@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { TERMINAL_INPUT_MAX_BYTES } from '../../terminal-input'
+import { TERMINAL_INPUT_MAX_BYTES } from '../../terminal/input/terminal-input'
 import type { PluginHookName } from '../contributions/plugin-hook-contribution'
 import { PLUGIN_TERMINAL_ID_MAX_LENGTH } from '../workers/plugin-host-api'
 

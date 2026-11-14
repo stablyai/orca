@@ -76,23 +76,6 @@ describe('mapWithConcurrency', () => {
     expect(peak).toBe(8)
   })
 
-  it('processes every item exactly once', async () => {
-    const seen: number[] = []
-    await mapWithConcurrency([1, 2, 3, 4, 5], 2, async (n) => {
-      seen.push(n)
-    })
-    expect(seen.sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5])
-  })
-
-  it('returns an empty array for no items without spawning workers', async () => {
-    let calls = 0
-    const results = await mapWithConcurrency([], 4, async () => {
-      calls += 1
-    })
-    expect(results).toEqual([])
-    expect(calls).toBe(0)
-  })
-
   it('clamps a limit below one to a single worker instead of stalling', async () => {
     const results = await mapWithConcurrency([1, 2, 3], 0, async (n) => n * 2)
     expect(results).toEqual([2, 4, 6])

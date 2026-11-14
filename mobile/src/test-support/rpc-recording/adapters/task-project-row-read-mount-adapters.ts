@@ -1,3 +1,6 @@
+import type * as UseMobileTasksProjectDetailLoadingModule from '../../../tasks/project-board/use-mobile-tasks-project-detail-loading'
+import type * as UseMobileTasksProjectMetadataLoadingModule from '../../../tasks/project-board/use-mobile-tasks-project-metadata-loading'
+import { useTaskFileMountOwner } from '../task-action-mount-owners'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
 import type { MountAdapter, MountContext, MountedOperation } from '../recording-scenario'
@@ -60,7 +63,9 @@ const ISSUE_ROW = {
   content: {
     repository: 'owner/repo',
     number: 1,
-    url: 'https://github.com/owner/repo/issues/1',
+    url: 'https://github.enterprise.test/owner/repo/issues/1',
+    title: 'Project issue',
+    body: 'Project issue body',
     state: 'OPEN',
     labels: [],
     assignees: [],
@@ -75,7 +80,9 @@ const PR_ROW = {
   content: {
     repository: 'owner/repo',
     number: 2,
-    url: 'https://github.com/owner/repo/pull/2',
+    url: 'https://github.enterprise.test/owner/repo/pull/2',
+    title: 'Project pull request',
+    body: 'Project pull request body',
     state: 'OPEN',
     labels: [],
     assignees: [],
@@ -101,6 +108,7 @@ const PROJECT_TABLE = {
 type ModelHookSpec<Actions> = {
   /** Called inside the render body, so a hook that throws is recorded as a mount failure. */
   readonly useHook: (model: never) => Actions
+  readonly fileOwner?: boolean
   readonly fixture: Record<string, unknown>
   readonly actions: (context: {
     /** A getter, not a value: an action that re-renders first needs the rebuilt callbacks. */
@@ -112,12 +120,16 @@ type ModelHookSpec<Actions> = {
 }
 
 function mountModelHook<Actions>(
+  modules: ReturnType<typeof operationModuleLoader>,
   context: MountContext,
   spec: ModelHookSpec<Actions>
 ): MountedOperation {
   const model = observableModel(context, { client: context.client, ...spec.fixture })
   let actions!: Actions
   const hook = hookMount(() => {
+    if (spec.fileOwner) {
+      useTaskFileMountOwner(modules, context, model)
+    }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies every member the hook reads.
     actions = spec.useHook(model as unknown as never)
   })
@@ -149,7 +161,6 @@ function mountModelHook<Actions>(
 export function taskProjectRowReadMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
-  const load = <T>(file: string): T => modules.load<T>(`mobile/src/tasks/${file}`)
   const boardFixture = {
     activeGitHubProjectHost: PROJECT_HOST,
     findProjectRowRepo: () => PROJECT_REPO,
@@ -161,11 +172,12 @@ export function taskProjectRowReadMountAdapters(
     projectRowDetailRefreshSeq: 0
   }
   const rowDetail: MountAdapter = (context) => {
-    const useLoading = load<
-      typeof import('../../../tasks/use-mobile-tasks-project-detail-loading')
-    >('use-mobile-tasks-project-detail-loading.tsx').useMobileTasksProjectDetailLoading
-    return mountModelHook(context, {
+    const useLoading = modules.load<typeof UseMobileTasksProjectDetailLoadingModule>(
+      'mobile/src/tasks/project-board/use-mobile-tasks-project-detail-loading.tsx'
+    ).useMobileTasksProjectDetailLoading
+    return mountModelHook(modules, context, {
       useHook: (model) => useLoading(model),
+      fileOwner: true,
       fixture: {
         ...boardFixture,
         projectRowDetail: null,
@@ -183,7 +195,20 @@ export function taskProjectRowReadMountAdapters(
         prFileContents: {},
         prFileLoadingPath: null
       },
-      actions: () => ({}),
+      actions: ({ model, update }) => ({
+        'replace-client': ({ client }) => {
+          model.client = client
+          return update()
+        },
+        select: ({ row }) => {
+          model.projectRowItem = row === undefined ? ISSUE_ROW : row
+          return update()
+        },
+        refresh: () => {
+          model.projectRowDetailRefreshSeq = Number(model.projectRowDetailRefreshSeq) + 1
+          return update()
+        }
+      }),
       state: (model) => ({
         detail: model.projectRowDetail,
         loading: model.projectRowDetailLoading,
@@ -192,10 +217,10 @@ export function taskProjectRowReadMountAdapters(
     })
   }
   const rowMetadataLoad: MountAdapter = (context) => {
-    const useLoading = load<
-      typeof import('../../../tasks/use-mobile-tasks-project-metadata-loading')
-    >('use-mobile-tasks-project-metadata-loading.tsx').useMobileTasksProjectMetadataLoading
-    return mountModelHook(context, {
+    const useLoading = modules.load<typeof UseMobileTasksProjectMetadataLoadingModule>(
+      'mobile/src/tasks/project-board/use-mobile-tasks-project-metadata-loading.tsx'
+    ).useMobileTasksProjectMetadataLoading
+    return mountModelHook(modules, context, {
       useHook: (model) => useLoading(model),
       fixture: {
         activeGitHubProjectHost: PROJECT_HOST,

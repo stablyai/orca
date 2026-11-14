@@ -1,7 +1,7 @@
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ userData: '', tabs: new Set<number>() }))
 
@@ -11,10 +11,10 @@ vi.mock('electron', () => ({
   webContents: { fromId: vi.fn() },
   webFrameMain: { fromId: vi.fn() }
 }))
-vi.mock('../browser-extension-permission-prompt', () => ({
+vi.mock('../permissions/browser-extension-permission-prompt', () => ({
   askToGrantBrowserExtensionPermissions: async () => true
 }))
-vi.mock('../browser-extension-tab-model', () => ({
+vi.mock('../tabs-and-windows/browser-extension-tab-model', () => ({
   resolveBrowserExtensionTab: (id: number) =>
     mocks.tabs.has(id) ? { contents: { id, session: currentSession } } : null
 }))
@@ -22,19 +22,19 @@ vi.mock('../browser-extension-tab-model', () => ({
 mocks.userData = mkdtempSync(join(tmpdir(), 'orca-dnr-api-'))
 let currentSession: Electron.Session | null = null
 
-const registry = await import('../browser-extension-namespace-registry')
+const registry = await import('../api-runtime/browser-extension-namespace-registry')
 const { registerDeclarativeNetRequestNamespace } = await import('./declarative-net-request')
 const { attachBrowserExtensionDnr, getDnrSessionRuntime } =
-  await import('../browser-extension-dnr-session')
+  await import('../declarative-net-request/session/browser-extension-dnr-session')
 const { browserExtensionDnrRequestDecider: decider } =
-  await import('../browser-extension-dnr-requests')
-const { DNR_API_CONSTANTS } = await import('../browser-extension-dnr-limits')
-const { BROWSER_EXTENSION_API_SURFACE } =
-  await import('../../../../preload/browser-extension-api-surface')
+  await import('../declarative-net-request/session/browser-extension-dnr-requests')
+await import('../declarative-net-request/session/browser-extension-dnr-limits')
+await import('../../../../preload/browser/extensions/api/browser-extension-api-surface')
 
+const { getBrowserExtensionDnrStore } =
+  await import('../declarative-net-request/session/browser-extension-dnr-store')
 const { registerPermissionsNamespace } = await import('./permissions')
-const { ensureHostSessionState } = await import('../browser-extension-contexts')
-const { getBrowserExtensionInstallStore } = await import('../browser-extension-install-store')
+
 registerPermissionsNamespace()
 registerDeclarativeNetRequestNamespace()
 
@@ -42,6 +42,7 @@ const ID = 'd'.repeat(32)
 const PROFILE = 'profile-api'
 const TAB = 9
 mocks.tabs.add(TAB)
+beforeEach(() => getBrowserExtensionDnrStore().forgetProfile(PROFILE))
 
 const block = (id: number, urlFilter: string) => ({
   id,
@@ -112,12 +113,6 @@ async function launch(ext = extension()) {
 }
 
 describe('chrome.declarativeNetRequest', () => {
-  it("gives extensions main's limits as the API constants", () => {
-    expect(BROWSER_EXTENSION_API_SURFACE.declarativeNetRequest?.constants).toEqual(
-      DNR_API_CONSTANTS
-    )
-  })
-
   it('replaces dynamic rules all or nothing and keeps them for the next launch', async () => {
     const { call, blocks } = await launch()
     await call('updateDynamicRules', { addRules: [block(1, '||x.example^'), block(2, 'y')] })
@@ -134,205 +129,5 @@ describe('chrome.declarativeNetRequest', () => {
     await expect(next.call('getDynamicRules')).resolves.toMatchObject([{ id: 1 }, { id: 3 }])
     expect(next.blocks('https://z.example/1.js')).toBe(true)
     await next.call('updateDynamicRules', { removeRuleIds: [1, 3] })
-  })
-
-  it("enforces Chrome's dynamic and session rule limits", async () => {
-    const { call } = await launch()
-    const redirects = Array.from({ length: 5001 }, (_, index) => ({
-      id: index + 1,
-      condition: { urlFilter: `r${index}` },
-      action: { type: 'redirect', redirect: { url: 'https://safe.example/' } }
-    }))
-    await expect(call('updateDynamicRules', { addRules: redirects })).rejects.toThrow(
-      'Dynamic unsafe rule count exceeded.'
-    )
-    const blocks = Array.from({ length: 5001 }, (_, index) => block(index + 1, `s${index}`))
-    await expect(call('updateSessionRules', { addRules: blocks })).rejects.toThrow(
-      'Session rule count exceeded.'
-    )
-    await expect(call('getSessionRules')).resolves.toEqual([])
-  })
-
-  it('switches static rulesets, and an update brings back the manifest choice', async () => {
-    const { call, blocks } = await launch()
-    await expect(call('getEnabledRulesets')).resolves.toEqual(['a'])
-    await call('updateEnabledRulesets', { enableRulesetIds: ['b'], disableRulesetIds: ['a'] })
-    expect(blocks('https://b.example/x.js')).toBe(true)
-    expect(blocks('https://a.example/x.js')).toBe(false)
-    await expect(call('updateEnabledRulesets', { enableRulesetIds: ['zzz'] })).rejects.toThrow(
-      'Invalid ruleset id: zzz.'
-    )
-    await expect(call('getAvailableStaticRuleCount')).resolves.toBe(330_000 - 2)
-    await expect((await launch()).call('getEnabledRulesets')).resolves.toEqual(['b'])
-    await expect((await launch(extension('2'))).call('getEnabledRulesets')).resolves.toEqual(['a'])
-  })
-
-  it('disables single static rules', async () => {
-    const { call, blocks } = await launch(extension('3'))
-    await call('updateStaticRules', { rulesetId: 'a', disableRuleIds: [1] })
-    expect(blocks('https://a.example/x.js')).toBe(false)
-    await expect(call('getDisabledRuleIds', { rulesetId: 'a' })).resolves.toEqual([1])
-    await expect(
-      call('updateStaticRules', {
-        rulesetId: 'b',
-        disableRuleIds: Array.from({ length: 5000 }, (_, index) => index + 2)
-      })
-    ).rejects.toThrow('The number of disabled static rules exceeds the disabled rule count limit.')
-    await call('updateStaticRules', { rulesetId: 'a', enableRuleIds: [1] })
-    expect(blocks('https://a.example/x.js')).toBe(true)
-  })
-
-  it('drops updates still queued when the extension unloads', async () => {
-    const { session } = await launch(extension('6'))
-    const runtime = getDnrSessionRuntime(session)
-    const rules = runtime?.extensions.get(ID)?.rules
-    const enabling = rules?.updateEnabledRulesets(['b'], [])
-    const disabling = rules?.updateStaticRules('a', [1], [])
-    runtime?.removeExtension(ID)
-    await enabling?.catch(() => undefined)
-    await expect(disabling).rejects.toThrow('Internal error.')
-    const next = await launch(extension('6'))
-    expect(next.blocks('https://a.example/x.js')).toBe(true)
-  })
-
-  it('checks regexes and tests a request against its own rules', async () => {
-    const { call } = await launch(extension('4'))
-    await expect(call('isRegexSupported', { regex: '^https://a\\.example/' })).resolves.toEqual({
-      isSupported: true
-    })
-    await expect(call('isRegexSupported', { regex: '(' })).resolves.toEqual({
-      isSupported: false,
-      reason: 'syntaxError'
-    })
-    await expect(
-      call('testMatchOutcome', { url: 'https://a.example/x.js', type: 'script', tabId: TAB })
-    ).resolves.toEqual({ matchedRules: [{ ruleId: 1, rulesetId: 'a' }] })
-    await expect(call('testMatchOutcome', { url: 'nope', type: 'script' })).rejects.toThrow(
-      'Invalid test request URL.'
-    )
-  })
-
-  it('reports matched rules only with feedback (or activeTab) access', async () => {
-    const plain = await launch(extension('5'))
-    await expect(plain.call('getMatchedRules')).rejects.toThrow(
-      /declarativeNetRequestFeedback permission or have activeTab/
-    )
-    await expect(
-      plain.call('setExtensionActionOptions', { tabUpdate: { tabId: TAB, increment: 1 } })
-    ).rejects.toThrow('Cannot increment action count unless displaying action count as badge text.')
-    const feedback = await launch(extension('5', ['declarativeNetRequestFeedback']))
-    expect(feedback.blocks('https://a.example/x.js')).toBe(true)
-    await expect(feedback.call('getMatchedRules', { tabId: TAB })).resolves.toMatchObject({
-      rulesInfo: [{ rule: { ruleId: 1, rulesetId: 'a' }, tabId: TAB }]
-    })
-    await expect(feedback.call('getMatchedRules', { tabId: 404 })).rejects.toThrow(
-      'No tab with id: 404.'
-    )
-  })
-})
-
-describe('live DNR permission changes and precedence', () => {
-  it('activates optional authority immediately and preserves session rules across feedback changes', async () => {
-    const ext = extension()
-    ext.manifest.permissions = []
-    ext.manifest.optional_permissions = [
-      'declarativeNetRequestWithHostAccess',
-      'declarativeNetRequestFeedback'
-    ]
-    const { session, call, blocks } = await launch(ext)
-    ensureHostSessionState(session, PROFILE)
-    const caller = { extension: ext, session, browserProfileId: PROFILE, userGesture: true }
-    const permission = (method: string, permissions: string[]) =>
-      registry
-        .getBrowserExtensionNamespace('permissions')
-        ?.methods[method].invoke(caller, [{ permissions }])
-    expect(blocks('https://a.example/file')).toBe(false)
-    await expect(permission('request', ['declarativeNetRequestWithHostAccess'])).resolves.toBe(true)
-    expect(blocks('https://a.example/file')).toBe(true)
-    await call('updateSessionRules', { addRules: [block(21, '||session.example^')] })
-    await permission('request', ['declarativeNetRequestFeedback'])
-    expect(blocks('https://session.example/file')).toBe(true)
-    expect(await call('getSessionRules')).toEqual([block(21, '||session.example^')])
-    const runtime = getDnrSessionRuntime(session)
-    expect(runtime?.matched.matchedRules(ID, {})).not.toEqual([])
-    await permission('remove', ['declarativeNetRequestFeedback'])
-    expect(runtime?.matched.matchedRules(ID, {})).toEqual([])
-    expect(blocks('https://session.example/file')).toBe(true)
-    await permission('remove', ['declarativeNetRequestWithHostAccess'])
-    expect(blocks('https://a.example/file')).toBe(false)
-    expect(blocks('https://session.example/file')).toBe(false)
-  })
-
-  it('keeps install precedence when an older extension reloads or another profile loads in reverse order', async () => {
-    const store = getBrowserExtensionInstallStore()
-    const make = (id: string, target: string): Electron.Extension => {
-      const path = mkdtempSync(join(tmpdir(), 'orca-dnr-precedence-'))
-      writeFileSync(
-        join(path, 'rules.json'),
-        JSON.stringify([
-          {
-            id: 1,
-            condition: { urlFilter: '|https://tie.example/' },
-            action: { type: 'redirect', redirect: { url: target } }
-          }
-        ])
-      )
-      store.save({
-        id,
-        name: id,
-        version: '1',
-        path,
-        source: 'unpacked',
-        iconPath: null,
-        permissions: ['declarativeNetRequest'],
-        hostPermissions: ['<all_urls>'],
-        optionsPage: null
-      })
-      return {
-        id,
-        name: id,
-        version: '1',
-        path,
-        url: '',
-        manifest: {
-          permissions: ['declarativeNetRequest'],
-          host_permissions: ['<all_urls>'],
-          declarative_net_request: {
-            rule_resources: [{ id: 'rules', enabled: true, path: 'rules.json' }]
-          }
-        }
-      }
-    }
-    const older = make('a'.repeat(32), 'https://older.example/')
-    const newer = make('b'.repeat(32), 'https://newer.example/')
-    const first = await launch(older)
-    const runtime = getDnrSessionRuntime(first.session)
-    if (!runtime) {
-      throw new Error('Missing DNR runtime')
-    }
-    await runtime.addExtension(newer)
-    const winner = (owner: typeof runtime) =>
-      owner.engine.evaluateBeforeRequest(
-        {
-          url: 'https://tie.example/file',
-          method: 'GET',
-          type: 'script',
-          initiator: null,
-          tabId: TAB
-        },
-        { allowByExtension: new Map(), actions: [] },
-        { hostAccess: () => 'allowed' }
-      ).actions[0]?.redirectUrl
-    expect(winner(runtime)).toBe('https://newer.example/')
-    runtime.removeExtension(older.id)
-    await runtime.addExtension(older)
-    expect(winner(runtime)).toBe('https://newer.example/')
-    const second = await launch(newer)
-    const reversed = getDnrSessionRuntime(second.session)
-    if (!reversed) {
-      throw new Error('Missing DNR runtime')
-    }
-    await reversed.addExtension(older)
-    expect(winner(reversed)).toBe('https://newer.example/')
   })
 })

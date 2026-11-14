@@ -1,4 +1,4 @@
-import { installWindowVisibilityInterval } from '../lib/window-visibility-interval'
+import { installWindowVisibilityInterval } from '../lib/window-activity/window-visibility-interval'
 
 const HEARTBEAT_INTERVAL_MS = 10_000
 const HEARTBEAT_IDLE_MS = 25_000

@@ -90,9 +90,10 @@ function publishRows(host: HostRowModules): Record<string, AgentRow> {
     summaries,
     pathIndex: { byPath: new Map(), byRealPath: new Map() },
     missingWorktreeIds: new Set(),
-    // Older builds read workingTerminalEvidenceByWorktreeId; newer ones read terminalTitleEvidenceByWorktreeId.
+    // Builds read workingTerminalEvidenceByWorktreeId, then terminalTitleEvidenceByWorktreeId, now terminalTitleEvidenceByRow.
     workingTerminalEvidenceByWorktreeId: new Map(),
     terminalTitleEvidenceByWorktreeId: new Map(),
+    terminalTitleEvidenceByRow: new Map(),
     rowSources: host.collectRuntimeWorktreeAgentSources({
       hookSnapshots: SNAPSHOTS,
       mirroredWorktreeIdByTabId: new Map(),
@@ -103,8 +104,9 @@ function publishRows(host: HostRowModules): Record<string, AgentRow> {
       }
     }),
     orchestrationByPaneKey: null,
-    // Old builds pass (summaries, pathIndex, missingIds, id); newer ones pass (id). The id is last in both.
-    getSummary: (...args: unknown[]) => summaries.get(String(args.at(-1))) ?? null
+    // Old builds pass (summaries, pathIndex, missingIds, id), then (id), now (id, hostId).
+    getSummary: (...args: unknown[]) =>
+      summaries.get(String(args.find((arg) => arg === WORKTREE_ID))) ?? null
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: JSON.parse of the rows the host just attached, which are plain objects keyed by paneKey.
   const rows = JSON.parse(JSON.stringify(summary.agents)) as AgentRow[]
@@ -120,8 +122,8 @@ function dotStates(build: Build, rows: Record<string, AgentRow>): Record<string,
 async function loadBuild(ref: string | null): Promise<Build> {
   if (ref === null) {
     const [sources, rows, display] = await Promise.all([
-      import('../../../src/main/runtime/runtime-worktree-agent-sources'),
-      import('../../../src/main/runtime/runtime-worktree-agent-rows'),
+      import('../../../src/main/runtime/workspaces/process-listing/runtime-worktree-agent-sources'),
+      import('../../../src/main/runtime/workspaces/process-listing/runtime-worktree-agent-rows'),
       importWorkingTreeModuleCopy(PHONE_ROW_READER)
     ])
     return {
@@ -134,8 +136,14 @@ async function loadBuild(ref: string | null): Promise<Build> {
   }
   const checkout = await materializeReleaseCheckout(ref)
   const [sources, rows, display] = await Promise.all([
-    importReleaseCheckoutModule(checkout, 'src/main/runtime/runtime-worktree-agent-sources.ts'),
-    importReleaseCheckoutModule(checkout, 'src/main/runtime/runtime-worktree-agent-rows.ts'),
+    importReleaseCheckoutModule(
+      checkout,
+      'src/main/runtime/workspaces/process-listing/runtime-worktree-agent-sources.ts'
+    ),
+    importReleaseCheckoutModule(
+      checkout,
+      'src/main/runtime/workspaces/process-listing/runtime-worktree-agent-rows.ts'
+    ),
     importReleaseCheckoutModule(checkout, PHONE_ROW_READER)
   ])
   return {

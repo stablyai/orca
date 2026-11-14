@@ -1,12 +1,12 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import * as repositories from '../../github-api-repository'
+import * as remoteProbe from '../../repositories/github-api-repository-remote-probe'
 import { getRepoSlug } from '../fetch/repo-slug-upstream'
 
 afterEach(() => vi.restoreAllMocks())
 it('keeps verified SSH discovery failures distinct from tolerant PR nulls', async () => {
-  const tolerant = vi.spyOn(repositories, 'getOriginGitHubApiRepository').mockResolvedValue(null)
+  const tolerant = vi.spyOn(remoteProbe, 'getOriginGitHubApiRepository').mockResolvedValue(null)
   const verified = vi
-    .spyOn(repositories, 'getGitHubApiRepositoryForRemote')
+    .spyOn(remoteProbe, 'getGitHubApiRepositoryForRemote')
     .mockRejectedValue(new Error('SSH origin unavailable'))
   await expect(getRepoSlug('/remote', 'ssh-a')).resolves.toBeNull()
   await expect(getRepoSlug('/remote', 'ssh-a', { requireVerifiedSshProbe: true })).rejects.toThrow(

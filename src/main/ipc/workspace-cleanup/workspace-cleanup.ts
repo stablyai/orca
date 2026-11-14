@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import type { Store } from '../../persistence/loading-store/store'
+import type { OrchestrationDb } from '../../runtime/orchestration/db/orchestration-db'
 import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
   type WorkspaceCleanupDismissArgs,
@@ -7,9 +8,9 @@ import {
   type WorkspaceCleanupScanResult,
   type WorkspaceCleanupSnapshotPruneBatchArgs,
   type WorkspaceCleanupSnapshotPruneRecordArgs
-} from '../../../shared/workspace-cleanup'
+} from '../../../shared/workspace-cleanup/workspace-cleanup'
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import { getWorkspaceCleanupHostIdentity } from '../../../shared/workspace-cleanup-host-identity'
+import { getWorkspaceCleanupHostIdentity } from '../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import { scanWorkspaceCleanup } from './workspace-cleanup-scan'
 import { abortWhenRendererGone } from '../renderer-lifetime-abort'
 import { hasTargetedWorkspaceCleanupScan } from './workspace-cleanup-scan-targets'
@@ -32,7 +33,10 @@ function getBroadScanModeKey(senderId: number, args: WorkspaceCleanupScanArgs): 
   return `${senderId}\0${args.includeAllWorkspaces === true}`
 }
 
-export function registerWorkspaceCleanupHandlers(store: Store): void {
+export function registerWorkspaceCleanupHandlers(
+  store: Store,
+  getOrchestrationDb?: () => OrchestrationDb | null
+): void {
   const snapshotDirectory = store.getProfileStorageDirectory()
   ipcMain.removeHandler('workspaceCleanup:scan')
   ipcMain.removeHandler('workspaceCleanup:cancelScan')
@@ -66,6 +70,7 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
       try {
         const result = await scanWorkspaceCleanup(store, scanArgs, {
           signal: controller.signal,
+          getOrchestrationDb,
           onProgress: scanArgs.scanId
             ? (progress) => {
                 if (!controller.signal.aborted && !sender.isDestroyed()) {
@@ -112,6 +117,11 @@ export function registerWorkspaceCleanupHandlers(store: Store): void {
         if (dismissal.worktreeId === worktreeId) {
           delete next[identity]
         }
+      }
+    }
+    for (const key of args.restoredDismissalKeys ?? []) {
+      if (typeof key === 'string') {
+        delete next[key]
       }
     }
     for (const dismissal of args.dismissals ?? []) {

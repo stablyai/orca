@@ -1,31 +1,67 @@
+import type * as RepoDetectionModule from '../git/repositories/discovery/repo-detection'
+import type * as GitExecFileModule from '../git/command-runner/git-exec-file'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as GitRunner from '../git/runner'
-import type * as RepoModule from '../git/repo'
+import type * as GitSpawnModule from '../git/command-runner/git-spawn'
 
-const { reposMocks, moduleMocks } = await vi.hoisted(async () => {
+const { reposMocks, moduleMocks, gitRepoProbeMocks } = await vi.hoisted(async () => {
   const moduleMocks = await import('./repos-remote-test-harness')
-  return { reposMocks: moduleMocks.createReposIpcMocks(), moduleMocks }
+  return {
+    reposMocks: moduleMocks.createReposIpcMocks(),
+    moduleMocks,
+    gitRepoProbeMocks: moduleMocks.createGitRepoProbeMocks()
+  }
+})
+
+vi.mock('../git/repositories/discovery/repo-detection', async (importOriginal) =>
+  moduleMocks.repoDetectionModuleMock(
+    await importOriginal<typeof RepoDetectionModule>(),
+    gitRepoProbeMocks
+  )
+)
+
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => {
+  return {
+    ...(await importOriginal<typeof GitExecFileModule>()),
+    gitExecFileAsync: reposMocks.gitExecFileAsyncMock
+  }
 })
 
 vi.mock('electron', () => moduleMocks.electronModuleMock(reposMocks))
-vi.mock('../git/repo', async (importOriginal) =>
-  moduleMocks.gitRepoModuleMock(await importOriginal<typeof RepoModule>())
+vi.mock('../git/repositories/repository-name', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getRepoName: vi.fn().mockImplementation((path: string) => path.split('/').pop())
+}))
+vi.mock('../git/refs/resolution/repo-default-base-ref', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getDefaultBaseRefAsync: vi.fn().mockResolvedValue('origin/main')
+}))
+vi.mock('../git/remotes/repo-remote-queries', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getRemoteCount: vi.fn().mockResolvedValue(1)
+}))
+vi.mock('../git/refs/resolution/repo-base-ref-search', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  searchBaseRefs: vi.fn().mockResolvedValue([])
+}))
+vi.mock('../git/command-runner/git-spawn', async (importOriginal) =>
+  moduleMocks.gitSpawnModuleMock(reposMocks, await importOriginal<typeof GitSpawnModule>())
 )
-vi.mock('../git/runner', async (importOriginal) =>
-  moduleMocks.gitRunnerModuleMock(reposMocks, await importOriginal<typeof GitRunner>())
-)
-vi.mock('../git/worktree', () => moduleMocks.gitWorktreeModuleMock(reposMocks))
-vi.mock('./registered-worktree-roots-cache', () =>
+vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreeGraph: reposMocks.listWorktreeGraphMock
+}))
+vi.mock('./worktrees/removal/registered-worktree-roots-cache', () =>
   moduleMocks.registeredWorktreeRootsCacheModuleMock(reposMocks)
 )
-vi.mock('../worktree-root-preparation', () =>
+vi.mock('../workspaces/creation/worktree-root-preparation', () =>
   moduleMocks.worktreeRootPreparationModuleMock(reposMocks)
 )
 
+import { ipcMain } from 'electron'
 import { registerRepoHandlers } from './repos'
-import { clearGitCapabilityStateForTests } from '../git/git-capability-state'
-import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
-import { getGitRepoRoot, isGitRepo } from '../git/repo'
+import { clearGitCapabilityStateForTests } from '../git/command-runner/host-routing/git-capability-state'
+import { resetSshProviderAuthorities } from '../ssh/connection/authority/ssh-provider-authority'
+import { getGitRepoRoot, isGitRepo } from '../git/repositories/discovery/repo-detection'
 import { createRepoHandlerHarness, resetProjectGroupMocks } from './repos-remote-test-harness'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -36,7 +72,7 @@ import {
   WslMoveProjectFencedError,
   loadWslMoveFence,
   resetWslMoveFenceForTests
-} from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 const { handleMock, mockStore } = reposMocks
 
@@ -54,6 +90,33 @@ describe('projectGroups IPC validation', () => {
     resetProjectGroupMocks(reposMocks, { isGitRepo, getGitRepoRoot })
 
     registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
+  })
+
+  it('re-registers group hook inspection and subsequent handlers when a window reopens', () => {
+    const registered = new Map<string, (...args: unknown[]) => unknown>()
+    handleMock.mockImplementation((channel: string, handler: (...args: unknown[]) => unknown) => {
+      if (registered.has(channel)) {
+        throw new Error(`Handler already registered: ${channel}`)
+      }
+      registered.set(channel, handler)
+    })
+    vi.mocked(ipcMain.removeHandler).mockImplementation((channel) => {
+      registered.delete(channel)
+    })
+    const runtime = { checkProjectGroupHooks: vi.fn(() => ({ status: 'ok' })) }
+    try {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the registration harness supplies only the window, store and runtime ports invoked by these handlers.
+      registerRepoHandlers(mockWindow as never, mockStore as never, runtime as never)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the registration harness supplies only the window, store and runtime ports invoked by these handlers.
+      registerRepoHandlers(mockWindow as never, mockStore as never, runtime as never)
+      expect(registered.get('projectGroups:checkHooks')?.(null, { groupId: 'group-1' })).toEqual({
+        status: 'ok'
+      })
+      expect(registered.get('projectGroups:list')?.()).toEqual([])
+      expect(registered.has('folderWorkspaces:create')).toBe(true)
+    } finally {
+      vi.mocked(ipcMain.removeHandler).mockReset()
+    }
   })
 
   describe('while a WSL move fences the local repo-1', () => {

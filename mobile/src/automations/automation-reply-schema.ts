@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
 import { salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 
@@ -146,7 +146,8 @@ export const sshInventorySchema = z.object({
     z.object({
       id: z.string(),
       label: z.string(),
-      generation: z.number().int().positive().optional()
+      generation: z.number().int().positive().optional(),
+      managedServer: z.literal(true).optional().catch(undefined)
     })
   )
 })

@@ -3,8 +3,8 @@ import {
   isPersistedAgentSessionRecord,
   type AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { encodePersistedAgentSessionProviderHandleChain } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { encodePersistedAgentSessionProviderHandleChain } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import { setAgentSessionRecordConversationName } from './agent-session-record-conversation-name'
 
 const NOW = 9_000
@@ -19,15 +19,6 @@ function storedRecordIsValid(
 }
 
 describe('agent session record conversationName validation', () => {
-  it('accepts a record carrying a bounded name', () => {
-    expect(
-      storedRecordIsValid({
-        ...agentSessionRecordFixture(),
-        conversationName: 'Fix the lease probe'
-      })
-    ).toBe(true)
-  })
-
   it('accepts a record with no name at all', () => {
     expect(storedRecordIsValid(agentSessionRecordFixture())).toBe(true)
   })

@@ -19,7 +19,6 @@ type HostRuntimeEffectsInput = Pick<
   | 'selectedRepoConnectionIdRef'
   | 'selectedRepoExecutionHostId'
   | 'selectedRepoHookContextKey'
-  | 'selectedRepoIsGit'
   | 'selectedRepoSshStatus'
   | 'setTuiAgent'
   | 'settings'
@@ -30,16 +29,20 @@ import { useEffect, useCallback } from 'react'
 import {
   readWorkspaceSetupInspection,
   getComposerSetupInspectionCommit
-} from '@/lib/workspace-setup-preparation'
-import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import { getAgentCatalog } from '@/lib/agent-catalog'
-import { useAppStore } from '@/store'
-import { isSshConnectInProgress } from '@/lib/new-workspace-ssh-gate'
+} from '@/lib/workspace/creation/setup/workspace-setup-preparation'
+import {
+  filterEnabledTuiAgents,
+  isTuiAgentEnabled
+} from '../../../../shared/agent-launch/catalog/tui-agent-selection'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
+import { useAppStore } from '@/store/index'
+import '@/lib/workspace/creation/new-workspace-ssh-gate'
+import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 import {
   connectRepoSshConnection,
   getRepoSshConnection,
   selectRepoSshGateInput
-} from '@/lib/repo-ssh-connection'
+} from '@/lib/workspace/catalog/repo-ssh-connection'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
@@ -63,7 +66,6 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
     selectedRepoConnectionIdRef,
     selectedRepoExecutionHostId,
     selectedRepoHookContextKey,
-    selectedRepoIsGit,
     selectedRepoSshStatus,
     setTuiAgent,
     settings,
@@ -111,7 +113,8 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
   ])
 
   useEffect(() => {
-    if (!repoId || !selectedRepoIsGit || !selectedRepoHookContextKey) {
+    // Folder projects have setup scripts too; hosts without folder setup report none for them.
+    if (!repoId || !selectedRepoHookContextKey) {
       return
     }
 
@@ -136,7 +139,6 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
     loadHookCheckForRepo,
     repoId,
     selectedRepoHookContextKey,
-    selectedRepoIsGit,
     runtimeEnvironmentId
   ])
 
@@ -157,7 +159,7 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
       return
     }
     const liveStatus = selectRepoSshGateInput(liveState, liveRepo).status
-    if (liveStatus === 'connected' || isSshConnectInProgress(liveStatus)) {
+    if (liveStatus === 'connected' || isConnectingSshStatus(liveStatus)) {
       return
     }
 
@@ -179,7 +181,7 @@ export function useHostRuntimeEffects(input: HostRuntimeEffectsInput) {
     const liveStatus = useAppStore
       .getState()
       .sshConnectionStates.get(folderTargetConnectionId)?.status
-    if (liveStatus === 'connected' || isSshConnectInProgress(liveStatus ?? null)) {
+    if (liveStatus === 'connected' || isConnectingSshStatus(liveStatus ?? null)) {
       return
     }
     try {

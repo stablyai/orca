@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ArrowDown, ArrowUp, ArrowUpDown, Check } from 'lucide-react'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { PluginDeclarativeProps } from '../../../../../shared/plugins/declarative/plugin-declarative-catalog'
 import { usePluginDeclarativeHostValue } from './plugin-declarative-host-value'
 import type { PluginDeclarativeEmit } from './PluginDeclarativeControls'
@@ -30,11 +30,12 @@ const COLUMN_WIDTH: Record<NonNullable<Column['width']>, string> = {
 const IS_MAC = typeof navigator !== 'undefined' && navigator.userAgent.includes('Mac')
 
 function CellValue({ value }: { value: Cell | undefined }): React.ReactNode {
+  const t = useTranslate()
   if (value === true) {
     return (
       <Check
         className="size-4"
-        aria-label={translate('auto.components.plugins.declarative.Table.yes', 'Yes')}
+        aria-label={t('auto.components.plugins.declarative.Table.yes', 'Yes')}
       />
     )
   }
@@ -72,6 +73,7 @@ export function PluginDeclarativeTable({
   props: TableProps
   emit: PluginDeclarativeEmit
 }): React.JSX.Element {
+  const t = useTranslate()
   const id = useId()
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const mode = props.selectionMode ?? 'none'
@@ -252,8 +254,7 @@ export function PluginDeclarativeTable({
       >
         {rows.length === 0 && !showLoading ? (
           <div className="px-2 py-3 text-center text-muted-foreground">
-            {props.emptyText ??
-              translate('auto.components.plugins.declarative.Table.empty', 'No rows')}
+            {props.emptyText ?? t('auto.components.plugins.declarative.Table.empty', 'No rows')}
           </div>
         ) : (
           <div className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
@@ -268,10 +269,7 @@ export function PluginDeclarativeTable({
                     style={{ top: item.start, height: ROW_HEIGHT }}
                   >
                     <LoadingSpinner className="size-3.5" />
-                    {translate(
-                      'auto.components.plugins.declarative.Table.loading',
-                      'Loading more…'
-                    )}
+                    {t('auto.components.plugins.declarative.Table.loading', 'Loading more…')}
                   </div>
                 )
               }

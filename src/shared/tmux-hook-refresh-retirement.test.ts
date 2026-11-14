@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createAgentStatusStore } from './agent-status-store'
+import { createAgentStatusStore } from './agent-status/store/agent-status-store'
 import { TmuxAgentHookOwner } from './tmux-agent-hook-owner'
 import { commitTmuxSelectedStatus } from './tmux-selected-status'
 import { TMUX_TEST_PANE, TMUX_TEST_ROOT, tmuxTestBody } from './tmux-status.test-fixture'
-import type { AgentStatusPtySubject } from './agent-status-subject'
+import type { AgentStatusPtySubject } from './agent-status/contracts/agent-status-subject'
 
 describe('tmux refresh retirement during root resolution', () => {
   it.each([

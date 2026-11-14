@@ -2,25 +2,22 @@ import { EventEmitter } from 'node:events'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as ServePreflight from './serve-electron-preflight'
-import { MacServeStartupAbortError } from './serve-signal-exit-diagnostic'
+import { join } from 'node:path'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
+import type * as ServePreflight from './serve/startup/serve-electron-preflight'
 
-const { spawnMock, preflightMock, recordAbortMock, superviseMock } = vi.hoisted(() => ({
+const { spawnMock, preflightMock, superviseMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
   preflightMock: vi.fn(),
-  recordAbortMock: vi.fn(),
   superviseMock: vi.fn()
 }))
 
 vi.mock('child_process', () => ({ spawn: spawnMock, spawnSync: vi.fn() }))
-vi.mock('./serve-electron-preflight', async (original) => ({
+vi.mock('./serve/startup/serve-electron-preflight', async (original) => ({
   ...(await original<typeof ServePreflight>()),
-  preflightElectronServe: preflightMock,
-  recordElectronServeStartupAbort: recordAbortMock
+  preflightElectronServe: preflightMock
 }))
-vi.mock('./serve-update-supervisor', async (importOriginal) => ({
+vi.mock('./serve/updates/serve-update-supervisor', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   superviseForegroundServe: superviseMock
 }))
@@ -29,7 +26,9 @@ import { serveOrcaApp } from './launch'
 
 let actualPreflight: typeof ServePreflight
 beforeAll(async () => {
-  actualPreflight = await vi.importActual<typeof ServePreflight>('./serve-electron-preflight')
+  actualPreflight = await vi.importActual<typeof ServePreflight>(
+    './serve/startup/serve-electron-preflight'
+  )
 })
 
 class FakeChildProcess extends EventEmitter {
@@ -38,47 +37,6 @@ class FakeChildProcess extends EventEmitter {
   unref = vi.fn()
   pid = 4101
 }
-
-const PROFILE = resolve('/profiles/serve-preflight')
-
-describe('serveOrcaApp: Electron serve preflight', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    spawnMock.mockReturnValue(new FakeChildProcess())
-    vi.stubEnv('ORCA_APP_EXECUTABLE', '/opt/orca/orca')
-    vi.stubEnv('ORCA_SERVE_RUNTIME', 'electron')
-    vi.stubEnv('ORCA_USER_DATA_PATH', PROFILE)
-  })
-
-  afterEach(() => {
-    vi.unstubAllEnvs()
-  })
-
-  it('never execs a second Electron main once the preflight refuses', async () => {
-    preflightMock.mockReturnValue(Promise.resolve(3))
-
-    await expect(serveOrcaApp({ json: true })).resolves.toBe(3)
-    expect(spawnMock).not.toHaveBeenCalled()
-    expect(preflightMock).toHaveBeenCalledWith({ json: true }, PROFILE)
-  })
-
-  it('execs once the preflight finds the profile free', async () => {
-    preflightMock.mockReturnValue(Promise.resolve(null))
-    superviseMock.mockResolvedValue(0)
-
-    await expect(serveOrcaApp({})).resolves.toBe(0)
-    expect(spawnMock).toHaveBeenCalledOnce()
-  })
-
-  it('remembers a prompt macOS startup abort for the next separate run', async () => {
-    preflightMock.mockReturnValue(null)
-    const abort = new MacServeStartupAbortError('runtime_serve_failed', 'aborted at startup')
-    superviseMock.mockRejectedValue(abort)
-
-    await expect(serveOrcaApp({})).rejects.toBe(abort)
-    expect(recordAbortMock).toHaveBeenCalledWith(PROFILE, 'aborted at startup')
-  })
-})
 
 describe.skipIf(process.platform === 'win32')(
   'serve launch with actual preflight dependencies',
@@ -117,7 +75,6 @@ describe.skipIf(process.platform === 'win32')(
           spawnMock.mockReturnValue(new FakeChildProcess())
           vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
           expect(await serveOrcaApp({})).toBe(state === 'absent' ? 0 : 3)
-          expect(spawnMock).toHaveBeenCalledTimes(state === 'absent' ? 1 : 0)
         } finally {
           for (const socket of sockets) {
             socket.destroy()

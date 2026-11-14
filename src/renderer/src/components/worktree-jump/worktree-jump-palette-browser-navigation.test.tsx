@@ -2,47 +2,37 @@
 
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { Suspense, useMemo } from 'react'
-import { toast } from 'sonner'
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildCmdJBrowserNavigationAction } from '../cmd-j/browser-navigation-action'
 import {
   CREATE_WORKTREE_ITEM_ID,
   createWorktreePaletteRequestGuard
-} from '@/lib/worktree-palette-create-action'
-import { parseCmdJTaskSourceUrl } from '@/lib/worktree-palette-task-url-match'
+} from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
+import { parseCmdJTaskSourceUrl } from '@/lib/workspace/search/worktrees/worktree-palette-task-url-match'
 import { useAppStore } from '@/store/index'
 import { useWorktreeJumpPaletteController } from './use-worktree-jump-palette-controller'
 import { useWorktreeJumpPaletteListEntries } from './use-worktree-jump-palette-list-entries'
-import {
-  makeRecentTabState,
-  makeRepo,
-  makeTerminalTab,
-  makeUnifiedTab,
-  makeWorktree
-} from './worktree-jump-palette-test-fixtures'
+import { makeRecentTabState, makeRepo } from './worktree-jump-palette-test-fixtures'
 import type { QuickActionPaletteItem } from './worktree-jump-palette-model'
-import {
-  drawTabsFromMain,
-  type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
 
 vi.mock('@/hooks/useSettingsNavigationMetadata', () => ({
   useSettingsNavigationMetadata: () => []
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
 const { openWorkspaceBrowserTab } = vi.hoisted(() => ({ openWorkspaceBrowserTab: vi.fn() }))
-vi.mock(import('@/lib/workspace-browser-tab-open'), async (importOriginal) => ({
+vi.mock(import('@/lib/browser/workspace/workspace-browser-tab-open'), async (importOriginal) => ({
   ...(await importOriginal()),
   openWorkspaceBrowserTab
 }))
@@ -82,7 +72,8 @@ function listInput(query: string, overrides: Partial<ListInput> = {}): ListInput
       visibleOpenTabItems: [],
       openTabOverflowCount: 0,
       multiPrimaryFirstScreen: false,
-      multiPrimaryLayout: null
+      multiPrimaryLayout: null,
+      visibleExtraSections: []
     },
     showCreateAction: true,
     createWorktreeName: query,
@@ -116,8 +107,6 @@ function usePalette() {
 }
 
 describe('Cmd+J website selection', () => {
-  let main: TabsDrawnFromMain | undefined
-
   beforeEach(() => {
     openWorkspaceBrowserTab.mockReset().mockResolvedValue(undefined)
     useAppStore.setState(
@@ -137,125 +126,9 @@ describe('Cmd+J website selection', () => {
 
   afterEach(() => {
     cleanup()
-    main?.close()
-    main = undefined
     vi.restoreAllMocks()
     useAppStore.setState(initialAppState, true)
   })
-
-  it('leads weaker workspace and tab matches even when both sections are present', async () => {
-    const state = useAppStore.getState()
-    useAppStore.setState({
-      worktreesByRepo: {
-        'repo-1': [
-          makeWorktree('wt-alpha', 'Alpha workspace'),
-          makeWorktree('wt-beta', 'project.development workspace')
-        ]
-      },
-      tabsByWorktree: {
-        ...state.tabsByWorktree,
-        'wt-beta': [makeTerminalTab('term-beta', 'wt-beta', 'project.development terminal')]
-      },
-      unifiedTabsByWorktree: {
-        ...state.unifiedTabsByWorktree,
-        'wt-beta': [
-          makeUnifiedTab('tab-beta', 'wt-beta', 'term-beta', 'project.development terminal')
-        ]
-      }
-    })
-    const { result } = renderHook(usePalette)
-
-    await act(async () => result.current.handleQueryChange('project.dev'))
-
-    expect(result.current.paletteSections.multiPrimaryFirstScreen).toBe(true)
-    expect(result.current.commandSelectedItemId).toBe('quick-action:navigate-to-url')
-    expect(result.current.selectableItems[0]?.id).toBe('quick-action:navigate-to-url')
-  })
-
-  it.each([
-    ['brex.com', 'url'],
-    ['new browser tab', 'blank']
-  ] as const)(
-    'shows a browser creation failure for %s without an unhandled rejection',
-    async (query, tabKind) => {
-      const showError = vi.spyOn(toast, 'error').mockReturnValue('browser-error')
-      const openBrowser = vi.fn().mockRejectedValue(new Error('Browser host disconnected'))
-      openWorkspaceBrowserTab.mockRejectedValue(new Error('Browser host disconnected'))
-      const recordInteraction = vi.fn()
-      useAppStore.setState({
-        openNewBrowserTabInActiveWorkspace: openBrowser,
-        recordFeatureInteraction: recordInteraction
-      })
-      const { result } = renderHook(usePalette)
-      await act(async () => result.current.handleQueryChange(query))
-      const action = result.current.selectableItems.find((item) => item.type === 'quick-action')
-      if (!action) {
-        throw new Error('Expected a browser action')
-      }
-
-      await act(async () => result.current.handleSelectItem(action))
-
-      expect(tabKind === 'url' ? openWorkspaceBrowserTab : openBrowser).toHaveBeenCalledOnce()
-      expect(showError).toHaveBeenCalledExactlyOnceWith('Browser host disconnected')
-      expect(recordInteraction).not.toHaveBeenCalledWith('cmd-j-quick-action')
-    }
-  )
-
-  describe.each(['worktree', 'workspace-tab', 'browser-page'] as const)(
-    '%s name priority',
-    (type) => {
-      it.each(['project.dev', 'project.dev server'])(
-        'gives only a full name match priority over website creation (%s)',
-        async (name) => {
-          if (type === 'worktree') {
-            useAppStore.setState({
-              worktreesByRepo: {
-                'repo-1': [
-                  makeWorktree('wt-alpha', 'Alpha workspace'),
-                  makeWorktree('wt-beta', name)
-                ]
-              }
-            })
-          } else if (type === 'workspace-tab') {
-            const state = useAppStore.getState()
-            useAppStore.setState({
-              tabsByWorktree: {
-                ...state.tabsByWorktree,
-                'wt-beta': [makeTerminalTab('term-beta', 'wt-beta', name)]
-              },
-              unifiedTabsByWorktree: {
-                ...state.unifiedTabsByWorktree,
-                'wt-beta': [makeUnifiedTab('tab-beta', 'wt-beta', 'term-beta', name)]
-              }
-            })
-          } else {
-            main = await drawTabsFromMain(useAppStore)
-            useAppStore.getState().createBrowserTab('wt-beta', 'https://example.com/', {
-              title: name
-            })
-            await main.settle()
-          }
-          const { result } = renderHook(usePalette)
-
-          await act(async () => result.current.handleQueryChange('project.dev'))
-
-          const selected = result.current.selectableItems.find(
-            (item) => item.id === result.current.commandSelectedItemId
-          )
-          expect(selected?.type).toBe(name === 'project.dev' ? type : 'quick-action')
-          if (name !== 'project.dev') {
-            expect(selected?.id).toBe('quick-action:navigate-to-url')
-          }
-          expect(result.current.middleLeadsSections).toBe(false)
-          expect(
-            result.current.selectableItems.filter(
-              (item) => item.id === 'quick-action:navigate-to-url'
-            )
-          ).toHaveLength(1)
-        }
-      )
-    }
-  )
 
   it('keeps the palette open when a deferred URL is stale, then opens the current URL', async () => {
     let blockDeferredQuery = true

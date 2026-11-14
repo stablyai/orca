@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto'
 import { ORCAD_RUNTIMES_DIRNAME } from '../../../shared/orcad-artifacts'
 import type { RemoteInstallTransport } from './remote-install-transport'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { execHostCommand } from '../../ssh/remote-exec/remote-host-exec'
 import { isUnconfirmedSshCommandTermination } from '../../ssh/remote-exec/remote-exec-command'
 import { acquireInstallLock, INSTALL_LOCK_STALE_SECONDS } from './remote-install-lock'
@@ -11,13 +11,13 @@ import {
   tryStealInstallLockCommand,
   type InstallLockOwnerFile
 } from './remote-install-lock-commands'
-import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
-import { removeRemoteTreeCommand } from '../../ssh/ssh-remote-commands'
+import { RELAY_REMOTE_DIR } from './remote-install-root'
+import { removeRemoteTreeCommand } from '../../ssh/remote-exec/ssh-remote-commands'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
+} from '../../ssh/remote-host/ssh-remote-platform'
 
 export const RUNTIME_STORE_LOCK_NAME = '.store-lock'
 // Owner tokens prevent late releases from deleting successor locks.

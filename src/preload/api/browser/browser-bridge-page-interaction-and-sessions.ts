@@ -1,16 +1,18 @@
-import type { GoogleCookieClearLocalTarget } from '../../../shared/browser-google-cookie-clear'
+import type { GoogleCookieClearLocalTarget } from '../../../shared/browser/cookies/browser-google-cookie-clear'
 import { ipcRenderer } from 'electron'
 import {
   BROWSER_AGENT_ACTIVITY_CHANNEL,
   BROWSER_AGENT_CURSOR_ARRIVED_CHANNEL,
   BROWSER_AGENT_CURSOR_CHANNEL,
+  BROWSER_AGENT_VIEWPORT_CHANNEL,
   type BrowserAgentActivityEvent,
-  type BrowserAgentCursorEvent
+  type BrowserAgentCursorEvent,
+  type BrowserAgentViewportEvent
 } from '../../../shared/browser-agent-activity-contract'
 import type { PreloadApi } from '../../api-types'
 import type { BrowserUserAgentMode } from '../../../shared/browser-user-agent-mode'
-import type { ManagedBrowserProfileOwner } from '../../../shared/browser-profile-scope'
-import type { GrabIntent } from '../../../shared/browser-grab-types'
+import type { ManagedBrowserProfileOwner } from '../../../shared/browser/profiles/browser-profile-scope'
+import type { GrabIntent } from '../../../shared/browser/element-grab/browser-grab-types'
 import type {
   BrowserSitePermission,
   BrowserSitePermissionDecision
@@ -18,7 +20,7 @@ import type {
 import type {
   BrowserContextMenuRequestedEvent,
   BrowserTargetUrlChangedEvent
-} from '../../../shared/browser-guest-events'
+} from '../../../shared/browser/guest-lifecycle/browser-guest-events'
 
 export const browserPageInteractionAndSessionsApi = {
   onContextMenuRequested: (
@@ -70,6 +72,12 @@ export const browserPageInteractionAndSessionsApi = {
     ) => callback(data)
     ipcRenderer.on('browser:capturePaintHold', listener)
     return () => ipcRenderer.removeListener('browser:capturePaintHold', listener)
+  },
+  onAgentViewportApplied: (callback: (data: BrowserAgentViewportEvent) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: BrowserAgentViewportEvent) =>
+      callback(data)
+    ipcRenderer.on(BROWSER_AGENT_VIEWPORT_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(BROWSER_AGENT_VIEWPORT_CHANNEL, listener)
   },
   onAgentInputFocusGuard: (
     callback: (data: { browserPageId: string; token: string; active: boolean }) => void
@@ -153,6 +161,12 @@ export const browserPageInteractionAndSessionsApi = {
     ) => callback(data)
     ipcRenderer.on('browser:grabActionShortcut', listener)
     return () => ipcRenderer.removeListener('browser:grabActionShortcut', listener)
+  },
+  onGuestEscape: (callback: (args: { browserPageId: string }) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: { browserPageId: string }) =>
+      callback(data)
+    ipcRenderer.on('browser:guestEscape', listener)
+    return () => ipcRenderer.removeListener('browser:guestEscape', listener)
   },
   sessionListProfiles: () => ipcRenderer.invoke('browser:session:listProfiles'),
   onSessionProfilesChanged: (callback: () => void): (() => void) => {

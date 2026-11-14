@@ -1,5 +1,5 @@
 import type { Page } from '@stablyai/playwright-test'
-import type { AgentType } from '../../../src/shared/agent-status-types'
+import type { AgentType } from '../../../src/shared/agent-status/contracts/agent-status-types'
 import { waitForActivePaneHookDescriptor } from './terminal'
 
 export async function showActivePaneAsNativeChat(

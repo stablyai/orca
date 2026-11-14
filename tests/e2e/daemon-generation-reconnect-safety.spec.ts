@@ -2,12 +2,12 @@ import { fork, type ChildProcess } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { expect, test, type TestInfo } from '@playwright/test'
-import { DaemonClient } from '../../src/main/daemon/client'
+import { DaemonClient } from '../../src/main/daemon/transport/client/daemon-client'
 import {
   CLEAN_DISCONNECT_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
   PTY_STARTUP_INGRESS_PROTOCOL_VERSION
-} from '../../src/main/daemon/types'
+} from '../../src/main/daemon/protocol/daemon-protocol-version'
 import {
   cleanupDaemonGenerationFixtures,
   createDaemonGenerationRuntime,

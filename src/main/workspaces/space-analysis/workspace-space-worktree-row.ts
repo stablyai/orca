@@ -6,8 +6,8 @@ import type {
   WorkspaceSpaceItem,
   WorkspaceSpaceScanStatus,
   WorkspaceSpaceWorktree
-} from '../../../shared/workspace-space-types'
-import type { WorkspaceSpaceEntryScan } from '../../../shared/workspace-space-directory-frame'
+} from '../../../shared/workspace-disk-space/workspace-space-types'
+import type { WorkspaceSpaceEntryScan } from '../../../shared/workspace-disk-space/workspace-space-directory-frame'
 import { getWorktreeExecutionHostId } from '../../../shared/execution-host'
 
 export function basenameWorkspaceFilesystemPath(pathValue: string): string {
@@ -33,7 +33,7 @@ function createBaseWorktreeRow(repo: Repo, worktree: Worktree, scannedAt: number
     executionHostId: getWorktreeExecutionHostId(worktree, repo),
     repoDisplayName: repo.displayName,
     repoPath: repo.path,
-    displayName: worktree.displayName,
+    displayName: worktree.displayName ?? '',
     path: worktree.path,
     branch: worktree.branch,
     isMainWorktree: worktree.isMainWorktree,

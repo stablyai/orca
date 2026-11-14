@@ -3,48 +3,47 @@ import { legacyChatPermissionWrite } from './legacy-chat-permission-write'
 import { stampDefaultOnMigrationGuards } from './default-on-migration-guards'
 import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat/native-chat-appearance-settings'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
+import { normalizeDisabledTuiAgents } from '../../../shared/agent-launch/catalog/tui-agent-selection'
 import {
   normalizeAgentDefaultSurface,
   normalizeNativeChatProviderChoices
 } from '../../../shared/native-chat/native-chat-providers'
-import { resolveNestedWorkerMaxDepth } from '../../../shared/nested-worker-depth'
-import { sanitizeAgentLaunchProfileUpdates } from '../../../shared/tui-agent-launch-defaults'
-import { normalizeTerminalQuickCommands } from '../../../shared/terminal-quick-commands'
-import { assertTerminalQuickCommandsStorable } from '../../../shared/terminal-quick-command-prompt-limit'
-import { normalizeTerminalCustomThemes } from '../../../shared/terminal-custom-themes'
+import { resolveNestedWorkerMaxDepth } from '../../../shared/orchestration/workers/nested-worker-depth'
+import { sanitizeAgentLaunchProfileUpdates } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { normalizeTerminalQuickCommands } from '../../../shared/terminal/quick-commands/terminal-quick-commands'
+import { assertTerminalQuickCommandsStorable } from '../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
+import { normalizeTerminalCustomThemes } from '../../../shared/terminal-themes/terminal-custom-themes'
 import { normalizePluginOwnedSettings } from '../../../shared/plugins/capabilities/plugin-owned-settings'
 import { legacyMatchTerminalSidebarWrite } from '../../../shared/plugin-theme-settings'
-import { normalizeTerminalDefaultShell } from '../../../shared/terminal-default-shell'
-import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal-cursor-style-settings'
-import { normalizeDesktopTerminalScrollbackRows } from '../../../shared/terminal-scrollback-policy'
-import { normalizeTerminalMinimumContrastRatio } from '../../../shared/terminal-minimum-contrast-settings'
-import { normalizeTaskProviderSettings } from '../../../shared/task-providers'
+import { normalizeTerminalDefaultShell } from '../../../shared/shell/launch/terminal-default-shell'
+import { normalizeTerminalCursorStyleDefault } from '../../../shared/terminal/appearance/terminal-cursor-style-settings'
+import { normalizeDesktopTerminalScrollbackRows } from '../../../shared/terminal/replay/terminal-scrollback-policy'
+import { normalizeTerminalMinimumContrastRatio } from '../../../shared/terminal-themes/terminal-minimum-contrast-settings'
+import { normalizeTaskProviderSettings } from '../../../shared/work-items/task-providers'
 import { normalizeOpenInApplications } from '../../../shared/open-in-applications'
 import { normalizeTerminalShortcutPolicy } from '../../../shared/keybindings'
-import { normalizeSourceControlGroupOrder } from '../../../shared/source-control-group-order'
+import { normalizeSourceControlGroupOrder } from '../../../shared/source-control/listing/source-control-group-order'
 import { normalizeAppIconId } from '../../../shared/app-icon'
 import { normalizeUiLanguage } from '../../../shared/ui-language'
 import { normalizeWorktreeVisibilityDefaults } from '../../../shared/external-worktree-visibility'
-import { normalizePRBotAuthorOverrides } from '../../../shared/pr-bot-author-overrides'
+import { normalizePRBotAuthorOverrides } from '../../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { normalizeMachineName } from '../../../shared/machine-name'
+import { normalizeWorkspaceCleanupRules } from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   addMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddress,
   normalizeMobilePairingCustomAddresses
-} from '../../../shared/mobile-pairing-custom-address'
-import {
-  mergeLegacyCommitMessageAiIntoSourceControlAi,
-  normalizeSourceControlAiSettings,
-  projectSourceControlAiToLegacyCommitMessageAi
-} from '../../../shared/source-control-ai'
-import type { ProtectedSecretPersistence } from '../../protected-secret-persistence'
+} from '../../../shared/remote-runtime/pairing/mobile-pairing-custom-address'
+import { mergeLegacyCommitMessageAiIntoSourceControlAi } from '../../../shared/source-control/ai/settings/source-control-ai-legacy-reconciliation'
+import { normalizeSourceControlAiSettings } from '../../../shared/source-control/ai/settings/source-control-ai-settings'
+import { projectSourceControlAiToLegacyCommitMessageAi } from '../../../shared/source-control/ai/settings/source-control-ai-legacy-projection'
+import type { ProtectedSecretPersistence } from '../../credentials/protected-secret-persistence'
 import { normalizeNotificationSettings } from './onboarding-normalization'
 import { retireLegacyInstructionsForClearedTextActionRecipes } from './source-control-settings'
 import {
   buildWorkspaceDirHistoryForUpdate,
-  expandWorkspaceDirHome,
+  normalizeWorkspaceDirSetting,
   stripRetiredGlobalSettings
 } from './terminal-settings-migrations'
 
@@ -61,7 +60,7 @@ export function updateSettings(
   updates: Partial<GlobalSettings>,
   options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
 ): GlobalSettings {
-  const sanitizedUpdates = expandWorkspaceDirHome(stripRetiredGlobalSettings(updates))
+  const sanitizedUpdates = normalizeWorkspaceDirSetting(stripRetiredGlobalSettings(updates))
   const linkBehavior = updates.terminalLinkClickBehavior
   if (linkBehavior === 'actions' || linkBehavior === 'open' || linkBehavior === 'none') {
     // Loaded defaults are ambiguous; synchronize the legacy switch only on an explicit write.
@@ -113,6 +112,11 @@ export function updateSettings(
         external: 'hide'
       })
     }
+  }
+  if ('workspaceCleanupPolicy' in updates) {
+    sanitizedUpdates.workspaceCleanupPolicy = normalizeWorkspaceCleanupRules(
+      updates.workspaceCleanupPolicy
+    )
   }
   sanitizeAgentLaunchProfileUpdates(sanitizedUpdates, updates)
   if ('nativeChatPermissionMode' in updates || 'agentPermissionDefault' in updates) {

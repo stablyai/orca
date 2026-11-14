@@ -1,4 +1,4 @@
-import { runWithGitReadCacheInvalidation } from '../../git/status'
+import { runWithGitReadCacheInvalidation } from '../../git/source-control/git-read-cache-invalidation'
 
 const cloneInFlightByPath = new Map<string, Promise<void>>()
 

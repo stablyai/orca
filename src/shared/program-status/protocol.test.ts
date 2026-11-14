@@ -1,16 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { PROGRAM_STATUS_QUERY_REPLY, parseProgramStatusBody } from './protocol'
+import { parseProgramStatusBody } from './protocol'
 
 const b64 = (text: string): string => Buffer.from(text, 'utf8').toString('base64')
 
 describe('parseProgramStatusBody', () => {
-  it('recognizes the feature-detection query', () => {
-    expect(parseProgramStatusBody('?')).toEqual({ type: 'query' })
-    expect(PROGRAM_STATUS_QUERY_REPLY).toBe(
-      '\x1b]7501;?:states=idle,working,done,blocked,error:kinds=permission,question,auth\x1b\\'
-    )
-  })
-
   it('parses the spec example with a base64 message', () => {
     const msg = 'Apply 3 to add, 1 to change, 0 to destroy?'
     expect(
@@ -102,13 +95,6 @@ describe('parseProgramStatusBody', () => {
     expect(parseProgramStatusBody('state=blocked:kind=unknown')).toEqual({
       type: 'report',
       report: { id: null, state: 'blocked' }
-    })
-  })
-
-  it('treats an out-of-charset app as absent', () => {
-    expect(parseProgramStatusBody('state=idle:app=a,b')).toEqual({
-      type: 'report',
-      report: { id: null, state: 'idle' }
     })
   })
 

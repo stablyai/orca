@@ -1,0 +1,163 @@
+import type { AppState } from '../../types'
+import type {
+  WorkspaceCleanupScanArgs,
+  WorkspaceCleanupScanResult
+} from '../../../../../shared/workspace-cleanup/workspace-cleanup'
+import {
+  getInFlightWorkspaceCleanupScan,
+  hasInFlightWorkspaceCleanupScan,
+  normalizeWorkspaceCleanupScanError,
+  registerInFlightWorkspaceCleanupScan,
+  releaseInFlightWorkspaceCleanupScan,
+  supersedeInFlightWorkspaceCleanupScans,
+  throwIfWorkspaceCleanupScanSuperseded
+} from './workspace-cleanup-broad-scan-registry'
+import {
+  applyWorkspaceCleanupDismissal,
+  enrichWorkspaceCleanupCandidates
+} from './workspace-cleanup-candidate-enrichment'
+import { getInitialWorkspaceCleanupGitDeferrals } from './workspace-cleanup-local-evidence'
+import {
+  beginWorkspaceCleanupScan,
+  drainWorkspaceCleanupProgressQueue,
+  enqueueWorkspaceCleanupProgress,
+  enrichWorkspaceCleanupCandidatesForScan,
+  finalizeWorkspaceCleanupScan,
+  isLatestWorkspaceCleanupScan
+} from './workspace-cleanup-scan-progress'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
+import {
+  cancelWorkspaceCleanupHostScan,
+  scanWorkspaceCleanupHosts
+} from './workspace-cleanup-host-scan'
+
+type SetState = (
+  partial: Partial<AppState> | ((state: AppState) => Partial<AppState>),
+  replace?: false
+) => void
+
+export async function scanWorkspaceCleanup(
+  get: () => AppState,
+  set: SetState,
+  args?: WorkspaceCleanupScanArgs
+): Promise<WorkspaceCleanupScanResult> {
+  if (args?.worktreeId !== undefined || args?.worktreeIds !== undefined) {
+    const scan = await scanWorkspaceCleanupHosts(args, get())
+    const enriched = await enrichWorkspaceCleanupCandidates(scan.candidates, get(), {
+      applyDismissals: false
+    })
+    return { ...scan, candidates: enriched }
+  }
+
+  const scanArgs = {
+    // Why: the dialog renders one flat list of every workspace, so a broad
+    // scan must not stop at the 30-day-idle suggestions.
+    includeAllWorkspaces: true,
+    ...args,
+    skipGitWorktreeIds: [
+      ...new Set([
+        ...(args?.skipGitWorktreeIds ?? []),
+        ...getInitialWorkspaceCleanupGitDeferrals(get())
+      ])
+    ],
+    // Broad scan identity belongs to this store request; caller-provided IDs
+    // are reserved for focused scans and can collide across refresh variants.
+    scanId: createBrowserUuid()
+  }
+  const scanKey = getWorkspaceCleanupScanKey(scanArgs)
+
+  const existingInFlight = getInFlightWorkspaceCleanupScan(scanKey)
+  if (existingInFlight) {
+    set({ workspaceCleanupLoading: true, workspaceCleanupError: null })
+    try {
+      return await existingInFlight
+    } finally {
+      if (!hasInFlightWorkspaceCleanupScan(scanKey)) {
+        set({ workspaceCleanupLoading: false })
+      }
+    }
+  }
+
+  // Supersede changed fleet-scan keys instead of running concurrent scans; legacy suggestion and full-workspace modes remain independent.
+  supersedeInFlightWorkspaceCleanupScans(
+    cancelWorkspaceCleanupHostScan,
+    (key) => getWorkspaceCleanupScanKeyMode(key) === (scanArgs.includeAllWorkspaces === true)
+  )
+  set({
+    workspaceCleanupLoading: true,
+    workspaceCleanupProgress: null,
+    workspaceCleanupError: null
+  })
+  const scanToken = beginWorkspaceCleanupScan()
+  const promise = (async () => {
+    try {
+      const scan = await scanWorkspaceCleanupHosts(scanArgs, get(), (progress) => {
+        enqueueWorkspaceCleanupProgress(progress, scanToken, get, set)
+      })
+      throwIfWorkspaceCleanupScanSuperseded(scanArgs.scanId)
+      await drainWorkspaceCleanupProgressQueue(scanToken)
+      const enriched = await enrichWorkspaceCleanupCandidatesForScan(
+        scan.candidates,
+        get(),
+        scanToken
+      )
+      throwIfWorkspaceCleanupScanSuperseded(scanArgs.scanId)
+      let result = { ...scan, candidates: enriched }
+      if (isLatestWorkspaceCleanupScan(scanToken)) {
+        finalizeWorkspaceCleanupScan(scanToken)
+        set((state) => {
+          // Ignore / Stop ignoring may commit during final enrichment.
+          result = {
+            ...result,
+            candidates: enriched.map((candidate) =>
+              applyWorkspaceCleanupDismissal(candidate, state.workspaceCleanupDismissals)
+            )
+          }
+          return {
+            workspaceCleanupScan: result,
+            workspaceCleanupProgress: {
+              scanId: state.workspaceCleanupProgress?.scanId ?? scanArgs.scanId,
+              scannedAt: result.scannedAt,
+              scannedWorktreeCount: result.candidates.length,
+              totalWorktreeCount: result.candidates.length,
+              candidates: result.candidates,
+              errors: result.errors
+            },
+            workspaceCleanupLoading: false
+          }
+        })
+      }
+      return result
+    } catch (error) {
+      throw normalizeWorkspaceCleanupScanError(scanArgs.scanId, error)
+    }
+  })()
+  registerInFlightWorkspaceCleanupScan(scanKey, scanArgs.scanId, promise)
+
+  try {
+    return await promise
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (isLatestWorkspaceCleanupScan(scanToken)) {
+      set({ workspaceCleanupError: message, workspaceCleanupLoading: false })
+    }
+    throw error
+  } finally {
+    releaseInFlightWorkspaceCleanupScan(scanKey, scanArgs.scanId, promise)
+  }
+}
+
+function getWorkspaceCleanupScanKey(args: WorkspaceCleanupScanArgs): string {
+  return JSON.stringify({
+    includeAllWorkspaces: args.includeAllWorkspaces === true,
+    skipGitWorktreeIds: [...new Set(args.skipGitWorktreeIds ?? [])].sort()
+  })
+}
+
+function getWorkspaceCleanupScanKeyMode(key: string): boolean {
+  try {
+    return (JSON.parse(key) as { includeAllWorkspaces?: boolean }).includeAllWorkspaces === true
+  } catch {
+    return false
+  }
+}

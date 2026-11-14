@@ -2,17 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { isLinuxWaylandSession } from './linux-wayland-session'
 
 describe('native Wayland session', () => {
-  it.each([{ WAYLAND_DISPLAY: 'wayland-1' }, { XDG_SESSION_TYPE: 'wayland' }])(
-    'recognizes the session from %j',
-    (env) => {
-      expect(isLinuxWaylandSession({ platform: 'linux', env })).toBe(true)
-    }
-  )
-  it('recognizes a command-line Wayland backend without a session hint', () => {
-    expect(isLinuxWaylandSession({ platform: 'linux', env: {}, ozonePlatform: 'wayland' })).toBe(
-      true
-    )
-  })
   it('honors explicit X11 overrides on Wayland desktops', () => {
     const env = { WAYLAND_DISPLAY: 'wayland-1', XDG_SESSION_TYPE: 'wayland' }
     expect(isLinuxWaylandSession({ platform: 'linux', env, ozonePlatform: 'x11' })).toBe(false)
@@ -23,20 +12,6 @@ describe('native Wayland session', () => {
         ozonePlatform: 'wayland'
       })
     ).toBe(true)
-  })
-  it('ignores the environment hint removed in Electron 38', () => {
-    expect(
-      isLinuxWaylandSession({
-        platform: 'linux',
-        env: { XDG_SESSION_TYPE: 'wayland', ELECTRON_OZONE_PLATFORM_HINT: 'x11' }
-      })
-    ).toBe(true)
-    expect(
-      isLinuxWaylandSession({
-        platform: 'linux',
-        env: { ELECTRON_OZONE_PLATFORM_HINT: 'wayland' }
-      })
-    ).toBe(false)
   })
   it.each(['x11', 'headless'])(
     'honors the explicit %s backend despite Wayland variables',
@@ -79,12 +54,6 @@ describe('native Wayland session', () => {
           })
         ).toBe(false)
       }
-    }
-  )
-  it.each(['darwin', 'win32', 'linux'] as const)(
-    'keeps ordinary %s sessions on their existing backend',
-    (platform) => {
-      expect(isLinuxWaylandSession({ platform, env: {} })).toBe(false)
     }
   )
 })

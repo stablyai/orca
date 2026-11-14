@@ -31,3 +31,8 @@ export function managedOrcadServerName(target: Pick<SshTarget, 'label' | 'owner'
   const runtimeId = isEphemeralRuntimeSshOwner(target.owner) ? target.owner?.runtimeId : undefined
   return runtimeId ? `${target.label} VM ${runtimeId.slice(-8)}` : target.label
 }
+
+/** Refusal for a new desktop automation on a host whose managed Orca server owns its automations. */
+export function moveProjectToManagedHostFirst(host: string): string {
+  return `Move this project to ${host} first.`
+}

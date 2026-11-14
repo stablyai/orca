@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import type { SetupRunPolicy } from '../../../src/shared/orca-yaml-hook-types'
 import { hostUnionArms, salvagedOptional, salvagingRecord } from '../../../src/shared/zod-salvage'
 
@@ -50,7 +50,7 @@ const trustedOrcaHookRepoSchema = z.looseObject({
 })
 
 // Total ui.get reader preserves optional trust default for every shape: unawaited caller has no catch, so throwing would also skip available-provider setup.
-// Salvage per repo so one malformed approval cannot erase other trust. Unit test covers fulfilled non-object payload outside matrix mutation vocabulary.
+// Salvage per repo so one malformed approval cannot erase other trust.
 export const newWorkspaceUiTrustSchema = z
   .looseObject({
     ui: salvagedOptional(

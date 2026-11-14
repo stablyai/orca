@@ -1,10 +1,10 @@
-import type { WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet } from '../listing/worktree-slice-types'
 import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
 import {
   withoutForeignHostStatus,
   type StatusColumnOwner
-} from '../../../host-workspace-status-columns'
+} from '../../../workspaces/status/host-workspace-status-columns'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
 /** The card's host and runtime owner; null when neither the caller nor the store knows its host. */

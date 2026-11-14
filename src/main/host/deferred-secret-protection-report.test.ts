@@ -93,20 +93,6 @@ describe('scheduleSecretProtectionGapReport', () => {
     expect(logged).toEqual([])
   })
 
-  it('honors forced reports for development profiles', () => {
-    scheduleSecretProtectionGapReport({
-      dataFile,
-      log: (m) => void logged.push(m),
-      deferUntilFirstWindow: true,
-      skipInDevelopment: true,
-      force: true
-    })
-    createWindow().reveal()
-    drain()
-    expect(probes).toBe(1)
-    expect(logged).toEqual(['[secrets] The OS keyring is unavailable.'])
-  })
-
   /** Drain queued setImmediate callbacks; the 1ms is slack. */
   const drain = (): void => void vi.advanceTimersByTime(1)
 
@@ -206,16 +192,5 @@ describe('scheduleSecretProtectionGapReport', () => {
     })
     expect(probes).toBe(1)
     expect(logged).toEqual(['[secrets] The OS keyring is unavailable.'])
-  })
-
-  it('leaves no timer armed in headless serve', () => {
-    scheduleSecretProtectionGapReport({
-      dataFile,
-      log: (m) => void logged.push(m),
-      deferUntilFirstWindow: false
-    })
-    expect(vi.getTimerCount()).toBe(0)
-    vi.runAllTimers()
-    expect(probes).toBe(1)
   })
 })

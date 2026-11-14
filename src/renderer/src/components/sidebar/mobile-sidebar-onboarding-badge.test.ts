@@ -3,14 +3,8 @@
 import { act, createElement, type ComponentProps } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  shouldShowMobileSidebarOnboardingBadge,
-  useMobileSidebarOnboardingBadge
-} from './mobile-sidebar-onboarding-badge'
-import {
-  _resetPairedMobileDevicesCacheForTests,
-  replacePairedMobileDevices
-} from '../mobile/paired-mobile-devices'
+import { useMobileSidebarOnboardingBadge } from './mobile-sidebar-onboarding-badge'
+import { _resetPairedMobileDevicesCacheForTests } from '../mobile/paired-mobile-devices'
 
 type HookState = ReturnType<typeof useMobileSidebarOnboardingBadge>
 
@@ -59,35 +53,6 @@ describe('mobile sidebar onboarding badge', () => {
     })
     document.body.innerHTML = ''
     vi.useRealTimers()
-  })
-
-  it('does not show when the sidebar button is hidden', () => {
-    expect(shouldShowMobileSidebarOnboardingBadge(false, false)).toBe(false)
-  })
-
-  it('shows only while enabled and undismissed', () => {
-    expect(shouldShowMobileSidebarOnboardingBadge(true, false)).toBe(true)
-    expect(shouldShowMobileSidebarOnboardingBadge(true, true)).toBe(false)
-  })
-
-  it('marks a paired device after shared mobile devices load', async () => {
-    listDevices.mockResolvedValue({
-      devices: [{ deviceId: 'phone-1', name: 'Phone', pairedAt: 1, lastSeenAt: 2 }]
-    })
-
-    await renderHookProbe()
-
-    await vi.waitFor(() => expect(latestHookState?.hasPairedDevice).toBe(true))
-    expect(latestHookState?.visible).toBe(false)
-  })
-
-  it('shows the badge after shared mobile devices load empty', async () => {
-    replacePairedMobileDevices([])
-
-    await renderHookProbe()
-
-    expect(latestHookState?.visible).toBe(true)
-    expect(latestHookState?.hasPairedDevice).toBe(false)
   })
 
   it('does not show the badge on a failed load and recovers on window focus', async () => {

@@ -2,19 +2,23 @@ import { mainI18n, translateMain } from '../i18n/main-i18n'
 import { app, BrowserWindow, nativeTheme, type WebContents, type Event } from 'electron'
 import { join } from 'node:path'
 import type { Store } from '../persistence/loading-store/store'
-import { isBackgroundLaunch, showWindowWithoutStealingFocus } from './foreground-activation-policy'
-import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
+import {
+  isBackgroundLaunch,
+  showWindowWithoutStealingFocus
+} from './activation/foreground-activation-policy'
+import { rectHasVisibleAreaOnAnyDisplay } from './presentation/window-bounds-validation'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
-import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
+import { installPrivilegedWindowNavigationPolicy } from './security/privileged-window-navigation'
 import { stepUIZoomLevel, type UIZoomDirection } from '../../shared/ui-zoom-level'
 import { nativeZoomCommandMatchesKeybindings } from '../../shared/window-shortcut-policy'
-import {
-  keybindingMatchesAction,
-  type KeybindingActionId,
-  type KeybindingInput,
-  type KeybindingOverrides
-} from '../../shared/keybindings'
-import { wslHostsWindowArguments } from '../wsl/wsl-host-gate'
+import { keybindingMatchesAction } from '../../shared/keybindings/matching'
+import type {
+  KeybindingActionId,
+  KeybindingInput,
+  KeybindingOverrides
+} from '../../shared/keybindings/types'
+import { wslHostsWindowArguments } from '../wsl/host-lifecycle/wsl-host-gate'
+import { isMacAppPasteInput } from './editing/mac-app-paste-input'
 
 const MIN_WIDTH = 480
 const MIN_HEIGHT = 360
@@ -192,8 +196,14 @@ export function createOrFocusDashboardPopout(
     }
   })
 
-  // No renderer shortcut routing exists here; handle zoom chords and yield everything else.
+  // No renderer shortcut routing exists here; handle paste and zoom chords and yield everything else.
   window.webContents.on('before-input-event', (event, input) => {
+    if (isMacAppPasteInput(input)) {
+      // Kitty-mode xterm encodes Cmd+V as CSI u and consumes it, so the Edit menu accelerator never fires.
+      event.preventDefault()
+      window.webContents.send('ui:appMenuPaste')
+      return
+    }
     if (input.type !== 'keyDown') {
       return
     }

@@ -1,145 +1,101 @@
 /** Early launch admission and the later chat host must share one record-store writer. */
 
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { JournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database'
-import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
+import { openJournalDatabase } from '../../../native-chat/agent-session-journal/database/journal-database'
+import { journalDatabasePath } from '../../../native-chat/agent-session-journal/database/journal-host-database'
 import {
+  journalDomainDatabasePath,
+  openJournalDomainDatabase
+} from '../../../native-chat/agent-session-journal/database/journal-domain-database'
+import {
+  journalSqlReaderPath,
+  journalSqlWorkerPath
+} from '../../../native-chat/agent-session-journal/journal-sql-worker-bundle.test-fixture'
+import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import {
+  closeAgentSessionRecordStoreDatabase,
+  hasPersistedStructuredAgentSessionStore,
   openAgentSessionRecordStoreOnce,
   peekOpenedAgentSessionRecordStore,
-  releaseAgentSessionRecordStore
+  retireAgentSessionRecordStore
 } from './agent-session-record-store-slot'
-import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
-import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from '../structured-agent-session-runtime'
 
 const HOST_ID = 'local'
 let stateDirectory: string
+let closed: Set<JournalSqlDatabase>
 
 function location(directory = stateDirectory) {
   return {
     stateDirectory: directory,
     legacySessionTabIds: [],
     hostId: HOST_ID,
-    logger: createStructuredAgentSessionLogger()
+    logger: createStructuredAgentSessionLogger(),
+    writerPath: journalSqlWorkerPath(),
+    readerPath: journalSqlReaderPath(),
+    onMaintenanceTick: () => {}
   }
 }
 
+const retireStandalone = () =>
+  retireAgentSessionRecordStore((opened) =>
+    closeAgentSessionRecordStoreDatabase(opened?.journalDatabase)
+  )
+
 beforeEach(async () => {
   stateDirectory = await mkdtemp(join(tmpdir(), 'orca-record-store-slot-'))
+  closed = new Set()
+  const realClose = JournalSqlDatabase.prototype.close
+  vi.spyOn(JournalSqlDatabase.prototype, 'close').mockImplementation(function (
+    this: JournalSqlDatabase
+  ) {
+    return realClose.call(this).then(() => {
+      closed.add(this)
+    })
+  })
 })
 
 afterEach(async () => {
-  await stopStructuredAgentSessionRuntime()
+  await retireStandalone()
   vi.restoreAllMocks()
   await rm(stateDirectory, { recursive: true, force: true })
 })
 
-describe('the record store slot', () => {
-  it('hands every caller the same store', async () => {
-    const [first, second] = await Promise.all([
-      openAgentSessionRecordStoreOnce(location()),
-      openAgentSessionRecordStoreOnce(location())
-    ])
-
-    expect(second.store).toBe(first.store)
-  })
-
-  it('builds a chat host installed after admission on the store admission opened', async () => {
-    const { store } = await openAgentSessionRecordStoreOnce(location())
-    const close = vi.spyOn(JournalHostDatabase.prototype, 'close')
-
-    const host = await ensureStructuredAgentSessionHost({
-      ...location(),
-      claimKeyId: 'key-1',
-      resolveWorkspacePath: async () => stateDirectory,
-      resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
-      resolveEnvironment: async () => ({}),
-      resolveLaunchArgs: () => []
-    })
-    expect(host.deps.store).toBe(store)
-
-    await stopStructuredAgentSessionRuntime()
-    expect(close).toHaveBeenCalledOnce()
-  })
-
-  it('closes a store no chat host was built on when the runtime stops', async () => {
-    const { store } = await openAgentSessionRecordStoreOnce(location())
-    const close = vi.spyOn(JournalHostDatabase.prototype, 'close')
-
-    await stopStructuredAgentSessionRuntime()
-
-    expect(close).toHaveBeenCalledOnce()
-    const reopened = await openAgentSessionRecordStoreOnce(location())
-    expect(reopened.store).not.toBe(store)
-  })
-
-  it('refuses a second profile rather than opening a second store', async () => {
-    await openAgentSessionRecordStoreOnce(location())
-    const elsewhere = await mkdtemp(join(tmpdir(), 'orca-record-store-slot-other-'))
-    try {
-      await expect(openAgentSessionRecordStoreOnce(location(elsewhere))).rejects.toThrow(
-        'agent_session_record_store_location_changed'
-      )
-    } finally {
-      await rm(elsewhere, { recursive: true, force: true })
-    }
-  })
-
-  it('lets the next caller retry after an open fails', async () => {
-    const notADirectory = join(stateDirectory, 'profile-file')
-    await writeFile(notADirectory, 'not a profile')
-
-    await expect(openAgentSessionRecordStoreOnce(location(notADirectory))).rejects.toThrow()
-    await expect(openAgentSessionRecordStoreOnce(location())).resolves.toMatchObject({
-      store: expect.anything()
-    })
-  })
-})
-
-it('publishes source installation and release even when opening an empty record store', async () => {
-  const observed: unknown[] = []
-  const facets: string[][] = []
-  const stop = sessionCrewChanges.subscribe((changed) => {
-    observed.push(peekOpenedAgentSessionRecordStore())
-    facets.push([...changed].sort())
-  })
+it('discovers saved SQL chats after restart and consults the old store only before conversion', async () => {
+  expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(false)
+  const oldPath = journalDatabasePath(stateDirectory)
+  const { db: old } = openJournalDatabase(oldPath)
   try {
-    const first = await openAgentSessionRecordStoreOnce(location())
-    expect(observed).toEqual([first.store])
-    await openAgentSessionRecordStoreOnce(location())
-    expect(observed).toEqual([first.store])
-    const released = await releaseAgentSessionRecordStore()
-    expect(observed).toEqual([first.store, null])
-    expect(facets).toEqual([
-      ['records', 'topology'],
-      ['records', 'topology']
-    ])
-    released?.journalDatabase.close()
+    old.prepare('INSERT INTO agent_session_records VALUES(?,?)').run('old-chat', '{}')
   } finally {
-    stop()
+    old.close()
   }
+  expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(true)
+  const { db } = openJournalDomainDatabase(journalDomainDatabasePath(stateDirectory))
+  try {
+    expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(false)
+    db.prepare('INSERT INTO agent_session_records VALUES(?,?)').run('new-chat', '{}')
+  } finally {
+    db.close()
+  }
+  await rm(oldPath)
+  expect(hasPersistedStructuredAgentSessionStore(stateDirectory)).toBe(true)
 })
 
 it.each(['standalone', 'construction'] as const)(
   'retains failed %s database closure for retry',
   async (path) => {
     const { AgentSessionRecordStore } = await import('./agent-session-record-store')
-    let database: JournalHostDatabase | undefined
-    const realClose = JournalHostDatabase.prototype.close
-    const realOpen = JournalHostDatabase.open
-    vi.spyOn(JournalHostDatabase, 'open').mockImplementation((directory) => {
-      const opened = realOpen(directory)
-      database = opened
-      return opened
+    let database: JournalSqlDatabase | undefined
+    const realOpen = JournalSqlDatabase.open
+    vi.spyOn(JournalSqlDatabase, 'open').mockImplementation(async (...args) => {
+      database = await realOpen(...args)
+      return database
     })
-    const close = vi
-      .spyOn(JournalHostDatabase.prototype, 'close')
-      .mockRejectedValueOnce(new Error('close failed'))
+    vi.mocked(JournalSqlDatabase.prototype.close).mockRejectedValueOnce(new Error('close failed'))
     if (path === 'construction') {
       vi.spyOn(AgentSessionRecordStore, 'open').mockImplementationOnce(() => {
         throw new Error('construction failed')
@@ -147,13 +103,55 @@ it.each(['standalone', 'construction'] as const)(
       await expect(openAgentSessionRecordStoreOnce(location())).rejects.toThrow('close failed')
     } else {
       await openAgentSessionRecordStoreOnce(location())
-      await expect(stopStructuredAgentSessionRuntime()).rejects.toThrow('close failed')
+      await expect(retireStandalone()).rejects.toThrow('close failed')
     }
-    expect(database?.isClosed).toBe(false)
-    close.mockImplementation(realClose)
-    const retiring = database
+    const retiring = database!
+    expect(closed.has(retiring)).toBe(false)
     // A new admission must first finish retiring the old connection.
-    await openAgentSessionRecordStoreOnce(location())
-    expect(retiring?.isClosed).toBe(true)
+    const reopened = await openAgentSessionRecordStoreOnce(location())
+    expect(closed.has(retiring)).toBe(true)
+    expect(reopened.journalDatabase).not.toBe(retiring)
+  }
+)
+
+it.each(['draining', 'refused'] as const)(
+  'keeps the physical writer owned through a %s retirement before launch admission reopens',
+  async (path) => {
+    const opened = await openAgentSessionRecordStoreOnce(location())
+    const realOpen = JournalSqlDatabase.open
+    vi.spyOn(JournalSqlDatabase, 'open').mockImplementation((...args) => {
+      if (!closed.has(opened.journalDatabase)) {
+        throw new Error('second physical journal writer')
+      }
+      return realOpen(...args)
+    })
+    const drain = Promise.withResolvers<void>()
+    let attempts = 0
+    const stopped = retireAgentSessionRecordStore(async (owned) => {
+      attempts++
+      await drain.promise
+      if (path === 'refused' && attempts === 1) {
+        throw new Error('sink still owned')
+      }
+      await closeAgentSessionRecordStoreDatabase(owned?.journalDatabase)
+    })
+    const observedStop = stopped.catch((error: unknown) => error)
+    expect(peekOpenedAgentSessionRecordStore()).toBeNull()
+    const replacement = openAgentSessionRecordStoreOnce(location())
+    const observedReplacement = replacement.catch((error: unknown) => error)
+    await new Promise(setImmediate)
+    expect(closed.has(opened.journalDatabase)).toBe(false)
+    drain.resolve()
+    if (path === 'refused') {
+      expect(await observedStop).toEqual(new Error('sink still owned'))
+      expect(await observedReplacement).toEqual(new Error('sink still owned'))
+      expect(closed.has(opened.journalDatabase)).toBe(false)
+      const retried = await openAgentSessionRecordStoreOnce(location())
+      expect(closed.has(retried.journalDatabase)).toBe(false)
+    } else {
+      await stopped
+      expect(closed.has((await replacement).journalDatabase)).toBe(false)
+    }
+    expect(closed.has(opened.journalDatabase)).toBe(true)
   }
 )

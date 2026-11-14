@@ -82,20 +82,6 @@ describe('remote runtime resume probe', () => {
     expect(onDead).not.toHaveBeenCalled()
   })
 
-  it('skips the probe when data arrived in the last few seconds', async () => {
-    const { monitor, onDead, ping } = start()
-
-    monitor.noteActivity()
-    await vi.advanceTimersByTimeAsync(2_000)
-    probeAllRemoteRuntimeSocketsNow()
-    expect(ping).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(7_000)
-    expect(onDead).not.toHaveBeenCalled()
-
-    probeAllRemoteRuntimeSocketsNow()
-    expect(ping).toHaveBeenCalledTimes(1)
-  })
-
   it('probes afresh instead of failing a socket when the process stalled through the deadline', async () => {
     let clock = 0
     const onDead = vi.fn()

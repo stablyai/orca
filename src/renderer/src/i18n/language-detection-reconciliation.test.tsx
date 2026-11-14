@@ -11,7 +11,7 @@ async function loadLanguageRuntime() {
       import('../../../shared/constants'),
       import('../../../shared/ui-locale'),
       import('@/store'),
-      import('@/store/plugin-language-packs'),
+      import('@/store/plugins/localization/plugin-language-packs'),
       import('./language-readiness'),
       import('./I18nProvider'),
       import('./i18n'),

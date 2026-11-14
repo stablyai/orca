@@ -11,18 +11,18 @@ import type {
   BrowserSelectResult,
   BrowserTypeResult,
   BrowserUploadResult
-} from '../../shared/runtime-browser-contracts'
-import type { CommandHandler } from '../dispatch'
-import { resolveRepoPathArgument } from '../repo-path-arguments'
-import { printResult } from '../format'
+} from '../../shared/browser/runtime/runtime-browser-contracts'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { resolveRepoPathArgument } from '../projects/repo-path-arguments'
+import { printResult } from '../output/command-result-output'
 import {
   getOptionalNumberFlag,
   getOptionalStringFlag,
   getRequiredFiniteNumber,
   getRequiredStringFlag,
   getRequiredStringFlagAllowingEmpty
-} from '../flags'
-import { getBrowserCommandTarget } from '../selectors'
+} from '../arguments/flags'
+import { getBrowserCommandTarget } from './browser-command-target'
 
 const checkHandler =
   (checked: boolean): CommandHandler =>

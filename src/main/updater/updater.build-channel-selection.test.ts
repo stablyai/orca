@@ -1,0 +1,398 @@
+import type { getReleaseDownloadUrl } from './releases/updater-release-readiness'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { loadUpdaterModule, warmUpdaterModule } from './testing/updater-test-module-loader'
+import { updaterMainWindow } from './testing/updater-test-main-window'
+
+const {
+  appMock,
+  autoUpdaterMock,
+  fetchNewerReleaseTagsMock,
+  chooseLocalBuildMock,
+  closeLocalBuildFeedMock,
+  moduleFactories,
+  resetUpdaterMocks
+} = await vi.hoisted(async () =>
+  (await import('./testing/updater-test-harness')).createUpdaterMocks()
+)
+
+vi.mock('electron', () => moduleFactories.electron())
+vi.mock('electron-updater', () => moduleFactories.electronUpdater())
+vi.mock('./electron-updater-loader', () => moduleFactories.electronUpdaterLoader())
+vi.mock('../ipc/pty/kill-all', () => moduleFactories.ptyKillAll())
+vi.mock('./linux-package/linux-update-package-type', () => moduleFactories.linuxUpdatePackageType())
+vi.mock('./updater-lifecycle-diagnostics', () => moduleFactories.updaterLifecycleDiagnostics())
+vi.mock('./releases/updater-changelog', () => moduleFactories.updaterChangelog())
+vi.mock('./nudges/nudge-campaign', () => moduleFactories.updaterNudge())
+vi.mock('./update-install-exit-watchdog', () => moduleFactories.updateInstallExitWatchdog())
+vi.mock('./releases/updater-prerelease-feed', () => moduleFactories.updaterPrereleaseFeed())
+vi.mock('./releases/updater-release-readiness', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getReleaseDownloadUrl: (
+    await vi.importMock<{
+      getReleaseDownloadUrl: typeof getReleaseDownloadUrl
+    }>('./releases/updater-prerelease-feed')
+  ).getReleaseDownloadUrl
+}))
+vi.mock('../local-builds/local-build-switch', () => moduleFactories.localBuildSwitch())
+vi.mock('../local-builds/local-build-feed-server', () => moduleFactories.localBuildFeedServer())
+
+// Matches updater/updater-state.ts.
+const AUTO_UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000
+
+warmUpdaterModule()
+
+describe('updater', () => {
+  beforeEach(() => {
+    resetUpdaterMocks()
+  })
+
+  // Signed Windows builds verify publisherName; refuse unsigned dev jumps before downloading.
+  it('refuses to pin a Windows dev build from a signed build, and says what to do', async () => {
+    const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    try {
+      appMock.getVersion.mockReturnValue('1.4.160')
+      const send = vi.fn()
+      const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
+      setupAutoUpdater(updaterMainWindow(send), {
+        getLastUpdateCheckAt: () => Date.now()
+      })
+
+      checkForUpdatesFromMenu({ channel: 'adhoc', targetTag: 'v1.4.160-adhoc.20260728140533' })
+
+      expect(send).toHaveBeenCalledWith('updater:status', {
+        state: 'error',
+        message: expect.stringContaining('Download the installer from the release page'),
+        messageCode: 'unsignedDevChannel',
+        messageParams: { channel: 'Adhoc' },
+        userInitiated: true
+      })
+      expect(autoUpdaterMock.checkForUpdates).not.toHaveBeenCalled()
+    } finally {
+      platformSpy.mockRestore()
+    }
+  })
+
+  it.runIf(process.platform === 'darwin')(
+    'allows a validated local build to downgrade through the normal updater lifecycle',
+    async () => {
+      chooseLocalBuildMock.mockResolvedValue({
+        version: '0.9.0-local.1',
+        manifestContent: 'version: 0.9.0-local.1',
+        artifacts: new Map()
+      })
+      autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+        autoUpdaterMock.emit('checking-for-update')
+        autoUpdaterMock.emit('update-available', { version: '0.9.0-local.1' })
+        return Promise.resolve(undefined)
+      })
+      const send = vi.fn()
+      const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
+      setupAutoUpdater(updaterMainWindow(send), {
+        getLastUpdateCheckAt: () => Date.now()
+      })
+
+      checkForUpdatesFromMenu({ localBuild: true })
+
+      await vi.waitFor(() => {
+        expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+      })
+      expect(autoUpdaterMock.allowDowngrade).toBe(true)
+      expect(autoUpdaterMock.disableDifferentialDownload).toBe(true)
+      expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
+        provider: 'generic',
+        url: 'http://127.0.0.1:1234/token/'
+      })
+      await vi.waitFor(() => {
+        expect(send).toHaveBeenCalledWith(
+          'updater:status',
+          expect.objectContaining({
+            state: 'available',
+            version: '0.9.0-local.1',
+            source: 'local'
+          })
+        )
+      })
+
+      setupAutoUpdater(updaterMainWindow(send), {
+        getLastUpdateCheckAt: () => Date.now()
+      })
+      expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
+        provider: 'generic',
+        url: 'http://127.0.0.1:1234/token/'
+      })
+      expect(autoUpdaterMock.allowDowngrade).toBe(true)
+
+      autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+      checkForUpdatesFromMenu()
+      await vi.waitFor(() => {
+        expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+      })
+      expect(closeLocalBuildFeedMock).toHaveBeenCalledTimes(1)
+      expect(autoUpdaterMock.allowDowngrade).toBe(false)
+      expect(autoUpdaterMock.disableDifferentialDownload).toBe(false)
+    }
+  )
+
+  it.runIf(process.platform === 'darwin')(
+    'restores ordinary release checks after a local build is unavailable',
+    async () => {
+      chooseLocalBuildMock.mockResolvedValue({
+        version: '0.9.0-local.1',
+        manifestContent: 'version: 0.9.0-local.1',
+        artifacts: new Map()
+      })
+      autoUpdaterMock.checkForUpdates.mockImplementationOnce(() => {
+        autoUpdaterMock.emit('checking-for-update')
+        autoUpdaterMock.emit('update-not-available')
+        return Promise.resolve(undefined)
+      })
+      const send = vi.fn()
+      const { setupAutoUpdater, checkForUpdates, checkForUpdatesFromMenu } =
+        await loadUpdaterModule()
+      setupAutoUpdater(updaterMainWindow(send), {
+        getLastUpdateCheckAt: () => Date.now()
+      })
+
+      checkForUpdatesFromMenu({ localBuild: true })
+      await vi.waitFor(() => {
+        expect(closeLocalBuildFeedMock).toHaveBeenCalledTimes(1)
+      })
+      expect(send).toHaveBeenCalledWith('updater:status', {
+        state: 'not-available',
+        userInitiated: true,
+        source: 'local'
+      })
+      expect(autoUpdaterMock.allowDowngrade).toBe(false)
+      expect(autoUpdaterMock.disableDifferentialDownload).toBe(false)
+
+      checkForUpdates()
+      await vi.waitFor(() => {
+        expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+      })
+      expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
+        provider: 'generic',
+        url: 'https://github.com/stablyai/orca/releases/download/v1.0.51'
+      })
+    }
+  )
+
+  it.runIf(process.platform === 'darwin')(
+    'restores ordinary release checks after a local updater failure',
+    async () => {
+      chooseLocalBuildMock.mockResolvedValue({
+        version: '0.9.0-local.1',
+        manifestContent: 'version: 0.9.0-local.1',
+        artifacts: new Map()
+      })
+      autoUpdaterMock.checkForUpdates.mockRejectedValueOnce(new Error('local feed failed'))
+      const send = vi.fn()
+      const { setupAutoUpdater, checkForUpdates, checkForUpdatesFromMenu } =
+        await loadUpdaterModule()
+      setupAutoUpdater(updaterMainWindow(send), {
+        getLastUpdateCheckAt: () => Date.now()
+      })
+
+      checkForUpdatesFromMenu({ localBuild: true })
+      await vi.waitFor(() => {
+        expect(send).toHaveBeenCalledWith('updater:status', {
+          state: 'error',
+          message: 'local feed failed',
+          userInitiated: true,
+          source: 'local'
+        })
+      })
+      expect(closeLocalBuildFeedMock).toHaveBeenCalledTimes(1)
+      expect(autoUpdaterMock.allowDowngrade).toBe(false)
+      expect(autoUpdaterMock.disableDifferentialDownload).toBe(false)
+
+      checkForUpdates()
+      await vi.waitFor(() => {
+        expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2)
+      })
+      expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
+        provider: 'generic',
+        url: 'https://github.com/stablyai/orca/releases/download/v1.0.51'
+      })
+    }
+  )
+
+  it.runIf(process.platform === 'darwin')(
+    'keeps the automatic check chain alive across a local build session',
+    async () => {
+      vi.useFakeTimers()
+      chooseLocalBuildMock.mockResolvedValue({
+        version: '0.9.0-local.1',
+        manifestContent: 'version: 0.9.0-local.1',
+        artifacts: new Map()
+      })
+      autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+        autoUpdaterMock.emit('checking-for-update')
+        autoUpdaterMock.emit('update-available', { version: '0.9.0-local.1' })
+        return Promise.resolve(undefined)
+      })
+      autoUpdaterMock.downloadUpdate.mockRejectedValue(new Error('local download failed'))
+      const send = vi.fn()
+      const { setupAutoUpdater, checkForUpdatesFromMenu, downloadUpdate } =
+        await loadUpdaterModule()
+      setupAutoUpdater(updaterMainWindow(send), {
+        getLastUpdateCheckAt: () => Date.now()
+      })
+
+      checkForUpdatesFromMenu({ localBuild: true })
+      await vi.advanceTimersByTimeAsync(0)
+      expect(send).toHaveBeenCalledWith(
+        'updater:status',
+        expect.objectContaining({ state: 'available', source: 'local' })
+      )
+
+      // This window observes only its owning module's attempts, excluding stale sibling timers.
+      autoUpdaterMock.checkForUpdates.mockReset().mockImplementation(() => {
+        autoUpdaterMock.emit('checking-for-update')
+        autoUpdaterMock.emit('update-not-available')
+        return Promise.resolve(undefined)
+      })
+
+      send.mockClear()
+      await vi.advanceTimersByTimeAsync(AUTO_UPDATE_CHECK_INTERVAL_MS)
+      expect(send).not.toHaveBeenCalledWith('updater:status', { state: 'not-available' })
+
+      downloadUpdate()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(autoUpdaterMock.allowDowngrade).toBe(false)
+
+      send.mockClear()
+      await vi.advanceTimersByTimeAsync(AUTO_UPDATE_CHECK_INTERVAL_MS)
+      expect(send).toHaveBeenCalledWith('updater:status', { state: 'not-available' })
+      expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
+        provider: 'generic',
+        url: 'https://github.com/stablyai/orca/releases/download/v1.0.51'
+      })
+    }
+  )
+
+  it.runIf(process.platform === 'darwin')(
+    'restores release checks when an offered local build is dismissed',
+    async () => {
+      chooseLocalBuildMock.mockResolvedValue({
+        version: '0.9.0-local.1',
+        manifestContent: 'version: 0.9.0-local.1',
+        artifacts: new Map()
+      })
+      autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+        autoUpdaterMock.emit('checking-for-update')
+        autoUpdaterMock.emit('update-available', { version: '0.9.0-local.1' })
+        return Promise.resolve(undefined)
+      })
+      const send = vi.fn()
+      const { setupAutoUpdater, checkForUpdates, checkForUpdatesFromMenu, dismissAvailableUpdate } =
+        await loadUpdaterModule()
+      setupAutoUpdater(updaterMainWindow(send), {
+        getLastUpdateCheckAt: () => Date.now()
+      })
+
+      checkForUpdatesFromMenu({ localBuild: true })
+      await vi.waitFor(() => {
+        expect(send).toHaveBeenCalledWith(
+          'updater:status',
+          expect.objectContaining({ state: 'available', source: 'local' })
+        )
+      })
+
+      dismissAvailableUpdate()
+      expect(closeLocalBuildFeedMock).toHaveBeenCalledTimes(1)
+      expect(autoUpdaterMock.allowDowngrade).toBe(false)
+      expect(autoUpdaterMock.disableDifferentialDownload).toBe(false)
+      expect(send).toHaveBeenCalledWith('updater:status', { state: 'idle' })
+
+      autoUpdaterMock.checkForUpdates.mockReset().mockResolvedValue(undefined)
+      checkForUpdates()
+      await vi.waitFor(() => {
+        expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1)
+      })
+      expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
+        provider: 'generic',
+        url: 'https://github.com/stablyai/orca/releases/download/v1.0.51'
+      })
+    }
+  )
+
+  it.runIf(process.platform === 'darwin')(
+    'keeps the local feed in force when a dismiss lands during a local build download',
+    async () => {
+      chooseLocalBuildMock.mockResolvedValue({
+        version: '0.9.0-local.1',
+        manifestContent: 'version: 0.9.0-local.1',
+        artifacts: new Map()
+      })
+      autoUpdaterMock.checkForUpdates.mockImplementation(() => {
+        autoUpdaterMock.emit('checking-for-update')
+        autoUpdaterMock.emit('update-available', { version: '0.9.0-local.1' })
+        return Promise.resolve(undefined)
+      })
+      autoUpdaterMock.downloadUpdate.mockResolvedValue(undefined)
+      const send = vi.fn()
+      const { setupAutoUpdater, checkForUpdatesFromMenu, dismissAvailableUpdate, downloadUpdate } =
+        await loadUpdaterModule()
+      setupAutoUpdater(updaterMainWindow(send), {
+        getLastUpdateCheckAt: () => Date.now()
+      })
+
+      checkForUpdatesFromMenu({ localBuild: true })
+      await vi.waitFor(() => {
+        expect(send).toHaveBeenCalledWith(
+          'updater:status',
+          expect.objectContaining({ state: 'available', source: 'local' })
+        )
+      })
+
+      downloadUpdate()
+      dismissAvailableUpdate()
+
+      expect(closeLocalBuildFeedMock).not.toHaveBeenCalled()
+      expect(autoUpdaterMock.allowDowngrade).toBe(true)
+      expect(autoUpdaterMock.disableDifferentialDownload).toBe(true)
+      expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
+        provider: 'generic',
+        url: 'http://127.0.0.1:1234/token/'
+      })
+    }
+  )
+
+  it('keeps background retries on the stable channel after a perf publishing-window miss', async () => {
+    vi.useFakeTimers()
+    appMock.getVersion.mockReturnValue('1.4.120')
+    fetchNewerReleaseTagsMock
+      .mockResolvedValueOnce({ tags: [], state: 'not-ready' })
+      .mockResolvedValueOnce(['v1.4.121'])
+    autoUpdaterMock.checkForUpdates.mockResolvedValue(undefined)
+    const sendMock = vi.fn()
+    const mainWindow = updaterMainWindow(sendMock)
+
+    const { setupAutoUpdater, checkForUpdatesFromMenu } = await loadUpdaterModule()
+
+    setupAutoUpdater(mainWindow, { getLastUpdateCheckAt: () => Date.now() })
+
+    checkForUpdatesFromMenu({ includePerfPrerelease: true })
+
+    await vi.waitFor(() => {
+      expect(sendMock).toHaveBeenCalledWith('updater:status', {
+        state: 'error',
+        message: "Couldn't reach the update server. Try again in a few minutes.",
+        messageCode: 'updateServerUnreachable',
+        userInitiated: true
+      })
+    })
+
+    await vi.advanceTimersByTimeAsync(60 * 60 * 1000)
+
+    await vi.waitFor(() => {
+      expect(fetchNewerReleaseTagsMock).toHaveBeenNthCalledWith(2, '1.4.120', 1, {
+        includePrerelease: false
+      })
+      expect(autoUpdaterMock.setFeedURL).toHaveBeenLastCalledWith({
+        provider: 'generic',
+        url: 'https://github.com/stablyai/orca/releases/download/v1.4.121'
+      })
+    })
+  })
+})

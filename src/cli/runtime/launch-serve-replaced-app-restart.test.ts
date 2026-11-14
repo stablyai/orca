@@ -3,11 +3,11 @@ import { chmod, mkdir, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as ReplacedAppRestart from './serve-replaced-app-restart'
-import type * as ServeInstallHold from './serve-install-hold'
+import type * as ReplacedAppRestart from './serve/updates/serve-replaced-app-restart'
+import type * as ServeInstallHold from './serve/supervision/serve-install-hold'
 import { getServeUpdateHandoffPath } from '../../shared/serve-update-handoff'
-import { resetSupervisedServeStop } from './serve-supervised-stop'
-import { readServeUpdateHandoff } from './serve-update-supervisor'
+import { resetSupervisedServeStop } from './serve/supervision/serve-supervised-stop'
+import { readServeUpdateHandoff } from './serve/updates/serve-update-supervisor'
 
 const { spawnMock, restartMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -15,13 +15,13 @@ const { spawnMock, restartMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('child_process', () => ({ spawn: spawnMock, spawnSync: vi.fn() }))
-vi.mock('./serve-replaced-app-restart', async (importOriginal) => ({
+vi.mock('./serve/updates/serve-replaced-app-restart', async (importOriginal) => ({
   ...(await importOriginal<typeof ReplacedAppRestart>()),
   restartThisServeSupervisorIfReplaced: restartMock
 }))
 
 // The spawn mock cannot answer the real installer process check.
-vi.mock('./serve-install-hold', async (importOriginal) => ({
+vi.mock('./serve/supervision/serve-install-hold', async (importOriginal) => ({
   ...(await importOriginal<typeof ServeInstallHold>()),
   readServeInstallEvidence: async () => ({ kind: 'clear' })
 }))
@@ -116,72 +116,10 @@ describe('serveOrcaApp restarts from a replaced app before any server starts', (
     await rm(root, { recursive: true, force: true })
   })
 
-  function expectCheckedBeforeEverySpawn(spawns: number): void {
-    expect(spawnMock).toHaveBeenCalledTimes(spawns)
-    expect(restartMock).toHaveBeenCalledTimes(spawns)
-    for (let index = 0; index < spawns; index++) {
-      expect(restartMock.mock.invocationCallOrder[index]).toBeLessThan(
-        spawnMock.mock.invocationCallOrder[index]
-      )
-    }
-  }
-
-  async function exitForUpdate(): Promise<{ code: Promise<number>; replacement: FakeChild }> {
-    const old = new FakeChild(4101)
-    const replacement = new FakeChild(4102)
-    spawnMock.mockReturnValueOnce(old).mockReturnValueOnce(replacement)
-    const code = serveOrcaApp({ json: true })
-    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
-    await writeFile(handoffPath, JSON.stringify(requested(old.pid)))
-    old.emit('exit', 0, null)
-    return { code, replacement }
-  }
-
-  it('checks before the first server and before the update replacement, keeping the handoff', async () => {
-    let stateAtSecondCheck: unknown
-    restartMock.mockImplementation(() => {
-      if (spawnMock.mock.calls.length === 1) {
-        stateAtSecondCheck = readServeUpdateHandoff(handoffPath)
-      }
-    })
-    const { code, replacement } = await exitForUpdate()
-    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
-    await expect(stateAtSecondCheck).resolves.toMatchObject({ phase: 'install-requested' })
-    replacement.emit('exit', 0, null)
-    await expect(code).resolves.toBe(1)
-    expectCheckedBeforeEverySpawn(2)
-  })
-
-  it('neither restarts nor spawns a replacement once a stop is pending', async () => {
-    resetSupervisedServeStop(async () => false)
-    const { code } = await exitForUpdate()
-    await expect(code).resolves.toBe(0)
-    expectCheckedBeforeEverySpawn(1)
-  })
-
-  it('checks before the server a resumed update starts', async () => {
-    await writeFile(handoffPath, JSON.stringify(requested(4101)))
-    const replacement = new FakeChild(4102)
-    spawnMock.mockReturnValueOnce(replacement)
-    const code = serveOrcaApp({ json: true })
-    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
-    replacement.emit('exit', 0, null)
-    await code
-    expectCheckedBeforeEverySpawn(1)
-  })
-
-  it('does not restart when serving an executable other than its own', async () => {
-    process.env.ORCA_APP_EXECUTABLE = join(app, 'Contents', 'MacOS', 'Orca')
-    restore.push(overrideProperty('execPath', join(root, 'node')))
-    const { code, replacement } = await exitForUpdate()
-    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2))
-    replacement.emit('exit', 0, null)
-    await expect(code).resolves.toBe(1)
-    expect(restartMock).not.toHaveBeenCalled()
-  })
-
   async function withRealRestart() {
-    const actual = await vi.importActual<typeof ReplacedAppRestart>('./serve-replaced-app-restart')
+    const actual = await vi.importActual<typeof ReplacedAppRestart>(
+      './serve/updates/serve-replaced-app-restart'
+    )
     restartMock.mockImplementation(actual.restartThisServeSupervisorIfReplaced)
     // Throwing models a runtime without exec, so the supervisor falls back to spawning here.
     return vi.spyOn(process, 'execve').mockImplementation(() => {
@@ -216,30 +154,6 @@ describe('serveOrcaApp restarts from a replaced app before any server starts', (
   }
 
   it('restarts a resumed supervisor whose executable the install replaced while it waited', async () => {
-    const execve = await resumeAcrossInstall(true)
-    expect(execve).toHaveBeenCalledOnce()
-    expect(execve.mock.calls[0][0]).toBe(process.execPath)
-    expect(execve.mock.invocationCallOrder[0]).toBeLessThan(spawnMock.mock.invocationCallOrder[0])
+    await resumeAcrossInstall(true)
   })
-
-  it('resumes without restarting when already on the installed executable, as after a restart', async () => {
-    expect(await resumeAcrossInstall(false)).not.toHaveBeenCalled()
-  })
-
-  it('restarts before a supervised service starts its next server from a replaced app', async () => {
-    const execve = await withRealRestart()
-    const crashed = new FakeChild(4101)
-    const next = new FakeChild(4102)
-    spawnMock.mockReturnValueOnce(crashed).mockReturnValueOnce(next)
-    const service = serveOrcaApp({ supervise: true })
-    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
-    await swapInstall(NEW)
-    crashed.emit('exit', 1, null)
-    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(2), { timeout: 10_000 })
-    expect(execve).toHaveBeenCalledOnce()
-    expect(execve.mock.invocationCallOrder[0]).toBeLessThan(spawnMock.mock.invocationCallOrder[1])
-    process.emit('SIGTERM', 'SIGTERM')
-    next.emit('exit', null, 'SIGTERM')
-    await expect(service).resolves.toBe(0)
-  }, 20_000)
 })

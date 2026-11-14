@@ -1,26 +1,32 @@
 import { useEffect, useState } from 'react'
-import { Check, Monitor, Moon, Settings2, Sun } from 'lucide-react'
+import { ExternalLink, Puzzle, Settings2 } from 'lucide-react'
 import { Trans } from 'react-i18next'
 import { toast } from 'sonner'
-import { cn } from '@/lib/utils'
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { GhosttyDiscoveryRow } from './GhosttyDiscoveryRow'
+import { i18n, translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { ThemeSlotControl, useThemeLooks } from './ThemeLookGallery'
+import { ThemeLookCarousel, openThemePluginDirectory } from './ThemeLookCarousel'
+import { ThemeModeControl } from './ThemeModeControl'
+import { themeLookSettingsUpdate } from './onboarding-theme-look-settings'
+import { terminalConfigImportSettingsUpdate } from '../../../../shared/terminal/appearance/terminal-config-import-preview'
+import type { TerminalConfigImportPreview } from '../../../../shared/terminal/appearance/terminal-config-import-preview'
+import { getSystemPrefersDark } from '@/lib/terminal/appearance/terminal-theme'
+import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { DiscoveryStatusEmitted } from '../../../../shared/onboarding-state-types'
-import { i18n, translate } from '@/i18n/i18n'
-import { ChromePreview } from './theme-chrome-preview'
-import {
-  terminalConfigImportSettingsUpdate,
-  type TerminalConfigImportPreview
-} from '../../../../shared/terminal-config-import-preview'
-import { getSystemPrefersDark } from '@/lib/terminal-theme'
+import type { ThemeLook, ThemeLookBase } from './onboarding-theme-looks'
 
 type ThemeStepProps = {
   theme: GlobalSettings['theme']
   onThemeChange: (theme: GlobalSettings['theme']) => void
   settings: GlobalSettings | null
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
+  /** Settings as the step found them; each pick replaces only its own mode's slot from here. */
+  lookBaseline: GlobalSettings | null
+  onLookBaselineChange: (settings: GlobalSettings) => void
 }
 
 export function applyOnboardingThemeSelection(
@@ -62,7 +68,15 @@ function fieldGroupCountBucket(count: number): '0' | '1-3' | '4-7' | '8+' {
   return '8+'
 }
 
-export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: ThemeStepProps) {
+export function ThemeStep({
+  theme,
+  onThemeChange,
+  settings,
+  updateSettings,
+  lookBaseline,
+  onLookBaselineChange
+}: ThemeStepProps) {
+  const t = useTranslate()
   const [importing, setImporting] = useState(false)
   const [discovery, setDiscovery] = useState<DiscoveryState>({ status: 'idle' })
   const mountedRef = useMountedRef()
@@ -124,7 +138,7 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
       if (!resolved.found || Object.keys(resolved.diff).length === 0) {
         if (mountedRef.current) {
           toast.info(
-            translate(
+            t(
               'auto.components.onboarding.ThemeStep.16a9f0446a',
               'No Ghostty settings found to import'
             )
@@ -133,9 +147,16 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
         track('onboarding_ghostty_import_failed', { reason: 'empty_diff' })
         return
       }
-      await updateSettings(
-        terminalConfigImportSettingsUpdate(settings, resolved, getSystemPrefersDark())
+      const imported = terminalConfigImportSettingsUpdate(
+        settings,
+        resolved,
+        getSystemPrefersDark()
       )
+      await updateSettings(imported)
+      // Why: later look picks start from the imported terminal, not the one it replaced.
+      if (mountedRef.current) {
+        onLookBaselineChange({ ...(lookBaseline ?? settings), ...imported })
+      }
       // Sync the controller’s local theme so Continue cannot overwrite the imported theme.
       if (resolved.diff.theme && mountedRef.current) {
         onThemeChange(resolved.diff.theme)
@@ -151,10 +172,7 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
     } catch (err) {
       if (mountedRef.current) {
         toast.error(
-          translate(
-            'auto.components.onboarding.ThemeStep.699ddf83c2',
-            'Failed to import Ghostty settings'
-          ),
+          t('auto.components.onboarding.ThemeStep.699ddf83c2', 'Failed to import Ghostty settings'),
           {
             description: err instanceof Error ? err.message : String(err)
           }
@@ -168,65 +186,56 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
     }
   }
 
-  const themes: {
-    id: GlobalSettings['theme']
-    label: string
-    hint: string
-    icon: typeof Monitor
-  }[] = [
-    {
-      id: 'system',
-      label: translate('auto.components.onboarding.ThemeStep.827ea7b4a2', 'System'),
-      hint: translate('components.onboarding.theme.hints.system', 'Match OS'),
-      icon: Monitor
-    },
-    {
-      id: 'dark',
-      label: translate('auto.components.onboarding.ThemeStep.fa7b673ea9', 'Dark'),
-      hint: translate('components.onboarding.theme.hints.dark', 'Easy on the eyes'),
-      icon: Moon
-    },
-    {
-      id: 'light',
-      label: translate('auto.components.onboarding.ThemeStep.ad192706e6', 'Light'),
-      hint: translate('components.onboarding.theme.hints.light', 'Bright & crisp'),
-      icon: Sun
+  const systemPrefersDark = useSystemPrefersDark()
+  const osBase: ThemeLookBase = systemPrefersDark ? 'dark' : 'light'
+  const [systemSlot, setSystemSlot] = useState<ThemeLookBase | null>(null)
+  const { looks, selected, pluginTerminalThemes } = useThemeLooks(settings, lookBaseline)
+  // Why a slot picker under System: both looks persist, and only the OS chooses which one shows.
+  const base: ThemeLookBase = theme === 'system' ? (systemSlot ?? osBase) : theme
+
+  const pickLook = (look: ThemeLook): void => {
+    if (settings && lookBaseline) {
+      void updateSettings(
+        themeLookSettingsUpdate(look, settings, lookBaseline, pluginTerminalThemes)
+      )
     }
-  ]
+  }
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-3 gap-3">
-        {themes.map(({ id, label, hint, icon: Icon }) => {
-          const selected = theme === id
-          return (
-            <button
-              key={id}
-              className={cn(
-                'group overflow-hidden rounded-xl border p-3 text-left transition-colors',
-                selected ? 'border-foreground/60 bg-accent' : 'border-border hover:bg-accent/60'
-              )}
-              onClick={() => applyOnboardingThemeSelection(id, onThemeChange, updateSettings)}
-            >
-              <div className="relative mb-3 h-24 overflow-hidden rounded-lg border border-border">
-                <ChromePreview variant={id} />
-                {selected && (
-                  <div className="absolute right-1.5 top-1.5 grid size-5 place-items-center rounded-full bg-foreground text-background shadow-sm">
-                    <Check className="size-3" strokeWidth={3} />
-                  </div>
-                )}
+      <section className="space-y-2.5">
+        <ThemeSectionHeading
+          title={t('components.onboarding.theme.looks.colorMode', 'Color mode')}
+        />
+        <ThemeModeControl
+          value={theme}
+          onChange={(id) => {
+            setSystemSlot(null)
+            applyOnboardingThemeSelection(id, onThemeChange, updateSettings)
+          }}
+        />
+      </section>
+
+      <ThemeLookCarousel
+        looks={looks[base]}
+        selectedId={selected[base]}
+        onPick={pickLook}
+        ariaLabel={
+          base === 'dark'
+            ? t('components.onboarding.theme.looks.darkLooks', 'Dark looks')
+            : t('components.onboarding.theme.looks.lightLooks', 'Light looks')
+        }
+        header={
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <ThemeSectionHeading title={t('components.onboarding.theme.looks.themes', 'Theme')} />
+            {theme === 'system' && (
+              <div className="w-60 shrink-0">
+                <ThemeSlotControl value={base} osBase={osBase} onChange={setSystemSlot} />
               </div>
-              <div className="flex items-baseline justify-between gap-2">
-                <div className="flex items-center gap-1.5 text-sm font-medium text-foreground">
-                  <Icon className="size-3.5 text-muted-foreground" />
-                  {label}
-                </div>
-                <div className="text-[11px] text-muted-foreground">{hint}</div>
-              </div>
-            </button>
-          )
-        })}
-      </div>
+            )}
+          </div>
+        }
+      />
 
       <GhosttyDiscoveryRow
         discovery={discovery}
@@ -235,18 +244,37 @@ export function ThemeStep({ theme, onThemeChange, settings, updateSettings }: Th
         onImport={importGhostty}
       />
 
-      <div className="flex items-center gap-2 px-1 text-[12px] text-muted-foreground">
-        <Settings2 className="size-3.5" />
-        <span>
-          <Trans
-            i18n={i18n}
-            defaults={translate(
-              'auto.components.onboarding.ThemeStep.moreTerminalOptions',
-              'More terminal options, including font, cursor, and palette, in <settings>Settings → Terminal</settings>'
+      <div className="space-y-1.5 px-1 text-[12px] text-muted-foreground">
+        <div className="flex items-center gap-2">
+          <Puzzle className="size-3.5" />
+          <span>
+            {t(
+              'components.onboarding.theme.looks.pluginsHint',
+              'More themes are available as plugins.'
             )}
-            components={{ settings: <span className="font-medium text-foreground" /> }}
-          />
-        </span>
+          </span>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1 font-medium text-foreground underline-offset-4 hover:underline"
+            onClick={openThemePluginDirectory}
+          >
+            {t('components.onboarding.theme.looks.browseThemePlugins', 'Browse theme plugins')}
+            <ExternalLink className="size-3" />
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          <Settings2 className="size-3.5" />
+          <span>
+            <Trans
+              i18n={i18n}
+              defaults={t(
+                'auto.components.onboarding.ThemeStep.moreTerminalOptions',
+                'More terminal options, including font, cursor, and palette, in <settings>Settings → Terminal</settings>'
+              )}
+              components={{ settings: <span className="font-medium text-foreground" /> }}
+            />
+          </span>
+        </div>
       </div>
     </div>
   )
@@ -293,4 +321,8 @@ function humanFields(diff: Partial<GlobalSettings>): string[] {
     }
   ]
   return groups.filter(({ keys }) => keys.some((k) => k in diff)).map(({ label }) => label)
+}
+
+function ThemeSectionHeading({ title }: { title: string }): React.JSX.Element {
+  return <h3 className="text-sm font-medium text-foreground">{title}</h3>
 }

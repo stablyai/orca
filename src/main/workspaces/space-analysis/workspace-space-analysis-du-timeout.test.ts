@@ -21,7 +21,7 @@ vi.mock('node:process', async () => {
   return { ...actual, platform: 'darwin' }
 })
 
-vi.mock('../../repo-worktrees', () => ({
+vi.mock('../catalog/repo-worktrees', () => ({
   createFolderWorktree: (repo: Repo) => ({
     path: repo.path,
     head: '',

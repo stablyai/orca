@@ -9,6 +9,18 @@
       "messages_other": "{{count}} messages"
     }
   },
+  "agents": {
+    "desktops": {
+      "agents_one": "{{count}} agent",
+      "agents_other": "{{count}} agents",
+      "needsYou_one": "{{count}} needs you",
+      "needsYou_other": "{{count}} need you"
+    },
+    "list": {
+      "workers_one": "{{count}} worker",
+      "workers_other": "{{count}} workers"
+    }
+  },
   "app": {
     "terminalSettings": {
       "restoreAfterMinutes_one": "After {{count}} minute",
@@ -29,12 +41,14 @@
       "workspaceHostAmbiguous": "Its workspace spans more than one host, so it has no single owner."
     },
     "runFailures": {
+      "agentInterrupted": "The agent was interrupted before it finished this run.",
       "agentNeverStarted": "Automation agent never started after the prompt was submitted.",
       "agentNoCompletion": "Automation agent did not report completion.",
       "automationChanged": "The automation changed before this run could launch.",
       "destinationChanged": "The automation destination changed before this run could launch.",
       "hooksReviewBlocked": "The agent is waiting for someone to review new or changed hooks (\"Hooks need review\"). Open this run and trust them, or remove them. Scheduled runs keep going and succeed once nothing needs review.",
       "legacyTwinHosts": "This automation was saved before Orca tracked which host it runs on, and its project is on more than one host. Open the automation and pick the host it should run on.",
+      "managedHostServer": "Needs migration to {{host}}",
       "missedGraceWindow": "This run was past its missed-run grace window when Orca next checked.",
       "noDispatchHost": "No Orca window was available to launch the automation.",
       "noRunnableHost": "This automation has no host to run on.",
@@ -56,6 +70,16 @@
     }
   },
   "chat": {
+    "notice": {
+      "modelFallback": "Claude switched models: {{from}} → {{to}}."
+    },
+    "queuedMessages": {
+      "moreCount_one": "{{count}} more",
+      "moreCount_other": "{{count}} more",
+      "queuedCount_one": "{{count}} queued message",
+      "queuedCount_other": "{{count}} queued messages",
+      "foldNeedsAttention": "{{more}}, a message needs attention"
+    },
     "subagentGroup": {
       "ran_one": "Ran {{count}} subagent",
       "ran_other": "Ran {{count}} subagents",
@@ -144,6 +168,16 @@
       "threadsWhenInSync_one": "Its GitHub comment shows here once this branch matches the pull request.",
       "threadsWhenInSync_other": "Its {{count}} GitHub comments show here once this branch matches the pull request."
     },
+    "hostCard": {
+      "needsYou_one": "{{count}} needs you",
+      "needsYou_other": "{{count}} need you"
+    },
+    "native-chat": {
+      "turnDiff": {
+        "changedFiles_one": "{{count}} changed file",
+        "changedFiles_other": "{{count}} changed files"
+      }
+    },
     "worktreeAgentList": {
       "hideChildAgents_one": "Hide {{count}} child agent",
       "hideChildAgents_other": "Hide {{count}} child agents",
@@ -156,9 +190,17 @@
     }
   },
   "dictation": {
+    "controls": {
+      "durationMinutes_one": "{{count}} minute",
+      "durationMinutes_other": "{{count}} minutes",
+      "durationSeconds_one": "{{count}} second",
+      "durationSeconds_other": "{{count}} seconds"
+    },
     "setup": {
-      "alreadyActive": "Dictation is already in use on the computer or another phone.",
+      "alreadyActive": "Dictation is already in use on the computer or another phone. Update Orca on the computer to dictate from several devices at once.",
+      "modelBusy": "Another device is dictating with a different speech model. Try again when it finishes.",
       "repairRequired": "Re-pair this phone with the computer to use dictation.",
+      "sessionLimit": "Too many devices are dictating on this computer. Try again when one finishes.",
       "sessionLost": "Dictation lost its connection to the computer. Try again."
     }
   },
@@ -273,6 +315,19 @@
       "uncommittedFiles_one": "{{count}} uncommitted",
       "uncommittedFiles_other": "{{count}} uncommitted"
     },
+    "failure": {
+      "forkOriginalLatestOnly": "{{agent}} can only fork the latest response in the original chat. Open that chat and fork its latest response once it has finished.",
+      "forkOriginalLatestOnlyNamed": "{{agent}} can only fork the latest response in \"{{detail}}\". Open that chat and fork its latest response once it has finished.",
+      "forkOriginalMissing": "{{agent}} could not find this response in the original chat. Open it and fork from there.",
+      "forkOriginalMissingNamed": "{{agent}} could not find this response in \"{{detail}}\". Open that chat and fork from there.",
+      "forkOriginalUnavailable": "{{agent}} cannot fork this response in the original chat. Open it and fork from there.",
+      "forkOriginalUnavailableNamed": "{{agent}} cannot fork this response in \"{{detail}}\". Open that chat and fork from there.",
+      "pluginInputRequired": "{{agent}} stopped because the \"{{plugin}}\" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal.",
+      "providerResponseFailed": "{{agent}} couldn't finish this response. Open Details for more information.",
+      "providerSafetyStopped": "{{agent}} stopped this response after a safety check. Review your request and send again.",
+      "providerUnavailable": "{{agent}} couldn't respond because the service is busy. Pick another model, or wait a little and send again.",
+      "selectedModel": "the selected model"
+    },
     "fileReader": {
       "reviewNotes_one": "{{count}} review note",
       "reviewNotes_other": "{{count}} review notes"
@@ -280,10 +335,6 @@
     "queuedMessageCardRow": {
       "images_one": "{{count}} image",
       "images_other": "{{count}} images"
-    },
-    "structuredOpen": {
-      "worktreeDeleted": "The worktree was deleted.",
-      "folderWorkspaceRemoved": "The folder workspace was removed."
     }
   },
   "settings": {

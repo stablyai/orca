@@ -8,6 +8,10 @@ Orca's code editor is Monaco — the same editor VS Code uses — with a few Orc
 
 Files save on blur and after short idle periods. There is no "dirty" dot because there are no unsaved changes in normal flow.
 
+## Final newline
+
+Enable **Insert Final Newline** under [Settings → General → Editor](/docs/settings) to add a missing line break when saving a non-empty file from the code editor. It is off by default, keeps the file's LF or CRLF line endings, and leaves the cursor in place. Rich Markdown, notebook, and CSV editors are unchanged.
+
 ## Multi-cursor, go-to, find
 
 - `Cmd-D` — select next occurrence.

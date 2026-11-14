@@ -6,8 +6,8 @@ on:
       - '.github/workflows/ci-xterm-cache.yml'
       - '.github/actions/prepare-xterm-dependencies/**'
       - 'config/patches/xterm-upstream.json'
-      - 'config/scripts/regenerate-xterm-patches.mjs'
-      - 'config/scripts/xterm-patch-text.mjs'
+      - 'config/scripts/terminal-dependencies/xterm-patches/regenerate-xterm-patches.mjs'
+      - 'config/scripts/terminal-dependencies/xterm-patches/xterm-patch-text.mjs'
       - 'package.json'
   # Refresh after Node patch releases or cache eviction without rebuilding on hits.
   schedule:
@@ -46,7 +46,7 @@ jobs:
         id: cache
       - name: Verify and populate dependencies
         if: steps.cache.outputs.cache-hit != 'true'
-        run: node config/scripts/regenerate-xterm-patches.mjs --check --work-dir="$RUNNER_TEMP/xterm-patch-build"
+        run: node config/scripts/terminal-dependencies/xterm-patches/regenerate-xterm-patches.mjs --check --work-dir="$RUNNER_TEMP/xterm-patch-build"
       - uses: actions/cache/save@v5
         if: steps.cache.outputs.cache-hit != 'true'
         with:

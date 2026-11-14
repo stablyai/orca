@@ -5,11 +5,12 @@ import {
   readAgentSessionRefusalDetails,
   type AgentSessionRefusalReason
 } from './agent-session-refusal-details'
-import type { AgentSessionRewindReason } from '../lifecycle/agent-session-rewind'
+import type { AgentSessionRewindReason } from '../lifecycle/rewind/agent-session-rewind-reasons'
 import type { AgentSessionArgumentProblem } from '../agent-session-argument-problem'
-import type { TuiAgent } from '../../tui-agent'
+import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 import type { CodexInstallationProblem } from '../../codex-cli-installation'
-import type { AgentCliInstallationProblem } from '../../agent-cli-installation-problem'
+import type { AgentCliInstallationProblem } from '../../agent-launch/catalog/agent-cli-installation-problem'
+import type { AgentSessionExpiredAttachment } from './agent-session-expired-attachments'
 import {
   isAgentSessionWireRefusalCode,
   readAgentSessionRefusalReference,
@@ -42,7 +43,10 @@ export function agentSessionWriteKindForMethod(
   fingerprintMethod: string,
   fields: Record<string, unknown>
 ): AgentSessionWriteKind {
-  if (fingerprintMethod === 'agentSession.send') {
+  if (
+    fingerprintMethod === 'agentSession.send' ||
+    fingerprintMethod === 'agentSession.queuedMessageSend'
+  ) {
     return 'send'
   }
   if (fingerprintMethod === 'agentSession.cancel') {
@@ -82,6 +86,7 @@ type DurableRefusalFacts = {
     agent?: TuiAgent
     agentInstallation?: AgentCliInstallationProblem
     codexInstallation?: CodexInstallationProblem
+    expiredAttachments?: readonly AgentSessionExpiredAttachment[]
   }
   agent_session_operation_unknown: { rewindReason?: AgentSessionRewindReason }
   /** A snapshot from when it was refused; see `agentSessionOwnerVerdictAllowsFreshOperationId`. */
@@ -95,7 +100,8 @@ const DURABLE_FACT_KEYS: Partial<Record<AgentSessionWireRefusalCode, readonly st
     'argumentProblem',
     'agent',
     'agentInstallation',
-    'codexInstallation'
+    'codexInstallation',
+    'expiredAttachments'
   ],
   agent_session_operation_unknown: ['rewindReason'],
   agent_session_ownership_unknown: ['ownerVerdict']

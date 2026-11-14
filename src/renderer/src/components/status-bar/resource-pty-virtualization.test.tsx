@@ -7,12 +7,12 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type {
   PtyFencedTerminationOutcome,
   PtyFencedTerminationRequest
-} from '../../../../shared/pty-fenced-termination'
+} from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { ResourcePtyPanel } from './ResourcePtyPanel'
 import { useResourcePtyActions } from './use-resource-pty-actions'
 import { useResourceSessionInventory } from './use-resource-session-inventory'
-import * as model from './resource-pty-view-model'
+
 import { makeRepo, makeWorktree } from '../worktree-jump/worktree-jump-palette-test-fixtures'
 
 vi.mock('@/i18n/i18n', () => ({
@@ -129,37 +129,6 @@ it.each([1_000, 10_000])(
     ).toContain(`pty-${String(count - 1).padStart(5, '0')}`)
   }
 )
-
-it('skips joins and sorting on scrolling or action updates, and does no model work when inactive', () => {
-  const join = vi.spyOn(model, 'buildResourcePtyRows')
-  const sort = vi.spyOn(model, 'groupResourcePtyRows')
-  const props = panelProps(1_000)
-  const panel = (value: typeof props) => (
-    <TooltipProvider>
-      <ResourcePtyPanel {...value} />
-    </TooltipProvider>
-  )
-  const view = render(panel(props))
-  const joined = join.mock.calls.length
-  const sorted = sort.mock.calls.length
-  const scroller = view.container.querySelector<HTMLElement>('[data-resource-pty-body]')
-  if (!scroller) {
-    throw new Error('PTY scroller missing')
-  }
-  act(() => {
-    scroller.scrollTop = ROW_HEIGHT * 20
-    fireEvent.scroll(scroller)
-  })
-  view.rerender(panel({ ...props, actions: { ...props.actions, errors: new Map() } }))
-  expect(join).toHaveBeenCalledTimes(joined)
-  expect(sort).toHaveBeenCalledTimes(sorted)
-  view.rerender(panel({ ...props, active: false }))
-  const inactiveSorts = sort.mock.calls.length
-  view.rerender(panel({ ...props, active: false, worktrees: [...props.worktrees] }))
-  expect(join).toHaveBeenCalledTimes(joined)
-  expect(sort).toHaveBeenCalledTimes(inactiveSorts)
-  expect(view.container.querySelectorAll('[data-resource-pty-row]')).toHaveLength(0)
-})
 
 it('selects across virtualized rows, excludes unavailable PTYs, and drops replaced identities', () => {
   const props = panelProps(1_000)

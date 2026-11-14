@@ -1,9 +1,15 @@
-import type { ProfileStateStartupPaneAlias } from '../loading-store/profile-state-authority'
+import type { ProfileStateStartupPaneAlias } from '../loading-store/profile-writing/profile-state-authority'
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
-import { collectLayoutLeafIdsInOrder, firstLayoutLeafId } from './terminal-layout-normalization'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalTab
+} from '../../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { isTerminalLeafId, makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import {
+  collectLayoutLeafIdsInOrder,
+  firstLayoutLeafId
+} from '../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 
 export function findWorktreeIdForTab(
   session: WorkspaceSessionState,

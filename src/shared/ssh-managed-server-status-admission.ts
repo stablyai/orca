@@ -77,6 +77,7 @@ export function admitSshManagedServerStatus(value: unknown): {
       ...(detail
         ? { detail: clampUtf8TextPrefix(detail, SSH_CONNECTION_ERROR_MAX_UTF8_BYTES) }
         : {}),
+      ...('code' in value && isSshRetainedIdentifier(value.code) ? { code: value.code } : {}),
       ...(isNonNegativeSafeInteger(terminals) ? { terminals } : {}),
       ...('terminalsElsewhere' in value && value.terminalsElsewhere === true
         ? { terminalsElsewhere: true }

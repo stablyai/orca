@@ -1,27 +1,33 @@
 import { cpSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   closeTestJournalHostDatabase,
   createTrackedJournalOpener,
   liveTestJournalRows,
   openTestJournalHostDatabase,
   type TrackedJournalOpener
-} from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import { restoreJournal } from '../../../src/main/native-chat/agent-session-journal/journal-open'
-import { JOURNAL_PREFIX_ORDINAL } from '../../../src/main/native-chat/agent-session-journal/journal-outcome-codec'
-import { journalOutcomeSource } from '../../../src/main/native-chat/agent-session-journal/journal-outcome-format'
+} from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { restoreJournal } from '../../../src/main/native-chat/agent-session-journal/replay/journal-open'
 import type { AgentJournalSnapshot } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
-import { parseJournalRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-schema'
-import type { JournalStoredRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-table'
-import { JournalWriteProjection } from '../../../src/main/native-chat/agent-session-journal/journal-write-projection'
+import { parseJournalRow } from '../../../src/main/native-chat/agent-session-journal/durable-rows/journal-row-schema'
+import {
+  readJournalSessionEpoch,
+  type JournalStoredRow
+} from '../../../src/main/native-chat/agent-session-journal/durable-rows/journal-row-table'
+import type { AgentSessionJournal } from '../../../src/main/native-chat/agent-session-journal/journal-store'
+import { readTestJournalSnapshot } from '../../../src/main/native-chat/agent-session-journal/journal-observation.test-support'
+import { readAgentSessionHistory } from '../../../src/main/native-chat/agent-session-wire/publication/history/agent-session-history-page'
+import {
+  readQueuePublication,
+  structuredQueueSendGate
+} from '../../../src/main/native-chat/agent-session-wire/delivery/structured-agent-session-queued-publication'
 import { resolveBaselineReleaseRef } from './release-checkout'
 import {
   editReleasedCard,
   rewindReleasedChat,
-  sendAfterUpgrade,
-  type ContinuedJournal
+  sendAfterUpgrade
 } from './released-chat-continuation'
 import {
   identityOf,
@@ -29,13 +35,15 @@ import {
   writeReleasedChat,
   type Agent
 } from './released-chat-writers'
+import type { ReleasedCard, ReleasedJournal, ReleasedOpener } from './released-chat-journal'
 
 // The two releases before outcome storage, and the oldest release whose chat database this build still
 // reads, writes a Claude and a Codex chat through its own writers. This build admits every row as
 // written, opens the chat as that release had it, then edits a queued card (its first write, over
 // a key the old rows hold), sends, and rewinds, which saves the kept chat again in this build's
-// form. Every commit restores to the live chat. What this build does after the open is checked on
-// its own result, never against a release, so main stays free to change it.
+// form. The release's rows stay its own: this build converts them and never writes them. What this
+// build does after the open is checked on its own result, never against a release, so main stays
+// free to change it.
 const SUITE_TIMEOUT_MS = 180_000
 // v1.4.246 shipped outcome storage, so its chats hold no rows to upgrade; the writers pin the two
 // releases before it, and the newest release stays the reader this build must match.
@@ -48,40 +56,68 @@ const RELEASES = {
 } as const
 type Written = Awaited<ReturnType<typeof writeReleasedChat>>
 
-beforeEach(() => {
-  JournalWriteProjection.verifyEachCommit = true
-})
-afterEach(() => {
-  JournalWriteProjection.verifyEachCommit = false
-})
+type Card = Pick<ReleasedCard, 'messageId' | 'position'> & { state?: string }
+const byPosition = <T extends Card>(cards: readonly T[]): T[] =>
+  [...cards].sort((a, b) => a.position - b.position)
 
-const view = (journal: ContinuedJournal) => ({
+/** This build's chat and its live cards; a withdrawn card is no longer listed. */
+const view = async (journal: AgentSessionJournal, now: () => number) => {
+  const publication = await readQueuePublication(
+    journal,
+    structuredQueueSendGate(
+      {
+        store: {
+          getConversation: () => null,
+          getRecord: () => null,
+          replacedRuntime: () => undefined
+        },
+        sessions: new Map([
+          [journal.identity.sessionId, { journal, child: null, operationalRevision: 0 }]
+        ])
+      },
+      journal.identity.sessionId,
+      now
+    )
+  )
+  // Nothing moves authority here, so a superseded read is a failure, not an empty queue.
+  if (!publication) {
+    throw new Error('the queue publication read was superseded')
+  }
+  return {
+    snapshot: await readTestJournalSnapshot(journal),
+    cards: byPosition(await journal.queuedMessages.list()),
+    publishedCards: publication.queuedMessages
+  }
+}
+
+/** A release's chat and its live cards, as that release reads them. */
+const releasedView = (journal: ReleasedJournal) => ({
   snapshot: journal.snapshot(),
-  cards: [...journal.queuedMessages.list()]
+  cards: byPosition(journal.queuedMessages.list()).filter((card) => card.state !== 'withdrawn')
 })
 
-/** What the release wrote: its items, sends and cards, in order. Fields a later build adds to them
- * are not compared (`toMatchObject`), so main may add one; a changed value or order still fails. */
+/** What the release wrote: its items, sends and live cards, in order. Fields a later build adds to
+ * them are not compared (`toMatchObject`), so main may add one; a changed value or order still fails. */
 const releaseWritten = ({
   snapshot,
   cards
 }: {
   snapshot: AgentJournalSnapshot
-  cards: unknown[]
+  cards: readonly Card[]
 }) => ({
   items: snapshot.items,
   submissions: snapshot.submissions,
-  cards
+  cards: cards.filter((card) => card.state !== 'withdrawn')
 })
 
-const kept = (items: ReturnType<ContinuedJournal['snapshot']>['items']) =>
+const kept = (items: AgentJournalSnapshot['items']) =>
   items.map(({ itemId, body }) => ({ itemId, body }))
 
-/** The chat as `opener`'s build opens it, over a copy so the original stays as the release left it. */
-async function openedBy(opener: TrackedJournalOpener, agent: Agent, stateDirectory: string) {
+/** The chat as a release opens it, over a copy so the original stays as the release left it. */
+async function openedBy(opener: ReleasedOpener, agent: Agent, stateDirectory: string) {
   return opener
     .open({ identity: identityOf(agent), stateDirectory })
-    .then(view)
+    .then(releasedView)
     .finally(() => opener.closeAll())
 }
 
@@ -102,33 +138,44 @@ async function carryOn(
   const carried = await opener
     .open(options)
     .then(async (journal) => {
-      const opened = view(journal)
+      const opened = await view(journal, written.now)
       await editReleasedCard(journal)
       if (prefix) {
-        // The release's rows stay byte for byte; one marker follows them, where records begin.
+        // The release's rows stay byte for byte; this build's writes go to its own store.
         const database = openTestJournalHostDatabase(stateDirectory)
-        const rows = liveTestJournalRows(database.db, options.identity.sessionId)
-        expect(rows.slice(0, prefix.length)).toEqual(prefix)
-        expect(rows).toHaveLength(prefix.length + 1)
-        expect(
-          journalOutcomeSource(database.db, options.identity.sessionId, journal.epoch)?.prefix
-        ).toBe(prefix.length)
+        expect(liveTestJournalRows(database.db, options.identity.sessionId)).toEqual(prefix)
       }
       await sendAfterUpgrade(journal)
-      const sent = view(journal)
+      const sent = await view(journal, written.now)
       expect(sent.snapshot.submissions).toContainEqual(
         expect.objectContaining({ clientMessageId: 'after-upgrade', dispatchState: 'accepted' })
       )
+      const beforeRewind = journal.cursor()
+      const database = openTestJournalHostDatabase(stateDirectory)
+      const physicalEpoch = readJournalSessionEpoch(database.db, options.identity.sessionId)
+      expect(physicalEpoch).not.toBeNull()
       await rewindReleasedChat(journal, new Set(opened.snapshot.items.map((item) => item.itemId)))
-      expect(journal.epoch).toBe('epoch-rewound')
-      const seen = view(journal)
+      expect(journal.cursor().epoch).toMatch(/^context-v1:/)
+      expect(journal.cursor().epoch).not.toBe(beforeRewind.epoch)
+      expect(readJournalSessionEpoch(database.db, options.identity.sessionId)).toBe(physicalEpoch)
+      // A client still at the old context is told to reload rather than sent a partial history.
+      expect(
+        await readAgentSessionHistory(journal, {
+          sessionId: options.identity.sessionId,
+          direction: 'after',
+          cursor: beforeRewind
+        })
+      ).toMatchObject({ ok: false, reset: 'epoch_changed' })
+      const seen = await view(journal, written.now)
       // The rewind keeps every message the release wrote and every card not taken back, the edit
       // included.
       expect(kept(seen.snapshot.items)).toEqual(kept(opened.snapshot.items))
       expect(seen.cards.map((card) => card.messageId)).toEqual(
-        opened.cards.filter((card) => card.state !== 'withdrawn').map((card) => card.messageId)
+        opened.cards.map((card) => card.messageId)
       )
       expect(seen.cards).toHaveLength(1)
+      expect(seen.cards).toEqual(sent.cards)
+      expect(seen.publishedCards.map((card) => card.messageId)).toEqual(['card-2'])
       for (const result of [sent, seen]) {
         expect(result.cards.find((card) => card.messageId === 'card-2')?.body.blocks).toEqual([
           { type: 'text', text: 'second, edited after the upgrade' }
@@ -139,7 +186,11 @@ async function carryOn(
     .finally(() => opener.closeAll())
   const reopened = await opener
     .open(options)
-    .then(view)
+    .then(async (journal) => {
+      const reopened = await view(journal, written.now)
+      expect(reopened.publishedCards.map((card) => card.messageId)).toEqual(['card-2'])
+      return reopened
+    })
     .finally(() => opener.closeAll())
   expect(reopened).toEqual(carried.seen)
   return carried
@@ -188,15 +239,8 @@ describe('a chat a shipped release wrote, carried on by this build', () => {
 
         const ours = await carryOn(createTrackedJournalOpener(), agent, directory, written, rows)
         if (build !== 'the oldest release with this chat database') {
-          // A release in the window wrote the shapes this build reads, so it opens as written,
-          // and the edit records the card the old rows hold in its place among them.
+          // A release in the window wrote the shapes this build reads, so it opens as written.
           expect(releaseWritten(ours.opened)).toMatchObject(releaseWritten(written))
-          const edits = openTestJournalHostDatabase(directory)
-            .db.prepare(`SELECT ordinal FROM journal_outcomes
-            WHERE field = 'queue.cards' AND entry_key = '"card-2"'`)
-            .all()
-          expect(edits).toContainEqual({ ordinal: JOURNAL_PREFIX_ORDINAL })
-          await closeTestJournalHostDatabase(directory)
         }
         // This build opens the chat as the newest release does.
         const newest = await releasedJournalOpener(resolveBaselineReleaseRef())

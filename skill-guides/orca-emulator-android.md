@@ -115,4 +115,4 @@ ORCA emulator kill --json
 ```
 
 See also: `orca-emulator` for iOS simulators, `orca-cli` for terminals, worktrees, and the
-built-in browser, and `computer-use` for desktop UI outside the emulator.
+built-in browser, and `orca-computer-use` for desktop UI outside the emulator.

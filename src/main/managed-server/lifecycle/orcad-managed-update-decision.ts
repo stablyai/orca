@@ -3,7 +3,7 @@ import type { OrcadActivationRecord } from '../activation/orcad-activation-recor
 import {
   refuseOrcadHostDowngrade,
   type OrcadHostVersionRefusal
-} from '../../ssh/orcad-host-version-admission'
+} from '../activation/orcad-host-version-admission'
 
 export type ManagedOrcadAutoUpdateSkip =
   | 'current'

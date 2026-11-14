@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import {
   getAntigravityAccountService,
@@ -6,33 +6,21 @@ import {
 } from './native-account-host'
 import { createAntigravityHostCredentialBackend } from './native-credential-backend'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
-import { credential, harness } from './native-account-test-fixtures'
+import { credential, harness, refreshedWithoutIdToken } from './native-account-test-fixtures'
 import { parseAntigravityWindowsSnapshot } from './native-windows-token-decode'
+import './native-wsl-credentials'
+
+void process.platform
 
 vi.mock('./native-credential-backend', () => ({ createAntigravityHostCredentialBackend: vi.fn() }))
 vi.mock('./native-account-store', () => ({ createEncryptedAntigravityAccountStore: vi.fn() }))
+vi.mock('./native-wsl-credentials', () => ({ createAntigravityWslCredentialBackend: vi.fn() }))
+vi.mock('../wsl/discovery/wsl-default-distro', () => ({
+  resolveWslDefaultDistro: async () => 'Ubuntu'
+}))
 vi.mock('../../shared/app-environment', () => ({
   getAppEnvironment: () => ({ getPath: () => '/task/home' })
 }))
-
-describe('Antigravity runtime authority guard', () => {
-  it.each(['Ubuntu', 'Debian', null])(
-    'refuses a client-selected WSL distro (%s) before resolving a host backend',
-    (wslDistro) => {
-      expect(() => getAntigravityAccountService({ runtime: 'wsl', wslDistro })).toThrow(
-        'host account was not changed'
-      )
-      expect(createAntigravityHostCredentialBackend).not.toHaveBeenCalled()
-    }
-  )
-
-  it('rejects a distro accidentally attached to a host target', () => {
-    expect(() => getAntigravityAccountService({ runtime: 'host', wslDistro: 'Ubuntu' })).toThrow(
-      'not supported yet'
-    )
-    expect(createAntigravityHostCredentialBackend).not.toHaveBeenCalled()
-  })
-})
 
 it('reports new credentials and verified account switches, but not baseline reads or sign-out', async () => {
   const h = harness()
@@ -42,12 +30,12 @@ it('reports new credentials and verified account switches, but not baseline read
   vi.mocked(createEncryptedAntigravityAccountStore).mockReturnValue(h.store)
   const changed = vi.fn()
   setAntigravityNativeCredentialChangeListener(changed)
-  const service = getAntigravityAccountService({ runtime: 'host' })
+  const service = await getAntigravityAccountService({ runtime: 'host' })
   expect(createEncryptedAntigravityAccountStore).toHaveBeenCalledWith(
     join('/task/home', 'antigravity-accounts', 'vault'),
     parse
   )
-  expect(getAntigravityAccountService({ runtime: 'host' })).toBe(service)
+  expect(await getAntigravityAccountService({ runtime: 'host' })).toBe(service)
   expect(createAntigravityHostCredentialBackend).toHaveBeenCalledTimes(1)
 
   const a = (await service.addCurrentAccount()).activeAccountId!
@@ -66,4 +54,13 @@ it('reports new credentials and verified account switches, but not baseline read
   expect(changed).toHaveBeenCalledTimes(2)
   await service.listAccounts()
   expect(changed).toHaveBeenCalledTimes(2)
+
+  // Signing in again to the same account issues a new grant, which must clear a sign-in hold.
+  h.setNative(credential('a', 2))
+  await service.listAccounts()
+  expect(changed).toHaveBeenCalledTimes(3)
+
+  h.setNative(refreshedWithoutIdToken(3, 'refresh-2'))
+  await service.listAccounts()
+  expect(changed).toHaveBeenCalledTimes(3)
 })

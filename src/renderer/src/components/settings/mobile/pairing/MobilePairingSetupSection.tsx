@@ -1,0 +1,217 @@
+import { useState, type ReactNode } from 'react'
+import { ChevronDown, Loader2, QrCode, RefreshCw } from 'lucide-react'
+import { Button } from '../../../ui/button'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../ui/collapsible'
+import { useSettingsTargetReveal } from '../../section-layout/settings-target-highlight'
+import { MOBILE_SETTING_ANCHORS } from '../mobile-pane-search'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
+import { NetworkInterfacePicker } from '../../../mobile/NetworkInterfacePicker'
+import type { PairingNetworkInterface } from '../../../../../../shared/pairing-address-auto-selection'
+import type { MobilePairingConnectionMode } from '../../../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
+
+type MobilePairingSetupSectionProps = {
+  connectionMode: MobilePairingConnectionMode
+  /** False when Anywhere is selected but Relay cannot be committed yet. */
+  canGenerate?: boolean
+  /** Reveals the Relay address disclosure when a settings search matches it. */
+  addressDisclosureForcedOpen?: boolean
+  connectionPathControl: ReactNode
+  networkInterfaces: PairingNetworkInterface[]
+  customAddresses: readonly string[]
+  selectedAddress: string | undefined
+  selectedAddressIsCustom: boolean
+  onSelectedAddressChange: (address: string) => void
+  onCustomAddressSelect: (address: string) => void
+  onCustomAddressRemove: (address: string) => void
+  refreshingNetworkInterfaces: boolean
+  onRefreshNetworkInterfaces: () => void
+  loading: boolean
+  hasQrCode: boolean
+  showGenerateAction?: boolean
+  onGenerateQr: () => void
+}
+
+export function MobilePairingSetupSection({
+  connectionMode,
+  canGenerate = true,
+  addressDisclosureForcedOpen = false,
+  connectionPathControl,
+  networkInterfaces,
+  customAddresses,
+  selectedAddress,
+  selectedAddressIsCustom,
+  onSelectedAddressChange,
+  onCustomAddressSelect,
+  onCustomAddressRemove,
+  refreshingNetworkInterfaces,
+  onRefreshNetworkInterfaces,
+  loading,
+  hasQrCode,
+  showGenerateAction = true,
+  onGenerateQr
+}: MobilePairingSetupSectionProps): React.JSX.Element {
+  const t = useTranslate()
+  const usingRelay = connectionMode === 'automatic'
+  const [addressDisclosureOpen, setAddressDisclosureOpen] = useState(false)
+  const addressRevealRef = useSettingsTargetReveal<HTMLDivElement>(() =>
+    setAddressDisclosureOpen(true)
+  )
+  // Render search/custom-address pickers outright; a collapse trigger cannot close pinned-open state.
+  const addressDisclosurePinned = addressDisclosureForcedOpen || selectedAddressIsCustom
+  // Relay can use main’s default LAN endpoint; LAN-only requires an explicit reachable address.
+  const generateDisabled = loading || !canGenerate || (!usingRelay && !selectedAddress)
+  // Present Relay’s direct path as additive; the phone races both and favors direct on ties.
+  const relayAddressLabel = t(
+    'auto.components.settings.MobilePairingSetupSection.step2RelayDisclosure',
+    'Also use a faster local path'
+  )
+
+  const addressControls = (
+    <div id={MOBILE_SETTING_ANCHORS.networkInterface} className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <NetworkInterfacePicker
+          networkInterfaces={networkInterfaces}
+          customAddresses={customAddresses}
+          selectedAddress={selectedAddress}
+          selectedAddressIsCustom={selectedAddressIsCustom}
+          onSelectedAddressChange={onSelectedAddressChange}
+          onCustomAddressSelect={onCustomAddressSelect}
+          onCustomAddressRemove={onCustomAddressRemove}
+          className="min-w-[220px] justify-between font-normal"
+        />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={onRefreshNetworkInterfaces}
+              disabled={refreshingNetworkInterfaces}
+              aria-label={t(
+                'auto.components.settings.MobilePairingSetupSection.refresh',
+                'Refresh network interfaces'
+              )}
+              className="text-muted-foreground"
+            >
+              <RefreshCw className={refreshingNetworkInterfaces ? 'animate-spin' : ''} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6}>
+            {t(
+              'auto.components.settings.MobilePairingSetupSection.refresh',
+              'Refresh network interfaces'
+            )}
+          </TooltipContent>
+        </Tooltip>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {usingRelay
+          ? t(
+              'auto.components.settings.MobilePairingSetupSection.step2RelayDescription',
+              'Optional. Pick the Wi‑Fi or Tailscale address your phone should use when nearby — usually faster than Relay. Relay still works when you’re away.'
+            )
+          : t(
+              'auto.components.settings.MobilePairingSetupSection.step2LocalDescription',
+              'The phone must be able to reach this address on Tailscale or Wi‑Fi.'
+            )}
+      </p>
+    </div>
+  )
+
+  return (
+    <section className="space-y-5">
+      <div className="space-y-1">
+        <h3 className="text-sm font-medium">
+          {t('auto.components.settings.MobilePairingSetupSection.title', 'Pair a phone')}
+        </h3>
+        <p className="text-xs text-muted-foreground">
+          {t(
+            'auto.components.settings.MobilePairingSetupSection.overview',
+            'Generate a QR code, then scan it in Orca Mobile under Pair Desktop.'
+          )}
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-xs font-medium text-foreground">
+          {t('auto.components.settings.MobilePairingSetupSection.step1Title', 'Connection')}
+        </p>
+        {connectionPathControl}
+      </div>
+
+      {usingRelay && addressDisclosurePinned ? (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-foreground">{relayAddressLabel}</p>
+          <div className="rounded-md border border-border/60 bg-muted/20 px-3 py-3">
+            {addressControls}
+          </div>
+        </div>
+      ) : usingRelay ? (
+        // Keep Relay’s optional direct path available in a disclosure without dominating setup.
+        <Collapsible
+          ref={addressRevealRef}
+          open={addressDisclosureOpen}
+          onOpenChange={setAddressDisclosureOpen}
+        >
+          <CollapsibleTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="-ml-2 h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+            >
+              {relayAddressLabel}
+              <ChevronDown
+                className={cn(
+                  'size-3.5 transition-transform',
+                  addressDisclosureOpen && 'rotate-180'
+                )}
+              />
+            </Button>
+          </CollapsibleTrigger>
+          {/* Mounted while closed so a settings jump can find and reveal the address picker. */}
+          <CollapsibleContent forceMount className="data-[state=closed]:hidden">
+            <div className="mt-2 rounded-md border border-border/60 bg-muted/20 px-3 py-3">
+              {addressControls}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-foreground">
+            {t(
+              'auto.components.settings.MobilePairingSetupSection.step2Title',
+              'This computer’s address'
+            )}
+          </p>
+          {addressControls}
+        </div>
+      )}
+
+      {showGenerateAction ? (
+        <div className="space-y-2">
+          <Button onClick={onGenerateQr} disabled={generateDisabled} size="sm" className="gap-1.5">
+            {loading ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : hasQrCode ? (
+              <RefreshCw className="size-3.5" />
+            ) : (
+              <QrCode className="size-3.5" />
+            )}
+            {hasQrCode
+              ? t(
+                  'auto.components.settings.MobilePairingSetupSection.regenerate',
+                  'Regenerate QR code'
+                )
+              : t(
+                  'auto.components.settings.MobilePairingSetupSection.generate',
+                  'Generate QR code'
+                )}
+          </Button>
+        </div>
+      ) : null}
+    </section>
+  )
+}

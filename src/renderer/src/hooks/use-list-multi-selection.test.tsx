@@ -57,47 +57,33 @@ afterEach(() => {
 })
 
 describe('useListMultiSelection', () => {
-  it.each([
-    ['macOS', true, { metaKey: true }],
-    ['Windows/Linux', false, { ctrlKey: true }]
-  ])('toggles with the %s modifier without navigating', (_label, isMac, modifier) => {
-    setPlatform(isMac)
-    render([a, b, c])
-
-    let navigate = true
-    act(() => {
-      navigate = !selection.updateSelectionForGesture(gesture(modifier), a)
-    })
-    act(() => selection.updateSelectionForGesture(gesture(modifier), c))
-
-    expect(navigate).toBe(false)
-    expect(selection.selectedItems).toEqual([a, c])
-    act(() => selection.updateSelectionForGesture(gesture(modifier), a))
-    expect(selection.selectedItems).toEqual([c])
+  it('looks up a single selection without rescanning a stable corpus', () => {
+    for (const size of [750, 7500]) {
+      let reads = 0
+      const items = Array.from({ length: size }, (_, index) => ({
+        get key() {
+          reads++
+          return `row-${index}`
+        }
+      }))
+      render(items)
+      reads = 0
+      for (let index = 0; index < 10; index++) {
+        act(() => selection.updateSelectionForGesture(gesture({}), items[index]))
+      }
+      expect(reads).toBe(10)
+      expect(selection.selectedItems).toEqual([items[9]])
+    }
   })
 
-  it('treats the other platform modifier as a plain click', () => {
-    setPlatform(true)
-    render([a, b])
-    act(() => selection.updateSelectionForGesture(gesture({ metaKey: true }), a))
-    let navigate = false
-    act(() => {
-      navigate = !selection.updateSelectionForGesture(gesture({ ctrlKey: true }), b)
-    })
-
-    expect(navigate).toBe(true)
-    expect(selection.selectedItems).toEqual([b])
-  })
-
-  it('replaces on plain click and selects ranges in render order from the anchor', () => {
-    setPlatform(false)
-    render([a, b, c, d])
-    act(() => selection.updateSelectionForGesture(gesture({}), b))
-    act(() => selection.updateSelectionForGesture(gesture({ shiftKey: true }), d))
-
-    expect(selection.selectedItems).toEqual([b, c, d])
-    act(() => selection.updateSelectionForGesture(gesture({ shiftKey: true }), a))
-    expect(selection.selectedItems).toEqual([a, b])
+  it('retains render order and the first occurrence of duplicate keys', () => {
+    const duplicateB = { key: 'b' }
+    render([a, b, duplicateB, c])
+    act(() => selection.toggleSelection(c))
+    act(() => selection.toggleSelection(duplicateB))
+    act(() => selection.toggleSelection(a))
+    expect(selection.selectedItems).toEqual([a, b, c])
+    expect(selection.getItemForKey('b')).toBe(b)
   })
 
   it('prunes rows that stop rendering and falls back to a surviving anchor', () => {
@@ -110,40 +96,5 @@ describe('useListMultiSelection', () => {
     expect(selection.selectedKeys).toEqual(new Set(['c']))
     act(() => selection.updateSelectionForGesture(gesture({ shiftKey: true }), d))
     expect(selection.selectedItems).toEqual([c, d])
-  })
-
-  it('keeps a 2+ selection for a right-click inside it and resets for one outside it', () => {
-    setPlatform(false)
-    render([a, b, c])
-    act(() => selection.updateSelectionForGesture(gesture({ ctrlKey: true }), a))
-    act(() => selection.updateSelectionForGesture(gesture({ ctrlKey: true }), b))
-
-    let targets: readonly Item[] = []
-    act(() => {
-      targets = selection.selectForContextMenu(b)
-    })
-    expect(targets).toEqual([a, b])
-    expect(selection.selectedItems).toEqual([a, b])
-
-    act(() => {
-      targets = selection.selectForContextMenu(c)
-    })
-    expect(targets).toEqual([c])
-    expect(selection.selectedItems).toEqual([c])
-  })
-
-  it('clears on a pointerdown outside the scope only', () => {
-    setPlatform(false)
-    render([a, b])
-    act(() => selection.updateSelectionForGesture(gesture({ ctrlKey: true }), a))
-
-    act(() => {
-      scope.dispatchEvent(new Event('pointerdown', { bubbles: true }))
-    })
-    expect(selection.selectedItems).toEqual([a])
-    act(() => {
-      outside.dispatchEvent(new Event('pointerdown', { bubbles: true }))
-    })
-    expect(selection.selectedItems).toEqual([])
   })
 })

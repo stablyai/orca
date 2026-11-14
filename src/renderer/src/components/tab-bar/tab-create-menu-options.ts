@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { normalizeMatchQuery, scoreQueryTokens } from './query-token-match'
 import type { BuiltInWindowsTerminalShell } from '../../../../shared/windows-terminal-shell'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
@@ -72,7 +73,8 @@ function scoreMenuOption(query: string, option: TabCreateMenuOption): number {
 }
 
 export function buildTabCreateMenuOptions(
-  context: TabCreateMenuOptionsContext
+  context: TabCreateMenuOptionsContext,
+  t: Translate = translate
 ): TabCreateMenuOption[] {
   if (context.terminalOnly) {
     return []
@@ -82,98 +84,98 @@ export function buildTabCreateMenuOptions(
 
   if (context.windowsShellEntries && context.windowsShellEntries.length > 0) {
     for (const entry of context.windowsShellEntries) {
-      const label = `${translate('auto.components.tab.bar.TabBar.7c1313d237', 'New Terminal:')} ${entry.label}`
+      const label = `${t('auto.components.tab.bar.TabBar.7c1313d237', 'New Terminal:')} ${entry.label}`
       options.push({
         id: `new-terminal-shell:${entry.shell}`,
         kind: 'new-terminal-shell',
         label,
         shell: entry.shell,
         keywords: [
-          translate('auto.components.tab.bar.tab.create.menu.options.5501c2fb7a', 'terminal'),
-          translate('auto.components.tab.bar.tab.create.menu.options.9630dd5494', 'shell'),
-          translate('auto.components.tab.bar.tab.create.menu.options.a094576900', 'new terminal'),
+          t('auto.components.tab.bar.tab.create.menu.options.5501c2fb7a', 'terminal'),
+          t('auto.components.tab.bar.tab.create.menu.options.9630dd5494', 'shell'),
+          t('auto.components.tab.bar.tab.create.menu.options.a094576900', 'new terminal'),
           entry.label,
           label
         ]
       })
     }
   } else {
-    const label = translate('auto.components.tab.bar.TabBar.d364f3c8d4', 'New Terminal')
+    const label = t('auto.components.tab.bar.TabBar.d364f3c8d4', 'New Terminal')
     options.push({
       id: 'new-terminal',
       kind: 'new-terminal',
       label,
       keywords: [
-        translate('auto.components.tab.bar.tab.create.menu.options.5501c2fb7a', 'terminal'),
-        translate('auto.components.tab.bar.tab.create.menu.options.9630dd5494', 'shell'),
-        translate('auto.components.tab.bar.tab.create.menu.options.a094576900', 'new terminal'),
-        translate('auto.components.tab.bar.tab.create.menu.options.4f23f4d01d', 'new shell')
+        t('auto.components.tab.bar.tab.create.menu.options.5501c2fb7a', 'terminal'),
+        t('auto.components.tab.bar.tab.create.menu.options.9630dd5494', 'shell'),
+        t('auto.components.tab.bar.tab.create.menu.options.a094576900', 'new terminal'),
+        t('auto.components.tab.bar.tab.create.menu.options.4f23f4d01d', 'new shell')
       ]
     })
   }
 
   if (context.hasNewBrowser) {
-    const label = translate('auto.components.tab.bar.TabBar.4833fb2cbe', 'New Browser Tab')
+    const label = t('auto.components.tab.bar.TabBar.4833fb2cbe', 'New Browser Tab')
     options.push({
       id: 'new-browser',
       kind: 'new-browser',
       label,
       keywords: [
-        translate('auto.components.tab.bar.tab.create.menu.options.4f2a91e15b', 'browser'),
-        translate('auto.components.tab.bar.tab.create.menu.options.6d0e6a4b7a', 'new browser'),
-        translate('auto.components.tab.bar.tab.create.menu.options.c87ad57785', 'browser tab'),
-        translate('auto.components.tab.bar.tab.create.menu.options.cce7ef1d2c', 'web')
+        t('auto.components.tab.bar.tab.create.menu.options.4f2a91e15b', 'browser'),
+        t('auto.components.tab.bar.tab.create.menu.options.6d0e6a4b7a', 'new browser'),
+        t('auto.components.tab.bar.tab.create.menu.options.c87ad57785', 'browser tab'),
+        t('auto.components.tab.bar.tab.create.menu.options.cce7ef1d2c', 'web')
       ]
     })
   }
 
   if (context.hasNewMarkdown) {
-    const label = translate('auto.components.tab.bar.TabBar.3d5d6c960d', 'New Markdown')
+    const label = t('auto.components.tab.bar.TabBar.3d5d6c960d', 'New Markdown')
     options.push({
       id: 'new-markdown',
       kind: 'new-markdown',
       label,
       keywords: [
-        translate('auto.components.tab.bar.tab.create.menu.options.5f17fb9d0c', 'markdown'),
-        translate('auto.components.tab.bar.tab.create.menu.options.44caaf7b36', 'md'),
-        translate('auto.components.tab.bar.tab.create.menu.options.fb50e3d874', 'new markdown'),
-        translate('auto.components.tab.bar.tab.create.menu.options.6d8b6b4117', 'new file'),
-        translate('auto.components.tab.bar.tab.create.menu.options.b330f72434', 'mark')
+        t('auto.components.tab.bar.tab.create.menu.options.5f17fb9d0c', 'markdown'),
+        t('auto.components.tab.bar.tab.create.menu.options.44caaf7b36', 'md'),
+        t('auto.components.tab.bar.tab.create.menu.options.fb50e3d874', 'new markdown'),
+        t('auto.components.tab.bar.tab.create.menu.options.6d8b6b4117', 'new file'),
+        t('auto.components.tab.bar.tab.create.menu.options.b330f72434', 'mark')
       ]
     })
   }
 
   if (context.hasOpenMarkdown) {
-    const label = translate('auto.components.tab.bar.TabBar.4f327c8b3d', 'Open Markdown...')
+    const label = t('auto.components.tab.bar.TabBar.4f327c8b3d', 'Open Markdown...')
     options.push({
       id: 'open-markdown',
       kind: 'open-markdown',
       label,
       keywords: [
-        translate('auto.components.tab.bar.tab.create.menu.options.37ff3ddca1', 'open markdown'),
-        translate('auto.components.tab.bar.tab.create.menu.options.5f17fb9d0c', 'markdown'),
-        translate('auto.components.tab.bar.tab.create.menu.options.44caaf7b36', 'md'),
-        translate('auto.components.tab.bar.tab.create.menu.options.164c394bab', 'open file')
+        t('auto.components.tab.bar.tab.create.menu.options.37ff3ddca1', 'open markdown'),
+        t('auto.components.tab.bar.tab.create.menu.options.5f17fb9d0c', 'markdown'),
+        t('auto.components.tab.bar.tab.create.menu.options.44caaf7b36', 'md'),
+        t('auto.components.tab.bar.tab.create.menu.options.164c394bab', 'open file')
       ]
     })
   }
 
   if (context.hasSimulator) {
     const label = context.simulatorIsGoTo
-      ? translate('auto.components.tab.bar.TabBar.b426bb2615', 'Go to Mobile Emulator')
-      : translate('auto.components.tab.bar.TabBar.fd2b42aaa3', 'New Mobile Emulator')
+      ? t('auto.components.tab.bar.TabBar.b426bb2615', 'Go to Mobile Emulator')
+      : t('auto.components.tab.bar.TabBar.fd2b42aaa3', 'New Mobile Emulator')
     options.push({
       id: context.simulatorIsGoTo ? 'go-to-simulator' : 'new-simulator',
       kind: context.simulatorIsGoTo ? 'go-to-simulator' : 'new-simulator',
       label,
       keywords: [
-        translate('auto.components.tab.bar.tab.create.menu.options.bbaf4f85a4', 'mobile emulator'),
-        translate('auto.components.tab.bar.tab.create.menu.options.3784b83bd4', 'emulator'),
-        translate('auto.components.tab.bar.tab.create.menu.options.a63847a742', 'simulator'),
-        translate('auto.components.tab.bar.tab.create.menu.options.1baeb07c17', 'ios simulator'),
-        translate('auto.components.tab.bar.tab.create.menu.options.8a580f88cf', 'iphone'),
-        translate('auto.components.tab.bar.tab.create.menu.options.7ecdc5ef08', 'ipad'),
-        translate('auto.components.tab.bar.tab.create.menu.options.14965cc123', 'mobile')
+        t('auto.components.tab.bar.tab.create.menu.options.bbaf4f85a4', 'mobile emulator'),
+        t('auto.components.tab.bar.tab.create.menu.options.3784b83bd4', 'emulator'),
+        t('auto.components.tab.bar.tab.create.menu.options.a63847a742', 'simulator'),
+        t('auto.components.tab.bar.tab.create.menu.options.1baeb07c17', 'ios simulator'),
+        t('auto.components.tab.bar.tab.create.menu.options.8a580f88cf', 'iphone'),
+        t('auto.components.tab.bar.tab.create.menu.options.7ecdc5ef08', 'ipad'),
+        t('auto.components.tab.bar.tab.create.menu.options.14965cc123', 'mobile')
       ]
     })
   }
@@ -185,7 +187,8 @@ export function buildTabCreateMenuOptions(
  *  create files the same way. */
 export function withPluginNewFileMenuOptions(
   options: readonly TabCreateMenuOption[],
-  newFiles: readonly TabCreateMenuPluginNewFile[]
+  newFiles: readonly TabCreateMenuPluginNewFile[],
+  t: Translate = translate
 ): TabCreateMenuOption[] {
   const markdownIndex = options.findIndex((option) => option.kind === 'new-markdown')
   if (markdownIndex === -1 || newFiles.length === 0) {
@@ -199,7 +202,7 @@ export function withPluginNewFileMenuOptions(
     keywords: [
       newFile.extension,
       newFile.pluginName,
-      translate('auto.components.tab.bar.tab.create.menu.options.6d8b6b4117', 'new file')
+      t('auto.components.tab.bar.tab.create.menu.options.6d8b6b4117', 'new file')
     ]
   }))
   return [

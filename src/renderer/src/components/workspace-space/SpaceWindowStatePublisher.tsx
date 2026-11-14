@@ -1,12 +1,13 @@
 import { useEffect } from 'react'
 import { useAppStore } from '@/store'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import {
   pickSpaceWindowState,
   spaceWindowStateChanged,
   type SpaceWindowState
 } from './space-window-state'
 import { revealWorkspaceSpaceChange } from '../status-bar/workspace-space-open-change'
+import { refreshLinkedIssueForWorktree } from '../status-bar/workspace-space-issue-freshness'
 
 export function SpaceWindowStatePublisher(): null {
   useEffect(() => {
@@ -41,11 +42,13 @@ export function SpaceWindowStatePublisher(): null {
     }
     const offRequest = api.onWindowStateRequested(() => {
       windowOpen = true
-      offStore ??= useAppStore.subscribe((next, previous) => {
-        if (spaceWindowStateChanged(previous, next)) {
-          queuePublish()
-        }
-      })
+      if (offStore == null) {
+        offStore = useAppStore.subscribe((next, previous) => {
+          if (spaceWindowStateChanged(previous, next)) {
+            queuePublish()
+          }
+        })
+      }
       publish(true)
     })
     const offClose = api.onWindowClosed?.(() => {
@@ -68,6 +71,9 @@ export function SpaceWindowStatePublisher(): null {
     const offRefresh = api.onWorktreeRefreshRequested?.(() => {
       void useAppStore.getState().fetchAllWorktrees()
     })
+    const offIssueRefresh = api.onIssueRefreshRequested?.((worktreeId, executionHostId) => {
+      refreshLinkedIssueForWorktree(worktreeId, executionHostId)
+    })
     const offAnalysis = api.onWindowAnalysis?.((analysis) => {
       if (typeof analysis.scannedAt === 'number') {
         useAppStore.setState({ workspaceSpaceAnalysis: analysis })
@@ -82,6 +88,7 @@ export function SpaceWindowStatePublisher(): null {
       offClose?.()
       offReveal?.()
       offRefresh?.()
+      offIssueRefresh?.()
       offAnalysis?.()
     }
   }, [])

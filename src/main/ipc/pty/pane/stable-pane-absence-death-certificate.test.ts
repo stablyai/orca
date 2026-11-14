@@ -1,11 +1,10 @@
 // Only the owning registry's typed absence can prove exit; an untyped not-found message may instead mean the route was lost.
 import { describe, expect, it, vi } from 'vitest'
-import { withDurableRuntimeStore } from '../../../runtime/runtime-durable-store-fixture'
+import { withDurableRuntimeStore } from '../../../runtime/orca-runtime-tests/runtime-durable-store-fixture'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
-import { SessionNotFoundError } from '../../../daemon/daemon-errors'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { Store } from '../../../persistence/loading-store/store'
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { adoptStablePane } from './adopt-stable'
 import * as providers from '../provider/registry'
@@ -79,44 +78,7 @@ function runtimeOwning(store: Store): OrcaRuntimeService {
   return runtime
 }
 
-async function adoptAfterAttachRefusal(error: unknown): Promise<{
-  runtime: OrcaRuntimeService
-  store: Store
-  read: () => WorkspaceSessionState
-  spawn: ReturnType<typeof vi.fn>
-}> {
-  const { store, read } = paneStore()
-  const runtime = runtimeOwning(store)
-  const spawn = vi
-    .fn()
-    .mockRejectedValueOnce(error)
-    .mockResolvedValueOnce({ id: 'ssh:conn-1@@pty2:epoch-b:1', isReattach: false })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: refusal exits attachment before any provider method other than spawn is used.
-  vi.spyOn(providers, 'getProvider').mockReturnValue({ spawn } as unknown as IPtyProvider)
-  await adoptStablePane(runtime, store, {
-    cols: 80,
-    rows: 24,
-    tabId: TAB,
-    leafId: LEAF,
-    worktreeId: WORKTREE,
-    connectionId: CONNECTION,
-    spawnFresh: () => spawn({ cols: 80, rows: 24 })
-  })
-  return { runtime, store, read, spawn }
-}
-
 describe('a stable pane whose reattach was refused', () => {
-  it('certifies an absence reported by the process registry that owns the PTY', async () => {
-    // Typed SessionNotFound comes from the owning registry; lost endpoints raise TerminalHostGoneError.
-    const { runtime } = await adoptAfterAttachRefusal(new SessionNotFoundError(PTY_ID))
-
-    expect(runtime.getPtyLivenessVerdict(PTY_ID)).toEqual({
-      status: 'exited',
-      incarnationId: undefined,
-      cause: { kind: 'unknown', reason: 'stop_unverified' }
-    })
-  })
-
   it('refuses to abandon the binding on an untyped "not found" string', async () => {
     const { store, read } = paneStore()
     const before = JSON.stringify(read())

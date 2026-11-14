@@ -3,24 +3,24 @@ import {
   type MobileTerminalCreateOptions,
   type OwnedMobileTerminalCreateOptions
 } from './mobile-terminal-create'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
-import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-types'
+import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
+import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../shared/runtime-session-contracts'
 import {
   prepareStructuredChatCliFork,
   isStructuredChatCliForkSourceCurrent
-} from '../../../ai-vault/structured-chat-cli-fork'
+} from '../../../ai-vault/structured-sessions/structured-chat-cli-fork'
 import { buildMobileTerminalChatFork } from './mobile-terminal-chat-fork'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import { applyRemoteViewerLaunchEnv } from '../../remote-viewer-launch-env'
-import { deterministicAgentSessionUuid } from '../../runtime-agent-launch-resolution'
-import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import { applyRemoteViewerLaunchEnv } from './remote-viewer-launch-env'
+import { deterministicAgentSessionUuid } from './runtime-agent-launch-resolution'
+import { rendererPublicationThrottle } from '../../../window/visibility/renderer-publication-throttle'
 import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../../shared/project-runtime-repair-message'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
-import { loadWorkspaceLayoutWithoutReport } from '../../../../shared/workspace-layout/workspace-layout-load'
-import { nameBasedLoadContext } from '../../../../shared/workspace-layout/workspace-layout-minted-ids'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import { loadWorkspaceLayoutWithoutReport } from '../../../../shared/workspace-layout/persistence/workspace-layout-load'
+import { nameBasedLoadContext } from '../../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
 import { resolveSessionTabRow } from '../../../../shared/workspace-layout/old-client/old-client-session-tab-rows'
 
 function resolveSavedChatForkAnchor(

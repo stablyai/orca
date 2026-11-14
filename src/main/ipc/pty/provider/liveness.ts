@@ -1,8 +1,8 @@
 import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session/agent-session-host-authority'
 import { agentSessionOwnerBindingsEqual } from '../../../../shared/claimed-agent-pty-owner'
-import { addNodePtyRecoveryHint } from '../../../daemon/node-pty-error-hints'
+import { addNodePtyRecoveryHint } from '../../../daemon/pty-subprocess/node-pty-error-hints'
 import type { Store } from '../../../persistence/loading-store/store'
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import { isCurrentPtyExit, ptyIncarnationById, ptyOwnership } from './ownership-state'
 import { getRelayPtyId, tryGetProviderForPty } from './registry'
 import {
@@ -10,7 +10,10 @@ import {
   KEEP_HISTORY_STOP_SETTLE_MS
 } from '../delivery/visibility-state'
 import { clearProviderPtyState } from './state-cleanup'
-import { PtyExitProof, type PtyRetirementEvidence } from '../../../pty-exit-proof'
+import {
+  PtyExitProof,
+  type PtyRetirementEvidence
+} from '../../../pty/process-retirement/pty-exit-proof'
 
 export function normalizeNodePtySpawnError(err: unknown): Error {
   const rawMessage = err instanceof Error ? err.message : String(err)

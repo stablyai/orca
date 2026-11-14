@@ -1,12 +1,13 @@
-import '../../../runtime/rpc/unused-default-rpc-methods.test-fixture'
+import '../../../runtime/rpc/dispatch/testing/unused-default-rpc-methods.test-fixture'
 import { RpcDispatcher } from '../../../runtime/rpc/dispatcher'
 import { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import { GITHUB_ACTIONS_METHODS } from '../../../runtime/rpc/methods/github-actions-methods'
+import { GITHUB_ACTIONS_METHODS } from '../../../runtime/rpc/methods/source-control/github/github-actions-methods'
 import type { RpcResponse } from '../../../runtime/rpc/core'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import * as execution from '../../github-api-repository'
-import * as gh from '../../gh-utils'
-import * as limits from '../../rate-limit'
+import * as execution from '../../repositories/github-api-repository'
+import * as gh from '../../execution/github-operation-slots'
+import * as ghExec from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import * as limits from '../../api/rate-limit'
 import { getWorkflowRunDetails } from './get-workflow-run-details'
 
 const repository = { owner: 'acme', repo: 'widgets', host: 'github.com' }
@@ -32,7 +33,7 @@ const selected = {
     }
   ]
 }
-const calls = vi.fn<typeof gh.ghExecFileAsync>()
+const calls = vi.fn<typeof ghExec.ghExecFileAsync>()
 const base = 'repos/acme/widgets/actions/runs/9'
 let responses: Map<string, unknown>
 beforeEach(() => {
@@ -66,7 +67,7 @@ beforeEach(() => {
     }
     return { stdout: typeof value === 'string' ? value : JSON.stringify(value), stderr: '' }
   })
-  vi.spyOn(gh, 'ghExecFileAsync').mockImplementation(calls)
+  vi.spyOn(ghExec, 'ghExecFileAsync').mockImplementation(calls)
 })
 afterEach(() => vi.restoreAllMocks())
 

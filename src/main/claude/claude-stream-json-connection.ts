@@ -1,29 +1,30 @@
+import { withOrcaClaudeChatEntrypoint } from '../../shared/agent-launch/startup/claude-chat-entrypoint'
+import { claudeStartupAnswerObservation } from './child-process/claude-startup-answer-observation'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import type * as ClaudeAgentSdk from '@anthropic-ai/claude-agent-sdk'
 import type { CanUseTool, OnUserDialog, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 import { spawnProcess } from '@orca/process-host'
-import { buildClaudeChildProcessEnv } from './claude-child-process-environment'
-import { withoutInheritedClaudeConfigDir } from './claude-config-dir-pin'
-import { withoutRejectedClaudeApiKey } from './claude-rejected-api-key'
+import { buildClaudeChildProcessEnv } from './child-process/claude-child-process-environment'
+import { withoutInheritedClaudeConfigDir } from './structured/launch/claude-config-dir-pin'
+import { withoutRejectedClaudeApiKey } from './configuration/claude-rejected-api-key'
 import {
-  ClaudeControlRequestError,
   createClaudeControlSurface,
   type ClaudeControlSurface
-} from './claude-agent-sdk-control-requests'
-import { createClaudeChildTreeReaper } from './claude-agent-sdk-exit-proof'
+} from './sdk-transport/claude-agent-sdk-control-requests'
+import { createClaudeChildTreeReaper } from './child-process/claude-agent-sdk-exit-proof'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
-import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
-import { claudeChildCloseProven } from './claude-child-exit-proof-ladder'
-import { createClaudeCodeProcessSpawn } from './claude-agent-sdk-process-spawn'
+import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
+import { claudeChildCloseProven } from './child-process/claude-child-exit-proof-ladder'
+import { createClaudeCodeProcessSpawn } from './child-process/claude-agent-sdk-process-spawn'
 import {
   claudeUnwrittenUserMessageError,
   createClaudeUserMessageQueue
-} from './claude-agent-sdk-user-message-queue'
+} from './sdk-transport/claude-agent-sdk-user-message-queue'
 import type { ClaudeStructuredSdkOptions } from './structured/launch/claude-structured-launch-resolution'
 import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
-import { claudeStreamJsonExitError } from './claude-stream-json-exit-error'
-
-export { ClaudeControlRequestError }
+import { claudeStreamJsonExitError } from './sdk-transport/claude-stream-json-exit-error'
+import { withObservedProviderExit } from '../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
+import type { ProviderProcessCloseOptions } from '../provider-process/provider-process-close'
 
 /** Bound output draining after proven exit so inherited pipes cannot hold close open. */
 export const CLAUDE_READER_DRAIN_AFTER_EXIT_MS = 2_000
@@ -67,7 +68,7 @@ export type ClaudeStreamJsonConnectionHandlers = {
   canUseTool?: CanUseTool
   /** `request_user_dialog` control; the CLI only emits kinds declared in `supportedDialogKinds`. */
   onUserDialog?: OnUserDialog
-  /** A transport/process fault that is not itself first-hand root exit proof. */
+  /** A transport/process fault; a physical root exit arrives marked observed and is followed by onExit. */
   onFault?: (error: Error) => void
   /** Report observed root exit once; expected stays true even after an unproven close attempt. */
   onExit?: (error: Error, exit?: { expected: boolean }) => void
@@ -87,11 +88,13 @@ export type ClaudeStreamJsonConnection = ClaudeControlSurface & {
   /** What the ladder has observed so far; read after a `close()` that returned false. */
   readonly exitVerdict: ClaudeChildExitVerdict
   readonly executableMissing?: boolean
+  exited?: Promise<Error>
+  startupFailure?: () => Error | undefined
   pauseReading?: () => void
   resumeReading?: () => void
   send: (message: Record<string, unknown>, beforeDispatch?: () => Promise<void>) => Promise<void>
   /** Resolves true after processless settlement, or root exit plus observed tree exit. */
-  close: () => Promise<boolean>
+  close: (options?: ProviderProcessCloseOptions) => Promise<boolean>
 }
 
 export async function openClaudeStreamJsonConnection(
@@ -101,18 +104,13 @@ export async function openClaudeStreamJsonConnection(
   queryImpl?: typeof ClaudeAgentSdk.query
 ): Promise<ClaudeStreamJsonConnection> {
   const { query } = await loadClaudeAgentSdk()
-  const spawner = createClaudeCodeProcessSpawn(
-    spawnImpl,
-    process.platform,
-    launch,
-    handlers.onStdout
-  )
+  const startup = claudeStartupAnswerObservation(handlers.onStdout)
+  const spawner = createClaudeCodeProcessSpawn(spawnImpl, process.platform, launch, startup.feed)
   // Always supply scrubbed env to prevent ambient auth leaks; only launch.env may pin CLAUDE_CONFIG_DIR.
   const env = await withoutRejectedClaudeApiKey(
     withoutKeys(
       buildClaudeChildProcessEnv(launch.env, {
-        inheritedEnv: withoutInheritedClaudeConfigDir(process.env),
-        scrubConfiguredChildSessionStamps: true
+        inheritedEnv: withoutInheritedClaudeConfigDir(process.env)
       }),
       launch.envToDelete ?? []
     )
@@ -123,7 +121,7 @@ export async function openClaudeStreamJsonConnection(
     options: {
       ...launch.options,
       cwd: launch.cwd,
-      env,
+      env: withOrcaClaudeChatEntrypoint(env, process.platform),
       pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
       spawnClaudeCodeProcess: spawner.spawn,
       ...(handlers.canUseTool ? { canUseTool: handlers.canUseTool } : {}),
@@ -135,6 +133,7 @@ export async function openClaudeStreamJsonConnection(
   if (!child || !managed) {
     throw new Error('the claude agent SDK returned without spawning a child')
   }
+  const exited = Promise.withResolvers<Error>()
   let closing = false
   let terminalError: Error | null = null
   let faultReported = false
@@ -160,6 +159,7 @@ export async function openClaudeStreamJsonConnection(
   // Share descendant evidence across close retries and fault cleanup.
   const rootSettled = (): boolean => managed.rootVerdict === 'exited'
   const tree = createClaudeChildTreeReaper(child, {
+    site: 'claude-structured-child-close',
     exited: rootSettled,
     supervised: managed.supervised
   })
@@ -185,6 +185,10 @@ export async function openClaudeStreamJsonConnection(
       const error = claudeStreamJsonExitError(managed.stderrTail(), managed.exitStatus, cause)
       terminalError = withProviderSpawnAbsence(error, managed.spawnAbsence)
     }
+    // One physical exit reaches both callbacks; mark it first so onFault cannot treat it as live-root.
+    if (managed.rootExitObserved && !closing) {
+      withObservedProviderExit(terminalError)
+    }
     inbox.fail(terminalError)
     if (!closing && !faultReported) {
       faultReported = true
@@ -193,6 +197,7 @@ export async function openClaudeStreamJsonConnection(
     if (managed.rootExitObserved && !exitReported) {
       exitReported = true
       handlers.onExit?.(terminalError, { expected: closing })
+      exited.resolve(terminalError)
     }
   }
 
@@ -259,18 +264,19 @@ export async function openClaudeStreamJsonConnection(
         )
       )
     }
+    startup.finish()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: dispatch constructs the SDK user envelope after mapping every content block.
     return inbox.push(message as unknown as SDKUserMessage, beforeDispatch)
   }
 
-  const close = (): Promise<boolean> => {
+  const close = (options?: ProviderProcessCloseOptions): Promise<boolean> => {
     closePromise ??= (async () => {
       closing = true
       resumeReading()
       // Capture before stopping: exited roots can leave reparented descendants undiscoverable.
       await (tree.refresh?.() ?? tree.capture())
       inbox.end()
-      const result = await managed.closeWriter(tree)
+      const result = await managed.closeWriter(tree, options)
       const proven = claudeChildCloseProven(result) || result.killDelivered === true
       inbox.fail(new Error('claude stream-json connection closed'))
       if (!proven) {
@@ -292,13 +298,17 @@ export async function openClaudeStreamJsonConnection(
           pid: spawner.pid
         })
       }
+      startup.finish()
       return true
     })()
     return closePromise
   }
 
+  const controls = createClaudeControlSurface(session)
   return {
-    ...createClaudeControlSurface(session),
+    ...controls,
+    startupFailure: startup.failure,
+    exited: exited.promise,
     get pid() {
       return spawner.pid
     },

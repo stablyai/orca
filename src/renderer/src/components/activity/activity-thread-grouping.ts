@@ -1,42 +1,29 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
 import { translate } from '@/i18n/i18n'
-import { formatAgentTypeLabel } from '@/lib/agent-status'
-import { getAgentRowPrimaryText } from '../../../../shared/agent-row-primary-text'
-import { getActivityThreadWorkspaceTitle } from '@/lib/activity-thread-display'
+import type { Translate } from '@/i18n/use-translate'
+import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
+import { getAgentRowPrimaryText } from '../../../../shared/agent-status/presentation/agent-row-primary-text'
+import { getActivityThreadWorkspaceTitle } from '@/lib/workspace/activity/activity-thread-display'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import {
   activityThreadStatusId,
   agentMeta,
   agentSummary,
   agentTitle,
-  threadAgentStateLabel,
-  type ActivityThreadStatusId
+  threadAgentStateLabel
 } from './activity-thread-presentation'
-import type { ActivityGroupBy, ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
-
-// Use exhaustive, unique attention ranks so new states fail typecheck and recency cannot reorder headers.
-const ACTIVITY_STATUS_GROUP_RANK: Record<ActivityThreadStatusId, number> = {
-  waiting: 0,
-  blocked: 1,
-  permission: 2,
-  failed: 3,
-  unconfirmed: 4,
-  working: 5,
-  monitoring: 6,
-  // A user's Stop is not news, so it follows live work, but it is not a finish either.
-  interrupted: 7,
-  unverifiable: 8,
-  done: 9,
-  idle: 10
-}
+import { AGENT_LIST_STATUS_RANK } from '../../../../shared/agent-status/presentation/agent-list-status'
+import type { ActivityGroupBy } from '../../../../shared/agents-view-thread-filters'
+import type { ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
 
 function activityStatusRank(thread: AgentPaneThread): number {
-  return ACTIVITY_STATUS_GROUP_RANK[activityThreadStatusId(thread)]
+  return AGENT_LIST_STATUS_RANK[activityThreadStatusId(thread)]
 }
 
 export function getActivityThreadGroup(
   thread: AgentPaneThread,
-  groupBy: ActivityGroupBy
+  groupBy: ActivityGroupBy,
+  t: Translate = translate
 ): { key: string; label: string; state?: AgentDotState } {
   if (groupBy === 'none') {
     return { key: 'all', label: '' }
@@ -44,17 +31,14 @@ export function getActivityThreadGroup(
   if (groupBy === 'status') {
     // The key is the glyph every row in the group draws, so it heads the group too.
     const status = activityThreadStatusId(thread)
-    return { key: status, label: threadAgentStateLabel(thread), state: status }
+    return { key: status, label: threadAgentStateLabel(thread, t), state: status }
   }
   if (groupBy === 'project') {
     return thread.repo
       ? { key: `project:${thread.repo.id}`, label: thread.repo.displayName }
       : {
           key: 'project:unknown',
-          label: translate(
-            'auto.components.activity.ActivityPrototypePage.5651b216c6',
-            'Unknown project'
-          )
+          label: t('auto.components.activity.ActivityPrototypePage.5651b216c6', 'Unknown project')
         }
   }
   if (groupBy === 'worktree') {
@@ -65,7 +49,8 @@ export function getActivityThreadGroup(
 
 export function buildActivityThreadGroups(
   threads: AgentPaneThread[],
-  groupBy: ActivityGroupBy
+  groupBy: ActivityGroupBy,
+  t?: Translate
 ): ActivityThreadGroup[] {
   if (groupBy === 'none') {
     return threads.length > 0 ? [{ key: 'all', label: '', threads }] : []
@@ -73,7 +58,7 @@ export function buildActivityThreadGroups(
   const groups: ActivityThreadGroup[] = []
   const groupIndexByKey = new Map<string, number>()
   for (const thread of threads) {
-    const group = getActivityThreadGroup(thread, groupBy)
+    const group = getActivityThreadGroup(thread, groupBy, t)
     const existingIndex = groupIndexByKey.get(group.key)
     if (existingIndex === undefined) {
       groups.push({ ...group, threads: [thread] })

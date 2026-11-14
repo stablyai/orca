@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
-import type { LocalGitExecOptions } from '../../gh-utils'
-import { ACTIONS_ARTIFACT_CHUNK_BYTES } from '../../../../shared/github/actions-artifact-types'
+import type { LocalGitExecOptions } from '../../repositories/github-repository-identity'
+import { ACTIONS_ARTIFACT_CHUNK_BYTES } from '../../../../shared/github/actions/actions-artifact-types'
 const sessions = new Map<
   string,
   { owner: string; archive: Buffer; timer: ReturnType<typeof setTimeout>; dispose: () => void }

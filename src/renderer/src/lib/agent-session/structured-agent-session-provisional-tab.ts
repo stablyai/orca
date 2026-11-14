@@ -1,19 +1,17 @@
-import {
-  readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey
-} from '@/components/native-chat/native-chat-composer-draft-store'
-import { nativeChatDraftPositions } from '@/components/native-chat/native-chat-composer-draft-memory'
+import { readNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
+import { nativeChatDraftPositions } from '@/components/native-chat/drafts/native-chat-composer-draft-memory'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
-import { afterPendingTab } from '@/runtime/layout-owner-pending-tabs'
-import type { NativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
+import { afterPendingTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
+import type { NativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import type {
   AgentSessionLaunchPlan,
   AgentSessionLaunchTarget
-} from '@/lib/agent-session-launch-plan'
+} from './launch/routing/agent-session-launch-plan'
 import type {
   StructuredAgentLaunchHandle,
   StructuredAgentLaunchHooks
-} from '@/lib/structured-agent-launch-settlement'
+} from './launch/continuation/structured-agent-launch-settlement'
 import { useAppStore } from '@/store/index'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
@@ -25,15 +23,15 @@ import {
 import {
   resolveStructuredAgentSessionOwner,
   structuredAgentSessionTargetForHost
-} from '@/runtime/structured-agent-session-owner'
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import {
   openTerminalForDeclinedChat,
   openDeclinedTerminal,
   opensAtAction
 } from './launch/structured-agent-session-action-launch'
-import { holdEmptyWorkspaceDefaultSurfaceForLaunch } from '../empty-workspace-default-surface-claims'
-import type { OpenedAgentSessionTab } from '../structured-agent-session-tab-open-through-layout-owner'
+import { holdEmptyWorkspaceDefaultSurfaceForLaunch } from '../workspace/activation/initial-surface/empty-workspace-default-surface-claims'
+import type { OpenedAgentSessionTab } from './launch/pane/structured-agent-session-tab-open-through-layout-owner'
 import {
   captureStructuredLaunchSurfaceAddress,
   openStructuredAgentSessionProvisionalTab
@@ -251,8 +249,8 @@ function beginDeferredPublication(
   args: ProvisionalLaunchArgs
 ): (StructuredAgentLaunchHandle & { tab: null }) | null {
   const worktreeId = args.target?.worktreeId ?? args.plan.worktreeId
-  if (!worktreeId || !args.plan.resumeFrom || args.plan.prompt) {
-    throw new Error('Deferred publication requires an identity-only resume.')
+  if (!worktreeId || (!args.plan.resumeFrom && !args.plan.forkFrom) || args.plan.prompt) {
+    throw new Error('Deferred publication requires an identity-only resume or fork.')
   }
   const releaseHold = holdEmptyWorkspaceDefaultSurfaceForLaunch(worktreeId)
   let handle: StructuredAgentLaunchHandle | null

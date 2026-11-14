@@ -9,7 +9,7 @@ import {
   testState,
   writeDataFile
 } from '../persistence-test-harness'
-import { getWorkspaceAttachments } from '../../../shared/workspace-attachments'
+import { getWorkspaceAttachments } from '../../../shared/workspace-attachments/workspace-attachments'
 import type { WorkspaceAttachment } from '../../../shared/worktree/types'
 import { mergeWorktree } from '../../ipc/worktree-metadata-merge'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'

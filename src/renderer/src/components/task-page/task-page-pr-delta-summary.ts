@@ -1,7 +1,8 @@
 import { translate } from '@/i18n/i18n'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { Translate } from '@/i18n/use-translate'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 
-export function formatPRDelta(item: GitHubWorkItem): string | null {
+export function formatPRDelta(item: GitHubWorkItem, t: Translate = translate): string | null {
   const parts: string[] = []
   if (typeof item.additions === 'number') {
     parts.push(`+${item.additions}`)
@@ -11,7 +12,7 @@ export function formatPRDelta(item: GitHubWorkItem): string | null {
   }
   if (typeof item.changedFiles === 'number') {
     parts.push(
-      translate('auto.components.TaskPage.changedFileCount', '{{count}} files', {
+      t('auto.components.TaskPage.changedFileCount', '{{count}} files', {
         count: item.changedFiles,
         defaultValue_one: '{{count}} file'
       })

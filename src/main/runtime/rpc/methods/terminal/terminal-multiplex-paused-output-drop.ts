@@ -1,4 +1,4 @@
-import { TerminalStreamOpcode } from '../../../../../shared/terminal-stream-protocol'
+import { TerminalStreamOpcode } from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import type { TerminalMultiplexConnection } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
 

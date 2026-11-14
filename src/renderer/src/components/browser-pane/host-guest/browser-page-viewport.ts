@@ -1,4 +1,5 @@
 // Keep guests in stable overlay-slot parents across chrome unmounts; Electron destroys them on DOM removal/reparenting.
+import { retireBrowserGuestMetadata } from './browser-guest-metadata-cache'
 
 const slotViewportRoots = new Map<string, HTMLDivElement>()
 
@@ -28,9 +29,17 @@ const browserPageViewports = new Map<string, BrowserPageViewport>()
 // Remember chrome insets across shell recovery/profile/slot rebuilds that do not trigger React remeasurement.
 const browserPageChromeInsetHeights = new Map<string, number>()
 const browserPageViewportPresetSizes = new Map<string, { width: number; height: number }>()
+// An agent's size outlives pane remounts until the page's next load or a user preset clears it.
+const browserPageAgentViewportSizes = new Map<string, { width: number; height: number }>()
 const MAX_REMEMBERED_BROWSER_PAGE_INSETS = 512
 
 const slotRootListeners = new Map<string, Set<() => void>>()
+
+function retireViewportGuests(root: HTMLElement): void {
+  for (const webview of root.querySelectorAll<Electron.WebviewTag>('webview')) {
+    retireBrowserGuestMetadata(webview)
+  }
+}
 
 function notifySlotRootListeners(workspaceTabId: string): void {
   for (const listener of slotRootListeners.get(workspaceTabId) ?? []) {
@@ -42,12 +51,19 @@ export function registerBrowserOverlaySlotViewport(
   workspaceTabId: string,
   element: HTMLDivElement | null
 ): void {
+  const previous = slotViewportRoots.get(workspaceTabId)
   if (element) {
     slotViewportRoots.set(workspaceTabId, element)
+    if (previous && previous !== element) {
+      retireViewportGuests(previous)
+    }
     notifySlotRootListeners(workspaceTabId)
     return
   }
   slotViewportRoots.delete(workspaceTabId)
+  if (previous) {
+    retireViewportGuests(previous)
+  }
   // Subscribers outlive the root; notify them on removal so they can observe its replacement.
   notifySlotRootListeners(workspaceTabId)
 }
@@ -91,6 +107,7 @@ export function ensureBrowserPageViewport(
       return existing
     }
     // Why: a remounted slot strands this shell after Electron destroys its detached guest (STA-3228).
+    retireViewportGuests(existing.shell)
     existing.shell.remove()
     browserPageViewports.delete(browserPageId)
   }
@@ -136,7 +153,7 @@ export function ensureBrowserPageViewport(
 
   const viewport = { shell, chromeInset, devToolsSplit, container, scroller, content }
   browserPageViewports.set(browserPageId, viewport)
-  applyViewportPresetSizeStyles(viewport, browserPageViewportPresetSizes.get(browserPageId) ?? null)
+  applyViewportPresetSizeStyles(viewport, browserPageBoxSize(browserPageId))
   return viewport
 }
 
@@ -165,22 +182,47 @@ function applyViewportPresetSizeStyles(
   viewport.scroller.style.overflow = size ? 'auto' : ''
 }
 
-export function setBrowserPageViewportPresetSize(
+function browserPageBoxSize(browserPageId: string): { width: number; height: number } | null {
+  return (
+    browserPageAgentViewportSizes.get(browserPageId) ??
+    browserPageViewportPresetSizes.get(browserPageId) ??
+    null
+  )
+}
+
+function rememberSize(
+  sizes: Map<string, { width: number; height: number }>,
   browserPageId: string,
   size: { width: number; height: number } | null
 ): void {
   if (size) {
-    browserPageViewportPresetSizes.set(browserPageId, size)
+    sizes.set(browserPageId, size)
   } else {
-    browserPageViewportPresetSizes.delete(browserPageId)
+    sizes.delete(browserPageId)
   }
   const viewport = browserPageViewports.get(browserPageId)
   if (viewport) {
-    applyViewportPresetSizeStyles(viewport, size)
+    applyViewportPresetSizeStyles(viewport, browserPageBoxSize(browserPageId))
   }
 }
 
+export function setBrowserPageViewportPresetSize(
+  browserPageId: string,
+  size: { width: number; height: number } | null
+): void {
+  rememberSize(browserPageViewportPresetSizes, browserPageId, size)
+}
+
+/** An agent's viewport sizes the box ahead of the user's preset until cleared. */
+export function setBrowserPageAgentViewportSize(
+  browserPageId: string,
+  size: { width: number; height: number } | null
+): void {
+  rememberSize(browserPageAgentViewportSizes, browserPageId, size)
+}
+
 export function clearBrowserPageViewportPresetSize(browserPageId: string): void {
+  browserPageAgentViewportSizes.delete(browserPageId)
   setBrowserPageViewportPresetSize(browserPageId, null)
 }
 
@@ -226,6 +268,7 @@ export function subscribeBrowserPageViewportScroll(
 export function removeBrowserPageViewport(browserPageId: string): void {
   const viewport = browserPageViewports.get(browserPageId)
   if (viewport) {
+    retireViewportGuests(viewport.shell)
     viewport.shell.remove()
     browserPageViewports.delete(browserPageId)
   }

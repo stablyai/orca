@@ -1,0 +1,12 @@
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+import type { JournalReducerState } from '../projection/journal-reducer'
+
+export function retireCoveredJournalFloor(
+  state: JournalReducerState,
+  reopenFloor: AgentJournalCursor | null
+): AgentJournalCursor | null {
+  return reopenFloor?.epoch === state.epoch &&
+    state.queuePauseMarks.reopenedSequence >= reopenFloor.sequence
+    ? null
+    : reopenFloor
+}

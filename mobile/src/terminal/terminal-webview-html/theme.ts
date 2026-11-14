@@ -1,4 +1,4 @@
-import type { RuntimeMobileTerminalTheme } from '../../../../src/shared/runtime-types'
+import type { RuntimeMobileTerminalTheme } from '../../../../src/shared/runtime-mobile-session-tab-contracts'
 import { colors } from '../../theme/mobile-theme'
 
 export const DEFAULT_TERMINAL_THEME: RuntimeMobileTerminalTheme['theme'] = {

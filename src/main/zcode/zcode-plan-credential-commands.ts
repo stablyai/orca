@@ -11,9 +11,9 @@ import {
   refuseCredentialSealedElsewhere,
   savedCredentialUnreadable
 } from '../credentials/saved-credential-readability'
-import { hasZcodeCliPlanCredentials } from '../rate-limits/zcode-usage-fetcher'
+import { hasZcodeCliPlanCredentials } from '../rate-limits/providers/zcode/zcode-usage-credentials'
 import { refreshAfterCredentialChange } from '../ipc/credential-change-rate-limit-refresh'
-import type { RateLimitService } from '../rate-limits/service'
+import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
 import type { ZcodePlanCredentialsStatus } from '../../shared/zcode-plan-sites'
 
 type UsageRefresher = Pick<RateLimitService, 'refresh' | 'invalidateZcodeCredentialState'>

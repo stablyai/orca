@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 type FloatingTerminalOrchestrationCardProps = {
   visible: boolean
@@ -7,11 +8,10 @@ type FloatingTerminalOrchestrationCardProps = {
   onEnable: () => void
 }
 
-export function renderFloatingTerminalOrchestrationCard({
-  visible,
-  onDismiss,
-  onEnable
-}: FloatingTerminalOrchestrationCardProps): React.JSX.Element | null {
+export function renderFloatingTerminalOrchestrationCard(
+  { visible, onDismiss, onEnable }: FloatingTerminalOrchestrationCardProps,
+  t: Translate = translate
+): React.JSX.Element | null {
   if (!visible) {
     return null
   }
@@ -23,13 +23,13 @@ export function renderFloatingTerminalOrchestrationCard({
       <div className="space-y-2">
         <div className="space-y-0.5">
           <p className="text-sm font-medium">
-            {translate(
+            {t(
               'auto.components.floating.terminal.FloatingTerminalPanel.2a3c5ddf5e',
               'Enable orchestration'
             )}
           </p>
           <p className="text-xs leading-5 text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.floating.terminal.FloatingTerminalPanel.8cf80db43b',
               'Set up the Orca CLI and agent skill so agents can coordinate through Orca.'
             )}
@@ -37,16 +37,10 @@ export function renderFloatingTerminalOrchestrationCard({
         </div>
         <div className="flex items-center gap-2">
           <Button type="button" variant="ghost" size="sm" className="flex-1" onClick={onDismiss}>
-            {translate(
-              'auto.components.floating.terminal.FloatingTerminalPanel.adc281394d',
-              'Dismiss'
-            )}
+            {t('auto.components.floating.terminal.FloatingTerminalPanel.adc281394d', 'Dismiss')}
           </Button>
           <Button type="button" variant="default" size="sm" className="flex-1" onClick={onEnable}>
-            {translate(
-              'auto.components.floating.terminal.FloatingTerminalPanel.bbc177f98f',
-              'Enable'
-            )}
+            {t('auto.components.floating.terminal.FloatingTerminalPanel.bbc177f98f', 'Enable')}
           </Button>
         </div>
       </div>

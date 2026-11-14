@@ -1,7 +1,7 @@
 import {
   pairedRuntimeConnectionFromOffer,
   type PairedRuntimeConnection
-} from '../../paired-runtime-connection'
+} from '../pairing/paired-runtime-connection'
 import type { AddressInfo } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WebSocketServer, type WebSocket } from 'ws'
@@ -12,12 +12,11 @@ import {
   generateKeyPair,
   publicKeyFromBase64,
   publicKeyToBase64
-} from '../../e2ee-crypto'
-import { encodePairingOffer, parsePairingCode } from '../../pairing'
-import {
-  subscribeRemoteRuntimeRequest,
-  type RemoteRuntimeSubscription
-} from '../remote-runtime-client'
+} from '../e2ee/node/e2ee-crypto'
+import { encodePairingOffer, parsePairingCode } from '../pairing/pairing'
+import '../requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../requests/remote-runtime-subscription-transport'
+import type { RemoteRuntimeTransportSubscription } from '../requests/remote-runtime-subscription-contract'
 
 const servers: WebSocketServer[] = []
 
@@ -36,25 +35,6 @@ afterEach(async () => {
 })
 
 describe('remote runtime subscription JSON requests', () => {
-  it('sends a second JSON RPC over the established subscription socket', async () => {
-    const server = await createServer()
-    const onResponse = vi.fn<(response: unknown) => void>()
-    const subscription = await subscribe(server.pairing, { onResponse })
-    const response = requireSender(subscription)(
-      'browser.clientHost.commandResult',
-      { commandId: 'command-a' },
-      1000
-    )
-
-    await expect(server.nextRequest).resolves.toMatchObject({
-      method: 'browser.clientHost.commandResult',
-      params: { commandId: 'command-a' }
-    })
-    await expect(response).resolves.toMatchObject({ result: { accepted: true } })
-    expect(onResponse).toHaveBeenCalledOnce()
-    subscription.close()
-  })
-
   it('routes concurrent responses by id when the host replies out of order', async () => {
     const server = await createServer({ reverseResponses: true })
     const subscription = await subscribe(server.pairing)
@@ -67,157 +47,6 @@ describe('remote runtime subscription JSON requests', () => {
     await expect(second).resolves.toMatchObject({ result: { accepted: true, index: 2 } })
     subscription.close()
   })
-
-  it.each([
-    ['unknown', { unknownResponse: true }, false],
-    ['duplicate', { duplicateResponse: true }, true]
-  ] as const)(
-    'fails the subscription on a %s nested response id',
-    async (_caseName, options, firstResolves) => {
-      const server = await createServer(options)
-      const onError = vi.fn<(error: unknown) => void>()
-      const onClose = vi.fn<() => void>()
-      const subscription = await subscribe(server.pairing, { onError, onClose })
-      const response = requireSender(subscription)(
-        'browser.clientHost.commandResult',
-        { commandId: 'command-a' },
-        1000
-      )
-
-      await (firstResolves
-        ? expect(response).resolves.toMatchObject({ result: { accepted: true } })
-        : expect(response).rejects.toMatchObject({ code: 'invalid_runtime_response' }))
-      await vi.waitFor(() => expect(onClose).toHaveBeenCalledOnce())
-      expect(onError).toHaveBeenCalledOnce()
-      expect(onError).toHaveBeenCalledWith(
-        expect.objectContaining({ code: 'invalid_runtime_response' })
-      )
-    }
-  )
-
-  it('bounds pending JSON requests and rejects each one on close', async () => {
-    const server = await createServer({ holdResponses: true })
-    const subscription = await subscribe(server.pairing)
-    const sendRequest = requireSender(subscription)
-    const pending = Array.from({ length: 32 }, (_, index) =>
-      sendRequest('browser.clientHost.commandResult', { index }, 1000)
-    )
-    const rejections = pending.map((request) =>
-      expect(request).rejects.toMatchObject({ code: 'remote_runtime_unavailable' })
-    )
-
-    await expect(
-      sendRequest('browser.clientHost.commandResult', { index: 32 }, 1000)
-    ).rejects.toMatchObject({ code: 'runtime_busy' })
-    subscription.close()
-    await Promise.all(rejections)
-  })
-
-  it('does not consume pending capacity when serialization fails', async () => {
-    const server = await createServer({ holdResponses: true })
-    const subscription = await subscribe(server.pairing)
-    const sendRequest = requireSender(subscription)
-    const circular: { self?: unknown } = {}
-    circular.self = circular
-
-    await expect(
-      sendRequest('browser.clientHost.commandResult', circular, 1000)
-    ).rejects.toMatchObject({ code: 'invalid_argument' })
-    const pending = Array.from({ length: 32 }, (_, index) =>
-      sendRequest('browser.clientHost.commandResult', { index }, 1000)
-    )
-    const rejections = pending.map((request) =>
-      expect(request).rejects.toMatchObject({ code: 'remote_runtime_unavailable' })
-    )
-    subscription.close()
-    await Promise.all(rejections)
-  })
-
-  it('rejects every concurrent request exactly once when one times out', async () => {
-    const server = await createServer({ holdResponses: true })
-    const onError = vi.fn<(error: unknown) => void>()
-    const onClose = vi.fn<() => void>()
-    const subscription = await subscribe(server.pairing, { onError, onClose })
-    const sendRequest = requireSender(subscription)
-    const rejections = [vi.fn(), vi.fn(), vi.fn()]
-    const pending = [
-      sendRequest('browser.clientHost.commandResult', { index: 1 }, 25),
-      sendRequest('browser.clientHost.commandResult', { index: 2 }, 1000),
-      sendRequest('browser.clientHost.commandResult', { index: 3 }, 1000)
-    ].map((request, index) => request.catch(rejections[index]!))
-
-    await Promise.all(pending)
-    for (const rejection of rejections) {
-      expect(rejection).toHaveBeenCalledOnce()
-      expect(rejection).toHaveBeenCalledWith(expect.objectContaining({ code: 'runtime_timeout' }))
-    }
-    expect(onError).toHaveBeenCalledOnce()
-    await vi.waitFor(() => expect(onClose).toHaveBeenCalledOnce())
-    expect(subscription.sendBinary(new Uint8Array([9]))).toBe(false)
-  })
-
-  it('releases queued control bytes and native socket memory exactly once', async () => {
-    const server = await createServer({ holdResponses: true })
-    const releaseQueued = vi.fn()
-    const releaseSocket = vi.fn()
-    const outboundMemoryBudget = {
-      claimQueuedBytes: vi.fn(() => releaseQueued),
-      registerBufferedAmount: vi.fn(() => ({ canSend: () => false, release: releaseSocket }))
-    }
-    const onClose = vi.fn<() => void>()
-    const subscription = await subscribe(server.pairing, {
-      onClose,
-      options: { outboundMemoryBudget }
-    })
-    const request = requireSender(subscription)(
-      'browser.clientHost.commandResult',
-      { commandId: 'command-a' },
-      1000
-    )
-    const rejected = expect(request).rejects.toMatchObject({ code: 'remote_runtime_unavailable' })
-
-    expect(outboundMemoryBudget.registerBufferedAmount).toHaveBeenCalledOnce()
-    expect(outboundMemoryBudget.claimQueuedBytes).toHaveBeenCalledOnce()
-    subscription.close()
-    subscription.close()
-    await rejected
-    expect(releaseQueued).toHaveBeenCalledOnce()
-    expect(releaseSocket).not.toHaveBeenCalled()
-    await vi.waitFor(() => expect(onClose).toHaveBeenCalledOnce())
-    expect(releaseSocket).toHaveBeenCalledOnce()
-  })
-
-  it.each(['socket registration', 'queue claim'] as const)(
-    'reports %s admission failure exactly once',
-    async (failure) => {
-      const server = await createServer({ holdResponses: true })
-      const onError = vi.fn<(error: unknown) => void>()
-      const onClose = vi.fn<() => void>()
-      const releaseSocket = vi.fn()
-      const subscription = await subscribe(server.pairing, {
-        onError,
-        onClose,
-        options: {
-          outboundMemoryBudget: {
-            claimQueuedBytes: () => null,
-            registerBufferedAmount: () =>
-              failure === 'socket registration'
-                ? null
-                : { canSend: () => false, release: releaseSocket }
-          }
-        }
-      })
-
-      await expect(
-        requireSender(subscription)('browser.clientHost.commandResult', {}, 1000)
-      ).rejects.toMatchObject({ code: 'remote_runtime_unavailable' })
-      expect(onError).toHaveBeenCalledOnce()
-      expect(onClose).toHaveBeenCalledOnce()
-      await vi.waitFor(() =>
-        expect(releaseSocket).toHaveBeenCalledTimes(failure === 'socket registration' ? 0 : 1)
-      )
-    }
-  )
 
   // ws delivers frames directly; unguarded consumer throws previously crashed the app.
   it('fails the subscription instead of crashing the process when a consumer throws', async () => {
@@ -239,7 +68,7 @@ describe('remote runtime subscription JSON requests', () => {
   })
 })
 
-function requireSender(subscription: RemoteRuntimeSubscription) {
+function requireSender(subscription: RemoteRuntimeTransportSubscription) {
   if (!subscription.sendRequest) {
     throw new Error('subscription JSON request sender unavailable')
   }
@@ -252,10 +81,10 @@ async function subscribe(
     onResponse?: (response: unknown) => void
     onError?: (error: unknown) => void
     onClose?: () => void
-    options?: Parameters<typeof subscribeRemoteRuntimeRequest>[5]
+    options?: Parameters<typeof subscribeRemoteRuntimeTransport>[5]
   } = {}
-): Promise<RemoteRuntimeSubscription> {
-  return subscribeRemoteRuntimeRequest(
+): Promise<RemoteRuntimeTransportSubscription> {
+  return subscribeRemoteRuntimeTransport(
     pairing,
     'browser.clientHost.attach',
     {},

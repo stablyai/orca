@@ -1,16 +1,16 @@
 import { z } from 'zod'
-import { emitBrowserExtensionEvent } from '../browser-extension-api-host'
+import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
 import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
   registerBrowserExtensionNamespace,
   type BrowserExtensionCaller,
   type BrowserExtensionMethod
-} from '../browser-extension-namespace-registry'
+} from '../api-runtime/browser-extension-namespace-registry'
 import {
   getBrowserExtensionProfileStateStore,
   type BrowserExtensionProfileState
-} from '../browser-extension-profile-state-store'
+} from '../profile-storage/browser-extension-profile-state-store'
 
 /**
  * chrome.privacy as types.ChromeSetting objects. Orca has no built-in password manager or

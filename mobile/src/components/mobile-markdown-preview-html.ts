@@ -56,7 +56,8 @@ function stripTags(value: string): string {
   return restoreMarkdownCode(stripped, codeSpans, placeholderPrefix)
 }
 
-function attrValue(tag: string, name: string): string {
+/** An attribute's decoded value in an HTML tag, quotes respected; '' when absent. */
+export function attrValue(tag: string, name: string): string {
   let cursor = 1
   while (cursor < tag.length && !/[\s/>]/.test(tag[cursor] ?? '')) {
     cursor += 1
@@ -119,6 +120,42 @@ function attrValue(tag: string, name: string): string {
 const tagAttributesSource = `(?:[^<>"']|"[^"]*"|'[^']*')*`
 const imageTagPattern = new RegExp(`<img\\b${tagAttributesSource}>`, 'gi')
 
+export type HtmlImage = {
+  start: number
+  end: number
+  src: string
+  alt: string
+  width?: number
+  height?: number
+}
+
+/** A pixel length (`300`, `300px`); percentages and other units stay unread. */
+function pixels(value: string): number | undefined {
+  const match = /^\s*(\d+)(?:px)?\s*$/i.exec(value)
+  return match ? Number(match[1]) : undefined
+}
+
+/** The `<img>` tags in HTML with an https source, where they sit, and their authored width. */
+export function htmlImages(html: string): HtmlImage[] {
+  return [...html.matchAll(imageTagPattern)].flatMap((match) => {
+    const src = attrValue(match[0], 'src')
+    const width = pixels(attrValue(match[0], 'width'))
+    const height = pixels(attrValue(match[0], 'height'))
+    return /^https:\/\//i.test(src)
+      ? [
+          {
+            start: match.index,
+            end: match.index + match[0].length,
+            src,
+            alt: attrValue(match[0], 'alt'),
+            ...(width ? { width } : {}),
+            ...(height ? { height } : {})
+          }
+        ]
+      : []
+  })
+}
+
 function normalizeAnchorTags(value: string): string {
   const lowerValue = value.toLowerCase()
   let output = ''
@@ -176,7 +213,8 @@ function normalizeAnchorTags(value: string): string {
 function normalizeInlineHtml(value: string): string {
   const imagesNormalized = value
     .replace(/<br\s*\/?>/gi, '\n')
-    .replace(imageTagPattern, (tag) => attrValue(tag, 'alt') || 'image')
+    // An image without alt text is decoration (badges, icons): it draws no word.
+    .replace(imageTagPattern, (tag) => attrValue(tag, 'alt'))
 
   let next = normalizeAnchorTags(imagesNormalized)
   next = replaceMobileMarkdownPairedMarkupTags(next, ['strong', 'b'], (_name, inner) => {

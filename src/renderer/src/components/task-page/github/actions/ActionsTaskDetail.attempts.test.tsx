@@ -3,10 +3,13 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
-import { TEST_REPO } from '@/store/slices/store-test-helpers'
-import * as requests from '@/store/github/actions-requests'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
+import * as requests from '@/store/github/actions/actions-requests'
 import { ActionsTaskDetail } from './ActionsTaskDetail'
-import type { ActionsRun, ActionsRunDetails } from '../../../../../../shared/github/actions-types'
+import type {
+  ActionsRun,
+  ActionsRunDetails
+} from '../../../../../../shared/github/actions/actions-types'
 
 vi.mock('./ActionsArtifacts', () => ({ ActionsArtifacts: () => null }))
 const repository = { owner: 'acme', repo: 'widgets', host: 'github.com' }

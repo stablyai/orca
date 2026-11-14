@@ -1,5 +1,5 @@
 // What a hello's snapshot tells the cloud: recently active cloud conversations, within the contract's caps.
-import type { PendingPrompt } from '../../shared/agent-pending-prompt'
+import type { PendingPrompt } from '../../shared/agent-status/contracts/agent-pending-prompt'
 import {
   cloudConversation,
   CONNECTOR_CLIENT_LIMITS,

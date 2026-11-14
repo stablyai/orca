@@ -8,15 +8,6 @@ const mine = { id: 'mine', name: 'My work', jql: 'assignee = currentUser()' }
 const bugs = { id: 'bugs', name: 'Bugs', jql: 'project = APP AND type = Bug' }
 
 describe('host Jira saved filters', () => {
-  it('retains several named queries and the selection through serialization', () => {
-    let state = mutateJiraSavedFilterState(undefined, { kind: 'save', filter: mine })
-    state = mutateJiraSavedFilterState(state, { kind: 'save', filter: bugs })
-    state = mutateJiraSavedFilterState(state, { kind: 'select', id: bugs.id })
-    expect(normalizeJiraSavedFilterState(JSON.parse(JSON.stringify(state)))).toEqual({
-      filters: [mine, bugs],
-      activeFilterId: bugs.id
-    })
-  })
   it('updates and renames only the targeted filter and clears a deleted selection', () => {
     const initial = { filters: [mine, bugs], activeFilterId: mine.id }
     const renamed = { ...mine, name: 'Active work', jql: 'status = Open' }

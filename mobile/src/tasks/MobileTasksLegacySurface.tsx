@@ -1,20 +1,18 @@
 import { useState } from 'react'
 import { describeLoadError } from '../components/load-error-description'
-import { mobileTasksListShowsError } from './mobile-tasks-list-state'
-import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
-  SafeAreaView,
-  View,
-  Text,
-  Pressable,
-  AlertTriangle,
-  colors,
-  ActionSheetModal,
-  GitBranch,
-  ConfirmModal,
-  useMobileColorScheme
-} from './mobile-tasks-dependencies'
+  MobileTasksOfflineBanner,
+  mobileTasksListShowsError
+} from './task-list/mobile-tasks-list-state'
+import type { ConnectionPresentationModel } from './screen-state/use-mobile-tasks-connection-presentation'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { SafeAreaView } from 'react-native-safe-area-context'
+import { View, Text, Pressable } from 'react-native'
+import { AlertTriangle, GitBranch } from 'lucide-react-native'
+import { colors, pressedStyle } from '../theme/mobile-theme'
+import { ActionSheetModal } from '../components/ActionSheetModal'
+import { ConfirmModal } from '../components/ConfirmModal'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawerModalHost } from '../components/bottom-drawer/bottom-drawer-modal-host'
 import { styles } from './mobile-tasks-legacy-styles'
 import {
@@ -24,25 +22,25 @@ import {
   getHostedStateConfirmTitle,
   getHostedStateConfirmMessage,
   getHostedStateConfirmLabel
-} from './mobile-tasks-legacy-foundation'
-import { renderMobileTasksChrome } from './mobile-tasks-screen-chrome'
-import { renderMobileTasksListSurface } from './mobile-tasks-list-surface'
+} from './hosted-review/mobile-tasks-hosted-review'
+import { renderMobileTasksChrome } from './screen/mobile-tasks-screen-chrome'
+import { renderMobileTasksListSurface } from './task-list/mobile-tasks-list-surface'
 import {
   mobileTasksSearchVisible,
   renderMobileTasksSearchControl
-} from './mobile-tasks-search-control'
-import { renderMobileTasksFilterSheet } from './mobile-tasks-filter-sheet'
+} from './screen/mobile-tasks-search-control'
+import { renderMobileTasksFilterSheet } from './screen/mobile-tasks-filter-sheet'
 import {
   renderMobileTasksRepoPicker,
   renderMobileTasksGitHubIssueSourcePicker,
   renderMobileTasksGitHubViewPicker,
   renderMobileTasksGitHubPresetPicker,
   renderMobileTasksPagePicker
-} from './mobile-tasks-provider-pickers'
+} from './screen/mobile-tasks-provider-pickers'
 import {
   renderMobileTasksGitHubProjectPicker,
   renderMobileTasksGitHubProjectViewPicker
-} from './mobile-tasks-github-project-pickers'
+} from './project-board/mobile-tasks-github-project-pickers'
 import {
   renderMobileTasksGitHubProjectFieldsPicker,
   renderMobileTasksGitLabViewPicker,
@@ -53,34 +51,33 @@ import {
   renderMobileTasksLinearWorkspacePicker,
   renderMobileTasksLinearTeamPicker,
   renderMobileTasksLinearStatusPicker
-} from './mobile-tasks-filter-pickers'
-import { renderMobileTasksLinearDisplayPicker } from './mobile-tasks-list-display-pickers'
+} from './screen/mobile-tasks-filter-pickers'
+import { renderMobileTasksLinearDisplayPicker } from './task-list/mobile-tasks-list-display-pickers'
 import {
   renderMobileTasksCreateDrawer,
   renderMobileTasksCreateTargetPicker,
   renderMobileTasksLinearConnectDrawer,
   renderMobileTasksWorkspaceCreateTargetPicker
-} from './mobile-tasks-create-drawers'
+} from './workspace-creation/mobile-tasks-create-drawers'
 import {
   renderMobileTasksWorkspaceCreateDrawer,
   renderMobileTasksWorkspaceCreateRepoPicker,
   renderMobileTasksWorkspaceAgentPicker
-} from './mobile-tasks-workspace-create-drawer'
+} from './workspace-creation/mobile-tasks-workspace-create-drawer'
 import {
   renderMobileTasksWorkspaceBaseBranchPicker,
   renderMobileTasksWorkspaceSparsePicker
-} from './mobile-tasks-workspace-option-pickers'
+} from './workspace-creation/mobile-tasks-workspace-option-pickers'
 import {
   renderMobileTasksWorkspaceSparseDrawer,
   renderMobileTasksSetupTrustDrawer,
   renderMobileTasksOrcaYamlTrustDrawer
-} from './mobile-tasks-workspace-trust-drawers'
-import { pressedStyle } from '../theme/mobile-theme'
+} from './workspace-creation/mobile-tasks-workspace-trust-drawers'
 import {
   renderMobileTasksProjectMissingRepoDrawer,
   renderMobileTasksProjectDetailDrawer
-} from './mobile-tasks-project-detail-drawer'
-import { MobileTasksItemDetailDrawer } from './mobile-tasks-item-detail-drawer'
+} from './project-board/mobile-tasks-project-detail-drawer'
+import { MobileTasksItemDetailDrawer } from './item-detail/mobile-tasks-item-detail-drawer'
 
 export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentationModel }) {
   const colorScheme = useMobileColorScheme()
@@ -202,6 +199,8 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
           </Text>
         </View>
       ) : null}
+
+      <MobileTasksOfflineBanner model={model} />
 
       {renderMobileTasksListSurface(model, colorScheme, bottomBarHeight)}
 

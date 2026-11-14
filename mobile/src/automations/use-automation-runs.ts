@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { RpcClient } from '../transport/rpc-client'
-import type { AutomationOwnerPrecondition } from '../../../src/shared/automation-owner-precondition'
-import { compareAutomationRunsNewestFirst } from '../../../src/shared/automation-run-cursor'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { AutomationOwnerPrecondition } from '../../../src/shared/automations/ownership/automation-owner-precondition'
+import { compareAutomationRunsNewestFirst } from '../../../src/shared/automations/history/automation-run-cursor'
 import { automationRunsRead } from './automation-operations'
 import { automationErrorMessage } from './automation-error'
 import type { MobileAutomationRun } from './automation-reply-schema'
@@ -88,6 +88,7 @@ export function useAutomationRuns(
           }
           const reply = await automationRunsRead.request(client, {
             limit: 30,
+            preview: true,
             ...requestScope,
             ...(cursor ? { cursor } : {})
           })
@@ -184,7 +185,9 @@ export function useAutomationRuns(
         void load(history.cursor)
       }
     },
-    reload: () => void load()
+    reload: () => void load(),
+    /** The scope these runs were listed under; its owner fences full-row reads. */
+    scope: query
   }
 }
 export type AutomationRunObservation = ReturnType<typeof useAutomationRuns>

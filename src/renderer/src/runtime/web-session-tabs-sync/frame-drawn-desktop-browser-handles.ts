@@ -1,5 +1,7 @@
+import { annotateBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
+import { browserInitializationReceiptStale } from './browser-initialization-presentation'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import { markWebSessionBrowserPlacementAdopted } from '../web-session-browser-placement'
+import { markWebSessionBrowserPlacementAdopted } from '../browser/placement/web-session-browser-placement'
 import { findBrowserWorkspaceForRemotePage } from './mirrored-browser-tabs'
 import type { WebSessionTabsBatchContext, WebSessionTabsSyncState } from './state'
 import { writableWebSessionTabsRecord } from './state-equality-core'
@@ -13,6 +15,9 @@ export function adoptFrameDrawnClientHostedBrowserHandles(
   worktreeId: string,
   batchContext?: WebSessionTabsBatchContext
 ): Partial<WebSessionTabsSyncState> {
+  if (browserInitializationReceiptStale(snapshot)) {
+    return {}
+  }
   let handles = state.remoteBrowserPageHandlesByPageId
   for (const tab of snapshot.tabs) {
     if (!isReadyBrowserTab(tab) || tab.placement?.kind !== 'client') {
@@ -34,7 +39,10 @@ export function adoptFrameDrawnClientHostedBrowserHandles(
         batchContext
       )
     }
+    annotateBrowserPageHandles(handles, [existing.page.id])
     handles[existing.page.id] = {
+      ...handles[existing.page.id],
+      staged: undefined,
       environmentId,
       remotePageId: tab.browserPageId,
       placement: tab.placement

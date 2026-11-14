@@ -6,7 +6,7 @@ import { translate } from '@/i18n/i18n'
 import {
   markLiveCodexSessionsForRestart,
   resolveCodexRestartPromptAccountLabel
-} from '@/lib/codex-session-restart'
+} from '@/lib/agent-session/accounts/codex/codex-session-restart'
 import { getCodexStatusActiveId } from './status-bar-codex-accounts'
 import type { CodexStatusRuntimeTarget } from './status-bar-runtime-targets'
 

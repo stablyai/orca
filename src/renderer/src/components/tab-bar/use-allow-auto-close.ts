@@ -1,20 +1,23 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
-import { collectLeafIdsInOrder } from '@/components/terminal-pane/terminal-layout-leaf-ids'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import '../terminal-pane/layout/terminal-layout-leaf-traversal'
+import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import {
   readWorkerAutoClose,
   setWorkerKeptOpen,
   type WorkerAutoCloseSubject
-} from '@/lib/worker-auto-close'
-import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
+} from '@/runtime/agent-orchestration/worker-auto-close'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 function tabWorkerSubjects(tabId: string, sessionId: string | undefined): WorkerAutoCloseSubject[] {
   if (sessionId) {
     return [{ sessionId }]
   }
-  const leafIds = collectLeafIdsInOrder(useAppStore.getState().terminalLayoutsByTabId[tabId]?.root)
+  const leafIds = collectLayoutLeafIdsInOrder(
+    useAppStore.getState().terminalLayoutsByTabId[tabId]?.root
+  )
   return leafIds.filter(isTerminalLeafId).map((leafId) => ({ paneKey: makePaneKey(tabId, leafId) }))
 }
 

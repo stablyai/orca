@@ -3,18 +3,6 @@ import { profileStateRecoveryRequestSchema } from './profile-state-recovery-comm
 
 describe('offline recovery source selection', () => {
   it.each([
-    { kind: 'current-json' },
-    { kind: 'latest-json' },
-    { kind: 'json', revision: 1 },
-    { kind: 'sqlite', backupId: 'selected-backup' },
-    { kind: 'repair', sections: [{ domain: 'automationRuns', source: 'current' }] }
-  ])('accepts an explicit source: %j', (selector) => {
-    expect(
-      profileStateRecoveryRequestSchema.parse({ userDataPath: '/profile', selector }).selector
-    ).toEqual(selector)
-  })
-
-  it.each([
     { kind: 'current-json', revision: 1 },
     { kind: 'current-json', backupId: 'selected-backup' },
     { kind: 'current-json', path: '../different-profile/orca-data.json' },

@@ -2,6 +2,7 @@ import { BrowserWindow, Notification, ipcMain, powerMonitor } from 'electron'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import type { Store } from '../persistence/loading-store/store'
 import type {
+  NotificationAttentionAcknowledgement,
   NotificationDeliveryProbeResult,
   NotificationDismissResult,
   NotificationDispatchRequest,
@@ -9,15 +10,19 @@ import type {
   NotificationPermissionStatusResult,
   StructuredNotificationRead
 } from '../../shared/notification-settings-types'
+import { isNotificationAttentionAcknowledgement } from '../../shared/notification-settings-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { readNotificationAuthorizationStatus } from './notification-authorization-status'
 import { setTrayAttention } from '../tray/system-tray'
-import { isMainWindowVisible } from '../window/main-window-visibility'
+import { isMainWindowVisible } from '../window/visibility/main-window-visibility'
 import { activeNotificationsById } from './native-notification-lifecycle'
 import { deliverNativeNotification } from './native-notification-delivery'
 import { removeReadMacosNotifications } from './macos-notification-center'
 import { createNotificationDeliveryService } from '../notifications/notification-delivery-service'
-import { createAnnouncedNotificationRegistry } from '../notifications/announced-notification-registry'
+import {
+  createAnnouncedNotificationRegistry,
+  type AnnouncedNotification
+} from '../notifications/announced-notification-registry'
 import { registerNotificationSoundHandlers } from './notification-sound-ipc'
 import { openNotificationSystemSettings } from './notification-system-settings-link'
 import { isStructuredAttentionRead } from '../../shared/agent-session/agent-session-attention'
@@ -29,6 +34,8 @@ import {
   recordNotificationDeliveryOutcome,
   resetNotificationPermissionEvidence
 } from './notification-permission-probe'
+
+let stopRuntimeAttentionEvents: (() => void) | undefined
 
 export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntimeService): void {
   ipcMain.removeHandler('notifications:getDesktopAwayState')
@@ -92,6 +99,84 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
 
   const announced = createAnnouncedNotificationRegistry()
 
+  const closeNativeAnnouncements = (entries: readonly AnnouncedNotification[]): number => {
+    let dismissed = 0
+    for (const entry of entries) {
+      const native = activeNotificationsById.get(entry.id)
+      if (native) {
+        native.notification.close()
+        native.release()
+        dismissed += 1
+      }
+    }
+    return dismissed
+  }
+  const discardEvictedAnnouncements = (entries: readonly AnnouncedNotification[]): void => {
+    closeNativeAnnouncements(entries)
+    for (const entry of entries) {
+      if (entry.paneKey && !entry.pendingOnly) {
+        removeReadMacosNotifications(entry.paneKey, [entry], false)
+      }
+    }
+  }
+
+  const retireAnnouncements = (
+    retired: readonly AnnouncedNotification[],
+    paneKeys: string[] = []
+  ): number => {
+    const dismissed = closeNativeAnnouncements(retired)
+    const byPane = new Map<string, AnnouncedNotification[]>(
+      paneKeys.map((paneKey) => [paneKey, []])
+    )
+    for (const entry of retired) {
+      if (entry.paneKey && !entry.pendingOnly) {
+        const entries = byPane.get(entry.paneKey) ?? []
+        entries.push(entry)
+        byPane.set(entry.paneKey, entries)
+      }
+      if (!entry.origin && !entry.pendingOnly) {
+        runtime?.dismissMobileNotification(entry.id)
+      }
+    }
+    for (const [paneKey, entries] of byPane) {
+      removeReadMacosNotifications(paneKey, entries, !announced.hasUnpositionedSubject(paneKey))
+    }
+    return dismissed
+  }
+
+  const acknowledge = (
+    acknowledgement: NotificationAttentionAcknowledgement,
+    executionHost?: NotificationDispatchRequest['executionHost']
+  ): NotificationDismissResult => {
+    if (!isNotificationAttentionAcknowledgement(acknowledgement)) {
+      return { dismissed: 0 }
+    }
+    const retired = announced.takeAcknowledged(acknowledgement, executionHost)
+    if (executionHost) {
+      runtime?.retireNotificationAttention?.(acknowledgement, executionHost)
+    }
+    return { dismissed: retireAnnouncements(retired) }
+  }
+  stopRuntimeAttentionEvents?.()
+  stopRuntimeAttentionEvents = runtime?.onClientEvent?.(
+    (event) => {
+      if (event.type === 'notificationAttentionAcknowledged') {
+        acknowledge(event.acknowledgement)
+      }
+    },
+    { consumesTerminalSideEffects: false }
+  )
+
+  ipcMain.removeHandler('notifications:acknowledgeAttention')
+  ipcMain.handle(
+    'notifications:acknowledgeAttention',
+    (
+      _event,
+      acknowledgement: NotificationAttentionAcknowledgement,
+      executionHost?: NotificationDispatchRequest['executionHost']
+    ) => acknowledge(acknowledgement, executionHost)
+  )
+
   ipcMain.removeHandler('notifications:dismiss')
   ipcMain.handle(
     'notifications:dismiss',
@@ -101,48 +186,38 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       paneKeys?: string[],
       reads?: StructuredNotificationRead[]
     ): NotificationDismissResult => {
-      const uniqueIds = new Set(
-        ids.filter(
-          (id): id is string =>
-            typeof id === 'string' &&
-            id.length > 0 &&
-            !id.startsWith('agent-attention:') &&
-            !announced.isBounded(id)
-        )
-      )
-      const genericMobileIds = new Set(uniqueIds)
-      // Positioned structured alerts need the journal boundary; pane-wide reads retire the rest.
+      const retired = new Map<string, AnnouncedNotification>()
+      for (const id of ids.filter(
+        (id) =>
+          typeof id === 'string' &&
+          id.length > 0 &&
+          !id.startsWith('agent-attention:') &&
+          !announced.isBounded(id) &&
+          (!paneKeys?.length || !announced.hasAnnouncement({ notificationId: id }))
+      )) {
+        retired.set(id, { id })
+      }
       for (const paneKey of Array.isArray(paneKeys) ? paneKeys : []) {
-        if (typeof paneKey === 'string') {
-          const read = Array.isArray(reads)
-            ? reads.find((item) => isStructuredAttentionRead(item) && item.paneKey === paneKey)
-            : undefined
-          const retired = announced.take(paneKey, read)
-          for (const entry of retired) {
-            uniqueIds.add(entry.id)
-            if (!entry.origin) {
-              genericMobileIds.add(entry.id)
-            }
-          }
-          removeReadMacosNotifications(paneKey, retired)
-          if (read) {
-            runtime?.retireStructuredAttention(read)
-          }
+        if (typeof paneKey !== 'string') {
+          continue
+        }
+        const read = Array.isArray(reads)
+          ? reads.find((item) => isStructuredAttentionRead(item) && item.paneKey === paneKey)
+          : undefined
+        const entries = announced.take(paneKey, read)
+        for (const entry of entries) {
+          retired.set(entry.id, entry)
+        }
+        if (read) {
+          runtime?.retireNotificationAttention?.({ reads: [read] }, read.executionHost)
         }
       }
-      let dismissed = 0
-      for (const id of uniqueIds) {
-        const entry = activeNotificationsById.get(id)
-        if (entry) {
-          entry.notification.close()
-          entry.release()
-          dismissed += 1
-        }
-        if (genericMobileIds.has(id)) {
-          runtime?.dismissMobileNotification(id)
-        }
+      return {
+        dismissed: retireAnnouncements(
+          [...retired.values()],
+          paneKeys?.filter((key) => typeof key === 'string')
+        )
       }
-      return { dismissed }
     }
   )
 
@@ -161,9 +236,40 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     deliverNative: deliverNativeNotification,
     platform: process.platform,
     now: () => Date.now(),
+    wasRead: announced.wasRead,
+    reserveNative: (request) => {
+      if (!request.notificationId || (!request.paneKey && !request.worktreeId)) {
+        return undefined
+      }
+      const reservation = announced.reserveNative(
+        request.paneKey ?? `worktree:${request.worktreeId}`,
+        request.notificationId,
+        request.structuredOrigin,
+        request
+      )
+      discardEvictedAnnouncements(reservation.evicted)
+      return reservation
+    },
     recordAnnounced: (request) => {
-      if (request.paneKey && request.notificationId) {
-        announced.record(request.paneKey, request.notificationId, request.structuredOrigin)
+      if (request.notificationId && (request.paneKey || request.worktreeId)) {
+        if (announced.wasRead(request)) {
+          retireAnnouncements([
+            {
+              id: request.notificationId,
+              origin: request.structuredOrigin,
+              paneKey: request.paneKey
+            }
+          ])
+          return
+        }
+        discardEvictedAnnouncements(
+          announced.record(
+            request.paneKey ?? `worktree:${request.worktreeId}`,
+            request.notificationId,
+            request.structuredOrigin,
+            request
+          )
+        )
       }
     }
   })
@@ -172,9 +278,19 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
   ipcMain.removeHandler('notifications:settleStructuredPrompts')
   ipcMain.handle(
     'notifications:settleStructuredPrompts',
-    (_event, scope: unknown, sessionId: unknown): void => {
+    (
+      _event,
+      scope: unknown,
+      sessionId: unknown,
+      executionHost?: NotificationDispatchRequest['executionHost']
+    ): void => {
       if (isAgentSessionExecutionLocation(scope) && typeof sessionId === 'string' && sessionId) {
-        runtime?.reconcileStructuredPromptAttention({ scope, sessionId, pendingPromptIds: [] })
+        runtime?.reconcileStructuredPromptAttention({
+          scope,
+          sessionId,
+          pendingPromptIds: [],
+          executionHost
+        })
       }
     }
   )

@@ -3,9 +3,9 @@ import {
   ORCAD_NODE_RUNTIME_MARKER_FILENAME,
   ORCAD_RUNTIMES_DIRNAME
 } from '../../../shared/orcad-artifacts'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
-import { RELAY_REMOTE_DIR } from '../../ssh/remote-exec/remote-frame-protocol'
-import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
+import { RELAY_REMOTE_DIR } from './remote-install-root'
+import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 
 /** Empty per-version reference files protect runtimes from GC. */
 export const RUNTIME_REF_NODE_PREFIX = '.runtime-ref-node-'

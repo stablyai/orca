@@ -4,9 +4,9 @@ import {
   startActionsArtifactDownload,
   readActionsArtifactChunk,
   releaseActionsArtifactDownload
-} from '@/store/github/actions-artifact-requests'
-import type { ActionsRequestContext } from '../../../../../../shared/github/actions-types'
-import type { ActionsArtifactDownloadQuery } from '../../../../../../shared/github/actions-artifact-types'
+} from '@/store/github/actions/actions-artifact-requests'
+import type { ActionsRequestContext } from '../../../../../../shared/github/actions/actions-types'
+import type { ActionsArtifactDownloadQuery } from '../../../../../../shared/github/actions/actions-artifact-types'
 /** Save ZIP chunks to the chosen destination; always release remote bytes and cancel unfinished local writes. */
 export async function downloadActionsArtifact(
   context: ActionsRequestContext,

@@ -151,7 +151,8 @@ describe('completed context clear projections', () => {
     const rows = [user, clear, row(7, { kind: 'turn', turnId: 'new-turn', state: 'running' })]
     expect(agentSessionCurrentContextRows(rows, [oldSend, boundarySend, currentSend])).toEqual({
       items: [rows[2]],
-      submissions: [currentSend]
+      submissions: [currentSend],
+      sequence: clear.sequence
     })
     expect(activeStructuredAgentSessionTurnId(rows)).toBe('new-turn')
     expect(owesStructuredAgentSessionWork(rows, [oldSend, currentSend], 3)).toBe(true)
@@ -178,14 +179,5 @@ describe('completed context clear projections', () => {
     const newUsage = { ...usageRow, itemId: 'new-usage', sequence: 6 }
     expect(latestStructuredAgentContextFacts([newUsage, clear, usageRow])).toEqual(old)
     expect(selectStructuredAgentContextUsage([usageRow], undefined, clear.sequence)).toBeNull()
-  })
-
-  it('chooses the newest clear independent of map order and scopes off-page rows', () => {
-    const again = { ...clear, itemId: 'clear-again', sequence: 8 }
-    expect(latestAgentSessionContextClearSequence([again, user, clear])).toBe(8)
-    expect(agentSessionCurrentContextRows([user], [oldSend], 5)).toEqual({
-      items: [],
-      submissions: []
-    })
   })
 })

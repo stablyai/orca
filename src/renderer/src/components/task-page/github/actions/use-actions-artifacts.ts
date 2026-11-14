@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useAppStore } from '@/store'
-import { fetchActionsArtifacts } from '@/store/github/actions-artifact-requests'
-import { actionsRepoProbeKey } from '@/components/right-sidebar/actions-repositories'
-import type { ActionsRepositoryOption } from '@/components/right-sidebar/use-actions-repositories'
-import type { ActionsPage } from '../../../../../../shared/github/actions-types'
-import type { ActionsArtifact } from '../../../../../../shared/github/actions-artifact-types'
+import { fetchActionsArtifacts } from '@/store/github/actions/actions-artifact-requests'
+import { actionsRepoProbeKey } from '@/components/right-sidebar/actions/actions-repositories'
+import type { ActionsRepositoryOption } from '@/components/right-sidebar/actions/use-actions-repositories'
+import type { ActionsPage } from '../../../../../../shared/github/actions/actions-types'
+import type { ActionsArtifact } from '../../../../../../shared/github/actions/actions-artifact-types'
 import { downloadActionsArtifact } from './download-actions-artifact'
 /** Fence paginated artifact reads and coordinate one cancelable save without treating intentional cancel as an error. */
 export function useActionsArtifacts(option: ActionsRepositoryOption, runId: number) {

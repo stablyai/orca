@@ -1,0 +1,159 @@
+import { readSavedStatus, hasSavedStatus } from '../persistence/last-status.test-fixtures'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { AgentHookServer, _internals } from '../../agent-hook-server'
+import { buildBody, GOOD_PANE, postHookEvent, PANE } from '../server.test-fixtures'
+
+const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
+  getCohortAtEmitMock: vi.fn(),
+  trackMock: vi.fn()
+}))
+
+vi.mock('../../../../telemetry/client', () => ({
+  track: trackMock
+}))
+
+vi.mock('../../../../telemetry/cohort-classifier', () => ({
+  getCohortAtEmit: getCohortAtEmitMock
+}))
+
+const REMINTED = '$$MFRGGZDFMY:L$$'
+const FOREIGN = '$$ONXW2ZJAON:L$$'
+
+beforeEach(() => {
+  _internals.resetCachesForTests()
+  trackMock.mockReset()
+  getCohortAtEmitMock.mockReset()
+  getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
+describe('reminted $$ pane keys on the OMP hook pipeline', () => {
+  let userDataPath: string
+
+  beforeEach(() => {
+    userDataPath = mkdtempSync(join(tmpdir(), 'orca-reminted-pane-'))
+  })
+
+  afterEach(() => {
+    rmSync(userDataPath, { recursive: true, force: true })
+  })
+
+  function lastStatusPath(): string {
+    return join(userDataPath, 'agent-hooks', 'last-status.json')
+  }
+
+  it('routes a reminted $$ key to its canonical pane and settles at done', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production', userDataPath })
+    try {
+      server.registerPaneKeyAlias(REMINTED, PANE, 'pty-remint')
+      const start = await postHookEvent(
+        server,
+        buildBody(
+          { hook_event_name: 'before_agent_start', prompt: 'finish the reminted pane' },
+          { paneKey: REMINTED, launchToken: 'launch-remint' }
+        ),
+        '/hook/omp'
+      )
+      const end = await postHookEvent(
+        server,
+        buildBody(
+          { hook_event_name: 'agent_end' },
+          { paneKey: REMINTED, launchToken: 'launch-remint' }
+        ),
+        '/hook/omp'
+      )
+      expect(start.status).toBe(204)
+      expect(end.status).toBe(204)
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          state: 'done',
+          prompt: 'finish the reminted pane',
+          agentType: 'omp'
+        })
+      ])
+      server.flushStatusPersistSync()
+      expect(hasSavedStatus(lastStatusPath())).toBe(true)
+      const file: {
+        entries: Record<string, { payload: { state: string } }>
+      } = JSON.parse(readSavedStatus(lastStatusPath()))
+      expect(file.entries[PANE]?.payload.state).toBe('done')
+      expect(file.entries[REMINTED]).toBeUndefined()
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('does not let a foreign reminted key stamp another pane', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      server.registerPaneKeyAlias(REMINTED, PANE, 'pty-remint')
+      await postHookEvent(
+        server,
+        buildBody(
+          { hook_event_name: 'before_agent_start', prompt: 'owned turn' },
+          { paneKey: REMINTED }
+        ),
+        '/hook/omp'
+      )
+      const foreign = await postHookEvent(
+        server,
+        buildBody(
+          { hook_event_name: 'agent_end', prompt: 'stolen done' },
+          { paneKey: FOREIGN, tabId: 'tab-1' }
+        ),
+        '/hook/omp'
+      )
+      expect(foreign.status).toBe(204)
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          state: 'working',
+          prompt: 'owned turn',
+          agentType: 'omp'
+        })
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+
+  it('does not rebind a reminted token onto a different pane', async () => {
+    const server = new AgentHookServer()
+    await server.start({ env: 'production' })
+    try {
+      // Different spawns can share $$ tokens; stale remints must not overwrite the newer pane owner.
+      server.registerPaneKeyAlias(REMINTED, PANE, 'pty-a', 10, { authorityVerified: true })
+      server.registerPaneKeyAlias(REMINTED, GOOD_PANE, 'pty-b', 20, { authorityVerified: true })
+      const start = await postHookEvent(
+        server,
+        buildBody(
+          { hook_event_name: 'before_agent_start', prompt: 'owned remint turn' },
+          { paneKey: REMINTED, tabId: 'tab-good' }
+        ),
+        '/hook/omp'
+      )
+      expect(start.status).toBe(204)
+      expect(server.getStatusSnapshot()).toEqual([
+        expect.objectContaining({
+          paneKey: PANE,
+          tabId: 'tab-1',
+          state: 'working',
+          prompt: 'owned remint turn',
+          agentType: 'omp'
+        })
+      ])
+    } finally {
+      server.stop()
+    }
+  })
+})

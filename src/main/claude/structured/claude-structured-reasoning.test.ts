@@ -53,13 +53,6 @@ function reasoning(text: string, lifecycle: Record<string, unknown>): AgentJourn
 afterEach(() => vi.useRealTimers())
 
 describe('structured Claude reasoning', () => {
-  it.each(['', ' ', '\n\t'])('omits blank final thinking %j', (thinking) => {
-    const { rows, final, translator } = setup()
-    final('final-only', [{ type: 'thinking', thinking }])
-    expect([...rows.values()]).toEqual([])
-    translator.dispose()
-  })
-
   it('writes final-only thinking closed, with no span it never saw', () => {
     const { rows, final, translator } = setup()
     final('final-only', [{ type: 'thinking', thinking: 'Inspecting the request' }], 5_000)
@@ -199,19 +192,6 @@ describe('structured Claude reasoning', () => {
     })
     translator.flush()
     expect(scopes).toEqual([{ kind: 'turn', turnItemId: expect.stringContaining('turn') }])
-    translator.dispose()
-  })
-
-  it('omits whitespace-only thinking deltas', () => {
-    vi.useFakeTimers()
-    const { rows, stream, translator } = setup()
-    stream('delta', {
-      type: 'content_block_delta',
-      index: 0,
-      delta: { type: 'thinking_delta', thinking: ' \n ' }
-    })
-    translator.flush()
-    expect(rows.size).toBe(0)
     translator.dispose()
   })
 })

@@ -11,7 +11,7 @@ import { seedRelayEraProfile } from './helpers/orcad-upgrade-profile'
 import { mutateStoppedProfileState } from './helpers/persisted-profile-state'
 import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../src/shared/execution-host'
 import { toAppSshPtyId } from '../../src/shared/ssh-pty-id'
-import { getOrcadSshDeployment } from '../../src/shared/runtime-environments'
+import { getOrcadSshDeployment } from '../../src/shared/remote-runtime/host-catalog/runtime-environments'
 import {
   cleanupDockerSshHostTarget,
   DOCKER_SSH_HOST_REMOTE_REPO_PATH,

@@ -7,7 +7,7 @@ import {
 import { writePluginFileAtomically } from '../installation/plugin-atomic-file-write'
 import { fetchBoundedJson } from './plugin-bounded-json-fetch'
 
-export const PLUGIN_INSTALL_STATS_URL = 'https://onorca.dev/plugins/stats.json'
+export const PLUGIN_INSTALL_STATS_URL = 'https://orca.dev/plugins/stats.json'
 const PLUGIN_INSTALL_STATS_MAX_BYTES = 2 * 1024 * 1024
 const PLUGIN_INSTALL_STATS_FETCH_TIMEOUT_MS = 30_000
 // Why 6h: the file is rebuilt daily; counts are display-only, so staleness costs nothing.

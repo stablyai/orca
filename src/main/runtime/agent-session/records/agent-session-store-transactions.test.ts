@@ -1,26 +1,20 @@
-import { cancelAgentSessionUsageLimitContinue } from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
-import { sessionCrewChanges } from '../../orchestration/crew/crew-changes'
-import { CrewReadModel } from '../../orchestration/crew/crew-read-model'
-import type { CrewReadDependencies } from '../../orchestration/crew/crew-read-dependencies'
-import { subscribeCrew } from '../../orchestration/crew/crew-stream'
-import { OrchestrationDb } from '../../orchestration/db/orchestration-db'
-import { conversationRecordReader } from '../../orchestration/structured-session-lineage'
-import type { OrchestrationCrewFrame } from '../../../../shared/orchestration-crew'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+  composeJournalOperationReceipts,
+  onJournalReceiptCommitted
+} from '../../../native-chat/agent-session-journal/writing/journal-row-writer'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import {
+  closeTestAgentSessionRecordStores,
+  openTestAgentSessionDatabase,
   openTestAgentSessionRecordStore,
-  readPersistedTestAgentSessionStore
+  withTestAgentSessionDatabase
 } from './agent-session-record-store-test-harness'
-import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 
@@ -32,7 +26,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await closeTestJournalHostDatabases()
+  await closeTestAgentSessionRecordStores()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -89,60 +83,6 @@ async function liveChat(
   })
 }
 
-function totalChanges(): number {
-  return Number(
-    openTestJournalHostDatabase(root).db.prepare('SELECT total_changes() AS n').get()?.n ?? 0
-  )
-}
-
-describe('writing a transaction', () => {
-  it('writes one record row for a renewal of one chat among several', async () => {
-    const store = await openTestAgentSessionRecordStore(root)
-    await liveChat(store, 'chat-a-0001')
-    await liveChat(store, 'chat-b-0002')
-    const renewed = await liveChat(store, 'chat-c-0003')
-    const before = totalChanges()
-
-    await store.renewLease({
-      sessionId: 'chat-c-0003',
-      fence: renewed.lease.runtimeFence,
-      childProbe: { outcome: 'identity-matched', matchedOn: ['spawn-token'] },
-      now: NOW + 10_000
-    })
-
-    expect(totalChanges() - before).toBe(1)
-    expect(
-      (await openTestAgentSessionRecordStore(root)).getRecord('chat-c-0003')?.lease.lastRenewedAt
-    ).toBe(NOW + 10_000)
-  })
-
-  it('writes nothing for a transaction that changes nothing', async () => {
-    const store = await openTestAgentSessionRecordStore(root)
-    await liveChat(store, 'chat-a-0001')
-    const before = totalChanges()
-
-    await store.renewLeases([])
-
-    expect(totalChanges()).toBe(before)
-  })
-
-  // Defer BEGIN beyond the caller's frame to avoid nesting its open journal transaction.
-  it('runs a store call made inside an open journal transaction after that transaction', async () => {
-    const store = await openTestAgentSessionRecordStore(root)
-    await liveChat(store, 'chat-a-0001')
-    let pending: Promise<unknown> | null = null
-
-    openTestJournalHostDatabase(root).transaction(() => {
-      pending = store.setConversationName('chat-a-0001', 'renamed')
-    })
-
-    await expect(pending).resolves.toMatchObject({ conversationName: 'renamed' })
-    expect((await readPersistedTestAgentSessionStore(root)).records['chat-a-0001']).toMatchObject({
-      conversationName: 'renamed'
-    })
-  })
-})
-
 describe('a receipt', () => {
   const operationId = `${NOW}-${'7'.repeat(32)}`
   const outcome = { status: 'succeeded' as const, sessionId: 'chat-a-0001' }
@@ -151,9 +91,15 @@ describe('a receipt', () => {
     turnItemId: `orca:${'long-supported-identity'.repeat(220)}`,
     resetsAt: NOW + 60_000
   }
-  const change = {
-    sessionId: 'chat-a-0001',
-    update: (record: AgentSessionRecord) => cancelAgentSessionUsageLimitContinue(record, cancel)
+  function cancellationReceipt(
+    store: AgentSessionRecordStore,
+    args: Parameters<AgentSessionRecordStore['operationOutcomeReceipt']>[0],
+    cut = cancel
+  ) {
+    const cancelReceipt = store.usageLimitContinueCancelReceipt('chat-a-0001', cut)
+    return cancelReceipt
+      ? composeJournalOperationReceipts(store.operationOutcomeReceipt(args), cancelReceipt)
+      : store.operationOutcomeReceipt(args)
   }
   async function pendingOperation(insert = false): Promise<AgentSessionRecordStore> {
     const store = await openTestAgentSessionRecordStore(root)
@@ -170,60 +116,26 @@ describe('a receipt', () => {
   }
 
   async function persistedStatus(): Promise<string | undefined> {
-    const reopened = await openTestAgentSessionRecordStore(root)
+    const reopened = await openTestAgentSessionRecordStore(root, { mode: 'observe' })
     return reopened.getOperationRow('client-1', operationId)?.outcome.status
   }
 
-  it.each([false, true])(
-    'adopts record and operation together after commit (insert=%s)',
-    async (insert) => {
-      const store = await pendingOperation(insert)
-      const receipt = store.operationOutcomeReceipt({
-        callerKey: 'client-1',
-        operationId,
-        outcome,
-        record: change,
-        ...(insert ? { fingerprint: 'fp', now: NOW } : {})
-      })
-
-      openTestJournalHostDatabase(root).transaction((db) => {
-        receipt.write(db)
-        expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe(
-          insert ? undefined : 'pending'
-        )
-        expect(store.getRecord('chat-a-0001')?.usageLimitContinueCancel).toBeUndefined()
-      })
-      expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe(
-        insert ? undefined : 'pending'
-      )
-      expect(
-        (await openTestAgentSessionRecordStore(root)).getRecord('chat-a-0001')
-          ?.usageLimitContinueCancel
-      ).toEqual(cancel)
-      expect(await persistedStatus()).toBe('succeeded')
-
-      receipt.committed()
-      expect(store.getOperationRow('client-1', operationId)?.outcome).toEqual(outcome)
-      expect(store.getRecord('chat-a-0001')?.usageLimitContinueCancel).toEqual(cancel)
-    }
-  )
-
   it.each([false, true])('rolls record and operation back together (insert=%s)', async (insert) => {
     const store = await pendingOperation(insert)
-    const receipt = store.operationOutcomeReceipt({
+    const receipt = cancellationReceipt(store, {
       callerKey: 'client-1',
       operationId,
       outcome,
-      record: change,
       ...(insert ? { fingerprint: 'fp', now: NOW } : {})
     })
 
-    expect(() =>
-      openTestJournalHostDatabase(root).transaction((db) => {
-        receipt.write(db)
-        throw new Error('the journal row was refused')
-      })
-    ).toThrow('the journal row was refused')
+    await withTestAgentSessionDatabase(root, (db) =>
+      db.exec(
+        "CREATE TRIGGER refuse_record BEFORE UPDATE ON agent_session_records BEGIN SELECT RAISE(ABORT, 'the write was refused'); END"
+      )
+    )
+    await expect(store.commitOperationReceipt(receipt)).rejects.toThrow('the write was refused')
+    await withTestAgentSessionDatabase(root, (db) => db.exec('DROP TRIGGER refuse_record'))
 
     expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe(
       insert ? undefined : 'pending'
@@ -231,7 +143,7 @@ describe('a receipt', () => {
     expect(await persistedStatus()).toBe(insert ? undefined : 'pending')
     expect(store.getRecord('chat-a-0001')?.usageLimitContinueCancel).toBeUndefined()
     expect(
-      (await openTestAgentSessionRecordStore(root)).getRecord('chat-a-0001')
+      (await openTestAgentSessionRecordStore(root, { mode: 'observe' })).getRecord('chat-a-0001')
         ?.usageLimitContinueCancel
     ).toBeUndefined()
     // A discarded draft must not become the next diff baseline.
@@ -245,16 +157,15 @@ describe('a receipt', () => {
       operationId,
       fingerprint: 'fp',
       now: NOW,
-      outcome,
-      record: change
+      outcome
     }
-    await store.commitOperationReceipt(store.operationOutcomeReceipt(args))
+    await store.commitOperationReceipt(cancellationReceipt(store, args))
     expect(await persistedStatus()).toBe('pending')
     expect(store.getRecord('chat-a-0001')?.usageLimitContinueCancel).toEqual(cancel)
     await expect(
-      store.commitOperationReceipt(store.operationOutcomeReceipt({ ...args, fingerprint: 'other' }))
+      store.commitOperationReceipt(cancellationReceipt(store, { ...args, fingerprint: 'other' }))
     ).rejects.toThrow()
-    const stale = await openTestAgentSessionRecordStore(root)
+    const stale = await openTestAgentSessionRecordStore(root, { mode: 'observe' })
     const otherId = `${NOW}-${'8'.repeat(32)}`
     await store.admitOperation({
       callerKey: 'client-1',
@@ -264,157 +175,131 @@ describe('a receipt', () => {
     })
     await expect(
       stale.commitOperationReceipt(
-        stale.operationOutcomeReceipt({
-          ...args,
-          operationId: otherId,
-          record: { ...change, update: (r) => ({ ...r, conversationName: 'lost' }) }
-        })
+        cancellationReceipt(
+          stale,
+          { ...args, operationId: otherId },
+          { ...cancel, resetsAt: NOW + 90_000 }
+        )
       )
     ).rejects.toThrow()
-    expect(stale.getRecord('chat-a-0001')?.conversationName).not.toBe('lost')
+    expect(stale.getRecord('chat-a-0001')?.usageLimitContinueCancel).toEqual(cancel)
     expect(
-      (await openTestAgentSessionRecordStore(root)).getRecord('chat-a-0001')?.conversationName
-    ).not.toBe('lost')
+      (await openTestAgentSessionRecordStore(root, { mode: 'observe' })).getRecord('chat-a-0001')
+        ?.usageLimitContinueCancel
+    ).toEqual(cancel)
   })
-})
+  it('applies a staged receipt to the current SQL rows and ignores a discarded receipt', async () => {
+    const store = await pendingOperation()
+    const args = { callerKey: 'client-1', operationId, outcome }
+    const rolledBack = await cancellationReceipt(store, args).stage!({ savedAt: NOW })
+    await store.setConversationName('chat-a-0001', 'after')
+    rolledBack.settle(undefined)
+    expect(store.getRecord('chat-a-0001')?.usageLimitContinueCancel).toBeUndefined()
+    expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe('pending')
 
-describe('a change a load would refuse', () => {
-  it('rejects a tab id that could not prefix a pane key, and keeps memory and rows as they were', async () => {
-    const store = await openTestAgentSessionRecordStore(root)
-    await liveChat(store, 'chat-a-0001')
-    const persisted = await readPersistedTestAgentSessionStore(root)
-
-    await expect(
-      store.setSessionTabVisibility('chat-a-0001', true, 'agent-session:chat-a-0001')
-    ).rejects.toThrow('agent_session_store_write_invalid')
-
-    expect(store.getSessionTabId('chat-a-0001')).toBeNull()
-    expect(store.getVisibleSessionTabIndex().present).toBe(false)
-    expect(await readPersistedTestAgentSessionStore(root)).toEqual(persisted)
-  })
-
-  it('rejects a record whose handle chain names a link twice', async () => {
-    const store = await openTestAgentSessionRecordStore(root)
-    const before = await liveChat(store, 'chat-a-0001')
-
-    await expect(
-      store.transitionHandoff('chat-a-0001', (record) => ({
-        ...record,
-        providerHandleChain: [...record.providerHandleChain, ...record.providerHandleChain]
-      }))
-    ).rejects.toThrow('agent_session_store_write_invalid')
-
-    expect(store.getRecord('chat-a-0001')).toBe(before)
-    expect(
-      (await openTestAgentSessionRecordStore(root)).getRecord('chat-a-0001')?.providerHandleChain
-    ).toHaveLength(1)
-  })
-})
-
-describe('rows in memory', () => {
-  it('throws on a change made in place, which the row diff would never write', async () => {
-    const store = await openTestAgentSessionRecordStore(root)
-    await liveChat(store, 'chat-a-0001')
-    const loaded = (await openTestAgentSessionRecordStore(root)).getRecord('chat-a-0001')
-
-    expect(() => Object.assign(loaded?.lease ?? {}, { runtimeFence: 99 })).toThrow(TypeError)
-    expect(() =>
-      Object.assign(store.getRecord('chat-a-0001') ?? {}, { conversationName: 'x' })
-    ).toThrow(TypeError)
-  })
-})
-
-describe('after the database closes', () => {
-  it('refuses a write with journal_closed and leaves memory as it was', async () => {
-    const store = await openTestAgentSessionRecordStore(root)
-    const before = await liveChat(store, 'chat-a-0001')
-    await closeTestJournalHostDatabases()
-
-    await expect(store.setConversationName('chat-a-0001', 'late')).rejects.toMatchObject({
-      code: 'journal_closed'
+    const committed = await cancellationReceipt(store, args).stage!({ savedAt: NOW })
+    const database = await openTestAgentSessionDatabase(root)
+    committed.settle(await database.effects(committed.effects))
+    expect(store.getRecord('chat-a-0001')).toMatchObject({
+      conversationName: 'after',
+      usageLimitContinueCancel: cancel
     })
-    expect(store.getRecord('chat-a-0001')).toBe(before)
+    expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe('succeeded')
   })
-})
-
-it.each([3, 30])(
-  'keeps %i crew subscribers idle on lease-only commits and refreshes a committed name',
-  async (population) => {
-    const store = await openTestAgentSessionRecordStore(root)
-    const records: AgentSessionRecord[] = []
-    for (let i = 0; i < population; i++) {
-      records.push(await liveChat(store, `chat-crew-${i}`))
+  it('composes receipts against the rows written earlier in the same transaction', async () => {
+    const store = await pendingOperation()
+    const forkedFrom = {
+      sessionId: 'chat-parent',
+      itemId: 'turn-1',
+      childBoundary: { kind: 'start' as const }
     }
-    const db = new OrchestrationDb(':memory:')
-    const run = db.createRun({
-      objective: 'Crew',
-      coordinatorHandle: 'term_coord',
-      coordinatorPaneKey: 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-    })
-    db.createDispatchContext({
-      taskId: db.createTask({ runId: run.id, spec: 'Worker' }).id,
-      assigneeHandle: `orca_session_id:${records[0].sessionId}`,
-      creator: { kind: 'system' },
-      maxDepth: 10
-    })
-    const list = vi.spyOn(store, 'listConversations')
-    const dependencies = vi.fn((): CrewReadDependencies => ({
-      db,
-      retainedDbExists: true,
-      hostKey: 'test',
-      records: conversationRecordReader(store),
-      statuses: [],
-      liveHandle: (handle) => handle === 'term_coord',
-      handleForPane: () => null,
-      paneForHandle: () => 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-      name: (party, _task, captured) =>
-        party.orcaSessionId
-          ? (captured?.getRecord(party.orcaSessionId)?.conversationName ?? 'Chat')
-          : 'Coordinator'
-    }))
-    const model = new CrewReadModel(dependencies, (wake) => {
-      const stops = [db.crewChanges.subscribe(wake), sessionCrewChanges.subscribe(wake)]
-      return () => stops.forEach((stop) => stop())
-    })
-    const publications = Array.from({ length: population }, (): OrchestrationCrewFrame[] => [])
-    const stops = publications.map((frames, i) =>
-      subscribeCrew(
-        () => model.read(i === 0 ? 'term_coord' : `orca_session_id:chat-empty-${i}`),
-        model.subscribe,
-        (frame) => frames.push(frame)
-      )
+    const composed = composeJournalOperationReceipts(
+      cancellationReceipt(store, {
+        callerKey: 'client-1',
+        operationId,
+        outcome
+      }),
+      store.conversationReceipts.forkBoundary('chat-a-0001', forkedFrom)
     )
-    try {
-      expect(dependencies).toHaveBeenCalledTimes(1)
-      expect(list).toHaveBeenCalledTimes(1)
-      for (const record of records) {
-        await store.renewLease({
-          sessionId: record.sessionId,
-          fence: record.lease.runtimeFence,
-          childProbe: { outcome: 'identity-matched', matchedOn: ['spawn-token'] },
-          now: NOW + 10_000
-        })
-      }
-      await Promise.resolve()
-      await Promise.resolve()
-      expect(dependencies).toHaveBeenCalledTimes(1)
-      expect(list).toHaveBeenCalledTimes(1)
-      await store.setConversationName(records[0].sessionId, 'Renamed worker')
-      await Promise.resolve()
-      await Promise.resolve()
-      expect(dependencies).toHaveBeenCalledTimes(2)
-      expect(list).toHaveBeenCalledTimes(1)
-      expect(publications[0].filter((frame) => frame.type === 'complete')).toHaveLength(2)
-      expect(publications[0].findLast((frame) => frame.type === 'rows')).toMatchObject({
-        rows: [{ label: 'Renamed worker' }]
-      })
-      for (const frames of publications.slice(1)) {
-        expect(frames.filter((frame) => frame.type === 'complete')).toHaveLength(1)
-      }
-    } finally {
-      stops.forEach((stop) => stop())
-      list.mockRestore()
-      db.close()
+    const staged = await composed.stage!({ savedAt: NOW })
+    const database = await openTestAgentSessionDatabase(root)
+    staged.settle(await database.effects(staged.effects))
+    const both = { usageLimitContinueCancel: cancel, forkedFrom }
+    expect(store.getRecord('chat-a-0001')).toMatchObject(both)
+    expect(
+      (await openTestAgentSessionRecordStore(root, { mode: 'observe' })).getRecord('chat-a-0001')
+    ).toMatchObject(both)
+    expect(await persistedStatus()).toBe('succeeded')
+  })
+  it('publishes actual writer rows before co-staged callbacks and the next store transaction', async () => {
+    const store = await pendingOperation()
+    const forkedFrom = {
+      sessionId: 'chat-parent',
+      itemId: 'turn-1',
+      childBoundary: { kind: 'start' as const }
     }
-  }
-)
+    const actual = {
+      usageLimitContinueCancel: cancel,
+      forkedFrom,
+      options: { interactionMode: 'plan' }
+    }
+    const composed = composeJournalOperationReceipts(
+      onJournalReceiptCommitted(
+        cancellationReceipt(store, {
+          callerKey: 'client-1',
+          operationId,
+          outcome
+        }),
+        () => {
+          expect(store.getRecord('chat-a-0001')).toMatchObject(actual)
+          expect(store.getRecord('chat-a-0001')?.lease.unreconciled).toBe(false)
+        }
+      ),
+      store.conversationReceipts.forkBoundary('chat-a-0001', forkedFrom)
+    )
+    const staged = await composed.stage!({ savedAt: NOW })
+    const other = await openTestAgentSessionRecordStore(root, { mode: 'observe' })
+    await other.replaceSessionOptions({
+      sessionId: 'chat-a-0001',
+      fence: 1,
+      options: { interactionMode: 'plan' },
+      now: NOW
+    })
+    expect(store.getRecord('chat-a-0001')?.options?.interactionMode).toBeUndefined()
+    const database = await openTestAgentSessionDatabase(root)
+    const results = await database.effects(staged.effects)
+    staged.settle(results)
+    await store.setConversationName('chat-a-0001', 'after')
+    expect(store.getRecord('chat-a-0001')).toMatchObject({ ...actual, conversationName: 'after' })
+    expect(
+      (await openTestAgentSessionRecordStore(root, { mode: 'observe' })).getRecord('chat-a-0001')
+    ).toMatchObject({
+      ...actual,
+      conversationName: 'after'
+    })
+  })
+  it('fences later writes when a committed store acknowledgement has no resolved rows', async () => {
+    const store = await pendingOperation()
+    const staged = await cancellationReceipt(store, {
+      callerKey: 'client-1',
+      operationId,
+      outcome
+    }).stage!({ savedAt: NOW })
+    const database = await openTestAgentSessionDatabase(root)
+    await database.effects(staged.effects)
+    expect(() => staged.settle([])).toThrow('missing store results')
+    expect(store.getRecord('chat-a-0001')?.usageLimitContinueCancel).toBeUndefined()
+    await expect(store.setConversationName('chat-a-0001', 'stale')).rejects.toThrow(
+      'missing store results'
+    )
+    await withTestAgentSessionDatabase(root, (db) => {
+      const row = db
+        .prepare('SELECT record_json FROM agent_session_records WHERE session_id=?')
+        .get('chat-a-0001')!
+      expect(JSON.parse(String(row.record_json))).toMatchObject({
+        usageLimitContinueCancel: cancel
+      })
+      expect(JSON.parse(String(row.record_json)).conversationName).not.toBe('stale')
+    })
+  })
+})

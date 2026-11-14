@@ -1,5 +1,8 @@
-import type { DiffLineCounts, LargeDiffRenderLimit } from '../../large-diff-render-limit'
-import type { DiffSection } from '../../diff-section-types'
+import type {
+  DiffLineCounts,
+  LargeDiffRenderLimit
+} from '../../../../../../shared/large-diff-render-limit'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 
 // Null diff results already imply clean state: dirty can only come from a mounted, loaded editor.
 export function shouldRequestCombinedDiffSectionLoad(

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { subscribeDaemonSessionInventoryInvalidated } from './daemon-session-inventory-invalidation'
 import { ResourceSessionInventoryCache } from './resource-session-inventory-cache'
-import type { PtyListedSession } from '../../../../shared/pty-listed-session'
+import type { PtyListedSession } from '../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 
 export function useResourceSessionInventory(ready: boolean, active = false, localOnly = false) {
   const [cache] = useState(

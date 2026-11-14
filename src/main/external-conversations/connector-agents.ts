@@ -2,7 +2,7 @@ import type { ConnectorAgent } from '../../shared/external-conversation-link'
 import {
   isAgentStatusHooksEnabledForAgent,
   type AgentStatusHooksSettings
-} from '../../shared/agent-status-hooks-setting'
+} from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 
 // Membership records mid-turn terminal input support until capability data covers it.
 export const CONNECTOR_AGENTS = ['claude', 'codex'] as const satisfies readonly ConnectorAgent[]

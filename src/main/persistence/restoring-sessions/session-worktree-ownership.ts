@@ -1,11 +1,11 @@
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   getWorktreeIdFromHostIdentity,
   isWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
-import { worktreeRetentionIdComparisonKey } from '../../worktree-retention-path-comparison'
+import { worktreeRetentionIdComparisonKey } from '../../workspaces/catalog/worktree-retention-path-comparison'
 
 type WorkspaceSessionWorktreeReferenceKind =
   | 'none'

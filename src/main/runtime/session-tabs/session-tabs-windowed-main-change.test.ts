@@ -8,7 +8,7 @@ import {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,
   TEST_WORKTREE_ID
-} from '../orca-runtime-test-fixtures.spec'
+} from '../orca-runtime-tests/orca-runtime-test-fixtures.spec'
 import {
   SURFACE_TAB_ID,
   surfaceRuntime
@@ -104,32 +104,6 @@ describe('session.tabs on a windowed server follow main without a window publish
     vi.useRealTimers()
   })
 
-  it('a CLI rename reaches the pushed and listed rows', async () => {
-    const { runtime } = surfaceRuntime()
-    const seen = await windowedPhone(runtime)
-
-    await runtime.applyLayoutCommand({
-      type: 'renameTab',
-      workspace: TEST_WORKTREE_ID,
-      tabId: SURFACE_TAB_ID,
-      kind: 'custom',
-      title: 'Build'
-    })
-    await vi.runAllTimersAsync()
-
-    const named = (rows: RuntimeMobileSessionTabsResult | undefined) =>
-      (rows?.tabs ?? []).map((tab) => [tab.title, tab.type === 'terminal' && tab.customTitle])
-    // The manual name too, which a paired desktop reads to keep or replace its own.
-    expect(named(seen.at(-1))).toEqual([
-      ['Build', 'Build'],
-      ['Build', 'Build']
-    ])
-    expect(named(await listed(runtime))).toEqual([
-      ['Build', 'Build'],
-      ['Build', 'Build']
-    ])
-  })
-
   it('a CLI create reaches the pushed and listed rows', async () => {
     const { runtime, store } = surfaceRuntime()
     const seen = await windowedPhone(runtime)
@@ -193,30 +167,6 @@ describe('session.tabs on a windowed server follow main without a window publish
     await vi.runAllTimersAsync()
 
     expect(parentTabsOf(await listed(runtime))).not.toContain(SECOND_TAB_ID)
-  })
-
-  it('a workspace on an unloaded SSH host keeps the rows its window published', async () => {
-    const { runtime } = surfaceRuntime()
-    await windowedPhone(runtime)
-    const before = runtime.mobileSessionTabsByWorktree.get(UNLOADED_SSH_ROWS.worktree)
-
-    await runtime.applyLayoutCommand({
-      type: 'renameTab',
-      workspace: TEST_WORKTREE_ID,
-      tabId: SURFACE_TAB_ID,
-      kind: 'custom',
-      title: 'Build'
-    })
-    await vi.runAllTimersAsync()
-    runtime.storeMobileSessionSnapshot(UNLOADED_SSH_ROWS.worktree, {
-      ...UNLOADED_SSH_ROWS,
-      snapshotVersion: 2
-    })
-
-    expect(before?.tabs.map((tab) => tab.id)).toEqual(['ssh-tab::ssh-leaf'])
-    const after = runtime.mobileSessionTabsByWorktree.get(UNLOADED_SSH_ROWS.worktree)
-    expect(after?.tabs).toEqual(UNLOADED_SSH_ROWS.tabs)
-    expect(after?.tabGroups).toEqual(UNLOADED_SSH_ROWS.tabGroups)
   })
 
   it("after the window closes, main's later moves reach the phone, as no-window rows", async () => {

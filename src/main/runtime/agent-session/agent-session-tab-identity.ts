@@ -1,8 +1,9 @@
+import { normalizeMobileSessionTabSelection } from '../session-tabs/mobile-session-tab-selection'
 import { isReopenedChatTabId } from '../../../shared/agent-session/view/structured-agent-session-host-tab-id'
 import { randomUUID } from 'node:crypto'
 import { isAgentSessionSurfaceTabId } from '../../../shared/agent-session/view/agent-session-surface-tab-id'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-types'
-import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
+import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 
 const REOPENED_TAB_PREFIX = 'agent-chat-tab-v1-'
 
@@ -140,7 +141,7 @@ export function reconcileChatTabIdentities(
       addedByGroup.set(groupId, added)
     }
   }
-  return {
+  return normalizeMobileSessionTabSelection({
     ...snapshot,
     activeTabId: active?.id ?? null,
     activeTabType: active?.type ?? null,
@@ -161,5 +162,5 @@ export function reconcileChatTabIdentities(
         recentTabIds: group.recentTabIds?.filter((id) => !removed.has(id))
       }
     })
-  }
+  })
 }

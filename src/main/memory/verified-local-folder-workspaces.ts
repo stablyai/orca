@@ -3,7 +3,7 @@ import {
   findFolderWorkspaceCandidateRepos,
   resolveFolderWorkspaceHost,
   type FolderWorkspaceHostState
-} from '../../shared/folder-workspace-execution-host'
+} from '../../shared/folder-workspaces/folder-workspace-execution-host'
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
 
 export function getVerifiedLocalFolderWorkspaceKeys(state: FolderWorkspaceHostState): Set<string> {

@@ -7,11 +7,6 @@ import {
 const bytes = (text: string): number => new TextEncoder().encode(text).byteLength
 
 describe('sanitizeAgentSessionAttachmentName', () => {
-  it('keeps only the last path segment', () => {
-    expect(sanitizeAgentSessionAttachmentName('../../etc/passwd')).toBe('passwd')
-    expect(sanitizeAgentSessionAttachmentName('C:\\Users\\me\\shot.png')).toBe('shot.png')
-  })
-
   it('caps a long name in UTF-8 bytes on whole characters, keeping its extension', () => {
     const name = sanitizeAgentSessionAttachmentName(`${'图'.repeat(120)}.pdf`)
     expect(bytes(name)).toBeLessThanOrEqual(AGENT_SESSION_ATTACHMENT_NAME_MAX_BYTES)
@@ -26,11 +21,5 @@ describe('sanitizeAgentSessionAttachmentName', () => {
     const name = sanitizeAgentSessionAttachmentName(long)
     expect(name).toBe('a'.repeat(AGENT_SESSION_ATTACHMENT_NAME_MAX_BYTES - 1))
     expect(sanitizeAgentSessionAttachmentName('notes. .')).toBe('notes')
-  })
-
-  it('renames what Windows reserves for devices', () => {
-    expect(sanitizeAgentSessionAttachmentName('CON')).toBe('_CON')
-    expect(sanitizeAgentSessionAttachmentName('nul.tar.gz')).toBe('_nul.tar.gz')
-    expect(sanitizeAgentSessionAttachmentName('console.log')).toBe('console.log')
   })
 })

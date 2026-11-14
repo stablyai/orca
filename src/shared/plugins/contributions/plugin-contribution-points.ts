@@ -23,6 +23,11 @@ import {
   pluginEventContributionSchema
 } from './plugin-event-contribution'
 import { PLUGIN_HOOK_LIMIT, pluginHookContributionSchema } from './plugin-hook-contribution'
+import {
+  PLUGIN_FONT_LIMIT,
+  PLUGIN_FONTS_SINCE,
+  pluginFontContributionSchema
+} from './plugin-font-contribution'
 import type { PluginExecutionProfile } from './plugin-execution-profile'
 import {
   PLUGIN_CUSTOM_EDITOR_LIMIT,
@@ -62,6 +67,7 @@ export const PLUGIN_CONTRIBUTION_POINTS = [
   'themes',
   'terminalThemes',
   'iconThemes',
+  'fonts',
   'syntaxes',
   'customEditors',
   'newFiles',
@@ -193,6 +199,12 @@ export const pluginContributesFields = {
     'File icon themes.',
     NEXT
   ),
+  fonts: contributionList(
+    pluginFontContributionSchema,
+    PLUGIN_FONT_LIMIT,
+    'Font families for the terminal, editor and interface font pickers.',
+    PLUGIN_FONTS_SINCE
+  ),
   syntaxes: contributionList(
     pluginSyntaxContributionSchema,
     PLUGIN_SYNTAX_LIMIT,
@@ -220,7 +232,7 @@ export const pluginContributesFields = {
   statusBarItems: contributionList(
     pluginStatusBarItemContributionSchema,
     PLUGIN_STATUS_BAR_ITEM_LIMIT,
-    'Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`.',
+    'Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled.',
     PLUGIN_STATUS_BAR_SINCE
   )
 } satisfies Record<PluginContributionPoint, z.ZodType>
@@ -261,6 +273,8 @@ export const PLUGIN_CONTRIBUTION_POINT_POLICY: Record<
   themes: { execution: 'data', catalogType: 'app-theme', bindsContent: false },
   terminalThemes: { execution: 'data', catalogType: 'terminal-theme', bindsContent: false },
   iconThemes: { execution: 'data', catalogType: 'icon-theme', bindsContent: false },
+  // Why no catalog type: older catalogs would drop a release naming one, and a font is inert data.
+  fonts: { execution: 'data', catalogType: null, bindsContent: false },
   syntaxes: { execution: 'data', catalogType: 'syntax', bindsContent: false },
   customEditors: { execution: 'sandboxed-ui', catalogType: 'editor', bindsContent: false },
   // Why data and no catalog type: a template is inert text that seeds a file the user asked for;

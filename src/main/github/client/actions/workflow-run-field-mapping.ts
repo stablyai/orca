@@ -1,5 +1,5 @@
-import { actionsUrl } from '../../../../shared/github/actions-web-url'
-import type { ActionsRun, ActionsWorkflow } from '../../../../shared/github/actions-types'
+import { actionsUrl } from '../../../../shared/github/actions/actions-web-url'
+import type { ActionsRun, ActionsWorkflow } from '../../../../shared/github/actions/actions-types'
 import { nullableString } from '../check/check-detail-field-mapping'
 
 /** Reject non-object API rows instead of letting malformed payloads reach field mapping. */

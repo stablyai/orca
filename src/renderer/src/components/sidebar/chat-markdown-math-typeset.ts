@@ -5,12 +5,12 @@ import katex from 'katex'
 import { SKIP, visitParents } from 'unist-util-visit-parents'
 import type { VFile } from 'vfile'
 import { BoundedMap } from '../../../../shared/bounded-map'
+import { MARKDOWN_MATH_KATEX_SETTINGS as settings } from '../../../../shared/markdown-math-rules'
 
 type MathResult = Readonly<{
   html?: string
   failure?: Readonly<{ name: string; message: string; title: string }>
 }>
-const settings = { trust: false, maxSize: 20, maxExpand: 1000, strict: 'ignore' } as const
 const results = new BoundedMap<string, MathResult>({
   maxEntries: 1000,
   maxBytes: 4 * 1024 * 1024,

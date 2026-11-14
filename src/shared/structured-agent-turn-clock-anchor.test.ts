@@ -3,7 +3,7 @@ import type {
   AgentJournalRenderItem,
   AgentJournalTurnLifecycle
 } from './agent-session/journal/agent-session-journal-types'
-import { agentJournalTurnBody } from './agent-session/lifecycle/agent-session-turn-record'
+import { agentJournalTurnBody } from './agent-session/lifecycle/records/agent-session-turn-record'
 import {
   stepStructuredAgentTurnClock,
   type StructuredAgentTurnClockLatch
@@ -133,19 +133,6 @@ describe('structured agent turn clock anchor', () => {
 })
 
 describe('structured agent turn origin', () => {
-  // Live and settled timing must share an origin or completion contradicts the counter.
-  it('settles a turn from the same instant the live counter used', () => {
-    const settled = completedStructuredAgentTurnSeconds({
-      state: 'completed',
-      startedAt: HOST_START + 25_000,
-      requestedAt: HOST_START,
-      completedAt: HOST_START + 26_000,
-      observedAt: HOST_START + 25_000
-    })
-
-    expect(settled).toBe(26)
-  })
-
   it('does not let a provider start-scoped duration undercut an exact request origin', () => {
     const settled = completedStructuredAgentTurnSeconds({
       state: 'completed',

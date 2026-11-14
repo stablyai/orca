@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import type { SystemResolverHealth } from '../daemon/types'
+import type { SystemResolverHealth } from '../daemon/protocol/daemon-rpc-contract'
 
 const MAC_RESOLVER_CHECK_TIMEOUT_MS = 1_500
 const MAC_NO_DNS_CONFIGURATION_RE = /\bNo DNS configuration available\b/i

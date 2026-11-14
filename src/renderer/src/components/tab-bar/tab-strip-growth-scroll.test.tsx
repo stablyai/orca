@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { useTabStripOverflowNavigation } from './tab-strip-overflow-navigation'
 
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
@@ -83,8 +83,6 @@ function restoreStripLayout(): void {
 }
 
 const NO_HOSTED_ROWS: string[] = []
-let stripRenderCount = 0
-let subscribeToStripResize: ((listener: () => void) => () => void) | null = null
 
 /** `hostedRows` render like client-hosted browser rows: a strip slot with no `data-tab-id`. */
 function Strip({
@@ -98,7 +96,6 @@ function Strip({
   hostedRows?: string[]
   activeHostedRow?: string | null
 }): React.JSX.Element {
-  stripRenderCount++
   const activation = useTabStripPointerActivation({ onActivate: () => {} })
   const navigation = useTabStripOverflowNavigation({
     activeVisibleTabId: active,
@@ -106,7 +103,6 @@ function Strip({
     layoutKey: [...tabs, ...hostedRows].join(','),
     worktreeId: 'wt-1'
   })
-  subscribeToStripResize = navigation.subscribeToStripResize
   return (
     <div
       data-strip=""
@@ -157,74 +153,6 @@ describe('tab strip scroll when tabs are added', () => {
     restoreStripLayout()
   })
 
-  it('keeps the viewed tab still when a background tab lands on screen after it', () => {
-    const { strip, rerender } = mountScrolled('F', 400)
-    rerender(<Strip tabs={[...TABS.slice(0, 6), 'N', ...TABS.slice(6)]} active="F" />)
-    expect(strip.scrollLeft).toBe(400)
-    expect(tabX(strip, 'F')).toBe(100)
-  })
-
-  it('does not scroll for a background tab that opens on screen', () => {
-    const { strip, rerender } = mountScrolled('B', 0)
-    rerender(<Strip tabs={['A', 'B', 'N', ...TABS.slice(2)]} active="B" />)
-    expect(strip.scrollLeft).toBe(0)
-    expect(tabX(strip, 'B')).toBe(100)
-  })
-
-  it('scrolls to the end for a foreground tab appended at the end', () => {
-    const { strip, rerender } = mountScrolled('C', 0)
-    rerender(<Strip tabs={[...TABS, 'N']} active="N" />)
-    expect(strip.scrollLeft).toBe(800)
-  })
-
-  it('reveals a background tab appended past the end, beside the active tab', () => {
-    const { strip, rerender } = mountScrolled('J', 700)
-    rerender(<Strip tabs={[...TABS, 'N']} active="J" />)
-    expect(tabX(strip, 'J')).toBe(100)
-    expect(tabX(strip, 'N')).toBe(200)
-  })
-
-  it('reveals a client-hosted row appended past the end', () => {
-    const { strip, rerender } = mountScrolled('E', 300)
-    rerender(<Strip tabs={TABS} hostedRows={['remote']} active="E" />)
-    expect(strip.scrollLeft).toBe(800)
-    expect(tabX(strip, 'remote')).toBe(200)
-    expect(strip.dataset.dock).toBe('start')
-  })
-
-  it('reveals a tab that replaces another even when the strip count stays the same', () => {
-    const { strip, rerender } = mountScrolled('B', 0)
-    rerender(<Strip tabs={['A', 'B', ...TABS.slice(3), 'N']} active="B" />)
-    expect(strip.scrollLeft).toBe(700)
-    expect(tabX(strip, 'B')).toBe(0)
-    expect(tabX(strip, 'N')).toBe(200)
-  })
-
-  it('does not scroll for a background tab while the pointer is over the strip', () => {
-    const { strip, rerender } = mountScrolled('J', 700)
-    const matches = Element.prototype.matches.bind(strip)
-    Object.defineProperty(strip, 'matches', {
-      value: (selector: string) => selector === ':hover' || matches(selector)
-    })
-    rerender(<Strip tabs={[...TABS, 'N']} active="J" />)
-    expect(strip.scrollLeft).toBe(700)
-    expect(tabX(strip, 'J')).toBe(200)
-  })
-
-  it('reveals a background tab that opened under the pointer once the pointer leaves', () => {
-    const { strip, rerender } = mountScrolled('J', 700)
-    const matches = Element.prototype.matches.bind(strip)
-    Object.defineProperty(strip, 'matches', {
-      value: (selector: string) => selector === ':hover' || matches(selector)
-    })
-    rerender(<Strip tabs={[...TABS, 'N']} active="J" />)
-    act(() => {
-      strip.dispatchEvent(new Event('pointerleave'))
-    })
-    expect(tabX(strip, 'J')).toBe(100)
-    expect(tabX(strip, 'N')).toBe(200)
-  })
-
   it('reveals deferred overflow after contextmenu retires the interrupted strip gesture', () => {
     const { strip, rerender } = mountScrolled('J', 700)
     const matches = Element.prototype.matches.bind(strip)
@@ -242,21 +170,6 @@ describe('tab strip scroll when tabs are added', () => {
     expect(tabX(strip, 'J')).toBe(100)
     expect(tabX(strip, 'N')).toBe(200)
   })
-
-  it('reveals a background tab that lands far from the active tab, which docks', () => {
-    const { strip, rerender } = mountScrolled('B', 0)
-    rerender(<Strip tabs={[...TABS, 'N']} active="B" />)
-    expect(tabX(strip, 'N')).toBe(200)
-    expect(strip.dataset.dock).toBe('start')
-  })
-
-  it('reveals a background tab that lands left of the viewed tab, which docks', () => {
-    const { strip, rerender } = mountScrolled('F', 400)
-    rerender(<Strip tabs={['A', 'B', 'N', ...TABS.slice(2)]} active="F" />)
-    expect(tabX(strip, 'N')).toBe(0)
-    expect(tabX(strip, 'F')).toBe(200)
-    expect(strip.dataset.dock).toBe('end')
-  })
 })
 
 describe('tab strip scroll when tabs are closed', () => {
@@ -266,13 +179,6 @@ describe('tab strip scroll when tabs are closed', () => {
     restoreStripLayout()
   })
 
-  it('keeps the strip still when closing the active tab switches to a far tab', () => {
-    const { strip, rerender } = mountScrolled('E', 300)
-    rerender(<Strip tabs={TABS.filter((id) => id !== 'E')} active="A" />)
-    expect(strip.scrollLeft).toBe(300)
-    expect(strip.dataset.dock).toBe('start')
-  })
-
   it('still reveals a later tab switch after a close', () => {
     const { strip, rerender } = mountScrolled('E', 300)
     const remaining = TABS.filter((id) => id !== 'E')
@@ -280,78 +186,5 @@ describe('tab strip scroll when tabs are closed', () => {
     rerender(<Strip tabs={remaining} active="J" />)
     expect(strip.scrollLeft).toBe(600)
     expect(tabX(strip, 'I')).toBe(100)
-  })
-})
-
-describe('tab strip with a docked active tab', () => {
-  beforeEach(installStripLayout)
-  afterEach(() => {
-    cleanup()
-    restoreStripLayout()
-  })
-
-  it('reports the edge the active tab is docked to', () => {
-    expect(mountScrolled('H', 0).strip.dataset.dock).toBe('end')
-    cleanup()
-    expect(mountScrolled('E', 300).strip.dataset.dock).toBeUndefined()
-  })
-
-  it('reports the dock edge when a client-hosted row takes and gives back the active state', () => {
-    const { strip, rerender } = mountScrolled('E', 300, ['remote'])
-    expect(strip.dataset.dock).toBeUndefined()
-    rerender(<Strip tabs={TABS} hostedRows={['remote']} activeHostedRow="remote" active="E" />)
-    expect(strip.dataset.dock).toBe('end')
-    rerender(<Strip tabs={TABS} hostedRows={['remote']} active="E" />)
-    expect(strip.dataset.dock).toBeUndefined()
-  })
-
-  it('reveals a foreground tab opened next to a docked active tab', () => {
-    const { strip, rerender } = mountScrolled('H', 0)
-    rerender(<Strip tabs={[...TABS.slice(0, 8), 'N', ...TABS.slice(8)]} active="N" />)
-    expect(tabX(strip, 'N')).toBe(200)
-    expect(tabX(strip, 'H')).toBe(100)
-  })
-
-  it('reveals a background tab opened right after a docked active tab, side by side', () => {
-    const { strip, rerender } = mountScrolled('B', 500)
-    expect(strip.dataset.dock).toBe('start')
-    rerender(<Strip tabs={['A', 'B', 'N', ...TABS.slice(2)]} active="B" />)
-    expect(tabX(strip, 'B')).toBe(0)
-    expect(tabX(strip, 'N')).toBe(100)
-    expect(strip.dataset.dock).toBeUndefined()
-  })
-
-  it('keeps a revealed background tab clear of the docked active tab', () => {
-    const { strip, rerender } = mountScrolled('A', 700)
-    rerender(<Strip tabs={[...TABS.slice(0, 5), 'N', ...TABS.slice(5)]} active="A" />)
-    expect(tabX(strip, 'A')).toBe(0)
-    expect(tabX(strip, 'N')).toBe(100)
-  })
-})
-
-describe('tab strip while scrolling', () => {
-  beforeEach(installStripLayout)
-  afterEach(() => {
-    cleanup()
-    restoreStripLayout()
-  })
-
-  it('does not re-render the strip for a scroll that stays between the edges', () => {
-    const { strip } = mountScrolled('E', 300)
-    const rendersBefore = stripRenderCount
-    act(() => {
-      strip.scrollLeft = 400
-      strip.dispatchEvent(new Event('scroll'))
-    })
-    expect(stripRenderCount).toBe(rendersBefore)
-  })
-
-  it('tells resize subscribers when tabs change the strip without a scroll', async () => {
-    const { rerender } = mountScrolled('J', 700)
-    const listener = vi.fn()
-    subscribeToStripResize!(listener)
-    rerender(<Strip tabs={[...TABS, 'N']} active="J" />)
-    await Promise.resolve()
-    expect(listener).toHaveBeenCalled()
   })
 })

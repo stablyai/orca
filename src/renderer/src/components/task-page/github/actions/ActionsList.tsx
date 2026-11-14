@@ -1,11 +1,11 @@
 import { Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useDelayedStatus } from '@/hooks/use-delayed-status'
-import { ActionsStatus } from '@/components/right-sidebar/ActionsStatus'
-import type { useActionsRuns } from '@/components/right-sidebar/use-actions-runs'
-import type { ActionsRun } from '../../../../../../shared/github/actions-types'
+import { ActionsStatus } from '@/components/right-sidebar/actions/ActionsStatus'
+import type { useActionsRuns } from '@/components/right-sidebar/actions/use-actions-runs'
+import type { ActionsRun } from '../../../../../../shared/github/actions/actions-types'
 import { PaginationBar } from '../../PaginationBar'
 import {
   GITHUB_TASK_HEADER_SURFACE_CLASS,

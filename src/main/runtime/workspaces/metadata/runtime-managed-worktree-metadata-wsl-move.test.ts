@@ -1,0 +1,162 @@
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  closeTestStores,
+  createStore,
+  testState
+} from '../../../persistence/persistence-test-harness'
+import type { Store } from '../../../persistence/loading-store/store'
+import { wslMoveCutoverFixture as cutover } from '../../../persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
+import { seedWslMoveCutover } from '../../../persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
+import {
+  WslMoveProjectFencedError,
+  loadWslMoveFence,
+  resetWslMoveFenceForTests
+} from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import {
+  persistRuntimeManagedWorktreeSortOrder,
+  updateRuntimeManagedWorktreeMetadata
+} from './runtime-managed-worktree-metadata'
+import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
+import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
+
+vi.mock('electron', () => ({
+  app: { getPath: () => testState.dir },
+  safeStorage: { isEncryptionAvailable: () => false }
+}))
+
+const MOVING = 'repo-1::/src/app'
+const STAYING = 'repo-2::/src/other'
+
+function resolved(id: string): ResolvedWorktree {
+  const repoId = id.slice(0, id.indexOf('::'))
+  const path = id.slice(repoId.length + 2)
+  return {
+    id,
+    repoId,
+    instanceId: `${id}#instance`,
+    hostId: 'local',
+    path,
+    head: 'abc',
+    branch: 'refs/heads/main',
+    isBare: false,
+    isMainWorktree: false,
+    displayName: 'app',
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0,
+    parentWorktreeId: null,
+    childWorktreeIds: [],
+    lineage: null,
+    git: { path, head: 'abc', branch: 'refs/heads/main', isBare: false, isMainWorktree: false }
+  }
+}
+
+function ports() {
+  return {
+    resolveWorktree: vi.fn(async (selector: string) => resolved(selector.replace(/^id:/, ''))),
+    validateParent: vi.fn(),
+    resolveParent: vi.fn(async (selector: string) => {
+      const id = selector.replace(/^(id:)?folder:/, '')
+      return {
+        type: 'folder' as const,
+        workspaceKey: `folder:${id}` as const,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: recording reads only the parent folder's id.
+        folderWorkspace: { id } as FolderWorkspace,
+        instanceId: null
+      }
+    }),
+    invalidateResolved: vi.fn(),
+    invalidateScan: vi.fn(),
+    notifyChanged: vi.fn(),
+    showWorktree: vi.fn(async (selector: string) => resolved(selector.replace(/^id:/, '')))
+  }
+}
+
+let store: Store
+beforeEach(() => {
+  testState.dir = mkdtempSync(join(tmpdir(), 'wsl-move-meta-'))
+  store = createStore()
+  loadWslMoveFence(testState.dir)
+  seedWslMoveCutover(testState.dir, cutover('move-1', 'source-fenced'))
+})
+afterEach(async () => {
+  resetWslMoveFenceForTests()
+  await closeTestStores()
+  rmSync(testState.dir, { recursive: true, force: true })
+})
+
+describe('updateRuntimeManagedWorktreeMetadata under a WSL move', () => {
+  type Updates = Parameters<typeof updateRuntimeManagedWorktreeMetadata>[0]['updates']
+  const update = (selector: string, updates: Updates, p = ports()) =>
+    updateRuntimeManagedWorktreeMetadata({ selector: `id:${selector}`, updates, store, ports: p })
+
+  it('drops background bookkeeping quietly and writes nothing', async () => {
+    const p = ports()
+    const result = await update(MOVING, { isUnread: true, lastActivityAt: 5 }, p)
+    expect(result.id).toBe(MOVING)
+    expect(store.getWorktreeMeta(MOVING)).toBeUndefined()
+    expect(p.notifyChanged).not.toHaveBeenCalled()
+  })
+
+  it('refuses a lineage change even alongside passive fields', async () => {
+    await expect(
+      update(MOVING, { isUnread: true, lineage: { noParent: true } })
+    ).rejects.toBeInstanceOf(WslMoveProjectFencedError)
+  })
+})
+
+describe('persistRuntimeManagedWorktreeSortOrder under a WSL move', () => {
+  it('drops the moving project from the batch and writes the rest', () => {
+    store.setWorktreeMeta(hostWorktreeTarget({ id: MOVING, hostId: 'local' }), { sortOrder: 1 })
+    store.setWorktreeMeta(hostWorktreeTarget({ id: STAYING, hostId: 'local' }), { sortOrder: 2 })
+    const result = persistRuntimeManagedWorktreeSortOrder({
+      orderedIds: [MOVING, STAYING],
+      store,
+      invalidateResolved: vi.fn(),
+      notifyChanged: vi.fn()
+    })
+    expect(result).toEqual({ updated: 1 })
+    expect(store.getWorktreeMeta(MOVING)?.sortOrder).toBe(1)
+    expect(store.getWorktreeMeta(STAYING)?.sortOrder).toBeGreaterThan(2)
+  })
+})
+
+describe('updateRuntimeManagedWorktreeMetadata with a folder workspace parent', () => {
+  it('replaces the worktree parent with the folder, in both lists', async () => {
+    const target = hostWorktreeTarget({ id: STAYING, hostId: 'local' })
+    store.setWorktreeMeta(target, { instanceId: `${STAYING}#instance` })
+    store.setWorktreeLineage(target, {
+      worktreeId: STAYING,
+      worktreeInstanceId: `${STAYING}#instance`,
+      parentWorktreeId: 'repo-2::/src/parent',
+      parentWorktreeInstanceId: 'parent#instance',
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' },
+      createdAt: 1
+    })
+
+    await updateRuntimeManagedWorktreeMetadata({
+      selector: `id:${STAYING}`,
+      updates: { lineage: { parentWorktree: 'id:folder:5b1c' } },
+      store,
+      ports: ports()
+    })
+
+    expect(store.getWorktreeLineage(STAYING)).toBeUndefined()
+    expect(store.getWorkspaceLineage(`worktree:${STAYING}`)).toMatchObject({
+      parentWorkspaceKey: 'folder:5b1c',
+      parentInstanceId: '5b1c',
+      childInstanceId: `${STAYING}#instance`
+    })
+  })
+})

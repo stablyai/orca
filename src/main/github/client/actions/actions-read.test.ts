@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import * as repoExecution from '../../github-api-repository'
-import * as gh from '../../gh-utils'
-import * as rateLimit from '../../rate-limit'
+import * as repoExecution from '../../repositories/github-api-repository'
+import * as remoteProbe from '../../repositories/github-api-repository-remote-probe'
+import * as gh from '../../execution/github-operation-slots'
+import * as ghExec from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import * as rateLimit from '../../api/rate-limit'
 import { listActionsRuns, listActionsWorkflows } from './list-actions-pages'
 import { getWorkflowRunDetails } from './get-workflow-run-details'
 import { prCheckLogTailCache } from '../check/check-job-log-tails'
@@ -18,7 +20,7 @@ const run = {
   status: 'in_progress',
   updated_at: '2026-09-30T01:00:00Z'
 }
-const exec = vi.spyOn(gh, 'ghExecFileAsync')
+const exec = vi.spyOn(ghExec, 'ghExecFileAsync')
 beforeEach(() => {
   vi.spyOn(repoExecution, 'resolveGitHubRepoExecution').mockResolvedValue({
     ownerRepo: repository,
@@ -50,7 +52,7 @@ describe('bounded repository Actions reads', () => {
       }
     ]
     let logCalls = 0
-    vi.spyOn(gh, 'ghExecFileAsync').mockImplementation(async (args) => {
+    vi.spyOn(ghExec, 'ghExecFileAsync').mockImplementation(async (args) => {
       if (args[1]?.endsWith('/logs')) {
         logCalls += 1
         if (logCalls === 1) {
@@ -78,7 +80,7 @@ describe('bounded repository Actions reads', () => {
   })
   it('queries the whole repository without a PR and preserves Enterprise execution options', async () => {
     const command = vi
-      .spyOn(gh, 'ghExecFileAsync')
+      .spyOn(ghExec, 'ghExecFileAsync')
       .mockResolvedValue(json({ total_count: 2000, workflow_runs: [run] }))
     const page = await listActionsRuns(
       '/remote/repo',
@@ -102,8 +104,8 @@ describe('bounded repository Actions reads', () => {
     expect(page).toMatchObject({ hasNextPage: false, limitReached: true, repository })
   })
   it('requires verified origin discovery and propagates unavailable SSH errors', async () => {
-    const command = vi.spyOn(gh, 'ghExecFileAsync')
-    vi.spyOn(repoExecution, 'getGitHubApiRepositoryForRemote').mockRejectedValue(
+    const command = vi.spyOn(ghExec, 'ghExecFileAsync')
+    vi.spyOn(remoteProbe, 'getGitHubApiRepositoryForRemote').mockRejectedValue(
       new Error('SSH Git provider unavailable')
     )
     vi.spyOn(repoExecution, 'resolveGitHubRepoExecution').mockImplementation(
@@ -115,7 +117,7 @@ describe('bounded repository Actions reads', () => {
     await expect(listActionsRuns('/remote/repo', {}, 'ssh-host')).rejects.toThrow(
       'SSH Git provider unavailable'
     )
-    expect(repoExecution.getGitHubApiRepositoryForRemote).toHaveBeenCalledWith(
+    expect(remoteProbe.getGitHubApiRepositoryForRemote).toHaveBeenCalledWith(
       '/remote/repo',
       'origin',
       'ssh-host',
@@ -126,7 +128,7 @@ describe('bounded repository Actions reads', () => {
   })
   it('encodes workflow scope and preserves future status values', async () => {
     const command = vi
-      .spyOn(gh, 'ghExecFileAsync')
+      .spyOn(ghExec, 'ghExecFileAsync')
       .mockResolvedValue(json({ workflow_runs: [{ ...run, status: 'future_state' }] }))
     const page = await listActionsRuns('/repo', { workflowId: 5 })
     expect(command.mock.calls[0][0]).toEqual([
@@ -136,7 +138,7 @@ describe('bounded repository Actions reads', () => {
     expect(page.items[0].status).toBe('future_state')
   })
   it('does not convert API errors into an empty successful list', async () => {
-    vi.spyOn(gh, 'ghExecFileAsync').mockRejectedValue(
+    vi.spyOn(ghExec, 'ghExecFileAsync').mockRejectedValue(
       new Error('HTTP 403 SSO authorization required')
     )
     await expect(listActionsRuns('/repo', {})).rejects.toThrow('SSO')
@@ -150,7 +152,7 @@ describe('bounded repository Actions reads', () => {
   })
   it('keeps jobs failures visibly partial and metadata failures fatal', async () => {
     const command = vi
-      .spyOn(gh, 'ghExecFileAsync')
+      .spyOn(ghExec, 'ghExecFileAsync')
       .mockResolvedValueOnce(json(run))
       .mockRejectedValueOnce(new Error('jobs unavailable'))
     const details = await getWorkflowRunDetails('/repo', { repository, runId: 9 })
@@ -164,7 +166,7 @@ describe('bounded repository Actions reads', () => {
   })
   it('resets paginated jobs on attempt changes and never narrows by workflow name', async () => {
     const command = vi
-      .spyOn(gh, 'ghExecFileAsync')
+      .spyOn(ghExec, 'ghExecFileAsync')
       .mockResolvedValueOnce(json(run))
       .mockResolvedValueOnce(
         json({
@@ -194,7 +196,7 @@ describe('bounded repository Actions reads', () => {
       name: `Failed ${index}`,
       conclusion: 'failure'
     }))
-    const command = vi.spyOn(gh, 'ghExecFileAsync').mockImplementation(async (args) => {
+    const command = vi.spyOn(ghExec, 'ghExecFileAsync').mockImplementation(async (args) => {
       const endpoint = args[1] ?? ''
       if (endpoint.endsWith('/logs')) {
         throw new Error('expired log')

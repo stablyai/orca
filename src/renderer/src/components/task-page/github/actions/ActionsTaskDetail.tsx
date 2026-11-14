@@ -1,12 +1,12 @@
 import { translate } from '@/i18n/i18n'
 import { ActionsArtifacts } from './ActionsArtifacts'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActionsRunDetailsContent } from '@/components/editor/ActionsRunDetailsPanel'
-import { fetchActionsRunDetails } from '@/store/github/actions-requests'
-import { actionsRepoProbeKey } from '@/components/right-sidebar/actions-repositories'
-import type { ActionsRepositoryOption } from '@/components/right-sidebar/use-actions-repositories'
+import { ActionsRunDetailsContent } from '@/components/editor/actions-run/ActionsRunDetailsPanel'
+import { fetchActionsRunDetails } from '@/store/github/actions/actions-requests'
+import { actionsRepoProbeKey } from '@/components/right-sidebar/actions/actions-repositories'
+import type { ActionsRepositoryOption } from '@/components/right-sidebar/actions/use-actions-repositories'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import type { ActionsRun } from '../../../../../../shared/github/actions-types'
+import type { ActionsRun } from '../../../../../../shared/github/actions/actions-types'
 import { useAppStore } from '@/store'
 
 /** Fence detail reads by run and owner; append jobs only when the workflow attempt still matches. */

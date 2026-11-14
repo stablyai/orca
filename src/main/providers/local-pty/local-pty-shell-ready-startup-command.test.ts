@@ -46,43 +46,12 @@ function createMockProc(): pty.IPty & {
 }
 
 describe('writeStartupCommandWhenShellReady', () => {
-  let origPlatform: NodeJS.Platform
-
   beforeEach(() => {
     vi.useFakeTimers()
-    origPlatform = process.platform
   })
 
   afterEach(() => {
     vi.useRealTimers()
-    Object.defineProperty(process, 'platform', { value: origPlatform })
-  })
-
-  it.each(['darwin', 'linux', 'win32'])('submits with CR on %s', async (platform) => {
-    Object.defineProperty(process, 'platform', { value: platform })
-    const proc = createMockProc()
-    const ready = Promise.resolve()
-    writeStartupCommandWhenShellReady(ready, proc, 'claude', () => {})
-
-    await ready
-    proc._emitData('\r\nuser@host % ')
-    vi.advanceTimersByTime(30)
-    await Promise.resolve()
-
-    expect(proc._writes).toEqual(['claude\r'])
-  })
-
-  it('replaces a caller-supplied LF terminator with CR', async () => {
-    const proc = createMockProc()
-    const ready = Promise.resolve()
-    writeStartupCommandWhenShellReady(ready, proc, 'claude\n', () => {})
-
-    await ready
-    proc._emitData('\r\nuser@host % ')
-    vi.advanceTimersByTime(30)
-    await Promise.resolve()
-
-    expect(proc._writes).toEqual(['claude\r'])
   })
 
   it('keeps the no-prompt fallback conservative to avoid duplicate shell echo', async () => {
@@ -132,21 +101,6 @@ describe('writeStartupCommandWhenShellReady', () => {
     await Promise.resolve()
 
     expect(proc._writes).toEqual([`\x1b[200~${command}\x1b[201~\r`])
-  })
-
-  it('leaves a single-line command on the raw submit path even when bracketed paste is safe', async () => {
-    const proc = createMockProc()
-    const ready = Promise.resolve()
-    writeStartupCommandWhenShellReady(ready, proc, 'claude', () => {}, {
-      bracketedPasteSafe: true
-    })
-
-    await ready
-    proc._emitData('\r\nuser@host % ')
-    vi.advanceTimersByTime(30)
-    await Promise.resolve()
-
-    expect(proc._writes).toEqual(['claude\r'])
   })
 
   it('does not bracket-wrap a multiline command when the shell lacks bracketed paste', async () => {

@@ -5,17 +5,18 @@ import {
 } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import type { AppState } from '../types'
-import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
-import { getRecipeVmSshTargetForHost } from '@/lib/recipe-vm-managed-host'
-import { selectWorktreesByRepo } from '../workspace-record-selectors'
+import { cleanupEphemeralVmRuntimesForDeleted } from '@/runtime/ephemeral-vm/ephemeral-vm-runtime-cleanup'
+import { getRecipeVmSshTargetForHost } from '@/runtime/ephemeral-vm/recipe-vm-managed-host'
+import { selectWorktreesByRepo } from '../workspaces/catalog/workspace-record-fields'
 
-/** Destroy backing recipe VM before project removal to prevent leaks. Return false synchronously without a VM; resolve true if VM destruction also removed the owning managed server/catalog. */
-export function destroyRecipeVmBeforeProjectRemoval(
+type RecipeVmRemovalTargets = { knownServerTarget: string | null; directTarget: string | null }
+
+/** Return null when removing this project on this host leaves no recipe VM to destroy. */
+export function getRecipeVmRemovalTargets(
   state: Pick<AppState, 'runtimeEnvironments' | 'worktreesByRepo'>,
   ownerRepo: Pick<Repo, 'id' | 'connectionId'>,
-  ownerHostId: ExecutionHostId,
-  workspaceIds: string[]
-): Promise<boolean> | false {
+  ownerHostId: ExecutionHostId
+): RecipeVmRemovalTargets | null {
   const knownServerTarget = getRecipeVmSshTargetForHost(state.runtimeEnvironments, ownerHostId)
   const hasProvisionedRoot = (selectWorktreesByRepo(state)[ownerRepo.id] ?? []).some(
     (worktree) =>
@@ -27,9 +28,23 @@ export function destroyRecipeVmBeforeProjectRemoval(
       ? ownerRepo.connectionId
       : null
   if (!knownServerTarget && !hasProvisionedRoot && !directTarget) {
+    return null
+  }
+  return { knownServerTarget, directTarget }
+}
+
+/** Destroy backing recipe VM before project removal to prevent leaks. Return false synchronously without a VM; resolve true if VM destruction also removed the owning managed server/catalog. */
+export function destroyRecipeVmBeforeProjectRemoval(
+  state: Pick<AppState, 'runtimeEnvironments' | 'worktreesByRepo'>,
+  ownerRepo: Pick<Repo, 'id' | 'connectionId'>,
+  ownerHostId: ExecutionHostId,
+  workspaceIds: string[]
+): Promise<boolean> | false {
+  const targets = getRecipeVmRemovalTargets(state, ownerRepo, ownerHostId)
+  if (!targets) {
     return false
   }
-  return destroyRecipeVm(ownerHostId, workspaceIds, knownServerTarget, directTarget)
+  return destroyRecipeVm(ownerHostId, workspaceIds, targets.knownServerTarget, targets.directTarget)
 }
 
 async function destroyRecipeVm(

@@ -6,8 +6,8 @@ import {
   resolveViewedUnreadSubjectKey,
   type AgentAttentionTurnRecords
 } from '@/attention/agent-attention-acknowledgement'
-import { createTerminalAttentionSurface } from '@/components/terminal-pane/terminal-attention-surface'
-import { createStructuredAttentionSurface } from '@/components/native-chat/structured-attention-surface'
+import { createTerminalAttentionSurface } from '@/components/terminal-pane/notifications/terminal-attention-surface'
+import { createStructuredAttentionSurface } from '@/components/native-chat/session/attention/structured-attention-surface'
 import type { AutoAckTabTarget } from './agent-auto-ack-targets'
 import {
   emitAgentSubjectReads,

@@ -1,5 +1,5 @@
-import { hasUnambiguousStartTime } from '../pty-descendant-termination'
-import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
+import { hasUnambiguousStartTime } from '../pty/process-retirement/pty-descendant-termination'
+import { recordSelfInitiatedTreeKill } from '../crash-reporting/process-exits/self-initiated-tree-kill-log'
 import { setTimeout as delay } from 'node:timers/promises'
 import { readPosixProcessRow, type ProcessRowRead } from './provider-process-row-read'
 

@@ -15,6 +15,7 @@ type SharedControlDiagnosticsCounts = {
   pendingRequestCount: number
   subscriptionCount: number
   reconnectAttempt: number
+  unresponsiveSince: number | null
 }
 
 export class SharedControlDiagnosticsTracker {
@@ -94,7 +95,8 @@ export class SharedControlDiagnosticsTracker {
       lastClose: this.lastClose,
       lastError: this.lastError,
       ...(this.lastCloseCause ? { lastCloseCause: this.lastCloseCause } : {}),
-      ...(this.lastRttMs === null ? {} : { lastRttMs: this.lastRttMs })
+      ...(this.lastRttMs === null ? {} : { lastRttMs: this.lastRttMs }),
+      ...(args.unresponsiveSince === null ? {} : { unresponsiveSince: args.unresponsiveSince })
     }
   }
 
@@ -113,6 +115,7 @@ export class SharedControlDiagnosticsTracker {
       previous.lastConnectedAt === diagnostics.lastConnectedAt &&
       closeUnchanged &&
       previous.lastCloseCause === diagnostics.lastCloseCause &&
+      previous.unresponsiveSince === diagnostics.unresponsiveSince &&
       previous.lastError === diagnostics.lastError
     ) {
       return

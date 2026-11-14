@@ -1,7 +1,7 @@
 import type {
   WorkspaceCleanupSnapshotPruneBatchArgs,
   WorkspaceCleanupSnapshotPruneRecordArgs
-} from '../../../shared/workspace-cleanup'
+} from '../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   finalizeWorkspaceCleanupScanSnapshotPrunes,
   pruneWorkspaceCleanupScanSnapshots,

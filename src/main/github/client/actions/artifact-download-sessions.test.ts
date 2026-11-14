@@ -5,7 +5,7 @@ import {
   readArtifactSession,
   releaseArtifactSession
 } from './artifact-download-sessions'
-import { ACTIONS_ARTIFACT_CHUNK_BYTES } from '../../../../shared/github/actions-artifact-types'
+import { ACTIONS_ARTIFACT_CHUNK_BYTES } from '../../../../shared/github/actions/actions-artifact-types'
 import { EventEmitter } from 'node:events'
 import { abortWhenRendererGone } from '../../../ipc/renderer-lifetime-abort'
 afterEach(() => vi.useRealTimers())

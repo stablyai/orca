@@ -1,12 +1,16 @@
 import type { AgentKind } from '../../../shared/telemetry-events'
-import { getAgentResumeArgv } from '../../../shared/agent-resume-argv'
+import { publishedOrcaSessionId } from '../identity/pane-agent-identities'
+import { getAgentResumeArgv } from '../../../shared/agent-launch/startup/agent-resume-argv'
 import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
+import {
+  parseLegacyNumericPaneKey,
+  parsePaneKey
+} from '../../../shared/workspace-layout/stable-pane-id'
 import {
   pickHostTurnEnd,
-  type AgentStatusIpcPayload,
   type AgentType
-} from '../../../shared/agent-status-types'
+} from '../../../shared/agent-status/contracts/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { AGENT_PROMPT_SENT_AGENT_KINDS } from './server-constants'
 import { MAX_PANE_KEY_LEN } from '../../../shared/agent-hook-listener/listener-limits'
@@ -72,11 +76,12 @@ export function toAgentStatusIpcPayload(
     ...(entry.structuredHost ? { structuredHost: entry.structuredHost } : {}),
     ...(entry.terminalHandle ? { terminalHandle: entry.terminalHandle } : {}),
     ...(entry.programStatus ? { programStatus: entry.programStatus } : {}),
+    ...(publishedOrcaSessionId(entry.agentIdentity) !== undefined
+      ? { orcaSessionId: publishedOrcaSessionId(entry.agentIdentity) }
+      : {}),
     ...entry.payload
   }
 }
-
-export { isToolProgressWorkingAfterInterrupt } from '../../../shared/agent-hook-cancel-verdict-latch'
 
 export function paneCacheKeyTabId(key: string): string | null {
   const paneKey = key.split('\0', 1)[0] ?? key

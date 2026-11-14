@@ -2,11 +2,11 @@ import { join } from 'node:path'
 import {
   getEndpointFileName,
   writeEndpointFile
-} from '../../../shared/agent-hook-listener/endpoint-publication'
+} from '../../../shared/agent-hook-listener/transport/endpoint-publication'
 import {
   ORCA_HOOK_PROTOCOL_VERSION,
   ORCA_HOOK_RAW_JSON_TRANSPORT
-} from '../../../shared/agent-hook-types'
+} from '../../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { AgentHookServerIngestRemote } from './server-ingest-remote'
 
 export abstract class AgentHookServerRuntimeEnv extends AgentHookServerIngestRemote {
@@ -59,6 +59,6 @@ export abstract class AgentHookServerRuntimeEnv extends AgentHookServerIngestRem
       ? join(userDataPath, 'agent-hooks', endpointNamespace)
       : join(userDataPath, 'agent-hooks')
     this.endpointFilePathCache = join(this.endpointDir, getEndpointFileName())
-    this.lastStatusFilePath = join(this.endpointDir, 'last-status.json')
+    this.setStatusFilePath(join(this.endpointDir, 'last-status.json'))
   }
 }

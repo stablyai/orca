@@ -1,14 +1,14 @@
 import { useState } from 'react'
-import { useActionsRepositories } from '@/components/right-sidebar/use-actions-repositories'
-import { useActionsRuns } from '@/components/right-sidebar/use-actions-runs'
-import { actionsRepoProbeKey } from '@/components/right-sidebar/actions-repositories'
-import { ActionsChoice } from '@/components/right-sidebar/ActionsChoice'
+import { useActionsRepositories } from '@/components/right-sidebar/actions/use-actions-repositories'
+import { useActionsRuns } from '@/components/right-sidebar/actions/use-actions-runs'
+import { actionsRepoProbeKey } from '@/components/right-sidebar/actions/actions-repositories'
+import { ActionsChoice } from '@/components/right-sidebar/actions/ActionsChoice'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { ActionsFilters } from './ActionsFilters'
 import { ActionsList } from './ActionsList'
 import { ActionsTaskDetail } from './ActionsTaskDetail'
-import type { ActionsRun } from '../../../../../../shared/github/actions-types'
+import type { ActionsRun } from '../../../../../../shared/github/actions/actions-types'
 
 /** Require a verified registered GitHub repository before exposing run browsing and download controls. */
 export function TaskPageActions({ selectedRepoIds }: { selectedRepoIds: ReadonlySet<string> }) {

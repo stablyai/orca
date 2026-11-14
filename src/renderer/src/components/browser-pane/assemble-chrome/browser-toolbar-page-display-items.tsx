@@ -10,7 +10,7 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   browserPageZoomLevelToPercent,
   nextBrowserPageZoomLevel,
@@ -36,12 +36,13 @@ export function BrowserToolbarZoomRow({
   display: BrowserPageSiteDisplay | null
   onZoom: (direction: BrowserPageZoomDirection) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const zoomLevel = display?.zoomLevel ?? 0
   const percent = browserPageZoomLevelToPercent(zoomLevel)
   return (
     <DropdownMenuItem
       disabled={!display?.site}
-      aria-label={translate(
+      aria-label={t(
         'auto.components.browser.pane.BrowserToolbarMenu.zoomPercent',
         'Zoom {{value0}}%',
         { value0: percent }
@@ -57,17 +58,14 @@ export function BrowserToolbarZoomRow({
       }}
     >
       <ZoomIn className="mr-2 size-3.5" />
-      {translate('auto.components.browser.pane.BrowserToolbarMenu.zoom', 'Zoom')}
+      {t('auto.components.browser.pane.BrowserToolbarMenu.zoom', 'Zoom')}
       <span className="ml-auto flex items-center">
         <Button
           variant="ghost"
           size="icon-xs"
           tabIndex={-1}
           disabled={nextBrowserPageZoomLevel(zoomLevel, 'out') === zoomLevel}
-          aria-label={translate(
-            'auto.components.browser.pane.BrowserToolbarMenu.zoomOut',
-            'Zoom out'
-          )}
+          aria-label={t('auto.components.browser.pane.BrowserToolbarMenu.zoomOut', 'Zoom out')}
           onClick={() => onZoom('out')}
         >
           <Minus />
@@ -76,10 +74,7 @@ export function BrowserToolbarZoomRow({
           variant="ghost"
           size="xs"
           tabIndex={-1}
-          aria-label={translate(
-            'auto.components.browser.pane.BrowserToolbarMenu.resetZoom',
-            'Reset zoom'
-          )}
+          aria-label={t('auto.components.browser.pane.BrowserToolbarMenu.resetZoom', 'Reset zoom')}
           onClick={() => onZoom('reset')}
         >
           <span className="min-w-8 tabular-nums">{percent}%</span>
@@ -89,10 +84,7 @@ export function BrowserToolbarZoomRow({
           size="icon-xs"
           tabIndex={-1}
           disabled={nextBrowserPageZoomLevel(zoomLevel, 'in') === zoomLevel}
-          aria-label={translate(
-            'auto.components.browser.pane.BrowserToolbarMenu.zoomIn',
-            'Zoom in'
-          )}
+          aria-label={t('auto.components.browser.pane.BrowserToolbarMenu.zoomIn', 'Zoom in')}
           onClick={() => onZoom('in')}
         >
           <Plus />
@@ -102,10 +94,7 @@ export function BrowserToolbarZoomRow({
           size="icon-xs"
           tabIndex={-1}
           disabled={!display?.siteHasZoom}
-          aria-label={translate(
-            'auto.components.browser.pane.BrowserToolbarMenu.resetZoom',
-            'Reset zoom'
-          )}
+          aria-label={t('auto.components.browser.pane.BrowserToolbarMenu.resetZoom', 'Reset zoom')}
           onClick={() => onZoom('reset')}
         >
           <RotateCcw />
@@ -126,11 +115,12 @@ export function BrowserToolbarAppearanceSub({
   display: BrowserPageSiteDisplay | null
   onSetColorScheme: (colorScheme: BrowserSiteColorScheme | null) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger disabled={!display?.site}>
         <SunMoon className="mr-2 size-3.5" />
-        {translate('auto.components.browser.pane.BrowserToolbarMenu.appearance', 'Appearance')}
+        {t('auto.components.browser.pane.BrowserToolbarMenu.appearance', 'Appearance')}
       </DropdownMenuSubTrigger>
       <DropdownMenuPortal>
         <DropdownMenuSubContent data-browser-page-menu-id={browserPageId}>
@@ -141,20 +131,17 @@ export function BrowserToolbarAppearanceSub({
             }
           >
             <DropdownMenuRadioItem value={MATCH_ORCA_VALUE}>
-              {translate(
+              {t(
                 'auto.components.browser.pane.BrowserToolbarMenu.appearanceMatchOrca',
                 'Match Orca'
               )}
             </DropdownMenuRadioItem>
             <DropdownMenuSeparator />
             <DropdownMenuRadioItem value="light">
-              {translate(
-                'auto.components.browser.pane.BrowserToolbarMenu.appearanceLight',
-                'Light'
-              )}
+              {t('auto.components.browser.pane.BrowserToolbarMenu.appearanceLight', 'Light')}
             </DropdownMenuRadioItem>
             <DropdownMenuRadioItem value="dark">
-              {translate('auto.components.browser.pane.BrowserToolbarMenu.appearanceDark', 'Dark')}
+              {t('auto.components.browser.pane.BrowserToolbarMenu.appearanceDark', 'Dark')}
             </DropdownMenuRadioItem>
           </DropdownMenuRadioGroup>
         </DropdownMenuSubContent>

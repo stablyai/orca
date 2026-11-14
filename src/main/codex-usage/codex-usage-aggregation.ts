@@ -1,4 +1,4 @@
-import { createUsageEventAggregation } from '../usage/usage-event-aggregation'
+import { createUsageEventAggregation } from '../usage/rollups/usage-event-aggregation'
 import type { CodexLongContextTokens, CodexUsageAttributedEvent } from './types'
 
 type CodexUsageMetric = { hasInferredPricing: boolean } & CodexLongContextTokens

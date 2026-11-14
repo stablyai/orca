@@ -1,10 +1,10 @@
 import { useMemo } from 'react'
-import { useProjectHostSetupProjection } from '@/store/selectors'
-import { terminalQuickCommandMatchesWorkspaceProject } from '@/lib/terminal-quick-command-project-scope'
+import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
+import { terminalQuickCommandMatchesWorkspaceProject } from '@/lib/terminal/quick-commands/terminal-quick-command-project-scope'
 import {
   getTerminalQuickCommandScope,
   isTerminalQuickCommandComplete
-} from '../../../shared/terminal-quick-commands'
+} from '../../../shared/terminal/quick-commands/terminal-quick-commands'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type {
   TerminalQuickCommandHost,

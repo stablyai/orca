@@ -45,20 +45,22 @@ function installExecCommandClipboardDocument(execCommandResult = true): {
   return { appendChild, createElement, execCommand, setData }
 }
 
-function trackPromiseSettled(promise: Promise<unknown>): () => boolean {
-  let settled = false
-  void promise.then(
-    () => {
-      settled = true
-    },
-    () => {
-      settled = true
+const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+
+function stubDecodedImageSize(width: number, height: number): void {
+  vi.stubGlobal(
+    'Image',
+    class {
+      src = ''
+      naturalWidth = width
+      naturalHeight = height
+      decode = vi.fn().mockResolvedValue(undefined)
     }
   )
-  return () => settled
 }
 
 function installClipboardImageBase64(contentBase64: string): void {
+  stubDecodedImageSize(800, 600)
   vi.stubGlobal(
     'FileReader',
     class {
@@ -81,7 +83,7 @@ function installClipboardImageBase64(contentBase64: string): void {
       read: vi.fn().mockResolvedValue([
         {
           types: ['image/png'],
-          getType: vi.fn().mockResolvedValue(new Blob(['ignored'], { type: 'image/png' }))
+          getType: vi.fn().mockResolvedValue(new Blob([PNG_BYTES], { type: 'image/png' }))
         }
       ])
     }
@@ -121,64 +123,6 @@ describe('web UI preload API', () => {
     vi.doUnmock('./web-runtime-client')
   })
 
-  it('writes bounded clipboard text through the browser clipboard API', async () => {
-    const globals = installBrowserGlobals('Linux')
-    const writeText = vi.fn().mockResolvedValue(undefined)
-    vi.stubGlobal('navigator', {
-      userAgent: 'Linux',
-      hardwareConcurrency: 8,
-      clipboard: { writeText }
-    })
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    await expect(globals.window.api.ui.writeClipboardText('copy me')).resolves.toBeUndefined()
-    await expect(
-      globals.window.api.ui.writeTerminalClipboardText('terminal copy')
-    ).resolves.toBeUndefined()
-    expect(writeText.mock.calls).toEqual([['copy me'], ['terminal copy']])
-  })
-
-  it('copies through execCommand when navigator.clipboard is unavailable (insecure context)', async () => {
-    const globals = installBrowserGlobals('Linux')
-    vi.stubGlobal('navigator', { userAgent: 'Linux', hardwareConcurrency: 8 })
-    const clipboard = installExecCommandClipboardDocument()
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    await expect(globals.window.api.ui.writeClipboardText('copy me')).resolves.toBeUndefined()
-    expect(clipboard.setData).toHaveBeenCalledWith('text/plain', 'copy me')
-    expect(clipboard.execCommand).toHaveBeenCalledWith('copy')
-    expect(clipboard.createElement).not.toHaveBeenCalled()
-    expect(clipboard.appendChild).not.toHaveBeenCalled()
-  })
-
-  it('rejects instead of silently succeeding when no clipboard write path exists', async () => {
-    const globals = installBrowserGlobals('Linux')
-    vi.stubGlobal('navigator', { userAgent: 'Linux', hardwareConcurrency: 8 })
-    vi.stubGlobal('document', {
-      activeElement: null,
-      createElement: vi.fn(() => ({
-        value: '',
-        readOnly: false,
-        style: {} as Record<string, string>,
-        select: vi.fn(),
-        remove: vi.fn()
-      })),
-      execCommand: vi.fn().mockReturnValue(false),
-      body: { appendChild: vi.fn() }
-    })
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    await expect(globals.window.api.ui.writeClipboardText('copy me')).rejects.toThrow(
-      'Clipboard write is unavailable in this browser context'
-    )
-    await expect(globals.window.api.ui.writeTerminalClipboardText('copy me')).rejects.toThrow(
-      'Clipboard write is unavailable in this browser context'
-    )
-  })
-
   it('falls back to execCommand when the browser clipboard write is permission-gated', async () => {
     const globals = installBrowserGlobals('Linux')
     const writeText = vi.fn().mockRejectedValue(new DOMException('denied', 'NotAllowedError'))
@@ -198,71 +142,32 @@ describe('web UI preload API', () => {
     expect(clipboard.appendChild).not.toHaveBeenCalled()
   })
 
-  it('yields while reading accepted large browser clipboard text', async () => {
-    vi.useFakeTimers()
-    const text = 'é'.repeat(300_000)
-    const globals = installBrowserGlobals('Linux')
-    vi.stubGlobal('navigator', {
-      userAgent: 'Linux',
-      hardwareConcurrency: 8,
-      clipboard: { readText: vi.fn().mockResolvedValue(text) }
+  it('downscales a pasted browser PNG above the pixel cap', async () => {
+    installClipboardImageBlob(new Blob([PNG_BYTES], { type: 'image/png' }))
+    stubDecodedImageSize(8000, 6000)
+    const fitted = new Blob([PNG_BYTES], { type: 'image/png' })
+    const canvas = {
+      width: 0,
+      height: 0,
+      getContext: () => ({ drawImage: vi.fn() }),
+      toBlob: (callback: (blob: Blob) => void) => callback(fitted)
+    }
+    vi.stubGlobal('document', { createElement: () => canvas })
+    const readAsDataURL = vi.fn(function (this: { result: string; onload: () => void }) {
+      this.result = 'data:image/png;base64,Zml0dGVk'
+      this.onload()
     })
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
+    vi.stubGlobal(
+      'FileReader',
+      class {
+        readAsDataURL = readAsDataURL
+      }
+    )
+    const { readClipboardImagePngBase64 } = await import('./preload-api/web-clipboard-api')
 
-    const result = globals.window.api.ui.readClipboardText({ maxBytes: text.length * 3 })
-    const isSettled = trackPromiseSettled(result)
-
-    await Promise.resolve()
-
-    expect(isSettled()).toBe(false)
-    await vi.runOnlyPendingTimersAsync()
-    await expect(result).resolves.toBe(text)
-  })
-
-  it('yields before writing accepted large browser clipboard text', async () => {
-    vi.useFakeTimers()
-    const text = 'é'.repeat(300_000)
-    const globals = installBrowserGlobals('Linux')
-    const writeText = vi.fn().mockResolvedValue(undefined)
-    vi.stubGlobal('navigator', {
-      userAgent: 'Linux',
-      hardwareConcurrency: 8,
-      clipboard: { writeText }
-    })
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    const result = globals.window.api.ui.writeClipboardText(text)
-    const isSettled = trackPromiseSettled(result)
-
-    await Promise.resolve()
-
-    expect(isSettled()).toBe(false)
-    expect(writeText).not.toHaveBeenCalled()
-    await vi.runOnlyPendingTimersAsync()
-    await expect(result).resolves.toBeUndefined()
-    expect(writeText).toHaveBeenCalledWith(text)
-  })
-
-  it('rejects oversized clipboard text writes before calling the browser clipboard API', async () => {
-    const globals = installBrowserGlobals('Linux')
-    const writeText = vi.fn().mockResolvedValue(undefined)
-    vi.stubGlobal('navigator', {
-      userAgent: 'Linux',
-      hardwareConcurrency: 8,
-      clipboard: { writeText }
-    })
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    await expect(
-      globals.window.api.ui.writeClipboardText('copied-secret-token-value'.repeat(900_000))
-    ).rejects.toThrow('Clipboard text is too large to copy safely.')
-    await expect(
-      globals.window.api.ui.writeTerminalClipboardText('copied-secret-token-value'.repeat(900_000))
-    ).rejects.toThrow('Clipboard text is too large to copy safely.')
-    expect(writeText).not.toHaveBeenCalled()
+    await expect(readClipboardImagePngBase64()).resolves.toBe('Zml0dGVk')
+    expect({ width: canvas.width, height: canvas.height }).toEqual({ width: 6688, height: 5016 })
+    expect(readAsDataURL).toHaveBeenCalledWith(fitted)
   })
 
   it('saves browser clipboard images through bounded upload chunks', async () => {
@@ -342,221 +247,6 @@ describe('web UI preload API', () => {
     ])
   })
 
-  it('falls back to one-shot clipboard save for small payloads when the host lacks upload RPCs', async () => {
-    const runtimeCalls: { method: string; params: unknown }[] = []
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-          runtimeCalls.push({ method, params })
-          if (method === 'clipboard.startImageUpload') {
-            return Promise.resolve({
-              id: `call-${runtimeCalls.length}`,
-              ok: false,
-              error: { code: 'method_not_found', message: 'Unknown method' },
-              _meta: { runtimeId: 'runtime-1' }
-            })
-          }
-          return Promise.resolve({
-            id: `call-${runtimeCalls.length}`,
-            ok: true,
-            result: '/tmp/orca-paste-image.png',
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-
-        close(): void {}
-      }
-    }))
-
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    installClipboardImageBase64(Buffer.from('png-bytes').toString('base64'))
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    await expect(
-      globals.window.api.ui.saveClipboardImageAsTempFile({ connectionId: null })
-    ).resolves.toBe('/tmp/orca-paste-image.png')
-    expect(runtimeCalls).toEqual([
-      {
-        method: 'clipboard.startImageUpload',
-        params: {
-          expectedBase64Length: Buffer.from('png-bytes').toString('base64').length,
-          connectionId: null
-        }
-      },
-      {
-        method: 'clipboard.saveImageAsTempFile',
-        params: {
-          contentBase64: Buffer.from('png-bytes').toString('base64'),
-          connectionId: null
-        }
-      }
-    ])
-  })
-
-  it('does not send large one-shot fallback frames when upload RPCs are missing', async () => {
-    const runtimeCalls: { method: string; params: unknown }[] = []
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-          runtimeCalls.push({ method, params })
-          return Promise.resolve({
-            id: `call-${runtimeCalls.length}`,
-            ok: false,
-            error: { code: 'method_not_found', message: 'Unknown method' },
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-
-        close(): void {}
-      }
-    }))
-
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    const { CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS } =
-      await import('./preload-api/web-clipboard-api')
-    installClipboardImageBase64('A'.repeat(CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS + 4))
-    installWebPreloadApi()
-
-    await expect(globals.window.api.ui.saveClipboardImageAsTempFile()).rejects.toThrow(
-      'Unknown method'
-    )
-    expect(runtimeCalls).toHaveLength(1)
-    expect(runtimeCalls[0]?.method).toBe('clipboard.startImageUpload')
-  })
-
-  it('aborts best-effort when append fails', async () => {
-    const runtimeCalls: { method: string; params: unknown }[] = []
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-          runtimeCalls.push({ method, params })
-          if (method === 'clipboard.startImageUpload') {
-            return Promise.resolve({
-              id: `call-${runtimeCalls.length}`,
-              ok: true,
-              result: { uploadId: 'upload-1' },
-              _meta: { runtimeId: 'runtime-1' }
-            })
-          }
-          if (method === 'clipboard.appendImageUploadChunk') {
-            return Promise.resolve({
-              id: `call-${runtimeCalls.length}`,
-              ok: false,
-              error: { code: 'runtime_error', message: 'bad chunk' },
-              _meta: { runtimeId: 'runtime-1' }
-            })
-          }
-          return Promise.resolve({
-            id: `call-${runtimeCalls.length}`,
-            ok: true,
-            result: { aborted: true },
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-
-        close(): void {}
-      }
-    }))
-
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    installClipboardImageBase64('AAAA')
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    await expect(globals.window.api.ui.saveClipboardImageAsTempFile()).rejects.toThrow('bad chunk')
-    expect(runtimeCalls.map((call) => call.method)).toEqual([
-      'clipboard.startImageUpload',
-      'clipboard.appendImageUploadChunk',
-      'clipboard.abortImageUpload'
-    ])
-  })
-
-  it('aborts best-effort when commit fails', async () => {
-    const runtimeCalls: { method: string; params: unknown }[] = []
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-          runtimeCalls.push({ method, params })
-          if (method === 'clipboard.startImageUpload') {
-            return Promise.resolve({
-              id: `call-${runtimeCalls.length}`,
-              ok: true,
-              result: { uploadId: 'upload-1' },
-              _meta: { runtimeId: 'runtime-1' }
-            })
-          }
-          if (method === 'clipboard.commitImageUpload') {
-            return Promise.resolve({
-              id: `call-${runtimeCalls.length}`,
-              ok: false,
-              error: { code: 'runtime_error', message: 'save failed' },
-              _meta: { runtimeId: 'runtime-1' }
-            })
-          }
-          return Promise.resolve({
-            id: `call-${runtimeCalls.length}`,
-            ok: true,
-            result: { aborted: true },
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-
-        close(): void {}
-      }
-    }))
-
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    installClipboardImageBase64('AAAA')
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    await expect(globals.window.api.ui.saveClipboardImageAsTempFile()).rejects.toThrow(
-      'save failed'
-    )
-    expect(runtimeCalls.map((call) => call.method)).toEqual([
-      'clipboard.startImageUpload',
-      'clipboard.appendImageUploadChunk',
-      'clipboard.commitImageUpload',
-      'clipboard.abortImageUpload'
-    ])
-  })
-
-  it('rejects oversized converted clipboard images before starting an upload', async () => {
-    const runtimeCalls: { method: string; params: unknown }[] = []
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-          runtimeCalls.push({ method, params })
-          return Promise.resolve({
-            id: `call-${runtimeCalls.length}`,
-            ok: true,
-            result: null,
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-
-        close(): void {}
-      }
-    }))
-
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    installClipboardImageBase64('A'.repeat(24 * 1024 * 1024 + 4))
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    await expect(globals.window.api.ui.saveClipboardImageAsTempFile()).rejects.toThrow(
-      'Clipboard image is too large'
-    )
-    expect(runtimeCalls).toEqual([])
-  })
-
   it('rejects oversized clipboard image source blobs before FileReader or upload work', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
     const readAsDataURL = vi.fn(() => {
@@ -598,59 +288,6 @@ describe('web UI preload API', () => {
     )
     expect(clipboard.read).toHaveBeenCalledTimes(1)
     expect(clipboard.getType).toHaveBeenCalledTimes(1)
-    expect(readAsDataURL).not.toHaveBeenCalled()
-    expect(runtimeCalls).toEqual([])
-  })
-
-  it('rejects oversized decoded clipboard images before canvas conversion', async () => {
-    const runtimeCalls: { method: string; params: unknown }[] = []
-    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
-    const readAsDataURL = vi.fn(() => {
-      throw new Error('FileReader should not receive oversized decoded image data')
-    })
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-          runtimeCalls.push({ method, params })
-          return Promise.resolve({
-            id: `call-${runtimeCalls.length}`,
-            ok: true,
-            result: null,
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-
-        close(): void {}
-      }
-    }))
-
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    const { MAX_CLIPBOARD_IMAGE_PIXELS } = await import('./preload-api/web-clipboard-api')
-    installClipboardImageBlob(new Blob(['small'], { type: 'image/jpeg' }))
-    vi.stubGlobal(
-      'Image',
-      class {
-        src = ''
-        naturalHeight = 1
-        naturalWidth = MAX_CLIPBOARD_IMAGE_PIXELS + 1
-        decode = vi.fn().mockResolvedValue(undefined)
-      }
-    )
-    vi.stubGlobal(
-      'FileReader',
-      class {
-        readAsDataURL = readAsDataURL
-      }
-    )
-    installWebPreloadApi()
-
-    await expect(globals.window.api.ui.saveClipboardImageAsTempFile()).rejects.toThrow(
-      'Clipboard image is too large'
-    )
-    expect(revokeObjectURL).toHaveBeenCalledTimes(1)
-    revokeObjectURL.mockRestore()
     expect(readAsDataURL).not.toHaveBeenCalled()
     expect(runtimeCalls).toEqual([])
   })

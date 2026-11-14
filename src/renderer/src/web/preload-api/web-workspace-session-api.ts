@@ -8,7 +8,7 @@ import {
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
-} from '../../../../shared/workspace-session-state-types'
+} from '../../../../shared/workspace-session/workspace-session-state-types'
 import { sanitizeWebRuntimeWorkspaceSession } from '../web-workspace-session'
 import { readLocalWebUIState } from './web-preferences-store'
 import { requireActiveEnvironmentOrNull } from './web-runtime-session'
@@ -84,8 +84,7 @@ export function createWebWorkspaceSessionApi(): Partial<PreloadApi> {
       // localStorage writes synchronously, so there is no deferred web flush.
       flush: async () => {},
       // No local snapshot store: host-run panes read theirs from the host (host-terminal-scrollback-hydration).
-      readTerminalScrollback: () => null,
-      hasTerminalScrollback: () => false
+      readTerminalScrollback: async () => null
     }
   }
 }

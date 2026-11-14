@@ -3,17 +3,17 @@ import {
   openCookieDebuggerSession,
   type CookieClearDebugger
 } from './browser-cookie-debugger-session'
-import { normalizeCookieDomain } from './browser-cookie-import-policy'
+import { normalizeCookieDomain } from './policy/cookie-domain'
 import type {
   CookieClearIdentity,
   CookieClearPartitionKey,
   CookieClearStore,
   CookieImportWriteStore,
   CookieJarCdpReadStore
-} from './browser-cookie-import-clear'
+} from './storage/cookie-store-contracts'
 import { restoreEveryCookieIdentity } from './browser-cookie-identity-restore'
 import { normalizeCookiePartitionSite } from './sources/browser-cookie-source-partition'
-import type { CdpCookie } from '../browser-cdp-cookie'
+import { cdpCookiesFromCommand, type CdpCookie } from './browser-cdp-cookie'
 
 function cdpSameSite(sameSite: Cookie['sameSite']): 'Strict' | 'Lax' | 'None' | undefined {
   if (sameSite === 'strict') {
@@ -150,14 +150,6 @@ export function cdpSetCookieParamsFromIdentity(
     ...(identity.expirationDate ? { expires: identity.expirationDate } : {}),
     ...(identity.partitionKey ? { partitionKey: identity.partitionKey } : {})
   }
-}
-
-function cdpCookiesFromCommand(value: unknown): CdpCookie[] {
-  if (typeof value !== 'object' || value === null || !('cookies' in value)) {
-    return []
-  }
-  const cookies = value.cookies
-  return Array.isArray(cookies) ? cookies : []
 }
 
 function cdpSetCookieSucceeded(value: unknown): boolean {

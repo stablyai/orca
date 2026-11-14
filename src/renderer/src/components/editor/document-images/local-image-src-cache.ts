@@ -1,0 +1,173 @@
+import {
+  clearLocalImageCachePins,
+  isLocalImageCacheKeyPinned,
+  prunePinnedLocalImageCache,
+  unpinLocalImageCacheKey
+} from './local-image-cache-pinning'
+
+const BLOB_URL_CACHE_MAX_SIZE = 100
+// Bound retained encoded image payload separately from the reusable entry target.
+const BLOB_URL_CACHE_MAX_BYTES = 128 * 1024 * 1024
+
+export const blobUrlCache = new Map<string, string>()
+const blobUrlCacheBytes = new Map<string, number>()
+export const inFlightBlobUrlLoads = new Map<string, Promise<string | null>>()
+
+let cacheGeneration = 0
+const cacheListeners = new Set<() => void>()
+const pendingBlobUrlRevocations = new Set<string>()
+let pendingBlobUrlRevocationTimer: ReturnType<typeof setTimeout> | null = null
+
+function pruneImageCache(): void {
+  prunePinnedLocalImageCache(blobUrlCache, BLOB_URL_CACHE_MAX_SIZE, (url) => {
+    URL.revokeObjectURL(url)
+  })
+  for (const key of blobUrlCacheBytes.keys()) {
+    if (!blobUrlCache.has(key)) {
+      blobUrlCacheBytes.delete(key)
+    }
+  }
+  let retainedBytes = 0
+  for (const byteLength of blobUrlCacheBytes.values()) {
+    retainedBytes += byteLength
+  }
+  while (retainedBytes > BLOB_URL_CACHE_MAX_BYTES) {
+    const key = Array.from(blobUrlCache.keys()).find(
+      (candidate) => !isLocalImageCacheKeyPinned(candidate)
+    )
+    if (key === undefined) {
+      return
+    }
+    const url = blobUrlCache.get(key)
+    blobUrlCache.delete(key)
+    retainedBytes -= blobUrlCacheBytes.get(key) ?? 0
+    blobUrlCacheBytes.delete(key)
+    if (url) {
+      URL.revokeObjectURL(url)
+    }
+  }
+}
+
+export function cacheLocalImageBlob(key: string, url: string, byteLength: number): boolean {
+  if (byteLength > BLOB_URL_CACHE_MAX_BYTES) {
+    URL.revokeObjectURL(url)
+    return false
+  }
+  const previousUrl = blobUrlCache.get(key)
+  const previousBytes = blobUrlCacheBytes.get(key) ?? 0
+  let retainedBytes = 0
+  for (const bytes of blobUrlCacheBytes.values()) {
+    retainedBytes += bytes
+  }
+  let projectedEntries = blobUrlCache.size + (previousUrl === undefined ? 1 : 0)
+  let projectedBytes = retainedBytes - previousBytes + byteLength
+
+  // Active displays share the strict byte budget; the entry target bounds reusable, unleased images.
+  while (projectedEntries > BLOB_URL_CACHE_MAX_SIZE || projectedBytes > BLOB_URL_CACHE_MAX_BYTES) {
+    const candidate = Array.from(blobUrlCache.keys()).find(
+      (candidateKey) => candidateKey !== key && !isLocalImageCacheKeyPinned(candidateKey)
+    )
+    if (candidate === undefined) {
+      if (isLocalImageCacheKeyPinned(key) && projectedBytes <= BLOB_URL_CACHE_MAX_BYTES) {
+        break
+      }
+      URL.revokeObjectURL(url)
+      return false
+    }
+    const candidateUrl = blobUrlCache.get(candidate)
+    const candidateBytes = blobUrlCacheBytes.get(candidate) ?? 0
+    blobUrlCache.delete(candidate)
+    blobUrlCacheBytes.delete(candidate)
+    projectedEntries -= 1
+    projectedBytes -= candidateBytes
+    if (candidateUrl) {
+      URL.revokeObjectURL(candidateUrl)
+    }
+  }
+  if (previousUrl !== undefined && previousUrl !== url) {
+    URL.revokeObjectURL(previousUrl)
+  }
+  blobUrlCacheBytes.delete(key)
+  blobUrlCacheBytes.set(key, byteLength)
+  blobUrlCache.set(key, url)
+  return true
+}
+
+export function getLocalImageCacheGeneration(): number {
+  return cacheGeneration
+}
+
+export function unpinLocalImageCache(key: string): void {
+  unpinLocalImageCacheKey(key)
+  pruneImageCache()
+}
+
+export function subscribeToLocalImageCacheInvalidation(listener: () => void): () => void {
+  cacheListeners.add(listener)
+  return () => cacheListeners.delete(listener)
+}
+
+function revokePendingBlobUrls(): void {
+  pendingBlobUrlRevocationTimer = null
+  for (const url of pendingBlobUrlRevocations) {
+    URL.revokeObjectURL(url)
+  }
+  pendingBlobUrlRevocations.clear()
+}
+
+function scheduleBlobUrlRevocation(urls: string[]): void {
+  for (const url of urls) {
+    pendingBlobUrlRevocations.add(url)
+  }
+  if (pendingBlobUrlRevocationTimer !== null || pendingBlobUrlRevocations.size === 0) {
+    return
+  }
+  pendingBlobUrlRevocationTimer = setTimeout(revokePendingBlobUrls, 30_000)
+}
+
+export function invalidateLocalImageCache(): void {
+  const staleUrls = Array.from(blobUrlCache.values())
+  blobUrlCache.clear()
+  blobUrlCacheBytes.clear()
+  inFlightBlobUrlLoads.clear()
+  cacheGeneration += 1
+  for (const listener of cacheListeners) {
+    listener()
+  }
+  if (staleUrls.length > 0) {
+    scheduleBlobUrlRevocation(staleUrls)
+  }
+}
+
+export function resetLocalImageCacheState(): void {
+  if (pendingBlobUrlRevocationTimer !== null) {
+    clearTimeout(pendingBlobUrlRevocationTimer)
+    pendingBlobUrlRevocationTimer = null
+  }
+  revokePendingBlobUrls()
+  for (const url of blobUrlCache.values()) {
+    URL.revokeObjectURL(url)
+  }
+  blobUrlCache.clear()
+  blobUrlCacheBytes.clear()
+  clearLocalImageCachePins()
+  inFlightBlobUrlLoads.clear()
+  cacheGeneration = 0
+  pendingBlobUrlRevocations.clear()
+  cacheListeners.clear()
+}
+
+export function disposeLocalImageCacheState(): void {
+  if (typeof window !== 'undefined') {
+    window.removeEventListener('focus', invalidateLocalImageCache)
+  }
+  resetLocalImageCacheState()
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('focus', invalidateLocalImageCache)
+}
+
+if (import.meta !== undefined && import.meta.hot) {
+  import.meta.hot.dispose(disposeLocalImageCacheState)
+}

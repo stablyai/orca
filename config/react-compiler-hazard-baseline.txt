@@ -1,0 +1,5 @@
+# Grandfathered code React Compiler would run differently (<file>#<function>:<hazard>).
+# Generated; never hand-edit. Lower after a fix: pnpm check:react-compiler-compat-ratchet --prune
+1 src/renderer/src/components/agent/agent-launch-picker-drafts.ts#useAgentPickerSetup:discarded-subscription
+1 src/renderer/src/components/native-chat-recovery/offers/native-chat-restart-runtimes.ts#useNativeChatRestartRuntimes:discarded-subscription
+1 src/renderer/src/components/right-sidebar/source-control/ai/use-source-control-action-agent-choice.ts#useSourceControlActionAgentChoice:store-read-in-memo-block

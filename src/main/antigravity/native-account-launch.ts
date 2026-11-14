@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
-import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
+import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-status/process/agent-process-recognition'
 import { isAntigravityFileStorageHost } from './native-credential-backend'
 import { createEncryptedAntigravityAccountStore } from './native-account-store'
 import { getAntigravityAccountService, getAntigravityAccountVaultPath } from './native-account-host'
@@ -47,5 +47,5 @@ export async function prepareAntigravityAccountForLaunch(args: {
       'This agy launch uses a different credential authority from the selected Antigravity account.'
     )
   }
-  await getAntigravityAccountService({ runtime: 'host' }).prepareForLaunch()
+  await (await getAntigravityAccountService({ runtime: 'host' })).prepareForLaunch()
 }

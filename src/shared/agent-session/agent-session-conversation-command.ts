@@ -4,6 +4,23 @@ import type { AgentSessionQueuedSendReceipt } from './agent-session-wire'
 
 export type AgentSessionConversationCommand = 'clear' | 'compact'
 
+/** What the user typed and what a text-driven agent receives. */
+export function agentSessionCompactCommandText(instructions?: string): string {
+  return instructions ? `/compact ${instructions}` : '/compact'
+}
+
+/** The fields a command's mutation is fingerprinted over: host and clients must build the same ones. */
+export function agentSessionConversationCommandFields(
+  command: AgentSessionConversationCommand,
+  options: { instructions?: string; delivery?: 'queue-if-active' } = {}
+): Record<string, string> {
+  return {
+    command,
+    ...(options.instructions ? { instructions: options.instructions } : {}),
+    ...(options.delivery ? { delivery: options.delivery } : {})
+  }
+}
+
 /** How long a client waits for a conversation command: the host may first start an agent at rest. */
 export const AGENT_SESSION_CONVERSATION_COMMAND_TIMEOUT_MS = 195_000
 

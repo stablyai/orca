@@ -3,7 +3,7 @@ import type {
   GitConflictKind,
   GitStatusEntry,
   GitUpstreamStatus
-} from '../../../../../../shared/git-status-types'
+} from '../../../../../../shared/git/status/git-status-types'
 import type { BranchCompareLike, CommitCompareLike, OpenFile } from '../types/open-file'
 import type {
   BranchCompareSnapshot,
@@ -140,7 +140,11 @@ export function reconcileOpenFilesForStatus(
       return [file]
     }
 
-    if (file.mode === 'conflict-review' || file.mode === 'check-details') {
+    if (
+      file.mode === 'conflict-review' ||
+      file.mode === 'check-details' ||
+      file.mode === 'git-graph'
+    ) {
       return [file]
     }
 

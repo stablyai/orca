@@ -1,6 +1,9 @@
 import { webcrypto } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { encodeDeviceProofMessage, verifyDeviceProof } from '../../../shared/device-key-proof'
+import {
+  encodeDeviceProofMessage,
+  verifyDeviceProof
+} from '../../../shared/remote-runtime/pairing/device-key-proof'
 import { getOrCreatePendingWebDeviceKey, webDeviceSigningKey } from './web-device-key'
 
 import { createMemoryWebDeviceKeyStore } from './web-device-key-store'

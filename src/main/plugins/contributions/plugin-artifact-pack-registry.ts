@@ -1,10 +1,10 @@
-import type { PluginContentVerifier } from '../plugin-content-integrity'
+import type { PluginContentVerifier } from '../artifacts/plugin-content-integrity'
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
 import {
   isInvalidDiscoveredPlugin,
   type DiscoveredPlugin,
   type ValidDiscoveredPlugin
-} from '../plugin-discovery'
+} from '../discovery/plugin-discovery'
 
 const ARTIFACT_PACK_LOAD_CONCURRENCY = 4
 
@@ -22,11 +22,12 @@ export class PluginArtifactPackRegistry<Contribution, Entry> {
       contentVerifier: PluginContentVerifier
       contributions: (plugin: ValidDiscoveredPlugin) => readonly Contribution[]
       load: (plugin: ValidDiscoveredPlugin, contribution: Contribution) => Promise<Entry>
+      overlay?(entries: readonly Entry[]): readonly Entry[]
     }
   ) {}
 
   list(): readonly Entry[] {
-    return this.entries
+    return this.options.overlay?.(this.entries) ?? this.entries
   }
 
   error(pluginKey: string): string | null {

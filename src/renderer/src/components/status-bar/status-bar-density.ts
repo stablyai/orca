@@ -152,7 +152,9 @@ export function useStatusBarDensity(): {
     const bind =
       (target: ElementRef) =>
       (node: HTMLElement | null): void => {
-        observerRef.current ??= new ResizeObserver(() => evaluate())
+        if (observerRef.current == null) {
+          observerRef.current = new ResizeObserver(() => evaluate())
+        }
         if (target.current) {
           observerRef.current.unobserve(target.current)
         }

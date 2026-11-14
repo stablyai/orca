@@ -5,7 +5,7 @@ import { readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { hasControlByte, TYPED_STARTUP_LINE_PROMPT_BUDGET_BYTES } from './startup-line-prompt-carry'
-import { quoteStartupArg } from './tui-agent-startup-shell'
+import { quoteStartupArg } from './agent-launch/startup/tui-agent-startup-shell'
 
 export const STAGED_STARTUP_COMMAND_PREFIX = 'orca-launch-'
 

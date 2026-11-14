@@ -1,4 +1,4 @@
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { syncAgentHookCompletionNotificationsForStoreUpdate } from '../agent-hook-completion-notifications'
 import { registerAgentStatusListeners } from './agent-status-listeners'
 import { useAppStore } from '../../store'

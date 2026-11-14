@@ -7,6 +7,7 @@ import { useChatMathRendering } from './chat-markdown-math-rendering'
 import { rehypeWordFade } from './comment-markdown-word-fade'
 import {
   splitMarkdownTopLevelBlocks,
+  type HtmlRendersAsText,
   type MarkdownBlock,
   type MarkdownBlockSplit
 } from './markdown-top-level-blocks'
@@ -59,25 +60,27 @@ export function useMarkdownBlocks(
   growing: boolean,
   math: boolean,
   plugins: RemarkPlugins,
-  extension?: CommentMarkdownExtension
+  extension?: CommentMarkdownExtension,
+  rendersAsText?: HtmlRendersAsText
 ): readonly MarkdownBlock[] {
   const parser = React.useMemo(() => unified().use(remarkParse).use(plugins), [plugins])
   const [state, setState] = React.useState<{
     parser: typeof parser
+    rendersAsText?: HtmlRendersAsText
     split: MarkdownBlockSplit
   } | null>(null)
-  if (state && state.parser !== parser) {
+  // Cuts made while some HTML rendered as text do not hold once it is raw.
+  const kept = state?.rendersAsText === rendersAsText ? state : null
+  if (kept && kept.parser !== parser) {
     const split = {
-      ...state.split,
-      blocks: state.split.blocks.map(
-        ({ tree: _tree, closedFence: _closedFence, ...block }) => block
-      )
+      ...kept.split,
+      blocks: kept.split.blocks.map(({ tree: _tree, closedFence: _closedFence, ...block }) => block)
     }
-    setState({ parser, split })
+    setState({ parser, rendersAsText, split })
     return split.blocks
   }
-  const previous = state?.split ?? null
-  if (!growing && state === null) {
+  const previous = kept?.split ?? null
+  if (!growing && kept === null) {
     return [{ start: 0, line: 1, text: content }]
   }
   if (previous?.source === content) {
@@ -90,9 +93,10 @@ export function useMarkdownBlocks(
     previous,
     math,
     knownGrammar ? (source) => parser.parse(source) : undefined,
-    (tail) => !content.includes('\uFEFF') && !markers?.some((marker) => tail.includes(marker))
+    (tail) => !content.includes('\uFEFF') && !markers?.some((marker) => tail.includes(marker)),
+    rendersAsText
   )
-  setState({ parser, split: next })
+  setState({ parser, rendersAsText, split: next })
   return next.blocks
 }
 

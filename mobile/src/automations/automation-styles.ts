@@ -1,18 +1,12 @@
 import { themedStyleSheet } from '../theme/themed-styles'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input/text-input-font-size'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
 export const automationStyles = themedStyleSheet(() => ({
   screen: { flex: 1, backgroundColor: colors.bgBase },
+  // Inset like Source Control's switch under its bar.
+  tabs: { marginHorizontal: spacing.md, marginTop: spacing.sm, backgroundColor: colors.bgPanel },
   content: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing.xl },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
-  },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   grow: { flex: 1, minWidth: 0 },

@@ -1,6 +1,6 @@
 import { OrcaRuntimeWithRefreshPtyWorktreeRecordsFromController } from './pty-worktree-refresh'
-import type * as PtyControllerContract from '../../runtime-pty-controller-contract'
-import type { PtyProcessInfo } from '../../../providers/pty-process-info'
+import type * as PtyControllerContract from './runtime-pty-controller-contract'
+import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 import {
   type ExecutionHostId,
   getConnectionExecutionHostId
@@ -8,9 +8,18 @@ import {
 import {
   PTY_CONTROLLER_LIST_PROVIDER_MARGIN_MS,
   PTY_CONTROLLER_LIST_TIMEOUT_MS
-} from '../../orca-runtime-postlude'
-import { pruneOldestMapEntry } from '../../prune-oldest-map-entry'
-import { withTimeoutResult } from '../../runtime-async-boundaries'
+} from './pty-controller-inventory-budget'
+import { withTimeoutResult } from '../../../../shared/promise-timeout-fallback'
+
+function pruneOldestMapEntry<K, V>(map: Map<K, V>, maxEntries: number): void {
+  if (map.size <= maxEntries) {
+    return
+  }
+  const oldest = map.keys().next()
+  if (!oldest.done) {
+    map.delete(oldest.value)
+  }
+}
 
 type HostScopedPtyProcesses = { processes: PtyProcessInfo[]; hostIds: ExecutionHostId[] }
 

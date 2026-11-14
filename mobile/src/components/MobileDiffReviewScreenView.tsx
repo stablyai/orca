@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Text, View, type LayoutChangeEvent } from 'react-native'
-import type { useMobileDiffReviewController } from '../session/use-mobile-diff-review-controller'
+import type { useMobileDiffReviewController } from '../source-control/review/use-mobile-diff-review-controller'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { MobileDiffReviewBody } from './MobileDiffReviewBody'
-import { useMobilePrCommentActions } from '../session/use-mobile-pr-comment-actions'
+import { useMobilePrCommentActions } from '../source-control/review/use-mobile-pr-comment-actions'
 import { usePRCommentCardActions } from './pr-sidebar/PRCommentsSection'
 import { MobileDiffReviewDrawers } from './MobileDiffReviewDrawers'
 import { MobileDiffReviewFileSummary } from './MobileDiffReviewFileSummary'
@@ -19,17 +19,19 @@ import {
   resolvePresentationMode,
   shouldShowTrigger
 } from './mobile-pr-sidebar-presentation'
-import { mobileDiffReviewPositionLabel } from '../session/mobile-diff-review-screen-model'
+import { mobileDiffReviewPositionLabel } from '../source-control/review/mobile-diff-review-screen-model'
 import { getRuntimePathBasename } from '../../../src/shared/cross-platform-path'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import type { HostConnectionInputs } from '../transport/connection/client-context-connection-metrics'
 
 type Props = {
   controller: ReturnType<typeof useMobileDiffReviewController>
+  hostConnection: HostConnectionInputs
   onBack: () => void
 }
 
-export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
+export function MobileDiffReviewScreenView({ controller, hostConnection, onBack }: Props) {
   useMobileColorScheme()
   const { isWideLayout } = useResponsiveLayout()
   const insets = useSafeAreaInsets()
@@ -50,17 +52,14 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
   })
   const item = controller.currentItem
   const github = controller.github
-  const refetchPR = controller.refetchPRSidebar
-  const refetchThreads = useCallback(async () => {
-    await refetchPR({ includeDetails: true })
-  }, [refetchPR])
   const threadCommentActions = useMobilePrCommentActions({
+    hostId: controller.hostId,
     client: controller.client,
     connState: controller.connState,
     worktreeId: controller.worktreeId,
     prNumber: github?.prNumber ?? 0,
     prRepo: github?.prRepo ?? null,
-    refetch: refetchThreads
+    queries: controller.prQueries
   })
   const threadActions = usePRCommentCardActions(
     github ? threadCommentActions : undefined,
@@ -139,10 +138,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
             threadsByLine={controller.threadsByLine}
             threadActions={threadActions}
             selectedRange={selectedRange}
-            onPickLines={(range) => {
-              controller.setComposerBody('')
-              controller.openSheet({ kind: 'range', ...range })
-            }}
+            onPickLines={(range) => controller.openNewNoteSheet({ kind: 'range', ...range })}
             scrollToLine={controller.scrollToLine}
             onScrolledToLine={controller.clearScrollToLine}
             onEditNote={controller.openEditComposer}
@@ -167,10 +163,13 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
               state={controller.prSidebarState}
               onRetry={controller.retryPRSidebar}
               refetch={controller.refetchPRSidebar}
-              rereadAfterWrite={controller.rereadPRSidebarAfterWrite}
+              rereadSlices={controller.rereadPRSlices}
+              hostId={controller.hostId}
+              queries={controller.prQueries}
               client={controller.client}
               connState={controller.connState}
               worktreeId={controller.worktreeId}
+              hostConnection={hostConnection}
               gitBranch={controller.prSidebarBranch}
               gitStatus={gitStatus}
               headSha={controller.prSidebarHeadSha}
@@ -190,10 +189,13 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
             state={controller.prSidebarState}
             onRetry={controller.retryPRSidebar}
             refetch={controller.refetchPRSidebar}
-            rereadAfterWrite={controller.rereadPRSidebarAfterWrite}
+            rereadSlices={controller.rereadPRSlices}
+            hostId={controller.hostId}
+            queries={controller.prQueries}
             client={controller.client}
             connState={controller.connState}
             worktreeId={controller.worktreeId}
+            hostConnection={hostConnection}
             gitBranch={controller.prSidebarBranch}
             gitStatus={gitStatus}
             headSha={controller.prSidebarHeadSha}

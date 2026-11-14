@@ -1,4 +1,4 @@
-import { AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH } from './agent-status-types'
+import { AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH } from './agent-status/contracts/agent-status-types'
 
 // OMP’s overlay owns keyboard input; the extension intercepts this OSC and answers through ctx.resolvePlanReview first.
 export const OMP_PLAN_REVIEW_ANSWER_PREFIX = '\x1b]7503;orca-plan-review;'

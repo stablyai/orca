@@ -10,17 +10,17 @@ const { listRepoWorktreesMock, pruneLineageMock, pruneMetadataMock, registerWork
     registerWorktreeRootsMock: vi.fn()
   }))
 
-vi.mock('../../../repo-worktrees', () => ({
+vi.mock('../../../workspaces/catalog/repo-worktrees', () => ({
   listRepoWorktreesForDetectedScan: listRepoWorktreesMock
 }))
-vi.mock('../../../project-runtime-git-options', () => ({
+vi.mock('../../../workspaces/execution-host/project-runtime-git-options', () => ({
   getLocalProjectWorktreeGitOptions: () => ({})
 }))
-vi.mock('../../registered-worktree-roots-cache', () => ({
+vi.mock('../removal/registered-worktree-roots-cache', () => ({
   getRegisteredWorktreeRootsRevision: () => 1,
   registerWorktreeRootsForRepo: registerWorktreeRootsMock
 }))
-vi.mock('../../../worktree-lineage-pruning', () => ({
+vi.mock('../../../workspaces/catalog/worktree-lineage-pruning', () => ({
   pruneLineageForMissingRepoWorktrees: pruneLineageMock
 }))
 vi.mock('./authoritative-local-worktree-metadata-pruning', () => ({
@@ -30,11 +30,14 @@ vi.mock('./authoritative-local-worktree-metadata-pruning', () => ({
 const {
   DETECTED_WORKTREE_SCAN_CACHE_TTL_MS,
   __resetDetectedWorktreeScanCacheForTests,
+  applyFreshDetectedWorktreeScanSideEffects,
   invalidateDetectedWorktreeScanCache,
   listDetectedGitWorktrees
 } = await import('./detected-worktree-scan-cache')
+const { setWorktreeCatalogRouteResolver } =
+  await import('../../../workspaces/catalog/repo-worktree-catalog-route')
 const { invalidateLocalWorktreeMetadataPruneInputs } =
-  await import('../../../local-worktree-metadata-prune-gate')
+  await import('../../../workspaces/catalog/local-worktree-metadata-prune-gate')
 
 const repo = { id: 'repo-1', path: '/repos/one', displayName: 'one' } as Repo
 
@@ -114,5 +117,36 @@ describe('detected worktree scan hygiene gate', () => {
 
     advancePastListingTtl()
     expect((await listDetectedGitWorktrees(store, repo)).hygieneDue).toBe(true)
+  })
+
+  it('stops deleting once the owner retires the route during the prune helper', async () => {
+    let live = true
+    setWorktreeCatalogRouteResolver(() =>
+      live ? { repoPath: repo.path, runtimeKey: 'local:default' } : null
+    )
+    try {
+      const scan = await listDetectedGitWorktrees(store, repo)
+      let helperSawCurrent: boolean | undefined
+      pruneMetadataMock.mockImplementation(async (args: { isCallerCurrent: () => boolean }) => {
+        live = false
+        helperSawCurrent = args.isCallerCurrent()
+        return { scanGenerationCurrent: true, preservedMetadataCandidateIds: new Set() }
+      })
+
+      const applied = await applyFreshDetectedWorktreeScanSideEffects(
+        store,
+        repo,
+        scan.gitWorktrees,
+        scan.metadataPrune,
+        { sideEffectToken: scan.sideEffectToken, hygieneDue: scan.hygieneDue }
+      )
+
+      expect(helperSawCurrent).toBe(false)
+      expect(applied).toBe(false)
+      expect(pruneLineageMock).not.toHaveBeenCalled()
+      expect(scan.authorityCurrent?.()).toBe(false)
+    } finally {
+      setWorktreeCatalogRouteResolver(null)
+    }
   })
 })

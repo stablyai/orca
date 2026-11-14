@@ -1,12 +1,15 @@
-import type { DaemonSessionInventory } from './resource-session-inventory'
 import {
   ptySessionIdentity,
   type PtyListedSession,
   type PtySessionLifecycle
-} from '../../../../shared/pty-listed-session'
+} from '../../../../shared/terminal/pty/lifecycle/pty-listed-session'
 import { isResourceViewInactive } from '../../../../shared/resource-view-admission'
-import { isProvenProcessExit } from '../../../../shared/terminal-exit-cause'
-import { EMPTY_DAEMON_SESSION_INVENTORY, inventoryFromSessions } from './resource-session-inventory'
+import { isProvenProcessExit } from '../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
+import {
+  type DaemonSessionInventory,
+  EMPTY_DAEMON_SESSION_INVENTORY,
+  inventoryFromSessions
+} from './resource-session-inventory'
 
 const COOLDOWN_MS = 100
 const EXIT_PUBLICATION_MS = 50

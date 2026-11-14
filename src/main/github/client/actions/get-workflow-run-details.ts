@@ -2,9 +2,9 @@ import { readActionsRelatedLinks } from './actions-related-links'
 import type {
   ActionsDetailsQuery,
   ActionsRunDetails
-} from '../../../../shared/github/actions-types'
-import { ActionsDetailsQuery as DetailsSchema } from '../../../../shared/rpc-contract/github-actions-params'
-import type { LocalGitExecOptions } from '../../gh-utils'
+} from '../../../../shared/github/actions/actions-types'
+import { ActionsDetailsQuery as DetailsSchema } from '../../../../shared/rpc-contract/github/github-actions-params'
+import type { LocalGitExecOptions } from '../../repositories/github-repository-identity'
 import { actionsJson, withActionsRead } from './actions-read-request'
 import { actionsCount, actionsRecord, mapActionsRun } from './workflow-run-field-mapping'
 import { mapWorkflowJobs } from '../check/check-detail-field-mapping'

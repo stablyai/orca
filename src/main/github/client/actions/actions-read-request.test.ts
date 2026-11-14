@@ -1,16 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import * as gh from '../../gh-utils'
-import * as execution from '../../github-api-repository'
-import * as rateLimit from '../../rate-limit'
+import * as gh from '../../execution/github-operation-slots'
+import * as execution from '../../repositories/github-api-repository'
+import * as rateLimit from '../../api/rate-limit'
 import { withActionsRead } from './actions-read-request'
 import {
   GITHUB_CHECK_DETAILS_HOST_TIMEOUT_MS,
   GITHUB_CHECK_DETAILS_TIMEOUT_MESSAGE
-} from '../../../../shared/github/check-details-deadline'
+} from '../../../../shared/github/checks/check-details-deadline'
 import {
   ACTIONS_ARTIFACT_HOST_TIMEOUT_MS,
   ACTIONS_ARTIFACT_TIMEOUT_MESSAGE
-} from '../../../../shared/github/actions-artifact-types'
+} from '../../../../shared/github/actions/actions-artifact-types'
 
 const repository = { owner: 'acme', repo: 'widgets', host: 'github.enterprise.test' }
 let caller: AbortController

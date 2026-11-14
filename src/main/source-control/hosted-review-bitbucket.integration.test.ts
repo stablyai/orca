@@ -39,93 +39,112 @@ describe('Bitbucket hosted review integration', () => {
     __resetHostedReviewBranchCacheForTests()
   })
 
-  it('resolves a Bitbucket PR through real git remote parsing and HTTP API calls', async () => {
-    const seen: SeenRequest[] = []
-    const server = createServer((req: IncomingMessage, res: ServerResponse) => {
-      const url = new URL(req.url ?? '/', `http://${req.headers.host ?? '127.0.0.1'}`)
-      seen.push({
-        pathname: url.pathname,
-        search: url.search,
-        authorization: req.headers.authorization
-      })
+  it.each([false, true])(
+    'preserves stopped builds only for a complete Bitbucket page (next=%s)',
+    async (next) => {
+      const seen: SeenRequest[] = []
+      const server = createServer((req: IncomingMessage, res: ServerResponse) => {
+        const url = new URL(req.url ?? '/', `http://${req.headers.host ?? '127.0.0.1'}`)
+        seen.push({
+          pathname: url.pathname,
+          search: url.search,
+          authorization: req.headers.authorization
+        })
 
-      if (url.pathname === '/2.0/repositories/team/repo/pullrequests') {
-        sendJson(res, {
-          values: [
-            {
-              id: 12,
-              title: 'Local Bitbucket branch',
-              state: 'OPEN',
-              updated_on: '2026-05-15T00:00:00Z',
-              links: {
-                html: { href: 'https://bitbucket.org/team/repo/pull-requests/12' }
-              },
-              source: {
-                branch: { name: 'feature/bitbucket' },
-                commit: { hash: 'abc123' }
+        if (url.pathname === '/2.0/repositories/team/repo/pullrequests') {
+          sendJson(res, {
+            values: [
+              {
+                id: 12,
+                title: 'Local Bitbucket branch',
+                state: 'OPEN',
+                updated_on: '2026-05-15T00:00:00Z',
+                links: {
+                  html: { href: 'https://bitbucket.org/team/repo/pull-requests/12' }
+                },
+                source: {
+                  branch: { name: 'feature/bitbucket' },
+                  commit: { hash: 'abc123' }
+                }
               }
-            }
-          ]
+            ]
+          })
+          return
+        }
+
+        if (url.pathname === '/2.0/repositories/team/repo/commit/abc123/statuses/build') {
+          sendJson(res, {
+            values: [{ state: 'SUCCESSFUL' }, { state: 'STOPPED' }],
+            ...(next ? { next: 'https://api.bitbucket.org/next' } : {})
+          })
+          return
+        }
+
+        res.writeHead(404, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ message: 'not found' }))
+      })
+      await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+
+      const repoPath = await mkdtemp(join(tmpdir(), 'orca-bitbucket-review-'))
+      try {
+        const address = server.address()
+        if (!address || typeof address === 'string') {
+          throw new Error('expected TCP server address')
+        }
+
+        process.env.ORCA_BITBUCKET_API_BASE_URL = `http://127.0.0.1:${address.port}/2.0`
+        await execFileAsync('git', ['init'], { cwd: repoPath })
+        await execFileAsync('git', ['remote', 'add', 'origin', 'git@bitbucket.org:team/repo.git'], {
+          cwd: repoPath
         })
-        return
-      }
 
-      if (url.pathname === '/2.0/repositories/team/repo/commit/abc123/statuses/build') {
-        sendJson(res, { values: [{ state: 'SUCCESSFUL' }] })
-        return
-      }
-
-      res.writeHead(404, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ message: 'not found' }))
-    })
-    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
-
-    const repoPath = await mkdtemp(join(tmpdir(), 'orca-bitbucket-review-'))
-    try {
-      const address = server.address()
-      if (!address || typeof address === 'string') {
-        throw new Error('expected TCP server address')
-      }
-
-      process.env.ORCA_BITBUCKET_API_BASE_URL = `http://127.0.0.1:${address.port}/2.0`
-      await execFileAsync('git', ['init'], { cwd: repoPath })
-      await execFileAsync('git', ['remote', 'add', 'origin', 'git@bitbucket.org:team/repo.git'], {
-        cwd: repoPath
-      })
-
-      await expect(
-        getHostedReviewForBranch({
-          executionHostId: 'local',
-          repoPath,
-          branch: 'refs/heads/feature/bitbucket'
+        await expect(
+          getHostedReviewForBranch({
+            executionHostId: 'local',
+            repoPath,
+            branch: 'refs/heads/feature/bitbucket'
+          })
+        ).resolves.toEqual({
+          provider: 'bitbucket',
+          number: 12,
+          title: 'Local Bitbucket branch',
+          state: 'open',
+          url: 'https://bitbucket.org/team/repo/pull-requests/12',
+          status: 'failure',
+          ...(!next
+            ? {
+                checksSummary: {
+                  state: 'failure',
+                  total: 2,
+                  passed: 1,
+                  failed: 1,
+                  cancelled: 1,
+                  pending: 0,
+                  neutral: 0
+                }
+              }
+            : {}),
+          updatedAt: '2026-05-15T00:00:00Z',
+          mergeable: 'UNKNOWN',
+          headSha: 'abc123'
         })
-      ).resolves.toEqual({
-        provider: 'bitbucket',
-        number: 12,
-        title: 'Local Bitbucket branch',
-        state: 'open',
-        url: 'https://bitbucket.org/team/repo/pull-requests/12',
-        status: 'success',
-        updatedAt: '2026-05-15T00:00:00Z',
-        mergeable: 'UNKNOWN',
-        headSha: 'abc123'
-      })
 
-      expect(seen.map((request) => request.pathname)).toEqual([
-        '/2.0/repositories/team/repo/pullrequests',
-        '/2.0/repositories/team/repo/commit/abc123/statuses/build'
-      ])
-      expect(seen.every((request) => request.authorization === 'Bearer local-token')).toBe(true)
-      const query = new URLSearchParams(seen[0].search)
-      expect(query.get('q')).toContain('source.branch.name = "feature/bitbucket"')
-      expect(query.getAll('state')).toEqual(['OPEN', 'MERGED', 'DECLINED', 'SUPERSEDED'])
-    } finally {
-      await rm(repoPath, { recursive: true, force: true })
-      await new Promise<void>((resolve, reject) => {
-        server.close((error) => (error ? reject(error) : resolve()))
-      })
+        expect(seen.map((request) => request.pathname)).toEqual([
+          '/2.0/repositories/team/repo/pullrequests',
+          '/2.0/repositories/team/repo/commit/abc123/statuses/build'
+        ])
+        expect(seen.every((request) => request.authorization === 'Bearer local-token')).toBe(true)
+        const query = new URLSearchParams(seen[0].search)
+        expect(query.get('q')).toContain('source.branch.name = "feature/bitbucket"')
+        expect(query.getAll('state')).toEqual(['OPEN', 'MERGED', 'DECLINED', 'SUPERSEDED'])
+      } finally {
+        await rm(repoPath, { recursive: true, force: true })
+        await new Promise<void>((resolve, reject) => {
+          server.close((error) => (error ? reject(error) : resolve()))
+        })
+      }
     }
-  })
+  )
 
   it('does not cache a transient API failure as a definitive no-review result', async () => {
     vi.useFakeTimers({ now: Date.now() })

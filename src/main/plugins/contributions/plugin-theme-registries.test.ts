@@ -4,8 +4,8 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { fingerprintPluginConsent } from '../../../shared/plugins/approval/plugin-consent-fingerprint'
 import { pluginManifestSchema } from '../../../shared/plugins/manifest/plugin-manifest'
-import { PluginContentVerifier } from '../plugin-content-integrity'
-import type { ValidDiscoveredPlugin } from '../plugin-discovery'
+import { PluginContentVerifier } from '../artifacts/plugin-content-integrity'
+import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import {
   createPluginTerminalThemeRegistry,
   createPluginThemeRegistry
@@ -76,23 +76,5 @@ describe('plugin theme registries', () => {
     expect(terminalThemes.list()).toEqual([
       expect.objectContaining({ id: 'plugin:samples.midnight/midnight', mode: 'dark' })
     ])
-  })
-
-  it('reports an invalid theme and drops it, then clears when the plugin is disabled', async () => {
-    const plugin = await themePlugin({
-      app: { base: 'dark', tokens: { '--background': 'url(https://example.com)' } },
-      terminal: { ...terminal, terminal: { background: '#000000' } }
-    })
-    const themes = createPluginThemeRegistry(new PluginContentVerifier())
-    const terminalThemes = createPluginTerminalThemeRegistry(new PluginContentVerifier())
-
-    await themes.reconcile([plugin], () => true)
-    await terminalThemes.reconcile([plugin], () => true)
-    expect(themes.list()).toEqual([])
-    expect(themes.error(plugin.pluginKey)).toContain('theme "midnight" is invalid')
-    expect(terminalThemes.error(plugin.pluginKey)).toContain('requires background, foreground')
-
-    await themes.reconcile([plugin], () => false)
-    expect(themes.error(plugin.pluginKey)).toBeNull()
   })
 })

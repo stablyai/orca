@@ -2,9 +2,9 @@ import { ipcMain } from 'electron'
 import {
   validatePathExistenceBatch,
   type ShellPathExistence
-} from '../../shared/path-existence-batch'
+} from '../../shared/file-access/path-existence-batch'
 import { pathExists } from './shell-owned-path-target'
-import { guardWslUncPathAccess, WslDistroStoppedError } from '../wsl/wsl-unc-access-gate'
+import { guardWslUncPathAccess, WslDistroStoppedError } from '../wsl/filesystem/wsl-unc-access-gate'
 
 /** Existence checks of host paths; a stopped WSL distro's UNC path is refused unless a user act asks (E9). */
 export function registerShellPathExistenceHandlers(): void {

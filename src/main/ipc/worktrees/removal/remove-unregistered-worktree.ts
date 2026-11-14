@@ -1,12 +1,12 @@
-import { removeWorktree } from '../../../git/worktree-removal'
-import { usesNativeWindowsRemoval } from '../../../git/windows-worktree-removal'
+import { removeWorktree } from '../../../git/worktrees/removal/worktree-removal'
+import { usesNativeWindowsRemoval } from '../../../git/worktrees/removal/windows-worktree-removal'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { GitPushTarget, GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
-import type { LocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
-import { preservedBranchCleanupScopeKey } from '../../../../shared/preserved-branch-cleanup'
+import type { LocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
+import { preservedBranchCleanupScopeKey } from '../../../../shared/git/branches/preserved-branch-cleanup'
 import {
   assertWorktreeDoesNotContainRegisteredWorktree,
   canCleanupUnregisteredOrcaWorktreeDirectory,
@@ -14,18 +14,18 @@ import {
   isDangerousWorktreeRemovalPath,
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE,
   UNREGISTERED_MISSING_WORKTREE_MESSAGE
-} from '../../../worktree-removal-safety'
-import { resolveWorktreeRemovalHomeForHost } from '../../../worktree-removal-execution-host-route'
+} from '../../../workspaces/removal/worktree-removal-safety'
+import { resolveWorktreeRemovalHomeForHost } from '../../../workspaces/removal/worktree-removal-execution-host-route'
 import {
   getLocalWorktreePathAccess,
   removeLocalWorktreePath,
   toLocalWorktreeRuntimePath
-} from '../../../local-worktree-filesystem'
+} from '../../../workspaces/removal/local-worktree-filesystem'
 import {
   cleanupUnusedWorktreePushTargetRemote,
   notifyWorktreesChanged
 } from '../../worktree-remote'
-import { invalidateAuthorizedRootsCache } from '../../registered-worktree-roots-cache'
+import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
 import { preservedBranchCleanupByScope } from './preserved-branch-cleanup'

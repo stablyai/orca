@@ -1,6 +1,6 @@
 // Resumed stale holders must prove their generation on-host before every step, preventing writes or release under a successor's fence.
 import { AsyncLocalStorage } from 'node:async_hooks'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import { isSshCommandExitError } from '../../ssh/remote-exec/remote-exec-command'
 
 export const ORCAD_FENCE_OWNER_FILENAME = '.orca-fence-owner'

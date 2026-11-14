@@ -3,17 +3,17 @@ import { platform } from 'node:process'
 import type { Dirent } from 'node:fs'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
-import type { WorkspaceSpaceWorktree } from '../../../shared/workspace-space-types'
-import { compactWorkspaceSpaceItems } from '../../../shared/workspace-space-compaction'
+import type { WorkspaceSpaceWorktree } from '../../../shared/workspace-disk-space/workspace-space-types'
+import { compactWorkspaceSpaceItems } from '../../../shared/workspace-disk-space/workspace-space-compaction'
 import { escapeRegex } from '../../../shared/string-utils'
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
-import { scanWorkspaceSpaceEntryTree } from '../../../shared/workspace-space-entry-traversal'
-import type { WorkspaceSpaceEntryScan } from '../../../shared/workspace-space-directory-frame'
+import { scanWorkspaceSpaceEntryTree } from '../../../shared/workspace-disk-space/workspace-space-entry-traversal'
+import type { WorkspaceSpaceEntryScan } from '../../../shared/workspace-disk-space/workspace-space-directory-frame'
 import {
   collectWorkspaceSpaceDirectoryEntries,
   createWorkspaceSpaceScanBudget,
   WorkspaceSpaceScanCapacityError
-} from '../../../shared/workspace-space-scan-budget'
+} from '../../../shared/workspace-disk-space/workspace-space-scan-budget'
 import {
   WorkspaceSpaceScanCancelledError,
   classifyWorkspaceSpaceError,

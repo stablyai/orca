@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { createShellReadyScanState, scanForShellReady } from '../../shell-ready-marker-scanner'
+import {
+  createShellReadyScanState,
+  scanForShellReady
+} from '../../pty/shell-startup/shell-ready-marker-scanner'
 
 describe('scanForShellReady', () => {
   it('flushes marker-like output when the full marker is not BEL-terminated', () => {

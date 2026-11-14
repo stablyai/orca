@@ -1,5 +1,5 @@
 import WebSocket from 'ws'
-import type { PairedRuntimeConnection } from '../paired-runtime-connection'
+import type { PairedRuntimeConnection } from './pairing/paired-runtime-connection'
 import type { RuntimeCapability } from '../protocol-version'
 import {
   formatRemoteRuntimeCloseMessage,
@@ -37,16 +37,8 @@ export function openRemoteRuntimePassthroughSocket(
   return new Promise((resolve, reject) => {
     let state: 'awaiting_ready' | 'awaiting_authenticated' | 'ready' | 'ended' = 'awaiting_ready'
     const opened = openRemoteRuntimeWebSocket(connection, {
-      onTextFrame: (_ws, frame) => onTextFrame(frame),
-      onBinaryFrame: (_ws, frame) => {
-        liveness.noteActivity()
-        const bytes = state === 'ready' ? handshake.channel.openBinary(frame) : null
-        if (!bytes) {
-          end(protocolError('Remote Orca runtime returned an unreadable binary frame.'))
-          return
-        }
-        callbacks.onBinary(bytes)
-      },
+      onFrame: (_ws, frame) =>
+        typeof frame === 'string' ? onTextFrame(frame) : onBinaryFrame(frame),
       onError: (_ws, error) => end(error),
       onClose: (_ws, code, reason) =>
         end(
@@ -113,6 +105,17 @@ export function openRemoteRuntimePassthroughSocket(
 
     function protocolError(message: string): RemoteRuntimeClientError {
       return new RemoteRuntimeClientError('invalid_runtime_response', message)
+    }
+
+    // No inflate: relayed phones' capabilities omit compressed frames, so the host sends none here.
+    function onBinaryFrame(frame: Uint8Array<ArrayBufferLike>): void {
+      liveness.noteActivity()
+      const bytes = state === 'ready' ? handshake.channel.openBinary(frame) : null
+      if (!bytes) {
+        end(protocolError('Remote Orca runtime returned an unreadable binary frame.'))
+        return
+      }
+      callbacks.onBinary(bytes)
     }
 
     function onTextFrame(frame: string): void {

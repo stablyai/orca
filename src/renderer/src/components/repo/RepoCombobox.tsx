@@ -9,14 +9,14 @@ import {
   CommandList
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { searchRepos } from '@/lib/repo-search'
-import { cn } from '@/lib/utils'
+import { searchRepos } from '@/lib/workspace/catalog/repo-search'
+import { cn } from '@/lib/class-names'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import type { Repo } from '../../../../shared/repo-types'
 import RepoBadgeLabel from './RepoBadgeLabel'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type RepoComboboxProps = {
   repos: readonly Repo[]
@@ -43,6 +43,7 @@ export default function RepoCombobox({
   invalid = false,
   describedBy
 }: RepoComboboxProps): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(autoOpenOnMount)
   const [query, setQuery] = useState('')
   // Control cmdk selection so hovering the external footer can clear the last repo highlight.
@@ -197,7 +198,7 @@ export default function RepoCombobox({
                 {selectedRepo.connectionId && (
                   <span className="shrink-0 inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
                     <Server className="size-2.5" />
-                    {translate('auto.components.repo.RepoCombobox.3639fd9da2', 'SSH')}
+                    {t('auto.components.repo.RepoCombobox.3639fd9da2', 'SSH')}
                   </span>
                 )}
               </span>
@@ -219,7 +220,7 @@ export default function RepoCombobox({
           <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
             <CommandInput
               ref={setInputNode}
-              placeholder={translate(
+              placeholder={t(
                 'auto.components.repo.RepoCombobox.a0c48f5f29',
                 'Search projects/folders...'
               )}
@@ -228,7 +229,7 @@ export default function RepoCombobox({
             />
             <CommandList>
               <CommandEmpty>
-                {translate(
+                {t(
                   'auto.components.repo.RepoCombobox.e7ed739236',
                   'No projects/folders match your search.'
                 )}
@@ -256,7 +257,7 @@ export default function RepoCombobox({
                       {repo.connectionId && (
                         <span className="shrink-0 inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-[9px] font-medium leading-none text-muted-foreground">
                           <Server className="size-2.5" />
-                          {translate('auto.components.repo.RepoCombobox.3639fd9da2', 'SSH')}
+                          {t('auto.components.repo.RepoCombobox.3639fd9da2', 'SSH')}
                         </span>
                       )}
                     </span>
@@ -279,8 +280,8 @@ export default function RepoCombobox({
                 <FolderPlus className="size-3.5 text-muted-foreground" />
                 <span>
                   {isAdding
-                    ? translate('auto.components.repo.RepoCombobox.116812151a', 'Adding project…')
-                    : translate('auto.components.repo.RepoCombobox.b3e15f4525', 'Add project')}
+                    ? t('auto.components.repo.RepoCombobox.116812151a', 'Adding project…')
+                    : t('auto.components.repo.RepoCombobox.b3e15f4525', 'Add project')}
                 </span>
               </Button>
             </div>
@@ -299,8 +300,8 @@ export default function RepoCombobox({
           className="size-9 shrink-0 p-0"
           aria-label={
             isAdding
-              ? translate('auto.components.repo.RepoCombobox.b4a235e886', 'Adding project')
-              : translate('auto.components.repo.RepoCombobox.b3e15f4525', 'Add project')
+              ? t('auto.components.repo.RepoCombobox.b4a235e886', 'Adding project')
+              : t('auto.components.repo.RepoCombobox.b3e15f4525', 'Add project')
           }
         >
           <FolderPlus className="size-3.5" />

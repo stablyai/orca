@@ -1,20 +1,20 @@
-import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
+import { githubRepoIdentityKey } from '../../../../shared/github/repositories/repository-identity-key'
 import { createCheckDetailsAdmissionLifetime } from '../check/check-details-admission-lifetime'
 import { snapshotCheckJobLogExecution } from '../check/check-job-log-execution'
 import type { CheckJobLogContext } from '../check/check-job-log-tails'
-import { acquire, release, ghExecFileAsync, type LocalGitExecOptions } from '../../gh-utils'
-import {
-  getGitHubApiRepositoryForRemote,
-  resolveGitHubRepoExecution,
-  type GitHubApiRepository
-} from '../../github-api-repository'
+import { acquire, release } from '../../execution/github-operation-slots'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import type { LocalGitExecOptions } from '../../repositories/github-repository-identity'
+import { resolveGitHubRepoExecution } from '../../repositories/github-api-repository'
+import { getGitHubApiRepositoryForRemote } from '../../repositories/github-api-repository-remote-probe'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 import type { GhExecOptions } from '../github-exec-scope'
-import { repositoryRateLimitGuard } from '../../rate-limit'
+import { repositoryRateLimitGuard } from '../../api/rate-limit'
 import { waitForCheckDetailsResolution } from '../check/check-details-abort'
 import {
   GITHUB_CHECK_DETAILS_HOST_TIMEOUT_MS,
   GITHUB_CHECK_DETAILS_TIMEOUT_MESSAGE
-} from '../../../../shared/github/check-details-deadline'
+} from '../../../../shared/github/checks/check-details-deadline'
 
 /** Resolve the GitHub account and execution route, enforce a deadline including queue time, and release the read slot. */
 export async function withActionsRead<T>(

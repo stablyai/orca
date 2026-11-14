@@ -1,13 +1,17 @@
-import { githubRepoContext, withGitHubRepoExecution } from '../github/github-repository-identity'
+import {
+  githubRepoContext,
+  withGitHubRepoExecution
+} from '../github/repositories/github-repository-identity'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import {
   cachedHostedReviewOutcome,
   type HostedReviewForBranchOutcome,
   type HostedReviewInfo
-} from '../../shared/hosted-review'
-import { assertRemoteUrlReadable } from '../git/remote-url-probe'
+} from '../../shared/source-control/hosted-review/hosted-review-contracts'
+import { assertRemoteUrlReadable } from '../git/remotes/remote-url-probe'
 import { forgetGiteaPullRequestReads } from '../gitea/pull-request-read-forgetting'
-import { getForgeProviderForRepository, type ForgeProviderId } from './forge-provider'
+import type { ForgeProviderId } from './forge-provider'
+import { getForgeProviderForRepository } from './forge-provider-detection'
 import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
 import { readHostedReviewBranchCache } from './hosted-review-branch-cache'
 import {
@@ -137,7 +141,7 @@ export async function readHostedReviewForBranch(
           ...(providerOptions.localGitExecOptions
             ? { localGitExecOptions: providerOptions.localGitExecOptions }
             : {}),
-          githubCurrentHeadOid: headOid,
+          currentHeadOid: headOid,
           ...(input.userRefresh === true ? { userRefresh: true } : {}),
           ...reviewLinkForProvider(input, provider.id)
         })

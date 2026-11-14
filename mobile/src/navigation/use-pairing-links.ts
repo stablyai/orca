@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useRouter } from 'expo-router'
 import * as Linking from 'expo-linking'
-import { extractPairingCodeFromUrl } from '../transport/pairing'
+import { extractPairingCodeFromUrl } from '../pairing/pairing'
 import { consumeInitialLaunchIntent } from './initial-launch-intent'
 
 export function usePairingLinks(): void {

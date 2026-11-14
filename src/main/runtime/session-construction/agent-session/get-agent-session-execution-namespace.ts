@@ -1,6 +1,6 @@
 import { OrcaRuntimeWithResolveWorktreeRemovalTarget } from '../../workspaces/workspace-removal-target'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import type {
   AgentLaunchPreferences,
@@ -12,16 +12,20 @@ import {
   canonicalizeAgentSessionIdentity,
   type ProviderExecutionNamespace
 } from '../../agent-session/ownership/agent-session-claim-identity'
-import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import { buildAgentResumeStartupPlan } from '../../../../shared/tui-agent-startup'
-import { agentLaunchQuotingShell } from '../../../../shared/agent-launch-runtime'
+import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
+import { buildAgentResumeStartupPlan } from '../../../../shared/agent-launch/startup/tui-agent-resume-startup'
+import { agentLaunchQuotingShell } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { withAgentSessionAccountEnv } from '../../agent-session/agent-session-account-env'
-import { resolveWslHostAgentResumeInputs } from '../../wsl-host-agent-terminal-launch'
+import { resolveWslHostAgentResumeInputs } from '../../terminal/launch/wsl-host-agent-terminal-launch'
+import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { resolveSavedRestoreLaunchRecipe } from './saved-restore-launch-recipe'
+import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import {
   resolveTuiAgentLaunchRawArgs,
   resolveTuiAgentLaunchEnv
-} from '../../../../shared/tui-agent-launch-defaults'
+} from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 
 export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends OrcaRuntimeWithResolveWorktreeRemovalTarget {
   protected getAgentSessionExecutionNamespace(
@@ -86,6 +90,34 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
     return Object.keys(options).length > 0 ? options : undefined
   }
 
+  /** A saved restore replays the source pane as this host ran it; History and other user resumes keep current settings. */
+  private savedRestoreRecipe(
+    worktreeId: string,
+    request: Extract<RuntimeEnsureAgentSessionRequest, { kind: 'explicit' }>
+  ): SleepingAgentLaunchConfig {
+    // Why the source pane: a Wake opens a new tab, so `placement` names a pane that never ran it.
+    const { tabId, leafId } = request.placement ?? {}
+    const sourcePaneKey =
+      request.restoreSourcePaneKey ??
+      // A legacy non-UUID leaf names no saved record, so it gets the no-note rule instead of throwing.
+      (tabId && !tabId.includes(':') && leafId && isTerminalLeafId(leafId)
+        ? makePaneKey(tabId, leafId)
+        : null)
+    const record = sourcePaneKey
+      ? this.getWorkspaceSessionForWorktree(worktreeId)?.sleepingAgentSessionsByPaneKey?.[
+          sourcePaneKey
+        ]
+      : undefined
+    return resolveSavedRestoreLaunchRecipe({
+      agent: request.agent,
+      providerSession: request.providerSession,
+      record: record && worktreeIdsEqual(record.worktreeId, worktreeId) ? record : undefined,
+      liveRow: sourcePaneKey
+        ? this.getAgentProviderSessionSnapshotFn?.().find((row) => row.paneKey === sourcePaneKey)
+        : undefined
+    })
+  }
+
   async ensureAgentSession(
     request: RuntimeEnsureAgentSessionRequest,
     _caller: RuntimeAgentSessionRpcCaller = {}
@@ -134,17 +166,21 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
     const shell = agentLaunchQuotingShell(launchRuntime)
     // Use the resolved PTY route, not display repo metadata that may belong to another host.
     const isRemote = Boolean(workspace.connectionId)
+    const restored =
+      request.resumeOrigin === 'saved' ? this.savedRestoreRecipe(workspace.id, request) : undefined
     const startup = buildAgentResumeStartupPlan(
       resolveWslHostAgentResumeInputs({
         agent: request.agent,
         providerSession: identity.providerSession,
         cmdOverrides: settings.agentCmdOverrides ?? {},
-        agentArgs:
-          request.agentArgs !== undefined
-            ? request.agentArgs
-            : resolveTuiAgentLaunchRawArgs(request.agent, settings, undefined, shell),
-        agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings),
-        ompResumeFilePath: request.ompResumeFilePath,
+        ...(restored ?? {
+          agentArgs:
+            request.agentArgs !== undefined
+              ? request.agentArgs
+              : resolveTuiAgentLaunchRawArgs(request.agent, settings, undefined, shell),
+          agentEnv: resolveTuiAgentLaunchEnv(request.agent, settings)
+        }),
+        ompResumeFilePath: restored?.ompResumeFilePath ?? request.ompResumeFilePath,
         sessionOptions: this.toAgentSessionOptions(request.launchPreferences),
         sessionOptionsOverrideAgentArgs: Boolean(request.launchPreferences),
         platform,

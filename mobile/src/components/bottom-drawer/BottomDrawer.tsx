@@ -86,7 +86,10 @@ export function useOptionPager<Key extends string>() {
     })
   }, [reducedMotion, slide])
 
-  const forget = useCallback(() => setPage(null), [])
+  const forget = useCallback(() => {
+    slide.value = 1
+    setPage(null)
+  }, [slide])
 
   return { page, open, close, forget, slide, reducedMotion }
 }
@@ -167,7 +170,7 @@ const styles = themedStyleSheet(() => ({
   pager: { overflow: 'hidden' },
   underlay: { position: 'absolute', top: 0, left: 0, right: 0 },
   page: { flexGrow: 1, backgroundColor: colors.sheetSurface },
-  dim: { ...StyleSheet.absoluteFillObject, backgroundColor: '#000' },
+  dim: { ...StyleSheet.absoluteFill, backgroundColor: '#000' },
   fill: { flex: 1, overflow: 'hidden' },
-  fillPage: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.bgBase }
+  fillPage: { ...StyleSheet.absoluteFill, backgroundColor: colors.bgBase }
 }))

@@ -1,18 +1,19 @@
 import type { QuickCreationExecutionInput } from './composer-model'
 
+import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/work-items/linked-work-item-context'
 import { useCallback } from 'react'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import { useAppStore } from '@/store'
-import { isWorkspaceStatusAllowedOnHost } from '@/store/host-workspace-status-columns'
-import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
-import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
-import type { ComposerCreateHandoff } from '@/lib/composer-create-handoff'
+import { isWorkspaceStatusAllowedOnHost } from '@/store/workspaces/status/host-workspace-status-columns'
+import { settleComposerSubmit } from '@/lib/workspace/creation/composer-submit-cancellation'
+import { runBackgroundWorktreeCreation } from '@/lib/workspace/creation/worktree-creation-flow'
+import type { ComposerCreateHandoff } from '@/lib/workspace/creation/composer-create-handoff'
 import { translate } from '@/i18n/i18n'
 import { prepareQuickComposerStartup } from './quick-startup-plan'
 import { buildQuickCreationRequest, type QuickSubmitOptions } from './quick-creation-request'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
-import { resolveAgentSessionLaunchRoute } from '@/lib/agent-session-launch-plan'
+import { resolveAgentSessionLaunchRoute } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 
 export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
   const {
@@ -89,27 +90,10 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         trimmedNote
       } = prepared
 
-      const {
-        startupPlan,
-        backendStartup,
-        telemetry: quickTelemetry,
-        prompt: quickPrompt,
-        draftPrompt: quickDraftPrompt
-      } = await prepareQuickComposerStartup({
-        agent,
-        linkedWorkItem: submitLinkedWorkItem,
-        note: trimmedNote,
-        settings,
-        launchHost: selectedRepoAgentLaunchFact,
-        shell: selectedRepoStartupShell,
-        isRemote: selectedRepoIsRemote,
-        telemetrySource,
-        repoId,
-        executionHostId: selectedRepoExecutionHostId
-      })
-      if (isSubmissionCancelled()) {
-        return
-      }
+      const promptLinkedWorkItem = agent === null ? null : submitLinkedWorkItem
+
+      const { prompt: quickPrompt, draftPrompt: quickDraftPrompt } =
+        resolveQuickCreateLinkedWorkItemPrompt(promptLinkedWorkItem, trimmedNote)
 
       const startupPolicySettlement = await settleComposerSubmit(
         persistSetupAgentStartupPolicy(),
@@ -164,6 +148,30 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
           }))
       const structuredLaunch = agentLaunchRoute === 'structured-native-chat'
 
+      const quickStartup = await prepareQuickComposerStartup({
+        agent,
+        linkedWorkItem: submitLinkedWorkItem,
+        note: trimmedNote,
+        repoId,
+        executionHostId: selectedRepoExecutionHostId,
+        settings,
+        launchHost: selectedRepoAgentLaunchFact,
+        shell: selectedRepoStartupShell,
+        isRemote: selectedRepoIsRemote,
+        telemetrySource,
+        route: agentLaunchRoute,
+        launchInputs: options?.launchInputs,
+        legacyLaunchInputs: options?.legacyLaunchInputs,
+        ephemeralVm: Boolean(ephemeralVmRecipe)
+      })
+
+      if (isSubmissionCancelled()) {
+        return
+      }
+      if (quickStartup.creationStartup) {
+        quickStartup.creationStartup.onLegacyPreparationFailure =
+          options?.onLegacyPreparationFailure
+      }
       const request = buildQuickCreationRequest({
         repoId,
         ephemeralVmRecipe,
@@ -188,6 +196,9 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         pushTarget: submitPushTarget,
         agent,
         agentLaunchRoute,
+        launchInputs: options?.launchInputs,
+        legacyLaunchInputs: options?.legacyLaunchInputs,
+        creationStartup: quickStartup.creationStartup,
         linkedLinearIssue,
         linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey,
@@ -211,7 +222,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         linkedGitLabMR,
         linkedGitLabIssue,
         includeGitLabLinks: smartGitHubResolution.kind === 'none',
-        startup: structuredLaunch ? undefined : backendStartup,
+        startup: structuredLaunch ? undefined : quickStartup.backendStartup,
         hookPreparation: ephemeralVmRecipe
           ? {
               ...hookPreparation,
@@ -221,11 +232,11 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
           : hookPreparation,
         pendingFirstAgentMessageRename,
         note: trimmedNote,
-        startupPlan,
+        startupPlan: quickStartup.startupPlan,
         quickPrompt,
         launchDraftPrompt: quickDraftPrompt,
         promptDelivery,
-        quickTelemetry,
+        quickTelemetry: quickStartup.telemetry,
         suppressTerminalFocusOnCompletion: createMultiple,
         setupOnly: options?.setupOnly === true
       })

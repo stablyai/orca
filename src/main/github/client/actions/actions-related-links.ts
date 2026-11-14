@@ -1,7 +1,10 @@
-import type { ActionsDetailMetadata, ActionsRun } from '../../../../shared/github/actions-types'
-import type { GitHubApiRepository } from '../../github-api-repository'
+import type {
+  ActionsDetailMetadata,
+  ActionsRun
+} from '../../../../shared/github/actions/actions-types'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 import type { GhExecOptions } from '../github-exec-scope'
-import { actionsUrl } from '../../../../shared/github/actions-web-url'
+import { actionsUrl } from '../../../../shared/github/actions/actions-web-url'
 import { actionsJson } from './actions-read-request'
 import { actionsRecord } from './workflow-run-field-mapping'
 

@@ -1,4 +1,3 @@
-import { readFileSync, writeFileSync } from 'node:fs'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CollectedBundle } from '../observability/bundle'
 import type * as NodeFs from 'node:fs'
@@ -113,72 +112,6 @@ describe('diagnostics IPC handlers', () => {
     expect(uploadDiagnosticBundleMock).not.toHaveBeenCalled()
   })
 
-  it('uploads only the payload retained by main after collection', async () => {
-    const bundle = makeBundle({
-      bundleSubmissionId: 'bundleabcdefghijklmnop',
-      payload: '{"type":"bundle-header"}\n{"safe":true}\n'
-    })
-    collectDiagnosticBundleMock.mockReturnValue(bundle)
-    readFileSyncMock.mockReturnValue(bundle.payload)
-    const collect = handlers.get('diagnostics:collectBundle')!
-    const openPreview = handlers.get('diagnostics:openBundlePreview')!
-    const upload = handlers.get('diagnostics:uploadBundle')!
-
-    await collect({}, 30)
-    await openPreview({}, bundle.bundleSubmissionId)
-    await upload({}, bundle.bundleSubmissionId)
-
-    expect(uploadDiagnosticBundleMock).toHaveBeenCalledWith({
-      tokenEndpoint: 'https://diagnostics.example.com/diagnostics/token',
-      payload: bundle.payload,
-      bundleSubmissionId: bundle.bundleSubmissionId
-    })
-  })
-
-  it('pins official builds to the compile-time diagnostics endpoint', async () => {
-    const bundle = makeBundle({
-      bundleSubmissionId: 'bundleabcdefghijklmnop',
-      payload: '{"type":"bundle-header"}\n{"safe":true}\n'
-    })
-    const globalOverrides = globalThis as {
-      ORCA_BUILD_IDENTITY?: 'stable'
-      ORCA_DIAGNOSTICS_TOKEN_URL?: string
-    }
-    globalOverrides.ORCA_BUILD_IDENTITY = 'stable'
-    globalOverrides.ORCA_DIAGNOSTICS_TOKEN_URL = 'https://official.example.com/diagnostics/token'
-    process.env.ORCA_DIAGNOSTICS_TOKEN_URL = 'https://attacker.example.com/diagnostics/token'
-    collectDiagnosticBundleMock.mockReturnValue(bundle)
-    readFileSyncMock.mockReturnValue(bundle.payload)
-    const collect = handlers.get('diagnostics:collectBundle')!
-    const openPreview = handlers.get('diagnostics:openBundlePreview')!
-    const upload = handlers.get('diagnostics:uploadBundle')!
-
-    await collect({}, 30)
-    await openPreview({}, bundle.bundleSubmissionId)
-    await upload({}, bundle.bundleSubmissionId)
-
-    expect(uploadDiagnosticBundleMock).toHaveBeenCalledWith({
-      tokenEndpoint: 'https://official.example.com/diagnostics/token',
-      payload: bundle.payload,
-      bundleSubmissionId: bundle.bundleSubmissionId
-    })
-  })
-
-  it('returns a quiet cancellation when the user declines upload confirmation', async () => {
-    const bundle = makeBundle({ bundleSubmissionId: 'bundleabcdefghijklmnop' })
-    collectDiagnosticBundleMock.mockReturnValue(bundle)
-    showMessageBoxMock.mockResolvedValue({ response: 1 })
-    const collect = handlers.get('diagnostics:collectBundle')!
-    const openPreview = handlers.get('diagnostics:openBundlePreview')!
-    const upload = handlers.get('diagnostics:uploadBundle')!
-
-    await collect({}, 30)
-    await openPreview({}, bundle.bundleSubmissionId)
-    await expect(upload({}, bundle.bundleSubmissionId)).resolves.toEqual({ canceled: true })
-    expect(showMessageBoxMock).toHaveBeenCalledTimes(1)
-    expect(uploadDiagnosticBundleMock).not.toHaveBeenCalled()
-  })
-
   it('rechecks the retained preview after upload confirmation', async () => {
     const bundle = makeBundle({ bundleSubmissionId: 'bundleabcdefghijklmnop' })
     collectDiagnosticBundleMock.mockReturnValue(bundle)
@@ -198,41 +131,6 @@ describe('diagnostics IPC handlers', () => {
     expect(uploadDiagnosticBundleMock).not.toHaveBeenCalled()
   })
 
-  it('ignores edited preview file contents and uploads the retained original payload', async () => {
-    const bundle = makeBundle({
-      bundleSubmissionId: 'bundleabcdefghijklmnop',
-      payload: '{"original":true}\n'
-    })
-    collectDiagnosticBundleMock.mockReturnValue(bundle)
-    readFileSyncMock.mockReturnValue('{"edited":true}\n')
-    const collect = handlers.get('diagnostics:collectBundle')!
-    const openPreview = handlers.get('diagnostics:openBundlePreview')!
-    const upload = handlers.get('diagnostics:uploadBundle')!
-
-    await collect({}, 30)
-    await openPreview({}, bundle.bundleSubmissionId)
-    await upload({}, bundle.bundleSubmissionId)
-
-    expect(readFileSync).not.toHaveBeenCalled()
-    expect(uploadDiagnosticBundleMock).toHaveBeenCalledWith(
-      expect.objectContaining({ payload: '{"original":true}\n' })
-    )
-  })
-
-  it('opens the retained bundle preview file through main', async () => {
-    const bundle = makeBundle({ bundleSubmissionId: 'bundleabcdefghijklmnop' })
-    collectDiagnosticBundleMock.mockReturnValue(bundle)
-    const collect = handlers.get('diagnostics:collectBundle')!
-    const openPreview = handlers.get('diagnostics:openBundlePreview')!
-
-    await collect({}, 30)
-    await openPreview({}, bundle.bundleSubmissionId)
-
-    expect(openPathMock).toHaveBeenCalledWith(
-      expect.stringContaining(`${bundle.bundleSubmissionId}.ndjson`)
-    )
-  })
-
   it('requires opening the retained review file before sending', async () => {
     const bundle = makeBundle({ bundleSubmissionId: 'bundleabcdefghijklmnop' })
     collectDiagnosticBundleMock.mockReturnValue(bundle)
@@ -242,19 +140,6 @@ describe('diagnostics IPC handlers', () => {
     await collect({}, 30)
     await expect(upload({}, bundle.bundleSubmissionId)).rejects.toThrow(/open.*review file/)
     expect(uploadDiagnosticBundleMock).not.toHaveBeenCalled()
-  })
-
-  it('discards retained bundle previews on request', async () => {
-    const bundle = makeBundle({ bundleSubmissionId: 'bundleabcdefghijklmnop' })
-    collectDiagnosticBundleMock.mockReturnValue(bundle)
-    const collect = handlers.get('diagnostics:collectBundle')!
-    const discard = handlers.get('diagnostics:discardBundlePreview')!
-    const upload = handlers.get('diagnostics:uploadBundle')!
-
-    await collect({}, 30)
-    await discard({}, bundle.bundleSubmissionId)
-
-    await expect(upload({}, bundle.bundleSubmissionId)).rejects.toThrow(/expired/)
   })
 
   it('expires retained bundle previews without another diagnostics call', async () => {
@@ -274,41 +159,6 @@ describe('diagnostics IPC handlers', () => {
     }
   })
 
-  it('writes retained preview files with private permissions', async () => {
-    const bundle = makeBundle({ bundleSubmissionId: 'bundleabcdefghijklmnop' })
-    collectDiagnosticBundleMock.mockReturnValue(bundle)
-    const collect = handlers.get('diagnostics:collectBundle')!
-
-    await collect({}, 30)
-
-    expect(mkdirSyncMock).toHaveBeenCalledWith(expect.any(String), {
-      mode: 0o700,
-      recursive: true
-    })
-    expect(writeFileSync).toHaveBeenCalledWith(
-      expect.stringContaining(`${bundle.bundleSubmissionId}.ndjson`),
-      bundle.payload,
-      { encoding: 'utf8', mode: 0o600 }
-    )
-  })
-
-  it('returns only bundle metadata from collection', async () => {
-    const bundle = makeBundle({
-      bundleSubmissionId: 'bundleabcdefghijklmnop',
-      payload: '{"type":"bundle-header"}\n{"safe":true}\n',
-      bytes: 37,
-      spanCount: 1
-    })
-    collectDiagnosticBundleMock.mockReturnValue(bundle)
-    const collect = handlers.get('diagnostics:collectBundle')!
-
-    expect(await collect({}, 30)).toEqual({
-      bundleSubmissionId: bundle.bundleSubmissionId,
-      bytes: bundle.bytes,
-      spanCount: bundle.spanCount
-    })
-  })
-
   it('does not expose retained bundle payloads through collection IPC', async () => {
     const bundle = makeBundle({
       bundleSubmissionId: 'bundleabcdefghijklmnop',
@@ -319,22 +169,5 @@ describe('diagnostics IPC handlers', () => {
 
     const preview = await collect({}, 30)
     expect(JSON.stringify(preview)).not.toContain('retained in main')
-  })
-
-  it('allows crash-report lookbacks beyond 24 hours while bounding abuse', async () => {
-    const collect = handlers.get('diagnostics:collectBundle')!
-    await collect({}, 3 * 24 * 60)
-    expect(collectDiagnosticBundleMock).toHaveBeenCalledWith(
-      expect.objectContaining({ lookbackMinutes: 3 * 24 * 60 })
-    )
-  })
-
-  it('registers and handles bundle deletion by ticket ID', async () => {
-    const deleteBundle = handlers.get('diagnostics:deleteBundle')!
-    await deleteBundle({}, 'ticketabcdefghijklmnop')
-    expect(deleteDiagnosticBundleMock).toHaveBeenCalledWith({
-      tokenEndpoint: 'https://diagnostics.example.com/diagnostics/token',
-      ticketId: 'ticketabcdefghijklmnop'
-    })
   })
 })

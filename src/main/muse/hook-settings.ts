@@ -3,22 +3,23 @@ import { join } from 'node:path'
 import { readFile } from 'node:fs/promises'
 import {
   buildManagedCommandHook,
-  createManagedCommandMatcher,
-  getSharedManagedScriptPath,
-  wrapPosixHookCommand,
   type HookDefinition
-} from '../agent-hooks/installer-utils'
-import { readManagedHookEventsFromJson } from '../agent-hooks/managed-hooks-json-events'
-import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
-import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
+} from '../agent-hooks/installation/configuration/hook-config-schema'
+import { createManagedCommandMatcher } from '../agent-hooks/installation/commands/managed-hook-command-matching'
+import { getSharedManagedScriptPath } from '../agent-hooks/installation/scripts/managed-hook-script-path'
+import { wrapPosixHookCommand } from '../agent-hooks/installation/commands/posix-hook-command'
+import { readManagedHookEventsFromJson } from '../agent-hooks/installation/configuration/managed-hooks-json-events'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/installation/commands/windows-direct-cmd-hook-command'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/installation/scripts/managed-hook-script-refresh'
 import { parseMuseSettingsText } from './hook-config-json'
 
 const MUSE_SCRIPT_BASE = 'muse-hook'
 
-// Muse 1.3 uses Claude-shaped events; SubagentStart must not update parent-pane status.
+// Muse 1.3 uses Claude-shaped events; subagent events track background children, never the parent's own status.
 export const MUSE_HOOK_EVENTS = [
   'SessionStart',
   'SubagentStart',
+  'SubagentStop',
   'SessionEnd',
   'Notification',
   'UserPromptSubmit',
@@ -27,7 +28,8 @@ export const MUSE_HOOK_EVENTS = [
   'PostToolUseFailure',
   'PermissionRequest',
   'Stop',
-  'StopFailure'
+  'StopFailure',
+  'Interrupt'
 ] as const
 
 export const MUSE_MANAGED_HOOKS_FILE_NAME = 'muse-hooks.json'
@@ -77,7 +79,9 @@ export function getMuseRemoteManagedCommand(scriptPath: string): string {
 export function buildMuseManagedHooksFile(command: string): string {
   const hooks: Record<string, HookDefinition[]> = {}
   for (const event of MUSE_HOOK_EVENTS) {
-    hooks[event] = [{ hooks: [buildManagedCommandHook(command)] }]
+    const hook = buildManagedCommandHook(command)
+    // Muse refuses synchronous Interrupt hooks.
+    hooks[event] = [{ hooks: [event === 'Interrupt' ? { ...hook, async: true } : hook] }]
   }
   return `${JSON.stringify({ hooks }, null, 2)}\n`
 }

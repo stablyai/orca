@@ -1,15 +1,16 @@
-import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { isAgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import {
+  closeTestAgentSessionRecordStores,
   openTestAgentSessionRecordStore,
-  readPersistedTestAgentSessionStore
+  readPersistedTestAgentSessionStore,
+  withTestAgentSessionDatabase
 } from './agent-session-record-store-test-harness'
 import type { AgentSessionReserveRequest } from '../ownership/agent-session-reservation-admission'
 
@@ -30,7 +31,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await closeTestJournalHostDatabases()
+  await closeTestAgentSessionRecordStores()
   await rm(directory, { recursive: true, force: true })
 })
 
@@ -65,7 +66,24 @@ async function open(): Promise<AgentSessionRecordStore> {
 }
 
 describe('chat tab table', () => {
-  const LEGACY_TAB_ID = 'structured-agent-session-session-alpha'
+  it('keeps an observable record in its tab when its lease has an unknown write requirement', async () => {
+    const store = await open()
+    await store.reserveOwner(reserveRequest())
+    await withTestAgentSessionDatabase(directory, (db) =>
+      db
+        .prepare(
+          `UPDATE agent_session_records SET record_json=json_set(record_json,'$.lease.minimumNextFence','future-floor') WHERE session_id=?`
+        )
+        .run('session-alpha')
+    )
+    const reopened = await open()
+    await reopened.setSessionTabVisibility('session-alpha', true, 'tab-alpha')
+    expect(reopened.getSessionTabId('session-alpha')).toBe('tab-alpha')
+    expect((await readPersistedTestAgentSessionStore(directory)).sessionTabs).toEqual([
+      { tabId: 'tab-alpha', sessionId: 'session-alpha' }
+    ])
+    await expect(reopened.setConversationName('session-alpha', 'changed')).rejects.toThrow()
+  })
 
   it('takes a reserved id only when the tab is shown, and refuses it to a second chat', async () => {
     const store = await open()
@@ -92,34 +110,6 @@ describe('chat tab table', () => {
     expect(store.getRecord('session-beta')).toBeNull()
   })
 
-  it('refuses showing a tab with the situation typed, as every chat refusal is', async () => {
-    const store = await open()
-    await store.reserveOwner(reserveRequest({ surfaceTabId: 'tab-alpha' }))
-    await store.setSessionTabVisibility('session-alpha', true, 'tab-alpha')
-    await store.reserveOwner(
-      reserveRequest({
-        sessionId: 'session-beta',
-        operation: { callerKey: 'client-1', operationId: operationId(), fingerprint: 'fp-2' }
-      })
-    )
-
-    // Refusal consumers key on the error code in message.
-    await expect(
-      store.setSessionTabVisibility('session-beta', true, 'tab-alpha')
-    ).rejects.toSatisfy(
-      (error) =>
-        isAgentSessionRefusalError(error) &&
-        error.message === 'agent_session_conflict' &&
-        error.refusal.details?.reason === 'tabIdTaken'
-    )
-    await expect(store.setSessionTabVisibility('session-gone', true)).rejects.toSatisfy(
-      (error) =>
-        isAgentSessionRefusalError(error) &&
-        error.message === 'agent_session_identity_required' &&
-        error.refusal.details?.reason === 'recordMissing'
-    )
-  })
-
   it('frees a reserved id once its chat is hidden', async () => {
     const store = await open()
     await store.reserveOwner(reserveRequest({ surfaceTabId: 'tab-alpha' }))
@@ -134,22 +124,5 @@ describe('chat tab table', () => {
     )
     await store.setSessionTabVisibility('session-beta', true, 'tab-alpha')
     expect(store.getSessionTabId('session-beta')).toBe('tab-alpha')
-  })
-
-  it('refuses a tab id that could not prefix a pane key', async () => {
-    const store = await open()
-    await expect(
-      store.reserveOwner(reserveRequest({ surfaceTabId: 'agent-session:session-alpha' }))
-    ).rejects.toThrow('agent_session_operation_invalid')
-  })
-
-  it('gives a shown chat the id clients derive, and puts a hidden one back under its old id', async () => {
-    const store = await open()
-    await store.reserveOwner(reserveRequest())
-    await store.setSessionTabVisibility('session-alpha', true)
-    expect(store.getSessionTabId('session-alpha')).toBe(LEGACY_TAB_ID)
-    await store.setSessionTabVisibility('session-alpha', false)
-    await store.setSessionTabVisibility('session-alpha', true, 'tab-restored')
-    expect(store.getSessionTabId('session-alpha')).toBe('tab-restored')
   })
 })

@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { isWslHostRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import { isWslHostRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 /** Preload exposes WSL-host APIs only when this desktop launch supports them. */
 export function wslHostsAvailable(): boolean {

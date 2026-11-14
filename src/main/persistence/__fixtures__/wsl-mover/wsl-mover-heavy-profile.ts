@@ -1,5 +1,5 @@
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
-import type { WslMoveProjectionInput } from '../../moving-wsl-projects/wsl-move-state-projection'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
+import type { WslMoveProjectionInput } from '../../moving-wsl-projects/manifest-scope/wsl-move-state-projection'
 import {
   project,
   repo,

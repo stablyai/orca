@@ -1,5 +1,5 @@
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import { agentTypeToIconAgent } from '@/lib/agent-status'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { agentTypeToIconAgent } from '../../../../shared/agent-status/presentation/agent-type-icon-agent'
 
 type ProgramStatusRowSource = Pick<
   AgentStatusEntry,

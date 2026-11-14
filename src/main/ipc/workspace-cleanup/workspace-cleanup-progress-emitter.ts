@@ -2,14 +2,17 @@ import type {
   WorkspaceCleanupCandidate,
   WorkspaceCleanupScanError,
   WorkspaceCleanupScanProgress
-} from '../../../shared/workspace-cleanup'
+} from '../../../shared/workspace-cleanup/workspace-cleanup'
 import { appendWorkspaceCleanupItems } from './workspace-cleanup-scan-primitives'
+import type { OrchestrationDb } from '../../runtime/orchestration/db/orchestration-db'
 
 const WORKSPACE_CLEANUP_PROGRESS_EMIT_INTERVAL_MS = 100
 
 export type WorkspaceCleanupScanOptions = {
   onProgress?: (progress: WorkspaceCleanupScanProgress) => void
   signal?: AbortSignal
+  /** The scanning host's orchestration database, so released workers' workspaces can be classified. */
+  getOrchestrationDb?: () => OrchestrationDb | null
 }
 
 export type WorkspaceCleanupProgressEmitter = {

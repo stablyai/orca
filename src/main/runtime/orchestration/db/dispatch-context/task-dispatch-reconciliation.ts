@@ -1,4 +1,4 @@
-import type { DispatchContextRow } from '../../types'
+import type { DispatchContextRow } from '../orchestration-records'
 import type { OrchestrationDb } from '../orchestration-db'
 import { transitionLifecycleWithDb } from '../lifecycle-transition'
 
@@ -37,5 +37,31 @@ export function reconcileTaskAfterDispatchInterruption(
     id: taskId,
     from: task.status,
     to: next
+  })
+}
+
+/**
+ * A worker lost with its runtime (restart recovery) leaves its Task ready for a fresh start, or
+ * failed once its retries broke the circuit, while no other attempt runs for it.
+ */
+export function settleTaskAfterLostWorker(
+  db: OrchestrationDb,
+  taskId: string,
+  to: 'ready' | 'failed'
+): void {
+  const task = db.getTask(taskId)
+  if (
+    !task ||
+    !['dispatched', 'blocked'].includes(task.status) ||
+    getActiveDispatchForTask(db, taskId)
+  ) {
+    return
+  }
+  transitionLifecycleWithDb(db.db, {
+    entity: 'task',
+    id: taskId,
+    from: task.status,
+    to,
+    projection: { completed_at: to === 'failed' ? new Date().toISOString() : null }
   })
 }

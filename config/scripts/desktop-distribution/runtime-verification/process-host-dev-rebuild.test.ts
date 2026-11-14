@@ -1,0 +1,202 @@
+import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
+import { createRequire } from 'node:module'
+import { pathToFileURL } from 'node:url'
+import { runProcessSync } from '@orca/process-host'
+import { watch } from 'rolldown'
+import type { RolldownWatcher } from 'rolldown'
+import { afterEach, describe, expect, it } from 'vitest'
+import { createProcessHostDevRebuildPlugin } from '../../../build-plugins/process-host-dev-rebuild'
+
+const realPackageDir = resolve('src/packages/process-host')
+const temporaryRoots: string[] = []
+const watchers: RolldownWatcher[] = []
+
+afterEach(async () => {
+  await Promise.all(watchers.splice(0).map((watcher) => watcher.close()))
+  for (const root of temporaryRoots.splice(0)) {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+
+function fixture(): { root: string; packageDir: string; main: string } {
+  const root = mkdtempSync(join(tmpdir(), 'orca-process-host-dev-'))
+  temporaryRoots.push(root)
+  const packageDir = join(root, 'src', 'packages', 'process-host')
+  const sourceDir = join(packageDir, 'src')
+  mkdirSync(sourceDir, { recursive: true })
+  mkdirSync(join(packageDir, 'scripts'))
+  // Runs the real package build against this fixture package.
+  writeFileSync(
+    join(packageDir, 'scripts', 'build-dist.mjs'),
+    `const { buildPackageDist } = await import(${JSON.stringify(pathToFileURL(resolve(realPackageDir, 'scripts', 'build-dist.mjs')).href)})\nawait buildPackageDist(${JSON.stringify(packageDir)})\n`
+  )
+  mkdirSync(join(root, 'node_modules', '@orca'), { recursive: true })
+  const packageRequire = createRequire(join(realPackageDir, 'package.json'))
+  for (const tool of ['typescript', 'tsx']) {
+    symlinkSync(
+      dirname(packageRequire.resolve(`${tool}/package.json`)),
+      join(root, 'node_modules', tool),
+      'junction'
+    )
+  }
+  symlinkSync(packageDir, join(root, 'node_modules', '@orca', 'process-host'), 'junction')
+  writeFileSync(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - src/packages/*\n')
+  writeFileSync(
+    join(packageDir, 'package.json'),
+    JSON.stringify({
+      name: '@orca/process-host',
+      type: 'commonjs',
+      exports: { '.': { 'orca-source': './src/entry.ts', default: './dist/entry.js' } }
+    })
+  )
+  writeFileSync(
+    join(root, 'tsconfig.base.json'),
+    JSON.stringify({ compilerOptions: { strict: true } })
+  )
+  writeFileSync(
+    join(packageDir, 'tsconfig.json'),
+    JSON.stringify({
+      extends: '../../../tsconfig.base.json',
+      compilerOptions: {
+        target: 'ES2022',
+        lib: ['ES2022'],
+        module: 'Node16',
+        moduleResolution: 'Node16',
+        rootDir: 'src',
+        outDir: 'dist',
+        noEmitOnError: true,
+        types: []
+      },
+      include: ['src/**/*.ts'],
+      exclude: ['src/**/*.test.ts', 'src/**/__fixtures__/**']
+    })
+  )
+  writeFileSync(join(sourceDir, 'entry.ts'), "export { version } from './internal'\n")
+  writeFileSync(join(sourceDir, 'internal.ts'), '// preserved comment\nexport const version = 1\n')
+  const main = join(root, 'main.cjs')
+  writeFileSync(main, "module.exports = require('@orca/process-host')\n")
+  return { root, packageDir, main }
+}
+
+function nextEvent(watcher: RolldownWatcher, code: 'END' | 'ERROR'): Promise<void> {
+  return new Promise((resolveEvent, reject) => {
+    const timeout = setTimeout(() => reject(new Error(`Timed out waiting for ${code}`)), 15_000)
+    watcher.on('event', function listener(event) {
+      if (event.code === code) {
+        clearTimeout(timeout)
+        watcher.off('event', listener)
+        resolveEvent()
+      } else if (event.code === 'ERROR' && code !== 'ERROR') {
+        clearTimeout(timeout)
+        watcher.off('event', listener)
+        reject(event.error)
+      }
+    })
+  })
+}
+
+function closeSuccessfulBundles(watcher: RolldownWatcher): void {
+  // Vite closes successful watch outputs, which invokes electron-vite's reload hook.
+  watcher.on('event', async (event) => {
+    if (event.code === 'BUNDLE_END') {
+      await event.result.close()
+    }
+  })
+}
+
+function readEmittedVersion(root: string): number {
+  const result = runProcessSync({
+    program: process.execPath,
+    args: ['-e', `console.log(require(${JSON.stringify(join(root, 'out', 'main.cjs'))}).version)`],
+    cwd: root,
+    env: { ...process.env, NODE_OPTIONS: '', NODE_PATH: '' }
+  })
+  if (result.code !== 0) {
+    throw new Error(result.stderr || 'The emitted main entry did not load')
+  }
+  return Number(result.stdout.trim())
+}
+
+describe('External process-host development rebuilds', () => {
+  it('rebuilds when an explicitly imported excluded source is created or edited', async () => {
+    const { root, packageDir, main } = fixture()
+    const versions: number[] = []
+    const watcher = watch({
+      input: main,
+      external: ['@orca/process-host'],
+      plugins: [
+        createProcessHostDevRebuildPlugin(root),
+        {
+          name: 'fake-electron-reload',
+          closeBundle() {
+            versions.push(readEmittedVersion(root))
+          }
+        }
+      ],
+      output: { file: join(root, 'out', 'main.cjs'), format: 'cjs' }
+    })
+    watchers.push(watcher)
+    closeSuccessfulBundles(watcher)
+    await nextEvent(watcher, 'END')
+    const failed = nextEvent(watcher, 'ERROR')
+    writeFileSync(
+      join(packageDir, 'src', 'internal.ts'),
+      "export { version } from './included.test'\n"
+    )
+    await failed
+
+    const imported = join(packageDir, 'src', 'included.test.ts')
+    writeFileSync(imported, 'export const version = 6\n')
+    await expect.poll(() => versions.at(-1), { timeout: 15_000 }).toBe(6)
+    writeFileSync(imported, 'export const version = 7\n')
+    await expect.poll(() => versions.at(-1), { timeout: 15_000 }).toBe(7)
+  })
+
+  it('recovers when a missing import is created in a new source directory', async () => {
+    const { root, packageDir, main } = fixture()
+    const loadedVersions: number[] = []
+    const rebuildPlugin = createProcessHostDevRebuildPlugin(root)
+    const watcher = watch({
+      input: main,
+      external: ['@orca/process-host'],
+      plugins: [
+        rebuildPlugin,
+        {
+          name: 'fake-electron-reload',
+          closeBundle() {
+            loadedVersions.push(readEmittedVersion(root))
+          }
+        }
+      ],
+      output: { file: join(root, 'out', 'main.cjs'), format: 'cjs' }
+    })
+    watchers.push(watcher)
+    closeSuccessfulBundles(watcher)
+    await nextEvent(watcher, 'END')
+
+    const failed = nextEvent(watcher, 'ERROR')
+    writeFileSync(
+      join(packageDir, 'src', 'internal.ts'),
+      "export { version } from './features/new-feature'\n"
+    )
+    await failed
+    expect(loadedVersions.at(-1)).toBe(1)
+    expect(readEmittedVersion(root)).toBe(1)
+
+    mkdirSync(join(packageDir, 'src', 'features'))
+    writeFileSync(
+      join(packageDir, 'src', 'features', 'new-feature.ts'),
+      'export const version = 5\n'
+    )
+    await expect.poll(() => loadedVersions.at(-1), { timeout: 15_000 }).toBe(5)
+    const failedAgain = nextEvent(watcher, 'ERROR')
+    writeFileSync(
+      join(packageDir, 'src', 'internal.ts'),
+      "export { version } from './features/still-missing'\n"
+    )
+    await failedAgain
+    expect(readEmittedVersion(root)).toBe(5)
+  })
+})

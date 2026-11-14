@@ -2,11 +2,11 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { ActionsArtifacts } from './ActionsArtifacts'
-import * as requests from '@/store/github/actions-artifact-requests'
-import { TEST_REPO } from '@/store/slices/store-test-helpers'
-import type { ActionsArtifact } from '../../../../../../shared/github/actions-artifact-types'
+import * as requests from '@/store/github/actions/actions-artifact-requests'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
+import type { ActionsArtifact } from '../../../../../../shared/github/actions/actions-artifact-types'
 import type { PreloadApi } from '../../../../../../preload/api-types'
-import { ACTIONS_ARTIFACT_MAX_BYTES } from '../../../../../../shared/github/actions-artifact-types'
+import { ACTIONS_ARTIFACT_MAX_BYTES } from '../../../../../../shared/github/actions/actions-artifact-types'
 
 const repository = { owner: 'acme', repo: 'widgets', host: 'github.com' }
 const option = { repo: TEST_REPO, repository }

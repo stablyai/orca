@@ -1,12 +1,12 @@
-import type { AgentProcessPresence } from '../../../shared/agent-process-presence'
+import type { AgentProcessPresence } from '../../../shared/agent-status/process/agent-process-presence'
 import {
   admitLegacyAgentStatus,
   clearPaneCacheState,
   deleteLegacyAgentStatus
 } from '../../../shared/agent-hook-listener/listener-state'
 import { paneHasStateClaims } from '../../../shared/agent-hook-listener/pane-state-claims'
-import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status-legacy-adapter'
-import type { AgentStatusCacheIdentity } from '../../../shared/agent-status-types'
+import { AGENT_STATUS_2A_CURRENT_PRODUCER_MODE } from '../../../shared/agent-status/transport/agent-status-legacy-adapter'
+import type { AgentStatusCacheIdentity } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   ALL_EXECUTION_HOSTS_SCOPE,
   parseExecutionHostId,
@@ -265,6 +265,7 @@ export abstract class AgentHookServerCleanup extends AgentHookServerAuthorityFen
           // A replacement remote process may reuse the pane; discard the lost owner's children.
           this.state.codexSubagentRosterByPaneKey.delete(paneKey)
           this.state.codexLeadStateByPaneKey.delete(paneKey)
+          this.state.codexAsyncQuestionsByPaneKey.delete(paneKey)
         } else if (deleted.payload.agentType === 'claude') {
           this.state.claudeSubagentRosterByPaneKey.delete(paneKey)
           this.state.claudeLeadStateByPaneKey.delete(paneKey)

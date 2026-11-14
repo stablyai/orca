@@ -1,4 +1,4 @@
-import type { MessageType, MessageRow, RunRow, DeliveryRow } from '../../types'
+import type { MessageType, MessageRow, RunRow, DeliveryRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { exposeMessageListTimestamps } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'

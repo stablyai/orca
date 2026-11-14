@@ -54,6 +54,7 @@ function handle(method, params) {
   if (injected) {
     const error = new Error(injected.message)
     error.code = injected.code
+    error.data = injected.data
     throw error
   }
   if (method === 'status.get') {
@@ -130,7 +131,7 @@ const server = createServer((socket) => {
         response = {
           id: request.id,
           ok: false,
-          error: { code: error.code ?? 'browser_error', message: error.message }
+          error: { code: error.code ?? 'browser_error', message: error.message, data: error.data }
         }
       }
       socket.write(`${JSON.stringify(response)}\n`)

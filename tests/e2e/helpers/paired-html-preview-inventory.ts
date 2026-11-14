@@ -186,34 +186,12 @@ export async function readDocPreviewElementCenter(
   }, selector)
 }
 
-type RoutedPreviewLink = { url: string; opened: boolean }
-
-// Record routed links so swallowed guest clicks can be distinguished from refused tab creation.
-export async function armPairedHtmlPreviewLinkRouting(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('paired client exposed no store to observe link routing')
-    }
-    const routed: RoutedPreviewLink[] = []
-    ;(window as unknown as { __routedPreviewLinks: RoutedPreviewLink[] }).__routedPreviewLinks =
-      routed
-    const original = store.getState().openBrowserProfileTabInActiveWorkspace
-    store.setState({
-      openBrowserProfileTabInActiveWorkspace: async (url: string, profileId: string | null) => {
-        const opened = await original(url, profileId)
-        routed.push({ url, opened })
-        return opened
-      }
-    } as never)
-  })
-}
-
-export async function readPairedHtmlPreviewLinkRouting(page: Page): Promise<RoutedPreviewLink[]> {
-  return page.evaluate(
-    () =>
-      (window as unknown as { __routedPreviewLinks?: RoutedPreviewLink[] }).__routedPreviewLinks ??
-      []
+// Read every client browser page URL so a routed link is observed where it lands, whatever opener produced it.
+export async function readClientBrowserPageUrls(page: Page): Promise<string[]> {
+  return page.evaluate(() =>
+    Object.values(window.__store?.getState().browserPagesByWorkspace ?? {}).flatMap((pages) =>
+      pages.map((browserPage) => browserPage.url)
+    )
   )
 }
 

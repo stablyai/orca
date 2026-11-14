@@ -33,10 +33,13 @@ file of at most 16 KiB, or 64 KiB for an icon theme.
   `--primary`/`--primary-foreground`) must be opaque with at least 4.5:1 contrast; a pair that
   fails is dropped and keeps Orca's built-in colors. A pair you set only half of is checked
   against what the other half falls back to. Some checks drop only your token: `--text-link`
-  needs 4.5:1 on `--editor-surface`, each `--git-decoration-*` 3:1 on `--sidebar`, and
-  `--worktree-sidebar-active`, `--chat-user-message` and the diff line and character tints
-  4.5:1 with the text drawn on them. Those surfaces and `--host-badge` may be translucent; they
-  are checked as painted over the surface beneath.
+  needs 4.5:1 on `--editor-surface`, each `--git-decoration-*` 3:1 on `--sidebar`,
+  `--chat-bold-foreground` 4.5:1 on the chat background and on `--chat-user-message`,
+  `--chat-muted-foreground` 4.5:1 on the chat background and on code blocks, and
+  `--worktree-sidebar-active`, `--chat-user-message`, `--chat-inline-code` (against the chat link
+  color), `--chat-code-block` and the diff line and character tints 4.5:1 with the text drawn on
+  them. Those surfaces, `--chat-inline-code`, `--chat-selection` and `--host-badge` may be
+  translucent; they are checked as painted over the surface beneath.
 - An omitted surface token paints exactly what Orca paints without a theme. The code editor's
   diff view and links keep Monaco's own colors unless the theme sets a diff token or
   `--text-link`. Setting only `--diff-added` and `--diff-removed` is enough; the line, gutter and
@@ -96,6 +99,7 @@ An app theme may add one image painted behind the window's translucent surfaces:
   "tokens": { "--background": "#1b1430", "--foreground": "#e8e0ff" },
   "background": {
     "path": "images/dusk.webp",
+    "videoPath": "images/dusk.mp4",
     "opacity": 0.35,
     "size": "cover",
     "position": "center"
@@ -107,10 +111,39 @@ An app theme may add one image painted behind the window's translucent surfaces:
   2 MB. Orca serves it only through its own image scheme and checks the bytes each time; an image
   that does not pass is not shown and the theme still applies. `validate:plugin` reports a
   missing file.
+- `videoPath` (optional, Orca 1.4.254 and later) is a looping video played over `path`. It
+  never shows controls. Orca checks it from the file's headers, without
+  decoding it. Limits:
+  - MP4 or WebM, with one video track and no audio track (encode with `-an`)
+  - H.264, VP9 or AV1
+  - at least 640×360, at most 2,304,000 pixels (for example 1920×1080)
+  - at most 60 seconds and 8 MB
+
+  Ship H.264 in MP4. It was the only codec decoded in hardware on every GPU tested (macOS,
+  Windows and Linux with VA-API). Without a hardware decoder, H.264, VP9 and AV1 fall back to
+  software. HEVC is refused because Chromium has no software decoder for it, so it plays on
+  some machines and not others.
+
+  For example: `ffmpeg -framerate 20 -i frame%04d.png -c:v libx264 -crf 18 -pix_fmt yuv420p -an -movflags +faststart dusk.mp4`.
+
+  Each frame is a full-window composite, so 20 fps or less keeps the cost low.
+
+  `path` stays required. Orca shows only the still image:
+  - while the video loads
+  - if the video cannot play
+  - when the system asks to reduce motion
+  - in earlier releases, which ignore `videoPath`
+
+  The video pauses on its current frame while the window is not focused (including hidden or
+  minimized) and while a dialog is open.
+
+  Animated WebP, APNG and GIF are not supported: each frame is decoded in software, which costs
+  several times the CPU of a video.
+
 - `opacity` (0 to 1, default 1) is how strongly the image shows through the theme's
-  `--background`; `size` is `cover` (default), `contain` or `tile`; `position` is `center`
-  (default), `top`, `bottom`, `left` or `right`.
-- The image is one static layer, never blurred. Sidebars, editors and pages stay opaque; it
+  `--background`; `size` is `cover` (default), `contain` or `tile` (a video covers instead);
+  `position` is `center` (default), `top`, `bottom`, `left` or `right`.
+- The image and video are never blurred. Sidebars, editors and pages stay opaque; it
   shows through terminals and agent chats when the user's terminal Background Opacity is below 1.
   Chat text sits on the chat canvas at that opacity (at least 0.8); message bubbles, code blocks,
   approval and question cards, the composer and menus stay opaque. A chat split beside terminals

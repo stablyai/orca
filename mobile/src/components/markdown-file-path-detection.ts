@@ -1,6 +1,6 @@
 // Prefer precise chat file paths over recall: missed link is tolerable, false prose/version tap is broken navigation.
 
-import { parseFileLinkLocation } from '../../../src/shared/file-link-location'
+import { parseFileLinkLocation } from '../../../src/shared/file-links/file-link-location'
 
 export type FilePathSegment =
   | { type: 'text'; value: string }

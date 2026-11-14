@@ -1,4 +1,4 @@
-import { parsePaneKey } from './stable-pane-id'
+import { parsePaneKey } from './workspace-layout/stable-pane-id'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId

@@ -1,5 +1,5 @@
-import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
-import type { BrowserTabInfo } from '../../../../../shared/runtime-types'
+import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
+import type { BrowserTabInfo } from '../../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type {
   RemoteBrowserOperationToken,
@@ -57,7 +57,7 @@ export const WHEEL_DELTA_LINE = 1
 export const WHEEL_DELTA_PAGE = 2
 
 export type RemoteBrowserStreamBridge = {
-  applyTabInfo: (tab: Pick<BrowserTabInfo, 'url' | 'title'>) => void
+  applyTabInfo: (tab: BrowserTabInfo) => void
   clearFrame: () => void
   handleFrameBytes: (token: RemoteBrowserStreamToken, bytes: Uint8Array<ArrayBufferLike>) => void
   closeMissingRemotePage: (remotePageId: string | null) => void

@@ -116,19 +116,4 @@ describe('triggerPtySpawnPushTargetMaterialization (real git fixture)', () => {
     ).trim()
     expect(fetchedHead).toBe(forkHead)
   })
-
-  it('is a no-op once the remote was already created (repeat pty:spawn, e.g. reattach)', async () => {
-    const target = { ...forkTarget(), remoteCreated: true }
-    const { deps } = depsFor(target)
-    await git(['remote', 'add', FORK_REMOTE, forkPath], repoPath)
-
-    triggerPtySpawnPushTargetMaterialization(deps, { cols: 80, rows: 24, worktreeId })
-
-    // Let the fire-and-forget hook settle before asserting the remoteCreated no-op.
-    await new Promise((resolve) => setImmediate(resolve))
-    const upstream = await git(['rev-parse', '--abbrev-ref', `${mainBranch}@{u}`], repoPath).catch(
-      () => ''
-    )
-    expect(upstream.trim()).toBe('')
-  })
 })

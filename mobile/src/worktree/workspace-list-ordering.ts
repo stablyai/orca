@@ -5,13 +5,16 @@ import {
   buildWorkspaceRowComparator,
   recentActivityWithCreateGrace
 } from '../../../src/shared/workspace-view/workspace-row-sort'
-import { compareCodePoints, compareSidebarText } from '../../../src/shared/sidebar-list/text-order'
+import {
+  compareCodePoints,
+  compareSidebarText
+} from '../../../src/shared/sidebar-list/sorting/text-order'
 import { getWorktreeRowIdentity } from './worktree-host-row-identity'
 import {
   compareSmartStamps,
   recentStamp,
   type StampOrderRow
-} from '../../../src/shared/sidebar-list/stamp-order'
+} from '../../../src/shared/sidebar-list/sorting/stamp-order'
 
 function finiteOr(value: number | undefined, fallback: number): number {
   return value !== undefined && Number.isFinite(value) ? value : fallback
@@ -130,6 +133,15 @@ const HOST_VERDICT_DOT_STATUSES: ReadonlySet<string> = new Set<WorktreeStatus>([
 
 function isHostVerdictDotStatus(value: string | undefined): value is WorktreeStatus {
   return value !== undefined && HOST_VERDICT_DOT_STATUSES.has(value)
+}
+
+/** A row from the phone's store has its agent state stripped (K1); only a live read fills its dot. */
+export function hasWorktreeAgentState(w: WorktreeStatusInputs): boolean {
+  return (
+    w.status !== undefined ||
+    w.sidebarStatus !== undefined ||
+    w.hasHostSidebarActivity !== undefined
+  )
 }
 
 export function getWorktreeDotStatus(w: WorktreeStatusInputs): WorktreeStatus {

@@ -4,7 +4,7 @@ import {
   BROWSER_EXTENSIONS_CHANGED_CHANNEL,
   type BrowserExtensionActionResult,
   type BrowserExtensionListResult
-} from '../../../shared/browser-extension-types'
+} from '../../../shared/browser/extensions/browser-extension-types'
 
 /** Settings › Browser › Extensions. */
 export const browserExtensionsApi = {

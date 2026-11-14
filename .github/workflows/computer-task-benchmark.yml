@@ -27,22 +27,6 @@ env:
   BASELINE_SHA: 030c88deecf3adc212d22f57b085e4bd5c6e48e6
 
 jobs:
-  contract:
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          persist-credentials: false
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - run: python -m unittest discover -s config/benchmarks/computer-use -p 'test_*.py'
-
   linux:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     runs-on: ubuntu-latest

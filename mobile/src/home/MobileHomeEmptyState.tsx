@@ -1,5 +1,7 @@
-import { Fragment } from 'react'
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { QrCode } from 'lucide-react-native'
+import { Fragment, useState } from 'react'
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import Animated from 'react-native-reanimated'
 import { OrcaLogo } from '../components/OrcaLogo'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -36,7 +38,12 @@ function onboardingSteps(t: Translate) {
   ]
 }
 
-export function MobileHomeEmptyState(props: { contentMaxWidth: number; isWideLayout: boolean }) {
+export function MobileHomeEmptyState(props: {
+  contentMaxWidth: number
+  isWideLayout: boolean
+  bottomInset: number
+  onPairDesktop: () => void
+}) {
   const t = useMobileTranslation()
   useMobileColorScheme()
   // Scrolls because a phone in landscape is shorter than the hero and the steps together.
@@ -44,6 +51,7 @@ export function MobileHomeEmptyState(props: { contentMaxWidth: number; isWideLay
     <ScrollView
       contentContainerStyle={[
         styles.container,
+        { paddingBottom: props.bottomInset },
         props.isWideLayout && {
           maxWidth: props.contentMaxWidth,
           width: '100%',
@@ -79,7 +87,40 @@ export function MobileHomeEmptyState(props: { contentMaxWidth: number; isWideLay
           </Fragment>
         ))}
       </View>
+      <PairDesktopButton onPress={props.onPairDesktop} />
     </ScrollView>
+  )
+}
+
+function PairDesktopButton(props: { onPress: () => void }) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
+  const [pressed, setPressed] = useState(false)
+  return (
+    <Pressable
+      accessibilityRole="button"
+      style={styles.ctaHit}
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
+      onPress={props.onPress}
+    >
+      <Animated.View
+        style={[
+          styles.cta,
+          {
+            opacity: pressed ? 0.85 : 1,
+            transform: [{ scale: pressed ? 0.97 : 1 }],
+            transitionProperty: ['transform', 'opacity'],
+            transitionDuration: pressed ? 90 : 160
+          }
+        ]}
+      >
+        <QrCode size={18} color={colors.onAccent} strokeWidth={2.2} />
+        <Text style={styles.ctaLabel}>
+          {t('home.emptyState.pairDesktopButton', 'Pair desktop')}
+        </Text>
+      </Animated.View>
+    </Pressable>
   )
 }
 
@@ -121,5 +162,16 @@ const styles = themedStyleSheet(() => ({
   },
   stepText: { flex: 1, minWidth: 0 },
   stepTitle: { fontSize: 17, lineHeight: 22, color: colors.textPrimary },
-  stepDescription: { fontSize: 15, lineHeight: 20, color: colors.textSecondary, marginTop: 2 }
+  stepDescription: { fontSize: 15, lineHeight: 20, color: colors.textSecondary, marginTop: 2 },
+  ctaHit: { alignSelf: 'center', marginTop: 22 },
+  cta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: 48,
+    paddingHorizontal: 22,
+    borderRadius: radii.control,
+    backgroundColor: colors.accentBlue
+  },
+  ctaLabel: { fontSize: 16, fontWeight: '600', color: colors.onAccent }
 }))

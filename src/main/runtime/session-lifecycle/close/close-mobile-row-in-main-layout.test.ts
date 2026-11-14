@@ -6,7 +6,7 @@ import {
   resolveAgentLaunchPaneVerdict,
   trackRunningAgentLaunchPane
 } from '../../../agent-launch/agent-launch-pane-attachment'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   LEAF_A,
   LEAF_B,
@@ -15,7 +15,7 @@ import {
   TAB_ID,
   WORKTREE_ID,
   setupMainOwnedWorkspace
-} from '../../main-owned-workspace-runtime-fixture'
+} from '../../terminal/layout/main-owned-workspace-runtime-fixture'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 

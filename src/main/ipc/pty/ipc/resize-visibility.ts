@@ -3,8 +3,8 @@ import type {
   PtyDeliveryWriteOff,
   PtyRendererDeliveryHealthReply,
   PtyRendererDeliveryStateReport
-} from '../../../../shared/pty-renderer-delivery-health'
-import { redactPtyIdForDiagnostics } from '../../../../shared/pty-delivery-diagnostics'
+} from '../../../../shared/terminal/pty/diagnostics/pty-renderer-delivery-health'
+import { redactPtyIdForDiagnostics } from '../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 import { installTerminalViewAttributesIpc } from './terminal-view-attributes-ipc'
 import {
   consumeHiddenRendererPtyDropMemory,

@@ -2,6 +2,7 @@ import React from 'react'
 import { SortableContext } from '@dnd-kit/sortable'
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -26,30 +27,34 @@ import { renderTabBarItems } from './tab-bar-item-surface'
 import { TabBarStaticCreateMenu } from './tab-bar-static-create-menu'
 import ClientHostedBrowserTabRows from './ClientHostedBrowserTabRows'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
+import { advanceAgentSessionsTourPastNewTab } from '@/components/contextual-tours/agent-sessions-tour-new-tab'
 
 const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
 
-export function renderTabBarSurface({
-  props,
-  runtime,
-  createMenu,
-  itemProjection,
-  tabStripNavigation,
-  tabStripDragScroll,
-  activeClientHostedBrowserRowId,
-  itemActions,
-  surfaceRef
-}: {
-  props: TabBarProps
-  runtime: TabBarRuntimeModel
-  createMenu: TabBarCreateMenuController
-  itemProjection: TabBarItemProjection
-  tabStripNavigation: ReturnType<typeof useTabStripOverflowNavigation>
-  tabStripDragScroll: ReturnType<typeof useTabStripDragScrollHandlers>
-  activeClientHostedBrowserRowId: string | null
-  itemActions: TabBarItemActions
-  surfaceRef: (node: HTMLDivElement | null) => void
-}): React.JSX.Element {
+export function renderTabBarSurface(
+  {
+    props,
+    runtime,
+    createMenu,
+    itemProjection,
+    tabStripNavigation,
+    tabStripDragScroll,
+    activeClientHostedBrowserRowId,
+    itemActions,
+    surfaceRef
+  }: {
+    props: TabBarProps
+    runtime: TabBarRuntimeModel
+    createMenu: TabBarCreateMenuController
+    itemProjection: TabBarItemProjection
+    tabStripNavigation: ReturnType<typeof useTabStripOverflowNavigation>
+    tabStripDragScroll: ReturnType<typeof useTabStripDragScrollHandlers>
+    activeClientHostedBrowserRowId: string | null
+    itemActions: TabBarItemActions
+    surfaceRef: (node: HTMLDivElement | null) => void
+  },
+  t: Translate = translate
+): React.JSX.Element {
   const {
     worktreeId,
     terminalOnly = false,
@@ -111,6 +116,7 @@ export function renderTabBarSurface({
     activeClientHostedBrowserRowId
   })
 
+  const hasTabs = orderedItems.length + clientHostedBrowserRows.length > 0
   return (
     <div ref={surfaceRef} className="flex items-stretch h-full overflow-hidden flex-1 min-w-0">
       {tabStripOverflowState.hasOverflow ? (
@@ -121,10 +127,7 @@ export function renderTabBarSurface({
               size="icon-xs"
               className="mx-0.5 my-auto h-6 w-5 @max-[260px]/tab-strip:hidden"
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              aria-label={translate(
-                'auto.components.tab.bar.TabBar.7a9b4af2af',
-                'Scroll tabs left'
-              )}
+              aria-label={t('auto.components.tab.bar.TabBar.7a9b4af2af', 'Scroll tabs left')}
               aria-disabled={!tabStripOverflowState.canScrollStart}
               disabled={
                 !tabStripDragScroll.isTabDragActive && !tabStripOverflowState.canScrollStart
@@ -137,7 +140,7 @@ export function renderTabBarSurface({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
-            {translate('auto.components.tab.bar.TabBar.7a9b4af2af', 'Scroll tabs left')}
+            {t('auto.components.tab.bar.TabBar.7a9b4af2af', 'Scroll tabs left')}
           </TooltipContent>
         </Tooltip>
       ) : null}
@@ -146,7 +149,10 @@ export function renderTabBarSurface({
         {/* Why: no-drag lets tab interactions work inside the titlebar's drag region (outer container stays window-draggable). */}
         <div
           data-single-tab={singleTab ? '' : undefined}
-          className="group/tab-strip relative flex min-h-0 w-max min-w-0 max-w-full shrink"
+          // Why: tabs are the only drag source, so a narrow pane clips the "+" before the last tab sliver.
+          className={`group/tab-strip relative flex min-h-0 w-max max-w-full shrink ${
+            hasTabs ? 'min-w-10' : 'min-w-0'
+          }`}
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           <div
@@ -190,10 +196,7 @@ export function renderTabBarSurface({
               size="icon-xs"
               className="mx-0.5 my-auto h-6 w-5 @max-[260px]/tab-strip:hidden"
               style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              aria-label={translate(
-                'auto.components.tab.bar.TabBar.232e075b07',
-                'Scroll tabs right'
-              )}
+              aria-label={t('auto.components.tab.bar.TabBar.232e075b07', 'Scroll tabs right')}
               aria-disabled={!tabStripOverflowState.canScrollEnd}
               disabled={!tabStripDragScroll.isTabDragActive && !tabStripOverflowState.canScrollEnd}
               onClick={() => scrollTabStrip('end')}
@@ -204,7 +207,7 @@ export function renderTabBarSurface({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
-            {translate('auto.components.tab.bar.TabBar.232e075b07', 'Scroll tabs right')}
+            {t('auto.components.tab.bar.TabBar.232e075b07', 'Scroll tabs right')}
           </TooltipContent>
         </Tooltip>
       ) : null}
@@ -215,11 +218,15 @@ export function renderTabBarSurface({
         modal={false}
       >
         <DropdownMenuTrigger asChild>
+          {/* Why: below 86px (40 tab floor + 36 "+" + 8 action padding + 2 sub-pixel slack) "+" would only clip; hide it whole so Tab never lands on it. Empty groups keep it. */}
           <button
-            className="ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+            className={`ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground ${
+              hasTabs ? '@max-[86px]/tab-strip:hidden' : ''
+            }`}
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-            title={translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
-            aria-label={translate('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
+            title={t('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
+            aria-label={t('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
+            data-contextual-tour-target="tab-create-menu"
           >
             <Plus className="w-3.5 h-3.5" />
           </button>
@@ -232,12 +239,14 @@ export function renderTabBarSurface({
             // Why: Radix restores focus to the "+" trigger on close, stealing it from the freshly-mounted terminal.
             event.preventDefault()
             runPendingNewTabMenuFocusAfterClose()
+            advanceAgentSessionsTourPastNewTab()
           }}
         >
           {!terminalOnly && onOpenEntry ? (
             <>
               <TabBarAgentPickerEntry
                 inventory={agentPickerInventory}
+                terminalPending={agentMenu.state === 'settled' && agentMenu.terminalPending}
                 worktreeId={worktreeId}
                 groupId={resolvedGroupId}
                 menuOpen={newTabMenuOpen}

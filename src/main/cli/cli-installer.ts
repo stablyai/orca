@@ -4,17 +4,17 @@ import type { CliInstallStatus } from '../../shared/cli-install-types'
 import {
   pruneAppImageExtractedRoots,
   removeAppImageInstalledPayloads
-} from './appimage-extraction-pruning'
-import { withAppImageRegistrationLock } from './appimage-registration-lock'
+} from './appimage/appimage-extraction-pruning'
+import { withAppImageRegistrationLock } from './appimage/appimage-registration-lock'
 import {
   isAppImageInstalledLauncherCurrent,
   isAppImageInstalledLauncherOwnedBySibling,
   resolveAppImageNamespacePath,
   resolveLegacyAppImageNamespacePath
-} from './appimage-extracted-root'
-import { isAppImageStableLauncherReady } from './appimage-stable-launcher'
-import { CliPathRegistration } from './cli-path-registration'
-import { removeLinuxBareOrcaDispatcher } from './linux-bare-orca-dispatcher'
+} from './appimage/appimage-extracted-root'
+import { isAppImageStableLauncherReady } from './appimage/appimage-stable-launcher'
+import { CliPathRegistration } from './command-paths/cli-path-registration'
+import { removeLinuxBareOrcaDispatcher } from './launchers/linux-bare-orca-dispatcher'
 
 export class CliInstaller extends CliPathRegistration {
   isAppImageRegistrationOwnedBySibling(status: CliInstallStatus): boolean {

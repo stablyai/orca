@@ -1,5 +1,5 @@
 {
-  "$schemaNote": "Consumed by config/scripts/regenerate-xterm-patches.mjs. See docs/reference/xterm-patch-regeneration.md.",
+  "$schemaNote": "Consumed by config/scripts/terminal-dependencies/xterm-patches/regenerate-xterm-patches.mjs. See docs/reference/xterm-patch-regeneration.md.",
   "upstream": {
     "repository": "https://github.com/xtermjs/xterm.js.git",
     "commit": "08829c7eb6279dda2a9e86df901353a1a89858ca",
@@ -7,7 +7,7 @@
   },
   "sourcemaps": {
     "policy": "include",
-    "why": "terminal-ime-xterm-transaction-events.test.ts reads lib/*.map and asserts the mapped Version.ts matches the runtime version, so the maps have to move with the bundles rather than be dropped. Patching them costs ~5.8MB of the emitted patch; the alternative, deleting them, is only available again once nothing reads them."
+    "why": "Keep generated source maps synchronized with their bundles for debugging. The removed transaction-events test no longer requires source-map/runtime version self-consistency."
   },
   "toolchain": {
     "why": "Pinned by the upstream package-lock at the commit above. The generator asserts these resolve as expected so a silent upstream resolution change surfaces as a toolchain error rather than a mystery patch diff.",

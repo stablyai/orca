@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithHandleMobileSubscribe } from './mobile-terminal-subscribe'
-import { clampTerminalViewport } from '../../../../shared/terminal-viewport'
+import { clampTerminalViewport } from '../../../../shared/terminal/viewport/terminal-viewport'
 
 export abstract class OrcaRuntimeWithHandleMobileSubscribeInternal extends OrcaRuntimeWithHandleMobileSubscribe {
   protected async handleMobileSubscribeInternal(
@@ -7,6 +7,8 @@ export abstract class OrcaRuntimeWithHandleMobileSubscribeInternal extends OrcaR
     clientId: string,
     viewport?: { cols: number; rows: number }
   ): Promise<boolean> {
+    // A fresh view must not inherit a departed phone's claim.
+    this.resetMobileDisplayModeForFreshViewer(ptyId)
     const mode = this.getMobileDisplayMode(ptyId)
 
     // Any new subscriber supersedes the prior client's pending restore.
@@ -122,7 +124,7 @@ export abstract class OrcaRuntimeWithHandleMobileSubscribeInternal extends OrcaR
       lastActedAt: now
     })
 
-    // Subscribe-fresh with auto/phone counts as "take the floor".
+    // Subscribe-fresh in auto mode takes the floor. Headless hosts start in desktop mode, so a lone viewer arrives here only after input or a phone-mode request.
     this.setDriver(ptyId, { kind: 'mobile', clientId })
 
     // The first transition has no layout entry yet; admit it through the fresh-subscribe guard.

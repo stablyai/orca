@@ -186,7 +186,7 @@ jobs:
       # a missing cert must fail here rather than after a 20-minute build.
       - name: Verify macOS signing environment
         if: steps.freshness.outputs.should_build == 'true'
-        run: node config/scripts/verify-macos-release-env.mjs
+        run: node config/scripts/desktop-distribution/macos/verify-macos-release-env.mjs
         env:
           CSC_LINK: ${{ secrets.MAC_CERTS }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
@@ -219,7 +219,7 @@ jobs:
           published="$main_tags"$'\n'"$channel_tags"
           echo "Published version sources: $(grep -c . <<<"$main_tags" || true) main tags, $(grep -c . <<<"$channel_tags" || true) channel tags"
           ORCA_PUBLISHED_VERSIONS="$published" ORCA_DAILY_RELEASE_NAMES="$names" \
-            node config/scripts/daily-build-version.mjs \
+            node "$(if [ -f config/scripts/release/versioning/daily-build-version.mjs ]; then printf %s config/scripts/release/versioning/daily-build-version.mjs; else printf %s config/scripts/daily-build-version.mjs; fi)" \
             >"$RUNNER_TEMP/daily-identity.txt"
           grep -E '^(version|build_number)=' "$RUNNER_TEMP/daily-identity.txt"
           # Dispatch YAML can be newer than the pinned source’s version script; reject missing output before publishing an untitled release.
@@ -235,7 +235,7 @@ jobs:
         env:
           NODE_OPTIONS: --max-old-space-size=4096
           # Leave dev identity unset so official-only stable/rc telemetry stays silent.
-          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+          ORCA_DIAGNOSTICS_TOKEN_URL: https://orca.dev/diagnostics/token
 
       # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
       - name: Download the orcad deployment template
@@ -304,7 +304,7 @@ jobs:
           timeout_minutes: 45
           max_attempts: 2
           retry_wait_seconds: 30
-          command: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON config/scripts/pinned-node-downloads.mjs darwin-arm64 darwin-x64 && node config/scripts/ensure-native-runtime.mjs --runtime=electron && if [ -f config/scripts/build-mac-notarization-overlap.mjs ]; then ORCA_MAC_DAILY=1 node config/scripts/build-mac-notarization-overlap.mjs --publish always; else ORCA_MAC_DAILY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always; fi
+          command: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON "$(if [ -f config/scripts/orcad-distribution/prebuilds/pinned-node-downloads.mjs ]; then printf %s config/scripts/orcad-distribution/prebuilds/pinned-node-downloads.mjs; else printf %s config/scripts/pinned-node-downloads.mjs; fi)" darwin-arm64 darwin-x64 && node "$(if [ -f config/scripts/native-build/node-addons/ensure-native-runtime.mjs ]; then printf %s config/scripts/native-build/node-addons/ensure-native-runtime.mjs; else printf %s config/scripts/ensure-native-runtime.mjs; fi)" --runtime=electron && if { [ -f config/scripts/desktop-distribution/macos/build-mac-notarization-overlap.mjs ] || [ -f config/scripts/build-mac-notarization-overlap.mjs ]; }; then ORCA_MAC_DAILY=1 node "$(if [ -f config/scripts/desktop-distribution/macos/build-mac-notarization-overlap.mjs ]; then printf %s config/scripts/desktop-distribution/macos/build-mac-notarization-overlap.mjs; else printf %s config/scripts/build-mac-notarization-overlap.mjs; fi)" --publish always; else ORCA_MAC_DAILY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always; fi
         env:
           # Give the publisher App write access to its configured orca-daily target.
           GH_TOKEN: ${{ steps.app_token_publish.outputs.token }}
@@ -329,6 +329,18 @@ jobs:
           private-key: ${{ secrets.HOURLY_RELEASE_APP_PRIVATE_KEY }}
           owner: stablyai
           repositories: orca-daily
+
+      # Builder cannot write this field, so older macOS updaters would install a build that won't launch.
+      - name: Gate the update manifest on the minimum macOS
+        if: steps.freshness.outputs.should_build == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app_token_final.outputs.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          node config/scripts/desktop-distribution/macos/gate-mac-update-manifests.mjs dist
+          gh release upload "$TAG" dist/*-mac.yml --repo "$DAILY_REPO" --clobber
 
       # Verify latest-mac.yml before exposing its release to prevent picker downloads returning 404.
       - name: Verify update manifest published

@@ -1,14 +1,14 @@
 import type { PermissionResult } from '@anthropic-ai/claude-agent-sdk'
-import type { AgentChildWorkStopAcknowledgement } from '../../../shared/agent-child-work-stop-targets'
-import type { ClaudePromptClaim } from '../claude-prompt-registry'
+import type { AgentChildWorkStopAcknowledgement } from '../../../shared/agent-status/child-work/agent-child-work-stop-targets'
+import type { ClaudePromptClaim } from './permissions/claude-prompt-registry'
 import {
   ClaudeControlRequestError,
   ClaudeControlRequestTimeoutError
-} from '../claude-agent-sdk-control-requests'
+} from '../sdk-transport/claude-agent-sdk-control-requests'
 import { settleCancelledClaudeDispatchWaiters } from './claude-structured-dispatch'
-import type { ClaudeLateDispatchSettlement } from '../claude-replay-turn-resolution'
+import type { ClaudeLateDispatchSettlement } from './turns/claude-replay-turn-resolution'
 import type { ClaudeSession } from './claude-structured-session-state'
-import { CLAUDE_STOP_GRACE_MS } from '../claude-request-end-wait'
+import { CLAUDE_STOP_GRACE_MS } from './turns/claude-request-end-wait'
 
 const INTERRUPT_CANCEL_QUEUED_CAPABILITY = 'interrupt_cancel_queued_v1'
 
@@ -16,7 +16,7 @@ export function supportsClaudeQueuedInterruptCancellation(session: ClaudeSession
   return session.capabilities.includes(INTERRUPT_CANCEL_QUEUED_CAPABILITY)
 }
 
-export type ClaudeTurnCancellationGuard = () => boolean
+export type ClaudeTurnCancellationGuard = () => boolean | Promise<boolean>
 
 /** Cancel queued sends atomically when supported; otherwise withdraw UUIDs from the interrupt receipt. */
 export async function cancelClaudeTurn(
@@ -32,7 +32,7 @@ export async function cancelClaudeTurn(
       ? timeoutMs
       : Math.min(timeoutMs ?? CLAUDE_STOP_GRACE_MS, stoppedAt + CLAUDE_STOP_GRACE_MS - Date.now())
   const interruptTimeout = remaining()
-  if (!isCurrent() || (interruptTimeout !== undefined && interruptTimeout <= 0)) {
+  if (!(await isCurrent()) || (interruptTimeout !== undefined && interruptTimeout <= 0)) {
     return { cancelled: false }
   }
   const cancelQueued = supportsClaudeQueuedInterruptCancellation(session)
@@ -47,7 +47,7 @@ export async function cancelClaudeTurn(
       const withdrawn: string[] = []
       for (const uuid of receipt?.still_queued ?? []) {
         const withdrawalTimeout = remaining()
-        if (!isCurrent() || (withdrawalTimeout !== undefined && withdrawalTimeout <= 0)) {
+        if (!(await isCurrent()) || (withdrawalTimeout !== undefined && withdrawalTimeout <= 0)) {
           break
         }
         if (
@@ -82,7 +82,7 @@ export async function stopClaudeBackgroundTasks(
   // Continue after individual failures; a timeout aborts to avoid one deadline per task.
   let failure: { error: unknown } | undefined
   for (const taskId of taskIds) {
-    if (!isCurrent()) {
+    if (!(await isCurrent())) {
       break
     }
     try {

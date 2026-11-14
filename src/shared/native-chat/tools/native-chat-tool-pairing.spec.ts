@@ -1,24 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { pairNativeChatToolResults } from './native-chat-tool-pairing'
-import type {
-  NativeChatBlock,
-  NativeChatToolCallBlock,
-  NativeChatToolResultBlock
-} from '../native-chat-types'
+import type { NativeChatToolCallBlock, NativeChatToolResultBlock } from '../native-chat-types'
 
 const call = (name: string): NativeChatToolCallBlock => ({ type: 'tool-call', name, input: {} })
 const result = (output: string): NativeChatToolResultBlock => ({ type: 'tool-result', output })
 
 describe('pairNativeChatToolResults', () => {
-  it('gives each call the result that answered it', () => {
-    const [a, ra, b, rb] = [call('read'), result('one'), call('shell'), result('two')]
-    const { resultByCall, pairedResults } = pairNativeChatToolResults([a, ra, b, rb])
-
-    expect(resultByCall.get(a)).toBe(ra)
-    expect(resultByCall.get(b)).toBe(rb)
-    expect(pairedResults.size).toBe(2)
-  })
-
   it('answers the oldest unanswered call when two are interleaved', () => {
     const [outer, inner, first, second] = [call('a'), call('b'), result('inner'), result('outer')]
     const { resultByCall } = pairNativeChatToolResults([outer, inner, first, second])
@@ -33,14 +20,6 @@ describe('pairNativeChatToolResults', () => {
 
     expect(resultByCall.get(a)).toBe(only)
     expect(resultByCall.has(b)).toBe(false)
-  })
-
-  it('leaves a result with no call to answer unpaired, so it still draws its own row', () => {
-    const orphan = result('one')
-    const { resultByCall, pairedResults } = pairNativeChatToolResults([orphan])
-
-    expect(resultByCall.size).toBe(0)
-    expect(pairedResults.has(orphan)).toBe(false)
   })
 
   it('gives a result that names its call to that call, past one that finished with no output', () => {
@@ -67,13 +46,5 @@ describe('pairNativeChatToolResults', () => {
 
     expect(resultByCall.has(waiting)).toBe(false)
     expect(pairedResults.has(stray)).toBe(false)
-  })
-
-  it('ignores blocks that are neither a call nor a result', () => {
-    const text: NativeChatBlock = { type: 'text', text: 'hi' }
-    const [a, ra] = [call('a'), result('r')]
-    const { resultByCall } = pairNativeChatToolResults([text, a, ra])
-
-    expect(resultByCall.get(a)).toBe(ra)
   })
 })

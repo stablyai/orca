@@ -1,0 +1,158 @@
+import { useCallback, useMemo } from 'react'
+import { useShallow } from 'zustand/react/shallow'
+import { toast } from 'sonner'
+import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
+import { findFolderWorkspaceOwner } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
+import { useAppStore } from '@/store/index'
+import { openDesktopStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
+import { findStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
+import { flashFocusedPaneRim } from '@/components/terminal-pane/input/focus/focused-pane-rim-flash'
+import { translate } from '@/i18n/i18n'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { findOriginalAiVaultSessionPane } from './ai-vault-original-pane'
+import {
+  createLazyAiVaultOriginalPaneIndex,
+  findAiVaultSessionLiveStateInIndex,
+  findOriginalAiVaultSessionPaneInIndex
+} from './ai-vault-original-pane-index'
+import type { AgentDotState } from '@/components/AgentStateDot'
+import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
+
+export function useAiVaultOriginalPaneActions(): {
+  getOriginalPaneTarget: (
+    session: AiVaultSession
+  ) => ReturnType<typeof findOriginalAiVaultSessionPane>
+  getSessionLiveState: (session: AiVaultSession) => AgentDotState | null
+  isStructuredSessionOpen: (session: AiVaultSession) => boolean
+  /** Settles false when the pane is gone and nothing was switched. */
+  jumpToOriginalPane: (session: AiVaultSession) => Promise<boolean>
+  jumpToWorktree: (worktreeId: string) => void
+} {
+  const originalPaneLookupState = useAppStore(
+    useShallow((s) => ({
+      agentStatusByPaneKey: s.agentStatusByPaneKey,
+      retainedAgentsByPaneKey: s.retainedAgentsByPaneKey,
+      sleepingAgentSessionsByPaneKey: s.sleepingAgentSessionsByPaneKey,
+      tabsByWorktree: s.tabsByWorktree,
+      terminalLayoutsByTabId: s.terminalLayoutsByTabId,
+      unifiedTabsByWorktree: s.unifiedTabsByWorktree
+    }))
+  )
+
+  const isStructuredSessionOpen = useCallback(
+    (session: AiVaultSession): boolean => {
+      const structured = session.structuredSession
+      return structured
+        ? Boolean(
+            findStructuredAgentSessionTab(originalPaneLookupState.unifiedTabsByWorktree, {
+              workspaceId: structured.workspaceId,
+              sessionId: structured.sessionId
+            })
+          )
+        : false
+    },
+    [originalPaneLookupState.unifiedTabsByWorktree]
+  )
+  // Build on first lookup because loading, filtered, or collapsed views may render no rows.
+  const getOriginalPaneIndex = useMemo(
+    () => createLazyAiVaultOriginalPaneIndex(originalPaneLookupState),
+    [originalPaneLookupState]
+  )
+
+  const getOriginalPaneTarget = useCallback(
+    (session: AiVaultSession) =>
+      findOriginalAiVaultSessionPaneInIndex(getOriginalPaneIndex(), session),
+    [getOriginalPaneIndex]
+  )
+
+  const getSessionLiveState = useCallback(
+    (session: AiVaultSession) =>
+      findAiVaultSessionLiveStateInIndex(getOriginalPaneIndex(), session),
+    [getOriginalPaneIndex]
+  )
+
+  const jumpToOriginalPane = useCallback(
+    async (session: AiVaultSession): Promise<boolean> => {
+      if (session.structuredSession && isStructuredSessionOpen(session)) {
+        const result = await openDesktopStructuredSession({
+          kind: 'history',
+          structuredSession: session.structuredSession,
+          agent: session.agent
+        })
+        if (result.kind !== 'opened') {
+          return false
+        }
+        // Wait for workspace activation to reveal the retained chat pane.
+        requestAnimationFrame(() => {
+          const pane = document.querySelector<HTMLElement>(
+            `[data-structured-agent-session-overlay-tab-id="${CSS.escape(result.tab.id)}"]`
+          )
+          if (pane) {
+            flashFocusedPaneRim(pane)
+          }
+        })
+        return true
+      }
+      const target = findOriginalAiVaultSessionPane(useAppStore.getState(), session)
+      if (!target) {
+        toast.error(
+          translate(
+            'auto.components.right.sidebar.AiVaultPanel.originalPaneUnavailable',
+            'Original pane is no longer available.'
+          )
+        )
+        return false
+      }
+
+      if (!revealSessionWorkspace(target.worktreeId)) {
+        return false
+      }
+      const state = useAppStore.getState()
+      state.setActiveTabType('terminal', target.worktreeId)
+      activateTabAndFocusPane(target.tabId, target.leafId, {
+        flashFocusedPane: true,
+        scrollToBottomIfOutputSinceLastView: true
+      })
+      return true
+    },
+    [isStructuredSessionOpen]
+  )
+
+  const jumpToWorktree = useCallback((worktreeId: string): void => {
+    revealSessionWorkspace(worktreeId)
+  }, [])
+
+  return {
+    getOriginalPaneTarget,
+    getSessionLiveState,
+    isStructuredSessionOpen,
+    jumpToOriginalPane,
+    jumpToWorktree
+  }
+}
+
+function revealSessionWorkspace(workspaceId: string): boolean {
+  if (activateAndRevealWorkspace(workspaceId) !== false) {
+    return true
+  }
+  // Folder activation explains a refusal itself once it resolves the folder; anything else is gone.
+  const scope = parseWorkspaceKey(workspaceId)
+  const reported =
+    scope?.type === 'folder' &&
+    findFolderWorkspaceOwner(useAppStore.getState(), scope.folderWorkspaceId) !== null
+  if (!reported) {
+    toast.error(
+      scope?.type === 'folder'
+        ? translate(
+            'auto.components.right.sidebar.AiVaultPanel.folderWorkspaceUnavailable',
+            'Folder workspace is no longer available.'
+          )
+        : translate(
+            'auto.components.right.sidebar.AiVaultPanel.worktreeUnavailable',
+            'Worktree is no longer available.'
+          )
+    )
+  }
+  return false
+}

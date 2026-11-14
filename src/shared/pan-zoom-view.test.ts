@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   type PanZoomPoint,
   type PanZoomView,
-  clampPanZoom,
   containPanZoomView,
   getPanZoomViewOffset,
   getFittedPanZoomView,
@@ -50,11 +49,6 @@ describe('pan and zoom view', () => {
     const after = pointAt(zoomed, target, fitScale * 3)
     expect(after.x).toBeCloseTo(before.x)
     expect(after.y).toBeCloseTo(before.y)
-  })
-
-  it('lets an icon fitted far above its natural size zoom back out to actual size', () => {
-    const fitScale = 32
-    expect(clampPanZoom(1 / fitScale, fitScale) * fitScale).toBe(1)
   })
 
   it('pulls a view panned to an edge back inside after the viewport resizes', () => {

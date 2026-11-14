@@ -1,7 +1,8 @@
-import type { DragReorderCallbacks } from './pane-drag-reorder'
+import type { DragReorderCallbacks } from './pane-layout/pane-drag-reorder'
 import type { PaneManagerHost } from './pane-manager-host'
-import { applyDividerStyles, applyPaneOpacity, createDivider } from './pane-divider'
-import { refitPanesUnder, safeFit } from './pane-tree-ops'
+import { applyDividerStyles, applyPaneOpacity, createDivider } from './pane-layout/pane-divider'
+import { refitPanesUnder } from './pane-layout/pane-tree-ops'
+import { safeFit } from './terminal-fit/pane-fit'
 
 export function createManagedPaneDivider(host: PaneManagerHost, isVertical: boolean): HTMLElement {
   return createDivider(isVertical, host.getStyleOptions(), {

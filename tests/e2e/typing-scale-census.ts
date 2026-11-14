@@ -1,8 +1,6 @@
 import type { Page } from '@stablyai/playwright-test'
-import type {
-  TypingDiagnosticBridge,
-  TypingLatencyReport
-} from '../../src/renderer/src/lib/typing-latency/diagnostic'
+import type { TypingDiagnosticBridge } from '../../src/renderer/src/diagnostics/typing-latency/diagnostic'
+import type { TypingLatencyReport } from '../../src/renderer/src/diagnostics/typing-latency/diagnostic-report'
 
 /** Reads the existing census without enabling per-keystroke diagnostic instrumentation. */
 export async function readTypingScaleCensus(

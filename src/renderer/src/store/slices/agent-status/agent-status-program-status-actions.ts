@@ -4,7 +4,7 @@ import {
   programStatusFacetsEqual,
   type ProgramStatusFacet
 } from '../../../../../shared/program-status/facet'
-import { resolveAgentPaneAuthorityKey } from '../agent-pane-authority'
+import { resolveAgentPaneAuthorityKey } from './agent-pane-authority'
 
 export function createAgentStatusProgramStatusActions(
   runtime: AgentStatusRuntime

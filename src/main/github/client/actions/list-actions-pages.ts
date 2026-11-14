@@ -4,16 +4,16 @@ import type {
   ActionsWorkflow,
   ActionsRunsQuery,
   ActionsWorkflowsQuery
-} from '../../../../shared/github/actions-types'
+} from '../../../../shared/github/actions/actions-types'
 import {
   ACTIONS_RUNS_MAX_PAGE,
   ACTIONS_RUNS_PER_PAGE
-} from '../../../../shared/github/actions-types'
+} from '../../../../shared/github/actions/actions-types'
 import {
   ActionsRunsQuery as RunsSchema,
   ActionsWorkflowsQuery as WorkflowsSchema
-} from '../../../../shared/rpc-contract/github-actions-params'
-import type { LocalGitExecOptions } from '../../gh-utils'
+} from '../../../../shared/rpc-contract/github/github-actions-params'
+import type { LocalGitExecOptions } from '../../repositories/github-repository-identity'
 import { actionsJson, withActionsRead } from './actions-read-request'
 import {
   actionsRecord,

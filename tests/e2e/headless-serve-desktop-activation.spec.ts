@@ -25,14 +25,14 @@ import {
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { RuntimeClient } from '../../src/cli/runtime/client'
-import { RuntimeClientError } from '../../src/cli/runtime/types'
+import { RuntimeClientError } from '../../src/cli/runtime/connection/types'
 import type {
   RuntimeStatus,
   RuntimeTerminalCreate,
   RuntimeTerminalRead
 } from '../../src/shared/runtime-types'
-import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
-import { parsePaneKey } from '../../src/shared/stable-pane-id'
+import { PROTOCOL_VERSION } from '../../src/main/daemon/protocol/daemon-protocol-version'
+import { parsePaneKey } from '../../src/shared/workspace-layout/stable-pane-id'
 
 const electronPackageDir = path.join(process.cwd(), 'node_modules', 'electron')
 const electronPath = path.join(

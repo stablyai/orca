@@ -7,12 +7,12 @@ import {
   posixOrcadFenceOwnedTest,
   type OrcadFence
 } from '../activation/orcad-activation-fence-scope'
-import { quotePosixShell } from '../../../shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
 import {
   isWindowsRemoteHost,
   joinRemotePath,
   type RemoteHostPlatform
-} from '../../ssh/ssh-remote-platform'
+} from '../../ssh/remote-host/ssh-remote-platform'
 import type { OrcadWindowsHostStateOp } from './orcad-windows-host-state-ops'
 import { pruneOrcadSnapshotsScript } from './orcad-state-snapshot-space'
 import {

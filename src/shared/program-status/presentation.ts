@@ -1,6 +1,6 @@
 // The one place deciding what a row shows from its OSC 7501 facet: the row owns `state`, the facet
 // adds what the row's producer cannot say. Shared by desktop, dashboard and mobile.
-import type { AgentStatusEntry } from '../agent-status-types'
+import type { AgentStatusEntry } from '../agent-status/contracts/agent-status-types'
 import type { ProgramStatusFacet } from './facet'
 import {
   isTurnScopedProgramStatusKind,

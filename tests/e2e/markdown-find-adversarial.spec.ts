@@ -63,6 +63,28 @@ async function find(page: Page, query = 'Needle', status = '1/2') {
   return input
 }
 
+/** Clicks, then waits for the selectionchange the editor reads the click's selection from; Xvfb delivers it late. */
+async function clickAndAwaitSelection(
+  page: Page,
+  point: { x: number; y: number },
+  expected: 'caret' | 'range'
+) {
+  await page.evaluate((collapsed) => {
+    const root = document.documentElement
+    delete root.dataset.e2eSelectionChanged
+    const onChange = () => {
+      // An earlier action's late event describes the previous selection, not this click's.
+      if (window.getSelection()?.isCollapsed === collapsed) {
+        root.dataset.e2eSelectionChanged = 'true'
+        document.removeEventListener('selectionchange', onChange)
+      }
+    }
+    document.addEventListener('selectionchange', onChange)
+  }, expected === 'caret')
+  await page.mouse.click(point.x, point.y)
+  await expect(page.locator('html')).toHaveAttribute('data-e2e-selection-changed', 'true')
+}
+
 async function drag(page: Page, start: Locator, end: Locator, from: number, to: number) {
   const firstPoint = await textPoint(start, from)
   const lastPoint = await textPoint(end, to)
@@ -112,10 +134,11 @@ test('Find preserves Shift-click, double-click, and multi-paragraph copy selecti
       .last()
       .locator('span.rounded-full')
   ).toHaveCount(0)
-  await orcaPage.mouse.click(start.x, start.y)
+  // Find extends from the caret the editor saw, and copy reads the editor's range, so each must land first.
+  await clickAndAwaitSelection(orcaPage, start, 'caret')
   await search.focus()
   await orcaPage.keyboard.down('Shift')
-  await orcaPage.mouse.click(end.x, end.y)
+  await clickAndAwaitSelection(orcaPage, end, 'range')
   await orcaPage.keyboard.up('Shift')
   expect(await selectedText(orcaPage)).toBe(`${FIRST.slice(6)}\n\n${SECOND.slice(0, 11)}`)
   const copied = await editor.evaluate((element) => {

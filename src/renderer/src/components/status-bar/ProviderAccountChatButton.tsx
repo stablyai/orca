@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
@@ -18,6 +18,7 @@ export function ProviderAccountChatButton({
   add?: boolean
   disabled: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   return (
@@ -44,8 +45,8 @@ export function ProviderAccountChatButton({
       }
     >
       {add
-        ? translate('components.native-chat.usageLimitActions.addAccount', 'Add Account…')
-        : translate('components.native-chat.usageLimitActions.switchAccount', 'Switch Account')}
+        ? t('components.native-chat.usageLimitActions.addAccount', 'Add Account…')
+        : t('components.native-chat.usageLimitActions.switchAccount', 'Switch Account')}
     </Button>
   )
 }

@@ -1,4 +1,4 @@
-import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
+import type { PrSidebarState } from '../source-control/review/mobile-pr-sidebar-state'
 
 // Keep sidebar decisions pure and RN-free for Node tests.
 

@@ -1,7 +1,7 @@
 import {
   forgetVisibleTabPicksForEnvironment,
   forgetVisibleTabPicksForWorktree
-} from '../web-session-visible-tab-pick-report'
+} from './navigation/web-session-visible-tab-pick-report'
 import {
   latestSessionTabsSnapshotByWorktree,
   replayableSessionTabsSnapshotByWorktree,
@@ -18,18 +18,19 @@ import {
   hostSessionTabIdByLocalKey,
   hostSessionTabMappingKeysByEnvironmentAndWorktree,
   hostWorkingClientBoundaryByPaneKey,
-  resetReceivedSessionTabsFrameSequence
+  resetReceivedSessionTabsFrameSequence,
+  sessionTabsFreshnessKey
 } from './state'
 import {
   clearWebRuntimeWakeTerminalRespawnForWorktree,
   clearAllWebRuntimeWakeTerminalRespawn
-} from '../web-runtime-wake-terminal-respawn'
+} from '../hosted-terminals/restoration/web-runtime-wake-terminal-respawn'
 import {
   endWebRuntimeInitialTerminalBootstrap,
   clearWebRuntimeInitialTerminalBootstrapsForEnvironment
-} from '../web-runtime-initial-terminal-bootstrap'
-import { clearWebSessionReorderIntentsForWorktree } from '../web-session-reorder-intent'
-import { clearWebSessionCloseIntentsForWorktree } from '../web-session-close-intent'
+} from './initial-terminal/web-runtime-initial-terminal-bootstrap'
+import { clearWebSessionReorderIntentsForWorktree } from './navigation/web-session-reorder-intent'
+import { clearWebSessionCloseIntentsForWorktree } from './closing/web-session-close-intent'
 import {
   forgetMirroredTerminalHandles,
   resetMirroredTerminalHandlesForTests
@@ -41,25 +42,21 @@ import {
 import {
   clearWebAgentSessionHandoffsForWorktree,
   clearWebAgentSessionHandoffsForEnvironment
-} from '../web-agent-session-handoff'
+} from '../hosted-terminals/creation/agent-launch/web-agent-session-handoff'
 import {
   clearWebSessionBrowserPlacementsForWorktree,
   clearWebSessionBrowserPlacementsForEnvironment,
   resetWebSessionBrowserPlacementsForTests
-} from '../web-session-browser-placement'
+} from '../browser/placement/web-session-browser-placement'
 import {
   clearWebSessionTerminalPlacementsForWorktree,
   clearWebSessionTerminalPlacementsForEnvironment
-} from '../web-session-terminal-placement'
-import { clearHostSessionMirrorHydration } from '../host-session-mirror-hydration'
-import { clearHostMirrorHandleGapVerdictsForEnvironment } from '@/lib/host-mirror-handle-gap-wait'
+} from '../hosted-terminals/placement/web-session-terminal-placement'
+import { clearHostSessionMirrorHydration } from './hydration/host-session-mirror-hydration'
+import { clearHostMirrorHandleGapVerdictsForEnvironment } from '@/lib/agent-session/resume/host-mirror-handle-gap-wait'
 import { createBoundedGenerationMap } from '@/lib/bounded-generation-map'
 import { clearHostSessionTabIdMappings } from './tracking-mappings'
-import {
-  sessionTabsFreshnessKey,
-  untrackWebSessionTabsWorktree,
-  removeWebSessionTabsEnvironment
-} from './tracking'
+import { untrackWebSessionTabsWorktree, removeWebSessionTabsEnvironment } from './tracking'
 
 const sessionTabsTrackingGenerations = createBoundedGenerationMap(512)
 
@@ -84,7 +81,6 @@ export function getLatestWebSessionTabsPublicationEpoch(
   )
 }
 
-export { acceptReplayedWebSessionTabsSnapshot } from './state'
 export function resetWebSessionTabsSnapshotFreshnessForTests(): void {
   latestSessionTabsSnapshotByWorktree.clear()
   replayableSessionTabsSnapshotByWorktree.clear()

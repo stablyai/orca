@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getLivePaneMemoryProfileCounts,
   registerLivePaneManager,
+  resetAndRefreshAllTerminalWebglAtlases,
   unregisterLivePaneManager
 } from './pane-manager-registry'
 
@@ -48,5 +49,29 @@ describe('pane manager registry', () => {
     expect(managers[1].getPanes).toHaveBeenCalledWith(156)
     expect(managers[2].getPanes).toHaveBeenCalledWith(56)
     expect(managers[3].getPanes).not.toHaveBeenCalled()
+  })
+
+  it('clears hidden atlases without painting them only when asked to include hidden managers', () => {
+    const createManager = (visible: boolean) => ({
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      clearWebglTextureAtlases: vi.fn<() => void>(),
+      presentViewports: vi.fn<() => void>(),
+      isVisibleForAtlasRecovery: () => visible
+    })
+    const visible = createManager(true)
+    const hidden = createManager(false)
+    for (const manager of [visible, hidden]) {
+      registerLivePaneManager(manager)
+      registeredManagers.push(manager)
+    }
+
+    resetAndRefreshAllTerminalWebglAtlases('test')
+    expect(hidden.clearWebglTextureAtlases).not.toHaveBeenCalled()
+
+    resetAndRefreshAllTerminalWebglAtlases('test', { includeHidden: true })
+    expect(hidden.clearWebglTextureAtlases).toHaveBeenCalledTimes(1)
+    expect(hidden.presentViewports).not.toHaveBeenCalled()
+    expect(visible.clearWebglTextureAtlases).toHaveBeenCalledTimes(2)
+    expect(visible.presentViewports).toHaveBeenCalledTimes(2)
   })
 })

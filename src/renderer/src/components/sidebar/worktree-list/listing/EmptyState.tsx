@@ -1,8 +1,9 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { CircleX } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
+import { isRepoHidden } from '../../../../../../shared/hidden-projects'
 
 export function SidebarWorktreeListEmptyState({
   hasFilters,
@@ -11,7 +12,10 @@ export function SidebarWorktreeListEmptyState({
   hasFilters: boolean
   onClearFilters: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const discoveryCompleted = useAppStore((s) => s.startupWorktreeRefreshCompleted)
+  const repos = useAppStore((s) => s.repos)
+  const everyProjectHidden = useMemo(() => repos.length > 0 && repos.every(isRepoHidden), [repos])
   return (
     <div
       data-worktree-sidebar-container
@@ -22,7 +26,15 @@ export function SidebarWorktreeListEmptyState({
         <div className="flex flex-col items-center gap-2 px-4 py-6 text-center text-[11px] text-muted-foreground">
           {discoveryCompleted && (
             <span>
-              {translate('auto.components.sidebar.WorktreeList.b7acbf038b', 'No workspaces found')}
+              {t('auto.components.sidebar.WorktreeList.b7acbf038b', 'No workspaces found')}
+            </span>
+          )}
+          {everyProjectHidden && (
+            <span>
+              {t(
+                'sidebar.hiddenProjects.allHidden',
+                'Every project is hidden. Show one from Hidden projects below.'
+              )}
             </span>
           )}
           {hasFilters && (
@@ -33,7 +45,7 @@ export function SidebarWorktreeListEmptyState({
               className="gap-1.5 border border-border/80 text-[11px]"
             >
               <CircleX className="size-3.5" />
-              {translate('auto.components.sidebar.WorktreeList.370c6a55dd', 'Clear Filters')}
+              {t('auto.components.sidebar.WorktreeList.370c6a55dd', 'Clear Filters')}
             </Button>
           )}
         </div>

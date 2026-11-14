@@ -1,4 +1,4 @@
-import { isPtyIncarnationId } from '../../../../shared/pty-incarnation'
+import { isPtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toSshExecutionHostId,

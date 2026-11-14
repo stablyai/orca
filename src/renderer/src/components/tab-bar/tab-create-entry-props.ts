@@ -1,4 +1,4 @@
-import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { TabCreateEntryArgs } from './tab-create-entry-action'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 import type { TabCreateMenuOption } from './tab-create-menu-options'
@@ -19,5 +19,7 @@ export type TabBarCreateEntryProps = {
   /** Runs after the menu closes, so the tab jumped to actually takes focus. */
   onQueueSwitchFocus?: (focus: () => void) => void
   onSelectMenuOption?: (option: TabCreateMenuOption) => void
+  /** The host is still connecting, so options that open a terminal wait. */
+  terminalPending?: boolean
   worktreeId: string
 }

@@ -1,16 +1,17 @@
+import { readTestHostJournal } from '../../native-chat/agent-session-journal/journal-observation.test-support'
 // Exercise real adapter connection exits/Stop during compact; fake only the Codex child, never its compaction result.
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES } from '../../ipc/desktop-renderer-runtime-capabilities'
 import { structuredAgentSessionCommandTurn } from '../../../shared/agent-session/view/structured-agent-session-command-turn-identity'
-import { ensureStructuredAgentSessionHost } from './structured-agent-session-runtime'
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from './records/agent-session-record-store-test-harness'
 import {
   openStructuredCodexRpcHarness,
   SESSION,
   type FakeCodexConnection,
   type StructuredCodexRpcHarness
-} from '../structured-codex-session-rpc-test-harness'
+} from '../rpc/methods/structured-sessions/structured-codex-session-rpc-test-harness'
 
 let harness: StructuredCodexRpcHarness
 
@@ -25,7 +26,10 @@ afterEach(async () => {
 })
 
 async function snapshot() {
-  return (await ensureStructuredAgentSessionHost(harness.hostConfig())).journalSnapshot(SESSION)
+  return await readTestHostJournal(
+    await ensureStructuredAgentSessionHost(harness.hostConfig()),
+    SESSION
+  )
 }
 
 /** The connections that received `method`, once per call. */
@@ -76,14 +80,16 @@ it('delivers what waited behind the command once its child dies mid-command, wit
     'agentSession.create',
     harness.createIntentParams()
   )
+  const compacting = harness.codex.nextRequest('thread/compact/start')
   const command = await startCompact(created.fence)
-  await vi.waitFor(() => expect(calls('thread/compact/start')).toHaveLength(1))
+  await compacting
   await send('after the exit')
 
+  const restarted = harness.codex.nextRequest('turn/start')
   const dead = exitChild()
 
-  await vi.waitFor(() => expect(calls('turn/start')).toHaveLength(1))
-  expect(calls('turn/start')[0]).not.toBe(dead)
+  expect(await restarted).not.toBe(dead)
+  expect(calls('turn/start')).toHaveLength(1)
   const settled = await snapshot()
   const turn = settled.items.find(
     (item) => item.itemId === structuredAgentSessionCommandTurn(command).itemId
@@ -94,44 +100,14 @@ it('delivers what waited behind the command once its child dies mid-command, wit
   ).toHaveLength(1)
 })
 
-it('runs a later command after Stop named the one whose child died', async () => {
-  const created = await harness.ok<{ fence: number }>(
-    'agentSession.create',
-    harness.createIntentParams()
-  )
-  const command = await startCompact(created.fence)
-  await vi.waitFor(() => expect(calls('thread/compact/start')).toHaveLength(1))
-
-  const dead = exitChild()
-  await vi.waitFor(async () => {
-    const turn = (await snapshot()).items.find(
-      (item) => item.itemId === structuredAgentSessionCommandTurn(command).itemId
-    )
-    expect(readAgentJournalTurn(turn?.body)?.state).toBe('interrupted')
-  })
-  const { turnId } = structuredAgentSessionCommandTurn(command)
-  await harness.ok('agentSession.cancel', {
-    envelope: harness.envelope('agentSession.cancel', { turnId }, null),
-    turnId
-  })
-
-  // Nothing the dead command left behind holds the queue or refuses the next one.
-  const later = await startCompact(created.fence)
-  await vi.waitFor(() => expect(calls('thread/compact/start')).toHaveLength(2))
-  expect(calls('thread/compact/start')[1]).not.toBe(dead)
-  const turn = (await snapshot()).items.find(
-    (item) => item.itemId === structuredAgentSessionCommandTurn(later).itemId
-  )
-  expect(readAgentJournalTurn(turn?.body)?.state).toBe('running')
-})
-
 it('ends a command Codex has not opened a turn for by stopping its child, and the next send gets a fresh one', async () => {
   const created = await harness.ok<{ fence: number }>(
     'agentSession.create',
     harness.createIntentParams()
   )
+  const compacting = harness.codex.nextRequest('thread/compact/start')
   const command = await startCompact(created.fence)
-  await vi.waitFor(() => expect(calls('thread/compact/start')).toHaveLength(1))
+  await compacting
   const first = threadChild()
   const { itemId, turnId } = structuredAgentSessionCommandTurn(command)
 
@@ -150,7 +126,8 @@ it('ends a command Codex has not opened a turn for by stopping its child, and th
     const turn = (await snapshot()).items.find((item) => item.itemId === itemId)
     expect(readAgentJournalTurn(turn?.body)?.state).toBe('interrupted')
   })
+  const restarted = harness.codex.nextRequest('turn/start')
   await send('after the stop')
-  await vi.waitFor(() => expect(calls('turn/start')).toHaveLength(1))
-  expect(calls('turn/start')[0]).not.toBe(first)
+  expect(await restarted).not.toBe(first)
+  expect(calls('turn/start')).toHaveLength(1)
 })

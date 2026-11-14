@@ -1,5 +1,5 @@
 import type { UserConfig } from 'electron-vite'
-import { DEV_RUNTIME_ENV_KEYS } from '../scripts/dev-rolldown-runtime-env.mjs'
+import { DEV_RUNTIME_ENV_KEYS } from '../scripts/development/launch/dev-rolldown-runtime-env.mjs'
 import { createDevRolldownRuntimeEnvPlugin } from './dev-rolldown-runtime-env'
 import { withBundledRendererDev } from './renderer-bundled-dev'
 

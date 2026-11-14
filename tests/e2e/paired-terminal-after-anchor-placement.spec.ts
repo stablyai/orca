@@ -5,7 +5,10 @@ import {
   launchPairedWebClient
 } from './helpers/paired-electron-client'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
-import { toHostSessionTabId, toWebTerminalSurfaceTabId } from '../../src/shared/terminal-surface-id'
+import {
+  toHostSessionTabId,
+  toWebTerminalSurfaceTabId
+} from '../../src/shared/workspace-layout/terminal-surface-id'
 
 async function createTerminal(page: Page, worktreeId: string, afterTabId?: string) {
   const tabs = page.locator('[data-testid="sortable-tab"]')

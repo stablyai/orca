@@ -1,47 +1,53 @@
 import { win32 as pathWin32 } from 'node:path'
-import { isWindowsGitBashShellPath, resolveWindowsGitBashShellPath } from '../../git-bash'
-import { isPwshAvailable } from '../../pwsh'
-import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../../pty/codex-home-wsl-env'
-import { addOrcaWslInteropEnv } from '../../pty/wsl-orca-env'
+import {
+  isWindowsGitBashShellPath,
+  resolveWindowsGitBashShellPath
+} from '../../pty/shell-startup/git-bash'
+import { isPwshAvailable } from '../../pty/shell-startup/pwsh'
+import {
+  isHostCodexHomeForWsl,
+  isWslCodexHomeForHost
+} from '../../pty/shell-startup/codex-home-wsl-env'
+import { addOrcaWslInteropEnv } from '../../pty/shell-startup/wsl-orca-env'
 import {
   POWERLEVEL10K_WIZARD_DISABLE_ENV,
   seedPowerlevel10kWizardEnv
-} from '../../pty/powerlevel10k-wizard-env'
+} from '../../pty/shell-startup/powerlevel10k-wizard-env'
 import {
   resolveSafePtyDefaultCwd,
   assertSafeAgentStartupCwd
-} from '../../providers/pty-default-cwd'
+} from '../../providers/working-directory/default-cwd'
 import {
   resolveEffectiveWindowsPowerShell,
   shouldProbeWindowsPowerShellAvailability,
   type WindowsPowerShellShellFamily
-} from '../../providers/windows-powershell'
+} from '../../providers/shell-launch/windows/powershell'
 import {
   buildWindowsPowerShellSpawnAttempts,
   type WindowsShellSpawnAttempt
-} from '../../providers/windows-shell-fallback-chain'
+} from '../../providers/shell-launch/windows/shell-fallback-chain'
 import {
   ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
   resolveWindowsShellLaunchArgs
-} from '../../providers/windows-shell-args'
+} from '../../providers/shell-launch/windows/shell-args'
 import { resolveUnixShellPath } from '../../providers/local-pty/local-pty-executable-spawn'
-import { selectShellStartupFeatures } from '../../shell-startup-features'
-import { parseWslPath } from '../../wsl'
-import { addWslEnvKeys } from '../../wsl-env'
+import { selectShellStartupFeatures } from '../../pty/shell-startup/shell-startup-features'
+import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
+import { addWslEnvKeys } from '../../../shared/wsl-env'
 import {
   recognizeAgentProcessFromCommandLine,
   type RecognizedAgentProcess
-} from '../../../shared/agent-process-recognition'
-import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../../shared/hermes-startup-query'
+} from '../../../shared/agent-status/process/agent-process-recognition'
+import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../../shared/agent-launch/startup/hermes-startup-query'
 import {
   CLAUDE_INJECTED_CONFIG_DIR_ENV,
   CLAUDE_PROFILE_POINTER_ENV
 } from '../../../shared/claude-profile-routing'
 import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/windows-terminal-shell'
-import { getShellLaunchConfig, resolvePtyShellPath } from '../shell-ready'
-import { resolveWslSessionContext } from '../wsl-session-context'
+import { getShellLaunchConfig, resolvePtyShellPath } from '../shell-readiness/shell-ready'
+import { resolveWslSessionContext } from './wsl-session-context'
 import { finalizeDaemonPtyEnvironment, rescrubDaemonPtyEnvironment } from './spawn-environment'
-import type { PtySubprocessOptions } from '../pty-subprocess'
+import type { PtySubprocessOptions } from './pty-subprocess'
 
 export type PtyShellLaunchPlan = {
   shellPath: string
@@ -225,7 +231,7 @@ export function createPtyShellLaunchPlan(
   ) {
     addWslEnvKeys(env, [POWERLEVEL10K_WIZARD_DISABLE_ENV])
   }
-  finalizeDaemonPtyEnvironment(env, opts.env)
+  finalizeDaemonPtyEnvironment(env, opts.env, opts.envToDelete)
 
   return {
     shellPath,

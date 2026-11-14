@@ -1,7 +1,7 @@
 {
   "commands": [
-    "ORCA_BACKGROUND_LAUNCH=1 node --expose-gc config/scripts/native-chat-fold-benchmark.mjs --memory-control > /tmp/orca-chat-full-fold-memory-control.json",
-    "ORCA_BACKGROUND_LAUNCH=1 node --expose-gc config/scripts/native-chat-fold-benchmark.mjs > /tmp/orca-chat-full-fold-final.json"
+    "ORCA_BACKGROUND_LAUNCH=1 node --expose-gc config/scripts/performance/native-chat/native-chat-fold-benchmark.mjs --memory-control > /tmp/orca-chat-full-fold-memory-control.json",
+    "ORCA_BACKGROUND_LAUNCH=1 node --expose-gc config/scripts/performance/native-chat/native-chat-fold-benchmark.mjs > /tmp/orca-chat-full-fold-final.json"
   ],
   "artifactPromotion": "Final JSON copied only after successful process exit, all 54 cases completed, and memory-control validation passed.",
   "artifactFormatting": {
@@ -10,8 +10,8 @@
     "parsedJsonIdentical": true
   },
   "sha256": {
-    "config/scripts/native-chat-fold-benchmark.mjs": "8211f3f7159cb7559de622e35f5216e04000d40913109636adda7cf116aa1b16",
-    "config/scripts/native-chat-fold-benchmark-workloads.mjs": "2e6996889d678c71513e08c820c2b3dc2ae0731764b7133e5f2a88a72fe5f977",
+    "config/scripts/performance/native-chat/native-chat-fold-benchmark.mjs": "8211f3f7159cb7559de622e35f5216e04000d40913109636adda7cf116aa1b16",
+    "config/scripts/performance/native-chat/native-chat-fold-benchmark-workloads.mjs": "2e6996889d678c71513e08c820c2b3dc2ae0731764b7133e5f2a88a72fe5f977",
     "config/scripts/counterbalanced-benchmark-schedule.mjs": "bc35b40e954fa7ddec0225ed375bd3b113c2e05b8554bc50734d14f89987294d",
     "config/scripts/benchmark-sample-summary.mjs": "feecbd5ec627e7d0ad568f8521c108c1a1cfd478b56f2239d72cd04cb079db1c",
     "config/scripts/script-child-process.mjs": "a7441428bf7b5c9a897b6a3c057c50f46acca24c4f218a4b849de5aec53c4173",

@@ -7,7 +7,12 @@ import {
   type RemoteRuntimePreparedRequest
 } from './remote-runtime-prepared-request-admission'
 import { remoteRuntimeTimeoutError } from './remote-runtime-request-frames'
-import type { RuntimeOrchestrationEnvelope, RuntimeRpcResponse } from '../../runtime-rpc-envelope'
+import type {
+  RuntimeOrchestrationEnvelope,
+  RuntimeRequestPreparation,
+  RuntimeRpcResponse
+} from '../../runtime-rpc-envelope'
+import { serializePreparedRemoteRuntimeRequest } from './remote-runtime-request-preparation'
 import { toRemoteRuntimeClientError } from '../control/remote-runtime-shared-control-protocol'
 import { rejectSharedControlPendingRequest } from '../control/remote-runtime-shared-control-state'
 import type { SharedControlPendingRequest } from '../control/remote-runtime-shared-control-types'
@@ -21,6 +26,8 @@ export function requestSharedControl<TResult>(args: {
   params: unknown
   timeoutMs: number
   envelope?: RuntimeOrchestrationEnvelope
+  /** Picks the params actually sent, e.g. the prefix of a batch that fits the host's request bound. */
+  prepareRequest?: RuntimeRequestPreparation
   ensureReady: () => Promise<void>
   send: (requestId: string) => void
   retireRequestId?: (requestId: string) => void
@@ -38,13 +45,19 @@ export function requestSharedControl<TResult>(args: {
   let preparedRequest: RemoteRuntimePreparedRequest
   try {
     preparedRequest = prepareRemoteRuntimeRequest(pendingRequests, () =>
-      serializeRemoteRuntimeRpcRequest({
-        requestId,
-        deviceToken: args.deviceToken,
-        method: args.method,
-        params: args.params,
-        envelope: args.envelope
-      })
+      serializePreparedRemoteRuntimeRequest(
+        (params, envelope) =>
+          serializeRemoteRuntimeRpcRequest({
+            requestId,
+            deviceToken: args.deviceToken,
+            method: args.method,
+            params,
+            envelope
+          }),
+        args.params,
+        args.envelope,
+        args.prepareRequest
+      )
     )
   } catch (error) {
     return Promise.reject(error)

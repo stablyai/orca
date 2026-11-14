@@ -1,6 +1,6 @@
 import type * as ChildProcessModule from 'node:child_process'
 import { PassThrough } from 'node:stream'
-import type { PipedChildProcess } from '@orca/process-host/process-spec'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { vi } from 'vitest'
 
 // Consumers may mock spawn without exporting the ChildProcess constructor.
@@ -11,7 +11,13 @@ class FakeSpawnedChild extends NodeChildProcess {
   override stdin = new PassThrough()
   override stdout = new PassThrough()
   override stderr = new PassThrough()
-  override stdio: PipedChildProcess['stdio'] = [this.stdin, this.stdout, this.stderr, null, null]
+  override stdio: ChildProcessWithoutNullStreams['stdio'] = [
+    this.stdin,
+    this.stdout,
+    this.stderr,
+    null,
+    null
+  ]
   override kill = vi.fn((_signal?: NodeJS.Signals | number) => true)
   override unref = vi.fn<() => void>()
 

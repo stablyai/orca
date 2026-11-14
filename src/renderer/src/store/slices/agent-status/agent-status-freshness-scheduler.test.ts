@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../../shared/agent-status-types'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status-freshness'
+import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
+import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { createFreshnessScheduler } from './agent-status-freshness-scheduler'
 
 const NOW = new Date('2026-04-09T12:00:00.000Z').getTime()

@@ -1,7 +1,7 @@
-import type { ParsedAgentStatusPayload } from './agent-status-types'
-import { extractLastOscTitle } from './osc-title-extraction'
+import type { ParsedAgentStatusPayload } from './agent-status/contracts/agent-status-types'
+import { extractLastOscTitle } from './agent-status/title/osc-title-extraction'
 import { extractOscTitleScanTail } from './osc-title-scan-tail'
-import { advancePartialEscapeTail } from './terminal-partial-escape-tail'
+import { advancePartialEscapeTail } from './terminal/protocol/escape/terminal-partial-escape-tail'
 
 export function splitFreebuffScreenUpdates(data: string, pendingEscape: string): string[] {
   const input = pendingEscape + data

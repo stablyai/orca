@@ -1,5 +1,5 @@
 /** A WSL-runtime project on a Windows drive, converted to Windows Git (D1c); desktop-only IPC. */
-import type { LocalWindowsRuntimePreference } from './project-execution-runtime'
+import type { LocalWindowsRuntimePreference } from './execution-host/project-runtime-preference'
 
 export type WslDriveProjectBlocker =
   /** Its runtime isn't WSL (or already uses Windows Git), so there is nothing to convert. */

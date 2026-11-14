@@ -1,106 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   getNextTabAcrossAllTypes,
+  getNextTerminalCycleTab,
   getNextTabWithinActiveType,
   type TypeCyclableTab
 } from './tab-type-cycle'
 
-const mixedTabs: TypeCyclableTab[] = [
-  { type: 'terminal', id: 'term-1' },
-  { type: 'editor', id: 'file-1', tabId: 'tab-file-1' },
-  { type: 'browser', id: 'browser-1' },
-  { type: 'terminal', id: 'term-2' },
-  { type: 'editor', id: 'file-2', tabId: 'tab-file-2' },
-  { type: 'browser', id: 'browser-2' }
-]
-
 describe('getNextTabWithinActiveType', () => {
-  it('cycles only terminal tabs when a terminal is active', () => {
-    expect(
-      getNextTabWithinActiveType({
-        tabs: mixedTabs,
-        activeTabType: 'terminal',
-        activeTabId: 'term-1',
-        activeFileId: 'file-1',
-        activeBrowserTabId: 'browser-1',
-        direction: 1
-      })
-    ).toEqual({ type: 'terminal', id: 'term-2' })
-  })
-
-  it('cycles only editor tabs when an editor is active', () => {
-    expect(
-      getNextTabWithinActiveType({
-        tabs: mixedTabs,
-        activeTabType: 'editor',
-        activeTabId: 'term-1',
-        activeFileId: 'file-1',
-        activeBrowserTabId: 'browser-1',
-        direction: 1
-      })
-    ).toEqual({ type: 'editor', id: 'file-2', tabId: 'tab-file-2' })
-  })
-
-  it('cycles only browser tabs when a browser is active', () => {
-    expect(
-      getNextTabWithinActiveType({
-        tabs: mixedTabs,
-        activeTabType: 'browser',
-        activeTabId: 'term-1',
-        activeFileId: 'file-1',
-        activeBrowserTabId: 'browser-1',
-        direction: 1
-      })
-    ).toEqual({ type: 'browser', id: 'browser-2' })
-  })
-
-  it('returns null when the active type has a single tab', () => {
-    expect(
-      getNextTabWithinActiveType({
-        tabs: [
-          { type: 'terminal', id: 'term-1' },
-          { type: 'editor', id: 'file-1' },
-          { type: 'browser', id: 'browser-1' }
-        ],
-        activeTabType: 'browser',
-        activeTabId: 'term-1',
-        activeFileId: 'file-1',
-        activeBrowserTabId: 'browser-1',
-        direction: 1
-      })
-    ).toBeNull()
-  })
-
-  it('uses direction-aware fallback when the active tab is missing from the active type', () => {
-    const terminalTabs: TypeCyclableTab[] = [
-      { type: 'terminal', id: 'term-1' },
-      { type: 'terminal', id: 'term-2' },
-      { type: 'terminal', id: 'term-3' }
-    ]
-
-    expect(
-      getNextTabWithinActiveType({
-        tabs: terminalTabs,
-        activeTabType: 'terminal',
-        activeTabId: null,
-        activeFileId: 'file-1',
-        activeBrowserTabId: 'browser-1',
-        direction: -1
-      })
-    ).toEqual({ type: 'terminal', id: 'term-3' })
-
-    expect(
-      getNextTabWithinActiveType({
-        tabs: terminalTabs,
-        activeTabType: 'terminal',
-        activeTabId: null,
-        activeFileId: 'file-1',
-        activeBrowserTabId: 'browser-1',
-        direction: 1
-      })
-    ).toEqual({ type: 'terminal', id: 'term-1' })
-  })
-
   it('uses the active group tab id for split editor duplicates', () => {
     expect(
       getNextTabWithinActiveType({
@@ -122,58 +28,6 @@ describe('getNextTabWithinActiveType', () => {
 })
 
 describe('getNextTabAcrossAllTypes', () => {
-  it('cycles to the next tab regardless of type when a terminal is active', () => {
-    expect(
-      getNextTabAcrossAllTypes({
-        tabs: mixedTabs,
-        activeTabType: 'terminal',
-        activeTabId: 'term-1',
-        activeFileId: 'file-1',
-        activeBrowserTabId: 'browser-1',
-        direction: 1
-      })
-    ).toEqual({ type: 'editor', id: 'file-1', tabId: 'tab-file-1' })
-  })
-
-  it('wraps from the last tab back to the first', () => {
-    expect(
-      getNextTabAcrossAllTypes({
-        tabs: mixedTabs,
-        activeTabType: 'browser',
-        activeTabId: 'term-1',
-        activeFileId: 'file-1',
-        activeBrowserTabId: 'browser-2',
-        direction: 1
-      })
-    ).toEqual({ type: 'terminal', id: 'term-1' })
-  })
-
-  it('cycles backward across types', () => {
-    expect(
-      getNextTabAcrossAllTypes({
-        tabs: mixedTabs,
-        activeTabType: 'editor',
-        activeTabId: 'term-1',
-        activeFileId: 'file-1',
-        activeBrowserTabId: 'browser-1',
-        direction: -1
-      })
-    ).toEqual({ type: 'terminal', id: 'term-1' })
-  })
-
-  it('returns null when only one tab exists total', () => {
-    expect(
-      getNextTabAcrossAllTypes({
-        tabs: [{ type: 'terminal', id: 'term-1' }],
-        activeTabType: 'terminal',
-        activeTabId: 'term-1',
-        activeFileId: null,
-        activeBrowserTabId: null,
-        direction: 1
-      })
-    ).toBeNull()
-  })
-
   it('prefers the active group tab id to disambiguate split duplicates', () => {
     expect(
       getNextTabAcrossAllTypes({
@@ -192,28 +46,23 @@ describe('getNextTabAcrossAllTypes', () => {
       })
     ).toEqual({ type: 'browser', id: 'browser-1', tabId: 'tab-browser-1' })
   })
+})
 
-  it('uses direction-aware fallback when the active tab id is missing', () => {
-    expect(
-      getNextTabAcrossAllTypes({
-        tabs: mixedTabs,
-        activeTabType: 'terminal',
-        activeTabId: 'nonexistent',
-        activeFileId: null,
-        activeBrowserTabId: null,
-        direction: 1
-      })
-    ).toEqual(mixedTabs[0])
+describe('getNextTerminalCycleTab', () => {
+  it('enters a sole chat from an editor but does not reactivate the same exact chat', () => {
+    const chat: TypeCyclableTab = { type: 'agent-session', id: 'session', tabId: 'chat' }
+    expect(getNextTerminalCycleTab([chat], { type: 'editor', id: 'session' }, 1)).toBe(chat)
+    expect(getNextTerminalCycleTab([chat], chat, -1)).toBeNull()
+  })
 
-    expect(
-      getNextTabAcrossAllTypes({
-        tabs: mixedTabs,
-        activeTabType: 'terminal',
-        activeTabId: 'nonexistent',
-        activeFileId: null,
-        activeBrowserTabId: null,
-        direction: -1
-      })
-    ).toEqual(mixedTabs.at(-1))
+  it('prefers exact tab identity and otherwise distinguishes colliding entity kinds', () => {
+    const tabs: TypeCyclableTab[] = [
+      { type: 'terminal', id: 'same', tabId: 'terminal' },
+      { type: 'agent-session', id: 'same', tabId: 'chat' },
+      { type: 'terminal', id: 'same', tabId: 'terminal-copy' }
+    ]
+    expect(getNextTerminalCycleTab(tabs, tabs[1], 1)).toBe(tabs[2])
+    expect(getNextTerminalCycleTab(tabs, { type: 'agent-session', id: 'same' }, -1)).toBe(tabs[0])
+    expect(getNextTerminalCycleTab(tabs, tabs[2], 1)).toBe(tabs[0])
   })
 })

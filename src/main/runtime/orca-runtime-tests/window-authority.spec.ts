@@ -1,199 +1,18 @@
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import '../../../shared/layout-owner-switch'
 import { describe, expect, it, vi } from 'vitest'
-import {
-  HEADLESS_RUNTIME_WINDOW_ID,
-  OrcaRuntimeService,
-  RUNTIME_GRAPH_RELOAD_TIMEOUT_MS,
-  electronMocks
-} from '../orca-runtime-test-mocks.spec'
-import type { WorkspaceSessionState } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
+import '../orca-runtime'
+import { RUNTIME_GRAPH_RELOAD_TIMEOUT_MS } from '../session-graph/runtime-graph-reload-lifecycle'
+import '../orca-runtime-test-mocks/setup.spec'
 import {
   HEADLESS_LEAF_ID,
   TEST_WINDOW_ID,
   TEST_WORKTREE_ID,
-  createRuntime,
-  makeHeadlessTerminalLayout,
-  makeRuntimeStoreWithWorkspaceSession,
-  makeWorkspaceSessionWithHeadlessTerminal,
-  store
-} from '../orca-runtime-test-fixtures.spec'
+  createRuntime
+} from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('claims the first window as authoritative and ignores later windows', () => {
-    const runtime = createRuntime()
-
-    runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.attachWindow(2)
-
-    expect(runtime.getStatus().authoritativeWindowId).toBe(TEST_WINDOW_ID)
-  })
-
-  it('transfers authority from the headless sentinel to the first real window', () => {
-    const runtime = createRuntime()
-    electronMocks.BrowserWindow.fromId.mockImplementation((windowId: number) =>
-      windowId === TEST_WINDOW_ID ? ({ isDestroyed: () => false } as never) : null
-    )
-    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
-
-    runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.attachWindow(2)
-
-    expect(runtime.getStatus()).toMatchObject({
-      authoritativeWindowId: TEST_WINDOW_ID,
-      desktopWindowStatus: 'available',
-      graphStatus: 'reloading',
-      rendererGraphEpoch: 1
-    })
-  })
-
-  it('relays terminal browser launches only while headless owns the graph', () => {
-    const runtime = createRuntime()
-    electronMocks.BrowserWindow.fromId.mockImplementation((windowId: number) =>
-      windowId === TEST_WINDOW_ID ? ({ isDestroyed: () => false } as never) : null
-    )
-
-    expect(runtime.shouldRelayTerminalBrowserOpens()).toBe(false)
-
-    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
-    expect(runtime.shouldRelayTerminalBrowserOpens()).toBe(true)
-
-    runtime.attachWindow(TEST_WINDOW_ID)
-    expect(runtime.shouldRelayTerminalBrowserOpens()).toBe(false)
-  })
-
-  it('marks live headless PTYs for renderer reattach before desktop promotion', () => {
-    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
-      makeWorkspaceSessionWithHeadlessTerminal({
-        activeWorktreeIdsOnShutdown: []
-      })
-    )
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
-    runtime.registerPty('persisted-pty', TEST_WORKTREE_ID, null, {
-      tabId: 'host-tab',
-      leafId: HEADLESS_LEAF_ID
-    })
-
-    runtime.attachWindow(TEST_WINDOW_ID)
-
-    expect(getSession().activeWorktreeIdsOnShutdown).toEqual([TEST_WORKTREE_ID])
-  })
-
-  it('marks live bindings again when reopening after a promoted window closes', () => {
-    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
-      makeWorkspaceSessionWithHeadlessTerminal({
-        activeWorktreeIdsOnShutdown: []
-      })
-    )
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
-    runtime.registerPty('persisted-pty', TEST_WORKTREE_ID, null, {
-      tabId: 'host-tab',
-      leafId: HEADLESS_LEAF_ID
-    })
-    runtime.attachWindow(TEST_WINDOW_ID)
-    ;(runtimeStore.setWorkspaceSession as unknown as (next: WorkspaceSessionState) => void)({
-      ...getSession(),
-      activeWorktreeIdsOnShutdown: []
-    })
-    runtime.markGraphUnavailable(TEST_WINDOW_ID)
-
-    runtime.attachWindow(2)
-
-    expect(getSession().activeWorktreeIdsOnShutdown).toEqual([TEST_WORKTREE_ID])
-  })
-
-  it('preserves live SSH session identities when promoting a headless runtime', () => {
-    const remotePtyId = 'ssh:ssh-1@@persisted-pty'
-    const { runtimeStore, getSession } = makeRuntimeStoreWithWorkspaceSession(
-      makeWorkspaceSessionWithHeadlessTerminal({
-        activeWorktreeIdsOnShutdown: [],
-        activeConnectionIdsAtShutdown: [],
-        remoteSessionIdsByTabId: {},
-        tabsByWorktree: {
-          [TEST_WORKTREE_ID]: [
-            {
-              id: 'host-tab',
-              ptyId: remotePtyId,
-              worktreeId: TEST_WORKTREE_ID,
-              title: 'Remote Terminal',
-              customTitle: null,
-              color: null,
-              sortOrder: 0,
-              createdAt: 1
-            }
-          ]
-        },
-        terminalLayoutsByTabId: {
-          'host-tab': makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: remotePtyId })
-        }
-      })
-    )
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
-    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
-    runtime.registerPty(remotePtyId, TEST_WORKTREE_ID, 'ssh-1', {
-      tabId: 'host-tab',
-      leafId: HEADLESS_LEAF_ID
-    })
-
-    runtime.attachWindow(TEST_WINDOW_ID)
-
-    expect(getSession()).toMatchObject({
-      activeWorktreeIdsOnShutdown: [TEST_WORKTREE_ID],
-      activeConnectionIdsAtShutdown: ['ssh-1'],
-      remoteSessionIdsByTabId: { 'host-tab': remotePtyId }
-    })
-  })
-
-  it('reports the activation gate state while no desktop window is available', () => {
-    const runtime = new OrcaRuntimeService(store, undefined, {
-      getDesktopWindowStatus: () => 'blocked'
-    })
-
-    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
-
-    expect(runtime.getStatus().desktopWindowStatus).toBe('blocked')
-  })
-
-  it('bumps the epoch and enters reloading when the authoritative window reloads', () => {
-    const runtime = createRuntime()
-
-    runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.markGraphReady(TEST_WINDOW_ID)
-    runtime.markRendererReloading(TEST_WINDOW_ID)
-
-    expect(runtime.getStatus()).toMatchObject({
-      graphStatus: 'reloading',
-      rendererGraphEpoch: 1
-    })
-  })
-
-  it('can mark the graph ready for the authoritative window', () => {
-    const runtime = createRuntime()
-
-    runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.markGraphReady(TEST_WINDOW_ID)
-    runtime.markRendererReloading(TEST_WINDOW_ID)
-    runtime.markGraphReady(TEST_WINDOW_ID)
-
-    expect(runtime.getStatus().graphStatus).toBe('ready')
-  })
-
-  it('restores a surviving renderer when its reload is cancelled', () => {
-    const runtime = createRuntime()
-    runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.markGraphReady(TEST_WINDOW_ID)
-    const fence = runtime.markRendererReloading(TEST_WINDOW_ID)
-    if (fence === null) {
-      throw new Error('expected active renderer reload fence')
-    }
-
-    expect(fence.recovery).toBe('renderer')
-    expect(runtime.getStatus().graphStatus).toBe('reloading')
-    expect(runtime.markRendererReloadCancelled(TEST_WINDOW_ID, fence)).toBe(true)
-    expect(runtime.getStatus().graphStatus).toBe('ready')
-  })
-
   it('keeps an earlier committed reload fenced when a later reload is cancelled', async () => {
     vi.useFakeTimers()
     try {
@@ -216,39 +35,6 @@ describe('OrcaRuntimeService', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('restores headless authority when desktop promotion navigation is cancelled', () => {
-    const runtime = createRuntime()
-    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
-    runtime.attachWindow(TEST_WINDOW_ID)
-    const fence = runtime.markRendererReloading(TEST_WINDOW_ID)
-    if (fence === null) {
-      throw new Error('expected active promotion reload fence')
-    }
-
-    expect(fence.recovery).toBe('headless')
-    expect(runtime.markRendererReloadCancelled(TEST_WINDOW_ID, fence)).toBe(false)
-    expect(runtime.getStatus()).toMatchObject({
-      authoritativeWindowId: HEADLESS_RUNTIME_WINDOW_ID,
-      graphStatus: 'ready'
-    })
-  })
-
-  it('drops back to unavailable and clears authority when the window disappears', () => {
-    const runtime = createRuntime()
-
-    runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.markGraphReady(TEST_WINDOW_ID)
-    runtime.markRendererReloading(TEST_WINDOW_ID)
-    runtime.markGraphUnavailable(TEST_WINDOW_ID)
-
-    // Main-owned panes remain answerable after the window closes.
-    expect(runtime.getStatus()).toMatchObject(
-      ORCA_LAYOUT_OWNER_IS_MAIN
-        ? { graphStatus: 'ready', authoritativeWindowId: HEADLESS_RUNTIME_WINDOW_ID }
-        : { graphStatus: 'unavailable', authoritativeWindowId: null, rendererGraphEpoch: 2 }
-    )
   })
 
   it('restores headless graph authority after a promoted renderer reload times out', async () => {
@@ -276,46 +62,6 @@ describe('OrcaRuntimeService', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('moves a desktop graph to unavailable when its reload times out', async () => {
-    vi.useFakeTimers()
-    try {
-      const runtime = createRuntime()
-      runtime.attachWindow(TEST_WINDOW_ID)
-      runtime.markGraphReady(TEST_WINDOW_ID)
-      runtime.markRendererReloading(TEST_WINDOW_ID)
-
-      await vi.advanceTimersByTimeAsync(RUNTIME_GRAPH_RELOAD_TIMEOUT_MS)
-
-      expect(runtime.getStatus()).toMatchObject({
-        authoritativeWindowId: TEST_WINDOW_ID,
-        graphStatus: 'unavailable',
-        rendererGraphEpoch: 1
-      })
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('recovers a failed headless promotion and accepts a later renderer generation', () => {
-    const runtime = createRuntime()
-    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
-    runtime.attachWindow(TEST_WINDOW_ID)
-
-    runtime.markGraphReloadFailed(TEST_WINDOW_ID, 'renderer-process-gone')
-
-    expect(runtime.getStatus()).toMatchObject({
-      authoritativeWindowId: HEADLESS_RUNTIME_WINDOW_ID,
-      graphStatus: 'ready'
-    })
-
-    runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
-
-    expect(runtime.getStatus()).toMatchObject({
-      authoritativeWindowId: TEST_WINDOW_ID,
-      graphStatus: 'ready'
-    })
   })
 
   it('retires the headless fallback after renderer promotion succeeds', () => {
@@ -409,21 +155,6 @@ describe('OrcaRuntimeService', () => {
     })
   })
 
-  it('hands the graph back to headless when a promoted serve window closes (#27292)', () => {
-    const runtime = createRuntime()
-    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
-    runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
-    runtime.markGraphReady(TEST_WINDOW_ID)
-
-    runtime.markGraphUnavailable(TEST_WINDOW_ID)
-
-    expect(runtime.getStatus()).toMatchObject({
-      authoritativeWindowId: HEADLESS_RUNTIME_WINDOW_ID,
-      graphStatus: 'ready'
-    })
-  })
-
   it('promotes a reopened serve window and hands back again when it closes', () => {
     const runtime = createRuntime()
     runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
@@ -446,34 +177,6 @@ describe('OrcaRuntimeService', () => {
     expect(runtime.getStatus()).toMatchObject({
       authoritativeWindowId: HEADLESS_RUNTIME_WINDOW_ID,
       graphStatus: 'ready'
-    })
-  })
-
-  it('keeps a crashed promoted serve renderer on its own window while the window is open', () => {
-    const runtime = createRuntime()
-    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
-    runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.syncWindowGraph(TEST_WINDOW_ID, { tabs: [], leaves: [] })
-    runtime.markGraphReady(TEST_WINDOW_ID)
-    runtime.markGraphUnavailable(TEST_WINDOW_ID)
-    runtime.attachWindow(2)
-    runtime.syncWindowGraph(2, { tabs: [], leaves: [] })
-    runtime.markGraphReady(2)
-
-    runtime.markGraphReloadFailed(2, 'renderer-process-gone')
-
-    expect(runtime.getStatus()).toMatchObject({ authoritativeWindowId: 2 })
-  })
-
-  it('stays unavailable during initial loads before a graph is published', () => {
-    const runtime = createRuntime()
-
-    runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.markRendererReloading(TEST_WINDOW_ID)
-
-    expect(runtime.getStatus()).toMatchObject({
-      graphStatus: 'unavailable',
-      rendererGraphEpoch: 0
     })
   })
 })

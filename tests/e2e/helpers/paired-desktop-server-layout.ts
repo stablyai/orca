@@ -1,11 +1,12 @@
 // Compare the server’s authoritative workspace layout to the tree its paired desktop actually draws (H5b, H5c).
 import type { Page } from '@stablyai/playwright-test'
-import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/paired-runtime-connection'
-import { decodePairingOffer } from '../../../src/shared/pairing'
-import { subscribeRemoteRuntimeRequest } from '../../../src/shared/remote-runtime/remote-runtime-client'
-import { toWebTerminalSurfaceTabId } from '../../../src/shared/terminal-surface-id'
-import type { PublishedWorkspaceLayout } from '../../../src/shared/workspace-layout/workspace-layout-published'
-import { readWorkspaceLayoutStreamFrame } from '../../../src/shared/workspace-layout/workspace-layout-stream-frames'
+import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/remote-runtime/pairing/paired-runtime-connection'
+import { decodePairingOffer } from '../../../src/shared/remote-runtime/pairing/pairing'
+import '../../../src/shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../../src/shared/remote-runtime/requests/remote-runtime-subscription-transport'
+import { toWebTerminalSurfaceTabId } from '../../../src/shared/workspace-layout/terminal-surface-id'
+import type { PublishedWorkspaceLayout } from '../../../src/shared/workspace-layout/published-layout/workspace-layout-published'
+import { readWorkspaceLayoutStreamFrame } from '../../../src/shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 import { expect } from './orca-app'
 import type { HeadlessPairedRuntimeHost } from './headless-paired-runtime-host'
 import type { PairedElectronClient } from './paired-electron-client'
@@ -23,7 +24,7 @@ export async function readServerLayout(
   const snapshot = new Promise<unknown>((resolve) => {
     resolveSnapshot = resolve
   })
-  const subscription = await subscribeRemoteRuntimeRequest<unknown>(
+  const subscription = await subscribeRemoteRuntimeTransport<unknown>(
     pairedRuntimeConnectionFromOffer(decodePairingOffer(host.offer.pairingUrl)),
     'layout.subscribe',
     { workspaces: [worktreeId] },

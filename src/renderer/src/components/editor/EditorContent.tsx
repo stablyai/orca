@@ -1,25 +1,31 @@
-import { ActionsRunDetailsPanel } from './ActionsRunDetailsPanel'
+import { ActionsRunDetailsPanel } from './actions-run/ActionsRunDetailsPanel'
+import { GitGraphTab } from './git-graph/git-graph-tab'
 import { useAppStore } from '@/store'
-import type { ActivePluginCustomEditor } from '@/store/plugin-custom-editors'
-import type { MarkdownViewMode, OpenFile, PendingEditorReveal } from '@/store/slices/editor'
-import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
-import type { GitStatusEntry } from '../../../../shared/git-status-types'
-import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'
+import type { ActivePluginCustomEditor } from '@/store/plugins/file-editors/plugin-custom-editors'
+import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
+import type { PendingEditorReveal } from '@/store/slices/editor/types/pending-editor-reveal'
+import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
+import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
+import { CheckRunDetailsPanel } from './check-details/panel/CheckRunDetailsPanel'
 import { CombinedDiffViewer, MarkdownPreview } from './editor-lazy-views'
-import { EditorConflictReviewSurface } from './EditorConflictReviewSurface'
-import { EditorDiffFileSurface } from './EditorDiffFileSurface'
-import { EditorEditFileSurface } from './EditorEditFileSurface'
-import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
-import { MarkdownPreviewSizeGate } from './MarkdownPreviewSizeGate'
-import type { FileContent } from './editor-panel-content-types'
-import { buildPdfScalePreferenceKey } from './pdf-scale-preference-storage'
-import { translate } from '@/i18n/i18n'
-import { useEditorConflictNavigation } from './useEditorConflictNavigation'
-import { useMarkdownDocuments } from './useMarkdownDocuments'
-import type { MarkdownRenderState } from './markdown-render-mode'
+import { EditorConflictReviewSurface } from './conflict-review/EditorConflictReviewSurface'
+import { EditorDiffFileSurface } from './panel/EditorDiffFileSurface'
+import { EditorEditFileSurface } from './panel/EditorEditFileSurface'
+import { EditorFileLoadErrorView } from './loading/EditorFileLoadErrorView'
+import { MarkdownPreviewSizeGate } from './markdown-preview/render-tree/MarkdownPreviewSizeGate'
+import {
+  HOST_STARTED,
+  USER_RETRY,
+  type FileContent,
+  type ReloadContentOptions
+} from './loading/editor-panel-content-types'
+import { buildFileViewPreferenceKey as buildPdfScalePreferenceKey } from './view-mode/file-view-preference-storage'
+import { useTranslate } from '@/i18n/use-translate'
+import { useEditorConflictNavigation } from './conflict-review/useEditorConflictNavigation'
+import { useMarkdownDocuments } from './markdown/documents/useMarkdownDocuments'
+import type { MarkdownRenderState } from './markdown/render-mode/markdown-render-mode'
 
 // Retry is a user act: it may start a stopped WSL distro.
-const USER_RETRY = { wakeWslDistro: true }
 
 const noopCloseMarkdownTableOfContents = (): void => {}
 
@@ -101,8 +107,9 @@ export function EditorContent({
   handleDirtyStateHint: (dirty: boolean) => void
   handleSave: (content: string) => Promise<boolean>
   handleSaveForFile: (file: OpenFile, content: string) => Promise<boolean>
-  reloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void
+  reloadContent: (file: OpenFile, options?: ReloadContentOptions) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const editorViewStateKey =
     viewStateScopeId === activeFile.id
       ? activeFile.id
@@ -133,15 +140,16 @@ export function EditorContent({
       activeFile.diffSource === 'combined-branch' ||
       activeFile.diffSource === 'combined-commit')
 
+  if (activeFile.mode === 'git-graph') {
+    return <GitGraphTab key={activeFile.worktreeId} worktreeId={activeFile.worktreeId} />
+  }
+
   if (activeFile.mode === 'check-details') {
     const checkRunDetails = activeFile.checkRunDetails
     if (!checkRunDetails) {
       return (
         <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-          {translate(
-            'auto.components.editor.EditorContent.6c4f1a8d2e',
-            'Check details are unavailable.'
-          )}
+          {t('auto.components.editor.EditorContent.6c4f1a8d2e', 'Check details are unavailable.')}
         </div>
       )
     }
@@ -202,7 +210,7 @@ export function EditorContent({
     if (!fileContent) {
       return (
         <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
-          {translate('auto.components.editor.EditorContent.37a0e81fa6', 'Loading preview...')}
+          {t('auto.components.editor.EditorContent.37a0e81fa6', 'Loading preview...')}
         </div>
       )
     }
@@ -213,14 +221,14 @@ export function EditorContent({
           code={fileContent.loadErrorCode}
           worktreeId={activeFile.worktreeId}
           onRetry={() => reloadContent(activeFile, USER_RETRY)}
-          onHostStarted={() => reloadContent(activeFile)}
+          onHostStarted={() => reloadContent(activeFile, HOST_STARTED)}
         />
       )
     }
     if (fileContent.isBinary) {
       return (
         <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.editor.EditorContent.8608ce4cb1',
             'Markdown preview is unavailable for binary files.'
           )}
@@ -238,6 +246,7 @@ export function EditorContent({
             filePath={activeFile.filePath}
             sourceFileId={previewSourceFileId}
             sourceWorktreeId={activeFile.worktreeId}
+            sourceRelativePath={activeFile.relativePath}
             sourceRuntimeEnvironmentId={activeFile.runtimeEnvironmentId}
             scrollCacheKey={markdownPreviewViewStateKey}
             initialAnchor={activeFile.markdownPreviewAnchor ?? null}

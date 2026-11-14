@@ -2,12 +2,12 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync } fr
 import { readdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
-import { removeHostTree } from '../host-tree-removal'
+import { removeHostTree } from '../filesystem/host-tree-removal'
 import type {
   ManagedDataAccountProvider,
   ManagedDataAccountsState
 } from '../../shared/managed-account-types'
-import { writeSecureFile } from '../../shared/secure-file'
+import { writeSecureFile } from '../../shared/secure-storage/secure-file'
 
 export class ManagedDataAccountProfileRemoval {
   constructor(

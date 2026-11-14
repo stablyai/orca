@@ -1,6 +1,6 @@
 import type { Page } from '@stablyai/playwright-test'
 import { expect } from './orca-app'
-import type { CommitMessageAiSettings } from '../../../src/shared/commit-message-ai-types'
+import type { CommitMessageAiSettings } from '../../../src/shared/source-control/ai/generation/commit-message-ai-types'
 
 // Raw git worktree add bypasses Orca’s 5s scan-cache invalidation; poll for 10s to cross the TTL and allow a slow scan.
 const WORKTREE_CACHE_TTL_POLL_MS = 10_000

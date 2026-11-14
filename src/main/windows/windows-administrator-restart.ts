@@ -2,8 +2,9 @@ import { existsSync } from 'node:fs'
 import { win32 } from 'node:path'
 import { app } from 'electron'
 import { quoteWindowsArgument } from '@orca/process-host/windows-command-line'
-import { getBundledLauncherPath } from '../cli/bundled-cli-launcher-path'
+import { getBundledLauncherPath } from '../cli/packaged-assets/bundled-cli-launcher-path'
 import { getWindowsAdministratorStatus } from './windows-administrator-status'
+import { BACKGROUND_OPEN_ARG } from '../../shared/background-open-argv'
 
 const RESTART_LOCAL_TERMINALS_ARG = '--orca-restart-local-terminals-as-administrator'
 
@@ -28,7 +29,10 @@ export function prepareWindowsAdministratorRestart(): Electron.RelaunchOptions {
   if (!launcher || !existsSync(launcher)) {
     throw new Error('The Windows administrator launcher is unavailable.')
   }
-  const args = process.argv.slice(1).filter((arg) => arg !== RESTART_LOCAL_TERMINALS_ARG)
+  // The user asked for this restart, so the elevated window comes forward even when `orca open` started this one.
+  const args = process.argv
+    .slice(1)
+    .filter((arg) => arg !== RESTART_LOCAL_TERMINALS_ARG && arg !== BACKGROUND_OPEN_ARG)
   return {
     execPath: launcher,
     args: [
@@ -49,6 +53,6 @@ export async function restartLocalTerminalsAfterElevation(signal: AbortSignal): 
   if (signal.aborted || (await getWindowsAdministratorStatus()) !== true || signal.aborted) {
     return
   }
-  const { restartDaemon } = await import('../daemon/daemon-provider-restart')
+  const { restartDaemon } = await import('../daemon/providers/lifecycle/daemon-provider-restart')
   await restartDaemon()
 }

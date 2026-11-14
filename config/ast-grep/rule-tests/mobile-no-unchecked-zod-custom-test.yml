@@ -1,0 +1,5 @@
+id: mobile-no-unchecked-zod-custom
+valid:
+  - 'z.custom<Worktree>(isWorktreeCatalogRow)'
+invalid:
+  - 'z.array(z.custom<Worktree>()).optional()'

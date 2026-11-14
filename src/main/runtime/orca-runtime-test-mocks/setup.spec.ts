@@ -1,19 +1,37 @@
-import { expect, vi } from 'vitest'
-import type { Mock } from 'vitest'
-import type * as GitUsernameModule from '../../git/git-username'
-import type * as WslUncAccessGateModule from '../../wsl/wsl-unc-access-gate'
-import type * as FilesystemPathContainmentModule from '../../ipc/filesystem/filesystem-path-containment'
+export * from './github-hosted-review-test-harness'
+export * from './gitlab-test-harness'
+import type * as WorktreeScanCacheModule from '../../git/worktrees/catalog/worktree-scan-cache'
+import { beforeEach, vi, type Mock } from 'vitest'
+
+import type * as GitUsernameModule from '../../git/repositories/git-username'
+import './repo-creation.spec'
+import type * as WslUncAccessGateModule from '../../wsl/filesystem/wsl-unc-access-gate'
+import type * as FilesystemPathContainmentModule from '../../ipc/filesystem/access/filesystem-path-containment'
 import { reviewHeadRemoteRefComponent } from '../../../shared/review-head-tracking-ref'
 
 export const ORIGIN_REMOTE_URL = 'git@example.com:group/repo.git'
 export const ORIGIN_HEAD_COMPONENT = reviewHeadRemoteRefComponent('origin', ORIGIN_REMOTE_URL)
 import type { OrcaRuntimeService as OrcaRuntimeServiceConstructor } from '../orca-runtime'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import { setWorktreeWatcherRemoval } from '../../ipc/worktree-watcher-removal'
+import { setWorktreeWatcherRemoval } from '../../workspaces/removal/worktree-watcher-removal'
+import { _resetWorktreeCatalogOwnerForTests } from '../../workspaces/catalog/repo-worktree-catalog-owner'
+
+// Each runtime case once had private scan caches; the process-wide catalog owner starts unobserved instead.
+beforeEach(() => {
+  _resetWorktreeCatalogOwnerForTests()
+})
 
 type TestMock = Mock
 
 const reconcileClaudeAgentViewMock = vi.hoisted(() => vi.fn(async () => {}))
+vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
+  const facade = await getWorktreeOwnerMocks()
+  return {
+    ...(await importOriginal<typeof WorktreeScanCacheModule>()),
+    listWorktrees: facade.listWorktrees,
+    listWorktreesSharedStrict: (await getWorktreeOwnerMocks()).listWorktreesSharedStrict
+  }
+})
+
 vi.mock('../../claude/agent-view/agent-view-service', () => ({
   getClaudeAgentViewService: () => ({
     reconcile: reconcileClaudeAgentViewMock,
@@ -38,12 +56,10 @@ vi.mock('../../ipc/worktree-symlinks', () => ({
   removeWorktreeLinkedPaths: removeWorktreeLinkedPathsMock
 }))
 
-export async function waitForMobileSessionTabsEvents(
-  events: RuntimeMobileSessionTabsResult[],
-  count: number
-): Promise<void> {
-  await vi.waitFor(() => expect(events).toHaveLength(count))
-}
+vi.mock('../../git/worktrees/content-paths/worktree-symlink-detection', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  findExistingWorktreeSymlinkPaths: findExistingWorktreeSymlinkPathsMock
+}))
 
 export function setPlatform(platform: NodeJS.Platform): void {
   Object.defineProperty(process, 'platform', {
@@ -68,7 +84,9 @@ export function acknowledgeAgentPromptSubmit(
   }
 }
 
-const electronMocks = vi.hoisted(() => {
+const electronMocks = await vi.hoisted(async () => {
+  const { fakeAppEnvironment } =
+    await import('../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup')
   type Listener = (...args: unknown[]) => void
   const listeners = new Map<string, Set<Listener>>()
   const ipcMain = {
@@ -93,7 +111,7 @@ const electronMocks = vi.hoisted(() => {
     BrowserWindow: { fromId: vi.fn((_id: number): unknown => null) },
     webContents: { fromId: vi.fn((_id: number): unknown => null) },
     ipcMain,
-    app: { getPath: vi.fn(() => '/tmp'), isPackaged: false }
+    app: { getPath: vi.fn(() => fakeAppEnvironment().getPath('userData')), isPackaged: false }
   }
 })
 
@@ -120,71 +138,12 @@ const {
   ensurePathWithinWorkspaceMock,
   invalidateAuthorizedRootsCacheMock,
   prepareLocalWorktreeRootForRepoMock,
-  createHostedReviewMock,
-  createStackedHostedReviewMock,
-  getHostedReviewCreationEligibilityMock,
-  getHostedReviewForBranchMock,
-  getPRForBranchMock,
-  getPRForBranchOutcomeMock,
-  getRepoSlugMock,
-  getRepoUpstreamMock,
-  getGitHubWorkItemMock,
-  getPullRequestPushTargetMock,
-  getGitHubWorkItemByOwnerRepoMock,
-  getGitHubWorkItemDetailsMock,
-  getGitHubPRFileContentsMock,
-  getGitHubPRChecksMock,
-  rerunGitHubPRChecksMock,
-  getGitHubPRCheckDetailsMock,
-  getGitHubPRCommentsMock,
-  resolveGitHubReviewThreadMock,
-  setGitHubPRFileViewedMock,
-  updateGitHubPRTitleMock,
-  updateGitHubPRDetailsMock,
-  mergeGitHubPRMock,
-  setGitHubPRAutoMergeMock,
-  updateGitHubPRStateMock,
-  requestGitHubPRReviewersMock,
-  removeGitHubPRReviewersMock,
-  addGitHubPRReviewCommentMock,
-  addGitHubPRReviewCommentReplyMock,
-  listGitHubIssuesMock,
-  listGitHubWorkItemsMock,
-  countGitHubWorkItemsMock,
-  createGitHubIssueMock,
-  updateGitHubIssueMock,
-  addGitHubIssueCommentMock,
-  listGitHubLabelsMock,
-  listGitHubAssignableUsersMock,
   applyAgentStatusHooksEnabledMock,
+  detectAgentCommandsOnHostMock,
   detectInstalledAgentsWithShellPathHydrationMock,
   markCodexProjectTrustedMock,
   markCopilotFolderTrustedMock,
   markCursorWorkspaceTrustedMock,
-  listGitLabMergeRequestsMock,
-  listGitLabWorkItemsMock,
-  listGitLabIssuesMock,
-  listGitLabLabelsMock,
-  listGitLabAssignableUsersMock,
-  listGitLabTodosMock,
-  getGitLabProjectRefForRemoteMock,
-  getGitLabWorkItemByProjectRefMock,
-  createGitLabIssueMock,
-  updateGitLabIssueMock,
-  addGitLabIssueCommentMock,
-  addGitLabMRCommentMock,
-  addGitLabMRInlineCommentMock,
-  resolveGitLabMRDiscussionMock,
-  getGitLabJobTraceMock,
-  retryGitLabJobMock,
-  mergeGitLabMRMock,
-  closeGitLabMRMock,
-  reopenGitLabMRMock,
-  updateGitLabMRMock,
-  getGlabKnownHostsMock,
-  getGitLabWorkItemDetailsMock,
-  updateGitLabMRReviewersMock,
-  getIssueMock,
   deleteWorktreeHistoryDirMock
 } = vi.hoisted(() => {
   return {
@@ -205,95 +164,79 @@ const {
     ensurePathWithinWorkspaceMock: vi.fn() as TestMock,
     invalidateAuthorizedRootsCacheMock: vi.fn() as TestMock,
     prepareLocalWorktreeRootForRepoMock: vi.fn() as TestMock,
-    createHostedReviewMock: vi.fn() as TestMock,
-    createStackedHostedReviewMock: vi.fn() as TestMock,
-    getHostedReviewCreationEligibilityMock: vi.fn() as TestMock,
-    getHostedReviewForBranchMock: vi.fn() as TestMock,
-    getPRForBranchMock: vi.fn().mockResolvedValue(null) as TestMock,
-    getPRForBranchOutcomeMock: vi
-      .fn()
-      .mockResolvedValue({ kind: 'no-pr', fetchedAt: 0 }) as TestMock,
-    getRepoSlugMock: vi.fn().mockResolvedValue(null) as TestMock,
-    getRepoUpstreamMock: vi.fn().mockResolvedValue(null) as TestMock,
-    getGitHubWorkItemMock: vi.fn() as TestMock,
-    getPullRequestPushTargetMock: vi.fn() as TestMock,
-    getGitHubWorkItemByOwnerRepoMock: vi.fn() as TestMock,
-    getGitHubWorkItemDetailsMock: vi.fn() as TestMock,
-    getGitHubPRFileContentsMock: vi.fn() as TestMock,
-    getGitHubPRChecksMock: vi.fn() as TestMock,
-    rerunGitHubPRChecksMock: vi.fn() as TestMock,
-    getGitHubPRCheckDetailsMock: vi.fn() as TestMock,
-    getGitHubPRCommentsMock: vi.fn() as TestMock,
-    resolveGitHubReviewThreadMock: vi.fn() as TestMock,
-    setGitHubPRFileViewedMock: vi.fn() as TestMock,
-    updateGitHubPRTitleMock: vi.fn() as TestMock,
-    updateGitHubPRDetailsMock: vi.fn() as TestMock,
-    mergeGitHubPRMock: vi.fn() as TestMock,
-    setGitHubPRAutoMergeMock: vi.fn() as TestMock,
-    updateGitHubPRStateMock: vi.fn() as TestMock,
-    requestGitHubPRReviewersMock: vi.fn() as TestMock,
-    removeGitHubPRReviewersMock: vi.fn() as TestMock,
-    addGitHubPRReviewCommentMock: vi.fn() as TestMock,
-    addGitHubPRReviewCommentReplyMock: vi.fn() as TestMock,
-    listGitHubIssuesMock: vi.fn() as TestMock,
-    listGitHubWorkItemsMock: vi.fn() as TestMock,
-    countGitHubWorkItemsMock: vi.fn() as TestMock,
-    createGitHubIssueMock: vi.fn() as TestMock,
-    updateGitHubIssueMock: vi.fn() as TestMock,
-    addGitHubIssueCommentMock: vi.fn() as TestMock,
-    listGitHubLabelsMock: vi.fn() as TestMock,
-    listGitHubAssignableUsersMock: vi.fn() as TestMock,
     applyAgentStatusHooksEnabledMock: vi.fn() as TestMock,
+    detectAgentCommandsOnHostMock: vi.fn(async () => new Set(['qodercli'])),
     detectInstalledAgentsWithShellPathHydrationMock: vi.fn() as TestMock,
     markCodexProjectTrustedMock: vi.fn() as TestMock,
     markCopilotFolderTrustedMock: vi.fn() as TestMock,
     markCursorWorkspaceTrustedMock: vi.fn() as TestMock,
-    listGitLabMergeRequestsMock: vi.fn() as TestMock,
-    listGitLabWorkItemsMock: vi.fn() as TestMock,
-    listGitLabIssuesMock: vi.fn() as TestMock,
-    listGitLabLabelsMock: vi.fn() as TestMock,
-    listGitLabAssignableUsersMock: vi.fn<TestMock>(),
-    listGitLabTodosMock: vi.fn() as TestMock,
-    getGitLabProjectRefForRemoteMock: vi.fn() as TestMock,
-    getGitLabWorkItemByProjectRefMock: vi.fn() as TestMock,
-    createGitLabIssueMock: vi.fn() as TestMock,
-    updateGitLabIssueMock: vi.fn() as TestMock,
-    addGitLabIssueCommentMock: vi.fn() as TestMock,
-    addGitLabMRCommentMock: vi.fn() as TestMock,
-    addGitLabMRInlineCommentMock: vi.fn() as TestMock,
-    resolveGitLabMRDiscussionMock: vi.fn() as TestMock,
-    getGitLabJobTraceMock: vi.fn() as TestMock,
-    retryGitLabJobMock: vi.fn() as TestMock,
-    mergeGitLabMRMock: vi.fn() as TestMock,
-    closeGitLabMRMock: vi.fn() as TestMock,
-    reopenGitLabMRMock: vi.fn() as TestMock,
-    updateGitLabMRMock: vi.fn() as TestMock,
-    getGlabKnownHostsMock: vi.fn() as TestMock,
-    getGitLabWorkItemDetailsMock: vi.fn() as TestMock,
-    updateGitLabMRReviewersMock: vi.fn() as TestMock,
-    getIssueMock: vi.fn() as TestMock,
     deleteWorktreeHistoryDirMock: vi.fn() as TestMock
   }
 })
 
-vi.mock('../../git/worktree', () => ({
-  listWorktrees: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
-  listWorktreesSharedStrict: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
-  listWorktreesStrict: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
-  describeCreatedWorktree: vi.fn().mockResolvedValue(undefined),
-  assertWorktreeCleanForRemoval: vi.fn().mockResolvedValue(undefined),
-  addSparseWorktree: addSparseWorktreeMock,
-  addWorktree: addWorktreeMock,
-  removeWorktree: removeWorktreeMock,
-  forceDeleteLocalBranch: forceDeleteLocalBranchMock
+const listWorktreesStrictMock = vi.hoisted(() => vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES))
+
+vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listWorktreesStrict: listWorktreesStrictMock,
+  describeCreatedWorktree: (await getWorktreeOwnerMocks()).describeCreatedWorktree
 }))
 
-vi.mock('../repo-worktree-resolution-scan', () => ({
+// Fire-and-forget reclaim runs real Git on fixture paths and warns after the file ends.
+vi.mock(
+  '../../workspaces/creation/preparation/worktree-create-preparation-project-removal',
+  () => ({ releaseWorktreeCreatePreparationsForRepo: vi.fn() })
+)
+
+const { getWorktreeOwnerMocks } = vi.hoisted(() => {
+  function createWorktreeOwnerMocks() {
+    return (() => ({
+      listWorktrees: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
+      listWorktreesSharedStrict: vi.fn().mockResolvedValue(MOCK_GIT_WORKTREES),
+      listWorktreesStrict: listWorktreesStrictMock,
+      describeCreatedWorktree: vi.fn().mockResolvedValue(undefined),
+      assertWorktreeCleanForRemoval: vi.fn().mockResolvedValue(undefined),
+      addSparseWorktree: addSparseWorktreeMock,
+      addWorktree: addWorktreeMock,
+      removeWorktree: removeWorktreeMock,
+      forceDeleteLocalBranch: forceDeleteLocalBranchMock
+    }))()
+  }
+  let fixture: ReturnType<typeof createWorktreeOwnerMocks> | undefined
+  return { getWorktreeOwnerMocks: () => (fixture ??= createWorktreeOwnerMocks()) }
+})
+
+vi.mock('../../git/worktrees/removal/worktree-removal-preflight', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  assertWorktreeCleanForRemoval: (await getWorktreeOwnerMocks()).assertWorktreeCleanForRemoval
+}))
+
+vi.mock('../../git/worktrees/creation/worktree-sparse-add', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  addSparseWorktree: (await getWorktreeOwnerMocks()).addSparseWorktree
+}))
+
+vi.mock('../../git/worktrees/creation/worktree-add', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  addWorktree: (await getWorktreeOwnerMocks()).addWorktree
+}))
+
+vi.mock('../../git/worktrees/removal/worktree-removal', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  removeWorktree: (await getWorktreeOwnerMocks()).removeWorktree
+}))
+
+vi.mock('../../git/worktrees/removal/worktree-branch-removal', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  forceDeleteLocalBranch: (await getWorktreeOwnerMocks()).forceDeleteLocalBranch
+}))
+
+vi.mock('../workspaces/catalog/repo-worktree-resolution-scan', () => ({
   scanLocalRepoWorktreesForResolution: scanLocalRepoWorktreesForResolutionMock
 }))
 
 // Fake-win32 runtime tests have no wsl.exe: treat every distro as running unless a test says otherwise.
-vi.mock('../../wsl/wsl-unc-access-gate', async (importOriginal) => {
+vi.mock('../../wsl/filesystem/wsl-unc-access-gate', async (importOriginal) => {
   const actual = await importOriginal<typeof WslUncAccessGateModule>()
   const blockedWslDistroForPath = vi.fn<typeof actual.blockedWslDistroForPath>(async () => null)
   return {
@@ -319,7 +262,7 @@ vi.mock('../../wsl/wsl-unc-access-gate', async (importOriginal) => {
   }
 })
 
-vi.mock('../../terminal-history-deletion', () => ({
+vi.mock('../../pty/history/terminal-history-deletion', () => ({
   deleteWorktreeHistoryDir: deleteWorktreeHistoryDirMock
 }))
 
@@ -328,47 +271,56 @@ vi.mock('../../ssh/targets/ssh-target-registry', () => ({
   getRegisteredSshState: () => ({ remotePlatform: 'linux' })
 }))
 
+vi.mock('../../preflight/agent-command-detection', () => ({
+  detectAgentCommandsOnHost: detectAgentCommandsOnHostMock
+}))
+
 vi.mock('../../preflight/agent-detection', () => ({
-  detectAgentCommandsOnHost: vi.fn(async () => new Set(['qodercli'])),
+  detectAgentCommandsOnHost: detectAgentCommandsOnHostMock,
   detectInstalledAgentsWithShellPathHydration: detectInstalledAgentsWithShellPathHydrationMock
 }))
 
-vi.mock('../../agent-hooks/managed-agent-hook-controls', () => ({
+vi.mock('../../agent-hooks/installation/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock
 }))
 
-vi.mock('../../agent-trust-presets', () => ({
+vi.mock('../../agent-launch/trust/agent-trust-presets', () => ({
   markCodexProjectTrusted: markCodexProjectTrustedMock,
   markCopilotFolderTrusted: markCopilotFolderTrustedMock,
   markCursorWorkspaceTrusted: markCursorWorkspaceTrustedMock
 }))
 
-vi.mock('../../hooks', () => ({
+const parseOrcaYamlMock = vi.hoisted(() => vi.fn().mockReturnValue(null))
+vi.mock('../../../shared/orca-yaml', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  parseOrcaYaml: parseOrcaYamlMock
+}))
+
+vi.mock('../../workspace-hooks/hooks', () => ({
   getEffectiveHooks: vi.fn().mockReturnValue(null),
   loadHooks: vi.fn().mockReturnValue(null),
   runHook: vi.fn().mockResolvedValue({ success: true, output: '' }),
-  hasHooksFile: vi.fn().mockReturnValue(false),
-  parseOrcaYaml: vi.fn().mockReturnValue(null)
+  hasHooksFile: vi.fn().mockReturnValue(false)
 }))
 
-vi.mock('../../setup-runner-script-text', () => ({
+vi.mock('../../workspace-hooks/setup-runner-script-text', () => ({
   buildPosixRunnerScript: (script: string) => `#!/usr/bin/env bash\nset -e\n${script}\n`,
   buildWindowsRunnerScript: (script: string) => `@echo off\r\n${script}\r\n`
 }))
 
-vi.mock('../../worktree-runner-script', () => ({
+vi.mock('../../workspace-hooks/worktree-runner-script', () => ({
   createSetupRunnerScript: vi.fn(),
   resolveSetupRunnerShell: vi.fn().mockReturnValue(undefined)
 }))
 
-vi.mock('../../setup-hook-env-vars', () => ({
+vi.mock('../../workspace-hooks/setup-hook-env-vars', () => ({
   getSetupRunnerEnvVars: (_repo: never, worktreePath: string) => ({
     ORCA_ROOT_PATH: '/remote/repo',
     ORCA_WORKTREE_PATH: worktreePath
   })
 }))
 
-vi.mock('../../effective-hook-config', () => ({
+vi.mock('../../workspace-hooks/effective-hook-config', () => ({
   getEffectiveHooksFromConfig: vi.fn().mockReturnValue(null),
   getDefaultTabsLaunch: vi.fn().mockReturnValue(undefined),
   shouldRunSetupForCreate: vi
@@ -386,175 +338,36 @@ vi.mock('../../ipc/worktree-logic', async (importOriginal) => {
   }
 })
 
-vi.mock('../../ipc/filesystem/filesystem-auth', () => ({
+vi.mock('../../ipc/filesystem/access/filesystem-auth', () => ({
   resolveAuthorizedPath: vi.fn(async (pathValue: string) => pathValue)
 }))
 
-vi.mock('../../ipc/registered-worktree-roots-cache', () => ({
-  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock
+vi.mock('../../ipc/worktrees/removal/registered-worktree-roots-cache', () => ({
+  invalidateAuthorizedRootsCache: invalidateAuthorizedRootsCacheMock,
+  getRegisteredWorktreeRootsRevision: () => 0,
+  registerWorktreeRootsForRepo: vi.fn()
 }))
 
-vi.mock('../../ipc/registered-worktree-roots-scoped-invalidation', () => ({
+vi.mock('../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation', () => ({
   invalidateAuthorizedRootsCacheForRepo: invalidateAuthorizedRootsCacheMock
 }))
 
 // Relay-rebuilt ENOENT errors may retain only the message.
-vi.mock('../../ipc/filesystem/filesystem-path-containment', async () => {
+vi.mock('../../ipc/filesystem/access/filesystem-path-containment', async () => {
   const actual = await vi.importActual<typeof FilesystemPathContainmentModule>(
-    '../../ipc/filesystem/filesystem-path-containment'
+    '../../ipc/filesystem/access/filesystem-path-containment'
   )
   return { isENOENT: actual.isENOENT }
 })
 
-vi.mock('../../worktree-root-preparation', () => ({
+vi.mock('../../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: prepareLocalWorktreeRootForRepoMock
 }))
 
-vi.mock('../../source-control/hosted-review-creation', () => ({
-  createHostedReview: createHostedReviewMock,
-  getHostedReviewCreationEligibility: getHostedReviewCreationEligibilityMock
-}))
-
-vi.mock('../../source-control/stacked-hosted-review-creation', () => ({
-  createStackedHostedReview: createStackedHostedReviewMock
-}))
-
-vi.mock('../../source-control/hosted-review', () => ({
-  getHostedReviewForBranch: getHostedReviewForBranchMock,
-  // Handlers read through this; keep asserting on the one mock.
-  readHostedReviewForBranch: vi.fn(async (input: unknown) => ({
-    review: await getHostedReviewForBranchMock(input),
-    readOutcome: 'cached'
-  }))
-}))
-
-vi.mock('../../github/client', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>
-  return {
-    ...actual,
-    getPRForBranch: getPRForBranchMock,
-    getPRForBranchOutcome: getPRForBranchOutcomeMock,
-    getRepoSlug: getRepoSlugMock,
-    getRepoUpstream: getRepoUpstreamMock,
-    getWorkItem: getGitHubWorkItemMock,
-    getPullRequestPushTarget: getPullRequestPushTargetMock,
-    getWorkItemByOwnerRepo: getGitHubWorkItemByOwnerRepoMock,
-    getPRChecks: getGitHubPRChecksMock,
-    rerunPRChecks: rerunGitHubPRChecksMock,
-    getPRCheckDetails: getGitHubPRCheckDetailsMock,
-    getPRComments: getGitHubPRCommentsMock,
-    resolveReviewThread: resolveGitHubReviewThreadMock,
-    setPRFileViewed: setGitHubPRFileViewedMock,
-    updatePRTitle: updateGitHubPRTitleMock,
-    updatePRDetails: updateGitHubPRDetailsMock,
-    mergePR: mergeGitHubPRMock,
-    setPRAutoMerge: setGitHubPRAutoMergeMock,
-    updatePRState: updateGitHubPRStateMock,
-    requestPRReviewers: requestGitHubPRReviewersMock,
-    removePRReviewers: removeGitHubPRReviewersMock,
-    addPRReviewComment: addGitHubPRReviewCommentMock,
-    addPRReviewCommentReply: addGitHubPRReviewCommentReplyMock,
-    listIssues: listGitHubIssuesMock,
-    listWorkItems: listGitHubWorkItemsMock,
-    countWorkItems: countGitHubWorkItemsMock,
-    getIssue: getIssueMock,
-    createIssue: createGitHubIssueMock,
-    updateIssue: updateGitHubIssueMock,
-    addIssueComment: addGitHubIssueCommentMock,
-    listLabels: listGitHubLabelsMock,
-    listAssignableUsers: listGitHubAssignableUsersMock
-  }
-})
-
-vi.mock('../../gitlab/client', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>
-  return {
-    ...actual,
-    listMergeRequests: listGitLabMergeRequestsMock,
-    listWorkItems: listGitLabWorkItemsMock,
-    listIssues: listGitLabIssuesMock,
-    listLabels: listGitLabLabelsMock,
-    listAssignableUsers: listGitLabAssignableUsersMock,
-    listTodos: listGitLabTodosMock,
-    getProjectRefForRemote: getGitLabProjectRefForRemoteMock,
-    getWorkItemByProjectRef: getGitLabWorkItemByProjectRefMock,
-    createIssue: createGitLabIssueMock,
-    updateIssue: updateGitLabIssueMock,
-    addIssueComment: addGitLabIssueCommentMock,
-    addMRComment: addGitLabMRCommentMock,
-    addMRInlineComment: addGitLabMRInlineCommentMock,
-    resolveMRDiscussion: resolveGitLabMRDiscussionMock,
-    getJobTrace: getGitLabJobTraceMock,
-    retryJob: retryGitLabJobMock,
-    mergeMR: mergeGitLabMRMock,
-    closeMR: closeGitLabMRMock,
-    reopenMR: reopenGitLabMRMock,
-    updateMR: updateGitLabMRMock,
-    updateMRReviewers: updateGitLabMRReviewersMock
-  }
-})
-
-vi.mock('../../gitlab/gl-utils', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>
-  return {
-    ...actual,
-    getGlabKnownHosts: getGlabKnownHostsMock
-  }
-})
-
-vi.mock('../../gitlab/work-item-details', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>
-  return {
-    ...actual,
-    getWorkItemDetails: getGitLabWorkItemDetailsMock
-  }
-})
-
-vi.mock('../../github/work-item-details', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>
-  return {
-    ...actual,
-    getWorkItemDetails: getGitHubWorkItemDetailsMock,
-    getPRFileContents: getGitHubPRFileContentsMock
-  }
-})
-
-vi.mock('../../github/issues', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>
-  return {
-    ...actual,
-    getIssue: getIssueMock
-  }
-})
-
-// Fabricated repo paths need deterministic async default-ref resolution.
-vi.mock('../../git/repo', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>
-  const actualGetBaseRefDefault = actual.getBaseRefDefault as (
-    path: string,
-    options?: { wslDistro?: string }
-  ) => Promise<string | null>
-  return {
-    ...actual,
-    // Keep fake local defaults deterministic while WSL exercises real async Git options.
-    getBaseRefDefault: vi
-      .fn()
-      .mockImplementation((path: string, options?: { wslDistro?: string }) =>
-        options?.wslDistro ? actualGetBaseRefDefault(path, options) : Promise.resolve('origin/main')
-      ),
-    resolveDefaultBaseRefWithLocalGit: vi
-      .fn()
-      .mockImplementation((options: { cwd: string; wslDistro?: string }) =>
-        options.wslDistro
-          ? actualGetBaseRefDefault(options.cwd, options)
-          : Promise.resolve('origin/main')
-      ),
-    getBranchConflictKind: vi.fn().mockResolvedValue(null)
-  }
-})
-
-vi.mock('../../git/git-username', async () => {
-  const actual = await vi.importActual<typeof GitUsernameModule>('../../git/git-username')
+vi.mock('../../git/repositories/git-username', async () => {
+  const actual = await vi.importActual<typeof GitUsernameModule>(
+    '../../git/repositories/git-username'
+  )
   return { ...actual, resolveLocalGitUsername: resolveLocalGitUsernameMock }
 })
 
@@ -576,72 +389,17 @@ export {
   ensurePathWithinWorkspaceMock,
   invalidateAuthorizedRootsCacheMock,
   prepareLocalWorktreeRootForRepoMock,
-  createHostedReviewMock,
-  createStackedHostedReviewMock,
-  getHostedReviewCreationEligibilityMock,
-  getHostedReviewForBranchMock,
-  getPRForBranchMock,
-  getPRForBranchOutcomeMock,
-  getRepoSlugMock,
-  getRepoUpstreamMock,
-  getGitHubWorkItemMock,
-  getPullRequestPushTargetMock,
-  getGitHubWorkItemByOwnerRepoMock,
-  getGitHubWorkItemDetailsMock,
-  getGitHubPRFileContentsMock,
-  getGitHubPRChecksMock,
-  rerunGitHubPRChecksMock,
-  getGitHubPRCheckDetailsMock,
-  getGitHubPRCommentsMock,
-  resolveGitHubReviewThreadMock,
-  setGitHubPRFileViewedMock,
-  updateGitHubPRTitleMock,
-  updateGitHubPRDetailsMock,
-  mergeGitHubPRMock,
-  setGitHubPRAutoMergeMock,
-  updateGitHubPRStateMock,
-  requestGitHubPRReviewersMock,
-  removeGitHubPRReviewersMock,
-  addGitHubPRReviewCommentMock,
-  addGitHubPRReviewCommentReplyMock,
-  listGitHubIssuesMock,
-  listGitHubWorkItemsMock,
-  countGitHubWorkItemsMock,
-  createGitHubIssueMock,
-  updateGitHubIssueMock,
-  addGitHubIssueCommentMock,
-  listGitHubLabelsMock,
-  listGitHubAssignableUsersMock,
   applyAgentStatusHooksEnabledMock,
   detectInstalledAgentsWithShellPathHydrationMock,
   markCodexProjectTrustedMock,
   markCopilotFolderTrustedMock,
   markCursorWorkspaceTrustedMock,
-  listGitLabMergeRequestsMock,
-  listGitLabWorkItemsMock,
-  listGitLabIssuesMock,
-  listGitLabLabelsMock,
-  listGitLabAssignableUsersMock,
-  listGitLabTodosMock,
-  getGitLabProjectRefForRemoteMock,
-  getGitLabWorkItemByProjectRefMock,
-  createGitLabIssueMock,
-  updateGitLabIssueMock,
-  addGitLabIssueCommentMock,
-  addGitLabMRCommentMock,
-  addGitLabMRInlineCommentMock,
-  resolveGitLabMRDiscussionMock,
-  getGitLabJobTraceMock,
-  retryGitLabJobMock,
-  mergeGitLabMRMock,
-  closeGitLabMRMock,
-  reopenGitLabMRMock,
-  updateGitLabMRMock,
-  getGlabKnownHostsMock,
-  getGitLabWorkItemDetailsMock,
-  updateGitLabMRReviewersMock,
-  getIssueMock,
   deleteWorktreeHistoryDirMock
 }
 
 export { reconcileClaudeAgentViewMock }
+
+vi.mock(import('../../preflight/installed-agent-detection'), async (importOriginal) => ({
+  ...(await importOriginal()),
+  detectInstalledAgentsWithShellPathHydration: detectInstalledAgentsWithShellPathHydrationMock
+}))

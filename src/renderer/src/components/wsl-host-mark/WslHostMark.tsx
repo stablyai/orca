@@ -2,13 +2,15 @@ import React from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { LinuxPenguinIcon } from '@/components/icons/LinuxPenguinIcon'
 import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
-import { cn } from '@/lib/utils'
+import { useTranslate } from '@/i18n/use-translate'
+import type { Translate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
+import { cn } from '@/lib/class-names'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import {
   isWslHostRuntimeEnvironment,
   type OrcadDeploymentLink
-} from '../../../../shared/runtime-environments'
+} from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 
 /** The distro a WSL host runs in; null for any other host, including an unknown runtime id. */
 export function selectWslHostDistro(
@@ -37,8 +39,8 @@ export function useWslHostDistro(hostId: string | null | undefined): string | nu
   return useAppStore((state) => selectWslHostDistro(state, hostId))
 }
 
-export function wslHostRunsOnLabel(distro: string): string {
-  return translate('components.wslHostMark.runsOn', 'Runs on WSL: {{distro}} (Linux)', { distro })
+export function wslHostRunsOnLabel(distro: string, t: Translate = translate): string {
+  return t('components.wslHostMark.runsOn', 'Runs on WSL: {{distro}} (Linux)', { distro })
 }
 
 /** Stands in for a WSL host's text badge on project and workspace rows. */
@@ -52,7 +54,8 @@ export function WslHostMark({
   /** Off where the row already has its own identity tooltip. */
   withTooltip?: boolean
 }): React.JSX.Element {
-  const label = wslHostRunsOnLabel(distro)
+  const t = useTranslate()
+  const label = wslHostRunsOnLabel(distro, t)
   if (!withTooltip) {
     return (
       <span

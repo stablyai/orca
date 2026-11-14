@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { quotePosixShell } from '../../../src/shared/shell-argument-quoting'
+import { quotePosixShell } from '../../../src/shared/shell/launch/shell-argument-quoting'
 
 function fixtureCommand(fixturePath: string, marker: string): string {
   const command = [process.execPath, fixturePath, marker]

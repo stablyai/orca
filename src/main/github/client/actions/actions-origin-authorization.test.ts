@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import * as execution from '../../github-api-repository'
-import * as gh from '../../gh-utils'
+import * as remoteProbe from '../../repositories/github-api-repository-remote-probe'
+import * as ghExec from '../../../git/command-runner/hosted-cli/gh-exec-file'
 import { withActionsRead } from './actions-read-request'
 import { startActionsArtifactDownload } from './actions-artifacts'
 
@@ -13,9 +13,9 @@ it.each([
 ])(
   'refuses another repository or host before artifact metadata or archive execution',
   async (repository) => {
-    vi.spyOn(execution, 'getGitHubApiRepositoryForRemote').mockResolvedValue(origin)
+    vi.spyOn(remoteProbe, 'getGitHubApiRepositoryForRemote').mockResolvedValue(origin)
     const command = vi
-      .spyOn(gh, 'ghExecFileAsync')
+      .spyOn(ghExec, 'ghExecFileAsync')
       .mockRejectedValue(new Error('Unexpected gh execution'))
     await expect(
       startActionsArtifactDownload('/registered', { repository, runId: 9, artifactId: 7 })
@@ -32,7 +32,7 @@ it.each([
   'uses the verified origin for a matching or legacy host-less request: %j',
   async (repository) => {
     const discover = vi
-      .spyOn(execution, 'getGitHubApiRepositoryForRemote')
+      .spyOn(remoteProbe, 'getGitHubApiRepositoryForRemote')
       .mockResolvedValue(origin)
     await expect(
       withActionsRead(
@@ -55,7 +55,7 @@ it.each([
 )
 
 it('refuses a supplied slug when the registered origin cannot be verified', async () => {
-  vi.spyOn(execution, 'getGitHubApiRepositoryForRemote').mockResolvedValue(null)
+  vi.spyOn(remoteProbe, 'getGitHubApiRepositoryForRemote').mockResolvedValue(null)
   await expect(
     withActionsRead('/registered', origin, undefined, {}, undefined, async () => true)
   ).rejects.toThrow('verified GitHub repository is required')

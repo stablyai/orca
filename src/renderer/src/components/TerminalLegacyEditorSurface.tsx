@@ -1,6 +1,6 @@
 import { Suspense } from 'react'
-import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
-import { translate } from '@/i18n/i18n'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
+import { useTranslate } from '@/i18n/use-translate'
 import type { TerminalController } from './use-terminal-controller'
 
 const EditorPanel = lazy(() => import('./editor/EditorPanel'))
@@ -10,6 +10,7 @@ export function TerminalLegacyEditorSurface({
 }: {
   controller: TerminalController
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const { activeTabType, renderedActiveWorktreeId, worktreeFiles } = controller
   if (!renderedActiveWorktreeId || activeTabType !== 'editor' || worktreeFiles.length === 0) {
     return null
@@ -18,7 +19,7 @@ export function TerminalLegacyEditorSurface({
     <Suspense
       fallback={
         <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-          {translate('auto.components.Terminal.5c1d2a32bb', 'Loading editor...')}
+          {t('auto.components.Terminal.5c1d2a32bb', 'Loading editor...')}
         </div>
       }
     >

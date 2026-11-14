@@ -1,6 +1,6 @@
 // Mirror of cloud/packages/connector-contract/src for the machine side of the Orca Cloud connector.
 import { z } from 'zod'
-import type { PendingPrompt } from './agent-pending-prompt'
+import type { PendingPrompt } from './agent-status/contracts/agent-pending-prompt'
 
 export const CONNECTOR_CONTRACT_VERSION = 1
 

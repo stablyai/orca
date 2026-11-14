@@ -1,5 +1,5 @@
 // Pin viewport-only reveal reads; normal-buffer scrollback in serialize() can masquerade as a live alt frame (STA-5208).
-import '../../../src/main/daemon/xterm-env-polyfill'
+import '../../../src/main/daemon/emulation/xterm-env-polyfill'
 import { describe, expect, it } from 'vitest'
 import { Terminal } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'

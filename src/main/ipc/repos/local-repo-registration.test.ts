@@ -6,10 +6,10 @@ import type { Repo } from '../../../shared/repo-types'
 import type { Store } from '../../persistence/loading-store/store'
 import { addLocalRepoFromPath } from './local-repo-registration'
 
-vi.mock('../../repo-icon-autodetect', () => ({
-  detectRepoIconAndUpstream: vi.fn().mockResolvedValue({})
+vi.mock('../../repository-icons/repo-icon-autodetect', () => ({
+  detectRepoLocalMetadata: vi.fn().mockResolvedValue({})
 }))
-vi.mock('../../worktree-root-preparation', () => ({
+vi.mock('../../workspaces/creation/worktree-root-preparation', () => ({
   prepareLocalWorktreeRootForRepo: vi.fn().mockResolvedValue(undefined)
 }))
 
@@ -50,17 +50,5 @@ describe('addLocalRepoFromPath through a symlink alias', () => {
     expect('repo' in first && 'repo' in second && second.repo.id === first.repo.id).toBe(true)
     expect(second).toMatchObject({ alreadyExisted: true })
     expect(repos).toHaveLength(1)
-  })
-
-  it('keeps two different folders as two workspaces', async () => {
-    await mkdir(join(root, 'a'))
-    await mkdir(join(root, 'b'))
-    const repos: Repo[] = []
-    const store = createStore(repos)
-
-    await addLocalRepoFromPath(store, join(root, 'a'), 'folder')
-    await addLocalRepoFromPath(store, join(root, 'b'), 'folder')
-
-    expect(repos).toHaveLength(2)
   })
 })

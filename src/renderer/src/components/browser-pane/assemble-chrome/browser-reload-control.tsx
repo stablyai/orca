@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Share left-click reload/right-click hard reload gestures; the caller defines the hard variant. */
 export function BrowserReloadControl({
@@ -37,6 +37,7 @@ export function BrowserReloadControl({
   onReload: () => void
   onHardReload: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <DropdownMenu modal={false} open={menuOpen} onOpenChange={onMenuOpenChange}>
       {/* Why: suppress the tooltip while the menu is open — both anchor below the button and would overlap. */}
@@ -78,11 +79,11 @@ export function BrowserReloadControl({
       </Tooltip>
       <DropdownMenuContent align="start" alignOffset={-4}>
         <DropdownMenuItem onClick={onReload}>
-          {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
+          {t('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
           <DropdownMenuShortcut>{reloadShortcut}</DropdownMenuShortcut>
         </DropdownMenuItem>
         <DropdownMenuItem onClick={onHardReload}>
-          {translate('auto.components.browser.pane.BrowserPane.a1f3c2e4b5', 'Hard Reload')}
+          {t('auto.components.browser.pane.BrowserPane.a1f3c2e4b5', 'Hard Reload')}
           <DropdownMenuShortcut>{hardReloadShortcut}</DropdownMenuShortcut>
         </DropdownMenuItem>
       </DropdownMenuContent>

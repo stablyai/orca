@@ -36,6 +36,20 @@ export function readScenarios(path: string): { scenarios: RecordingScenario[] } 
       `The recording manifest no longer carries a pin or scenario versions; remove: ${retired.join(', ')}`
     )
   }
+  for (const scenario of input.scenarios) {
+    for (const step of scenario.steps) {
+      if (
+        step.transport !== undefined &&
+        (!['native', 'bridge'].includes(step.transport) ||
+          !('complete' in step || 'bind' in step || 'advance' in step))
+      ) {
+        throw new Error(`Invalid execution qualifier: ${scenario.id}`)
+      }
+      if (step.bridgeSite && (step.transport !== 'bridge' || !('complete' in step) || !step.site)) {
+        throw new Error(`Invalid bridge-only reply site: ${scenario.id}`)
+      }
+    }
+  }
   const ids = input.scenarios.map((scenario) => scenario.id)
   if (new Set(ids).size !== ids.length) {
     throw new Error('Duplicate scenario ids')

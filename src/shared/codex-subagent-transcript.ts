@@ -15,8 +15,10 @@ import { isCodexStatusTranscriptLine } from './codex-status-transcript-line'
 import { readApprovalsReviewer } from './codex-subagent-reviewer'
 import type { CodexApprovalsReviewer } from './codex-subagent-reviewer'
 
+import { codexSubagentPathLabel } from './codex-agent-path'
 import {
   finishCodexSubagent,
+  queueCodexSubagentIdentity,
   setCodexSubagentModel,
   upsertCodexSubagent,
   type CodexSubagentRoster
@@ -127,7 +129,8 @@ function readActivity(recordValue: JsonRecord):
   return {
     id,
     description:
-      typeof payload.agent_path === 'string' ? payload.agent_path.trim() || undefined : undefined,
+      codexSubagentPathLabel(typeof payload.agent_path === 'string' ? payload.agent_path : null) ??
+      undefined,
     kind: rawKind,
     startedAt:
       typeof payload.occurred_at_ms === 'number' && Number.isFinite(payload.occurred_at_ms)
@@ -309,6 +312,10 @@ export function reconcileCodexSubagentTranscript(
       }
     } else {
       tracked.unresolvedSince = undefined
+      // A missed or early hook read must not leave the child unnamed; the poll's bounded retries read it.
+      if (tracked.filePath) {
+        queueCodexSubagentIdentity(roster, id, tracked.filePath)
+      }
       tracked.model = readChildModel(records) ?? tracked.model
       // Reapply each poll because parent activity can rebuild the child row and erase its discovered model.
       setCodexSubagentModel(roster, id, tracked.model)

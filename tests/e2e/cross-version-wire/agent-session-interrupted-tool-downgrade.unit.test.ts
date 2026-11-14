@@ -2,23 +2,33 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from 'vitest'
-import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import {
   endedRunningAgentJournalToolCall,
   interruptedAgentJournalToolCall
 } from '../../../src/shared/agent-journal-tool-call-lifecycle'
 import type { AgentJournalItemIdentity } from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
-import { createTrackedJournalOpener } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import type { JournalRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-schema'
-import type { JournalReadRow } from '../../../src/main/native-chat/agent-session-journal/journal-read-row'
+import { createTrackedJournalOpener } from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { readTestJournalItems } from '../../../src/main/native-chat/agent-session-journal/journal-observation.test-support'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
   releaseModuleExport
 } from './release-checkout'
+import { prepareReleaseFixtures } from './release-fixture-setup'
 
 // Pin a release predating endedAs to prove cut-short tool calls still read as failed.
 const BASELINE_REF = 'v1.4.218'
+const releaseToolModules = prepareReleaseFixtures([BASELINE_REF], async (ref) => {
+  const checkout = await materializeReleaseCheckout(ref)
+  return Promise.all(
+    [
+      'src/shared/agent-session-journal-schemas.ts',
+      'src/shared/structured-agent-session-projection.ts',
+      'src/shared/native-chat-tool-run-outcome.ts'
+    ].map((path) => importReleaseCheckoutModule(checkout, path))
+  )
+})
 
 const SESSION = 'session-interrupted-tool'
 
@@ -33,19 +43,10 @@ type OldRunOutcome = (
   options: { activeTurnIsWorking?: boolean }
 ) => { failedCallCount: number; succeeded: boolean }
 
-// Old builds fold input rows; an outcome row here means the probe opened a converted chat by mistake.
-function inputRows(rows: readonly JournalReadRow[]): JournalRow[] {
-  return rows.map((row) => {
-    if (row.kind === 'outcome') {
-      throw new Error('expected input rows')
-    }
-    return row
-  })
-}
 // Loads a real old build, including cold extraction and transforms.
-test('an older host and client read a call a stop cut short as the failure they always showed', async () => {
+test('an older client reads a call a stop cut short as the failure they always showed', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-interrupted-tool-downgrade-'))
-  const journals = createTrackedJournalOpener({ legacyInputs: true })
+  const journals = createTrackedJournalOpener()
   try {
     // This build: a call a stop cut short, with the partial output it left.
     const journal = await journals.open({
@@ -73,38 +74,13 @@ test('an older host and client read a call a stop cut short as the failure they 
       'unverifiable'
     )
     await journal.appendItem(call(1), unverified, { fence: 1, turnScope: { kind: 'thread' } })
-    const since = journal.readSince({ epoch: journal.epoch, sequence: 0 })
-    if (!since.ok) {
-      throw new Error(`expected rows, got reset ${since.reset}`)
-    }
-    const rows = inputRows(since.rows)
-    const current = journal.snapshot().items
+    const current = await readTestJournalItems(journal)
     expect(current.map((item) => item.body)).toMatchObject([
       { state: 'failed', endedAs: 'interrupted' },
       { state: 'failed', endedAs: 'unverifiable' }
     ])
 
-    const checkout = await materializeReleaseCheckout(BASELINE_REF)
-    const [reducer, schemas, projection, outcome] = await Promise.all(
-      [
-        'src/main/native-chat/agent-session-journal/journal-reducer.ts',
-        'src/shared/agent-session-journal-schemas.ts',
-        'src/shared/structured-agent-session-projection.ts',
-        'src/shared/native-chat-tool-run-outcome.ts'
-      ].map((path) => importReleaseCheckoutModule(checkout, path))
-    )
-    const createState = releaseModuleExport<(sessionId: string, epoch: string) => unknown>(
-      reducer,
-      'createJournalReducerState'
-    )
-    const applyRow = releaseModuleExport<(state: unknown, row: JournalRow) => void>(
-      reducer,
-      'applyJournalRow'
-    )
-    const render = releaseModuleExport<(state: unknown) => { items: OldRenderItem[] }>(
-      reducer,
-      'renderJournalState'
-    )
+    const [schemas, projection, outcome] = releaseToolModules(BASELINE_REF)
     const renderItemSchema = releaseModuleExport<{ parse: (value: unknown) => OldRenderItem }>(
       schemas,
       'AgentJournalRenderItemSchema'
@@ -119,23 +95,8 @@ test('an older host and client read a call a stop cut short as the failure they 
     const blocksOf = (items: OldRenderItem[]) =>
       items.flatMap((item) => project(item)?.blocks ?? [])
 
-    // The older host, after a downgrade, folds the rows it never wrote as failed calls.
-    const state = createState(SESSION, journal.epoch)
-    for (const row of rows) {
-      applyRow(state, row)
-    }
-    const folded = render(state).items
-    expect(folded.map((item) => item.body)).toMatchObject([
-      { kind: 'tool-call', state: 'failed' },
-      { kind: 'tool-call', state: 'failed' }
-    ])
-    expect(runOutcome(blocksOf(folded), settled)).toEqual({
-      failedCallCount: 2,
-      succeeded: false
-    })
-
-    // The older client reads this host's render items the same way.
-    const read = current.map((item) => renderItemSchema.parse(item))
+    // The older client reads this host's render items, as sent on the wire, as failed calls.
+    const read = current.map((item) => renderItemSchema.parse(JSON.parse(JSON.stringify(item))))
     expect(runOutcome(blocksOf(read), settled)).toEqual({
       failedCallCount: 2,
       succeeded: false

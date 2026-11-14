@@ -1,0 +1,175 @@
+import { assertJsonTextStructureWithinLimits } from '../../json-stream/json-text-structure-limit'
+
+const TERMINAL_STREAM_KIND = 0x74
+const TERMINAL_STREAM_VERSION = 1
+const HEADER_BYTES = 16
+export const TERMINAL_STREAM_JSON_MAX_BYTES = 8 * 1024 * 1024
+export const TERMINAL_STREAM_JSON_STRUCTURE_LIMITS = {
+  structuralTokens: 256 * 1024,
+  nestingDepth: 32
+} as const
+
+export enum TerminalStreamOpcode {
+  Output = 1,
+  SnapshotStart = 2,
+  SnapshotChunk = 3,
+  SnapshotEnd = 4,
+  Resized = 5,
+  Error = 6,
+  Input = 7,
+  Resize = 8,
+  Subscribe = 9,
+  Unsubscribe = 10,
+  SnapshotRequest = 11,
+  Metadata = 12,
+  // Metadata=12 shipped in mobile v1.4.120; keep Ack on 13 for wire compatibility.
+  Ack = 13,
+  // Older runtimes ignore ClaimViewport and still receive the following compatibility Resize.
+  ClaimViewport = 14,
+  OutputSpan = 15,
+  // Negotiated per stream; older hosts reject unknown opcodes, so clients send only after capability confirmation.
+  SetOutputPaused = 16,
+  // Negotiated per stream because older clients reject unknown opcodes.
+  WriteUnavailable = 17,
+  // Host->client; `seq` is the cumulative input sequence the host applied (see encodeTerminalInputAck). Sent only after `inputAck` negotiation.
+  InputAck = 18,
+  // Host->client, empty payload; at most once per pause, when the host first discards output for a paused stream. Sent only after `outputPauseDropNotice` negotiation.
+  PausedOutputDropped = 19,
+  // Client->host; negotiated per stream like SetOutputPaused.
+  SetOutputCadence = 20
+}
+
+export type TerminalInputAckKind = 'applied' | 'delivery-unknown' | 'resend'
+
+const INPUT_ACK_FLAGS: Record<TerminalInputAckKind, number> = {
+  applied: 0,
+  // The write at `seq` may have reached the terminal; the client must not resend it.
+  'delivery-unknown': 1,
+  // A refusal or gap: the host needs everything after `seq` sent again, in order.
+  resend: 2
+}
+
+/** InputAck payload; `seq` is the host's cumulative applied input sequence. */
+export function encodeTerminalInputAck(kind: TerminalInputAckKind): Uint8Array {
+  return kind === 'applied' ? new Uint8Array() : Uint8Array.of(INPUT_ACK_FLAGS[kind])
+}
+
+export function decodeTerminalInputAck(payload: Uint8Array): TerminalInputAckKind {
+  return payload[0] === INPUT_ACK_FLAGS.resend
+    ? 'resend'
+    : payload[0] === INPUT_ACK_FLAGS['delivery-unknown']
+      ? 'delivery-unknown'
+      : 'applied'
+}
+
+export type TerminalStreamFrame = {
+  opcode: TerminalStreamOpcode
+  streamId: number
+  seq: number
+  payload: Uint8Array
+}
+
+export function encodeTerminalStreamFrame(frame: TerminalStreamFrame): Uint8Array {
+  const out = new Uint8Array(HEADER_BYTES + frame.payload.length)
+  const view = new DataView(out.buffer, out.byteOffset, out.byteLength)
+  view.setUint8(0, TERMINAL_STREAM_KIND)
+  view.setUint8(1, TERMINAL_STREAM_VERSION)
+  view.setUint8(2, frame.opcode)
+  view.setUint8(3, 0)
+  view.setUint32(4, frame.streamId, true)
+  const seq = Math.max(0, Math.floor(frame.seq))
+  view.setUint32(8, Math.floor(seq / 0x100000000), true)
+  view.setUint32(12, seq >>> 0, true)
+  out.set(frame.payload, HEADER_BYTES)
+  return out
+}
+
+export function decodeTerminalStreamFrame(bytes: Uint8Array): TerminalStreamFrame | null {
+  if (bytes.length < HEADER_BYTES) {
+    return null
+  }
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
+  if (view.getUint8(0) !== TERMINAL_STREAM_KIND || view.getUint8(1) !== TERMINAL_STREAM_VERSION) {
+    return null
+  }
+  const opcode = view.getUint8(2)
+  if (!isTerminalStreamOpcode(opcode)) {
+    return null
+  }
+  const high = view.getUint32(8, true)
+  const low = view.getUint32(12, true)
+  return {
+    opcode,
+    streamId: view.getUint32(4, true),
+    seq: high * 0x100000000 + low,
+    // Why a view: each message is a fresh buffer, and only the header is ever rewritten in place.
+    payload: bytes.subarray(HEADER_BYTES)
+  }
+}
+
+/** The stream id in a terminal frame's header, or null when the bytes are not a terminal frame. */
+export function readTerminalStreamFrameId(bytes: Uint8Array): number | null {
+  if (
+    bytes.length < HEADER_BYTES ||
+    bytes[0] !== TERMINAL_STREAM_KIND ||
+    bytes[1] !== TERMINAL_STREAM_VERSION
+  ) {
+    return null
+  }
+  return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(4, true)
+}
+
+/** Overwrites the stream id of a frame `readTerminalStreamFrameId` accepted. */
+export function writeTerminalStreamFrameId(bytes: Uint8Array, streamId: number): void {
+  new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).setUint32(4, streamId, true)
+}
+
+export function encodeTerminalStreamJson(value: unknown): Uint8Array {
+  return new TextEncoder().encode(JSON.stringify(value))
+}
+
+export function decodeTerminalStreamJson<T>(payload: Uint8Array): T | null {
+  if (payload.byteLength > TERMINAL_STREAM_JSON_MAX_BYTES) {
+    return null
+  }
+  try {
+    const content = new TextDecoder().decode(payload)
+    assertJsonTextStructureWithinLimits(content, TERMINAL_STREAM_JSON_STRUCTURE_LIMITS)
+    return JSON.parse(content) as T
+  } catch {
+    return null
+  }
+}
+
+export function encodeTerminalStreamText(value: string): Uint8Array {
+  return new TextEncoder().encode(value)
+}
+
+export function decodeTerminalStreamText(payload: Uint8Array): string {
+  return new TextDecoder().decode(payload)
+}
+
+function isTerminalStreamOpcode(value: number): value is TerminalStreamOpcode {
+  return (
+    value === TerminalStreamOpcode.Output ||
+    value === TerminalStreamOpcode.SnapshotStart ||
+    value === TerminalStreamOpcode.SnapshotChunk ||
+    value === TerminalStreamOpcode.SnapshotEnd ||
+    value === TerminalStreamOpcode.Resized ||
+    value === TerminalStreamOpcode.Error ||
+    value === TerminalStreamOpcode.Input ||
+    value === TerminalStreamOpcode.Resize ||
+    value === TerminalStreamOpcode.Subscribe ||
+    value === TerminalStreamOpcode.Unsubscribe ||
+    value === TerminalStreamOpcode.SnapshotRequest ||
+    value === TerminalStreamOpcode.Metadata ||
+    value === TerminalStreamOpcode.Ack ||
+    value === TerminalStreamOpcode.ClaimViewport ||
+    value === TerminalStreamOpcode.OutputSpan ||
+    value === TerminalStreamOpcode.SetOutputPaused ||
+    value === TerminalStreamOpcode.WriteUnavailable ||
+    value === TerminalStreamOpcode.InputAck ||
+    value === TerminalStreamOpcode.PausedOutputDropped ||
+    value === TerminalStreamOpcode.SetOutputCadence
+  )
+}

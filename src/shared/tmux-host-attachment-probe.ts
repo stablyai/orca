@@ -1,5 +1,5 @@
 import { stat } from 'node:fs/promises'
-import { readAgentProcess } from './agent-process-presence-probe'
+import { readAgentProcess } from './agent-status/process/agent-process-presence-probe'
 import { runProcess } from '@orca/process-host'
 import { runPsInProcess } from './libproc-process-table'
 import {
@@ -13,7 +13,7 @@ import {
   resolveTmuxClientAttachment,
   type TmuxAttachedClient
 } from './tmux-client-attachment'
-import type { TmuxPaneBridge } from './hook-process-root-evidence'
+import type { TmuxPaneBridge } from './agent-hook-listener/presence/hook-process-root-evidence'
 
 const MAX_PROCESS_ROWS = 256
 

@@ -4,7 +4,7 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
-} from '../../../../../shared/terminal-stream-protocol'
+} from '../../../../../shared/terminal/stream/terminal-stream-protocol'
 import { appendAckPendingOutput } from './terminal-stream-replay'
 import { notePausedOutputDropped } from './terminal-multiplex-paused-output-drop'
 import {
@@ -16,10 +16,16 @@ import {
   isMultiplexStreamAttached,
   type TerminalMultiplexConnection
 } from './terminal-multiplex-connection'
-import type { TerminalOutputFrameChunk } from '../../terminal-output-frame-chunks'
+import type { TerminalOutputFrameChunk } from '../../terminal/terminal-output-frame-chunks'
 import type { TerminalStreamInputOutcome } from './terminal-input-delivery'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
-import type { RpcBinarySendResult } from '../../rpc-binary-sender'
+import {
+  ackPendingOutputBudgetBytes,
+  ackWindowAdmits,
+  chargeAckWindow,
+  noteAckGatedSend
+} from './terminal-multiplex-ack-window'
+import type { RpcBinarySendResult } from '../../transports/rpc-binary-sender'
 
 export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection): void {
   const { sendBinary, emit } = state
@@ -104,14 +110,12 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
     if (!stream.ackOutput) {
       return true
     }
-    return (
-      stream.ackInFlightBytes + bytes <= stream.ackWindowBytes &&
-      state.ackTotalInFlightBytes + bytes <= state.ackTotalWindowBytes
-    )
+    return ackWindowAdmits(state, stream, bytes)
   }
   state.sendAckGatedOutput = (
     stream: TerminalMultiplexStream,
-    chunk: TerminalOutputFrameChunk
+    chunk: TerminalOutputFrameChunk,
+    fromBacklog = false
   ): boolean => {
     const sent = state.sendFrame(
       stream.streamId,
@@ -128,8 +132,15 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
       settleDeliveredYieldedQueries(stream, chunk.seq)
     }
     if (stream.ackOutput) {
-      stream.ackInFlightBytes += chunk.bytes.byteLength
-      state.ackTotalInFlightBytes += chunk.bytes.byteLength
+      if (state.linkEstimate.enabled) {
+        noteAckGatedSend(
+          state,
+          stream,
+          chunk.bytes.byteLength,
+          fromBacklog || stream.ackOutputWaited
+        )
+      }
+      chargeAckWindow(state, stream, chunk.bytes.byteLength)
     }
     return true
   }
@@ -149,7 +160,11 @@ export function installMultiplexFrameDelivery(state: TerminalMultiplexConnection
       stream.ackPendingOutput.length > 0 ||
       !state.canSendAckGatedOutput(stream, chunk.bytes.byteLength)
     ) {
-      markYieldedQueriesDiscardedInFrames(stream, appendAckPendingOutput(stream, chunk))
+      stream.ackOutputWaited = true
+      markYieldedQueriesDiscardedInFrames(
+        stream,
+        appendAckPendingOutput(stream, chunk, ackPendingOutputBudgetBytes(state, stream))
+      )
       return
     }
     state.sendAckGatedOutput(stream, chunk)

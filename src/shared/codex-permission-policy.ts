@@ -1,4 +1,4 @@
-import type { AgentChatPermissionMode } from './agent-chat-permission-mode'
+import type { AgentChatPermissionMode } from './agent-launch/permissions/agent-chat-permission-mode'
 import type { CodexApprovalsReviewer } from './codex-subagent-reviewer'
 
 export type CodexStructuredPermissionPolicy =

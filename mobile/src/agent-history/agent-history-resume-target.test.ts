@@ -3,7 +3,7 @@ import {
   resolveMobileAiVaultSessionResumeTarget,
   type MobileAiVaultResumeCatalog
 } from './agent-history-resume-target'
-import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
+import type { AiVaultSession } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
 
 function session(overrides: Partial<AiVaultSession> = {}): AiVaultSession {

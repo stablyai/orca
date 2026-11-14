@@ -9,7 +9,7 @@ import {
   WINDOWS_BREAKAWAY_STDERR_KEEP_PREVIOUS_FLAG,
   WINDOWS_BREAKAWAY_STDOUT_FLAG
 } from '../../../shared/windows-breakaway-launch'
-import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import {
   orcadWindowsNodeCommandLine,
   orcadWindowsSlotOpCommand,
@@ -25,7 +25,7 @@ import {
   ORCAD_WINDOWS_PROCESS_FILENAME
 } from './orcad-remote-host-support'
 import { orcadManagedLaunchEnv, type OrcadLaunchSpec } from './orcad-remote-launch'
-import { ORCAD_WINDOWS_LAUNCH_REFUSED_CODE } from '../../orcad/orcad-host-unavailable'
+import { ORCAD_WINDOWS_LAUNCH_REFUSED_CODE } from '../../orcad/diagnostics/orcad-host-unavailable'
 
 export class OrcadWindowsLaunchRefusedError extends Error {
   readonly code = ORCAD_WINDOWS_LAUNCH_REFUSED_CODE
@@ -36,6 +36,14 @@ export class OrcadWindowsLaunchRefusedError extends Error {
         'back to WMI.'
     )
     this.name = 'OrcadWindowsLaunchRefusedError'
+  }
+}
+
+/** The launcher reported that it could not start orcad. */
+export class OrcadWindowsLaunchFailedError extends Error {
+  constructor(detail: string) {
+    super(`orcad's Windows launcher did not start the candidate: ${detail}.`)
+    this.name = 'OrcadWindowsLaunchFailedError'
   }
 }
 
@@ -103,6 +111,10 @@ export function windowsOrcadLaunchCommand(
   ])
 }
 
+export function hasWindowsOrcadLaunchReport(output: string): boolean {
+  return parseWindowsBreakawayLaunchReport(ORCAD_WINDOWS_BREAKAWAY_CONTRACT, output) !== null
+}
+
 /** Return launched PID or surface native-breakaway refusal/failure. */
 export function readWindowsOrcadLaunchReport(output: string): number {
   const report = parseWindowsBreakawayLaunchReport(ORCAD_WINDOWS_BREAKAWAY_CONTRACT, output)
@@ -114,9 +126,10 @@ export function readWindowsOrcadLaunchReport(output: string): number {
       report.step ? `${report.reason} at ${report.step}` : report.reason
     )
   }
-  const detail =
-    report?.method === 'failed'
-      ? `${report.reason}${report.step ? ` at ${report.step}` : ''} (code ${String(report.code ?? 0)})`
-      : 'no launch report'
-  throw new Error(`orcad's Windows launcher did not start the candidate: ${detail}.`)
+  if (report?.method === 'failed') {
+    throw new OrcadWindowsLaunchFailedError(
+      `${report.reason}${report.step ? ` at ${report.step}` : ''} (code ${String(report.code ?? 0)})`
+    )
+  }
+  throw new Error("orcad's Windows launcher did not start the candidate: no launch report.")
 }

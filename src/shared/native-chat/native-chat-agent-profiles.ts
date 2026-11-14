@@ -1,10 +1,10 @@
-import type { AgentType } from '../agent-status-types'
+import type { AgentType } from '../agent-status/contracts/agent-status-types'
 import type { SkillDiscoverySource } from '../skills'
 import {
   getAgentSlashCommands,
   type NativeChatCommandReply,
   type SlashCommandSuggestion
-} from './input/native-chat-slash-commands'
+} from './input/commands/native-chat-slash-commands'
 
 export type NativeChatAgentProfile = {
   skillPrefix: '$' | '/'

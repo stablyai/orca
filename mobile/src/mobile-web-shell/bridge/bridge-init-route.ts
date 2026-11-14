@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import {
   BRIDGE_MAX_ROUTE_PARAM_CHARS,
   BRIDGE_MAX_ROUTE_PARAMS,

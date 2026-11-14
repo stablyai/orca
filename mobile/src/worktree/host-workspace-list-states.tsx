@@ -4,7 +4,7 @@ import { MobileNoMatchState, MobileStateView } from '../components/MobileStateVi
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { isConnectionOutage, verdictDisplayLabel } from '../transport/connection-health'
+import { isConnectionOutage, verdictDisplayLabel } from '../transport/connection/connection-health'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   selectHostWorkspaceListState,

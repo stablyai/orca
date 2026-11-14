@@ -9,12 +9,12 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { ActionsChoice } from '@/components/right-sidebar/ActionsChoice'
-import { actionsStatusLabel } from '@/components/right-sidebar/actions-status-label'
-import type { ActionsRepositoryOption } from '@/components/right-sidebar/use-actions-repositories'
-import type { useActionsRuns } from '@/components/right-sidebar/use-actions-runs'
-import { ACTIONS_STATUSES } from '../../../../../../shared/github/actions-types'
-import { actionsRepositoryUrl } from '../../../../../../shared/github/actions-web-url'
+import { ActionsChoice } from '@/components/right-sidebar/actions/ActionsChoice'
+import { actionsStatusLabel } from '@/components/right-sidebar/actions/actions-status-label'
+import type { ActionsRepositoryOption } from '@/components/right-sidebar/actions/use-actions-repositories'
+import type { useActionsRuns } from '@/components/right-sidebar/actions/use-actions-runs'
+import { ACTIONS_STATUSES } from '../../../../../../shared/github/actions/actions-types'
+import { actionsRepositoryUrl } from '../../../../../../shared/github/actions/actions-web-url'
 import { translate } from '@/i18n/i18n'
 
 /** Apply run filters and retry only the failed workflow page, preserving run paging and loaded workflows. */

@@ -25,7 +25,15 @@ function clampDockWidthForRow(width: number, availableWidth: number): number {
 
 // Attach PanResponder to a leaf edge overlay: Android child scroll views consume container move events. Dragging left widens the right dock.
 export function useMobileDockResize(availableWidth = 0): MobileDockResize {
-  const [dockWidth, setDockWidth] = useState(HOST_DOCK_DEFAULT_WIDTH)
+  const [dockWidth, setDockWidth] = useState(() =>
+    clampDockWidthForRow(HOST_DOCK_DEFAULT_WIDTH, availableWidth)
+  )
+  // Clamp during render so a layout change does not commit an unclamped dock first.
+  const [clampedForWidth, setClampedForWidth] = useState(availableWidth)
+  if (clampedForWidth !== availableWidth) {
+    setClampedForWidth(availableWidth)
+    setDockWidth((prev) => clampDockWidthForRow(prev, availableWidth))
+  }
 
   const availableWidthRef = useRef(availableWidth)
   availableWidthRef.current = availableWidth
@@ -44,10 +52,6 @@ export function useMobileDockResize(availableWidth = 0): MobileDockResize {
       stale = true
     }
   }, [])
-
-  useEffect(() => {
-    setDockWidth((prev) => clampDockWidthForRow(prev, availableWidth))
-  }, [availableWidth])
 
   const resizer = useRef(
     PanResponder.create({

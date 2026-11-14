@@ -19,3 +19,7 @@ export function stepUIZoomLevel(current: number, direction: UIZoomDirection): nu
 export function uiZoomFactorFromLevel(level: number): number {
   return UI_ZOOM_BASE ** level
 }
+
+export function zoomLevelToPercent(level: number): number {
+  return Math.round(100 * uiZoomFactorFromLevel(level))
+}

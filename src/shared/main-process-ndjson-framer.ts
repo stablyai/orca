@@ -37,6 +37,8 @@ export type IncrementalNdjsonFramer = {
 export type IncrementalNdjsonFramerOptions = {
   maxLineBytes?: number
   shouldPause?: () => boolean
+  /** Skips parsing lines the consumer can rule out from their text. */
+  acceptLine?: (line: string) => boolean
 }
 
 function boundedUtf8Prefix(value: string, maxBytes: number): string {
@@ -192,7 +194,7 @@ export function createIncrementalNdjsonFramer(
           lineSegments.push(segment)
           const line = lineSegments.length === 1 ? lineSegments[0] : lineSegments.join('')
           clearLine()
-          if (!/^\s*$/.test(line)) {
+          if (!/^\s*$/.test(line) && (options.acceptLine?.(line) ?? true)) {
             let parsed: unknown
             try {
               parsed = JSON.parse(line)

@@ -3,7 +3,7 @@ import { isAbsolute } from 'node:path'
 import type { z } from 'zod'
 import type { NestedRepoScanResult } from '../../../shared/project-group-types'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
-import { awaitWindowsHostGitEnvironmentReady } from '../../git/runner'
+import { awaitWindowsHostGitEnvironmentReady } from '../../git/command-runner/host-routing/windows-host-git-environment'
 import { scanNestedRepos } from '../../project-groups/nested-repo-discovery'
 import type { ProjectGroupScanNestedArgs } from './repo-ipc-arg-schemas'
 

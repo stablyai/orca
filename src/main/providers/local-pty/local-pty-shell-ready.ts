@@ -3,18 +3,21 @@ import { encodePowerShellCommand } from '../../../shared/powershell-command-enco
 import {
   getPowerShellOsc133Bootstrap,
   isPowerShellExecutableName
-} from '../../powershell-osc133-bootstrap'
+} from '../../pty/shell-startup/powershell-osc133-bootstrap'
 import { getFishCodexShellLaunchPreflight } from '../../../shared/codex-shell-function'
 import { getFishClaudeShellFunction } from '../../../shared/claude-shell-function'
-import { getFishXdgDataDirsLaunchEnv } from '../../fish-xdg-data-dirs-handoff'
-import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../../pty/posix-shell-startup-command'
-import { getFishShellReadyInitCommand } from '../../shell-templates'
+import { getFishXdgDataDirsLaunchEnv } from '../../pty/shell-startup/fish-xdg-data-dirs-handoff'
+import { POSIX_SHELL_STARTUP_COMMAND_ENV } from '../../pty/shell-startup/posix-shell-startup-command'
+import { getFishShellReadyInitCommand } from '../../pty/shell-startup/shell-templates'
 import {
   encodeShellStartupFeatures,
   SHELL_STARTUP_FEATURE_ENV,
   type ShellStartupFeature
-} from '../../shell-startup-features'
-import { inheritedZdotdirEnv, resolveInheritedZdotdir } from '../../zsh-wrapper-dir-ownership'
+} from '../../pty/shell-startup/shell-startup-features'
+import {
+  inheritedZdotdirEnv,
+  resolveInheritedZdotdir
+} from '../../pty/shell-startup/zsh-wrapper-dir-ownership'
 import { ensureShellReadyWrappers } from './local-pty-shell-ready-wrapper-generation'
 import {
   getShellReadyWrapperRoot,

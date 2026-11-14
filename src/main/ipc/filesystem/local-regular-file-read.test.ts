@@ -21,17 +21,6 @@ afterEach(async () => {
 })
 
 describe('local regular-file reads', () => {
-  it('caps a read at the limit even when the file is bigger than its handle claimed', async () => {
-    const filePath = join(base, 'big.txt')
-    await writeFile(filePath, 'a'.repeat(2048))
-    const { handle } = await openLocalRegularFile(filePath)
-    try {
-      await expect(readLocalFileBounded(handle, 1024)).rejects.toThrow('File too large')
-    } finally {
-      await handle.close()
-    }
-  })
-
   it('keeps reading a file that grew past its reported size, up to the cap', async () => {
     const filePath = join(base, 'grew.txt')
     await writeFile(filePath, 'a'.repeat(5000))

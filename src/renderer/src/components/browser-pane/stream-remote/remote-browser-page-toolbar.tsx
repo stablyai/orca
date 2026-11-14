@@ -1,7 +1,7 @@
 import { MessageSquarePlus, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { BrowserNavigationControlRow } from '../assemble-chrome/browser-navigation-control-row'
 import BrowserAddressBar from '../assemble-chrome/BrowserAddressBar'
 import type { BrowserAddressBarEditSessionBinding } from '../assemble-chrome/use-browser-address-bar-edit-session'
@@ -48,6 +48,7 @@ export function RemoteBrowserPageToolbar({
   onForward: () => void
   onReload: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <BrowserNavigationControlRow
       controls={{
@@ -87,17 +88,14 @@ export function RemoteBrowserPageToolbar({
               size="icon"
               variant="ghost"
               className="h-7 w-7"
-              aria-label={translate(
-                'auto.components.browser.pane.BrowserPane.0e080d820e',
-                'Reload'
-              )}
+              aria-label={t('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
               onClick={onReload}
             >
               <RefreshCw className="size-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={4}>
-            {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
+            {t('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
           </TooltipContent>
         </Tooltip>
       }
@@ -109,7 +107,7 @@ export function RemoteBrowserPageToolbar({
             variant="ghost"
             className="h-7 w-7 opacity-50"
             aria-disabled="true"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.browser.pane.BrowserPane.deb5293610',
               'Browser annotations unavailable in remote runtime'
             )}
@@ -121,7 +119,7 @@ export function RemoteBrowserPageToolbar({
           </Button>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={4}>
-          {translate(
+          {t(
             'auto.components.browser.pane.BrowserPane.8b7e6d1f5a',
             'Browser annotations are only available in local browser tabs.'
           )}

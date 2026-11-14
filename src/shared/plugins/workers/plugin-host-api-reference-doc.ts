@@ -5,7 +5,13 @@ import { PLUGIN_EVENT_NAMES } from '../manifest/plugin-manifest'
 import { PLUGIN_HOOK_NAMES } from '../contributions/plugin-hook-contribution'
 import { PLUGIN_HOOK_DEFAULT_DEADLINE_MS, PLUGIN_HOOK_SPECS } from '../events/plugin-hook-payloads'
 import { PLUGIN_HOST_API_MAJOR } from './plugin-host-api-major'
-import { PLUGIN_HOST_API, PLUGIN_HOST_API_MINOR, PLUGIN_HOST_METHOD_NAMES } from './plugin-host-api'
+import {
+  PLUGIN_HOST_API,
+  PLUGIN_HOST_API_MINOR,
+  PLUGIN_HOST_METHOD_NAMES,
+  PLUGIN_STABLE_HOST_METHOD_NAMES,
+  type PluginHostMethodSpec
+} from './plugin-host-api'
 import { REFERENCE_TYPE_TEXT, zodTypeText } from './plugin-schema-type-text'
 
 function signature(params: z.ZodType, result: z.ZodType): string {
@@ -37,9 +43,22 @@ export const PLUGIN_HOST_ERROR_CODE_MEANINGS: Record<PluginErrorCode, string> = 
 
 const version = (minor: number): string => `${PLUGIN_HOST_API_MAJOR}.${minor}`
 
+/** `workspace:create` (+`agent:launch` for `agent`): a passed param can need a second capability. */
+function capabilityCell(spec: PluginHostMethodSpec): string {
+  const base = spec.capability === null ? 'none' : `\`${spec.capability}\``
+  const extra = Object.entries(spec.paramCapabilities ?? {}).map(
+    ([param, kind]) => ` (+\`${kind}\` for \`${param}\`)`
+  )
+  return `${base}${extra.join('')}`
+}
+
 /** Author reference for the host API, rendered from the typed spec table. */
 export function renderPluginHostApiReference(): string {
-  const specs = PLUGIN_HOST_METHOD_NAMES.map((name) => ({ name, ...PLUGIN_HOST_API[name] }))
+  const specs = PLUGIN_STABLE_HOST_METHOD_NAMES.map((name) => ({
+    name,
+    ...PLUGIN_HOST_API[name]
+  }))
+  const proposed = PLUGIN_HOST_METHOD_NAMES.filter((name) => PLUGIN_HOST_API[name].proposed)
   const lines = [
     '# Orca plugin host API reference',
     '',
@@ -57,7 +76,7 @@ export function renderPluginHostApiReference(): string {
     '| --- | --- | --- | --- | --- | --- |',
     ...specs.map(
       (spec) =>
-        `| [\`${spec.name}\`](#${spec.name.replace('.', '').toLowerCase()}) | ${spec.capability === null ? 'none' : `\`${spec.capability}\``} | ${spec.surfaces.join(', ')} | ${spec.mutation ? 'yes' : 'no'} | ${version(spec.since)}${spec.deprecatedSince === undefined ? '' : ` (deprecated ${version(spec.deprecatedSince)})`} | ${spec.summary} |`
+        `| [\`${spec.name}\`](#${spec.name.replace('.', '').toLowerCase()}) | ${capabilityCell(spec)} | ${spec.surfaces.join(', ')} | ${spec.mutation ? 'yes' : 'no'} | ${version(spec.since)}${spec.deprecatedSince === undefined ? '' : ` (deprecated ${version(spec.deprecatedSince)})`} | ${spec.summary} |`
     )
   ]
   for (const spec of specs) {
@@ -72,11 +91,32 @@ export function renderPluginHostApiReference(): string {
       '```'
     )
   }
+  if (proposed.length > 0) {
+    lines.push(
+      '',
+      '## Proposed',
+      '',
+      'Methods still being designed. Only development plugins (`orca plugin dev`) may call them; any other plugin gets `not_permitted`. They are not frozen: they may change or disappear in any release, they count toward no `api.minor`, and `orca/host` typings omit them.'
+    )
+    for (const name of proposed) {
+      const spec = PLUGIN_HOST_API[name]
+      lines.push(
+        '',
+        `### \`${name}\``,
+        '',
+        `${spec.summary} Capability: ${capabilityCell(spec)}; surfaces: ${spec.surfaces.join(', ')}.`,
+        '',
+        '```ts',
+        signature(spec.params, spec.result),
+        '```'
+      )
+    }
+  }
   lines.push(
     '',
     '## Events',
     '',
-    "A worker receives the events its manifest lists in `contributes.events` through `orca.events.on(event, handler)`, which returns `{ dispose() }`. Each needs `main`, the `trusted-worker` profile and its domain's capability (`workspace:read` or `agent:read`). `orca plugin types` writes the payloads as `PluginEvents` in `orca/host`.",
+    "A worker receives the events its manifest lists in `contributes.events` through `orca.events.on(event, handler)`, which returns `{ dispose() }`. Each needs `main`, the `trusted-worker` profile and its domain's capability (`workspace:read` or `agent:read`; editor events need none). `orca plugin types` writes the payloads as `PluginEvents` in `orca/host`.",
     '',
     '| Event | Payload | Summary |',
     '| --- | --- | --- |',
@@ -93,7 +133,7 @@ export function renderPluginHostApiReference(): string {
     '',
     '## Hooks',
     '',
-    `A worker changes or stops what Orca is about to do with \`orca.hooks.on(hook, (event, next) => ...)\`, which returns \`{ dispose() }\`. Each hook must be listed in \`contributes.hooks\` (\`main\` and the \`trusted-worker\` profile; no capability). Return \`next(event)\` to go on, with the fields the hook allows changed; return a result such as \`{ deny: reason }\` to stop; return nothing to pass. Plugins run one after another (installed plugins by key, then development folders), then Orca acts on what is left. Orca starts the workers of plugins that list hooks as soon as they are enabled and keeps them running. A handler that takes longer than ${PLUGIN_HOOK_DEFAULT_DEADLINE_MS / 1000} s, a worker that does not start within the worker ready timeout, a throw, a crash or a disabled plugin counts as having passed, and \`orca plugin logs\` shows the hook, the plugin and how long it took. A guard that must fail closed sets \`"onError": "deny"\` on its \`contributes.hooks\` entry; then those failures refuse the action, naming the plugin. Decide before any other awaited call: an awaited host call ahead of your \`{ deny }\` can fail or time out and let the action through.`,
+    `A worker changes or stops what Orca is about to do with \`orca.hooks.on(hook, (event, next) => ...)\`, which returns \`{ dispose() }\`. Each hook must be listed in \`contributes.hooks\` (\`main\` and the \`trusted-worker\` profile; no capability). Return \`next(event)\` to go on, with the fields the hook allows changed; return a result such as \`{ deny: reason }\` to stop; return nothing to pass. Plugins run one after another (installed plugins by key, then development folders), then Orca acts on what is left. Orca starts the workers of plugins that list hooks (or status bar items) as soon as they are enabled and keeps them running until they are disabled. A handler that takes longer than ${PLUGIN_HOOK_DEFAULT_DEADLINE_MS / 1000} s, a worker that does not start within the worker ready timeout, a throw, a crash or a disabled plugin counts as having passed, and \`orca plugin logs\` shows the hook, the plugin and how long it took. A guard that must fail closed sets \`"onError": "deny"\` on its \`contributes.hooks\` entry; then those failures refuse the action, naming the plugin. Decide before any other awaited call: an awaited host call ahead of your \`{ deny }\` can fail or time out and let the action through.`,
     '',
     "Hooks run in the workers of the Orca that handles the request, before it acts: for an SSH or WSL terminal or workspace, that is the desktop, before the work is sent to its host. A paired client reaching a remote Orca server is decided by that server's plugins. `orca plugin types` writes the events as `PluginHooks` in `orca/host`; `orca/testing` `mountWorker(...).hooks.fire(hook, event)` returns what the chain decided.",
     '',

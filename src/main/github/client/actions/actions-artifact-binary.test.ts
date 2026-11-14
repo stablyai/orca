@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import * as execution from '../../github-api-repository'
-import * as resolution from '../../../git/command-runner/wsl-command-resolution'
+import * as remoteProbe from '../../repositories/github-api-repository-remote-probe'
+import * as resolution from '../../../git/command-runner/host-routing/wsl-command-resolution'
 import { startActionsArtifactDownload } from './actions-artifacts'
 import {
   artifactSessionOwner,
@@ -16,7 +16,7 @@ const origin = { owner: 'acme', repo: 'widgets', host: 'github.com' }
 afterEach(() => vi.restoreAllMocks())
 
 it('downloads exact ZIP bytes through the real gh subprocess capture and chunk path', async () => {
-  vi.spyOn(execution, 'getGitHubApiRepositoryForRemote').mockResolvedValue(origin)
+  vi.spyOn(remoteProbe, 'getGitHubApiRepositoryForRemote').mockResolvedValue(origin)
   const metadata = {
     id: 7,
     name: 'hello',

@@ -1,4 +1,4 @@
-import { runtimeEnvironmentIdUnlessTwin } from '../../lib/resolve-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '../../lib/workspace/ownership/resolve-owner'
 
 /** The paired server whose tabs this workspace mirrors; an unselected twin mirrors none. */
 export function mirroredRuntimeEnvironmentIdForWorkspace(

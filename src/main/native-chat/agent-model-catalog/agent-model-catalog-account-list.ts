@@ -1,6 +1,6 @@
 import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session/agent-session-wire'
 import { isNativeLocalLocation } from '../../../shared/execution-host'
-import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
+import { independentAgentModelCatalog } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import {
   agentModelCatalogListingKey,
   agentModelCatalogResultFromEntry

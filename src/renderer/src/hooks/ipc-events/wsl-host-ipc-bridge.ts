@@ -1,11 +1,11 @@
 import { selectWslHostsServing } from '@/components/sidebar/use-wsl-hosts-enabled'
 import type { WslHostCapability, WslHostStatus } from '../../../../shared/wsl-host-types'
-import { isWslHostRuntimeEnvironment } from '../../../../shared/runtime-environments'
+import { isWslHostRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { workspaceOwnerHostId } from '../../lib/workspace-row-owner-host'
+import { workspaceOwnerHostId } from '../../lib/workspace/ownership/workspace-row-owner-host'
 import type { AppState } from '../../store/types'
 import { useAppStore } from '../../store'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 /**
  * The WSL hosts with visible work: the active workspace's, and those of workspaces focused earlier

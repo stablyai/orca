@@ -1,7 +1,8 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import * as repoExecution from '../../github-api-repository'
-import * as gh from '../../gh-utils'
-import * as rateLimit from '../../rate-limit'
+import * as repoExecution from '../../repositories/github-api-repository'
+import * as gh from '../../execution/github-operation-slots'
+import * as ghExec from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import * as rateLimit from '../../api/rate-limit'
 import { getWorkflowRunDetails } from './get-workflow-run-details'
 import { prCheckLogTailCache } from '../check/check-job-log-tails'
 
@@ -27,7 +28,7 @@ it.each([
     const repository = { host: 'github.com', owner: 'acme', repo: 'widget' }
     const resolve = vi.spyOn(repoExecution, 'resolveGitHubRepoExecution')
     let logCalls = 0
-    vi.spyOn(gh, 'ghExecFileAsync').mockImplementation(async (args) => {
+    vi.spyOn(ghExec, 'ghExecFileAsync').mockImplementation(async (args) => {
       if (args[1]?.endsWith('/logs')) {
         logCalls += 1
         if (unavailable) {

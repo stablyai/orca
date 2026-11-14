@@ -12,7 +12,7 @@ export type BrowserGuestState = {
 
 type RuntimeResponse = {
   ok: boolean
-  result?: { tabs?: { browserPageId: string; url: string }[] }
+  result?: { tabs?: { browserPageId: string; url: string; loaded?: boolean }[] }
 }
 
 export async function readGuestProcessId(
@@ -62,10 +62,7 @@ export async function readBrowserGuestState(
   }, browserTabId)
 }
 
-export async function listRegisteredBrowserPages(
-  page: Page,
-  worktreeId: string
-): Promise<RuntimeResponse> {
+async function readBrowserTabList(page: Page, worktreeId: string): Promise<RuntimeResponse> {
   return page.evaluate(
     (targetWorktreeId) =>
       window.api.runtime.call({
@@ -74,6 +71,18 @@ export async function listRegisteredBrowserPages(
       }),
     worktreeId
   ) as Promise<RuntimeResponse>
+}
+
+export async function listRegisteredBrowserPages(
+  page: Page,
+  worktreeId: string
+): Promise<RuntimeResponse> {
+  const response = await readBrowserTabList(page, worktreeId)
+  const tabs = response.result?.tabs
+  // Why: tab list also reports tab-bar pages with no registered guest as loaded: false.
+  return tabs
+    ? { ...response, result: { tabs: tabs.filter((tab) => tab.loaded !== false) } }
+    : response
 }
 
 export async function crashGuestRenderer(

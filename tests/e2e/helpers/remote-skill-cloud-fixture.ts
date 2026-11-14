@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import {
   createSkillPackageArchive,
   type CreatedSkillPackage
-} from '../../../src/main/skills/skill-package-creation'
+} from '../../../src/main/skills/package-archive/skill-package-creation'
 import { SKILL_PACKAGE_CONTENT_TYPE } from '../../../src/shared/skill-package-manifest'
 
 export const REMOTE_SKILL_PACKAGE_ID = 'package_remote_e2e'

@@ -6,6 +6,7 @@ import { useWorktreeJumpPaletteOpenTabs } from './use-worktree-jump-palette-open
 import { useWorktreeJumpPaletteRecentTabs } from './use-worktree-jump-palette-recent-tabs'
 import { useWorktreeJumpPaletteProjectTargets } from './use-worktree-jump-palette-project-targets'
 import { useWorktreeJumpPaletteQuickActions } from './use-worktree-jump-palette-quick-actions'
+import { useWorktreeJumpPaletteExtraResults } from './use-worktree-jump-palette-extra-results'
 import { useWorktreeJumpPaletteSections } from './use-worktree-jump-palette-sections'
 import { useWorktreeJumpPaletteListEntries } from './use-worktree-jump-palette-list-entries'
 import { useWorktreeJumpPaletteSelectionLifecycle } from './use-worktree-jump-palette-selection-lifecycle'
@@ -15,7 +16,7 @@ import { useWorktreeJumpPaletteTaskSearch } from './use-worktree-jump-palette-ta
 import { useWorktreeJumpPaletteTaskUrl } from './use-worktree-jump-palette-task-url'
 import { useWorkspaceEmojiShortcodeInput } from '@/components/workspace-emoji/useWorkspaceEmojiShortcodeInput'
 import { usePaletteSearchEvaluationContext } from '@/hooks/use-palette-search-evaluation-context'
-import type { WorktreePaletteRequestGuard } from '@/lib/worktree-palette-create-action'
+import type { WorktreePaletteRequestGuard } from '@/lib/workspace/search/worktrees/worktree-palette-create-action'
 import { useMemo } from 'react'
 
 export function useWorktreeJumpPaletteController({
@@ -71,11 +72,18 @@ export function useWorktreeJumpPaletteController({
     ...filter,
     ...evaluation
   })
+  const extraResults = useWorktreeJumpPaletteExtraResults({
+    ...localState,
+    ...filter,
+    ...evaluation,
+    visible
+  })
   const openTabs = useWorktreeJumpPaletteOpenTabs({
     ...storeState,
     ...localState,
     ...filter,
     ...worktrees,
+    ...extraResults,
     ...evaluation
   })
   const recentTabs = useWorktreeJumpPaletteRecentTabs({
@@ -106,6 +114,7 @@ export function useWorktreeJumpPaletteController({
     ...recentTabs,
     ...projectTargets,
     ...quickActions,
+    ...extraResults,
     ...taskUrl
   })
   const listEntries = useWorktreeJumpPaletteListEntries({
@@ -165,6 +174,7 @@ export function useWorktreeJumpPaletteController({
     ...recentTabs,
     ...projectTargets,
     ...quickActions,
+    ...extraResults,
     ...sections,
     ...listEntries,
     ...selectionLifecycle,

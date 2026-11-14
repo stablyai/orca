@@ -1,14 +1,15 @@
 import React from 'react'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { PaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
 import type { MatchRange } from '../../../../shared/palette-match/normalized-text'
-import type { PaletteSearchResult } from '@/lib/worktree-palette-search'
+import type { PaletteSearchResult } from '@/lib/workspace/search/worktrees/worktree-palette-search'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { splitPathHeadForElision } from '@/lib/path-head-elision'
+import { splitPathHeadForElision } from '@/lib/path-display/path-head-elision'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { useWslHostDistro, WslHostMark } from '@/components/wsl-host-mark/WslHostMark'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 const NO_SECONDARY_MATCHES: readonly { text: string; ranges: readonly MatchRange[] }[] = []
 
@@ -116,7 +117,8 @@ export function PaletteOpenTabPrimaryLine({
   secondaryMatches = NO_SECONDARY_MATCHES,
   elideSecondaryPathHead = false,
   sessionAge,
-  leadingBadges
+  leadingBadges,
+  secondary
 }: {
   title: string
   titleRanges: readonly MatchRange[]
@@ -126,8 +128,11 @@ export function PaletteOpenTabPrimaryLine({
   elideSecondaryPathHead?: boolean
   sessionAge?: string
   leadingBadges?: React.ReactNode
+  /** Rich secondary content, drawn after "·" and truncated, in place of `secondaryText`. */
+  secondary?: React.ReactNode
 }): React.JSX.Element {
-  const showSecondary = secondaryText.trim().length > 0
+  const t = useTranslate()
+  const showSecondary = secondaryText.trim().length > 0 || Boolean(secondary)
   const additionalSecondaryMatches = secondaryMatches.filter(
     (match) => match.text && match.text !== secondaryText
   )
@@ -145,7 +150,7 @@ export function PaletteOpenTabPrimaryLine({
       </span>
       {sessionAge ? (
         <span
-          aria-label={translate(
+          aria-label={t(
             'auto.components.WorktreeJumpPalette.lastActiveTime',
             'Last active {{value0}} ago',
             { value0: sessionAge }
@@ -156,7 +161,12 @@ export function PaletteOpenTabPrimaryLine({
         </span>
       ) : null}
       {leadingBadges}
-      {showSecondary ? (
+      {secondary ? (
+        <>
+          <span className="shrink-0 text-muted-foreground/45">·</span>
+          <span className="min-w-0 truncate text-[12px] text-muted-foreground/92">{secondary}</span>
+        </>
+      ) : showSecondary ? (
         <PaletteOpenTabSecondaryText
           text={secondaryText}
           ranges={secondaryRanges}
@@ -297,6 +307,7 @@ export function PaletteHostBadgeChip({
 }: {
   badge: PaletteHostBadge | null
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const wslDistro = useWslHostDistro(badge?.hostId)
   if (!badge) {
     return null
@@ -306,11 +317,9 @@ export function PaletteHostBadgeChip({
   }
   return (
     <span
-      aria-label={translate(
-        'auto.components.WorktreeJumpPalette.paletteHostBadge',
-        'Host: {{value0}}',
-        { value0: badge.label }
-      )}
+      aria-label={t('auto.components.WorktreeJumpPalette.paletteHostBadge', 'Host: {{value0}}', {
+        value0: badge.label
+      })}
       className="max-w-[140px] truncate rounded-[6px] border border-border/60 bg-background px-1.5 py-px text-[9px] font-medium leading-normal text-muted-foreground/88"
     >
       {badge.label}
@@ -319,22 +328,23 @@ export function PaletteHostBadgeChip({
 }
 
 export function getPaletteSupportingTextLabel(
-  labelKind: NonNullable<PaletteSearchResult['supportingText']>['labelKind']
+  labelKind: NonNullable<PaletteSearchResult['supportingText']>['labelKind'],
+  t: Translate = translate
 ): string {
   switch (labelKind) {
     case 'comment':
-      return translate('worktreeJumpPalette.matchLabel.comment', 'Comment')
+      return t('worktreeJumpPalette.matchLabel.comment', 'Comment')
     case 'issue':
-      return translate('worktreeJumpPalette.matchLabel.issue', 'Issue')
+      return t('worktreeJumpPalette.matchLabel.issue', 'Issue')
     case 'port':
-      return translate('worktreeJumpPalette.matchLabel.port', 'Port')
+      return t('worktreeJumpPalette.matchLabel.port', 'Port')
     case 'pr':
-      return translate('worktreeJumpPalette.matchLabel.pr', 'PR')
+      return t('worktreeJumpPalette.matchLabel.pr', 'PR')
     case 'mr':
-      return translate('worktreeJumpPalette.matchLabel.mr', 'MR')
+      return t('worktreeJumpPalette.matchLabel.mr', 'MR')
     case 'task':
-      return translate('worktreeJumpPalette.matchLabel.task', 'Task')
+      return t('worktreeJumpPalette.matchLabel.task', 'Task')
     case 'automation':
-      return translate('worktreeJumpPalette.matchLabel.automationItem', 'Automation')
+      return t('worktreeJumpPalette.matchLabel.automationItem', 'Automation')
   }
 }

@@ -1,25 +1,21 @@
-import { translate } from '@/i18n/i18n'
-import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
-import {
-  HeroFlow,
-  HeroIntro,
-  HeroPaired,
-  type PairedDevice,
-  type Platform,
-  type StepIndex
-} from './MobileHero'
+import { useTranslate } from '@/i18n/use-translate'
+import type { PairingNetworkInterface } from '../../../../shared/pairing-address-auto-selection'
+import { HeroFlow, type Platform, type StepIndex } from './MobileHero'
+import { HeroIntro } from './MobileHeroIntro'
+import { HeroPaired } from './MobileHeroPairedDevices'
+import type { PairedMobileDevice } from './paired-mobile-devices'
 import { getInstallCopy } from './mobile-platform-copy'
 import type { MobilePageStage } from './mobile-page-stage'
 import { MobilePageToolbar } from './MobilePageToolbar'
 import { PhoneCarousel } from './PhoneCarousel'
-import type { MobilePairingConnectionMode } from '../../../../shared/mobile-pairing-connection-mode'
-import type { MobileRelayMintFailure } from '../../../../shared/mobile-relay-mint-failure'
+import type { MobilePairingConnectionMode } from '../../../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
+import type { MobileRelayMintFailure } from '../../../../shared/remote-runtime/relay/mobile-relay-mint-failure'
 
 type MobilePageContentProps = {
   closeMobilePage: () => void
   copyInstallUrl: () => void
   copyPairingCode: () => void
-  devices: readonly PairedDevice[]
+  devices: readonly PairedMobileDevice[]
   enterFlow: () => void
   generatePairing: (rotate: boolean) => void
   canGeneratePairing: boolean
@@ -33,7 +29,7 @@ type MobilePageContentProps = {
   handleContinue: () => void
   installQrUrl: string | null
   loadNetworkInterfaces: () => void
-  networkInterfaces: MobileNetworkInterface[]
+  networkInterfaces: PairingNetworkInterface[]
   openAndroidInstallGuide: () => void
   openInstallUrl: () => void
   pairAnotherDevice: () => void
@@ -106,6 +102,7 @@ export function MobilePageContent({
   stepIdx,
   toggleMobileSidebarButton
 }: MobilePageContentProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="mobile-page-root scrollbar-sleek">
       <MobilePageToolbar
@@ -130,7 +127,7 @@ export function MobilePageContent({
               platform={platform}
               onPlatformChange={setPlatform}
               installQrUrl={installQrUrl}
-              installCopy={getInstallCopy(platform)}
+              installCopy={getInstallCopy(platform, t)}
               onOpenAndroidInstallGuide={openAndroidInstallGuide}
               onOpenInstallUrl={openInstallUrl}
               onCopyInstallUrl={copyInstallUrl}
@@ -167,7 +164,7 @@ export function MobilePageContent({
 
         <div
           className="mp-stage"
-          aria-label={translate('auto.components.mobile.MobilePage.e17393c6a3', 'Phone preview')}
+          aria-label={t('auto.components.mobile.MobilePage.e17393c6a3', 'Phone preview')}
         >
           <PhoneCarousel />
         </div>

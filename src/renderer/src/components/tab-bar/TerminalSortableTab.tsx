@@ -1,6 +1,7 @@
-import { useTabAgent } from '@/lib/use-tab-agent'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import SortableTab, { type SortableTabProps } from './SortableTab'
+import { useTabAgent } from '@/lib/agent-session/tab-identity/use-tab-agent'
+import SortableTab from './SortableTab'
+import type { SortableTabProps } from './SortableTab'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 type TerminalSortableTabProps = Omit<SortableTabProps, 'tab' | 'agent'> & { tab: TerminalTab }
 

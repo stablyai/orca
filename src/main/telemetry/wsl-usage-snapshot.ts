@@ -2,7 +2,7 @@
 import type { WslHostsGateState } from '../../shared/wsl-host-internal-gate'
 import type { WslHostsMovedProjects, WslHostsPolicyState } from '../../shared/wsl-hosts-policy'
 import type { Repo } from '../../shared/repo-types'
-import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../shared/execution-host/project-execution-runtime'
 import { isDrvfsLinuxPath, parseWslUncPath } from '../../shared/wsl-paths'
 import {
   bucketWslUsageCount,

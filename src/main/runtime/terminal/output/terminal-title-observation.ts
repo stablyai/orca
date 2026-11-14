@@ -1,11 +1,13 @@
-import type { AgentStatus } from '../../../../shared/agent-detection'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import { OrcaRuntimeWithGetUnpersistedTrackedTitleForPty } from './terminal-title-tracker'
-import type { TerminalTitleFactMeta } from '../../../../shared/terminal-output-side-effects'
-import { detectAgentStatusFromTitle } from '../../../../shared/agent-detection'
-import { terminalTitleBlocksExplicitAgentStatus } from '../../runtime-worktree-status-projection'
+import type { TerminalTitleFactMeta } from '../../../../shared/terminal/output/terminal-output-side-effects'
+import { detectAgentStatusFromTitle } from '../../../../shared/agent-status/title/agent-title-status'
+import { terminalTitleBlocksExplicitAgentStatus } from '../../workspaces/process-listing/runtime-worktree-status-projection'
 import type { ClaudeTerminalEvidence } from '../../../../shared/claude-terminal-interrupt'
-import { agentStatusTakesTypedInput } from '../../orchestration/mailbox-owner'
+import { agentStatusTakesTypedInput } from '../../orchestration/mailbox/routing/mailbox-owner'
+import { hermesNativeTitleStatus } from '../../../../shared/agent-status/title/providers/hermes-terminal-title'
+import { jcodePaneTitleStatus } from '../../../../shared/agent-status/title/providers/jcode-terminal-title'
 
 export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnpersistedTrackedTitleForPty {
   protected abstract collectPaneKeysForPty(ptyId: string): Set<string>
@@ -37,6 +39,8 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
   protected abstract clearAgentPromptCorrelationForPty(ptyId: string): void
   protected abstract collectAgentStatusPaneKeysForPty(ptyId: string): Set<string>
   protected abstract markPaneLiveTitlesDirty(): void
+  /** A title moved a terminal agent to another status; worktree.ps rows show it without a hook row. */
+  protected abstract onTitleAgentStatusChanged(): void
 
   observeClaudeTerminalEvidence(ptyId: string, evidence: ClaudeTerminalEvidence): void {
     if (!this.onClaudeTerminalEvidence || this.ptysById.get(ptyId)?.connectionId) {
@@ -50,8 +54,11 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
   /** The PTY's agent status under this title: the program's own OSC 7501 activity while it
    *  reports one, else what the title glyph says. */
   protected classifyPtyTitleStatus(ptyId: string, rawTitle: string): AgentStatus | null {
+    const agent = this.getPaneTerminalAgent(ptyId)
     return (
       this.ptyTitleTrackersByPtyId.get(ptyId)?.programActivity ??
+      hermesNativeTitleStatus(rawTitle, agent) ??
+      jcodePaneTitleStatus(rawTitle, agent) ??
       detectAgentStatusFromTitle(rawTitle)
     )
   }
@@ -126,6 +133,8 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
           (agentStatus === 'idle' && !statusOnly && prevTitle !== recordedTitle))
       const observedAt = this.nextTitleObservationSequence()
       const observedAtEpochMs = identityOnlyTitle ? null : Date.now()
+      // A fresh title retires a stale-working display clear, so the row shows the agent again.
+      const retiresDisplayClear = !statusOnly && pty.titleDisplayClear != null
       if (!statusOnly) {
         pty.titleDisplayClear = null
         pty.lastOscTitle = recordedTitle
@@ -139,6 +148,9 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       }
       if (prevStatus !== agentStatus) {
         pty.lastAgentStatusStartedAtEpochMs = observedAtEpochMs
+      }
+      if (prevStatus !== agentStatus || retiresDisplayClear) {
+        this.onTitleAgentStatusChanged()
       }
       if (
         identityOnlyTitle ||
@@ -220,6 +232,7 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
     if (nativeStatus === clearedStatus) {
       return previousTitle !== normalizedTitle
     }
+    this.onTitleAgentStatusChanged()
     const foregroundRefresh = this.ptyForegroundAgent.refresh(ptyId, observedAt)
     if (this.shouldDelayPtyBackedMobileSnapshotForForegroundAgent(pty, normalizedTitle)) {
       this.delayPtyBackedMobileSnapshotForForegroundAgent(ptyId, observedAt, foregroundRefresh)

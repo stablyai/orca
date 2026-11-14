@@ -1,11 +1,11 @@
-import { expect } from 'vitest'
-import type { Mock } from 'vitest'
-import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
-import { encodePairingOffer } from '../../../shared/pairing'
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
-import { createRuntimeEnvironmentStatusOwner } from './runtime-environment-status-owner'
-import type { RuntimeHostStatusOwner } from '../../../shared/runtime-host-status-owner'
-import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-manual-disconnect'
+import { expect, type Mock } from 'vitest'
+
+import { getPreferredPairedRuntimeConnection } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
+import { createRuntimeEnvironmentStatusOwner } from './status/runtime-environment-status-owner'
+import type { RuntimeHostStatusOwner } from '../../../shared/remote-runtime/host-status/runtime-host-status-owner'
+import { isRuntimeEnvironmentManuallyDisconnected } from './connectivity/runtime-environment-manual-disconnect'
 
 /** Keep IPC tests on the production owner while replacing only its transport. */
 export function withRuntimeStatusOwners<T extends Record<string, Mock>>(transport: T) {

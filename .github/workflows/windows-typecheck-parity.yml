@@ -11,9 +11,9 @@ on:
       - 'config/.bun-version'
       - 'config/tsconfig*.json'
       - 'src/packages/process-host/tsconfig*.json'
-      - 'config/scripts/run-typecheck-projects-in-parallel.mjs'
-      - 'config/scripts/benchmark-preflight-compilers.mjs'
-      - 'config/scripts/preflight-benchmark-command.mjs'
+      - 'config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs'
+      - 'config/scripts/preflight/benchmarks/benchmark-preflight-compilers.mjs'
+      - 'config/scripts/preflight/benchmarks/preflight-benchmark-command.mjs'
       - '.github/workflows/windows-typecheck-parity.yml'
   workflow_dispatch:
 
@@ -45,7 +45,7 @@ jobs:
           bun-version-file: config/.bun-version
           no-cache: true
       - name: Compare compiler diagnostics and project file lists
-        run: node config/scripts/benchmark-preflight-compilers.mjs --parity-only
+        run: node config/scripts/preflight/benchmarks/benchmark-preflight-compilers.mjs --parity-only
       - uses: actions/upload-artifact@v7
         if: always()
         with:

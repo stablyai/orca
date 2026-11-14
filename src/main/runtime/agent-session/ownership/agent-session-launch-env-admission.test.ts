@@ -1,4 +1,4 @@
-import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -71,7 +71,7 @@ describe('agent session launch environment admission', () => {
     const raw = await readPersistedTestAgentSessionStoreText(directory)
     expect(raw).not.toContain('OPENAI_API_KEY')
     expect(raw).not.toContain('"PATH"')
-    const reopened = await openTestAgentSessionRecordStore(directory)
+    const reopened = await openTestAgentSessionRecordStore(directory, { mode: 'observe' })
     expect(reopened.getRecord(SESSION)).not.toHaveProperty('launchEnv')
   })
 

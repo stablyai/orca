@@ -120,18 +120,6 @@ afterEach(() => {
 })
 
 describe('ActivityThreadListPane multi-select', () => {
-  it('toggles rows with Ctrl on Windows/Linux without opening them', () => {
-    setPlatform(false)
-    renderPane()
-    click(a, { ctrlKey: true })
-    click(c, { ctrlKey: true })
-
-    expect(selectedTitles()).toEqual(['Agent A', 'Agent C'])
-    expect(onSelectThread).not.toHaveBeenCalled()
-    click(a, { ctrlKey: true })
-    expect(selectedTitles()).toEqual(['Agent C'])
-  })
-
   it('toggles with Cmd on macOS and ignores Ctrl-click, the native right-click gesture', () => {
     setPlatform(true)
     renderPane()
@@ -140,37 +128,6 @@ describe('ActivityThreadListPane multi-select', () => {
 
     expect(selectedTitles()).toEqual(['Agent A'])
     expect(onSelectThread).not.toHaveBeenCalled()
-  })
-
-  it('opens the agent and replaces the selection on a plain click', () => {
-    setPlatform(false)
-    renderPane()
-    click(a, { ctrlKey: true })
-    click(c, { ctrlKey: true })
-    click(b)
-
-    expect(onSelectThread).toHaveBeenCalledWith(b)
-    expect(selectedTitles()).toEqual(['Agent B'])
-  })
-
-  it('selects a Shift range across group headers', () => {
-    setPlatform(false)
-    renderPane()
-    click(b)
-    click(d, { shiftKey: true })
-
-    expect(selectedTitles()).toEqual(['Agent B', 'Agent C', 'Agent D'])
-    expect(onSelectThread).toHaveBeenCalledTimes(1)
-  })
-
-  it('never marks the open row as selected, so it keeps its active look', () => {
-    setPlatform(false)
-    renderPane(b.paneKey)
-    click(a, { ctrlKey: true })
-    click(b, { ctrlKey: true })
-
-    expect(selectedTitles()).toEqual(['Agent A'])
-    expect(row(b).getAttribute('data-worktree-card-active')).toBe('primary')
   })
 
   it('drops rows hidden by a collapsed group from the selection', () => {

@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady, waitForActiveWorktree } from './helpers/store'
-import type { ActionsRunsQuery } from '../../src/shared/github/actions-types'
+import type { ActionsRunsQuery } from '../../src/shared/github/actions/actions-types'
 
 declare global {
   var __actionsTestQueries: ActionsRunsQuery[] | undefined

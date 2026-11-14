@@ -55,7 +55,7 @@ Keep Orca running on a machine you control—an old laptop, Mac mini, home serve
 For a headless Linux server or service-managed VM, use `orca serve` as the alternative. On Linux the CLI is named `orca-ide`, so the first launch is:
 
 ```bash
-orca-ide serve --pairing-address <reachable-tailscale-ip-or-hostname>
+orca-ide serve --bind <server-tailscale-ip> --pairing-address <server-tailscale-ip>
 ```
 
 Full detail: [Remote Orca Servers](/docs/remote-servers).

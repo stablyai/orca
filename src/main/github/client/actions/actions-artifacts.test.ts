@@ -1,7 +1,8 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
-import * as execution from '../../github-api-repository'
-import * as gh from '../../gh-utils'
-import * as rateLimit from '../../rate-limit'
+import * as execution from '../../repositories/github-api-repository'
+import * as gh from '../../execution/github-operation-slots'
+import * as ghExec from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import * as rateLimit from '../../api/rate-limit'
 import { listActionsArtifacts, startActionsArtifactDownload } from './actions-artifacts'
 import {
   artifactSessionOwner,
@@ -12,7 +13,7 @@ import {
   ACTIONS_ARTIFACT_MAX_BYTES,
   ACTIONS_ARTIFACT_HOST_TIMEOUT_MS,
   ACTIONS_ARTIFACT_TIMEOUT_MESSAGE
-} from '../../../../shared/github/actions-artifact-types'
+} from '../../../../shared/github/actions/actions-artifact-types'
 const repository = { owner: 'acme', repo: 'widgets', host: 'github.enterprise.test' }
 const metadata = {
   id: 7,
@@ -26,7 +27,7 @@ const zip = Buffer.from(
   'UEsDBBQAAAAAAAAAIVwCDJr/IwAAACMAAAAJAAAAaGVsbG8udHh0SGVsbG8gZnJvbSB0aGUgT3JjYSBtb2NrIGFydGlmYWN0LgpQSwECFAMUAAAAAAAAACFcAgya/yMAAAAjAAAACQAAAAAAAAAAAAAAgAEAAAAAaGVsbG8udHh0UEsFBgAAAAABAAEANwAAAEoAAAAAAA==',
   'base64'
 )
-const call = vi.fn<typeof gh.ghExecFileAsync>()
+const call = vi.fn<typeof ghExec.ghExecFileAsync>()
 beforeEach(() => {
   vi.spyOn(execution, 'resolveGitHubRepoExecution').mockResolvedValue({
     ownerRepo: repository,
@@ -36,7 +37,7 @@ beforeEach(() => {
   vi.spyOn(gh, 'release').mockImplementation(() => {})
   vi.spyOn(rateLimit, 'repositoryRateLimitGuard').mockReturnValue({ blocked: false })
   call.mockReset()
-  vi.spyOn(gh, 'ghExecFileAsync').mockImplementation(call)
+  vi.spyOn(ghExec, 'ghExecFileAsync').mockImplementation(call)
 })
 afterEach(() => {
   vi.restoreAllMocks()

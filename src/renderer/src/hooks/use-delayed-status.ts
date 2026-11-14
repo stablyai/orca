@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { createDelayedStatus, type ShownStatus } from '@/lib/delayed-status'
+import { createDelayedStatus, type ShownStatus } from '@/lib/loading-feedback/delayed-status'
 
 /**
  * Returns `value` only once it has lasted past `showDelayMs`, then holds it for a

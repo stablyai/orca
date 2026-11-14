@@ -1,5 +1,6 @@
 /** The words of a distro's move status line (D3a-2); null where the line shows nothing. */
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { WslMoveOrchestratorRecord } from '../../../../shared/wsl-move/wsl-move-orchestrator-types'
 
 export type WslMoveOrchestratorLine =
@@ -9,7 +10,8 @@ export type WslMoveOrchestratorLine =
   | { kind: 'paused'; text: string }
 
 export function wslMoveOrchestratorLine(
-  record: WslMoveOrchestratorRecord | undefined
+  record: WslMoveOrchestratorRecord | undefined,
+  t: Translate = translate
 ): WslMoveOrchestratorLine | null {
   const state = record?.state
   if (!record || !state) {
@@ -18,7 +20,7 @@ export function wslMoveOrchestratorLine(
   if (state.kind === 'deferred') {
     return {
       kind: 'deferred',
-      text: translate(
+      text: t(
         'wslMove.orchestrator.deferred',
         'Finishing your move to the {{distro}} host: some terminals are still busy.',
         { distro: record.distro }
@@ -33,7 +35,7 @@ export function wslMoveOrchestratorLine(
       // Never "failed": the projects moved; only an earlier move's settling did not finish.
       return {
         kind: 'stuck',
-        text: translate(
+        text: t(
           'wslMove.orchestrator.stuck',
           "An earlier move to the {{distro}} host hasn't finished settling.",
           { distro: record.distro }
@@ -45,7 +47,7 @@ export function wslMoveOrchestratorLine(
         ? null
         : {
             kind: 'declined',
-            text: translate(
+            text: t(
               'wslMove.orchestrator.declined',
               'Moving is paused because you brought these projects back to this computer.'
             )
@@ -56,17 +58,17 @@ export function wslMoveOrchestratorLine(
     case 'attempts-exhausted':
       return {
         kind: 'paused',
-        text: translate(
+        text: t(
           'wslMove.orchestrator.paused',
           'Moving projects to the {{distro}} host is paused: {{reason}}.',
-          { distro: record.distro, reason: pausedReason(state.reason) }
+          { distro: record.distro, reason: pausedReason(state.reason, t) }
         )
       }
     case 'finish-pending':
       // Check again is the user's step, which finishes it now; on its own it waits for a restart.
       return {
         kind: 'stuck',
-        text: translate(
+        text: t(
           'wslMove.orchestrator.finishPending',
           'An earlier move to the {{distro}} host is done there. Orca finishes it here when it restarts, or now with Check again.',
           { distro: record.distro }
@@ -81,26 +83,28 @@ export function wslMoveOrchestratorLine(
 
 /** Short and calm: these wait for the user, and nothing was lost. */
 function pausedReason(
-  reason: 'export-incomplete' | 'manifest-too-large' | 'host-update-required' | 'attempts-exhausted'
+  reason:
+    | 'export-incomplete'
+    | 'manifest-too-large'
+    | 'host-update-required'
+    | 'attempts-exhausted',
+  t: Translate = translate
 ): string {
   switch (reason) {
     case 'export-incomplete':
-      return translate(
+      return t(
         'wslMove.orchestrator.pausedReason.exportIncomplete',
         "some saved state can't be carried over yet"
       )
     case 'manifest-too-large':
-      return translate(
+      return t(
         'wslMove.orchestrator.pausedReason.manifestTooLarge',
         'there is more saved state than one move can carry'
       )
     case 'host-update-required':
-      return translate(
-        'wslMove.orchestrator.pausedReason.hostUpdate',
-        'the host needs an update first'
-      )
+      return t('wslMove.orchestrator.pausedReason.hostUpdate', 'the host needs an update first')
     case 'attempts-exhausted':
-      return translate(
+      return t(
         'wslMove.orchestrator.pausedReason.attemptsExhausted',
         "it didn't complete after several tries"
       )

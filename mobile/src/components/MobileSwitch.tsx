@@ -10,8 +10,8 @@ import Animated, {
 import { colors, feedback, radii } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { triggerSelection } from '../platform/haptics'
-import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
+import { triggerSelection } from '../platform/haptics/haptics'
+import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
 import { BOTTOM_DRAWER_EASING } from './bottom-drawer/bottom-drawer-constants'
 
 export type MobileSwitchProps = {

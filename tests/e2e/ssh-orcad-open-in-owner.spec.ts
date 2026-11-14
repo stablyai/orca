@@ -19,7 +19,7 @@ import {
 import { dismissTransientAnnouncement } from './helpers/ssh-config-host-picker'
 import { toRuntimeExecutionHostId } from '../../src/shared/execution-host'
 import { folderWorkspaceKey } from '../../src/shared/workspace-scope'
-import { quotePosixShell } from '../../src/shared/shell-argument-quoting'
+import { quotePosixShell } from '../../src/shared/shell/launch/shell-argument-quoting'
 
 skipUnlessManagedDockerHost()
 test.skip(process.platform === 'win32', 'Needs a POSIX recorder')
@@ -67,12 +67,18 @@ for (const surface of [
         beforeSeed: async (page) => {
           expect(
             await page.evaluate(
-              async ({ filePath, recorder }) =>
-                window.api.shell.openInExternalEditor({
+              async ({ filePath, recorder }) => {
+                await window.api.settings.set({
+                  openInApplications: [
+                    { id: 'recorder', label: 'Recording editor', command: recorder }
+                  ]
+                })
+                return window.api.shell.openInExternalEditor({
                   path: filePath,
-                  command: recorder,
+                  openInApplicationId: 'recorder',
                   ownerHostId: 'local'
-                }),
+                })
+              },
               { filePath, recorder }
             )
           ).toEqual({ ok: true })
