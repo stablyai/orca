@@ -27,6 +27,7 @@ import {
 } from './usage-error-copy'
 import {
   getTightestUsageSection,
+  getUrgentScopedSection,
   getUsageHeadlineSection,
   hasOnlyScopedUsage
 } from './usage-headline-sections'
@@ -336,13 +337,24 @@ export function ProviderSegment({
 
   // Why: a Fable/MCP-only reading says nothing about ordinary requests, so it never stands in as the number.
   if (!tightest && hasOnlyScopedUsage(p, t)) {
+    const scoped = getUrgentScopedSection(p, t)
     return (
       <span className="inline-flex items-center gap-1 text-muted-foreground">
         <ProviderIcon provider={provider} />
+        {scoped ? (
+          <span
+            data-usage-scoped-urgent
+            className={`tabular-nums ${usageTextClass(scoped.window.usedPercent)}`}
+          >
+            {`${scoped.label} ${formatBareUsagePercentage(scoped.window.usedPercent, display, t)}`}
+          </span>
+        ) : null}
         {compact ? (
-          '--'
+          scoped ? null : (
+            '--'
+          )
         ) : (
-          <span className="text-[11px]">
+          <span data-usage-not-checked className="text-[11px]">
             {t('auto.components.status.bar.UsageRosterPanel.notChecked', 'Not checked')}
           </span>
         )}

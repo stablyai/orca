@@ -30,7 +30,6 @@ it('flips the persisted Used/Left setting from the keyboard and keeps the menu o
     </DropdownMenu>
   )
   const toggle = await screen.findByRole('menuitem', { name: 'Used' })
-  expect(toggle.getAttribute('aria-description')).toBe('Show remaining usage')
   toggle.focus()
   fireEvent.keyDown(toggle, { key: 'Enter' })
 

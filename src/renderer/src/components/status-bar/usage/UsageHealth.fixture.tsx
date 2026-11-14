@@ -315,3 +315,59 @@ export const providerPanelGrok = defineFixture({
     </div>
   )
 })
+
+export const cardExtraUsageLeft = defineFixture({
+  width: 480,
+  store: { usagePercentageDisplay: 'remaining' },
+  render: () => (
+    <div className="h-[380px] bg-background p-3">
+      <DropdownMenu defaultOpen modal={false}>
+        <DropdownMenuTrigger>Claude</DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-[440px] max-w-[calc(100vw-1rem)]">
+          <div className="p-2">
+            <ProviderIdentityCard
+              p={{
+                ...claudeFor(PRESETS.healthy),
+                extraUsage: {
+                  unit: 'currency',
+                  enabled: true,
+                  disabledReason: null,
+                  resetsAt: null,
+                  balance: 75,
+                  currencyCode: 'USD',
+                  spent: 25,
+                  spendLimit: 100,
+                  spentPercent: 25
+                }
+              }}
+              accountLabel="alpha@example.com"
+              usagePercentageDisplay="remaining"
+              inMenu
+            />
+          </div>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  )
+})
+
+export const statusBarFableOnly = defineFixture({
+  width: 420,
+  render: () => (
+    <div className="flex flex-col gap-2 bg-background p-3 text-xs">
+      {(['verbose', 'compact'] as const).flatMap((mode) =>
+        [false, true].map((compact) => (
+          <div key={`${mode}-${compact}`} className="flex items-center gap-3">
+            <span className="w-40 text-muted-foreground">{`${mode} · ${compact ? 'narrow' : 'normal'} density`}</span>
+            <ProviderSegment
+              p={claudeFor(PRESETS.fableOnly)}
+              compact={compact}
+              display="used"
+              mode={mode}
+            />
+          </div>
+        ))
+      )}
+    </div>
+  )
+})

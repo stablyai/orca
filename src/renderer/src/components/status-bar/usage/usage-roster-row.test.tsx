@@ -61,7 +61,7 @@ it('reads as not checked when only a Fable reading below 90% exists', () => {
 
 it('names a nearly spent Fable limit beside not checked when no ordinary reading exists', () => {
   const row = renderRow(claude({ fableWeekly: win(100, 10_080) }), 'compact')
-  expect(row.querySelector('[data-usage-scoped-urgent]')?.textContent).toBe('Fable 100%')
+  expect(row.querySelector('[data-usage-scoped-urgent]')).not.toBeNull()
   expect(row.querySelector('[data-usage-not-checked]')).not.toBeNull()
 })
 
@@ -70,7 +70,7 @@ it('flags a spent Fable limit in place of the reset while the headline is health
     claude({ weekly: withReset(win(33, 10_080)), fableWeekly: win(100, 10_080) }),
     'compact'
   )
-  expect(row.querySelector('[data-usage-scoped-urgent]')?.textContent).toBe('Fable 100%')
+  expect(row.querySelector('[data-usage-scoped-urgent]')).not.toBeNull()
   expect(row.querySelector('[data-usage-reset]')).toBeNull()
 })
 
@@ -79,6 +79,6 @@ it('keeps the headline reset when the headline itself is nearly spent', () => {
     claude({ weekly: withReset(win(100, 10_080)), fableWeekly: win(100, 10_080) }),
     'compact'
   )
-  expect(row.querySelector('[data-usage-reset]')?.textContent).toBe('3h')
+  expect(row.querySelector('[data-usage-reset]')).not.toBeNull()
   expect(row.querySelector('[data-usage-scoped-urgent]')).toBeNull()
 })

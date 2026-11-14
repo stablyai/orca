@@ -1,6 +1,9 @@
 import type { ExtraUsageBalance, ProviderRateLimits } from '../../../../../shared/rate-limit-types'
 import type { UsagePercentageDisplay } from '../../../../../shared/usage-percentage-display'
-import { clampUsedPercent } from '../../../../../shared/usage-percentage-display'
+import {
+  clampUsedPercent,
+  getDisplayedUsagePercentage
+} from '../../../../../shared/usage-percentage-display'
 import { formatCreditCount } from '../../../../../shared/credit-count-format'
 import { formatCurrencyAmount } from '../../../../../shared/currency-format'
 import { translate } from '@/i18n/i18n'
@@ -136,7 +139,7 @@ export function ProviderExtraUsageSection({
       <div className={`h-[6px] w-full overflow-hidden rounded-full ${emptyBarClass}`}>
         <div
           className={`h-full rounded-full ${spendBarColor(spentPct)} transition-all duration-300`}
-          style={{ width: `${spentPct}%` }}
+          style={{ width: `${getDisplayedUsagePercentage(spentPct, usagePercentageDisplay)}%` }}
         />
       </div>
       <div className={`flex justify-between ${mutedClass}`}>

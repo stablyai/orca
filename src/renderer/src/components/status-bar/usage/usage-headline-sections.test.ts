@@ -32,7 +32,7 @@ describe('primary-only usage headline', () => {
     const p = claude({ session: win(12, 300), weekly, fableWeekly: win(100, 10_080) })
     expect(getUsageHeadlineSection(p)?.window).toBe(weekly)
     expect(providerPrimaryMaxUsed(p)).toBe(33)
-    expect(getUrgentScopedSection(p)?.label).toBe('Fable')
+    expect(getUrgentScopedSection(p)?.window).toBe(p.fableWeekly)
   })
 
   it('has no headline when only Fable was read, instead of standing Fable in', () => {
