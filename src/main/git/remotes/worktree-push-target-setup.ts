@@ -1,9 +1,14 @@
 import type { GitPushTarget } from '../../../shared/worktree/types'
 import { findGitRemoteNameByFetchUrl } from '../../../shared/git/remotes/git-remote-url-index'
 import { getGitCurrentBranchName } from '../../../shared/git/refs/git-current-branch'
-import { sameGitHubRemoteUrl, type GitRemoteExec } from './worktree-push-target-cleanup'
+import {
+  remoteHasOrcaProvenance,
+  sameGitHubRemoteUrl,
+  type GitRemoteExec
+} from './worktree-push-target-cleanup'
 import {
   buildNarrowForkFetchRefspec,
+  ensureRemoteAlsoTracksBranch,
   ensureRemoteTracksBranchNarrowly
 } from '../refs/fork-remotes/fork-remote-refspec'
 
@@ -87,8 +92,15 @@ export async function prepareWorktreePushTargetWithExec(
       remoteName = existingRemote
       // Reused Orca remotes retain ownership so removing the final worktree can reclaim them.
       remoteCreated = isRemoteCreatedByKnownWorktree(existingRemote)
-      // Reused remotes may still track every fork branch; keep this branch within the bounded refspec.
-      await ensureRemoteTracksBranchNarrowly(execGit, repoPath, remoteName, target.branchName)
+      // Why (#25703): only a remote Orca minted (marker set) may have its refspec
+      // rewritten -- narrowing a user-created remote breaks tracking for every other
+      // branch they push (`@{u}`, ahead/behind, PR lookup). For those, widen add-only:
+      // append this branch's narrow refspec, never drop or rewrite their entries.
+      const orcaCreated = await remoteHasOrcaProvenance(execGit, repoPath, remoteName)
+      const widenRefspec = orcaCreated
+        ? ensureRemoteTracksBranchNarrowly
+        : ensureRemoteAlsoTracksBranch
+      await widenRefspec(execGit, repoPath, remoteName, target.branchName)
     } else {
       remoteName = await ensureUniqueRemoteName(execGit, repoPath, target.remoteName)
       // Restrict branches and tags at creation so even transient config cannot import the whole fork.
