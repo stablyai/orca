@@ -1,10 +1,16 @@
+import type { ResolvedCommand } from './host-routing/wsl-command-resolution'
 import type { ChildProcess, SpawnOptions } from 'node:child_process'
 import { spawnNativeProcess } from '@orca/process-host/native-process-spawn'
 import { recordSubprocessSpawn } from '../../diagnostics/main-thread-churn-probe'
 import { startGitSpan } from '../../observability/instrumentation'
 import { createAbortError } from './process-capture/abort-error'
 import { resolveGitCommand } from './host-routing/git-command-resolution'
-import { pendingWslDriveCheckoutGitRouting } from './host-routing/wsl-drive-checkout-git-routing'
+import {
+  assertPreparedGitCommand,
+  captureGitExecutionContext,
+  type GitExecutionContext,
+  pendingWslGitPathPreparation
+} from './host-routing/wsl-git-path-preparation'
 import { untranslatedGitOutputEnv } from './git-environment/git-process-env'
 import { prepareWindowsHostGitEnvironment } from './host-routing/windows-host-git-environment'
 import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
@@ -24,6 +30,7 @@ export type GitSpawnOptions = SpawnOptions & {
   wslDistro?: string
   /** Runs the host's Git even in a WSL-runtime project (local-git-runtime-route.ts); say why. */
   hostGit?: true
+  executionContext?: GitExecutionContext
   admissionTier?: GitAdmissionTier
 }
 
@@ -31,16 +38,20 @@ export async function gitSpawnAfterWindowsEnvironmentReady(
   args: string[],
   callerOptions: GitSpawnOptions
 ): Promise<ChildProcess> {
-  const options = routeLocalGitOptions(callerOptions)
+  let options = routeLocalGitOptions(callerOptions)
   if (options.signal?.aborted) {
     throw createAbortError()
   }
-  const lineEndingsReady = pendingWslDriveCheckoutGitRouting(args, options)
-  if (lineEndingsReady) {
-    await lineEndingsReady
+  const lineEndingsReady = pendingWslGitPathPreparation(args, options)
+  options = {
+    ...options,
+    executionContext: lineEndingsReady
+      ? await lineEndingsReady
+      : captureGitExecutionContext(options)
   }
   const resolved = resolveGitCommand(args, {
     cwd: options.cwd,
+    executionContext: options.executionContext,
     ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
     ...(options.env ? { env: options.env } : {})
   })
@@ -64,12 +75,20 @@ export async function withGitAdmission(
   callerOptions: GitSpawnOptions,
   spawnChild?: () => ChildProcess
 ): Promise<ChildProcess> {
-  const options = routeLocalGitOptions(callerOptions)
-  const spawnRouted = spawnChild ?? (() => gitSpawn(args, options))
+  let options = routeLocalGitOptions(callerOptions)
   const admission = admitWslGit(options)
   if (admission) {
     await admission
   }
+  if (!options.executionContext) {
+    const ready = pendingWslGitPathPreparation(args, options)
+    options = {
+      ...options,
+      executionContext: ready ? await ready : captureGitExecutionContext(options)
+    }
+  }
+  const resolved = resolveGitCommand(args, options)
+  const spawnRouted = spawnChild ?? (() => spawnPreparedGitCommand(args, resolved, options))
   const span = startGitSpan({ args, cwd: options.cwd, admissionTier: options.admissionTier })
   let grant: Awaited<ReturnType<typeof acquireGitAdmission>> | null = null
   try {
@@ -81,22 +100,14 @@ export async function withGitAdmission(
       signal: options.signal
     })
     span.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
-    // The same resolution gitSpawn makes, for the span only; only the router can change its answer.
-    if (isLocalGitRuntimeRouterInstalled()) {
-      span.setAttribute(
-        'git.runs_in',
-        gitRunsIn(
-          resolveGitCommand(args, {
-            cwd: options.cwd,
-            ...(options.wslDistro ? { wslDistro: options.wslDistro } : {})
-          })
-        )
-      )
-    }
+    span.setAttribute('git.runs_in', gitRunsIn(resolved))
     if (options.signal?.aborted) {
       grant.release()
       span.fail(createAbortError())
       throw createAbortError()
+    }
+    if (spawnChild) {
+      assertPreparedGitCommand(resolved, args, options)
     }
     const child = spawnRouted()
     let finalized = false
@@ -161,9 +172,27 @@ export function gitSpawn(args: string[], callerOptions: GitSpawnOptions): ChildP
   const { wslDistro, admissionTier: _admissionTier, hostGit: _hostGit, ...spawnOptions } = options
   const resolved = resolveGitCommand(args, {
     cwd: options.cwd,
+    executionContext: options.executionContext,
+    hostGit: options.hostGit,
     ...(wslDistro ? { wslDistro } : {}),
     ...(spawnOptions.env ? { env: spawnOptions.env } : {})
   })
+  return spawnPreparedGitCommand(args, resolved, options)
+}
+
+export function spawnPreparedGitCommand(
+  args: string[],
+  resolved: ResolvedCommand,
+  options: GitSpawnOptions
+): ChildProcess {
+  assertPreparedGitCommand(resolved, args, options)
+  const {
+    wslDistro: _wslDistro,
+    admissionTier: _tier,
+    hostGit: _hostGit,
+    executionContext: _context,
+    ...spawnOptions
+  } = options
   return spawnNativeProcess(
     resolved.binary,
     resolved.args,

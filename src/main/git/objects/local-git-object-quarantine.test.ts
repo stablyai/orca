@@ -1,39 +1,10 @@
-import { describe, expect, it, vi } from 'vitest'
-import type * as GitObjectQuarantineModule from '../../../shared/git/objects/git-object-quarantine'
-import type {
-  GitObjectQuarantine,
-  GitObjectsDirectory
-} from '../../../shared/git/objects/git-object-quarantine'
+import { settleWslAutomountRoot } from '../../wsl/filesystem/__fixtures__/wsl-automount-root-fixture'
+import { resetWslAutomountRootsForTests } from '../../wsl/filesystem/wsl-automount-root'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { inheritedLocalObjectStore, localGitObjectsDirectory } from './local-git-object-quarantine'
-import '../command-runner/host-routing/wsl-linked-worktree-git-routing'
-
-const { readRepoCommonDirFromGitMock } = vi.hoisted(() => ({
-  readRepoCommonDirFromGitMock: vi.fn()
-}))
-
-vi.mock('../worktrees/catalog/worktree-list-reader', () => ({
-  readRepoCommonDirFromGit: readRepoCommonDirFromGitMock
-}))
-vi.mock('../../../shared/git/objects/git-object-quarantine', async (importOriginal) => ({
-  ...(await importOriginal<typeof GitObjectQuarantineModule>()),
-  createGitObjectQuarantine: (
-    resolve: () => Promise<GitObjectsDirectory | undefined>
-  ): GitObjectQuarantine => ({
-    run: async (command) => {
-      const objects = await resolve()
-      return command(
-        objects
-          ? {
-              GIT_OBJECT_DIRECTORY: `${objects.gitPath}/scratch`,
-              GIT_ALTERNATE_OBJECT_DIRECTORIES: objects.gitPath
-            }
-          : undefined
-      )
-    }
-  })
-}))
-
 describe('localGitObjectsDirectory', () => {
+  beforeEach(() => settleWslAutomountRoot())
+  afterEach(() => resetWslAutomountRootsForTests())
   it('translates a WSL Git common dir into a path the Windows host can open', () => {
     expect(localGitObjectsDirectory('/home/me/repo/.git', 'Ubuntu')).toEqual({
       hostPath: '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo\\.git\\objects',

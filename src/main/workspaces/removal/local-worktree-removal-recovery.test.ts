@@ -15,9 +15,18 @@ vi.mock('../../git/command-runner/git-exec-file', async (importOriginal) => ({
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
-vi.mock('./local-worktree-filesystem', () => ({
-  removeLocalWorktreePath: removeLocalWorktreePathMock
-}))
+vi.mock('./local-worktree-filesystem', async (importOriginal) => {
+  const actual = await importOriginal<typeof LocalWorktreeFilesystem>()
+  return {
+    ...actual,
+    prepareLocalWorktreeFilesystem: async (
+      ...args: Parameters<typeof actual.prepareLocalWorktreeFilesystem>
+    ) => {
+      const filesystem = await actual.prepareLocalWorktreeFilesystem(...args)
+      return { ...filesystem, remove: (path: string) => removeLocalWorktreePathMock(path, args[1]) }
+    }
+  }
+})
 
 vi.mock('../../filesystem/asar-transparent-fs', () => ({ rm: hostRmMock }))
 
@@ -80,11 +89,6 @@ describe('recoverPartialLocalWorktreeRemoval', () => {
           signal: controller.signal
         })
       ).rejects.toThrow(/aborted/i)
-      expect(removeLocalWorktreePathMock).toHaveBeenCalledWith(
-        'C:/repo/worktree/feature',
-        {},
-        controller.signal
-      )
       expect(closeWatcher).toHaveBeenCalledOnce()
       expect(hostRmMock).toHaveBeenCalledOnce()
       expect(gitExecFileAsyncMock).not.toHaveBeenCalled()

@@ -10,7 +10,11 @@ import {
   type GitWorktreeExecOptions
 } from '../../git/worktrees/worktree-operation-options'
 import { deleteBranchOfUnregisteredWorktree } from '../../git/worktrees/removal/worktree-removal'
-import { removeLocalWorktreePath } from './local-worktree-filesystem'
+import { prepareLocalWorktreeFilesystem } from './local-worktree-filesystem'
+import {
+  assertWslAutomountSnapshotCurrent,
+  captureWslAutomountSnapshot
+} from '../../wsl/filesystem/wsl-automount-root'
 import { assertWorktreeDoesNotContainRegisteredWorktree } from './worktree-removal-safety'
 import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
 
@@ -112,33 +116,51 @@ export async function recoverPartialLocalWorktreeRemoval(
   // Reject Git locks before recovery can recursively delete files.
   assertWorktreeUnlockedForRemoval(args.registeredWorktree)
 
+  const distro =
+    process.platform === 'win32' ? args.localWorktreeGitOptions.wslDistro?.trim() : undefined
+  const proofEpoch = distro ? captureWslAutomountSnapshot(distro) : undefined
   const recoverable = await isRecoverablePartialRemovalFailure(args)
   throwIfSignalAborted(args.signal)
+  if (proofEpoch) {
+    assertWslAutomountSnapshotCurrent(proofEpoch)
+  }
   if (!recoverable) {
     return undefined
   }
+  const filesystem = await prepareLocalWorktreeFilesystem(
+    [args.canonicalWorktreePath, args.repoPath],
+    { ...args.localWorktreeGitOptions, signal: args.signal, proofEpoch }
+  )
 
   // Release watcher handles before recursively finishing Git’s partial removal; abort if closing fails.
   await args.closeWatcher(args.canonicalWorktreePath)
-  throwIfSignalAborted(args.signal)
+  filesystem.assertCurrent()
   try {
-    await removeLocalWorktreePath(
-      args.canonicalWorktreePath,
-      args.localWorktreeGitOptions,
-      args.signal
-    )
+    await filesystem.remove(args.canonicalWorktreePath)
   } catch (error) {
     throwIfSignalAborted(args.signal)
     throw new Error(formatWorktreeRemovalError(error, args.canonicalWorktreePath, args.force))
   }
+  filesystem.assertAuthorityCurrent()
   const { branch, head } = args.registeredWorktree
   // Same -d policy as a normal delete: merged branches go, unmerged ones are preserved.
-  return deleteBranchOfUnregisteredWorktree(
+  const result = await deleteBranchOfUnregisteredWorktree(
     args.repoPath,
     args.canonicalWorktreePath,
     args.deleteBranch && branch ? { name: normalizeLocalBranchRef(branch), head } : null,
-    args.localWorktreeGitOptions
+    {
+      ...args.localWorktreeGitOptions,
+      canStart: () => {
+        if (args.localWorktreeGitOptions.canStart?.() === false) {
+          return false
+        }
+        filesystem.assertAuthorityCurrent()
+        return true
+      }
+    }
   )
+  filesystem.assertAuthorityCurrent()
+  return result
 }
 
 async function isRecoverablePartialRemovalFailure(

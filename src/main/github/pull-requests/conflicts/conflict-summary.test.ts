@@ -60,7 +60,7 @@ function mockGitDispatch(overrides: Record<string, GitHandler> = {}): void {
     if (!handler) {
       return Promise.reject(new Error(`unexpected git command: ${argv.join(' ')}`))
     }
-    return handler(argv)
+    return handler(argv).then((result) => ({ ...result, executionContext: { kind: 'host' } }))
   })
 }
 

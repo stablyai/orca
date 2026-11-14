@@ -17,9 +17,8 @@ import {
 } from '../../../workspaces/removal/worktree-removal-safety'
 import { resolveWorktreeRemovalHomeForHost } from '../../../workspaces/removal/worktree-removal-execution-host-route'
 import {
-  getLocalWorktreePathAccess,
-  removeLocalWorktreePath,
-  toLocalWorktreeRuntimePath
+  prepareLocalWorktreeFilesystem,
+  type LocalWorktreeFilesystem
 } from '../../../workspaces/removal/local-worktree-filesystem'
 import {
   cleanupUnusedWorktreePushTargetRemote,
@@ -49,21 +48,25 @@ export async function removeUnregisteredWorktree(
 ): Promise<RemoveWorktreeResult> {
   const { mainWindow, store, runtime } = context
   const removalHome = resolveWorktreeRemovalHomeForHost(removalHostId)
+  let filesystem: LocalWorktreeFilesystem | undefined
   let canCleanOrphanedDirectory = false
   if (
     canCleanupUnregisteredOrcaWorktreeDirectory({
       meta: removedMeta
-    })
+    }) &&
+    !isDangerousWorktreeRemovalPath(worktreePath, repo.path, removalHome)
   ) {
-    const access = getLocalWorktreePathAccess(localWorktreeGitOptions)
-    canCleanOrphanedDirectory =
-      !isDangerousWorktreeRemovalPath(worktreePath, repo.path, removalHome) &&
-      (await canSafelyRemoveOrphanedWorktreeDirectory(
-        toLocalWorktreeRuntimePath(worktreePath, localWorktreeGitOptions),
-        toLocalWorktreeRuntimePath(repo.path, localWorktreeGitOptions),
-        removalHome,
-        access
-      ))
+    filesystem = await prepareLocalWorktreeFilesystem(
+      [worktreePath, repo.path],
+      localWorktreeGitOptions
+    )
+    canCleanOrphanedDirectory = await canSafelyRemoveOrphanedWorktreeDirectory(
+      filesystem.runtimePath(worktreePath),
+      filesystem.runtimePath(repo.path),
+      removalHome,
+      filesystem.access
+    )
+    filesystem.assertCurrent()
   }
   const native = usesNativeWindowsRemoval(worktreePath, localWorktreeGitOptions)
   if (canCleanOrphanedDirectory || (native && removedMeta)) {
@@ -72,19 +75,25 @@ export async function removeUnregisteredWorktree(
       throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
     }
 
+    const scope =
+      filesystem ??
+      (await prepareLocalWorktreeFilesystem([worktreePath, repo.path], localWorktreeGitOptions))
     const removalGate = await runtime.acquireFileWatcherRemoval(worktreePath)
     let removalCompleted = false
     try {
+      scope.assertCurrent()
       await stopPtysForDestructiveWorktreeRemoval(runtime, args.worktreeId, {
         allowUnverifiedStop: args.allowUnverifiedPtyStop
       })
+      scope.assertCurrent()
       await (usesNativeWindowsRemoval(worktreePath, localWorktreeGitOptions)
         ? removeWorktree(repo.path, worktreePath, args.force ?? false, {
             ...localWorktreeGitOptions,
             deleteBranch: false,
             knownRemovedWorktree: null
           })
-        : removeLocalWorktreePath(worktreePath, localWorktreeGitOptions))
+        : scope.remove(worktreePath))
+      scope.assertCurrent()
       removalCompleted = true
     } finally {
       await removalGate.finish(removalCompleted)
@@ -96,6 +105,7 @@ export async function removeUnregisteredWorktree(
       store,
       localWorktreeGitOptions
     )
+    scope.assertCurrent()
     invalidateAuthorizedRootsCache()
     runtime.clearOptimisticReconcileToken(args.worktreeId)
     removeWorktreeMetadataAndTransientState(
@@ -113,7 +123,10 @@ export async function removeUnregisteredWorktree(
     notifyWorktreesChanged(mainWindow, repoId)
     return {}
   }
-  if (await isAlreadyRemovedWorktreePath(worktreePath, localWorktreeGitOptions)) {
+  const scope =
+    filesystem ??
+    (await prepareLocalWorktreeFilesystem([worktreePath, repo.path], localWorktreeGitOptions))
+  if (await isAlreadyRemovedWorktreePath(worktreePath, localWorktreeGitOptions, scope)) {
     if (!args.force && !removedMeta) {
       // Without persisted ownership, require renderer recovery approval before deleting unregistered state.
       throw new Error(UNREGISTERED_MISSING_WORKTREE_MESSAGE)
@@ -126,6 +139,7 @@ export async function removeUnregisteredWorktree(
       store,
       localWorktreeGitOptions
     )
+    scope.assertCurrent()
     invalidateAuthorizedRootsCache()
     runtime.clearOptimisticReconcileToken(args.worktreeId)
     removeWorktreeMetadataAndTransientState(

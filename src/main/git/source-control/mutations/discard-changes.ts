@@ -66,7 +66,12 @@ export async function listTrackedPathSpecs(
   options: GitRuntimeOptions = {}
 ): Promise<string[]> {
   const trackedPaths: string[] = []
-  const commands = bulkPathspecCommands(['ls-files', '-z', '--'], filePaths, worktreePath, options)
+  const commands = await bulkPathspecCommands(
+    ['ls-files', '-z', '--'],
+    filePaths,
+    worktreePath,
+    options
+  )
   for (const args of commands) {
     const { stdout } = await gitExecFileAsync(args, gitOptionsForWorktree(worktreePath, options))
     // Iterate instead of spreading: tracked directories can exceed the JS argument limit.
@@ -85,7 +90,12 @@ async function cleanUntrackedPaths(
   options: GitRuntimeOptions = {}
 ): Promise<void> {
   // Git pathspecs avoid recursive deletion through symlinked parents; empty chunks must never invoke clean.
-  const commands = bulkPathspecCommands(['clean', '-ffdx', '--'], filePaths, worktreePath, options)
+  const commands = await bulkPathspecCommands(
+    ['clean', '-ffdx', '--'],
+    filePaths,
+    worktreePath,
+    options
+  )
   for (const args of commands) {
     await gitExecFileAsync(args, { ...gitOptionsForWorktree(worktreePath, options) })
   }

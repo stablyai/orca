@@ -1,3 +1,5 @@
+import { settleWslAutomountRoot } from '../../../wsl/filesystem/__fixtures__/wsl-automount-root-fixture'
+import { resetWslAutomountRootsForTests } from '../../../wsl/filesystem/wsl-automount-root'
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -58,12 +60,15 @@ async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>):
 describe('Windows host Git environment readiness', () => {
   const originalPath = process.env.Path
 
-  beforeEach(() => {
+  beforeEach(async () => {
+    resetWslAutomountRootsForTests()
+    await settleWslAutomountRoot()
     execFileMock.mockReset()
     spawnMock.mockReset()
   })
 
   afterEach(() => {
+    resetWslAutomountRootsForTests()
     _resetGitAdmissionForTests()
     configureWindowsHostGitEnvironmentReadiness(null)
     if (originalPath === undefined) {

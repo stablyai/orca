@@ -68,11 +68,11 @@ export async function listUntrackedDirectoryFiles(
   if (directories.some((dir) => dir.startsWith('./') || dir.startsWith('../'))) {
     return null
   }
-  const commands = bulkPathspecCommands(
+  const commands = await bulkPathspecCommands(
     LIST_OTHER_FILES_ARGS,
     directories,
     worktreePath,
-    options.wslDistro ? { wslDistro: options.wslDistro } : {}
+    options
   )
   // Each extra chunk rereads the index; that many directories favour one -uall scan.
   if (commands.length !== 1) {

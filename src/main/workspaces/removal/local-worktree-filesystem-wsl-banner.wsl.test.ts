@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { getLocalWorktreePathAccess } from './local-worktree-filesystem'
+import { prepareLocalWorktreeFilesystem } from './local-worktree-filesystem'
 
 const execFileAsync = promisify(execFile)
 const DISTRO = process.env.ORCA_WSL_TEST_DISTRO ?? 'Ubuntu-24.04'
@@ -37,7 +37,9 @@ describe.skipIf(!runRealWsl)('WSL worktree reads carry no shell chatter', () => 
   }, 120_000)
 
   it('returns file contents byte-for-byte', async () => {
-    const { readPath } = getLocalWorktreePathAccess({ wslDistro: DISTRO })
+    const {
+      access: { readPath }
+    } = await prepareLocalWorktreeFilesystem([unc(fixtureRoot)], { wslDistro: DISTRO })
 
     expect(await readPath(unc(`${fixtureRoot}/file.txt`))).toBe(FILE_CONTENTS)
   }, 60_000)
@@ -48,7 +50,9 @@ describe.skipIf(!runRealWsl)('WSL worktree reads carry no shell chatter', () => 
   ])(
     'stats %s as a usable type, not shell chatter',
     async (entry, expectedType) => {
-      const { statPath } = getLocalWorktreePathAccess({ wslDistro: DISTRO })
+      const {
+        access: { statPath }
+      } = await prepareLocalWorktreeFilesystem([unc(fixtureRoot)], { wslDistro: DISTRO })
 
       const stat = (await statPath(unc(`${fixtureRoot}/${entry}`))) as { type: string }
 
@@ -58,7 +62,9 @@ describe.skipIf(!runRealWsl)('WSL worktree reads carry no shell chatter', () => 
   )
 
   it('still reports a missing path as ENOENT', async () => {
-    const { statPath } = getLocalWorktreePathAccess({ wslDistro: DISTRO })
+    const {
+      access: { statPath }
+    } = await prepareLocalWorktreeFilesystem([unc(fixtureRoot)], { wslDistro: DISTRO })
 
     await expect(statPath(unc(`${fixtureRoot}/absent`))).rejects.toMatchObject({ code: 'ENOENT' })
   }, 60_000)

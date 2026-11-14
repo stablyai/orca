@@ -7,7 +7,7 @@ import {
 } from './wsl-background-distro-gate'
 import { WslDistroNotRunningError } from '../orcad/wsl-orcad-connection-errors'
 import { resolveWslInteropSpawnCwd } from '../execution/wsl-interop-spawn-directory'
-import { buildWslDistroHolderArgs } from './wsl-distro-holder-command'
+import { buildWslDistroHolderArgs, WSL_DISTRO_BOOT_TIMEOUT_MS } from './wsl-distro-holder-command'
 import {
   listWslDistroHolderRecordDistros,
   readWslDistroHolderRecord,
@@ -27,7 +27,6 @@ import type {
   WslDistroHolderState
 } from './wsl-distro-holder-types'
 
-const DEFAULT_BOOT_TIMEOUT_MS = 60_000
 const BOOT_POLL_INTERVAL_MS = 250
 const RELEASE_EXIT_TIMEOUT_MS = 5_000
 /** Replace unverifiable holders only after this monotonic grace while confirmed running. A duplicate costs a sleep and may keep the distro alive after release; log the old PID. */
@@ -60,7 +59,7 @@ export function createWslDistroHolder(dependencies: WslDistroHolderDependencies)
   const unverifiableSince = new Map<string, number>()
   const sleep =
     dependencies.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
-  const bootTimeoutMs = dependencies.bootTimeoutMs ?? DEFAULT_BOOT_TIMEOUT_MS
+  const bootTimeoutMs = dependencies.bootTimeoutMs ?? WSL_DISTRO_BOOT_TIMEOUT_MS
 
   const tails = new Map<string, Promise<void>>()
   const inFlightEnsures = new Map<

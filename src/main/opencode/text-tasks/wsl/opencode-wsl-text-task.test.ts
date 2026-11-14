@@ -1,7 +1,15 @@
+import { _resetRunningWslDistroCacheForTests } from '../../../wsl/discovery/wsl-running-distro-cache'
+import { settleWslAutomountRoot } from '../../../wsl/filesystem/__fixtures__/wsl-automount-root-fixture'
+import { resetWslAutomountRootsForTests } from '../../../wsl/filesystem/wsl-automount-root'
+import {
+  _resetWslBackgroundDistroGateForTests,
+  noteWslDistroMayHaveStopped,
+  WSL_STOP_SETTLE_MS
+} from '../../../wsl/discovery/wsl-background-distro-gate'
 import { ChildProcess } from 'node:child_process'
 import { PassThrough } from 'node:stream'
 import { z } from 'zod'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   SourceControlAgentSpawnInput,
   SpawnedSourceControlAgentProcess
@@ -66,6 +74,38 @@ function task(signal = new AbortController().signal) {
 }
 
 describe('runOpenCodeWslTextTask', () => {
+  beforeEach(async () => {
+    resetWslAutomountRootsForTests()
+    await settleWslAutomountRoot()
+  })
+  afterEach(() => {
+    resetWslAutomountRootsForTests()
+    _resetWslBackgroundDistroGateForTests()
+    _resetRunningWslDistroCacheForTests()
+    vi.restoreAllMocks()
+  })
+
+  it('settles restarted guest operands before spawning after runtime preparation', async () => {
+    const guest = fakeGuest(async () => ({ ok: true, text: 'message' }))
+    await expect(
+      runOpenCodeWslTextTask(task(), {
+        prepare: async () => {
+          const now = performance.now()
+          noteWslDistroMayHaveStopped('Ubuntu')
+          vi.spyOn(performance, 'now').mockReturnValue(now + WSL_STOP_SETTLE_MS + 1)
+          await settleWslAutomountRoot('Ubuntu', '/qamnt/')
+          return prepare()
+        },
+        spawnAgent: guest.spawnAgent
+      })
+    ).resolves.toBe('message')
+    expect(guest.requests[0]?.runArgs).toEqual([
+      '--model',
+      'anthropic/claude-sonnet',
+      '--file',
+      '/qamnt/c/notes/context.txt'
+    ])
+  })
   it('cancels by ending the guest stdin and settles only after the guest exits', async () => {
     const controller = new AbortController()
     const guest = fakeGuest(async (_request, canceled) => {

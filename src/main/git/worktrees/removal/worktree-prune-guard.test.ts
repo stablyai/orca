@@ -37,8 +37,8 @@ vi.mock('../../../../shared/wsl-paths', async (importOriginal) => ({
 vi.mock('../../command-runner/host-routing/wsl-linked-worktree-git-routing', () => ({
   usesHostGitForWslLinkedWorktree: () => false
 }))
-vi.mock('../../command-runner/host-routing/wsl-drive-checkout-git-routing', () => ({
-  pendingWslDriveCheckoutGitRouting: () => null
+vi.mock('../../command-runner/host-routing/wsl-git-path-preparation', () => ({
+  pendingWslGitPathPreparation: () => null
 }))
 
 import { PRUNE_GUARD_LOCK_REASON, pruneGitWorktrees } from './worktree-prune-guard'

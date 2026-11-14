@@ -28,7 +28,6 @@ src/main/emulator/simctl-simulator-devices.ts
 src/main/emulator/simulator-app-visibility.ts
 src/main/external-editors/external-editor-launch.ts
 src/main/git/command-runner/process-capture/exec-file-capture.ts
-src/main/git/command-runner/git-stream-stdout.ts
 src/main/git/command-runner/process-capture/spawn-command-capture.ts
 src/main/git/command-runner/process-capture/spawned-command-tree-kill.ts
 src/main/git/command-runner/host-routing/wsl-aware-spawn.ts

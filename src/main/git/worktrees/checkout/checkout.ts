@@ -8,7 +8,6 @@ import {
 } from '../../command-runner/git-runtime-options'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { gitEnvWithoutYesNoPrompt } from '../../command-runner/git-environment/git-no-prompt-env'
-import { translateWorktreePath } from '../catalog/worktree-path-comparison'
 import { parseCheckoutSkippedPaths } from './checkout-skipped-paths'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
 
@@ -69,7 +68,7 @@ export async function listLocalBranches(
     committedAt[ref.label] = ref.committedAt
   }
   for (const [name, path] of occupied) {
-    worktreePaths[name] = translateWorktreePath(path, worktreePath, options)
+    worktreePaths[name] = path
   }
   return { current, branches, committedAt, worktreePaths }
 }

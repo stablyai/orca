@@ -13,8 +13,8 @@ import {
   type LocalBaseBranchGit
 } from '../../../../shared/worktree/base-refs/local-base-branch-fast-forward'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
+import { gitResultPathTranslator } from '../../command-runner/host-routing/wsl-path-translation'
 import { findGitSubcommandIndex } from '../../../../shared/git/commands/git-command-classification'
-import { translateWslOutputPaths } from '../../command-runner/host-routing/wsl-path-translation'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
 import type { AddWorktreeOptions, GitWorktreeExecOptions } from '../worktree-operation-options'
 
@@ -124,13 +124,16 @@ function localBaseBranchGit(options: GitWorktreeExecOptions): LocalBaseBranchGit
           : {})
       }),
     listWorktrees: async (repoPath) => {
-      const { stdout } = await withRepositoryGitCause(
+      const result = await withRepositoryGitCause(
         repoPath,
         options,
         { family: 'catalog', reason: 'creation-base-refresh', cache: 'uncached' },
         () => gitExecFileAsync(['worktree', 'list', '--porcelain'], execOptions(repoPath))
       )
-      return parseWorktreeList(translateWslOutputPaths(stdout, repoPath, options))
+      const toHostPath = await gitResultPathTranslator(result, repoPath, {
+        wslDistro: options.wslDistro
+      })
+      return parseWorktreeList(result.stdout).map((row) => ({ ...row, path: toHostPath(row.path) }))
     }
   }
 }

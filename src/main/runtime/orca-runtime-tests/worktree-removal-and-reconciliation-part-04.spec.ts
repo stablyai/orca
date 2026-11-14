@@ -446,9 +446,14 @@ describe('OrcaRuntimeService', () => {
         stderr: 'fatal: not a git repository (or any of the parent directories): .git\n'
       })
     )
-    const removePathSpy = vi
-      .spyOn(localWorktreeFilesystem, 'removeLocalWorktreePath')
-      .mockRejectedValue(new Error('injected removal failure'))
+    const prepareFilesystem = localWorktreeFilesystem.prepareLocalWorktreeFilesystem
+    const removePathSpy = vi.fn().mockRejectedValue(new Error('injected removal failure'))
+    const preparePathSpy = vi
+      .spyOn(localWorktreeFilesystem, 'prepareLocalWorktreeFilesystem')
+      .mockImplementation(async (...args) => ({
+        ...(await prepareFilesystem(...args)),
+        remove: removePathSpy
+      }))
     const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockResolvedValue({
       stdout: '',
       stderr: ''
@@ -462,7 +467,7 @@ describe('OrcaRuntimeService', () => {
       expect(removeWorktreeMeta).not.toHaveBeenCalled()
       expect(gitSpy).not.toHaveBeenCalledWith(['worktree', 'prune'], expect.anything())
     } finally {
-      removePathSpy.mockRestore()
+      preparePathSpy.mockRestore()
       gitSpy.mockRestore()
       await rm(parentDir, { recursive: true, force: true })
     }

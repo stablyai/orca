@@ -88,7 +88,7 @@ async function finishEmptyCommitAction(
         ],
         execution
       )
-      for (const args of bulkPathspecCommands(
+      for (const args of await bulkPathspecCommands(
         ['diff-files', '--quiet', '--ignore-submodules=none', '--'],
         paths.split('\0').filter(Boolean),
         execution.cwd,

@@ -1,6 +1,7 @@
 import type { LocalGitExecOptions } from '../refs/resolution/repo-default-base-ref'
 import type { GitExecOptions } from '../command-runner/git-exec-options'
-import { parseWslUncPath, toWslExecutionSpace } from '../../../shared/wsl-paths'
+import { gitResultPathTranslator } from '../command-runner/host-routing/wsl-path-translation'
+import { parseWslUncPath } from '../../../shared/wsl-paths'
 import { gitExecFileAsync } from '../command-runner/git-exec-file'
 import { resolveRevParsePath } from '../worktrees/catalog/worktree-path-comparison'
 
@@ -19,7 +20,7 @@ export function readGitCommonDir(stdout: string, repoPath: string): string | und
     .split('\n')
     .map((line) => (line.endsWith('\r') ? line.slice(0, -1) : line))
     .findLast((line) => line.length > 0 && !line.startsWith('-'))
-  return commonDir ? resolveRevParsePath(toWslExecutionSpace(repoPath), commonDir) : undefined
+  return commonDir ? resolveRevParsePath(repoPath, commonDir) : undefined
 }
 
 function remember(cacheKey: string, value: CachedRepoKey): string {
@@ -56,16 +57,19 @@ export async function getCanonicalRepoKey(
     return remember(cacheKey, cached)
   }
   try {
-    const { stdout } = await gitExecFileAsync(
+    const result = await gitExecFileAsync(
       ['rev-parse', '--path-format=absolute', '--git-common-dir'],
       { cwd: repoPath, ...options }
     )
-    const commonDir = readGitCommonDir(stdout, repoPath)
+    const wslCwd = process.platform === 'win32' ? parseWslUncPath(repoPath) : null
+    const commonDir = readGitCommonDir(result.stdout, wslCwd?.linuxPath ?? repoPath)
     if (commonDir) {
+      const toHostPath = await gitResultPathTranslator(result, repoPath, options)
+      const canonicalPath = toHostPath(commonDir)
       return remember(cacheKey, {
-        key: `${runtimeKey}::${commonDir}`,
+        key: `${runtimeKey}::${canonicalPath}`,
         // Drive-path routing may change Git hosts; only unambiguous namespaces prove provenance.
-        ...(process.platform !== 'win32' || parseWslUncPath(repoPath) ? { commonDir } : {})
+        ...(process.platform !== 'win32' || wslCwd ? { commonDir } : {})
       })
     }
   } catch (error) {

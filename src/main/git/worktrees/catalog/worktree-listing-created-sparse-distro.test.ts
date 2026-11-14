@@ -40,8 +40,8 @@ const missing = () => Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
 
 // A drive-spelled checkout loses the distro needed to resolve its non-drvfs gitdir pointer.
 const REPO = '\\\\wsl.localhost\\Ubuntu\\home\\me\\repo'
-const GUEST_WORKTREE = '/mnt/c/wt/x'
 const HOST_WORKTREE = 'C:/wt/x'
+const HOST_COMMON_DIR = '//wsl.localhost/Ubuntu/home/me/repo/.git'
 const GUEST_GIT_DIR = '/home/me/repo/.git/worktrees/x'
 const HOST_GIT_DIR = '//wsl.localhost/Ubuntu/home/me/repo/.git/worktrees/x'
 const HEAD_OID = 'a'.repeat(40)
@@ -50,11 +50,11 @@ describe('describeCreatedWorktree on a drvfs-spelled WSL worktree', () => {
   beforeEach(() => {
     readRepoLocationMock.mockReset()
     readRepoLocationMock.mockResolvedValue({
-      topLevel: GUEST_WORKTREE,
-      commonDir: '/home/me/repo/.git'
+      topLevel: HOST_WORKTREE,
+      commonDir: HOST_COMMON_DIR
     })
     readRepoCommonDirFromGitMock.mockReset()
-    readRepoCommonDirFromGitMock.mockResolvedValue('/home/me/repo/.git')
+    readRepoCommonDirFromGitMock.mockResolvedValue(HOST_COMMON_DIR)
     readCheckedOutBranchRefMock.mockReset()
     readCheckedOutBranchRefMock.mockResolvedValue('refs/heads/feature')
     readWorktreeHeadOidMock.mockReset()
@@ -99,9 +99,9 @@ describe('describeCreatedWorktree on a drvfs-spelled WSL worktree', () => {
     }
   })
 
-  it('uses the repo disk witness in the WSL execution namespace', async () => {
+  it('uses the repo disk witness in the host filesystem namespace', async () => {
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
-    readRepoCommonDirFromGitMock.mockResolvedValue('/other/.git')
+    readRepoCommonDirFromGitMock.mockResolvedValue('//wsl.localhost/Ubuntu/other/.git')
     statMock.mockImplementation(async (target: string) => {
       const value = slashed(target)
       if (value === `${slashed(REPO)}/.git`) {

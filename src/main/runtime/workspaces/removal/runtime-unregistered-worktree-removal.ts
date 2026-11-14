@@ -9,9 +9,8 @@ import {
   type WorktreeRemovalRoute
 } from '../../../workspaces/removal/worktree-removal-execution-host-route'
 import {
-  getLocalWorktreePathAccess,
-  removeLocalWorktreePath,
-  toLocalWorktreeRuntimePath
+  prepareLocalWorktreeFilesystem,
+  type LocalWorktreeFilesystem
 } from '../../../workspaces/removal/local-worktree-filesystem'
 import { cleanupUnusedWorktreePushTargetRemote } from '../../../ipc/worktree-remote'
 import {
@@ -47,17 +46,20 @@ export async function removeRuntimeUnregisteredWorktree(args: {
 }): Promise<{}> {
   const { repo, target, registeredWorktrees, removedMeta, route } = args
   const removalHome = resolveWorktreeRemovalHome(route)
+  let filesystem: LocalWorktreeFilesystem | undefined
   let canCleanOrphanedDirectory = false
-  if (canCleanupUnregisteredOrcaWorktreeDirectory({ meta: removedMeta })) {
-    const access = getLocalWorktreePathAccess(args.localOptions)
-    canCleanOrphanedDirectory =
-      !isDangerousWorktreeRemovalPath(target.path, repo.path, removalHome) &&
-      (await canSafelyRemoveOrphanedWorktreeDirectory(
-        toLocalWorktreeRuntimePath(target.path, args.localOptions),
-        toLocalWorktreeRuntimePath(repo.path, args.localOptions),
-        removalHome,
-        access
-      ))
+  if (
+    canCleanupUnregisteredOrcaWorktreeDirectory({ meta: removedMeta }) &&
+    !isDangerousWorktreeRemovalPath(target.path, repo.path, removalHome)
+  ) {
+    filesystem = await prepareLocalWorktreeFilesystem([target.path, repo.path], args.localOptions)
+    canCleanOrphanedDirectory = await canSafelyRemoveOrphanedWorktreeDirectory(
+      filesystem.runtimePath(target.path),
+      filesystem.runtimePath(repo.path),
+      removalHome,
+      filesystem.access
+    )
+    filesystem.assertCurrent()
   }
   const native = usesNativeWindowsRemoval(target.path, args.localOptions)
   if (canCleanOrphanedDirectory || (native && removedMeta)) {
@@ -66,18 +68,27 @@ export async function removeRuntimeUnregisteredWorktree(args: {
       throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
     }
 
-    await deleteUnregisteredDirectory(args)
+    const scope =
+      filesystem ??
+      (await prepareLocalWorktreeFilesystem([target.path, repo.path], args.localOptions))
+    await deleteUnregisteredDirectory(args, scope)
     return {}
   }
-  if (await isLocalRuntimeWorktreePathMissing(target.path, args.localOptions)) {
+  const scope =
+    filesystem ??
+    (await prepareLocalWorktreeFilesystem([target.path, repo.path], args.localOptions))
+  if (await isLocalRuntimeWorktreePathMissing(target.path, args.localOptions, scope)) {
     if (!args.force && !removedMeta) {
       throw new Error(UNREGISTERED_MISSING_WORKTREE_MESSAGE)
     }
     const gate = await args.acquireWatcherRemoval(target.path)
+    let completed = false
     try {
+      scope.assertCurrent()
       try {
         await cleanupPushTarget(args)
       } finally {
+        scope.assertCurrent()
         // Deleting an archived workspace forgets it; the purge keeps only rows still marked.
         if (removedMeta?.archivedCheckout) {
           args.store.setWorktreeMeta(hostWorktreeTarget({ id: target.id, hostId: route.hostId }), {
@@ -85,9 +96,11 @@ export async function removeRuntimeUnregisteredWorktree(args: {
           })
         }
         await args.finishRemoval()
+        scope.assertCurrent()
+        completed = true
       }
     } finally {
-      await gate.finish(true)
+      await gate.finish(completed)
     }
     return {}
   }
@@ -95,23 +108,28 @@ export async function removeRuntimeUnregisteredWorktree(args: {
 }
 
 async function deleteUnregisteredDirectory(
-  args: Parameters<typeof removeRuntimeUnregisteredWorktree>[0]
+  args: Parameters<typeof removeRuntimeUnregisteredWorktree>[0],
+  filesystem: LocalWorktreeFilesystem
 ): Promise<void> {
   const gate = await args.acquireWatcherRemoval(args.target.path)
   let completed = false
   try {
+    filesystem.assertCurrent()
     await args.stopPtys(args.target.id, args.allowUnverifiedPtyStop)
+    filesystem.assertCurrent()
     await (usesNativeWindowsRemoval(args.target.path, args.localOptions)
       ? removeWorktree(args.repo.path, args.target.path, args.force, {
           ...args.localOptions,
           deleteBranch: false,
           knownRemovedWorktree: null
         })
-      : removeLocalWorktreePath(args.target.path, args.localOptions))
+      : filesystem.remove(args.target.path))
+    filesystem.assertCurrent()
     completed = true
     try {
       await cleanupPushTarget(args)
     } finally {
+      filesystem.assertCurrent()
       await args.finishRemoval()
     }
   } finally {

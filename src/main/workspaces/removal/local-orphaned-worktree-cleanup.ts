@@ -1,11 +1,8 @@
 import type { LocalWorktreeFilesystemOptions } from './local-worktree-filesystem'
-import {
-  getLocalWorktreePathAccess,
-  removeLocalWorktreePath,
-  toLocalWorktreeRuntimePath
-} from './local-worktree-filesystem'
+import { prepareLocalWorktreeFilesystem } from './local-worktree-filesystem'
 import {
   canSafelyRemoveOrphanedWorktreeDirectory,
+  isDangerousWorktreeRemovalPath,
   isWorktreePathMissing,
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE
 } from './worktree-removal-safety'
@@ -17,28 +14,43 @@ export async function cleanupLocalOrphanedWorktreeDirectory(
   path: string,
   options: LocalWorktreeFilesystemOptions,
   closeWatchers: (path: string) => Promise<void>,
-  signal?: AbortSignal
+  signal: AbortSignal | undefined = options.signal
 ): Promise<void> {
   throwIfSignalAborted(signal)
-  const access = getLocalWorktreePathAccess(options)
-  const runtimePath = toLocalWorktreeRuntimePath(path, options)
+  if (isDangerousWorktreeRemovalPath(path, repoPath, CLIENT_REMOVAL_HOME)) {
+    throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
+  }
+  const filesystem = await prepareLocalWorktreeFilesystem([path, repoPath], { ...options, signal })
+  const { access } = filesystem
+  const runtimePath = filesystem.runtimePath(path)
   const safe = await canSafelyRemoveOrphanedWorktreeDirectory(
     runtimePath,
-    toLocalWorktreeRuntimePath(repoPath, options),
+    filesystem.runtimePath(repoPath),
     CLIENT_REMOVAL_HOME,
     access
   )
-  throwIfSignalAborted(signal)
+  filesystem.assertCurrent()
+  let removed = false
   if (safe) {
     await closeWatchers(path)
-    throwIfSignalAborted(signal)
-    await removeLocalWorktreePath(path, options, signal).catch(() => {
-      throwIfSignalAborted(signal)
-    })
+    filesystem.assertCurrent()
+    try {
+      await filesystem.remove(path)
+      removed = true
+    } catch {
+      filesystem.assertCurrent()
+    }
   } else {
     console.warn(`[worktrees] Refusing recursive cleanup for unproven worktree directory: ${path}`)
   }
-  if (!(await isWorktreePathMissing(runtimePath, access.statPath))) {
+  const assertSettlement = removed ? filesystem.assertAuthorityCurrent : filesystem.assertCurrent
+  assertSettlement()
+  const missing = await isWorktreePathMissing(
+    runtimePath,
+    removed ? filesystem.statPathAfterRemoval : access.statPath
+  )
+  assertSettlement()
+  if (!missing) {
     throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
   }
 }
