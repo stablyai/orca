@@ -3,6 +3,8 @@ import type { CodexManagedAccount } from '../../../shared/managed-account-types'
 export type CodexHomeLaunchOptions = {
   unavailableManagedHomePath?: string
   deferConfigSync?: (syncConfig: () => boolean) => void
+  /** A new agent launch, which dynamic account launch may route to another host account. */
+  dynamicAccountLaunch?: boolean
 }
 
 export type CodexSystemDefaultSnapshot = {

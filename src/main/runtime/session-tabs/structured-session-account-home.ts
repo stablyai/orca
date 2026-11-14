@@ -13,7 +13,8 @@ export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRu
     agent: StructuredAgentId,
     worktree: string,
     purpose: 'launch' | 'read' | 'identity',
-    hostLaunchDirectory?: string
+    hostLaunchDirectory?: string,
+    dynamicAccountLaunch = false
   ) {
     const registration = structuredAgentRuntimeMetadata(agent)
     if (!registration) {
@@ -25,6 +26,7 @@ export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRu
           launchEnv,
           location: location ?? null,
           purpose,
+          ...(dynamicAccountLaunch ? { dynamicAccountLaunch } : {}),
           ...(permissionMode ? { permissionMode } : {}),
           workspacePath:
             purpose === 'launch'
@@ -62,11 +64,17 @@ export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRu
     purpose: 'read' | 'identity' = 'read'
   ): Promise<AgentSessionAccountHome | null> {
     const { provider, location } = record
-    if (!structuredAgentRuntimeMetadata(provider)?.launchFollowsSelection?.()) {
+    const settings = this.requireStore().getSettings()
+    if (
+      !structuredAgentRuntimeMetadata(provider)?.launchFollowsSelection?.(
+        record.accountHome,
+        settings
+      )
+    ) {
       return null
     }
     const read = this.structuredAgentAccountHomeResolver(provider, '', purpose)
-    const launchEnv = this.structuredAgentLaunchEnv(provider, this.requireStore().getSettings())
+    const launchEnv = this.structuredAgentLaunchEnv(provider, settings)
     return (await read?.({ launchEnv, location })) ?? null
   }
 
@@ -76,7 +84,12 @@ export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRu
     launchDirectory: string
   ): Promise<AgentSessionAccountHome | null> {
     const { provider, location } = record
-    if (!structuredAgentRuntimeMetadata(provider)?.launchFollowsSelection?.()) {
+    if (
+      !structuredAgentRuntimeMetadata(provider)?.launchFollowsSelection?.(
+        record.accountHome,
+        this.requireStore().getSettings()
+      )
+    ) {
       return null
     }
     const prepare = this.structuredAgentAccountHomeResolver(provider, '', 'launch', launchDirectory)

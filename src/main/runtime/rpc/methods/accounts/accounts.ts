@@ -25,6 +25,7 @@ import {
 } from '../../../../../shared/rpc-contract/accounts/accounts-params'
 import { HostAccountLaunchEnvParams } from '../../../../../shared/agent-launch/startup/host-account-launch-env'
 import { withTimeout } from '../../../../../shared/promise-timeout-fallback'
+import { accountsListSnapshot } from './accounts-list-snapshot'
 
 // Use a per-process counter: same-millisecond subscriptions must not evict each other's cleanup.
 let accountsSubscriptionSeq = 0
@@ -148,7 +149,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
           undefined
         )
       }
-      return runtime.getAccountsSnapshot()
+      return accountsListSnapshot(runtime)
     }
   }),
   defineMethod({

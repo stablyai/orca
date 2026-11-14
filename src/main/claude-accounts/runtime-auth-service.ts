@@ -13,6 +13,11 @@ import {
   installClaudeWslProfileRouter
 } from './profiles/routing/claude-profile-installed-router'
 import { ClaudeObservedConfigDirs } from './profiles/routing/claude-observed-config-dirs'
+import { repointClaudeLaunchPointer } from './profiles/routing/claude-profile-launch-preparation'
+import {
+  ClaudeDynamicLaunch,
+  type ClaudeDynamicLaunchReadings
+} from './selection/claude-dynamic-launch'
 import type { ClaudeAccountSelectionTarget } from './selection/runtime-selection'
 import type { ClaudeRuntimeAuthPreparation } from './runtime-auth/runtime-auth-types'
 
@@ -27,10 +32,14 @@ export class ClaudeRuntimeAuthService {
 
   constructor(
     private readonly store: Pick<Store, 'getSettings'>,
+    readings: ClaudeDynamicLaunchReadings,
     private readonly isDistroRunning: (distro: string) => Promise<boolean> = isWslDistroRunning
   ) {
     const args = { getSettings: () => store.getSettings(), dataRoot: this.dataRoot }
-    this.router = new ClaudeProfileRouter(args)
+    this.router = new ClaudeProfileRouter({
+      ...args,
+      dynamicLaunch: (router) => new ClaudeDynamicLaunch(router, args.getSettings, readings)
+    })
     installClaudeProfileRouter(this.router)
     installClaudeObservedConfigDirs(
       new ClaudeObservedConfigDirs(join(this.dataRoot, 'claude-observed-config-dirs.json'), () =>
@@ -44,11 +53,24 @@ export class ClaudeRuntimeAuthService {
     })
   }
 
-  prepareForClaudeLaunch(
-    target?: ClaudeAccountSelectionTarget
+  async prepareForClaudeLaunch(
+    target?: ClaudeAccountSelectionTarget,
+    dynamicAccountLaunch = false
   ): Promise<ClaudeRuntimeAuthPreparation> {
     const wsl = this.wslRouteFor(target)
-    return wsl ? wsl.router.prepareLaunch(wsl.distro) : this.router.prepareLaunch()
+    if (wsl) {
+      return wsl.router.prepareLaunch(wsl.distro)
+    }
+    const accountId = dynamicAccountLaunch
+      ? await this.router.dynamicLaunch?.newLaunchAccount()
+      : null
+    // A picked account that cannot be set up must not fail a launch the selection can run.
+    return accountId
+      ? this.router.prepareLaunch(accountId).catch((error: unknown) => {
+          console.warn('[claude-runtime-auth] Launching on the selected account instead:', error)
+          return this.router.prepareLaunch()
+        })
+      : this.router.prepareLaunch()
   }
 
   async prepareForRateLimitFetch(
@@ -120,6 +142,7 @@ export class ClaudeRuntimeAuthService {
     const wsl = this.wslRouteFor(target)
     if (!wsl) {
       await this.router.removeAccount(accountId)
+      await repointClaudeLaunchPointer(this.dataRoot, accountId, this.router.routedHome('identity'))
       return
     }
     // Deleted distros must not block account removal.

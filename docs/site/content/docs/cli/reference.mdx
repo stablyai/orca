@@ -422,10 +422,14 @@ orca account list                                               # ids, emails/la
 orca account select --agent claude --account you@example.com    # id, email or label
 orca worktree create --name task --agent claude --prompt "..."
 orca account select --agent claude --account system             # back to your own sign-in
+orca account select --agent codex --account dynamic             # pick an account for each new launch
+orca account select --agent codex --account dynamic --off       # back to the selected account
 orca account rm --agent codex --account old@example.com         # forget a saved account
 ```
 
 A selection applies to every agent of that provider launched on the host after it — the same switch as the status-bar account menu — not to a single workspace. An email shared by several accounts (one sign-in in two organizations) is refused; pass the id instead. Antigravity has no `system` default, and `account rm` never removes system credentials.
+
+For Claude and Codex, `--account dynamic` is the CLI form of **Pick an account for each new session** in Settings: each new host launch uses the account whose weekly limit resets soonest among those keeping the margin free in every usage window. Resumes, plain shells and WSL keep the selected account, which also stays the fallback when no account qualifies. Selecting an account leaves dynamic mode as it is, and `orca account list` shows `dynamic: true` while it is on.
 
 ## Artifacts
 

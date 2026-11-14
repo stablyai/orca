@@ -1,6 +1,7 @@
 import { realpath, stat } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
+import { agentSessionAccountHomePath } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { getClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { agentSessionPinnedLaunchDirectory } from '../records/agent-session-record-launch-directory'
@@ -97,7 +98,8 @@ export async function structuredSessionRecoveryOptions(
       router &&
       record.provider === 'claude' &&
       record.location.wslDistro === null &&
-      metadata.launchFollowsSelection?.()
+      router.dynamicLaunch?.pinnedAccount(agentSessionAccountHomePath(record.accountHome)) ===
+        undefined
     ) {
       try {
         const roots = await Promise.all(

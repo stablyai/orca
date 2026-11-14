@@ -16,7 +16,10 @@ import type {
 
 type CodexPaneLaunchAccountSettings = Pick<
   GlobalSettings,
-  'activeCodexManagedAccountId' | 'activeCodexManagedAccountIdsByRuntime' | 'codexManagedAccounts'
+  | 'activeCodexManagedAccountId'
+  | 'activeCodexManagedAccountIdsByRuntime'
+  | 'codexManagedAccounts'
+  | 'codexDynamicAccountLaunch'
 >
 
 // Resumes pin CODEX_HOME independently of selection; restart prompts must name the actual account.
@@ -27,17 +30,38 @@ export function resolveCodexPaneLaunchAccount(args: {
   settings: CodexPaneLaunchAccountSettings
   target: CodexAccountSelectionTarget
 }): CodexPaneAccountRecord | null {
+  const selectedAccountId = getSelectedCodexAccountIdForTarget(args.settings, args.target)
   const accountId = args.pinnedByResume
     ? resolveCodexHomeOwnerAccountId(args)
-    : getSelectedCodexAccountIdForTarget(args.settings, args.target)
+    : resolveCodexLaunchAccountId(args, selectedAccountId)
   if (accountId === undefined) {
     return null
   }
   return {
     selectionKey: getCodexSelectionLaneKey(args.target),
     accountId,
-    homeRoute: resolveCodexPaneHomeRoute(args)
+    homeRoute: resolveCodexPaneHomeRoute(args),
+    ...(!args.pinnedByResume && accountId !== selectedAccountId
+      ? { selectionAccountId: selectedAccountId }
+      : {})
   }
+}
+
+// A dynamic launch may run under another host account than the selection; name its home's owner.
+function resolveCodexLaunchAccountId(
+  args: {
+    launchCodexHomePath: string | null
+    systemCodexHomePath: string
+    settings: CodexPaneLaunchAccountSettings
+    target: CodexAccountSelectionTarget
+  },
+  selectedAccountId: string | null
+): string | null {
+  if (!args.settings.codexDynamicAccountLaunch || args.target.runtime !== 'host') {
+    return selectedAccountId
+  }
+  const ownerAccountId = resolveCodexHomeOwnerAccountId(args)
+  return typeof ownerAccountId === 'string' ? ownerAccountId : selectedAccountId
 }
 
 function resolveCodexPaneHomeRoute(args: {

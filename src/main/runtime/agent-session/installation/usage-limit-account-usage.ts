@@ -7,6 +7,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/native-chat-shell-environment'
 import { createStructuredAgentEnvironmentResolvers } from '../environment/structured-agent-shell-environment'
 import { CLAUDE_AUTH_ENV_VARS } from '../../../claude-accounts/runtime-auth/environment'
+import { claudeProvenanceAccountId } from '../../../claude-accounts/runtime-auth/runtime-auth-types'
 import type { RateLimitService } from '../../../rate-limits/service/rate-limit-service'
 import type { StructuredAgentSessionHostDeps } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 
@@ -30,7 +31,7 @@ function readingIdentity(
   settings: Partial<Pick<GlobalSettings, 'claudeManagedAccounts' | 'codexManagedAccounts'>>
 ): string | null {
   if (provider === 'claude') {
-    const id = /^profile:([^:]+)$/.exec(reading.provenance)?.[1]
+    const id = claudeProvenanceAccountId(reading.provenance)
     const account = (settings.claudeManagedAccounts ?? []).find((candidate) => candidate.id === id)
     return account ? JSON.stringify([account.id, account.email, account.organizationUuid]) : null
   }

@@ -124,11 +124,19 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
       }
       // Allow auth rotation to settle; Codex re-reads the file after launch.
     }
-    // Materialize resources and config in this home; the launch caller installs hooks and trust.
     this.lastSyncedAccountId = account.id
     this.lastHostAccountUsedSelfContainedHome = true
     this.sharedAuthRefreshBlockedByManagedTransition = true
     this.markSharedRuntimeAuthManaged(account.id)
+    this.materializeSelfContainedHomeForLaunch(perAccountHome, deferConfigSync)
+    return perAccountHome
+  }
+
+  // Materialize resources and config in this home; the launch caller installs hooks and trust.
+  protected materializeSelfContainedHomeForLaunch(
+    perAccountHome: string,
+    deferConfigSync?: (syncConfig: () => boolean) => void
+  ): void {
     syncSystemCodexResourcesIntoManagedHome(perAccountHome)
     const syncConfig = (): boolean =>
       syncSystemConfigIntoManagedCodexHome({
@@ -141,7 +149,6 @@ export abstract class CodexRuntimeHomeManagedHome extends CodexRuntimeHomeSync {
       syncConfig()
     }
     this.startSelfContainedSessionBridgeForLaunch(perAccountHome)
-    return perAccountHome
   }
 
   // Bridge history in the background: /resume only sees launch-home rollouts, and scans can be large.

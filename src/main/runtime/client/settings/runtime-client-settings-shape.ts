@@ -64,6 +64,9 @@ export type RuntimeClientSettingsUpdate = Pick<
   Partial<GlobalSettings>,
   | 'agentStatusHooksEnabled'
   | 'claudeSubagentNavigationEnabled'
+  | 'claudeDynamicAccountLaunch'
+  | 'codexDynamicAccountLaunch'
+  | 'dynamicAccountMarginPercent'
   | 'experimentalConnectors'
   | 'defaultTuiAgent'
   | 'disabledTuiAgents'

@@ -137,8 +137,14 @@ async function resolvePtySpawnHostEnvForAct(args: PtySpawnHostEnvArgs): Promise<
   const launchCommand = codexResumeLaunch.command
   const baseEnv = deps.stripSequencedStartupResumeArgv(args.env, codexResumeLaunch)
   const launchesCodex = args.launchAgent === 'codex'
+  // Resumes and account-switch restarts keep their account; only new Codex launches may be routed.
+  const launchContext = {
+    launchesCodex,
+    dynamicAccountLaunch:
+      launchesCodex && !args.resumeProviderSession && !args.resumeOnSelectedAccount
+  }
   const selectLaunchCodexHome = async (): Promise<string | null> =>
-    (await deps.getSelectedCodexHomePath?.(target, baseEnv, { launchesCodex })) ?? null
+    (await deps.getSelectedCodexHomePath?.(target, baseEnv, launchContext)) ?? null
   let selectedCodexHomePath = !args.preAdopted
     ? getCompatibleSelectedCodexHomePath(
         target,
@@ -158,14 +164,14 @@ async function resolvePtySpawnHostEnvForAct(args: PtySpawnHostEnvArgs): Promise<
       resolveCurrent: async () =>
         getCompatibleSelectedCodexHomePath(
           target,
-          (await deps.getSelectedCodexHomePath?.(target, baseEnv, { launchesCodex })) ?? null
+          (await deps.getSelectedCodexHomePath?.(target, baseEnv, launchContext)) ?? null
         ),
       resolveAfterUnavailable: async (unavailableManagedHomePath) =>
         getCompatibleSelectedCodexHomePath(
           target,
           (await deps.getSelectedCodexHomePath?.(target, baseEnv, {
             unavailableManagedHomePath,
-            launchesCodex
+            ...launchContext
           })) ?? null
         )
     })

@@ -119,7 +119,10 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
   args.env = withClaudeProfileTerminalEnv(args.env, ctx.codexSelectionTarget)
   ctx.claudeAuth =
     ctx.isClaudeLaunch && ctx.deps.prepareClaudeAuth
-      ? await ctx.deps.prepareClaudeAuth(ctx.codexSelectionTarget)
+      ? await ctx.deps.prepareClaudeAuth(
+          ctx.codexSelectionTarget,
+          args.launchAgent === 'claude' && !args.resumeProviderSession && !args.replacesPtyId
+        )
       : null
   ctx.spawnTiming.mark('auth')
 }

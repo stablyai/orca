@@ -10,3 +10,7 @@ export type ClaudeRuntimeAuthPreparation = {
   /** Report unavailable usage without throwing out the entire polling cycle. */
   usageError?: string
 }
+
+export function claudeProvenanceAccountId(provenance: string): string | undefined {
+  return /^profile:([^:]+)$/.exec(provenance)?.[1]
+}

@@ -12,6 +12,7 @@ import { normalizePRBotAuthorOverrides } from '../../source-control/review-comme
 import { WorktreeVisibilityDefaultsUpdate } from '../workspaces/worktree-visibility-defaults-params'
 import { WorkspaceCleanupRulesParam } from '../workspace-cleanup/workspace-cleanup-policy-params'
 import { AGENT_CHAT_PERMISSION_MODES } from '../../agent-launch/permissions/agent-chat-permission-mode'
+import { MAX_DYNAMIC_ACCOUNT_MARGIN_PERCENT } from '../../dynamic-account-launch-settings'
 
 export const TaskProviderParam = z.custom<TaskProvider>(isTaskProvider, {
   message: 'Unknown task provider'
@@ -118,6 +119,14 @@ export const SettingsUpdate = z
     experimentalConnectors: z.boolean().optional(),
     agentStatusHooksEnabled: z.boolean().optional(),
     codexShareHistoryAcrossAccounts: z.boolean().optional(),
+    claudeDynamicAccountLaunch: z.boolean().optional(),
+    codexDynamicAccountLaunch: z.boolean().optional(),
+    dynamicAccountMarginPercent: z
+      .number()
+      .int()
+      .min(0)
+      .max(MAX_DYNAMIC_ACCOUNT_MARGIN_PERCENT)
+      .optional(),
     claudeSubagentNavigationEnabled: z.boolean().optional(),
     defaultRepoSelection: z.array(z.string()).nullable().optional(),
     defaultLinearTeamSelection: z.array(z.string()).nullable().optional(),
