@@ -7,9 +7,11 @@ import { track } from '../../telemetry/client'
 import { getPtyIdForPaneKey } from '../../ipc/pty/pane/key-state'
 import {
   getDaemonProvider,
+  getDaemonEndpointFacts,
   getProviderProcessHostClient,
   listLiveDaemonPtyIds
 } from '../../daemon/providers/lifecycle/daemon-provider-state'
+import { reportDaemonPtyCwdVerdict } from '../../daemon/observability/daemon-adoption-telemetry-event'
 import { initDaemonPtyProvider } from '../../daemon/providers/lifecycle/daemon-provider-init'
 import { restartLocalTerminalsAfterElevation } from '../../windows/windows-administrator-restart'
 import { resolveTerminalSpawnAdmissionMode } from '../../daemon/admission/terminal-spawn-admission-mode'
@@ -229,10 +231,18 @@ export function bindTerminalRuntimeStartupServices(
   services: Promise<WindowsDesktopStartupServices>
 ): void {
   if (process.platform === 'darwin' && !state.isServeMode) {
-    installProviderProcessHost(async () => {
-      await state.localPtyProviderStartupReady
-      return getProviderProcessHostClient()
-    })
+    installProviderProcessHost(
+      async () => {
+        await state.localPtyProviderStartupReady
+        return getProviderProcessHostClient()
+      },
+      (verdict) => {
+        void reportDaemonPtyCwdVerdict({
+          ...verdict,
+          pidPath: getDaemonEndpointFacts()?.pidPath ?? null
+        })
+      }
+    )
   }
   state.firstWindowStartupServicesReady = services.then((value) => value.firstWindowReady)
   state.localPtyStartupReady = services.then((value) => value.localPtyReady)

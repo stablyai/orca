@@ -11,11 +11,12 @@ import type { HostedProviderOutcome } from '../daemon/protocol/daemon-provider-p
 import { ProviderOwnerListener, watchProviderControl } from './provider-owner-channels'
 import { ProviderChildHandle } from './provider-child-handle'
 import type { createProviderSpawnSpec } from './provider-process-supervisor'
-import { sameDaemonIdentity } from '../daemon/transport/client/daemon-client-hello-handshake'
 import {
   createHostedLaunch,
   inspectHostedIdentity,
-  withProviderStartDeadline
+  isCurrentHostedIdentity,
+  withProviderStartDeadline,
+  type HostedCwdReporter
 } from './hosted-provider-launch'
 
 type ProviderSpawnSpec = ReturnType<typeof createProviderSpawnSpec>
@@ -38,7 +39,8 @@ export class HostedProviderChild extends ProviderChildHandle {
   constructor(
     private readonly spec: ProviderSpawnSpec,
     getHost: () => Promise<DaemonClient | null>,
-    private readonly fallback: () => ChildProcessWithoutNullStreams
+    private readonly fallback: () => ChildProcessWithoutNullStreams,
+    private readonly reportCwd: HostedCwdReporter = () => {}
   ) {
     super()
     // Defer errors until the caller can install its observation/ownership listeners.
@@ -108,16 +110,16 @@ export class HostedProviderChild extends ProviderChildHandle {
       if (this.canceled) {
         return this.failBeforeDispatch(new Error('Provider launch canceled'))
       }
-      const identity = await inspectHostedIdentity(this.client, this.spec.cwd, () => this.canceled)
+      const identity = await inspectHostedIdentity(
+        this.client,
+        this.spec.cwd,
+        () => this.canceled,
+        this.reportCwd
+      )
       if (this.canceled) {
         return this.failBeforeDispatch(new Error('Provider launch canceled'))
       }
-      const currentIdentity = this.client.getDaemonIdentity()
-      if (
-        !identity ||
-        !currentIdentity?.providerSpawn ||
-        !sameDaemonIdentity(identity, currentIdentity)
-      ) {
+      if (!isCurrentHostedIdentity(this.client, identity)) {
         return this.launchDirect()
       }
       const payload = createHostedLaunch(this.spec, identity.pid, {

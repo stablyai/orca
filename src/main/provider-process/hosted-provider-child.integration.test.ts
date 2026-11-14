@@ -1,6 +1,7 @@
 import { createServer, type Socket } from 'node:net'
 import { setSpawnObserver } from '@orca/process-host/spawn-observer'
 import { spawnProcess } from '@orca/process-host'
+import type { PipedProcessSpec } from '@orca/process-host/process-spec'
 import { runLocalSourceControlPlan } from '../text-generation/execution/source-control-local-process'
 import { runCodexProcessWithHomeLock } from '../text-generation/execution/source-control-local-generation'
 import { stopSupervisedChildProcess } from './supervised-child-process-stop'
@@ -100,7 +101,8 @@ describe.skipIf(process.platform === 'win32')('hosted provider production transp
       async () => client,
       () => {
         throw new Error('Unexpected direct fallback')
-      }
+      },
+      (verdict) => void adoptionTelemetry.reportDaemonPtyCwdVerdict({ ...verdict, pidPath: null })
     )
     children.add(child)
     child.on('error', () => {})
@@ -151,17 +153,21 @@ describe.skipIf(process.platform === 'win32')('hosted provider production transp
       { PATH: process.env.PATH },
       process.platform
     )
-    const fallback = vi.fn(() =>
-      spawnProcess({
-        program: spec.program,
-        args: spec.args,
-        cwd: spec.cwd,
-        env: spec.env,
-        detached: spec.detached,
-        stdio: ['pipe', 'pipe', 'pipe', ...spec.groupReportStdio]
-      })
+    const directSpec: PipedProcessSpec = {
+      program: spec.program,
+      args: spec.args,
+      cwd: spec.cwd,
+      env: spec.env,
+      detached: spec.detached,
+      stdio: ['pipe', 'pipe', 'pipe', ...spec.groupReportStdio]
+    }
+    const fallback = vi.fn(() => spawnProcess(directSpec))
+    const child = new HostedProviderChild(
+      spec,
+      async () => client,
+      fallback,
+      (verdict) => void adoptionTelemetry.reportDaemonPtyCwdVerdict({ ...verdict, pidPath: null })
     )
-    const child = new HostedProviderChild(spec, async () => client, fallback)
     children.add(child)
     let output = ''
     child.stdout.on('data', (chunk) => (output += chunk.toString()))

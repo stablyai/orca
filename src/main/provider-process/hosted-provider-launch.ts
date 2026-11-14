@@ -5,7 +5,22 @@ import type { DaemonEndpointIdentity } from '../daemon/protocol/daemon-hello-pro
 import { inspectMacProcessCodeIdentity } from '../daemon/executable-host/macos/daemon-mac-code-identity'
 import type { DirectoryEnumerationOutcome } from '../daemon/permissions/directory-enumeration-probe'
 import { sameDaemonIdentity } from '../daemon/transport/client/daemon-client-hello-handshake'
-import { reportDaemonPtyCwdVerdict } from '../daemon/observability/daemon-adoption-telemetry-event'
+
+export type HostedCwdReporter = (verdict: {
+  cwd: string
+  cwdReadableByDaemon: boolean
+  daemonIdentity: DaemonEndpointIdentity
+}) => void
+
+export function isCurrentHostedIdentity(
+  client: DaemonClient,
+  identity: DaemonEndpointIdentity | null
+): identity is DaemonEndpointIdentity {
+  const current = client.getDaemonIdentity()
+  return (
+    identity !== null && current?.providerSpawn === true && sameDaemonIdentity(identity, current)
+  )
+}
 
 async function probeHostedCwd(
   client: DaemonClient,
@@ -30,7 +45,8 @@ async function probeHostedCwd(
 export async function inspectHostedIdentity(
   client: DaemonClient,
   cwd: string,
-  isCanceled: () => boolean
+  isCanceled: () => boolean,
+  reportCwd: HostedCwdReporter
 ): Promise<DaemonEndpointIdentity | null> {
   const identity = client.getDaemonIdentity()
   if (!identity?.providerSpawn) {
@@ -41,22 +57,20 @@ export async function inspectHostedIdentity(
     isCanceled() ||
     !image.executablePath ||
     (image.identity !== 'resolved' && image.identity !== 'parked') ||
-    !sameDaemonIdentity(identity, client.getDaemonIdentity())
+    !isCurrentHostedIdentity(client, identity)
   ) {
     return null
   }
   const outcome = await probeHostedCwd(client, cwd)
-  const current = client.getDaemonIdentity()
-  if (isCanceled() || !current?.providerSpawn || !sameDaemonIdentity(identity, current)) {
+  if (isCanceled() || !isCurrentHostedIdentity(client, identity)) {
     return null
   }
   if (outcome === 'ok' || outcome === 'denied') {
-    void reportDaemonPtyCwdVerdict({
-      cwd,
-      cwdReadableByDaemon: outcome === 'ok',
-      pidPath: null,
-      daemonIdentity: identity
-    })
+    try {
+      reportCwd({ cwd, cwdReadableByDaemon: outcome === 'ok', daemonIdentity: identity })
+    } catch {
+      // Notice bookkeeping must never prevent launching a chat.
+    }
   }
   return outcome === 'ok' ? identity : null
 }

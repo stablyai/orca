@@ -134,7 +134,8 @@ function pendingChild(
     spec,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture implements the daemon methods exercised by the hosted child without opening real daemon sockets.
     async () => client as never,
-    fallback
+    fallback,
+    (verdict) => void reportDaemonPtyCwdVerdict({ ...verdict, pidPath: null })
   )
   child.on('error', () => {})
   const channels = owners.at(-1)!

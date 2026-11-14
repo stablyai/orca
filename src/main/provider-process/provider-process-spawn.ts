@@ -4,12 +4,19 @@ import type { DaemonClient } from '../daemon/transport/client/daemon-client'
 import { HostedProviderChild } from './hosted-provider-child'
 import type { ProviderChild } from './provider-child'
 import type { createProviderSpawnSpec } from './provider-process-supervisor'
+import type { HostedCwdReporter } from './hosted-provider-launch'
 
-let hostClient: (() => Promise<DaemonClient | null>) | null = null
+let hostRoute: {
+  getClient: () => Promise<DaemonClient | null>
+  reportCwd: HostedCwdReporter
+} | null = null
 
 /** Only desktop composition installs this route; server and remote launchers keep direct spawn. */
-export function installProviderProcessHost(getClient: () => Promise<DaemonClient | null>): void {
-  hostClient = getClient
+export function installProviderProcessHost(
+  getClient: () => Promise<DaemonClient | null>,
+  reportCwd: HostedCwdReporter = () => {}
+): void {
+  hostRoute = { getClient, reportCwd }
 }
 
 export function spawnProviderProcess(
@@ -26,15 +33,15 @@ export function spawnProviderProcess(
       detached: spec.detached,
       stdio: ['pipe', 'pipe', 'pipe', ...spec.groupReportStdio]
     })
-  const getClient = hostClient
-  if (!getClient || !spec.supervised || !allowHost) {
+  const route = hostRoute
+  if (!route || !spec.supervised || !allowHost) {
     return direct()
   }
   return new HostedProviderChild(
     spec,
     async () => {
       try {
-        const client = await getClient()
+        const client = await route.getClient()
         if (!client) {
           return null
         }
@@ -49,6 +56,7 @@ export function spawnProviderProcess(
         return null
       }
     },
-    direct
+    direct,
+    route.reportCwd
   )
 }
