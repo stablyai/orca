@@ -651,6 +651,7 @@
         "fontKeywordTypeface": "yazı tipi",
         "fontKeywordTypography": "tipografi",
         "inheritFont": "IDE yazı tipiyle aynı",
+        "systemFont": "Sistem yazı tipi",
         "fontPreviewLabel": "Sohbet yazı tipi önizlemesi",
         "fontPreview": "Pijamalı hasta yağız şoföre çabucak güvendi.",
         "title": "Sohbet arayüzü",
@@ -3745,6 +3746,7 @@
             "1e4b81d892": "Thump",
             "86af8d938c": "Bong",
             "80f7cc95b3": "Çift Ton",
+            "silent": "Sessiz",
             "017abebfa6": "Sistem Varsayılanı"
           }
         }
@@ -19449,7 +19451,8 @@
         "safetyReviewApproved": "{{agent}} bu işleme onay verdi. Ayrıntıları görüntüleyin.",
         "safetyReview": "{{agent}} bir güvenlik incelemesi uyarısı bildirdi. Ayrıntıları görüntüleyin.",
         "truncatedResponse": "Sağlayıcı yanıtı kısaltıldı (özgün boyut: {{bytes}} bayt).",
-        "forkedFrom": "Çatallandığı kaynak"
+        "forkedFrom": "Çatallandığı kaynak",
+        "forkedFromUnknown": "Başka bir sohbetten çatallandı"
       },
       "composer": {
         "planMode": "Planla",
@@ -20200,7 +20203,12 @@
         "unconfirmedDetail": "Yine de açılmış olabilir. Yeniden çatallamadan önce Oturum Geçmişini kontrol edin.",
         "failed": "{{agent}} bu sohbeti çatallayamadı",
         "failedDetail": "Sohbetiniz değişmedi. Tekrar deneyin.",
-        "commandWorking": "{{agent}} yanıt verirken çatallanamaz. Yanıt bittiğinde /fork komutunu yeniden çalıştırın."
+        "commandWorking": "{{agent}} yanıt verirken çatallanamaz. Yanıt bittiğinde /fork komutunu yeniden çalıştırın.",
+        "mark": "Çatal ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "Çatal: {{name}}",
+        "sourceTooltip": "{{name}} sohbetinin çatalı",
+        "unknownSourceTooltip": "Başka bir sohbetin çatalı"
       },
       "cardKindHidden": {
         "description": "Bunu istediğiniz zaman şuradan değiştirebilirsiniz:",

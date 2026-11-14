@@ -27,7 +27,10 @@ export type ActionSheetAction = {
 
 type Props = {
   visible: boolean
-  title?: string
+  /** Text, or Text-compatible nodes such as a marked name. */
+  title?: ReactNode
+  /** What a screen reader hears for a title that is not plain text. */
+  titleAccessibilityLabel?: string
   message?: string
   actions: ActionSheetAction[]
   onClose: () => void
@@ -46,7 +49,8 @@ function iconForAction(label: string, destructive?: boolean, icon?: LucideIcon):
 }
 
 type ContentProps = {
-  title?: string
+  title?: ReactNode
+  titleAccessibilityLabel?: string
   message?: string
   /** Drawn between the header and the actions. */
   children?: ReactNode
@@ -54,14 +58,25 @@ type ContentProps = {
   onClose?: () => void
 }
 
-export function ActionSheetContent({ title, message, children, actions, onClose }: ContentProps) {
+export function ActionSheetContent({
+  title,
+  titleAccessibilityLabel,
+  message,
+  children,
+  actions,
+  onClose
+}: ContentProps) {
   useMobileColorScheme()
   return (
     <>
       {(title || message) && (
         <View style={styles.header}>
           {title ? (
-            <Text style={styles.title} numberOfLines={1}>
+            <Text
+              style={styles.title}
+              numberOfLines={1}
+              accessibilityLabel={titleAccessibilityLabel}
+            >
               {title}
             </Text>
           ) : null}
@@ -114,6 +129,7 @@ export function ActionSheetContent({ title, message, children, actions, onClose 
 export function ActionSheetModal({
   visible,
   title,
+  titleAccessibilityLabel,
   message,
   actions,
   onClose,
@@ -146,6 +162,7 @@ export function ActionSheetModal({
     >
       <ActionSheetContent
         title={title}
+        titleAccessibilityLabel={titleAccessibilityLabel}
         message={message}
         actions={sequencedActions}
         onClose={onClose}

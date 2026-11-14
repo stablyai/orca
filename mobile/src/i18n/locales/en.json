@@ -3472,7 +3472,10 @@
         "contextCurrent": "Current context (since the last compact or clear)",
         "contextHistory": "Full history up to here",
         "recapNoCopy": "An exact copy can’t reach this host or kind, so {{agent}} starts with a recap of this chat up to here."
-      }
+      },
+      "mark": "Fork ·",
+      "markedName": "{{mark}} {{name}}",
+      "accessibleName": "Fork: {{name}}"
     },
     "hostOutage": {
       "offlineAsOf": "{{host}} is offline · as of {{time}}",

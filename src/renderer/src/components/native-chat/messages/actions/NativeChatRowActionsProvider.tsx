@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { selectNativeChatForkSourceOpenable } from './native-chat-fork-source-openable'
 import { openDesktopStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import {
   NativeChatForkContext,
@@ -58,10 +59,14 @@ export function NativeChatRowActionsProvider({
   // Every Fork window, however it opens, suggests another agent at a usage limit.
   const usageLimited = useNativeChatOrcaStopView().usageLimitTurnItemId !== null
   useNativeChatWorktreeForkRequest(pane.tabId, forks.fork?.openWorktreeForkLatest)
+  // An unreachable host cannot open the source, so its divider shows plain words until it returns.
+  const sourceOpenable = useAppStore(
+    (state) => worktreeId !== null && selectNativeChatForkSourceOpenable(state, worktreeId, target)
+  )
   // A fork and its source share a host; a fork into a new worktree has its source open elsewhere.
   const openSource = useMemo(
     () =>
-      worktreeId
+      worktreeId && sourceOpenable
         ? (sourceSessionId: string) =>
             void openDesktopStructuredSession(
               {
@@ -75,7 +80,7 @@ export function NativeChatRowActionsProvider({
               target
             )
         : undefined,
-    [agent, target, worktreeId]
+    [agent, target, worktreeId, sourceOpenable]
   )
   return (
     <NativeChatRewindContext.Provider value={chat.rewind.surface}>

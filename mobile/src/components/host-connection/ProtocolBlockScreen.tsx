@@ -9,7 +9,7 @@ import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { CompatVerdict } from '../../transport/connection/protocol-compat'
 import type { MobileWebBundleCompatVerdict } from '../../transport/web-bundle/mobile-web-bundle-compat'
-import type { PageRouteRefusalVerdict } from '../../mobile-web-shell/page-route-policy'
+import type { PageRouteRefusalVerdict } from '../../mobile-web-shell/routing/page-route-policy'
 
 const RELEASES_URL = 'https://github.com/stablyai/orca/releases'
 const IOS_APP_STORE_URL = 'itms-apps://apps.apple.com/app/orca-ide/id6766130217'
