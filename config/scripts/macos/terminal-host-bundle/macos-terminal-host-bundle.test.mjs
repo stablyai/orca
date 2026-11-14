@@ -10,30 +10,9 @@ const {
   assembleMacTerminalHost,
   assertMacTerminalHostUuid,
   daemonBareRequires,
-  findUnresolvedDaemonRequires,
-  parseBuildVersionMinos
+  findUnresolvedDaemonRequires
 } = require('./macos/terminal-host-bundle/macos-terminal-host-bundle.cjs')
 const INFO = { CFBundleIdentifier: 'com.stablyai.orca' }
-describe('terminal host binary checks', () => {
-  it('reads minos from the LC_BUILD_VERSION load command only', () => {
-    const otool = [
-      'Load command 8',
-      '      cmd LC_SEGMENT_64',
-      '    minos 99.0',
-      'Load command 9',
-      '      cmd LC_BUILD_VERSION',
-      '  cmdsize 32',
-      ' platform 1',
-      '    minos 13.5',
-      '      sdk 14.0',
-      'Load command 10',
-      '      cmd LC_SOURCE_VERSION'
-    ].join('\n')
-    expect(parseBuildVersionMinos(otool)).toBe('13.5')
-    expect(parseBuildVersionMinos('Load command 1\n      cmd LC_SEGMENT_64\n')).toBeNull()
-  })
-})
-
 describe.skipIf(process.platform !== 'darwin')('terminal host assembly', () => {
   let root
   let appPath
