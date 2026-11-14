@@ -10,7 +10,19 @@ import {
 } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { TerminalCreateOptions } from './terminal-create-options'
 
-export async function resolveQoderTerminalCommand<
+const AGENTS_WITH_HOST_RESOLVED_COMMAND = ['qoder', 'cursor'] as const
+
+const COMMAND_WHEN_HOST_CANNOT_BE_PROBED: Partial<
+  Record<(typeof AGENTS_WITH_HOST_RESOLVED_COMMAND)[number], string>
+> = { cursor: 'cursor-agent' }
+
+export function hasHostResolvedCommand(
+  agent: string | null | undefined
+): agent is (typeof AGENTS_WITH_HOST_RESOLVED_COMMAND)[number] {
+  return AGENTS_WITH_HOST_RESOLVED_COMMAND.some((candidate) => candidate === agent)
+}
+
+export async function resolveHostAgentTerminalCommand<
   T extends Pick<TerminalCreateOptions, 'launchAgent' | 'command' | 'launchConfig'>
 >(
   options: T,
@@ -21,9 +33,11 @@ export async function resolveQoderTerminalCommand<
   },
   detect = detectAgentCommandsOnHost
 ): Promise<T> {
-  if (options.launchAgent !== 'qoder' || !options.command) {
+  const agent = options.launchAgent
+  if (!hasHostResolvedCommand(agent) || !options.command) {
     return options
   }
+  const config = TUI_AGENT_CONFIG[agent]
   const parsed = tokenizeStartupCommand(options.command, host.shell)
   // Explicit paths and configured recipes remain owned by the caller.
   if (!parsed.ok) {
@@ -31,7 +45,7 @@ export async function resolveQoderTerminalCommand<
   }
   const executableIndex = parsed.tokens.findIndex(
     (token, index) =>
-      token === TUI_AGENT_CONFIG.qoder.detectCmd &&
+      token === config.detectCmd &&
       (index === 0 ||
         parsed.tokens[index - 1] === '&&' ||
         (parsed.tokens[0] === 'Set-Location' && parsed.tokens[index - 1].endsWith(';')))
@@ -39,9 +53,14 @@ export async function resolveQoderTerminalCommand<
   if (executableIndex === -1) {
     return options
   }
-  const candidates = getTuiAgentDetectCommands(TUI_AGENT_CONFIG.qoder)
-  const found = await detect(candidates, host)
-  const selected = candidates.find((candidate) => found.has(candidate))
+  const candidates = getTuiAgentDetectCommands(config)
+  let selected: string | undefined
+  if (host.connectionId) {
+    selected = COMMAND_WHEN_HOST_CANNOT_BE_PROBED[agent]
+  } else {
+    const found = await detect(candidates, host)
+    selected = candidates.find((candidate) => found.has(candidate))
+  }
   if (!selected || selected === parsed.tokens[executableIndex]) {
     return options
   }
@@ -56,7 +75,10 @@ export async function resolveQoderTerminalCommand<
       ? {
           launchConfig: {
             ...options.launchConfig,
-            agentCommand: options.launchConfig.agentCommand?.replace(/^qodercli(?=\s|$)/, selected)
+            agentCommand: options.launchConfig.agentCommand?.replace(
+              new RegExp(`^${config.detectCmd}(?=\\s|$)`),
+              selected
+            )
           }
         }
       : {})
