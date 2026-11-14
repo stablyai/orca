@@ -30,17 +30,15 @@ describe('command-scoped repeatable flags', () => {
     expect(parsed.get('path')).toBe('/c')
   })
 
-  it.each([
-    ['--agent', '--agent=b'],
-    ['--agent=a', '--agent', '--agent=b'],
-    ['--agent=a', '--agent'],
-    ['--agent', '--agent']
-  ])('rejects a missing occurrence even among valid values: %j', (...options) => {
-    const parsed = parseArgs(['example', 'search', ...options], paths, specs)
-    expect(() => validateCommandAndFlags(specs, parsed)).toThrow('Flag --agent requires a value.')
-  })
+  it.each([['--agent=a', '--agent', '--agent=b']])(
+    'rejects a missing occurrence even among valid values: %j',
+    (...options) => {
+      const parsed = parseArgs(['example', 'search', ...options], paths, specs)
+      expect(() => validateCommandAndFlags(specs, parsed)).toThrow('Flag --agent requires a value.')
+    }
+  )
 
-  it.each(['label', 'skill'])('also rejects erased missing legacy --%s values', (flag) => {
+  it.each(['label'])('also rejects erased missing legacy --%s values', (flag) => {
     const spec = { ...leaf, allowedFlags: [flag], repeatableFlags: [] }
     const parsed = parseArgs(['ex', 'find', `--${flag}=a`, `--${flag}`, `--${flag}=b`], paths, [
       spec

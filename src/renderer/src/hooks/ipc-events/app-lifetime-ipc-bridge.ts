@@ -35,6 +35,7 @@ import { registerSettingsAndSidebarIpcBridge } from './settings-sidebar-ipc-brid
 import { registerQuitAndStopAllSessionsIpcBridge } from './quit-and-stop-all-sessions-ipc-bridge'
 import { registerTabLifecycleIpcBridge } from './tab-lifecycle-ipc-bridge'
 import { registerTerminalPresentationIpcBridge } from './terminal-presentation-ipc-bridge'
+import { registerTerminalTabMountIpcBridge } from './terminal-tab-mount-ipc-bridge'
 import { registerPtySourceDisownedIpcBridge } from './pty-source-disowned-ipc-bridge'
 import { registerTerminalRequestIpcBridge } from './terminal-request-ipc-bridge'
 import { registerAgentLaunchTabIpcBridge } from './agent-launch-tab-ipc-bridge'
@@ -133,6 +134,7 @@ export function installAppLifetimeIpcEvents(): () => void {
   )
 
   registerTerminalPresentationIpcBridge(unsubs)
+  registerTerminalTabMountIpcBridge(unsubs)
   registerTerminalRequestIpcBridge(unsubs)
   registerAgentLaunchTabIpcBridge(unsubs)
   registerPtySourceDisownedIpcBridge(unsubs)

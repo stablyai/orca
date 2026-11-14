@@ -6,6 +6,7 @@ import {
 import { resolveSpawn, type ResolvedSpawn } from './spawn-resolution'
 import { hasSpawnObserver, notifySpawnObserver } from './spawn-observer'
 import type { PipedProcessSpec, ProcessSpec } from './process-spec'
+import { spawnNativeProcess } from './native-process-spawn'
 
 type SpawnOwnership = {
   onChild: (child: ChildProcess) => void
@@ -34,7 +35,14 @@ export function spawnOwnedProcess(spec: OwnedProcessSpec, ownership: SpawnOwners
 export function spawnProcess(spec: PipedProcessSpec): ChildProcessWithoutNullStreams
 export function spawnProcess(spec: ProcessSpec): ChildProcess
 export function spawnProcess(spec: ProcessSpec): ChildProcess {
-  return spawnResolvedProcess(resolveSpawn(spec, process.platform))
+  const resolved = resolveSpawn(spec, process.platform)
+  return spawnNativeProcess(
+    resolved.file,
+    resolved.args,
+    resolved.options,
+    undefined,
+    hasSpawnObserver() ? notifySpawnObserver : undefined
+  )
 }
 
 function spawnResolvedProcess(resolved: ResolvedSpawn, ownership?: SpawnOwnership): ChildProcess {

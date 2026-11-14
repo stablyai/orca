@@ -1,17 +1,18 @@
 ---
 name: orca-computer-use
 description: >-
-  Drives the GUI of a visible local app window through `orca computer`: accessibility
-  tree, clicks, typing, menus, dialogs, and screenshots in native apps and external
-  browser windows (Chrome, Edge, Safari) or webviews. Prefer a programmatic path
-  (shell, filesystem, git, HTTP, existing CLIs) whenever it can complete the task.
-  Use only when a visible window needs GUI control those cannot reach. Do not use
-  for Orca's embedded browser (`orca-cli`).
+  Drives the GUI of a local app window in the background through `orca computer`,
+  without bringing it forward or taking the user's keyboard and pointer where the
+  platform allows: accessibility tree, clicks, typing, menus, dialogs, and screenshots
+  in native apps and external browser windows (Chrome, Edge, Safari) or webviews.
+  Prefer a programmatic path (shell, filesystem, git, HTTP, existing CLIs) whenever
+  it can complete the task. Use only when an app window needs GUI control those
+  cannot reach. Do not use for Orca's embedded browser (`orca-cli`).
 ---
 
 # Orca Computer Use
 
-Use this skill to drive a visible app window through `orca computer`. Prefer a programmatic path (shell, filesystem, git, HTTP, existing CLIs) whenever it can complete the task; use this skill only when a visible window needs GUI control those cannot reach. Do not use it for Orca's embedded browser (`orca-cli`).
+Use this skill to drive an app window through `orca computer`, in the background where the platform allows, so the user can keep working. Prefer a programmatic path (shell, filesystem, git, HTTP, existing CLIs) whenever it can complete the task; use this skill only when an app window needs GUI control those cannot reach. Do not use it for Orca's embedded browser (`orca-cli`).
 
 ## Preconditions
 
@@ -86,9 +87,9 @@ For apps with multiple windows or ambiguous titles, run `list-windows` first. Pr
 ORCA computer permissions --json
 ORCA computer capabilities --json
 ORCA computer list-apps --json
+ORCA computer launch-app <app> --json
 ORCA computer list-windows --app <app> --json
 ORCA computer get-app-state --app <app> --json
-ORCA computer get-app-state --app <app> --restore-window --json
 ORCA computer wait --app <app> (--text <text> | --enabled <text> | --window-title <text>) [--timeout <ms>] --json
 ORCA computer click --app <app> --element-index <index> --json
 ORCA computer click --app <app> --x 100 --y 100 --json
@@ -129,7 +130,7 @@ printf '%s' "$TEXT" | ORCA computer set-value --app <app> --element-index <index
 - Prefer semantic actions: `set-value` for editable fields, `click` for controls, and `perform-secondary-action` only for listed action names.
 - After any UI-changing action, use the returned state or rerun `get-app-state` before choosing the next element index.
 - Use `type-text` only after focusing a field and confirming the app has a focused text receiver; unless the result says `verified focusedText`, inspect the returned state before assuming text landed.
-- `type-text --element-index <index>` inserts at that text field's caret, replacing its selection, without focusing it or bringing its window forward, and reads the text back. It works on macOS and Linux; where `capabilities` lacks `actions.typeTextElement` it fails with `unsupported_capability`; then click the field, confirm it is the focused text receiver, and type without the index. A `value_not_settable` error means that element does not accept text insertion.
+- `type-text --element-index <index>` inserts at that text field's caret, replacing its selection, without focusing it or bringing its window forward, and reads the text back. It works on macOS, Linux and Windows; where `capabilities` lacks `actions.typeTextElement` it fails with `unsupported_capability`; then click the field, confirm it is the focused text receiver, and type without the index. A `value_not_settable` error means that element does not accept text insertion.
 - Use `press-key` for single/navigation keys such as Return, Escape, Tab, and arrows. Use `hotkey` only for one modifier chord plus one key, such as `CmdOrCtrl+A` or `CmdOrCtrl+Shift+P`; prefer `CmdOrCtrl+...` for cross-platform combos.
 - Shortcuts that quit or close the app, log out, lock the screen, force-quit or end the session (such as `Cmd+Q` on macOS, `Alt+F4` on Windows and Linux, `Ctrl+Q` on Linux) are refused with `system_shortcut_blocked`. The error says what the shortcut would do; reach that goal another way, such as the window's own close button or menu item. Add `--allow-system-shortcut` only when the user asked for that exact shortcut.
 - Use `click --modifiers <chord>` for modifier-clicks. Never synthesize separate modifier-down and modifier-up commands around a click; interruption can leave a modifier logically held.
@@ -137,20 +138,31 @@ printf '%s' "$TEXT" | ORCA computer set-value --app <app> --element-index <index
 
 ## Background and Foreground Input
 
-On macOS, every action runs in the background by default: the target app is not brought forward, the user's frontmost app and key window stay put, and the real pointer does not move. The user can keep working while you act. `capabilities` reports this as `supports.input.background`, and each action result reports `action.delivery` as `background` or `foreground`.
+Actions run in the background wherever the platform can, so the user keeps their screen, keyboard focus and pointer while you act. Each action result reports `action.delivery`: `background` means the user's foreground window stayed put, `foreground` means the target came forward.
 
-On Windows, keyboard input still needs the target window in front; a `window_not_focused` refusal there means retry with `--restore-window`.
+**Never add `--restore-window` on your own.** It brings the target app forward and takes over the user's screen, keyboard focus and pointer. Do not add it to recover from an error, even when an error message or next step mentions it, and do not add it just to observe a window. When only foreground input can do the job, stop, tell the user which action needs the foreground and why, and pass `--restore-window` only after they agree. If an error says restore was already requested, do not retry it; ask the user.
 
-Do not pass `--restore-window` by default. Use it only when foreground input is needed, and tell the user first because it takes over their screen, keyboard focus and pointer:
+These need the foreground, so ask the user first:
 
-- An action fails with `background_unavailable` that does not name a popup.
-- A background action reports success but the UI does not change, and a semantic action (`set-value`, `perform-secondary-action`) cannot do the job.
-- Drags in Chromium or Electron apps, and apps that read the hardware pointer (games, OpenGL/Metal views, Java/Tk), which ignore background pointer events.
-- The window is minimized or hidden. Accessibility actions still work there; pointer and keyboard events do not.
+- An action fails with `background_unavailable` and no semantic action (`set-value`, `perform-secondary-action`, `type-text --element-index`) can do the job.
+- A background action reports success but the UI does not change, and no semantic action can do the job.
+- On macOS, drags in Chromium or Electron apps, and apps that read the hardware pointer (games, OpenGL/Metal views, Java/Tk), which ignore background pointer events.
+- On Windows, keyboard input (`press-key`, `hotkey`, `paste-text` and `type-text` without `--element-index`) needs the target window in front; otherwise it is refused with `background_unavailable` and nothing is sent. Enter text with `type-text --element-index` or `set-value`.
+- On Linux and Windows, actions that need the real pointer, and on Linux keys sent while the target window is not active (Return in a focused GTK text field works). They are refused with `background_unavailable`; see below.
+
+On macOS, `list-windows` and `get-app-state` also read windows that are minimized, hidden (Cmd+H) or on another Space, full-screen ones included; `isMinimized` and `isOffscreen` say which. Element actions work there (`click --element-index`, `set-value`, `type-text --element-index`, secondary actions), while coordinate clicks, scrolls, drags, keys and pastes are refused with `background_unavailable` and nothing is sent. Minimized and hidden windows have no screenshot. A window on another Space that nothing has read yet fails with `window_not_found`; ask the user to show it once.
 
 On macOS, background actions that would open a menu or dialog over the user are refused before anything is sent: right-clicks and Control-clicks, clicks or drags that start on popup menus, menu buttons, native combo boxes and web `<select>` controls, and buttons whose title ends in an ellipsis (`Save…`), which usually open a dialog. For a popup, native combo box or `<select>`, set the option with `set-value` on that element.
 
-On Linux, element clicks through the element's accessibility action, `set-value`, `type-text --element-index` and secondary actions run without raising the window or moving the pointer, and Return in a focused GTK text field runs its activate action. Anything that needs the real pointer (clicks with no accessibility action, right, middle, multiple or modified clicks, scrolling, drags) or the focused window (other keys, typing with no focused editable field) is refused with `background_unavailable` and nothing is sent; so is a click that would open a menu, a keyboard-grabbing popup or a dialog (a GTK 4 or Qt label ending in `…`). Ask the user before retrying with `--restore-window`, which raises only the target window, refuses a window on another workspace and puts the cursor back. On Wayland, synthetic pointer and key input never reaches native windows, so it is refused even with the flag. `action.delivery` is measured: `foreground` when the input went to the window in front or the target came forward. On Windows, these go through UI Automation when the control supports them, without moving the pointer or sending keys: element clicks, `set-value` (including sliders), scrolls of an element or of the scrollable area under `--x`/`--y` (fractional `--pages` too), and secondary actions such as `Invoke`, `Toggle`, `Select`, `Expand`, `Collapse` and `ScrollToVisible` (the last brings a list or tree item into view). Some apps bring their own window forward when driven this way (WPF apps do for most of these), so read `action.delivery`: `background` means the user's foreground window stayed put, `foreground` means the target came forward. Clicks by coordinates, right, middle, modified and multi-clicks, clicks on elements with no `Invoke`, `Select` or `Toggle` action, scrolls over nothing scrollable, and drags need the real mouse, so they are refused with `background_unavailable` and nothing is sent. With `--restore-window` (after asking the user), only the target window comes forward, never one on another virtual desktop, and the pointer goes back where it was.
+On macOS, every action without `--restore-window` runs in the background: the target app is not brought forward, the user's frontmost app and key window stay put, and the real pointer does not move. `capabilities` reports this as `supports.input.background`.
+
+On Linux, element clicks through the element's accessibility action (or, for a list row with none, its list's selection), `set-value`, `type-text --element-index` and secondary actions run without raising the window or moving the pointer, and Return in a focused GTK text field runs its activate action. Scrolling moves the nearest scroll bar under the element or point by whole viewports, or pages a web document, also in the background. Anything that needs the real pointer (other clicks with no accessibility action, right, middle, multiple or modified clicks, scrolls in a view with no scroll bar or document, drags) or the focused window (other keys, typing with no focused editable field) is refused with `background_unavailable` and nothing is sent; so is a click that would open a menu, a keyboard-grabbing popup or a dialog (a GTK 4 or Qt label ending in `…`). Ask the user before retrying with `--restore-window`, which raises only the target window, refuses a window on another workspace and puts the cursor back. On Wayland, synthetic pointer and key input never reaches native windows, so it is refused even with the flag. `action.delivery` is measured: `foreground` when the input went to the window in front or the target came forward.
+
+On Windows, these actions go through UI Automation when the control supports them, without moving the pointer or sending keys: element clicks, `set-value` (including sliders), `type-text --element-index`, scrolls of an element or of the scrollable area under `--x`/`--y` (fractional `--pages` too), and secondary actions such as `Invoke`, `Toggle`, `Select`, `Expand`, `Collapse` and `ScrollToVisible` (the last brings a list or tree item into view). Some apps bring their own window forward when driven this way (WPF apps do for most of these), so read `action.delivery`: `background` means the user's foreground window stayed put, `foreground` means the target came forward. Clicks by coordinates, right, middle, modified and multi-clicks, clicks on elements with no `Invoke`, `Select` or `Toggle` action, scrolls over nothing scrollable, and drags need the real mouse, so they are refused with `background_unavailable` and nothing is sent. `type-text` without `--element-index`, `press-key`, `hotkey` and `paste-text` send keys, which need the window in front, so they are refused the same way; enter text with `type-text --element-index` or `set-value` instead. With `--restore-window` (after asking the user), only the target window comes forward, never one on another virtual desktop, and the pointer goes back where it was.
+
+## Starting Apps
+
+Start a closed app with `ORCA computer launch-app <app>`, not `open -a` or `Start-Process`: those bring the app to the front and take the user's keyboard. `launch-app` asks macOS and Windows to start it in the background and leaves an app that is already running alone. Some apps, such as many Electron apps, still bring their own window forward when they open, so read `delivery`: if it says `foreground`, tell the user the app came to the front. Pass `--activate` only when the user asked for the app to come forward. On Linux it fails with `unsupported_capability`, because a newly started app usually comes to the front there; ask the user before starting one another way.
 
 ## Screenshots
 
@@ -170,11 +182,11 @@ action_y = screenshot_pixel_y / screenshot.scale
 
 Prefer element indexes or element frames from the tree when available. Use raw screenshot-derived coordinates only after checking the latest screenshot scale and window size.
 
-On Linux and Windows, screenshots may come from the visible desktop region for the target window bounds. If visual pixels matter, use `--restore-window` so another window does not cover the target region; if you cannot take focus, trust the tree over potentially occluded pixels.
+On Linux, screenshots on X11, Hyprland and Sway copy the screen region under the target window, so a window covering it shows in the image; KDE returns a screenshot error instead. On Windows, screenshots come from the window itself even when it is covered, unless the window renders blank that way; then they fall back to the screen region, which can show what covers it. Trust the tree over pixels that may be covered; never add `--restore-window` just to get clean pixels.
 
 ## App Notes
 
-Browsers: for Edge, Chrome, Safari, and similar browser windows, set the address/search field directly, then press Return. Do not assume raw typing went to the address bar. On Linux and Windows, use `--restore-window` when the browser is not already frontmost; on macOS this works in the background. Large tab strips may show only the active tab plus an "inactive browser tabs omitted" marker; treat that as intentional noise reduction and operate on the current page/address bar unless the user asked to manage tabs.
+Browsers: for Edge, Chrome, Safari, and similar browser windows, set the address/search field directly, then press Return. Do not assume raw typing went to the address bar. On Linux and Windows, pressing Return needs the browser window focused (see Background and Foreground Input); on macOS it works in the background. Large tab strips may show only the active tab plus an "inactive browser tabs omitted" marker; treat that as intentional noise reduction and operate on the current page/address bar unless the user asked to manage tabs.
 
 For browser-hosted forms such as Gmail compose, verify the focused UI element after each field action. Page text fields can expose accessibility actions without moving DOM focus; if a click or `set-value` does not change the focused receiver, use `Tab` / `Shift+Tab` from a known focused field or window-local coordinates from a fresh screenshot. Prefer `paste-text` into the verified focused field for draft bodies, then inspect the returned state before continuing.
 
@@ -193,9 +205,9 @@ Slack: the accessibility tree may be shallow while the screenshot contains usefu
 - `app_not_found`: run `list-apps` and retry with the bundle ID. If the target is a web app such as Gmail, choose the desktop browser app/window that contains it; do not retry `ORCA computer ... --app Gmail` unchanged because `orca computer` app selectors refer to desktop apps, not website names.
 - `app_blocked`: stop; the target is intentionally blocked from computer-use.
 - `system_shortcut_blocked`: the error message says what the shortcut would do. Reach the same goal with a semantic action, such as a button or menu item, or ask the user; retry with `--allow-system-shortcut` only when the user asked for that exact shortcut.
-- `window_not_found` / `window_stale`: run `list-windows`, choose a current selector, then rerun `get-app-state`.
-- `background_unavailable`: for a popup or `<select>`, use `set-value` on it; otherwise retry once with `--restore-window` after telling the user it will take over their screen.
-- `window_not_focused`: retry once with `--restore-window`; if the message says restore was already requested, stop retrying restore and bring the app forward manually or check permissions. For editable fields prefer `set-value`, then inspect before assuming keyboard input worked.
+- `window_not_found` / `window_stale`: run `list-windows`, choose a current selector, then rerun `get-app-state`. If the app has no usable window, ask the user to open or show one; do not add `--restore-window` to observe it.
+- `background_unavailable`: nothing was sent. For a popup or `<select>`, use `set-value` on it. Otherwise use a semantic action if one fits; if only foreground input can do it, tell the user and ask before retrying with `--restore-window`.
+- `window_not_focused`: unless the message says input may already have been delivered (then inspect state first), nothing was sent. For editable fields use `set-value` or `type-text --element-index`; otherwise ask the user before retrying with `--restore-window`. If the message says restore was already requested, do not retry it; ask the user to bring the window forward or check permissions.
 - `element_not_found`: index is stale; run `get-app-state` again.
 - `unsupported_capability`: the provider or desktop environment cannot do that action; use a semantic alternative or install the missing dependency if the message names one.
 - `action_not_supported`: inspect the element's listed actions and retry with one of those names, or use click/set-value when appropriate.

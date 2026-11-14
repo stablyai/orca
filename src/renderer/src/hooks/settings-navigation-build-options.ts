@@ -1,3 +1,4 @@
+import type { ProjectGroupSettingsEntry } from './use-supported-group-hook-settings'
 import type { ProjectGroupingModel } from '../../../shared/project-section-grouping'
 import type { Repo } from '../../../shared/repo-types'
 
@@ -13,6 +14,7 @@ export type SettingsNavigationBuildOptions = {
   mobileEmulatorCreationEnabled: boolean
   isDev: boolean
   isLinearConnected: boolean
+  projectGroups?: readonly ProjectGroupSettingsEntry[]
   repos: readonly Repo[]
   projectGrouping?: ProjectGroupingModel
 }

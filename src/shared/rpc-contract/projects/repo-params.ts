@@ -1,3 +1,4 @@
+import { WorkspaceHookSettingsSchema } from '../../workspace-hook-settings-schema'
 import { z } from 'zod'
 
 // Opt-in: a caller holding afterSnapshotId's repos gets `unchanged`; older hosts take no params and ignore it.
@@ -85,6 +86,7 @@ export const ProjectGroupCreate = z.object({
 export const ProjectGroupUpdate = z.object({
   groupId: requiredString('Missing group id'),
   updates: z.object({
+    hookSettings: WorkspaceHookSettingsSchema.optional(),
     name: OptionalString,
     isCollapsed: z.boolean().optional(),
     tabOrder: OptionalFiniteNumber,
@@ -95,6 +97,10 @@ export const ProjectGroupUpdate = z.object({
 
 export const ProjectGroupSelector = z.object({
   groupId: requiredString('Missing group id')
+})
+
+export const ProjectGroupHooksCheck = ProjectGroupSelector.extend({
+  background: z.boolean().optional()
 })
 
 export const ProjectGroupUpdateMany = z.object({

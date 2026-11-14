@@ -552,20 +552,25 @@
 }
 
 /* One lifted surface for toasts and corner notification cards; the default card/popover blends into the app.
-   App themes replace the surface, secondary and muted colors with readable hex (notice-surface-tokens.ts). */
+   App themes replace the surface, fill and edge colors with readable ones (notice-surface-tokens.ts). */
 :root {
+  --notice-accent: var(--accent);
+  --notice-accent-foreground: var(--accent-foreground);
+  --notice-edge: var(--border);
+  --notice-input: var(--input);
   --notice-muted: var(--muted);
   --notice-muted-foreground: var(--muted-foreground);
+  --notice-outline-edge: transparent;
   --notice-secondary-edge: transparent;
   --notice-surface: var(--popover);
-  --notice-border: color-mix(in srgb, var(--foreground) 14%, transparent);
+  --notice-border: color-mix(in srgb, var(--popover-foreground) 14%, transparent);
   --notice-secondary: color-mix(in srgb, var(--foreground) 6%, var(--notice-surface));
   --notice-shadow: 0 11px 32px -6px rgb(0 0 0 / 0.2), 0 2px 6px rgb(0 0 0 / 0.08);
 }
 
 .dark {
   --notice-surface: color-mix(in srgb, var(--foreground) 7%, var(--popover));
-  --notice-border: color-mix(in srgb, var(--foreground) 15%, transparent);
+  --notice-border: color-mix(in srgb, var(--popover-foreground) 15%, transparent);
   --notice-secondary: color-mix(in srgb, var(--foreground) 10%, var(--notice-surface));
   --notice-shadow:
     0 11px 32px -6px rgb(0 0 0 / 0.55), 0 2px 6px rgb(0 0 0 / 0.22),
@@ -585,6 +590,10 @@
   --muted-foreground: var(--notice-muted-foreground);
   --secondary: var(--notice-secondary);
   --secondary-foreground: var(--popover-foreground);
+  --accent: var(--notice-accent);
+  --accent-foreground: var(--notice-accent-foreground);
+  --input: var(--notice-input);
+  --border: var(--notice-edge);
 }
 
 /* Why inset outline: an edge for themes that leave secondary buttons unfilled, without moving layout. */
@@ -594,6 +603,13 @@
     [data-sonner-toast] [data-button][data-cancel]
   ) {
   outline: 1px solid var(--notice-secondary-edge);
+  outline-offset: -1px;
+}
+
+.dark
+  :is([data-sonner-toaster], .notification-card-stack)
+  [data-slot='button'][data-variant='outline'] {
+  outline: 1px solid var(--notice-outline-edge);
   outline-offset: -1px;
 }
 

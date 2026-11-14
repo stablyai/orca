@@ -141,7 +141,7 @@ const extensionSession = {
       (_filter: unknown, callback: (details: Record<string, unknown>) => void) => callback
     )
   },
-  protocol: { handle: vi.fn(), unhandle: vi.fn() },
+  protocol: { handle: vi.fn(), unhandle: vi.fn(), isProtocolHandled: vi.fn(() => true) },
   extensions: Object.assign(new EventEmitter(), {
     getExtension: (id: string) => extensions.get(id) ?? null,
     getAllExtensions: () => [...extensions.values()]

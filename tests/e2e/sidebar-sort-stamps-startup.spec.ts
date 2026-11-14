@@ -79,7 +79,7 @@ test('a restart clears a tier nothing backs, keeps a hook row’s and an SSH hos
       if (!folder) {
         throw new Error('Expected a folder workspace')
       }
-      return folder.id
+      return folder.folderWorkspace.id
     }, folderPath)
     folderToRemove = folderPath
     const goneId = `folder:${goneFolderId}`

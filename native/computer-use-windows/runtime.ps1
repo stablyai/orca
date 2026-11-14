@@ -89,9 +89,6 @@ public static class OrcaDesktopWin32 {
     [DllImport("user32.dll")]
     public static extern bool ScreenToClient(IntPtr hwnd, ref POINT point);
 
-    [DllImport("user32.dll", EntryPoint = "PostMessageW")]
-    public static extern bool PostMessage(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
-
     [DllImport("user32.dll")]
     public static extern bool ShowWindow(IntPtr hwnd, int nCmdShow);
 
@@ -143,6 +140,18 @@ public static class OrcaDesktopWin32 {
     [DllImport("user32.dll", EntryPoint = "SendMessageTimeoutW", SetLastError = true)]
     private static extern IntPtr SendMessageTimeout(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam, uint flags, uint timeout, out IntPtr result);
 
+    [DllImport("user32.dll", EntryPoint = "SendMessageTimeoutW", CharSet = CharSet.Unicode)]
+    private static extern IntPtr SendMessageTimeoutString(IntPtr hwnd, uint message, IntPtr wParam, string lParam, uint flags, uint timeout, out IntPtr result);
+
+    [DllImport("user32.dll", EntryPoint = "SendMessageTimeoutW", CharSet = CharSet.Unicode)]
+    private static extern IntPtr SendMessageTimeoutBuffer(IntPtr hwnd, uint message, IntPtr wParam, System.Text.StringBuilder lParam, uint flags, uint timeout, out IntPtr result);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsWindow(IntPtr hwnd);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
+    public static extern int GetWindowLong(IntPtr hwnd, int index);
+
     [DllImport("user32.dll")]
     private static extern bool IsHungAppWindow(IntPtr hwnd);
 
@@ -173,6 +182,61 @@ public static class OrcaDesktopWin32 {
         const int errorTimeout = 1460;
         // Other failures (a closed window, UIPI refusing an elevated target) are not hangs.
         return Marshal.GetLastWin32Error() == errorTimeout || IsHungAppWindow(hwnd);
+    }
+
+    const uint AbortIfHung = 0x0002;
+    const uint EditMessageTimeoutMilliseconds = 2000;
+
+    // EM_REPLACESEL: user32 marshals its string across processes and the edit needs no focus; false when it did not answer.
+    public static bool ReplaceEditSelection(IntPtr hwnd, string text) {
+        IntPtr result;
+        return SendMessageTimeoutString(hwnd, 0x00C2, new IntPtr(1), text, AbortIfHung, EditMessageTimeoutMilliseconds, out result) != IntPtr.Zero;
+    }
+
+    // WM_GETTEXT, at most maxLength characters; null when the window did not answer.
+    public static string GetEditText(IntPtr hwnd, int maxLength) {
+        IntPtr length;
+        if (SendMessageTimeout(hwnd, 0x000E, IntPtr.Zero, IntPtr.Zero, AbortIfHung, EditMessageTimeoutMilliseconds, out length) == IntPtr.Zero) { return null; }
+        if (length.ToInt64() <= 0) { return ""; }
+        var capacity = (int)Math.Min(Math.Max(0L, length.ToInt64()), (long)maxLength) + 1;
+        var buffer = new System.Text.StringBuilder(capacity);
+        IntPtr copied;
+        if (SendMessageTimeoutBuffer(hwnd, 0x000D, new IntPtr(capacity), buffer, AbortIfHung, EditMessageTimeoutMilliseconds, out copied) == IntPtr.Zero) { return null; }
+        return buffer.ToString();
+    }
+
+    // EM_GETSEL as [start, end]; null when the edit did not answer or an offset is past the 16-bit return value.
+    public static int[] GetEditSelection(IntPtr hwnd) {
+        IntPtr result;
+        if (SendMessageTimeout(hwnd, 0x00B0, IntPtr.Zero, IntPtr.Zero, AbortIfHung, EditMessageTimeoutMilliseconds, out result) == IntPtr.Zero) { return null; }
+        var packed = result.ToInt64() & 0xFFFFFFFFL;
+        if (packed == 0xFFFFFFFFL) { return null; }
+        return new[] { (int)(packed & 0xFFFF), (int)(packed >> 16) };
+    }
+
+    // One SendInput batch of KEYEVENTF_UNICODE characters, so any layout types them and no other input interleaves.
+    public static bool SendUnicodeText(string text) {
+        const uint keyboardInput = 1;
+        const uint keyUp = 0x0002;
+        const uint unicode = 0x0004;
+        const byte returnKey = 0x0D;
+        const byte tabKey = 0x09;
+        var inputs = new List<INPUT>();
+        foreach (var unit in text) {
+            if (unit == '\r') { continue; }
+            // Why: Return and Tab go as keys, as SendKeys sent them, so dialogs and forms act on them.
+            if (unit == '\n' || unit == '\t') {
+                var key = unit == '\n' ? returnKey : tabKey;
+                inputs.Add(KeyboardInput(keyboardInput, key, 0));
+                inputs.Add(KeyboardInput(keyboardInput, key, keyUp));
+                continue;
+            }
+            inputs.Add(UnicodeInput(unit, unicode));
+            inputs.Add(UnicodeInput(unit, unicode | keyUp));
+        }
+        var values = inputs.ToArray();
+        if (values.Length == 0) { return true; }
+        return SendInput((uint)values.Length, values, Marshal.SizeOf(typeof(INPUT))) == (uint)values.Length;
     }
 
     // Mandatory integrity RID (0x2000 medium, 0x3000 high), or -1 when the process cannot be queried.
@@ -359,6 +423,15 @@ public static class OrcaDesktopWin32 {
         };
     }
 
+    private static INPUT UnicodeInput(char unit, uint flags) {
+        return new INPUT {
+            type = 1,
+            data = new INPUTUNION {
+                keyboard = new KEYBDINPUT { scanCode = unit, flags = flags }
+            }
+        };
+    }
+
     private static INPUT MouseInput(uint type, uint flags) {
         return new INPUT {
             type = type,
@@ -366,6 +439,123 @@ public static class OrcaDesktopWin32 {
                 mouse = new MOUSEINPUT { flags = flags }
             }
         };
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct STARTUPINFO {
+        public int cb;
+        public string lpReserved;
+        public string lpDesktop;
+        public string lpTitle;
+        public int dwX;
+        public int dwY;
+        public int dwXSize;
+        public int dwYSize;
+        public int dwXCountChars;
+        public int dwYCountChars;
+        public int dwFillAttribute;
+        public int dwFlags;
+        public short wShowWindow;
+        public short cbReserved2;
+        public IntPtr lpReserved2;
+        public IntPtr hStdInput;
+        public IntPtr hStdOutput;
+        public IntPtr hStdError;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct STARTUPINFOEX {
+        public STARTUPINFO StartupInfo;
+        public IntPtr lpAttributeList;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PROCESS_INFORMATION {
+        public IntPtr hProcess;
+        public IntPtr hThread;
+        public int dwProcessId;
+        public int dwThreadId;
+    }
+
+    [DllImport("kernel32.dll", EntryPoint = "CreateProcessW", SetLastError = true, CharSet = CharSet.Unicode)]
+    private static extern bool CreateProcess(string applicationName, System.Text.StringBuilder commandLine, IntPtr processAttributes, IntPtr threadAttributes, bool inheritHandles, uint creationFlags, IntPtr environment, string currentDirectory, ref STARTUPINFOEX startupInfo, out PROCESS_INFORMATION processInformation);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool InitializeProcThreadAttributeList(IntPtr attributeList, int attributeCount, int flags, ref IntPtr size);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool UpdateProcThreadAttribute(IntPtr attributeList, uint flags, IntPtr attribute, IntPtr value, IntPtr size, IntPtr previousValue, IntPtr returnSize);
+
+    [DllImport("kernel32.dll")]
+    private static extern void DeleteProcThreadAttributeList(IntPtr attributeList);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetShellWindow();
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetWindowPos(IntPtr hwnd, IntPtr insertAfter, int x, int y, int width, int height, uint flags);
+
+    // Starts an app without handing it the caller's right to take the foreground (design from agent-desktop #615):
+    // the desktop shell is its parent, and its first ShowWindow is SW_SHOWNOACTIVATE.
+    public static int LaunchWithoutForeground(string executable, string workingDirectory) {
+        const uint processCreateProcess = 0x0080;
+        const uint extendedStartupInfoPresent = 0x00080000;
+        const int procThreadAttributeParentProcess = 0x00020000;
+        const int startfUseShowWindow = 0x0001;
+        const short swShowNoActivate = 4;
+        uint shellProcessId;
+        GetWindowThreadProcessId(GetShellWindow(), out shellProcessId);
+        if (shellProcessId == 0) {
+            throw new InvalidOperationException("no desktop shell is running to start the app under");
+        }
+        var shell = OpenProcess(processCreateProcess, false, (int)shellProcessId);
+        if (shell == IntPtr.Zero) {
+            throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error(), "could not open the desktop shell process");
+        }
+        var attributes = IntPtr.Zero;
+        var parentHandle = IntPtr.Zero;
+        var attributesInitialized = false;
+        try {
+            var size = IntPtr.Zero;
+            InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref size);
+            attributes = Marshal.AllocHGlobal(size);
+            if (!InitializeProcThreadAttributeList(attributes, 1, 0, ref size)) {
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            }
+            attributesInitialized = true;
+            // CreateProcess reads the handle through this pointer, so it must outlive the call.
+            parentHandle = Marshal.AllocHGlobal(IntPtr.Size);
+            Marshal.WriteIntPtr(parentHandle, shell);
+            if (!UpdateProcThreadAttribute(attributes, 0, (IntPtr)procThreadAttributeParentProcess, parentHandle, (IntPtr)IntPtr.Size, IntPtr.Zero, IntPtr.Zero)) {
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            }
+            var startup = new STARTUPINFOEX();
+            startup.StartupInfo.cb = Marshal.SizeOf(typeof(STARTUPINFOEX));
+            startup.StartupInfo.dwFlags = startfUseShowWindow;
+            startup.StartupInfo.wShowWindow = swShowNoActivate;
+            startup.lpAttributeList = attributes;
+            PROCESS_INFORMATION process;
+            var commandLine = new System.Text.StringBuilder("\"" + executable + "\"");
+            if (!CreateProcess(executable, commandLine, IntPtr.Zero, IntPtr.Zero, false, extendedStartupInfoPresent, IntPtr.Zero, workingDirectory, ref startup, out process)) {
+                throw new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error());
+            }
+            CloseHandle(process.hThread);
+            CloseHandle(process.hProcess);
+            return process.dwProcessId;
+        } finally {
+            if (attributesInitialized) { DeleteProcThreadAttributeList(attributes); }
+            if (attributes != IntPtr.Zero) { Marshal.FreeHGlobal(attributes); }
+            if (parentHandle != IntPtr.Zero) { Marshal.FreeHGlobal(parentHandle); }
+            CloseHandle(shell);
+        }
+    }
+
+    // Bottom of the z-order without activating: the window stays restored and drivable but covers nothing.
+    public static bool SendWindowToBack(IntPtr hwnd) {
+        const uint swpNoSize = 0x0001;
+        const uint swpNoMove = 0x0002;
+        const uint swpNoActivate = 0x0010;
+        return SetWindowPos(hwnd, new IntPtr(1), 0, 0, 0, 0, swpNoSize | swpNoMove | swpNoActivate);
     }
 }
 "@
@@ -375,6 +565,7 @@ public static class OrcaDesktopWin32 {
 $MaxNodes = 1200
 $MaxDepth = 64
 $TextLimit = 500
+$EditReadbackLimit = 1048576
 $MaxScreenshotPngBytes = 900000
 $MaxScreenshotEdge = 1280
 $MinScreenshotScale = 0.25
@@ -389,20 +580,6 @@ $BlockedAppFragments = @(
     "nordpass",
     "proton pass"
 )
-
-$WindowsMessages = @{
-    Char = 0x0102
-    KeyDown = 0x0100
-    KeyUp = 0x0101
-    MouseMove = 0x0200
-    LeftDown = 0x0201
-    LeftUp = 0x0202
-    RightDown = 0x0204
-    RightUp = 0x0205
-    MiddleDown = 0x0207
-    MiddleUp = 0x0208
-    Wheel = 0x020A
-}
 
 $MouseEvents = @{
     LeftDown = 0x0002
@@ -620,13 +797,19 @@ function Wait-OrcaWindowFocused([IntPtr]$WindowHandle, [int]$TimeoutMilliseconds
     Test-OrcaWindowFocused $WindowHandle
 }
 
-function Assert-OrcaKeyboardFocus([IntPtr]$WindowHandle, $Operation, $RestoreFailure = $null) {
+function Assert-OrcaKeyboardFocus([IntPtr]$WindowHandle, $Operation, $RestoreFailure = $null, $Process = $null) {
     if (Test-OrcaWindowFocused $WindowHandle) { return }
     if ([bool]$Operation.restoreWindow) {
         $reason = if ($null -ne $RestoreFailure) { " ($RestoreFailure)" } else { "" }
-        throw "window_not_focused: keyboard input requires the target window to be focused; restoreWindow was requested but the target window is still not focused$reason; bring it forward manually or check desktop permissions"
+        throw "window_not_focused: keyboard input requires the target window to be focused; restoreWindow was requested but the target window is still not focused$reason, so nothing was sent; ask the user to bring it forward or check desktop permissions"
     }
-    throw "window_not_focused: keyboard input requires the target window to be focused; retry with --restore-window"
+    $verb = ([string]$Operation.tool) -replace "_", "-"
+    $alternative = if ($Operation.tool -in @("type_text", "paste_text")) {
+        "To enter text in the background, use type-text --element-index <field> or set-value."
+    } else {
+        "To press a button in the background, click it with click --element-index; to enter text, use type-text --element-index <field>."
+    }
+    throw (New-OrcaForegroundRefusal $Process "$verb sends keys, which go only to the window in front" $alternative "takes the user's keyboard")
 }
 
 # Raises the target for real mouse input, then returns its frame read after the raise (restoring moves it).
@@ -638,9 +821,9 @@ function Restore-OrcaPointerWindow($Process, $RootElement) {
     Get-OrcaWindowFrame $Process $RootElement
 }
 
-function New-OrcaForegroundRefusal($Process, [string]$Need, [string]$Alternative = "") {
+function New-OrcaForegroundRefusal($Process, [string]$Need, [string]$Alternative = "", [string]$Takes = "moves the user's pointer") {
     $hint = if ([string]::IsNullOrEmpty($Alternative)) { "" } else { " $Alternative" }
-    "background_unavailable: $Need, which on Windows brings $(Get-OrcaAppName $Process) to the front and moves the user's pointer; nothing was sent.$hint Ask the user before retrying with --restore-window."
+    "background_unavailable: $Need, which on Windows brings $(Get-OrcaAppName $Process) to the front and $Takes; nothing was sent.$hint Ask the user before retrying with --restore-window."
 }
 
 function Get-OrcaCursorPosition {
@@ -708,6 +891,178 @@ function Get-OrcaValueText($Element) {
     } catch {
         ""
     }
+}
+
+function Test-OrcaEditClass([string]$ClassName) {
+    # Why: user32 edits, RichEdit and their WinForms superclasses answer EM_ and WM_GETTEXT messages from other processes.
+    $ClassName -match "^(?:WindowsForms\d+\.)?(?:Edit|RichEdit\w*)(?:\.|$)"
+}
+
+# Only for elements Get-OrcaValueText left empty, so never a sensitive one (it answers "[redacted]" for those).
+function Get-OrcaEditValueText([IntPtr]$Handle) {
+    # Why: the client-side edit proxy gives a multiline edit (Notepad's document) no ValuePattern, so its text is read directly.
+    $text = [OrcaDesktopWin32]::GetEditText($Handle, $TextLimit + 1)
+    if ($null -eq $text) { return "" }
+    if ($text.Length -gt $TextLimit) { return $text.Substring(0, $TextLimit) + "..." }
+    $text
+}
+
+function Get-OrcaNativeEdit($Element, $Process) {
+    $className = Get-OrcaProperty $Element "ClassName"
+    if (-not (Test-OrcaEditClass $className)) { return $null }
+    $handle = try { [IntPtr][int64]$Element.Current.NativeWindowHandle } catch { [IntPtr]::Zero }
+    if ($handle -eq [IntPtr]::Zero) { return $null }
+    [pscustomobject]@{
+        handle = $handle
+        processId = [int]$Process.Id
+        rich = $className -match "RichEdit"
+        sensitive = Test-OrcaSensitiveElement $Element
+    }
+}
+
+function Assert-OrcaEditOwner($Edit) {
+    # Why: a window handle can be recycled for another process between the tree read and the message.
+    $owner = [uint32]0
+    if ([OrcaDesktopWin32]::IsWindow($Edit.handle)) {
+        [void][OrcaDesktopWin32]::GetWindowThreadProcessId($Edit.handle, [ref]$owner)
+    }
+    if ($owner -ne $Edit.processId) {
+        throw "stale element: the text field's window no longer belongs to the target app; run get-app-state again and use a fresh element index"
+    }
+}
+
+function ConvertTo-OrcaEditNewlines([string]$Text, [bool]$Collapse) {
+    $normalized = $Text -replace "`r`n|`r", "`n"
+    if ($Collapse) { return $normalized }
+    $normalized -replace "`n", "`r`n"
+}
+
+function Invoke-OrcaEditTextInsertion($Edit, [int]$Index, [string]$Text) {
+    Assert-OrcaEditOwner $Edit
+    $style = [OrcaDesktopWin32]::GetWindowLong($Edit.handle, -16)
+    if (($style -band 0x0800) -ne 0) { throw "element $Index text is not settable: the field is read-only" }
+    $insert = ConvertTo-OrcaEditNewlines $Text $false
+    $before = if ($Edit.sensitive) { $null } else { [OrcaDesktopWin32]::GetEditText($Edit.handle, $EditReadbackLimit) }
+    $selection = [OrcaDesktopWin32]::GetEditSelection($Edit.handle)
+    Assert-OrcaEditOwner $Edit
+    if (-not [OrcaDesktopWin32]::ReplaceEditSelection($Edit.handle, $insert)) {
+        throw "window_not_responding: the text field did not answer the insertion in time; the text may still land, so run get-app-state before retrying"
+    }
+    $action = [pscustomobject]@{ path = "accessibility"; actionName = "EM_REPLACESEL"; fallbackReason = $null; verification = [pscustomobject]@{ state = "unverified"; reason = "readback_unsupported" } }
+    $after = if ($null -eq $before) { $null } else { [OrcaDesktopWin32]::GetEditText($Edit.handle, $EditReadbackLimit) }
+    # Why: a text past the read limit can't show the whole result, so it neither proves nor disproves the insertion.
+    if ($null -eq $after -or $before.Length -ge $EditReadbackLimit -or $after.Length -ge $EditReadbackLimit) { return $action }
+    # Why: RichEdit counts a line break as one character in its selection but may read it back as CRLF.
+    $current = if ($Edit.rich) { ConvertTo-OrcaEditNewlines $before $true } else { $before }
+    $actual = if ($Edit.rich) { ConvertTo-OrcaEditNewlines $after $true } else { $after }
+    $expected = $null
+    if ($null -ne $selection -and [Math]::Max($selection[0], $selection[1]) -le $current.Length) {
+        $start = [Math]::Min($selection[0], $selection[1])
+        $end = [Math]::Max($selection[0], $selection[1])
+        $expected = $current.Substring(0, $start) + (ConvertTo-OrcaEditNewlines $Text $Edit.rich) + $current.Substring($end)
+    }
+    if ($null -ne $expected -and $actual -ceq $expected) {
+        $action.verification = [pscustomobject]@{ state = "verified"; property = "elementText" }
+    } elseif ($after -ceq $before) {
+        throw "text_insertion_unconfirmed: element $Index did not change after the insertion; run get-app-state to check the field before retrying"
+    } elseif ($null -ne $expected) {
+        $action.verification = [pscustomobject]@{ state = "unverified"; reason = "text_mismatch" }
+    }
+    $action
+}
+
+function Set-OrcaTextCaret($Element, [string]$Leading) {
+    # Why: a ValuePattern write resets WPF's caret to the start, so the next insertion would land there.
+    try {
+        # Why: UIA moves by caret positions, which keep a surrogate pair, a combining sequence and a CRLF together.
+        $positions = (New-Object Globalization.StringInfo $Leading).LengthInTextElements - ([regex]::Matches($Leading, "`r`n")).Count
+        $start = [Windows.Automation.Text.TextPatternRangeEndpoint]::Start
+        $end = [Windows.Automation.Text.TextPatternRangeEndpoint]::End
+        $leadingRange = $Element.GetCurrentPattern([Windows.Automation.TextPattern]::Pattern).DocumentRange.Clone()
+        $leadingRange.MoveEndpointByRange($end, $leadingRange, $start)
+        [void]$leadingRange.MoveEndpointByUnit($end, [Windows.Automation.Text.TextUnit]::Character, $positions)
+        # Why: a provider that counts positions differently would put the caret elsewhere, so only a confirmed prefix moves it.
+        if ($leadingRange.GetText(-1) -cne $Leading) { return }
+        $leadingRange.MoveEndpointByRange($start, $leadingRange, $end)
+        $leadingRange.Select()
+    } catch {}
+}
+
+function Get-OrcaTextSelectionOffsets($Element) {
+    try {
+        $text = $Element.GetCurrentPattern([Windows.Automation.TextPattern]::Pattern)
+        $ranges = @($text.GetSelection())
+        if ($ranges.Count -ne 1) { return $null }
+        $leading = $text.DocumentRange.Clone()
+        $leading.MoveEndpointByRange([Windows.Automation.Text.TextPatternRangeEndpoint]::End, $ranges[0], [Windows.Automation.Text.TextPatternRangeEndpoint]::Start)
+        $start = $leading.GetText(-1).Length
+        @($start, ($start + $ranges[0].GetText(-1).Length))
+    } catch {
+        $null
+    }
+}
+
+function Invoke-OrcaValueTextInsertion($Element, [int]$Index, [string]$Text) {
+    $pattern = try { $Element.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern) } catch { $null }
+    if ($null -eq $pattern) { return $null }
+    if ($pattern.Current.IsReadOnly) { throw "element $Index text is not settable: the field is read-only" }
+    # Why: Chromium applies a value write as replaced inner text, which editors with their own model miss or revert.
+    if ((Get-OrcaProperty $Element "FrameworkId") -eq "Chrome") { return $null }
+    if (Test-OrcaSensitiveElement $Element) {
+        throw "element $Index text is not settable at its caret: it is a password field, whose text can't be read; use set-value to replace it"
+    }
+    $current = [string]$pattern.Current.Value
+    $selection = Get-OrcaTextSelectionOffsets $Element
+    # Why: without a readable selection the caret is unknown; appending matches macOS's default insertion point.
+    if ($null -eq $selection -or $selection[1] -gt $current.Length) { $selection = @($current.Length, $current.Length) }
+    $next = $current.Substring(0, $selection[0]) + $Text + $current.Substring($selection[1])
+    $pattern.SetValue($next)
+    # Why: Chromium applies the write asynchronously, so poll briefly like the range readback.
+    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+    while ($true) {
+        $actual = try { [string]$pattern.Current.Value } catch { $null }
+        if ($actual -ceq $next -or $stopwatch.ElapsedMilliseconds -ge 500) { break }
+        Start-Sleep -Milliseconds 25
+    }
+    if ($actual -ceq $next) { Set-OrcaTextCaret $Element ($current.Substring(0, $selection[0]) + $Text) }
+    $verification = if ($actual -ceq $next) {
+        [pscustomobject]@{ state = "verified"; property = "elementText" }
+    } elseif ($null -eq $actual) {
+        [pscustomobject]@{ state = "unverified"; reason = "readback_unsupported" }
+    } elseif ($actual -ceq $current) {
+        [pscustomobject]@{ state = "unverified"; reason = "accessibility_action_unasserted" }
+    } else {
+        [pscustomobject]@{ state = "unverified"; reason = "text_mismatch" }
+    }
+    [pscustomobject]@{ path = "accessibility"; actionName = "setValue"; fallbackReason = $null; verification = $verification }
+}
+
+function Invoke-OrcaElementTextInsertion($Element, $Record, $Process, $RootElement, $Operation, [string]$Text) {
+    if ($null -eq $Element) {
+        throw "stale element: element $($Record.index) is gone; run get-app-state again and use a fresh element index"
+    }
+    $index = [int]$Record.index
+    # Why: edit messages bypass a disabled field's lock, which set-value's UI Automation write honours.
+    if (Test-OrcaElementDisabled $Element) { throw "element $index text is not settable: the field is disabled" }
+    $edit = Get-OrcaNativeEdit $Element $Process
+    if ($null -ne $edit) { return Invoke-OrcaEditTextInsertion $edit $index $Text }
+    # Why: list and tree items also take ValuePattern, where a write renames them rather than typing.
+    $controlType = try { [string]$Element.Current.ControlType.ProgrammaticName } catch { "" }
+    if ($controlType -notin @("ControlType.Edit", "ControlType.Document")) {
+        throw "element $index text is not settable: it is not a text field"
+    }
+    $action = Invoke-OrcaValueTextInsertion $Element $index $Text
+    if ($null -ne $action) { return $action }
+    if (-not [bool]$Operation.restoreWindow) {
+        throw (New-OrcaForegroundRefusal $Process "element $index accepts text only as keys, which go only to the window in front" "" "takes the user's keyboard")
+    }
+    $failure = Restore-OrcaWindow $Process $RootElement
+    Assert-OrcaKeyboardFocus ([IntPtr]$Process.MainWindowHandle) $Operation $failure $Process
+    try { $Element.SetFocus() } catch {
+        throw "window_not_focused: element $index did not take keyboard focus; no text was sent"
+    }
+    Send-OrcaText ([IntPtr]$Process.MainWindowHandle) $Text
+    [pscustomobject]@{ path = "synthetic"; actionName = "typeText"; fallbackReason = "actionUnsupported"; verification = [pscustomobject]@{ state = "unverified"; reason = "synthetic_input" } }
 }
 
 function Get-OrcaRangeValueText($Element) {
@@ -849,10 +1204,14 @@ function Test-OrcaPlainTextSubtree($Element, [int]$MaxDepth = 4) {
 function New-OrcaElementRecord($Element, [int]$Index, $WindowFrame) {
     $controlType = try { [string]$Element.Current.ControlType.ProgrammaticName } catch { "" }
     $nativeWindowHandle = try { [int64]$Element.Current.NativeWindowHandle } catch { 0 }
+    $className = Get-OrcaProperty $Element "ClassName"
     $patterns = @($Element.GetSupportedPatterns())
     $value = Get-OrcaValueText $Element
     if ([string]::IsNullOrEmpty($value) -and $patterns -contains [Windows.Automation.RangeValuePattern]::Pattern) {
         $value = Get-OrcaRangeValueText $Element
+    }
+    if ([string]::IsNullOrEmpty($value) -and $nativeWindowHandle -ne 0 -and (Test-OrcaEditClass $className)) {
+        $value = Get-OrcaEditValueText ([IntPtr]$nativeWindowHandle)
     }
     [pscustomobject]@{
         index = $Index
@@ -861,7 +1220,7 @@ function New-OrcaElementRecord($Element, [int]$Index, $WindowFrame) {
         name = Get-OrcaProperty $Element "Name"
         controlType = $controlType
         localizedControlType = Get-OrcaProperty $Element "LocalizedControlType"
-        className = Get-OrcaProperty $Element "ClassName"
+        className = $className
         value = $value
         isSelected = Test-OrcaElementSelected $Element
         isDisabled = Test-OrcaElementDisabled $Element
@@ -1211,6 +1570,104 @@ function Get-OrcaWindowList([string]$Query) {
     }
 }
 
+function Resolve-OrcaLaunchExecutable([string]$Query) {
+    $needle = $Query.Trim()
+    if ([System.IO.Path]::IsPathRooted($needle)) {
+        if (Test-Path -LiteralPath $needle -PathType Leaf) { return $needle }
+        throw "appNotFound(`"$Query`")"
+    }
+    $exe = if ($needle.EndsWith(".exe", [System.StringComparison]::OrdinalIgnoreCase)) { $needle } else { "$needle.exe" }
+    $command = Get-Command -Name ([WildcardPattern]::Escape($exe)) -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($null -ne $command) { return [string]$command.Source }
+    # Why: Start-Process finds apps such as chrome.exe through App Paths, which PATH lookup misses.
+    foreach ($hive in @("HKCU:", "HKLM:")) {
+        $entry = Get-ItemProperty -LiteralPath "$hive\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\$exe" -ErrorAction SilentlyContinue
+        if ($null -eq $entry -or [string]::IsNullOrWhiteSpace([string]$entry.'(default)')) { continue }
+        $path = [Environment]::ExpandEnvironmentVariables(([string]$entry.'(default)').Trim('"'))
+        if (Test-Path -LiteralPath $path -PathType Leaf) { return $path }
+    }
+    throw "appNotFound(`"$Query`")"
+}
+
+function Wait-OrcaLaunchedWindow([int]$ProcessId, [string]$ProcessName, [DateTime]$StartedAt, [int]$TimeoutMilliseconds) {
+    $deadline = [DateTime]::UtcNow.AddMilliseconds($TimeoutMilliseconds)
+    while ([DateTime]::UtcNow -lt $deadline) {
+        $process = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+        if ($null -ne $process -and $process.MainWindowHandle -ne 0) { return $process }
+        if ($null -eq $process) {
+            # Why: stubs such as Windows 11's notepad.exe start the real app under the same name and exit.
+            $handoff = Get-OrcaWindowProcesses | Where-Object {
+                $_.ProcessName -ieq $ProcessName -and $_.StartTime -ge $StartedAt
+            } | Select-Object -First 1
+            if ($null -ne $handoff) { return $handoff }
+        }
+        Start-Sleep -Milliseconds 100
+    }
+    Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
+}
+
+function New-OrcaLaunchResult($Process, [bool]$Launched) {
+    $owner = [uint32]0
+    [void][OrcaDesktopWin32]::GetWindowThreadProcessId([OrcaDesktopWin32]::GetForegroundWindow(), [ref]$owner)
+    # Why: measured, not taken from the request; an app may raise itself however it was started.
+    $delivery = if ($owner -eq $Process.Id) { "foreground" } else { "background" }
+    [pscustomobject]@{ ok = $true; app = New-OrcaAppRecord $Process; launched = $Launched; delivery = $delivery }
+}
+
+function Find-OrcaRunningLaunchTarget([string]$ProcessName, [string]$ExecutablePath = "") {
+    # Why: starting a running app again usually opens a second window over the user's work; tray-only apps count too.
+    $session = [System.Diagnostics.Process]::GetCurrentProcess().SessionId
+    $running = @(Get-Process -Name ([WildcardPattern]::Escape($ProcessName)) -ErrorAction SilentlyContinue | Where-Object {
+        # A resolved executable must be that file, not another copy with the same name.
+        $_.SessionId -eq $session -and ([string]::IsNullOrEmpty($ExecutablePath) -or [string]$_.Path -ieq $ExecutablePath)
+    }) | Sort-Object { $_.MainWindowHandle -eq 0 } | Select-Object -First 1
+    if ($null -ne $running) { Assert-OrcaProcessAllowed $running }
+    $running
+}
+
+function Invoke-OrcaLaunchApp($Operation) {
+    $query = ([string]$Operation.app).Trim()
+    if ([string]::IsNullOrWhiteSpace($query)) { throw 'appNotFound("")' }
+    # A bare name means any running copy; a path means that file, checked once it resolves.
+    if (-not [System.IO.Path]::IsPathRooted($query)) {
+        $queryName = if ($query.EndsWith(".exe", [System.StringComparison]::OrdinalIgnoreCase)) { $query.Substring(0, $query.Length - 4) } else { $query }
+        $running = Find-OrcaRunningLaunchTarget $queryName
+        if ($null -ne $running) { return New-OrcaLaunchResult $running $false }
+    }
+
+    $executable = [System.IO.Path]::GetFullPath((Resolve-OrcaLaunchExecutable $query))
+    # Why: an App Paths alias can name a differently named executable.
+    $running = Find-OrcaRunningLaunchTarget ([System.IO.Path]::GetFileNameWithoutExtension($executable)) $executable
+    if ($null -ne $running) { return New-OrcaLaunchResult $running $false }
+    $name = [System.IO.Path]::GetFileNameWithoutExtension($executable).ToLowerInvariant().Replace(" ", "")
+    foreach ($fragment in $BlockedAppFragments) {
+        if ($name.Contains($fragment.Replace(" ", ""))) { throw "appBlocked(`"$name`")" }
+    }
+    $activate = [bool]$Operation.activate
+    # Why: Orca runs this script with ELECTRON_RUN_AS_NODE=1, which would start an Electron app as bare Node.
+    Remove-Item Env:ELECTRON_RUN_AS_NODE -ErrorAction SilentlyContinue
+    $startedAt = (Get-Date).AddSeconds(-1)
+    try {
+        $processId = if ($activate) {
+            (Start-Process -FilePath $executable -PassThru).Id
+        } else {
+            [OrcaDesktopWin32]::LaunchWithoutForeground($executable, [System.IO.Path]::GetDirectoryName($executable))
+        }
+    } catch {
+        throw "app_launch_failed: could not launch '$query': $($_.Exception.Message)"
+    }
+    $process = Wait-OrcaLaunchedWindow $processId ([System.IO.Path]::GetFileNameWithoutExtension($executable)) $startedAt 10000
+    if ($null -eq $process) {
+        throw "app_launch_failed: the process started for '$query' exited; if it handed off to another process, find that one with list-apps"
+    }
+    $result = New-OrcaLaunchResult $process $true
+    # Why: an app that still took the foreground keeps the keyboard; burying it would hide where typing goes.
+    if (-not $activate -and $result.delivery -eq "background" -and $process.MainWindowHandle -ne 0) {
+        [void][OrcaDesktopWin32]::SendWindowToBack([IntPtr]$process.MainWindowHandle)
+    }
+    $result
+}
+
 function Get-OrcaHandshake {
     [pscustomobject]@{
         platform = "win32"
@@ -1218,13 +1675,13 @@ function Get-OrcaHandshake {
         providerVersion = "1.0.0"
         protocolVersion = 1
         supports = [pscustomobject]@{
-            apps = [pscustomobject]@{ list = $true; bundleIds = $false; pids = $true }
+            apps = [pscustomobject]@{ list = $true; bundleIds = $false; pids = $true; launch = $true }
             windows = [pscustomobject]@{ list = $true; targetById = $true; targetByIndex = $true; focus = $false; moveResize = $false }
             observation = [pscustomobject]@{ screenshot = $true; annotatedScreenshot = $false; elementFrames = $true; ocr = $false; disabledState = $true }
             actions = [pscustomobject]@{
                 click = $true
                 typeText = $true
-                typeTextElement = $false
+                typeTextElement = $true
                 pressKey = $true
                 hotkey = $true
                 pasteText = $true
@@ -1621,19 +2078,10 @@ function Send-OrcaDrag($From, $To) {
 }
 
 function Send-OrcaText([IntPtr]$WindowHandle, [string]$Text) {
-    [void][OrcaDesktopWin32]::SetForegroundWindow($WindowHandle)
-    $hasNonAscii = $false
-    foreach ($character in $Text.ToCharArray()) {
-        if ([int][char]$character -gt 0x7F) { $hasNonAscii = $true; break }
+    Assert-OrcaStillFocused $WindowHandle
+    if (-not [OrcaDesktopWin32]::SendUnicodeText($Text)) {
+        throw "SendInput did not deliver the text; inspect the field before retrying"
     }
-    if ($hasNonAscii) {
-        foreach ($character in $Text.ToCharArray()) {
-            [void][OrcaDesktopWin32]::PostMessage($WindowHandle, $WindowsMessages.Char, [IntPtr][int][char]$character, [IntPtr]::Zero)
-            Start-Sleep -Milliseconds 8
-        }
-        return
-    }
-    [System.Windows.Forms.SendKeys]::SendWait((ConvertTo-OrcaSendKeysText $Text))
 }
 
 function Get-OrcaVirtualKey([string]$Key) {
@@ -1648,8 +2096,15 @@ function Get-OrcaVirtualKey([string]$Key) {
     throw "Unsupported key: $Key"
 }
 
+function Assert-OrcaStillFocused([IntPtr]$WindowHandle) {
+    # Why: keys go to whatever is in front, so a user switching windows since the focus check must not receive them.
+    if (-not (Test-OrcaWindowFocused $WindowHandle)) {
+        throw "window_not_focused: the target window lost focus before the keys were sent; nothing was sent"
+    }
+}
+
 function Send-OrcaKey([IntPtr]$WindowHandle, [string]$Key) {
-    [void][OrcaDesktopWin32]::SetForegroundWindow($WindowHandle)
+    Assert-OrcaStillFocused $WindowHandle
     [System.Windows.Forms.SendKeys]::SendWait((ConvertTo-OrcaSendKeysKey $Key))
 }
 
@@ -1690,7 +2145,7 @@ function ConvertTo-OrcaSendKeysHotkey([string]$KeySpec) {
 
 function Send-OrcaHotkey([IntPtr]$WindowHandle, [string]$KeySpec) {
     $keys = ConvertTo-OrcaSendKeysHotkey $KeySpec
-    [void][OrcaDesktopWin32]::SetForegroundWindow($WindowHandle)
+    Assert-OrcaStillFocused $WindowHandle
     [System.Windows.Forms.SendKeys]::SendWait($keys)
 }
 
@@ -1771,6 +2226,9 @@ function Invoke-OrcaOperation($Operation) {
         $list = Get-OrcaWindowList $Operation.app
         return [pscustomobject]@{ ok = $true; app = $list.app; windows = @($list.windows) }
     }
+    if ($Operation.tool -eq "launch_app") {
+        return Invoke-OrcaLaunchApp $Operation
+    }
     if ($Operation.tool -eq "get_app_state") {
         return [pscustomobject]@{ ok = $true; snapshot = New-OrcaSnapshot $Operation.app $includeScreenshot $Operation.windowId $Operation.windowIndex ([bool]$Operation.restoreWindow) $Operation.root }
     }
@@ -1785,9 +2243,10 @@ function Invoke-OrcaOperation($Operation) {
     $fromElement = Find-OrcaElement $root $Operation.fromElement
     $toElement = Find-OrcaElement $root $Operation.toElement
     $handle = [IntPtr]$process.MainWindowHandle
-    if ($Operation.tool -in @("type_text", "press_key", "hotkey", "paste_text")) {
+    $typesIntoElement = $Operation.tool -eq "type_text" -and $null -ne $Operation.element
+    if ($Operation.tool -in @("type_text", "press_key", "hotkey", "paste_text") -and -not $typesIntoElement) {
         $restoreFailure = if ($restoreWindow) { Restore-OrcaWindow $process $root } else { $null }
-        Assert-OrcaKeyboardFocus $handle $Operation $restoreFailure
+        Assert-OrcaKeyboardFocus $handle $Operation $restoreFailure $process
     }
     $foregroundBefore = [OrcaDesktopWin32]::GetForegroundWindow()
     # Why: a stale or frameless target must fail before any refusal or raise; a minimized window has no frames until restored.
@@ -1904,8 +2363,13 @@ function Invoke-OrcaOperation($Operation) {
             $action = [pscustomobject]@{ path = "synthetic"; actionName = "drag"; fallbackReason = $null }
         }
         "type_text" {
-            Send-OrcaText $handle (Get-OrcaRequiredString $Operation.text "text")
-            $action = [pscustomobject]@{ path = "synthetic"; actionName = "typeText"; fallbackReason = $null; verification = [pscustomobject]@{ state = "unverified"; reason = "synthetic_input" } }
+            $text = Get-OrcaRequiredString $Operation.text "text"
+            if ($typesIntoElement) {
+                $action = Invoke-OrcaElementTextInsertion $element $Operation.element $process $root $Operation $text
+            } else {
+                Send-OrcaText $handle $text
+                $action = [pscustomobject]@{ path = "synthetic"; actionName = "typeText"; fallbackReason = $null; verification = [pscustomobject]@{ state = "unverified"; reason = "synthetic_input" } }
+            }
         }
         "press_key" {
             Send-OrcaKey $handle (Get-OrcaRequiredString $Operation.key "key")

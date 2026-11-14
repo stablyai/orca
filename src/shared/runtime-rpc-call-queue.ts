@@ -53,6 +53,17 @@ export function isBackgroundRuntimeMethod(method: string): boolean {
   )
 }
 
+export function isTimedPRRead(method: string, params: unknown): boolean {
+  return (
+    method === 'github.prForBranch' &&
+    typeof params === 'object' &&
+    params !== null &&
+    'reason' in params &&
+    params.reason === 'swr' &&
+    !('userRefresh' in params && params.userRefresh === true)
+  )
+}
+
 // Slow worktree removal/model listing waits get a separate lane so foreground refresh/send slots remain free;
 // background slots belong to status.
 function isLongWaitRuntimeMethod(method: string): boolean {
@@ -86,23 +97,38 @@ export class RuntimeRpcCallQueuePool {
     method: string,
     run: () => Promise<T>,
     retainedBytes = 0,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    params?: unknown
   ): Promise<T> {
     if (signal?.aborted) {
       return Promise.reject(abortSignalReason(signal))
     }
     // Same concurrency bound, counted apart from the selector's other calls; global caps still apply.
     const bulkRead = isBulkReadRuntimeMethod(method)
+    const timedPR = isTimedPRRead(method, params)
+    const timedKey = `${selector}\u0000timed-pr`
     const queueKey = isLongWaitRuntimeMethod(method)
       ? `${selector}\u0000long-wait`
       : bulkRead
         ? `${selector}\u0000bulk-read`
-        : selector
+        : timedPR
+          ? timedKey
+          : selector
     if (this.queuedCallCount >= this.maxQueuedTotal) {
       return Promise.reject(new RuntimeRpcCallQueueOverloadError('global'))
     }
     const existingQueue = this.queues.get(queueKey)
-    if (existingQueue && this.queuedCount(existingQueue) >= this.maxQueuedPerSelector) {
+    const pending = (key: string): number => {
+      const queue = this.queues.get(key)
+      return queue ? this.queuedCount(queue) : 0
+    }
+    const queued =
+      queueKey === selector || timedPR
+        ? pending(selector) + pending(timedKey)
+        : existingQueue
+          ? this.queuedCount(existingQueue)
+          : 0
+    if (queued >= this.maxQueuedPerSelector) {
       return Promise.reject(new RuntimeRpcCallQueueOverloadError('selector'))
     }
     if (
@@ -115,11 +141,15 @@ export class RuntimeRpcCallQueuePool {
 
     const queue = this.getQueue(
       queueKey,
-      bulkRead ? Math.min(this.concurrency, REMOTE_RUNTIME_BULK_READ_CONCURRENCY) : this.concurrency
+      timedPR
+        ? Math.min(this.concurrency, 2)
+        : bulkRead
+          ? Math.min(this.concurrency, REMOTE_RUNTIME_BULK_READ_CONCURRENCY)
+          : this.concurrency
     )
     return new Promise<T>((resolve, reject) => {
       const call: QueuedRuntimeCall<T> = {
-        background: isBackgroundRuntimeMethod(method),
+        background: !timedPR && isBackgroundRuntimeMethod(method),
         retainedBytes,
         run,
         resolve,
