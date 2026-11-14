@@ -3,18 +3,24 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree, DetectedWorktree } from '../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { Store } from '../../../persistence/loading-store/store'
-import { mergeWorktreeMetaForWrite } from '../../../persistence/loading-store/worktree-meta-write-normalization'
-import { isWslMoveRepoBlocked } from '../../../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { mergeWorktreeMetaForWrite } from '../../../persistence/loading-store/worktree-metadata/worktree-meta-write-normalization'
+import { isWslMoveRepoBlocked } from '../../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import {
+  hostWorktreeTargetForRepo,
+  readAllWorktreeMetaForHost,
+  readWorktreeMetaForHost
+} from '../../../persistence/host-qualified-worktree-meta'
 import {
   createWorktreeVisibilitySourceMatcher,
   resolveCustomWorktreeVisibilitySources
-} from '../../../../shared/worktree/visibility-sources'
-import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/configured-worktree-base-path'
+} from '../../../../shared/worktree/visibility/visibility-sources'
+import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/paths/configured-worktree-base-path'
 import {
   toDetectedWorktree,
   applyMetadataFallbackVisibility
-} from '../../../../shared/worktree/ownership'
-import { projectResolvedWorktreeLineage } from '../../../../shared/resolved-worktree-lineage'
+} from '../../../../shared/worktree/visibility/ownership'
+import { projectWorktreeLineageWithHostPeers } from '../../../workspaces/catalog/worktree-lineage-host-peers'
 import { getProjectHostSetupMetaUpdates } from './worktree-discovery-metadata'
 import {
   getFolderWorkspaceInstanceIdentity,
@@ -23,17 +29,18 @@ import {
   mergeFolderWorkspace
 } from '../folder-workspace-model'
 
-// A project a WSL move is taking still lists, with its repairs projected in memory only.
+// During WSL moves, project repairs stay in memory to avoid mutating the source store.
 function folderMetaWriter(
   store: Store,
   repo: Repo
 ): (worktreeId: string, updates: Partial<WorktreeMeta>) => WorktreeMeta {
   if (!isWslMoveRepoBlocked(repo)) {
-    return (worktreeId, updates) => store.setWorktreeMeta(worktreeId, updates)
+    return (worktreeId, updates) =>
+      store.setWorktreeMeta(hostWorktreeTargetForRepo(worktreeId, repo), updates)
   }
   return (worktreeId, updates) => {
     const existing = store.getWorktreeMeta(worktreeId)
-    // Nothing persists, so a minted root id would change on every listing; derive it instead.
+    // Without persistence, derive root identity so repeated listings cannot mint new instances.
     const instanceId =
       existing?.instanceId ??
       (worktreeId === getFolderWorkspaceRootId(repo)
@@ -101,34 +108,22 @@ export function buildFolderDetectedWorktrees(store: Store, repo: Repo): Detected
   )
 }
 
-export function listVisibleFolderWorkspaces(store: Store, repo: Repo): Worktree[] {
-  const writeMeta = folderMetaWriter(store, repo)
-  return buildFolderDetectedWorktrees(store, repo)
-    .filter((worktree) => worktree.visible)
-    .map((worktree) => {
-      const meta = store.getWorktreeMeta(worktree.id)
-      const ownershipUpdates = getProjectHostSetupMetaUpdates(store, repo, meta)
-      const repairedMeta =
-        meta && Object.keys(ownershipUpdates).length === 0
-          ? meta
-          : writeMeta(worktree.id, ownershipUpdates)
-      return mergeFolderWorkspace(repo, worktree.id, repairedMeta)
-    })
-}
-
 export function buildDisconnectedDetectedWorktrees(
   store: Store,
   repo: Repo,
-  worktrees: Worktree[]
+  worktrees: Worktree[],
+  options: { hostMeta?: Record<string, WorktreeMeta> } = {}
 ): DetectedWorktree[] {
   const settings = store.getSettings()
+  const hostId = getRepoExecutionHostId(repo)
+  const hostMeta = options.hostMeta ?? readAllWorktreeMetaForHost(store, hostId)
   const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
     [repo.path, ...worktrees.map((worktree) => worktree.path)],
     resolveCustomWorktreeVisibilitySources(repo, settings.worktreeVisibilityDefaults),
     resolveConfiguredWorktreeBasePaths(repo)
   )
   const detected = worktrees.map((worktree) => {
-    const meta = store.getWorktreeMeta(worktree.id)
+    const meta = readWorktreeMetaForHost(store, worktree.id, hostId) ?? hostMeta[worktree.id]
     const detected = toDetectedWorktree({
       repo,
       worktree,
@@ -140,5 +135,5 @@ export function buildDisconnectedDetectedWorktrees(
     })
     return applyMetadataFallbackVisibility(detected)
   })
-  return projectResolvedWorktreeLineage(detected, store.getAllWorktreeLineage?.() ?? {})
+  return projectWorktreeLineageWithHostPeers(store, repo, detected)
 }

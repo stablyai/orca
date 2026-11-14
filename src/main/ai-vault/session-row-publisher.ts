@@ -19,13 +19,19 @@ export class SessionRowPublisher {
   ) {}
 
   readonly observe = (delta: AiVaultRowDelta): void => {
-    if (this.retired) return
+    if (this.retired) {
+      return
+    }
     this.accumulate(delta)
-    if (this.pending.size) this.schedule()
+    if (this.pending.size) {
+      this.schedule()
+    }
   }
 
   selectFinite(prepare: () => AiVaultRowDelta): void {
-    if (this.retired) return
+    if (this.retired) {
+      return
+    }
     this.prepare = prepare
     this.schedule()
   }
@@ -34,17 +40,25 @@ export class SessionRowPublisher {
     this.retired = true
     this.pending.clear()
     this.prepare = null
-    if (this.timer) clearTimeout(this.timer)
+    if (this.timer) {
+      clearTimeout(this.timer)
+    }
     this.timer = null
   }
 
   private accumulate(delta: AiVaultRowDelta): void {
-    for (const id of delta.removed) this.pending.set(id, null)
-    for (const row of delta.upserts) this.pending.set(row.id, row)
+    for (const id of delta.removed) {
+      this.pending.set(id, null)
+    }
+    for (const row of delta.upserts) {
+      this.pending.set(row.id, row)
+    }
   }
 
   private schedule(): void {
-    if (this.timer || this.flight) return
+    if (this.timer || this.flight) {
+      return
+    }
     if (!this.started) {
       void this.flush()
       return
@@ -56,35 +70,49 @@ export class SessionRowPublisher {
   }
 
   private flush(): Promise<void> {
-    if (this.flight || this.retired) return this.flight ?? Promise.resolve()
-    this.flight = Promise.resolve().then(async () => {
-      if (this.retired) return
-      const prepare = this.prepare
-      this.prepare = null
-      const next = this.pending
-      this.pending = new Map()
-      if (prepare) {
-        this.accumulate(prepare())
-        for (const [id, row] of next) this.pending.set(id, row)
-      } else {
-        this.pending = next
-      }
-      const batch = this.pending
-      this.pending = new Map()
-      const upserts: AiVaultSession[] = []
-      const removed: string[] = []
-      for (const [id, row] of batch) {
-        if (row) upserts.push(row)
-        else removed.push(id)
-      }
-      await this.deliver({ upserts: this.project(upserts), removed })
-    }).catch(() => {
-      // Preview failure never fails or delays the authoritative scan.
-      this.finish()
-    }).finally(() => {
-      this.flight = null
-      if (!this.retired && (this.prepare || this.pending.size)) this.schedule()
-    })
+    if (this.flight || this.retired) {
+      return this.flight ?? Promise.resolve()
+    }
+    this.flight = Promise.resolve()
+      .then(async () => {
+        if (this.retired) {
+          return
+        }
+        const prepare = this.prepare
+        this.prepare = null
+        const next = this.pending
+        this.pending = new Map()
+        if (prepare) {
+          this.accumulate(prepare())
+          for (const [id, row] of next) {
+            this.pending.set(id, row)
+          }
+        } else {
+          this.pending = next
+        }
+        const batch = this.pending
+        this.pending = new Map()
+        const upserts: AiVaultSession[] = []
+        const removed: string[] = []
+        for (const [id, row] of batch) {
+          if (row) {
+            upserts.push(row)
+          } else {
+            removed.push(id)
+          }
+        }
+        await this.deliver({ upserts: this.project(upserts), removed })
+      })
+      .catch(() => {
+        // Preview failure never fails or delays the authoritative scan.
+        this.finish()
+      })
+      .finally(() => {
+        this.flight = null
+        if (!this.retired && (this.prepare || this.pending.size)) {
+          this.schedule()
+        }
+      })
     return this.flight
   }
 
@@ -100,18 +128,28 @@ export class SessionRowPublisher {
       bytes = 0
     }
     for (const id of changes.removed) {
-      if (this.retired) return
+      if (this.retired) {
+        return
+      }
       const size = Buffer.byteLength(JSON.stringify(id)) + 1
-      if (bytes + size > ROW_BATCH_BYTES) await flush()
+      if (bytes + size > ROW_BATCH_BYTES) {
+        await flush()
+      }
       delta.removed.push(id)
       bytes += size
     }
     for (const row of changes.upserts) {
-      if (this.retired) return
+      if (this.retired) {
+        return
+      }
       const size = Buffer.byteLength(JSON.stringify(row)) + 1
       // Oversized previews still arrive in the ordinary final response.
-      if (size > ROW_BATCH_BYTES) continue
-      if (bytes + size > ROW_BATCH_BYTES) await flush()
+      if (size > ROW_BATCH_BYTES) {
+        continue
+      }
+      if (bytes + size > ROW_BATCH_BYTES) {
+        await flush()
+      }
       delta.upserts.push(row)
       bytes += size
     }

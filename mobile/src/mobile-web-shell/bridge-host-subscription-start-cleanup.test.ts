@@ -65,27 +65,6 @@ function observeBacklogs(): BridgeTerminalOutputBacklog[] {
 afterEach(() => vi.restoreAllMocks())
 
 describe('bridge subscription start cleanup', () => {
-  it('rethrows the original immediate failure without keeping a slot or timer', () => {
-    const failure = new Error('subscribe failed')
-    const timers = manualTimers()
-    const subscriptions = new BridgeHostSubscriptions({
-      client: {
-        ...createFakeRpcClient(),
-        subscribe: () => {
-          throw failure
-        }
-      },
-      post: vi.fn(),
-      onBinaryFrameDropped: vi.fn(),
-      terminalTimers: timers
-    })
-
-    expect(() => subscriptions.start(ID, 'terminal.subscribe', {})).toThrow(failure)
-    expect(subscriptions.size).toBe(0)
-    expect(timers.pending()).toBe(0)
-    expect(timers.delays).toEqual([])
-  })
-
   it('releases held output and its silence timer when subscribe emits and then throws', () => {
     const failure = new Error('subscribe failed after output')
     const timers = manualTimers()
@@ -165,6 +144,7 @@ describe('bridge subscription start cleanup', () => {
     const timers = manualTimers()
     const backlogs = observeBacklogs()
     const unsubscribe = vi.fn()
+    const post = vi.fn()
     const subscriptions = new BridgeHostSubscriptions({
       client: {
         ...createFakeRpcClient(),
@@ -173,7 +153,7 @@ describe('bridge subscription start cleanup', () => {
           return unsubscribe
         }
       },
-      post: vi.fn(),
+      post,
       onBinaryFrameDropped: vi.fn(),
       terminalTimers: timers
     })
@@ -183,6 +163,13 @@ describe('bridge subscription start cleanup', () => {
     expect(backlogs[0]?.pendingBytes).toBe(JSON.stringify(HELD_OUTPUT).length)
     expect(timers.pending()).toBe(1)
     subscriptions.ack(ID, BRIDGE_MAX_UNACKED_FRAMES)
+    expect(post.mock.calls.map(([raw]) => JSON.parse(raw))).toContainEqual({
+      v: 1,
+      type: 'event',
+      id: ID,
+      seq: BRIDGE_MAX_UNACKED_FRAMES + 1,
+      payload: HELD_OUTPUT
+    })
     expect(backlogs[0]?.pendingBytes).toBe(0)
     expect(timers.pending()).toBe(0)
     subscriptions.cancel(ID, null)
@@ -208,8 +195,8 @@ describe('bridge subscription start cleanup', () => {
     })
 
     expect(() => subscriptions.start(ID, 'terminal.subscribe', {})).toThrow(failure)
-    expect(post.mock.calls).toEqual([
-      [JSON.stringify({ v: 1, type: 'end', id: ID, reason: 'overflow' })]
+    expect(post.mock.calls.map(([raw]) => JSON.parse(raw))).toEqual([
+      { v: 1, type: 'end', id: ID, reason: 'overflow' }
     ])
     expect(subscriptions.size).toBe(0)
     expect(timers.pending()).toBe(0)

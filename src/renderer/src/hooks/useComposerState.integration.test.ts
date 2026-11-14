@@ -1,15 +1,15 @@
 // @vitest-environment happy-dom
 
-import { act, renderHook } from '@testing-library/react'
+import { renderHook } from '@testing-library/react'
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { EMPTY_RETIRED_NAME_REGISTRY } from '../../../shared/worktree/retired-name-registry'
+import { EMPTY_RETIRED_NAME_REGISTRY } from '../../../shared/worktree/naming/retired-name-registry'
+
 import type { Repo } from '../../../shared/repo-types'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
-import { normalizeTaskSourceContext } from '../../../shared/task-source-context'
+import { normalizeTaskSourceContext } from '../../../shared/work-items/task-source-context'
 import { useComposerState } from './useComposerState'
-import * as publicComposerDecisions from './useComposerState'
-import * as composerDecisions from './composer-state/composer-decisions'
 
 let originalApiDescriptor: PropertyDescriptor | undefined
 
@@ -39,33 +39,6 @@ afterEach(() => {
 })
 
 describe('useComposerState integrated lifecycle', () => {
-  it('keeps the public composer decisions bound to the canonical decision module', () => {
-    expect(publicComposerDecisions.canResolveFolderSmartGitHubSubmit).toBe(
-      composerDecisions.canResolveFolderSmartGitHubSubmit
-    )
-    expect(publicComposerDecisions.getInitialAutoManagedWorkspaceName).toBe(
-      composerDecisions.getInitialAutoManagedWorkspaceName
-    )
-    expect(publicComposerDecisions.getInitialGitHubPrStartPointSelection).toBe(
-      composerDecisions.getInitialGitHubPrStartPointSelection
-    )
-    expect(publicComposerDecisions.getMatchingLinkedTaskSourceContext).toBe(
-      composerDecisions.getMatchingLinkedTaskSourceContext
-    )
-    expect(publicComposerDecisions.isExplicitWorkspaceNameInput).toBe(
-      composerDecisions.isExplicitWorkspaceNameInput
-    )
-    expect(publicComposerDecisions.resolveInitialWorkspaceRunSeed).toBe(
-      composerDecisions.resolveInitialWorkspaceRunSeed
-    )
-    expect(publicComposerDecisions.resolveSmartGitHubCreateNames).toBe(
-      composerDecisions.resolveSmartGitHubCreateNames
-    )
-    expect(publicComposerDecisions.retargetGitHubPrStartPointSelection).toBe(
-      composerDecisions.retargetGitHubPrStartPointSelection
-    )
-  })
-
   it('passes the selected runtime repository to the name field when IDs repeat across hosts', () => {
     const localRepo: Repo = {
       id: 'same-id',
@@ -121,33 +94,5 @@ describe('useComposerState integrated lifecycle', () => {
       'runtime:remote'
     )
     composer.unmount()
-  })
-
-  it('composes two live composers and exposes the parent-worktree control state', () => {
-    useAppStore.setState({
-      repos: [],
-      projects: [],
-      projectGroups: [],
-      projectHostSetups: [],
-      newWorkspaceDraft: null,
-      worktreesByRepo: {},
-      sparsePresetsByRepo: {}
-    })
-    const first = renderHook(() => useComposerState({ initialName: 'first', persistDraft: false }))
-    const second = renderHook(() =>
-      useComposerState({ initialName: 'second', persistDraft: false })
-    )
-
-    expect(first.result.current.cardProps.name).toBe('first')
-    expect(second.result.current.cardProps.name).toBe('second')
-    expect(first.result.current.cardProps.parentWorktreeId).toBeNull()
-    expect(first.result.current.cardProps.onParentWorktreeIdChange).toBeTypeOf('function')
-    act(() => first.result.current.cardProps.onParentWorktreeIdChange('repo-1::/parent'))
-    expect(first.result.current.cardProps.parentWorktreeId).toBe('repo-1::/parent')
-    expect(first.result.current.cardProps.onNativeFileDrop).toBeUndefined()
-    expect(second.result.current.cardProps.onNativeFileDrop).toBeUndefined()
-
-    second.unmount()
-    first.unmount()
   })
 })

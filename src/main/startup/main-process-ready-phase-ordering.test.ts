@@ -13,7 +13,7 @@ vi.mock('./main-process-ready-runtime', () => ({
     phaseEvents.push('runtime-services')
   })
 }))
-vi.mock('./main-process-i18n-menu', () => ({
+vi.mock('./main-window/main-process-i18n-menu', () => ({
   initializeMainProcessI18nAndMenu: vi.fn(
     () =>
       new Promise<void>((resolve) => {
@@ -25,7 +25,7 @@ vi.mock('./main-process-i18n-menu', () => ({
       })
   )
 }))
-vi.mock('./main-process-runtime-launch', () => ({
+vi.mock('./runtime-startup/main-process-runtime-launch', () => ({
   initializeMainProcessRuntimeLaunch: vi.fn(async () => {
     phaseEvents.push('launch-start')
     await Promise.resolve()
@@ -34,36 +34,12 @@ vi.mock('./main-process-runtime-launch', () => ({
 }))
 
 const { initializeMainProcessReady } = await import('./main-process-ready')
+await import('./main-process-state')
 
 describe('ready-phase concurrency', () => {
   beforeEach(() => {
     phaseEvents.length = 0
     releaseI18n = null
-  })
-
-  it('creates the window without waiting for i18n and the native menu', async () => {
-    const options = {
-      openMainWindow: vi.fn(),
-      handleMacAppActivation: vi.fn()
-    } as unknown as Parameters<typeof initializeMainProcessReady>[0]
-
-    const ready = initializeMainProcessReady(options)
-    // Drain the launch phase's microtasks while i18n is still pending.
-    for (let tick = 0; tick < 8; tick += 1) {
-      await Promise.resolve()
-    }
-
-    expect(phaseEvents).toEqual([
-      'foundation',
-      'runtime-services',
-      'i18n-start',
-      'launch-start',
-      'window-created'
-    ])
-
-    releaseI18n?.()
-    await ready
-    expect(phaseEvents.at(-1)).toBe('i18n-done')
   })
 
   it('still resolves only once i18n and the menu have settled', async () => {

@@ -1,15 +1,33 @@
-import { invalidateReviewLookupsAfterPRMutation } from '../../pr-mutation-review-invalidation'
+import { invalidateReviewLookupsAfterPRMutation } from '../../pull-requests/refresh/pr-mutation-review-invalidation'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { acquire, release } from '../../execution/github-operation-slots'
+import { classifyPullRequestUpdateError } from '../../api/gh-error-classification'
+import type { LocalGitExecOptions } from '../../repositories/github-repository-identity'
 import {
-  ghExecFileAsync,
-  acquire,
-  release,
-  classifyPullRequestUpdateError,
-  type LocalGitExecOptions
-} from '../../gh-utils'
-import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
-/**
- * Update a PR's title.
- */
+  resolveGitHubRepoExecution,
+  type GitHubRepoExecOptions
+} from '../../repositories/github-api-repository'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
+import { codeHostFailure, classifiedFailure } from '../../../../shared/code-host-failure-copy'
+
+async function patchPullRequest(
+  repository: GitHubApiRepository,
+  prNumber: number,
+  fields: string[],
+  ghOptions: GitHubRepoExecOptions
+): Promise<void> {
+  await ghExecFileAsync(
+    [
+      'api',
+      '-X',
+      'PATCH',
+      `repos/${repository.owner}/${repository.repo}/pulls/${prNumber}`,
+      ...fields.flatMap((field) => ['--raw-field', field])
+    ],
+    ghOptions
+  )
+}
+
 export async function updatePRTitle(
   repoPath: string,
   prNumber: number,
@@ -29,19 +47,13 @@ export async function updatePRTitle(
   }
   await acquire()
   try {
-    const args = ['pr', 'edit', String(prNumber), '--title', title]
-    if (ownerRepo) {
-      args.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
-    }
-    await ghExecFileAsync(args, {
-      ...ghOptions
-    })
-    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
+    await patchPullRequest(ownerRepo, prNumber, [`title=${title}`], ghOptions)
     return true
   } catch (err) {
     console.warn('updatePRTitle failed:', err)
     return false
   } finally {
+    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     release()
   }
 }
@@ -61,14 +73,14 @@ export async function updatePRDetails(
     localGitOptions
   )
   if (!ownerRepo) {
-    return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
+    return codeHostFailure('github.repoUnresolved')
   }
 
   const fields: string[] = []
   if (updates.title !== undefined) {
     const title = updates.title.trim()
     if (!title) {
-      return { ok: false, error: 'Title is required' }
+      return codeHostFailure('titleRequired')
     }
     fields.push(`title=${title}`)
   }
@@ -81,23 +93,14 @@ export async function updatePRDetails(
 
   await acquire()
   try {
-    await ghExecFileAsync(
-      [
-        'api',
-        '-X',
-        'PATCH',
-        `repos/${ownerRepo.owner}/${ownerRepo.repo}/pulls/${prNumber}`,
-        ...fields.flatMap((field) => ['--raw-field', field])
-      ],
-      ghOptions
-    )
-    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
+    await patchPullRequest(ownerRepo, prNumber, fields, ghOptions)
     return { ok: true }
   } catch (err) {
     const message =
       err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
-    return { ok: false, error: classifyPullRequestUpdateError(message).message }
+    return classifiedFailure(classifyPullRequestUpdateError(message))
   } finally {
+    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     release()
   }
 }

@@ -1,10 +1,10 @@
-import type { AgentStatusIpcPayload } from '../../shared/agent-status-ipc-payload'
+import type { AgentStatusIpcPayload } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   mintFleetAgentStatusEvidence,
   type FleetAgentStatusEvidence,
   type FleetEvidenceBinding
-} from '../../shared/orchestration-fleet-agent-status-evidence'
-import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
+} from '../../shared/orchestration/fleet/orchestration-fleet-agent-status-evidence'
+import { isValidTerminalTabId } from '../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
 export type AgentStatusRuntimeEnrichment = Pick<
@@ -12,12 +12,12 @@ export type AgentStatusRuntimeEnrichment = Pick<
   | 'getAgentStatusTerminalHandleForPaneKey'
   | 'getAgentStatusOrchestrationContextForPaneKey'
   | 'getTerminalProcessIncarnation'
->
+> &
+  Partial<Pick<OrcaRuntimeService, 'getLaunchStatementForPaneKey'>>
 
 const MAX_AGENT_STATUS_DROP_TAB_ID_LENGTH = 160
 
-/** What the runtime resolved for a pane at the moment a status row was ingested. Captured by
- *  `AgentStatusObservedPaneIdentities`, which is where the arms are documented. */
+/** Identity at ingestion, captured by AgentStatusObservedPaneIdentities. */
 export type ObservedAgentStatusPaneIdentity =
   | {
       kind: 'observed'
@@ -26,12 +26,10 @@ export type ObservedAgentStatusPaneIdentity =
       /** The orchestration dispatch that owned the pane then, not whichever owns it now. */
       dispatchId: string | null
     }
-  /** No status arrival was seen for this pane in this runtime: a hydrated replay row, or one
-   *  reconciled from it. Those carry `restoredUnconfirmed` and never project `live`. */
+  /** Hydrated replay rows stay restoredUnconfirmed and cannot project live. */
   | { kind: 'unobserved' }
 
-/** The one place a pane key becomes terminal identity. Both the IPC payload the renderer
- *  decodes and the fleet evidence the orchestration path reads are derived from this. */
+/** Resolve terminal identity once for renderer IPC and orchestration fleet evidence. */
 export function resolveAgentStatusBinding(
   paneKey: string,
   runtime: AgentStatusRuntimeEnrichment | undefined
@@ -50,14 +48,7 @@ export function resolveAgentStatusBinding(
     : { kind: 'pane', terminalHandle, paneKey, processIncarnation }
 }
 
-/**
- * The identity the row was observed under, fenced against the pane's identity now.
- *
- * The fleet path reads cached rows, so resolving identity here would describe whatever process
- * and dispatch the pane owns at read time rather than the one the agent reported from. A row
- * this runtime never observed keeps the current resolution: it is a hydrated replay, already
- * held off `live` by `restoredUnconfirmed`, and inventing an observation for it would be worse.
- */
+/** Fence ingestion identity against the current process; replay rows remain unconfirmed without inventing observations. */
 export function resolveObservedAgentStatusBinding(
   paneKey: string,
   runtime: AgentStatusRuntimeEnrichment | undefined,
@@ -94,8 +85,7 @@ export function mintAgentStatusFleetEvidence(
   )
 }
 
-/** Unchanged wire shape: `agentStatus:set` and `agentStatus:getSnapshot` still publish the
- *  same optional fields an older renderer decodes. Only the identity lookup is shared. */
+/** Share identity lookup while preserving optional wire fields understood by older renderers. */
 export function enrichAgentStatusIpcPayload(
   data: AgentStatusIpcPayload,
   runtime: AgentStatusRuntimeEnrichment | undefined
@@ -105,9 +95,11 @@ export function enrichAgentStatusIpcPayload(
   }
   const terminalHandle = runtime.getAgentStatusTerminalHandleForPaneKey(data.paneKey)
   const orchestration = runtime.getAgentStatusOrchestrationContextForPaneKey(data.paneKey)
+  const launchConfig = runtime.getLaunchStatementForPaneKey?.(data.paneKey, data.agentType)
   return {
     ...data,
     ...(terminalHandle ? { terminalHandle } : {}),
+    ...(launchConfig !== undefined ? { launchConfig } : {}),
     ...(orchestration ? { orchestration } : {})
   }
 }

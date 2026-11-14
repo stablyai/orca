@@ -1,30 +1,31 @@
-import { optionalSettingsRead } from '../transport/settings-read-operations'
-import { useEffect, useState } from 'react'
+import { optionalSettingsRead } from '../settings/mobile-settings-read-operations'
+import { useCallback, useEffect, useState } from 'react'
 import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
-import type { RpcAcceptedResult } from '../transport/rpc-accepted-result'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcResponse } from '../transport/types'
-import { taskLinearStatusRead, taskPreflightRead } from '../tasks/mobile-task-runtime-operations'
+import type { RpcAcceptedResult } from '../transport/rpc/rpc-accepted-result'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
+import {
+  taskLinearStatusRead,
+  taskPreflightRead
+} from '../tasks/screen-state/mobile-task-runtime-operations'
 import {
   filterAvailableTaskProviders,
   normalizeVisibleTaskProviders,
   type TaskProvider
-} from '../../../src/shared/task-providers'
+} from '../../../src/shared/work-items/task-providers'
 import {
   readJiraConnectionProbeReply,
   type MobileJiraConnection
-} from '../tasks/jira-mobile-connection'
-import { jiraConnectionStatusProbe } from '../tasks/mobile-jira-operations'
-import { useMobileJiraConnectionState } from '../tasks/use-mobile-jira-connection-state'
+} from '../tasks/providers/jira/jira-mobile-connection'
+import { jiraConnectionStatusProbe } from '../tasks/providers/jira/mobile-jira-operations'
+import { useMobileJiraConnectionState } from '../tasks/providers/jira/use-mobile-jira-connection-state'
 import type { NewWorktreeRuntimeSettings } from './new-worktree-agent-selection'
 import { newWorkspaceUiStateRead } from './new-workspace-operations'
 
-/** One member off a probe payload the drawer only re-typed, keeping its optional-chaining read. */
 function readProbeMember(payload: unknown, key: string): unknown {
   return payload == null ? undefined : Object(payload)[key]
 }
 
-/** A settled probe's accepted payload, or undefined when it never landed or was refused. */
 function settledValue(
   entry: PromiseSettledResult<RpcResponse>,
   interpret: (reply: RpcResponse) => RpcAcceptedResult<unknown>
@@ -36,10 +37,18 @@ function settledValue(
   return verdict.accepted ? verdict.value : undefined
 }
 
+type OwnedRuntimeContext = {
+  owner: { hostId: string | undefined; serverId: string | undefined }
+  runtimeSettings: NewWorktreeRuntimeSettings | null
+  trustedOrcaHooks: PersistedTrustedOrcaHooks
+  availableProviders: TaskProvider[]
+}
+
 export function useNewWorkspaceRuntimeContext(
   client: RpcClient | null,
   visible: boolean,
-  hostId?: string
+  hostId?: string,
+  serverId?: string
 ): {
   runtimeSettings: NewWorktreeRuntimeSettings | null
   setRuntimeSettings: (settings: NewWorktreeRuntimeSettings) => void
@@ -48,9 +57,41 @@ export function useNewWorkspaceRuntimeContext(
   availableProviders: TaskProvider[]
   jiraConnection: MobileJiraConnection
 } {
-  const [runtimeSettings, setRuntimeSettings] = useState<NewWorktreeRuntimeSettings | null>(null)
-  const [trustedOrcaHooks, setTrustedOrcaHooks] = useState<PersistedTrustedOrcaHooks>({})
-  const [availableProviders, setAvailableProviders] = useState<TaskProvider[]>([])
+  // Owned by the selected host, not the client object, which is rebuilt when any server's relay
+  // changes. A fresh owner per selection keeps A -> B -> A from reviving the first A's callbacks.
+  const [context, setContext] = useState<OwnedRuntimeContext>(() => ({
+    owner: { hostId, serverId },
+    runtimeSettings: null,
+    trustedOrcaHooks: {},
+    availableProviders: []
+  }))
+  const { owner } = context
+  const matchesOwner = owner.hostId === hostId && owner.serverId === serverId
+  if (!matchesOwner) {
+    setContext({
+      owner: { hostId, serverId },
+      runtimeSettings: null,
+      trustedOrcaHooks: {},
+      availableProviders: []
+    })
+  }
+  const runtimeSettings = matchesOwner ? context.runtimeSettings : null
+  const trustedOrcaHooks = matchesOwner ? context.trustedOrcaHooks : {}
+  const availableProviders = matchesOwner ? context.availableProviders : []
+  const publish = useCallback(
+    (patch: Partial<Omit<OwnedRuntimeContext, 'owner'>>) => {
+      setContext((current) => (current.owner === owner ? { ...current, ...patch } : current))
+    },
+    [owner]
+  )
+  const setRuntimeSettings = useCallback(
+    (settings: NewWorktreeRuntimeSettings) => publish({ runtimeSettings: settings }),
+    [publish]
+  )
+  const setTrustedOrcaHooks = useCallback(
+    (trust: PersistedTrustedOrcaHooks) => publish({ trustedOrcaHooks: trust }),
+    [publish]
+  )
   // Tasks can offer Jira setup; the composer requires a connected site.
   const [jiraConnection, setJiraConnection] = useMobileJiraConnectionState(
     client,
@@ -107,12 +148,11 @@ export function useNewWorkspaceRuntimeContext(
         readProbeMember(settledValue(linearRes, taskLinearStatusRead.interpret), 'connected') ===
         true
       const visibleProviders = normalizeVisibleTaskProviders(settingsValue?.visibleTaskProviders)
-      setAvailableProviders(
-        filterAvailableTaskProviders(visibleProviders, {
-          gitlabInstalled: glabInstalled,
-          linearConnected
-        }).filter((provider) => visibleProviders.includes(provider))
-      )
+      const availableProviders = filterAvailableTaskProviders(visibleProviders, {
+        gitlabInstalled: glabInstalled,
+        linearConnected
+      }).filter((provider) => visibleProviders.includes(provider))
+      publish({ availableProviders })
       const [jiraRes] = await jiraProbe
       if (!stale) {
         setJiraConnection(
@@ -123,7 +163,7 @@ export function useNewWorkspaceRuntimeContext(
     return () => {
       stale = true
     }
-  }, [visible, client, hostId])
+  }, [visible, client, hostId, publish, setRuntimeSettings, setTrustedOrcaHooks])
 
   return {
     runtimeSettings,

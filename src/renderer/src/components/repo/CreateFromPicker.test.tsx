@@ -1,142 +1,146 @@
 // @vitest-environment happy-dom
-
-import React, { act } from 'react'
-import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { afterEach, expect, it, vi } from 'vitest'
 import { CreateFromPicker } from './CreateFromPicker'
-import { TooltipProvider } from '@/components/ui/tooltip'
-import {
-  getRuntimeRepoBaseRefDefault,
-  searchRuntimeRepoBaseRefs
-} from '@/runtime/runtime-repo-client'
+import { TooltipProvider } from '../ui/tooltip'
+import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
 
-vi.mock('@/components/ui/popover', () => ({
-  // Why: the real popover owns open state; expose onOpenChange so a test can open the list.
-  Popover: ({
-    children,
-    onOpenChange
-  }: {
-    children: React.ReactNode
-    onOpenChange?: (open: boolean) => void
-  }) => (
-    <div>
-      <button type="button" data-testid="open-popover" onClick={() => onOpenChange?.(true)} />
-      {children}
-    </div>
-  ),
-  PopoverContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  PopoverTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>
+const refs = vi.hoisted(() => ({
+  defaultRef: 'origin/main',
+  values: ['refs/heads/origin/main', 'refs/remotes/origin/main']
 }))
-
-vi.mock('@/components/ui/command', () => ({
-  Command: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  CommandEmpty: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  CommandInput: () => <input />,
-  CommandItem: ({ children }: { children: React.ReactNode }) => <button>{children}</button>,
-  CommandList: ({ children }: { children: React.ReactNode }) => <div>{children}</div>
+vi.mock('@/runtime/source-control/references/runtime-repo-client', () => ({
+  getRuntimeRepoBaseRefDefault: async () => ({ defaultBaseRef: refs.defaultRef, remoteCount: 1 }),
+  searchRuntimeRepoBaseRefs: async () => refs.values
 }))
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+  refs.defaultRef = 'origin/main'
+  refs.values = ['refs/heads/origin/main', 'refs/remotes/origin/main']
+})
 
-const storeState = {
-  settings: { activeRuntimeEnvironmentId: 'focused-runtime' },
-  repos: [] as Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
-}
-
-vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: typeof storeState) => unknown) => selector(storeState)
-}))
-
-vi.mock('@/runtime/runtime-repo-client', () => ({
-  getRuntimeRepoBaseRefDefault: vi.fn().mockResolvedValue({
-    defaultBaseRef: 'main',
-    remoteCount: 1
-  }),
-  searchRuntimeRepoBaseRefs: vi.fn().mockResolvedValue([])
-}))
-
-let container: HTMLDivElement
-let root: Root
-
-function repoMapFor(repo: Repo): Map<string, Repo> {
-  return new Map([[repo.id, repo]])
-}
-
-function makeRepo(overrides: Partial<Repo>): Repo {
-  return {
-    id: 'repo-1',
-    path: '/repo',
-    displayName: 'Repo',
-    badgeColor: '#000000',
-    addedAt: 1,
-    ...overrides
+it('keeps deferred search focus through typing and cancels it when the picker closes', async () => {
+  const frames = new Map<number, FrameRequestCallback>()
+  let nextFrame = 0
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    frames.set(++nextFrame, callback)
+    return nextFrame
+  })
+  vi.stubGlobal('cancelAnimationFrame', (id: number) => frames.delete(id))
+  const flushFrames = () => {
+    const pending = [...frames.values()]
+    frames.clear()
+    act(() => pending.forEach((callback) => callback(0)))
   }
-}
+  const repo = { id: 'repo', path: '/repo', displayName: 'Repo', badgeColor: '', addedAt: 0 }
+  const view = render(
+    <TooltipProvider>
+      <CreateFromPicker
+        repoId="repo"
+        repoMap={new Map([['repo', repo]])}
+        worktrees={[]}
+        value=""
+        onValueChange={() => {}}
+      />
+    </TooltipProvider>
+  )
+  const trigger = view.getByRole('combobox')
+  fireEvent.click(trigger)
+  const input = await view.findByPlaceholderText('Search repo branches...')
+  fireEvent.change(input, { target: { value: 'origin' } })
+  flushFrames()
+  expect(document.activeElement).toBe(input)
 
-async function renderPicker(repo: Repo): Promise<void> {
-  await act(async () => {
-    root.render(
+  fireEvent.click(trigger)
+  fireEvent.click(trigger)
+  const reopened = await view.findByPlaceholderText('Search repo branches...')
+  const focus = vi.spyOn(reopened, 'focus')
+  fireEvent.click(trigger)
+  flushFrames()
+  expect(focus).not.toHaveBeenCalled()
+})
+
+it('uses the latest project default and default action after a rerender', async () => {
+  refs.values = ['refs/heads/main', 'refs/heads/topic']
+  refs.defaultRef = 'main'
+  const initial = vi.fn()
+  const latest = vi.fn()
+  const repo = { id: 'repo', path: '/repo', displayName: 'Repo', badgeColor: '', addedAt: 0 }
+  const picker = (defaultRef: string, onSetDefault: (branch: string) => void) => (
+    <TooltipProvider>
+      <CreateFromPicker
+        repoId="repo"
+        repoMap={new Map([['repo', { ...repo, worktreeBaseRef: defaultRef }]])}
+        worktrees={[]}
+        value=""
+        onValueChange={() => {}}
+        onSetDefault={onSetDefault}
+      />
+    </TooltipProvider>
+  )
+  const view = render(picker('refs/heads/main', initial))
+  fireEvent.click(view.getByRole('combobox'))
+  await view.findByRole('option', { name: 'topic' })
+  view.rerender(picker('refs/heads/topic', latest))
+  fireEvent.contextMenu(view.getByRole('option', { name: 'topic (default)' }))
+  expect(
+    (await view.findByRole('menuitem', { name: 'Current default' })).getAttribute('aria-disabled')
+  ).toBe('true')
+  fireEvent.keyDown(view.getByRole('menu'), { key: 'Escape' })
+  await waitFor(() => expect(view.queryByRole('menu')).toBeNull())
+  fireEvent.contextMenu(view.getByRole('option', { name: 'main' }))
+  fireEvent.click(view.getByRole('menuitem', { name: 'Set as default' }))
+  expect(initial).not.toHaveBeenCalled()
+  expect(latest).toHaveBeenCalledWith('refs/heads/main')
+})
+
+it('keeps the colliding local branch selectable beside a remote project default', async () => {
+  const selected = vi.fn()
+  const repo = { id: 'repo', path: '/repo', displayName: 'Repo', badgeColor: '', addedAt: 0 }
+  const view = render(
+    <TooltipProvider>
+      <CreateFromPicker
+        repoId="repo"
+        repoMap={new Map([['repo', repo]])}
+        worktrees={[]}
+        value=""
+        onValueChange={selected}
+      />
+    </TooltipProvider>
+  )
+  fireEvent.click(view.getByRole('combobox'))
+  const local = await view.findByRole('option', { name: 'refs/heads/origin/main' })
+  expect(view.getByRole('option', { name: 'origin/main (default)' })).toBeTruthy()
+  fireEvent.click(local)
+  expect(selected).toHaveBeenCalledWith('refs/heads/origin/main')
+})
+
+it.each(['main', 'origin/main'])(
+  'merges an older server default %s without changing its action',
+  async (ref) => {
+    refs.defaultRef = ref
+    refs.values = [ref, 'topic']
+    const selected = vi.fn()
+    const repo = { id: 'repo', path: '/repo', displayName: 'Repo', badgeColor: '', addedAt: 0 }
+    const view = render(
       <TooltipProvider>
         <CreateFromPicker
-          repoId={repo.id}
-          repoMap={repoMapFor(repo)}
-          worktrees={[]}
+          repoId="repo"
+          repoMap={new Map([['repo', repo]])}
+          worktrees={
+            ref === 'main' ? [makeWorktree({ id: 'main', repoId: 'repo', branch: 'main' })] : []
+          }
           value=""
-          onValueChange={vi.fn()}
+          onValueChange={selected}
         />
       </TooltipProvider>
     )
-  })
-}
-
-describe('CreateFromPicker host routing', () => {
-  beforeEach(() => {
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-    vi.clearAllMocks()
-  })
-
-  afterEach(() => {
-    act(() => {
-      root.unmount()
-    })
-    container.remove()
-    storeState.repos = []
-  })
-
-  it('uses the selected runtime-owned repo host instead of the focused runtime', async () => {
-    const repo = makeRepo({ executionHostId: 'runtime:owner-runtime' })
-    storeState.repos = [repo]
-
-    await renderPicker(repo)
-
-    expect(getRuntimeRepoBaseRefDefault).toHaveBeenCalledWith('runtime:owner-runtime', repo.id)
-  })
-
-  // Why: the composer's Branch tab already lists on an empty query; a minimum-length gate left
-  // this picker showing only the default ref and branches that happen to have a worktree.
-  it('lists the repo branches as soon as it opens, with no query typed', async () => {
-    const repo = makeRepo({ executionHostId: 'local' })
-    storeState.repos = [repo]
-
-    await renderPicker(repo)
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>('[data-testid="open-popover"]')?.click()
-    })
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 250))
-    })
-
-    expect(searchRuntimeRepoBaseRefs).toHaveBeenCalledWith('local', repo.id, '', 30)
-  })
-
-  it('keeps an explicit local repo on the local client even when a runtime is focused', async () => {
-    const repo = makeRepo({ executionHostId: 'local' })
-    storeState.repos = [repo]
-
-    await renderPicker(repo)
-
-    expect(getRuntimeRepoBaseRefDefault).toHaveBeenCalledWith('local', repo.id)
-    expect(searchRuntimeRepoBaseRefs).not.toHaveBeenCalled()
-  })
-})
+    fireEvent.click(view.getByRole('combobox'))
+    const topic = await view.findByRole('option', { name: 'topic' })
+    expect(view.getAllByRole('option')).toHaveLength(2)
+    expect(view.getByRole('option', { name: `${ref} (default)` })).toBeTruthy()
+    fireEvent.click(topic)
+    expect(selected).toHaveBeenCalledWith('topic')
+  }
+)

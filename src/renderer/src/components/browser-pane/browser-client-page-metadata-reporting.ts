@@ -5,15 +5,7 @@ import {
   type BrowserClientPageMetadataUnpublished
 } from './browser-client-page-metadata-publisher'
 
-/**
- * Why this exists at all: a client-hosted page's URL and title only reach its runtime through a
- * metadata publish, so a publish that quietly fails presents downstream as a page that never
- * navigated — the runtime, other clients, and page recovery all keep showing where it started.
- * That failure mode went unnoticed for as long as the publisher discarded its own outcome.
- *
- * Warned once per page and reason: publishes fire on every navigation and title change, and a
- * standing fault would otherwise bury the log it is trying to make visible.
- */
+/** Warn once per page/reason: failed metadata leaves runtime, peers and recovery at the starting URL, but navigation-frequency logging would bury the signal. */
 const warnedByPageId = new Map<string, Set<string>>()
 
 export function reportUnpublishedBrowserClientPageMetadata(
@@ -33,10 +25,7 @@ export function reportUnpublishedBrowserClientPageMetadata(
   console.warn('[browser-client-page] metadata publish did not land:', { browserPageId, ...detail })
 }
 
-/**
- * A publisher wired to the one route that reaches the runtime: main, which holds the host lease.
- * Publishing straight from this renderer is refused as a stale lease and silently never lands.
- */
+/** Publish through main’s host lease; direct renderer calls are refused as stale. */
 export function startBrowserClientPageMetadataPublisher(options: {
   browserPageId: string
   environmentId: string

@@ -5,7 +5,5 @@ out
 .vercel
 next-env.d.ts
 *.tsbuildinfo
-# Keep local deployment credentials out of the publication boundary.
 .env
 .env.*
-# Project .npmrc contains package policy; keep credentials in user-level npm config.

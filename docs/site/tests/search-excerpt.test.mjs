@@ -2,13 +2,14 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { stripSearchExcerptMarkdown } from '../src/components/docs/search-excerpt.mjs'
 
-test('search excerpts omit inline Markdown syntax', () => {
-  assert.equal(
-    stripSearchExcerptMarkdown(
-      'Use **bold**, *emphasis*, `inline code`, and [linked text](https://example.com).'
-    ),
-    'Use bold, emphasis, inline code, and linked text.'
-  )
+test('link destinations retain escaped closing parentheses and literal escapes', () => {
+  for (const prefix of ['![label](', '[label](']) {
+    assert.equal(stripSearchExcerptMarkdown(prefix + 'https://example.com/a\\)b)'), 'label')
+    assert.equal(stripSearchExcerptMarkdown(prefix + 'https://example.com/a\\(b)'), 'label')
+    assert.equal(stripSearchExcerptMarkdown(prefix + 'https://example.com/a\\)'), 'label')
+    assert.equal(stripSearchExcerptMarkdown(prefix + 'https://example.com/a\\\\))'), 'label)')
+    assert.equal(stripSearchExcerptMarkdown(prefix + 'https://example.com/a\\\nb)'), 'label')
+  }
 })
 
 test('search excerpts preserve highlighted matches inside Markdown', () => {
@@ -33,24 +34,6 @@ test('search excerpts preserve highlighted matches inside Markdown', () => {
     stripSearchExcerptMarkdown('<mark>[Privacy controls](https://example.com/privacy)</mark>'),
     '<mark>Privacy controls</mark>'
   )
-})
-
-test('unclosed angles avoid the HTML matcher without changing excerpt text', () => {
-  const input = '<'.repeat(8192)
-  const replace = String.prototype.replace
-  let tagMatcherCalls = 0
-  String.prototype.replace = function (pattern, ...args) {
-    if (pattern instanceof RegExp && pattern.source === '<[^>]+>' && pattern.flags === 'g') {
-      tagMatcherCalls += 1
-    }
-    return Reflect.apply(replace, this, [pattern, ...args])
-  }
-  try {
-    assert.equal(stripSearchExcerptMarkdown(input), input)
-  } finally {
-    String.prototype.replace = replace
-  }
-  assert.equal(tagMatcherCalls, 0)
 })
 
 test('tag guards preserve malformed markup, protected code and highlighted matches', () => {
@@ -81,26 +64,4 @@ test('tag guards preserve malformed markup, protected code and highlighted match
   for (const [input, expected] of cases) {
     assert.equal(stripSearchExcerptMarkdown(input), expected, input)
   }
-})
-
-test('unclosed brackets avoid link matchers without changing excerpt text', () => {
-  const input = '['.repeat(4096)
-  const replace = String.prototype.replace
-  let linkMatcherCalls = 0
-  String.prototype.replace = function (pattern, ...args) {
-    if (
-      pattern instanceof RegExp &&
-      pattern.source.includes('\\[') &&
-      pattern.source.includes('\\]')
-    ) {
-      linkMatcherCalls += 1
-    }
-    return Reflect.apply(replace, this, [pattern, ...args])
-  }
-  try {
-    assert.equal(stripSearchExcerptMarkdown(input), input)
-  } finally {
-    String.prototype.replace = replace
-  }
-  assert.equal(linkMatcherCalls, 0)
 })

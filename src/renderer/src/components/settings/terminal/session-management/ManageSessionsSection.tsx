@@ -1,0 +1,263 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
+import type { PtyManagementSession } from '../../../../../../preload/api/terminal/pty-management-api'
+import { SearchableSetting } from '../../section-layout/SearchableSetting'
+import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import { getManageSessionsSearchEntries } from './manage-sessions-search'
+import { useAppStore } from '../../../../store/index'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
+import { useDaemonActions, DaemonActionDialog } from '../../../shared/useDaemonActions'
+import { ManageSessionKillDialog } from './ManageSessionKillDialog'
+import { ManageSessionsTable } from './ManageSessionsTable'
+import {
+  notifyDaemonSessionInventoryInvalidated,
+  subscribeDaemonSessionInventoryInvalidated
+} from '../../../status-bar/daemon-session-inventory-invalidation'
+import { MANAGE_SESSIONS_SECTION_ID } from './open-terminal-manage-sessions'
+import { TerminalTccAttributionNotice } from '../../developer-permissions/TerminalTccAttributionNotice'
+import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+
+type ConfirmKind = 'killOne'
+
+export function ManageSessionsSection(): React.JSX.Element {
+  const t = useTranslate()
+  const [sessions, setSessions] = useState<PtyManagementSession[]>([])
+  const [isRefreshing, setIsRefreshing] = useState(true)
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
+  const [pendingKillSession, setPendingKillSession] = useState<PtyManagementSession | null>(null)
+  const [busyKind, setBusyKind] = useState<ConfirmKind | null>(null)
+  const [attributionRefreshRevision, setAttributionRefreshRevision] = useState(0)
+  const optimisticRollback = useRef<PtyManagementSession[] | null>(null)
+  const isMounted = useRef(true)
+  const mutationInFlight = useRef(false)
+  const notifyingOwnInvalidation = useRef(false)
+
+  const tabsByWorktree = useAppStore((s) => s.tabsByWorktree)
+  const ptyIdsByTabId = useAppStore((s) => s.ptyIdsByTabId)
+  const setActiveView = useAppStore((s) => s.setActiveView)
+  const closeSettingsPage = useAppStore((s) => s.closeSettingsPage)
+
+  const ptyIdToTabId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const [tabId, ptyIds] of Object.entries(ptyIdsByTabId)) {
+      for (const ptyId of ptyIds) {
+        map.set(ptyId, tabId)
+      }
+    }
+    return map
+  }, [ptyIdsByTabId])
+
+  const tabIdToWorktreeId = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
+      for (const tab of tabs) {
+        map.set(tab.id, worktreeId)
+      }
+    }
+    return map
+  }, [tabsByWorktree])
+
+  const handleNavigate = useCallback(
+    (tabId: string) => {
+      const worktreeId = tabIdToWorktreeId.get(tabId)
+      if (worktreeId) {
+        activateAndRevealWorktree(worktreeId)
+      }
+      setActiveView('terminal')
+      activateTabAndFocusPane(tabId, null)
+      closeSettingsPage()
+    },
+    [tabIdToWorktreeId, setActiveView, closeSettingsPage]
+  )
+
+  useEffect(() => {
+    isMounted.current = true
+    return () => {
+      isMounted.current = false
+    }
+  }, [])
+
+  const refresh = useCallback(async (): Promise<PtyManagementSession[]> => {
+    setIsRefreshing(true)
+    try {
+      const result = await window.api.pty.management.listSessions()
+      if (!isMounted.current || mutationInFlight.current) {
+        return result.sessions
+      }
+      setSessions(result.sessions)
+      return result.sessions
+    } catch (err) {
+      console.error('[manage-sessions] listSessions failed', err)
+      if (isMounted.current && !mutationInFlight.current) {
+        toast.error(
+          translate(
+            'auto.components.settings.ManageSessionsSection.c535cbdd09',
+            'Couldn’t load sessions.'
+          ),
+          {
+            description: err instanceof Error ? err.message : undefined
+          }
+        )
+      }
+      return []
+    } finally {
+      if (isMounted.current) {
+        setIsRefreshing(false)
+        setHasLoadedOnce(true)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
+
+  // Retained search sections need invalidation from external kills; own mutations refresh when settled.
+  useEffect(
+    () =>
+      subscribeDaemonSessionInventoryInvalidated(() => {
+        if (notifyingOwnInvalidation.current || mutationInFlight.current) {
+          return
+        }
+        void refresh()
+      }),
+    [refresh]
+  )
+
+  const notifyForeignSurfaces = useCallback((): void => {
+    notifyingOwnInvalidation.current = true
+    try {
+      notifyDaemonSessionInventoryInvalidated()
+    } finally {
+      notifyingOwnInvalidation.current = false
+    }
+  }, [])
+
+  const sessionCount = sessions.length
+
+  const daemonActions = useDaemonActions({
+    onKillAllStart: () => {
+      mutationInFlight.current = true
+      optimisticRollback.current = sessions
+      setSessions([])
+    },
+    onKillAllError: () => {
+      if (isMounted.current && optimisticRollback.current) {
+        setSessions(optimisticRollback.current)
+      }
+    },
+    onKillAllSettled: () => {
+      optimisticRollback.current = null
+      mutationInFlight.current = false
+      void refresh()
+    },
+    onRestartSettled: () => {
+      notifyForeignSurfaces()
+      setAttributionRefreshRevision((revision) => revision + 1)
+      void refresh()
+    }
+  })
+
+  const handleKillOne = useCallback(
+    async (session: PtyManagementSession) => {
+      setBusyKind('killOne')
+      mutationInFlight.current = true
+      try {
+        const { success } = await window.api.pty.management.killOne({
+          sessionId: session.sessionId
+        })
+        if (success) {
+          toast.success(
+            translate(
+              'auto.components.settings.ManageSessionsSection.bfba05dccd',
+              'Killed session.'
+            )
+          )
+        } else {
+          toast.error(
+            translate(
+              'auto.components.settings.ManageSessionsSection.0735b7a586',
+              'Couldn’t kill session — it may already be gone.'
+            )
+          )
+        }
+        mutationInFlight.current = false
+        notifyForeignSurfaces()
+        await refresh()
+      } catch (err) {
+        toast.error(
+          translate(
+            'auto.components.settings.ManageSessionsSection.8dbd96b463',
+            'Couldn’t kill session.'
+          ),
+          {
+            description: err instanceof Error ? err.message : undefined
+          }
+        )
+      } finally {
+        mutationInFlight.current = false
+        if (isMounted.current) {
+          setBusyKind(null)
+          setPendingKillSession(null)
+        }
+      }
+    },
+    [notifyForeignSurfaces, refresh]
+  )
+
+  const runConfirmed = useCallback(() => {
+    if (!pendingKillSession) {
+      return
+    }
+    void handleKillOne(pendingKillSession)
+  }, [pendingKillSession, handleKillOne])
+
+  const isBusy = busyKind !== null || daemonActions.isBusy
+
+  return (
+    <SettingsGroup
+      title={t('auto.components.settings.ManageSessionsSection.0e07cc838b', 'Manage sessions')}
+      description={t(
+        'auto.components.settings.ManageSessionsSection.7c4889a724',
+        'Recover from a frozen or misbehaving terminal by killing sessions or restarting the underlying daemon.'
+      )}
+    >
+      <SearchableSetting
+        title={getManageSessionsSearchEntries()[0].title}
+        description={getManageSessionsSearchEntries()[0].description}
+        keywords={getManageSessionsSearchEntries()[0].keywords}
+        className="space-y-3 py-3"
+        id={MANAGE_SESSIONS_SECTION_ID}
+      >
+        <TerminalTccAttributionNotice
+          showManageSessionsButton={false}
+          refreshRevision={attributionRefreshRevision}
+        />
+        <ManageSessionsTable
+          sessions={sessions}
+          hasLoadedOnce={hasLoadedOnce}
+          sessionCount={sessionCount}
+          isBusy={isBusy}
+          isRefreshing={isRefreshing}
+          daemonBusyKind={daemonActions.busyKind}
+          ptyIdToTabId={ptyIdToTabId}
+          onRefresh={() => void refresh()}
+          onKillAll={() => daemonActions.setPending('killAll')}
+          onRestartDaemon={() => daemonActions.setPending('restart')}
+          onNavigate={handleNavigate}
+          onRequestKill={setPendingKillSession}
+        />
+      </SearchableSetting>
+
+      <ManageSessionKillDialog
+        session={pendingKillSession}
+        isBusy={isBusy}
+        onCancel={() => setPendingKillSession(null)}
+        onConfirm={runConfirmed}
+      />
+      <DaemonActionDialog api={daemonActions} />
+    </SettingsGroup>
+  )
+}

@@ -1,8 +1,11 @@
+import { useTranslation } from 'react-i18next'
 import React from 'react'
+import { useRepoSshGate } from '@/hooks/use-repo-ssh-gate'
 import {
   CircleX,
   Ellipsis,
   Eye,
+  EyeOff,
   FolderInput,
   FolderTree,
   Plus,
@@ -23,22 +26,22 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { getRepositoryIconSectionId } from '@/components/settings/repository-settings-targets'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { getRepositoryIconSectionId } from '@/components/settings/repository/repository-settings-targets'
+import { WslMoveProjectMenuItem } from '@/components/wsl-move/WslMoveProjectMenuItem'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
+import '../../../../../../shared/worktree/visibility/ownership'
 import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
-} from '../../../../../../shared/worktree/ownership'
-import {
-  REPO_HEADER_ACTION_BUTTON_CLASS,
-  REPO_HEADER_ACTION_REVEAL_CLASS
-} from '../../repo-header-action-button-class'
-import type { getRepoHeaderCreateState } from '../../repo-header-create-state'
+} from '../../../../../../shared/external-worktree-visibility'
+import { REPO_HEADER_ACTION_BUTTON_CLASS } from './repo-header-action-button-class'
+import { setProjectHidden } from '../../hidden-projects/set-project-hidden'
+import { getRepoHeaderCreateState } from './repo-header-create-state'
 import {
   handleRepoHeaderActionPointerDown,
   stopRepoHeaderKeyboardToggle,
@@ -47,14 +50,23 @@ import {
 
 function getWorktreeVisibilityMenuLabel(
   repo: Repo,
-  visibilityDefaults?: WorktreeVisibilityDefaults
+  visibilityDefaults?: WorktreeVisibilityDefaults,
+  t: Translate = translate
 ): string {
   const visibility = effectiveExternalWorktreeVisibility(
     repo,
     isLegacyRepoForExternalWorktreeVisibility(repo),
     visibilityDefaults
   )
-  return visibility === 'show' ? 'Hide non-Orca worktrees' : 'Show hidden worktrees'
+  return visibility === 'show'
+    ? t(
+        'auto.components.sidebar.repoHeaderProjectActions.hideNonOrcaWorktrees',
+        'Hide non-Orca worktrees'
+      )
+    : t(
+        'auto.components.sidebar.repoHeaderProjectActions.showHiddenWorktrees',
+        'Show hidden worktrees'
+      )
 }
 
 export type RepoHeaderProjectActions = {
@@ -65,20 +77,28 @@ export type RepoHeaderProjectActions = {
   onMoveProjectToGroup: (repo: Repo, groupId: string) => void
   onRemoveProjectFromGroup: (repo: Repo) => void
   onRemoveProject: (repo: Repo) => void
-  onCreateForRepo: (projectId: string) => void
+  /** `pinHost`: the header's rows all sit on its repo's host, so that registration names the host. */
+  onCreateForRepo: (repo: Repo, options: { pinHost: boolean }) => void
 }
 
-export function RepoHeaderProjectActionsMenu({
+// Memoized: the sidebar re-renders every header row when the active workspace changes.
+export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjectActionsMenu({
   repo,
+  hostRepos,
   label,
   projectGroups,
   actions
 }: {
   repo: Repo
+  /** A header spanning hosts: every copy it shows, which Hide hides together. */
+  hostRepos?: ReadonlyMap<string, Repo>
   label: string
   projectGroups: readonly ProjectGroup[]
   actions: RepoHeaderProjectActions
 }): React.JSX.Element {
+  const t = useTranslate()
+  // Memoized: subscribe so a language change still repaints its labels.
+  useTranslation()
   return (
     <DropdownMenu modal={false}>
       <Tooltip>
@@ -90,7 +110,7 @@ export function RepoHeaderProjectActionsMenu({
               size="icon-xs"
               className={REPO_HEADER_ACTION_BUTTON_CLASS}
               data-repo-header-action=""
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.sidebar.WorktreeList.609633a9e6',
                 'Project actions for {{value0}}',
                 { value0: label }
@@ -104,7 +124,7 @@ export function RepoHeaderProjectActionsMenu({
           </DropdownMenuTrigger>
         </TooltipTrigger>
         <TooltipContent side="bottom" sideOffset={6}>
-          {translate('auto.components.sidebar.WorktreeList.2ef41bf9a7', 'Project actions')}
+          {t('auto.components.sidebar.WorktreeList.2ef41bf9a7', 'Project actions')}
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent
@@ -121,30 +141,30 @@ export function RepoHeaderProjectActionsMenu({
       >
         <DropdownMenuItem onSelect={() => actions.onOpenRepoSettings(repo.id)}>
           <SlidersHorizontal className="size-3.5" />
-          {translate('auto.components.sidebar.WorktreeList.2cdffbc728', 'Project Settings')}
+          {t('auto.components.sidebar.WorktreeList.2cdffbc728', 'Project Settings')}
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => actions.onOpenRepoSettings(repo.id, getRepositoryIconSectionId(repo.id))}
         >
           <Shapes className="size-3.5" />
-          {translate('auto.components.sidebar.WorktreeList.e82d3589a1', 'Change Project Icon')}
+          {t('auto.components.sidebar.WorktreeList.e82d3589a1', 'Change Project Icon')}
         </DropdownMenuItem>
         {isGitRepoKind(repo) ? (
           <DropdownMenuItem onSelect={() => actions.onOpenWorktreeVisibility(repo)}>
             <Eye className="size-3.5" />
-            {getWorktreeVisibilityMenuLabel(repo, actions.getWorktreeVisibilityDefaults(repo))}
+            {getWorktreeVisibilityMenuLabel(repo, actions.getWorktreeVisibilityDefaults(repo), t)}
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuItem onSelect={() => actions.onCreateGroupFromRepo(repo)}>
           {/* Not FolderPlus: that now means "Add project" in the sidebar header above. */}
           <FolderTree className="size-3.5" />
-          {translate('auto.components.sidebar.WorktreeList.cbfd565f83', 'New group from project')}
+          {t('auto.components.sidebar.WorktreeList.cbfd565f83', 'New group from project')}
         </DropdownMenuItem>
         {projectGroups.length > 0 ? (
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
               <FolderInput className="size-3.5" />
-              {translate('auto.components.sidebar.WorktreeList.4a08fb55f2', 'Move to group')}
+              {t('auto.components.sidebar.WorktreeList.4a08fb55f2', 'Move to group')}
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
               {projectGroups.map((group) => (
@@ -162,31 +182,45 @@ export function RepoHeaderProjectActionsMenu({
         {repo.projectGroupId ? (
           <DropdownMenuItem onSelect={() => actions.onRemoveProjectFromGroup(repo)}>
             <CircleX className="size-3.5" />
-            {translate('auto.components.sidebar.WorktreeList.64e55f7f01', 'Remove from group')}
+            {t('auto.components.sidebar.WorktreeList.64e55f7f01', 'Remove from group')}
           </DropdownMenuItem>
         ) : null}
+        <WslMoveProjectMenuItem repo={repo} />
         <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onSelect={() =>
+            void setProjectHidden(hostRepos ? [...hostRepos.values()] : [repo], true, label)
+          }
+        >
+          <EyeOff className="size-3.5" />
+          {t('sidebar.hiddenProjects.hideFromSidebar', 'Hide from Sidebar')}
+        </DropdownMenuItem>
         <DropdownMenuItem variant="destructive" onSelect={() => actions.onRemoveProject(repo)}>
           <Trash2 className="size-3.5" />
-          {translate('auto.components.sidebar.WorktreeList.c83968f87f', 'Remove Project')}
+          {t('auto.components.sidebar.WorktreeList.c83968f87f', 'Remove Project')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   )
-}
+})
 
-export function RepoHeaderCreateWorkspaceButton({
+export const RepoHeaderCreateWorkspaceButton = React.memo(function RepoHeaderCreateWorkspaceButton({
   repo,
   label,
-  createState,
+  pinHost = false,
   onCreateForRepo
 }: {
   repo: Repo
   label: string
-  createState: ReturnType<typeof getRepoHeaderCreateState> | null
-  onCreateForRepo: (projectId: string) => void
+  pinHost?: boolean
+  onCreateForRepo: RepoHeaderProjectActions['onCreateForRepo']
 }): React.JSX.Element {
-  const fallbackLabel = translate(
+  const t = useTranslate()
+  // Memoized: subscribe so a language change still repaints its labels.
+  useTranslation()
+  const sshGate = useRepoSshGate(repo)
+  const createState = getRepoHeaderCreateState({ repo, label, sshGate }, t)
+  const fallbackLabel = t(
     'auto.components.sidebar.WorktreeList.bb85cd86ba',
     'Create workspace for {{value0}}',
     { value0: label }
@@ -196,10 +230,7 @@ export function RepoHeaderCreateWorkspaceButton({
       <TooltipTrigger asChild>
         {createState?.disabled ? (
           <span
-            className={cn(
-              'inline-flex cursor-not-allowed transition-[margin,max-width,opacity]',
-              REPO_HEADER_ACTION_REVEAL_CLASS
-            )}
+            className="inline-flex size-5 shrink-0 cursor-not-allowed"
             data-repo-header-action=""
             tabIndex={0}
             aria-label={createState.ariaLabel}
@@ -231,7 +262,7 @@ export function RepoHeaderCreateWorkspaceButton({
             onClick={(event) => {
               event.preventDefault()
               event.stopPropagation()
-              onCreateForRepo(repo.id)
+              onCreateForRepo(repo, { pinHost })
             }}
           >
             <Plus className="size-3" />
@@ -243,4 +274,4 @@ export function RepoHeaderCreateWorkspaceButton({
       </TooltipContent>
     </Tooltip>
   )
-}
+})

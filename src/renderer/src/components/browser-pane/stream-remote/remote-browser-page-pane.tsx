@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import { BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY } from '../../../../../shared/protocol-version'
+import '../../../../../shared/protocol-version'
+import { BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
-import { runtimeEnvironmentSupportsCapability } from '@/runtime/runtime-rpc-client'
-import { convertBrowserPageToWorkspaceDoc } from '@/lib/file-preview'
-import { openWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-open'
-import { resolveBrowserSourceUnifiedTab } from '@/lib/browser-workspace-source-resolution'
+import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
+import '@/lib/browser/documents/file-preview'
+import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-preview-page-conversion'
+import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'
+import { resolveBrowserSourceUnifiedTab } from '@/lib/browser/workspace/browser-workspace-source-resolution'
 import { useBrowserPageChromeFocus } from '../assemble-chrome/use-browser-page-chrome-focus'
 import { useBrowserAddressBarEditSession } from '../assemble-chrome/use-browser-address-bar-edit-session'
 import { useElementGuestFocus } from '../assemble-chrome/browser-page-guest-focus'
@@ -19,7 +21,7 @@ import {
 import type {
   BrowserChromeShortcutScope,
   BrowserPageUrlSetter,
-  BrowserTabPageState
+  BrowserPageStateWriter
 } from '../describe-page/browser-page-types'
 import type { RemoteBrowserPaneNotice } from './remote-browser-page-input-model'
 import { useRemoteBrowserPageLifecycle } from './use-remote-browser-page-lifecycle'
@@ -30,6 +32,7 @@ import {
   useRemoteBrowserPageInputQueue
 } from './use-remote-browser-page-input'
 import { useRemoteBrowserPageChromeChords } from './use-remote-browser-page-chrome-chords'
+import { useRemoteBrowserPagePointerHistory } from './use-remote-browser-page-pointer-history'
 import { useRemoteBrowserPageWheel } from './use-remote-browser-page-wheel'
 import {
   RemoteBrowserPageContextMenu,
@@ -54,15 +57,13 @@ export function RemoteBrowserPagePane({
   worktreeId: string
   isActive: boolean
   chromeShortcutScope: BrowserChromeShortcutScope
-  onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
+  onUpdatePageState: BrowserPageStateWriter
   onSetUrl: BrowserPageUrlSetter
 }): React.JSX.Element {
-  const activeRuntimeEnvironmentId = runtimeEnvironmentId
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
   const remoteViewportRef = useRef<HTMLDivElement | null>(null)
-  // Why: the screencast <img> only exists once a frame lands, so before the first one the
-  // viewport is the only place guest focus can go.
+  // Before the first frame creates the image, the viewport is the only guest-focus target.
   const guestFocus = useElementGuestFocus(imageRef, remoteViewportRef)
   const { startAddressBarFocusGrab } = useBrowserPageChromeFocus({
     browserTabId: browserTab.id,
@@ -79,15 +80,7 @@ export function RemoteBrowserPagePane({
       addressBarInputRef,
       startAddressBarFocusGrab
     })
-  // Pane-owned notices, split by what they are ABOUT, because that decides who outranks whom:
-  //
-  //   'direct'      — feedback on what the user just did (URL validation). Always shown: it is the
-  //                   only response to their action, and suppressing it makes Enter look broken.
-  //   'consequence' — an operation that failed BECAUSE the stream is down (input, navigation RPCs).
-  //                   Outranked by the stream's own notice, which explains the cause; otherwise
-  //                   these repaint raw transport text over it on every stray click.
-  //
-  // Kept as one slot so the newest notice replaces the previous one, as a single toast should.
+  // Direct action feedback must remain visible; stream failures outrank consequent RPC failures. Keep one slot so newer pane notices replace older ones.
   const [paneNotice, setPaneNotice] = useState<RemoteBrowserPaneNotice | null>(null)
   const [paneBusy, setPaneBusy] = useState(false)
   const certificateFailure = useAppStore(
@@ -100,16 +93,15 @@ export function RemoteBrowserPagePane({
 
   // Why: runtimes predating browser.certificate-trust.v1 can't honor a proceed request, so hide "Proceed Anyway" until support is advertised.
   const [remoteCertificateTrustSupported, setRemoteCertificateTrustSupported] = useState(false)
-  const remoteCertificateEnvironmentId = remotePageHandle?.environmentId ?? null
   const certificateChallengeId = certificateFailure?.challengeId ?? null
   useEffect(() => {
-    if (!remoteCertificateEnvironmentId || !certificateChallengeId) {
+    if (!remotePageHandle?.environmentId || !certificateChallengeId) {
       setRemoteCertificateTrustSupported(false)
       return
     }
     let cancelled = false
     void runtimeEnvironmentSupportsCapability(
-      remoteCertificateEnvironmentId,
+      remotePageHandle?.environmentId,
       BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY
     )
       .then((supported) => {
@@ -125,7 +117,7 @@ export function RemoteBrowserPagePane({
     return () => {
       cancelled = true
     }
-  }, [remoteCertificateEnvironmentId, certificateChallengeId])
+  }, [remotePageHandle?.environmentId, certificateChallengeId])
 
   const {
     enqueueRemoteInput,
@@ -160,7 +152,7 @@ export function RemoteBrowserPagePane({
   } = useRemoteBrowserPageLifecycle({
     browserTab,
     worktreeId,
-    activeRuntimeEnvironmentId,
+    activeRuntimeEnvironmentId: runtimeEnvironmentId,
     isActive,
     setPaneNotice,
     setPaneBusy,
@@ -168,11 +160,7 @@ export function RemoteBrowserPagePane({
     resetRemoteInputQueue
   })
 
-  // Derived, never stored. The stream's own notice wins over an incidental one: while the stream is
-  // down every input RPC fails as a matter of course, and those failures must not overwrite the
-  // message that explains why — nor can the reconnect control depend on one of them being present.
-  // A stopped stream delivers no frames that could clear paneBusy, so it must force busy off.
-  // A staged page has no stream to report on yet; its create is the thing still in progress.
+  // Stopped streams cannot clear paneBusy with frames; staged pages remain busy until creation. Stream notices outrank consequent RPC failures.
   const busy = stagedPage
     ? true
     : streamStatus.kind === 'stopped'
@@ -184,6 +172,7 @@ export function RemoteBrowserPagePane({
 
   const {
     applyRemoteTabInfo,
+    prepareCertificateProceed,
     scheduleRemoteTabInfoRefresh,
     runRemoteNavigation,
     navigateToUrl,
@@ -205,8 +194,7 @@ export function RemoteBrowserPagePane({
     setPaneBusy
   })
 
-  // Why: a URL submitted against a staged page was parked rather than sent to a host page that did
-  // not exist. This pane keeps the page when the host is headless, so it owns the replay.
+  // Replay staged navigation here when the headless host leaves this pane owning the page.
   useEffect(() => {
     if (stagedPage) {
       return
@@ -223,9 +211,9 @@ export function RemoteBrowserPagePane({
     runRemoteNavigation,
     setPaneNotice
   })
+  useRemoteBrowserPagePointerHistory({ isActive, remoteViewportRef, runRemoteNavigation })
 
-  // Why: focus given to the pane before the first frame can only land on the viewport, but the
-  // screencast <img> is what carries key input — hand it over as soon as there is one.
+  // Transfer viewport focus to the first image, which owns remote key input.
   const hasStreamFrame = frameUrl !== null
   useEffect(() => {
     if (!hasStreamFrame || document.activeElement !== remoteViewportRef.current) {
@@ -235,7 +223,7 @@ export function RemoteBrowserPagePane({
   }, [hasStreamFrame])
 
   const { reconnectRemoteStream } = useRemoteBrowserPageStream({
-    activeRuntimeEnvironmentId,
+    activeRuntimeEnvironmentId: runtimeEnvironmentId,
     browserPageId: browserTab.id,
     isActive,
     lifecycle,
@@ -264,7 +252,8 @@ export function RemoteBrowserPagePane({
     getRemoteImagePoint,
     handleRemotePointerDown,
     handleRemotePointerUp,
-    handleRemoteScreenshotKeyDown
+    handleRemoteScreenshotKeyDown,
+    handleRemoteScreenshotPaste
   } = useRemoteBrowserPageInput({
     busy,
     imageRef,
@@ -323,11 +312,11 @@ export function RemoteBrowserPagePane({
   const markup = useMarkupMode({
     getCaptureContext: useCallback((): MarkupCaptureContext | null => {
       const element = imageRef.current
-      const container = remoteViewportRef.current
-      if (!element || !container) {
+      if (!element || !remoteViewportRef.current) {
         return null
       }
-      const rect = container.getBoundingClientRect()
+      // Why the image's box: the frame is letterboxed, and the pane's shape would distort it.
+      const rect = element.getBoundingClientRect()
       if (rect.width <= 0 || rect.height <= 0) {
         return null
       }
@@ -342,8 +331,7 @@ export function RemoteBrowserPagePane({
   })
 
   return (
-    // The testid scopes E2E queries to this pane: a workspace can hold more than one browser pane,
-    // and controls like the address bar are otherwise ambiguous across them.
+    // Scope E2E controls per pane; a workspace may have several address bars.
     <div
       data-testid="remote-browser-pane"
       className="relative flex h-full min-h-0 flex-1 flex-col bg-background"
@@ -395,6 +383,7 @@ export function RemoteBrowserPagePane({
         addressBarEditSession={addressBarEditSession}
         busy={busy}
         loading={browserTab.loading}
+        loadFailed={browserTab.loadError !== null}
         markup={markup}
         frameUrl={frameUrl}
         isActive={isActive}
@@ -415,17 +404,20 @@ export function RemoteBrowserPagePane({
         remoteCertificateTrustSupported={remoteCertificateTrustSupported}
         certificateFailure={certificateFailure}
         remotePageHandle={remotePageHandle}
-        activeRuntimeEnvironmentId={activeRuntimeEnvironmentId}
+        activeRuntimeEnvironmentId={runtimeEnvironmentId}
         worktreeId={worktreeId}
         runtimeWorktree={runtimeWorktree}
         runtimeTarget={runtimeTarget}
-        onReload={() => void runRemoteNavigation('browser.reload')}
-        onGoto={(url) => void runRemoteNavigation('browser.goto', url)}
+        isActive={isActive}
+        onGoto={(url) => runRemoteNavigation('browser.goto', url)}
+        onNavigateToUrl={navigateToUrl}
         onReconnect={reconnectRemoteStream}
+        onBeforeProceedCertificate={prepareCertificateProceed}
         handleRemotePointerDown={handleRemotePointerDown}
         handleRemotePointerUp={handleRemotePointerUp}
         handleRemoteContextMenu={handleRemoteContextMenu}
         handleRemoteScreenshotKeyDown={handleRemoteScreenshotKeyDown}
+        handleRemoteScreenshotPaste={handleRemoteScreenshotPaste}
       />
     </div>
   )

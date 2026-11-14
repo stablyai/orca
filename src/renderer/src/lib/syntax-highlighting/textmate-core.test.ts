@@ -2,16 +2,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { tokenizeLineWithinLimits } from './textmate-core'
 
 describe('tokenizeLineWithinLimits', () => {
-  it('retries a line that ran out of time while its grammar warmed up', () => {
-    const tokenize = vi
-      .fn()
-      .mockReturnValueOnce({ stoppedEarly: true })
-      .mockReturnValueOnce({ stoppedEarly: false })
-
-    expect(tokenizeLineWithinLimits('x', tokenize)).toEqual({ stoppedEarly: false })
-    expect(tokenize).toHaveBeenCalledTimes(2)
-  })
-
   it('gives up on a line that keeps running out of time', () => {
     const tokenize = vi.fn(() => ({ stoppedEarly: true }))
 

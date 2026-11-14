@@ -1,6 +1,7 @@
 import { getLinearOrganizationUrlKeyFromIssueUrl } from '../linear/links'
-import type { FolderWorkspaceLinkedTask } from '../folder-workspace-types'
-import type { JiraIssue } from '../jira-types'
+import { branchRefLabel } from '../git/refs/branch-ref-label'
+import type { WorkspaceLinkedItem as FolderWorkspaceLinkedTask } from '../worktree/types'
+import type { JiraIssue } from '../jira/jira-types'
 import type { LinearIssue } from '../linear/issue-types'
 import {
   getLinkedWorkItemSuggestedName,
@@ -120,8 +121,7 @@ export function buildGitLabWorkspaceSource(item: {
 export function getUsableLinearBranchName(
   branchName: string | null | undefined
 ): string | undefined {
-  // Why: only a non-blank normalized value can safely enter the exact git-ref
-  // override path; missing values must keep Orca's generated-name fallback.
+  // Only nonblank values enter exact Git-ref overrides; missing names retain generated fallback.
   return branchName?.trim() || undefined
 }
 
@@ -192,7 +192,7 @@ export function buildWorkspaceSourceSelection(args: {
 }): WorkspaceSourceSelection | null {
   const { linkedWorkItem, baseBranch } = args
   if (!linkedWorkItem) {
-    return baseBranch ? { kind: 'branch', label: baseBranch } : null
+    return baseBranch ? { kind: 'branch', label: branchRefLabel(baseBranch) } : null
   }
   const provider = getWorkspaceSourceProvider(linkedWorkItem)
   const kind: WorkspaceSourceSelectionKind =

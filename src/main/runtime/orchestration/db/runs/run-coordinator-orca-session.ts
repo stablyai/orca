@@ -1,17 +1,13 @@
 import { orcaSessionAddressSql } from '../orca-session-address-sql'
 import type { OrcaSessionId } from '../../../../../shared/orca-session-address'
-import type { RunRow } from '../../types'
+import type { RunRow } from '../orchestration-records'
 
 type RunCoordinatorOrcaSessionFields = Pick<
   RunRow,
   'coordinator_orca_session_id' | 'coordinator_orca_session_id_generation' | 'consumer_generation'
 >
 
-/**
- * A Run coordinator's Orca session id counts only at the `consumer_generation` it was written at.
- * Every write that rebinds or unbinds a Run bumps that generation, including one from a binary that
- * predates the column, so an id such a write leaves behind stops counting with nothing to clear it.
- */
+/** Count a coordinator session id only at its stamped consumer generation; older writers bump generation without clearing it. */
 export function currentRunCoordinatorOrcaSessionId(
   run: RunCoordinatorOrcaSessionFields
 ): OrcaSessionId | null {

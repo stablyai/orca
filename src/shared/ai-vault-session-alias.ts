@@ -19,18 +19,16 @@ export function sessionAliasKey(session: AiVaultSession): string | null {
   return `devin\0${session.executionHostId}\0${cliDir}\0${session.sessionId}`
 }
 
-
 export function codexSessionAliasKey(session: AiVaultSession): string | null {
   if (session.agent !== 'codex') {
     return null
   }
-  const fileName = (session.filePath.split(/[\\/]/).at(-1) ?? '')
+  const fileName = session.filePath.split(/[\\/]/).at(-1) ?? ''
   if (!/^rollout-.+\.jsonl$/.test(fileName)) {
     return null
   }
   return `${session.executionHostId}\0${codexPathExecutionNamespace(session.filePath)}\0${session.sessionId}\0${fileName}`
 }
-
 
 function codexPathExecutionNamespace(filePath: string): string {
   const wslPath = parseWslUncPath(filePath)

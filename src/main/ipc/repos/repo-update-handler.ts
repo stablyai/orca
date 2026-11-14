@@ -1,30 +1,40 @@
-import type { BrowserWindow } from 'electron'
-import { ipcMain } from 'electron'
-import type { Store } from '../../persistence'
+import { type BrowserWindow, ipcMain } from 'electron'
+import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
-import type { ExecutionHostId } from '../../../shared/execution-host'
-import { normalizeExecutionHostId } from '../../../shared/execution-host'
+import type { RepoHostTarget } from '../../../shared/repo-host-identity'
+import { isFolderRepo } from '../../../shared/repo-kind'
+
+import {
+  type ExecutionHostId,
+  getRepoExecutionHostId,
+  normalizeExecutionHostId
+} from '../../../shared/execution-host'
 import { normalizeRepoBadgeColor } from '../../../shared/repo-badge-color'
 import { sanitizeRepoIcon } from '../../../shared/repo-icon'
-import { normalizeGhAccountBinding } from '../../../shared/github/account-binding'
-import type { GhAccountBinding } from '../../../shared/github/account-binding'
-import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control-ai'
+import {
+  normalizeGhAccountBinding,
+  type GhAccountBinding
+} from '../../../shared/github/accounts/account-binding'
+
+import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
-} from '../../../shared/worktree/visibility-sources'
-import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
-import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+} from '../../../shared/worktree/visibility/visibility-sources'
+import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
+import { commitProvenRepoKindChange } from '../../workspaces/catalog/folder-repo-git-conversion'
+import { normalizeDictationTerms } from '../../../shared/dictation-dictionary'
+import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { notifyReposChanged } from './repos-changed-notification'
 import {
   assertWslMoveProjectWritable,
   isWslMoveSourceHost
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Store): void {
   ipcMain.handle(
     'repos:update',
-    (
+    async (
       _event,
       args: {
         repoId: string
@@ -37,35 +47,40 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
             | 'repoIcon'
             | 'upstream'
             | 'hookSettings'
+            | 'editorFormatter'
             | 'worktreeBaseRef'
             | 'worktreeBasePath'
             | 'kind'
             | 'symlinkPaths'
+            | 'dictationTerms'
             | 'issueSourcePreference'
             | 'forkSyncMode'
+            | 'agentWorkspaceTrust'
             | 'externalWorktreeVisibilityPromptDismissedAt'
             | 'externalWorktreeInboxBaselinePaths'
             | 'importedExternalWorktreePaths'
             | 'customWorktreeVisibilitySources'
             | 'worktreeVisibilitySourcePreferences'
             | 'projectGroupId'
-            | 'projectGroupOrder'
           >
         > & {
+          projectGroupOrder?: number | null
           externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
           agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
           sourceControlAi?: Repo['sourceControlAi'] | null
+          workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
           externalWorktreeDiscoverySuppressedAt?:
             | Repo['externalWorktreeDiscoverySuppressedAt']
             | null
+          hiddenAt?: Repo['hiddenAt'] | null
           ghAccount?: GhAccountBinding | null
         }
       }
-    ) => {
+    ): Promise<Repo | null> => {
       if (isWslMoveSourceHost(args.hostId)) {
         assertWslMoveProjectWritable(store, { repoId: args.repoId })
       }
-      // Why: TS is erased at runtime, so a garbage preference would silently collapse to 'auto' in resolveIssueSource; strip it, keeping other fields.
+      // Invalid preferences would silently resolve to auto; discard only the malformed field.
       const updates = { ...args.updates }
       if (
         'issueSourcePreference' in updates &&
@@ -85,7 +100,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
       ) {
         delete updates.forkSyncMode
       }
-      // Why: null is the transport sentinel for clearing the binding; malformed shapes are dropped, never coerced.
+      // Null clears the binding; malformed values must not become account selections.
       if ('ghAccount' in updates) {
         if (updates.ghAccount == null) {
           updates.ghAccount = null
@@ -98,11 +113,19 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
           }
         }
       }
-      // Why: worktree materialization calls .trim() per entry, so strip non-string[] at the boundary to avoid a silent throw later.
+      // Worktree materialization trims each path; reject malformed arrays at the IPC boundary.
       if ('symlinkPaths' in updates && updates.symlinkPaths !== undefined) {
         const v = updates.symlinkPaths as unknown
         if (!Array.isArray(v) || !v.every((e) => typeof e === 'string')) {
           delete updates.symlinkPaths
+        }
+      }
+      if ('dictationTerms' in updates) {
+        const terms = normalizeDictationTerms(updates.dictationTerms)
+        if (terms) {
+          updates.dictationTerms = terms
+        } else {
+          delete updates.dictationTerms
         }
       }
       if ('worktreeBasePath' in updates && updates.worktreeBasePath !== undefined) {
@@ -176,7 +199,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
       ) {
         delete updates.externalWorktreeVisibilityPromptDismissedAt
       }
-      // Why: null is the transport sentinel for clearing discovery suppression.
+      // Null clears discovery suppression across the transport.
       if (
         'externalWorktreeDiscoverySuppressedAt' in updates &&
         updates.externalWorktreeDiscoverySuppressedAt === null
@@ -189,6 +212,15 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
           !Number.isFinite(updates.externalWorktreeDiscoverySuppressedAt))
       ) {
         delete updates.externalWorktreeDiscoverySuppressedAt
+      }
+      if ('hiddenAt' in updates && updates.hiddenAt === null) {
+        updates.hiddenAt = undefined
+      } else if (
+        'hiddenAt' in updates &&
+        updates.hiddenAt !== undefined &&
+        (typeof updates.hiddenAt !== 'number' || !Number.isFinite(updates.hiddenAt))
+      ) {
+        delete updates.hiddenAt
       }
       if (
         'externalWorktreeInboxBaselinePaths' in updates &&
@@ -208,7 +240,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
           delete updates.importedExternalWorktreePaths
         }
       }
-      // Why: null is the transport sentinel for clearing Source Control AI, so flow it through as undefined instead of deleting.
+      // Null clears Source Control AI; retain the field as undefined for the store update.
       if ('sourceControlAi' in updates && updates.sourceControlAi === null) {
         updates.sourceControlAi = undefined
       } else if ('sourceControlAi' in updates && updates.sourceControlAi !== undefined) {
@@ -225,9 +257,30 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
       if (args.hostId && !hostId) {
         return null
       }
-      const updated = hostId
-        ? store.updateRepo(args.repoId, updates, hostId)
-        : store.updateRepo(args.repoId, updates)
+      // ID-only callers retain legacy first-match behavior.
+      const target: RepoHostTarget | undefined = hostId
+        ? { id: args.repoId, executionHostId: hostId }
+        : store.getRepo(args.repoId)
+      if (!target) {
+        return null
+      }
+      const write = (proven: Pick<Repo, 'folderUpgradeGitRootPath'>): Repo | null => {
+        if (isWslMoveSourceHost(args.hostId)) {
+          assertWslMoveProjectWritable(store, { repoId: args.repoId })
+        }
+        return store.updateRepo(target, { ...updates, ...proven })
+      }
+      let updated: Repo | null
+      if (updates.kind === 'git') {
+        const targetHostId = getRepoExecutionHostId(target)
+        const row = store
+          .getRepos()
+          .find((repo) => repo.id === target.id && getRepoExecutionHostId(repo) === targetHostId)
+        updated =
+          row && isFolderRepo(row) ? await commitProvenRepoKindChange(store, row, write) : write({})
+      } else {
+        updated = write({})
+      }
       if (updated) {
         if ('worktreeBasePath' in updates) {
           void prepareLocalWorktreeRootForRepo(store, updated)

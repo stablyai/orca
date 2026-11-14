@@ -10,13 +10,15 @@ import {
   holdTerminalTabsForStartup,
   releaseStartupTerminalTabHold
 } from './terminal/startup-terminal-tab-hold'
-import { hasRegisteredRuntimeTerminalTab } from '../runtime/mounted-terminal-tab-registry'
+import { hasRegisteredRuntimeTerminalTab } from '../runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { anyMountedWorktreeHasLayout as computeAnyMountedWorktreeHasLayout } from './terminal/split-group-mount'
-import { isParkRestorableTerminalPty } from './terminal-pane/terminal-hidden-view-parking'
-import { canWatcherCoverParkedTerminalTab } from './terminal-pane/terminal-parked-tab-watchers'
-import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
-import { terminalProviderHasAuthoritativeSnapshot } from './terminal/terminal-provider-snapshot-capability'
+import { isParkRestorableTerminalPty } from './terminal-pane/parking/retention/terminal-hidden-view-parking'
+import './terminal-pane/parking/output-watchers/terminal-parked-tab-watchers'
+import { canWatcherCoverParkedTerminalTab } from './terminal-pane/parking/output-watchers/parked-terminal-tab-coverage'
+import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
+import { terminalProviderAllowsParking } from './terminal/terminal-provider-snapshot-capability'
 import type { TerminalParkingFoundation } from './use-terminal-parking-foundation'
+import { isUnboundRestoredTerminalTab } from './terminal/unbound-restored-terminal-tab'
 
 export function applyTerminalColdActivation(controller: TerminalParkingFoundation) {
   const {
@@ -45,10 +47,7 @@ export function applyTerminalColdActivation(controller: TerminalParkingFoundatio
     workspaceSurfaceIds,
     workspaceSurfaceIdSet
   } = controller
-  // Why the surface mounts on the tab model alone: the hydrated tabs, groups, and layout are
-  // everything the tab strip and the chat, browser, and editor panes need. Only terminal
-  // panes wait, held below, for startup restoration to publish PTY ownership — gating the
-  // whole surface on that chain left a restored session blank until its last step.
+  // Mount hydrated non-terminal surfaces immediately; hold only terminals until startup publishes PTY ownership.
   const startupHeldWorktreeId =
     renderedActiveWorktreeId &&
     !canAdmitTerminalTabsForStartup({
@@ -105,12 +104,21 @@ export function applyTerminalColdActivation(controller: TerminalParkingFoundatio
       executionHostId: activeWorktreeDeferralHostId,
       pairedRuntimeParkingEnvironmentIds
     })
+    // Unbound saved tabs have no output to watch, so they wait regardless of parking support (#39166).
+    const storeState = useAppStore.getState()
+    const heldUnboundTabIds = new Set(
+      worktreeTabs
+        .filter(
+          (tab) => !immediateTabIds.has(tab.id) && isUnboundRestoredTerminalTab(tab, storeState)
+        )
+        .map((tab) => tab.id)
+    )
     const isColdActivationPtyEligible = (ptyId: string): boolean =>
       isRemoteRuntimePtyId(ptyId)
         ? isParkRestorableTerminalPty(ptyId, renderedActiveWorktreeId, {
             pairedRuntimeParkingEnvironmentIds
           })
-        : terminalProviderHasAuthoritativeSnapshot(ptyId)
+        : terminalProviderAllowsParking(ptyId)
     if (lastActivationWorktreeIdRef.current !== renderedActiveWorktreeId) {
       lastActivationWorktreeIdRef.current = renderedActiveWorktreeId
       const tabById = new Map(worktreeTabs.map((tab) => [tab.id, tab]))
@@ -122,6 +130,9 @@ export function applyTerminalColdActivation(controller: TerminalParkingFoundatio
         isTabLive: (tabId, worktreeId) => hasRegisteredRuntimeTerminalTab(tabId, worktreeId),
         // Why the coverage gate: parked byte watchers own an unmounted tab's bells/titles/completions, so a tab they can't cover must mount immediately.
         isTabDeferrable: (tabId) => {
+          if (heldUnboundTabIds.has(tabId)) {
+            return true
+          }
           const tab = tabById.get(tabId)
           return (
             coldActivationDeferralEnabled &&
@@ -136,17 +147,24 @@ export function applyTerminalColdActivation(controller: TerminalParkingFoundatio
         },
         immediateTabIds
       })
-      // Why: the install mutates only refs, so without a returned revision the
-      // admission drain's effect deps never change and the plan strands.
+      // Installing mutates refs only; advance a revision so the admission effect can drain the plan.
       if (installedDeferralPlan) {
         activationDeferralPlanRevisionRef.current += 1
       }
-    } else if (!coldActivationDeferralEnabled || !activationHostSupportsDeferral) {
+    } else if (
+      (!coldActivationDeferralEnabled || !activationHostSupportsDeferral) &&
+      heldUnboundTabIds.size === 0
+    ) {
       backgroundMountTabIdsByWorktreeRef.current.delete(renderedActiveWorktreeId)
       activationDeferredMountTabIdsByWorktreeRef.current.delete(renderedActiveWorktreeId)
     } else {
+      const parkingDeferralEnabled = coldActivationDeferralEnabled && activationHostSupportsDeferral
       for (const tab of worktreeTabs) {
+        if (heldUnboundTabIds.has(tab.id)) {
+          continue
+        }
         if (
+          !parkingDeferralEnabled ||
           !canWatcherCoverParkedTerminalTab(
             renderedActiveWorktreeId,
             tab,

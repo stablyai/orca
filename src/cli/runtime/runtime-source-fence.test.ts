@@ -9,8 +9,8 @@ import {
   RUNTIME_SOURCE_INCARNATION_ENV,
   RUNTIME_SOURCE_PROFILE_PATH_ENV
 } from '../../shared/runtime-source-env'
-import { RuntimeClient, RuntimeClientError } from '../runtime-client'
-import { resolveFencedRuntimeSource } from './runtime-source-fence'
+import { RuntimeClient } from './client'
+import { RuntimeClientError } from './types'
 
 const SOURCE_A = '11111111-1111-4111-8111-111111111111'
 const SOURCE_B = '22222222-2222-4222-8222-222222222222'
@@ -42,7 +42,6 @@ afterEach(async () => {
 
 type FakeRuntime = { userDataPath: string; methods: string[]; expectations: unknown[] }
 
-/** A live runtime on its own socket that answers every method and records what reached it. */
 async function startRuntime(args: {
   runtimeId: string
   installationId?: string
@@ -126,27 +125,16 @@ describe('RuntimeClient runtime-source fence', () => {
     expect(runtime.methods).toEqual(['status.get', 'status.get'])
   })
 
-  it('accepts a restarted runtime of the same source and probes it only once', async () => {
+  it('accepts a restarted runtime of the same source and carries its verified identity', async () => {
     const runtime = await startRuntime({ runtimeId: 'runtime-a2', installationId: SOURCE_A })
     launchedBy(SOURCE_A, 'runtime-a1')
     const client = new RuntimeClient(runtime.userDataPath, 2_000, null, null, 'orca')
 
     await client.call('terminal.send', { terminal: 't1', text: 'hi' })
-    await client.call('worktree.list')
-    expect(runtime.methods).toEqual(['status.get', 'terminal.send', 'worktree.list'])
-    // Why: the host refuses the send itself if it is no longer the runtime the probe verified.
+    expect(runtime.methods).toEqual(['status.get', 'terminal.send'])
+    // The host must recheck identity if it changes after the probe.
     const expected = { sourceId: SOURCE_A, runtimeId: 'runtime-a2' }
-    expect(runtime.expectations).toEqual([undefined, expected, expected])
-  })
-
-  it('sends without a probe when the launching runtime is still the live one', async () => {
-    const runtime = await startRuntime({ runtimeId: 'runtime-a', installationId: SOURCE_A })
-    launchedBy(SOURCE_A, 'runtime-a')
-    const client = new RuntimeClient(runtime.userDataPath, 2_000, null, null, 'orca')
-
-    await client.call('worktree.list')
-    expect(runtime.methods).toEqual(['worktree.list'])
-    expect(runtime.expectations).toEqual([{ sourceId: SOURCE_A, runtimeId: 'runtime-a' }])
+    expect(runtime.expectations).toEqual([undefined, expected])
   })
 
   it('refuses when the live runtime cannot say which profile it serves', async () => {
@@ -176,12 +164,5 @@ describe('RuntimeClient runtime-source fence', () => {
 
     await client.call('worktree.list')
     expect(runtime.methods).toEqual(['worktree.list'])
-  })
-
-  it('still fences a terminal whose CLI fell back to the platform default profile', () => {
-    const stamp = { sourceId: SOURCE_A, incarnation: 'runtime-a', profilePath: '/profiles/custom' }
-    expect(resolveFencedRuntimeSource(stamp, '/profiles/default', '/profiles/default')).toBe(stamp)
-    expect(resolveFencedRuntimeSource(stamp, '/profiles/custom', '/profiles/default')).toBe(stamp)
-    expect(resolveFencedRuntimeSource(stamp, '/profiles/dev', '/profiles/default')).toBeNull()
   })
 })

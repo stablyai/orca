@@ -1,11 +1,9 @@
 type CodexTokenRates = { input: number; cachedInput: number; output: number }
 export type CodexModelPricing = CodexTokenRates & {
-  /** Rates for a request whose prompt exceeds LONG_CONTEXT_THRESHOLD_TOKENS; they apply to that
-   *  whole request's input, cached input and output. */
+  /** Long-context rates apply to the entire request, including cached input and output. */
   longContext?: CodexTokenRates
 }
 
-/** OpenAI: "Prompts with more than 272K input tokens" — strictly greater, decimal thousands. */
 export const LONG_CONTEXT_THRESHOLD_TOKENS = 272_000
 
 export const MODEL_PRICING: Record<string, CodexModelPricing> = {
@@ -45,7 +43,7 @@ export const MODEL_PRICING: Record<string, CodexModelPricing> = {
     output: 30,
     longContext: { input: 10, cachedInput: 1, output: 45 }
   },
-  // Why: Sol's $4/$20 is OpenAI's promotional rate, listed through at least 2026-11-21.
+  // Promotional Sol rates are listed through at least 2026-11-21.
   'gpt-5.6-sol': {
     input: 4,
     cachedInput: 0.4,
@@ -76,6 +74,12 @@ export const MODEL_PRICING: Record<string, CodexModelPricing> = {
     output: 10,
     longContext: { input: 4, cachedInput: 0.4, output: 15 }
   },
+  'gpt-6.1-sol': {
+    input: 2,
+    cachedInput: 0.1,
+    output: 10,
+    longContext: { input: 4, cachedInput: 0.2, output: 15 }
+  },
   'gpt-6-luna': {
     input: 0.1,
     cachedInput: 0.01,
@@ -85,7 +89,7 @@ export const MODEL_PRICING: Record<string, CodexModelPricing> = {
 }
 
 const REASONING_TIER_SUFFIXES = ['minimal', 'low', 'medium', 'high', 'xhigh', 'auto', 'none']
-// Why: `max`/`ultra` only in parentheses — as a dash suffix `max` would strip `gpt-5.1-codex-max`.
+// Preserve model names ending in "-max"; only strip max/ultra inside parentheses.
 const PARENTHESIZED_REASONING_TIERS = [...REASONING_TIER_SUFFIXES, 'max', 'ultra']
 
 function stripParenthesizedReasoningTier(model: string): string | null {
@@ -186,12 +190,13 @@ export function normalizeModelForPricing(model: string | null): string | null {
   if (normalized === 'gpt-6-sol' || normalized.startsWith('gpt-6-sol-')) {
     return 'gpt-6-sol'
   }
+  if (normalized === 'gpt-6.1-sol' || normalized.startsWith('gpt-6.1-sol-')) {
+    return 'gpt-6.1-sol'
+  }
   if (normalized === 'gpt-6-luna' || normalized.startsWith('gpt-6-luna-')) {
     return 'gpt-6-luna'
   }
-  // Why: OpenAI routes the bare `gpt-5.6` alias to Sol. Match it exactly — a
-  // `gpt-5.6-` prefix match would swallow the tier IDs above and any future
-  // cheaper variant.
+  // Exact alias match avoids assigning Sol rates to future cheaper variants.
   if (normalized === 'gpt-5.6') {
     return 'gpt-5.6-sol'
   }

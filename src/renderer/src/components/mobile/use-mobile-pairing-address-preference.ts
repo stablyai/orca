@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
-import {
-  selectRefreshedNetworkAddress,
-  type MobileNetworkInterface
-} from '../settings/mobile-network-interface-selection'
+import { selectRefreshedNetworkAddress } from './pairing/mobile-network-interface-selection'
+import type { PairingNetworkInterface } from '../../../../shared/pairing-address-auto-selection'
 import {
   useMobilePairingCustomAddress,
   useMobilePairingCustomAddresses
@@ -11,7 +9,7 @@ import {
 import {
   addMobilePairingCustomAddress,
   removeMobilePairingCustomAddress
-} from '../../../../shared/mobile-pairing-custom-address'
+} from '../../../../shared/remote-runtime/pairing/mobile-pairing-custom-address'
 
 function haveSameAddresses(left: readonly string[], right: readonly string[]): boolean {
   return left.length === right.length && left.every((address, index) => address === right[index])
@@ -23,7 +21,7 @@ export type MobilePairingAddressChange = {
 }
 
 export function useMobilePairingAddressPreference(args: {
-  networkInterfaces: readonly MobileNetworkInterface[]
+  networkInterfaces: readonly PairingNetworkInterface[]
   onSelectionInvalidated: (change: MobilePairingAddressChange) => void
 }): {
   selectedAddress: string | undefined
@@ -32,7 +30,7 @@ export function useMobilePairingAddressPreference(args: {
   selectAddress: (address: string) => void
   selectCustomAddress: (address: string) => void
   removeCustomAddress: (address: string) => void
-  selectAddressAfterRefresh: (interfaces: readonly MobileNetworkInterface[]) => void
+  selectAddressAfterRefresh: (interfaces: readonly PairingNetworkInterface[]) => void
 } {
   const { networkInterfaces, onSelectionInvalidated } = args
   const updateSettings = useAppStore((state) => state.updateSettings)
@@ -51,7 +49,7 @@ export function useMobilePairingAddressPreference(args: {
   const pendingCustomAddressWritesRef = useRef<(string | undefined)[]>([])
 
   const selectAddressAfterRefresh = useCallback(
-    (interfaces: readonly MobileNetworkInterface[]): void => {
+    (interfaces: readonly PairingNetworkInterface[]): void => {
       const nextAddress = selectRefreshedNetworkAddress(
         selectedAddressRef.current,
         interfaces,
@@ -61,8 +59,7 @@ export function useMobilePairingAddressPreference(args: {
       if (nextAddress === selectedAddressRef.current) {
         return
       }
-      // Why: the first resolution picks the same default main already minted
-      // with, so invalidating there would drop a QR that is still correct.
+      // The first default resolution matches main’s minted address; invalidating would discard a valid QR.
       const hadSelection = selectedAddressRef.current !== undefined
       selectedAddressRef.current = nextAddress
       selectedAddressIsManualRef.current = false

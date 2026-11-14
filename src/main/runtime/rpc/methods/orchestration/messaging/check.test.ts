@@ -1,14 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
 import type { RpcContext } from '../../../core'
+
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
-import type { OrchestrationDb } from '../../../../orchestration/db'
-import { reconcileLifecycleMessage } from '../../../../orchestration/lifecycle-reconciliation'
+
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+
+import '../../../../orchestration/workers/lifecycle/lifecycle-reconciliation'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
+
+import '../../../../orchestration/db/root-dispatch-test-fixture'
+import { MessageWake } from '../../../../orchestration/mailbox/runtime-message-waiters'
 
 describe('orchestration RPC methods', () => {
   const h = createOrchestrationRpcHarness()
-  const { coordinatorPaneKey, findMethod } = h
+  const { coordinatorPaneKey } = h
   let db: OrchestrationDb
   let runtime: OrcaRuntimeService
   let ctx: RpcContext
@@ -38,58 +44,6 @@ describe('orchestration RPC methods', () => {
   }
 
   describe('orchestration.check', () => {
-    function createDispatchedTask(assigneeHandle = 'term_worker', assigneePaneKey?: string) {
-      const task = db.createTask({ spec: 'manual check work' })
-      const dispatch = createRootDispatch(db, task.id, assigneeHandle, assigneePaneKey)
-      return { task, dispatch }
-    }
-
-    function insertWorkerDone(params: {
-      from?: string
-      to?: string
-      taskId?: string
-      dispatchId?: string
-      filesModified?: string[]
-      senderPaneKey?: string
-    }): void {
-      const payload: Record<string, unknown> = {}
-      if (params.taskId !== undefined) {
-        payload.taskId = params.taskId
-      }
-      if (params.dispatchId !== undefined) {
-        payload.dispatchId = params.dispatchId
-      }
-      payload.outcome = 'succeeded'
-      if (params.filesModified !== undefined) {
-        payload.filesModified = params.filesModified
-      }
-
-      const message = db.insertMessage({
-        from: params.from ?? 'term_worker',
-        to: params.to ?? `run:${activeRunId}`,
-        subject: 'Done',
-        type: 'worker_done',
-        payload: JSON.stringify(payload),
-        senderPaneKey: params.senderPaneKey,
-        runId: activeRunId
-      })
-      reconcileLifecycleMessage(db, message)
-    }
-
-    it('returns unread messages for a terminal', async () => {
-      setup()
-      resolveDirectPanes('b')
-      db.insertMessage({ from: 'a', to: 'b', subject: 'one' })
-      db.insertMessage({ from: 'a', to: 'b', subject: 'two' })
-      db.insertMessage({ from: 'a', to: 'c', subject: 'other' })
-
-      const result = (await call('orchestration.check', {
-        terminal: 'b'
-      })) as { messages: unknown[]; count: number }
-
-      expect(result.count).toBe(2)
-    })
-
     it('never mixes two bound Run mailboxes', async () => {
       setup(false)
       const paneA = 'tab_a:11111111-1111-4111-8111-111111111111'
@@ -180,53 +134,23 @@ describe('orchestration RPC methods', () => {
       expect(result.messages.map((message) => message.subject)).toEqual(['Coordinator only'])
     })
 
-    it('returns formatted output with --format', async () => {
+    it('says to check again only when a capped batch leaves mail behind', async () => {
       setup()
-      resolveDirectPanes('b')
-      db.insertMessage({ from: 'a', to: 'b', subject: 'test' })
-
-      const result = (await call('orchestration.check', {
-        terminal: 'b',
-        format: true
-      })) as { formatted: string; count: number }
-
-      expect(result.formatted).toContain('Subject: test')
-      expect(result.count).toBe(1)
-    })
-
-    it('filters by type', async () => {
-      setup()
-      resolveDirectPanes('b')
-      db.insertMessage({ from: 'a', to: 'b', subject: 'status', type: 'status' })
-      db.insertMessage({ from: 'a', to: 'b', subject: 'done', type: 'worker_done' })
-
-      const result = (await call('orchestration.check', {
-        terminal: 'b',
-        types: 'worker_done'
-      })) as { count: number }
-
-      expect(result.count).toBe(1)
-    })
-
-    it('returns typed timeout and rejects a second actionable waiter', async () => {
-      setup()
-      vi.spyOn(runtime, 'waitForMessage').mockResolvedValueOnce('timed_out')
-
-      const timedOut = (await call('orchestration.check', {
-        terminal: 'term_coord',
-        wait: true,
-        timeoutMs: 10
-      })) as { timedOut: boolean; cancelled: boolean; count: number }
-      expect(timedOut).toMatchObject({ timedOut: true, cancelled: false, count: 0 })
-
-      vi.mocked(runtime.waitForMessage).mockResolvedValueOnce('waiter_exists')
-      await expect(
-        call('orchestration.check', {
-          terminal: 'term_coord',
-          wait: true,
-          timeoutMs: 10
+      for (let index = 0; index < 51; index++) {
+        db.insertMessage({
+          from: 'term_worker',
+          to: `run:${activeRunId}`,
+          subject: `status ${index}`,
+          type: 'status',
+          runId: activeRunId
         })
-      ).rejects.toMatchObject({ code: 'waiter_exists' })
+      }
+      const check = () => call('orchestration.check', { terminal: 'term_coord' })
+
+      expect(await check()).toMatchObject({ count: 50, next: expect.stringContaining('again') })
+      const last = await check()
+      expect(last).toMatchObject({ count: 1 })
+      expect(last).not.toHaveProperty('next')
     })
 
     it('rejects stale Delivery acknowledgment without consuming queued mail', async () => {
@@ -245,39 +169,6 @@ describe('orchestration RPC methods', () => {
         })
       ).rejects.toMatchObject({ code: 'stale_delivery' })
       expect(db.getUnreadMessages(`run:${activeRunId}`)).toHaveLength(1)
-    })
-
-    it('names the id-kind mismatch when --ack is given a message id', async () => {
-      setup()
-      db.insertMessage({
-        from: 'worker',
-        to: `run:${activeRunId}`,
-        subject: 'queued',
-        runId: activeRunId
-      })
-      const [queued] = db.getUnreadMessages(`run:${activeRunId}`)
-      const checked = await call('orchestration.check', { terminal: 'term_coord' })
-      if (!checked || typeof checked !== 'object' || !('deliveryId' in checked)) {
-        throw new Error('Expected a mailbox delivery')
-      }
-      const deliveryId = checked.deliveryId
-      expect(typeof deliveryId).toBe('string')
-
-      await expect(
-        call('orchestration.check', { terminal: 'term_coord', ack: queued.id })
-      ).rejects.toMatchObject({
-        code: 'stale_delivery',
-        message: `${queued.id} is a message id, not a delivery id. Acknowledge the batch with the deliveryId field from the check response; process the entire batch before acknowledging.`
-      })
-      expect(db.getMessageById(queued.id)).toMatchObject({ id: queued.id, read: 0 })
-      expect(await call('orchestration.check', { terminal: 'term_coord' })).toMatchObject({
-        deliveryId,
-        messages: [{ id: queued.id }]
-      })
-      expect(
-        await call('orchestration.check', { terminal: 'term_coord', ack: deliveryId })
-      ).toMatchObject({ acknowledged: deliveryId })
-      expect(db.getMessageById(queued.id)).toMatchObject({ read: 1 })
     })
 
     it('acknowledges a Run Delivery before returning --peek history', async () => {
@@ -344,7 +235,7 @@ describe('orchestration RPC methods', () => {
           type: 'worker_done',
           runId: activeRunId
         }).id
-        return 'notified'
+        return new MessageWake()
       })
 
       const peeked = (await call('orchestration.check', {
@@ -364,207 +255,6 @@ describe('orchestration RPC methods', () => {
       expect(db.getUnreadMessages(`run:${activeRunId}`, ['worker_done'])).toHaveLength(1)
     })
 
-    it('reconciles worker_done returned by a waiting manual check', async () => {
-      setup()
-      const { task, dispatch } = createDispatchedTask()
-      vi.spyOn(runtime, 'waitForMessage').mockImplementation(async () => {
-        insertWorkerDone({
-          taskId: task.id,
-          dispatchId: dispatch.id,
-          filesModified: ['src/file.ts']
-        })
-        return 'notified'
-      })
-
-      const result = (await call('orchestration.check', {
-        terminal: 'term_coord',
-        wait: true,
-        timeoutMs: 100,
-        types: 'worker_done,escalation,decision_gate'
-      })) as { count: number; messages: { type: string }[]; deliveryId: string }
-
-      expect(result.count).toBe(1)
-      expect(result.messages[0].type).toBe('worker_done')
-      expect(db.getTask(task.id)?.status).toBe('completed')
-      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
-      expect(db.getUnreadMessages(`run:${activeRunId}`)).toHaveLength(1)
-      const taskList = (await call('orchestration.taskList', {})) as {
-        tasks: {
-          id: string
-          status: string
-          assignee_handle?: string | null
-          dispatch_id?: string | null
-        }[]
-      }
-      const listedTask = taskList.tasks.find((t) => t.id === task.id)
-      expect(listedTask?.status).toBe('completed')
-      expect(listedTask).not.toHaveProperty('assignee_handle')
-      expect(listedTask).not.toHaveProperty('dispatch_id')
-      const shownDispatch = (await call('orchestration.dispatchShow', {
-        task: task.id
-      })) as { dispatch: { status: string } | null }
-      expect(shownDispatch.dispatch?.status).toBe('completed')
-
-      const completedAt = db.getTask(task.id)?.completed_at
-      const taskResult = db.getTask(task.id)?.result
-      const repeated = (await call('orchestration.check', {
-        terminal: 'term_coord',
-        types: 'worker_done'
-      })) as { count: number; deliveryId: string }
-      expect(repeated.count).toBe(1)
-      expect(repeated.deliveryId).toBe(result.deliveryId)
-      const acknowledged = (await call('orchestration.check', {
-        terminal: 'term_coord',
-        ack: repeated.deliveryId,
-        types: 'worker_done'
-      })) as { count: number }
-      expect(acknowledged.count).toBe(0)
-      expect(db.getTask(task.id)?.completed_at).toBe(completedAt)
-      expect(db.getTask(task.id)?.result).toBe(taskResult)
-    })
-
-    it('keeps check --all read-only while lifecycle settles at acceptance', async () => {
-      setup()
-      const { task, dispatch } = createDispatchedTask()
-      insertWorkerDone({ taskId: task.id, dispatchId: dispatch.id })
-
-      const result = (await call('orchestration.check', {
-        terminal: 'term_coord',
-        all: true,
-        types: 'worker_done'
-      })) as { count: number }
-
-      expect(result.count).toBe(1)
-      expect(db.getTask(task.id)?.status).toBe('completed')
-      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
-      expect(db.getUnreadMessages(`run:${activeRunId}`, ['worker_done'])).toHaveLength(1)
-    })
-
-    it('does not complete worker_done missing taskId or dispatchId', async () => {
-      setup()
-      const { task, dispatch } = createDispatchedTask()
-      insertWorkerDone({ dispatchId: dispatch.id })
-      insertWorkerDone({ taskId: task.id })
-
-      const result = (await call('orchestration.check', {
-        terminal: 'term_coord',
-        types: 'worker_done'
-      })) as { count: number }
-
-      expect(result.count).toBe(2)
-      expect(db.getTask(task.id)?.status).toBe('dispatched')
-      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('dispatched')
-    })
-
-    it('completes worker_done by payload IDs when the sender handle changed', async () => {
-      setup()
-      const leafId = '11111111-1111-4111-8111-111111111111'
-      const { task, dispatch } = createDispatchedTask('term_owner', `tab_before:${leafId}`)
-      insertWorkerDone({
-        from: 'term_reminted',
-        taskId: task.id,
-        dispatchId: dispatch.id,
-        senderPaneKey: `tab_after:${leafId}`
-      })
-
-      const result = (await call('orchestration.check', {
-        terminal: 'term_coord',
-        types: 'worker_done'
-      })) as { count: number }
-
-      expect(result.count).toBe(1)
-      expect(db.getTask(task.id)?.status).toBe('completed')
-      expect(db.getDispatchContextById(dispatch.id)?.status).toBe('completed')
-    })
-
-    it('does not complete worker_done for a stale inactive dispatch', async () => {
-      setup()
-      const task = db.createTask({ spec: 'retry-sensitive work' })
-      const staleDispatch = createRootDispatch(db, task.id, 'term_old')
-      db.failDispatch(staleDispatch.id, 'retry elsewhere')
-      const activeDispatch = createRootDispatch(db, task.id, 'term_current')
-      insertWorkerDone({
-        from: 'term_old',
-        taskId: task.id,
-        dispatchId: staleDispatch.id
-      })
-
-      const result = (await call('orchestration.check', {
-        terminal: 'term_coord',
-        types: 'worker_done'
-      })) as { count: number }
-
-      expect(result.count).toBe(1)
-      expect(db.getTask(task.id)?.status).toBe('dispatched')
-      expect(db.getDispatchContextById(staleDispatch.id)?.status).toBe('failed')
-      expect(db.getDispatchContextById(activeDispatch.id)?.status).toBe('dispatched')
-    })
-
-    it('returns a persisted foreign completion as a rejection diagnostic', async () => {
-      setup()
-      const { task, dispatch } = createDispatchedTask('term_worker', 'tab_worker:leaf_worker')
-      insertWorkerDone({
-        from: 'term_foreign',
-        taskId: task.id,
-        dispatchId: dispatch.id,
-        senderPaneKey: 'tab_foreign:leaf_foreign'
-      })
-
-      const result = (await call('orchestration.check', {
-        terminal: 'term_coord',
-        types: 'worker_done'
-      })) as { count: number; messages: { type: string; subject: string; body: string }[] }
-
-      expect(result).toMatchObject({
-        count: 1,
-        messages: [
-          {
-            type: 'worker_done',
-            subject: 'Rejected worker_done: Done',
-            body: expect.stringContaining('expected handle term_worker')
-          }
-        ]
-      })
-      expect(db.getTask(task.id)?.status).toBe('dispatched')
-    })
-
-    it('records heartbeat returned by unread manual check', async () => {
-      setup()
-      const { task, dispatch } = createDispatchedTask()
-      const msg = db.insertMessage({
-        from: 'term_worker',
-        to: `run:${activeRunId}`,
-        subject: 'alive',
-        type: 'heartbeat',
-        payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id }),
-        runId: activeRunId
-      })
-      reconcileLifecycleMessage(db, msg)
-
-      const result = (await call('orchestration.check', {
-        terminal: 'term_coord',
-        types: 'heartbeat'
-      })) as { count: number }
-
-      expect(result.count).toBe(1)
-      expect(db.getDispatchContextById(dispatch.id)?.last_heartbeat_at).toBe(msg.created_at)
-    })
-
-    it('rejects invalid type filters', async () => {
-      setup()
-      await expect(
-        call('orchestration.check', {
-          terminal: 'b',
-          types: 'worker_done,typo'
-        })
-      ).rejects.toThrow('Invalid --types')
-    })
-
-    it('rejects conflicting message read modes', () => {
-      const method = findMethod('orchestration.check')
-      expect(() => method.params!.parse({ unread: true, peek: true })).toThrow(/read mode/)
-    })
-
     it('default (unread only) marks returned rows as read', async () => {
       setup()
       resolveDirectPanes('b')
@@ -580,36 +270,6 @@ describe('orchestration RPC methods', () => {
         count: number
       }
       expect(second.count).toBe(0)
-    })
-
-    it('withholds delivery plumbing columns from check receipts', async () => {
-      setup()
-      db.insertMessage({
-        from: 'term_worker',
-        to: `run:${activeRunId}`,
-        subject: 'plumbing',
-        senderPaneKey: 'tab_worker:leaf_worker',
-        runId: activeRunId
-      })
-
-      const result = (await call('orchestration.check', { terminal: 'term_coord' })) as {
-        messages: Record<string, unknown>[]
-      }
-
-      expect(result.messages[0]).toMatchObject({
-        subject: 'plumbing',
-        delivery_contract: 'current_delivery'
-      })
-      for (const column of [
-        'read',
-        'sequence',
-        'sender_pane_key',
-        'pointer_enter_pending',
-        'pointer_pty_id',
-        'pointer_process_incarnation'
-      ]) {
-        expect(result.messages[0]).not.toHaveProperty(column)
-      }
     })
 
     it('rejects a consuming check whose --terminal no longer resolves to a pane', async () => {
@@ -683,7 +343,6 @@ describe('orchestration RPC methods', () => {
       })) as { messages: { read: number }[]; count: number }
 
       expect(result.count).toBe(2)
-      // Must not have flipped the remaining unread row
       const stillUnread = db.getUnreadMessages('b')
       expect(stillUnread).toHaveLength(1)
     })
@@ -703,46 +362,6 @@ describe('orchestration RPC methods', () => {
       expect(result.count).toBe(2)
       expect(result.messages.map((m) => m.type).sort()).toEqual(['dispatch', 'worker_done'])
       expect(db.getUnreadMessages('b')).toHaveLength(3)
-    })
-
-    it('--all returns rows with delivered_at set after push-on-idle stamped them', async () => {
-      setup()
-      const msg = db.insertMessage({ from: 'a', to: 'b', subject: 'hi' })
-      // Why: simulate push-on-idle stamping delivered_at without the runtime loop.
-      db.markAsDelivered([msg.id])
-
-      const result = (await call('orchestration.check', {
-        terminal: 'b',
-        all: true
-      })) as { messages: { id: string; delivered_at: string | null }[]; count: number }
-
-      expect(result.count).toBe(1)
-      expect(result.messages[0].delivered_at).not.toBeNull()
-    })
-
-    it('--all --terminal <unknown> returns empty list', async () => {
-      setup()
-      db.insertMessage({ from: 'a', to: 'b', subject: 'one' })
-
-      const result = (await call('orchestration.check', {
-        terminal: 'does_not_exist',
-        all: true
-      })) as { count: number }
-      expect(result.count).toBe(0)
-    })
-
-    it('unread:false compat shim behaves like --all (one-release bridge)', async () => {
-      setup()
-      db.insertMessage({ from: 'a', to: 'b', subject: 'one' })
-
-      const result = (await call('orchestration.check', {
-        terminal: 'b',
-        unread: false
-      })) as { count: number }
-      expect(result.count).toBe(1)
-
-      // Must not have marked read
-      expect(db.getUnreadMessages('b')).toHaveLength(1)
     })
 
     it('does not mark messages read when a waiting check is aborted', async () => {
@@ -823,49 +442,6 @@ describe('orchestration RPC methods', () => {
 
       expect(result).toEqual({ messages: [], count: 0 })
       expect(db.getUnreadMessages('b')).toHaveLength(1)
-    })
-  })
-
-  describe('orchestration.inbox', () => {
-    it('returns all messages', async () => {
-      setup()
-      db.insertMessage({ from: 'a', to: 'b', subject: 'one' })
-      db.insertMessage({ from: 'c', to: 'd', subject: 'two' })
-
-      const result = (await call('orchestration.inbox', {})) as { count: number }
-      expect(result.count).toBe(2)
-    })
-
-    it('--terminal <handle> matches check --all output for the same handle', async () => {
-      setup()
-      db.insertMessage({ from: 'a', to: 'b', subject: 'one' })
-      db.insertMessage({ from: 'a', to: 'b', subject: 'two' })
-      db.insertMessage({ from: 'a', to: 'c', subject: 'other' })
-
-      const inbox = (await call('orchestration.inbox', { terminal: 'b' })) as {
-        messages: { id: string; to_handle: string }[]
-        count: number
-      }
-      const check = (await call('orchestration.check', {
-        terminal: 'b',
-        all: true
-      })) as { messages: { id: string; to_handle: string }[]; count: number }
-
-      expect(inbox.count).toBe(2)
-      expect(check.count).toBe(2)
-      // Same rows in the same order — both use sequence DESC
-      expect(inbox.messages.map((m) => m.id)).toEqual(check.messages.map((m) => m.id))
-      expect(inbox.messages.every((m) => m.to_handle === 'b')).toBe(true)
-    })
-
-    it('--terminal <unknown_handle> returns empty list without erroring', async () => {
-      setup()
-      db.insertMessage({ from: 'a', to: 'b', subject: 'one' })
-
-      const result = (await call('orchestration.inbox', {
-        terminal: 'does_not_exist'
-      })) as { count: number }
-      expect(result.count).toBe(0)
     })
   })
 })

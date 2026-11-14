@@ -1,21 +1,20 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { getGitHubRuntimeRepoId } from '@/lib/github-source-runtime-context'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { getGitHubRuntimeRepoId } from '@/lib/work-items/github/github-source-runtime-context'
 import {
   normalizeGitHubReviewerLogins,
   parseGitHubReviewerInputLogins
-} from '@/components/github-pr-reviewer-display'
+} from '../../../../../shared/github/pull-requests/pr-reviewer-display'
 import { notifyWorkItemDetailsMutation } from '@/components/github/github-work-item-comment-mutations'
 import { buildRequestedReviewUsers } from '@/components/github/work-item-state-presentation'
-import type {
-  GitHubAssignableUser,
-  GitHubOwnerRepo
-} from '../../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { GitHubAssignableUser } from '../../../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { translate } from '@/i18n/i18n'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 type ReviewerRequestArgs = {
   submitting: boolean
@@ -38,6 +37,7 @@ type ReviewerRequestArgs = {
     options: { sourceContext?: TaskSourceContext | null }
   ) => void
   onReviewersRequested: (reviewRequests: GitHubAssignableUser[]) => void
+  onMutated: () => void
 }
 
 export async function requestPRReviewers({
@@ -57,7 +57,8 @@ export async function requestPRReviewers({
   setLocalReviewRequests,
   setReviewerInput,
   patchWorkItem,
-  onReviewersRequested
+  onReviewersRequested,
+  onMutated
 }: ReviewerRequestArgs & {
   requestedLogins?: string[]
   reviewerInput: string
@@ -118,7 +119,7 @@ export async function requestPRReviewers({
     }
     if (!result.ok) {
       toast.error(
-        result.error ??
+        codeHostErrorText(result) ??
           translate('auto.components.GitHubItemDialog.c42d942b75', 'Failed to request reviewer')
       )
       return
@@ -162,6 +163,8 @@ export async function requestPRReviewers({
     if (reviewerPanelMountedRef.current) {
       setSubmitting(false)
     }
+    // Why: a failed response doesn't prove the host kept the old reviewers; reread on every attempted write.
+    onMutated()
   }
 }
 
@@ -179,7 +182,8 @@ export async function removePRReviewers({
   setLocalReviewRequests,
   setReviewerInput,
   patchWorkItem,
-  onReviewersRequested
+  onReviewersRequested,
+  onMutated
 }: ReviewerRequestArgs & {
   reviewersToRemove: string[]
 }): Promise<void> {
@@ -232,7 +236,7 @@ export async function removePRReviewers({
     }
     if (!result.ok) {
       toast.error(
-        result.error ??
+        codeHostErrorText(result) ??
           translate('auto.components.GitHubItemDialog.73487fb975', 'Failed to remove reviewer')
       )
       return
@@ -275,5 +279,7 @@ export async function removePRReviewers({
     if (reviewerPanelMountedRef.current) {
       setSubmitting(false)
     }
+    // Why: a failed response doesn't prove the host kept the old reviewers; reread on every attempted write.
+    onMutated()
   }
 }

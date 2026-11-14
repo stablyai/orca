@@ -34,54 +34,82 @@ export class AiVaultRowDelivery {
   }
 
   readonly observe = (view: AiVaultScanRows): void => {
-    if (!this.isCurrent()) return
+    if (!this.isCurrent()) {
+      return
+    }
     if (this.scanId !== view.scanId) {
       this.acknowledge?.()
       void this.publisher?.finish()
       this.scanId = view.scanId
       let reset = true
-      this.publisher = new SessionRowPublisher(async (delta) => {
-        if (!this.isCurrent() || this.scanId !== view.scanId) return
-        const event: AiVaultRowsEvent = {
-          ...delta, requestToken: this.requestToken, scanId: view.scanId,
-          sequence: ++this.sequence, reset
-        }
-        reset = false
-        await new Promise<void>((resolve) => {
-          // A detached renderer retires only preview delivery, never the scan's final response.
-          const timer = setTimeout(() => { this.dispose(); resolve() }, 5_000)
-          this.acknowledge = () => {
-            clearTimeout(timer)
-            this.acknowledge = null
-            resolve()
+      this.publisher = new SessionRowPublisher(
+        async (delta) => {
+          if (!this.isCurrent() || this.scanId !== view.scanId) {
+            return
           }
-          this.sender.send('aiVault:rows', event)
-        })
-      }, (rows) => projectStructuredAiVaultRows(rows, OPENS_EVERY_STRUCTURED_CHAT))
+          const event: AiVaultRowsEvent = {
+            ...delta,
+            requestToken: this.requestToken,
+            scanId: view.scanId,
+            sequence: ++this.sequence,
+            reset
+          }
+          reset = false
+          await new Promise<void>((resolve) => {
+            // A detached renderer retires only preview delivery, never the scan's final response.
+            const timer = setTimeout(() => {
+              this.dispose()
+              resolve()
+            }, 5_000)
+            this.acknowledge = () => {
+              clearTimeout(timer)
+              this.acknowledge = null
+              resolve()
+            }
+            this.sender.send('aiVault:rows', event)
+          })
+        },
+        (rows) => projectStructuredAiVaultRows(rows, OPENS_EVERY_STRUCTURED_CHAT)
+      )
     }
-    this.publisher?.observe(view.kind === 'snapshot'
-      ? { upserts: [...view.sessions], removed: [] } : view.delta)
+    this.publisher?.observe(
+      view.kind === 'snapshot' ? { upserts: [...view.sessions], removed: [] } : view.delta
+    )
   }
 
   ack(sequence: number): void {
-    if (sequence === this.sequence) this.acknowledge?.()
+    if (sequence === this.sequence) {
+      this.acknowledge?.()
+    }
   }
 
   readonly dispose = (): void => {
-    if (this.closed) return
+    if (this.closed) {
+      return
+    }
     this.closed = true
     this.acknowledge?.()
     void this.publisher?.finish()
     this.signal?.removeEventListener('abort', this.dispose)
     this.sender.removeListener('destroyed', this.dispose)
     const requests = deliveries.get(this.sender)
-    if (requests?.get(this.requestToken) === this) requests.delete(this.requestToken)
-    if (requests?.size === 0) deliveries.delete(this.sender)
+    if (requests?.get(this.requestToken) === this) {
+      requests.delete(this.requestToken)
+    }
+    if (requests?.size === 0) {
+      deliveries.delete(this.sender)
+    }
   }
 
   private isCurrent(): boolean {
-    if (this.closed) return false
-    if (this.sender.isDestroyed() || this.signal?.aborted || (this.generation !== undefined && this.generation !== aiVaultSessionListGeneration())) {
+    if (this.closed) {
+      return false
+    }
+    if (
+      this.sender.isDestroyed() ||
+      this.signal?.aborted ||
+      (this.generation !== undefined && this.generation !== aiVaultSessionListGeneration())
+    ) {
       this.dispose()
       return false
     }
@@ -93,6 +121,8 @@ export function acknowledgeAiVaultRows(
   event: IpcMainEvent,
   args: { requestToken?: string; sequence?: number } | undefined
 ): void {
-  if (typeof args?.requestToken !== 'string' || typeof args.sequence !== 'number') return
+  if (typeof args?.requestToken !== 'string' || typeof args.sequence !== 'number') {
+    return
+  }
   deliveries.get(event.sender)?.get(args.requestToken)?.ack(args.sequence)
 }

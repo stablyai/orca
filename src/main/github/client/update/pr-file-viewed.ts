@@ -1,9 +1,10 @@
-import { ghExecFileAsync, acquire, release, type LocalGitExecOptions } from '../../gh-utils'
-import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
-import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../../rate-limit'
-/**
- * Mark or unmark a PR file as viewed via GitHub's GraphQL API.
- */
+import type { GhAccountBinding } from '../../../../shared/github/accounts/account-binding'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { acquire, release } from '../../execution/github-operation-slots'
+import type { LocalGitExecOptions } from '../../repositories/github-repository-identity'
+import { resolveGitHubRepoExecution } from '../../repositories/github-api-repository'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
+import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../../api/rate-limit'
 export async function setPRFileViewed(args: {
   repoPath: string
   connectionId?: string | null
@@ -12,12 +13,14 @@ export async function setPRFileViewed(args: {
   pullRequestId: string
   path: string
   viewed: boolean
+  expectedGhAccount?: GhAccountBinding | null
 }): Promise<boolean> {
   const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
     args.repoPath,
     args.prRepo,
     args.connectionId,
-    args.localGitOptions
+    args.localGitOptions,
+    args.expectedGhAccount
   )
   if (!ownerRepo) {
     return false
@@ -28,7 +31,7 @@ export async function setPRFileViewed(args: {
       pullRequest { id }
     }
   }`
-  // Why: viewed toggles fire once per file while reading a diff — the highest-volume GraphQL caller here.
+  // Per-file viewed toggles can produce high GraphQL volume; respect the budget floor.
   const guard = repositoryRateLimitGuard(ownerRepo, 'graphql', ghOptions)
   if (guard.blocked) {
     console.warn(

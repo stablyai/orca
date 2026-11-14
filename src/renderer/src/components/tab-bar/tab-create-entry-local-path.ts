@@ -1,11 +1,20 @@
-import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
-import { getFolderWorkspaceConnectionId } from '@/lib/folder-workspace-connection'
-import { getLocalPathOpenOwnerForRoute, isLocalPathOpenBlocked } from '@/lib/local-path-open-guard'
-import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
-import type { useAppStore } from '@/store'
+import { getEditorFileOperationContext } from '@/lib/editor/file-operations/editor-file-operation-owner'
+import { getFolderWorkspaceConnectionId } from '@/lib/workspace/ownership/folder-workspace-connection'
+import {
+  getLocalPathOpenOwnerForRoute,
+  isLocalPathOpenBlocked
+} from '@/lib/files/os-open/local-path-open-guard'
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
+import type { useAppStore } from '@/store/index'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
+import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
+import { selectFileListWorktree } from '@/store/workspaces/selection/known-worktree-selection'
+import {
+  selectDetectedWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 type TabEntryAbsolutePathOwnerState = Pick<
   ReturnType<typeof useAppStore.getState>,
@@ -38,7 +47,7 @@ export function getTabEntryAllowAbsolutePaths(
   state: ReturnType<typeof useAppStore.getState>,
   worktreeId: string
 ): boolean {
-  const worktree = state.getKnownWorktreeById(worktreeId)
+  const worktree = selectFileListWorktree(state, worktreeId)
   if (!worktree) {
     return false
   }
@@ -92,9 +101,9 @@ export function createTabEntryAllowAbsolutePathsSelector(
     if (
       previousSlices?.settings === state.settings &&
       previousSlices.repos === state.repos &&
-      previousSlices.worktreesByRepo === state.worktreesByRepo &&
-      previousSlices.detectedWorktreesByRepo === state.detectedWorktreesByRepo &&
-      previousSlices.folderWorkspaces === state.folderWorkspaces &&
+      selectWorktreesByRepo(previousSlices) === selectWorktreesByRepo(state) &&
+      selectDetectedWorktreesByRepo(previousSlices) === selectDetectedWorktreesByRepo(state) &&
+      selectFolderWorkspaces(previousSlices) === selectFolderWorkspaces(state) &&
       previousSlices.projectGroups === state.projectGroups &&
       previousSlices.runtimeEnvironments === state.runtimeEnvironments &&
       previousSlices.runtimeEnvironmentCatalogHydrated ===
@@ -110,9 +119,9 @@ export function createTabEntryAllowAbsolutePathsSelector(
     previousSlices = {
       settings: state.settings,
       repos: state.repos,
-      worktreesByRepo: state.worktreesByRepo,
-      detectedWorktreesByRepo: state.detectedWorktreesByRepo,
-      folderWorkspaces: state.folderWorkspaces,
+      worktreesByRepo: selectWorktreesByRepo(state),
+      detectedWorktreesByRepo: selectDetectedWorktreesByRepo(state),
+      folderWorkspaces: selectFolderWorkspaces(state),
       projectGroups: state.projectGroups,
       runtimeEnvironments: state.runtimeEnvironments,
       runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated,

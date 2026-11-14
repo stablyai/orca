@@ -1,7 +1,12 @@
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
+import {
+  resolveOwner,
+  runtimeTargetForWorkspaceOwner
+} from '@/lib/workspace/ownership/resolve-owner'
+import { hostRouteForAuthority, type HostRoute } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { AppState } from '../../../types'
+import { ambiguousWorkspaceOwnerMessage } from '@/lib/workspace/ownership/duplicate-paired-servers'
 import { WORKTREE_REMOVAL_AMBIGUOUS_ERROR } from './worktree-slice-constants'
 
 /** Transport to the worktree's owner (on `executionHostId` when given), or `null` when unresolved. */
@@ -24,7 +29,28 @@ export function runtimeTargetForWorktreeOwner(
 ): RuntimeClientTarget {
   const target = tryRuntimeTargetForWorktreeOwner(state, worktreeId, executionHostId)
   if (!target) {
-    throw new Error(WORKTREE_REMOVAL_AMBIGUOUS_ERROR)
+    // Why only unqualified: a named host picks its own row, so twins cannot be the cause.
+    throw new Error(
+      executionHostId
+        ? WORKTREE_REMOVAL_AMBIGUOUS_ERROR
+        : ambiguousWorkspaceOwnerMessage(state, worktreeId)
+    )
   }
   return target
+}
+
+/** The owner's transport and place together (on `executionHostId` when given), refusing an unresolved owner. */
+export function hostRouteForWorktreeOwner(
+  state: AppState,
+  worktreeId: string,
+  executionHostId?: ExecutionHostId
+): HostRoute {
+  const match = resolveOwner(state, {
+    workspaceId: worktreeId,
+    ...(executionHostId ? { hostId: executionHostId } : {})
+  })
+  if (match.kind !== 'resolved') {
+    throw new Error(ambiguousWorkspaceOwnerMessage(state, worktreeId))
+  }
+  return hostRouteForAuthority(match.owner)
 }

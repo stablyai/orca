@@ -1,0 +1,235 @@
+import { useCallback, useMemo } from 'react'
+import { applyDocumentTheme } from '@/app-shell/appearance/document-theme'
+import { resolvePaintedTheme } from '@/app-shell/appearance/terminal-app-theme'
+import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
+import type { SettingsNavInstallStatus } from '@/components/settings/navigation/settings-navigation-types'
+import {
+  COMPUTER_USE_SKILL_NAME,
+  ORCHESTRATION_SKILL_NAME
+} from '@/lib/skills/installation/agent-feature-skill-names'
+import {
+  getAgentSkillNavInstallStatus,
+  getLinearAgentSkillNavInstallStatus
+} from '@/components/settings/navigation/agent-skill-nav-install-status'
+import { getProjectHostSetupProjectionFromState } from '../../../store/projects/project-host-setup-selector'
+import { getSettingsSectionSearchEntries, rankSettingsSearchItems } from '../search/settings-search'
+import { deriveNeededSectionIds } from '../page/settings-load-performance'
+import { DESKTOP_TERMINAL_SCROLLBACK_ROW_PRESETS as SCROLLBACK_PRESETS_ROWS } from '../../../../../shared/terminal/replay/terminal-scrollback-policy'
+import type { SettingsStoreModel } from '../page/use-settings-store-model'
+import type { SettingsInteractionController } from '../page/use-settings-interaction-controller'
+import { hasReadyVoiceModel } from './settings-navigation-foundations'
+import { buildSettingsSearchResults } from './settings-search-results'
+import { getGeneralWorkspaceSearchDescriptors } from '../general/general-search'
+import { getGeneralEditorSearchDescriptors } from '../editor/general-editor-search'
+import { GENERAL_SUB_PAGE_ENTRY_ANCHORS } from '../general/general-setting-anchors'
+import { getGeneralSubPageTitle } from '../general/general-sub-pages'
+import { translate } from '@/i18n/i18n'
+
+export function useSettingsNavigationModel(
+  model: SettingsStoreModel,
+  interactions: SettingsInteractionController
+) {
+  // Unrelated settings mutations must not recompute scrollback mode.
+  if (model.settings?.terminalScrollbackRows !== model.prevScrollbackRows) {
+    model.setPrevScrollbackRows(model.settings?.terminalScrollbackRows)
+    if (model.settings) {
+      model.setScrollbackMode(
+        SCROLLBACK_PRESETS_ROWS.includes(
+          model.settings.terminalScrollbackRows as (typeof SCROLLBACK_PRESETS_ROWS)[number]
+        )
+          ? 'preset'
+          : 'custom'
+      )
+    }
+  }
+
+  const applyTheme = useCallback(
+    // Why the painted theme: Match Terminal may paint the other mode than the one picked.
+    (theme: 'system' | 'dark' | 'light') =>
+      applyDocumentTheme(resolvePaintedTheme(model.settings, theme)),
+    [model.settings]
+  )
+
+  const displayedGitUsername = model.repos[0]?.gitUsername ?? ''
+  const baseNavSections = useSettingsNavigationMetadata()
+  const { installed: orchestrationSkillInstalled, loading: orchestrationSkillLoading } =
+    model.orchestrationSkill
+  const {
+    installed: linearSkillInstalled,
+    loading: linearSkillLoading,
+    skills: linearSkills
+  } = model.linearSkill
+  const { installed: computerUseSkillInstalled, loading: computerUseSkillLoading } =
+    model.computerUseSkill
+  const capabilityInstallStatusBySectionId = useMemo(() => {
+    const applicableSkillPlan = model.skillFreshnessApplies ? model.skillPlan : null
+    const next = new Map<string, SettingsNavInstallStatus>([
+      [
+        'orchestration',
+        getAgentSkillNavInstallStatus({
+          name: ORCHESTRATION_SKILL_NAME,
+          installed: orchestrationSkillInstalled,
+          loading: orchestrationSkillLoading,
+          plan: applicableSkillPlan
+        })
+      ]
+    ])
+    if (model.linearConnected) {
+      next.set(
+        'linear',
+        getLinearAgentSkillNavInstallStatus({
+          skills: linearSkills,
+          installed: linearSkillInstalled,
+          loading: linearSkillLoading,
+          plan: applicableSkillPlan
+        })
+      )
+    }
+    if (model.showDesktopOnlySettings) {
+      next.set(
+        'computer-use',
+        getAgentSkillNavInstallStatus({
+          name: COMPUTER_USE_SKILL_NAME,
+          installed: computerUseSkillInstalled,
+          loading: computerUseSkillLoading,
+          plan: applicableSkillPlan
+        })
+      )
+      if (model.settings) {
+        next.set(
+          'voice',
+          model.voiceModelStatesLoading
+            ? 'checking'
+            : hasReadyVoiceModel(model.settings, model.modelStates)
+              ? 'installed'
+              : 'install'
+        )
+      }
+    }
+    return next
+  }, [
+    computerUseSkillInstalled,
+    computerUseSkillLoading,
+    linearSkillInstalled,
+    linearSkillLoading,
+    linearSkills,
+    model.linearConnected,
+    model.modelStates,
+    model.settings,
+    model.showDesktopOnlySettings,
+    model.skillFreshnessApplies,
+    model.skillPlan,
+    model.voiceModelStatesLoading,
+    orchestrationSkillInstalled,
+    orchestrationSkillLoading
+  ])
+  const navSections = useMemo(
+    () =>
+      baseNavSections.map((section) => {
+        const installStatus = capabilityInstallStatusBySectionId.get(section.id)
+        return installStatus ? { ...section, installStatus } : section
+      }),
+    [baseNavSections, capabilityInstallStatusBySectionId]
+  )
+  const navSectionById = useMemo(
+    () => new Map(navSections.map((section) => [section.id, section] as const)),
+    [navSections]
+  )
+  const searchCandidates = useMemo(() => {
+    // General sub-page rows carry anchors in descriptors, not in their search entries.
+    const generalAnchorByTitle = new Map<string, string>([
+      ...[...getGeneralWorkspaceSearchDescriptors(), ...getGeneralEditorSearchDescriptors()].map(
+        (descriptor) => [descriptor.entry.title, descriptor.sectionId] as const
+      ),
+      ...GENERAL_SUB_PAGE_ENTRY_ANCHORS.map(
+        ([page, anchor]) => [getGeneralSubPageTitle(page, translate), anchor] as const
+      )
+    ])
+    return buildSettingsSearchResults(navSections, (section, entry) =>
+      section.id === 'general' ? generalAnchorByTitle.get(entry.title) : undefined
+    )
+  }, [navSections])
+  const getSectionSearchEntries = (sectionId: string) => {
+    const section = navSectionById.get(sectionId)
+    return section ? getSettingsSectionSearchEntries(section) : []
+  }
+
+  const visibleNavSections = useMemo(() => {
+    const rankedSections = rankSettingsSearchItems(
+      model.settingsSearchQuery,
+      navSections,
+      getSettingsSectionSearchEntries
+    ).map(({ item }) => item)
+    const visible = [...rankedSections]
+    for (const [id, dirty] of [
+      ['git', model.hasUnsavedCommitPromptChanges || model.hasUnsavedBranchPromptChanges],
+      ['chat', model.hasUnsavedChatPromptChanges]
+    ] as const) {
+      const section = navSectionById.get(id)
+      if (dirty && section && !visible.some((item) => item.id === id)) {
+        visible.push(section)
+      }
+    }
+    return visible
+  }, [
+    model.hasUnsavedCommitPromptChanges,
+    model.hasUnsavedBranchPromptChanges,
+    model.hasUnsavedChatPromptChanges,
+    navSectionById,
+    navSections,
+    model.settingsSearchQuery
+  ])
+  const visibleSectionIds = useMemo(
+    () => new Set(visibleNavSections.map((section) => section.id)),
+    [visibleNavSections]
+  )
+  const projectByRepoId = useMemo(() => {
+    const projection = getProjectHostSetupProjectionFromState({
+      repos: model.repos,
+      projects: model.projects,
+      projectHostSetups: model.projectHostSetups
+    })
+    const projectById = new Map(projection.projects.map((project) => [project.id, project]))
+    const nextProjectByRepoId = new Map<string, (typeof projection.projects)[number]>()
+    for (const setup of projection.setups) {
+      const project = projectById.get(setup.projectId)
+      if (project && setup.repoId.trim()) {
+        nextProjectByRepoId.set(setup.repoId, project)
+      }
+    }
+    return nextProjectByRepoId
+  }, [model.projectHostSetups, model.projects, model.repos])
+  const neededSectionIds = useMemo(
+    () =>
+      deriveNeededSectionIds({
+        navSectionIds: navSections.map((section) => section.id),
+        mountedSectionIds: model.mountedSectionIds,
+        activeSectionId: model.activeSectionId,
+        pendingSectionId: interactions.pendingNavSectionRef.current,
+        query: model.settingsSearchQuery,
+        visibleSectionIds
+      }),
+    [
+      model.activeSectionId,
+      model.mountedSectionIds,
+      interactions.pendingNavSectionRef,
+      navSections,
+      model.settingsSearchQuery,
+      visibleSectionIds
+    ]
+  )
+
+  return {
+    applyTheme,
+    displayedGitUsername,
+    navSections,
+    getSectionSearchEntries,
+    searchCandidates,
+    visibleNavSections,
+    visibleSectionIds,
+    projectByRepoId,
+    neededSectionIds
+  }
+}
+
+export type SettingsNavigationModel = ReturnType<typeof useSettingsNavigationModel>

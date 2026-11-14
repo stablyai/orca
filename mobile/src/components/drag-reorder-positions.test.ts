@@ -1,48 +1,18 @@
-import { describe, expect, it } from 'vitest'
-
+import { expect, it } from 'vitest'
 import {
-  clampDragReorderIndex,
+  dragReorderLayout,
+  dragReorderTarget,
   dragReorderPositionsFromKeys,
-  moveDragReorderKey,
-  orderedKeysFromDragReorderPositions
+  moveDragReorderKey
 } from './drag-reorder-positions'
 
-describe('drag reorder positions', () => {
-  it('round-trips keys through positions', () => {
-    const keys = ['escape', 'tab', 'enter']
-    expect(orderedKeysFromDragReorderPositions(dragReorderPositionsFromKeys(keys))).toEqual(keys)
-  })
-
-  it('clamps drag indexes to the list bounds', () => {
-    expect(clampDragReorderIndex(-2, 3)).toBe(0)
-    expect(clampDragReorderIndex(1, 3)).toBe(1)
-    expect(clampDragReorderIndex(7, 3)).toBe(2)
-    expect(clampDragReorderIndex(0, 0)).toBe(0)
-  })
-
-  it('shifts intermediate rows down when dragging a row later', () => {
-    const positions = dragReorderPositionsFromKeys(['a', 'b', 'c', 'd'])
-    expect(orderedKeysFromDragReorderPositions(moveDragReorderKey(positions, 'a', 2))).toEqual([
-      'b',
-      'c',
-      'a',
-      'd'
-    ])
-  })
-
-  it('shifts intermediate rows up when dragging a row earlier', () => {
-    const positions = dragReorderPositionsFromKeys(['a', 'b', 'c', 'd'])
-    expect(orderedKeysFromDragReorderPositions(moveDragReorderKey(positions, 'd', 1))).toEqual([
-      'a',
-      'd',
-      'b',
-      'c'
-    ])
-  })
-
-  it('returns the same positions for no-op or unknown moves', () => {
-    const positions = dragReorderPositionsFromKeys(['a', 'b'])
-    expect(moveDragReorderKey(positions, 'a', 0)).toBe(positions)
-    expect(moveDragReorderKey(positions, 'missing', 1)).toBe(positions)
-  })
+it('lays out variable-height rows when targeting, reordering and resizing', () => {
+  const positions = dragReorderPositionsFromKeys(['row-0', 'row-1', 'row-2', 'row-3'])
+  const sizes = { 'row-0': 100, 'row-1': 20, 'row-2': 100, 'row-3': 20 }
+  const layout = dragReorderLayout(positions, sizes)
+  expect(layout.tops['row-3']).toBe(220)
+  expect(dragReorderTarget(positions, sizes, layout, 'row-0', 35)).toBe(1)
+  const moved = moveDragReorderKey(positions, 'row-0', 2)
+  expect(dragReorderLayout(moved, sizes).keys.slice(0, 3)).toEqual(['row-1', 'row-2', 'row-0'])
+  expect(dragReorderLayout(positions, { ...sizes, 'row-0': 200 }).tops['row-1']).toBe(200)
 })

@@ -1,11 +1,11 @@
-import type { WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import {
   appliedWorktreeCatalogVersionPatch,
   isStaleWorktreeCatalogPublication
 } from './worktree-catalog-version-state'
 import type { WorktreeSliceGet, WorktreeSliceSet } from './worktree-slice-types'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
-import { findRepoForHost } from '../../repo-host-identity'
+import { findRepoForHost } from '../../../repos/repo-host-identity'
 import { getCurrentDirectSshAuthority } from './direct-ssh-authority'
 import { listDetectedWorktreesForRepoCoalesced } from './detected-worktree-refresh'
 import { worktreeListingRefusal } from './detected-worktree-refresh-admission'
@@ -40,8 +40,7 @@ export function createFetchDetectedWorktrees(
           ? (getCurrentDirectSshAuthority(ownerState, hostId) ?? undefined)
           : undefined
       if (parsedHost?.kind === 'ssh' && !directSshAuthority) {
-        // Why: this function's contract is detected-only. The fallback runs for its store side effect, but
-        // callers keep seeing null as they did before the metadata path existed.
+        // Fallback hydrates store only; detected-only callers retain the existing null return contract.
         await fetchKnownSshWorktreesForRepo(set, repoId, parsedHost.id)
         return null
       }

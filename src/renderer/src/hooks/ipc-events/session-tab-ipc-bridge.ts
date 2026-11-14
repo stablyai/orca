@@ -1,5 +1,6 @@
-import { isLocalSessionTabCloseOwned } from '@/runtime/local-session-tab-close-owner'
-import { closeMobileSessionTabInStore } from '@/runtime/mobile-session-tab-close'
+import { hasUnsentBrowserNotes } from '@/store/slices/browser/annotations/browser-page-annotation'
+import { isLocalSessionTabCloseOwned } from '@/runtime/web-session-tabs-sync/closing/local-session-tab-close-owner'
+import { closeMobileSessionTabInStore } from '@/runtime/web-session-tabs-sync/closing/mobile-session-tab-close'
 import {
   SESSION_TAB_CLOSE_CANCELED_ERROR,
   SESSION_TAB_CLOSE_FAILED_ERROR,
@@ -10,10 +11,17 @@ import {
   guardPinnedTabClose,
   isUnifiedTabPinned,
   resolvePinnedTabLabel
-} from '../../store/pinned-tab-close-guard'
+} from '../../store/slices/tabs/closing/pinned-tab-close-guard'
 import { useAppStore } from '../../store'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import type { RuntimeMobileSessionTabMove } from '../../../../shared/runtime-session-contracts'
+import {
+  dropTabThroughLayoutOwner,
+  type TabDrop
+} from '@/components/tab-group/tab-group-layout-owner-commands'
 import { resolveBrowserSessionTabTarget } from './browser-session-tab-target'
 import { resolveWindowTabIdForHostTab } from './host-session-tab-target'
+import { moveTerminalPaneToNewTabForClient } from '@/components/terminal-pane/layout/detach/terminal-pane-move-request-routing'
 
 export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
@@ -28,7 +36,8 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
         guardPinnedTabClose({
           isPinned: isUnifiedTabPinned(store, worktreeId, browserTarget.workspaceId),
           tabLabel: resolvePinnedTabLabel(store, worktreeId, browserTarget.workspaceId),
-          onClose: () => useAppStore.getState().closeBrowserTab(browserTarget.workspaceId)
+          onClose: () => useAppStore.getState().closeBrowserTab(browserTarget.workspaceId),
+          unsentNotes: hasUnsentBrowserNotes(store, browserTarget.workspaceId)
         })
         return
       }
@@ -104,7 +113,8 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
         isPinned: isUnifiedTabPinned(store, worktreeId, visibleId),
         tabLabel: resolvePinnedTabLabel(store, worktreeId, visibleId),
         onClose: closeAndRespond,
-        onCancel: () => respond(SESSION_TAB_CLOSE_CANCELED_ERROR)
+        onCancel: () => respond(SESSION_TAB_CLOSE_CANCELED_ERROR),
+        unsentNotes: browserTarget ? hasUnsentBrowserNotes(store, browserTarget.workspaceId) : false
       })
     })
   )
@@ -112,9 +122,21 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
     window.api.ui.onMoveSessionTab((move) => {
       const { tabId, targetGroupId } = move
+      // Main owns moves; whole-order changes use the reorder path that records equivalent main moves.
+      if (
+        ORCA_LAYOUT_OWNER_IS_MAIN &&
+        move.kind !== 'reorder' &&
+        dropTabThroughLayoutOwner(move.worktreeId, tabDropOf(move))
+      ) {
+        return
+      }
       const store = useAppStore.getState()
       if (move.kind === 'reorder') {
-        store.reorderUnifiedTabs(targetGroupId, move.tabOrder)
+        store.reorderUnifiedTabs(
+          targetGroupId,
+          move.tabOrder.map((id) => resolveWindowTabIdForHostTab(move.worktreeId, id)),
+          { projectedMoveTabId: resolveWindowTabIdForHostTab(move.worktreeId, tabId) }
+        )
         return
       }
       store.dropUnifiedTab(tabId, {
@@ -124,4 +146,31 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
       })
     })
   )
+
+  registerTerminalPaneMoveRequests(unsubs)
+}
+
+/** Moves a client's pane in this window, which owns the layout, and answers main with the result. */
+function registerTerminalPaneMoveRequests(unsubs: (() => void)[]): void {
+  const { onTerminalPaneMoveToNewTabRequest, replyTerminalPaneMoveToNewTab } = window.api.ui
+  // Why: during an in-place renderer reload an older preload can linger; keep this listener additive at that seam.
+  if (!onTerminalPaneMoveToNewTabRequest || !replyTerminalPaneMoveToNewTab) {
+    return
+  }
+  unsubs.push(
+    onTerminalPaneMoveToNewTabRequest(({ requestId, ...move }) => {
+      void moveTerminalPaneToNewTabForClient({
+        ...move,
+        sourceTabId: resolveWindowTabIdForHostTab(move.worktreeId, move.sourceTabId)
+      }).then((result) => replyTerminalPaneMoveToNewTab({ requestId, result }))
+    })
+  )
+}
+
+function tabDropOf(move: Exclude<RuntimeMobileSessionTabMove, { kind: 'reorder' }>): TabDrop {
+  const { tabId, targetGroupId: groupId } = move
+  if (move.kind === 'split') {
+    return { kind: 'split', tabId, groupId, direction: move.splitDirection }
+  }
+  return { kind: 'move', tabId, groupId, index: move.index }
 }

@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import {
-  installApi,
   installBrowserGlobals,
   writeStoredRuntimeEnvironment
 } from './web-preload-api-test-harness'
@@ -15,178 +14,215 @@ describe('web settings preload API', () => {
     vi.unstubAllGlobals()
   })
 
-  it('migrates first-work branch auto-rename on for stored legacy web settings once', async () => {
-    const globals = installBrowserGlobals('Linux')
-    globals.storage.setItem(
-      'orca.web.settings.v1',
-      JSON.stringify({ autoRenameBranchFromWork: false })
-    )
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    const settings = await globals.window.api.settings.get()
-    const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
-      autoRenameBranchFromWork?: boolean
-      autoRenameBranchFromWorkDefaultedOn?: boolean
-    }
-
-    expect(settings.autoRenameBranchFromWork).toBe(true)
-    expect(settings.autoRenameBranchFromWorkDefaultedOn).toBe(true)
-    expect(stored.autoRenameBranchFromWork).toBe(true)
-    expect(stored.autoRenameBranchFromWorkDefaultedOn).toBe(true)
-  })
-
-  it('migrates inherited terminal bar cursor defaults for stored web settings once', async () => {
-    const globals = installBrowserGlobals('Linux')
-    globals.storage.setItem('orca.web.settings.v1', JSON.stringify({ terminalCursorStyle: 'bar' }))
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    const settings = await globals.window.api.settings.get()
-    const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
-      terminalCursorStyle?: string
-      terminalCursorStyleDefaultedToBlock?: boolean
-    }
-
-    expect(settings.terminalCursorStyle).toBe('block')
-    expect(settings.terminalCursorStyleDefaultedToBlock).toBe(true)
-    expect(stored.terminalCursorStyle).toBe('block')
-    expect(stored.terminalCursorStyleDefaultedToBlock).toBe(true)
-  })
-
-  it('preserves terminal cursor choices after the web block-default migration', async () => {
-    const globals = installBrowserGlobals('Linux')
-    globals.storage.setItem(
-      'orca.web.settings.v1',
-      JSON.stringify({
-        terminalCursorStyle: 'bar',
-        terminalCursorStyleDefaultedToBlock: true
-      })
-    )
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    const settings = await globals.window.api.settings.get()
-    expect(settings.terminalCursorStyle).toBe('bar')
-    expect(settings.terminalCursorStyleDefaultedToBlock).toBe(true)
-  })
-
-  it('mirrors the host-owned agent skill sharing capability without granting it', async () => {
+  it('reads the paired host details row preference and writes changes back to that host', async () => {
     const runtimeCalls: { method: string; params: unknown }[] = []
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
         call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
           runtimeCalls.push({ method, params })
           return Promise.resolve({
-            id: `call-${runtimeCalls.length}`,
+            id: 'settings',
             ok: true,
-            result: { settings: { agentSkillSharingEnabled: false } },
+            result: {
+              settings: {
+                worktreeCardDetailsRow: method === 'settings.update'
+              }
+            },
             _meta: { runtimeId: 'runtime-1' }
           })
         }
-
         close(): void {}
       }
     }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    globals.storage.setItem(
+      'orca.web.settings.v1',
+      JSON.stringify({ worktreeCardDetailsRow: true })
+    )
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    expect((await globals.window.api.settings.get()).worktreeCardDetailsRow).toBe(false)
+    expect(
+      (await globals.window.api.settings.set({ worktreeCardDetailsRow: true }))
+        .worktreeCardDetailsRow
+    ).toBe(true)
+    expect(runtimeCalls.find((call) => call.method === 'settings.update')?.params).toMatchObject({
+      worktreeCardDetailsRow: true
+    })
+  })
 
+  it('retains a local details-row choice when an older paired host omits it', async () => {
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(): Promise<RuntimeRpcResponse<unknown>> {
+          return Promise.resolve({
+            id: 'settings',
+            ok: true,
+            result: { settings: {} },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+        close(): void {}
+      }
+    }))
     const globals = installBrowserGlobals('Linux')
     writeStoredRuntimeEnvironment(globals.storage)
     const { installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
-
-    const settings = await globals.window.api.settings.get()
-    await globals.window.api.settings.set({ agentSkillSharingEnabled: true })
-    const refreshed = await globals.window.api.settings.get()
-
-    expect(settings.agentSkillSharingEnabled).toBe(false)
-    expect(refreshed.agentSkillSharingEnabled).toBe(false)
-    expect(runtimeCalls).toEqual([
-      { method: 'settings.get', params: undefined },
-      { method: 'settings.get', params: undefined }
-    ])
-    expect(runtimeCalls).not.toContainEqual(expect.objectContaining({ method: 'settings.update' }))
-  })
-
-  it('normalizes terminal cursor style before web settings writes return or persist', async () => {
-    const { api, storage } = await installApi('Linux')
-
-    const invalid = await api.settings.set({ terminalCursorStyle: 'beam' as never })
-    const invalidStored = JSON.parse(storage.getItem('orca.web.settings.v1') ?? '{}') as {
-      terminalCursorStyle?: string
-      terminalCursorStyleDefaultedToBlock?: boolean
-    }
-    expect(invalid.terminalCursorStyle).toBe('block')
-    expect(invalid.terminalCursorStyleDefaultedToBlock).toBe(true)
-    expect(invalidStored.terminalCursorStyle).toBe('block')
-    expect(invalidStored.terminalCursorStyleDefaultedToBlock).toBe(true)
-
-    const valid = await api.settings.set({ terminalCursorStyle: 'bar' })
-    expect(valid.terminalCursorStyle).toBe('bar')
-    expect(JSON.parse(storage.getItem('orca.web.settings.v1') ?? '{}').terminalCursorStyle).toBe(
-      'bar'
-    )
-  })
-
-  it('migrates OSC 52 clipboard writes on for stored web settings once', async () => {
-    // Why: the web store is a second, independent settings store — the constants-level
-    // default flip only reaches profiles that never persisted the old `false` (#10567).
-    const globals = installBrowserGlobals('Linux')
-    globals.storage.setItem(
-      'orca.web.settings.v1',
-      JSON.stringify({ terminalAllowOsc52Clipboard: false })
-    )
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    const settings = await globals.window.api.settings.get()
-    const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
-      terminalAllowOsc52Clipboard?: boolean
-      terminalAllowOsc52ClipboardDefaultedOnForAllUsers?: boolean
-    }
-
-    expect(settings.terminalAllowOsc52Clipboard).toBe(true)
-    expect(settings.terminalAllowOsc52ClipboardDefaultedOnForAllUsers).toBe(true)
-    expect(stored.terminalAllowOsc52Clipboard).toBe(true)
-    expect(stored.terminalAllowOsc52ClipboardDefaultedOnForAllUsers).toBe(true)
-  })
-
-  it('arms the OSC 52 notice in the web UI store when the flip overrides a persisted off', async () => {
-    const globals = installBrowserGlobals('Linux')
-    globals.storage.setItem(
-      'orca.web.settings.v1',
-      JSON.stringify({ terminalAllowOsc52Clipboard: false })
-    )
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
     await globals.window.api.settings.get()
-    const storedUi = JSON.parse(globals.storage.getItem('orca.web.ui.v1') ?? '{}') as {
-      osc52ClipboardDefaultOnNoticePending?: boolean
-    }
+    await globals.window.api.settings.set({ worktreeCardDetailsRow: false })
 
-    expect(storedUi.osc52ClipboardDefaultOnNoticePending).toBe(true)
+    expect((await globals.window.api.settings.get()).worktreeCardDetailsRow).toBe(false)
   })
 
-  it('does not arm the OSC 52 notice for a web profile with no persisted value', async () => {
+  it('ignores a stale details-row reply after another host has answered', async () => {
+    let answer!: (response: RuntimeRpcResponse<unknown>) => void
+    let started!: () => void
+    const readStarted = new Promise<void>((resolve) => {
+      started = resolve
+    })
+    let hold = true
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(): Promise<RuntimeRpcResponse<unknown>> {
+          if (hold) {
+            hold = false
+            return new Promise((resolve) => {
+              answer = resolve
+              started()
+            })
+          }
+          return Promise.resolve({
+            id: 'settings',
+            ok: true,
+            result: { settings: { worktreeCardDetailsRow: false } },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+        close(): void {}
+      }
+    }))
     const globals = installBrowserGlobals('Linux')
-    globals.storage.setItem('orca.web.settings.v1', JSON.stringify({ terminalFontSize: 15 }))
+    writeStoredRuntimeEnvironment(globals.storage)
     const { installWebPreloadApi } = await import('./web-preload-api')
+    const { webRuntimeState } = await import('./preload-api/web-runtime-session')
     installWebPreloadApi()
+    const api = globals.window.api.settings
+    const pending = api.get()
+    await readStarted
+    webRuntimeState.activeEnvironment = { ...webRuntimeState.activeEnvironment!, id: 'host-B' }
+    expect((await api.get()).worktreeCardDetailsRow).toBe(false)
+    answer({
+      id: 'late',
+      ok: true,
+      result: { settings: { worktreeCardDetailsRow: true } },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    expect((await pending).worktreeCardDetailsRow).toBe(false)
+    expect(api.getSync()?.worktreeCardDetailsRow).toBe(false)
+  })
 
-    await globals.window.api.settings.get()
-    const storedUi = JSON.parse(globals.storage.getItem('orca.web.ui.v1') ?? '{}') as {
-      osc52ClipboardDefaultOnNoticePending?: boolean
-    }
+  it('keeps the active host details-row preference when a previous host update replies late', async () => {
+    let answer!: (response: RuntimeRpcResponse<unknown>) => void
+    let started!: () => void
+    const updateStarted = new Promise<void>((resolve) => {
+      started = resolve
+    })
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          if (method === 'settings.update') {
+            return new Promise((resolve) => {
+              answer = resolve
+              started()
+            })
+          }
+          return Promise.resolve({
+            id: 'settings',
+            ok: true,
+            result: { settings: { worktreeCardDetailsRow: false } },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    const { webRuntimeState } = await import('./preload-api/web-runtime-session')
+    installWebPreloadApi()
+    const api = globals.window.api.settings
+    await api.get()
+    const pending = api.set({ worktreeCardDetailsRow: true })
+    await updateStarted
+    webRuntimeState.activeEnvironment = { ...webRuntimeState.activeEnvironment!, id: 'host-B' }
+    await api.get()
+    answer({
+      id: 'late',
+      ok: true,
+      result: { settings: { worktreeCardDetailsRow: true } },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    await pending
+    expect(api.getSync()?.worktreeCardDetailsRow).toBe(false)
+  })
 
-    expect(storedUi.osc52ClipboardDefaultOnNoticePending).not.toBe(true)
+  it('does not write a details-row preference to a host selected during a capability check', async () => {
+    let answer!: (response: RuntimeRpcResponse<unknown>) => void
+    let started!: () => void
+    const statusStarted = new Promise<void>((resolve) => {
+      started = resolve
+    })
+    let hostDetailsRow = false
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          if (method === 'status.get') {
+            return new Promise((resolve) => {
+              answer = resolve
+              started()
+            })
+          }
+          if (method === 'settings.update') {
+            hostDetailsRow = true
+          }
+          return Promise.resolve({
+            id: 'settings',
+            ok: true,
+            result: { settings: { worktreeCardDetailsRow: hostDetailsRow } },
+            _meta: { runtimeId: 'runtime-1' }
+          })
+        }
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    const { webRuntimeState } = await import('./preload-api/web-runtime-session')
+    installWebPreloadApi()
+    const api = globals.window.api.settings
+    await api.get()
+    const pending = api.set({
+      worktreeCardDetailsRow: true,
+      nativeChatAutoContinueAfterUsageLimit: true
+    })
+    await statusStarted
+    webRuntimeState.activeEnvironment = { ...webRuntimeState.activeEnvironment!, id: 'host-B' }
+    answer({
+      id: 'status',
+      ok: true,
+      result: { capabilities: [] },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+    await pending
+    expect((await api.get()).worktreeCardDetailsRow).toBe(false)
   })
 
   it('arms the OSC 52 notice when ui.get is the read that runs the migration', async () => {
-    // Why seed after install: readLocalWebUIState must run the settings migration before it
-    // snapshots the UI blob, and only a ui.get that is itself the first settings read can
-    // show that. Reading first returns a pre-arm state every caller then writes back — and
-    // the stamp means nothing can raise the arm again. Another tab populating localStorage
-    // after this one loaded is the shape that reaches it.
+    // Seed after module load to model another tab’s storage update; first ui.get must migrate settings before snapshotting UI or it erases the one-shot notice arm.
     const globals = installBrowserGlobals('Linux')
     const { installWebPreloadApi } = await import('./web-preload-api')
     installWebPreloadApi()
@@ -199,102 +235,6 @@ describe('web settings preload API', () => {
 
     expect(ui.osc52ClipboardDefaultOnNoticePending).toBe(true)
   })
-
-  it('preserves OSC 52 clipboard web opt-outs after migration', async () => {
-    const globals = installBrowserGlobals('Linux')
-    globals.storage.setItem(
-      'orca.web.settings.v1',
-      JSON.stringify({
-        terminalAllowOsc52Clipboard: false,
-        terminalAllowOsc52ClipboardDefaultedOnForAllUsers: true
-      })
-    )
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    const settings = await globals.window.api.settings.get()
-    expect(settings.terminalAllowOsc52Clipboard).toBe(false)
-    expect(settings.terminalAllowOsc52ClipboardDefaultedOnForAllUsers).toBe(true)
-  })
-
-  it('preserves first-work branch auto-rename web opt-outs after migration', async () => {
-    const globals = installBrowserGlobals('Linux')
-    globals.storage.setItem(
-      'orca.web.settings.v1',
-      JSON.stringify({
-        autoRenameBranchFromWork: false,
-        autoRenameBranchFromWorkDefaultedOn: true
-      })
-    )
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    const settings = await globals.window.api.settings.get()
-    const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
-      autoRenameBranchFromWork?: boolean
-      autoRenameBranchFromWorkDefaultedOn?: boolean
-    }
-
-    expect(settings.autoRenameBranchFromWork).toBe(false)
-    expect(settings.autoRenameBranchFromWorkDefaultedOn).toBe(true)
-    expect(stored.autoRenameBranchFromWork).toBe(false)
-    expect(stored.autoRenameBranchFromWorkDefaultedOn).toBe(true)
-  })
-
-  it('stamps the first-work branch auto-rename guard for web setting updates', async () => {
-    const { api, storage } = await installApi('Linux')
-
-    const settings = await api.settings.set({ autoRenameBranchFromWork: false })
-    const stored = JSON.parse(storage.getItem('orca.web.settings.v1') ?? '{}') as {
-      autoRenameBranchFromWork?: boolean
-      autoRenameBranchFromWorkDefaultedOn?: boolean
-    }
-
-    expect(settings.autoRenameBranchFromWork).toBe(false)
-    expect(settings.autoRenameBranchFromWorkDefaultedOn).toBe(true)
-    expect(stored.autoRenameBranchFromWork).toBe(false)
-    expect(stored.autoRenameBranchFromWorkDefaultedOn).toBe(true)
-  })
-
-  it('hydrates compact worktree cards from paired runtime settings', async () => {
-    const runtimeCalls: { method: string; params: unknown }[] = []
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-          runtimeCalls.push({ method, params })
-          return Promise.resolve({
-            id: `call-${runtimeCalls.length}`,
-            ok: true,
-            result: {
-              settings: {
-                compactWorktreeCards: true,
-                activeRuntimeEnvironmentId: 'host-internal-default'
-              }
-            },
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-
-        close(): void {}
-      }
-    }))
-
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    const settings = await globals.window.api.settings.get()
-    const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
-      compactWorktreeCards?: boolean
-    }
-
-    expect(settings.compactWorktreeCards).toBe(true)
-    expect(settings.activeRuntimeEnvironmentId).toBeNull()
-    expect(stored.compactWorktreeCards).toBe(true)
-    expect(stored).not.toHaveProperty('activeRuntimeEnvironmentId')
-    expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
-  }, 15_000)
 
   it('keeps a completed settings merge when the paired host is removed mid-read', async () => {
     let resolveSettings!: (value: RuntimeRpcResponse<unknown>) => void
@@ -435,47 +375,6 @@ describe('web settings preload API', () => {
     ])
   })
 
-  it('does not persist a paired runtime visibility update as the local default', async () => {
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
-          return Promise.resolve({
-            id: method,
-            ok: true,
-            result: {
-              settings: {
-                worktreeVisibilityDefaults: {
-                  external: method === 'settings.update' ? 'show' : 'hide'
-                }
-              }
-            },
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-
-        close(): void {}
-      }
-    }))
-
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    globals.storage.setItem(
-      'orca.web.settings.v1',
-      JSON.stringify({ worktreeVisibilityDefaults: { external: 'hide' } })
-    )
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-    await globals.window.api.settings.get()
-
-    await globals.window.api.settings.set({
-      worktreeVisibilityDefaults: { external: 'show' }
-    })
-
-    expect(
-      JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}').worktreeVisibilityDefaults
-    ).toEqual({ external: 'hide' })
-  })
-
   it('rejects a failed paired visibility write after preserving local-only fields', async () => {
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {
@@ -518,378 +417,5 @@ describe('web settings preload API', () => {
       terminalFontSize: 15,
       worktreeVisibilityDefaults: { external: 'show' }
     })
-  })
-
-  it('does not send the additive visibility field to an older paired runtime', async () => {
-    const runtimeCalls: { method: string; params: unknown }[] = []
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-          runtimeCalls.push({ method, params })
-          return Promise.resolve({
-            id: `call-${runtimeCalls.length}`,
-            ok: true,
-            result: { settings: {} },
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-
-        close(): void {}
-      }
-    }))
-
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    expect((await globals.window.api.settings.get()).worktreeVisibilityDefaults).toBeUndefined()
-    const settings = await globals.window.api.settings.set({
-      worktreeVisibilityDefaults: { external: 'show' }
-    })
-
-    expect(settings.worktreeVisibilityDefaults).toBeUndefined()
-    expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
-  })
-
-  it('hydrates new worktree card style from a paired runtime', async () => {
-    const runtimeCalls: { method: string; params: unknown }[] = []
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-          runtimeCalls.push({ method, params })
-          return Promise.resolve({
-            id: `call-${runtimeCalls.length}`,
-            ok: true,
-            result: { settings: { experimentalNewWorktreeCardStyle: true } },
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-
-        close(): void {}
-      }
-    }))
-
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    const settings = await globals.window.api.settings.get()
-    const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
-      experimentalNewWorktreeCardStyle?: boolean
-    }
-
-    expect(settings.experimentalNewWorktreeCardStyle).toBe(true)
-    expect(stored.experimentalNewWorktreeCardStyle).toBe(true)
-    expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
-  })
-
-  it('hydrates MiniMax usage settings from a paired runtime', async () => {
-    const runtimeCalls: { method: string; params: unknown }[] = []
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-          runtimeCalls.push({ method, params })
-          return Promise.resolve({
-            id: `call-${runtimeCalls.length}`,
-            ok: true,
-            result: {
-              settings: {
-                minimaxGroupId: 'group-42',
-                minimaxUsageModels: 'general,abab6.5',
-                minimaxEndpoint: 'cn'
-              }
-            },
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-
-        close(): void {}
-      }
-    }))
-
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    const settings = await globals.window.api.settings.get()
-    const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
-      minimaxGroupId?: string
-      minimaxUsageModels?: string
-      minimaxEndpoint?: string
-    }
-
-    expect(settings.minimaxGroupId).toBe('group-42')
-    expect(settings.minimaxUsageModels).toBe('general,abab6.5')
-    expect(settings.minimaxEndpoint).toBe('cn')
-    expect(stored.minimaxGroupId).toBe('group-42')
-    expect(stored.minimaxUsageModels).toBe('general,abab6.5')
-    expect(stored.minimaxEndpoint).toBe('cn')
-    expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
-  })
-
-  it('hydrates bot-author overrides from paired runtime settings', async () => {
-    const runtimeCalls: { method: string; params: unknown }[] = []
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-          runtimeCalls.push({ method, params })
-          return Promise.resolve({
-            id: 'call-1',
-            ok: true,
-            result: { settings: { prBotAuthorOverrides: [' GretelFlux ', 'gretelflux'] } },
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-
-        close(): void {}
-      }
-    }))
-
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    const settings = await globals.window.api.settings.get()
-
-    expect(settings.prBotAuthorOverrides).toEqual(['gretelflux'])
-    expect(runtimeCalls).toEqual([{ method: 'settings.get', params: undefined }])
-  })
-
-  it('forwards compact worktree card updates to a paired runtime', async () => {
-    const runtimeCalls: { method: string; params: unknown }[] = []
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-          runtimeCalls.push({ method, params })
-          return Promise.resolve({
-            id: `call-${runtimeCalls.length}`,
-            ok: true,
-            result: {
-              settings: {
-                compactWorktreeCards: true,
-                activeRuntimeEnvironmentId: 'host-internal-default'
-              }
-            },
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-
-        close(): void {}
-      }
-    }))
-
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    const settings = await globals.window.api.settings.set({ compactWorktreeCards: true })
-
-    const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
-      compactWorktreeCards?: boolean
-    }
-
-    expect(settings.compactWorktreeCards).toBe(true)
-    expect(settings.activeRuntimeEnvironmentId).toBeNull()
-    expect(stored.compactWorktreeCards).toBe(true)
-    expect(stored).not.toHaveProperty('activeRuntimeEnvironmentId')
-    expect(runtimeCalls).toEqual([
-      { method: 'settings.update', params: { compactWorktreeCards: true } }
-    ])
-  }, 15_000)
-
-  it('forwards new worktree card style updates to a paired runtime', async () => {
-    const runtimeCalls: { method: string; params: unknown }[] = []
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-          runtimeCalls.push({ method, params })
-          return Promise.resolve({
-            id: `call-${runtimeCalls.length}`,
-            ok: true,
-            result: { settings: { experimentalNewWorktreeCardStyle: true } },
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-
-        close(): void {}
-      }
-    }))
-
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    const settings = await globals.window.api.settings.set({
-      experimentalNewWorktreeCardStyle: true
-    })
-
-    expect(settings.experimentalNewWorktreeCardStyle).toBe(true)
-    expect(runtimeCalls).toEqual([
-      { method: 'settings.update', params: { experimentalNewWorktreeCardStyle: true } }
-    ])
-  })
-
-  it('forwards MiniMax usage setting updates to a paired runtime', async () => {
-    const runtimeCalls: { method: string; params: unknown }[] = []
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-          runtimeCalls.push({ method, params })
-          return Promise.resolve({
-            id: `call-${runtimeCalls.length}`,
-            ok: true,
-            result: {
-              settings: {
-                minimaxGroupId: 'group-42',
-                minimaxUsageModels: 'general,abab6.5',
-                minimaxEndpoint: 'cn'
-              }
-            },
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-
-        close(): void {}
-      }
-    }))
-
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    const settings = await globals.window.api.settings.set({
-      minimaxGroupId: 'group-42',
-      minimaxUsageModels: 'general,abab6.5',
-      minimaxEndpoint: 'cn'
-    })
-
-    const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
-      minimaxGroupId?: string
-      minimaxUsageModels?: string
-      minimaxEndpoint?: string
-    }
-
-    expect(settings.minimaxGroupId).toBe('group-42')
-    expect(settings.minimaxUsageModels).toBe('general,abab6.5')
-    expect(settings.minimaxEndpoint).toBe('cn')
-    expect(stored.minimaxGroupId).toBe('group-42')
-    expect(stored.minimaxUsageModels).toBe('general,abab6.5')
-    expect(stored.minimaxEndpoint).toBe('cn')
-    expect(runtimeCalls).toEqual([
-      {
-        method: 'settings.update',
-        params: {
-          minimaxGroupId: 'group-42',
-          minimaxUsageModels: 'general,abab6.5',
-          minimaxEndpoint: 'cn'
-        }
-      }
-    ])
-  })
-
-  it('forwards normalized bot-author overrides to a paired runtime', async () => {
-    const runtimeCalls: { method: string; params: unknown }[] = []
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-          runtimeCalls.push({ method, params })
-          return Promise.resolve({
-            id: 'call-1',
-            ok: true,
-            result: { settings: { prBotAuthorOverrides: ['gretelflux'] } },
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-
-        close(): void {}
-      }
-    }))
-
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    const settings = await globals.window.api.settings.set({
-      prBotAuthorOverrides: [' GretelFlux ', 'gretelflux']
-    })
-
-    expect(settings.prBotAuthorOverrides).toEqual(['gretelflux'])
-    expect(runtimeCalls).toEqual([
-      { method: 'settings.update', params: { prBotAuthorOverrides: ['gretelflux'] } }
-    ])
-  })
-
-  it('atomically updates a bot-author override through a paired runtime', async () => {
-    const runtimeCalls: { method: string; params: unknown }[] = []
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-          runtimeCalls.push({ method, params })
-          return Promise.resolve({
-            id: 'call-1',
-            ok: true,
-            result: { settings: { prBotAuthorOverrides: ['gretelflux'] } },
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-
-        close(): void {}
-      }
-    }))
-
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    const settings = await globals.window.api.settings.updatePRBotAuthorOverride({
-      author: 'gretelflux',
-      isBot: true
-    })
-
-    expect(settings.prBotAuthorOverrides).toEqual(['gretelflux'])
-    expect(runtimeCalls).toEqual([
-      {
-        method: 'settings.updatePRBotAuthorOverride',
-        params: { author: 'gretelflux', isBot: true }
-      }
-    ])
-  })
-
-  it('does not claim a paired bot-author update succeeded when the runtime rejects it', async () => {
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(): Promise<RuntimeRpcResponse<unknown>> {
-          return Promise.reject(new Error('runtime unavailable'))
-        }
-
-        close(): void {}
-      }
-    }))
-
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    await expect(
-      globals.window.api.settings.updatePRBotAuthorOverride({
-        author: 'gretelflux',
-        isBot: true
-      })
-    ).rejects.toThrow('runtime unavailable')
-
-    const stored = JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}') as {
-      prBotAuthorOverrides?: string[]
-    }
-    expect(stored.prBotAuthorOverrides).toBeUndefined()
   })
 })

@@ -1,0 +1,275 @@
+import { createHash } from 'node:crypto'
+import { mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdir, rename, rm, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+import { getAppEnvironment } from '../../../shared/app-environment'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
+import { TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT } from '../../../shared/terminal/replay/terminal-scrollback-limits'
+import { errorMessage } from '../../../shared/error-message'
+
+const SNAPSHOT_DIR_NAME = 'terminal-scrollback'
+const REF_PREFIX = 'v1'
+
+export type TerminalScrollbackSnapshotStorage = {
+  snapshotRoot?: string
+  fallbackSnapshotRoot?: string | null
+}
+
+function getLegacySnapshotRoot(): string {
+  return join(getAppEnvironment().getPath('userData'), SNAPSHOT_DIR_NAME)
+}
+
+export function getProfileTerminalScrollbackSnapshotRoot(dataFile: string): string {
+  return join(dirname(dataFile), SNAPSHOT_DIR_NAME)
+}
+
+export function getTerminalScrollbackSnapshotRoot(
+  storage?: TerminalScrollbackSnapshotStorage
+): string {
+  return storage?.snapshotRoot ?? getLegacySnapshotRoot()
+}
+
+export function makeTerminalScrollbackSnapshotRef(tabId: string, leafId: string): string {
+  const hash = createHash('sha256').update(`${tabId}\0${leafId}`).digest('hex').slice(0, 32)
+  return `${REF_PREFIX}-${hash}`
+}
+
+function snapshotPath(ref: string, snapshotRoot: string): string | null {
+  if (!/^v1-[0-9a-f]{32}$/.test(ref)) {
+    return null
+  }
+  return join(snapshotRoot, `${ref}.bin`)
+}
+
+export function snapshotReadPaths(
+  ref: string,
+  storage?: TerminalScrollbackSnapshotStorage
+): string[] {
+  const primaryRoot = getTerminalScrollbackSnapshotRoot(storage)
+  const primaryPath = snapshotPath(ref, primaryRoot)
+  if (!primaryPath) {
+    return []
+  }
+  const fallbackRoot = storage?.fallbackSnapshotRoot ?? null
+  if (!fallbackRoot || fallbackRoot === primaryRoot) {
+    return [primaryPath]
+  }
+  const fallbackPath = snapshotPath(ref, fallbackRoot)
+  return fallbackPath ? [primaryPath, fallbackPath] : [primaryPath]
+}
+
+export function getTerminalScrollbackSnapshotPath(
+  ref: string,
+  storage?: TerminalScrollbackSnapshotStorage
+): string | null {
+  return snapshotPath(ref, getTerminalScrollbackSnapshotRoot(storage))
+}
+
+export function readTerminalScrollbackStoredBytesSync(
+  ref: string,
+  storage?: TerminalScrollbackSnapshotStorage
+): Buffer | null {
+  const bytes = readTerminalScrollbackStoredSnapshotSync(ref, storage)
+  return bytes === 'absent' ? null : bytes
+}
+
+/** `'absent'` when no root holds saved bytes; `null` when a snapshot exists but can't be read. */
+export function readTerminalScrollbackStoredSnapshotSync(
+  ref: string,
+  storage?: TerminalScrollbackSnapshotStorage
+): Buffer | 'absent' | null {
+  const paths = snapshotReadPaths(ref, storage)
+  let unreadable = paths.length === 0
+  for (const path of paths) {
+    try {
+      if (statSync(path).size > TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT) {
+        return null
+      }
+      const bytes = readFileSync(path)
+      // An empty file holds no history, but another root may.
+      if (bytes.length > 0) {
+        return bytes
+      }
+    } catch (error) {
+      unreadable ||= !(error instanceof Error && 'code' in error && error.code === 'ENOENT')
+    }
+  }
+  return unreadable ? null : 'absent'
+}
+
+function trailingUtf8Bytes(value: string, maxBytes: number): Buffer {
+  const bytes = Buffer.from(value, 'utf-8')
+  if (bytes.length <= maxBytes) {
+    return bytes
+  }
+  let start = bytes.length - maxBytes
+  while (start < bytes.length && (bytes[start] & 0xc0) === 0x80) {
+    start++
+  }
+  return bytes.subarray(start)
+}
+
+/** Decodes a tail slice, skipping continuation bytes of a character the slice cut in half. */
+export function decodeFromFirstUtf8Boundary(bytes: Buffer): string {
+  let start = 0
+  while (start < bytes.length && (bytes[start] & 0xc0) === 0x80) {
+    start++
+  }
+  return bytes.subarray(start).toString('utf-8')
+}
+
+export function writeTerminalScrollbackSnapshotSync(args: {
+  tabId: string
+  leafId: string
+  buffer: string
+  storage?: TerminalScrollbackSnapshotStorage
+}): string | null {
+  if (!args.buffer) {
+    return null
+  }
+  const ref = makeTerminalScrollbackSnapshotRef(args.tabId, args.leafId)
+  const snapshotRoot = getTerminalScrollbackSnapshotRoot(args.storage)
+  const path = snapshotPath(ref, snapshotRoot)
+  if (!path) {
+    return null
+  }
+  try {
+    mkdirSync(snapshotRoot, { recursive: true, mode: 0o700 })
+    const tmpPath = `${path}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
+    const bytes = trailingUtf8Bytes(args.buffer, TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT)
+    let renamed = false
+    try {
+      writeFileSync(tmpPath, bytes, { mode: 0o600 })
+      renameSync(tmpPath, path)
+      renamed = true
+    } finally {
+      if (!renamed) {
+        rmSync(tmpPath, { force: true })
+      }
+    }
+    return ref
+  } catch (err) {
+    console.warn(`[terminal-scrollback] Failed to write snapshot: ${errorMessage(err)}`)
+    return null
+  }
+}
+
+export async function writeTerminalScrollbackSnapshot(args: {
+  tabId: string
+  leafId: string
+  buffer: string
+  storage?: TerminalScrollbackSnapshotStorage
+}): Promise<string | null> {
+  if (!args.buffer) {
+    return null
+  }
+  const ref = makeTerminalScrollbackSnapshotRef(args.tabId, args.leafId)
+  const snapshotRoot = getTerminalScrollbackSnapshotRoot(args.storage)
+  const path = snapshotPath(ref, snapshotRoot)
+  if (!path) {
+    return null
+  }
+  const tmpPath = `${path}.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}.tmp`
+  let renamed = false
+  try {
+    await mkdir(snapshotRoot, { recursive: true, mode: 0o700 })
+    const bytes = trailingUtf8Bytes(args.buffer, TERMINAL_SCROLLBACK_STORE_BYTE_LIMIT)
+    await writeFile(tmpPath, bytes, { mode: 0o600 })
+    await rename(tmpPath, path)
+    renamed = true
+    return ref
+  } catch (err) {
+    console.warn(`[terminal-scrollback] Failed to write snapshot: ${errorMessage(err)}`)
+    return null
+  } finally {
+    if (!renamed) {
+      await rm(tmpPath, { force: true }).catch(() => {})
+    }
+  }
+}
+
+export function deleteTerminalScrollbackSnapshotSync(
+  ref: string,
+  storage?: TerminalScrollbackSnapshotStorage
+): void {
+  for (const path of snapshotReadPaths(ref, storage)) {
+    try {
+      rmSync(path, { force: true })
+    } catch {
+      // Cleanup failures must not block session deletion.
+    }
+  }
+}
+
+export async function deleteTerminalScrollbackSnapshot(
+  ref: string,
+  storage?: TerminalScrollbackSnapshotStorage
+): Promise<void> {
+  await Promise.all(
+    snapshotReadPaths(ref, storage).map((path) => rm(path, { force: true }).catch(() => {}))
+  )
+}
+
+export function collectTerminalScrollbackSnapshotRefs(session: WorkspaceSessionState): Set<string> {
+  const refs = new Set<string>()
+  for (const layout of Object.values(session.terminalLayoutsByTabId ?? {})) {
+    for (const ref of Object.values(layout.scrollbackRefsByLeafId ?? {})) {
+      refs.add(ref)
+    }
+  }
+  return refs
+}
+
+export function migrateWorkspaceSessionTerminalScrollbackSnapshots(
+  session: WorkspaceSessionState,
+  storage?: TerminalScrollbackSnapshotStorage
+): { session: WorkspaceSessionState; changed: boolean } {
+  let terminalLayoutsByTabId: WorkspaceSessionState['terminalLayoutsByTabId'] | null = null
+  for (const [tabId, layout] of Object.entries(session.terminalLayoutsByTabId ?? {})) {
+    const buffers = layout.buffersByLeafId
+    if (!buffers || Object.keys(buffers).length === 0) {
+      continue
+    }
+    const refs = { ...layout.scrollbackRefsByLeafId }
+    const remainingBuffers: Record<string, string> = {}
+    let layoutChanged = false
+    for (const [leafId, buffer] of Object.entries(buffers)) {
+      const ref = writeTerminalScrollbackSnapshotSync({
+        tabId,
+        leafId,
+        buffer,
+        storage
+      })
+      if (ref) {
+        refs[leafId] = ref
+        layoutChanged = true
+      } else {
+        remainingBuffers[leafId] = buffer
+        if (refs[leafId]) {
+          delete refs[leafId]
+          layoutChanged = true
+        }
+      }
+    }
+    if (!layoutChanged) {
+      continue
+    }
+    terminalLayoutsByTabId ??= { ...session.terminalLayoutsByTabId }
+    const nextLayout = { ...layout }
+    if (Object.keys(refs).length > 0) {
+      nextLayout.scrollbackRefsByLeafId = refs
+    } else {
+      delete nextLayout.scrollbackRefsByLeafId
+    }
+    if (Object.keys(remainingBuffers).length > 0) {
+      nextLayout.buffersByLeafId = remainingBuffers
+    } else {
+      delete nextLayout.buffersByLeafId
+    }
+    terminalLayoutsByTabId[tabId] = nextLayout
+  }
+  if (!terminalLayoutsByTabId) {
+    return { session, changed: false }
+  }
+  return { session: { ...session, terminalLayoutsByTabId }, changed: true }
+}

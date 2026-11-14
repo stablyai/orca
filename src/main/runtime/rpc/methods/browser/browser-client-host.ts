@@ -1,0 +1,275 @@
+import { requireCommandResultIdentity } from './browser-client-host-command-result-identity'
+import { BROWSER_PAGE_INITIALIZATION_ACTION_METHODS } from './browser-page-initialization-action'
+import '../../../../../shared/protocol-version'
+import {
+  BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
+  BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY
+} from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
+import { BrowserClientPageMetadataParams } from '../../../../../shared/browser/client-hosting/browser-client-page-metadata-protocol'
+import {
+  BROWSER_CLIENT_HOST_REQUEST_CAPABILITY,
+  BrowserClientHostRequestResultParams
+} from '../../../../../shared/browser/client-hosting/browser-client-host-request-protocol'
+import {
+  BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE,
+  BROWSER_CLIENT_PAGE_INITIALIZATION_CAPABILITY,
+  BrowserClientHostAttachParams,
+  BrowserClientHostCommandResultChunkParams,
+  BrowserClientHostCommandResultParams
+} from '../../../../../shared/browser/client-hosting/browser-client-host-protocol'
+import { BROWSER_CLIENT_HOST_COMMAND_RESULT_CHUNK_METHOD } from '../../../../../shared/browser/client-hosting/browser-client-automation-protocol'
+import { BrowserError } from '../../../../browser/browser-error'
+import { getBrowserHostLeaseRegistry } from '../../../browser-host/leases/browser-host-lease-registry-instance'
+import { getRuntimeBrowserPageRegistry } from '../../../browser/client-pages/runtime-browser-page-registry'
+import { adoptRuntimeBrowserClientPagesFromInventory } from '../../../browser/client-pages/runtime-browser-client-page-adoption'
+import { recoverUnavailableRuntimeBrowserClientPages } from '../../../browser/client-pages/runtime-browser-client-page-recovery'
+import { releaseRuntimeBrowserClientPageRecord } from '../../../browser/client-pages/runtime-browser-client-page-release'
+import { getBrowserHostRequestRegistry } from '../../../browser-host/leases/browser-host-request-registry'
+import { defineMethod, defineStreamingMethod } from '../../core'
+
+export const BROWSER_CLIENT_HOST_METHODS = [
+  ...BROWSER_PAGE_INITIALIZATION_ACTION_METHODS,
+  defineStreamingMethod({
+    name: 'browser.clientHost.attach',
+    permission: 'workspace',
+    params: BrowserClientHostAttachParams,
+    handler: async (
+      params,
+      { runtime, connectionId, pairedDeviceId, clientKind, clientCapabilities, signal },
+      emit
+    ) => {
+      if (clientKind !== 'runtime' || !connectionId || !pairedDeviceId) {
+        throw new Error('authenticated_browser_client_host_required')
+      }
+      if (!clientCapabilities?.includes(BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY)) {
+        throw new Error('browser_client_host_capability_required')
+      }
+      if (params.authorityRuntimeId !== runtime.getRuntimeId()) {
+        throw new BrowserError(
+          BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE,
+          BROWSER_CLIENT_HOST_AUTHORITY_MISMATCH_CODE
+        )
+      }
+
+      const registry = getBrowserHostLeaseRegistry(runtime)
+      // Attach inventory cannot describe pages created or replaced after readiness is published.
+      const pagePlacementsAtAttach = new Map(
+        getRuntimeBrowserPageRegistry(runtime)
+          .listPages()
+          .map((page) => [page.browserPageId, page.placement])
+      )
+      const handle = registry.attach(
+        {
+          browserHostClientId: params.browserHostClientId,
+          connectionId,
+          pairedDeviceId,
+          hostCapabilities: params.hostCapabilities,
+          pageCommandProtocolVersion: params.pageCommandProtocolVersion,
+          pageInventoryProtocolVersion: params.pageInventoryProtocolVersion,
+          pageInventory: params.pageInventory,
+          pageReconciliationProtocolVersion: params.pageReconciliationProtocolVersion,
+          leaseReconnectProtocolVersion: params.leaseReconnectProtocolVersion,
+          fileChannelProtocolVersion: params.fileChannelProtocolVersion
+        },
+        () => runtime.markClientHostedPagesReconciled(pairedDeviceId)
+      )
+      let releaseCommandDelivery = (): void => {}
+      let resolveDisconnected = (): void => {}
+      const whenDisconnected = new Promise<void>((resolve) => {
+        resolveDisconnected = resolve
+      })
+      let cleaned = false
+      const cleanup = (): void => {
+        if (cleaned) {
+          return
+        }
+        cleaned = true
+        releaseCommandDelivery()
+        handle.disconnect()
+        resolveDisconnected()
+      }
+      const subscriptionId = `browser-client-host:${params.browserHostClientId}`
+      const initializationLifetime = new AbortController()
+      const initializationSignal = signal
+        ? AbortSignal.any([signal, initializationLifetime.signal])
+        : initializationLifetime.signal
+      try {
+        runtime.registerSubscriptionCleanup(subscriptionId, cleanup, connectionId)
+        signal?.addEventListener('abort', cleanup, { once: true })
+        if (signal?.aborted) {
+          cleanup()
+          return
+        }
+        emit({
+          type: 'ready',
+          authorityEpoch: handle.lease.authorityEpoch,
+          browserHostGeneration: handle.lease.browserHostGeneration,
+          ...(params.pageCommandProtocolVersion
+            ? { pageCommandProtocolVersion: params.pageCommandProtocolVersion }
+            : {}),
+          ...(params.pageInventoryProtocolVersion
+            ? { pageInventoryProtocolVersion: params.pageInventoryProtocolVersion }
+            : {}),
+          ...(params.leaseReconnectProtocolVersion
+            ? { leaseReconnectProtocolVersion: params.leaseReconnectProtocolVersion }
+            : {}),
+          ...(params.pageReconciliationProtocolVersion
+            ? { pageReconciliationProtocolVersion: params.pageReconciliationProtocolVersion }
+            : {}),
+          ...(handle.lease.fileChannelProtocolVersion
+            ? { fileChannelProtocolVersion: handle.lease.fileChannelProtocolVersion }
+            : {})
+        })
+        if (params.pageCommandProtocolVersion) {
+          releaseCommandDelivery = registry.attachCommandDelivery(
+            {
+              authorityEpoch: handle.lease.authorityEpoch,
+              browserHostClientId: handle.lease.browserHostClientId,
+              browserHostGeneration: handle.lease.browserHostGeneration,
+              pairedDeviceId
+            },
+            emit
+          )
+        }
+        // Adopt surviving client guests before recovery, which only reconciles records the runtime already knows.
+        const adoption = await adoptRuntimeBrowserClientPagesFromInventory({
+          lease: handle.lease,
+          authority: registry,
+          pages: getRuntimeBrowserPageRegistry(runtime),
+          notifyWorkspace: (workspaceId) => runtime.notifyMobileSessionTabsChanged(workspaceId),
+          resolveExecutionHostKey: (workspaceId) =>
+            runtime.resolveBrowserExecutionHostKeyForWorkspace(workspaceId),
+          signal: initializationSignal
+        })
+        const modern = handle.lease.hostCapabilities?.includes(
+          BROWSER_CLIENT_PAGE_INITIALIZATION_CAPABILITY
+        )
+        if (!modern) {
+          registry.sealClientPageInitializations(
+            handle.lease,
+            adoption.unadoptedPageIds.length !== 0
+          )
+        }
+        await recoverUnavailableRuntimeBrowserClientPages({
+          lease: handle.lease,
+          authority: registry,
+          pages: getRuntimeBrowserPageRegistry(runtime),
+          pagePlacementsAtAttach,
+          notifyWorkspace: (workspaceId) => runtime.notifyMobileSessionTabsChanged(workspaceId),
+          releaseUnrecoverablePage: (page) =>
+            releaseRuntimeBrowserClientPageRecord(runtime, page.browserPageId, page.placement),
+          resolveExecutionHostKey: (workspaceId) =>
+            runtime.resolveBrowserExecutionHostKeyForWorkspace(workspaceId),
+          adoptedPageIds: new Set(adoption.adoptedPageIds),
+          claimedPageIds: new Set(adoption.claimedPageIds),
+          signal: initializationSignal
+        })
+        if (modern) {
+          const claimed = new Set(adoption.claimedPageIds)
+          registry.sealClientPageInitializations(
+            handle.lease,
+            adoption.unadoptedPageIds.some((id) => !claimed.has(id))
+          )
+        }
+        const reason = await Promise.race([
+          handle.whenFenced,
+          whenDisconnected.then(() => undefined),
+          handle.whenConnectionSuperseded.then(() => undefined)
+        ])
+        if (!reason) {
+          return
+        }
+        emit({
+          type: 'revoked',
+          authorityEpoch: handle.lease.authorityEpoch,
+          browserHostGeneration: handle.lease.browserHostGeneration,
+          reason: reason === 'replaced' ? 'replaced' : 'released'
+        })
+      } finally {
+        initializationLifetime.abort()
+        signal?.removeEventListener('abort', cleanup)
+        cleanup()
+      }
+    }
+  }),
+  defineMethod({
+    name: 'browser.clientHost.commandResult',
+    permission: 'workspace',
+    params: BrowserClientHostCommandResultParams,
+    handler: (params, context) => {
+      const accepted = getBrowserHostLeaseRegistry(context.runtime).settleClientPageCommand(
+        requireCommandResultIdentity(params, context),
+        params
+      )
+      return { accepted }
+    }
+  }),
+  defineMethod({
+    name: BROWSER_CLIENT_HOST_COMMAND_RESULT_CHUNK_METHOD,
+    permission: 'workspace',
+    params: BrowserClientHostCommandResultChunkParams,
+    handler: (params, context) => {
+      getBrowserHostLeaseRegistry(context.runtime)
+        .requireCommandResultLedger(requireCommandResultIdentity(params, context))
+        .stageResultChunk(params)
+      return { accepted: true }
+    }
+  }),
+  defineMethod({
+    name: 'browser.clientHost.requestResult',
+    permission: 'workspace',
+    params: BrowserClientHostRequestResultParams,
+    handler: (params, { runtime, pairedDeviceId, clientKind, clientCapabilities }) => {
+      if (clientKind !== 'runtime' || !pairedDeviceId) {
+        throw new Error('authenticated_browser_client_host_required')
+      }
+      if (!clientCapabilities?.includes(BROWSER_CLIENT_HOST_REQUEST_CAPABILITY)) {
+        throw new Error('browser_client_host_request_capability_required')
+      }
+      return {
+        accepted: getBrowserHostRequestRegistry(runtime).settle({ pairedDeviceId }, params)
+      }
+    }
+  }),
+  defineMethod({
+    name: 'browser.clientHost.pageMetadata',
+    permission: 'workspace',
+    params: BrowserClientPageMetadataParams,
+    handler: (
+      params,
+      { runtime, pairedDeviceId, connectionId, clientKind, clientCapabilities }
+    ) => {
+      if (clientKind !== 'runtime' || !pairedDeviceId || !connectionId) {
+        throw new Error('authenticated_browser_client_host_required')
+      }
+      if (
+        !clientCapabilities?.includes(BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY) ||
+        !clientCapabilities.includes(BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY)
+      ) {
+        throw new Error('browser_client_page_metadata_capability_required')
+      }
+      const placement = {
+        kind: 'client' as const,
+        browserHostClientId: params.browserHostClientId,
+        browserHostGeneration: params.browserHostGeneration,
+        pageHostGeneration: params.pageHostGeneration
+      }
+      getBrowserHostLeaseRegistry(runtime).requireClientPageConnection({
+        browserPageId: params.browserPageId,
+        placement,
+        pairedDeviceId,
+        connectionId
+      })
+      const pages = getRuntimeBrowserPageRegistry(runtime)
+      const page = pages.getPage(params.browserPageId)
+      if (!page) {
+        throw new Error('browser_runtime_page_required')
+      }
+      const accepted = pages.updatePageMetadata(params.browserPageId, placement, params)
+      if (accepted) {
+        runtime.notifyMobileSessionTabsChanged(page.workspaceId)
+      }
+      return { accepted }
+    }
+  })
+]

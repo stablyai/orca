@@ -1,8 +1,9 @@
 import {
   terminalGridSizeForBox,
   type TerminalFitMetrics
-} from '@/lib/pane-manager/terminal-grid-size-for-box'
-import { mountedTerminalTabEntries } from '../mounted-terminal-tab-registry'
+} from '@/lib/pane-manager/terminal-fit/terminal-grid-size-for-box'
+import { readTerminalStableCellSize } from '@/lib/pane-manager/terminal-fit/terminal-stable-cell-fit-addon'
+import { mountedTerminalTabEntries } from '../hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 
 type GridSize = { cols: number; rows: number }
 
@@ -13,7 +14,7 @@ function readDefaultPaneFit(
 ): { metrics: TerminalFitMetrics; inset: { width: number; height: number } } | null {
   for (const [, registered] of mountedTerminalTabEntries()) {
     for (const { terminal, container } of registered.getManager()?.getPanes() ?? []) {
-      const cell = terminal.dimensions?.css.cell
+      const cell = readTerminalStableCellSize(terminal)
       if (
         terminal.options.fontSize !== defaultFontSize ||
         container.hasAttribute('data-has-title') ||

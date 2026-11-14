@@ -1,93 +1,23 @@
+import type * as UseMobileSessionMarkdownActionsModule from '../../../files/session-documents/use-mobile-session-markdown-actions'
+import type * as UseQuickCommandsModule from '../../../terminal/quick-commands/use-quick-commands'
 import { hookMount, performHookAction } from '../hook-mount'
 import { mountFixture } from '../recorder-fixture-shape'
-import type { DiffComment } from '../../../../../src/shared/diff-comment-types'
-import type {
-  DiffNotesDelivery,
-  MarkdownDocState
-} from '../../../session/mobile-session-route-types'
+import type { MarkdownDocState } from '../../../files/session-documents/session-document-state'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
 
 const WORKSPACE = 'workspace-1'
 const TAB = 'tab-md'
 
-/**
- * The session screen's own persisted text: the worktree-stored review notes, the markdown tab save,
- * and the quick-command list the terminal sheet edits.
- *
- * All three are optimistic writes with a rollback, so the projection is the local list rather than
- * the reply: what a golden has to show is which value survives a refusal. Quick commands adds a
- * serialized queue, so its recording is also the order two overlapping saves settle in.
- */
+// Observe local values surviving refused optimistic saves and settlement order for overlapping serialized quick-command writes.
 export function sessionNotesMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
   return {
-    'session.diff-notes': ({ client, effect }) => {
-      const useComments = modules.load<
-        typeof import('../../../session/use-mobile-session-diff-comments')
-      >('mobile/src/session/use-mobile-session-diff-comments.ts').useMobileSessionDiffComments
-      let diffComments: DiffComment[] = []
-      const diffCommentsRef = { current: diffComments }
-      let busy = false
-      let pendingDelivery: DiffNotesDelivery | null = null
-      let comments: ReturnType<typeof useComments>
-      const hook = hookMount(() => {
-        comments = useComments(
-          mountFixture<Parameters<typeof useComments>[0]>({
-            worktreeId: WORKSPACE,
-            isFloatingWorkspaceRoute: false,
-            client,
-            connState: 'connected',
-            setDiffComments: (update) => {
-              diffComments = typeof update === 'function' ? update(diffComments) : update
-              diffCommentsRef.current = diffComments
-            },
-            diffCommentsRef,
-            diffCommentBusy: busy,
-            setDiffCommentBusy: (update) => {
-              busy = typeof update === 'function' ? update(busy) : update
-            },
-            setPendingDiffNotesDelivery: (update) => {
-              pendingDelivery = typeof update === 'function' ? update(pendingDelivery) : update
-            },
-            showToast: (message: string) => effect('toast', { message })
-          })
-        )
-      })
-      return {
-        action(name, args) {
-          if (name === 'mount') {
-            return hook.mount()
-          }
-          return performHookAction(() => {
-            if (name === 'add') {
-              return comments.addDiffCommentForFile(
-                'src/app.ts',
-                Number(args.line ?? 4),
-                String(args.body ?? 'needs a test')
-              )
-            }
-            if (name === 'delete') {
-              return comments.deleteDiffCommentForFile(String(args.id ?? 'note-1'))
-            }
-            if (name === 'copy') {
-              return comments.copyDiffCommentsToClipboard()
-            }
-            if (name === 'reload') {
-              return comments.loadDiffComments()
-            }
-            throw new Error(`Unknown diff notes action: ${name}`)
-          })
-        },
-        state: () => ({ diffComments, busy, pendingDelivery }),
-        dispose: hook.unmount
-      }
-    },
     'session.markdown-save': ({ client, effect }) => {
-      const useMarkdown = modules.load<
-        typeof import('../../../session/use-mobile-session-markdown-actions')
-      >('mobile/src/session/use-mobile-session-markdown-actions.ts').useMobileSessionMarkdownActions
+      const useMarkdown = modules.load<typeof UseMobileSessionMarkdownActionsModule>(
+        'mobile/src/files/session-documents/use-mobile-session-markdown-actions.ts'
+      ).useMobileSessionMarkdownActions
       let markdownDocs = new Map<string, MarkdownDocState>([
         [
           TAB,
@@ -123,7 +53,8 @@ export function sessionNotesMountAdapters(
             readMarkdownTab: () => {
               effect('read-markdown-tab', {})
               return Promise.resolve()
-            }
+            },
+            dictationLeaveHold: { holdsLeave: false, hold: () => false }
           })
         )
       })
@@ -147,8 +78,8 @@ export function sessionNotesMountAdapters(
       }
     },
     'settings.quick-commands': ({ client }) => {
-      const useQuickCommands = modules.load<typeof import('../../../session/use-quick-commands')>(
-        'mobile/src/session/use-quick-commands.ts'
+      const useQuickCommands = modules.load<typeof UseQuickCommandsModule>(
+        'mobile/src/terminal/quick-commands/use-quick-commands.ts'
       ).useQuickCommands
       let enabled = true
       let model: ReturnType<typeof useQuickCommands>

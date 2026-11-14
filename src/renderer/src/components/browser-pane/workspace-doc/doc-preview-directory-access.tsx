@@ -1,9 +1,10 @@
 import { useCallback, useRef, useState, type RefObject } from 'react'
 import { AlertCircle, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import type { DocPreviewFileFailure } from '../../../../../shared/doc-preview-scheme'
+import type { DocPreviewFileFailure } from '../../../../../shared/document-preview/doc-preview-scheme'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 function requestedDirectory(relativePath: string): string {
   const separator = relativePath.lastIndexOf('/')
@@ -24,11 +25,7 @@ function reportAuthorizationFailure(): void {
   )
 }
 
-/**
- * All blocked folders a load has surfaced so far, batched into one decision: a reader cannot
- * meaningfully judge `assets/` and `data/` separately, and N sequential banners only train the
- * allow reflex. What is granted is exactly the set named on the banner, never more.
- */
+/** Batch blocked folders into one decision granting exactly the displayed set; sequential banners encourage indiscriminate approval. */
 export function useDocPreviewDirectoryAccess({
   grantId,
   reloadRef
@@ -43,8 +40,7 @@ export function useDocPreviewDirectoryAccess({
   dismiss: () => void
   allow: () => Promise<void>
 } {
-  // Why a ref plus a version tick and not state alone: dismiss must fence the directory against
-  // an offer landing in the same event batch, which a state updater sees one render too late.
+  // Dismiss must fence same-batch offers synchronously; a state update is visible one render too late.
   const requestsByDirectoryRef = useRef(new Map<string, DocPreviewFileFailure>())
   const [, setRequestsVersion] = useState(0)
   const [busy, setBusy] = useState(false)
@@ -107,9 +103,9 @@ export function useDocPreviewDirectoryAccess({
 
 const MAX_NAMED_FOLDERS = 3
 
-function requestedFolderSentence(labels: string[]): string {
+function requestedFolderSentence(labels: string[], t: Translate = translate): string {
   if (labels.length === 1) {
-    return translate(
+    return t(
       'auto.components.editor.HtmlDocPreview.directoryAccessRequest',
       'This preview wants to read files in {{path}}.',
       { path: labels[0] }
@@ -119,13 +115,13 @@ function requestedFolderSentence(labels: string[]): string {
   const remainder = labels.length - named.length
   const folders =
     remainder > 0
-      ? translate(
+      ? t(
           'auto.components.editor.HtmlDocPreview.directoryAccessRequestOverflow',
           '{{folders}}, and {{count}} more',
           { folders: named.join(', '), count: remainder }
         )
       : `${named.slice(0, -1).join(', ')} and ${named.at(-1)}`
-  return translate(
+  return t(
     'auto.components.editor.HtmlDocPreview.directoryAccessRequestMultiple',
     'This preview wants to read files in {{folders}}.',
     { folders }
@@ -145,6 +141,7 @@ export function DocPreviewDirectoryAccessBanner({
   onDismiss: () => void
   onAllow: () => Promise<void>
 }): React.JSX.Element {
+  const t = useTranslate()
   const labels = requests.map((request) =>
     requestedDirectoryLabel(request.relativePath, worktreeRoot)
   )
@@ -153,20 +150,18 @@ export function DocPreviewDirectoryAccessBanner({
       <AlertCircle className="size-3.5 shrink-0 text-muted-foreground" />
       {/* The title carries every folder in full, for when the sentence truncates past three. */}
       <span className="min-w-0 flex-1 text-muted-foreground" title={labels.join('\n')}>
-        {requestedFolderSentence(labels)}
+        {requestedFolderSentence(labels, t)}
       </span>
       <Button type="button" variant="ghost" size="xs" disabled={busy} onClick={onDismiss}>
-        {translate('auto.components.editor.HtmlDocPreview.dismissAccessRequest', 'Dismiss')}
+        {t('auto.components.editor.HtmlDocPreview.dismissAccessRequest', 'Dismiss')}
       </Button>
       <Button type="button" size="xs" disabled={busy} onClick={() => void onAllow()}>
         {busy ? <Loader2 className="size-3 animate-spin" /> : null}
         {labels.length === 1
-          ? translate('auto.components.editor.HtmlDocPreview.allowDirectory', 'Allow folder')
-          : translate(
-              'auto.components.editor.HtmlDocPreview.allowDirectories',
-              'Allow {{count}} folders',
-              { count: labels.length }
-            )}
+          ? t('auto.components.editor.HtmlDocPreview.allowDirectory', 'Allow folder')
+          : t('auto.components.editor.HtmlDocPreview.allowDirectories', 'Allow {{count}} folders', {
+              count: labels.length
+            })}
       </Button>
     </div>
   )

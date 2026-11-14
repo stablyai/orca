@@ -1,5 +1,5 @@
 import type { PreloadApi } from '../../../../preload/api-types'
-import { EMPTY_PTY_MAIN_DELIVERY_DIAGNOSTICS } from '../../../../shared/pty-delivery-diagnostics'
+import { EMPTY_PTY_MAIN_DELIVERY_DIAGNOSTICS } from '../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 import type { SshConnectionState, SshTarget } from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeResult } from './web-runtime-calls'
@@ -13,6 +13,8 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     writeAccepted: () => Promise.resolve(false),
     resize: () => {},
     claimViewport: () => {},
+    // Web clients have no local PTYs; runtime attention arrives through terminal.list.
+    getTerminalAttention: () => Promise.resolve({}),
     reportGeometry: () => {},
     signal: () => {},
     // Web panes clear the host buffer via the terminal.clearBuffer runtime RPC.
@@ -20,7 +22,10 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     // Likewise terminal.resetInputModes.
     resetInputModes: () => {},
     kill: () => Promise.resolve(),
+    killFenced: () => Promise.resolve({ outcome: 'refused', reason: 'unsupported' }),
     ackColdRestore: () => {},
+    // Web panes never transit main's hidden-delivery gate, so there is no drop latch.
+    ackHiddenOutputRestoreApplied: () => {},
     ackData: () => {},
     onDeliveryResyncRequest: () => noopUnsubscribe,
     respondDeliveryResync: () => {},
@@ -45,6 +50,7 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     disableCodexSharedServerAutoStart: () => Promise.resolve(false),
     stopCodexSharedServer: () => Promise.resolve(false),
     openedBeforeClaudeAccounts: () => Promise.resolve(false),
+    claudeDiffPanelMayAutoOpen: () => Promise.resolve(false),
     // Why: the paired host owns its daemons; this client has none to stop.
     readNewerDaemonHeldScreen: () => Promise.resolve(null),
     reopenNewerDaemonTerminals: () => Promise.resolve({ reopened: false }),
@@ -103,6 +109,7 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     clearPendingPaneSerializer: () => Promise.resolve(),
     reportRendererSerializerReady: () => Promise.resolve(),
     management: {
+      asyncIoHealth: () => Promise.resolve({ state: 'unsupported' as const }),
       listSessions: () => Promise.resolve({ sessions: [], degraded: false }),
       killAll: () => Promise.resolve({ killedCount: 0, remainingCount: 0, killedSessionIds: [] }),
       killOne: () => Promise.resolve({ success: false }),
@@ -122,7 +129,7 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
 
 export function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
   return {
-    // Why: SSH is owned by the paired host; route read/connect to runtime RPC for state/reconnect (STA-1468). Target mgmt is desktop-only.
+    // Paired host owns SSH; route state/reconnect through runtime RPC, leaving target management to desktop (STA-1468).
     listTargets: async () => {
       if (!requireActiveEnvironmentOrNull()) {
         return []
@@ -181,12 +188,15 @@ export function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
         error: translate('auto.web.web.preload.api.31bfe8ae1a', 'Unavailable in the web client.')
       }),
     onStateChanged: () => noopUnsubscribe,
+    onTargetRemoved: () => noopUnsubscribe,
     addPortForward: () =>
       Promise.reject(new Error('SSH port forwarding is unavailable in the web client.')),
     updatePortForward: () =>
       Promise.reject(new Error('SSH port forwarding is unavailable in the web client.')),
     removePortForward: () => Promise.resolve(null),
     listPortForwards: () => Promise.resolve([]),
+    listUnrestoredPortForwards: () => Promise.resolve([]),
+    removeSavedPortForward: () => Promise.resolve(),
     listDetectedPorts: () => Promise.resolve([]),
     onPortForwardsChanged: () => noopUnsubscribe,
     onDetectedPortsChanged: () => noopUnsubscribe,

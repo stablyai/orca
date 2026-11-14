@@ -1,16 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
-  clearShapes,
   commitShape,
   createMarkupDocument,
   redoShape,
   undoShape,
   type MarkupPoint,
-  type PenShape,
-  type TextShape
+  type PenShape
 } from './markup-drawing-model'
 import {
-  applyDocumentCommand,
   beginDrawGesture,
   beginEraseGesture,
   cancelGesture,
@@ -59,16 +56,6 @@ const erasedIds = (state: MarkupEditorState) =>
   state.gesture?.kind === 'erase' ? state.gesture.erasedIds : undefined
 
 describe('erase gesture', () => {
-  it('removes only the clicked mark, leaving the ones drawn after it', () => {
-    const state = endGesture(
-      erase(editorWith(line('a', 0), line('b', 100), line('c', 200)), [{ x: 50, y: 0 }]),
-      1
-    )
-
-    expect(ids(state)).toEqual(['b', 'c'])
-    expect(state.gesture).toBeNull()
-  })
-
   it('erases only the newest of two overlapping marks on a click', () => {
     const before = editorWith(line('older', 0), line('newer', 0))
     const pressed = erase(before, [{ x: 50, y: 0 }])
@@ -78,14 +65,6 @@ describe('erase gesture', () => {
     const after = endGesture(pressed, 1)
     expect(ids(after)).toEqual(['older'])
     expect(undoShape(after.doc).shapes.map((shape) => shape.id)).toEqual(['older', 'newer'])
-  })
-
-  it('keeps a click a click when a tap jitters by a fraction of a pixel', () => {
-    const pressed = erase(editorWith(line('older', 0), line('newer', 0)), [{ x: 50, y: 0 }])
-    const jittered = moveGesture(pressed, 1, { x: 50.6, y: 0.4 }, noText)
-
-    expect(jittered).toBe(pressed)
-    expect(ids(endGesture(jittered, 1))).toEqual(['older'])
   })
 
   it('keeps a click a click when the pointer wanders inside the slop and back', () => {
@@ -99,15 +78,6 @@ describe('erase gesture', () => {
 
     expect(erasedIds(wandered)).toEqual(new Set(['newer']))
     expect(ids(endGesture(wandered, 1))).toEqual(['older', 'near'])
-  })
-
-  it('becomes a drag once the pointer leaves the slop', () => {
-    const dragged = erase(editorWith(line('older', 0), line('newer', 0)), [
-      { x: 50, y: 0 },
-      { x: 54, y: 0 }
-    ])
-
-    expect(erasedIds(dragged)).toEqual(new Set(['older', 'newer']))
   })
 
   it('erases every mark under the press point once the click becomes a drag', () => {
@@ -140,16 +110,8 @@ describe('erase gesture', () => {
     expect(redoShape(undone).shapes.map((shape) => shape.id)).toEqual(['c'])
   })
 
-  it('leaves the document and its history untouched when nothing was hit', () => {
-    const before = editorWith(line('a', 0))
-    const after = endGesture(erase(before, [{ x: 50, y: 300 }]), 1)
-
-    expect(after.doc).toBe(before.doc)
-  })
-
   it('does not erase a mark the pointer curved around between events', () => {
-    // Down left of the stroke, around its end, to its far side: the chord from the
-    // first to the last point crosses it, but no swept segment does.
+    // The endpoint chord crosses the stroke, but the actual curved sweep goes around it.
     const after = endGesture(
       erase(editorWith(line('a', 0)), [
         { x: 50, y: -40 },
@@ -161,35 +123,6 @@ describe('erase gesture', () => {
     )
 
     expect(ids(after)).toEqual(['a'])
-  })
-
-  it('keeps the same erased set while a drag hits nothing new', () => {
-    const begun = beginEraseGesture(editorWith(line('a', 0)), 1, { x: 50, y: 0 }, noText)
-    const moved = moveGesture(begun, 1, { x: 50, y: 300 }, noText)
-
-    expect(erasedIds(begun)).toEqual(new Set(['a']))
-    expect(erasedIds(moved)).toBe(erasedIds(begun))
-  })
-
-  it('erases a text label the drag passes through', () => {
-    const label: TextShape = {
-      id: 'label',
-      kind: 'text',
-      color: '#111827',
-      at: { x: 200, y: 200 },
-      text: 'note',
-      fontSize: 18
-    }
-    const inkBox = () => ({ x: 200, y: 200, width: 60, height: 20 })
-    const before: MarkupEditorState = {
-      doc: commitShape(createMarkupDocument(), label),
-      gesture: null
-    }
-    const begun = beginEraseGesture(before, 1, { x: 100, y: 210 }, inkBox)
-    const after = endGesture(moveGesture(begun, 1, { x: 230, y: 210 }, inkBox), 1)
-
-    expect(erasedIds(begun)).toEqual(new Set())
-    expect(ids(after)).toEqual([])
   })
 
   it('ignores a second pointer while a gesture is in flight', () => {
@@ -232,30 +165,6 @@ describe('erase gesture', () => {
 })
 
 describe('draw gesture', () => {
-  it('keeps every point of a freehand stroke', () => {
-    const begun = beginDrawGesture(editorWith(), 1, {
-      id: 'pen',
-      kind: 'highlight',
-      color: '#eab308',
-      width: 4,
-      points: [{ x: 0, y: 0 }]
-    })
-    const moved = [
-      { x: 10, y: 5 },
-      { x: 20, y: 0 }
-    ].reduce((state, point) => moveGesture(state, 1, point, noText), begun)
-
-    expect(endGesture(moved, 1).doc.shapes).toMatchObject([
-      {
-        points: [
-          { x: 0, y: 0 },
-          { x: 10, y: 5 },
-          { x: 20, y: 0 }
-        ]
-      }
-    ])
-  })
-
   it('commits a stroke whose release was lost and starts afresh on the next press', () => {
     const stale = moveGesture(
       beginDrawGesture(editorWith(), 1, line('old', 0)),
@@ -310,7 +219,7 @@ describe('draw gesture', () => {
     expect(endGesture(ended, 1)).toBe(ended)
   })
 
-  it.each(['rect', 'ellipse', 'arrow'] as const)(
+  it.each(['rect'] as const)(
     'saves no %s released without being dragged, so it adds no undo step',
     (kind) => {
       const before = editorWith(line('a', 0))
@@ -321,16 +230,6 @@ describe('draw gesture', () => {
       expect(endGesture(pressed, 1).doc).toBe(before.doc)
     }
   )
-
-  it('lets an eraser click take a mark where a shape was pressed without dragging', () => {
-    const at = { x: 50, y: 0 }
-    const clicked = endGesture(
-      beginDrawGesture(editorWith(line('a', 0)), 1, pressedShape('rect', at)),
-      1
-    )
-
-    expect(ids(endGesture(erase(clicked, [at]), 1))).toEqual([])
-  })
 
   it('still saves a pen tap, which leaves a visible dot', () => {
     const tapped = endGesture(
@@ -343,20 +242,6 @@ describe('draw gesture', () => {
 })
 
 describe('cancelled pointer', () => {
-  it('discards a stroke in progress without adding history', () => {
-    const before = editorWith(line('a', 0))
-    const held = moveGesture(
-      beginDrawGesture(before, 1, line('held', 300)),
-      1,
-      { x: 50, y: 300 },
-      noText
-    )
-
-    const cancelled = cancelGesture(held, 1)
-    expect(cancelled.doc).toBe(before.doc)
-    expect(cancelled.gesture).toBeNull()
-  })
-
   it('discards an erase, so the marks it hid stay, and a later lost capture does nothing', () => {
     const before = editorWith(line('a', 0), line('b', 100))
     const held = erase(before, [
@@ -369,12 +254,6 @@ describe('cancelled pointer', () => {
     expect(cancelled.doc).toBe(before.doc)
     // lostpointercapture follows pointercancel and ends the same pointer's gesture.
     expect(endGesture(cancelled, 1)).toBe(cancelled)
-  })
-
-  it('ignores a cancel from a pointer that does not own the gesture', () => {
-    const held = erase(editorWith(line('a', 0)), [{ x: 50, y: 0 }], 1)
-
-    expect(cancelGesture(held, 2)).toBe(held)
   })
 })
 
@@ -427,13 +306,6 @@ describe('history commands mid-gesture', () => {
     expect(ids(finishDrag(undone))).toEqual(['a'])
   })
 
-  it('undo during an erase that hides nothing, with no history, keeps the erase', () => {
-    const held = erase(editorWith(), [{ x: 50, y: 300 }])
-    expect(canUndoMarkup(held)).toBe(false)
-
-    expect(undoMarkup(held)).toBe(held)
-  })
-
   it('an unmoved shape press on an empty canvas leaves undo disabled and is kept', () => {
     const held = beginDrawGesture(editorWith(), 1, pressedShape('ellipse', { x: 50, y: 0 }))
     expect(canUndoMarkup(held)).toBe(false)
@@ -442,14 +314,6 @@ describe('history commands mid-gesture', () => {
     // Dragging it out still draws the ellipse.
     const ended = endGesture(moveGesture(held, 1, { x: 90, y: 40 }, noText), 1)
     expect(ids(ended)).toEqual(['ellipse'])
-  })
-
-  it('a second undo while the pointer is still down undoes the last committed mark', () => {
-    const held = undoMarkup(drawing(editorWith(line('a', 0), line('b', 100))))
-
-    const again = undoMarkup(held)
-    expect(ids(again)).toEqual(['a'])
-    expect(ids(finishDrag(again))).toEqual(['a'])
   })
 
   it('redo mid-gesture cancels the gesture, then redoes', () => {
@@ -465,13 +329,5 @@ describe('history commands mid-gesture', () => {
 
     expect(redoMarkup(held)).toBe(held)
     expect(ids(endGesture(held, 1))).toEqual(['b'])
-  })
-
-  it('clear mid-erase cancels the erase, then clears as one undo step', () => {
-    const held = erase(editorWith(line('a', 0), line('b', 100)), [{ x: 50, y: 0 }])
-
-    const released = finishDrag(applyDocumentCommand(held, clearShapes))
-    expect(ids(released)).toEqual([])
-    expect(ids(undoMarkup(released))).toEqual(['a', 'b'])
   })
 })

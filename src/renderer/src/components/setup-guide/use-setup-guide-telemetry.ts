@@ -6,14 +6,14 @@ import {
   type FeatureWallSetupStepId
 } from '../../../../shared/feature-wall-setup-steps'
 import type { SetupGuideSource } from '../../../../shared/feature-education-telemetry'
-import type { FeatureWallSetupProgress } from '../feature-wall/feature-wall-setup-progress'
+import type { FeatureWallSetupProgress } from '../feature-wall/setup/feature-wall-setup-progress'
 import {
   persistEmittedSetupGuideStepId,
   readEmittedSetupGuideStepIds,
   trackSetupGuideClosed,
   trackSetupGuideOpened,
   trackSetupGuideStepCompleted
-} from '@/lib/feature-education-telemetry'
+} from '@/diagnostics/telemetry/feature-education-telemetry'
 
 type SetupGuideTelemetrySession = {
   source: SetupGuideSource
@@ -146,8 +146,7 @@ export function recordSetupGuideStepCompletionTelemetry(args: {
   args.state.previousDone = { ...args.progress.stepDone }
   const emitted = args.state.emitted
   if (!previousDone || !args.setupGuideVisible) {
-    // Why: hidden async refresh can flip already-complete setup state from false
-    // to true; only visible guide actions are attributable enough to event.
+    // Hidden refreshes cannot be attributed to guide actions; update baselines without emitting completion.
     persistCompletedSetupGuideStepBaselines(args.progress.stepDone, emitted)
     return
   }

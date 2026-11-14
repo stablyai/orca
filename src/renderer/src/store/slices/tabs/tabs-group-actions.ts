@@ -1,14 +1,17 @@
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import type { TabSplitTarget, TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { activeSurfacePatchMatchesState, buildActiveSurfacePatch } from './tabs-surface'
-import type { TabGroup } from '../../../../../shared/tab-types'
+import type { TabGroup, TabGroupLayoutNode } from '../../../../../shared/tab-types'
 import {
   buildSplitNode,
   collapseGroupLayout,
   replaceLeaf
-} from '../../../../../shared/workspace-layout/tab-group-layout-tree'
-import { workspaceRootGroupId } from '../../../../../shared/workspace-layout/workspace-layout-minted-ids'
-import { ownsGlobalSelection } from '../../global-selection-owner'
+} from '../../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
+import { workspaceRootGroupId } from '../../../../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
+import { insertTabIdIntoOrder } from '../../../../../shared/workspace-layout/tab-groups/tab-order'
+import { resolveUnifiedTabCreatePlacement } from './tabs-create-placement'
+import { ownsGlobalSelection } from '../../workspaces/selection/global-selection-owner'
+import { replaceRecordEntries } from '../../keyed-record-transitions'
 
 type SplitGroupState = Pick<
   TabsSlice,
@@ -22,6 +25,24 @@ export function insertSplitGroup(
   target: TabSplitTarget,
   newGroup: TabGroup
 ): SplitGroupState {
+  const split = splitGroupEntries(state, worktreeId, target, newGroup)
+  return {
+    groupsByWorktree: replaceRecordEntries(state.groupsByWorktree, [[worktreeId, split.groups]]),
+    layoutByWorktree: replaceRecordEntries(state.layoutByWorktree, [[worktreeId, split.layout]]),
+    activeGroupIdByWorktree:
+      split.activeGroupId === null
+        ? state.activeGroupIdByWorktree
+        : replaceRecordEntries(state.activeGroupIdByWorktree, [[worktreeId, split.activeGroupId]])
+  }
+}
+
+/** insertSplitGroup's values for its one worktree; a null active group id leaves the entry unwritten. */
+export function splitGroupEntries(
+  state: SplitGroupState,
+  worktreeId: string,
+  target: TabSplitTarget,
+  newGroup: TabGroup
+): { groups: TabGroup[]; layout: TabGroupLayoutNode; activeGroupId: string | null } {
   const { sourceGroupId, splitDirection } = target
   const currentLayout =
     state.layoutByWorktree[worktreeId] ?? ({ type: 'leaf', groupId: sourceGroupId } as const)
@@ -32,18 +53,9 @@ export function insertSplitGroup(
     splitDirection === 'left' || splitDirection === 'up' ? 'first' : 'second'
   )
   return {
-    groupsByWorktree: {
-      ...state.groupsByWorktree,
-      [worktreeId]: [...(state.groupsByWorktree[worktreeId] ?? []), newGroup]
-    },
-    layoutByWorktree: {
-      ...state.layoutByWorktree,
-      [worktreeId]: replaceLeaf(currentLayout, sourceGroupId, replacement)
-    },
-    activeGroupIdByWorktree:
-      target.activate === false
-        ? state.activeGroupIdByWorktree
-        : { ...state.activeGroupIdByWorktree, [worktreeId]: newGroup.id }
+    groups: [...(state.groupsByWorktree[worktreeId] ?? []), newGroup],
+    layout: replaceLeaf(currentLayout, sourceGroupId, replacement),
+    activeGroupId: target.activate === false ? null : newGroup.id
   }
 }
 
@@ -59,28 +71,73 @@ export function createTabsGroupActions(
   'ensureWorktreeRootGroup' | 'focusGroup' | 'closeEmptyGroup' | 'createEmptySplitGroup'
 > {
   return {
-    ensureWorktreeRootGroup: (worktreeId) => {
+    ensureWorktreeRootGroup: (worktreeId, orderSlot) => {
       const existingGroups = get().groupsByWorktree[worktreeId] ?? []
-      if (existingGroups.length > 0) {
+      if (!orderSlot && existingGroups.length > 0) {
         return get().activeGroupIdByWorktree[worktreeId] ?? existingGroups[0].id
       }
 
-      const groupId = workspaceRootGroupId(worktreeId)
-      set((state) => ({
-        // Why: a zero-tab worktree still needs a canonical root group so new tabs and splits land in a deterministic place.
-        groupsByWorktree: {
-          ...state.groupsByWorktree,
-          [worktreeId]: [{ id: groupId, worktreeId, activeTabId: null, tabOrder: [] }]
-        },
-        layoutByWorktree: {
-          ...state.layoutByWorktree,
-          [worktreeId]: { type: 'leaf', groupId }
-        },
-        activeGroupIdByWorktree: {
-          ...state.activeGroupIdByWorktree,
-          [worktreeId]: groupId
+      let groupId = workspaceRootGroupId(worktreeId)
+      set((state) => {
+        const groups = state.groupsByWorktree[worktreeId] ?? []
+        const reserved =
+          orderSlot && groups.find((group) => group.tabOrder.includes(orderSlot.tabId))
+        if (reserved) {
+          groupId = reserved.id
+          return state
         }
-      }))
+        const tabs = state.unifiedTabsByWorktree[worktreeId] ?? []
+        const placement = resolveUnifiedTabCreatePlacement({
+          groups,
+          tabs,
+          activeGroupId: state.activeGroupIdByWorktree[worktreeId],
+          targetGroupId: orderSlot?.targetGroupId,
+          lookupWorktrees: () => []
+        })
+        const group =
+          groups.find((entry) => entry.id === placement.groupId) ??
+          groups[0] ??
+          emptySplitGroup(worktreeId, groupId)
+        groupId = group.id
+        let tabOrder = group.tabOrder
+        if (orderSlot) {
+          const { tabId, precedingTabIds } = orderSlot
+          const preceding = new Set(precedingTabIds)
+          const anchor = tabOrder.findLast((id) => preceding.has(id))
+          tabOrder = insertTabIdIntoOrder(tabOrder, tabs, tabId, false, anchor)
+          if (!anchor && precedingTabIds.length === 0) {
+            tabOrder.splice(tabOrder.indexOf(tabId), 1)
+            const firstUnpinned = tabOrder.findIndex(
+              (id) => !tabs.find((tab) => tab.id === id)?.isPinned
+            )
+            tabOrder.splice(firstUnpinned === -1 ? tabOrder.length : firstUnpinned, 0, tabId)
+          }
+        }
+        // A new root and its first order member must become observable together.
+        const nextGroup = { ...group, tabOrder }
+        return {
+          groupsByWorktree: replaceRecordEntries(state.groupsByWorktree, [
+            [
+              worktreeId,
+              groups.length
+                ? groups.map((entry) => (entry.id === groupId ? nextGroup : entry))
+                : [nextGroup]
+            ]
+          ]),
+          layoutByWorktree: replaceRecordEntries(state.layoutByWorktree, [
+            [
+              worktreeId,
+              (orderSlot && state.layoutByWorktree[worktreeId]) || {
+                type: 'leaf',
+                groupId
+              }
+            ]
+          ]),
+          activeGroupIdByWorktree: groups.length
+            ? state.activeGroupIdByWorktree
+            : replaceRecordEntries(state.activeGroupIdByWorktree, [[worktreeId, groupId]])
+        }
+      })
       return groupId
     },
 
@@ -89,12 +146,8 @@ export function createTabsGroupActions(
         const groupAlreadyFocused = state.activeGroupIdByWorktree[worktreeId] === groupId
         const nextActiveGroupIdByWorktree = groupAlreadyFocused
           ? state.activeGroupIdByWorktree
-          : {
-              ...state.activeGroupIdByWorktree,
-              [worktreeId]: groupId
-            }
-        // Why: focusing a group surfaces its active terminal tab, so dismiss the tab-level bell.
-        // Why (activeWorktree guard below): only when the group is in the active worktree, else the unseen tab's bell is swallowed.
+          : replaceRecordEntries(state.activeGroupIdByWorktree, [[worktreeId, groupId]])
+        // Only surface tabs of the active workspace; focusing an unseen group must not consume its bell.
         if (state.activeWorktreeId !== worktreeId) {
           if (groupAlreadyFocused) {
             return state
@@ -128,7 +181,8 @@ export function createTabsGroupActions(
       const group = (state.groupsByWorktree[worktreeId] ?? []).find(
         (candidate) => candidate.id === groupId
       )
-      if (!group || group.tabOrder.length > 0) {
+      const realIds = new Set((state.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) => tab.id))
+      if (!group || group.tabOrder.some((id) => realIds.has(id))) {
         return false
       }
       set((current) => {
@@ -140,13 +194,17 @@ export function createTabsGroupActions(
           current.activeGroupIdByWorktree,
           worktreeId,
           groupId,
-          remainingGroups[0]?.id ?? null
+          remainingGroups[0]?.id ?? null,
+          replaceRecordEntries
         )
+        const nextGroupsByWorktree = replaceRecordEntries(current.groupsByWorktree, [
+          [worktreeId, remainingGroups]
+        ])
         // Why: drop the dead group's recent-quick-command entry so the map can't grow unbounded as groups open/close.
         const { [groupId]: _droppedRecent, ...remainingRecent } =
           current.recentQuickCommandIdByGroup
         return {
-          groupsByWorktree: { ...current.groupsByWorktree, [worktreeId]: remainingGroups },
+          groupsByWorktree: nextGroupsByWorktree,
           layoutByWorktree: collapsedState.layoutByWorktree,
           activeGroupIdByWorktree: collapsedState.activeGroupIdByWorktree,
           recentQuickCommandIdByGroup: remainingRecent,
@@ -154,10 +212,7 @@ export function createTabsGroupActions(
             ? buildActiveSurfacePatch(
                 {
                   ...current,
-                  groupsByWorktree: {
-                    ...current.groupsByWorktree,
-                    [worktreeId]: remainingGroups
-                  },
+                  groupsByWorktree: nextGroupsByWorktree,
                   layoutByWorktree: collapsedState.layoutByWorktree,
                   activeGroupIdByWorktree: collapsedState.activeGroupIdByWorktree
                 },
@@ -172,14 +227,17 @@ export function createTabsGroupActions(
 
     createEmptySplitGroup: (worktreeId, sourceGroupId, direction, opts) => {
       const newGroupId = createBrowserUuid()
-      set((state) =>
-        insertSplitGroup(
+      set((state) => ({
+        ...insertSplitGroup(
           state,
           worktreeId,
           { sourceGroupId, splitDirection: direction, activate: opts?.activate },
           emptySplitGroup(worktreeId, newGroupId)
-        )
-      )
+        ),
+        ...(opts?.landing
+          ? { splitLandingGroupIds: { ...state.splitLandingGroupIds, [newGroupId]: worktreeId } }
+          : {})
+      }))
       get().recordFeatureInteraction?.('terminal-panes')
       return newGroupId
     }

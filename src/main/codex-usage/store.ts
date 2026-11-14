@@ -1,5 +1,4 @@
-import { codexOpenCodeTokenSessions } from '../usage/agent-token-usage'
-import { app } from 'electron'
+import { codexOpenCodeTokenSessions } from '../usage/reporting/token-usage/agent-token-usage'
 import { join } from 'node:path'
 import type {
   CodexUsageBreakdownKind,
@@ -11,20 +10,18 @@ import type {
   CodexUsageSnapshot,
   CodexUsageSummary
 } from '../../shared/codex-usage-types'
-import type { AutomationRunUsage } from '../../shared/automations-types'
-import type { Store } from '../persistence'
+import type { AutomationRunUsage } from '../../shared/automations/history/automation-run'
+import type { UsageStoreHost } from '../usage/usage-store-host'
 import type { CodexUsagePersistedState } from './types'
 import type { AutomationUsageLookupInput } from './codex-automation-run-attribution'
 import { CODEX_USAGE_SCHEMA_VERSION, codexUsageProvider } from './codex-usage-provider'
 import { resolveCodexAutomationRunUsage } from './codex-automation-run-attribution'
 import { buildRecentSessions } from './codex-usage-session-rows'
 import { buildBreakdown, buildDaily, buildSummary } from './codex-usage-rollup-projections'
-import { UsageProviderStoreLifecycle } from '../usage/usage-provider-store-lifecycle'
-import { splitUsageCacheFileViaWorker } from '../usage/usage-scan-worker-spawn'
+import { UsageProviderStoreLifecycle } from '../usage/provider-lifecycle/usage-provider-store-lifecycle'
+import { splitUsageCacheFileViaWorker } from '../usage/scan-worker/usage-scan-worker-spawn'
 
 const SCHEMA_VERSION = CODEX_USAGE_SCHEMA_VERSION
-
-let _codexUsageFile: string | null = null
 
 function getDefaultState(): CodexUsagePersistedState {
   return {
@@ -44,12 +41,7 @@ function getDefaultState(): CodexUsagePersistedState {
 
 export function normalizePersistedState(state: CodexUsagePersistedState): CodexUsagePersistedState {
   if (state.schemaVersion !== SCHEMA_VERSION) {
-    // Why: Orca-scoped Codex projections now depend on locationModelBreakdown.
-    // Reusing an older cache would silently serve wrong model/session rows
-    // until the next forced rescan, so schema changes must invalidate stale
-    // persisted analytics instead of best-effort patching partial data.
-    // Preserve scanState.enabled so existing users keep tracking on across
-    // schema bumps; the next refresh will repopulate the analytics.
+    // Rebuild incompatible projections while preserving the user's tracking preference.
     const defaults = getDefaultState()
     return {
       ...defaults,
@@ -68,30 +60,19 @@ export function normalizePersistedState(state: CodexUsagePersistedState): CodexU
   }
 }
 
-export function initCodexUsagePath(): void {
-  _codexUsageFile = join(app.getPath('userData'), 'orca-codex-usage.json')
-}
-
-function getCodexUsageFile(): string {
-  if (!_codexUsageFile) {
-    _codexUsageFile = join(app.getPath('userData'), 'orca-codex-usage.json')
-  }
-  return _codexUsageFile
-}
-
 export class CodexUsageStore extends UsageProviderStoreLifecycle<
   'processedFiles',
   CodexUsagePersistedState,
   'hasAnyCodexData'
 > {
-  constructor(store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>) {
-    super(store, {
+  constructor(host: UsageStoreHost) {
+    super(host, {
       tokenUsage: {
         provider: 'codex',
         selectSessions: (state) => codexOpenCodeTokenSessions(state.sessions)
       },
       logTag: '[codex-usage]',
-      resolveCacheFile: getCodexUsageFile,
+      resolveCacheFile: () => join(host.userDataPath, 'orca-codex-usage.json'),
       createDefaultState: getDefaultState,
       normalizeState: normalizePersistedState,
       sourceKey: 'processedFiles',

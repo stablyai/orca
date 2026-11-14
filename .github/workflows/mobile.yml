@@ -6,11 +6,11 @@ on:
       - opened
       - synchronize
       - reopened
+      - ready_for_review
+      - converted_to_draft
     paths:
       - 'mobile/**'
-      # Why all of src/shared: mobile imports hundreds of its modules, directly and through the RPC
-      # recordings and the host params check, so any shared edit can move a golden or break mobile's
-      # typecheck. Why the root lockfile: those modules resolve their packages from the root install.
+      # Route shared edits to mobile’s imports/RPC recordings/typecheck; root lockfile changes affect those modules’ root-resolved packages.
       - 'src/shared/**'
       # Mobile's Node RPC recording tools import this package.
       - 'src/packages/process-host/**'
@@ -18,29 +18,138 @@ on:
       # Mobile launch contracts exercise the real host dispatcher and durable receipt store.
       - 'src/main/agent-launch/**'
       - 'src/main/runtime/rpc/**'
-      - 'src/main/runtime/runtime-rpc/**'
-      - 'src/main/runtime/runtime-rpc.ts'
-      - 'src/main/runtime/device-registry.ts'
+      - 'src/main/runtime/rpc/server/runtime-rpc.ts'
+      - 'src/main/runtime/rpc/server/pairing/device-registry.ts'
       - 'src/main/runtime/orca-runtime.ts'
-      - 'src/main/runtime/agent-session-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-*.ts'
+      - 'src/main/runtime/agent-session/ownership/agent-session-*.ts'
+      - 'src/main/runtime/agent-session/records/agent-session-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-account-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-acquisition-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-conversation-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-launch-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-operation-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-rewind-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-runtime-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-unsaved-*.ts'
+      # The phone/host contract program's unmocked desktop sources and its declaration owner's inputs.
+      - 'src/main/runtime/integrations/github/runtime-github-repository-query-commands.ts'
+      - 'src/main/github/issues/issue-field-options.ts'
+      - 'config/tsconfig.test.mobile-host-declarations.json'
+      - 'config/tsconfig.node.json'
+      - 'src/types/build-constants.d.ts'
       - 'src/main/native-chat/agent-session-wire/**'
-      # Why: this job holds the only checks that load the Fastfile, so edits to
-      # it or to the release workflow it guards must re-run them.
+      # Recorded phone transcripts exercise these host decoders and their runtime dependencies.
+      - 'src/main/native-chat/*transcript*.ts'
+      - 'src/main/native-chat/transcript-discovery/**'
+      - 'src/main/native-chat/transcript-filesystem/**'
+      - 'src/main/native-chat/transcript-decoding/**'
+      - 'src/main/native-chat/transcript-streaming/**'
+      - 'src/main/native-chat/transcript-watching/**'
+      - 'src/main/native-chat/transcript-history/**'
+      - 'src/main/native-chat/subagent-entry-id-bounds.ts'
+      - 'src/main/native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds.ts'
+      - 'src/main/native-chat/agent-session-journal/item-lifecycle/journal-reasoning-row.ts'
+      - 'src/main/claude/structured/journal/claude-internal-message-content.ts'
+      - 'src/main/claude/structured/journal/claude-stop-hook-feedback.ts'
+      - 'src/main/claude/structured/journal/**'
+      - 'src/main/claude/__fixtures__/claude-adapter-capture-fold.jsonl'
+      - 'src/main/codex/app-server/codex-item-field-readers.ts'
+      - 'src/main/codex/structured/items/**'
+      - 'src/main/codex/structured/background-work/codex-subagent-activity.ts'
+      - 'src/main/codex/structured/journal/codex-goal-journal-rows.ts'
+      - 'src/main/codex/__fixtures__/codex-hook-outcomes.jsonl'
+      - 'src/main/ai-vault/session-scanner-*.ts'
+      - 'src/main/ai-vault/discovery/agent-session-directories.ts'
+      - 'src/main/ai-vault/discovery/session-file-discovery.ts'
+      - 'src/main/ai-vault/discovery/session-json-file.ts'
+      - 'src/main/ai-vault/discovery/session-path-absence.ts'
+      - 'src/main/ai-vault/discovery/session-scanner-agent-sources.ts'
+      - 'src/main/ai-vault/discovery/session-scanner-candidates.ts'
+      - 'src/main/ai-vault/discovery/session-scanner-directory-reader.test.ts'
+      - 'src/main/ai-vault/discovery/session-scanner-discovery-pipeline.test.ts'
+      - 'src/main/ai-vault/discovery/session-scanner-discovery.ts'
+      - 'src/main/ai-vault/discovery/session-scanner-roots.ts'
+      - 'src/main/ai-vault/discovery/session-scanner-source-discovery.ts'
+      - 'src/main/ai-vault/parsing/session-json-object.ts'
+      - 'src/main/ai-vault/parsing/session-record-fields.ts'
+      - 'src/main/ai-vault/parsing/session-record-time.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-accumulator.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-agent-parser.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-candidate-parse.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-core-parser-wsl-stall.test.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-injected-title.test.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-jsonl-reader.test.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-jsonl-reader.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-messages.test.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-messages.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-parse-wsl-stall.test.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-record-budget.test.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-recoverable-empty.test.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-text-normalization.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-token-values.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-unlimited-dedup.test.ts'
+      - 'src/main/ai-vault/prompts/session-scanner-first-user-prompt-capture.ts'
+      - 'src/main/ai-vault/prompts/session-scanner-first-user-prompt.test.ts'
+      - 'src/main/ai-vault/prompts/session-scanner-first-user-prompt.ts'
+      - 'src/main/ai-vault/scanner-fixtures/session-scanner-incremental-fixtures.ts'
+      - 'src/main/ai-vault/scanner-fixtures/session-scanner-prime-agent-fixtures.ts'
+      - 'src/main/ai-vault/scanner-fixtures/session-scanner-test-fixtures.ts'
+      - 'src/main/ai-vault/scanners/copilot/session-scanner-copilot-parser.ts'
+      - 'src/main/ai-vault/scanners/opencode/session-scanner-opencode-parser.ts'
+      - 'src/main/ai-vault/scope/session-scanner-scope-discovery.ts'
+      - 'src/main/ai-vault/scope/session-scanner-scope-inventory.test.ts'
+      - 'src/main/ai-vault/scope/session-scanner-scope-inventory.ts'
+      - 'src/main/ai-vault/scope/session-scanner-scope-only.test.ts'
+      - 'src/main/ai-vault/scope/session-scanner-scope-walk.test.ts'
+      - 'src/main/ai-vault/scope/session-scanner-scope-walk.ts'
+      - 'src/main/ai-vault/scope/session-scanner-scope.test.ts'
+      - 'src/main/ai-vault/session-scanner.ts'
+      - 'src/shared/error-message.ts'
+      - 'src/shared/surrogate-safe-text-slice.ts'
+      - 'src/shared/trimmed-string.ts'
+      - 'src/main/ai-vault/scan-lifecycle/ai-vault-scan-cancellation.ts'
+      - 'src/main/ai-vault/scan-service/session-scanner-service-env.ts'
+      - 'src/main/ai-vault/scanners/grok/session-scanner-grok-user-text.ts'
+      - 'src/main/provider-process/provider-json-record.ts'
+      - 'src/main/providers/ssh-host-not-served-error.ts'
+      - 'src/main/wsl/discovery/**'
+      - 'src/main/wsl/execution/wsl-exe-process.ts'
+      - 'src/main/wsl/execution/wsl-interop-spawn-directory.ts'
+      - 'src/main/wsl/filesystem/wsl-unc-access-gate.ts'
+      - 'src/main/runtime/push/notifications/structured-attention-original-delivery.test-fixture.ts'
+      # Rerun the only Fastfile-loading checks for release-workflow/Fastfile edits.
       - '.github/workflows/mobile.yml'
       - 'config/mobile-ci.vitest.config.mjs'
-      - 'config/scripts/run-mobile-ci-tests.mjs'
+      - 'config/scripts/mobile-web/check-entry/run-mobile-ci-tests.mjs'
+      # Mobile typechecks run through the root compiler selection.
+      - 'config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs'
+      - 'config/scripts/typecheck/project-execution/tsrs-typecheck-compiler.mjs'
+      - 'config/scripts/tool-invocation/pinned-bun-executable.mjs'
+      - 'config/oxlint-code-quality-native-plugins.json'
       - 'config/.bun-version'
       - '.github/actions/install-node-dependencies/**'
+      - '.github/actions/setup-pnpm/**'
       - '.github/actions/restore-pnpm-verification/**'
       - '.github/workflows/mobile-ios-release.yml'
       - 'config/scripts/mobile-release-check-scope*'
       - 'config/scripts/mobile-test-change-scope*'
-      - 'config/scripts/pr-code-change-scope.mjs'
-      - 'config/scripts/pr-package-test-paths.mjs'
-      - 'config/scripts/pr-layout-oracle-route.mjs'
-  # Why main too: two pull requests can each pass against their own base and disagree once both
-  # land, and `verify` never runs on main. The same source paths as above, less the CI inputs only
-  # `verify` reads.
+      - 'config/scripts/workflow/source-routing/pr-code-change-scope.mjs'
+      - 'config/scripts/workflow/source-routing/pr-xterm-patch-prefixes.mjs'
+      - 'config/scripts/workflow/source-routing/pr-package-test-paths.mjs'
+      - 'config/scripts/workflow/source-routing/pr-layout-oracle-route.mjs'
+      - 'config/scripts/workflow/source-routing/pr-shell-contract-prefixes.mjs'
+      # Desktop suites do not feed mobile; keep fixtures and test/toolchain config inputs.
+      - '!src/shared/**/*.test.[jt]s'
+      - '!src/shared/**/*.test.[jt]sx'
+      - '!src/shared/**/*.test.[cm][jt]s'
+      - '!src/packages/process-host/**/*.test.[jt]s'
+      - '!src/packages/process-host/**/*.test.[jt]sx'
+      - '!src/packages/process-host/**/*.test.[cm][jt]s'
+      - '!src/main/**/*.test.[jt]s'
+      - '!src/main/**/*.test.[jt]sx'
+      - '!src/main/**/*.test.[cm][jt]s'
+  # Check matching source inputs on main too: independently passing PRs can conflict after merge, and verify is PR-only.
   push:
     branches:
       - main
@@ -51,39 +160,146 @@ on:
       - 'pnpm-lock.yaml'
       - 'src/main/agent-launch/**'
       - 'src/main/runtime/rpc/**'
-      - 'src/main/runtime/runtime-rpc/**'
-      - 'src/main/runtime/runtime-rpc.ts'
-      - 'src/main/runtime/device-registry.ts'
+      - 'src/main/runtime/rpc/server/runtime-rpc.ts'
+      - 'src/main/runtime/rpc/server/pairing/device-registry.ts'
       - 'src/main/runtime/orca-runtime.ts'
-      - 'src/main/runtime/agent-session-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-*.ts'
+      - 'src/main/runtime/agent-session/ownership/agent-session-*.ts'
+      - 'src/main/runtime/agent-session/records/agent-session-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-account-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-acquisition-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-conversation-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-launch-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-operation-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-rewind-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-runtime-*.ts'
+      - 'src/main/runtime/agent-session/agent-session-unsaved-*.ts'
+      # The phone/host contract program's unmocked desktop sources and its declaration owner's inputs.
+      - 'src/main/runtime/integrations/github/runtime-github-repository-query-commands.ts'
+      - 'src/main/github/issues/issue-field-options.ts'
+      - 'config/tsconfig.test.mobile-host-declarations.json'
+      - 'config/tsconfig.node.json'
+      - 'src/types/build-constants.d.ts'
       - 'src/main/native-chat/agent-session-wire/**'
+      # Recorded phone transcripts exercise these host decoders and their runtime dependencies.
+      - 'src/main/native-chat/*transcript*.ts'
+      - 'src/main/native-chat/transcript-discovery/**'
+      - 'src/main/native-chat/transcript-filesystem/**'
+      - 'src/main/native-chat/transcript-decoding/**'
+      - 'src/main/native-chat/transcript-streaming/**'
+      - 'src/main/native-chat/transcript-watching/**'
+      - 'src/main/native-chat/transcript-history/**'
+      - 'src/main/native-chat/subagent-entry-id-bounds.ts'
+      - 'src/main/native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds.ts'
+      - 'src/main/native-chat/agent-session-journal/item-lifecycle/journal-reasoning-row.ts'
+      - 'src/main/claude/structured/journal/claude-internal-message-content.ts'
+      - 'src/main/claude/structured/journal/claude-stop-hook-feedback.ts'
+      - 'src/main/claude/structured/journal/**'
+      - 'src/main/claude/__fixtures__/claude-adapter-capture-fold.jsonl'
+      - 'src/main/codex/app-server/codex-item-field-readers.ts'
+      - 'src/main/codex/structured/items/**'
+      - 'src/main/codex/structured/background-work/codex-subagent-activity.ts'
+      - 'src/main/codex/structured/journal/codex-goal-journal-rows.ts'
+      - 'src/main/codex/__fixtures__/codex-hook-outcomes.jsonl'
+      - 'src/main/ai-vault/session-scanner-*.ts'
+      - 'src/main/ai-vault/discovery/agent-session-directories.ts'
+      - 'src/main/ai-vault/discovery/session-file-discovery.ts'
+      - 'src/main/ai-vault/discovery/session-json-file.ts'
+      - 'src/main/ai-vault/discovery/session-path-absence.ts'
+      - 'src/main/ai-vault/discovery/session-scanner-agent-sources.ts'
+      - 'src/main/ai-vault/discovery/session-scanner-candidates.ts'
+      - 'src/main/ai-vault/discovery/session-scanner-directory-reader.test.ts'
+      - 'src/main/ai-vault/discovery/session-scanner-discovery-pipeline.test.ts'
+      - 'src/main/ai-vault/discovery/session-scanner-discovery.ts'
+      - 'src/main/ai-vault/discovery/session-scanner-roots.ts'
+      - 'src/main/ai-vault/discovery/session-scanner-source-discovery.ts'
+      - 'src/main/ai-vault/parsing/session-json-object.ts'
+      - 'src/main/ai-vault/parsing/session-record-fields.ts'
+      - 'src/main/ai-vault/parsing/session-record-time.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-accumulator.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-agent-parser.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-candidate-parse.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-core-parser-wsl-stall.test.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-injected-title.test.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-jsonl-reader.test.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-jsonl-reader.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-messages.test.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-messages.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-parse-wsl-stall.test.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-record-budget.test.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-recoverable-empty.test.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-text-normalization.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-token-values.ts'
+      - 'src/main/ai-vault/parsing/session-scanner-unlimited-dedup.test.ts'
+      - 'src/main/ai-vault/prompts/session-scanner-first-user-prompt-capture.ts'
+      - 'src/main/ai-vault/prompts/session-scanner-first-user-prompt.test.ts'
+      - 'src/main/ai-vault/prompts/session-scanner-first-user-prompt.ts'
+      - 'src/main/ai-vault/scanner-fixtures/session-scanner-incremental-fixtures.ts'
+      - 'src/main/ai-vault/scanner-fixtures/session-scanner-prime-agent-fixtures.ts'
+      - 'src/main/ai-vault/scanner-fixtures/session-scanner-test-fixtures.ts'
+      - 'src/main/ai-vault/scanners/copilot/session-scanner-copilot-parser.ts'
+      - 'src/main/ai-vault/scanners/opencode/session-scanner-opencode-parser.ts'
+      - 'src/main/ai-vault/scope/session-scanner-scope-discovery.ts'
+      - 'src/main/ai-vault/scope/session-scanner-scope-inventory.test.ts'
+      - 'src/main/ai-vault/scope/session-scanner-scope-inventory.ts'
+      - 'src/main/ai-vault/scope/session-scanner-scope-only.test.ts'
+      - 'src/main/ai-vault/scope/session-scanner-scope-walk.test.ts'
+      - 'src/main/ai-vault/scope/session-scanner-scope-walk.ts'
+      - 'src/main/ai-vault/scope/session-scanner-scope.test.ts'
+      - 'src/main/ai-vault/session-scanner.ts'
+      - 'src/shared/error-message.ts'
+      - 'src/shared/surrogate-safe-text-slice.ts'
+      - 'src/shared/trimmed-string.ts'
+      - 'src/main/ai-vault/scan-lifecycle/ai-vault-scan-cancellation.ts'
+      - 'src/main/ai-vault/scan-service/session-scanner-service-env.ts'
+      - 'src/main/ai-vault/scanners/grok/session-scanner-grok-user-text.ts'
+      - 'src/main/provider-process/provider-json-record.ts'
+      - 'src/main/providers/ssh-host-not-served-error.ts'
+      - 'src/main/wsl/discovery/**'
+      - 'src/main/wsl/execution/wsl-exe-process.ts'
+      - 'src/main/wsl/execution/wsl-interop-spawn-directory.ts'
+      - 'src/main/wsl/filesystem/wsl-unc-access-gate.ts'
+      - 'src/main/runtime/push/notifications/structured-attention-original-delivery.test-fixture.ts'
       - '.github/workflows/mobile.yml'
       - 'config/mobile-ci.vitest.config.mjs'
-      - 'config/scripts/run-mobile-ci-tests.mjs'
+      - 'config/scripts/mobile-web/check-entry/run-mobile-ci-tests.mjs'
+      - 'config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs'
+      - 'config/scripts/typecheck/project-execution/tsrs-typecheck-compiler.mjs'
+      - 'config/scripts/tool-invocation/pinned-bun-executable.mjs'
       - 'config/.bun-version'
+      - '.github/actions/install-node-dependencies/**'
+      - '.github/actions/setup-pnpm/**'
+      # Desktop suites do not feed mobile; keep fixtures and test/toolchain config inputs.
+      - '!src/shared/**/*.test.[jt]s'
+      - '!src/shared/**/*.test.[jt]sx'
+      - '!src/shared/**/*.test.[cm][jt]s'
+      - '!src/packages/process-host/**/*.test.[jt]s'
+      - '!src/packages/process-host/**/*.test.[jt]sx'
+      - '!src/packages/process-host/**/*.test.[cm][jt]s'
+      - '!src/main/**/*.test.[jt]s'
+      - '!src/main/**/*.test.[jt]sx'
+      - '!src/main/**/*.test.[cm][jt]s'
 
 concurrency:
-  # Per commit on main, not per branch. GitHub cancels any PENDING run in a group when a new one
-  # queues, whatever `cancel-in-progress` says, so one shared main group drops the middle merge of
-  # three -- and a merge that breaks main there is exactly what `main-tests` checks for.
+  # Key main concurrency by commit: GitHub replaces pending runs even with cancel-in-progress:false, hiding middle-merge regressions.
   group: mobile-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   verify:
     name: Mobile verify
-    if: github.event_name == 'pull_request'
-    # Why ARM: 209s of this job is Vitest and nothing here needs x86: no Android SDK, emulator, gradle,
-    # Hermes or Watchman, no docker, and no artifacts. The Gemfile.lock lists the generic `ruby`
-    # platform, so frozen bundler installs without an aarch64-linux entry.
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
+    # Use ARM for pure Vitest; no x86 native toolchain is needed and Gemfile.lock’s ruby platform supports frozen install.
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 180
 
     env:
-      # Why: an unfrozen bundler silently re-resolves when Gemfile.lock drifts
-      # from the Gemfile, which is how the release jobs could land on different
-      # fastlane versions in the first place. Fail here instead.
+      # Freeze bundler to reject Gemfile drift before release jobs resolve different fastlane versions.
       BUNDLE_FROZEN: 'true'
-      ORCA_MOBILE_TYPECHECK_COMPILER: 'native'
+      ORCA_MOBILE_TYPECHECK_COMPILER: 'bun'
 
     defaults:
       run:
@@ -110,51 +326,73 @@ jobs:
           # Keep deletions when release files move into an application directory.
           if ! git diff --name-only --no-renames -z HEAD^1 HEAD > "$RUNNER_TEMP/mobile-release-changes"; then
             echo 'should_run=true' >> "$GITHUB_OUTPUT"
-          elif ! node config/scripts/mobile-release-check-scope.mjs "$RUNNER_TEMP/mobile-release-changes"; then
+          elif ! node config/scripts/mobile-web/check-entry/mobile-release-check-scope.mjs "$RUNNER_TEMP/mobile-release-changes"; then
             echo 'should_run=true' >> "$GITHUB_OUTPUT"
           fi
 
-      # bundler-cache installs mobile/Gemfile.lock, so this job is also what
-      # proves the pinned fastlane the release workflow depends on still
-      # resolves — before a release run finds out.
-      - name: Setup Ruby and fastlane
-        id: ruby-tools
+      - name: Setup Ruby
+        id: ruby-setup
         background: true
         if: steps.ruby-scope.outputs.should_run != 'false'
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.3'
-          bundler-cache: true
           working-directory: mobile
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - wait: ruby-setup
+
+      # ruby/setup-ruby's bundler-cache saves on every miss; the platform warmup saves this key on main.
+      - name: Resolve fastlane bundle cache
+        id: ruby-bundle
+        if: steps.ruby-scope.outputs.should_run != 'false'
+        env:
+          GEMFILE_HASH: ${{ hashFiles('mobile/Gemfile', 'mobile/Gemfile.lock') }}
+        run: |
+          . /etc/os-release
+          printf 'key=mobile-bundle-v1-%s-%s-%s-%s\n' "$ID-$VERSION_ID" "$(ruby -e 'print RUBY_PLATFORM')" "$(ruby -e 'print RbConfig::CONFIG["ruby_version"]')" "$GEMFILE_HASH" >> "$GITHUB_OUTPUT"
+
+      - name: Restore fastlane bundle
+        if: steps.ruby-scope.outputs.should_run != 'false'
+        uses: actions/cache/restore@v5
+        with:
+          path: mobile/vendor/bundle
+          key: ${{ steps.ruby-bundle.outputs.key }}
+
+      # Installing proves the release’s pinned fastlane still resolves before a release needs it.
+      - name: Install fastlane
+        id: ruby-tools
+        background: true
+        if: steps.ruby-scope.outputs.should_run != 'false'
+        run: |
+          bundle config set --local path "$PWD/vendor/bundle"
+          bundle config set --local deployment true
+          bundle install --jobs 4
+
+      # Check mobile import cycles after Expo deps install; pre-install pr.yml cannot load its tsconfig.
+      - name: Lint mobile imports with mobile dependencies installed
+        working-directory: .
+        run: node node_modules/oxlint/bin/oxlint --config config/oxlint-code-quality-native-plugins.json mobile --deny-warnings
+
       # Call installed tools so pnpm's dependency refresh cannot race between checks.
       - name: Typecheck
         id: production-types
         background: true
-        env:
-          GOMAXPROCS: '2'
-        run: node scripts/typecheck-mobile.mjs
+        run: node ../config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs --compiler=bun --bun-threads=2 --project=mobile/tsconfig.json
 
       # Why a ratchet and not the raw typecheck: mobile/tsconfig.json excludes test files, so until
       # tsconfig.test.json existed nothing checked them, and at introduction 127 of the 632 had
       # drifted. This fails when a test file that checks today stops checking, when a test leaves
-      # the program, and on @ts-nocheck; the baseline may only shrink.
+      # the program, and on @ts-nocheck; the baseline may only shrink. It then emits phone and host
+      # declarations and strictly checks the phone/host contract tests against them.
       - name: Typecheck tests (ratchet)
         id: test-types
         background: true
-        env:
-          GOMAXPROCS: '2'
         run: node scripts/check-tests-typecheck-ratchet.mjs
 
-      # This includes the bridged replay of the whole recording corpus, which used to be a second
-      # step of its own behind RPC_FOUNDATION_BRIDGE=1. A gate nobody can forget to set is the point:
-      # it fails when a divergence class grows, when a divergence lands in no class at all, or when
-      # one of the 103 goldens inside the C1 page closure changes the verdict it is pinned to. It is
-      # ~3 min of test time on its own, and Vitest runs it on a worker beside the rest of the suite,
-      # so folding it in costs a fraction of that in wall time and one step less to skip.
+      # Run bridged recording corpus unconditionally: reject growing/unclassified divergence and changed verdicts among 103 C1 goldens. Share worker time instead of a separate skippable env-gated step.
       - name: Detect mobile test inputs
         id: test-scope
         shell: bash
@@ -162,28 +400,41 @@ jobs:
         run: |
           if ! git diff --name-only --no-renames -z HEAD^1 HEAD > "$RUNNER_TEMP/mobile-test-changes"; then
             echo 'should_run=true' >> "$GITHUB_OUTPUT"
-          elif ! node config/scripts/mobile-test-change-scope.mjs "$RUNNER_TEMP/mobile-test-changes"; then
+          elif ! node config/scripts/mobile-web/check-entry/mobile-test-change-scope.mjs "$RUNNER_TEMP/mobile-test-changes"; then
             echo 'should_run=true' >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Setup Bun for tests
+      - name: Find installed Bun
+        id: installed-bun
         if: steps.test-scope.outputs.should_run != 'false'
+        shell: bash
+        working-directory: .
+        run: |
+          bun="$GITHUB_WORKSPACE/node_modules/.bin/bun"
+          if [ -x "$bun" ] && [ "$("$bun" --version)" = "$(cat config/.bun-version)" ]; then
+            echo "$GITHUB_WORKSPACE/node_modules/.bin" >> "$GITHUB_PATH"
+            echo 'found=true' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Setup Bun for tests
+        if: steps.test-scope.outputs.should_run != 'false' && steps.installed-bun.outputs.found != 'true'
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
+          no-cache: true
+
+      # Compiler work (including the ratchet's declaration emission) finishes before Vitest workers start.
+      - wait: [production-types, test-types]
 
       - name: Test
         if: steps.test-scope.outputs.should_run != 'false'
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
-        run: node ../config/scripts/run-mobile-ci-tests.mjs
+        run: node ../config/scripts/mobile-web/check-entry/run-mobile-ci-tests.mjs
 
-      # All checks read the completed install; compilers need not hold up test workers.
-      - wait: [production-types, test-types, ruby-tools]
+      # The Ruby checks below read the completed fastlane install.
+      - wait: ruby-tools
 
-      # Reports, never gates: the goldens are content-addressed JSON, so their raw diff is hashes.
-      # This decodes which recorded behaviour the pull request moves into the job summary, and runs
-      # after a red Test too, when a reviewer most wants it.
+      # Decode hash-addressed golden behavior changes for review, including after failed tests; advisory only.
       - name: Summarize RPC recording changes
         if: ${{ !cancelled() }}
         continue-on-error: true
@@ -193,15 +444,7 @@ jobs:
         if: steps.ruby-scope.outputs.should_run != 'false'
         run: ruby fastlane/ios_release_version_test.rb
 
-      - name: Test TestFlight lane arguments
-        if: steps.ruby-scope.outputs.should_run != 'false'
-        run: ruby fastlane/fastfile_testflight_arguments_test.rb
-
-      # Why: nothing else in CI loads the Fastfile, so a syntax error, a broken
-      # require, or an undefined constant only surfaces mid-release — the
-      # ios-distribute job failed every run for six days that way. `lanes` just
-      # loads and lists, so it needs no App Store Connect credentials and makes
-      # no network calls to Apple.
+      # Load/list Fastfile lanes without Apple credentials/network to catch syntax/require/constants before release; ios-distribute failed six days without this guard.
       - name: Smoke-check the Fastfile
         if: steps.ruby-scope.outputs.should_run != 'false'
         env:
@@ -209,19 +452,69 @@ jobs:
           FASTLANE_OPT_OUT_USAGE: '1'
         run: bundle exec fastlane lanes
 
+      - name: Smoke-check CocoaPods
+        if: steps.ruby-scope.outputs.should_run != 'false'
+        run: bundle exec pod --version
+
       - name: Lint
         run: pnpm lint
 
       - name: Check formatting
         run: pnpm format:check
 
+  # Reports, never gates: flags in the job summary when a pull request changes the Expo fingerprint,
+  # i.e. dev clients need a native rebuild. Only mobile's install, without scripts: the fingerprint
+  # hashes project sources and dependency paths, never installed package contents.
+  native-fingerprint:
+    name: Mobile native fingerprint
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft != true
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    continue-on-error: true
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: package.json
+          package-manager-cache: false
+
+      - name: Setup pnpm
+        uses: ./.github/actions/setup-pnpm
+
+      # The base commit may predate the fingerprint tools, so run the head's copy against both.
+      - name: Compare native fingerprint with the base
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools="$RUNNER_TEMP/native-fingerprint"
+          mkdir -p "$tools"
+          cp scripts/native-client.mjs scripts/native-build-cache.cjs "$tools/"
+          pnpm install --frozen-lockfile --ignore-scripts
+          node "$tools/native-client.mjs" fingerprint --project . --out "$tools/head.json"
+          git checkout --quiet --detach HEAD^1
+          pnpm install --frozen-lockfile --ignore-scripts
+          node "$tools/native-client.mjs" fingerprint --project . --out "$tools/base.json"
+          node "$tools/native-client.mjs" compare "$tools/base.json" "$tools/head.json" \
+            --project . --summary "$GITHUB_STEP_SUMMARY"
+
   main-tests:
     name: Mobile tests on main
     env:
-      ORCA_MOBILE_TYPECHECK_COMPILER: 'native'
+      ORCA_MOBILE_TYPECHECK_COMPILER: 'bun'
     if: github.event_name == 'push'
     # Why ARM: the same pure-Node Vitest run `verify` makes on a pull request.
     runs-on: ubuntu-24.04-arm
+    timeout-minutes: 180
 
     defaults:
       run:
@@ -233,8 +526,10 @@ jobs:
         with:
           persist-credentials: false
 
+      # Restoring the 650 MB store took longer than downloading these packages.
       - uses: ./.github/actions/install-node-dependencies
         with:
+          cache-pnpm-store: 'false'
           cache-dependency-path: |
             pnpm-lock.yaml
             mobile/pnpm-lock.yaml
@@ -245,28 +540,34 @@ jobs:
       - name: Typecheck
         id: production-types
         background: true
-        env:
-          GOMAXPROCS: '2'
-        run: node scripts/typecheck-mobile.mjs
+        run: node ../config/scripts/typecheck/project-execution/run-typecheck-projects-in-parallel.mjs --compiler=bun --bun-threads=2 --project=mobile/tsconfig.json
 
       - name: Typecheck tests (ratchet)
         id: test-types
         background: true
-        env:
-          GOMAXPROCS: '2'
         run: node scripts/check-tests-typecheck-ratchet.mjs
 
-      # The whole suite, not only the recordings: the mutant and page-bridge suites read the goldens
-      # too. A red run here names each golden and the `rpc:record` command; the author of the merge
-      # that turned it red re-records in a follow-up.
+      # Run all golden consumers, including mutant/page-bridge suites; failures name the recording and rpc:record command.
+      - name: Find installed Bun
+        id: installed-bun
+        shell: bash
+        working-directory: .
+        run: |
+          bun="$GITHUB_WORKSPACE/node_modules/.bin/bun"
+          if [ -x "$bun" ] && [ "$("$bun" --version)" = "$(cat config/.bun-version)" ]; then
+            echo "$GITHUB_WORKSPACE/node_modules/.bin" >> "$GITHUB_PATH"
+            echo 'found=true' >> "$GITHUB_OUTPUT"
+          fi
       - name: Setup Bun for tests
+        if: steps.installed-bun.outputs.found != 'true'
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: config/.bun-version
+          no-cache: true
+
+      - wait: [production-types, test-types]
 
       - name: Test
         env:
           ORCA_BACKGROUND_LAUNCH: '1'
-        run: node ../config/scripts/run-mobile-ci-tests.mjs
-
-      - wait: [production-types, test-types]
+        run: node ../config/scripts/mobile-web/check-entry/run-mobile-ci-tests.mjs

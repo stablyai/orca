@@ -1,9 +1,10 @@
 import { app, dialog } from 'electron'
-import { formatProfileStateStartupFailure } from '../persistence/profile-state/profile-state-startup-failure'
-import { isBackgroundLaunch } from '../window/foreground-activation-policy'
+import { prepareEarlyMainUiLanguage, translateMain } from '../i18n/main-i18n'
+import { formatProfileStateStartupFailure } from '../persistence/profile-state/startup/profile-state-startup-failure'
+import { isBackgroundLaunch } from '../window/activation/foreground-activation-policy'
 import { mainProcessState as state } from './main-process-state'
-import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from './single-instance-lock'
-import { acquireDesktopProfileInstanceLock } from './desktop-profile-instance-lock'
+import { SINGLE_INSTANCE_ALREADY_RUNNING_EXIT_CODE } from '../../shared/single-instance-exit-code'
+import { acquireDesktopProfileInstanceLock } from './profile-startup/desktop-profile-instance-lock'
 
 /** False when orcad holds the profile; unlike a second desktop, nothing else would say why. */
 export function acquireDesktopProfileLockOrExplain(userDataPath: string): boolean {
@@ -20,9 +21,6 @@ export function acquireDesktopProfileLockOrExplain(userDataPath: string): boolea
 
 /** Ends a failed preflight without showing a Linux dialog before Electron is ready. */
 export function handleMainProcessPreflightFailure(error: unknown, exitCode = 1): void {
-  const message =
-    formatProfileStateStartupFailure(error) ??
-    (error instanceof Error ? error.message : String(error))
   const shouldShowDialog = !state.isServeMode && !isBackgroundLaunch()
   state.desktopActivationGate = null
   const admission = state.profileStateAdmission
@@ -35,7 +33,11 @@ export function handleMainProcessPreflightFailure(error: unknown, exitCode = 1):
 
   const showDialogAndExit = (): void => {
     try {
-      dialog.showErrorBox('Orca could not start', message)
+      // Built here so Linux reads the system-language catalog loaded after ready.
+      const message =
+        formatProfileStateStartupFailure(error, translateMain) ??
+        (error instanceof Error ? error.message : String(error))
+      dialog.showErrorBox(translateMain('startupFailure.title', 'Orca could not start'), message)
     } catch (dialogError) {
       console.warn('[startup] Could not show startup failure:', dialogError)
     } finally {
@@ -44,11 +46,15 @@ export function handleMainProcessPreflightFailure(error: unknown, exitCode = 1):
   }
   if (process.platform === 'linux' && shouldShowDialog) {
     try {
-      void app.whenReady().then(showDialogAndExit, () => app.exit(exitCode))
+      void app
+        .whenReady()
+        .then(prepareEarlyMainUiLanguage)
+        .then(showDialogAndExit, () => app.exit(exitCode))
     } catch {
       app.exit(exitCode)
     }
   } else if (shouldShowDialog) {
+    // Why: pre-ready exit must stay synchronous, so this can't await the lazily loaded catalog.
     showDialogAndExit()
   } else {
     app.exit(exitCode)

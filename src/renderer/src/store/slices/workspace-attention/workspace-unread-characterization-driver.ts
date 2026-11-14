@@ -1,6 +1,6 @@
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { applyAgentAttention, resolveAgentAttention } from '@/attention/agent-attention-policy'
-import { createTerminalAttentionSurface } from '@/components/terminal-pane/terminal-attention-surface'
+import { createTerminalAttentionSurface } from '@/components/terminal-pane/notifications/terminal-attention-surface'
 import { acknowledgeViewedAutoAckTarget } from '@/hooks/agent-auto-ack-surfaces'
 import {
   screenOf,
@@ -8,11 +8,9 @@ import {
   type PaneTarget
 } from './workspace-unread-characterization-fixture'
 
-// Why a driver: each user/system event is replayed here exactly as its production call site
-// issues it, so the scenario expectations in the characterization suites never change when a
-// call site is rewired — only this file does.
+// Replay production events here so call-site rewiring changes only the driver, preserving scenario expectations.
 
-/** pane-pty-visibility-bind.ts onBell and parked-terminal-byte-watcher.ts onBell. */
+/** terminal-bell-completion-arbitration.ts onBell and parked-terminal-byte-watcher.ts onBell. */
 export function ringBell(store: AttentionStore, target: PaneTarget): void {
   store.getState().markTerminalBell(target)
 }

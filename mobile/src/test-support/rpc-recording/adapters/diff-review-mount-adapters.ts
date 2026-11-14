@@ -1,7 +1,14 @@
+import type * as MobileDiffReviewLoadersModule from '../../../source-control/review/mobile-diff-review-loaders'
 import type { MountAdapter } from '../recording-scenario'
+import type * as CommitLoader from '../../../source-control/review/mobile-diff-review-commit-loader'
+import type * as SnapshotLoader from '../../../source-control/review/mobile-diff-review-snapshot-loader'
+import type * as GitStatusQuery from '../../../source-control/changes/mobile-git-status-query'
 import type { operationModuleLoader } from '../operation-module-loader'
 
 const WORKTREE = 'repo-9::/w'
+
+const COMMIT_OID = 'c0ffee0123456789abcdef0123456789abcdef01'
+const PARENT_OID = 'beef0123456789abcdef0123456789abcdef0123'
 
 const BRANCH_COMPARE = {
   summary: {
@@ -16,26 +23,23 @@ const BRANCH_COMPARE = {
   entries: []
 }
 
-/**
- * The review screen's three loaders, mounted as the plain async senders they are. `scope` picks the
- * diff arm: a worktree item asks `git.diff`, a branch item asks `git.branchDiff` from the compare
- * summary above. Text diffs are deliberately not scripted — highlighting them reaches `lowlight`,
- * which the module loader refuses as an unspecified native dependency.
- */
+// Use real async loaders; omit text highlighting because lowlight is outside this recorder’s declared module boundary.
 export function diffReviewMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
   return {
     'session.diff-review-load': ({ client }) => {
-      const loaders = modules.load<typeof import('../../../session/mobile-diff-review-loaders')>(
-        'mobile/src/session/mobile-diff-review-loaders.ts'
+      const loaders = modules.load<typeof MobileDiffReviewLoadersModule>(
+        'mobile/src/source-control/review/mobile-diff-review-loaders.ts'
       )
       let snapshot: unknown = 'unloaded'
       let branchCompare: unknown = 'unloaded'
       let diff: unknown = 'unloaded'
       function reviewItem(args: Record<string, unknown>) {
         const scope =
-          args.scope === 'branch' ? 'branch' : args.scope === 'staged' ? 'staged' : 'unstaged'
+          args.scope === 'branch' || args.scope === 'staged' || args.scope === 'commit'
+            ? args.scope
+            : 'unstaged'
         return {
           key: `${scope}:src/app.ts`,
           scope,
@@ -59,10 +63,38 @@ export function diffReviewMountAdapters(
       return {
         action(name, args) {
           if (name === 'snapshot') {
-            return loaders.loadMobileDiffReviewSnapshot(client, WORKTREE).then((value) => {
-              snapshot = value
-              return value
-            })
+            const statusQuery = modules.load<typeof GitStatusQuery>(
+              'mobile/src/source-control/changes/mobile-git-status-query.ts'
+            ).gitStatusQuery
+            return modules
+              .load<typeof SnapshotLoader>(
+                'mobile/src/source-control/review/mobile-diff-review-snapshot-loader.ts'
+              )
+              .loadMobileDiffReviewSnapshot(client, WORKTREE, {
+                status: statusQuery.fetch(
+                  client,
+                  { exec: 'local', worktree: WORKTREE },
+                  {},
+                  undefined,
+                  { live: false, previousFromStore: false }
+                ),
+                compareAgainstUpstream: false
+              })
+              .then((value) => {
+                snapshot = value
+                return value
+              })
+          }
+          if (name === 'commit-snapshot') {
+            return modules
+              .load<typeof CommitLoader>(
+                'mobile/src/source-control/review/mobile-diff-review-commit-loader.ts'
+              )
+              .loadMobileDiffReviewCommitSnapshot(client, WORKTREE, COMMIT_OID)
+              .then((value) => {
+                snapshot = value
+                return value
+              })
           }
           if (name === 'branch-compare') {
             return loaders.loadMobileDiffReviewBranchCompare(client, WORKTREE).then((value) => {
@@ -71,23 +103,26 @@ export function diffReviewMountAdapters(
             })
           }
           if (name === 'diff') {
-            return loaders
-              .loadMobileDiffReviewDiff({
-                client,
-                worktreeId: WORKTREE,
-                // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the loader reads only scope, filePath, oldPath, status and key.
-                item: reviewItem(args) as Parameters<
-                  typeof loaders.loadMobileDiffReviewDiff
-                >[0]['item'],
+            const input = loaders.mobileReviewDiffInput(
+              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the input reads only key, scope, filePath, oldPath and status.
+              reviewItem(args) as Parameters<typeof loaders.mobileReviewDiffInput>[0],
+              {
                 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the branch arm reads only the compare summary's refs and oids.
                 branchCompare: (args.compare === false ? null : BRANCH_COMPARE) as Parameters<
-                  typeof loaders.loadMobileDiffReviewDiff
-                >[0]['branchCompare']
-              })
-              .then((value) => {
-                diff = value
-                return value
-              })
+                  typeof loaders.mobileReviewDiffInput
+                >[1]['branchCompare'],
+                commit:
+                  args.scope === 'commit'
+                    ? { commitOid: COMMIT_OID, parentOid: PARENT_OID, entries: [] }
+                    : null,
+                statusRevision: 1,
+                ignoreTrimWhitespace: false
+              }
+            )
+            return loaders.loadMobileDiffReviewDiff(client, WORKTREE, input).then((value) => {
+              diff = value
+              return value
+            })
           }
           throw new Error(`Unknown diff review action: ${name}`)
         },

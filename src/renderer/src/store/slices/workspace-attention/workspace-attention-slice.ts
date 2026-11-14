@@ -5,17 +5,37 @@ import type { WorkspaceAttentionSlice } from './workspace-attention-contract'
 import {
   collectRemovedAttention,
   dismissReadNotifications,
-  sameMarkers
+  sameMarkers,
+  type RemovedAttention
 } from './attention-removal-follow-up'
-import { removeTabsAttention } from './subject-attention-transitions'
+import { removePanesAttention, removeTabsAttention } from './subject-attention-transitions'
 import {
   markWorkspaceUnreadFlag,
-  onScreenHostId,
-  settleWorkspaceUnreadFlag
+  settleWorkspaceUnreadFlag,
+  noteWorkspaceRead,
+  forgetMarkerRaise
 } from './workspace-unread-flag'
-import { workspaceMarkerTabIds } from './workspace-live-markers'
+import { isWorkspaceFlagSet, onScreenHostId } from './workspace-unread-flag-reads'
+import { paneKeyTabId } from './workspace-live-markers'
+import { workspaceAgentPaneKeys } from './workspace-agent-pane-index'
+import {
+  workspaceMarkerTabIdsForHost,
+  workspaceMarkerPaneKeysForHost
+} from './workspace-marker-host'
+import {
+  composeWorktreeHostIdentity,
+  type HostScopedWorktreeKey
+} from '../../../../../shared/worktree/host-qualified-identity'
+import { getResolvedExecutionHostIdForWorktree } from '@/lib/workspace/ownership/resolved-worktree-execution-host'
+import { getAgentPaneExecutionHost } from '../agent-status/agent-pane-execution-host'
+import { isExecutionHostForWorktree } from '@/lib/workspace/ownership/qualified-worktree-execution-owner'
 import { isTabOnScreen } from '@/hooks/agent-auto-ack-targets'
 import { isWorkspaceNotificationMutedBySidebarFilters } from '@/attention/hidden-workspace-notification-mute'
+import { getTerminalTabOwnerWorktreeId } from '../../terminals/ownership/terminal-tab-owner-index'
+import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
+import { hasUnreadAgentSessionTab } from '@/components/terminal-pane/notifications/unread-agent-session-membership'
+
+const emptyTerminalTabs: AppState['tabsByWorktree'] = {}
 
 export const createWorkspaceAttentionSlice: StateCreator<
   AppState,
@@ -25,25 +45,18 @@ export const createWorkspaceAttentionSlice: StateCreator<
 > = (set, get) => {
   const markTabUnread = (tabId: string, reason: AgentAttentionUnreadReason): void => {
     const state = get()
-    // Why both indexes: a container id is a terminal tab id, or a structured chat's unified tab
-    // id (which has no TerminalTab record) — the same pair `findRenamableUnifiedTab` resolves,
-    // and the same pair SortableTab reads this marker back under.
+    if (state.unreadTerminalTabs[tabId]) {
+      return
+    }
+    // Terminal tab IDs and structured-chat unified IDs both own markers; SortableTab/findRenamableUnifiedTab use the same pair.
     const ownsTab =
-      Object.values(state.tabsByWorktree ?? {})
-        .flat()
-        .some((tab) => tab.id === tabId) ||
-      Object.values(state.unifiedTabsByWorktree ?? {})
-        .flat()
-        .some((tab) => tab.contentType === 'agent-session' && tab.id === tabId)
+      getTerminalTabOwnerWorktreeId(state.tabsByWorktree ?? emptyTerminalTabs, tabId) !== null ||
+      hasUnreadAgentSessionTab(state.unifiedTabsByWorktree, tabId)
     if (!ownsTab) {
       return
     }
     // Why: a marker stays until its tab is read on screen, Marked as read, or closed.
-    set((s) =>
-      s.unreadTerminalTabs[tabId]
-        ? s
-        : { unreadTerminalTabs: { ...s.unreadTerminalTabs, [tabId]: reason } }
-    )
+    set((s) => ({ unreadTerminalTabs: { ...s.unreadTerminalTabs, [tabId]: reason } }))
   }
   const markPaneUnread = (paneKey: string, reason: AgentAttentionUnreadReason): void => {
     set((s) =>
@@ -59,20 +72,52 @@ export const createWorkspaceAttentionSlice: StateCreator<
         : { unreadAgentCompletionPanes: { ...s.unreadAgentCompletionPanes, [paneKey]: reason } }
     )
   }
-  /** Removes every marker of the tabs and dismisses their panes' notifications; true if any. */
-  const removeAndDismiss = (tabIds: Iterable<string>): boolean => {
+  /** Removes every marker of the tabs and dismisses their panes' notifications. */
+  const removeAndDismiss = (
+    tabIds: Iterable<string>,
+    paneKeys?: ReadonlySet<string>,
+    notificationPaneKeys?: (keys: Iterable<string>) => Set<string>
+  ): RemovedAttention | null => {
     const before = get()
     set((s) => {
-      const next = removeTabsAttention(s, tabIds)
+      const next = paneKeys
+        ? {
+            unreadTerminalTabs: omitRecordKeys(s.unreadTerminalTabs, new Set(tabIds)),
+            ...removePanesAttention(s, paneKeys)
+          }
+        : removeTabsAttention(s, tabIds)
       return sameMarkers(s, next) ? s : next
     })
     const removed = collectRemovedAttention(before, get())
     if (removed) {
-      dismissReadNotifications(removed.paneKeys)
+      dismissReadNotifications(
+        notificationPaneKeys ? notificationPaneKeys(removed.paneKeys) : removed.paneKeys
+      )
     }
-    return removed !== null
+    return removed
   }
   const paneAttentionEnabled = (): boolean => get().settings?.experimentalTerminalAttention === true
+  const setWorkspacesMarkedUnreadByUser = (
+    identities: readonly HostScopedWorktreeKey[],
+    marked: boolean
+  ): void =>
+    set((s) => {
+      const changed = identities.filter(
+        (identity) => Boolean(s.workspacesMarkedUnreadByUser[identity]) !== marked
+      )
+      if (changed.length === 0) {
+        return s
+      }
+      const next = { ...s.workspacesMarkedUnreadByUser }
+      for (const identity of changed) {
+        if (marked) {
+          next[identity] = true
+        } else {
+          delete next[identity]
+        }
+      }
+      return { workspacesMarkedUnreadByUser: next }
+    })
 
   return {
     unreadTerminalTabs: {},
@@ -99,31 +144,121 @@ export const createWorkspaceAttentionSlice: StateCreator<
       if (subjectKey === null) {
         return
       }
-      // Why: focus-return auto-ack needs an agent-specific marker; the tab and pane markers
-      // below also cover bells and are gated behind the experimental attention setting.
+      // Auto-ack needs completion-specific markers; generic bell/pane markers remain behind the experimental attention gate.
       markCompletionUnread(subjectKey, reason)
       if (groupId !== null && paneAttentionEnabled()) {
         markTabUnread(groupId, reason)
         markPaneUnread(subjectKey, reason)
       }
     },
-    readOnScreenAttention: ({ workspaceIds, targets }, { screenArrived }) => {
-      const removed = removeAndDismiss(targets.map((target) => target.tabId))
-      // Why on arrival even with nothing removed: a flag with no marker behind it (Mark as unread,
-      // restart, another client) is read when the screen moves to it, not on every later scan.
-      if (removed || screenArrived) {
+    readOnScreenAttention: ({ workspaceIds, targets }, { screenArrived, markersRead }) => {
+      // Arriving fulfils "come back to this", even while other tabs still hold markers.
+      if (screenArrived) {
+        const state = get()
+        const arrivals = workspaceIds.flatMap((id) => {
+          const host = onScreenHostId(state, id) ?? getResolvedExecutionHostIdForWorktree(state, id)
+          return host
+            ? [
+                {
+                  identity: composeWorktreeHostIdentity(host, id),
+                  unread: isWorkspaceFlagSet(state, id, host)
+                }
+              ]
+            : []
+        })
+        setWorkspacesMarkedUnreadByUser(
+          arrivals.map(({ identity }) => identity),
+          false
+        )
+        const pending = arrivals.filter(({ unread }) => unread)
+        if (pending.length > 0) {
+          // Arrival consumes the original flag; remaining markers now own its settlement.
+          set((s) => ({
+            workspaceUnreadRaisedByMarkers: {
+              ...s.workspaceUnreadRaisedByMarkers,
+              ...Object.fromEntries(pending.map(({ identity }) => [identity, true]))
+            }
+          }))
+        }
+      }
+      // Agent acknowledgement may already have removed this scan's completion markers.
+      if (
+        removeAndDismiss(targets.map((target) => target.tabId)) !== null ||
+        markersRead ||
+        screenArrived
+      ) {
         for (const workspaceId of workspaceIds) {
-          settleWorkspaceUnreadFlag(set, get, workspaceId, onScreenHostId(get(), workspaceId))
+          settleWorkspaceUnreadFlag(
+            set,
+            get,
+            workspaceId,
+            screenArrived ? 'arrival' : 'markers',
+            onScreenHostId(get(), workspaceId)
+          )
         }
       }
     },
+    workspaceUnreadRaisedByMarkers: {},
+    workspacesMarkedUnreadByUser: {},
     setWorkspaceUnreadByUser: (worktreeId, isUnread, executionHostId) => {
-      if (!isUnread) {
-        removeAndDismiss(workspaceMarkerTabIds(get(), worktreeId))
+      setWorkspacesMarkedUnreadByUser(
+        [composeWorktreeHostIdentity(executionHostId, worktreeId)],
+        isUnread
+      )
+      // The user owns the flag now: a later marker's removal must not lower their mark.
+      forgetMarkerRaise(set, get, worktreeId, { evenIfFlagged: true, executionHostId })
+      if (isUnread) {
+        void get().updateWorktreeMeta(worktreeId, { isUnread }, { executionHostId })
+        return
       }
-      // Why: the toggle writes only the clicked host's row; the markers it removes are
-      // workspace-wide because tabs, and so markers, are keyed by workspace id, not host.
+      noteWorkspaceRead(worktreeId)
+      const before = get()
+      const hostPanes = (keys: Iterable<string>) =>
+        workspaceMarkerPaneKeysForHost(before, worktreeId, executionHostId, keys)
+      const removed = removeAndDismiss(
+        workspaceMarkerTabIdsForHost(before, worktreeId, executionHostId),
+        hostPanes([
+          ...Object.keys(before.unreadTerminalPanes),
+          ...Object.keys(before.unreadAgentCompletionPanes)
+        ]),
+        hostPanes
+      )
       void get().updateWorktreeMeta(worktreeId, { isUnread }, { executionHostId })
+      // Mark read reads the agents too, or their lines keep the dot the user just cleared.
+      // Journal-positioned chat alerts retire only with this explicit read that bounds them.
+      const paneKeys = new Set([
+        ...(removed?.paneKeys ?? []),
+        ...workspaceAgentPaneKeys(get(), worktreeId)
+      ])
+      const state = get()
+      // One index per action: a lookup per pane is O(tabs × panes) for a workspace with many tabs.
+      const tabsById = new Map((state.tabsByWorktree[worktreeId] ?? []).map((tab) => [tab.id, tab]))
+      const stampedHosts = new Map(
+        (state.unifiedTabsByWorktree[worktreeId] ?? [])
+          .filter((tab) => tab.contentType === 'terminal')
+          .map((tab) => [tab.entityId, tab.executionHostId])
+      )
+      const hostPaneKeys = [...paneKeys].filter((paneKey) => {
+        const retained = state.retainedAgentsByPaneKey[paneKey]
+        const entry = state.agentStatusByPaneKey[paneKey] ?? retained?.entry
+        const tabId = paneKeyTabId(paneKey)
+        const tab = tabId ? tabsById.get(tabId) : undefined
+        return isExecutionHostForWorktree(
+          state,
+          worktreeId,
+          executionHostId,
+          getAgentPaneExecutionHost(
+            state,
+            paneKey,
+            entry,
+            tab?.ptyId ?? retained?.tab.ptyId,
+            tabId ? stampedHosts.get(tabId) : undefined
+          )
+        )
+      })
+      if (hostPaneKeys.length > 0) {
+        get().acknowledgeAgents(hostPaneKeys, undefined, 'explicit')
+      }
     }
   }
 }

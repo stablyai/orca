@@ -1,26 +1,30 @@
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-session-contracts'
+import { selectMobileSessionTab } from '../../session-tabs/mobile-session-tab-selection'
 import type { OrcaRuntimeWithScheduleMobileSessionTabsChanged as MobileSessionPublication } from '../../session-tabs/session-tabs-change-publication'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as MobileSessionPreservation } from '../../session-tabs/mobile-session-publication-preservation'
 import { OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh } from './perform-mobile-session-pty-records-refresh'
 import type {
   RuntimeMobileSessionTabsResult,
-  RuntimeMobileSessionTabsSnapshot,
-  RuntimeMobileSessionTerminalTab
-} from '../../../../shared/runtime-types'
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTerminalTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import { navigationTargetsClients } from '../../../../shared/runtime-navigation'
 import {
   activateClientSessionTabSelection,
   deriveClientSessionTabSelection,
   projectClientSessionTabSelection
-} from '../../client-session-tab-selection'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { runtimeWorktreeIdsEqual } from '../../runtime-worktree-path-identity'
+} from '../../client/navigation/client-session-tab-selection-projection'
 import {
   buildHeadlessMobileSessionTabGroups,
   cloneTerminalLayoutSnapshot
-} from '../../mobile-session-layout-projection'
+} from '../../terminal/surface/mobile-session-layout-projection'
 
 export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh {
+  protected abstract createMobileSessionTabsDelivery(): ReturnType<
+    MobileSessionPublication['createMobileSessionTabsDelivery']
+  >
+
   protected abstract emitMobileSessionTabsSnapshotToClient(
     ...args: Parameters<MobileSessionPublication['emitMobileSessionTabsSnapshotToClient']>
   ): ReturnType<MobileSessionPublication['emitMobileSessionTabsSnapshotToClient']>
@@ -32,11 +36,14 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     snapshot: RuntimeMobileSessionTabsResult,
     activeTabId: string,
     navigation: RuntimeNavigationTarget,
-    clientNavigationId?: string
+    clientNavigationId?: string,
+    /** The caller asked for nothing itself (a host action on its behalf), so it must be told to follow. */
+    callerFollows = false
   ): RuntimeMobileSessionTabsResult {
+    const deliver = this.createMobileSessionTabsDelivery()
     let callerSnapshot: RuntimeMobileSessionTabsResult | null = null
     if (navigationTargetsClients(navigation)) {
-      // Why: follow is live intent; disconnected devices must not inherit stale navigation on reconnect.
+      // Follow is live intent; reconnecting devices must not inherit stale navigation.
       const ids = new Set(
         [...this.mobileSessionTabListeners]
           .map((subscription) => subscription.clientNavigationId)
@@ -51,19 +58,24 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
           id,
           activeTabId
         )
-        this.emitMobileSessionTabsSnapshotToClient(projected, id, true)
+        this.emitMobileSessionTabsSnapshotToClient(projected, id, true, deliver)
         if (id === clientNavigationId) {
           callerSnapshot = projected
         }
       }
     } else if (clientNavigationId) {
-      // Why: follow-host still starts as caller navigation; the host is an additional target, not a replacement owner.
+      // Follow-host adds the host as a target without replacing caller navigation.
       callerSnapshot = this.clientSessionTabSelections.activate(
         this.withSessionTabsHolds(snapshot, clientNavigationId),
         clientNavigationId,
         activeTabId
       )
-      this.emitMobileSessionTabsSnapshotToClient(callerSnapshot, clientNavigationId)
+      this.emitMobileSessionTabsSnapshotToClient(
+        callerSnapshot,
+        clientNavigationId,
+        callerFollows,
+        deliver
+      )
     }
     if (clientNavigationId) {
       return callerSnapshot ?? this.projectMobileSessionTabsForClient(snapshot, clientNavigationId)
@@ -79,17 +91,15 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     return snapshot
   }
 
-  /**
-   * Records a tab a create just published as one paired client's selection, as a create does for
-   * its own tab. Not the tap path: a tap is a wake gesture that may respawn a non-ready pane.
-   * Returns false when the tab is not in the snapshot.
-   */
+  /** Select a newly created tab for one client; false if absent. Unlike a tap, this never wakes or respawns a pending pane. */
   selectCreatedMobileSessionTabForClient(
     worktreeId: string,
     surface: { tabId: string; leafId: string } | { sessionId: string },
     clientNavigationId: string
   ): boolean {
-    const snapshot = this.getMobileSessionTabsForWorktree(worktreeId)
+    const snapshot = this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+      includeAgentSenders: false
+    })
     const tab = snapshot.tabs.find((candidate) =>
       'sessionId' in surface
         ? candidate.type === 'agent-session' && candidate.sessionId === surface.sessionId
@@ -104,27 +114,30 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     return true
   }
 
-  /**
-   * Whether persistence proves this pane's PTY was deliberately taken down and parked
-   * (workspace sleep or completed-agent hibernation) rather than lost and awaiting reconnect.
-   * Why: `pending-handle` alone cannot tell those apart — a parked pane publishes it
-   * indefinitely — and respawning a parked pane re-launches its agent behind the user.
-   * Only an automatic activation consults this; a user opening the tab is the wake gesture.
-   */
-  protected isDeliberatelyParkedPane(
+  reopenMobileSessionTabForClient(
     worktreeId: string,
-    tab: RuntimeMobileSessionTerminalTab
+    sessionId: string,
+    clientNavigationId: string
   ): boolean {
-    const record =
-      this.getWorkspaceSessionForWorktree(worktreeId)?.sleepingAgentSessionsByPaneKey?.[
-        makePaneKey(tab.parentTabId, tab.leafId)
-      ]
-    // Why: 'live'/'quit' captures describe a pane that was still running, so a reconnect
-    // must still mint its replacement PTY (#11542). Only a worktree-owned capture records
-    // a deliberate takedown the user did not ask to undo.
-    return (
-      record?.origin === 'worktree-sleep' && runtimeWorktreeIdsEqual(record.worktreeId, worktreeId)
+    const snapshot = this.getMobileSessionTabsForWorktree(worktreeId, undefined, {
+      includeAgentSenders: false
+    })
+    const tab = snapshot.tabs.find(
+      (candidate) => candidate.type === 'agent-session' && candidate.sessionId === sessionId
     )
+    if (!tab) {
+      return false
+    }
+    const projected = this.clientSessionTabSelections.reopen(
+      this.withSessionTabsHolds(snapshot, clientNavigationId),
+      clientNavigationId,
+      tab.id
+    )
+    if (!projected.tabs.some((candidate) => candidate.id === tab.id)) {
+      return false
+    }
+    this.emitMobileSessionTabsSnapshotToClient(projected, clientNavigationId)
+    return true
   }
 
   protected shouldMaterializeHeadlessMobileSessionTab(
@@ -144,7 +157,11 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
     if (snapshot.publicationEpoch.includes(':headless-merge:')) {
       return false
     }
-    if (this.authoritativeWindowId !== null && this.graphStatus === 'ready') {
+    if (
+      this.authoritativeWindowId !== null &&
+      this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID &&
+      this.graphStatus === 'ready'
+    ) {
       return false
     }
     return this.shouldMaterializeHeadlessMobileSessionTab(snapshot, tab)
@@ -159,28 +176,36 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
       ...candidate,
       isActive: candidate.id === activeTab.id
     }))
-    const nextSnapshot: RuntimeMobileSessionTabsSnapshot = {
-      ...snapshot,
-      publicationEpoch: `headless:${Date.now().toString(36)}`,
-      snapshotVersion: snapshot.snapshotVersion + 1,
-      activeTabId: activeTab.id,
-      activeTabType: 'terminal',
-      tabGroups: buildHeadlessMobileSessionTabGroups(
-        worktreeId,
-        tabs,
-        activeTab,
-        snapshot.tabGroups
-      ),
-      tabs
-    }
-    this.persistHeadlessTerminalActiveLeaf(worktreeId, activeTab)
+    const tabGroups = buildHeadlessMobileSessionTabGroups(
+      worktreeId,
+      tabs,
+      activeTab,
+      snapshot.tabGroups
+    )
+    const nextSnapshot = selectMobileSessionTab(
+      {
+        ...snapshot,
+        activeGroupId:
+          tabGroups.find((group) => group.tabOrder.includes(activeTab.parentTabId))?.id ??
+          snapshot.activeGroupId,
+        publicationEpoch: `headless:${Date.now().toString(36)}`,
+        snapshotVersion: snapshot.snapshotVersion + 1,
+        activeTabId: activeTab.id,
+        activeTabType: 'terminal',
+        tabGroups,
+        tabs
+      },
+      activeTab
+    )
+    this.persistHeadlessTerminalActiveLeaf(worktreeId, activeTab, nextSnapshot)
     this.storeMobileSessionSnapshot(worktreeId, nextSnapshot)
     this.emitMobileSessionTabsSnapshot(nextSnapshot)
   }
 
   protected persistHeadlessTerminalActiveLeaf(
     worktreeId: string,
-    tab: RuntimeMobileSessionTerminalTab
+    tab: RuntimeMobileSessionTerminalTab,
+    snapshot: RuntimeMobileSessionTabsSnapshot
   ): void {
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
     if (!session || !this.store?.setWorkspaceSession) {
@@ -203,6 +228,26 @@ export abstract class OrcaRuntimeWithApplyMobileSessionTabNavigation extends Orc
         ...session.activeTabIdByWorktree,
         [worktreeId]: tab.parentTabId
       },
+      ...(session.tabGroups?.[worktreeId]
+        ? {
+            tabGroups: {
+              ...session.tabGroups,
+              [worktreeId]: session.tabGroups[worktreeId].map((group) =>
+                group.id === snapshot.activeGroupId
+                  ? { ...group, activeTabId: tab.parentTabId }
+                  : group
+              )
+            }
+          }
+        : {}),
+      ...(snapshot.activeGroupId
+        ? {
+            activeGroupIdByWorktree: {
+              ...session.activeGroupIdByWorktree,
+              [worktreeId]: snapshot.activeGroupId
+            }
+          }
+        : {}),
       terminalLayoutsByTabId: nextLayouts
     })
   }

@@ -1,12 +1,16 @@
-import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
+import { agentVerdictDisplayMark } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
+import { interactivePromptLabel } from '../../../../shared/native-chat/input/native-chat-interactive-prompt'
+import { sayNativeChatApprovalTranslated } from '../native-chat/prompts/native-chat-interactive-prompt'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
-  dashboardCardDisplayState,
+  dashboardCardBaseDisplayState,
   type DashboardCard,
   type DashboardCardSubagent,
   type DashboardSnapshot
 } from '../../../../shared/dashboard-snapshot'
 import { dashboardBucketForDotState } from '../dashboard/dashboard-card-bucket'
 import { dashboardCardDotState } from '../dashboard/dashboard-row-bucket'
+import { isAgentTurnUnacknowledged } from '@/attention/agent-attention-acknowledgement'
 
 export type DashboardAgentStatusPatchResult = {
   matched: boolean
@@ -27,12 +31,11 @@ function patchedSubagents(
   }))
 }
 
-/** Applies an already bounded hook event inside the pop-out renderer. */
 export function patchDashboardSnapshotFromAgentStatus(
   snapshot: DashboardSnapshot,
   event: AgentStatusIpcPayload
 ): DashboardAgentStatusPatchResult {
-  if (event.providerSessionOnly) {
+  if (event.providerSessionOnly || event.programStatusOnly) {
     return { matched: true, snapshot }
   }
   const index = snapshot.cards.findIndex((card) => card.paneKey === event.paneKey)
@@ -48,12 +51,13 @@ export function patchDashboardSnapshotFromAgentStatus(
   }
 
   const stateChanged = event.stateStartedAt > card.stateChangedAt
-  const unseen = stateChanged ? card.startedAt !== 0 : card.unseen
+  // Why ack 0: the event is a live turn and the pop-out holds no acks; the next snapshot has them.
+  const unseen = stateChanged ? isAgentTurnUnacknowledged(0, event.stateStartedAt) : card.unseen
   const dotState = event.state
   const workingMode =
     event.state === 'working' && event.workingMode === 'monitoring' ? event.workingMode : undefined
   const bucket = dashboardBucketForDotState(
-    dashboardCardDisplayState({ dotState, workingMode, unseen })
+    dashboardCardBaseDisplayState({ dotState, workingMode, unseen })
   )
   const nextCard: DashboardCard = {
     ...card,
@@ -67,6 +71,7 @@ export function patchDashboardSnapshotFromAgentStatus(
       : {}),
     bucket,
     dotState,
+    verdict: agentVerdictDisplayMark(event) ?? undefined,
     workingMode,
     unseen,
     stateChangedAt: stateChanged ? event.stateStartedAt : card.stateChangedAt,
@@ -75,7 +80,12 @@ export function patchDashboardSnapshotFromAgentStatus(
     askSummary:
       bucket === 'attention'
         ? event.interactivePrompt !== undefined
-          ? event.interactivePrompt || undefined
+          ? interactivePromptLabel(
+              event.interactivePrompt,
+              event.toolName,
+              event.agentType ?? card.agentType,
+              sayNativeChatApprovalTranslated
+            )
           : card.askSummary
         : undefined,
     subagents: patchedSubagents(card, event)

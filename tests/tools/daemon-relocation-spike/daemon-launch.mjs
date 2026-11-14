@@ -1,16 +1,10 @@
-// Launches the copied Orca.exe as the daemon host (ELECTRON_RUN_AS_NODE=1) and
-// waits for its {type:'ready'} IPC signal. Mirrors the real fork() options in
-// src/main/daemon/daemon-init.ts (detached, ipc channel, ORCA_USER_DATA_PATH).
+// Launch copied Orca.exe as run-as-node daemon with production detached/IPC/userData options, awaiting ready.
 
 import { spawn } from 'node:child_process'
 import { createWriteStream } from 'node:fs'
 import { join } from 'node:path'
 
-/**
- * Spawn the daemon host. Resolves { child, pid } once the daemon signals ready,
- * or rejects on early exit / timeout. stdout+stderr are teed to files under
- * workDir. The caller owns shutdown (SIGTERM `child`).
- */
+// Return child/pid on ready, reject exit/timeout, and tee logs under workDir; caller owns child shutdown.
 export function launchDaemonHost(options) {
   const {
     hostExePath,
@@ -31,17 +25,12 @@ export function launchDaemonHost(options) {
     ELECTRON_RUN_AS_NODE: '1',
     ORCA_USER_DATA_PATH: workDir
   }
-  // The current branch's node-pty patch resolves natives relative to its own
-  // dir, so this env var is inert there; set it anyway so the spike still works
-  // if run against a build that carries the ORCA_NODE_PTY_NATIVE_DIR patch.
+  // Set ORCA_NODE_PTY_NATIVE_DIR for older patched builds; current native resolution is relative to node-pty itself.
   if (nodePtyNativeDir) {
     env.ORCA_NODE_PTY_NATIVE_DIR = nodePtyNativeDir
   }
 
-  // Why: --log-file makes the daemon write its session lifecycle events
-  // (session-created / session-exited / uncaught-exception-suppressed) to a
-  // file, which is the only window into ConPTY spawn failures that don't reach
-  // stdout/stderr. daemon-entry parses it as an optional Phase 0 flag.
+  // Capture --log-file session/crash events because some ConPTY spawn failures never reach stdio.
   const daemonArgs = [daemonEntryPath, '--socket', socketPath, '--token', tokenPath]
   if (logFilePath) {
     daemonArgs.push('--log-file', logFilePath)
@@ -72,8 +61,7 @@ export function launchDaemonHost(options) {
       child.off('error', onError)
       child.off('exit', onExit)
       if (err) {
-        // Expose the still-running detached child so the caller can stop it;
-        // otherwise a ready-timeout leaks the daemon with no handle to kill it.
+        // Attach the child to timeout errors so callers can kill a detached daemon that never reached ready.
         err.child = child
         reject(err)
       } else {

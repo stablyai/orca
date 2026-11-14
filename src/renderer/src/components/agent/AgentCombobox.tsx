@@ -4,49 +4,50 @@ import { Button } from '@/components/ui/button'
 import { Command, CommandEmpty, CommandInput, CommandList } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { AgentIcon, type AgentCatalogEntry } from '@/lib/agent-catalog'
+import type { AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import {
   agentPickerBlankTerminalMatches,
   getAgentPickerCommandValue,
   searchAgentPickerEntries
-} from '@/lib/agent-picker-search'
-import { cn } from '@/lib/utils'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import {
-  createAgentComboboxCommandState,
-  resolveAgentComboboxCommandState,
-  updateAgentComboboxCommandValue
-} from './agent-combobox-command-state'
+} from '@/lib/agent-catalog/agent-picker-search'
+import { cn } from '@/lib/class-names'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import * as state from './agent-combobox-command-state'
 import {
   AgentDefaultContextMenu,
   AgentIconLabel,
   renderAgentComboboxItem
 } from './agent-combobox-items'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { rowLabel } from '@/components/tab-bar/tab-agent-row-presentation'
+import {
+  SurfaceAgentItems,
+  surfaceCommandValues,
+  useSurfaceRowArming,
+  surfaceAnswerPending,
+  type AgentComboboxSurfaceRows
+} from './agent-combobox-surface-items'
 
 type DefaultAgentPreference = TuiAgent | 'blank' | null
 
-// Why: Blank Terminal is opt-in so agent-only flows (automations, source-control
-// actions) never offer a choice they cannot run, and never receive null for it.
+// Blank Terminal is opt-in; agent-only automation/source-control flows cannot run it or accept null.
 type AgentComboboxSelectionProps =
   | { allowBlankTerminal: true; onValueChange: (agent: TuiAgent | null) => void }
   | { allowBlankTerminal?: false; onValueChange: (agent: TuiAgent) => void }
 
 type AgentComboboxProps = AgentComboboxSelectionProps & {
+  blankLabel?: string
+  disabled?: boolean
   agents: AgentCatalogEntry[]
   value: TuiAgent | null
   onOpenManageAgents?: () => void
-  /** Current saved default agent preference. Used to render a subtle "default"
-   *  indicator in the list and to tell which right-click menu item is the
-   *  currently-applied choice. */
+  /** Saved default used for list indicators and right-click default actions. */
   defaultAgent?: DefaultAgentPreference
-  /** Optional handler for right-click "Set as default" action. When provided,
-   *  the selected trigger and each list item get a context menu. */
+  /** Enable default-setting context menus on the selected trigger and list items. */
   onSetDefault?: (agent: DefaultAgentPreference) => void
   triggerClassName?: string
-  /** When set, pressing Enter on the closed combobox trigger invokes this
-   *  instead of opening the popover — lets the parent form treat the Agent
-   *  field as the last keyboard-submit step. */
+  /** Let the parent submit on Enter from the closed trigger instead of opening the picker. */
   onTriggerEnter?: () => void
   allowNarrowTrigger?: boolean
   /** Clearing is separate from selecting Blank Terminal. */
@@ -54,6 +55,8 @@ type AgentComboboxProps = AgentComboboxSelectionProps & {
     cleared: boolean
     onClear: () => void
   }
+  /** Lists the "+" menu's chat and CLI rows instead of `agents`; picks go to `onPick`. */
+  surfaceRows?: AgentComboboxSurfaceRows
 }
 
 const BLANK_VALUE = '__none__'
@@ -61,6 +64,8 @@ const TRIGGER_MIN_WIDTH_CLASS = '!min-w-[260px]'
 
 export default function AgentCombobox({
   agents,
+  blankLabel,
+  disabled,
   value,
   onOpenManageAgents,
   defaultAgent,
@@ -69,15 +74,17 @@ export default function AgentCombobox({
   onTriggerEnter,
   allowNarrowTrigger = false,
   clearSelection,
+  surfaceRows,
   ...selection
 }: AgentComboboxProps): React.JSX.Element {
+  const t = useTranslate()
+  const blankText =
+    blankLabel ?? t('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')
   const allowBlankTerminal = selection.allowBlankTerminal === true
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  // Why: controlled cmdk selection so hovering the footer (which lives outside
-  // the cmdk tree) can clear the list's highlighted item — otherwise cmdk keeps
-  // the last-hovered agent visually selected while the mouse is on the footer.
-  const [commandState, setCommandState] = useState(() => createAgentComboboxCommandState(''))
+  // Control cmdk selection so hovering the external footer clears the last highlighted agent.
+  const [commandState, setCommandState] = useState(() => state.createAgentComboboxCommandState(''))
   const triggerRef = React.useRef<HTMLButtonElement | null>(null)
   const inputRef = React.useRef<HTMLInputElement | null>(null)
   const focusFrameRef = React.useRef<number | null>(null)
@@ -90,30 +97,39 @@ export default function AgentCombobox({
   const selectedDefaultPreference = selectionCleared
     ? null
     : (value ?? (allowBlankTerminal ? 'blank' : null))
-  const openCommandValue = selectionCleared ? '' : (value ?? BLANK_VALUE)
   const canClear = clearSelection !== undefined && !selectionCleared
   const filteredAgents = useMemo(() => searchAgentPickerEntries(agents, query), [agents, query])
   const blankMatchesQuery = useMemo(
     () => allowBlankTerminal && agentPickerBlankTerminalMatches(query),
     [allowBlankTerminal, query]
   )
-  const pickedCommandValue = getAgentPickerCommandValue({
-    blankValue: BLANK_VALUE,
-    blankMatchesQuery,
-    currentValue: value,
-    filteredAgents,
-    rawQuery: query
-  })
+  const pickerValues = { agents, query, value, blankValue: BLANK_VALUE, blankMatchesQuery }
+  const surface = surfaceRows ? surfaceCommandValues(surfaceRows.model, pickerValues, t) : null
+  const surfaceList = surface?.rows ?? []
+  const openCommandValue = selectionCleared
+    ? ''
+    : ((surface ? surface.selected : value) ?? BLANK_VALUE)
+  const pickedCommandValue = surface
+    ? surface.highlighted
+    : getAgentPickerCommandValue({
+        ...pickerValues,
+        currentValue: value,
+        filteredAgents,
+        rawQuery: query
+      })
   const activeCommandValue = selectionCleared && !query ? '' : pickedCommandValue
-  const resolvedCommandState = resolveAgentComboboxCommandState(
+  const resolvedCommandState = state.resolveAgentComboboxCommandState(
     commandState,
-    open,
+    open && !disabled,
     activeCommandValue
   )
   if (resolvedCommandState !== commandState) {
-    // Why: cmdk highlights should follow query/result changes before paint,
-    // while manual hover selection remains intact until the active candidate changes.
+    // Reconcile query/results before paint without replacing manual hover until the candidate changes.
     setCommandState(resolvedCommandState)
+  }
+  if (disabled && open) {
+    setOpen(false)
+    setQuery('')
   }
   const commandValue = resolvedCommandState.commandValue
 
@@ -135,7 +151,7 @@ export default function AgentCombobox({
   )
 
   const setCommandValue = useCallback((nextCommandValue: string): void => {
-    setCommandState((current) => updateAgentComboboxCommandValue(current, nextCommandValue))
+    setCommandState((current) => state.updateAgentComboboxCommandValue(current, nextCommandValue))
   }, [])
 
   const focusSearchInput = useCallback(() => {
@@ -147,9 +163,7 @@ export default function AgentCombobox({
         return
       }
       searchInput.focus()
-      // Why: when a printable keydown on the trigger seeded the query, the user
-      // expects the next keystroke to append to what they typed — not replace
-      // it — so drop the caret at the end instead of selecting all.
+      // Append after the key that seeded search instead of selecting and replacing it.
       const end = searchInput.value.length
       searchInput.setSelectionRange(end, end)
     })
@@ -157,21 +171,31 @@ export default function AgentCombobox({
 
   const handleOpenChange = useCallback(
     (nextOpen: boolean) => {
-      setOpen(nextOpen)
-      if (nextOpen) {
-        setCommandState(createAgentComboboxCommandState(openCommandValue))
+      setOpen(nextOpen && !disabled)
+      if (nextOpen && !disabled) {
+        setCommandState(state.createAgentComboboxCommandState(openCommandValue))
         return
       }
       cancelFocusFrame()
       setQuery('')
     },
-    [cancelFocusFrame, openCommandValue]
+    [cancelFocusFrame, disabled, openCommandValue]
   )
 
   const closePicker = useCallback(() => {
     setOpen(false)
     setQuery('')
   }, [])
+
+  const handleSurfacePick: AgentComboboxSurfaceRows['onPick'] = (agent, surface) => {
+    surfaceRows?.onPick(agent, surface)
+    closePicker()
+  }
+  const arming = useSurfaceRowArming(surfaceList, commandValue, handleSurfacePick, {
+    key: JSON.stringify([open, query, surfaceRows?.contextKey]),
+    model: surfaceRows?.model
+  })
+  const picksCli = surfaceRows?.selection.cli === true
 
   const handleSelectAgent = (nextValue: TuiAgent): void => {
     selection.onValueChange(nextValue)
@@ -185,14 +209,10 @@ export default function AgentCombobox({
     closePicker()
   }
 
-  // Why: mirror RepoCombobox's trigger-keydown handling — the button-style
-  // trigger treats the current value as a confirmed selection. Plain focus does
-  // not open the dropdown. Only explicit intent opens: Arrow keys open without
-  // filtering; a printable non-whitespace char opens AND seeds the search
-  // query (treating the keystroke as the start of a new search).
+  // Match RepoCombobox: plain focus confirms the selection; arrows open unfiltered, printable non-whitespace keys open and seed a new query.
   const handleTriggerKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLButtonElement>) => {
-      if (open) {
+      if (disabled || open) {
         return
       }
       if (
@@ -209,7 +229,7 @@ export default function AgentCombobox({
       }
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()
-        setCommandState(createAgentComboboxCommandState(openCommandValue))
+        setCommandState(state.createAgentComboboxCommandState(openCommandValue))
         setOpen(true)
         return
       }
@@ -218,19 +238,18 @@ export default function AgentCombobox({
       }
       if (event.key.length === 1 && /\S/.test(event.key)) {
         event.preventDefault()
-        setCommandState(createAgentComboboxCommandState(openCommandValue))
+        setCommandState(state.createAgentComboboxCommandState(openCommandValue))
         setQuery(event.key)
         setOpen(true)
       }
     },
-    [open, onTriggerEnter, openCommandValue]
+    [disabled, open, onTriggerEnter, openCommandValue]
   )
 
   return (
-    // Why: min-w-0 lets full-width form rows shrink; plain flex+items-center left the
-    // trigger free to overflow its dialog column and look misaligned with Project/Name.
+    // Allow full-width form rows to shrink within their dialog column.
     <div className="relative min-w-0 w-full">
-      <Popover open={open} onOpenChange={handleOpenChange}>
+      <Popover open={open && !disabled} onOpenChange={handleOpenChange}>
         <AgentDefaultContextMenu
           isDefault={
             selectedDefaultPreference !== null && defaultAgent === selectedDefaultPreference
@@ -249,10 +268,10 @@ export default function AgentCombobox({
               role="combobox"
               aria-expanded={open}
               onKeyDown={handleTriggerKeyDown}
+              // Why: the "(CLI)" suffix depends on the host's answer; it never pops in on a settled field.
+              disabled={disabled || (surfaceAnswerPending(surfaceRows) && value !== null)}
               className={cn(
-                // Why: callers sometimes pass `min-w-0` for grid layouts, but
-                // the compact trigger still needs room for "GitHub Copilot".
-                // py-0 clears the default size's py-2 so icon+label center in h-8/h-9.
+                // Retain room for long labels; py-0 clears default vertical padding to center content in h-8/h-9.
                 'h-8 justify-between px-3 py-0 text-xs font-normal',
                 triggerClassName,
                 !allowNarrowTrigger && TRIGGER_MIN_WIDTH_CLASS
@@ -262,29 +281,24 @@ export default function AgentCombobox({
               <span className={cn('inline-flex min-w-0 flex-1', canClear && 'pr-8')}>
                 {selectionCleared ? (
                   <span className="truncate text-muted-foreground">
-                    {translate(
-                      'components.agentSessionContinuation.selectAgent',
-                      'Select an Agent'
-                    )}
+                    {t('components.agentSessionContinuation.selectAgent', 'Select an Agent')}
                   </span>
                 ) : selectedAgent ? (
                   <AgentIconLabel
                     icon={<AgentIcon agent={selectedAgent.id} size={14} />}
-                    label={selectedAgent.label}
+                    label={
+                      picksCli
+                        ? rowLabel({ kind: 'cli', agent: selectedAgent.id }, t)
+                        : selectedAgent.label
+                    }
                   />
                 ) : (
                   <AgentIconLabel
                     icon={<Terminal className="size-3.5" />}
                     label={
                       allowBlankTerminal
-                        ? translate(
-                            'auto.components.agent.AgentCombobox.986f946354',
-                            'Blank Terminal'
-                          )
-                        : translate(
-                            'components.agentSessionContinuation.selectAgent',
-                            'Select an Agent'
-                          )
+                        ? blankText
+                        : t('components.agentSessionContinuation.selectAgent', 'Select an Agent')
                     }
                   />
                 )}
@@ -305,19 +319,21 @@ export default function AgentCombobox({
             focusSearchInput()
           }}
         >
-          <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
+          <Command
+            shouldFilter={false}
+            value={commandValue}
+            onValueChange={setCommandValue}
+            onKeyDown={surfaceRows ? arming.onKeyDown : undefined}
+          >
             <CommandInput
               ref={setInputNode}
-              placeholder={translate(
-                'auto.components.agent.AgentCombobox.48c6a5a9b4',
-                'Search agents...'
-              )}
+              placeholder={t('auto.components.agent.AgentCombobox.48c6a5a9b4', 'Search agents...')}
               value={query}
               onValueChange={setQuery}
             />
             <CommandList>
               <CommandEmpty>
-                {translate(
+                {t(
                   'auto.components.agent.AgentCombobox.579c768bde',
                   'No agents match your search.'
                 )}
@@ -331,13 +347,20 @@ export default function AgentCombobox({
                     onSelect: handleSelectBlank,
                     onSetDefault: onSetDefault ? () => onSetDefault('blank') : undefined,
                     icon: <Terminal className="size-3.5" />,
-                    label: translate(
-                      'auto.components.agent.AgentCombobox.986f946354',
-                      'Blank Terminal'
-                    )
+                    label: blankText
                   })
                 : null}
-              {filteredAgents.map((agent) =>
+              {surfaceRows ? (
+                <SurfaceAgentItems
+                  surfaceRows={{ ...surfaceRows, onPick: handleSurfacePick }}
+                  rows={surfaceList}
+                  value={value}
+                  armedValue={arming.armedValue}
+                  defaultAgent={defaultAgent}
+                  onSetDefault={onSetDefault}
+                />
+              ) : null}
+              {(surfaceRows ? [] : filteredAgents).map((agent) =>
                 renderAgentComboboxItem({
                   key: agent.id,
                   itemValue: agent.id,
@@ -360,7 +383,7 @@ export default function AgentCombobox({
                   onMouseEnter={() => setCommandValue('')}
                   className="h-9 w-full justify-start rounded-none px-3 text-xs font-normal text-muted-foreground"
                 >
-                  {translate('auto.components.agent.AgentCombobox.19522e25ee', 'Manage agents')}
+                  {t('auto.components.agent.AgentCombobox.19522e25ee', 'Manage agents')}
                   <ArrowRight className="ml-auto size-3" />
                 </Button>
               </div>
@@ -375,11 +398,9 @@ export default function AgentCombobox({
               type="button"
               variant="ghost"
               size="icon-xs"
+              disabled={disabled}
               className="absolute right-8 top-1/2 -translate-y-1/2"
-              aria-label={translate(
-                'components.agentCombobox.clearSelection',
-                'Clear agent selection'
-              )}
+              aria-label={t('components.agentCombobox.clearSelection', 'Clear agent selection')}
               onClick={() => {
                 clearSelection.onClear()
                 closePicker()
@@ -390,7 +411,7 @@ export default function AgentCombobox({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            {translate('components.agentCombobox.clearSelection', 'Clear agent selection')}
+            {t('components.agentCombobox.clearSelection', 'Clear agent selection')}
           </TooltipContent>
         </Tooltip>
       )}

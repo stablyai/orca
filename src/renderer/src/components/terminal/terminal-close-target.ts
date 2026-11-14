@@ -1,5 +1,5 @@
-import type { AppState } from '@/store'
-import type { TerminalTabRetirementPlan } from '@/store/slices/terminal-tab-retirement'
+import type { AppState } from '@/store/types'
+import type { TerminalTabRetirementPlan } from '@/store/terminals/retirement/terminal-tab-retirement'
 
 export type PrecomputedTerminalCloseState = {
   owningWorktreeId: string
@@ -47,8 +47,7 @@ export function resolveTerminalCloseTarget(
   return null
 }
 
-// Why: host-backed terminals may exist only in unified state, so sibling
-// selection must merge both representations into one terminal entity set.
+// Host-backed tabs may exist only in unified state; merge both representations before choosing siblings.
 export function getWorktreeTerminalTabIds(
   state: Pick<AppState, 'tabsByWorktree' | 'unifiedTabsByWorktree'>,
   worktreeId: string

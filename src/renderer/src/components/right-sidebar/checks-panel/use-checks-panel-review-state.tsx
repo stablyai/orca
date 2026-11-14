@@ -1,37 +1,38 @@
 import { useCallback, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
-import { prChecksCacheSuffix, prCommentsCacheSuffix } from '@/store/github/cache-identity'
-import { getGitHubRepoCacheKey } from '@/store/slices/github-cache-key'
+import { prChecksCacheSuffix, prCommentsCacheSuffix } from '@/store/github/cache/cache-identity'
+import { getGitHubRepoCacheKey } from '../../../../../shared/github/cache/github-cache-key'
 import {
   buildChecksPanelEligibilityGitFingerprint,
   readChecksPanelGitStatusSnapshot,
   readChecksPanelPublishActionGitStatus
-} from '../checks-panel-git-status-snapshot'
-import { resolveHostedReviewCreationProvider } from '../../../../../shared/hosted-review-creation-providers'
+} from './refresh/checks-panel-git-status-snapshot'
+import { resolveHostedReviewCreationProvider } from '../../../../../shared/source-control/hosted-review/hosted-review-creation-providers'
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
-import { resolveChecksPanelReviewLookup } from '../checks-panel-review-lookup-authority'
+import { resolveChecksPanelReviewLookup } from './checks-panel-review-lookup-authority'
 import {
   computeChecksPanelConfirmedReadiness,
   isChecksPanelHardErrorCleared,
   type ChecksPanelConfirmedReadinessInput
-} from '../checks-panel-review-creation'
+} from './review-actions/checks-panel-review-creation'
 import {
   getPullRequestGenerationRecordKey,
   getPullRequestGenerationSeedRestoreKey,
-  markPullRequestGenerationRequiresPushBeforeCreate,
-  type PullRequestGenerationContext
-} from '@/store/slices/pull-request-generation'
-import { getCommitMessageModelDiscoveryHostKeyForScope } from '../../../../../shared/commit-message-host-key'
+  markPullRequestGenerationRequiresPushBeforeCreate
+} from '@/store/slices/hosted-review/generation/pull-request-generation'
+import type { PullRequestGenerationContext } from '@/store/slices/hosted-review/generation/pull-request-generation-state'
+import { DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import {
-  DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
   resolveSourceControlAiEnabled,
-  resolveSourceControlAiForOperation,
   resolveSourceControlAiPrCreationDefaults
-} from '../../../../../shared/source-control-ai'
-import { getRuntimeGitScope } from '@/runtime/runtime-git-client-context'
+} from '../../../../../shared/source-control/ai/source-control-ai-operation-policy'
+import { resolveSourceControlAiForOperation } from '../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
+import { getRuntimeGitRepoDiscoveryHostKey } from '@/runtime/source-control/git/runtime-git-client-context'
 import type { ChecksPanelReviewStateInput } from './review-state-dependencies'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {
+  const t = useTranslate()
   const {
     activeReview,
     activeWorktree,
@@ -68,7 +69,7 @@ export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {
     settings,
     updatePullRequestGenerationRecord
   } = model
-  // Why: select only timestamps, not whole cache records, so the entry-refresh effect doesn't re-run on every cache mutation. See docs/refresh-on-checks-tab.md.
+  // Select timestamps only to avoid rerunning entry-refresh on unrelated cache mutations; see docs/refresh-on-checks-tab.md.
   const prFetchedAt = useAppStore((s) =>
     prCacheKey ? s.prCache[prCacheKey]?.fetchedAt : undefined
   )
@@ -146,7 +147,7 @@ export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {
     gitStatusSnapshot?.contextKey === panelContextKey
       ? (gitStatusSnapshot.gitIdentity?.head ?? null)
       : null
-  // Read via a ref so a HEAD move drops confirmed (fingerprint mismatch) without re-triggering the eligibility network call.
+  // Read HEAD through a ref to drop stale confirmation without retriggering the eligibility request.
   const eligibilityHeadOidRef = useRef(eligibilityHeadOid)
   eligibilityHeadOidRef.current = eligibilityHeadOid
   const eligibilityGitFingerprint = gitStatusReadyForPanelContext
@@ -162,7 +163,7 @@ export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {
         localExecutionScope
       })
     : null
-  // Why: Publish can use the worktree poller when the stricter panel snapshot is delayed; still blocked for dirty fallback status.
+  // Publish may use poller fallback while the stricter snapshot is delayed, but still rejects dirty status.
   const publishActionGitStatusInputs = readChecksPanelPublishActionGitStatus({
     snapshot: gitStatusSnapshot,
     contextKey: panelContextKey,
@@ -179,7 +180,7 @@ export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {
   const hostedReviewCreateProvider = resolveHostedReviewCreationProvider(
     hostedReviewCreation?.provider
   )
-  // Only GitHub runs the gh refresh coordinator; re-derive GitHub-ness from linked reviews because resolveHostedReviewCreationProvider defaults null→'github' (can't tell unknown from GitHub), staying GitHub-optimistic pre-eligibility.
+  // Only GitHub uses its refresh coordinator; linked reviews disambiguate the provider resolver's null-to-GitHub default.
   const hasNonGitHubLinkedReview =
     activeWorktree?.linkedGitLabMR != null ||
     activeWorktree?.linkedBitbucketPR != null ||
@@ -188,13 +189,12 @@ export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {
   const isGitHubReviewContext = hostedReviewCreation
     ? hostedReviewCreation.provider === 'github'
     : !hasNonGitHubLinkedReview
-  const hostedReviewCreateCopy = localizedHostedReviewCopy(hostedReviewCreateProvider)
-  // The PR cache isn't push-target scoped, so demote a branch-scoped no-PR to unknown when the eligibility snapshot is for a different context.
+  const hostedReviewCreateCopy = localizedHostedReviewCopy(hostedReviewCreateProvider, t)
+  // Demote cached absence to unknown across eligibility contexts; PR cache keys omit push targets.
   const prCachedHasPRForContext =
     hostedReviewCreationSnapshot && hostedReviewCreationSnapshot.contextKey !== panelContextKey
       ? null
       : prCachedHasPR
-  // Four-state review evidence so the empty state can never claim "No review found" without accepted evidence.
   const checksPanelReviewLookupResult = resolveChecksPanelReviewLookup({
     pr,
     prCachedHasPR: prCachedHasPRForContext,
@@ -204,7 +204,7 @@ export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {
     eligibilityReview: hostedReviewCreation?.review ?? null
   })
   const checksPanelReviewLookup = checksPanelReviewLookupResult.state
-  // Confirmed readiness from the last eligibility snapshot, not live canCreate (which would be circular and flap during transient failures).
+  // Use the last eligibility snapshot; live canCreate would be circular and flap during transient failures.
   const hardErrorObservedAt =
     isGitHubReviewContext && hardRefreshError && hardRefreshError.contextKey === panelContextKey
       ? hardRefreshError.observedAt
@@ -222,7 +222,7 @@ export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {
     now: prRefreshStateNow
   }
   const confirmedReadiness = computeChecksPanelConfirmedReadiness(confirmedReadinessInput)
-  // A hard error persists until a qualifying eligibility request clears it; queued/in-flight status no longer un-hides Create.
+  // Retries cannot clear sticky hard errors without a qualifying eligibility result.
   const checksPanelHasHardRefreshError =
     hardErrorObservedAt !== undefined && !isChecksPanelHardErrorCleared(confirmedReadinessInput)
   const activePullRequestGenerationKey = getPullRequestGenerationRecordKey({
@@ -250,7 +250,7 @@ export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {
       if (!context.worktreeId || !context.worktreePath) {
         return
       }
-      // Why: AI PR generation can rebase before summarizing; persist the push requirement since ChecksPanel unmounts when users leave the tab.
+      // Generation may rebase; persist its push requirement because leaving Checks unmounts the panel.
       updatePullRequestGenerationRecord(generationKey, (record) =>
         markPullRequestGenerationRequiresPushBeforeCreate({
           record,
@@ -277,8 +277,10 @@ export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {
     if (!settings) {
       return DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
     }
-    const hostKey = getCommitMessageModelDiscoveryHostKeyForScope(
-      getRuntimeGitScope(ownerTarget ?? { kind: 'local' }, repo?.connectionId)
+    const hostKey = getRuntimeGitRepoDiscoveryHostKey(
+      ownerTarget ?? { kind: 'local' },
+      repo,
+      repo?.connectionId
     )
     const resolved = resolveSourceControlAiForOperation({
       settings,
@@ -299,7 +301,7 @@ export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {
     () => (settings ? resolveSourceControlAiEnabled({ settings, repo }) : false),
     [repo, settings]
   )
-  // Confirmed-only gate: a confirmed composer survives transient refresh failures, but a failure never *opens* a never-confirmed Create.
+  // Transient failures preserve confirmed composers but cannot open unconfirmed ones.
   const createComposerOpen =
     !isFolder && !activeReview && Boolean(branch) && confirmedReadiness.confirmed
   return {

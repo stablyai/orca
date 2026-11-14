@@ -1,24 +1,31 @@
 import { ipcMain } from 'electron'
 import {
+  resolveConflict,
   stageFile,
   unstageFile,
-  discardChanges,
-  bulkDiscardChanges,
   bulkStageFiles,
   bulkUnstageFiles,
   stageWorktreeChanges
-} from '../../git/status'
-import { resolveRegisteredWorktreePath } from '../registered-worktree-roots-cache'
+} from '../../git/source-control/mutations/staging'
+import {
+  discardChanges,
+  bulkDiscardChanges
+} from '../../git/source-control/mutations/discard-changes'
+import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import {
   getLocalGitOptionsForRegisteredWorktree,
   getLocalRepoForRegisteredWorktree
 } from '../local-worktree-runtime-options'
-import { getWorktreeSharedLinkPaths } from '../../git/worktree-shared-directories'
-import { validateGitRelativeFilePath } from '../filesystem-path-containment'
+import { getWorktreeSharedLinkPaths } from '../../git/worktrees/content-paths/worktree-shared-directories'
+import { validateGitRelativeFilePath } from './access/filesystem-path-containment'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
-import { parseGitStageWorktreeScope } from '../../../shared/git-stage-worktree-scope'
+import { parseGitStageWorktreeScope } from '../../../shared/git/paths/git-stage-worktree-scope'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../shared/execution-host'
+import {
+  CONFLICT_RESOLUTIONS,
+  type ConflictResolution
+} from '../../../shared/source-control/listing/source-control-entry-actions'
 
 export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerContext): void {
   const { store } = context
@@ -37,6 +44,35 @@ export function registerFilesystemGitIndexHandlers(context: FilesystemHandlerCon
         worktreePath
       )
       await stageFile(worktreePath, filePath, { ...gitOptions, admissionTier: 'interactive' })
+    }
+  )
+
+  ipcMain.handle(
+    'git:resolveConflict',
+    async (
+      _event,
+      args: {
+        worktreePath: string
+        filePath: string
+        resolution: ConflictResolution
+        connectionId?: string
+      }
+    ): Promise<void> => {
+      if (!CONFLICT_RESOLUTIONS.includes(args.resolution)) {
+        throw new Error('Unknown conflict resolution')
+      }
+      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
+      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
+      const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
+      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+        store,
+        args.worktreePath,
+        worktreePath
+      )
+      await resolveConflict(worktreePath, filePath, args.resolution, {
+        ...gitOptions,
+        admissionTier: 'interactive'
+      })
     }
   )
 

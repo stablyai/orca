@@ -1,0 +1,199 @@
+// Window writes OpenFile immediately but selects proposed tabs only after main frames draw them. Tab consumers wait via afterPendingTab.
+
+import type { Tab } from '../../../../../../shared/tab-types'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
+import {
+  sendLayoutApply,
+  type WindowLayoutCommand
+} from '@/runtime/workspace-layout/commands/layout-apply-send'
+import {
+  beginPendingTab,
+  isPendingTab
+} from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
+import { newGroupSplitOf } from '@/runtime/workspace-layout/commands/layout-owner-new-group-split'
+import type { AppState } from '../../../types'
+import type { EditorTabSelection, OpenFile } from '../types/open-file'
+import { isEditorTabContentType, type EditorTabContentType } from './editor-tab-content-type'
+import { restorableEditorFile } from './editor-tab-layout-owner'
+import { layoutEditorViewOfOpenFile } from './open-file-layout-view'
+import { layoutFrameWorkspace } from '@/runtime/workspace-layout/frames/layout-frame-workspaces'
+import { editorTabFile } from '../../../../../../shared/workspace-layout/editor-tabs/workspace-layout-editor-tab-file'
+import { stableJson } from '../../../../../../shared/workspace-layout/persistence/workspace-layout-load-report'
+import {
+  publishEditorFile,
+  publishEditorView
+} from '../../../../../../shared/workspace-layout/published-layout/workspace-layout-published'
+
+type EditorTabOpen = {
+  fixedTabId?: string
+  fileId: string
+  worktreeId: string
+  contentType: EditorTabContentType
+  isPreview: boolean
+  /** The group the window resolved; a dead or missing one falls back as today's create does. */
+  groupId: string | undefined
+  selection: EditorTabSelection
+  index?: number
+  /** Today's draw, for a twin main may route to a paired server. */
+  drawHere: (tabId: string) => Pick<Tab, 'id'> | undefined
+}
+
+/** What lets a reload or a second client rebuild the tab: an edit file's record, any view. */
+export function editorTabContent(
+  file: OpenFile,
+  placementWorkspaceId = file.worktreeId
+): Pick<Extract<WindowLayoutCommand, { type: 'openEditorTab' }>, 'file' | 'view'> {
+  const view = layoutEditorViewOfOpenFile(file, placementWorkspaceId)
+  return {
+    ...(file.mode === 'edit' && placementWorkspaceId === file.worktreeId
+      ? { file: restorableEditorFile(file) }
+      : {}),
+    ...(view ? { view } : {})
+  }
+}
+
+function openFileOf(state: AppState, fileId: string): OpenFile | undefined {
+  return state.openFiles.find((file) => file.id === fileId)
+}
+
+/** A live group of the window's, else its active one, else a root group frames then draw. */
+function placementGroupId(
+  state: AppState,
+  worktreeId: string,
+  groupId: string | undefined
+): string | undefined {
+  const groups = state.groupsByWorktree[worktreeId] ?? []
+  const live = (id: string | undefined): id is string =>
+    id !== undefined && groups.some((group) => group.id === id)
+  if (live(groupId)) {
+    return groupId
+  }
+  const active = state.activeGroupIdByWorktree[worktreeId]
+  if (live(active)) {
+    return active
+  }
+  return groups[0]?.id ?? state.ensureWorktreeRootGroup?.(worktreeId)
+}
+
+/** Return proposed tab ID; null for paired-owned layouts/missing OpenFile means caller draws directly. */
+export function openEditorTabThroughLayoutOwner(
+  state: AppState,
+  open: EditorTabOpen
+): string | null {
+  const { fileId, worktreeId } = open
+  const file = openFileOf(state, fileId)
+  // A store without the tab slice draws no tab, as today's optional create does.
+  if (!file || !state.createUnifiedTab) {
+    return null
+  }
+  const tabId = open.fixedTabId ?? createBrowserUuid()
+  const groupId = placementGroupId(state, worktreeId, open.groupId)
+  const command: WindowLayoutCommand = {
+    type: 'openEditorTab',
+    tabId,
+    fileId,
+    contentType: open.contentType,
+    ...editorTabContent(file, worktreeId),
+    ...(groupId ? { groupId, ...newGroupSplitOf(state, worktreeId, groupId, tabId) } : {}),
+    ...(open.index !== undefined ? { index: open.index } : {}),
+    // Main stamps the tab's time (ledger L186); the frame draws it.
+    ...(open.isPreview ? { preview: true } : {})
+  }
+  const settle = beginPendingTab(tabId, worktreeId, fileId, { kind: 'open', groupId })
+  const sent = sendLayoutApply(state, worktreeId, command, {
+    apply: (result) => {
+      if (!isPendingTab(tabId)) {
+        return
+      }
+      const shownId = result.tabId ?? tabId
+      // A throwing selection must not leave the tab pending: its waiters would never run.
+      try {
+        selectDrawnEditorTab(state, worktreeId, shownId, open.selection)
+      } finally {
+        settle(shownId)
+      }
+    },
+    asToday: () => {
+      if (!isPendingTab(tabId)) {
+        return
+      }
+      let shownId: string | null = null
+      try {
+        shownId = open.drawHere(tabId)?.id ?? null
+      } finally {
+        settle(shownId)
+      }
+    },
+    refused: () => settle(null)
+  })
+  if (!sent) {
+    settle(null)
+    return null
+  }
+  return tabId
+}
+
+/** Selects the tab main's frame just drew, as today's create selects it; a new preview stays one. */
+function selectDrawnEditorTab(
+  state: AppState,
+  worktreeId: string,
+  tabId: string,
+  selection: EditorTabSelection
+): void {
+  if (selection === 'none') {
+    return
+  }
+  state.activateTab?.(tabId, {
+    worktreeId,
+    preservePreview: true,
+    ...(selection === 'background' ? { recordFocus: false } : {})
+  })
+}
+
+/** Whether main's latest frame shows the tab with this record and view: a reopen sends nothing then. */
+function frameHoldsEditorContent(
+  tab: Pick<Tab, 'id' | 'entityId' | 'worktreeId'>,
+  content: ReturnType<typeof editorTabContent>
+): boolean {
+  const workspace = layoutFrameWorkspace(tab.worktreeId)
+  const shown = workspace?.tabs.find((entry) => entry.id === tab.id)
+  if (!workspace || shown?.entityId !== tab.entityId) {
+    return false
+  }
+  const record = content.file && editorTabFile(workspace, tab.entityId)
+  return (
+    (!content.view ||
+      stableJson(shown.editorView ?? null) === stableJson(publishEditorView(content.view))) &&
+    (!content.file ||
+      (record !== undefined && stableJson(record) === stableJson(publishEditorFile(content.file))))
+  )
+}
+
+/** An open the window answered with a tab it already shows: main takes its current record and view. */
+export function sendReusedEditorTabToLayoutOwner(
+  state: AppState,
+  tab: Pick<Tab, 'id' | 'entityId' | 'worktreeId' | 'groupId' | 'contentType'>
+): void {
+  const file = openFileOf(state, tab.entityId)
+  if (!file || !isEditorTabContentType(tab.contentType)) {
+    return
+  }
+  const content = editorTabContent(file, tab.worktreeId)
+  if ((!content.file && !content.view) || frameHoldsEditorContent(tab, content)) {
+    return
+  }
+  const keep = (): void => {}
+  sendLayoutApply(
+    state,
+    tab.worktreeId,
+    {
+      type: 'openEditorTab',
+      tabId: tab.id,
+      fileId: tab.entityId,
+      contentType: tab.contentType,
+      ...content,
+      groupId: tab.groupId
+    },
+    { apply: keep, asToday: keep }
+  )
+}

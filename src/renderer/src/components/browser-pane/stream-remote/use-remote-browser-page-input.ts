@@ -1,19 +1,19 @@
 import { useCallback, useRef } from 'react'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { isEditableKeyboardTarget } from '../host-guest/browser-keyboard'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import {
-  getRemoteBrowserKeyboardShortcut,
-  getRemoteBrowserKeypressKey
-} from './remote-browser-keyboard'
-import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
+  isRemoteBrowserInputOpenedDialogError,
+  isRemoteBrowserPageMissingError
+} from './remote-browser-stream-errors'
+import { useRemoteBrowserPageKeyboard } from './use-remote-browser-page-keyboard'
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type {
   RemoteBrowserOperationToken,
   RemoteBrowserViewportSize
 } from './remote-browser-stream-tokens'
-import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
+import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
 import {
   getRemoteBrowserMouseButton,
+  mapRemoteBrowserClientPoint,
   resolveRemoteBrowserCssViewport,
   type PendingRemoteBrowserWheel,
   type RemoteBrowserPaneNotice,
@@ -103,28 +103,25 @@ export function useRemoteBrowserPageInput({
   handleRemotePointerDown: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemotePointerUp: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
+  handleRemoteScreenshotPaste: (event: React.ClipboardEvent<HTMLImageElement>) => void
 } {
   const getRemoteImagePoint = useCallback(
     (event: { clientX: number; clientY: number }): { x: number; y: number } | null => {
       const image = imageRef.current
-      const viewport = remoteViewportRef.current
-      if (!image || !viewport) {
+      if (!image || !remoteViewportRef.current) {
         return null
       }
-      const rect = viewport.getBoundingClientRect()
-      const { width: viewportWidth, height: viewportHeight } = resolveRemoteBrowserCssViewport({
-        cssViewportSize: remoteCssViewportSizeRef.current,
-        requestedViewportSize: remoteViewportSizeRef.current,
-        frameMetadata,
-        naturalSize: { width: image.naturalWidth, height: image.naturalHeight }
+      return mapRemoteBrowserClientPoint({
+        clientX: event.clientX,
+        clientY: event.clientY,
+        frameRect: image.getBoundingClientRect(),
+        cssViewport: resolveRemoteBrowserCssViewport({
+          cssViewportSize: remoteCssViewportSizeRef.current,
+          requestedViewportSize: remoteViewportSizeRef.current,
+          frameMetadata,
+          naturalSize: { width: image.naturalWidth, height: image.naturalHeight }
+        })
       })
-      if (rect.width <= 0 || rect.height <= 0 || viewportWidth <= 0 || viewportHeight <= 0) {
-        return null
-      }
-      return {
-        x: Math.round(((event.clientX - rect.left) / rect.width) * viewportWidth),
-        y: Math.round(((event.clientY - rect.top) / rect.height) * viewportHeight)
-      }
     },
     [frameMetadata, imageRef, remoteCssViewportSizeRef, remoteViewportRef, remoteViewportSizeRef]
   )
@@ -147,6 +144,15 @@ export function useRemoteBrowserPageInput({
     }
     event.preventDefault()
     image.focus()
+    // Why: a release over the letterbox gutter or outside the pane must still send mouseUp, or
+    // the host page keeps the button held.
+    if (typeof image.setPointerCapture === 'function') {
+      try {
+        image.setPointerCapture(event.pointerId)
+      } catch {
+        // The pointer is already gone; its release will not arrive anywhere to capture.
+      }
+    }
     setPaneNotice(null)
     enqueueRemoteInput(async () => {
       if (!isCurrentRemoteOperationToken(operationToken)) {
@@ -170,6 +176,9 @@ export function useRemoteBrowserPageInput({
         if (isCurrentRemoteOperationToken(operationToken)) {
           if (isRemoteBrowserPageMissingError(error)) {
             closeMissingRemotePage(pageId)
+            return
+          }
+          if (isRemoteBrowserInputOpenedDialogError(error)) {
             return
           }
           setPaneNotice({
@@ -223,6 +232,9 @@ export function useRemoteBrowserPageInput({
             closeMissingRemotePage(pageId)
             return
           }
+          if (isRemoteBrowserInputOpenedDialogError(error)) {
+            return
+          }
           setPaneNotice({
             kind: 'consequence',
             text: error instanceof Error ? error.message : 'Remote mouse input failed.'
@@ -232,62 +244,24 @@ export function useRemoteBrowserPageInput({
     })
   }
 
-  const handleRemoteScreenshotKeyDown = (event: React.KeyboardEvent<HTMLImageElement>): void => {
-    if (isEditableKeyboardTarget(event.target)) {
-      return
-    }
-    const target = runtimeTarget()
-    const pageId = lifecycle.tokens.remotePage
-    const operationToken = pageId ? createRemoteOperationToken(pageId) : null
-    if (!target || !pageId || !operationToken) {
-      return
-    }
-    const params = { worktree: runtimeWorktree, page: pageId }
-    const key = getRemoteBrowserKeyboardShortcut(event) ?? getRemoteBrowserKeypressKey(event)
-    if (!key) {
-      return
-    }
-    event.preventDefault()
-    setPaneNotice(null)
-    enqueueRemoteInput(async () => {
-      if (!isCurrentRemoteOperationToken(operationToken)) {
-        return
-      }
-      try {
-        await callRuntimeRpc(
-          target,
-          'browser.keypress',
-          { ...params, key },
-          { timeoutMs: 15_000, suppressFeatureInteraction: true }
-        )
-        if (
-          key === 'Enter' ||
-          key === 'Meta+r' ||
-          key === 'Meta+Shift+r' ||
-          key === 'Control+r' ||
-          key === 'Control+Shift+r'
-        ) {
-          scheduleRemoteTabInfoRefresh(operationToken, 400)
-        }
-      } catch (error) {
-        if (isCurrentRemoteOperationToken(operationToken)) {
-          if (isRemoteBrowserPageMissingError(error)) {
-            closeMissingRemotePage(pageId)
-            return
-          }
-          setPaneNotice({
-            kind: 'consequence',
-            text: error instanceof Error ? error.message : 'Remote keyboard input failed.'
-          })
-        }
-      }
+  const { handleRemoteScreenshotKeyDown, handleRemoteScreenshotPaste } =
+    useRemoteBrowserPageKeyboard({
+      runtimeTarget,
+      lifecycle,
+      runtimeWorktree,
+      enqueueRemoteInput,
+      createRemoteOperationToken,
+      isCurrentRemoteOperationToken,
+      closeMissingRemotePage,
+      scheduleRemoteTabInfoRefresh,
+      setPaneNotice
     })
-  }
 
   return {
     getRemoteImagePoint,
     handleRemotePointerDown,
     handleRemotePointerUp,
-    handleRemoteScreenshotKeyDown
+    handleRemoteScreenshotKeyDown,
+    handleRemoteScreenshotPaste
   }
 }

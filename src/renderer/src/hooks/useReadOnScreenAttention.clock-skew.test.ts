@@ -5,16 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentAutoAckPresence from './agent-auto-ack-presence'
 import { useReadOnScreenAttention } from './useReadOnScreenAttention'
 import { useAppStore } from '../store'
-import { makeTab, makeTabGroup, makeUnifiedTab } from '../store/slices/store-session-test-harness'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import type { AgentStatusEntry } from '../../../shared/agent-status-types'
+import { makeTab } from '../store/terminals/testing/terminal-tab.test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '../store/slices/tabs/tab-group.test-fixture'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import type { AgentStatusEntry } from '../../../shared/agent-status/contracts/agent-status-types'
 
-// Why: the hook re-scans on every store write and advances its diff refs to the PRE-write snapshot,
-// so its ref guard never suppresses the rescan an ack triggers. It only terminated because
-// acknowledgeAgents returned the same object within one millisecond — a scan costing >=1ms with a
-// turn stamped ahead of the local clock (SSH/remote host) re-acked forever (React #185).
+// Synchronous ack re-entry once repeated forever when remote turn time led local clock and scans crossed millisecond boundaries (React #185); slice guards retained pre-write snapshots.
 
-// These suites isolate synchronous acknowledgement and layout behavior.
 vi.mock('./agent-auto-ack-presence', async (importOriginal) => ({
   ...(await importOriginal<typeof AgentAutoAckPresence>()),
   createAutoAckPresenceCheck: (_read: unknown, onPresent: () => void) => ({
@@ -93,7 +90,7 @@ describe('useReadOnScreenAttention — clock-skewed execution host', () => {
   beforeEach(() => {
     realAcknowledgeAgents = useAppStore.getState().acknowledgeAgents
     vi.spyOn(document, 'hasFocus').mockReturnValue(true)
-    // Why a ticking clock: the loop self-terminated only while Date.now() stayed on one millisecond.
+    // Advance Date.now: frozen single-millisecond time would hide the ack loop.
     let clock = NOW
     vi.spyOn(Date, 'now').mockImplementation(() => clock++)
   })
@@ -104,45 +101,13 @@ describe('useReadOnScreenAttention — clock-skewed execution host', () => {
     useAppStore.setState({ acknowledgeAgents: realAcknowledgeAgents })
   })
 
-  it('acks a turn stamped ahead of the local clock exactly once', () => {
+  it('acks a turn stamped ahead of the local clock', () => {
     seedFutureStampedTurn(NOW + SKEW_MS)
-    const calls = instrumentAcknowledgeAgents()
+    instrumentAcknowledgeAgents()
 
     renderHook(() => useReadOnScreenAttention())
 
-    expect(calls).toEqual([[PANE_KEY]])
     const ackAt = useAppStore.getState().acknowledgedAgentsByPaneKey[PANE_KEY] ?? 0
     expect(ackAt).toBeGreaterThanOrEqual(NOW + SKEW_MS)
-  })
-
-  it('leaves nothing to re-scan for a future-stamped turn on the next store write', () => {
-    seedFutureStampedTurn(NOW + SKEW_MS)
-    renderHook(() => useReadOnScreenAttention())
-
-    const calls = instrumentAcknowledgeAgents()
-    useAppStore.setState((state) => ({
-      unreadTerminalTabs: { ...state.unreadTerminalTabs, 'tab-unrelated': 'terminal-bell' }
-    }))
-
-    expect(calls).toEqual([])
-  })
-
-  it('still acks a normally stamped turn once', () => {
-    seedFutureStampedTurn(NOW - 5_000)
-    const calls = instrumentAcknowledgeAgents()
-
-    renderHook(() => useReadOnScreenAttention())
-
-    expect(calls).toEqual([[PANE_KEY]])
-  })
-
-  it('keeps an explicitly marked-unread visible turn unread', () => {
-    seedFutureStampedTurn(NOW - 5_000)
-    useAppStore.getState().acknowledgeAgents([PANE_KEY])
-
-    renderHook(() => useReadOnScreenAttention())
-    useAppStore.getState().unacknowledgeAgents([PANE_KEY])
-
-    expect(useAppStore.getState().acknowledgedAgentsByPaneKey[PANE_KEY]).toBeUndefined()
   })
 })

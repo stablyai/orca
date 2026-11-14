@@ -3,15 +3,41 @@ import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/ba
 import {
   dispatchTerminalPaneSplitRequest,
   queueTerminalPaneSplitRequest
-} from '@/components/terminal-pane/terminal-pane-split-request-routing'
-import { hasRegisteredRuntimeTerminalTab } from '@/runtime/mounted-terminal-tab-registry'
-import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+} from '@/components/terminal-pane/layout/split/terminal-pane-split-request-routing'
+import { hasRegisteredRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
+import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
 import { useAppStore } from '../../store'
 import type { AppState } from '../../store/types'
 import { resolveBrowserSessionTabTarget } from './browser-session-tab-target'
 import { resolveWindowTabIdForHostTab } from './host-session-tab-target'
-import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
+import { revealWorkspaceSurface } from '@/lib/workspace/activation/workspace-surface-reveal'
 import { focusTerminalInitiatedTab } from './terminal-command-state'
+import { applyRuntimePaneTitle } from './terminal-pane-title-ipc-bridge'
+import { isStructuredAgentSessionHostTabId } from '../../../../shared/agent-session/view/structured-agent-session-host-tab-id'
+import { LOCAL_STRUCTURED_SESSION_OWNER } from '@/runtime/native-chat/local-sessions/local-structured-session-owner'
+import {
+  recordWebSessionFocusIntent,
+  resolveWebSessionVisibleTabId
+} from '@/runtime/web-session-tabs-sync/navigation/web-session-focus-intent'
+
+/** A launched chat's listing can trail its focus request; follow it then, unless the user picked a tab meanwhile. */
+function focusChatWhenListed(worktreeId: string, hostTabId: string): void {
+  // A just-created worktree is not known yet; its own activation reveals it.
+  if (useAppStore.getState().getKnownWorktreeById(worktreeId)) {
+    revealWorkspaceSurface(useAppStore.getState(), worktreeId)
+  }
+  // Read after the reveal, which can change the workspace's visible tab.
+  const store = useAppStore.getState()
+  const populated = (store.unifiedTabsByWorktree[worktreeId] ?? []).length > 0
+  recordWebSessionFocusIntent(
+    { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
+    worktreeId,
+    hostTabId,
+    undefined,
+    // An empty workspace is still provisioning; its Setup and first terminal tabs must not cancel this.
+    populated ? resolveWebSessionVisibleTabId(store, worktreeId) : undefined
+  )
+}
 
 type RuntimeTerminalSplitRequest = SplitTerminalPaneDetail & { worktreeId?: string }
 
@@ -75,8 +101,7 @@ function resolveSplitTargetWorktreeId(request: RuntimeTerminalSplitRequest): str
     if (evidence.owners.size > 0) {
       return null
     }
-    // During startup the ownership rows can hydrate after this IPC event. Keep the
-    // explicit host hint so the bounded replay queue can wake the right worktree.
+    // Keep explicit host hints through startup hydration so bounded replay can wake the right workspace.
     return request.worktreeId
   }
   return evidence.owners.size === 1 ? [...evidence.owners][0]! : null
@@ -95,7 +120,8 @@ export function routeRuntimeTerminalSplitRequest(request: RuntimeTerminalSplitRe
     command: request.command,
     sourceLeafId: request.sourceLeafId,
     telemetrySource: request.telemetrySource,
-    newLeafId: request.newLeafId
+    newLeafId: request.newLeafId,
+    ...(request.activate === false ? { activate: false } : {})
   }
   if (hasRegisteredRuntimeTerminalTab(request.tabId, worktreeId)) {
     dispatchTerminalPaneSplitRequest(detail)
@@ -115,6 +141,11 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
         .setTabCustomTitle(tabId, title, recordInteraction === false ? { recordInteraction } : {})
     })
   )
+
+  // Why: during an in-place renderer reload an older preload can linger; keep this listener additive at that seam.
+  if (window.api.ui.onSetPaneTitle) {
+    unsubs.push(window.api.ui.onSetPaneTitle(applyRuntimePaneTitle))
+  }
 
   unsubs.push(
     window.api.ui.onFocusTerminal(
@@ -152,10 +183,7 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
         (item) => item.id === localTabId
       )
       const browserTarget = resolveBrowserSessionTabTarget(store, worktreeId, localTabId)
-      // Why: chat-completion focus is a courtesy reveal, not navigation — never yank the user
-      // back into a workspace they deliberately left. A notification click is the opposite: the
-      // user asked for this workspace, and the activateWorktree that precedes it is async, so
-      // the active id here is still the old one and would swallow the reveal.
+      // Courtesy completion reveals must not undo user navigation; explicit notification clicks may reveal before async activation updates the active ID.
       if (
         !userInitiated &&
         tab?.contentType === 'agent-session' &&
@@ -164,6 +192,10 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
         return
       }
       if (!tab) {
+        if (userInitiated && isStructuredAgentSessionHostTabId(tabId)) {
+          focusChatWhenListed(worktreeId, tabId)
+          return
+        }
         if (browserTarget) {
           // Why: older/mobile fallback snapshots identify browser tabs by workspace id when no unified tab wrapper exists.
           revealWorkspaceSurface(store, worktreeId)

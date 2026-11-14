@@ -1,8 +1,9 @@
 import { StyleSheet } from 'react-native'
 
-import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const mobileSessionFrameStyles = StyleSheet.create({
+export const mobileSessionFrameStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -10,8 +11,6 @@ export const mobileSessionFrameStyles = StyleSheet.create({
   kavInner: {
     flex: 1
   },
-  // Master-detail content row below the header chrome (KTD2): the existing content is
-  // the flex-1 left child; the dock column (when present on wide) is the right child.
   sessionContentRow: {
     flex: 1,
     flexDirection: 'row'
@@ -32,35 +31,16 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs
   },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.xs
-  },
-  backButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  filesButton: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.button,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: spacing.xs
-  },
-  filesButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  // Selected state for the active docked-panel icon on wide layouts (R2).
-  filesButtonActive: {
-    backgroundColor: colors.bgRaised
-  },
+  // Each 36pt visual reserves 4pt per side for its 44pt touch area.
   sessionTitleBlock: {
     flex: 1,
     minWidth: 0
+  },
+  // Landscape phone: the tab strip takes the row's spare width instead of the title.
+  sessionTitleBlockBesideTabs: {
+    // Use natural-width flex -1: web’s zero basis for flex 0 collapses the title.
+    flex: -1,
+    maxWidth: 160
   },
   sessionTitle: {
     color: colors.textPrimary,
@@ -78,72 +58,9 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: typography.metaSize
   },
-  tabBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: colors.borderSubtle
-  },
-  tabScroll: {
-    flex: 1,
-    maxHeight: 36
-  },
-  tabContent: {
-    paddingLeft: spacing.sm,
-    paddingRight: spacing.sm
-  },
-  tab: {
-    width: 128,
-    maxWidth: 128,
-    minHeight: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent'
-  },
-  tabActive: {
-    // Neutral grey underline, matching the desktop terminal tab's active
-    // indicator (a muted foreground/card mix), not a blue accent.
-    borderBottomColor: colors.textSecondary
-  },
-  tabLabelRow: {
-    maxWidth: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs
-  },
-  tabText: {
-    flexShrink: 1,
-    color: colors.textSecondary,
-    fontSize: 13
-  },
-  tabTextActive: {
-    color: colors.textPrimary
-  },
-  newTerminalButton: {
-    width: 40,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent'
-  },
   newTerminalButtonPressed: {
     backgroundColor: colors.bgRaised
   },
-  newTerminalButtonDisabled: {
-    opacity: 0.45
-  },
-  // Divider between the + new-terminal button and the Quick Commands launcher,
-  // matching the tab strip's borderSubtle separators.
-  tabActionDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: 18,
-    backgroundColor: colors.borderSubtle
-  },
-  // The content slot every branch renders in, measured as the terminal's frame; clips nothing.
   contentFrame: {
     flex: 1,
     minHeight: 0
@@ -155,7 +72,7 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     overflow: 'hidden'
   },
   terminalPane: {
-    ...StyleSheet.absoluteFillObject
+    ...StyleSheet.absoluteFill
   },
   terminalPaneHidden: {
     opacity: 0
@@ -188,4 +105,4 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     color: colors.statusRed,
     fontSize: typography.bodySize
   }
-})
+}))

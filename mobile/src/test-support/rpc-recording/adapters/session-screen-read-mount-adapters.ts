@@ -1,34 +1,30 @@
+import type * as UseMobileSessionDocumentReadersModule from '../../../files/session-documents/use-mobile-session-document-readers'
+import type * as UseMobileSessionTerminalListModule from '../../../terminal/session/inventory/use-mobile-session-terminal-list'
 import { hookMount, performHookAction } from '../hook-mount'
 import type {
   FileDocState,
-  MarkdownDocState,
-  MobileSessionTab
-} from '../../../session/mobile-session-route-types'
-import type { TerminalRecord } from '../../../session/mobile-terminal-records'
+  MarkdownDocState
+} from '../../../files/session-documents/session-document-state'
+import type { MobileSessionTab } from '../../../session/tabs/mobile-session-tabs'
+import type { TerminalRecord } from '../../../terminal/session/inventory/mobile-terminal-records'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
+import type * as MobileNativeChatStopModule from '../../../session/native-chat/composer/use-mobile-native-chat-stop'
 
 const WORKSPACE = 'workspace-1'
 const HANDLE = 'terminal-1'
 const DEVICE_TOKEN = 'device-token-1'
 
-/**
- * What the session screen reads while it is open: a markdown or file tab's document, the terminal
- * inventory, the repo probe native chat gates readability on, and the paced double-Escape stop.
- *
- * These hooks take the screen's accumulated model, so each mount supplies only the members the hook
- * destructures — a fixture completed into a whole session model would invent state no scenario
- * observes. The setters are recorded as model values rather than as native UI.
- */
+// Supply only destructured model fields; a complete invented session model would introduce state no scenario observes.
 export function sessionScreenReadMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
   return {
     'session.tab-documents': ({ client }) => {
-      const useReaders = modules.load<
-        typeof import('../../../session/use-mobile-session-document-readers')
-      >('mobile/src/session/use-mobile-session-document-readers.ts').useMobileSessionDocumentReaders
+      const useReaders = modules.load<typeof UseMobileSessionDocumentReadersModule>(
+        'mobile/src/files/session-documents/use-mobile-session-document-readers.ts'
+      ).useMobileSessionDocumentReaders
       let markdownDocs = new Map<string, MarkdownDocState>()
       let fileDocs = new Map<string, FileDocState>()
       let readers: ReturnType<typeof useReaders>
@@ -37,6 +33,11 @@ export function sessionScreenReadMountAdapters(
           mountFixture<Parameters<typeof useReaders>[0]>({
             worktreeId: WORKSPACE,
             client,
+            markdownDocsRef: {
+              get current() {
+                return markdownDocs
+              }
+            },
             setMarkdownDocs: (update) => {
               markdownDocs = typeof update === 'function' ? update(markdownDocs) : update
             },
@@ -48,7 +49,7 @@ export function sessionScreenReadMountAdapters(
       })
       hook.mount()
       return {
-        action(name, args) {
+        action(name) {
           if (name === 'markdown') {
             return performHookAction(() =>
               readers.readMarkdownTab(
@@ -56,19 +57,7 @@ export function sessionScreenReadMountAdapters(
                   type: 'markdown',
                   id: 'tab-md',
                   relativePath: 'docs/readme.md',
-                  isDirty: args.dirty === true
-                })
-              )
-            )
-          }
-          if (name === 'file') {
-            return performHookAction(() =>
-              readers.readFileTab(
-                mountFixture<Parameters<typeof readers.readFileTab>[0]>({
-                  type: 'file',
-                  id: 'tab-file',
-                  relativePath: 'src/app.ts',
-                  ...(args.diff === true ? { diffSource: 'staged' as const } : {})
+                  isDirty: false
                 })
               )
             )
@@ -83,9 +72,9 @@ export function sessionScreenReadMountAdapters(
       }
     },
     'session.terminal-inventory': ({ client, effect }) => {
-      const useList = modules.load<
-        typeof import('../../../session/use-mobile-session-terminal-list')
-      >('mobile/src/session/use-mobile-session-terminal-list.ts').useMobileSessionTerminalList
+      const useList = modules.load<typeof UseMobileSessionTerminalListModule>(
+        'mobile/src/terminal/session/inventory/use-mobile-session-terminal-list.ts'
+      ).useMobileSessionTerminalList
       let terminals: TerminalRecord[] = []
       const terminalsRef: { current: TerminalRecord[] } = { current: [] }
       const sessionTabsRef: { current: MobileSessionTab[] } = { current: [] }
@@ -102,12 +91,13 @@ export function sessionScreenReadMountAdapters(
             },
             terminalsRef,
             sessionTabsRef,
-            pruneTerminalHandlesFromLiveInput: (handles) =>
-              effect('prune-live-input', [...handles]),
-            defaultTerminalHandlesToLiveInput: (handles) =>
-              effect('default-live-input', [...handles]),
-            clearTerminalLiveInputDefault: (handle) => effect('clear-live-input', { handle }),
             setTerminalKeyboardMetrics: () => {},
+            setTerminalModes: () => {},
+            ptyModesRef: { current: new Map() },
+            terminalCwdRef: { current: new Map() },
+            subscribeSeqRef: { current: new Map() },
+            initialModesSeenRef: { current: new Set() },
+            webReadyHandlesRef: { current: new Set() },
             terminalRefs: { current: new Map() },
             terminalUnsubsRef: { current: unsubs },
             initializedHandlesRef: { current: new Set([HANDLE]) },
@@ -120,8 +110,7 @@ export function sessionScreenReadMountAdapters(
             activeHandleRef: { current: HANDLE },
             showNativeChatRef: { current: false },
             unsubscribeTerminal: (handle: string) => effect('unsubscribe-terminal', { handle }),
-            nativeChatStream: { notifyListedHandles: () => {} },
-            bufferedTerminalDraftState: { pruneDrafts: () => {} }
+            nativeChatStream: { notifyListedHandles: () => {} }
           })
         )
       })
@@ -135,33 +124,9 @@ export function sessionScreenReadMountAdapters(
         dispose: hook.unmount
       }
     },
-    'session.native-chat-readability': ({ client }) => {
-      const useReadability = modules.load<
-        typeof import('../../../session/use-mobile-native-chat-readability')
-      >('mobile/src/session/use-mobile-native-chat-readability.ts').useMobileNativeChatReadability
-      let readable = false
-      let worktreeId = `repo-1::/w`
-      const hook = hookMount(() => {
-        readable = useReadability(client, worktreeId)
-      })
-      return {
-        action(name) {
-          if (name === 'mount') {
-            return hook.mount()
-          }
-          if (name === 'reroute') {
-            worktreeId = 'repo-2::/w'
-            return hook.update()
-          }
-          throw new Error(`Unknown readability action: ${name}`)
-        },
-        state: () => ({ readable, worktreeId }),
-        dispose: hook.unmount
-      }
-    },
     'session.native-chat-stop': ({ client, effect }) => {
-      const useStop = modules.load<typeof import('../../../session/use-mobile-native-chat-stop')>(
-        'mobile/src/session/use-mobile-native-chat-stop.ts'
+      const useStop = modules.load<typeof MobileNativeChatStopModule>(
+        'mobile/src/session/native-chat/composer/use-mobile-native-chat-stop.ts'
       ).useMobileNativeChatStop
       const errors: string[] = []
       let stop: () => void
@@ -173,6 +138,8 @@ export function sessionScreenReadMountAdapters(
             enabled,
             handleRef: { current: HANDLE },
             deviceTokenRef: { current: DEVICE_TOKEN },
+            // OpenCode is the agent whose Stop sends the paced second Escape these recordings pin.
+            agentRef: { current: 'opencode' },
             streamIdentity: 'stream-1',
             cancelPending: () => effect('cancel-pending', {}),
             onSendError: (message: string) => errors.push(message)

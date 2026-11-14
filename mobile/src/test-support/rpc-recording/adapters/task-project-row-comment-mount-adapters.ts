@@ -1,3 +1,5 @@
+import type * as UseMobileTasksProjectThreadReplyActionsModule from '../../../tasks/project-board/use-mobile-tasks-project-thread-reply-actions'
+import type * as UseMobileTasksProjectWorkspaceCommentActionsModule from '../../../tasks/project-board/use-mobile-tasks-project-workspace-comment-actions'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
 import type { MountAdapter, MountContext, MountedOperation } from '../recording-scenario'
@@ -6,7 +8,6 @@ import { mountFixture } from '../recorder-fixture-shape'
 
 const REPO_ID = 'repo-1'
 
-/** A PR review comment: has a path, a numeric line and a numeric id, so a reply is a review reply. */
 const REVIEW_COMMENT = {
   id: 501,
   author: 'octocat',
@@ -18,7 +19,6 @@ const REVIEW_COMMENT = {
   isResolved: false
 } as const
 
-/** An issue comment: no path or line, so a reply falls back to a plain issue comment. */
 const ISSUE_COMMENT = {
   id: 'comment-2',
   author: 'octocat',
@@ -101,10 +101,6 @@ const PROJECT_TABLE = {
   rows: [ISSUE_ROW, PR_ROW]
 }
 
-/**
- * One model in, an actions object out, every setter recorded as an effect: the shape this domain's
- * hooks share.
- */
 type ModelHookSpec<Actions> = {
   /** Called inside the render body, so a hook that throws is recorded as a mount failure. */
   readonly useHook: (model: never) => Actions
@@ -152,14 +148,9 @@ function mountModelHook<Actions>(
   }
 }
 
-/**
- * Writing on a board row's conversation: review threads and their replies, and plain comments on
- * an issue or a pull-request row.
- */
 export function taskProjectRowCommentMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
-  const load = <T>(file: string): T => modules.load<T>(`mobile/src/tasks/${file}`)
   const boardFixture = {
     activeGitHubProjectHost: PROJECT_HOST,
     findProjectRowRepo: () => PROJECT_REPO,
@@ -171,9 +162,9 @@ export function taskProjectRowCommentMountAdapters(
     projectRowDetailRefreshSeq: 0
   }
   const rowThreads: MountAdapter = (context) => {
-    const useActions = load<
-      typeof import('../../../tasks/use-mobile-tasks-project-thread-reply-actions')
-    >('use-mobile-tasks-project-thread-reply-actions.tsx').useMobileTasksProjectThreadReplyActions
+    const useActions = modules.load<typeof UseMobileTasksProjectThreadReplyActionsModule>(
+      'mobile/src/tasks/project-board/use-mobile-tasks-project-thread-reply-actions.tsx'
+    ).useMobileTasksProjectThreadReplyActions
     return mountModelHook(context, {
       useHook: (model) => useActions(model),
       fixture: {
@@ -210,9 +201,11 @@ export function taskProjectRowCommentMountAdapters(
     return (context: Parameters<MountAdapter>[0]) =>
       mountModelHook(context, {
         useHook: (model) =>
-          load<typeof import('../../../tasks/use-mobile-tasks-project-workspace-comment-actions')>(
-            'use-mobile-tasks-project-workspace-comment-actions.tsx'
-          ).useMobileTasksProjectWorkspaceCommentActions(model),
+          modules
+            .load<typeof UseMobileTasksProjectWorkspaceCommentActionsModule>(
+              'mobile/src/tasks/project-board/use-mobile-tasks-project-workspace-comment-actions.tsx'
+            )
+            .useMobileTasksProjectWorkspaceCommentActions(model),
         fixture: {
           ...boardFixture,
           projectRowItem: row,

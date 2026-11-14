@@ -1,34 +1,43 @@
-import type { WorkspaceAttachmentMutation } from '../../../../../../shared/workspace-attachment-mutation'
+import type { WorkspaceAttachmentMutation } from '../../../../../../shared/workspace-attachments/workspace-attachment-mutation'
 import type { AppState } from '../../../types'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+
 import {
+  type ExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
-  getRepoExecutionHostId
+  getRepoExecutionHostId,
+  parseExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
 import {
   floatingWorkspaceToWorktree,
   isFloatingWorkspaceId
 } from '../../../../../../shared/floating-workspace-worktree'
+import { findIndexedDetectedWorktrees } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { findFirstIndexedWorktree } from '../../../../lib/workspace/ownership/worktree-runtime-owner-index'
+import { withoutErasedRequiredWorktreeFields } from '../metadata/worktree-meta-update-application'
+import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import {
-  findIndexedDetectedWorktrees,
-  findIndexedWorktreeOwnerForHost
-} from '@/lib/worktree-runtime-owner-index'
-import { findWorktreeById, withoutErasedRequiredWorktreeFields } from '../../worktree-helpers'
-import { worktreeMatchesHost } from './worktree-host-ownership'
+  type WorkspaceRecordState,
+  selectWorkspaceByHostTarget
+} from '../../../workspaces/selection/workspace-host-target'
+import { resolveQualifiedIndexedFolderWorkspace } from '../../../folder-workspaces/folder-workspace-record-index'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '../../../workspaces/catalog/workspace-record-fields'
+import { getFolderWorkspaceWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 
-const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
 // Why a one-slot cache: the floating workspace is a singleton; retained selectors only need the
 // row's identity to hold while the resolved directory is unchanged.
 let floatingWorkspaceWorktreeCache: { path: string; worktree: Worktree } | null = null
 
 import { worktreeRowMatchesMetaHost } from './worktree-meta-host-match'
-import { branchName } from '@/lib/git-utils'
-import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments'
+import { branchName } from '@/lib/source-control/branches/branch-name'
+import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 
 export function applyDetectedWorktreeUpdates(
   detectedWorktreesByRepo: AppState['detectedWorktreesByRepo'],
@@ -72,22 +81,8 @@ export function folderWorkspaceMatchesHost(
   return getRepoExecutionHostId(workspace) === executionHostId
 }
 
-/** Stable synthetic row per folder workspace object, so selectors keep referential equality. */
-export function getFolderWorkspaceWorktree(folderWorkspace: FolderWorkspace): Worktree {
-  const cached = folderWorkspaceWorktreeCache.get(folderWorkspace)
-  if (cached) {
-    return cached
-  }
-  const worktree = folderWorkspaceToWorktree(folderWorkspace)
-  folderWorkspaceWorktreeCache.set(folderWorkspace, worktree)
-  return worktree
-}
-
 export function findKnownWorktreeById(
-  state: Pick<
-    AppState,
-    'worktreesByRepo' | 'detectedWorktreesByRepo' | 'folderWorkspaces' | 'floatingWorkspacePath'
-  >,
+  state: WorkspaceRecordState & Pick<AppState, 'detectedWorktreesByRepo' | 'floatingWorkspacePath'>,
   worktreeId: string,
   executionHostId?: ExecutionHostId
 ): Worktree | DetectedWorktreeListResult['worktrees'][number] | undefined {
@@ -105,42 +100,77 @@ export function findKnownWorktreeById(
   }
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
-    const folderWorkspace = state.folderWorkspaces.find(
-      (workspace) =>
-        workspace.id === workspaceScope.folderWorkspaceId &&
-        (!executionHostId || folderWorkspaceMatchesHost(workspace, executionHostId))
+    const result = resolveQualifiedIndexedFolderWorkspace(
+      state,
+      workspaceScope.folderWorkspaceId,
+      executionHostId
     )
-    return folderWorkspace ? getFolderWorkspaceWorktree(folderWorkspace) : undefined
+    if (result.kind === 'selected') {
+      return getFolderWorkspaceWorktree(result.value.workspace, result.value)
+    }
+    // Preserve unqualified path access for narrow snapshots.
+    if (!executionHostId && (!state.projectGroups || !state.repos)) {
+      const rows = selectFolderWorkspaces(state).filter(
+        (workspace) => workspace.id === workspaceScope.folderWorkspaceId
+      )
+      return rows.length === 1 ? getFolderWorkspaceWorktree(rows[0]) : undefined
+    }
+    return undefined
   }
   const visible = executionHostId
-    ? (findIndexedWorktreeOwnerForHost(
-        state.worktreesByRepo,
-        worktreeId,
-        executionHostId
-      ) as Worktree | null)
-    : findWorktreeById(state.worktreesByRepo, worktreeId)
+    ? selectWorkspaceByHostTarget(
+        state,
+        hostWorktreeTarget({ id: worktreeId, hostId: executionHostId })
+      )
+    : findFirstIndexedWorktree(selectWorktreesByRepo(state), worktreeId)
   if (visible) {
     return visible
   }
-  // Why the index: this miss path runs per activity row for exactly the worktrees the
-  // feature targets (retained agents on deleted worktrees); the cached index replaces a
-  // full scan of every repo's detected worktrees. The index holds the same row objects,
-  // so the cast restores the listing's row type.
+  // Cached index avoids fleet scans per deleted-worktree activity row; same row objects justify restoring the listing row type.
   const detectedCandidates = findIndexedDetectedWorktrees(
     state.detectedWorktreesByRepo,
     worktreeId
   ) as DetectedWorktreeListResult['worktrees']
-  for (const detected of detectedCandidates) {
-    if (
-      !executionHostId ||
-      worktreeMatchesHost(detected, executionHostId, {
-        unhostedWorktreesMatchHost: executionHostId === LOCAL_EXECUTION_HOST_ID
-      })
-    ) {
-      return detected
-    }
+  return executionHostId
+    ? firstDetectedDirectoryForHost(detectedCandidates, executionHostId)
+    : detectedCandidates[0]
+}
+
+type DetectedDirectoryRow = DetectedWorktreeListResult['worktrees'][number]
+const detectedDirectoryIndexes = new WeakMap<
+  readonly DetectedDirectoryRow[],
+  ReadonlyMap<string, { row: DetectedDirectoryRow; position: number }>
+>()
+
+function firstDetectedDirectoryForHost(
+  rows: readonly DetectedDirectoryRow[],
+  hostId: ExecutionHostId
+): DetectedDirectoryRow | undefined {
+  if (!rows.length) {
+    return undefined
   }
-  return undefined
+  let index = detectedDirectoryIndexes.get(rows)
+  if (!index) {
+    const next = new Map<string, { row: DetectedDirectoryRow; position: number }>()
+    rows.forEach((row, position) => {
+      // Directory matching gives raw logical ownership precedence over physical host spelling.
+      const key = row.runtimeOwnerEnvironmentId
+        ? `owner\0${row.runtimeOwnerEnvironmentId}`
+        : `host\0${row.hostId || LOCAL_EXECUTION_HOST_ID}`
+      if (!next.has(key)) {
+        next.set(key, { row, position })
+      }
+    })
+    index = next
+    detectedDirectoryIndexes.set(rows, index)
+  }
+  const physical = index.get(`host\0${hostId}`)
+  const parsed = parseExecutionHostId(hostId)
+  const logical =
+    parsed?.kind === 'runtime' ? index.get(`owner\0${parsed.environmentId}`) : undefined
+  return logical && (!physical || logical.position < physical.position)
+    ? logical.row
+    : physical?.row
 }
 
 export function getFolderWorkspaceMetaUpdates(
@@ -178,7 +208,11 @@ export function getFolderWorkspaceMetaUpdates(
         ? null
         : updates.firstAgentMessageRenameError
   }
-  if (updates.comment !== undefined && updates.lastActivityAt === undefined) {
+  if (
+    updates.comment !== undefined &&
+    updates.lastActivityAt === undefined &&
+    !ORCA_SIDEBAR_INPUTS_IS_MAIN
+  ) {
     next.lastActivityAt = Date.now()
   }
   if (updates.linkedWorkItem !== undefined) {

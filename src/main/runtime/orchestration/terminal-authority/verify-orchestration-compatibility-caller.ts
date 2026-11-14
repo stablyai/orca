@@ -2,14 +2,15 @@ import { OrcaRuntimeWithSerializeHeadlessTerminalBuffer } from '../../terminal/o
 import type {
   OrchestrationCompatibilityEvidence,
   OrchestrationCompatibilityHostStamp
-} from '../../../../shared/orchestration-compatibility-evidence'
+} from '../../../../shared/orchestration/orchestration-compatibility-evidence'
 import type {
   OrchestrationCompatibilityCallerAuthority,
+  OrchestrationCompatibilitySshTerminal,
   OrchestrationCompatibilityTerminalAuthority
-} from '../../runtime-terminal-contracts'
+} from './orchestration-compatibility-authority'
 import { createHash } from 'node:crypto'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import type { RuntimePtyWorktreeRecord } from '../../terminal/records/runtime-terminal-state-records'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
 export abstract class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller extends OrcaRuntimeWithSerializeHeadlessTerminalBuffer {
   abstract getOrchestrationDispatchAuthority(
@@ -27,6 +28,23 @@ export abstract class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller exte
     const host = evidence?.host
     if (!terminalHandle || !claimedPaneKey || !launchToken) {
       return null
+    }
+    const sshHost = host?.kind === 'ssh' ? host : undefined
+    const bridged = sshHost ? this.verifyBridgedSshTerminal(sshHost) : undefined
+    if (sshHost && bridged) {
+      // COMPAT(legacy-relay-bridge): no hook can attest a terminal this runtime does not host; the
+      // bridge bound this one to its lease and Dispatch records for the attachment's one call.
+      return bridged.handle === terminalHandle &&
+        bridged.paneKey === claimedPaneKey &&
+        bridged.processIncarnation
+        ? this.freezeOrchestrationCompatibilityCallerAuthority(
+            { hostScope: { kind: 'ssh', targetId: sshHost.targetId } },
+            bridged.processIncarnation,
+            claimedPaneKey,
+            terminalHandle,
+            createHash('sha256').update(launchToken).digest('hex')
+          )
+        : null
     }
     const terminal = this.getOrchestrationDispatchAuthority(terminalHandle)
     if (
@@ -63,8 +81,7 @@ export abstract class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller exte
       terminalProvenance === 'current_runtime' &&
       claimedPaneKey === terminal.paneKey
     ) {
-      // Why: the checks above bind a fresh launch to its live PTY, host, and
-      // launch secret. Only an exact live-pane match may skip hook attestation.
+      // Only an exact live-pane match may skip hook attestation after PTY, host and launch-secret checks.
       return this.freezeOrchestrationCompatibilityCallerAuthority(
         terminal,
         terminal.processIncarnation,
@@ -91,8 +108,18 @@ export abstract class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller exte
     )
   }
 
+  private verifyBridgedSshTerminal(
+    host: Extract<OrchestrationCompatibilityHostStamp, { kind: 'ssh' }>
+  ): OrchestrationCompatibilitySshTerminal | undefined {
+    const terminal = this.orchestrationCompatibilitySshTerminals.get(host.attachmentId)
+    return terminal &&
+      this.orchestrationCompatibilityHostMatches({ kind: 'ssh', targetId: host.targetId }, host)
+      ? terminal
+      : undefined
+  }
+
   protected freezeOrchestrationCompatibilityCallerAuthority(
-    terminal: OrchestrationCompatibilityTerminalAuthority,
+    terminal: Pick<OrchestrationCompatibilityTerminalAuthority, 'hostScope'>,
     processIncarnation: string,
     paneKey: string,
     terminalHandle: string,
@@ -162,7 +189,7 @@ export abstract class OrcaRuntimeWithVerifyOrchestrationCompatibilityCaller exte
     terminalHandle: string,
     incarnationId: string
   ): void {
-    const paneKey = pty.paneKey
+    const { paneKey } = this.paneOfPty(pty)
     const hostScope = this.getOrchestrationCompatibilityHostScope(pty)
     if (!paneKey || !parsePaneKey(paneKey) || !hostScope) {
       this.restoredOrchestrationAuthorityByPtyId.delete(pty.ptyId)

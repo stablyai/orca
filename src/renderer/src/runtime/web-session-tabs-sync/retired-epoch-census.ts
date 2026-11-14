@@ -1,6 +1,10 @@
+import {
+  captureBrowserInitializationDelivery,
+  recordBrowserInitializationReceipt
+} from './browser-initialization-presentation'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import { getRuntimeEnvironmentRevision } from '../runtime-environment-revision'
+import { getRuntimeEnvironmentRevision } from '../rpc/environment-revisions/runtime-environment-revision'
 import {
   admitRetiredValueUnderAuthority,
   isRetiredSessionTabsPublicationEpoch,
@@ -10,9 +14,10 @@ import { createSessionTabsAuthorityRepairLane } from './session-tabs-authority-r
 import {
   latestReceivedSessionTabsSnapshotByWorktree,
   nextReceivedSessionTabsFrame,
-  sessionTabsPublicationEpochHistoryByWorktree
+  sessionTabsPublicationEpochHistoryByWorktree,
+  sessionTabsFreshnessKey
 } from './state'
-import { isSessionTabsListAllResult, sessionTabsFreshnessKey } from './tracking'
+import { isSessionTabsListAllResult } from './tracking'
 
 // Why no generation fence here: each census re-checks its own subscription before applying.
 const pairedRepairLane = createSessionTabsAuthorityRepairLane({
@@ -59,6 +64,7 @@ async function runCensus(
     return
   }
   const requestFrame = nextReceivedSessionTabsFrame()
+  const delivery = captureBrowserInitializationDelivery(args.environmentId)
   const response = await window.api.runtimeEnvironments.call({
     selector: args.environmentId,
     method: 'session.tabs.listAll',
@@ -82,6 +88,7 @@ async function runCensus(
   if (!snapshot) {
     return
   }
+  recordBrowserInitializationReceipt(args.environmentId, snapshot, requestFrame, delivery)
   admitRetiredValueUnderAuthority(
     sessionTabsPublicationEpochHistoryByWorktree.get(key),
     snapshot.publicationEpoch,

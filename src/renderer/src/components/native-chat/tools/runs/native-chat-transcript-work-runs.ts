@@ -1,0 +1,94 @@
+// Combine calls/thoughts after slot selection so every intervening visible row ends the run.
+
+import { agentJournalItemSubagentId } from '../../../../../../shared/agent-session/journal/agent-session-journal-producer'
+import {
+  nativeChatWorkRunMember,
+  nativeChatWorkRunSpans,
+  type NativeChatWorkRunRow
+} from '../../../../../../shared/native-chat/native-chat-work-run'
+import {
+  type NativeChatRowTypography,
+  estimateNativeChatRowHeight,
+  nativeChatRowContentMetrics,
+  nativeChatWorkRunContentMetrics
+} from '../../viewport/virtualization/native-chat-row-height-estimate'
+import type {
+  NativeChatMessageSlot,
+  NativeChatTranscriptSlot
+} from '../../conversation/slots/native-chat-transcript-slots'
+
+function workRunRow(slot: NativeChatTranscriptSlot): NativeChatWorkRunRow {
+  if (slot.kind !== 'message') {
+    return { member: null, draws: true, scope: undefined }
+  }
+  return {
+    member: slot.drawsMessage
+      ? // The live line owns the open thought.
+        nativeChatWorkRunMember(slot.message, slot.receipt !== undefined, false)
+      : null,
+    draws: true,
+    scope: `${agentJournalItemSubagentId(slot.message)}:${slot.turnKey}`
+  }
+}
+
+function workRunSlot(
+  members: readonly NativeChatMessageSlot[],
+  headIsLead: boolean,
+  typography: NativeChatRowTypography | undefined
+): NativeChatMessageSlot {
+  const head = members[0]!
+  // A turn's bar sits on its first row and its rollup on its last, so the run takes each from there.
+  const { turnDiff, openedPullRequests } = members.at(-1)!
+  return {
+    ...head,
+    workRun: members.map((member) => member.message),
+    trailingRun: members.some((member) => member.trailingRun),
+    turnDiff,
+    openedPullRequests,
+    estimatedHeight: estimateNativeChatRowHeight(
+      nativeChatWorkRunContentMetrics(
+        nativeChatRowContentMetrics(head.message, typography),
+        headIsLead
+      ),
+      {
+        hasReceipt: false,
+        hasStatus: head.status !== undefined,
+        hasTurnDiff: turnDiff !== undefined,
+        turnDiffFileCount: turnDiff?.files.length,
+        openedPullRequestCount: openedPullRequests?.length
+      },
+      typography
+    )
+  }
+}
+
+export function nativeChatTranscriptWorkRuns(
+  slots: readonly NativeChatTranscriptSlot[],
+  typography?: NativeChatRowTypography
+): NativeChatTranscriptSlot[] {
+  const rows = slots.map(workRunRow)
+  const runAt = new Map<number, NativeChatMessageSlot[]>()
+  const joined = new Set<number>()
+  for (const span of nativeChatWorkRunSpans(rows)) {
+    runAt.set(
+      span[0]!,
+      span.flatMap((index) => {
+        const slot = slots[index]
+        return slot?.kind === 'message' ? [slot] : []
+      })
+    )
+    for (const index of span.slice(1)) {
+      joined.add(index)
+    }
+  }
+  const result: NativeChatTranscriptSlot[] = []
+  for (const [index, slot] of slots.entries()) {
+    const members = runAt.get(index)
+    if (members) {
+      result.push(workRunSlot(members, rows[index]?.member === 'lead', typography))
+    } else if (!joined.has(index)) {
+      result.push(slot)
+    }
+  }
+  return result
+}

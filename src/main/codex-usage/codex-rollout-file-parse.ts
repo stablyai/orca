@@ -1,13 +1,16 @@
 import { basename } from 'node:path'
-import { readJsonlFileSnapshot, type JsonlFileSnapshot } from '../usage/jsonl-file-snapshot'
-import { readJsonlLinesFromOffset } from '../usage/jsonl-line-offsets'
+import {
+  readJsonlFileSnapshot,
+  type JsonlFileSnapshot
+} from '../usage/source-input/jsonl/jsonl-file-snapshot'
+import { readJsonlLinesFromOffset } from '../usage/source-input/jsonl/jsonl-line-offsets'
 import {
   openJsonlFileReader,
   validateJsonlFileReader,
   jsonlPhysicalFileId
-} from '../usage/jsonl-file-checkpoint'
+} from '../usage/source-input/jsonl/jsonl-file-checkpoint'
 import { attributeCodexUsageEvent } from './codex-usage-event-attribution'
-import type { UsageWorktreeResolver } from '../usage/usage-worktree-resolver'
+import type { UsageWorktreeResolver } from '../usage/worktree-attribution/usage-worktree-resolver'
 import { parseCodexUsageRecord, type CodexUsageParseContext } from './codex-usage-record-parser'
 import { codexUsageAggregation } from './codex-usage-aggregation'
 import {
@@ -76,6 +79,7 @@ function createParseContext(
       sessionCwd: resume.sessionCwd,
       currentCwd: resume.currentCwd,
       currentModel: resume.currentModel,
+      currentTurnId: resume.currentTurnId,
       previousTotals: resume.previousTotals,
       totalOnlyBaselinePending: false
     }
@@ -86,8 +90,7 @@ function createParseContext(
     currentCwd: null,
     currentModel: null,
     previousTotals: null,
-    // Why: suffix-only legacy copy parsing lacks the copied prefix context. A
-    // leading total-only snapshot is a baseline, not the suffix's billable delta.
+    // A copied suffix lacks prefix context; its first total-only snapshot establishes the baseline.
     totalOnlyBaselinePending: (options.legacySourceSkipBytes ?? 0) > 0
   }
 }

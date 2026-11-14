@@ -1,20 +1,23 @@
-// Computer-use types (see docs/computer-use/plan.md §4 and §12.6).
-
 export const COMPUTER_ERROR_CODES = {
   app_not_found: 'app_not_found',
   app_blocked: 'app_blocked',
+  app_launch_failed: 'app_launch_failed',
+  system_shortcut_blocked: 'system_shortcut_blocked',
   window_not_found: 'window_not_found',
   window_not_focused: 'window_not_focused',
+  background_unavailable: 'background_unavailable',
   window_stale: 'window_stale',
   provider_incompatible: 'provider_incompatible',
   unsupported_capability: 'unsupported_capability',
   permission_denied: 'permission_denied',
   element_not_found: 'element_not_found',
   element_not_clickable: 'element_not_clickable',
+  element_not_enabled: 'element_not_enabled',
   action_not_supported: 'action_not_supported',
   value_not_settable: 'value_not_settable',
   invalid_argument: 'invalid_argument',
   action_timeout: 'action_timeout',
+  verification_failed: 'verification_failed',
   screenshot_failed: 'screenshot_failed',
   accessibility_error: 'accessibility_error'
 } as const
@@ -51,6 +54,17 @@ export type ComputerSnapshotData = {
   treeText: string
   elementCount: number
   focusedElementId: number | null
+  // Elements rendered with the `(disabled)` trait; a label can hold the same text. Absent from older hosts.
+  disabledElementIndexes?: number[]
+  // Present only when treeText is the subtree of this element, read with rootElementIndex.
+  rootElementIndex?: number
+  // Present only when treeText is a diff against the previous snapshot of the same window.
+  treeDiff?: {
+    baseSnapshotId: string
+    changed: number
+    added: number
+    removed: number
+  }
   truncation?: {
     truncated: boolean
     maxNodes?: number
@@ -91,15 +105,15 @@ export type ComputerActionMetadata = {
   fallbackReason?: string | null
   targetWindowId?: number | null
   targetWindowIndex?: number | null
+  // Absent from providers that predate background input (Linux, older Windows and macOS helpers).
+  delivery?: 'background' | 'foreground'
   verification?: ComputerActionVerification
 }
 
 export type ComputerActionVerification =
   | {
       state: 'verified'
-      property: 'focusedText' | 'selection' | 'value'
-      expected?: string | null
-      actualPreview?: string | null
+      property: 'focusedText' | 'elementText' | 'selection' | 'value'
     }
   | {
       state: 'unverified'
@@ -111,7 +125,11 @@ export type ComputerActionVerification =
         | 'readback_unsupported'
         | 'window_changed'
         | 'value_mismatch'
-      expected?: string | null
+        // The accessibility call succeeded but the window and the app's windows looked the same about a second later.
+        | 'suspected_noop'
+        // Typed or pasted text was read back and the focused field does not hold what inserting it should produce.
+        | 'text_mismatch'
+      // Only on value_mismatch from a non-secure field; results never repeat the requested value.
       actualPreview?: string | null
     }
 
@@ -135,6 +153,8 @@ export type ComputerProviderCapabilities = {
       list: boolean
       bundleIds: boolean
       pids: boolean
+      // Starts a closed app without taking the foreground. Absent from providers that predate launch-app.
+      launch?: boolean
     }
     windows: {
       list: boolean
@@ -148,10 +168,16 @@ export type ComputerProviderCapabilities = {
       annotatedScreenshot: boolean
       elementFrames: boolean
       ocr: boolean
+      // Absent from runtimes that predate action-result tree diffs.
+      treeDiff?: boolean
+      // Tree lines mark disabled elements with a `(disabled)` trait. Absent from older Linux and Windows providers.
+      disabledState?: boolean
     }
     actions: {
       click: boolean
       typeText: boolean
+      // Absent from providers that predate element-targeted typing; they type at focus and ignore the element.
+      typeTextElement?: boolean
       pressKey: boolean
       hotkey: boolean
       pasteText: boolean
@@ -166,6 +192,10 @@ export type ComputerProviderCapabilities = {
       dock: boolean
       menubar: boolean
     }
+    // Absent from providers that predate background input.
+    input?: {
+      background: boolean
+    }
   }
 }
 
@@ -178,6 +208,14 @@ export type ComputerWindowListWindow = ComputerWindowInfo & {
 export type ComputerListWindowsResult = {
   app: ComputerAppInfo
   windows: ComputerWindowListWindow[]
+}
+
+export type ComputerLaunchAppResult = {
+  app: ComputerAppInfo & { pid: number }
+  // False when the app was already running and was left as it was.
+  launched: boolean
+  // Measured after the launch: 'foreground' when the app ended up frontmost.
+  delivery: 'background' | 'foreground'
 }
 
 export type ComputerListAppsResult = {

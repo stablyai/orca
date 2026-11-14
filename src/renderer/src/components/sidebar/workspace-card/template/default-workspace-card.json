@@ -1,0 +1,224 @@
+{
+  "version": 1,
+  "facts": 1,
+  "vars": {
+    "classic": "options.style == 'classic'",
+    "compact": "options.style == 'compact'",
+    "newStyle": "options.style == 'new'",
+    "folder": "ws.kind == 'folder'",
+    "pinnedRepo": "place.inPinnedSection && repo != null && !place.showProjectName",
+    "inlineRepo": "!vars.classic && repo != null && !place.hideRepoBadge && !vars.folder && !vars.pinnedRepo",
+    "metaRepo": "vars.classic && repo != null && !place.hideRepoBadge && !vars.pinnedRepo",
+    "hostLabel": "options.show.host ? host.contextLabel : null",
+    "hostBadge": "vars.hostLabel != null && (!vars.compact || place.showProjectName)",
+    "detailsRow": "!vars.newStyle || options.detailsRow",
+    "metaRow": "!vars.compact && vars.detailsRow",
+    "detachedInMeta": "vars.metaRow && !vars.folder && ws.detachedHead",
+    "branch": "!vars.folder && len(ws.branch) > 0 && !vars.newStyle && (!vars.compact || ws.branch != ws.name)",
+    "identityInMeta": "vars.newStyle && vars.metaRow && options.show.branch && ws.identity != null",
+    "folderInMeta": "vars.newStyle ? vars.metaRow && options.show.branch && vars.folder && ws.identity != null : vars.folder",
+    "conflict": "git.conflictOperation == 'cherry-pick'",
+    "hasComment": "len(trim(ws.comment)) > 0",
+    "details": "links.count > 0 || (options.show.issue && links.issue) || (options.show.linearIssue && links.linearIssue) || (options.show.jiraIssue && links.jiraIssue) || (!vars.newStyle && options.show.pr && review != null) || (options.show.comment && vars.hasComment) || (options.show.automation && provenance.automation) || (options.show.cli && provenance.cli)",
+    "ports": "options.show.ports && ports.count > 0",
+    "indicators": "vars.details || vars.ports",
+    "metaIndicators": "!vars.compact && vars.metaRow && vars.indicators",
+    "titleIndicators": "!vars.metaRow && vars.indicators",
+    "hasMetaRow": "vars.metaRow ? vars.metaRepo || vars.hostBadge || vars.folderInMeta || vars.branch || vars.identityInMeta || vars.detachedInMeta || vars.conflict || git.cacheTimerActive || vars.metaIndicators : vars.conflict || git.cacheTimerActive",
+    "star": "vars.compact && ws.isMain && !vars.folder",
+    "headerActions": "vars.star || place.deleteQuickAction",
+    "inlineAgents": "options.show.inlineAgents && !vars.compact",
+    "title": "trim(ws.title)",
+    "hoverBranch": "vars.newStyle ? ws.identity : vars.compact && vars.branch ? ws.branch : null",
+    "hoverTitle": "len(vars.title) > 0 && vars.title != vars.hoverBranch ? vars.title : null",
+    "hoverDetails": "!vars.classic && (links.count > 0 || links.issue || links.linearIssue || links.jiraIssue || review != null || vars.hasComment || (options.show.automation && provenance.automation) || (options.show.cli && provenance.cli) || ports.count > 0 || vars.hoverTitle != null || vars.hoverBranch != null)",
+    "singleLine": "!(vars.hasMetaRow || git.remoteBranchConflict != null || vars.inlineAgents || lineage.toggleable)"
+  },
+  "frame": {
+    "singleLine": "=vars.singleLine",
+    "statusLane": "=vars.newStyle && options.show.status"
+  },
+  "defs": {
+    "IdentityBlock": {
+      "el": "Stack",
+      "props": { "fill": true, "gap": "md", "hoverGroup": true, "marker": "hover-trigger" },
+      "children": [
+        {
+          "el": "Row",
+          "props": { "align": "center", "justify": "between", "gap": "lg" },
+          "children": [
+            {
+              "el": "Row",
+              "props": { "grow": true, "align": "center", "gap": "md" },
+              "children": [
+                { "el": "RepoChip", "when": "vars.pinnedRepo" },
+                {
+                  "el": "SshControl",
+                  "when": "host.kind == 'ssh'",
+                  "props": { "iconOnly": "=!vars.classic" }
+                },
+                { "el": "RuntimeHostMark", "when": "host.kind == 'runtime'" },
+                { "el": "RepoChip", "when": "vars.inlineRepo" },
+                {
+                  "el": "Title",
+                  "props": { "dimWhenRead": "=vars.newStyle", "tooltip": "=!vars.hoverDetails" }
+                },
+                { "el": "RenameError", "when": "ws.hasRenameError && !ws.isRenaming" },
+                {
+                  "el": "PrimaryBadge",
+                  "when": "!vars.compact && ws.isMain && !vars.folder",
+                  "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
+                },
+                {
+                  "el": "SparseBadge",
+                  "when": "ws.isSparse",
+                  "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }
+                },
+                {
+                  "el": "HostBadge",
+                  "when": "vars.newStyle && !vars.metaRow && vars.hostBadge",
+                  "props": { "label": "=vars.hostLabel" }
+                },
+                {
+                  "el": "Row",
+                  "when": "vars.titleIndicators",
+                  "props": {
+                    "push": true,
+                    "keep": true,
+                    "align": "center",
+                    "gap": "sm",
+                    "inset": "end"
+                  },
+                  "children": [{ "el": "Indicators" }]
+                },
+                {
+                  "el": "Row",
+                  "when": "vars.newStyle",
+                  "props": {
+                    "push": true,
+                    "keep": true,
+                    "align": "center",
+                    "gap": "sm",
+                    "inset": "end"
+                  },
+                  "children": [{ "el": "TitleStatus" }]
+                }
+              ]
+            },
+            {
+              "el": "Row",
+              "when": "vars.headerActions",
+              "props": {
+                "push": true,
+                "keep": true,
+                "align": "center",
+                "justify": "center",
+                "gap": "sm",
+                "inset": "end"
+              },
+              "children": [
+                { "el": "PrimaryStar", "when": "vars.star" },
+                { "el": "DeleteQuickAction", "when": "place.deleteQuickAction" }
+              ]
+            }
+          ]
+        },
+        {
+          "el": "Row",
+          "when": "vars.hasMetaRow",
+          "props": { "align": "center", "gap": "md", "marker": "meta-row" },
+          "children": [
+            {
+              "el": "Row",
+              "props": { "grow": true, "align": "center", "gap": "md", "overflow": "clip" },
+              "children": [
+                { "el": "MetaRepoBadge", "when": "vars.metaRepo" },
+                {
+                  "el": "HostBadge",
+                  "when": "vars.metaRow && vars.hostBadge",
+                  "props": { "label": "=vars.hostLabel" }
+                },
+                {
+                  "el": "IdentityLabel",
+                  "when": "vars.identityInMeta",
+                  "props": { "tooltip": "=!vars.hoverDetails" }
+                },
+                {
+                  "el": "FolderPath",
+                  "when": "!vars.identityInMeta && vars.folder && !vars.newStyle"
+                },
+                {
+                  "el": "Branch",
+                  "when": "!vars.identityInMeta && !(vars.folder && !vars.newStyle) && vars.branch",
+                  "props": { "tooltip": "=!vars.hoverDetails" }
+                },
+                {
+                  "el": "DetachedHead",
+                  "when": "!vars.identityInMeta && !(vars.folder && !vars.newStyle) && !vars.branch && vars.detachedInMeta"
+                },
+                { "el": "ConflictBadge", "when": "vars.conflict" },
+                { "el": "CacheTimer", "when": "git.cacheTimerActive" }
+              ]
+            },
+            {
+              "el": "Row",
+              "when": "vars.metaIndicators",
+              "props": {
+                "push": true,
+                "keep": true,
+                "align": "center",
+                "gap": "sm",
+                "inset": "end"
+              },
+              "children": [
+                { "el": "Indicators", "props": { "hover": "=vars.classic ? 'meta' : null" } }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "root": {
+    "el": "Row",
+    "props": {
+      "fill": true,
+      "gap": "xs",
+      "align": "=vars.singleLine ? 'center' : 'start'",
+      "marker": "parent-content"
+    },
+    "children": [
+      {
+        "el": "StatusLane",
+        "when": "options.show.status",
+        "props": { "unreadAction": "=!place.affiliateList && !vars.newStyle" }
+      },
+      {
+        "el": "Stack",
+        "props": {
+          "grow": true,
+          "gap": "md",
+          "overflow": "=vars.inlineAgents || links.count > 1 ? 'visible' : 'clip'"
+        },
+        "children": [
+          {
+            "el": "DetailsHover",
+            "when": "vars.hoverDetails && !ws.isRenaming",
+            "props": { "branchName": "=vars.hoverBranch", "workspaceTitle": "=vars.hoverTitle" },
+            "children": [{ "el": "IdentityBlock" }]
+          },
+          { "el": "IdentityBlock", "when": "!(vars.hoverDetails && !ws.isRenaming)" },
+          { "el": "RemoteBranchConflict", "when": "git.remoteBranchConflict != null" },
+          { "el": "DeleteFailed", "when": "ws.removalError != null && !ws.isDeleting" },
+          { "el": "LinearSetupPrompt", "when": "place.isActive && links.linearIssue" },
+          {
+            "el": "Agents",
+            "when": "vars.inlineAgents",
+            "props": { "tight": "=!(vars.hasMetaRow || git.remoteBranchConflict != null)" }
+          },
+          { "el": "ChildToggle", "when": "lineage.toggleable" }
+        ]
+      }
+    ]
+  }
+}

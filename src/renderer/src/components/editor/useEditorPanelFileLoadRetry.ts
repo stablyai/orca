@@ -1,7 +1,12 @@
 import { useEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
-import type { OpenFile } from '@/store/slices/editor'
-import { useWorktreeHostConnection } from '@/lib/worktree-host-connection-phase'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { useWorktreeHostConnection } from '@/lib/workspace/ownership/worktree-host-connection-phase'
+import { selectWorkspaceRuntimeEnvironmentId } from '@/lib/workspace/ownership/workspace-runtime-environment'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
+import type { WslHostConnectionState } from '../../../../shared/wsl-host-types'
+import { displayIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { hasRuntimeRpcErrorCode } from '../../../../shared/runtime-rpc-error-code'
+import { isFileTooLargeMessage } from '../../../../shared/file-write/file-write-disk-precondition'
 import {
   WORKTREE_HOST_SELECTOR_NOT_FOUND_CODE,
   WORKTREE_HOST_UNRESOLVED_CODE,
@@ -12,11 +17,7 @@ import {
 } from './editor-panel-content-types'
 
 export const FILE_LOAD_RETRY_DELAYS_MS = [250, 1000, 2500]
-// Why: a remote host can take a while to finish connecting. The owner-not-ready
-// check is a pure local store read (it throws before any network call until the
-// SSH repo hydrates), so poll it at a steady cadence — but cap the wait so a
-// host that never connects ends in a truthful terminal message instead of
-// retrying forever. ~2 min covers any realistic connect; Retry re-arms it (#6648).
+// Poll unresolved local owner state without network calls; bound the wait to two minutes, then require explicit Retry.
 export const OWNER_NOT_READY_RETRY_DELAY_MS = 750
 export const OWNER_NOT_READY_RETRY_LIMIT = 160
 
@@ -24,9 +25,7 @@ function isOwnerNotReadyError(message: string): boolean {
   return message === WORKTREE_OWNER_NOT_READY_ERROR
 }
 
-// Why the shared matcher: the token may arrive on `.code` with prose on the message, as
-// the bare message, or transport-wrapped ("…: selector_not_found"); a message compare
-// alone would strand the first shape on raw text with no way out (#21041).
+// Shared matching accepts codes on code/message fields or transport-wrapped text; message equality misses valid host failures.
 export function isHostSelectorNotFoundError(
   failure: Pick<FileContent, 'loadError' | 'loadErrorCode'>
 ): boolean {
@@ -51,8 +50,7 @@ type UseEditorPanelFileLoadRetryParams = {
 }
 
 export function shouldRetryFileLoadError(message: string, code?: string): boolean {
-  // Terminal: a retry budget is spent; only an explicit Retry should restart it,
-  // never the automatic backoff.
+  // Automatic backoff must not restart an exhausted budget.
   if (message === WORKTREE_OWNER_UNREACHABLE_ERROR || code === WORKTREE_HOST_UNRESOLVED_CODE) {
     return false
   }
@@ -61,8 +59,27 @@ export function shouldRetryFileLoadError(message: string, code?: string): boolea
     !lower.includes('access denied') &&
     !lower.includes('enoent') &&
     !lower.includes('no such file') &&
-    !lower.includes('file too large')
+    !isFileTooLargeMessage(displayIpcErrorMessage(message) ?? message)
   )
+}
+
+/**
+ * A WSL host's connection in the SSH phase's terms, so a read that failed while it was down waits
+ * for it and retries once it answers. Null for any other host.
+ */
+export function wslHostRetryConnection(
+  environmentId: string | null,
+  state: WslHostConnectionState | undefined
+): { targetId: string; connecting: boolean; connectedEpoch: string | null } | null {
+  if (!environmentId || state === undefined) {
+    return null
+  }
+  return {
+    targetId: `wsl:${environmentId}`,
+    connecting: state === 'connecting' || state === 'reconnecting',
+    // Per host, not per connection: main publishes connecting before every ready, which re-arms it.
+    connectedEpoch: state === 'ready' ? `wsl:${environmentId}` : null
+  }
 }
 
 export function useEditorPanelFileLoadRetry({
@@ -81,9 +98,18 @@ export function useEditorPanelFileLoadRetry({
     ? fileContents[activeFileLoadRetryId]?.loadErrorCode
     : undefined
   const hostConnection = useWorktreeHostConnection(activeFile?.worktreeId ?? null)
-  const hostTargetId = hostConnection.targetId
-  const hostConnecting = hostConnection.phase === 'connecting'
-  const connectedHostEpoch = hostConnection.connectedEpoch
+  const wslEnvironmentId = useAppStateValue((state) =>
+    selectWorkspaceRuntimeEnvironmentId(state, activeFile?.worktreeId)
+  )
+  const wslHostState = useAppStateValue((state) =>
+    wslEnvironmentId ? state.wslHostStatuses[wslEnvironmentId]?.state : undefined
+  )
+  // An SSH target keeps its own signal; only a workspace with none reads its WSL host.
+  const wslHost =
+    hostConnection.phase === 'local' ? wslHostRetryConnection(wslEnvironmentId, wslHostState) : null
+  const hostTargetId = wslHost?.targetId ?? hostConnection.targetId
+  const hostConnecting = wslHost?.connecting ?? hostConnection.phase === 'connecting'
+  const connectedHostEpoch = wslHost ? wslHost.connectedEpoch : hostConnection.connectedEpoch
   const seenHostRef = useRef({ targetId: hostTargetId, connectedEpoch: connectedHostEpoch })
 
   useEffect(() => {
@@ -124,8 +150,7 @@ export function useEditorPanelFileLoadRetry({
     if (hostConnecting) {
       return
     }
-    // Why: a host that just connected (or reconnected) can serve a read a lost connection
-    // failed — including one whose budget already ran out — so reload once on a fresh budget.
+    // A fresh connection can recover failed reads even after their earlier retry budget expired.
     if (
       hostJustConnected &&
       (activeFileLoadError === WORKTREE_OWNER_UNREACHABLE_ERROR ||
@@ -143,12 +168,7 @@ export function useEditorPanelFileLoadRetry({
       ? OWNER_NOT_READY_RETRY_LIMIT
       : FILE_LOAD_RETRY_DELAYS_MS.length
     if (retryCount >= retryLimit) {
-      // Why: the remote host never finished connecting (#6648), or its worktree
-      // resolver still cannot place the workspace (#21041). Replace the transient
-      // text with a truthful terminal message so it does not look like it is still
-      // retrying; Retry starts a fresh budget. selector_not_found is UNKNOWN, not
-      // absence, so the tab stays open: closing is the user's call, which is also
-      // what keeps an unsaved draft from being discarded on a resolver blip.
+      // End exhausted retries without closing: unresolved ownership does not prove deletion and must preserve drafts until explicit Retry/close.
       const terminalFailure: Pick<FileContent, 'loadError' | 'loadErrorCode'> | null = ownerNotReady
         ? { loadError: WORKTREE_OWNER_UNREACHABLE_ERROR }
         : isHostSelectorNotFoundError({

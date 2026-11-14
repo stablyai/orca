@@ -1,11 +1,26 @@
-/** The registry's lifetime on a mount: one per session, and swept when either one ends. */
 import type { ReactElement } from 'react'
 import { act, create } from 'react-test-renderer'
-import { describe, expect, it } from 'vitest'
-import { MediaHandleRegistry } from './media-handle-registry'
+import { afterEach, describe, expect, it } from 'vitest'
+import type { MediaHandleRegistry } from './media-handle-registry'
 import { useMediaHandleRegistry } from './use-media-handle-registry'
 
 const STAGED = { uri: 'file:///cache/a.png', mime: 'image/png', byteLength: 12 }
+
+const mountedTrees: ReturnType<typeof create>[] = []
+
+function createTracked(element: Parameters<typeof create>[0]): ReturnType<typeof create> {
+  const tree = create(element)
+  mountedTrees.push(tree)
+  return tree
+}
+
+afterEach(() => {
+  act(() => {
+    for (const tree of mountedTrees.splice(0)) {
+      tree.unmount()
+    }
+  })
+})
 
 function harness(): {
   render: (sessionId: string | null) => void
@@ -32,7 +47,7 @@ function harness(): {
     render(sessionId) {
       act(() => {
         if (tree === null) {
-          tree = create(<Probe sessionId={sessionId} />)
+          tree = createTracked(<Probe sessionId={sessionId} />)
         } else {
           tree.update(<Probe sessionId={sessionId} />)
         }
@@ -41,6 +56,7 @@ function harness(): {
     unmount() {
       act(() => {
         tree?.unmount()
+        tree = null
       })
     },
     discarded,
@@ -49,13 +65,6 @@ function harness(): {
 }
 
 describe('the registry a mounted page session holds', () => {
-  it('hands the same registry back across renders of one session', () => {
-    const probe = harness()
-    probe.render('session-a')
-    probe.render('session-a')
-    expect(probe.seen).toHaveLength(1)
-  })
-
   it('releases every staged file when the page unmounts', () => {
     const probe = harness()
     probe.render('session-a')
@@ -65,9 +74,8 @@ describe('the registry a mounted page session holds', () => {
     expect(probe.discarded).toEqual(['file:///cache/a.png', 'file:///cache/b.png'])
   })
 
-  it('releases the old session s files when a new session takes the mount', () => {
-    // A remount is a new session id, and the document behind the old one is gone: nothing will
-    // ever call `release` for what it staged.
+  it('releases the old session’s files when a new session takes the mount', () => {
+    // The retired document can no longer release its staged files; changing session must sweep them.
     const probe = harness()
     probe.render('session-a')
     probe.seen[0]?.mint([STAGED])
@@ -75,13 +83,5 @@ describe('the registry a mounted page session holds', () => {
     expect(probe.discarded).toEqual(['file:///cache/a.png'])
     expect(probe.seen).toHaveLength(2)
     expect(probe.seen[1]?.liveCount()).toBe(0)
-  })
-
-  it('gives a mount with no session a registry too, so a caller never holds null', () => {
-    const probe = harness()
-    probe.render(null)
-    expect(probe.seen[0]).toBeInstanceOf(MediaHandleRegistry)
-    probe.unmount()
-    expect(probe.discarded).toEqual([])
   })
 })

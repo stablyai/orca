@@ -3,8 +3,8 @@ import { BrowserWindow } from 'electron'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { closeTestStores, createStore, testState } from '../../persistence-test-harness'
-import type { Store } from '../../persistence'
+import { closeTestStores, createStore, testState } from '../../persistence/persistence-test-harness'
+import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 import { wslMoveCutoverFixture as cutover } from '../../persistence/__fixtures__/wsl-mover/wsl-move-cutover-fixture'
 import { seedWslMoveCutover } from '../../persistence/__fixtures__/wsl-mover/wsl-move-journal-seeding'
@@ -12,10 +12,10 @@ import {
   WslMoveProjectFencedError,
   loadWslMoveFence,
   resetWslMoveFenceForTests
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { RuntimeRepositorySettingsController } from '../../runtime/runtime-repository-settings-controller'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { RuntimeRepositorySettingsController } from '../../runtime/repositories/runtime-repository-settings-controller'
 import { registerFolderWorkspaceHandlers } from './folder-workspace-handlers'
-import { registerRepoCatalogHandlers } from './repo-catalog-handlers'
+import { runtimeRepoSelectorText } from '../../runtime/workspaces/catalog/runtime-repo-selector'
 
 const { handlers } = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, args: unknown) => unknown>()
@@ -79,6 +79,7 @@ describe('folderWorkspaces:update under a WSL move', () => {
       cutover('move-1', 'source-fenced', {}, { folderWorkspaceIds: [workspace.id] })
     )
     registerFolderWorkspaceHandlers(new BrowserWindow(), store, {
+      createFolderWorkspace: vi.fn(),
       deleteFolderWorkspace: vi.fn(async () => ({ deleted: true }))
     })
 
@@ -107,25 +108,6 @@ describe('folderWorkspaces:update under a WSL move', () => {
   })
 })
 
-describe('projects:update under a WSL move', () => {
-  it('refuses a runtime preference change when a source repo is moving', async () => {
-    store.addRepo(repo('repo-1'))
-    store.addRepo(repo('repo-2'))
-    seedWslMoveCutover(testState.dir, cutover('move-1', 'source-fenced'))
-    registerRepoCatalogHandlers(new BrowserWindow(), store)
-    const projectFor = (repoId: string) =>
-      store.getProjects().find((project) => project.sourceRepoIds.includes(repoId))
-    const updates = { localWindowsRuntimePreference: { kind: 'windows-host' } }
-
-    await expect(
-      invoke('projects:update', { projectId: projectFor('repo-1')?.id, updates })
-    ).rejects.toBeInstanceOf(WslMoveProjectFencedError)
-    await expect(
-      invoke('projects:update', { projectId: projectFor('repo-2')?.id, updates })
-    ).resolves.toMatchObject({ sourceRepoIds: ['repo-2'] })
-  })
-})
-
 describe('RuntimeRepositorySettingsController under a WSL move', () => {
   it('refuses a settings edit to a moving repo and writes nothing', async () => {
     store.addRepo(repo('repo-1'))
@@ -133,11 +115,12 @@ describe('RuntimeRepositorySettingsController under a WSL move', () => {
     const notifyReposChanged = vi.fn()
     const controller = new RuntimeRepositorySettingsController({
       getStore: () => store,
-      resolveRepo: async (id) => repo(id),
+      resolveRepo: async (selector) => repo(runtimeRepoSelectorText(selector)),
       forgetTerminalTopology: vi.fn(),
       invalidateResolvedWorktrees: vi.fn(),
       invalidateWorktreeScan: vi.fn(),
-      notifyReposChanged
+      notifyReposChanged,
+      notifyWorktreesChanged: vi.fn()
     })
 
     await expect(controller.update('repo-1', { displayName: 'renamed' })).rejects.toBeInstanceOf(

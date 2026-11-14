@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from '../execution-host'
-import type { TaskSourceContext } from '../task-source-context'
+import type { TaskSourceContext } from '../work-items/task-source-context'
 import type { EphemeralVmCheckoutMode } from '../orca-yaml-hook-types'
 import type {
   AutomationWorkspaceProvenance,
@@ -10,11 +10,19 @@ import type {
   WorkspaceAttachment,
   WorkspaceStatus
 } from './types'
-import type { TuiAgent } from '../tui-agent'
-import type { OrcaWorkspaceLayout } from '../global-settings-types'
+import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
+import type { OrcaWorkspaceLayout } from '../orca-workspace-layout'
 import type { DiffComment, MobileDiffReviewState } from '../diff-comment-types'
+import type { SmartTier } from '../sidebar-list/sorting/sort-stamps'
+import type { ExternalConversationLink } from '../external-conversation-link'
 
-// ─── Worktree metadata (persisted user-authored fields only) ─────────
+export type ArchivedCheckout = {
+  branch: string
+  archivedAt: number
+  /** isArchived before the archive, so a refused archive puts it back. */
+  wasArchived?: boolean
+}
+
 export type WorktreeMeta = {
   /** Immutable per-workspace-instance ID used to reject stale lineage after path reuse. */
   instanceId?: string
@@ -53,12 +61,20 @@ export type WorktreeMeta = {
   linkedItems?: WorkspaceAttachment[]
   linkedTaskSourceContext?: TaskSourceContext | null
   isArchived: boolean
+  /** Set while archived with the checkout removed from disk; restore recreates it from this branch. */
+  archivedCheckout?: ArchivedCheckout
   isUnread: boolean
   isPinned: boolean
   sortOrder: number
   /** User-authored sidebar ordering. Higher values render earlier in Manual sort. */
   manualOrder?: number
   lastActivityAt: number
+  /** See {@link Worktree.smartTier}. */
+  smartTier?: SmartTier
+  /** See {@link Worktree.smartAt}. */
+  smartAt?: number
+  /** See {@link Worktree.lastTerminalUseAt}. */
+  lastTerminalUseAt?: number
   /** See {@link Worktree.createdAt}. Persisted to orca-data.json. */
   createdAt?: number
   /** See {@link Worktree.createdWithAgent}. Persisted to orca-data.json. */
@@ -74,6 +90,8 @@ export type WorktreeMeta = {
   baseRef?: string
   /** True when Orca checked out a pre-existing local branch that delete must not prune. */
   preserveBranchOnDelete?: boolean
+  /** The user switched to or created the current branch in Orca, so first-work naming must not rename it. */
+  branchNameIsUserChosen?: boolean
   /** See {@link Worktree.pushTarget}. Persisted so refreshed worktree lists keep the target. */
   pushTarget?: GitPushTarget
   /** Explicit marker stamped when Orca creates the worktree. */
@@ -84,14 +102,13 @@ export type WorktreeMeta = {
   /** User-assigned workspace board status for manual sidebar organization. */
   workspaceStatus?: WorkspaceStatus
   diffComments?: DiffComment[]
-  /** Path-derived worktree ids this worktree had before its folder was renamed
-   *  on disk (the id embeds the path). Lets the daemon's session GC and registry
-   *  hydration recognize sessions minted under an old id instead of reaping
-   *  them. Self-prunes when the worktree is deleted. */
+  /** Prior path-derived IDs let session GC/hydration retain sessions across folder renames. Removed with the worktree. */
   priorWorktreeIds?: string[]
   mobileDiffReview?: MobileDiffReviewState
   /** System-owned provenance for workspaces created by automation new-per-run dispatches. */
   automationProvenance?: AutomationWorkspaceProvenance
   /** System-owned provenance for workspaces created via `orca worktree create`. */
   cliProvenance?: CliWorkspaceProvenance
+  /** System-owned connector threads whose agents run here; never published on `Worktree`. */
+  externalConversations?: ExternalConversationLink[]
 }

@@ -1,3 +1,7 @@
+import type * as MobileHostedReviewGitPreparationModule from '../../../source-control/review/creation/mobile-hosted-review-git-preparation'
+import type * as MobileHostedReviewRemotePrerequisiteModule from '../../../source-control/review/creation/mobile-hosted-review-remote-prerequisite'
+import type * as MobileHostedReviewServiceModule from '../../../source-control/review/creation/mobile-hosted-review-service'
+import type * as MobileHostedReviewCreateIntentRunnerModule from '../../../source-control/review/creation/mobile-hosted-review-create-intent-runner'
 import type { MountAdapter } from '../recording-scenario'
 import { operationModuleLoader } from '../operation-module-loader'
 
@@ -10,15 +14,14 @@ const STATUS_WITH_STAGED_CHANGE = {
   upstreamStatus: { ahead: 1, behind: 0, hasUpstream: true }
 }
 
-/** Hosted-review create: the mutation chain (status, stage, commit, push, create, link). */
 export function hostedReviewMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
   return {
     'source-control.review-git-preparation': ({ client }) => {
-      const preparation = modules.load<
-        typeof import('../../../source-control/mobile-hosted-review-git-preparation')
-      >('mobile/src/source-control/mobile-hosted-review-git-preparation.ts')
+      const preparation = modules.load<typeof MobileHostedReviewGitPreparationModule>(
+        'mobile/src/source-control/review/creation/mobile-hosted-review-git-preparation.ts'
+      )
       let status: unknown = 'unread'
       let committed: unknown = 'uncommitted'
       return {
@@ -41,25 +44,23 @@ export function hostedReviewMountAdapters(
       }
     },
     'source-control.remote-prerequisite': (context) => {
-      const apply = modules.load<
-        typeof import('../../../source-control/mobile-hosted-review-remote-prerequisite')
-      >(
-        'mobile/src/source-control/mobile-hosted-review-remote-prerequisite.ts'
+      const apply = modules.load<typeof MobileHostedReviewRemotePrerequisiteModule>(
+        'mobile/src/source-control/review/creation/mobile-hosted-review-remote-prerequisite.ts'
       ).applyMobileHostedReviewRemotePrerequisite
       let outcome: unknown = 'unapplied'
       return {
         action(name, args) {
-          const patchEquivalent = args.patchEquivalent === true
           return apply(
             context.client,
             WORKTREE,
             // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the scenario supplies the blocked reason as JSON, not as a typed prefill.
             { blockedReason: args.blockedReason } as Parameters<typeof apply>[2],
             {
-              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the prerequisite reads only upstreamStatus off the status.
+              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the prerequisite reads only branch and upstreamStatus off the status.
               status: {
                 entries: [],
-                upstreamStatus: { behindCommitsArePatchEquivalent: patchEquivalent }
+                branch: 'feature',
+                upstreamStatus: args.upstreamStatus
               } as unknown as Parameters<typeof apply>[3]['status'],
               onProgress: (progress) => context.effect('progress', progress)
             }
@@ -73,9 +74,9 @@ export function hostedReviewMountAdapters(
       }
     },
     'source-control.hosted-review-eligibility': ({ client }) => {
-      const service = modules.load<
-        typeof import('../../../source-control/mobile-hosted-review-service')
-      >('mobile/src/source-control/mobile-hosted-review-service.ts')
+      const service = modules.load<typeof MobileHostedReviewServiceModule>(
+        'mobile/src/source-control/review/creation/mobile-hosted-review-service.ts'
+      )
       let eligibility: unknown = 'unfetched'
       let prefill: unknown = 'unresolved'
       return {
@@ -103,9 +104,9 @@ export function hostedReviewMountAdapters(
       }
     },
     'source-control.hosted-review-create': ({ client }) => {
-      const create = modules.load<
-        typeof import('../../../source-control/mobile-hosted-review-service')
-      >('mobile/src/source-control/mobile-hosted-review-service.ts').createMobileHostedReview
+      const create = modules.load<typeof MobileHostedReviewServiceModule>(
+        'mobile/src/source-control/review/creation/mobile-hosted-review-service.ts'
+      ).createMobileHostedReview
       let outcome: unknown = 'uncreated'
       return {
         action: (_name, args) =>
@@ -126,10 +127,8 @@ export function hostedReviewMountAdapters(
       }
     },
     'source-control.create-intent': (context) => {
-      const run = modules.load<
-        typeof import('../../../source-control/mobile-hosted-review-create-intent-runner')
-      >(
-        'mobile/src/source-control/mobile-hosted-review-create-intent-runner.ts'
+      const run = modules.load<typeof MobileHostedReviewCreateIntentRunnerModule>(
+        'mobile/src/source-control/review/creation/mobile-hosted-review-create-intent-runner.ts'
       ).runMobileHostedReviewCreateIntent
       let outcome: unknown = 'unrun'
       return {

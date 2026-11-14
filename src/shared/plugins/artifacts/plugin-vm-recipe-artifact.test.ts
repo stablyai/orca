@@ -1,0 +1,19 @@
+import { describe, expect, it } from 'vitest'
+import { parsePluginVmRecipeArtifact } from './plugin-vm-recipe-artifact'
+
+describe('plugin VM recipe artifacts', () => {
+  it('represents an explicitly disabled destroy action without executing text', () => {
+    const recipe = parsePluginVmRecipeArtifact(
+      JSON.stringify({
+        schemaVersion: 1,
+        id: 'managed',
+        name: 'Managed',
+        create: 'create',
+        destroy: 'none'
+      })
+    )
+
+    expect(recipe).toMatchObject({ destroyDisabled: true })
+    expect(recipe.destroy).toBeUndefined()
+  })
+})

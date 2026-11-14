@@ -1,17 +1,16 @@
-import type { ListAccessibleProjectsArgs } from '../../../shared/github/project-request-types'
-import type { ListAccessibleProjectsResult } from '../../../shared/github/project-result-types'
+import type { ListAccessibleProjectsArgs } from '../../../shared/github/projects/project-request-types'
+import type { ListAccessibleProjectsResult } from '../../../shared/github/projects/project-result-types'
 import type {
   GitHubProjectOwnerType,
   GitHubProjectSummary
-} from '../../../shared/github/project-types'
-import { githubProjectHost } from '../../../shared/github/project-identity'
-import { projectGhExecOptions, runGraphql, type GraphqlVars } from './internals'
+} from '../../../shared/github/projects/project-types'
+import { githubProjectHost } from '../../../shared/github/projects/project-identity'
+import { projectGhExecOptions } from './project-host-execution'
+import { runGraphql, type GraphqlVars } from './project-graphql'
 import { driftError } from './project-error-classification'
 import { rememberOwnerType } from './project-view-cache'
 
-// ─── Constants ─────────────────────────────────────────────────────────
-
-// Why: defaults deliberately shrunk to cut quota spend in discovery — the org loop dominates and produced the HTTP 504; overflow owners can paste a URL.
+// Bound organization discovery to avoid 504s/quota drain; overflow projects remain accessible by URL.
 const DISCOVERY_PROJECTS_PER_OWNER = 40
 const DISCOVERY_MAX_ORGS = 20
 const DISCOVERY_ORG_PAGE_SIZE = 20
@@ -43,19 +42,15 @@ type RawViewerDiscovery = {
   }
 }
 
-// ─── listAccessibleProjects ────────────────────────────────────────────
-
 export async function listAccessibleProjects(
   args?: ListAccessibleProjectsArgs
 ): Promise<ListAccessibleProjectsResult> {
   const host = githubProjectHost(args?.host)
   const viewerProjects: GitHubProjectSummary[] = []
   const orgProjects: GitHubProjectSummary[] = []
-  // Why: collect per-org failures so the picker shows a "some orgs didn't load" banner instead of aborting discovery on the first 504.
   const partialFailures: { owner: string; message: string }[] = []
   let viewerLogin: string | null = null
 
-  // 1) Viewer projects (paginated, single owner so cap at DISCOVERY_PROJECTS_PER_OWNER total).
   let viewerCursor: string | null = null
   let viewerMore = true
   let viewerFetched = 0
@@ -82,7 +77,7 @@ export async function listAccessibleProjects(
     }
     const res = await runGraphql<RawViewerDiscovery>(query, vars, projectGhExecOptions(host))
     if (!res.ok) {
-      // Why: viewer-level failure is structural (no projects to build on), so propagate hard; org-level errors below are non-fatal.
+      // Viewer discovery failure is fatal; organization failures can preserve partial results.
       return { ok: false, error: res.error }
     }
     if (!res.data.viewer) {
@@ -119,8 +114,7 @@ export async function listAccessibleProjects(
     viewerCursor = viewerMore ? (pi?.endCursor ?? null) : null
   }
 
-  // 2) Organizations the viewer belongs to, each with its projectsV2.
-  // Why: no per-org projectsV2 continuation loop — it was the dominant 504 cost; users past the cap can paste a URL instead.
+  // Skip per-org continuation, the dominant 504 cost; overflow projects can be pasted by URL.
   let orgCursor: string | null = null
   let orgMore = true
   let orgsSeen = 0
@@ -149,7 +143,7 @@ export async function listAccessibleProjects(
     }
     const res = await runGraphql<RawViewerDiscovery>(query, vars, projectGhExecOptions(host))
     if (!res.ok) {
-      // Why: org-listing failed; record a synthetic '*' partial failure so the banner explains it, but keep collected viewer projects (the reported 504 path).
+      // Preserve viewer projects and mark the organization-list failure for the partial-results banner.
       partialFailures.push({ owner: '*', message: res.error.message })
       break
     }

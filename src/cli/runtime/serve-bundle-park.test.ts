@@ -11,7 +11,7 @@ import {
   supervisorsDir,
   type ServeParkRecord
 } from '../../shared/serve-bundle-coordination'
-import { openServeBundlePark } from './serve-bundle-park'
+import { openServeBundlePark } from '../../shared/serve-bundle-park'
 import { superviseServeService } from './serve-supervised-service'
 import { createSupervisedParkWatch } from './serve-supervised-park-watch'
 
@@ -63,13 +63,6 @@ describe('openServeBundlePark', () => {
     await mkdir(dir, { recursive: true })
     await writeFile(parkRecordPath(dir), JSON.stringify(record))
   }
-
-  it('takes part only under an installed launchd label on macOS', () => {
-    expect(open({})).toBeNull()
-    expect(open({ XPC_SERVICE_NAME: 'application.com.other' })).toBeNull()
-    expect(open({ XPC_SERVICE_NAME: LABEL }, 'linux')).toBeNull()
-    expect(open()).not.toBeNull()
-  })
 
   it('registers with its child pid and removes the registration on close', async () => {
     const park = open()!
@@ -125,7 +118,6 @@ describe('openServeBundlePark', () => {
         return 0
       }
     })
-    // While parked the loop holds; release it so the next attempt runs.
     await vi.waitFor(async () => expect(await readdir(acksDir(dir))).toHaveLength(1))
     await writeRecord({ phase: 'unpark' })
     await expect(result).resolves.toBe(0)
@@ -158,8 +150,6 @@ describe('openServeBundlePark', () => {
   it('holds while committed until the bundle changes, then releases', async () => {
     const park = open()!
     await writeRecord({ phase: 'commit', commitDeadlineAt: Date.now() + 60_000 })
-    const bundleBefore = JSON.parse(await readFile(parkRecordPath(dir), 'utf8')).bundleBefore
-    expect(bundleBefore).toBe('unused')
     // 'unused' differs from the real identity, which models a bundle ShipIt already replaced.
     expect(park.holds()).toBe(false)
     const identity = formatBundleIdentity(

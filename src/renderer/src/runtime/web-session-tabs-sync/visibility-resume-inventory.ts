@@ -1,5 +1,6 @@
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import { recordReceivedWebSessionTabsRemoval, sessionTabsFreshnessKey } from './tracking'
+import { recordReceivedWebSessionTabsRemoval } from './tracking'
+import { sessionTabsFreshnessKey } from './state'
 import { buildMissingWebSessionTabsRemovals } from './session-tabs-inventory-absence'
 import { isCurrentSessionTabsRuntimeFrame } from './publisher-identity-fences'
 import type { VisibilityResumeOmission } from './state'

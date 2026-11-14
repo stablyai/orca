@@ -1,0 +1,91 @@
+import { parseExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
+import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import type { Repo } from '../../shared/repo-types'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import {
+  hostWorktreeTarget,
+  type HostWorktreeTarget
+} from '../../shared/worktree/host-qualified-identity'
+import {
+  planWorktreeSortOrderUpdates,
+  type WorktreeSortOrderUpdate
+} from '../../shared/worktree/metadata/sort-order-update'
+import { resolveWorktreeMetaOwner } from './host-qualified-worktree-meta'
+import { createRepoRowExecutionHostLookup } from '../../shared/execution-host/worktree-execution-host-resolution'
+
+export type WorktreeSortOrderRequest = {
+  orderedIds: readonly string[]
+  /** Parallel host identities; omitted by older clients. */
+  hostIds?: readonly string[]
+}
+
+type SortOrderStore = {
+  getWorktreeMeta: (worktreeId: string) => WorktreeMeta | undefined
+  getWorktreeMetaForHost?: (
+    worktreeId: string,
+    executionHostId: ExecutionHostId
+  ) => WorktreeMeta | undefined
+  getRepos: () => readonly Repo[]
+  setWorktreeMeta: (target: HostWorktreeTarget, updates: Partial<WorktreeMeta>) => unknown
+}
+
+/** Unqualified IDs require unique ownership; return only written updates so same-ID siblings keep their order. */
+export function writeWorktreeSortOrder(
+  store: SortOrderStore,
+  request: WorktreeSortOrderRequest,
+  isBlocked: (worktreeId: string) => boolean,
+  now: number,
+  repos = createRepoRowExecutionHostLookup(store.getRepos())
+): WorktreeSortOrderUpdate[] {
+  const hostIds =
+    request.hostIds?.length === request.orderedIds.length ? request.hostIds : undefined
+  const targets = new Map<string, HostWorktreeTarget | undefined>()
+  request.orderedIds.forEach((worktreeId, index) => {
+    if (targets.has(worktreeId)) {
+      return
+    }
+    // Host-qualified reads can migrate legacy metadata, so check frozen moves first.
+    if (isBlocked(worktreeId)) {
+      targets.set(worktreeId, undefined)
+      return
+    }
+    if (!hostIds) {
+      targets.set(worktreeId, resolveWorktreeMetaOwner(store, worktreeId, repos))
+      return
+    }
+    const named = parseExecutionHostId(hostIds[index])
+    const hostId =
+      named && repos.registrationHostsFor(getRepoIdFromWorktreeId(worktreeId)).has(named.id)
+        ? named.id
+        : null
+    if (hostId) {
+      targets.set(worktreeId, hostWorktreeTarget({ id: worktreeId, hostId }))
+      return
+    }
+    // Client-local may mean this server; use unique-owner fallback, while unknown remote hosts stay skipped.
+    targets.set(
+      worktreeId,
+      named?.kind === 'local' ? resolveWorktreeMetaOwner(store, worktreeId, repos) : undefined
+    )
+  })
+  const metaFor = (worktreeId: string): WorktreeMeta | undefined => {
+    const target = targets.get(worktreeId)
+    return target && store.getWorktreeMetaForHost
+      ? store.getWorktreeMetaForHost(worktreeId, target.hostId)
+      : store.getWorktreeMeta(worktreeId)
+  }
+  // Why: an unwritable row's unqualified meta can be a twin's rank, so it must never anchor a partial re-rank.
+  const rerankAll = [...targets].some(
+    ([worktreeId, target]) => !target && store.getWorktreeMeta(worktreeId) !== undefined
+  )
+  return planWorktreeSortOrderUpdates(request.orderedIds, metaFor, now, { rerankAll }).filter(
+    (update) => {
+      const target = targets.get(update.worktreeId)
+      if (!target) {
+        return false
+      }
+      store.setWorktreeMeta(target, { sortOrder: update.sortOrder })
+      return true
+    }
+  )
+}

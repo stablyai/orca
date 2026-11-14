@@ -13,7 +13,7 @@ import path from 'node:path'
 import { test as base, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { waitForActivePaneHookDescriptor, waitForActivePanePtyId } from './helpers/terminal'
-import { RuntimeClient } from '../../src/cli/runtime-client'
+import { RuntimeClient } from '../../src/cli/runtime/client'
 import type {
   RuntimeTerminalListResult,
   RuntimeTerminalSummary
@@ -176,14 +176,11 @@ const agentCommands = Object.fromEntries(
 ) as Partial<Record<TranscriptProvider, string>>
 
 const test = base.extend({
-  launchEnv: [
-    {
-      PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}`,
-      GROK_HOME: fakeGrokHome,
-      OMP_CODING_AGENT_DIR: fakeOmpHome
-    },
-    { option: true }
-  ]
+  launchEnv: {
+    PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}`,
+    GROK_HOME: fakeGrokHome,
+    OMP_CODING_AGENT_DIR: fakeOmpHome
+  }
 })
 
 test.afterAll(() => {
@@ -288,8 +285,7 @@ test('worker-read uses provider transcripts across supported orchestration agent
     // The initial file intentionally stops before the cursor continuation row.
     mkdirSync(path.dirname(transcriptPath), { recursive: true })
     writeFileSync(transcriptPath, `${initialTranscript.slice(0, 2).join('\n')}\n`)
-    // The fake CLI reads this after receiving the injected preamble, so the hook
-    // is emitted through the same authenticated path as a real provider hook.
+    // Emit the hook through the authenticated provider path only after the fake CLI receives its injected preamble.
     writeFileSync(
       path.join(fakeCliDir, `${provider.agent}-config.json`),
       JSON.stringify({

@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { mobileSessionRouteTarget } from './mobile-session-route'
 import {
-  hostStackHostRoute,
   navigateToHostStackRoute,
   type HostStackNavigationState
 } from '../navigation/host-stack-navigation'
@@ -46,50 +45,34 @@ function mountedHostState(hostId: string): HostStackNavigationState {
 }
 
 describe('mobile session route', () => {
-  it('keeps dynamic route identities raw for the navigator to encode', () => {
-    expect(
-      mobileSessionRouteTarget({
-        hostId: 'host/one',
-        worktreeId: 'repo::/Users/ada/orca/workspaces/fix #1',
-        name: 'Fix #1'
-      })
-    ).toEqual({
-      name: '[hostId]/session/[worktreeId]',
-      params: {
-        hostId: 'host/one',
-        worktreeId: 'repo::/Users/ada/orca/workspaces/fix #1',
-        name: 'Fix #1'
-      }
-    })
-  })
-
-  it('omits an absent workspace name instead of sending an empty param', () => {
-    expect(
-      mobileSessionRouteTarget({ hostId: 'host-1', worktreeId: 'repo::/tmp/wt' }).params
-    ).toEqual({ hostId: 'host-1', worktreeId: 'repo::/tmp/wt' })
-  })
-
-  it('mounts the host before replacing it with the session route', () => {
+  it('mounts the host, then puts a standalone session in place of its list', () => {
     const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
-    const push = vi.fn()
     const target = mobileSessionRouteTarget({
       hostId: 'host/one',
-      worktreeId: 'repo::/Users/ada/orca/workspaces/fix #1',
-      name: 'Fix #1'
+      worktreeId: 'repo::/tmp/wt',
+      standalone: true
     })
 
-    navigateToHostStackRoute(harness.navigation, { push, replace: vi.fn() }, 'host/one', target)
-
-    expect(push).toHaveBeenCalledWith(hostStackHostRoute('host/one'))
-    expect(harness.navigation.dispatch).not.toHaveBeenCalled()
-
+    navigateToHostStackRoute(
+      harness.navigation,
+      { push: vi.fn(), replace: vi.fn() },
+      'host/one',
+      target
+    )
     harness.setState(mountedHostState('host/one'))
 
-    expect(harness.navigation.dispatch).toHaveBeenCalledWith({
-      type: 'REPLACE',
-      target: '/h',
-      source: 'host-index',
-      payload: target
-    })
+    expect(harness.navigation.dispatch.mock.calls).toEqual([
+      [
+        {
+          type: 'REPLACE',
+          target: '/h',
+          source: 'host-index',
+          payload: {
+            name: '[hostId]/session/[worktreeId]',
+            params: { hostId: 'host/one', worktreeId: 'repo::/tmp/wt', standalone: '1' }
+          }
+        }
+      ]
+    ])
   })
 })

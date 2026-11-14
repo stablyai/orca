@@ -1,26 +1,28 @@
-import { normalizeExplorerDisplayRootByWorktree } from '../../../../../shared/file-explorer-display-root'
+import { isProjectGroupHookTrustKey } from '../../../../../shared/workspace-hook-owner'
+import { normalizeExplorerDisplayRootByWorktree } from '../../../../../shared/file-listing/file-explorer-display-root'
 import type { AppState } from '../../types'
 import type { PersistedTrustedOrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
 import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
 import type {
+  ActivityBarPosition,
   TaskViewPresetId,
   TopLevelView,
   VisibleWorkspaceHostIds,
   StatusBarItem
 } from '../../../../../shared/ui-chrome-types'
-import type { WorkspaceCleanupDismissal } from '../../../../../shared/workspace-cleanup'
-import { WORKSPACE_CLEANUP_CLASSIFIER_VERSION } from '../../../../../shared/workspace-cleanup'
-import { isTopLevelView } from '../../../../../shared/top-level-view'
+
 import {
-  normalizeVisibleExecutionHostIds,
-  normalizeExecutionHostScope
-} from '../../../../../shared/execution-host'
+  type WorkspaceCleanupDismissal,
+  WORKSPACE_CLEANUP_CLASSIFIER_VERSION
+} from '../../../../../shared/workspace-cleanup/workspace-cleanup'
+import { isTopLevelView } from '../../../../../shared/top-level-view'
+import { AGENT_STATUS_HYDRATE_MAX_AGE_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
+import { resolveVisibleWorkspaceHostIds } from '../../../../../shared/workspace-view/workspace-host-visibility'
 import { persistedUIValuesEqual } from '../../../../../shared/persisted-ui-equality'
 import { DEFAULT_STATUS_BAR_ITEMS } from '../../../../../shared/constants'
 import type { UISlice } from './ui-slice-contract'
 
 const MIN_SIDEBAR_WIDTH = 220
-const HYDRATE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
 
 export function preserveStringArrayIdentity<T extends string>(
   current: readonly T[] | null,
@@ -73,7 +75,7 @@ export function hydrateTrustedOrcaHooks(
   }
   const next: PersistedTrustedOrcaHooks = {}
   for (const [repoId, entry] of Object.entries(sanitized)) {
-    if (validRepoIds.has(repoId)) {
+    if (validRepoIds.has(repoId) || isProjectGroupHookTrustKey(repoId)) {
       next[repoId] = entry
     }
   }
@@ -105,9 +107,14 @@ export function sanitizePersistedSidebarWidth(
   return Math.min(maxWidth, Math.max(MIN_SIDEBAR_WIDTH, width))
 }
 
+// Any other value would hide the activity bar entirely, since the layout renders only Top or Side.
+export function sanitizeActivityBarPosition(position: unknown): ActivityBarPosition {
+  return position === 'side' ? 'side' : 'top'
+}
+
 export function sanitizePaneKeyTimestampRecord(
   value: unknown,
-  maxAgeMs: number = HYDRATE_MAX_AGE_MS
+  maxAgeMs: number = AGENT_STATUS_HYDRATE_MAX_AGE_MS
 ): Record<string, number> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     return {}
@@ -128,12 +135,9 @@ export function sanitizePaneKeyTimestampRecord(
 
 export const sanitizeAcknowledgedAgentsByPaneKey = sanitizePaneKeyTimestampRecord
 
-/** Cleared-at cutoffs must outlive any persisted status entry they guard: main prunes entries
- *  at HYDRATE_MAX_AGE_MS from receivedAt, and cutoff values trail receipt time, so pruning them
- *  on the same clock can resurrect a cleared entry. Double the TTL keeps the guard alive past
- *  every entry it can still shadow. */
+/** Cutoffs trail status receipt times; double the status TTL so pruning cannot resurrect a cleared entry still retained by main. */
 export function sanitizeActivityClearedAtByPaneKey(value: unknown): Record<string, number> {
-  return sanitizePaneKeyTimestampRecord(value, 2 * HYDRATE_MAX_AGE_MS)
+  return sanitizePaneKeyTimestampRecord(value, 2 * AGENT_STATUS_HYDRATE_MAX_AGE_MS)
 }
 
 export function sanitizeWorkspaceCleanupDismissals(
@@ -192,12 +196,7 @@ export function hydratedUIPartialMatchesState(
 export function normalizeHydratedVisibleWorkspaceHostIds(
   ui: PersistedUIState
 ): VisibleWorkspaceHostIds {
-  const visibleHostIds = normalizeVisibleExecutionHostIds(ui.visibleWorkspaceHostIds)
-  if (visibleHostIds) {
-    return visibleHostIds
-  }
-  const legacyScope = normalizeExecutionHostScope(ui.workspaceHostScope)
-  return legacyScope === 'all' ? null : [legacyScope]
+  return resolveVisibleWorkspaceHostIds(ui.visibleWorkspaceHostIds, ui.workspaceHostScope)
 }
 
 export function clampPetSize(

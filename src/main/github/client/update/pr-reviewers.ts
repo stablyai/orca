@@ -1,6 +1,37 @@
-import { invalidateReviewLookupsAfterPRMutation } from '../../pr-mutation-review-invalidation'
-import { ghExecFileAsync, acquire, release, type LocalGitExecOptions } from '../../gh-utils'
-import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
+import { invalidateReviewLookupsAfterPRMutation } from '../../pull-requests/refresh/pr-mutation-review-invalidation'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { acquire, release } from '../../execution/github-operation-slots'
+import type { LocalGitExecOptions } from '../../repositories/github-repository-identity'
+import { resolveGitHubRepoExecution } from '../../repositories/github-api-repository'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
+import { codeHostFailure } from '../../../../shared/code-host-failure-copy'
+
+function reviewerUpdateArgs(
+  repository: GitHubApiRepository,
+  prNumber: number,
+  logins: string[],
+  operation: 'add' | 'remove'
+): string[] {
+  if (logins.every((login) => /^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/i.test(login))) {
+    return [
+      'api',
+      '-X',
+      operation === 'add' ? 'POST' : 'DELETE',
+      `repos/${repository.owner}/${repository.repo}/pulls/${prNumber}/requested_reviewers`,
+      ...logins.flatMap((login) => ['--raw-field', `reviewers[]=${login}`])
+    ]
+  }
+  return [
+    'pr',
+    'edit',
+    String(prNumber),
+    operation === 'add' ? '--add-reviewer' : '--remove-reviewer',
+    logins.join(','),
+    '--repo',
+    `${repository.owner}/${repository.repo}`
+  ]
+}
+
 export async function requestPRReviewers(
   repoPath: string,
   prNumber: number,
@@ -11,7 +42,7 @@ export async function requestPRReviewers(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const logins = reviewers.map((reviewer) => reviewer.trim()).filter(Boolean)
   if (logins.length === 0) {
-    return { ok: false, error: 'Enter at least one reviewer' }
+    return codeHostFailure('github.reviewerRequired')
   }
   const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
     repoPath,
@@ -20,25 +51,22 @@ export async function requestPRReviewers(
     localGitOptions
   )
   if (!ownerRepo) {
-    return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
+    return codeHostFailure('github.repoUnresolved')
   }
   await acquire()
   try {
-    const args = ['pr', 'edit', String(prNumber), '--add-reviewer', logins.join(',')]
-    if (ownerRepo) {
-      args.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
-    }
+    const args = reviewerUpdateArgs(ownerRepo, prNumber, logins, 'add')
     await ghExecFileAsync(args, {
       ...ghOptions,
       env: { ...process.env, GH_PROMPT_DISABLED: '1' }
     })
-    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     return { ok: true }
   } catch (err) {
     const message =
       err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
     return { ok: false, error: message }
   } finally {
+    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     release()
   }
 }
@@ -53,7 +81,7 @@ export async function removePRReviewers(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const logins = reviewers.map((reviewer) => reviewer.trim()).filter(Boolean)
   if (logins.length === 0) {
-    return { ok: false, error: 'Enter at least one reviewer' }
+    return codeHostFailure('github.reviewerRequired')
   }
   const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
     repoPath,
@@ -62,25 +90,22 @@ export async function removePRReviewers(
     localGitOptions
   )
   if (!ownerRepo) {
-    return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
+    return codeHostFailure('github.repoUnresolved')
   }
   await acquire()
   try {
-    const args = ['pr', 'edit', String(prNumber), '--remove-reviewer', logins.join(',')]
-    if (ownerRepo) {
-      args.push('--repo', `${ownerRepo.owner}/${ownerRepo.repo}`)
-    }
+    const args = reviewerUpdateArgs(ownerRepo, prNumber, logins, 'remove')
     await ghExecFileAsync(args, {
       ...ghOptions,
       env: { ...process.env, GH_PROMPT_DISABLED: '1' }
     })
-    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     return { ok: true }
   } catch (err) {
     const message =
       err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
     return { ok: false, error: message }
   } finally {
+    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     release()
   }
 }

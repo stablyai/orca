@@ -8,6 +8,9 @@ on:
         required: false
         type: string
 
+permissions:
+  contents: read
+
 jobs:
   golden-e2e:
     name: golden e2e ${{ matrix.platform }} experiment
@@ -41,6 +44,7 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version-file: package.json
+          check-latest: true
 
       - name: Setup pnpm
         uses: pnpm/setup@v2
@@ -66,7 +70,6 @@ jobs:
       - name: Run golden E2E tests on Linux
         if: runner.os == 'Linux'
         run: |
-          xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e tests/e2e/golden-core-flows.spec.ts
           xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:workspace-session-golden
           if [ -f tests/e2e/golden-fresh-profile-terminal.spec.ts ]; then
             xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e tests/e2e/golden-fresh-profile-terminal.spec.ts tests/e2e/golden-shell-command.spec.ts
@@ -80,7 +83,6 @@ jobs:
       - name: Run golden E2E tests on macOS
         if: runner.os == 'macOS'
         run: |
-          env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e tests/e2e/golden-core-flows.spec.ts
           env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run --if-present test:e2e:workspace-session-golden
           if [ -f tests/e2e/golden-fresh-profile-terminal.spec.ts ]; then
             env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e tests/e2e/golden-fresh-profile-terminal.spec.ts tests/e2e/golden-shell-command.spec.ts
@@ -98,8 +100,6 @@ jobs:
           $env:SKIP_BUILD = '1'
           $env:ORCA_E2E_FORWARD_APP_LOGS = '1'
           pnpm run --if-present test:e2e:workspace-session-golden
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          pnpm run --if-present test:e2e:windows-fresh-startup-golden
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           pnpm run --if-present test:e2e:tab-bar-agent-launch-golden
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

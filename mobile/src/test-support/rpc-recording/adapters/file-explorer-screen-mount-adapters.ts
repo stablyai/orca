@@ -1,31 +1,27 @@
+import type * as FileExplorerScreenModule from '../../../files/explorer/MobileFileExplorerPanel'
 import { createElement } from 'react'
 import { projectMountedScreen, renderedElementProps, screenMount } from '../mounted-screen-tree'
 import { mountFixture } from '../recorder-fixture-shape'
 import { hostClientContextExposure, loadHostClientContext } from '../host-client-context-exposure'
 import type { OperationExposure, operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
-import type { RpcClientContextValue } from '../../../transport/rpc-client-context-contract'
+import type { RpcClientContextValue } from '../../../transport/connection/rpc-client-context-contract'
 
 const HOST = 'host-1'
 const WORKTREE = 'wt-files'
 
-/**
- * The panel reads its client through the shared host-client context, whose handle is module-private
- * in `client-context.tsx`. Exposing it mounts the real `useHostClient` — acquire, subscribe,
- * release — over a scripted client, instead of reconstructing the hook against a prop.
- */
+// Expose context to run the real client acquire/subscribe/release lifecycle over the scripted connection.
 export const fileExplorerScreenMountExposures: readonly OperationExposure[] = [
   hostClientContextExposure
 ]
 
-/** The mobile files tab: the directory read, and the capped legacy list it falls back to. */
 export function fileExplorerScreenMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
   return {
     'files.explorer-screen': ({ client, effect }) => {
-      const Panel = modules.load<typeof import('../../../files/MobileFileExplorerPanel')>(
-        'mobile/src/files/MobileFileExplorerPanel.tsx'
+      const Panel = modules.load<typeof FileExplorerScreenModule>(
+        'mobile/src/files/explorer/MobileFileExplorerPanel.tsx'
       ).MobileFileExplorerPanel
       const hostClientContext = loadHostClientContext(modules)
       const context = mountFixture<RpcClientContextValue>({
@@ -35,8 +31,7 @@ export function fileExplorerScreenMountAdapters(
         getClientId: () => 'client-1',
         getAllClients: () => [{ hostId: HOST, client }],
         subscribeHostState: () => () => {},
-        // A reconnect is the screen reaching past the socket the recording scripts, so it is
-        // recorded rather than performed.
+        // Record reconnect intent without reaching a real socket beyond the scripted transport.
         forceReconnect: (hostId) => {
           effect('host-client.force-reconnect', { hostId })
           return Promise.resolve()
@@ -66,8 +61,7 @@ export function fileExplorerScreenMountAdapters(
         },
         state: () => ({
           ...projectMountedScreen(screen),
-          // The inert list never calls `renderItem`, so the rows it was handed are the only
-          // record of what the screen would have drawn.
+          // The inert list never renders rows; observe its data as the screen’s projection.
           rows: renderedElementProps(screen.tree(), 'FlatList').flatMap((props) =>
             Array.isArray(props.data)
               ? props.data.map((row: { id?: unknown }) => row?.id)

@@ -1,21 +1,37 @@
-import { getStoredRepoSshConnectionId } from '../../repo-execution-host'
 import { ipcMain } from 'electron'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoDialableSshTargetId,
+  isRepoOnCatalogHost,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
+import { scopeHooksToRepoKind } from '../../../shared/folder-workspace-hooks'
 import { isFolderRepo } from '../../../shared/repo-kind'
-import { hasHooksFile, loadHooks, hasUnrecognizedOrcaYamlKeys } from '../../hooks'
+import { hasHooksFile, loadHooks, hasUnrecognizedOrcaYamlKeys } from '../../workspace-hooks/hooks'
 import { resolveRepoForExecutionHost } from '../worktrees/repo-host-ownership'
+import { blockedWslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
 import type { WorktreeIpcContext } from '../worktrees/worktree-ipc-context'
+import type { SetupHooksCreateSource } from '../../../shared/worktree/setup-hooks-create-source'
+import { readCreateSourceSetupHooks } from '../../workspace-hooks/create-source-setup-hooks'
+import { getWorktreeCreatePrefetchGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 
 export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): void {
-  const { store } = context
+  const { store, runtime } = context
 
   ipcMain.handle(
     'hooks:check',
-    async (_event, args: { repoId: string; hostId?: ExecutionHostId }) => {
+    async (
+      _event,
+      args: {
+        repoId: string
+        hostId?: ExecutionHostId
+        background?: boolean
+        createSource?: SetupHooksCreateSource
+      }
+    ) => {
       const repo = resolveRepoForExecutionHost(store, args.repoId, args.hostId)
       if (!repo) {
         const repoIdExists = store.getRepos().some((candidate) => candidate.id === args.repoId)
-        // Why: callers treat inspection errors as "skip", so a requested/ambiguous host must report error (fail closed), not hook-free.
+        // Ambiguous/requested hosts must report error, not hook-free success, so callers cannot skip inspection.
         return {
           status: args.hostId || repoIdExists ? 'error' : 'ok',
           hasHooks: false,
@@ -23,12 +39,12 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
           mayNeedUpdate: false
         }
       }
-      if (isFolderRepo(repo)) {
+      // A folder owned by another host has no hooks here; its own host reports them.
+      if (isFolderRepo(repo) && !isRepoOnCatalogHost(repo)) {
         return { status: 'ok', hasHooks: false, hooks: null, mayNeedUpdate: false }
       }
 
-      if (getStoredRepoSshConnectionId(repo)) {
-        // Why: this process serves no SSH filesystem.
+      if (getRepoDialableSshTargetId(repo)) {
         return {
           status: 'error',
           hasHooks: false,
@@ -37,9 +53,42 @@ export function registerWorktreeHookCheckHandler(context: WorktreeIpcContext): v
         }
       }
 
+      // A render-driven check must not open a stopped distro's `\\wsl.localhost` paths (E9).
+      const blocked = args.background ? await blockedWslDistroForPath(repo.path) : null
+      if (blocked) {
+        return {
+          status: 'error',
+          hasHooks: false,
+          hooks: null,
+          mayNeedUpdate: false,
+          // A stopped distro answers once it runs again; an unverifiable one is worth a retry.
+          unavailable:
+            blocked.state === 'stopped'
+              ? ('wsl-distro-stopped' as const)
+              : ('wsl-distro-unverifiable' as const)
+        }
+      }
+
+      if (args.createSource && !args.background) {
+        const created = await readCreateSourceSetupHooks({
+          repo,
+          source: args.createSource,
+          runtime,
+          gitOptions: getWorktreeCreatePrefetchGitOptions(store, repo)
+        })
+        if (created) {
+          return {
+            status: 'ok',
+            hasHooks: created.hooks !== null,
+            hooks: created.hooks,
+            mayNeedUpdate: false
+          }
+        }
+      }
+
       const has = hasHooksFile(repo.path)
-      const hooks = has ? loadHooks(repo.path) : null
-      // Why: unrecognised top-level keys mean the file is well-formed but from a newer Orca; suggest updating rather than "could not be parsed".
+      const hooks = scopeHooksToRepoKind(repo, has ? loadHooks(repo.path) : null)
+      // Well-formed unknown keys may come from a newer Orca; suggest updating instead of parse repair.
       const mayNeedUpdate = has && !hooks && hasUnrecognizedOrcaYamlKeys(repo.path)
       return {
         status: 'ok',

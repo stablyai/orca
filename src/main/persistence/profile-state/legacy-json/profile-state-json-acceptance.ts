@@ -1,14 +1,14 @@
-import { withProfileStateWriteTransaction } from '../profile-state-write-transaction'
+import { withProfileStateWriteTransaction } from '../database/profile-state-write-transaction'
 import type Database from '../../../sqlite/sync-database'
-import { PROFILE_STATE_META_LEGACY_JSON_ACCEPTANCE } from '../profile-state-database-schema'
+import { PROFILE_STATE_META_LEGACY_JSON_ACCEPTANCE } from '../database/profile-state-database-schema'
 import {
   hashProfileStatePayload,
   isRecord,
   parseProfileStateRoot,
   ProfileStateDocumentCorruptionError,
   ProfileStateRevisionConflictError
-} from '../profile-state-document-validation'
-import { readProfileStateRevision } from '../profile-state-revision'
+} from '../documents/profile-state-document-validation'
+import { readProfileStateRevision } from '../database/profile-state-revision'
 
 type ProfileStateJsonAcceptanceVersion = {
   jsonHash: string
@@ -19,7 +19,6 @@ export type ProfileStateJsonAcceptance = ProfileStateJsonAcceptanceVersion & {
   pending?: ProfileStateJsonAcceptanceVersion
 }
 
-/** Read the source acceptance marker, if this database has one. */
 export function readProfileStateJsonAcceptance(
   db: Database.Database
 ): ProfileStateJsonAcceptance | undefined {
@@ -69,7 +68,7 @@ function isJsonAcceptanceVersion(value: unknown): value is ProfileStateJsonAccep
   )
 }
 
-/** Accept either side of the upcoming JSON replacement before publishing it. */
+/** Accept both old and replacement JSON before publication. */
 export function stageProfileStateRecoveryJson(
   db: Database.Database,
   rawJson: string,
@@ -99,7 +98,7 @@ export function stageProfileStateRecoveryJson(
   })
 }
 
-/** Promote the staged JSON after publication; failures leave both versions accepted. */
+/** Publish acceptance after replacement; failures keep both versions accepted. */
 export function acceptProfileStateRecoveryJson(
   db: Database.Database,
   rawJson: string,

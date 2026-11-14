@@ -1,20 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  isBackgroundRuntimeMethod,
-  RuntimeRpcCallQueueOverloadError,
-  RuntimeRpcCallQueuePool
-} from './runtime-rpc-call-queue'
+import { RuntimeRpcCallQueueOverloadError, RuntimeRpcCallQueuePool } from './runtime-rpc-call-queue'
 
 describe('runtime RPC call queue', () => {
-  it('classifies per-worktree decoration lookups as background work', () => {
-    expect(isBackgroundRuntimeMethod('github.prForBranch')).toBe(true)
-    expect(isBackgroundRuntimeMethod('hostedReview.forBranch')).toBe(true)
-    expect(isBackgroundRuntimeMethod('worktree.prefetchCreateBase')).toBe(true)
-    expect(isBackgroundRuntimeMethod('terminal.send')).toBe(false)
-    expect(isBackgroundRuntimeMethod('terminal.agentStatus')).toBe(false)
-    expect(isBackgroundRuntimeMethod('worktree.create')).toBe(false)
-  })
-
   it('limits background calls while allowing foreground runtime work through', async () => {
     const queue = new RuntimeRpcCallQueuePool(2, 1)
     const started: string[] = []
@@ -87,6 +74,30 @@ describe('runtime RPC call queue', () => {
       resolve()
     }
     await expect(Promise.all(waits)).resolves.toEqual(Array(8).fill('listed'))
+  })
+
+  it('keeps terminal input moving while byte-range reads fill their own small lane', async () => {
+    const queue = new RuntimeRpcCallQueuePool(8, 2)
+    const release: (() => void)[] = []
+    const reads = Array.from({ length: 6 }, () =>
+      queue.enqueue('web-runtime', 'files.readChunk', async () => {
+        await new Promise<void>((resolve) => release.push(resolve))
+        return 'chunk'
+      })
+    )
+    // Two at a time, however many viewers ask.
+    await vi.waitFor(() => expect(release).toHaveLength(2))
+
+    const send = queue.enqueue('web-runtime', 'terminal.send', async () => 'sent')
+    await expect(send).resolves.toBe('sent')
+    expect(release).toHaveLength(2)
+
+    for (let finished = 0; finished < 6; finished += 1) {
+      await vi.waitFor(() => expect(release.length).toBeGreaterThan(0))
+      expect(release.length).toBeLessThanOrEqual(2)
+      release.shift()?.()
+    }
+    await expect(Promise.all(reads)).resolves.toEqual(Array(6).fill('chunk'))
   })
 
   it('frees the queue slot when a runtime call throws synchronously', async () => {
@@ -233,4 +244,69 @@ describe('runtime RPC call queue', () => {
       queue.enqueue('runtime-b', 'status.get', async () => 'recovered', 10)
     ).resolves.toBe('recovered')
   })
+})
+
+it('keeps actions and status runnable while timed PR snapshots wait', async () => {
+  const pool = new RuntimeRpcCallQueuePool()
+  const release = Promise.withResolvers<void>()
+  const started: string[] = []
+  const timers = [0, 1, 2].map((row) =>
+    pool.enqueue(
+      'host',
+      'github.prForBranch',
+      async () => {
+        started.push(`timer-${row}`)
+        await release.promise
+      },
+      0,
+      undefined,
+      { reason: 'swr' }
+    )
+  )
+  expect(started).toEqual(['timer-0', 'timer-1'])
+  for (const reason of ['manual', 'active', 'post-push', 'visible', undefined, 'swr']) {
+    await expect(
+      pool.enqueue('host', 'github.prForBranch', async () => 'current', 0, undefined, {
+        reason,
+        userRefresh: reason === 'swr'
+      })
+    ).resolves.toBe('current')
+  }
+  await expect(pool.enqueue('host', 'git.status', async () => 'clean')).resolves.toBe('clean')
+  await expect(pool.enqueue('host', 'hostedReview.forBranch', async () => 'review')).resolves.toBe(
+    'review'
+  )
+  expect(started).toEqual(['timer-0', 'timer-1'])
+  release.resolve()
+  await Promise.all(timers)
+  expect(started).toEqual(['timer-0', 'timer-1', 'timer-2'])
+})
+
+it('shares pending and byte limits across ordinary and timed PR lanes and removes cancelled calls', async () => {
+  const pool = new RuntimeRpcCallQueuePool(1, 1, 1, 5, 4)
+  const release = Promise.withResolvers<void>()
+  const active = pool.enqueue('host', 'github.prForBranch', () => release.promise, 1, undefined, {
+    reason: 'swr'
+  })
+  const controller = new AbortController()
+  const queued = pool.enqueue(
+    'host',
+    'github.prForBranch',
+    async () => 'unused',
+    1,
+    controller.signal,
+    { reason: 'swr' }
+  )
+  await expect(pool.enqueue('host', 'git.status', async () => 'overflow')).rejects.toMatchObject({
+    scope: 'selector'
+  })
+  const cancelled = expect(queued).rejects.toMatchObject({ name: 'AbortError' })
+  controller.abort()
+  await cancelled
+  await expect(pool.enqueue('host', 'git.status', async () => 'clean', 3)).resolves.toBe('clean')
+  await expect(pool.enqueue('host', 'git.status', async () => 'oversize', 4)).rejects.toMatchObject(
+    { scope: 'memory' }
+  )
+  release.resolve()
+  await active
 })

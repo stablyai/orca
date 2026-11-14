@@ -1,74 +1,49 @@
 // @vitest-environment happy-dom
 
+// @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { expect, it } from 'vitest'
 import { useTaskCreationDraftRetention } from './use-task-creation-draft-retention'
 
-type Draft = { title: string; body: string }
+import { store } from './task-page/linear/issue-refresh/task-page-linear-refresh-test-fixtures'
 
-const emptyDraft = (): Draft => ({ title: '', body: '' })
+import {
+  writeNewLinearProjectDraft,
+  writeNewJiraIssueDraft
+} from './task-page/task-page-draft-storage'
 
-describe('useTaskCreationDraftRetention', () => {
-  it('does not fan out writes while typing and saves the latest text on dismissal', () => {
-    const writeDraft = vi.fn()
-    const view = renderHook(
-      ({ open, draft }) => useTaskCreationDraftRetention({ open, draft, writeDraft }),
-      { initialProps: { open: true, draft: emptyDraft() } }
-    )
-
-    view.rerender({ open: true, draft: { title: 'Bug', body: '' } })
-    view.rerender({ open: true, draft: { title: 'Bug', body: 'Latest details' } })
-
-    expect(writeDraft).not.toHaveBeenCalled()
-
-    view.rerender({ open: false, draft: emptyDraft() })
-
-    expect(writeDraft).toHaveBeenCalledOnce()
-    expect(writeDraft).toHaveBeenCalledWith({ title: 'Bug', body: 'Latest details' })
+it('project and Jira immediate discard keep their actual plain session slots cleared through close', () => {
+  const s = store()
+  const view = renderHook(
+    ({ open }) => ({
+      project: useTaskCreationDraftRetention({
+        open,
+        draft: { name: 'Project', description: 'Summary', content: 'Brief' },
+        writeDraft: writeNewLinearProjectDraft
+      }),
+      jira: useTaskCreationDraftRetention({
+        open,
+        draft: { title: 'Jira', body: 'Details' },
+        writeDraft: writeNewJiraIssueDraft
+      })
+    }),
+    { initialProps: { open: true } }
+  )
+  view.rerender({ open: false })
+  expect(s.getState().newLinearProjectDraft).toEqual({
+    name: 'Project',
+    description: 'Summary',
+    content: 'Brief'
   })
-
-  it('saves the latest text when an open composer unmounts', () => {
-    const writeDraft = vi.fn()
-    const view = renderHook(
-      ({ draft }) => useTaskCreationDraftRetention({ open: true, draft, writeDraft }),
-      { initialProps: { draft: { title: 'First', body: '' } } }
-    )
-    view.rerender({ draft: { title: 'Latest', body: 'Details' } })
-
-    view.unmount()
-
-    expect(writeDraft).toHaveBeenCalledOnce()
-    expect(writeDraft).toHaveBeenCalledWith({ title: 'Latest', body: 'Details' })
+  expect(s.getState().newJiraIssueDraft).toEqual({ title: 'Jira', body: 'Details' })
+  view.rerender({ open: true })
+  act(() => {
+    view.result.current.project()
+    view.result.current.jira()
   })
-
-  it('clears a successful draft without resurrecting it during close cleanup', () => {
-    const writeDraft = vi.fn()
-    const view = renderHook(
-      ({ open }) =>
-        useTaskCreationDraftRetention({
-          open,
-          draft: { title: 'Created', body: 'Details' },
-          writeDraft
-        }),
-      { initialProps: { open: true } }
-    )
-
-    act(() => view.result.current())
-    view.rerender({ open: false })
-    view.unmount()
-
-    expect(writeDraft).toHaveBeenCalledOnce()
-    expect(writeDraft).toHaveBeenCalledWith(null)
-  })
-
-  it('does not create a draft when an unopened composer unmounts', () => {
-    const writeDraft = vi.fn()
-    const view = renderHook(() =>
-      useTaskCreationDraftRetention({ open: false, draft: emptyDraft(), writeDraft })
-    )
-
-    view.unmount()
-
-    expect(writeDraft).not.toHaveBeenCalled()
-  })
+  view.rerender({ open: true })
+  view.rerender({ open: false })
+  view.unmount()
+  expect(s.getState().newLinearProjectDraft).toBeNull()
+  expect(s.getState().newJiraIssueDraft).toBeNull()
 })

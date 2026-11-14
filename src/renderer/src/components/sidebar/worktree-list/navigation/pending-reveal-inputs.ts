@@ -1,26 +1,45 @@
+import { supersedeVirtualizedScrollAnchorRestore } from '@/hooks/requestVirtualizedScrollAnchorRecord'
+import { getSidebarRowRevealAncestorKeys } from './reveal-ancestors'
+import type { WorktreeOccurrencePlan } from '../../../../../../shared/worktree-occurrence-plan'
 import type React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import type { AppState } from '@/store/types'
-import type { PendingSidebarRowReveal, PendingSidebarWorktreeReveal } from '@/store/slices/ui'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
+import type {
+  PendingSidebarRowReveal,
+  PendingSidebarWorktreeReveal
+} from '@/store/slices/ui/ui-slice-contract-core'
+import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
+import type { SidebarLineageParentIdentities } from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { RenderRow } from '../listing/render-row'
 import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
-import type { PinnedWorktreeDisplayPolicy, WorktreeGroupBy } from '../grouping/row-types'
-import { getFolderWorkspaceRevealGroupKeys } from './folder-reveal'
+import type {
+  PinnedWorktreeDisplayPolicy,
+  WorktreeGroupBy
+} from '../../../../../../shared/sidebar-list/row-types'
+import { getFolderWorkspaceRevealGroupKeys, sidebarWorkspaceStillExists } from './folder-reveal'
+import {
+  findPreferredRenderRowIndexForWorktree,
+  findPreferredRenderRowIndexForWorktreeIdentity,
+  rowKeyMatchesRenderRow
+} from './render-row-lookup'
 import { getWorktreeRevealCollapsedGroupKeys } from './worktree-reveal-group-keys'
+import { useAppStore } from '@/store'
+import { indexHiddenProjects } from '../../../../../../shared/hidden-projects'
 
 export const MAX_REVEAL_RETRIES = 8
 
 export type PendingSidebarRevealArgs = {
+  occurrencePlan?: WorktreeOccurrencePlan<Worktree>
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null
   pendingRevealSidebarRow: PendingSidebarRowReveal | null
-  clearPendingRevealWorktreeId: () => void
-  clearPendingRevealSidebarRow: () => void
+  clearPendingRevealWorktreeId: (expected?: PendingSidebarWorktreeReveal | null) => void
+  clearPendingRevealSidebarRow: (expected?: PendingSidebarRowReveal | null) => void
   agentSendTargetWorktreeId: string | null
   renderRows: RenderRow[]
   virtualizer: Virtualizer<HTMLDivElement, HTMLDivElement>
@@ -30,6 +49,7 @@ export type PendingSidebarRevealArgs = {
   repoMap: Map<string, Repo>
   worktreeMap: Map<string, Worktree>
   worktreeLineageById: Record<string, WorktreeLineage>
+  lineageParentIdentities?: SidebarLineageParentIdentities
   collapsedGroups: Set<string>
   toggleGroup: (key: string) => void
   groupBy: WorktreeGroupBy
@@ -46,7 +66,6 @@ export type PendingSidebarRevealArgs = {
   cancelPendingRevealFrames: () => void
 }
 
-// Expand whatever collapsed section hides the reveal target, then scroll to it.
 export function expandGroupsForWorktreeReveal(
   args: PendingSidebarRevealArgs,
   worktreeId: string,
@@ -100,4 +119,91 @@ export function resolvePendingSidebarReveal(args: {
     return 'scroll-and-clear'
   }
   return args.targetWorktreeStillExists ? 'keep-pending' : 'clear'
+}
+
+// A hidden project's rows never render, so waiting for one would hold the request until unhide.
+function isRevealTargetInHiddenProject(
+  worktrees: readonly Worktree[],
+  defaultHostId: ExecutionHostId,
+  request: PendingSidebarWorktreeReveal
+): boolean {
+  const target = worktrees.find(
+    (worktree) =>
+      worktree.id === request.worktreeId &&
+      (!request.executionHostId || !worktree.hostId || worktree.hostId === request.executionHostId)
+  )
+  // The sidebar's own default host, so the reveal and the rows agree on unstamped rows.
+  return (
+    target !== undefined &&
+    indexHiddenProjects(useAppStore.getState().repos, defaultHostId).isRowHidden({
+      repoId: target.repoId,
+      hostId: target.hostId ?? request.executionHostId
+    })
+  )
+}
+
+export function resolvePendingWorktreeRevealTarget(
+  args: Pick<
+    PendingSidebarRevealArgs,
+    'renderRows' | 'worktrees' | 'folderWorkspaces' | 'pinnedDisplayPolicy' | 'defaultHostId'
+  >,
+  request: PendingSidebarWorktreeReveal
+) {
+  const rowKey = request.rowKey
+  const targetIndex = rowKey
+    ? args.renderRows.findIndex((row) => rowKeyMatchesRenderRow(row, rowKey))
+    : request.executionHostId
+      ? findPreferredRenderRowIndexForWorktreeIdentity(
+          args.renderRows,
+          { id: request.worktreeId, hostId: request.executionHostId },
+          args.pinnedDisplayPolicy
+        )
+      : findPreferredRenderRowIndexForWorktree(
+          args.renderRows,
+          request.worktreeId,
+          args.pinnedDisplayPolicy
+        )
+  const outcome = rowKey
+    ? targetIndex === -1
+      ? 'clear'
+      : 'scroll-and-clear'
+    : resolvePendingSidebarReveal({
+        targetIndex,
+        targetWorktreeStillExists:
+          sidebarWorkspaceStillExists(
+            request.worktreeId,
+            args.worktrees,
+            selectFolderWorkspaces(args),
+            request.executionHostId
+          ) && !isRevealTargetInHiddenProject(args.worktrees, args.defaultHostId, request)
+      })
+  return { targetIndex, outcome }
+}
+
+export function preparePendingSidebarRowReveal(
+  args: PendingSidebarRevealArgs,
+  request: PendingSidebarRowReveal
+): boolean {
+  const isProjectHeaderTarget =
+    request.rowKey.startsWith('project-group:') ||
+    request.rowKey.startsWith('project:') ||
+    request.rowKey.startsWith('repo:')
+  if (isProjectHeaderTarget && args.groupBy !== 'repo') {
+    return false
+  }
+
+  supersedeVirtualizedScrollAnchorRestore(args.scrollRef.current)
+  let toggledAncestor = false
+  for (const groupKey of getSidebarRowRevealAncestorKeys({
+    rowKey: request.rowKey,
+    repoMap: args.repoMap,
+    projectGroups: args.projectGroups,
+    projectGrouping: args.projectGrouping
+  })) {
+    if (args.collapsedGroups.has(groupKey)) {
+      args.toggleGroup(groupKey)
+      toggledAncestor = true
+    }
+  }
+  return !toggledAncestor
 }

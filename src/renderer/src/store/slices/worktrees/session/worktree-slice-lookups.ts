@@ -1,20 +1,24 @@
-import type { WorktreeSlice } from '../../worktree-helpers'
+import { captureWorkspaceTerminalNoticeRemoval } from '../../../terminals/retirement/terminal-notice-removal'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import { getTerminalActivationSpawnSuppression } from '../../terminal-activation-spawn-suppression'
+import { getTerminalActivationSpawnSuppression } from '../../../terminals/pty/terminal-activation-spawn-suppression'
 import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
 import { buildWorktreePurgeState } from '../teardown/worktree-purge-state'
-import { locateTerminalTab } from '../../../terminals/terminal-tab-location'
+import { locateTerminalTab } from '../../../terminals/ownership/terminal-tab-location'
 import {
   admitTerminalRecoveryRemount,
   nextTerminalRecoveryLedger,
   settledTerminalRecoveryLedger
-} from '../../../terminals/terminal-tab-recovery-ledger'
+} from '../../../terminals/pty/terminal-tab-recovery-ledger'
 import type {
   TerminalRecoveryRemountRequest,
   TerminalRecoveryRemountResult
-} from '../../../terminals/terminal-tab-recovery-ledger'
+} from '../../../terminals/pty/terminal-tab-recovery-ledger'
 import { settleAttentionRemovedBy } from '../../workspace-attention/attention-removal-follow-up'
+import { selectWorktreesByRepo } from '../../../workspaces/catalog/workspace-record-fields'
+import { flushPurgedWorkspaceEdits } from '../teardown/removed-workspace-unsaved-files'
+import { replaceRecordEntries, replaceTabBuckets } from '../../../keyed-record-transitions'
 
 export function createSetRenamingWorktreeId(
   set: WorktreeSliceSet,
@@ -45,9 +49,7 @@ export function createRemountTerminalTabForRecovery(
     }
     set((s) => {
       const location = locateTerminalTab(s.tabsByWorktree, tabId)
-      // Why re-admit inside the write: the caller's read happened before an
-      // async liveness probe, and a concurrent detector may have consumed the
-      // budget across it. Locating the row and spending its budget is one step.
+      // Re-admit inside write after async liveness probe; another detector may have spent the row’s budget meanwhile.
       const admission = admitTerminalRecoveryRemount(location?.tab, remountRequest)
       if (!location || !admission.admitted) {
         if (admission.admitted) {
@@ -63,9 +65,7 @@ export function createRemountTerminalTabForRecovery(
       const pendingStartup = s.pendingStartupByTabId[tabId]
       // Why: bump generation to remount a pane whose renderer died while its PTY stayed alive, so it reattaches, not spawns.
       const nextTabGeneration = (tab.generation ?? 0) + 1
-      // An external remount is not a heal attempt, so it writes no ledger. The
-      // generation bump alone supersedes any ledger already on the row, which
-      // is exactly right: an external remount IS a new trigger.
+      // External remount skips ledger admission/write; generation alone supersedes the old attempt as a new trigger.
       const recovery =
         remountRequest.trigger === 'external'
           ? tab.recovery
@@ -83,18 +83,13 @@ export function createRemountTerminalTabForRecovery(
       }
       result = { remounted: true, generation: recovery?.generation ?? 0 }
       return {
-        tabsByWorktree: {
-          ...s.tabsByWorktree,
-          [worktreeId]: nextTabs
-        },
+        tabsByWorktree: replaceTabBuckets(s.tabsByWorktree, [[worktreeId, nextTabs]]),
         ...(pendingStartup
           ? {
-              // Why: a remounted pane must own a distinct one-shot startup record so a stale
-              // pane cannot consume the successor's command during teardown.
-              pendingStartupByTabId: {
-                ...s.pendingStartupByTabId,
-                [tabId]: { ...pendingStartup }
-              }
+              // Remount needs a distinct startup record so stale-pane teardown cannot consume the successor’s command.
+              pendingStartupByTabId: replaceRecordEntries(s.pendingStartupByTabId, [
+                [tabId, { ...pendingStartup }]
+              ])
             }
           : {})
       }
@@ -120,7 +115,7 @@ export function createSettleTerminalTabRecovery(
       }
       const nextTabs = s.tabsByWorktree[worktreeId].slice()
       nextTabs[index] = { ...tab, recovery }
-      return { tabsByWorktree: { ...s.tabsByWorktree, [worktreeId]: nextTabs } }
+      return { tabsByWorktree: replaceTabBuckets(s.tabsByWorktree, [[worktreeId, nextTabs]]) }
     })
   }
 }
@@ -129,7 +124,7 @@ export function createAllWorktrees(
   _set: WorktreeSliceSet,
   get: WorktreeSliceGet
 ): WorktreeSlice['allWorktrees'] {
-  return () => Object.values(get().worktreesByRepo).flat()
+  return () => Object.values(selectWorktreesByRepo(get())).flat()
 }
 
 export function createGetKnownWorktreeById(
@@ -151,8 +146,22 @@ export function createPurgeWorktreeTerminalState(
     if (purgeableWorktreeTargets.length === 0) {
       return
     }
-    settleAttentionRemovedBy(set, get, () =>
-      set((s) => buildWorktreePurgeState(s, purgeableWorktreeTargets))
+    const retireNotices = captureWorkspaceTerminalNoticeRemoval(
+      get(),
+      purgeableWorktreeTargets.map((target) => (typeof target === 'string' ? target : target.id))
     )
+    // Why before the purge: delayed views must commit text the purge may offer back.
+    flushPurgedWorkspaceEdits(
+      get(),
+      purgeableWorktreeTargets.map((target) =>
+        typeof target === 'string' ? { id: target } : target
+      )
+    )
+    settleAttentionRemovedBy(set, get, () =>
+      get().updateAgentStatusState((s, changedPaneKeys) =>
+        buildWorktreePurgeState(s, purgeableWorktreeTargets, changedPaneKeys)
+      )
+    )
+    retireNotices(get())
   }
 }

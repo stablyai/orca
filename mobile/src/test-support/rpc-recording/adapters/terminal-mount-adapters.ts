@@ -1,3 +1,7 @@
+import type * as MobileTerminalQueryReplyModule from '../../../terminal/host-operations/mobile-terminal-query-reply'
+import type * as TerminalLiveAccessoryRawSendModule from '../../../terminal/live-input/terminal-live-accessory-raw-send'
+import type * as TerminalViewportRefitModule from '../../../terminal/viewport/terminal-viewport-refit'
+import type * as MobileTerminalOperations from '../../../terminal/host-operations/mobile-terminal-operations'
 import type { MountAdapter, MountContext } from '../recording-scenario'
 import { hookMount } from '../hook-mount'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -21,21 +25,14 @@ function terminalWebViewHandle(
   }
 }
 
-/**
- * Terminal input, the worker-takeover report it triggers, and the in-place viewport refit.
- *
- * Every send here is a request/response call; the `subscribe` and `sendUnsubscribe` ports these
- * files sit next to are a separate boundary and are not driven. The refit hook's resubscribe
- * fallback is recorded as an effect for the same reason — what the recording observes is that the
- * hook chose it, not what resubscribing does.
- */
+// Record request/reply input and refit; resubscribe is an observed choice, with stream execution outside this adapter.
 export function terminalMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
   return {
     'terminal.query-reply': ({ client }) => {
-      const send = modules.load<typeof import('../../../terminal/mobile-terminal-query-reply')>(
-        'mobile/src/terminal/mobile-terminal-query-reply.ts'
+      const send = modules.load<typeof MobileTerminalQueryReplyModule>(
+        'mobile/src/terminal/host-operations/mobile-terminal-query-reply.ts'
       ).sendMobileTerminalQueryReply
       const subscribed = new Set([HANDLE])
       let accepted: unknown = 'unsent'
@@ -48,6 +45,7 @@ export function terminalMountAdapters(
             connected: args.connected !== false,
             handle: String(args.handle ?? HANDLE),
             hostSupportsQueryReplyInput: args.supported !== false,
+            hostSupportsProgramStatus: true,
             subscribedTerminals: { has: (handle: string) => subscribed.has(handle) }
           }).then((value: unknown) => {
             accepted = value
@@ -58,14 +56,18 @@ export function terminalMountAdapters(
       }
     },
     'terminal.accessory-raw-send': ({ client }) => {
-      const send = modules.load<
-        typeof import('../../../terminal/terminal-live-accessory-raw-send')
-      >('mobile/src/terminal/terminal-live-accessory-raw-send.ts').sendTerminalLiveAccessoryRawBytes
+      const { terminalInputSend } = modules.load<typeof MobileTerminalOperations>(
+        'mobile/src/terminal/host-operations/mobile-terminal-operations.ts'
+      )
+      const send = modules.load<typeof TerminalLiveAccessoryRawSendModule>(
+        'mobile/src/terminal/live-input/terminal-live-accessory-raw-send.ts'
+      ).sendTerminalLiveAccessoryRawBytes
       let accepted: unknown = 'unsent'
       return {
         action: (_name, args) =>
           send({
             client,
+            sendTerminalUserInput: terminalInputSend.request,
             targetHandle: HANDLE,
             activeHandle: args.activeHandle === null ? null : String(args.activeHandle ?? HANDLE),
             activeSessionTabType: String(args.tabType ?? 'terminal'),
@@ -80,22 +82,9 @@ export function terminalMountAdapters(
         dispose: () => {}
       }
     },
-    'terminal.takeover-report': ({ client }) => {
-      const report = modules.load<
-        typeof import('../../../terminal/worker-terminal-takeover-report')
-      >('mobile/src/terminal/worker-terminal-takeover-report.ts')
-      // The per-client report window is module state; a fresh recording must not inherit one.
-      report.resetWorkerTerminalTakeoverReportsForTest()
-      return {
-        action: (_name, args) =>
-          report.reportWorkerTerminalUserInput(client, String(args.terminal ?? HANDLE)),
-        state: () => ({}),
-        dispose: report.resetWorkerTerminalTakeoverReportsForTest
-      }
-    },
     'terminal.viewport-refit': ({ client, effect }) => {
-      const useRefit = modules.load<typeof import('../../../terminal/terminal-viewport-refit')>(
-        'mobile/src/terminal/terminal-viewport-refit.ts'
+      const useRefit = modules.load<typeof TerminalViewportRefitModule>(
+        'mobile/src/terminal/viewport/terminal-viewport-refit.ts'
       ).useTerminalViewportRefit
       const terminalRefs = { current: new Map([[HANDLE, terminalWebViewHandle(effect, VIEWPORT)]]) }
       const viewportRef: { current: { cols: number; rows: number } | null } = { current: null }

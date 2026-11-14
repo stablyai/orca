@@ -49,6 +49,8 @@ export type ProjectSectionRepo = {
 export type ProjectSectionEntry<Item, R extends ProjectSectionRepo = Repo> = {
   label: string
   items: Item[]
+  /** Owning-project activity, when display placement files rows under another project. */
+  activityItems?: readonly Item[]
   repo?: R
   repoIds: Set<string>
 }
@@ -175,8 +177,7 @@ export function getProjectGroupingForRepo<R extends Pick<ProjectSectionRepo, 'di
       projectId: project.id
     }
   }
-  // Why: provisioned runtime copies and non-ambiguous checkouts follow project
-  // identity rather than path-scoped setup identity, so they stay in one project.
+  // Provisioned copies and unambiguous checkouts share project identity rather than path-scoped setup identity.
   return {
     key: `project:${project.id}`,
     label: project.displayName,
@@ -193,7 +194,25 @@ export function getProjectHeaderRevealTarget(
   return getProjectGroupingForRepo(repoId, repoMap, buildProjectGroupingIndex(projectGrouping))
 }
 
-/** Files `item` under its repo's project section, opening the section on first sight. */
+/** Actual membership, independent of where a lineage occurrence is displayed. */
+export function buildProjectOwnershipIndex<Item, R extends ProjectSectionRepo>(args: {
+  items: readonly Item[]
+  repoIdOf: (item: Item) => string
+  repoMap: ReadonlyMap<string, R>
+  projectIndex: ProjectGroupingIndex | null
+}): Map<string, { items: Item[]; repoIds: Set<string> }> {
+  const ownership = new Map<string, { items: Item[]; repoIds: Set<string> }>()
+  for (const item of args.items) {
+    const repoId = args.repoIdOf(item)
+    const key = getProjectGroupingForRepo(repoId, args.repoMap, args.projectIndex).key
+    const entry = ownership.get(key) ?? { items: [], repoIds: new Set<string>() }
+    entry.items.push(item)
+    entry.repoIds.add(repoId)
+    ownership.set(key, entry)
+  }
+  return ownership
+}
+
 function addItemToProjectSection<Item, R extends ProjectSectionRepo>(
   sections: Map<string, ProjectSectionEntry<Item, R>>,
   item: Item,
@@ -211,10 +230,7 @@ function addItemToProjectSection<Item, R extends ProjectSectionRepo>(
   section.repoIds.add(repoId)
 }
 
-/**
- * Opens the project section for a repo that has no rows to file, or joins the repo to the open one.
- * `requireRepo` skips repo ids missing from the catalog, which would otherwise read "Unknown".
- */
+/** Open empty repo sections; requireRepo skips missing catalog IDs instead of showing Unknown. */
 function ensureProjectSectionForRepo<Item, R extends ProjectSectionRepo>(
   sections: Map<string, ProjectSectionEntry<Item, R>>,
   repoId: string,
@@ -239,17 +255,15 @@ function ensureProjectSectionForRepo<Item, R extends ProjectSectionRepo>(
   })
 }
 
-/**
- * Project sections in header order, unlabelled (see withRepoSectionDisplayLabels): rows first, then
- * empty-project placeholders, notice rows' repos (opened with the notice's own repo if the catalog
- * lacks it), and repos with a workspace being created.
- */
+/** Build unlabelled sections: rows, placeholders, notice repos (with catalog fallback), then pending workspace repos.
+ * Header order is applied here; withRepoSectionDisplayLabels supplies labels. */
 export function buildProjectSections<
   Item extends ActivityItem,
   R extends ProjectSectionRepo
 >(args: {
   items: readonly Item[]
   repoIdOf: (item: Item) => string
+  displayRepoIdOf?: (item: Item) => string
   repoMap: ReadonlyMap<string, R>
   projectIndex: ProjectGroupingIndex | null
   placeholderRepoIds: Iterable<string>
@@ -260,23 +274,31 @@ export function buildProjectSections<
 }): [string, ProjectSectionEntry<Item, R>][] {
   const { repoMap, projectIndex } = args
   const sections = new Map<string, ProjectSectionEntry<Item, R>>()
+  const ownership = buildProjectOwnershipIndex(args)
   for (const item of args.items) {
-    addItemToProjectSection(sections, item, args.repoIdOf(item), repoMap, projectIndex)
+    const repoId = args.repoIdOf(item)
+    addItemToProjectSection(
+      sections,
+      item,
+      args.displayRepoIdOf?.(item) ?? repoId,
+      repoMap,
+      projectIndex
+    )
   }
-  // Why: repos can arrive before worktree scans, but stale IDs passed by
-  // older snapshots must not render an "Unknown" project header.
+  // Repos may precede scans; ignore stale placeholder IDs instead of rendering Unknown headers.
   for (const repoId of args.placeholderRepoIds) {
     ensureProjectSectionForRepo(sections, repoId, repoMap, projectIndex, { requireRepo: true })
   }
-  // Why: the default policy removes pinned worktrees from natural groups,
-  // but actionable notice rows still need a project section to render in.
+  // Pinned worktrees leave natural groups, but actionable notices still need project sections.
   for (const [repoId, fallbackRepo] of args.noticeRepos ?? []) {
     ensureProjectSectionForRepo(sections, repoId, repoMap, projectIndex, { fallbackRepo })
   }
-  // Why: creating the first worktree in a repo leaves it with no group yet;
-  // ensure one so the in-progress row nests under its repo instead of being dropped.
+  // Ensure a section for first-workspace creation so its pending row is not dropped.
   for (const repoId of args.pendingRepoIds ?? []) {
     ensureProjectSectionForRepo(sections, repoId, repoMap, projectIndex)
+  }
+  for (const [key, section] of sections) {
+    section.activityItems = ownership.get(key)?.items ?? []
   }
   return orderProjectSections(sections, repoMap, args.repoOrder, args.projectOrderBy)
 }

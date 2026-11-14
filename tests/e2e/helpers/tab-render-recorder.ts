@@ -1,7 +1,4 @@
-/**
- * Counts how many tab-strip tabs each React commit re-renders, the way React DevTools highlights
- * updates: through the commit hook the renderer always installs.
- */
+// Count tab-strip renders through the renderer’s React DevTools commit hook.
 
 import type { Page } from '@stablyai/playwright-test'
 
@@ -51,7 +48,8 @@ export async function startRecordingTabRenders(page: Page): Promise<void> {
           }
           const element = host?.stateNode
           const tabId =
-            element instanceof Element
+            // Slot-producing ancestors do not prove that their first tab rendered.
+            element instanceof Element && !element.hasAttribute('data-tab-strip-slot')
               ? element.closest('[data-tab-strip-slot]')?.getAttribute('data-tab-strip-slot')
               : undefined
           if (tabId) {

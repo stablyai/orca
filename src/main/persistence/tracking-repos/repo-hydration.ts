@@ -3,9 +3,12 @@ import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { getDefaultRepoHookSettings } from '../../../shared/constants'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { sanitizeRepoIcon } from '../../../shared/repo-icon'
-import { normalizeGhAccountBinding } from '../../../shared/github/account-binding'
-import { normalizeJiraProjectReference } from '../../../shared/jira-project-reference'
-import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control-ai'
+import { normalizeGhAccountBinding } from '../../../shared/github/accounts/account-binding'
+import { normalizeJiraProjectReference } from '../../../shared/jira/jira-project-reference'
+import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
+import { normalizeOrcadRetainedMarker } from '../../../shared/orcad-retained-marker'
+import { normalizeRepoWorkspaceCleanupPolicy } from '../../../shared/workspace-cleanup/workspace-cleanup-policy'
+import { sanitizeAgentWorkspaceTrustDecision } from '../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
 import {
   sanitizeForkSyncMode,
   sanitizeGitRemoteIdentity,
@@ -15,13 +18,9 @@ import {
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
-} from '../../../shared/worktree/visibility-sources'
+} from '../../../shared/worktree/visibility/visibility-sources'
 
-/**
- * Cache key for a repo's resolved git username. Host-scoped because the same checkout path can exist
- * on local, SSH, and runtime hosts with different `user.name`, and a path-only key hydrates one
- * host's username onto another (wrong `git-username` branch prefix).
- */
+/** Same paths on different hosts can have different git usernames and branch prefixes. */
 export function repoGitUsernameCacheKey(
   repo: Pick<Repo, 'path' | 'connectionId' | 'executionHostId'>
 ): string {
@@ -35,20 +34,25 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
     upstream: rawUpstream,
     gitRemoteIdentity: rawGitRemoteIdentity,
     sourceControlAi: rawSourceControlAi,
+    workspaceCleanupPolicy: rawWorkspaceCleanupPolicy,
     projectHostSetupMethod: rawProjectHostSetupMethod,
     forkSyncMode: rawForkSyncMode,
+    agentWorkspaceTrust: rawAgentWorkspaceTrust,
     ghAccount: rawGhAccount,
     defaultJiraProject: rawDefaultJiraProject,
     customWorktreeVisibilitySources: rawCustomWorktreeVisibilitySources,
     worktreeVisibilitySourcePreferences: rawWorktreeVisibilitySourcePreferences,
+    orcadRetained: rawOrcadRetained,
     ...repoWithoutIcon
   } = repo
   const repoIcon = sanitizeRepoIcon(rawRepoIcon)
   const upstream = sanitizeRepoUpstream(rawUpstream)
   const gitRemoteIdentity = sanitizeGitRemoteIdentity(rawGitRemoteIdentity)
   const sourceControlAi = normalizeRepoSourceControlAiOverrides(rawSourceControlAi)
+  const workspaceCleanupPolicy = normalizeRepoWorkspaceCleanupPolicy(rawWorkspaceCleanupPolicy)
   const projectHostSetupMethod = sanitizeRepoProjectHostSetupMethod(rawProjectHostSetupMethod)
   const forkSyncMode = sanitizeForkSyncMode(rawForkSyncMode)
+  const agentWorkspaceTrust = sanitizeAgentWorkspaceTrustDecision(rawAgentWorkspaceTrust)
   const ghAccount = normalizeGhAccountBinding(rawGhAccount)
   const defaultJiraProject = normalizeJiraProjectReference(rawDefaultJiraProject)
   const customWorktreeVisibilitySources = normalizeCustomWorktreeVisibilitySources(
@@ -57,7 +61,8 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
   const worktreeVisibilitySourcePreferences = normalizeWorktreeVisibilitySourcePreferences(
     rawWorktreeVisibilitySourcePreferences
   )
-  // Why: never spawn git/gh username resolution in hydration — a stuck probe froze Windows startup for minutes (issue #7225); read only cache/persisted value.
+  const orcadRetained = normalizeOrcadRetainedMarker(rawOrcadRetained)
+  // Hydrate cached identity only; stuck git/gh probes froze Windows startup (#7225).
   const gitUsername = isFolderRepo(repo)
     ? ''
     : (gitUsernameCache.get(repoGitUsernameCacheKey(repo)) ?? repo.gitUsername ?? '')
@@ -71,14 +76,17 @@ export function hydrateRepo(repo: Repo, gitUsernameCache: ReadonlyMap<string, st
     ...(upstream !== undefined ? { upstream } : {}),
     ...(gitRemoteIdentity !== undefined ? { gitRemoteIdentity } : {}),
     ...(sourceControlAi !== undefined ? { sourceControlAi } : {}),
+    ...(workspaceCleanupPolicy !== undefined ? { workspaceCleanupPolicy } : {}),
     ...(projectHostSetupMethod !== undefined ? { projectHostSetupMethod } : {}),
     ...(forkSyncMode !== undefined ? { forkSyncMode } : {}),
+    ...(agentWorkspaceTrust !== undefined ? { agentWorkspaceTrust } : {}),
     ...(ghAccount ? { ghAccount } : {}),
     ...(defaultJiraProject !== undefined ? { defaultJiraProject } : {}),
     ...(customWorktreeVisibilitySources !== undefined ? { customWorktreeVisibilitySources } : {}),
     ...(worktreeVisibilitySourcePreferences !== undefined
       ? { worktreeVisibilitySourcePreferences }
       : {}),
+    ...(orcadRetained ? { orcadRetained } : {}),
     kind: isFolderRepo(repo) ? 'folder' : 'git',
     gitUsername,
     hookSettings: {

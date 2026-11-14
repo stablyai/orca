@@ -1,4 +1,3 @@
-/** Pure rendering of the per-user service units `orca serve service install` writes. */
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { SERVE_LAUNCHD_LABEL_PREFIX } from '../../shared/serve-bundle-coordination'
@@ -24,19 +23,28 @@ export type ServeServiceInput = {
   defaultUserDataPath: string
   path: string
   port?: string | null
+  bind?: string | null
   pairingAddress?: string | null
+  allowPublic?: boolean
+  refusePublic?: boolean
 }
 
-/** Why `--no-pairing`: a service's output lands in a log, which must never hold a live offer. */
+/** Service logs must never contain a live pairing offer. */
 export function serveServiceArgs(
-  input: Pick<ServeServiceInput, 'port' | 'pairingAddress'>
+  input: Pick<
+    ServeServiceInput,
+    'port' | 'bind' | 'pairingAddress' | 'allowPublic' | 'refusePublic'
+  >
 ): string[] {
   return [
     'serve',
     '--supervise',
     '--no-pairing',
     ...(input.port ? ['--port', input.port] : []),
-    ...(input.pairingAddress ? ['--pairing-address', input.pairingAddress] : [])
+    ...(input.bind ? ['--bind', input.bind] : []),
+    ...(input.pairingAddress ? ['--pairing-address', input.pairingAddress] : []),
+    ...(input.allowPublic ? ['--allow-public'] : []),
+    ...(input.refusePublic ? ['--refuse-public'] : [])
   ]
 }
 
@@ -56,7 +64,7 @@ export function renderServeService(input: ServeServiceInput): ServeServiceSpec {
     throw new Error(`No service manager support on ${input.platform}`)
   }
   const suffix = profileSuffix(input)
-  // Why always pin: the manager's environment may resolve a different default profile.
+  // The manager’s environment may resolve a different default profile.
   const env: Record<string, string> = { PATH: input.path, ORCA_USER_DATA_PATH: input.userDataPath }
   const argv = [input.command, ...serveServiceArgs(input)]
   if (manager === 'launchd') {
@@ -99,8 +107,7 @@ function renderLaunchAgent(
   const envEntries = Object.entries(env)
     .map(([key, value]) => `    <key>${xml(key)}</key>\n    <string>${xml(value)}</string>`)
     .join('\n')
-  // Why KeepAlive on failure only: the supervisor exits 0 after its crash-loop brake gives up, and
-  // launchd has no start-limit key, so a clean exit is the only way to make it stop.
+  // launchd has no start limit; a clean crash-brake exit must stop restarts.
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -147,8 +154,7 @@ function renderSystemdUnit(argv: string[], env: Record<string, string>): string 
   const environment = Object.entries(env)
     .map(([key, value]) => `Environment=${systemdQuote(`${key}=${value}`)}`)
     .join('\n')
-  // Why KillMode=process: stopping the service stops the supervisor, which stops its server; the
-  // terminal daemon is designed to outlive the server, as it outlives the desktop app.
+  // Kill only the supervisor: it stops its server while the terminal daemon survives.
   return `[Unit]
 Description=Orca server (orca serve --supervise)
 StartLimitIntervalSec=900

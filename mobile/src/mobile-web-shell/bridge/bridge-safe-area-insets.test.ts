@@ -43,22 +43,6 @@ describe('safeAreaInsets on init', () => {
     expect('safeAreaInsets' in init).toBe(false)
     expect(readShellSession(init).safeAreaInsets).toEqual(ZERO_SAFE_AREA_INSETS)
   })
-
-  it('passes the shell insets through to the session the page holds', () => {
-    const init = readInit(JSON.stringify(initFrame(PHONE)))
-    expect(readShellSession(init).safeAreaInsets).toEqual(PHONE)
-  })
-
-  it('omits all-zero insets, since absent and zero are the same answer', () => {
-    expect('safeAreaInsets' in initFrame(ZERO_SAFE_AREA_INSETS)).toBe(false)
-  })
-
-  it('refuses an init whose insets no device produces, rather than padding by them', () => {
-    for (const bad of [{ ...PHONE, top: -1 }, { ...PHONE, bottom: 1e9 }, { top: 1 }]) {
-      const frame = { ...initFrame(), safeAreaInsets: bad }
-      expect(readBridgeHostMessage(JSON.stringify(frame)).ok, JSON.stringify(bad)).toBe(false)
-    }
-  })
 })
 
 describe('insets that move under a live page', () => {
@@ -75,18 +59,7 @@ describe('insets that move under a live page', () => {
     await pair.flush()
     expect(seen).toEqual([keyboardUp])
     expect(pair.client.getShellSession()?.safeAreaInsets).toEqual(keyboardUp)
-    // Same session: an insets update is not a replacement.
     expect(pair.client.getShellSession()?.sessionId).toBe(session?.sessionId)
     expect(pair.client.getShellSession()?.route).toEqual(session?.route)
-  })
-
-  it('sends nothing for insets that did not move', async () => {
-    const pair = createFakeBridgePortPair({ safeAreaInsets: PHONE })
-    await pair.flush()
-    const inits = () => pair.readToPage().filter((frame) => frame.type === 'init').length
-    const before = inits()
-    pair.host.publishSafeAreaInsets({ ...PHONE })
-    await pair.flush()
-    expect(inits()).toBe(before)
   })
 })

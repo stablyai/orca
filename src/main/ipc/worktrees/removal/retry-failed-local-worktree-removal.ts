@@ -1,10 +1,11 @@
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
-import { retryFailedWorktreeRemoval } from '../../../worktree-background-removal'
-import { interruptedLocalWorktreeRemovalJob } from '../../../runtime/runtime-interrupted-local-worktree-removal'
-import { invalidateAuthorizedRootsCacheForRepo } from '../../registered-worktree-roots-scoped-invalidation'
+import { retryFailedWorktreeRemoval } from '../../../workspaces/removal/worktree-background-removal'
+import { interruptedLocalWorktreeRemovalJob } from '../../../runtime/workspaces/removal/runtime-interrupted-local-worktree-removal'
+import { invalidateAuthorizedRootsCacheForRepo } from './registered-worktree-roots-scoped-invalidation'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
+import type { WorktreeRemovalRecord } from '../../../workspaces/removal/worktree-removal-records'
 import {
   preserveBranchHeadFallback,
   rememberPreservedBranchCleanupTarget
@@ -13,18 +14,17 @@ import {
   removeWorktreeMetadataAndTransientState,
   stopPtysForDestructiveWorktreeRemoval
 } from './worktree-removal-ownership'
+import { worktreeHostIdentity } from '../../../persistence/worktree-meta-host-identity'
 
-/**
- * Delete on the leftover of a local delete that failed after Git dropped the registration: runs the
- * recorded removal again with this handler's bookkeeping. Undefined when there is none.
- */
+/** Retry recorded leftovers after Git deregistration, retaining IPC bookkeeping; return undefined if none exist. */
 export function retryFailedLocalWorktreeRemoval(
   context: WorktreeIpcContext,
   args: RemoveWorktreeArgs,
   removalHostId: ExecutionHostId
 ): Promise<RemoveWorktreeResult> | undefined {
   const { store, runtime, options } = context
-  return retryFailedWorktreeRemoval(args.worktreeId, removalHostId, (record) =>
+  const purgedIdentities = new Map<string, ReturnType<typeof worktreeHostIdentity>>()
+  const jobFor = (record: WorktreeRemovalRecord) =>
     interruptedLocalWorktreeRemovalJob(record, {
       store,
       acquireWatcherRemoval: (path) => runtime.acquireFileWatcherRemoval(path),
@@ -45,18 +45,31 @@ export function retryFailedLocalWorktreeRemoval(
           )
       },
       purge: ({ worktreeId, repoId }) => {
+        // `removed` is heard after this drops the row, so its identity is read first.
+        purgedIdentities.set(
+          worktreeId,
+          worktreeHostIdentity(store, worktreeId, LOCAL_EXECUTION_HOST_ID)
+        )
         runtime.clearOptimisticReconcileToken(worktreeId)
         removeWorktreeMetadataAndTransientState(
-          store,
+          { store, runtime },
           worktreeId,
           LOCAL_EXECUTION_HOST_ID,
           args.snapshotPruneBatchId
         )
         invalidateAuthorizedRootsCacheForRepo(store, repoId)
       },
-      onRemoved: ({ worktreeId, worktreePath }) =>
-        options?.onWorktreeLifecycle?.({ kind: 'removed', worktreeId, path: worktreePath }),
+      onRemoved: ({ worktreeId, worktreePath }) => {
+        const identity = purgedIdentities.get(worktreeId)
+        purgedIdentities.delete(worktreeId)
+        options?.onWorktreeLifecycle?.({
+          kind: 'removed',
+          worktreeId,
+          path: worktreePath,
+          ...identity
+        })
+      },
       publish: (repoId) => runtime.publishWorktreeRemovalChange(repoId)
     })
-  )
+  return retryFailedWorktreeRemoval(args.worktreeId, removalHostId, jobFor, args.force ?? false)
 }

@@ -1,10 +1,12 @@
+import { copyBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
-  agentStatusEvidenceObservedAt,
-  type AgentStatusEntry
-} from '../../../../shared/agent-status-types'
-import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
-import { mainAgentStatusEqual } from '../../../../shared/main-agent-status'
+  agentStatusEvidenceObservedAt
+} from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { mainAgentStatusEqual } from '../../../../shared/agent-status/lifecycle/main-agent-status'
+import { programStatusFacetsEqual } from '../../../../shared/program-status/facet'
 import type {
   WebSessionTabsBatchContext,
   WebSessionTabsBatchRecordKey,
@@ -49,6 +51,8 @@ export function agentStatusEntryEqual(
     a.updatedAt === b.updatedAt &&
     a.stateStartedAt === b.stateStartedAt &&
     a.turnStartedAt === b.turnStartedAt &&
+    a.turnEndedAt === b.turnEndedAt &&
+    a.turnEndDisposition === b.turnEndDisposition &&
     a.agentType === b.agentType &&
     a.paneKey === b.paneKey &&
     a.worktreeId === b.worktreeId &&
@@ -63,7 +67,10 @@ export function agentStatusEntryEqual(
     mainAgentStatusEqual(a.mainAgent, b.mainAgent) &&
     a.promptInteractionKey === b.promptInteractionKey &&
     a.restoredUnconfirmed === b.restoredUnconfirmed &&
+    a.launchAttested === b.launchAttested &&
+    programStatusFacetsEqual(a.programStatus, b.programStatus) &&
     agentProviderSessionsEqual(a.agentType, a.providerSession, b.providerSession) &&
+    a.orcaSessionId === b.orcaSessionId &&
     sameAgentStateHistory(a.stateHistory, b.stateHistory)
   )
 }
@@ -75,8 +82,7 @@ export function isAgentStatusFresh(
   >,
   now: number
 ): boolean {
-  // Why the shared accessor: a mirrored row's own stamps are the host's clock, so this must
-  // read the same reader-clock observation time the display gate does or the two disagree.
+  // Use shared reader-clock observation time like display gating; mirrored row stamps belong to host clocks.
   return (
     entry.restoredUnconfirmed !== true &&
     now - agentStatusEvidenceObservedAt(entry) <= AGENT_STATUS_STALE_AFTER_MS
@@ -129,13 +135,23 @@ export function writableWebSessionTabsRecord<K extends WebSessionTabsBatchRecord
 ): NonNullable<WebSessionTabsSyncState[K]> {
   const record = (state[recordKey] ?? {}) as NonNullable<WebSessionTabsSyncState[K]>
   if (!batchContext) {
-    return { ...record } as NonNullable<WebSessionTabsSyncState[K]>
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Each branch copies the selected record without changing its value type; TypeScript cannot narrow generic K.
+    return (
+      recordKey === 'remoteBrowserPageHandlesByPageId'
+        ? copyBrowserPageHandles(state.remoteBrowserPageHandlesByPageId)
+        : { ...record }
+    ) as NonNullable<WebSessionTabsSyncState[K]>
   }
-  // Why: one batch owns its record copies, so later snapshots can update them without recopying every workspace.
+  // Batch-owned record copies can be updated in place without recopying all workspaces.
   if (batchContext.changedRecords.has(recordKey)) {
     return record
   }
-  const next = { ...record } as NonNullable<WebSessionTabsSyncState[K]>
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Each branch copies the selected record without changing its value type; TypeScript cannot narrow generic K.
+  const next = (
+    recordKey === 'remoteBrowserPageHandlesByPageId'
+      ? copyBrowserPageHandles(state.remoteBrowserPageHandlesByPageId)
+      : { ...record }
+  ) as NonNullable<WebSessionTabsSyncState[K]>
   const mutableState = state as unknown as Record<
     WebSessionTabsBatchRecordKey,
     Record<string, unknown>

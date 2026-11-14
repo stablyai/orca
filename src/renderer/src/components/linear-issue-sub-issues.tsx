@@ -1,17 +1,25 @@
-import { ImeInput } from '@/lib/ime-text-field'
-import React, { useCallback, useMemo, useRef, useState } from 'react'
+import '@/store/slices/linear/linear-issue-read'
+import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-lifecycle'
+import {
+  taskProviderErrorMessage,
+  taskProviderErrorText
+} from '@/lib/work-items/task-provider-error-copy'
+import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight, LoaderCircle, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { getLinearStateMarkerStyle } from '@/components/linear-state-pill-style'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
-import { linearCreateSubIssue } from '@/runtime/runtime-linear-issue-mutations'
+import { useTranslate } from '@/i18n/use-translate'
+import { linearCreateSubIssue } from '@/runtime/linear/runtime-linear-issue-client'
 import { useAppStore } from '@/store'
 import type { LinearIssue, LinearIssueChildSummary } from '../../../shared/linear/issue-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 
 function mergeLinearSubIssues(
   serverSubIssues: LinearIssueChildSummary[] | undefined,
@@ -34,6 +42,7 @@ export function LinearIssueSubIssues({
   onOpenIssue: (issue: LinearIssue) => void
   sourceContext?: TaskSourceContext | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const settings = useAppStore((state) => state.settings)
   const providerSettings = sourceContext ?? defaultScopeSource(settings)
   const fetchLinearIssue = useAppStore((state) => state.fetchLinearIssue)
@@ -42,6 +51,7 @@ export function LinearIssueSubIssues({
   const [createdSubIssues, setCreatedSubIssues] = useState<LinearIssueChildSummary[]>([])
   const [submitting, setSubmitting] = useState(false)
   const [openingSubIssueId, setOpeningSubIssueId] = useState<string | null>(null)
+  const openReadRef = useRef<(() => void) | null>(null)
   const openRequestIdRef = useRef(0)
   const createRequestIdRef = useRef(0)
   const mountedRef = useMountedRef()
@@ -49,39 +59,58 @@ export function LinearIssueSubIssues({
     () => mergeLinearSubIssues(issue.subIssues, createdSubIssues),
     [createdSubIssues, issue.subIssues]
   )
+  useEffect(() => {
+    setOpeningSubIssueId(null)
+    return () => {
+      openReadRef.current?.()
+      openRequestIdRef.current += 1
+    }
+  }, [issue.id, sourceContext])
   const handleOpenSubIssue = useCallback(
-    async (subIssue: LinearIssueChildSummary) => {
+    (subIssue: LinearIssueChildSummary) => {
+      openReadRef.current?.()
       const requestId = ++openRequestIdRef.current
       setOpeningSubIssueId(subIssue.id)
-      try {
-        const fullIssue = await fetchLinearIssue(subIssue.id, issue.workspaceId, {
-          sourceContext
-        })
-        if (!mountedRef.current || requestId !== openRequestIdRef.current) {
-          return
-        }
-        if (fullIssue) {
-          onOpenIssue(fullIssue)
-        } else {
-          toast.error(
-            translate('auto.components.LinearIssueWorkspace.9a1317cdd3', 'Failed to load sub-issue')
-          )
-        }
-      } catch (error) {
-        if (mountedRef.current && requestId === openRequestIdRef.current) {
-          toast.error(
-            error instanceof Error
-              ? error.message
-              : translate(
+      let opened = false
+      let release = () => {}
+      release = observeLinearIssueRead(
+        fetchLinearIssue(subIssue.id, issue.workspaceId, { sourceContext }),
+        () => mountedRef.current && requestId === openRequestIdRef.current,
+        (lease, view) => {
+          if (opened || view.kind === 'loading') {
+            return
+          }
+          if (view.kind === 'abandoned') {
+            opened = true
+            setOpeningSubIssueId((previous) =>
+              mountedRef.current && requestId === openRequestIdRef.current ? null : previous
+            )
+            release()
+            return
+          }
+          lease.commit(view, false, (_, fullIssue) => {
+            opened = true
+            setOpeningSubIssueId((previous) =>
+              mountedRef.current && requestId === openRequestIdRef.current ? null : previous
+            )
+            if (fullIssue) {
+              onOpenIssue(fullIssue)
+            } else {
+              toast.error(
+                translate(
                   'auto.components.LinearIssueWorkspace.9a1317cdd3',
                   'Failed to load sub-issue'
                 )
-          )
+              )
+            }
+            release()
+            return true
+          })
         }
-      } finally {
-        if (mountedRef.current && requestId === openRequestIdRef.current) {
-          setOpeningSubIssueId(null)
-        }
+      )
+      openReadRef.current = release
+      if (opened) {
+        release()
       }
     },
     [fetchLinearIssue, issue.workspaceId, mountedRef, onOpenIssue, sourceContext]
@@ -129,14 +158,14 @@ export function LinearIssueSubIssues({
           setTitle('')
           setOpen(false)
         } else {
-          toast.error(result.error)
+          toast.error(taskProviderErrorMessage(result))
         }
       })
       .catch((error) => {
         if (mountedRef.current && requestId === createRequestIdRef.current) {
           toast.error(
             error instanceof Error
-              ? error.message
+              ? taskProviderErrorText(error.message)
               : translate(
                   'auto.components.LinearIssueWorkspace.b25e453c9d',
                   'Failed to create sub-issue'
@@ -165,6 +194,15 @@ export function LinearIssueSubIssues({
             >
               <span className="shrink-0 font-mono text-xs">{subIssue.identifier}</span>
               <span className="min-w-0 flex-1 truncate">{subIssue.title}</span>
+              {subIssue.state?.name ? (
+                <span className="flex max-w-[30%] shrink-0 items-center gap-1.5 text-xs">
+                  <span
+                    className="size-1.5 shrink-0 rounded-full"
+                    style={getLinearStateMarkerStyle(subIssue.state.color)}
+                  />
+                  <span className="truncate">{subIssue.state.name}</span>
+                </span>
+              ) : null}
               {openingSubIssueId === subIssue.id ? (
                 <LoaderCircle className="size-3.5 shrink-0 animate-spin" />
               ) : (
@@ -182,9 +220,7 @@ export function LinearIssueSubIssues({
             className="flex h-9 items-center gap-2 rounded-md px-1 text-sm font-medium text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
           >
             <Plus className="size-4" />
-            <span>
-              {translate('auto.components.LinearIssueWorkspace.8c55d6696a', 'Add sub-issues')}
-            </span>
+            <span>{t('auto.components.LinearIssueWorkspace.8c55d6696a', 'Add sub-issues')}</span>
           </button>
         </PopoverTrigger>
         <PopoverContent className="w-80 p-3" align="start">
@@ -198,10 +234,7 @@ export function LinearIssueSubIssues({
                   void handleCreate()
                 }
               }}
-              placeholder={translate(
-                'auto.components.LinearIssueWorkspace.c182e02de5',
-                'Sub-issue title'
-              )}
+              placeholder={t('auto.components.LinearIssueWorkspace.c182e02de5', 'Sub-issue title')}
               className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
             <div className="flex justify-end">
@@ -211,7 +244,7 @@ export function LinearIssueSubIssues({
                 disabled={!title.trim() || submitting}
               >
                 {submitting ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
-                {translate('auto.components.LinearIssueWorkspace.42589845bc', 'Create')}
+                {t('auto.components.LinearIssueWorkspace.42589845bc', 'Create')}
               </Button>
             </div>
           </div>

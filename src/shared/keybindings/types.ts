@@ -1,4 +1,5 @@
-import type { TuiAgent } from '../tui-agent'
+import type { KeybindingReasonCode } from './keybinding-diagnostic-copy'
+import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
 
 export type KeybindingScope =
   | 'global'
@@ -39,6 +40,7 @@ export type KeybindingActionId =
   | 'workspace.selectByIndex'
   | 'voice.dictation'
   | 'view.tasks'
+  | 'view.plugins'
   | 'dashboard.toggle'
   | 'sidebar.left.toggle'
   | 'sidebar.right.toggle'
@@ -49,6 +51,7 @@ export type KeybindingActionId =
   | 'sidebar.ports.toggle'
   | 'sidebar.sleepingWorkspaces.toggle'
   | 'sidebar.childWorkspaces.toggle'
+  | 'sidebar.projects.toggleCollapse'
   | 'sidebar.focusWorktreeList'
   | 'floatingTerminal.toggle'
   | 'floatingWorkspace.maximize'
@@ -62,6 +65,7 @@ export type KeybindingActionId =
   | 'tab.newAgent'
   | AgentTabActionId
   | 'tab.newBrowser'
+  | 'tab.newBrowserSplitRight'
   | 'tab.newSimulator'
   | 'tab.newMarkdown'
   | 'tab.openMarkdown'
@@ -85,6 +89,7 @@ export type KeybindingActionId =
   | 'browser.reload'
   | 'browser.hardReload'
   | 'browser.focusAddressBar'
+  | 'browser.showHistory'
   | 'browser.grabElement'
   | 'browser.annotateElement'
   | 'editor.find'
@@ -118,6 +123,7 @@ export type KeybindingActionId =
   | 'terminal.splitRight'
   | 'terminal.splitDown'
   | 'terminal.switchInputSource'
+  | 'terminal.toggleNativeChat'
   | PluginKeybindingActionId
 
 export type KeybindingOverrides = Partial<Record<KeybindingActionId, string[]>>
@@ -127,6 +133,13 @@ export type KeybindingFileDiagnostic = {
   message: string
   actionId?: string
   section?: string
+  /** Semantic id of `message`; renderers translate by it and fall back to `message`. */
+  code?: string
+  params?: Record<string, string | number>
+  /** Code of params.reason when that reason is an Orca sentence, not verbatim text. */
+  reasonCode?: string
+  /** Actions named by a conflict diagnostic, so renderers can show localized titles. */
+  actionIds?: string[]
 }
 
 export type KeybindingFileSnapshot = {
@@ -134,6 +147,7 @@ export type KeybindingFileSnapshot = {
   platform: KeybindingPlatform
   exists: boolean
   overrides: KeybindingOverrides
+  defaultOverrides?: KeybindingOverrides
   commonOverrides: KeybindingOverrides
   platformOverrides: Partial<Record<KeybindingPlatform, KeybindingOverrides>>
   diagnostics: KeybindingFileDiagnostic[]
@@ -153,9 +167,13 @@ export type KeybindingDefinition = {
   searchKeywords: readonly string[]
   defaultBindings: PlatformBindings
   allowInTerminal?: boolean
+  // Leaving it out means a focused text field keeps every key.
+  allowInTextField?: 'non-default-chords'
   allowBareKeybindings?: boolean
   allowShiftOnlyKeybindings?: boolean
   conflictGroup?: string
+  conflictGroups?: readonly KeybindingScope[]
+  implicitDefaultYields?: boolean
 }
 
 export type ModifierToken = 'Mod' | 'Cmd' | 'Ctrl' | 'Alt' | 'Shift'
@@ -191,7 +209,9 @@ export type NormalizeKeybindingOptions = {
   allowShiftOnlyKeybindings?: boolean
 }
 
-export type KeybindingValidationResult = { ok: true; value: string } | { ok: false; error: string }
+export type KeybindingValidationResult =
+  | { ok: true; value: string }
+  | { ok: false; error: string; errorCode?: KeybindingReasonCode }
 
 export type KeybindingConflict = {
   binding: string
@@ -201,4 +221,6 @@ export type KeybindingConflict = {
 export type FindKeybindingConflictOptions = {
   ignoredActionIds?: Iterable<KeybindingActionId>
   relevantActionIds?: Iterable<KeybindingActionId>
+  /** Include native interception for Settings writes, diagnostics and inherited defaults; saved overrides use scope-only checks. */
+  includeMainProcessInterception?: boolean
 }

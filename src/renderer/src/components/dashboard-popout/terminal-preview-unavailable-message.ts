@@ -1,31 +1,29 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { DashboardCardHostKind } from '../../../../shared/dashboard-snapshot'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
-/**
- * A missing buffer snapshot only proves the pane exited when the client could have
- * observed it. This client holds no SSH PTY provider and the host exposes no snapshot RPC to
- * it, so for a remote pty the absence is loss of contact —
- * `unverifiable`, never `exited`. A paired server's pane is likewise held by that server, not by
- * this client. See docs/reference/ssh-execution-boundary.md.
- */
-export function terminalPreviewUnavailableMessage(source: {
-  ptyId?: string | null
-  hostKind?: DashboardCardHostKind
-}): string {
+/** Remote snapshot absence cannot prove pane exit because the client does not own the PTY; see docs/reference/ssh-execution-boundary.md. */
+export function terminalPreviewUnavailableMessage(
+  source: {
+    ptyId?: string | null
+    hostKind?: DashboardCardHostKind
+  },
+  t: Translate = translate
+): string {
   const isRemote =
     source.hostKind === 'ssh' ||
     source.hostKind === 'remote' ||
     isRemoteRuntimePtyId(source.ptyId) ||
     (typeof source.ptyId === 'string' && parseAppSshPtyId(source.ptyId) !== null)
   return isRemote
-    ? translate(
+    ? t(
         'dashboardPopout.terminal.remotePreviewUnavailable',
         'No preview for this remote session — open the workspace to view the terminal.'
       )
-    : translate(
-        'dashboardPopout.terminal.closed',
-        "No live terminal — this agent's pane has closed."
+    : t(
+        'dashboardPopout.terminal.previewUnavailable',
+        'No preview available — open the workspace to view this agent.'
       )
 }

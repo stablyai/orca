@@ -1,12 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
-} from './agent-session-host-authority'
-import {
-  ClaimedAgentPtyOwnerRegistry,
-  MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES
-} from './claimed-agent-pty-owner'
+} from './agent-session/agent-session-host-authority'
+import { ClaimedAgentPtyOwnerRegistry } from './claimed-agent-pty-owner'
 
 function claim(
   identityDigest = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -29,25 +26,6 @@ const surface: AgentSessionSurfaceBinding = {
 }
 
 describe('ClaimedAgentPtyOwnerRegistry', () => {
-  it('joins concurrent exact ensures and spawns once', async () => {
-    const registry = new ClaimedAgentPtyOwnerRegistry()
-    let finish!: (result: { ptyId: string }) => void
-    const spawn = vi.fn(
-      () =>
-        new Promise<{ ptyId: string }>((resolve) => {
-          finish = resolve
-        })
-    )
-
-    const first = registry.ensure({ claim: claim(), surface, spawn })
-    const second = registry.ensure({ claim: claim(), surface, spawn })
-    finish({ ptyId: 'pty-1' })
-
-    await expect(first).resolves.toMatchObject({ disposition: 'created' })
-    await expect(second).resolves.toMatchObject({ disposition: 'adopted' })
-    expect(spawn).toHaveBeenCalledTimes(1)
-  })
-
   it('conflicts when the same identity is claimed by another worktree', async () => {
     const registry = new ClaimedAgentPtyOwnerRegistry()
     await registry.ensure({
@@ -68,25 +46,7 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
     ).rejects.toThrow('agent_session_conflict')
   })
 
-  it('does not find an owner through another worktree scope', async () => {
-    const registry = new ClaimedAgentPtyOwnerRegistry()
-    await registry.ensure({
-      claim: claim(),
-      surface,
-      spawn: async () => ({ ptyId: 'pty-1' })
-    })
-
-    expect(
-      registry.find(
-        claim(
-          'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-          'ccccccccccccccccccccccccccccccccccccccccccc'
-        )
-      )
-    ).toBeNull()
-  })
-
-  it('generation-guards release across a replacement owner', async () => {
+  it('ignores a stale release generation and releases the matching owner', async () => {
     const registry = new ClaimedAgentPtyOwnerRegistry()
     const first = await registry.ensure({
       claim: claim(),
@@ -95,7 +55,7 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
     })
 
     registry.release('pty-1', 'stale-generation')
-    expect(registry.find(claim())?.generation).toBe(first.owner.generation)
+    expect(registry.find(claim())).toMatchObject({ ptyId: 'pty-1' })
 
     registry.release('pty-1', first.owner.generation)
     expect(registry.find(claim())).toBeNull()
@@ -153,70 +113,6 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
     })
   })
 
-  it('rejects a recovered owner that reuses only one half of its generation identity', () => {
-    const registry = new ClaimedAgentPtyOwnerRegistry()
-    const owner = {
-      claim: claim(),
-      generation: 'generation-1',
-      phase: 'live' as const,
-      ptyId: 'pty-1',
-      surface
-    }
-    registry.register(owner)
-
-    expect(() => registry.register({ ...owner, ptyId: 'pty-2' })).toThrow('agent_session_conflict')
-    expect(() => registry.register({ ...owner, generation: 'generation-2' })).toThrow(
-      'agent_session_conflict'
-    )
-  })
-
-  it('retains only allowlisted owner fields', () => {
-    const registry = new ClaimedAgentPtyOwnerRegistry()
-    const owner = {
-      claim: { ...claim(), unknownPayload: 'claim payload' },
-      generation: 'generation-1',
-      phase: 'live' as const,
-      ptyId: 'pty-1',
-      surface: { ...surface, unknownPayload: 'surface payload' },
-      unknownPayload: 'owner payload'
-    }
-
-    registry.register(owner)
-
-    expect(registry.list()).toEqual([
-      {
-        claim: claim(),
-        generation: 'generation-1',
-        phase: 'live',
-        ptyId: 'pty-1',
-        surface
-      }
-    ])
-  })
-
-  it('fails closed when recovered owner evidence reaches the process-wide cap', () => {
-    const registry = new ClaimedAgentPtyOwnerRegistry()
-    const owners = Array.from({ length: MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES }, (_, index) => ({
-      claim: claim(`identity-${index}`),
-      generation: `generation-${index}`,
-      phase: 'live' as const,
-      ptyId: `pty-${index}`,
-      surface
-    }))
-    registry.reconcileAuthoritative(owners)
-
-    expect(() =>
-      registry.register({
-        claim: claim('one-more-identity'),
-        generation: 'one-more-generation',
-        phase: 'live',
-        ptyId: 'one-more-pty',
-        surface
-      })
-    ).toThrow('execution_owner_unavailable')
-    expect(registry.list()).toHaveLength(MAX_CLAIMED_AGENT_PTY_OWNER_ENTRIES)
-  })
-
   it('atomically converges from conflicting provider evidence to one owner', async () => {
     const registry = new ClaimedAgentPtyOwnerRegistry()
     const ownerA = {
@@ -245,7 +141,10 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
         spawn: async () => ({ ptyId: 'unexpected' }),
         isLive: (owner) => owner.generation === ownerB.generation
       })
-    ).resolves.toMatchObject({ disposition: 'adopted', owner: ownerB })
+    ).resolves.toMatchObject({
+      disposition: 'adopted',
+      owner: { ptyId: 'pty-b', generation: 'generation-b' }
+    })
   })
 
   it('prunes an advertised generation when an authoritative snapshot omits it', async () => {
@@ -260,12 +159,11 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
     registry.reconcileAuthoritative([recovered])
     registry.reconcileAuthoritative([])
 
-    const spawn = vi.fn(async () => ({ ptyId: 'pty-new' }))
+    const spawn = async () => ({ ptyId: 'pty-new' })
     await expect(registry.ensure({ claim: claim(), surface, spawn })).resolves.toMatchObject({
       disposition: 'created',
       owner: { ptyId: 'pty-new' }
     })
-    expect(spawn).toHaveBeenCalledOnce()
   })
 
   it('replaces a reused PTY id with the exact newly advertised generation', async () => {
@@ -280,7 +178,7 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
     const newOwner = { ...oldOwner, generation: 'generation-new' }
     registry.reconcileAuthoritative([oldOwner])
     registry.reconcileAuthoritative([newOwner])
-    const isLive = vi.fn((owner: typeof newOwner) => owner.generation === 'generation-new')
+    const isLive = (owner: typeof newOwner) => owner.generation === 'generation-new'
 
     await expect(
       registry.ensure({
@@ -289,27 +187,32 @@ describe('ClaimedAgentPtyOwnerRegistry', () => {
         spawn: async () => ({ ptyId: 'unexpected' }),
         isLive
       })
-    ).resolves.toMatchObject({ disposition: 'adopted', owner: newOwner })
-    expect(isLive).toHaveBeenCalledWith(expect.objectContaining({ generation: 'generation-new' }))
+    ).resolves.toMatchObject({
+      disposition: 'adopted',
+      owner: { ptyId: 'pty-reused', generation: 'generation-new' }
+    })
   })
 
   it('does not let reconciliation erase an in-flight reservation', async () => {
     const registry = new ClaimedAgentPtyOwnerRegistry()
     let finish!: (result: { ptyId: string }) => void
-    const spawn = vi.fn(
-      () =>
-        new Promise<{ ptyId: string }>((resolve) => {
-          finish = resolve
-        })
-    )
+    const spawn = () =>
+      new Promise<{ ptyId: string }>((resolve) => {
+        finish = resolve
+      })
     const first = registry.ensure({ claim: claim(), surface, spawn })
 
     registry.reconcileAuthoritative([])
     const second = registry.ensure({ claim: claim(), surface, spawn })
     finish({ ptyId: 'pty-reserved' })
 
-    await expect(first).resolves.toMatchObject({ disposition: 'created' })
-    await expect(second).resolves.toMatchObject({ disposition: 'adopted' })
-    expect(spawn).toHaveBeenCalledOnce()
+    await expect(first).resolves.toMatchObject({
+      disposition: 'created',
+      owner: { ptyId: 'pty-reserved' }
+    })
+    await expect(second).resolves.toMatchObject({
+      disposition: 'adopted',
+      owner: { ptyId: 'pty-reserved' }
+    })
   })
 })

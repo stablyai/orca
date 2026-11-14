@@ -4,9 +4,9 @@ import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { HostSectionRow } from '../../host-section-rows'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import { useSidebarWorktreeSelection } from './use-selection'
-import { getVisibleWorktreeShortcutTargets } from '../../visible-worktrees'
+import { getVisibleWorktreeShortcutTargets } from '../listing/visible-worktrees'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -21,7 +21,6 @@ function row(worktree: Worktree): HostSectionRow {
     repo: undefined,
     depth: 0,
     groupDepth: 0,
-    lineageTrail: [],
     isLastLineageChild: false,
     lineageChildCount: 0
   }
@@ -34,9 +33,9 @@ let container: HTMLDivElement
 let root: Root
 let selection: Selection
 
-function Probe(): null {
+function Probe({ sectionRows = rows }: { sectionRows?: HostSectionRow[] }): null {
   selection = useSidebarWorktreeSelection({
-    sectionRows: rows,
+    sectionRows,
     pinnedDisplayPolicy: 'single-location'
   })
   return null

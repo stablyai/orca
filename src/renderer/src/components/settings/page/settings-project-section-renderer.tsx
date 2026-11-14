@@ -1,0 +1,122 @@
+import { ProjectGroupHooksSection } from '../repository/hooks/ProjectGroupHooksSection'
+import { projectGroupHookOwner } from '../../../../../shared/workspace-hook-owner'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID
+} from '../../../../../shared/execution-host'
+import { getRepoHostIdentity } from '../../../../../shared/repo-host-identity'
+import { RepositoryPane } from '../repository/RepositoryPane'
+import { SettingsSection } from '../section-layout/SettingsSection'
+import {
+  getSettingsEntryHostSelection,
+  getSettingsProjectHostRepo,
+  getSettingsProjectRemovalScope
+} from '../navigation/settings-project-list'
+import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
+import type { SettingsRenderContext } from './settings-render-context'
+
+export function renderProjectSettingsSections(
+  context: SettingsRenderContext,
+  t: Translate = translate
+): React.ReactNode {
+  const { model, navigation, terminal, view, interactions } = context
+  return (
+    <>
+      {model.hookSettingsGroups.map((group) => {
+        const owner = projectGroupHookOwner(group)
+        if (!owner) {
+          return null
+        }
+        const id = `group-${encodeURIComponent(owner.id)}`
+        return (
+          <SettingsSection
+            key={id}
+            id={id}
+            title={t('settings.groupHooks.title', 'Project Settings > {{name}}', {
+              name: group.settingsLabel ?? group.name
+            })}
+            description={owner.path}
+            searchEntries={navigation.getSectionSearchEntries(id)}
+          >
+            {view.isSectionMounted(id) ? (
+              <ProjectGroupHooksSection key={owner.id} group={group} />
+            ) : null}
+          </SettingsSection>
+        )
+      })}
+      {model.settingsProjectList.map((settingsProject) => {
+        const repoSectionId = `repo-${settingsProject.representativeRepoId}`
+        // Identity edits must follow the selected Available Hosts entry.
+        const hostSelection = getSettingsEntryHostSelection(
+          settingsProject,
+          model.settingsProjectHostSelection,
+          model.settingsProjectSetupSelection
+        )
+        const repo = getSettingsProjectHostRepo(
+          settingsProject,
+          model.repos,
+          hostSelection.hostId,
+          hostSelection.setupId
+        )
+        if (!repo) {
+          return null
+        }
+        const repoHostIdentity = getRepoHostIdentity(repo)
+        const repoHooksState = model.repoHooksMap[repoHostIdentity]
+        const project = navigation.projectByRepoId.get(repo.id) ?? settingsProject.project
+
+        return (
+          <SettingsSection
+            key={repoSectionId}
+            id={repoSectionId}
+            title={t(
+              'auto.components.settings.Settings.3bf149e873',
+              'Project Settings > {{value0}}',
+              {
+                value0: settingsProject.checkoutLabel ?? project.displayName
+              }
+            )}
+            description={repo.path}
+            searchEntries={navigation.getSectionSearchEntries(repoSectionId)}
+          >
+            {view.isSectionMounted(repoSectionId) ? (
+              // Re-key by host so same-ID hosts cannot inherit drafts/effects.
+              <RepositoryPane
+                key={repoHostIdentity}
+                repo={repo}
+                yamlHooks={repoHooksState?.hooks ?? null}
+                hasHooksFile={repoHooksState?.hasHooks ?? false}
+                hooksInspectionReady={Boolean(repoHooksState)}
+                mayNeedUpdate={repoHooksState?.mayNeedUpdate ?? false}
+                updateRepo={model.updateRepo}
+                removeProject={() => void model.removeProjectAllHosts(settingsProject.setups)}
+                project={project}
+                selectedProjectSetupId={hostSelection.setupId}
+                settingsSelectionKey={settingsProject.selectionKey}
+                settingsEntryRepoIds={
+                  settingsProject.splitProject
+                    ? new Set(settingsProject.setups.map((setup) => setup.repoId))
+                    : undefined
+                }
+                removalScope={getSettingsProjectRemovalScope(settingsProject)}
+                removalSetups={settingsProject.setups}
+                isLocalWindowsProject={
+                  getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
+                  terminal.isWindowsTerminalHost
+                }
+                wslAvailable={terminal.windowsTerminalCapabilities.wslAvailable}
+                wslDistros={terminal.windowsTerminalCapabilities.wslDistros}
+                wslCapabilitiesLoading={terminal.windowsTerminalCapabilities.isLoading}
+                updateProject={(projectId, updates) =>
+                  model.updateProject(projectId, updates, getRepoExecutionHostId(repo))
+                }
+                writeSourceControlAiSettings={interactions.writeSourceControlAiSettings}
+              />
+            ) : null}
+          </SettingsSection>
+        )
+      })}
+    </>
+  )
+}

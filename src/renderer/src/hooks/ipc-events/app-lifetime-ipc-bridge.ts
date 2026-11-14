@@ -1,32 +1,46 @@
-import { observeJiraImageHostStatus } from '@/runtime/runtime-jira-image-cache'
-import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-status'
-import { getTabIdsAwaitingHostHydrationRemount } from '@/lib/parked-terminal-host-hydration'
-import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
-import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/wake-sleeping-agents-in-background'
-import { attachMobileMarkdownBridge } from '@/runtime/mobile-markdown-bridge'
-import { remoteRuntimeTerminalColorPush } from '@/runtime/remote-runtime-terminal-color-push'
+import { installBrowserInitializationPresentationLifetime } from '@/runtime/web-session-tabs-sync/browser-initialization-presentation'
+import { observeJiraImageHostStatus } from '@/runtime/jira/runtime-jira-image-cache'
+import { observeRuntimeHostStatusForPendingRemovals } from '@/store/repos/pending-runtime-repo-removal-replay'
+import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
+import { getTabIdsAwaitingHostHydrationRemount } from '@/components/terminal-pane/mounting/parked-terminal-host-hydration'
+import { emitAutomationsChangedWindowEvent } from '@/components/automations/events/automations-changed-window-event'
+import { emitWorkspaceCleanupRunFinishedWindowEvent } from '@/components/workspace-cleanup/events/workspace-cleanup-run-finished-window-event'
+import { createBackgroundSleepingAgentWakeDispatcher } from '@/lib/agent-session/resume/wake-sleeping-agents-in-background'
+import { remoteRuntimeTerminalColorPush } from '@/runtime/hosted-terminals/streams/remote-runtime-terminal-color-push'
 import { resetAgentHookCompletionNotificationCoordinators } from '../agent-hook-completion-notifications'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import { registerAgentStatusIpcBridge } from './agent-status-ipc-bridge'
 import { registerBackgroundWorktreeRemovalBridge } from './background-worktree-removal-bridge'
-import { registerBrowserRequestIpcBridge } from './browser-request-ipc-bridge'
+import {
+  registerBrowserRequestIpcBridge,
+  signalBrowserTabRequestsReadyAfterRestore
+} from './browser-request-ipc-bridge'
+import { registerBrowserTabActivateIpcBridge } from './browser-tab-activate-ipc-bridge'
 import { registerBrowserStateIpcBridge } from './browser-state-ipc-bridge'
 import { registerContentCreationIpcBridge } from './content-creation-ipc-bridge'
 import { registerDirectSshStateIpcBridge } from './direct-ssh-state-ipc-bridge'
+import { registerEphemeralVmLifecycleIpcBridge } from './ephemeral-vm-lifecycle-ipc-bridge'
 import { registerMobileAndTerminalCloseIpcBridge } from './mobile-terminal-close-ipc-bridge'
 import { registerMobileDriverIpcBridge } from './mobile-driver-ipc-bridge'
 import { registerOrcaProfileAuthIpcBridge } from './orca-profile-auth-ipc-bridge'
+import { registerPluginViewIpcBridge } from './plugin-view-ipc-bridge'
+import { registerPreflightWslRetryIpcBridge } from './preflight-wsl-retry-ipc-bridge'
 import { registerOsMarkdownFileOpenBridge } from './os-markdown-file-open-bridge'
 import { registerProjectCatalogIpcBridge } from './project-catalog-ipc-bridge'
 import { registerRateLimitIpcBridge } from './rate-limit-ipc-bridge'
+import { registerClaudeAccountSwitchIpcBridge } from './claude-account-switch-ipc-bridge'
 import { registerRuntimeClientIpcBridge } from './runtime-client-ipc-bridge'
 import { registerSessionTabIpcBridge } from './session-tab-ipc-bridge'
 import { registerSettingsAndSidebarIpcBridge } from './settings-sidebar-ipc-bridge'
+import { registerQuitAndStopAllSessionsIpcBridge } from './quit-and-stop-all-sessions-ipc-bridge'
 import { registerTabLifecycleIpcBridge } from './tab-lifecycle-ipc-bridge'
 import { registerTerminalPresentationIpcBridge } from './terminal-presentation-ipc-bridge'
+import { registerTerminalTabMountIpcBridge } from './terminal-tab-mount-ipc-bridge'
 import { registerPtySourceDisownedIpcBridge } from './pty-source-disowned-ipc-bridge'
 import { registerTerminalRequestIpcBridge } from './terminal-request-ipc-bridge'
 import { registerAgentLaunchTabIpcBridge } from './agent-launch-tab-ipc-bridge'
+import { registerTerminalPaneRevealIpcBridge } from './terminal-pane-reveal-ipc-bridge'
+import { registerAgentPaneActivityIpcBridge } from './agent-pane-activity-ipc-bridge'
 import { registerTerminalUiRoutingIpcBridge } from './terminal-ui-routing-ipc-bridge'
 import { registerUpdaterStatusIpcBridge } from './updater-status-ipc-bridge'
 import { createWorktreeEventRuntime } from './worktree-event-runtime'
@@ -46,24 +60,17 @@ function remountTerminalTabsAwaitingHostHydration(): void {
   }
 }
 
-export type IpcEventsCleanupPhase =
-  | 'agent.disposeAsyncState'
-  | 'mobile.disposeHydration'
-  | 'runtimeStore.unsubscribe'
-  | 'agentStore.unsubscribe'
-  | 'ipc.dispose'
-  | 'directSsh.stop'
-  | 'notifications.reset'
-
-export function installAppLifetimeIpcEvents(
-  onCleanupPhase?: (phase: IpcEventsCleanupPhase) => void
-): () => void {
-  const unsubs: (() => void)[] = []
+export function installAppLifetimeIpcEvents(): () => void {
+  const unsubs: (() => void)[] = [installBrowserInitializationPresentationLifetime()]
   const backgroundWakeDispatcher = createBackgroundSleepingAgentWakeDispatcher()
   unsubs.push(backgroundWakeDispatcher.dispose)
-  unsubs.push(attachMobileMarkdownBridge())
   unsubs.push(
     window.api.automations.onChanged((payload) => emitAutomationsChangedWindowEvent(payload))
+  )
+  unsubs.push(
+    window.api.workspaceCleanup.onRunFinished((run) =>
+      emitWorkspaceCleanupRunFinishedWindowEvent({ environmentId: null, run })
+    )
   )
 
   const worktreeRuntime = createWorktreeEventRuntime(unsubs, isRuntimeEnvironmentActive)
@@ -71,6 +78,7 @@ export function installAppLifetimeIpcEvents(
   if (statusApi?.onStatusChanged) {
     const apply = (snapshot: RuntimeHostStatusSnapshot): void => {
       useAppStore.getState().applyRuntimeHostStatusSnapshot(snapshot)
+      observeRuntimeHostStatusForPendingRemovals(snapshot)
       remoteRuntimeTerminalColorPush.observeStatusSnapshot(snapshot)
       observeJiraImageHostStatus(snapshot)
     }
@@ -90,6 +98,7 @@ export function installAppLifetimeIpcEvents(
   const unsubscribeRuntimeEnvironmentStore = registerRuntimeClientIpcBridge(unsubs, worktreeRuntime)
   registerBackgroundWorktreeRemovalBridge(unsubs)
   registerWslHostIpcBridge(unsubs)
+  registerEphemeralVmLifecycleIpcBridge(unsubs)
   registerProjectCatalogIpcBridge(
     unsubs,
     worktreeRuntime.worktreeChangeRefreshQueue,
@@ -97,7 +106,9 @@ export function installAppLifetimeIpcEvents(
     remountTerminalTabsAwaitingHostHydration
   )
   registerSettingsAndSidebarIpcBridge(unsubs)
+  registerQuitAndStopAllSessionsIpcBridge(unsubs)
   registerOrcaProfileAuthIpcBridge(unsubs)
+  registerPreflightWslRetryIpcBridge(unsubs)
   registerWorkspaceShortcutIpcBridge(unsubs)
   registerOsMarkdownFileOpenBridge(unsubs)
   registerWslAccountNoticeIpcBridge(unsubs)
@@ -123,18 +134,25 @@ export function installAppLifetimeIpcEvents(
   )
 
   registerTerminalPresentationIpcBridge(unsubs)
+  registerTerminalTabMountIpcBridge(unsubs)
   registerTerminalRequestIpcBridge(unsubs)
   registerAgentLaunchTabIpcBridge(unsubs)
   registerPtySourceDisownedIpcBridge(unsubs)
   registerTerminalUiRoutingIpcBridge(unsubs)
+  registerTerminalPaneRevealIpcBridge(unsubs)
+  registerAgentPaneActivityIpcBridge(unsubs)
   registerSessionTabIpcBridge(unsubs)
   registerMobileAndTerminalCloseIpcBridge(unsubs, backgroundWakeDispatcher.request)
   registerUpdaterStatusIpcBridge(unsubs)
   registerBrowserStateIpcBridge(unsubs, isRuntimeEnvironmentActive)
   registerContentCreationIpcBridge(unsubs, isRuntimeEnvironmentActive)
   registerBrowserRequestIpcBridge(unsubs)
+  signalBrowserTabRequestsReadyAfterRestore(unsubs)
+  registerBrowserTabActivateIpcBridge(unsubs)
   registerTabLifecycleIpcBridge(unsubs)
   registerRateLimitIpcBridge(unsubs)
+  registerPluginViewIpcBridge(unsubs)
+  registerClaudeAccountSwitchIpcBridge(unsubs)
   const stopDirectSshStateBridge = registerDirectSshStateIpcBridge(unsubs)
   registerZoomIpcBridge(unsubs)
   const agentStatusBridge = registerAgentStatusIpcBridge(unsubs)
@@ -145,18 +163,11 @@ export function installAppLifetimeIpcEvents(
 
   return () => {
     agentStatusBridge.disposeAsyncState()
-    onCleanupPhase?.('agent.disposeAsyncState')
     disposeMobileDriverHydration()
-    onCleanupPhase?.('mobile.disposeHydration')
     unsubscribeRuntimeEnvironmentStore()
-    onCleanupPhase?.('runtimeStore.unsubscribe')
     agentStatusBridge.unsubscribeStore()
-    onCleanupPhase?.('agentStore.unsubscribe')
     unsubs.forEach((unsubscribe) => unsubscribe())
-    onCleanupPhase?.('ipc.dispose')
     stopDirectSshStateBridge()
-    onCleanupPhase?.('directSsh.stop')
     resetAgentHookCompletionNotificationCoordinators()
-    onCleanupPhase?.('notifications.reset')
   }
 }

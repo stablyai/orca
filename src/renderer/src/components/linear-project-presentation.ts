@@ -1,3 +1,5 @@
+import { getIntlLocale, translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type {
   LinearProjectDetail,
   LinearProjectSummary
@@ -33,23 +35,39 @@ export function linearProjectUnknownText(value: unknown): string | null {
   return null
 }
 
-export function linearProjectDateLabel(value: string | null | undefined): string {
+export function linearProjectDateLabel(
+  value: string | null | undefined,
+  t?: Translate,
+  intlLocale: string = getIntlLocale()
+): string {
   if (!value) {
-    return 'None'
+    return linearProjectNoneLabel(t)
   }
   const date = new Date(value)
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString()
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString(intlLocale)
 }
 
-export function linearProjectPriorityLabel(priority: unknown, fallback: unknown): string {
+export function linearProjectPriorityLabel(
+  priority: unknown,
+  fallback: unknown,
+  t?: Translate
+): string {
   const fromFallback = linearProjectUnknownText(fallback)
   if (fromFallback) {
     return fromFallback
   }
   if (typeof priority === 'number') {
-    return priority === 0 ? 'None' : `P${priority}`
+    return priority === 0 ? linearProjectNoneLabel(t) : `P${priority}`
   }
-  return linearProjectUnknownText(priority) ?? 'None'
+  return linearProjectUnknownText(priority) ?? linearProjectNoneLabel(t)
+}
+
+export function linearProjectNoneLabel(t: Translate = translate): string {
+  return t('auto.components.linear.project.view.surfaces.8bbecb2510', 'None')
+}
+
+export function linearProjectBacklogLabel(t: Translate = translate): string {
+  return t('auto.components.linear.project.view.surfaces.backlog', 'Backlog')
 }
 
 export function linearProjectProgressPercent(project: LinearProjectPresentation): number | null {

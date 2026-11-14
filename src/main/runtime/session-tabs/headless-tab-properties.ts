@@ -1,14 +1,120 @@
-import { OrcaRuntimeWithCloseHeadlessMobileTerminalTab } from './headless-terminal-tab-close'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import { renameStructuredSessionTab, type SessionTabProps } from './structured-session-tab-rename'
+import { OrcaRuntimeWithHeadlessPaneMoveToNewTab } from './headless-pane-move-to-new-tab'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
 import type { RuntimeMobileSessionSnapshotTab } from '../../../shared/runtime-mobile-session-tab-contracts'
 import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
-} from '../../../shared/terminal-tab-types'
-import { cloneTerminalLayoutSnapshot } from '../mobile-session-layout-projection'
+} from '../../../shared/workspace-layout/terminal-tab-types'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { cloneTerminalLayoutSnapshot } from '../terminal/surface/mobile-session-layout-projection'
+import {
+  sameStringRecord,
+  terminalLayoutNodeEqual
+} from '../../../shared/workspace-layout/terminal-topology/terminal-layout-equality'
 
-export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithCloseHeadlessMobileTerminalTab {
+type HeadlessPaneLayoutEdit = {
+  tabId: string
+  root: TerminalPaneLayoutNode | null
+  expandedLeafId: string | null
+  chatLeafId?: string | null
+  titlesByLeafId?: Record<string, string>
+}
+
+// Remounts resend unchanged layouts; avoid persisting and broadcasting them to every client.
+function paneLayoutEditIsNoOp(
+  layout: Pick<TerminalLayoutSnapshot, 'root' | 'expandedLeafId' | 'chatLeafId' | 'titlesByLeafId'>,
+  edit: HeadlessPaneLayoutEdit
+): boolean {
+  return (
+    terminalLayoutNodeEqual(edit.root ?? layout.root, layout.root) &&
+    (layout.expandedLeafId ?? null) === edit.expandedLeafId &&
+    (edit.chatLeafId === undefined || (layout.chatLeafId ?? null) === (edit.chatLeafId ?? null)) &&
+    (!edit.titlesByLeafId || sameStringRecord(layout.titlesByLeafId, edit.titlesByLeafId))
+  )
+}
+
+export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithHeadlessPaneMoveToNewTab {
+  // Remote tab color/pin need persistence and live publication or the next snapshot reverts them.
+  async setMobileSessionTabProps(
+    worktreeSelector: string,
+    args: SessionTabProps
+  ): Promise<{ updated: true }> {
+    const explicitWorktreeId = this.getExplicitSessionWorktreeIdSelector(worktreeSelector)
+    const worktreeId =
+      explicitWorktreeId ?? (await this.resolveWorkspaceSelector(worktreeSelector)).id
+    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
+    // Attached renderers own and republish props; headless writes would be overwritten.
+    const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
+    const hostTabId = snapshot
+      ? (this.resolveMobileSessionHostTabId(snapshot, args.tabId) ?? args.tabId)
+      : args.tabId
+    if (ORCA_LAYOUT_OWNER_IS_MAIN && (await this.setMainTabProps(worktreeId, hostTabId, args))) {
+      return { updated: true }
+    }
+    const authoritativeWindow = this.getAvailableAuthoritativeWindow()
+    if (
+      authoritativeWindow &&
+      (args.color !== undefined || args.isPinned !== undefined || args.viewMode !== undefined)
+    ) {
+      throw Object.assign(
+        new Error(
+          'Tab color, pin, and view mode edits are unavailable while a desktop window owns the layout'
+        ),
+        { code: 'capability_unsupported' }
+      )
+    }
+    args = await renameStructuredSessionTab(snapshot, hostTabId, args, () =>
+      this.ensureStructuredAgentSessionHost()
+    )
+    // Sleeping/starting panes lack handles, so title edits must address the tab (#29975).
+    const customTitle =
+      args.customTitle === undefined ? undefined : args.customTitle?.trim() || null
+    if (authoritativeWindow) {
+      if (customTitle !== undefined) {
+        this.notifier?.renameTerminal(hostTabId, customTitle)
+      }
+      return { updated: true }
+    }
+    this.persistHeadlessSessionTabProps(worktreeId, hostTabId, args)
+    // Why: a live pane's own title outranks the snapshot's, so name it the way terminal.rename does.
+    const liveHandles =
+      customTitle === undefined
+        ? []
+        : this.getPtyIdsForExplicitTabClose(worktreeId, hostTabId).flatMap((ptyId) => {
+            const handle = this.handleByPtyId.get(ptyId)
+            return handle ? [handle] : []
+          })
+    for (const handle of liveHandles) {
+      await this.renameTerminal(handle, customTitle ?? null)
+    }
+    if (customTitle !== undefined && liveHandles.length === 0) {
+      this.persistHeadlessTerminalTitle(worktreeId, hostTabId, customTitle)
+    }
+    // A live pane's rename above already set its title; only a paneless tab needs `title` here.
+    this.applyHeadlessSessionTabPropsToSnapshot(worktreeId, hostTabId, {
+      ...args,
+      ...(customTitle !== undefined && liveHandles.length === 0
+        ? {
+            customTitle,
+            title: customTitle ?? this.headlessTerminalFallbackTitle(worktreeId, hostTabId)
+          }
+        : {})
+    })
+    return { updated: true }
+  }
+
+  /** What `title` reads once a manual name is cleared; readers that predate `customTitle` show it. */
+  protected headlessTerminalFallbackTitle(worktreeId: string, tabId: string): string {
+    const tab = this.getWorkspaceSessionForWorktree(worktreeId)?.tabsByWorktree[worktreeId]?.find(
+      (candidate) => candidate.id === tabId
+    )
+    return (
+      tab?.generatedTitle?.trim() || tab?.title?.trim() || tab?.defaultTitle?.trim() || 'Terminal'
+    )
+  }
+
   protected persistHeadlessSessionTabProps(
     worktreeId: string,
     tabId: string,
@@ -68,6 +174,7 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithCloseH
     tabId: string,
     props: {
       title?: string
+      customTitle?: string | null
       color?: string | null
       isPinned?: boolean
       viewMode?: 'terminal' | 'chat'
@@ -86,6 +193,9 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithCloseH
       return {
         ...tab,
         ...(props.title !== undefined ? { title: props.title } : {}),
+        ...(props.customTitle !== undefined && tab.type === 'terminal'
+          ? { customTitle: props.customTitle }
+          : {}),
         ...(props.color !== undefined ? { color: props.color } : {}),
         ...(props.isPinned !== undefined ? { isPinned: props.isPinned } : {}),
         ...(props.viewMode !== undefined ? { viewMode: props.viewMode } : {})
@@ -108,18 +218,10 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithCloseH
     return tab.type === 'terminal' ? tab.parentTabId : tab.id
   }
 
-  // Merge the client's pane structure into the persisted tab layout. PTY
-  // bindings and active leaf stay host-owned; only ratios/expand/titles change.
-  // terminalLayoutsByTabId is keyed by tab id (worktree-independent).
+  // Merge only client geometry/titles; PTY bindings and active leaf remain host-owned. Layouts are keyed by tab, independent of worktree.
   protected persistHeadlessTerminalPaneLayout(
     worktreeId: string,
-    args: {
-      tabId: string
-      root: TerminalPaneLayoutNode | null
-      expandedLeafId: string | null
-      chatLeafId?: string | null
-      titlesByLeafId?: Record<string, string>
-    }
+    args: HeadlessPaneLayoutEdit
   ): TerminalLayoutSnapshot | undefined {
     const session = this.getWorkspaceSessionForWorktree(worktreeId)
     if (!session || !this.store?.setWorkspaceSession) {
@@ -128,6 +230,9 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithCloseH
     const existing = session.terminalLayoutsByTabId?.[args.tabId]
     if (!existing) {
       return undefined
+    }
+    if (paneLayoutEditIsNoOp(existing, args)) {
+      return existing
     }
     const candidate = {
       ...session,
@@ -143,7 +248,7 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithCloseH
       }
     }
     this.setWorkspaceSessionForWorktree(worktreeId, candidate)
-    // Why: persistence may reject stale membership while accepting its metadata; publish only that rebased layout.
+    // Publish the persisted rebase: stale membership may be rejected while metadata is accepted.
     return (
       this.getWorkspaceSessionForWorktree(worktreeId)?.terminalLayoutsByTabId[args.tabId] ??
       candidate.terminalLayoutsByTabId[args.tabId]
@@ -152,13 +257,7 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithCloseH
 
   protected applyHeadlessTerminalPaneLayoutToSnapshot(
     worktreeId: string,
-    args: {
-      tabId: string
-      root: TerminalPaneLayoutNode | null
-      expandedLeafId: string | null
-      chatLeafId?: string | null
-      titlesByLeafId?: Record<string, string>
-    }
+    args: HeadlessPaneLayoutEdit
   ): void {
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     if (!snapshot) {
@@ -166,7 +265,12 @@ export abstract class RuntimeHeadlessTabProperties extends OrcaRuntimeWithCloseH
     }
     let changed = false
     const tabs = snapshot.tabs.map((tab) => {
-      if (tab.type !== 'terminal' || tab.parentTabId !== args.tabId || !tab.parentLayout) {
+      if (
+        tab.type !== 'terminal' ||
+        tab.parentTabId !== args.tabId ||
+        !tab.parentLayout ||
+        paneLayoutEditIsNoOp(tab.parentLayout, args)
+      ) {
         return tab
       }
       changed = true

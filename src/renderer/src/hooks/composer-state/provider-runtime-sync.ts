@@ -26,9 +26,9 @@ import { useAppStore } from '@/store'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { type HookCheckResult, checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import type { GitHubRepositoryIdentity } from '../../../../shared/github/pull-request-types'
+import { type HookCheckResult, checkRuntimeHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import type { GitHubRepositoryIdentity } from '../../../../shared/github/repositories/repository-identity'
 import {
   getRepoSetupAgentStartupPolicy,
   buildSetupAgentStartupHookSettings
@@ -54,9 +54,7 @@ export function useComposerProviderRuntimeSync(input: ComposerProviderRuntimeSyn
     updateRepo
   } = input
 
-  // Why: depend on the persisted policy *value*, not the selectedRepo object. Background repo
-  // refetches (git polling) hand back a new repo reference with the same hookSettings; keying on
-  // the object would re-run this and briefly flip the toggle back to the stale value — the glitch.
+  // Depend on persisted hook-policy value; refetched repo identities must not replay stale toggles.
   const persistedSetupAgentStartupPolicy = getRepoSetupAgentStartupPolicy(selectedRepo)
 
   useEffect(() => {
@@ -187,18 +185,22 @@ export function useComposerProviderRuntimeSync(input: ComposerProviderRuntimeSyn
   } | null>(null)
 
   const loadHookCheckForRepo = useCallback(
-    (targetRepoId: string): Promise<HookCheckResult> => {
-      const key = JSON.stringify([selectedRepoExecutionHostId ?? 'local', targetRepoId])
+    (targetRepoId: string, options?: { background?: boolean }): Promise<HookCheckResult> => {
+      const background = options?.background === true
+      // A submit must not reuse the open-time check's stopped-distro refusal.
+      const key = JSON.stringify([
+        selectedRepoExecutionHostId ?? 'local',
+        targetRepoId,
+        ...(background ? ['background'] : [])
+      ])
       const existing = hookCheckRef.current
       if (existing?.key === key) {
         return existing.promise
       }
-      // Why: drop the cache entry on failure so a transient IPC error doesn't pin every later
-      // check for this repo/host to the same rejection.
-      // Why: the repo row names its host; an unknown one is inspected nowhere.
+      // Evict rejected checks so transient errors can retry; inspect only the repo’s known host.
       const promise: Promise<HookCheckResult> = (
         selectedRepoExecutionHostId
-          ? checkRuntimeHooks(selectedRepoExecutionHostId, targetRepoId)
+          ? checkRuntimeHooks(selectedRepoExecutionHostId, targetRepoId, { background })
           : Promise.reject(new Error('The project host is unknown.'))
       ).catch((error: unknown) => {
         if (hookCheckRef.current?.promise === promise) {

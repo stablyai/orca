@@ -1,0 +1,408 @@
+import { useCallback, useState } from 'react'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
+import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { Button } from '../../ui/button'
+import { PluginCatalogLayout, type PluginCatalogFilter } from './PluginCatalogLayout'
+import { PluginListGroup } from './PluginListGroup'
+import { matchesPluginSearch, type PluginListEntry } from './plugin-list-entries'
+import { usePluginManagerEntries } from './use-plugin-manager-entries'
+import type { InstalledRowHandlers } from './PluginManagerRows'
+import { PluginMarketplaceSourceDialog } from '../dialogs/PluginMarketplaceSourceDialog'
+import { PluginCatalogLinkDialog } from '../dialogs/PluginCatalogLinkDialog'
+import { usePluginInstallLink } from '../state/use-plugin-install-link'
+import { usePluginBrowseRequest } from '../state/use-plugin-browse-request'
+import { usePluginCatalog } from '../state/use-plugin-catalog'
+import { usePluginHoverPrefetch } from '../state/use-plugin-hover-prefetch'
+import { usePluginInstallAction } from '../state/use-plugin-install-action'
+import { usePluginUpdateDialog } from '../state/use-plugin-update-dialog'
+import { PluginCatalogHighlights } from '../catalog/PluginCatalogHighlights'
+import {
+  CatalogCard,
+  CatalogNotice,
+  PluginCardSkeletons,
+  PluginCatalogGroups,
+  type CatalogCardHandlers
+} from '../catalog/PluginCatalogGroups'
+import { PluginListToolbar } from './PluginListToolbar'
+import { PluginCategoryChips } from './PluginCategoryChips'
+import {
+  PluginAllInstalled,
+  PluginNoMatches,
+  PluginNoneInstalled,
+  PluginPageMissing
+} from './PluginListEmptyStates'
+import { PluginUpdateAllDialog } from '../dialogs/PluginUpdateAllDialog'
+import {
+  matchesPluginFilter,
+  NO_PLUGIN_LIST_FILTER,
+  pluginFilterSize,
+  type PluginListFilter
+} from './plugin-list-filter'
+import { PluginDetailPage } from '../page/PluginDetailPage'
+import { useOrcaVersion, type PluginPageNavigation } from '../state/use-plugin-page-navigation'
+import type { PluginLogsState } from '../state/use-plugin-logs'
+
+function resultCountLabel(count: number, t: Translate = translate): string {
+  return count === 1
+    ? t('auto.components.settings.PluginManager.resultCountOne', '1 plugin matches')
+    : t('auto.components.settings.PluginManager.resultCount', '{{value0}} plugins match', {
+        value0: count
+      })
+}
+
+/** Rows a group shows before "Show all"; search and filters show everything. 12 fills whole rows at 1–4 columns. */
+export const PLUGIN_GROUP_ROW_CAP = 12
+
+/** A capped group's rows: the first ones, plus every installed one so its switch stays in view. */
+export function cappedPluginRows(rows: readonly PluginListEntry[]): PluginListEntry[] {
+  return rows.filter((entry, index) => index < PLUGIN_GROUP_ROW_CAP || entry.installed)
+}
+
+type PluginManagerProps = {
+  plugins: readonly PluginHostListEntry[]
+  pluginsLoading: boolean
+  pluginsError: string | null
+  busyPluginKeys: ReadonlySet<string>
+  handlers: Omit<InstalledRowHandlers, 'onOpen' | 'onViewLogs' | 'onCheckUpdate'>
+  onRefreshInstalled: () => Promise<void>
+  /** Reloads after an install or update and opens review for any that now need it. */
+  onInstalled: (pluginKeys: string | readonly string[]) => Promise<void>
+  logsByPlugin: Readonly<Record<string, PluginLogsState>>
+  onShowLogs: (pluginKey: string) => void
+  onOpenShortcuts: () => void
+  page: PluginPageNavigation
+  sourcesOpen: boolean
+  setSourcesOpen: (open: boolean) => void
+  onConsent: (
+    pluginKey: string,
+    reviewedFingerprint: string,
+    decision: 'approve' | 'keep-disabled'
+  ) => Promise<void>
+}
+
+export function PluginManager({
+  plugins,
+  pluginsLoading,
+  pluginsError,
+  busyPluginKeys,
+  handlers,
+  onRefreshInstalled,
+  onInstalled,
+  logsByPlugin,
+  onShowLogs,
+  onOpenShortcuts,
+  page,
+  sourcesOpen,
+  setSourcesOpen,
+  onConsent
+}: PluginManagerProps): React.JSX.Element {
+  const t = useTranslate()
+  const [search, setSearch] = useState('')
+  const [chosenTab, setTab] = useState<PluginCatalogFilter>('all')
+  const [listFilter, setListFilter] = useState<PluginListFilter>(NO_PLUGIN_LIST_FILTER)
+  const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(() => new Set())
+  const { openKey, open, back } = page
+  usePluginBrowseRequest({ page, setTab, setSearch, setListFilter })
+  const catalog = usePluginCatalog({ onRefreshInstalled, onOpenRequested: open })
+  // Why: an install counts as from a link only while the page that link opened is showing.
+  const [linkedKey, setLinkedKey] = useState<string | null>(null)
+  const installLink = usePluginInstallLink({
+    sources: catalog.sources,
+    loading: catalog.loading,
+    loadMarketplaceData: catalog.loadMarketplaceData,
+    open: (pluginKey) => {
+      setLinkedKey(pluginKey)
+      open(pluginKey)
+    }
+  })
+  const openEntry = (pluginKey: string): void => {
+    open(pluginKey)
+    if (plugins.find((plugin) => plugin.pluginKey === pluginKey)?.hasWorker) {
+      onShowLogs(pluginKey)
+    }
+  }
+  const isFromInstallLink = useCallback(
+    (pluginKey: string) => pluginKey === linkedKey && openKey === linkedKey,
+    [linkedKey, openKey]
+  )
+  const install = usePluginInstallAction({
+    fetchPreview: catalog.fetchPreview,
+    onInstalled,
+    isFromInstallLink
+  })
+  const prefetch = usePluginHoverPrefetch(catalog.fetchPreview)
+  const orcaVersion = useOrcaVersion()
+  const entries = usePluginManagerEntries(
+    plugins,
+    catalog.listings,
+    catalog.sources,
+    orcaVersion,
+    t
+  )
+  const allEntries = [...entries.installed, ...entries.available]
+  const query = search.trim()
+  const filterSize = pluginFilterSize(listFilter)
+  const narrowed = Boolean(query) || filterSize > 0
+  const matches = (entry: PluginListEntry): boolean =>
+    matchesPluginSearch(entry, query) && matchesPluginFilter(entry, listFilter)
+  const installed = entries.installed.filter(matches)
+  const updates = entries.installed.filter((entry) => entry.updateVersion)
+  // Why: once the last update lands the Updates filter is gone, so the list falls back to Installed.
+  const filter: PluginCatalogFilter =
+    chosenTab === 'updates' && updates.length === 0 ? 'installed' : chosenTab
+  const visibleInstalled = filter === 'updates' ? updates.filter(matches) : installed
+  const capped = (groupId: string, rows: PluginListEntry[]): PluginListEntry[] =>
+    narrowed || expandedGroups.has(groupId) ? rows : cappedPluginRows(rows)
+  const showAll = (groupId: string) => () =>
+    setExpandedGroups((current) => new Set(current).add(groupId))
+  const listedInCatalog = (entry: PluginListEntry): boolean =>
+    catalog.sources.some((source) => source.id === entry.listing?.marketplaceSourceId)
+  // Why: dev folders, local installs and bundled plugins have no catalog card to carry their switch.
+  const uncataloged = catalog.loading ? [] : installed.filter((entry) => !listedInCatalog(entry))
+  const catalogInstalled = filter === 'available' ? [] : entries.installed
+  const updateDialog = usePluginUpdateDialog({
+    ready: !pluginsLoading && !catalog.loading,
+    updates,
+    page,
+    showUpdates: () => setTab('updates'),
+    reloadCatalogs: catalog.loadMarketplaceData
+  })
+  const rowHandlers: InstalledRowHandlers = {
+    ...handlers,
+    onOpen: openEntry,
+    onViewLogs: openEntry,
+    onCheckUpdate: (entry) => updateDialog.open([entry])
+  }
+  const cardHandlers: CatalogCardHandlers = {
+    install,
+    prefetch,
+    openEntry,
+    orcaVersion,
+    refreshing: catalog.refreshBusy,
+    installedHandlers: rowHandlers,
+    busyPluginKeys
+  }
+  const visibleCatalogCount = [
+    ...entries.available,
+    ...catalogInstalled.filter((entry) => entry.listing)
+  ].filter((entry) => listedInCatalog(entry) && matches(entry)).length
+  const resultCount =
+    filter === 'installed' || filter === 'updates'
+      ? visibleInstalled.length
+      : visibleCatalogCount + (filter === 'all' ? uncataloged.length : 0)
+  const nothingMatches = narrowed && resultCount === 0
+  const everythingInstalled =
+    filter === 'available' &&
+    !narrowed &&
+    !catalog.loading &&
+    !catalog.error &&
+    catalog.sources.length > 0 &&
+    catalog.sources.every((source) => !source.error) &&
+    visibleCatalogCount === 0
+
+  const installedTitle = t('auto.components.settings.PluginManager.installed', 'Installed')
+  const installedGroup = pluginsLoading ? (
+    <PluginListGroup layout="grid" title={installedTitle} showHeading={false}>
+      <PluginCardSkeletons />
+    </PluginListGroup>
+  ) : pluginsError ? (
+    <PluginListGroup
+      title={installedTitle}
+      showHeading={false}
+      notice={
+        <CatalogNotice
+          tone="error"
+          title={t(
+            'auto.components.settings.PluginManager.installedFailedTitle',
+            'Couldn’t read your installed plugins.'
+          )}
+          body={pluginsError}
+          actions={
+            <Button variant="ghost" size="xs" onClick={() => void onRefreshInstalled()}>
+              {t('auto.components.settings.PluginManager.retry', 'Retry')}
+            </Button>
+          }
+        />
+      }
+    />
+  ) : filter === 'all' ? (
+    uncataloged.length > 0 ? (
+      <PluginListGroup
+        layout="grid"
+        title={installedTitle}
+        detail={
+          // Why: with no catalog loaded every installed plugin lands here, listed or not.
+          catalog.sources.length > 0
+            ? t('auto.components.settings.PluginManager.notFromCatalog', 'not from a catalog')
+            : undefined
+        }
+      >
+        {uncataloged.map((entry) => (
+          <CatalogCard key={entry.pluginKey} entry={entry} handlers={cardHandlers} />
+        ))}
+      </PluginListGroup>
+    ) : null
+  ) : (
+    <PluginListGroup
+      layout="grid"
+      title={
+        filter === 'updates'
+          ? t('auto.components.settings.PluginManager.updatesTitle', 'Updates')
+          : installedTitle
+      }
+      showHeading={false}
+    >
+      {visibleInstalled.map((entry) => (
+        <CatalogCard key={entry.pluginKey} entry={entry} handlers={cardHandlers} />
+      ))}
+    </PluginListGroup>
+  )
+
+  const openedEntry = openKey
+    ? [...entries.installed, ...entries.available].find((entry) => entry.pluginKey === openKey)
+    : null
+  const dialogs = (
+    <>
+      <PluginUpdateAllDialog
+        key={updateDialog.opens}
+        open={updateDialog.entries !== null}
+        entries={updateDialog.entries ?? []}
+        orcaVersion={orcaVersion}
+        onClose={updateDialog.close}
+        onUpdated={onInstalled}
+      />
+      <PluginMarketplaceSourceDialog
+        open={sourcesOpen}
+        sources={catalog.sources}
+        onOpenChange={setSourcesOpen}
+        onChanged={catalog.loadMarketplaceData}
+      />
+      <PluginCatalogLinkDialog
+        catalog={installLink.catalogToAdd}
+        onCancel={installLink.cancelCatalog}
+        onConfirm={installLink.confirmCatalog}
+      />
+    </>
+  )
+  if (openKey && !openedEntry) {
+    return (
+      <>
+        <PluginPageMissing loading={pluginsLoading || catalog.loading} onBack={back} />
+        {dialogs}
+      </>
+    )
+  }
+  if (openedEntry) {
+    return (
+      <>
+        <PluginDetailPage
+          key={openedEntry.pluginKey}
+          entry={openedEntry}
+          busy={busyPluginKeys.has(openedEntry.pluginKey)}
+          orcaVersion={orcaVersion}
+          logsState={logsByPlugin[openedEntry.pluginKey]}
+          handlers={rowHandlers}
+          fetchPreview={catalog.fetchPreview}
+          install={install}
+          refreshing={catalog.refreshBusy}
+          onConsent={onConsent}
+          onBack={back}
+          hasPreviousPage={page.previousKey !== null}
+          onOpenShortcuts={onOpenShortcuts}
+          entries={entries}
+          onOpenPlugin={openEntry}
+        />
+        {dialogs}
+      </>
+    )
+  }
+
+  return (
+    <>
+      <PluginCatalogLayout
+        filter={filter}
+        onFilterChange={setTab}
+        search={search}
+        onSearchChange={setSearch}
+        installedCount={plugins.length}
+        updateCount={updates.length}
+        filters={
+          <PluginCategoryChips entries={allEntries} filter={listFilter} onChange={setListFilter} />
+        }
+        toolbar={
+          <PluginListToolbar
+            updateCount={filter === 'updates' ? updates.length : 0}
+            onUpdateAll={() => updateDialog.open(updates)}
+            filter={listFilter}
+            sources={catalog.sources}
+            onFilterChange={setListFilter}
+            refreshBusy={catalog.refreshBusy}
+            onRefresh={() => void catalog.refresh()}
+          />
+        }
+      >
+        {catalog.error && catalog.sources.length > 0 ? (
+          <CatalogNotice
+            tone="error"
+            title={catalog.error}
+            body=""
+            actions={
+              <Button variant="ghost" size="xs" onClick={() => void catalog.refresh()}>
+                {t('auto.components.settings.PluginManager.retry', 'Retry')}
+              </Button>
+            }
+          />
+        ) : null}
+        {nothingMatches ? (
+          <PluginNoMatches
+            query={query}
+            filtered={filterSize > 0}
+            onClear={() => {
+              setSearch('')
+              setListFilter(NO_PLUGIN_LIST_FILTER)
+            }}
+          />
+        ) : (filter === 'installed' || filter === 'updates') &&
+          !pluginsLoading &&
+          !pluginsError &&
+          visibleInstalled.length === 0 ? (
+          <PluginNoneInstalled onBrowse={() => setTab('all')} />
+        ) : everythingInstalled ? (
+          <PluginAllInstalled onShowInstalled={() => setTab('installed')} />
+        ) : filter === 'all' || filter === 'available' ? (
+          <div className="@container/plugin-catalog space-y-8">
+            {!narrowed && !catalog.loading && !pluginsLoading && !pluginsError ? (
+              <PluginCatalogHighlights
+                entries={allEntries}
+                orcaVersion={orcaVersion}
+                cardHandlers={cardHandlers}
+              />
+            ) : null}
+            {/* Why the error and loading too: until installed plugins are read, Not installed can't tell what you have. */}
+            {filter === 'all' || pluginsError || pluginsLoading ? installedGroup : null}
+            {filter === 'available' && (pluginsLoading || pluginsError) ? null : (
+              <PluginCatalogGroups
+                catalog={catalog}
+                available={entries.available}
+                installed={catalogInstalled}
+                cardHandlers={cardHandlers}
+                matches={matches}
+                narrowed={narrowed}
+                capped={capped}
+                showAll={showAll}
+                openSources={() => setSourcesOpen(true)}
+              />
+            )}
+          </div>
+        ) : (
+          <div className="@container/plugin-catalog">{installedGroup}</div>
+        )}
+        <p className="sr-only" aria-live="polite">
+          {narrowed ? resultCountLabel(resultCount, t) : ''}
+        </p>
+      </PluginCatalogLayout>
+      {dialogs}
+    </>
+  )
+}

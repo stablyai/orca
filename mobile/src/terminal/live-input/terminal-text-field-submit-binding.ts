@@ -1,0 +1,12 @@
+import type { TextInputInstance } from 'react-native'
+import type { TerminalLiveAccessoryInput } from './terminal-live-accessory-input'
+
+// Native editor actions submit during composition; the web platform sibling repairs RN Web’s missing submit signal.
+export function bindTerminalTextFieldSubmit(
+  _node: TextInputInstance | null,
+  _onSubmit: () => void,
+  _onKeyChord?: (input: TerminalLiveAccessoryInput) => boolean,
+  _onCompositionEnd?: (text: string) => void
+): () => void {
+  return () => {}
+}

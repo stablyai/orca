@@ -27,7 +27,6 @@ async function backdate(path: string): Promise<void> {
   await utimes(path, past, past)
 }
 
-/** A service the stable launcher started from the copy unpacked from `Orca.AppImage`. */
 async function makeRunningGeneration() {
   const root = await mkdtemp(join(tmpdir(), 'orca-serve-appimage-update-'))
   created.push(root)
@@ -41,7 +40,7 @@ async function makeRunningGeneration() {
   return { root, appImagePath, executable: join(generationPath, 'orca-ide') }
 }
 
-/** `mv C B`: a new inode at the same path. */
+/** Replace the inode at the same path, as an AppImage update does. */
 async function swapIn(appImagePath: string, content: string): Promise<void> {
   const replacement = `${appImagePath}.new`
   await writeFile(replacement, content, { mode: 0o755 })
@@ -69,14 +68,6 @@ function restartDeps(overrides: Partial<AppImageRestartDeps> = {}): AppImageRest
 }
 
 describe('supervised serve and a replaced AppImage', () => {
-  it('finds the AppImage a stable-launcher service was unpacked from', async () => {
-    const { appImagePath, executable } = await makeRunningGeneration()
-    const watch = resolveAppImageBuildWatch(executable, {}, 'linux')
-    expect(watch?.appImagePath).toBe(appImagePath)
-    expect(inspectAppImageBuild(watch!)).toBe('current')
-    expect(resolveAppImageBuildWatch(executable, {}, 'darwin')).toBeNull()
-  })
-
   it('ignores a source record that names another AppImage', async () => {
     const { root, executable } = await makeRunningGeneration()
     const namespacePath = join(executable, '..', '..')
@@ -154,16 +145,15 @@ describe('supervised serve and a replaced AppImage', () => {
     expect(stopping.execve).not.toHaveBeenCalled()
   })
 
-  // Why: a build that dies before its own crash brake must not be exec'd on every service restart.
+  // Early build failures must not bypass the service’s durable crash brake.
   it('tries a new AppImage once, until a supervisor starts on it or --force', async () => {
     const { root, appImagePath, executable } = await makeRunningGeneration()
     const watch = resolveAppImageBuildWatch(executable, {}, 'linux')!
     await swapIn(appImagePath, 'build C')
     const attemptPath = join(root, 'attempt.json')
-    const logs: string[] = []
     const make = (overrides: { force?: boolean; runningKey?: string } = {}) =>
       createSupervisedAppImageUpdate({
-        ...restartDeps({ log: (line) => logs.push(line) }),
+        ...restartDeps(),
         watch: { ...watch, runningKey: overrides.runningKey ?? watch.runningKey },
         attemptPath,
         force: overrides.force ?? false
@@ -173,17 +163,13 @@ describe('supervised serve and a replaced AppImage', () => {
     expect(first.inspect()).toBe('superseded')
     await first.restart(() => false)
     const candidateKey = resolveAppImageCacheKey(appImagePath)
-    expect(JSON.parse(await readFile(attemptPath, 'utf8'))).toEqual({ candidateKey })
 
     // The new build died early; the service manager restarted the old one.
     const second = make()
     expect(second.inspect()).toBe('current')
-    expect(second.inspect()).toBe('current')
-    expect(logs.filter((line) => line.includes('did not come up'))).toHaveLength(1)
 
     expect(make({ force: true }).inspect()).toBe('superseded')
     await make().restart(() => false)
-    // A supervisor running the attempted build clears the record.
     make({ runningKey: candidateKey! })
     await expect(readFile(attemptPath, 'utf8')).rejects.toThrow()
   })

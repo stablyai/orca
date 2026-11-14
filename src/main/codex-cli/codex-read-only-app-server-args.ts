@@ -8,9 +8,7 @@ export const CODEX_READ_ONLY_APP_SERVER_ARGS = [
   ...CODEX_READ_ONLY_APP_SERVER_TAIL
 ] as const
 
-// Short-lived probes (rate limits, model catalog); plugin startup can launch marketplace
-// clones that outlive the probe teardown. Other read-only app-servers retain
-// normal plugin behavior.
+// Disable plugins only for short-lived probes; marketplace clones can outlive probe teardown.
 export const CODEX_SHORT_LIVED_PROBE_APP_SERVER_ARGS = [
   '-c',
   'approval_policy=never',

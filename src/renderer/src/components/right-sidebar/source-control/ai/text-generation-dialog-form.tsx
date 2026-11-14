@@ -1,3 +1,4 @@
+import { useAppStore } from '@/store/index'
 import React, { useCallback, useMemo, useState } from 'react'
 import { RefreshCw, Save, Sparkles, Terminal, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -11,20 +12,24 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
-import { planSourceControlTextGeneration } from '@/lib/source-control-generation-plan'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
+import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
+import { commitMessagePickerModel } from '@/components/feature-wall/commit-pr-settings/ai-commit-pr-picker'
+import type { AgentPickerEntry } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
+import { planSourceControlTextGeneration } from '@/lib/source-control/ai/source-control-generation-plan'
 import {
   CUSTOM_AGENT_ID,
   isCustomAgentId,
   listCommitMessageAgentCapabilities
-} from '../../../../../../shared/commit-message-agent-spec'
-import type { ResolvedSourceControlAiGenerationParams } from '../../../../../../shared/source-control-ai'
-import { formatLinkedIssueTemplateValue } from '../../../../../../shared/source-control-ai-action-variables'
-import type { SourceControlTextActionId } from '../../../../../../shared/source-control-ai-actions'
-import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control-ai-recipe-save'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+} from '../../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
+import type { ResolvedSourceControlAiGenerationParams } from '../../../../../../shared/source-control/ai/source-control-ai-operation-resolution'
+import { formatLinkedIssueTemplateValue } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-action-variables'
+import type { SourceControlTextActionId } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
+import type { SourceControlAiWriteTarget } from '../../../../../../shared/source-control/ai/settings/source-control-ai-recipe-save'
+import type { SourceControlRenderSettings } from '../listing/use-worktree-context'
 import type { Repo } from '../../../../../../shared/repo-types'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { toast } from 'sonner'
 import { SourceControlActionVariableChips } from '../../../source-control/SourceControlActionVariableChips'
 import { sourceControlTextGenerationDefaultsMatchTarget } from './text-generation-defaults'
@@ -33,8 +38,7 @@ import {
   type CommitMessageGenerationAgentChoice
 } from './text-generation-params'
 import { translate } from '@/i18n/i18n'
-
-const UNCONFIGURED_AGENT_SELECT_VALUE = ''
+import { useTranslate } from '@/i18n/use-translate'
 
 export type SourceControlTextGenerationSaveTarget = {
   target: SourceControlAiWriteTarget
@@ -45,7 +49,7 @@ export type SourceControlTextGenerationSaveTarget = {
 type SourceControlTextGenerationDialogFormProps = {
   actionId: SourceControlTextActionId
   generateLabel: string
-  settings: GlobalSettings | null
+  settings: SourceControlRenderSettings | null
   repo: Pick<Repo, 'id' | 'sourceControlAi'> | null
   baseParams: ResolvedSourceControlAiGenerationParams | null
   basePromptPreview?: string
@@ -91,7 +95,23 @@ export function SourceControlTextGenerationDialogForm({
   onOpenChange,
   onSaveDefaults
 }: SourceControlTextGenerationDialogFormProps): React.JSX.Element {
-  const capabilities = useMemo(() => listCommitMessageAgentCapabilities(), [])
+  const t = useTranslate()
+  const entries = useMemo<AgentPickerEntry[]>(
+    () =>
+      listCommitMessageAgentCapabilities().map((capability) => ({
+        agent: capability.id,
+        label: agentLabel(capability.id),
+        rows: [{ agent: capability.id, kind: 'cli' }],
+        surfaces: ['terminal'],
+        defaultSurface: 'terminal',
+        terminal: {},
+        structured: {},
+        catalog: { origin: 'unknown' },
+        arguments: ''
+      })),
+    []
+  )
+  const pickerModel = useMemo(() => commitMessagePickerModel(entries), [entries])
   const showCustomAgent = Boolean(
     baseParams && (isCustomAgentId(baseParams.agentId) || baseParams.customAgentCommand?.trim())
   )
@@ -112,16 +132,17 @@ export function SourceControlTextGenerationDialogForm({
       return sourceControlTextGenerationSaveTargetKey(saveTarget.target) === saveTargetKey
     }) ?? saveTargets[0]
 
-  const params = buildCommitMessageGenerationParams({
-    agentId,
-    commandTemplate,
-    agentArgs,
-    baseParams,
-    settings,
-    customAgentCommand: baseParams?.customAgentCommand
-  })
-  // Why: chip previews only. The plan below stays synthetic so a workspace-empty
-  // `{linkedIssue}` cannot disable Save/Generate for a repo- or global-scoped recipe.
+  const buildParams = (settings: SourceControlRenderSettings | null) =>
+    buildCommitMessageGenerationParams({
+      agentId,
+      commandTemplate,
+      agentArgs,
+      baseParams,
+      settings,
+      customAgentCommand: baseParams?.customAgentCommand
+    })
+  const params = buildParams(settings)
+  // Only chips use workspace previews; synthetic planning keeps empty linkedIssue from blocking repo/global recipe saves.
   const variablePreviews = useMemo(() => {
     const previews: Record<string, string> = {}
     if (basePromptPreview) {
@@ -132,7 +153,7 @@ export function SourceControlTextGenerationDialogForm({
     }
     return Object.keys(previews).length > 0 ? previews : undefined
   }, [basePromptPreview, linkedIssue])
-  const paramsPlanResult = params ? planSourceControlTextGeneration(actionId, params) : null
+  const paramsPlanResult = params ? planSourceControlTextGeneration(actionId, params, t) : null
   const canRunGeneration = Boolean(params && paramsPlanResult?.ok)
   const saving = savingTargetKey !== null
   const defaultsAlreadySaved = Boolean(
@@ -184,6 +205,17 @@ export function SourceControlTextGenerationDialogForm({
           toast.success(saveTarget.successMessage)
         }
         return true
+      } catch (error) {
+        console.error('Failed to save Source Control AI defaults', error)
+        if (options.showErrors) {
+          setGenerationError(
+            translate(
+              'sourceControl.actionSaveFailed',
+              'Could not save this action. Try saving it again in Settings.'
+            )
+          )
+        }
+        return false
       } finally {
         setSavingTargetKey(null)
       }
@@ -200,7 +232,7 @@ export function SourceControlTextGenerationDialogForm({
       )
       return
     }
-    onGenerate(params)
+    onGenerate(buildParams(useAppStore.getState().settings) ?? params)
     onOpenChange(false)
   }
 
@@ -215,56 +247,53 @@ export function SourceControlTextGenerationDialogForm({
       <div className="min-w-0 space-y-4">
         <div className="space-y-2">
           <Label className="text-xs">
-            {translate(
+            {t(
               'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.9c14186dd2',
               'Agent'
             )}
           </Label>
-          <Select
-            value={agentId || UNCONFIGURED_AGENT_SELECT_VALUE}
-            onValueChange={(value) => {
-              if (value === UNCONFIGURED_AGENT_SELECT_VALUE) {
-                return
-              }
-              setAgentId(value === CUSTOM_AGENT_ID ? CUSTOM_AGENT_ID : (value as TuiAgent))
+          <AgentLaunchPicker
+            model={pickerModel}
+            entries={entries}
+            setupDisabled
+            agent={agentId && !isCustomAgentId(agentId) ? agentId : null}
+            triggerLabel={
+              isCustomAgentId(agentId)
+                ? t(
+                    'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.914c8f6ac2',
+                    'Custom command'
+                  )
+                : undefined
+            }
+            emptyLabel={t(
+              'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.cce2cbd01d',
+              'Choose agent'
+            )}
+            onPick={(agent) => {
+              setAgentId(agent)
               setGenerationError(null)
             }}
           >
-            <SelectTrigger size="sm" className="h-8 text-xs">
-              <SelectValue
-                placeholder={translate(
-                  'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.cce2cbd01d',
-                  'Choose agent'
+            {showCustomAgent ? (
+              <DropdownMenuItem
+                onSelect={() => {
+                  setAgentId(CUSTOM_AGENT_ID)
+                  setGenerationError(null)
+                }}
+              >
+                <Terminal className="size-3.5 text-muted-foreground" />
+                {t(
+                  'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.914c8f6ac2',
+                  'Custom command'
                 )}
-              />
-            </SelectTrigger>
-            <SelectContent>
-              {capabilities.map((capability) => (
-                <SelectItem key={capability.id} value={capability.id}>
-                  <span className="flex items-center gap-2">
-                    <AgentIcon agent={capability.id} size={14} />
-                    {agentLabel(capability.id)}
-                  </span>
-                </SelectItem>
-              ))}
-              {showCustomAgent ? (
-                <SelectItem value={CUSTOM_AGENT_ID}>
-                  <span className="flex items-center gap-2">
-                    <Terminal className="size-3.5 text-muted-foreground" />
-                    {translate(
-                      'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.914c8f6ac2',
-                      'Custom command'
-                    )}
-                  </span>
-                </SelectItem>
-              ) : null}
-            </SelectContent>
-          </Select>
+              </DropdownMenuItem>
+            ) : null}
+          </AgentLaunchPicker>
         </div>
 
         <div className="space-y-2">
           <Label htmlFor={`source-control-${actionId}-cli-args`} className="text-xs">
-            {translate(
+            {t(
               'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.4eab815004',
               'CLI arguments'
             )}
@@ -273,7 +302,7 @@ export function SourceControlTextGenerationDialogForm({
             id={`source-control-${actionId}-cli-args`}
             value={agentArgs}
             spellCheck={false}
-            placeholder={translate(
+            placeholder={t(
               'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.551ffd111b',
               '--model sonnet'
             )}
@@ -287,7 +316,7 @@ export function SourceControlTextGenerationDialogForm({
 
         <div className="space-y-2">
           <Label htmlFor={commandTemplateId} className="text-xs">
-            {translate(
+            {t(
               'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.1f6fcfb6cf',
               'Command template'
             )}
@@ -301,7 +330,7 @@ export function SourceControlTextGenerationDialogForm({
               setCommandTemplate(event.target.value)
               setGenerationError(null)
             }}
-            className="box-border min-w-0 w-full max-w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground/70 focus-visible:ring-1 focus-visible:ring-ring"
+            className="box-border min-w-0 w-full max-w-full resize-y rounded-md border border-border bg-background px-2.5 py-2 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-ring"
           />
           <SourceControlActionVariableChips
             actionId={actionId}
@@ -318,7 +347,7 @@ export function SourceControlTextGenerationDialogForm({
         {showSaveRecipeControl ? (
           <div className="space-y-2">
             <Label className="text-xs">
-              {translate(
+              {t(
                 'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.d91b0a189d',
                 'Save recipe'
               )}
@@ -363,7 +392,7 @@ export function SourceControlTextGenerationDialogForm({
             ) : (
               <Save className="size-4" />
             )}
-            {translate(
+            {t(
               'auto.components.right.sidebar.SourceControlTextGenerationDialogForm.25fcd8e49a',
               'Save defaults'
             )}

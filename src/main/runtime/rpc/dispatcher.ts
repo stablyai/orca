@@ -10,31 +10,34 @@ import {
   type RpcStreamingMethod
 } from './core'
 
-import { successResponse } from './errors'
-import { ALL_RPC_METHODS } from './methods'
+import { successResponse } from './responses/rpc-response'
+import { withoutMethodsThisHostDoesNotServe } from './methods/terminal/session-terminal-scrollback'
 import { emulatorProbe, emulatorProbeError } from '../../emulator/emulator-probe'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import { isDurableMutation } from '../../../shared/orchestration-rpc-contract'
-import type { OrchestrationSessionCaller } from '../orchestration/orchestration-caller-identity'
+import { isDurableMutation } from '../../../shared/orchestration/orchestration-rpc-contract'
+import type { OrchestrationEntryCaller } from '../orchestration/addressing/orchestration-caller-identity'
 import {
   getOrchestrationMutationExecutor,
   type DurableMutationInvocation,
   type OrchestrationMutationExecutor
-} from './orchestration-mutation-executor'
-import { OrchestrationLegacyCompatibility } from './orchestration-legacy-compatibility'
+} from './orchestration/mutations/orchestration-mutation-executor'
+import { OrchestrationLegacyCompatibility } from './orchestration/compatibility/orchestration-legacy-compatibility'
 import {
   rpcContextFromTransport,
   type RpcDispatchStreamingOptions
-} from './dispatcher-stream-options'
-import { mapDispatcherError } from './dispatcher-error-response'
-import { createDispatcherStreamingFeatureEmitter } from './dispatcher-streaming-feature-emitter'
-import { recordRuntimeFeatureInteraction } from './runtime-feature-interaction'
-import type { RpcCallerScope } from './rpc-caller-scope'
-import { admitRpcRequest } from './rpc-request-admission-prologue'
+} from './dispatch/dispatcher-stream-options'
+import { mapDispatcherError } from './responses/dispatcher-error-response'
+import { createDispatcherStreamingFeatureEmitter } from './dispatch/dispatcher-streaming-feature-emitter'
+import { recordRuntimeFeatureInteraction } from './dispatch/runtime-feature-interaction'
+import type { RpcCallerScope } from './callers/rpc-caller-scope'
+import { runWithActiveRpcCaller } from './callers/active-call'
+import { admitRpcRequest } from './dispatch/rpc-request-admission-prologue'
+import { resolveOrcadFeatureRequirement, rpcMethodFeatureWait } from './startup/orcad-readiness'
+import { routeRemoteOwnedCall } from '../orchestration/federation/remote-owned/remote-owned-route'
 
 export type DispatcherOptions = {
   runtime: OrcaRuntimeService
-  methods?: readonly RpcAnyMethodDeclaration[]
+  methods: readonly RpcAnyMethodDeclaration[]
   /** Pins every call to this scope, for in-process bridges that relay a non-owner caller. */
   callerScope?: RpcCallerScope
 }
@@ -43,7 +46,7 @@ type AdmittedUnaryCall = {
   request: RpcRequest
   method: RpcMethod
   params: unknown
-  caller: OrchestrationSessionCaller | undefined
+  caller: OrchestrationEntryCaller | undefined
 }
 
 export class RpcDispatcher {
@@ -53,10 +56,10 @@ export class RpcDispatcher {
   private readonly legacyOrchestration: OrchestrationLegacyCompatibility
   private readonly pinnedCallerScope: RpcCallerScope | undefined
 
-  constructor({ runtime, methods = ALL_RPC_METHODS, callerScope }: DispatcherOptions) {
+  constructor({ runtime, methods, callerScope }: DispatcherOptions) {
     this.runtime = runtime
     this.pinnedCallerScope = callerScope
-    this.registry = buildRegistry(methods)
+    this.registry = buildRegistry(withoutMethodsThisHostDoesNotServe(methods))
     this.orchestrationMutations = getOrchestrationMutationExecutor(runtime)
     this.legacyOrchestration = new OrchestrationLegacyCompatibility(runtime)
   }
@@ -75,14 +78,23 @@ export class RpcDispatcher {
       return admission.rejected
     }
 
-    // Why: only the request/response transport probes emulator calls; streaming-unary never did.
+    // Only request/response dispatch probes emulator calls; streaming-unary retains its existing behavior.
     const probeEmulator = request.method.startsWith('emulator.')
     if (probeEmulator) {
       emulatorProbe(`rpc ${request.method}`, request.params)
     }
     try {
+      const featureWait = rpcMethodFeatureWait(
+        resolveOrcadFeatureRequirement(admission.method.requires, admission.params),
+        [options?.signal, options?.connectionSignal]
+      )
+      if (featureWait) {
+        await featureWait
+      }
+      options?.beforeInvoke?.()
       return successResponse(request.id, meta, await this.invokeUnary(admission, options))
     } catch (error) {
+      options?.onHandlerError?.(error)
       if (probeEmulator) {
         emulatorProbeError(`rpc ${request.method}`, error, {
           params: request.params
@@ -92,10 +104,22 @@ export class RpcDispatcher {
     }
   }
 
-  // Why: streaming dispatch sends multiple responses through the reply callback instead of a Promise.
   async dispatchStreaming(
     rawRequest: RpcRequest,
     reply: (response: string) => void,
+    options?: RpcDispatchStreamingOptions
+  ): Promise<void> {
+    return this.dispatchStreamingObjects(
+      rawRequest,
+      (response) => reply(JSON.stringify(response)),
+      options
+    )
+  }
+
+  // Transport callbacks must clone or encode synchronously before runtime-owned values change.
+  async dispatchStreamingObjects(
+    rawRequest: RpcRequest,
+    reply: (response: RpcResponse) => void,
     options?: RpcDispatchStreamingOptions
   ): Promise<void> {
     const meta = this.meta()
@@ -108,17 +132,29 @@ export class RpcDispatcher {
     const admission =
       pendingAdmission instanceof Promise ? await pendingAdmission : pendingAdmission
     if ('rejected' in admission) {
-      reply(JSON.stringify(admission.rejected))
+      reply(admission.rejected)
       return
     }
     const { method, request, params, caller } = admission
+    const featureWait = rpcMethodFeatureWait(
+      resolveOrcadFeatureRequirement(method.requires, params),
+      [options?.signal, options?.connectionSignal]
+    )
+    if (featureWait) {
+      try {
+        await featureWait
+      } catch (error) {
+        reply(mapDispatcherError(request, meta, error))
+        return
+      }
+    }
 
     if (!isStreamingMethod(method)) {
       try {
         const result = await this.invokeUnary({ method, request, params, caller }, options)
-        reply(JSON.stringify(successResponse(request.id, meta, result)))
+        reply(successResponse(request.id, meta, result))
       } catch (error) {
-        reply(JSON.stringify(mapDispatcherError(request, meta, error)))
+        reply(mapDispatcherError(request, meta, error))
       }
       return
     }
@@ -132,7 +168,7 @@ export class RpcDispatcher {
     try {
       const result = await method.handler(
         params,
-        rpcContextFromTransport(this.runtime, request, options, caller),
+        rpcContextFromTransport(this.runtime, request, options, caller, params),
         emit
       )
       recordRuntimeFeatureInteraction(
@@ -143,7 +179,7 @@ export class RpcDispatcher {
         request.params
       )
     } catch (error) {
-      reply(JSON.stringify(mapDispatcherError(request, meta, error)))
+      reply(mapDispatcherError(request, meta, error))
     }
   }
 
@@ -171,11 +207,12 @@ export class RpcDispatcher {
     options: RpcDispatchStreamingOptions | undefined
   ): Promise<unknown> {
     const { runtime, orchestrationMutations, legacyOrchestration } = this
-    const context = rpcContextFromTransport(runtime, request, options, caller)
-    // Why: test fakes of the runtime omit the client-hosted browser route.
+    const context = rpcContextFromTransport(runtime, request, options, caller, params)
+    // Runtime test fakes may omit client-hosted browser routing.
     const clientHostedBrowser = await (runtime.routeClientHostedBrowserRpc?.(
       request.method,
-      params
+      params,
+      context.caller
     ) ?? { handled: false as const })
     if (clientHostedBrowser.handled) {
       recordRuntimeFeatureInteraction(
@@ -187,8 +224,20 @@ export class RpcDispatcher {
       )
       return clientHostedBrowser.result
     }
+    const desktopBrowser = await (runtime.routeDesktopBrowserBridgeRpc?.(
+      request.method,
+      params,
+      context
+    ) ?? { handled: false as const })
+    if (desktopBrowser.handled) {
+      return desktopBrowser.result
+    }
 
-    const compatibility = await legacyOrchestration.tryHandle(request, params, context.signal)
+    // A paired Orca is never a legacy caller, so its calls reach only the declared access check.
+    const compatibility =
+      caller?.kind === 'peer'
+        ? { handled: false as const }
+        : await legacyOrchestration.tryHandle(request, params, context.signal)
     if (compatibility.handled) {
       return compatibility.result
     }
@@ -197,7 +246,22 @@ export class RpcDispatcher {
       request,
       compatibility.legacyCoordinatorAuthority
     )
-    // Why: a legacy coordinator's fingerprint outranks the transport's, so skip minting a local one.
+    // Before this Orca's receipts: the server that owns the worker keeps the receipt, under the caller's scoped key.
+    const remote = await routeRemoteOwnedCall(runtime, method, request, effectiveParams, {
+      ...context,
+      orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
+    })
+    if (remote.handled) {
+      recordRuntimeFeatureInteraction(
+        runtime,
+        request.method,
+        remote.result,
+        undefined,
+        request.params
+      )
+      return remote.result
+    }
+    // A legacy coordinator fingerprint outranks the transport identity; mint a fallback only when absent.
     const fallbackCallerFingerprint =
       context.authenticatedCallerFingerprint ??
       (!legacyCoordinator &&
@@ -209,29 +273,44 @@ export class RpcDispatcher {
       legacyCoordinator?.mutationCallerFingerprint ?? fallbackCallerFingerprint
     const invoke = (mutation?: DurableMutationInvocation) => {
       const legacyCoordinatorRunId = legacyCoordinator?.revalidate()
-      return method.handler(effectiveParams, {
-        ...context,
-        authenticatedCallerFingerprint: mutation?.identity.callerFingerprint ?? callerFingerprint,
-        recordMutationReceipt: mutation?.recordReceipt,
-        markWorkerDoneMutationEffectFree: mutation?.markWorkerDoneEffectFree,
-        markMutationEffectPossible: mutation?.markEffectPossible,
-        orchestrationMutation: mutation?.identity,
-        replayedMutationReceipt: mutation?.replayedReceipt,
-        legacyCoordinatorRunId,
-        legacyCoordinatorAuthority: legacyCoordinator?.authority,
-        revalidateLegacyCoordinator: legacyCoordinator?.revalidate,
-        orchestrationCompatibilityCallerAuthority:
-          compatibility.orchestrationCompatibilityCallerAuthority,
-        orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
-      })
+      return runWithActiveRpcCaller(
+        context.caller,
+        () =>
+          method.handler(effectiveParams, {
+            ...context,
+            authenticatedCallerFingerprint:
+              mutation?.identity.callerFingerprint ?? callerFingerprint,
+            recordMutationReceipt: mutation?.recordReceipt,
+            markWorkerDoneMutationEffectFree: mutation?.markWorkerDoneEffectFree,
+            markMutationEffectPossible: mutation?.markEffectPossible,
+            orchestrationMutation: mutation?.identity,
+            replayedMutationReceipt: mutation?.replayedReceipt,
+            legacyCoordinatorRunId,
+            legacyCoordinatorAuthority: legacyCoordinator?.authority,
+            revalidateLegacyCoordinator: legacyCoordinator?.revalidate,
+            orchestrationCompatibilityCallerAuthority:
+              compatibility.orchestrationCompatibilityCallerAuthority,
+            orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
+          }),
+        request.orchestrationCompatibilityEvidence?.agentSessionId
+      )
     }
     const result = await orchestrationMutations.run(
       request,
       effectiveParams,
       invoke,
       callerFingerprint,
-      context.orchestrationCaller?.orcaSessionId
+      context.orchestrationCaller
     )
+    if (request.method.startsWith('orchestration.')) {
+      queueMicrotask(() => {
+        try {
+          runtime.refreshAgentSenderAssociations?.()
+        } catch (error) {
+          console.warn('[runtime] Sender identity publication failed', error)
+        }
+      })
+    }
     recordRuntimeFeatureInteraction(runtime, request.method, result, undefined, request.params)
     return result
   }

@@ -1,20 +1,25 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { ChevronRight, Plus, Unplug } from 'lucide-react'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
-import { useActiveWorktree } from '@/store/selectors'
-import { cn } from '@/lib/utils'
-import { resolvePortOpenInOrcaBrowser } from '@/lib/workspace-port-actions'
-import { browserUrlForPortForwardEntry } from '@/lib/workspace-port-urls'
-import type { EnrichedDetectedPort, PortForwardEntry } from '../../../../shared/ssh-types'
+import { useAppStore } from '@/store/index'
+import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
+import { cn } from '@/lib/class-names'
+import { resolvePortOpenInOrcaBrowser } from '@/lib/workspace-ports/workspace-port-browser-open'
+import { browserUrlForPortForwardEntry } from '@/lib/workspace-ports/workspace-port-urls'
+import type {
+  EnrichedDetectedPort,
+  PortForwardEntry,
+  UnrestoredPortForward
+} from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
-import { openWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-open'
+import { useTranslate } from '@/i18n/use-translate'
+import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'
 import { SshForwardedPortRow } from './ssh-forwarded-port-row'
+import { SshUnrestoredPortRow } from './ssh-unrestored-port-row'
 import { SshDetectedPortRow } from './ssh-detected-port-row'
 import { SshPortForwardDialog, type PortForwardDialogState } from './ssh-port-forward-dialog'
 
-// Why: forwarded SSH ports and detected remote ports may report the same loopback
-// endpoint using different textual hosts. Normalize for deduping only.
+// Normalize loopback aliases only for deduplication across detected and forwarded ports.
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '::1', '0.0.0.0', '::'])
 function normalizeHost(host: string | undefined): string {
   if (!host || LOOPBACK_HOSTS.has(host)) {
@@ -23,14 +28,20 @@ function normalizeHost(host: string | undefined): string {
   return host
 }
 
+const NO_UNRESTORED: readonly UnrestoredPortForward[] = []
+
 export function SshPortsPanel({
   activeConnectionId
 }: {
   /** The SSH target this client dials for the active workspace. */
   activeConnectionId: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
   const portForwardsByConnection = useAppStore((s) => s.portForwardsByConnection)
+  const unrestoredForwards = useAppStore(
+    (s) => s.unrestoredPortForwardsByConnection[activeConnectionId] ?? NO_UNRESTORED
+  )
   const detectedPortsByConnection = useAppStore((s) => s.detectedPortsByConnection)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const activeWorktree = useActiveWorktree()
@@ -116,24 +127,35 @@ export function SshPortsPanel({
 
   if (isDisconnected) {
     return (
-      <div className="flex flex-col items-center justify-center h-full px-4 text-center text-muted-foreground">
+      <div className="flex flex-col items-center justify-center-safe h-full overflow-y-auto scrollbar-sleek px-4 py-4 text-center text-muted-foreground">
         <Unplug size={32} className="mb-3 opacity-50" />
         <p className="text-sm font-medium">
-          {translate('auto.components.right.sidebar.PortsPanel.a2f1a47f42', 'SSH connection lost')}
+          {t('auto.components.right.sidebar.PortsPanel.a2f1a47f42', 'SSH connection lost')}
         </p>
         <p className="text-xs mt-1">
-          {translate('auto.components.right.sidebar.PortsPanel.d4c3cd679c', 'Reconnecting...')}
+          {t('auto.components.right.sidebar.PortsPanel.d4c3cd679c', 'Reconnecting...')}
         </p>
+        {/* Saved forwards stay removable offline; main edits them without a connection. */}
+        {unrestoredForwards.length > 0 && (
+          <div className="mt-4 w-full text-left">
+            {unrestoredForwards.map((forward) => (
+              <SshUnrestoredPortRow
+                key={`${forward.localPort}:${forward.remoteHost}:${forward.remotePort}`}
+                targetId={activeConnectionId}
+                forward={forward}
+              />
+            ))}
+          </div>
+        )}
       </div>
     )
   }
 
   return (
     <div className="flex flex-col h-full overflow-y-auto scrollbar-sleek">
-      {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          {translate('auto.components.right.sidebar.PortsPanel.6bc058dbe1', 'Ports')}
+          {t('auto.components.right.sidebar.PortsPanel.6bc058dbe1', 'Ports')}
         </span>
         <button
           type="button"
@@ -143,12 +165,11 @@ export function SshPortsPanel({
           }
         >
           <Plus size={14} />
-          {translate('auto.components.right.sidebar.PortsPanel.a103dae837', 'Add')}
+          {t('auto.components.right.sidebar.PortsPanel.a103dae837', 'Add')}
         </button>
       </div>
 
-      {/* Forwarded ports */}
-      {allForwards.length > 0 && (
+      {allForwards.length + unrestoredForwards.length > 0 && (
         <div className="px-3 pt-2">
           <button
             type="button"
@@ -163,9 +184,11 @@ export function SshPortsPanel({
               )}
             />
             <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              {translate('auto.components.right.sidebar.PortsPanel.ddbe58d74e', 'Forwarded')}
+              {t('auto.components.right.sidebar.PortsPanel.ddbe58d74e', 'Forwarded')}
             </span>
-            <span className="text-[10px] text-muted-foreground/60 ml-1">{allForwards.length}</span>
+            <span className="text-[10px] text-muted-foreground/60 ml-1">
+              {allForwards.length + unrestoredForwards.length}
+            </span>
           </button>
           {!forwardedCollapsed &&
             allForwards.map((entry) => (
@@ -176,10 +199,17 @@ export function SshPortsPanel({
                 onOpenInBrowser={(event) => handleOpenForwardInBrowser(entry, event)}
               />
             ))}
+          {!forwardedCollapsed &&
+            unrestoredForwards.map((forward) => (
+              <SshUnrestoredPortRow
+                key={`${forward.localPort}:${forward.remoteHost}:${forward.remotePort}`}
+                targetId={activeConnectionId}
+                forward={forward}
+              />
+            ))}
         </div>
       )}
 
-      {/* Detected ports */}
       {allDetected.length > 0 && (
         <div className="px-3 pt-2">
           <button
@@ -195,7 +225,7 @@ export function SshPortsPanel({
               )}
             />
             <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-              {translate('auto.components.right.sidebar.PortsPanel.36b1b2984a', 'Detected')}
+              {t('auto.components.right.sidebar.PortsPanel.36b1b2984a', 'Detected')}
             </span>
             <span className="text-[10px] text-muted-foreground/60 ml-1">{allDetected.length}</span>
           </button>
@@ -210,14 +240,13 @@ export function SshPortsPanel({
         </div>
       )}
 
-      {/* Empty state */}
-      {allForwards.length === 0 && allDetected.length === 0 && (
+      {allForwards.length === 0 && unrestoredForwards.length === 0 && allDetected.length === 0 && (
         <div className="flex flex-col items-center justify-center flex-1 px-4 text-center text-muted-foreground">
           <p className="text-sm">
-            {translate('auto.components.right.sidebar.PortsPanel.1f0d2a24f9', 'No forwarded ports')}
+            {t('auto.components.right.sidebar.PortsPanel.1f0d2a24f9', 'No forwarded ports')}
           </p>
           <p className="text-xs mt-1 mb-3">
-            {translate(
+            {t(
               'auto.components.right.sidebar.PortsPanel.04efd3dad4',
               'Forward a port to access remote services on your local machine.'
             )}
@@ -232,7 +261,7 @@ export function SshPortsPanel({
               })
             }
           >
-            {translate('auto.components.right.sidebar.PortsPanel.907eb53ed2', 'Forward a Port')}
+            {t('auto.components.right.sidebar.PortsPanel.907eb53ed2', 'Forward a Port')}
           </button>
         </div>
       )}

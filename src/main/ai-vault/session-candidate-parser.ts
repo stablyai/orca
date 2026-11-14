@@ -28,8 +28,8 @@ export async function parseSessionCandidates(args: {
 }): Promise<AiVaultSession[]> {
   const sessions = new ScannedSessionCollection()
   const completed = new Map<number, AiVaultSession>()
-  const completedRows = (): AiVaultSession[] => [...completed.entries()]
-    .sort(([a], [b]) => a - b).map(([, row]) => row)
+  const completedRows = (): AiVaultSession[] =>
+    [...completed.entries()].sort(([a], [b]) => a - b).map(([, row]) => row)
   const advertised = new Map<string, AiVaultSession>()
 
   for (let index = 0; index < args.candidates.length;) {
@@ -61,11 +61,17 @@ export async function parseSessionCandidates(args: {
             const delta: AiVaultRowDelta = { upserts: [], removed: [] }
             for (const [key, winner] of winners) {
               const previous = advertised.get(key) ?? sessions.winner(winner)
-              if (previous === winner) continue
-              if (previous && previous.id !== winner.id) delta.removed.push(previous.id)
+              if (previous === winner) {
+                continue
+              }
+              if (previous && previous.id !== winner.id) {
+                delta.removed.push(previous.id)
+              }
               delta.upserts.push(winner)
             }
-            for (const [key, winner] of winners) advertised.set(key, winner)
+            for (const [key, winner] of winners) {
+              advertised.set(key, winner)
+            }
             args.observeRows(delta, () => sessions.previewRows(completedRows()))
           } catch {
             // Observers own presentation, never candidate admission.

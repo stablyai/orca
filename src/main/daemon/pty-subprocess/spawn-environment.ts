@@ -1,33 +1,36 @@
-import { getLegacyOpenCodeEnvKeysToDelete } from '../../opencode/legacy-shared-config-dir'
+import { getLegacyOpenCodeEnvKeysToDelete } from '../../opencode/status-hooks/legacy-shared-config-dir'
 import { restoreManagedDataAccountEnvironment } from '../../../shared/managed-data-account-environment'
-import { restoreOrStripOverlayEnv } from '../../../shared/agent-overlay-env'
+import { restoreOrStripOverlayEnv } from '../../../shared/agent-launch/startup/agent-overlay-env'
 import { delimiter } from 'node:path'
-import { dropInheritedOrcaFishHistory } from '../../fish-history-session'
-import { removeAppImageRuntimeEnv } from '../../pty/appimage-terminal-env'
-import { removeChromiumDisabledSessionBus } from '../../pty/chromium-session-bus-env'
-import { stripInheritedBuildModeEnv } from '../../pty/build-mode-env'
-import { stripPiProcessOwnerEnv } from '../../pty/pi-process-owner-env'
-import { dropIncoherentCondaActivationEnv } from '../../pty/conda-activation-env'
-import { stripLegacyTerminalShimEnv } from '../../pty/legacy-terminal-shim-dir'
-import { removeInheritedNoColor } from '../../pty/terminal-color-env'
-import { resolvePathEnvKey } from '../../pty/windows-environment-path'
-import { dropInheritedOrcaHistFile } from '../../worktree-history-file-path'
+import { dropInheritedOrcaFishHistory } from '../../pty/history/fish-history-session'
+import { removeAppImageRuntimeEnv } from '../../pty/shell-startup/appimage-terminal-env'
+import { removeChromiumDisabledSessionBus } from '../../pty/shell-startup/chromium-session-bus-env'
+import { stripInheritedBuildModeEnv } from '../../pty/shell-startup/build-mode-env'
+import { stripPiProcessOwnerEnv } from '../../pty/shell-startup/pi-process-owner-env'
+import { dropIncoherentCondaActivationEnv } from '../../pty/shell-startup/conda-activation-env'
+import { stripLegacyTerminalShimEnv } from '../../pty/shell-startup/legacy-terminal-shim-dir'
+import { removeInheritedNoColor } from '../../pty/shell-startup/terminal-color-env'
+import { resolvePathEnvKey } from '../../pty/environment/windows-path-segment-merge'
+import { dropInheritedOrcaHistFile } from '../../pty/history/worktree-history-file-path'
 import {
   gitCredentialPromptGuardEnv,
   mergeGitConfigEnvProtocol
-} from '../../../shared/git-credential-prompt-env'
-import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../../shared/terminal-git-credential-guard'
+} from '../../../shared/git/commands/git-credential-prompt-env'
+import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../../../shared/shell/launch/terminal-git-credential-guard'
 import {
   ORCA_IMAGE_PROTOCOL_ENV,
   ORCA_IMAGE_PROTOCOL_VALUE
-} from '../../../shared/terminal-image-protocol'
+} from '../../../shared/terminal/images/terminal-image-protocol'
 import {
   expandWindowsEnvironmentVariables,
   expandWindowsPathEnvironmentVariables
 } from '../../../shared/windows-environment-expansion'
-import { applyScrubSafeAgentEnvAliases } from '../../../shared/agent-hook-scrub-safe-env'
-import type { TuiAgent } from '../../../shared/tui-agent'
-import type { PtySubprocessOptions } from '../pty-subprocess'
+import { applyScrubSafeAgentEnvAliases } from '../../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import type { PtySubprocessOptions } from './pty-subprocess'
+import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../../shared/remote-viewer-clipboard-env'
+import { ORCAD_SERVER_LAUNCH_ENV_KEYS } from '../../../shared/orcad-server-launch-env'
+import { stripInheritedAgentSessionEnv } from '../../../shared/agent-launch/startup/parent-agent-session-env'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -36,7 +39,11 @@ const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_AGENT_LAUNCH_TOKEN',
   // Not identity but equally per-spawn: an inherited copy names another launch's CLI.
   'ORCA_WSL_CLI_DIR',
-  'JCODE_RUNTIME_DIR'
+  'JCODE_RUNTIME_DIR',
+  // Per-viewer: an Orca started from a remote viewer's pane must not mark its own local panes.
+  REMOTE_VIEWER_CLIPBOARD_ENV,
+  // A server's own launch env; a user's `orcad` in this shell is not that server.
+  ...ORCAD_SERVER_LAUNCH_ENV_KEYS
 ] as const
 const WINDOWS_PATH_ENV_KEY_RE = /^path$/i
 
@@ -50,7 +57,7 @@ function composeGuardedDaemonGitConfigEnv(
   if (policy !== 'guard' && launchAgent === undefined) {
     return
   }
-  // Why: the daemon can outlive Electron, so its process.env is the authoritative inherited config; append only the guard.
+  // Apply the guard after the inherited-env merge so it reflects the pane's final askpass values.
   Object.assign(env, gitCredentialPromptGuardEnv(env, process.platform))
 }
 
@@ -64,7 +71,7 @@ function deleteRequestedDaemonEnvKeys(
       delete env[key]
     }
   }
-  // Why: persistent daemon state can differ from Electron; delete CODEX_HOME only when its Orca overlay owns it.
+  // Persistent daemon state may differ from Electron; remove CODEX_HOME only if its Orca overlay owns it.
   const deleteOrcaOwnedCodexHome =
     keys?.includes('ORCA_CODEX_HOME') === true &&
     env.ORCA_CODEX_HOME !== undefined &&
@@ -116,7 +123,7 @@ function collapseWindowsPathEnvKeys(
   if (pathKeys.length < 2) {
     return
   }
-  // Why: a one-key main patch is authoritative; zero or two keys came from inherited state.
+  // A single explicit PATH spelling is authoritative; otherwise preserve inherited keys.
   const requestedKeys = requestedEnv
     ? Object.keys(requestedEnv).filter((key) => WINDOWS_PATH_ENV_KEY_RE.test(key))
     : []
@@ -134,7 +141,6 @@ function collapseWindowsPathEnvKeys(
   }
 }
 
-/** Promotes the agent-teams shim path ahead of inherited PATH entries. */
 function promoteAgentTeamsShimPath(
   env: Record<string, string>,
   requestedPath: string | undefined
@@ -162,7 +168,7 @@ function removeInheritedDevAgentHookEndpoint(
   explicitEnv: Record<string, string> | undefined
 ): void {
   if (explicitEnv?.ORCA_AGENT_HOOK_ENV === 'development' && !explicitEnv.ORCA_AGENT_HOOK_ENDPOINT) {
-    // Why: strip only stale inherited endpoints; a fresh explicit one is needed by hooks that scrub token-like env vars before exec.
+    // Preserve explicit endpoints used by hooks that scrub token-like environment variables.
     delete env.ORCA_AGENT_HOOK_ENDPOINT
   }
 }
@@ -181,6 +187,7 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
     [ORCA_IMAGE_PROTOCOL_ENV]: ORCA_IMAGE_PROTOCOL_VALUE
   } satisfies Record<string, string>
   stripLegacyTerminalShimEnv(env, process.platform)
+  stripInheritedAgentSessionEnv(env, { launchEnv: opts.env, envToDelete: opts.envToDelete })
   composeGuardedDaemonGitConfigEnv(env, opts.env, opts.launchAgent)
   deleteRequestedDaemonEnvKeys(env, opts.envToDelete)
   if (opts.env?.TERM) {
@@ -202,8 +209,7 @@ export function createDaemonPtyEnvironment(opts: PtySubprocessOptions): Record<s
   removeAppImageRuntimeEnv(env)
   removeChromiumDisabledSessionBus(env)
   removeInheritedNoColor(env)
-  // Why last: the aliases mirror pane identity AFTER every strip above has settled, so an
-  // alias can never outlive the value it mirrors.
+  // Mirror pane identity only after stripping, so aliases cannot retain removed ownership.
   applyScrubSafeAgentEnvAliases(env)
   env.LANG ??= 'en_US.UTF-8'
   return env
@@ -223,8 +229,10 @@ export function rescrubDaemonPtyEnvironment(
 /** Shell preparation can restore ambient state, so pane isolation is enforced again here. */
 export function finalizeDaemonPtyEnvironment(
   env: Record<string, string>,
-  requestedEnv: Record<string, string> | undefined
+  requestedEnv: Record<string, string> | undefined,
+  envToDelete?: readonly string[]
 ): void {
+  stripInheritedAgentSessionEnv(env, { launchEnv: requestedEnv, envToDelete })
   expandWindowsPathEnvironmentVariables(env)
   collapseWindowsPathEnvKeys(env, requestedEnv)
   const requestedPath = requestedEnv

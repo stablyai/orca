@@ -1,15 +1,26 @@
 import { OrcaRuntimeWithRunCreateMobileSessionTerminal } from './mobile-terminal-renderer-create'
-import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
-import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
-import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
-import { buildAgentStartupPlan } from '../../../../shared/tui-agent-startup'
-import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-startup-plan-inputs'
+import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
+import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import {
+  isResumableTuiAgent,
+  normalizeAgentProviderSession,
+  type AgentProviderSessionMetadata,
+  type SleepingAgentLaunchConfig
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
+import { buildAgentResumeStartupPlan } from '../../../../shared/agent-launch/startup/tui-agent-resume-startup'
+import { buildAgentStartupPlan } from '../../../../shared/agent-launch/startup/tui-agent-startup'
+import { resolveResumeLaunchRecipe } from '../../../../shared/agent-launch/choices/resume-launch-recipe'
+import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
+import {
+  resolveWslHostAgentLaunchInputs,
+  resolveWslHostAgentResumeInputs
+} from './wsl-host-agent-terminal-launch'
 import {
   agentLaunchQuotingShell,
   type AgentLaunchRuntime
-} from '../../../../shared/agent-launch-runtime'
+} from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 
 export type MobileTerminalCommandOptions = {
   command?: string
@@ -20,6 +31,15 @@ export type MobileTerminalCommandOptions = {
   agentPrompt?: string
   launchConfig?: SleepingAgentLaunchConfig
   launchAgent?: TuiAgent
+}
+
+/** What a resume reads from a recorded session; a SleepingAgentSessionRecord is one. */
+export type ResumableAgentSessionSource = {
+  agent: TuiAgent
+  providerSession: AgentProviderSessionMetadata
+  /** The capture's connection; undefined when the caller compared hosts itself. */
+  connectionId?: string | null
+  launchConfig?: SleepingAgentLaunchConfig
 }
 
 export type MobileTerminalCommand = {
@@ -33,7 +53,65 @@ export type MobileTerminalCommand = {
   launchRuntime?: AgentLaunchRuntime
 }
 
+export type MobileTerminalResumeCommand = MobileTerminalCommand & {
+  command: string
+  resumeProviderSession: AgentProviderSessionMetadata
+}
+
+function normalizeOriginConnectionId(connectionId: string | null | undefined): string | null {
+  return connectionId?.trim() || null
+}
+
 export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends OrcaRuntimeWithRunCreateMobileSessionTerminal {
+  /** The `--resume` launch for a pane's recorded agent session, as the host window's cold restore builds it. */
+  protected resolveMobileSessionResumeCommand(
+    workspace: TerminalWorkspaceLaunchScope,
+    record: ResumableAgentSessionSource
+  ): MobileTerminalResumeCommand | null {
+    const providerSession = normalizeAgentProviderSession(record.providerSession)
+    if (!this.store || !providerSession || !isResumableTuiAgent(record.agent)) {
+      return null
+    }
+    // Transcript ids belong to their capture host; another machine cannot resume them.
+    if (
+      record.connectionId !== undefined &&
+      normalizeOriginConnectionId(record.connectionId) !==
+        normalizeOriginConnectionId(workspace.connectionId)
+    ) {
+      return null
+    }
+    const settings = this.store.getSettings()
+    if (!isTuiAgentEnabled(record.agent, settings.disabledTuiAgents)) {
+      return null
+    }
+    const launchRuntime = this.resolveAgentLaunchRuntime(workspace, record.agent)
+    const { launchConfig } = record
+    // Throws WslHostWindowsOnlyAgentError; callers choose refusal or a plain-shell restore.
+    const resumeInputs = resolveWslHostAgentResumeInputs({
+      agent: record.agent,
+      providerSession,
+      cmdOverrides: settings.agentCmdOverrides ?? {},
+      ...resolveResumeLaunchRecipe(launchConfig, record.agent, providerSession),
+      platform: launchRuntime.platform,
+      shell: agentLaunchQuotingShell(launchRuntime),
+      isRemote: Boolean(workspace.connectionId),
+      launchCwd: workspace.path
+    })
+    const startupPlan = buildAgentResumeStartupPlan(resumeInputs)
+    if (!startupPlan) {
+      return null
+    }
+    return {
+      command: startupPlan.launchCommand,
+      env: startupPlan.env,
+      launchConfig: startupPlan.launchConfig,
+      launchAgent: record.agent,
+      startupCommandDelivery: startupPlan.startupCommandDelivery,
+      launchRuntime,
+      resumeProviderSession: providerSession
+    }
+  }
+
   protected async resolveMobileSessionTerminalCommand(
     workspace: TerminalWorkspaceLaunchScope,
     opts: MobileTerminalCommandOptions
@@ -57,15 +135,17 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
     }
     const launchRuntime = this.resolveAgentLaunchRuntime(workspace, opts.agent)
     const startupPlan = buildAgentStartupPlan({
-      ...resolveAgentStartupPlanInputs({
-        agent: opts.agent,
-        settings,
-        // Why: mobile may be iOS while the shell host is Windows/macOS/Linux or SSH Linux; quote for the host shell.
-        platform: launchRuntime.platform,
-        shell: agentLaunchQuotingShell(launchRuntime),
-        // Why: SSH runs the CLI through the relay shim (plain `orca`), so the Linux-only `orca-ide` rename must not apply.
-        isRemote: Boolean(workspace.connectionId)
-      }),
+      ...resolveWslHostAgentLaunchInputs(
+        resolveAgentStartupPlanInputs({
+          agent: opts.agent,
+          settings,
+          // Quote for the execution host, even when the mobile client runs another OS.
+          platform: launchRuntime.platform,
+          shell: agentLaunchQuotingShell(launchRuntime),
+          // SSH uses relay-shim orca, never the local Linux orca-ide rename.
+          isRemote: Boolean(workspace.connectionId)
+        })
+      ),
       prompt: opts.agentPrompt ?? '',
       allowEmptyPromptLaunch: true
     })
@@ -78,8 +158,7 @@ export abstract class OrcaRuntimeWithResolveMobileSessionTerminalCommand extends
     return {
       command: startupPlan.launchCommand,
       env: startupPlan.env,
-      // Why: a real-home Codex resume strips inherited CODEX_HOME via
-      // envToDelete; dropping it here would resume against the wrong home.
+      // Codex real-home resumes need envToDelete to strip inherited CODEX_HOME.
       envToDelete: opts.envToDelete,
       launchConfig: startupPlan.launchConfig,
       launchAgent: opts.agent,

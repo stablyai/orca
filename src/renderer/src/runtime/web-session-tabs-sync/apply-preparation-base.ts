@@ -1,3 +1,4 @@
+import { carryBrowserInitializationReceipt } from './browser-initialization-presentation'
 import { collectUnhydratedMirroredTabRetractions } from './mirrored-status-tab-retractions'
 import { isWebSessionTabsWorktreeRemovalFrame } from './session-tabs-inventory-absence'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
@@ -9,19 +10,19 @@ import type {
 import {
   reconcileWebSessionCloseIntents,
   isWebSessionCloseIntentPending
-} from '../web-session-close-intent'
+} from './closing/web-session-close-intent'
 import {
   peekWebSessionFocusIntent,
   resolveWebSessionVisibleTabId,
   clearWebSessionFocusIntent
-} from '../web-session-focus-intent'
+} from './navigation/web-session-focus-intent'
 import {
   resolveWebAgentSessionHandoff,
   isWebAgentSessionHandoffPostCreateSnapshotConfirmed,
   clearWebAgentSessionHandoff
-} from '../web-agent-session-handoff'
-import { toRemoteRuntimePtyId } from '../runtime-terminal-stream'
-import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
+} from '../hosted-terminals/creation/agent-launch/web-agent-session-handoff'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import {
   isReadyTerminalTab,
   isTerminalSurfaceTab,
@@ -29,7 +30,12 @@ import {
   shouldReplaceTerminalTab
 } from './terminal-surfaces'
 import { buildMirroredTerminalTabs } from './terminal-build'
-import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
+import {
+  collectHostRetiredTerminals,
+  isTerminalRowRetiredByHost
+} from './host-retired-terminal-rows'
+import { hostSnapshotAffirmsWorktreeContents } from './hydration/host-session-snapshot-authority'
+import { logHostTerminalTabsShrunk } from './host-terminal-tab-drop-log'
 
 export function prepareWebSessionTabsSnapshotBase(
   state: WebSessionTabsSyncState,
@@ -63,6 +69,7 @@ export function prepareWebSessionTabsSnapshotBase(
         )
       }
     : rawSnapshot
+  carryBrowserInitializationReceipt(rawSnapshot, snapshot)
   // Why: only a caller-recorded create intent may focus its arriving tab; unsolicited server-active must not steal focus (#5435).
   const focusIntent = peekWebSessionFocusIntent({ environmentId }, worktreeId)
   const focusIntentHostTabId = focusIntent?.hostTabId ?? null
@@ -84,10 +91,17 @@ export function prepareWebSessionTabsSnapshotBase(
           ) ?? null)
   const expectedCurrentLocalTabId = focusIntent?.expectedCurrentLocalTabId
   const currentVisibleLocalTabId = resolveWebSessionVisibleTabId(state, worktreeId)
+  const expectedCurrentLocalLeafId = focusIntent?.expectedCurrentLocalLeafId
+  const currentVisibleLocalLeafId = currentVisibleLocalTabId
+    ? (state.terminalLayoutsByTabId[currentVisibleLocalTabId]?.activeLeafId ?? null)
+    : null
   const callerFocusIntentTab =
     matchingFocusIntentTab &&
     (expectedCurrentLocalTabId === undefined ||
-      expectedCurrentLocalTabId === currentVisibleLocalTabId)
+      expectedCurrentLocalTabId === currentVisibleLocalTabId) &&
+    (expectedCurrentLocalLeafId === undefined ||
+      currentVisibleLocalLeafId === expectedCurrentLocalLeafId ||
+      currentVisibleLocalLeafId === focusIntent?.leafId)
       ? matchingFocusIntentTab
       : null
   const followIntentTab =
@@ -137,16 +151,23 @@ export function prepareWebSessionTabsSnapshotBase(
     }
   }
   const exactProvisionalHandoffs = new Set(provisionalHandoffHostTabIds.keys())
+  const hostRetiredTerminals = collectHostRetiredTerminals(snapshot, environmentId)
   const retainedTerminalTabs = reconcilesNonAgentTabs
     ? currentTerminalTabs.filter(
         (tab) =>
           !shouldReplaceTerminalTab(
+            state,
             tab,
             environmentId,
             nextRemotePtyIds,
             nextMirroredTerminalIds,
             exactProvisionalHandoffs,
             state.terminalLayoutsByTabId[tab.id]?.ptyIdsByLeafId
+          ) &&
+          !isTerminalRowRetiredByHost(
+            tab,
+            state.terminalLayoutsByTabId[tab.id],
+            hostRetiredTerminals
           )
       )
     : currentTerminalTabs
@@ -155,6 +176,7 @@ export function prepareWebSessionTabsSnapshotBase(
     environmentId,
     existingTerminalById,
     state.terminalLayoutsByTabId,
+    state.ptyIdsByTabId,
     retainedTerminalTabs.length,
     now,
     callerFocusIntentTab?.type === 'terminal'
@@ -167,12 +189,7 @@ export function prepareWebSessionTabsSnapshotBase(
   )
   const mirroredTerminalTabEntries = mirroredTerminalTabs.map((entry) => entry.tab)
   const retainedTerminalIds = new Set(retainedTerminalTabs.map((tab) => tab.id))
-  // Why an empty row rather than a deleted key: an explicit empty row is the closed-last-terminal
-  // tombstone every seeder reads (initial-terminal.ts), and dropping the key reads back as "never
-  // initialized", which re-seeds the workspace on every focus (STA-6173). `sameTerminalTabs` treats
-  // a missing row and an empty one as equal, so a worktree that never had a terminal still gets no
-  // row. A removal frame really is gone, and a synthesized unpublished frame is "ask me later", not
-  // evidence the user emptied anything — neither may leave a tombstone behind.
+  // Preserve explicit empty rows as closed-last-terminal tombstones (initial-terminal.ts, STA-6173). Missing/empty compare equal, so never-initialized worktrees gain no row; removal/unpublished frames prove no user-empty action and leave none.
   const nextTerminalTabs =
     retainedTerminalTabs.length + mirroredTerminalTabEntries.length > 0
       ? [...retainedTerminalTabs, ...mirroredTerminalTabEntries]
@@ -180,6 +197,15 @@ export function prepareWebSessionTabsSnapshotBase(
           !hostSnapshotAffirmsWorktreeContents(snapshot)
         ? null
         : []
+  if (reconcilesNonAgentTabs) {
+    logHostTerminalTabsShrunk(
+      environmentId,
+      worktreeId,
+      currentTerminalTabs,
+      nextTerminalTabs ?? [],
+      now
+    )
+  }
   const mirroredTerminalIds = new Set(mirroredTerminalTabEntries.map((tab) => tab.id))
   const removedTerminalIds = new Set(
     currentTerminalTabs.filter((tab) => !retainedTerminalIds.has(tab.id)).map((tab) => tab.id)

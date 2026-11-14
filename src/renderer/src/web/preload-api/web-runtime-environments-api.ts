@@ -1,10 +1,15 @@
-import { pairedRuntimeConnectionFromOffer } from '../../../../shared/paired-runtime-connection'
-const pendingSubscriptions = new Map<string, AbortController>()
+import { createWebRuntimeEnvironmentSubscriber } from './web-runtime-subscription'
+import { pairedRuntimeConnectionFromOffer } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
+import {
+  createWebRuntimeSubscriptionApiControl,
+  type WebRuntimeSubscriptionRegistration
+} from './web-runtime-crew-subscription'
+const pendingSubscriptions = new Map<string, WebRuntimeSubscriptionRegistration>()
 import type { PreloadApi } from '../../../../preload/api-types'
-import { parseHostAccessLink } from '../../../../shared/remote-pairing-address'
-import { verifyRemotePairingRuntimeStatus } from '../../../../shared/remote-pairing-verification'
+import { parseHostAccessLink } from '../../../../shared/remote-runtime/pairing/remote-pairing-address'
+import { verifyRemotePairingRuntimeStatus } from '../../../../shared/remote-runtime/pairing/remote-pairing-verification'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
 import { parseWebPairingInput } from '../web-pairing'
 import { WebRuntimeClient } from '../web-runtime-client'
 import { isWebRuntimeUnauthorizedError } from '../web-runtime-client-error'
@@ -14,13 +19,16 @@ import {
   saveStoredWebRuntimeEnvironment
 } from '../web-runtime-environment'
 import { translate } from '@/i18n/i18n'
-import { translateHostAccessLinkError } from '@/lib/remote-pairing-copy'
-import { callEnvironmentEnvelope } from './web-runtime-calls'
+import { translateHostAccessLinkError } from '@/lib/remote-pairing/remote-pairing-copy'
+import {
+  callEnvironmentEnvelope,
+  callWebRuntimeEnvironment,
+  getWebRuntimeStatus
+} from './web-runtime-calls'
 import {
   closeActiveRuntimeClients,
   subscribeWebRuntimeStatus,
   readWebRuntimeStatusSnapshots,
-  observeWebRuntimeStatus,
   disconnectActiveRuntimeEnvironment,
   getClientForEnvironment,
   manuallyDisconnectedEnvironmentIds,
@@ -29,10 +37,7 @@ import {
   resolveEnvironment,
   webRuntimeState
 } from './web-runtime-session'
-
-export function createRuntimeEnvironmentsApi(): NonNullable<
-  Partial<PreloadApi>['runtimeEnvironments']
-> {
+export function createRuntimeEnvironmentsApi(): PreloadApi['runtimeEnvironments'] {
   return {
     onStatusChanged: subscribeWebRuntimeStatus,
     getStatusSnapshots: async () => readWebRuntimeStatusSnapshots(),
@@ -165,6 +170,15 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
         runtimeStatus
       }
     },
+    // Why: the browser keeps a single paired server; pairing it again replaces that one.
+    repairFromPairingCode: async () => ({
+      ok: false,
+      kind: 'environment-save-failed',
+      message: translate(
+        'auto.web.webPreloadApi.remotePairingRepairUnavailable',
+        'Re-pairing is not available in the browser. Pair this browser with the server again.'
+      )
+    }),
     resolve: async ({ selector }) =>
       redactStoredWebRuntimeEnvironment(resolveEnvironment(selector)),
     remove: async ({ selector }) => {
@@ -194,43 +208,10 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
         timeoutMs
       )
     },
-    getStatus: ({ selector, timeoutMs, observeOnly }) =>
-      observeOnly
-        ? observeWebRuntimeStatus(selector, timeoutMs)
-        : callEnvironmentEnvelope<RuntimeStatus>(selector, 'status.get', undefined, timeoutMs),
-    retryControlConnection: () => Promise.resolve(),
+    getStatus: getWebRuntimeStatus,
     prepareBrowserClientHostPlacement: async () => ({ kind: 'server' }),
-    call: ({ selector, method, params, timeoutMs }) =>
-      callEnvironmentEnvelope(selector, method, params, timeoutMs),
-    cancelSubscription: async ({ subscriptionId }) => {
-      pendingSubscriptions.get(subscriptionId)?.abort()
-    },
-    subscribe: async ({ selector, method, params, timeoutMs, subscriptionId }, callbacks) => {
-      const environment = resolveEnvironment(selector)
-      const client = getClientForEnvironment(environment)
-      const controller = new AbortController()
-      if (subscriptionId) {
-        if (pendingSubscriptions.has(subscriptionId)) {
-          throw new Error('Subscription id already exists')
-        }
-        pendingSubscriptions.set(subscriptionId, controller)
-      }
-      let subscription
-      try {
-        subscription = await client.subscribe(method, params, callbacks, {
-          timeoutMs,
-          signal: controller.signal
-        })
-      } finally {
-        if (subscriptionId && pendingSubscriptions.get(subscriptionId) === controller) {
-          pendingSubscriptions.delete(subscriptionId)
-        }
-      }
-      if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
-        subscription.unsubscribe()
-        throw new Error('runtime_manually_disconnected')
-      }
-      return subscription
-    }
+    call: callWebRuntimeEnvironment,
+    ...createWebRuntimeSubscriptionApiControl(pendingSubscriptions),
+    subscribe: createWebRuntimeEnvironmentSubscriber(pendingSubscriptions)
   }
 }

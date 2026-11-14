@@ -8,18 +8,22 @@ import {
   WslMoveProjectFencedError,
   loadWslMoveFence,
   resetWslMoveFenceForTests
-} from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { assertWorkspaceAcceptsNewPty } from './spawn-cwd'
 
 const { listLiveDaemonPtyIds } = vi.hoisted(() => ({
   listLiveDaemonPtyIds: vi.fn<() => Promise<string[] | null>>()
 }))
-vi.mock('../../../daemon/daemon-provider-state', () => ({ listLiveDaemonPtyIds }))
+vi.mock('../../../daemon/providers/lifecycle/daemon-provider-state', () => ({
+  listLiveDaemonPtyIds
+}))
 
 let userDataPath: string
 // No store: a readable journal never needs one.
 const accept = (worktreeId: string, sessionId?: string) =>
   Promise.resolve(assertWorkspaceAcceptsNewPty(undefined, worktreeId, sessionId))
+const acceptCwd = (cwd: string | undefined, worktreeId?: string, sessionId?: string) =>
+  Promise.resolve(assertWorkspaceAcceptsNewPty(undefined, worktreeId, sessionId, cwd))
 
 beforeEach(() => {
   userDataPath = mkdtempSync(join(tmpdir(), 'wsl-move-spawn-'))
@@ -52,8 +56,37 @@ describe('assertWorkspaceAcceptsNewPty under a WSL move', () => {
       WslMoveProjectFencedError
     )
   })
+})
 
-  it('leaves other projects alone', async () => {
-    await expect(accept('repo-2::/x')).resolves.toBeUndefined()
+// R46: a terminal the workspace fence misses would otherwise outlive the commit in a moved folder.
+describe('a spawn by its folder, between quiesce and commit', () => {
+  beforeEach(() => {
+    seedWslMoveCutover(userDataPath, cutover('move-1', 'blobs-transferred'))
+  })
+
+  it.each([
+    ['the project root', '\\\\wsl.localhost\\Ubuntu\\home\\dev\\repo-1'],
+    ['a folder inside it', '\\\\wsl.localhost\\Ubuntu\\home\\dev\\repo-1\\src'],
+    [
+      'the wsl$ alias, distro case and a trailing separator',
+      '\\\\wsl$\\UBUNTU\\home\\dev\\repo-1\\'
+    ],
+    ['the Linux spelling', '/home/dev/repo-1/src']
+  ])('refuses one that starts in %s', async (_label, cwd) => {
+    await expect(acceptCwd(cwd)).rejects.toBeInstanceOf(WslMoveProjectFencedError)
+  })
+
+  it.each([['a folder workspace', 'folder:folder-9']])(
+    'refuses %s that starts in a moving folder',
+    async (_label, worktreeId) => {
+      await expect(acceptCwd('/home/dev/repo-1/src', worktreeId)).rejects.toBeInstanceOf(
+        WslMoveProjectFencedError
+      )
+    }
+  )
+
+  it('stops at the commit, once the host owns the folder', async () => {
+    seedWslMoveCutover(userDataPath, cutover('move-1', 'destination-committed'))
+    await expect(acceptCwd('/home/dev/repo-1')).resolves.toBeUndefined()
   })
 })

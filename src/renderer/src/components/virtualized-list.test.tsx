@@ -261,7 +261,6 @@ describe('measureVirtualizedListScrollMargin', () => {
 
     Object.defineProperty(scroller, 'scrollTop', { configurable: true, value: 120 })
     setTop(list, 170)
-    // list.top dropped by the same amount scrollTop rose → margin unchanged.
     expect(measureVirtualizedListScrollMargin(list, scroller)).toBe(190)
   })
 })
@@ -315,34 +314,6 @@ describe('observeVirtualizedListScrollMargin', () => {
 })
 
 describe('VirtualizedList scroll-margin lifecycle', () => {
-  it('does not read layout during ordinary re-renders after the initial measure', () => {
-    const aboveHeight = 160
-    const baseRows = manyRows(VIRTUALIZED_LIST_MIN_ROWS)
-
-    act(() => {
-      root.render(
-        <SharedScrollerHarness aboveHeight={aboveHeight} rows={baseRows.map((row) => `${row}@0`)} />
-      )
-    })
-    syncListTop(aboveHeight)
-    act(() => {
-      fireResizeObservers()
-    })
-
-    const rectSpy = vi.mocked(Element.prototype.getBoundingClientRect)
-    rectSpy.mockClear()
-
-    // Status-poll style re-render: new row identities, unchanged layout.
-    act(() => {
-      root.render(
-        <SharedScrollerHarness aboveHeight={aboveHeight} rows={baseRows.map((row) => `${row}@1`)} />
-      )
-    })
-
-    expect(rectSpy).not.toHaveBeenCalled()
-    expect(host.textContent).toContain('row-000@1')
-  })
-
   it('keeps multi-section windowing correct when content above resizes', () => {
     const rows = manyRows(VIRTUALIZED_LIST_MIN_ROWS + 20)
     let aboveHeight = 200
@@ -361,7 +332,6 @@ describe('VirtualizedList scroll-margin lifecycle', () => {
       'translateY(0px)'
     )
 
-    // Content above grows (sibling section / commit area).
     aboveHeight = 420
     act(() => {
       root.render(
@@ -373,7 +343,6 @@ describe('VirtualizedList scroll-margin lifecycle', () => {
       fireResizeObservers()
     })
 
-    // Local row positioning stays container-relative after margin update.
     expect(host.querySelector<HTMLElement>('[data-index="0"]')?.style.transform).toBe(
       'translateY(0px)'
     )
@@ -384,7 +353,6 @@ describe('VirtualizedList scroll-margin lifecycle', () => {
       return
     }
 
-    // Scroll to the section origin; window should still show this section's head.
     Object.defineProperty(scroller, 'scrollTop', {
       configurable: true,
       writable: true,
@@ -453,8 +421,7 @@ describe('VirtualizedList scroll-margin lifecycle', () => {
   })
 })
 
-// Why not 500 and not a window's worth: a hard-coded set size, or one that happens to equal the
-// mounted count, would pass at those lengths.
+// Use a total different from hardcoded/window sizes so counting mounted rows cannot accidentally pass.
 const ANNOUNCED_ROW_COUNT = VIRTUALIZED_LIST_MIN_ROWS + 23
 
 describe('VirtualizedList list-position announcement', () => {
@@ -480,7 +447,7 @@ describe('VirtualizedList list-position announcement', () => {
     const wrappers = renderAnnouncing()
 
     expect(wrappers.length).toBeGreaterThan(0)
-    // The window is a strict subset, so a set size read off the DOM could not reach the real total.
+    // Only a strict subset mounts, so DOM count cannot supply the real total.
     expect(wrappers.length).toBeLessThan(ANNOUNCED_ROW_COUNT)
     expect(host.querySelector('[data-testid="virtualized-list"]')?.getAttribute('role')).toBe(
       'list'
@@ -504,11 +471,10 @@ describe('VirtualizedList list-position announcement', () => {
     const wrappers = renderAnnouncing({ hasUnloadedRows: true })
 
     expect(wrappers.length).toBeGreaterThan(0)
-    // -1, never the loaded count: a "Load more" control exists precisely because more rows do.
+    // Paged totals are unknown (-1), not the number loaded so far.
     expect(wrappers.map((wrapper) => wrapper.getAttribute('aria-setsize'))).toEqual(
       wrappers.map(() => '-1')
     )
-    // Position is still real — only the total is unknown.
     expect(wrappers.map((wrapper) => wrapper.getAttribute('aria-posinset'))).toEqual(
       wrappers.map((wrapper) => String(Number(wrapper.dataset.index) + 1))
     )

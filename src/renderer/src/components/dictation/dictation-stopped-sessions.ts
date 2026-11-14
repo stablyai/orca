@@ -15,8 +15,7 @@ export function recordStoppedSession(
     return
   }
 
-  // Why: stopped events can arrive for abandoned startup attempts that will
-  // never wait on the id. Keep the early-event cache bounded across sessions.
+  // Abandoned startups may never await their stopped event; bound cached early IDs across sessions.
   stoppedSessionIdsRef.current.delete(sessionId)
   stoppedSessionIdsRef.current.add(sessionId)
   while (stoppedSessionIdsRef.current.size > MAX_EARLY_STOPPED_SESSION_IDS) {
@@ -47,4 +46,19 @@ export function waitForStoppedSession(
       resolve()
     })
   })
+}
+
+export type DictationStoppedSessions = {
+  record: (sessionId: string) => void
+  /** Resolves once the session's stopped event arrives, or after a second. */
+  wait: (sessionId: string) => Promise<void>
+}
+
+export function createDictationStoppedSessions(): DictationStoppedSessions {
+  const stoppedSessionIds = { current: new Set<string>() }
+  const stoppedResolvers = { current: new Map<string, () => void>() }
+  return {
+    record: (sessionId) => recordStoppedSession(sessionId, stoppedSessionIds, stoppedResolvers),
+    wait: (sessionId) => waitForStoppedSession(sessionId, stoppedSessionIds, stoppedResolvers)
+  }
 }

@@ -1,7 +1,7 @@
 import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 
-import type { AgentHookSource } from '../agent-hook-relay'
+import type { AgentHookSource } from './transport/agent-hook-relay'
 import {
   buildGrokChatHistoryPathCandidates,
   findGrokChatHistoryBySessionId,
@@ -16,7 +16,7 @@ import { parseAgentHookJson } from './request-body'
 import { GROK_HOME_ENVELOPE_MAX_LENGTH, GROK_SESSION_CWD_MAX_LENGTH } from './listener-limits'
 import { readLastAssistantFromTranscriptOnce } from './transcript-reader'
 import { isGrokEvent } from './provider-event-names'
-import { isAntigravityStopStillBusy } from './providers/antigravity-event-rules'
+import { isAntigravityStopStillBusy } from './providers/antigravity/antigravity-event-rules'
 
 export function parseHookBodyPayloadRecord(body: unknown): Record<string, unknown> | null {
   if (typeof body !== 'object' || body === null) {
@@ -85,7 +85,7 @@ export function readGrokSessionMetadata(
     ['cwd', 'workspaceRoot', 'workspace_root'],
     GROK_SESSION_CWD_MAX_LENGTH
   )
-  // Why: hook scripts report the effective per-PTY/remote Grok home; old scripts fall back to the runtime's for compatibility.
+  // Prefer effective per-PTY/remote Grok home; older scripts fall back to the runtime home.
   const sessionsDir = grokHome
     ? join(grokHome, 'sessions')
     : resolveGrokSessionsDir(process.env, homedir())
@@ -112,7 +112,7 @@ export function getGrokChatHistoryPath(
   if (cached) {
     return cached
   }
-  // Why: SessionEnd can race the last write; return a plausible on-disk candidate (short-cwd preferred) even if the file doesn't exist yet.
+  // SessionEnd can precede the final write; return a plausible path even before it exists.
   if (!metadata.cwd) {
     return undefined
   }
@@ -147,7 +147,7 @@ export function hasPendingAgentResultText(source: AgentHookSource, body: unknown
     return false
   }
   if (source === 'copilot') {
-    // Why: Copilot Stop uses generic `message` as final assistant text; Grok/Antigravity use that field for status instead.
+    // Copilot uses message as reply text; Grok/Antigravity use it as status.
     if (hasNonEmptyString(record.message)) {
       return false
     }
@@ -214,7 +214,7 @@ export function preparePendingGrokResultDiscovery(
   if (!metadata) {
     return null
   }
-  // Why: lets the server await discovery without moving filesystem I/O back into synchronous hook normalization.
+  // Let callers await discovery without synchronous filesystem work during normalization.
   return findGrokChatHistoryBySessionId(metadata.sessionsDir, metadata.sessionId).then(
     () => undefined
   )

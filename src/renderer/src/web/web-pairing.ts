@@ -1,8 +1,19 @@
 import {
   RuntimeHostDescriptorSchema,
   type RuntimeHostDescriptor
-} from '../../../shared/runtime-host-descriptor'
+} from '../../../shared/remote-runtime/host-status/runtime-host-descriptor'
+import { normalizePairingBase64 } from '../../../shared/remote-runtime/pairing/mobile-pairing-base64'
+import { PAIRING_INPUT_MAX_CHARACTERS } from '../../../shared/remote-runtime/pairing/mobile-pairing-protocol-limits'
 import type { DeviceScope } from '../../../shared/runtime-types'
+import { classifyRuntimeHostRePair } from '../../../shared/remote-runtime/host-status/runtime-host-pairing-identity'
+import type { StoredWebRuntimeEnvironment } from './web-runtime-environment'
+
+type SavedServerIdentity = Pick<StoredWebRuntimeEnvironment, 'hostDescriptor'> & {
+  endpoints: readonly Pick<
+    StoredWebRuntimeEnvironment['endpoints'][number],
+    'endpoint' | 'publicKeyB64'
+  >[]
+}
 
 const PAIRING_OFFER_VERSION = 2
 
@@ -19,9 +30,13 @@ export type WebPairingOffer = {
 export type WebPairingStartupDecision =
   | { kind: 'auto-save-runtime-offer'; offer: WebPairingOffer }
   | { kind: 'show-connect'; initialPairingInput: string | null }
+  | { kind: 'confirm-replace-saved-server'; initialPairingInput: string }
   | { kind: 'use-stored-environment' }
 
 export function parseWebPairingInput(input: string): WebPairingOffer | null {
+  if (input.length > PAIRING_INPUT_MAX_CHARACTERS) {
+    return null
+  }
   const trimmed = input.trim()
   if (!trimmed) {
     return null
@@ -38,7 +53,12 @@ export function parseWebPairingInput(input: string): WebPairingOffer | null {
   }
 }
 
-export function readPairingInputFromLocation(location: Location): string | null {
+export function readPairingInputFromLocation(
+  location: Pick<Location, 'search' | 'hash'>
+): string | null {
+  if (location.search.length + location.hash.length > PAIRING_INPUT_MAX_CHARACTERS) {
+    return null
+  }
   const search = new URLSearchParams(location.search)
   for (const key of ['pairing', 'pair', 'code', 'token']) {
     const value = search.get(key)
@@ -66,18 +86,41 @@ export function readPairingInputFromLocation(location: Location): string | null 
 
 export function decideWebPairingStartup(args: {
   initialPairingInput: string | null
-  hasStoredEnvironment: boolean
+  storedEnvironment: SavedServerIdentity | null
 }): WebPairingStartupDecision {
-  const offer = args.initialPairingInput ? parseWebPairingInput(args.initialPairingInput) : null
+  const { initialPairingInput, storedEnvironment } = args
+  const offer = initialPairingInput ? parseWebPairingInput(initialPairingInput) : null
+  // Why: a link must not silently repoint a browser that is already paired to another server.
+  if (
+    offer &&
+    initialPairingInput &&
+    storedEnvironment &&
+    !isSameSavedServer(storedEnvironment, offer)
+  ) {
+    return { kind: 'confirm-replace-saved-server', initialPairingInput }
+  }
   if (offer?.scope === 'runtime') {
     return { kind: 'auto-save-runtime-offer', offer }
   }
   if (offer) {
-    return { kind: 'show-connect', initialPairingInput: args.initialPairingInput }
+    return { kind: 'show-connect', initialPairingInput }
   }
-  return args.hasStoredEnvironment
+  return storedEnvironment
     ? { kind: 'use-stored-environment' }
     : { kind: 'show-connect', initialPairingInput: null }
+}
+
+function isSameSavedServer(environment: SavedServerIdentity, offer: WebPairingOffer): boolean {
+  return (
+    environment.endpoints.some((entry) => entry.endpoint === offer.endpoint) &&
+    classifyRuntimeHostRePair(
+      {
+        publicKeys: environment.endpoints.map((entry) => entry.publicKeyB64),
+        pin: environment.hostDescriptor
+      },
+      offer
+    ).kind === 'same-host'
+  )
 }
 
 export function clearPairingInputFromAddressBar(): void {
@@ -127,6 +170,9 @@ function parseWebPairingScope(value: unknown): DeviceScope | null {
 }
 
 function extractPairingCodeFromUrl(url: string): string | null {
+  if (url.length > PAIRING_INPUT_MAX_CHARACTERS) {
+    return null
+  }
   let parsed: URL
   try {
     parsed = new URL(url)
@@ -149,9 +195,7 @@ function extractPairingCodeFromUrl(url: string): string | null {
 }
 
 function base64UrlToBytes(value: string): Uint8Array {
-  const base64 = value.replace(/-/g, '+').replace(/_/g, '/')
-  const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, '=')
-  const binary = globalThis.atob(padded)
+  const binary = globalThis.atob(normalizePairingBase64(value))
   const bytes = new Uint8Array(binary.length)
   for (let index = 0; index < binary.length; index += 1) {
     bytes[index] = binary.charCodeAt(index)

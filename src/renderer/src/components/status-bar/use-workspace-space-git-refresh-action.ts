@@ -1,12 +1,12 @@
 import { useCallback } from 'react'
-import type { GitStatusResult } from '../../../../shared/git-status-types'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
-import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
+import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import { getWorkspaceSpaceWorktreeIdentity } from './workspace-space-delete-selection'
 import { useAppStore } from '../../store'
-import { findRepoForHost } from '../../store/slices/repo-host-identity'
-import { getRuntimeGitStatus } from '@/runtime/runtime-git-status-client'
+import { findRepoForHost } from '../../store/repos/repo-host-identity'
+import { getRuntimeGitStatus } from '@/runtime/source-control/git/runtime-git-status-client'
 import type { useWorkspaceSpaceManagerBindings } from './use-workspace-space-manager-bindings'
+import { translate } from '@/i18n/i18n'
 
 type WorkspaceSpaceManagerBindings = ReturnType<typeof useWorkspaceSpaceManagerBindings>
 
@@ -54,20 +54,30 @@ export function useWorkspaceSpaceGitRefreshAction(bindings: WorkspaceSpaceManage
 
       return (
         owner && ownerTarget
-          ? getRuntimeGitStatus({
-              target: ownerTarget,
-              worktreeId: worktree.worktreeId,
-              worktreePath: worktree.path,
-              connectionId: owner.connectionId ?? undefined
-            })
-          : Promise.reject(new Error('Workspace owner is no longer available'))
+          ? getRuntimeGitStatus(
+              {
+                target: ownerTarget,
+                worktreeId: worktree.worktreeId,
+                worktreePath: worktree.path,
+                connectionId: owner.connectionId ?? undefined
+              },
+              { includeLineStats: false, admissionTier: 'background' }
+            )
+          : Promise.reject(
+              new Error(
+                translate(
+                  'auto.components.status.bar.workspaceSpaceGitRefresh.ownerUnavailable',
+                  'Workspace owner is no longer available'
+                )
+              )
+            )
       )
         .then((status) => {
           if (gitStatusScanGenerationRef.current !== scanGeneration) {
             return
           }
           const nextStatus = new Map(gitStatusByWorktreeIdentityRef.current)
-          nextStatus.set(identity, (status as GitStatusResult).entries)
+          nextStatus.set(identity, status.entries)
           gitStatusByWorktreeIdentityRef.current = nextStatus
           setGitStatusByWorktreeIdentity(nextStatus)
           setGitRefreshStateByWorktreeId((current) => ({

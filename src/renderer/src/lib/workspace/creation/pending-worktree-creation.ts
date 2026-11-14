@@ -1,0 +1,314 @@
+import type { LaunchAgentStartupPromptPlan } from '@/lib/agent-session/launch/prompt/launch-agent-startup-prompt-plan'
+import type { agentPickerLaunchInputs } from '../../../../../shared/agent-launch/picker/agent-launch-picker'
+import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import { worktreeIdsEqual } from '../../../../../shared/worktree/id'
+import type {
+  WorkspaceLinkedItem as FolderWorkspaceLinkedTask,
+  GitPushTarget,
+  WorkspaceLinkedItem,
+  WorkspaceStatus
+} from '../../../../../shared/worktree/types'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../../shared/workspace-source'
+import type {
+  CreateSparseCheckoutRequest,
+  CreateWorktreeArgs,
+  SetupDecision,
+  WorktreeCheckoutProgress
+} from '../../../../../shared/worktree/create-types'
+import type { WorktreeStartupLaunch } from '../../../../../shared/worktree/creation/launch-types'
+
+import type { AgentStartupPlan } from '../../../../../shared/agent-launch/startup/tui-agent-startup'
+import type { AgentStartedTelemetry } from '@/lib/workspace/creation/worktree-startup-payload'
+import type {
+  TaskSourceContext,
+  WorkspaceRunContext
+} from '../../../../../shared/work-items/task-source-context'
+import type { AgentLaunchRoute } from '@/lib/agent-session/launch/routing/agent-launch-routing'
+import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
+import type { EnvironmentDoctorCheck } from '../../../../../shared/environment-doctor-types'
+import type { NativeChatComposerDraftImage } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
+import type { AgentJournalSkillRef } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+
+/** Creation phases include renderer preflight, base fetch and worktree add; remote/runtime can skip git phases, while VM recipes provision before runtime creation. */
+export type WorktreeCreationPhase = 'preparing' | 'provisioning-vm' | 'fetching' | 'creating'
+
+export type WorktreeCreationProgressMode = 'stepped' | 'indeterminate'
+
+/** Session-only creation intent, including script checks and compatibility planning retained for Retry. */
+export type WorktreeCreationRequest = {
+  repoId: string
+  /** Execution owner retained after script preparation, including retries. */
+  executionHostId?: ExecutionHostId
+  // Preserve linked-task source ownership separately from execution context so Retry never infers account from run host.
+  taskSourceContext?: TaskSourceContext | null
+  linkedWorkItem?: WorkspaceLinkedItem | null
+  linkedTaskSourceContext?: TaskSourceContext | null
+  // Preserve project-first host intent for retry/diagnostics/metadata; repoId remains for older create APIs.
+  workspaceRunContext?: WorkspaceRunContext | null
+  // Best-effort cleanup owns this VM runtime until workspace handoff succeeds.
+  ephemeralVmRuntimeId?: string
+  /** Runtime environment created from the VM's pairing code. Used to refresh
+   *  live status immediately after the workspace takes ownership. */
+  ephemeralVmRuntimeEnvironmentId?: string
+  /** Checkout ownership selected by the provisioned recipe. */
+  ephemeralVmCheckoutMode?: 'orca-worktree' | 'provisioned-root'
+  /** Source-host commit captured before a provisioned-root recipe starts. */
+  ephemeralVmExpectedRefHead?: string
+  // Retain a serializable recipe so failed creates can rerun provisioning.
+  ephemeralVmRecipe?: {
+    sourceRepoId: string
+    recipeId: string
+    projectId: string
+    checkoutMode?: 'orca-worktree' | 'provisioned-root'
+  }
+  // Capture local/runtime progress routing at submit so focus changes cannot alter Retry behavior.
+  worktreeCreateProgressMode?: WorktreeCreationProgressMode
+  name: string
+  /** True only when `name` came from the creature-name generator; gates host-side retirement. */
+  nameWasGenerated?: boolean
+  displayName?: string
+  displayNameKind?: 'generated' | 'user'
+  baseBranch?: string
+  compareBaseRef?: string
+  setupDecision: SetupDecision
+  /** Hash of the setup content confirmed at submit; the host compares it with the created branch's. */
+  approvedSetupHash?: string
+  approvedSetupHashes?: string[]
+  /** Inspect and confirm scripts on the captured host after the composer closes. */
+  hookPreparation?: {
+    executionHostId?: ExecutionHostId
+    confirmVmRecipe?: boolean
+    issueCommand?: {
+      provider: FolderWorkspaceLinkedTask['provider'] | null
+      issueNumber: number
+      artifactUrl: string | null
+    }
+  }
+  sparseCheckout?: CreateSparseCheckoutRequest
+  telemetrySource?: WorkspaceCreateTelemetrySource
+  linkedIssue?: number
+  linkedPR?: number
+  pushTarget?: GitPushTarget
+  agent: TuiAgent | null
+  /** Renderer-owned route decision captured at submit time and reused on retry. */
+  agentLaunchRoute?: AgentLaunchRoute
+  launchInputs?: ReturnType<typeof agentPickerLaunchInputs>
+  legacyLaunchInputs?: ReturnType<typeof agentPickerLaunchInputs>
+  creationStartup?: {
+    onLegacyPreparationFailure?: (error: unknown) => void
+    sessionOptions?: AgentStartupPlan['sessionOptions']
+    launchToken?: string
+    legacy: (
+      prompt?: string,
+      delivery?: 'draft' | 'auto-submit'
+    ) => {
+      startupPlan: AgentStartupPlan | null
+      backendStartup: WorktreeStartupLaunch | undefined
+      promptPlan?: LaunchAgentStartupPromptPlan
+    }
+  }
+  linkedLinearIssue?: string
+  linkedLinearIssueWorkspaceId?: string | null
+  linkedLinearIssueOrganizationUrlKey?: string | null
+  branchNameOverride?: string
+  branchIntent?: CreateWorktreeArgs['branchIntent']
+  /** Parent picked in the composer's Advanced drawer. Sidebar nesting only, no git effect. */
+  parentWorktreeId?: string
+  workspaceStatus?: WorkspaceStatus
+  linkedGitLabMR?: number
+  linkedGitLabIssue?: number
+  linkedBitbucketPR?: number | null
+  linkedAzureDevOpsPR?: number | null
+  linkedGiteaPR?: number | null
+  // Backend startup payload exists only for self-contained launch; otherwise startupPlan drives it in renderer.
+  startup?: WorktreeStartupLaunch
+  // Trust-gated repo issue command runs in a split after the first terminal, matching the composer.
+  issueCommand?: { command: string; env?: Record<string, string> }
+  pendingFirstAgentMessageRename: boolean
+  /** Post-create note persisted as the worktree comment. */
+  note: string
+  // Seed the first terminal only when backend did not launch it; null for blank shells.
+  startupPlan: AgentStartupPlan | null
+  quickPrompt: string
+  /** Launch context delivered only as an unsent TUI-input draft (argv prefill or
+   *  startup paste); completion seeds the chat-composer copy from it. */
+  launchDraftPrompt?: string
+  // Composer fixes launchDraftPrompt/quickPrompt delivery beside agentLaunchRoute; never rederive it later.
+  promptDelivery?: 'draft' | 'auto-submit'
+  quickTelemetry: AgentStartedTelemetry | null
+  // Sequential-create completion must preserve focus in the next workspace name field.
+  suppressTerminalFocusOnCompletion?: boolean
+  /** "None" in the composer: when setup runs, open only its tab instead of an extra shell. */
+  setupOnly?: boolean
+}
+
+export type PendingVmEnvironmentCheck = {
+  /** `skipped`: the VM's server predates the checks. */
+  status: 'running' | 'passed' | 'skipped' | 'failed'
+  checks?: readonly EnvironmentDoctorCheck[]
+}
+
+/** Session-only creation status drives sidebar/panel and vanishes on reload; completed worktrees reconcile normally. request owns display fields and retry intent so they cannot drift. */
+export type PendingWorktreeCreation = {
+  creationId: string
+  /** Resolved before checkout publication so passive activation can defer its initial surface. */
+  worktreeId?: string
+  phase: WorktreeCreationPhase
+  status: 'creating' | 'error'
+  startedAt: number
+  // Remote/runtime targets without phase events need one indeterminate spinner, never a checklist stuck at step one.
+  indeterminate: boolean
+  // Instant folder creates retain the initiating surface; explicit opens and retries reveal progress.
+  loaderVisible: boolean
+  error?: string
+  provisioningLog?: string
+  /** VM creates: the provisioned VM's environment checks, run before the workspace is created. */
+  environmentCheck?: PendingVmEnvironmentCheck
+  // Local git checkout meter; absent when git emits none or creation runs over SSH/runtime.
+  checkoutProgress?: WorktreeCheckoutProgress
+  /** Phases entered so far with their start times, so the chat checklist can time each step. */
+  phaseLog?: readonly { phase: WorktreeCreationPhase; at: number }[]
+  /** Chat message sent before the worktree existed; the chat launch delivers it as its first message. */
+  heldChatMessage?: string
+  heldChatAttachments?: readonly NativeChatComposerDraftImage[]
+  heldChatSkills?: readonly AgentJournalSkillRef[]
+  /** The launch owns the captured input until its replacement surface is published. */
+  chatInputHandedOff?: boolean
+  /** When the worktree was ready and the chat's agent began starting. */
+  chatHandedOffAt?: number
+  request: WorktreeCreationRequest
+}
+
+export function pendingWorktreeCreationIsVisible(
+  entry: PendingWorktreeCreation | undefined
+): boolean {
+  return entry !== undefined && (entry.loaderVisible || entry.status === 'error')
+}
+
+/** Draft scope of the chat composer shown while this creation has no workspace yet. */
+export function pendingCreationChatDraftScopeKey(creationId: string): string {
+  return `pending-worktree-creation:${creationId}`
+}
+
+/** The first message this creation's chat will send: one sent while pending, else the composer's auto-submit prompt. */
+export function pendingCreationHeldChatMessage(
+  entry: Pick<PendingWorktreeCreation, 'heldChatMessage' | 'request'>
+): string | null {
+  if (entry.heldChatMessage !== undefined) {
+    return entry.heldChatMessage
+  }
+  const { quickPrompt, promptDelivery } = entry.request
+  return promptDelivery !== 'draft' && quickPrompt.trim() ? quickPrompt : null
+}
+
+/** The pending chat surface owns the first message and draft; hand both to the chat launch. */
+export function withPendingChatInput(
+  entry: PendingWorktreeCreation | undefined,
+  request: WorktreeCreationRequest
+): WorktreeCreationRequest {
+  if (!entry || !pendingCreationOpensNativeChat({ phase: entry.phase, request })) {
+    return request
+  }
+  const held = pendingCreationHeldChatMessage({ ...entry, request })
+  // The draft prompt was seeded into the pending composer, whose draft the launch moves over.
+  const { launchDraftPrompt: _seeded, ...rest } = request
+  return { ...rest, quickPrompt: held ?? '', promptDelivery: 'auto-submit' }
+}
+
+/** True when this creation ends in a native chat, so its pending surface is the chat itself. */
+export function pendingCreationOpensNativeChat(
+  entry: Pick<PendingWorktreeCreation, 'phase' | 'request'>
+): boolean {
+  return (
+    entry.request.agentLaunchRoute === 'structured-native-chat' &&
+    entry.request.agent !== null &&
+    entry.phase !== 'provisioning-vm' &&
+    !entry.request.ephemeralVmRecipe
+  )
+}
+
+export function findPendingWorktreeCreationId(
+  pendingCreations: Readonly<Record<string, PendingWorktreeCreation>> | undefined,
+  worktreeId: string | null
+): string | null {
+  if (!pendingCreations || !worktreeId) {
+    return null
+  }
+  return (
+    Object.values(pendingCreations).find(
+      (entry) =>
+        entry.status === 'creating' &&
+        entry.worktreeId !== undefined &&
+        worktreeIdsEqual(entry.worktreeId, worktreeId)
+    )?.creationId ?? null
+  )
+}
+
+export function findPendingLinkedWorkItemCreationId(
+  pendingCreations: Readonly<Record<string, PendingWorktreeCreation>>,
+  request: Pick<
+    WorktreeCreationRequest,
+    'repoId' | 'linkedIssue' | 'linkedPR' | 'workspaceRunContext'
+  >
+): string | null {
+  if (request.linkedIssue == null && request.linkedPR == null) {
+    return null
+  }
+  const hostId = request.workspaceRunContext?.hostId ?? null
+  const match = Object.values(pendingCreations).find((entry) => {
+    const pending = entry.request
+    return (
+      pending.repoId === request.repoId &&
+      pending.linkedIssue === request.linkedIssue &&
+      pending.linkedPR === request.linkedPR &&
+      (pending.workspaceRunContext?.hostId ?? null) === hostId
+    )
+  })
+  return match?.creationId ?? null
+}
+
+/** Show checkout progress only in its live phase so retries/errors cannot display stale meters. */
+export function getVisibleCheckoutProgress(
+  entry: Pick<PendingWorktreeCreation, 'status' | 'phase' | 'checkoutProgress'>
+): WorktreeCheckoutProgress | null {
+  return entry.status === 'creating' && entry.phase === 'creating'
+    ? (entry.checkoutProgress ?? null)
+    : null
+}
+
+/** Share in-progress copy between panel/sidebar; callers handle errors. */
+export function getCreationProgressLabel(
+  entry: Pick<
+    PendingWorktreeCreation,
+    'status' | 'phase' | 'indeterminate' | 'request' | 'checkoutProgress' | 'environmentCheck'
+  >,
+  t: Translate = translate
+): string {
+  const checkout = getVisibleCheckoutProgress(entry)
+  if (checkout) {
+    return t(
+      'auto.lib.pendingWorktreeCreation.checkingOutFiles',
+      'Checking out files… {{percent}}%',
+      { percent: checkout.percent }
+    )
+  }
+  if (entry.phase === 'provisioning-vm') {
+    if (entry.environmentCheck?.status === 'failed') {
+      return t('auto.lib.pendingWorktreeCreation.vmChecksFailed', 'Environment checks failed')
+    }
+    return entry.environmentCheck
+      ? t('auto.lib.pendingWorktreeCreation.checkingVmEnvironment', 'Checking VM environment…')
+      : t('auto.lib.pendingWorktreeCreation.provisioningVm', 'Provisioning VM…')
+  }
+  if (entry.indeterminate) {
+    return t('auto.lib.pendingWorktreeCreation.settingUpWorkspace', 'Setting up your workspace…')
+  }
+  if (entry.phase === 'preparing') {
+    return t('auto.lib.pendingWorktreeCreation.preparingWorkspace', 'Preparing workspace…')
+  }
+  return entry.phase === 'creating'
+    ? t('auto.lib.pendingWorktreeCreation.creatingWorktree', 'Creating worktree…')
+    : t('auto.lib.pendingWorktreeCreation.fetchingBaseBranch', 'Fetching base branch…')
+}

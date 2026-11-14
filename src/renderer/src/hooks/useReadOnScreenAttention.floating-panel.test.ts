@@ -5,12 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentAutoAckPresence from './agent-auto-ack-presence'
 import { useReadOnScreenAttention } from './useReadOnScreenAttention'
 import { useAppStore } from '../store'
-import { selectFloatingWorkspaceHasUnread } from '../store/selectors'
-import { makeTab, makeTabGroup, makeUnifiedTab } from '../store/slices/store-session-test-harness'
+import { selectFloatingWorkspaceHasUnread } from '../store/workspaces/floating/floating-workspace-unread-selector'
+import { makeTab } from '../store/terminals/testing/terminal-tab.test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '../store/slices/tabs/tab-group.test-fixture'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 
-// These suites isolate synchronous acknowledgement and layout behavior.
 vi.mock('./agent-auto-ack-presence', async (importOriginal) => ({
   ...(await importOriginal<typeof AgentAutoAckPresence>()),
   createAutoAckPresenceCheck: (_read: unknown, onPresent: () => void) => ({
@@ -99,8 +99,7 @@ describe('useReadOnScreenAttention — floating workspace panel visibility', () 
     expect(selectFloatingWorkspaceHasUnread(useAppStore.getState())).toBe(false)
   })
 
-  // Why: the only case where the scan acks two targets, and acking the first re-enters the scan
-  // synchronously — so this is the path where a stale mid-loop snapshot would surface.
+  // Acknowledging the first visible target synchronously reenters scanning; a stale loop snapshot would re-ack the second.
   it('clears both the active terminal tab and the floating tab in one pass', () => {
     useAppStore.setState({
       activeView: 'terminal',
@@ -160,27 +159,4 @@ describe('useReadOnScreenAttention — floating workspace panel visibility', () 
     expect(state.unreadAgentCompletionPanes[FLOATING_PANE_KEY]).toBeUndefined()
     expect(selectFloatingWorkspaceHasUnread(state)).toBe(false)
   })
-})
-
-it('does not acknowledge the regular workspace for a colliding floating tab', () => {
-  vi.spyOn(document, 'hasFocus').mockReturnValue(true)
-  seedFloatingCompletion()
-  useAppStore.setState({
-    activeView: 'terminal',
-    activeTabId: FLOATING_TAB_ID,
-    activeWorktreeId: 'regular',
-    unreadAgentCompletionPanes: { [FLOATING_PANE_KEY]: true }
-  })
-  openFloatingPanel()
-  const read = vi.spyOn(useAppStore.getState(), 'readOnScreenAttention')
-  try {
-    renderHook(() => useReadOnScreenAttention())
-    expect(read).toHaveBeenCalled()
-    expect(
-      read.mock.calls.flatMap(([screen]) => screen.targets.map((target) => target.worktreeId))
-    ).not.toContain('regular')
-  } finally {
-    cleanup()
-    vi.restoreAllMocks()
-  }
 })
