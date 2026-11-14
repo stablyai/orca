@@ -25,6 +25,7 @@ import { wslDistroHoldRpcFailure } from '../../../../shared/wsl-distro-stopped-h
 import { LINEAR_ERROR_CODES } from '../../../../shared/linear/agent-access'
 import { AGENT_SESSION_RPC_ERROR_CODES } from '../../../../shared/agent-session/agent-session-host-authority'
 import { ARTIFACT_SHARING_DISABLED_CODE } from '../../../../shared/artifacts/artifact-sharing-gate'
+import { AGENT_LAUNCH_DISABLED_CODE } from '../../../../shared/agent-launch-disabled'
 import { AGENT_SKILL_SHARING_DISABLED_CODE } from '../../../../shared/agent-skill-sharing-gate'
 import { SHARING_UNAVAILABLE_ON_HOST_CODE } from '../../../../shared/sharing-unavailable-on-host'
 import {
@@ -187,6 +188,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   PROJECT_RUNTIME_REPAIR_REQUIRED_CODE,
   GIT_DIFF_TOO_LARGE_CODE,
   ARTIFACT_SHARING_DISABLED_CODE,
+  AGENT_LAUNCH_DISABLED_CODE,
   AGENT_SKILL_SHARING_DISABLED_CODE,
   SHARING_UNAVAILABLE_ON_HOST_CODE,
   AGENT_SKILL_NOT_SHAREABLE_CODE,

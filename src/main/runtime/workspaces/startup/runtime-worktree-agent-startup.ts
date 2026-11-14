@@ -15,6 +15,7 @@ import {
 } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { resolveAgentStartupPlanInputs } from '../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
+import { AGENT_LAUNCH_DISABLED_CODE } from '../../../../shared/agent-launch-disabled'
 import type { resolveStartupAgentLaunchRuntime } from '../../terminal/launch/agent-launch-scope-runtime'
 import {
   buildAgentDraftLaunchPlan,
@@ -190,7 +191,10 @@ export async function buildWorktreeStartupForAgent(
 }> {
   const { agent, repo, settings } = environment
   if (!isTuiAgentEnabled(agent, settings.disabledTuiAgents)) {
-    throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
+    throw Object.assign(
+      new Error('Selected agent is disabled. Choose an enabled agent before creating.'),
+      { code: AGENT_LAUNCH_DISABLED_CODE }
+    )
   }
   const { platform, shell, launchRuntime } = environment.getLaunchRuntime(agent)
   const resolvedInputs = resolveAgentStartupPlanInputs({
