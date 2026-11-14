@@ -29,11 +29,7 @@ type SubjectOwnerState = WorktreeRuntimeOwnerState &
   Partial<
     Pick<
       AppState,
-      | 'tabsByWorktree'
-      | 'unifiedTabsByWorktree'
-      | 'ptyIdsByTabId'
-      | 'terminalLayoutsByTabId'
-      | 'retainedAgentsByPaneKey'
+      'tabsByWorktree' | 'unifiedTabsByWorktree' | 'ptyIdsByTabId' | 'terminalLayoutsByTabId'
     >
   >
 
@@ -111,11 +107,11 @@ export function resolveTerminalNotificationOwner(
     return subject.workspaceOwner
   }
   const pane = subject.paneKey ? parsePaneKey(subject.paneKey) : null
-  const retained = subject.paneKey ? state.retainedAgentsByPaneKey?.[subject.paneKey] : undefined
-  const retainedTab =
-    retained?.worktreeId === workspaceId && retained.tab.id === pane?.tabId
-      ? retained.tab
-      : undefined
+  const notificationTab = state.unifiedTabsByWorktree?.[workspaceId]?.find(
+    (candidate) =>
+      candidate.contentType === 'terminal' &&
+      (candidate.entityId === pane?.tabId || candidate.id === pane?.tabId)
+  )
   const terminalTab = state.tabsByWorktree?.[workspaceId]?.find((tab) => tab.id === pane?.tabId)
   const layout = pane ? state.terminalLayoutsByTabId?.[pane.tabId] : undefined
   const tabPtys = pane ? state.ptyIdsByTabId?.[pane.tabId] : undefined
@@ -123,7 +119,7 @@ export function resolveTerminalNotificationOwner(
     subject.ptyId ??
     (pane ? layout?.ptyIdsByLeafId?.[pane.leafId] : null) ??
     (tabPtys?.length === 1 ? tabPtys[0] : null) ??
-    (terminalTab ?? retainedTab)?.ptyId
+    terminalTab?.ptyId
   if (ptyId) {
     const binding = resolveTerminalTabPtyOwnership(
       {
@@ -134,8 +130,10 @@ export function resolveTerminalNotificationOwner(
       workspaceId,
       ptyId
     )
-    if (binding.kind !== 'owned' && !(binding.kind === 'none' && ptyId === retainedTab?.ptyId)) {
-      return null
+    if (binding.kind !== 'owned') {
+      // A known tab still owns delayed delivery after its PTY binding disappears.
+      const tab = binding.kind === 'none' ? notificationTab : undefined
+      return tab ? resolveNotificationTabOwner(state, tab) : null
     }
     const transportHost = getPtyExecutionHost(ptyId)
     if (transportHost === 'foreign') {
@@ -156,10 +154,5 @@ export function resolveTerminalNotificationOwner(
       ? workspaceOwner
       : transportOwner
   }
-  const tab = state.unifiedTabsByWorktree?.[workspaceId]?.find(
-    (candidate) =>
-      candidate.contentType === 'terminal' &&
-      (candidate.entityId === pane?.tabId || candidate.id === pane?.tabId)
-  )
-  return tab ? resolveNotificationTabOwner(state, tab) : null
+  return notificationTab ? resolveNotificationTabOwner(state, notificationTab) : null
 }
