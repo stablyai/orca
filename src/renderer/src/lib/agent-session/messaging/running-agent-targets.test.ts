@@ -15,7 +15,9 @@ const LEAF_ID = '0b9f6c1e-4a52-4d4f-9a55-1f3f6d2c7a10'
 const SIBLING_LEAF_ID = '5d2a8e44-0c1b-4f7a-8b3e-9e6f1a2b3c4d'
 const PANE_KEY = `tab-1:${LEAF_ID}`
 
-function entry(overrides: Partial<AgentStatusEntry>): AgentStatusEntry {
+function entry(
+  overrides: Partial<Pick<AgentStatusEntry, 'state' | 'agentType' | 'restoredUnconfirmed'>>
+): AgentStatusEntry {
   return {
     state: 'done',
     prompt: '',
@@ -23,6 +25,7 @@ function entry(overrides: Partial<AgentStatusEntry>): AgentStatusEntry {
     stateStartedAt: NOW - TWO_HOURS_MS,
     agentType: 'kiro',
     paneKey: PANE_KEY,
+    stateHistory: [],
     ...overrides
   }
 }
