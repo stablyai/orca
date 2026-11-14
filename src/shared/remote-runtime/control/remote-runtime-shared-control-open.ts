@@ -1,5 +1,8 @@
 import { prepareOpenRefusal } from './remote-runtime-shared-control-hold'
-import type { RemoteRuntimeSharedControlConnectionOptions } from './remote-runtime-shared-control-types'
+import type {
+  RemoteRuntimeSharedControlConnectionOptions,
+  SharedControlSocketCloseCause
+} from './remote-runtime-shared-control-types'
 import type WebSocket from 'ws'
 import type { PairedRuntimeConnection } from '../pairing/paired-runtime-connection'
 import type { RemoteRuntimeClientError } from '../remote-runtime-client-error'
@@ -13,7 +16,6 @@ import {
   startRemoteRuntimeSocketLiveness,
   type RemoteRuntimeSocketLivenessOptions
 } from '../remote-runtime-socket-liveness'
-import type { SharedControlSocketCloseCause } from './remote-runtime-shared-control-types'
 import type { RemoteRuntimeSealedFrame } from '../remote-runtime-sealed-frame'
 
 export function openSharedControlSocket(

@@ -1,16 +1,4 @@
-export {
-  getRuntimeEnvironmentStatusOwner,
-  withRuntimeEnvironmentStatusOwner,
-  resetRuntimeEnvironmentStatusOwners,
-  getRuntimeEnvironmentStatusSnapshot,
-  getRuntimeEnvironmentStatusSnapshots
-} from '../status/runtime-environment-status-owner-registry'
-import {
-  getOwnedRuntimeEnvironmentStatusOwner,
-  retireRuntimeEnvironmentStatusOwner
-} from '../status/runtime-environment-status-owner-registry'
-
-export { isRemoteRuntimeConnectionReady } from './runtime-environment-connection-readiness'
+import { createRuntimeEnvironmentStatusOwnerRegistry } from '../status/runtime-environment-status-owner-registry'
 import { runtimeEnvironmentConnectionPairingKey as getPairingKey } from './runtime-environment-capability-evidence'
 import type { RuntimeEnvironmentCall } from '../requests/runtime-environment-call'
 import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
@@ -56,8 +44,36 @@ type CachedSharedControlConnection = {
   answeredAt: () => number | null
 }
 
-export const requestConnections = new Map<string, CachedRuntimeConnection>()
-export const sharedControlConnections = new Map<string, CachedSharedControlConnection>()
+const requestConnections = new Map<string, CachedRuntimeConnection>()
+const sharedControlConnections = new Map<string, CachedSharedControlConnection>()
+
+export const {
+  getRuntimeEnvironmentStatusOwner,
+  withRuntimeEnvironmentStatusOwner,
+  resetRuntimeEnvironmentStatusOwners,
+  getRuntimeEnvironmentStatusSnapshot,
+  getRuntimeEnvironmentStatusSnapshots,
+  getOwnedRuntimeEnvironmentStatusOwner,
+  retireRuntimeEnvironmentStatusOwner
+} = createRuntimeEnvironmentStatusOwnerRegistry({
+  closeRemoteRuntimeRequestConnection,
+  getRemoteRuntimeSharedControlDiagnostics,
+  sendRemoteRuntimeSharedControlRequest,
+  ensureRemoteRuntimeSharedControlConnection,
+  reconnectRemoteRuntimeSharedControlConnection,
+  pauseRemoteRuntimeSharedControlRetry
+})
+
+/** Consult owned authenticated transports without acquiring another host channel. */
+export function isRemoteRuntimeConnectionReady(
+  environmentId: string,
+  pairedConnection: PairedRuntimeConnection
+): boolean {
+  const pairingKey = getPairingKey(pairedConnection)
+  return [sharedControlConnections.get(environmentId), requestConnections.get(environmentId)].some(
+    (cached) => cached?.pairingKey === pairingKey && cached.connection.isReady()
+  )
+}
 
 export function sendRemoteRuntimeConnectionRequest<TResult>(
   environmentId: string,

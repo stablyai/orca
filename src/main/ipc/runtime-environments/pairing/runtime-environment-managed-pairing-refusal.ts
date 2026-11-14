@@ -1,8 +1,10 @@
-import { getPreferredPairedRuntimeConnection } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import {
+  getPreferredPairedRuntimeConnection,
+  getOrcadSshDeployment
+} from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { runtimeEnvironmentConnectionPairingKey } from '../connections/runtime-environment-capability-evidence'
 import { errorMessage } from '../../../../shared/error-message'
 import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
-import { getOrcadSshDeployment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { managedOrcadRefusalNeedingUserCode } from '../../../managed-server/lifecycle/orcad-managed-tunnel-identity'
 import {
   managedOrcadPairingFailureStands,
