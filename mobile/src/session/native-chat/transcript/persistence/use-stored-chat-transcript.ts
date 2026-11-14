@@ -8,6 +8,19 @@ import { flushChatTranscript } from './mobile-native-chat-transcript-writer'
 // The same cap the boot read has: past it, the chat reads live without its stored copy.
 const STORE_READ_WAIT_MS = 150
 
+export function useChatTranscriptStoreReadWait(identity: string | null, waiting: boolean): boolean {
+  const [gaveUpOn, setGaveUpOn] = useState<string | null>(null)
+  const reading = waiting && identity !== null && gaveUpOn !== identity
+  useEffect(() => {
+    if (!reading || identity === null) {
+      return
+    }
+    const wait = setTimeout(() => setGaveUpOn(identity), STORE_READ_WAIT_MS)
+    return () => clearTimeout(wait)
+  }, [identity, reading])
+  return reading
+}
+
 /**
  * A chat's link to the phone's stored copy. Returns true while the copy is still being read (a few ms, then
  * one re-render), so the chat subscribes only once it can paint and resume from it. The copy the chat noted
@@ -20,24 +33,19 @@ export function useStoredChatTranscript(args: {
   turnSettled: boolean
 }): boolean {
   const { identity, turnSettled } = args
-  // A store that doesn't answer in time never holds the live read back; its late answer still fills the copy.
-  const [gaveUpOn, setGaveUpOn] = useState<string | null>(null)
-  const reading =
-    args.read &&
-    identity !== null &&
-    gaveUpOn !== identity &&
-    peekStoredChatTranscript(identity) === undefined
+  const reading = useChatTranscriptStoreReadWait(
+    identity,
+    args.read && identity !== null && peekStoredChatTranscript(identity) === undefined
+  )
   const [, answered] = useReducer((answers: number) => answers + 1, 0)
   useEffect(() => {
     if (!reading || identity === null) {
       return
     }
     let current = true
-    const wait = setTimeout(() => current && setGaveUpOn(identity), STORE_READ_WAIT_MS)
     void readStoredChatTranscript(identity).then(() => current && answered())
     return () => {
       current = false
-      clearTimeout(wait)
     }
   }, [identity, reading])
   useEffect(() => {
