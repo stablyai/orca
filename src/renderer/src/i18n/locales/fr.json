@@ -7890,12 +7890,6 @@
             "title": "Mise en veille des agents",
             "toggleLabel": "Activer la mise en veille des agents"
           },
-          "newWorktreeCardStyle": {
-            "copy": "Prévisualise la nouvelle mise en page des cartes de worktree, l'emplacement des métadonnées, les options du menu d'affichage des cartes et la présentation des statuts.",
-            "description": "Prévisualise la nouvelle mise en page des cartes de worktree, l'emplacement des métadonnées, les options du menu d'affichage des cartes et la présentation des statuts.",
-            "title": "Nouveau style de carte",
-            "toggleLabel": "Activer le nouveau style de carte"
-          },
           "ca2219fe5e": "Affiche un petit compagnon animé épinglé dans le coin inférieur droit. Choisissez un personnage (Claudino, OpenCode, Gremlin) ou importez votre propre PNG, APNG, GIF, WebP, JPG ou SVG depuis le menu compagnon de la barre d'état. Masquez-le à tout moment depuis le même menu sans désactiver ce réglage.",
           "dd6f0a1d45": "Compagnon",
           "0e89a574ae": "Compagnon animé flottant dans le coin inférieur droit.",
@@ -10056,11 +10050,9 @@
             "newWorktreeCardStyle": {
               "card": "carte",
               "cards": "cartes",
-              "description": "Prévisualise la nouvelle mise en page des cartes de worktree, l'emplacement des métadonnées, les options du menu d'affichage des cartes et la présentation des statuts.",
               "menu": "menu",
               "metadata": "métadonnées",
               "status": "statut",
-              "title": "Nouveau style de carte",
               "worktree": "worktree",
               "worktrees": "worktrees"
             },
@@ -20299,7 +20291,8 @@
         "unconfirmedDetail": "La conversation s’est peut-être ouverte malgré tout. Consultez l’historique des sessions avant de réessayer.",
         "failed": "{{agent}} n’a pas pu créer de branche de cette conversation",
         "hostUnsupported": "Cet hôte utilise une ancienne version d’Orca. Mettez Orca à jour sur l’hôte, puis réessayez.",
-        "failedDetail": "Votre conversation est inchangée. Réessayez."
+        "failedDetail": "Votre conversation est inchangée. Réessayez.",
+        "commandWorking": "Impossible de créer une branche pendant que {{agent}} répond. Relancez /fork quand la réponse est terminée."
       },
       "cardKindHidden": {
         "description": "Vous pouvez modifier cela à tout moment dans",

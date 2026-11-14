@@ -76,7 +76,7 @@ const checks = [
     enabled: process.platform === 'win32'
   },
   {
-    name: 'Windows text entry tests',
+    name: 'Windows native control tests',
     command: 'powershell.exe',
     args: [
       '-NoLogo',
@@ -84,7 +84,7 @@ const checks = [
       '-ExecutionPolicy',
       'Bypass',
       '-File',
-      'native/computer-use-windows/runtime-text-entry.test.ps1'
+      'native/computer-use-windows/runtime-native-controls.test.ps1'
     ],
     enabled: process.platform === 'win32'
   },

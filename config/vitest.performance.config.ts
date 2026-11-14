@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { defineConfig } from 'vitest/config'
-import baseConfig from './vitest.config'
-import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-runtime-pool'
+import baseConfig from './vitest.config.ts'
+import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-runtime-pool.ts'
 
 const contracts = [
   'src/main/runtime/session-tabs/session-tabs-phone-layout-moves.test.ts',

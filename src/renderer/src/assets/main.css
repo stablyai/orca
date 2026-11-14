@@ -104,6 +104,7 @@
   --color-question-card-border: var(--question-card-border);
   --color-question-option-border: var(--question-option-border);
   --color-chat-focus-ring: var(--chat-focus-ring);
+  --color-unread: var(--unread);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -269,6 +270,8 @@
   /* Answer card edge and the outline shared by its option tiles, badges, answer field and Skip. */
   --question-card-border-mix: 14%;
   --question-option-border-mix: 16%;
+  /* A finished agent result the user hasn't seen; blue so it never reads as a state color. */
+  --unread: var(--color-blue-500);
   /* Keep PR-state hues stable across theme changes. */
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
@@ -388,6 +391,7 @@
   --agent-question-text: var(--color-orange-300);
   --question-card-border-mix: 16%;
   --question-option-border-mix: 12%;
+  --unread: var(--color-blue-400);
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
   --workspace-status-progress: #d4a300;
@@ -1780,16 +1784,12 @@ html.native-shell .app-layout {
 }
 
 .worktree-agent-row-hover:hover {
-  background: color-mix(in srgb, var(--sidebar-foreground) 1.25%, transparent);
+  background: var(--worktree-sidebar-accent);
 }
 
 .worktree-agent-row-hover[data-focused-agent-pane='true'] {
   /* Mix sidebar-foreground into faint light-mode accent, retaining enough contrast for muted timestamps. */
   background: color-mix(in srgb, var(--sidebar-foreground) 12%, var(--sidebar-accent));
-}
-
-.dark .worktree-agent-row-hover:hover {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .dark .worktree-agent-row-hover[data-focused-agent-pane='true'] {
@@ -2145,16 +2145,7 @@ html.native-shell .app-layout {
   .compact-agent-row.worktree-agent-lineage-parent-row.worktree-agent-row-hover:hover,
 [data-compact-agent-list='true']
   .compact-agent-row.worktree-agent-lineage-child-row.worktree-agent-row-hover:hover {
-  background: color-mix(in srgb, var(--sidebar-foreground) 1.25%, transparent);
-}
-
-.dark
-  [data-compact-agent-list='true']
-  .compact-agent-row.worktree-agent-lineage-parent-row.worktree-agent-row-hover:hover,
-.dark
-  [data-compact-agent-list='true']
-  .compact-agent-row.worktree-agent-lineage-child-row.worktree-agent-row-hover:hover {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  background: var(--worktree-sidebar-accent);
 }
 
 [data-compact-agent-list='true']

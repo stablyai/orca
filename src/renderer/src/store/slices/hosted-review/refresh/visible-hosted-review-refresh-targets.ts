@@ -271,12 +271,6 @@ export function visibleHostedReviewRefreshInputsChanged(
     // A WSL host turning ready brings its rows back into the refresh (E9).
     state.wslHostStatuses !== previous.wslHostStatuses ||
     state.prCache !== previous.prCache ||
-    state.hostedReviewCache !== previous.hostedReviewCache ||
-    state.tabsByWorktree !== previous.tabsByWorktree ||
-    state.ptyIdsByTabId !== previous.ptyIdsByTabId ||
-    state.browserTabsByWorktree !== previous.browserTabsByWorktree ||
-    state.unifiedTabsByWorktree !== previous.unifiedTabsByWorktree ||
-    state.agentStatusByPaneKey !== previous.agentStatusByPaneKey ||
-    state.agentStatusEpoch !== previous.agentStatusEpoch
+    state.hostedReviewCache !== previous.hostedReviewCache
   )
 }

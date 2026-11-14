@@ -7622,12 +7622,6 @@
             "title": "Suspensión de agentes",
             "toggleLabel": "Alternar suspensión de agentes"
           },
-          "newWorktreeCardStyle": {
-            "copy": "Previsualiza el diseño actualizado de tarjetas de worktree, la ubicación de metadatos, las opciones del menú de visualización de tarjetas y la presentación de estado.",
-            "description": "Previsualiza el diseño actualizado de tarjetas de worktree, la ubicación de metadatos, las opciones del menú de visualización de tarjetas y la presentación de estado.",
-            "title": "Nuevo estilo de tarjeta",
-            "toggleLabel": "Alternar nuevo estilo de tarjeta"
-          },
           "nativeChat": {
             "shellEnvNamesLabel": "Variables que se pasan desde tu shell",
             "shellEnvNamePlaceholder": "Nombre de la variable",
@@ -9748,11 +9742,9 @@
             "newWorktreeCardStyle": {
               "card": "tarjeta",
               "cards": "tarjetas",
-              "description": "Previsualiza el diseño actualizado de tarjetas de worktree, la ubicación de metadatos, las opciones del menú de visualización de tarjeta y la presentación de estado.",
               "menu": "menú",
               "metadata": "metadatos",
               "status": "estado",
-              "title": "Nuevo estilo de tarjeta",
               "worktree": "worktree",
               "worktrees": "worktrees"
             },
@@ -20026,7 +20018,8 @@
         "unconfirmedDetail": "Es posible que se haya abierto. Revisa el historial de sesiones antes de volver a intentarlo.",
         "failed": "{{agent}} no pudo crear una rama de este chat",
         "hostUnsupported": "Este host ejecuta una versión anterior de Orca. Actualiza Orca en el host y vuelve a intentarlo.",
-        "failedDetail": "Tu chat no ha cambiado. Inténtalo de nuevo."
+        "failedDetail": "Tu chat no ha cambiado. Inténtalo de nuevo.",
+        "commandWorking": "No se puede crear una rama mientras {{agent}} responde. Vuelve a ejecutar /fork cuando termine."
       },
       "cardKindHidden": {
         "description": "Puedes cambiar esto en cualquier momento en",

@@ -5468,11 +5468,9 @@
             "newWorktreeCardStyle": {
               "card": "cartão",
               "cards": "cartões",
-              "description": "Pré-visualize o layout atualizado do cartão de worktree, o posicionamento dos metadados, as opções do menu de exibição do cartão e a apresentação do status.",
               "menu": "menu",
               "metadata": "metadados",
               "status": "status",
-              "title": "Novo estilo de cartão",
               "worktree": "worktree",
               "worktrees": "worktrees"
             },
@@ -5943,12 +5941,6 @@
             "idleMinutesSuffix": "minutos",
             "title": "Suspensão do agente",
             "toggleLabel": "Alternar suspensão do agente"
-          },
-          "newWorktreeCardStyle": {
-            "copy": "Pré-visualize o layout atualizado do cartão de worktree, o posicionamento dos metadados, as opções do menu de exibição do cartão e a apresentação do status.",
-            "description": "Pré-visualize o layout atualizado do cartão de worktree, o posicionamento dos metadados, as opções do menu de exibição do cartão e a apresentação do status.",
-            "title": "Novo estilo de cartão",
-            "toggleLabel": "Alternar novo estilo de cartão"
           },
           "ca2219fe5e": "Mostra um pequeno bichinho animado fixado no canto inferior direito. Escolha um personagem (Claudino, OpenCode, Gremlin) ou envie seu próprio PNG, APNG, GIF, WebP, JPG ou SVG no menu do bichinho na barra de status. Oculte-o quando quiser no mesmo menu sem desativar esta configuração.",
           "dd6f0a1d45": "Bichinho",
@@ -21681,7 +21673,8 @@
         "unconfirmed": "{{agent}} não conseguiu confirmar a ramificação",
         "unconfirmedDetail": "Ela pode ter sido aberta. Confira o histórico de sessões antes de tentar novamente.",
         "failed": "{{agent}} não conseguiu ramificar este chat",
-        "failedDetail": "Seu chat não foi alterado. Tente novamente."
+        "failedDetail": "Seu chat não foi alterado. Tente novamente.",
+        "commandWorking": "Não é possível criar uma ramificação enquanto {{agent}} responde. Execute /fork novamente quando terminar."
       },
       "cardKindHidden": {
         "description": "Você pode alterar isso a qualquer momento em",
