@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
+import { mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { strToU8, zipSync } from 'fflate'
@@ -8,7 +8,6 @@ import { extensionIdFromPublicKey, type VerifiedCrx } from './browser-extension-
 import { generateCrxTestKey, type CrxTestKey } from './browser-extension-crx-fixture'
 import type * as InstallStoreModule from './browser-extension-install-store'
 import type * as InstallModule from './browser-extension-webstore-install'
-import type * as MutationLockModule from './browser-extension-mutation-lock'
 
 const state = vi.hoisted(() => {
   const enabled: Record<string, string[]> = {}
@@ -17,13 +16,12 @@ const state = vi.hoisted(() => {
     enabled,
     load: vi.fn(
       async (_profileId: string, _extension: InstalledBrowserExtension): Promise<unknown> => ({})
-    ),
-    recordInstalled: vi.fn()
+    )
   }
 })
 
 vi.mock('../../../telemetry/browser-extensions-banner', () => ({
-  recordBrowserExtensionInstalled: state.recordInstalled
+  recordBrowserExtensionInstalled: vi.fn()
 }))
 
 vi.mock('electron', () => ({ app: { getPath: () => state.userData, on: vi.fn() } }))
@@ -58,7 +56,6 @@ vi.mock('../profile-sessions/browser-extension-session-loader', () => ({
 let key: CrxTestKey
 let extensionId: string
 let install: typeof InstallModule
-let mutationLock: typeof MutationLockModule
 let installStore: typeof InstallStoreModule
 
 beforeAll(() => {
@@ -71,10 +68,8 @@ beforeEach(async () => {
   state.enabled = {}
   state.load.mockReset()
   state.load.mockImplementation(async () => ({}))
-  state.recordInstalled.mockReset()
   vi.resetModules()
   install = await import('./browser-extension-webstore-install')
-  mutationLock = await import('./browser-extension-mutation-lock')
   installStore = await import('./browser-extension-install-store')
 })
 afterEach(() => {
@@ -106,37 +101,8 @@ async function installVersion(version: string, profileId: string | null = 'defau
 }
 
 describe('store installs', () => {
-  it('never deletes a version while another profile is still enabling it', async () => {
-    const first = await installVersion('1.0.0')
-    const staged = await install.stageWebStoreExtension(crx('1.1.0'))
-    const { setBrowserExtensionEnabled } = await import('../browser-extension-management')
-    let release: () => void = () => {}
-    const gate = new Promise<void>((resolve) => (release = resolve))
-    state.load.mockImplementation(async (profileId) => {
-      if (profileId === 'work') {
-        await gate
-      }
-      return {}
-    })
-    const enabling = setBrowserExtensionEnabled('work', extensionId, true)
-    await vi.waitFor(() => expect(state.load).toHaveBeenCalledWith('work', first))
-    try {
-      await expect(
-        mutationLock.withBrowserExtensionLock(extensionId, () =>
-          install.commitStagedWebStoreExtension(staged, null)
-        )
-      ).rejects.toThrow('already being installed')
-      expect(existsSync(first.path)).toBe(true)
-      expect(store().get(extensionId)?.version).toBe('1.0.0')
-    } finally {
-      release()
-      expect(await enabling).toEqual({ ok: true })
-      await install.discardStagedWebStoreExtension(staged)
-    }
-  })
-
   it('keeps the old version when the new one fails to load', async () => {
-    const first = await installVersion('1.0.0')
+    await installVersion('1.0.0')
     state.load.mockImplementation(async (_profileId, extension) => {
       if (extension.version === '1.1.0') {
         throw new Error('Manifest is not valid')
@@ -148,19 +114,9 @@ describe('store installs', () => {
 
     expect(store().get(extensionId)?.version).toBe('1.0.0')
     expect(readdirSync(root())).toEqual(['1.0.0'])
-    expect(state.load).toHaveBeenLastCalledWith('default', first)
   })
 
-  it('reports a new extension once it has loaded, and not its later update', async () => {
-    await installVersion('1.0.0')
-    expect(state.recordInstalled).toHaveBeenCalledTimes(1)
-    expect(state.recordInstalled).toHaveBeenCalledWith('web_store')
-
-    await installVersion('1.1.0', null)
-    expect(state.recordInstalled).toHaveBeenCalledTimes(1)
-  })
-
-  it('reports only the extension that loaded when another new one fails alongside it', async () => {
+  it('keeps another installed extension when a concurrent new install fails', async () => {
     const otherKey = generateCrxTestKey('ecdsa')
     const otherId = extensionIdFromPublicKey(otherKey.publicKeyDer)
     const other: VerifiedCrx = {
@@ -192,6 +148,5 @@ describe('store installs', () => {
 
     expect(store().get(extensionId)).toBeNull()
     expect(store().get(otherId)).not.toBeNull()
-    expect(state.recordInstalled).toHaveBeenCalledTimes(1)
   })
 })

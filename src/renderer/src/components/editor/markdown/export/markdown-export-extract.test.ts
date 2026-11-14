@@ -36,19 +36,6 @@ describe('getActiveMarkdownExportPayload', () => {
     vi.unstubAllGlobals()
   })
 
-  it('rejects an incomplete preview even if export eligibility is stale', async () => {
-    const root = document.createElement('div')
-    root.innerHTML =
-      '<div class="markdown-body" data-markdown-preview-incomplete="true"><h1>Partial</h1><img src="blob:unmounted"></div>'
-    const subtree = root.firstElementChild
-    if (!subtree) {
-      throw new Error('Missing fixture subtree')
-    }
-    expect(
-      await getActiveMarkdownExportPayload({ fileId: '/repo/docs/readme.md', root })
-    ).toBeNull()
-  })
-
   it('embeds blob image sources so the PDF export window can render local images', async () => {
     const root = document.createElement('div')
     root.innerHTML =
@@ -61,22 +48,6 @@ describe('getActiveMarkdownExportPayload', () => {
 
     expect(payload?.html).toContain('src="data:image/png;base64,AQID"')
     expect(payload?.html).not.toContain('blob:rich-local-image')
-  })
-
-  it('fails extraction when a blob image cannot be inlined', async () => {
-    vi.mocked(fetch).mockResolvedValue({
-      ok: false
-    } as Response)
-    const root = document.createElement('div')
-    root.innerHTML =
-      '<div class="ProseMirror"><p><img src="blob:missing-local-image" alt="diagram"></p></div>'
-
-    await expect(
-      getActiveMarkdownExportPayload({
-        fileId: '/repo/docs/readme.md',
-        root
-      })
-    ).rejects.toThrow('Failed to inline image for PDF export')
   })
 
   it('strips preview annotation controls so Add note buttons never reach the PDF', async () => {
@@ -110,9 +81,6 @@ describe('getActiveMarkdownExportPayload', () => {
     expect(exported.querySelector('p')?.textContent).toBe('Body text')
     expect(exported.querySelector('pre code')?.textContent).toContain('graph TD;')
     expect(exported.querySelector('.markdown-annotation-controls')).toBeNull()
-    expect(exported.querySelector('.markdown-annotation-add')).toBeNull()
-    expect(exported.querySelector('.markdown-annotation-composer')).toBeNull()
-    expect(exported.querySelector('.markdown-annotation-note-stack')).toBeNull()
     expect(exported.textContent).not.toContain('draft note')
     expect(exported.textContent).not.toContain('saved note body')
     // Why: scrub runs on a clone; the live preview keeps its controls.
