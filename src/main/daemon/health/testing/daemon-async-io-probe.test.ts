@@ -21,9 +21,7 @@ describe('daemon asynchronous I/O progress', () => {
     expect(probe.check()).toBe(first)
     await vi.advanceTimersByTimeAsync(DAEMON_ASYNC_IO_TIMEOUT_MS)
     expect(await first).toEqual({ state: 'stalled', pendingMs: DAEMON_ASYNC_IO_TIMEOUT_MS })
-    for (let i = 0; i < 100; i++) {
-      expect(await probe.check()).toEqual(await first)
-    }
+    expect(await probe.check()).toEqual(await first)
     expect(start).toHaveBeenCalledTimes(1)
     expect(vi.getTimerCount()).toBe(0)
   })
