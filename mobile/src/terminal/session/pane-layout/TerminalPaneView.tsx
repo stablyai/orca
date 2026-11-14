@@ -13,6 +13,7 @@ import type {
   TerminalKeyboardAvoidanceMetrics,
   TerminalModes,
   TerminalPointerInput,
+  TerminalSelectionCells,
   TerminalWebViewHandle
 } from '../../webview/terminal-webview-contract'
 import type { RuntimeMobileTerminalTheme } from '../../../../../src/shared/runtime-mobile-session-tab-contracts'
@@ -35,7 +36,7 @@ type TerminalPaneViewProps = {
   onDocumentReleased: (handle: string) => void
   onWebReady: (handle: string) => void
   onSelectionMode: (handle: string, active: boolean) => void
-  onSelectionCopy: (handle: string, text: string) => void
+  onSelectionCopy: (handle: string, text: string, cells?: TerminalSelectionCells) => void
   onSelectionEvicted: (handle: string) => void
   onClipboardWrite: (handle: string, text: string) => void
   onModesChanged: (handle: string, modes: TerminalModes) => void
@@ -178,7 +179,7 @@ export function TerminalPaneView({
             interactionActive={visible && appActive && routeFocused}
             onWebReady={() => onWebReady(handle)}
             onSelectionMode={(a) => onSelectionMode(handle, a)}
-            onSelectionCopy={(t) => onSelectionCopy(handle, t)}
+            onSelectionCopy={(t, g) => onSelectionCopy(handle, t, g)}
             onSelectionEvicted={() => onSelectionEvicted(handle)}
             onClipboardWrite={(t) => onClipboardWrite(handle, t)}
             onModesChanged={(m) => onModesChanged(handle, m)}
