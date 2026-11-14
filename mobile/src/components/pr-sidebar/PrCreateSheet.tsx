@@ -1,75 +1,88 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type Dispatch,
-  type SetStateAction
-} from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronsUpDown, Sparkles } from 'lucide-react-native'
 import { colors, pressedStyle, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { triggerError, triggerSuccess } from '../../platform/haptics'
+import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
 import { SheetHeader } from '../nav-bar/SheetHeader'
 import { SheetPrimaryButton } from '../SheetPrimaryButton'
 import { ListGroup, ListRow } from '../list/ListGroup'
 import { MobileSwitch } from '../MobileSwitch'
 import { normalizeHostedReviewHeadRef } from '../../../../src/shared/source-control/hosted-review/hosted-review-refs'
-import { hostedReviewCopy } from '../../source-control/hosted-review-copy'
 import {
-  mobileHostedReviewCreateIntentProgressMessage,
-  type MobileHostedReviewCreateIntentProgress
-} from '../../source-control/mobile-hosted-review-create-intent'
+  hostedReviewCopy,
+  mobileHostedReviewCreateIntentProgressMessage
+} from '../../source-control/review/creation/hosted-review-copy'
+import '../../source-control/review/creation/mobile-hosted-review-create-intent'
+import type { MobileHostedReviewCreateIntentProgress } from '../../source-control/review/creation/mobile-hosted-review-create-intent'
+
 import {
   isMobileHostedReviewCommitFailure,
   runMobileHostedReviewCreateIntent
-} from '../../source-control/mobile-hosted-review-create-intent-runner'
+} from '../../source-control/review/creation/mobile-hosted-review-create-intent-runner'
 import {
   cancelMobilePrFields,
   generateMobilePrFields,
-  loadMobilePrCreateDraft,
-  type MobilePrCreateDraft
-} from '../../source-control/mobile-pr-create-draft'
+  loadMobilePrCreateDraft
+} from '../../source-control/review/creation/mobile-pr-create-draft'
 import {
   getMobileCommitFailureStagedEntries,
   type MobileCommitFailureRecovery
-} from '../../source-control/mobile-commit-failure-recovery'
-import { useMobileCommitFailureRecovery } from '../../source-control/use-mobile-commit-failure-recovery'
-import { MobileCommitFailurePanel } from '../../source-control/MobileCommitFailurePanel'
+} from '../../source-control/commits/mobile-commit-failure-recovery'
+import { useMobileCommitFailureRecovery } from '../../source-control/commits/use-mobile-commit-failure-recovery'
+import { MobileCommitFailurePanel } from '../../source-control/commits/MobileCommitFailurePanel'
 import type { MobilePrTab } from './use-mobile-pr-tab'
 import { prSheetStyles as sheetStyles } from './pr-tab-styles'
 import { PrBasePicker } from './PrBasePicker'
 import { FieldTextInput } from '../composer-input/FieldTextInput'
+import { workspaceDraftRowKey } from '../../drafts/durable-draft-rows'
+import { updateDurableDraftField, useDurableDraftField } from '../../drafts/durable-draft-fields'
+import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
 
-type Fields = { title: string; body: string; base: string; draft: boolean }
+// The provider rides along so a kept draft reopens without asking the host again.
+type Fields = { title: string; body: string; base: string; draft: boolean; provider: string }
 
-/** What Cancel leaves for the next open on the same workspace branch. */
-export type PrCreateKept = { key: string; draft: MobilePrCreateDraft; fields: Fields }
+function keepCreateField(key: string, patch: Partial<Fields>): void {
+  for (const [name, value] of Object.entries(patch)) {
+    updateDurableDraftField(key, name, value === true ? 'yes' : value === false ? '' : value)
+  }
+}
+
+// The first edit keeps the whole form. The provider is never empty, so it is what marks a kept draft.
+function keepCreateFields(key: string, fields: Fields | null): void {
+  keepCreateField(key, fields ?? { provider: '', title: '', body: '', base: '', draft: false })
+}
+
+function useKeptCreateFields(key: string | null): Fields | null {
+  const [provider] = useDurableDraftField(key, 'provider')
+  const [title] = useDurableDraftField(key, 'title')
+  const [body] = useDurableDraftField(key, 'body')
+  const [base] = useDurableDraftField(key, 'base')
+  const [draft] = useDurableDraftField(key, 'draft')
+  return useMemo(
+    () => (provider ? { title, body, base, draft: draft === 'yes', provider } : null),
+    [base, body, draft, provider, title]
+  )
+}
 
 // One Create flow for every entry point and all five providers: seed from commits, push if needed, land on the PR tab.
-export function PrCreateSheet({
-  tab,
-  kept,
-  onKeep
-}: {
-  tab: MobilePrTab
-  kept: PrCreateKept | null
-  onKeep: Dispatch<SetStateAction<PrCreateKept | null>>
-}) {
+export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const { client, worktreeId, gitBranch } = tab
+  const { client, hostId, worktreeId, gitBranch } = tab
+  const executionHost = useWorkspaceExecutionHost()
   const creating = tab.creatingPr
   const setCreating = tab.setCreatingPr
-  const keepKey = gitBranch ? `${worktreeId}\u0000${gitBranch}` : null
-  // Reopening on the same branch restores what was typed instead of re-seeding from commits.
-  const [restored] = useState(() => (kept && kept.key === keepKey ? kept : null))
-  const [draft, setDraft] = useState<MobilePrCreateDraft | null>(restored?.draft ?? null)
-  const [fields, setFields] = useState<Fields | null>(restored?.fields ?? null)
-  const editedRef = useRef(restored !== null)
+  // What was typed waits, per workspace branch, through Cancel and the app being killed.
+  const keptKey = gitBranch
+    ? workspaceDraftRowKey('prCreate', { hostId, executionHost, worktreeId }, gitBranch)
+    : null
+  const kept = useKeptCreateFields(keptKey)
+  const [seeded, setSeeded] = useState<Fields | null>(null)
+  const [seedError, setSeedError] = useState<string | null>(null)
+  const fields = kept ?? seeded
   const [pickingBase, setPickingBase] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null)
@@ -89,11 +102,11 @@ export function PrCreateSheet({
   useLayoutEffect(() => {
     commitsAheadRef.current = tab.commitsAhead
   })
-  // Seed once per open: a reconnect or a status reload must not overwrite what the user typed.
-  const seededRef = useRef(restored !== null)
+  // Seed once per open, and not over a kept draft: a reconnect or a status reload must not overwrite what was typed.
+  const seedRef = useRef(kept !== null)
 
   useEffect(() => {
-    if (!client || !gitBranch || seededRef.current) {
+    if (!client || !gitBranch || seedRef.current) {
       return
     }
     let cancelled = false
@@ -104,14 +117,19 @@ export function PrCreateSheet({
     })
       .then((loaded) => {
         if (!cancelled) {
-          seededRef.current = true
-          setDraft(loaded)
-          setFields({ title: loaded.title, body: loaded.body, base: loaded.base, draft: false })
+          seedRef.current = true
+          setSeeded({
+            title: loaded.title,
+            body: loaded.body,
+            base: loaded.base,
+            draft: false,
+            provider: loaded.prefill.provider
+          })
         }
       })
       .catch((err: unknown) => {
         if (!cancelled) {
-          setMessage({ text: err instanceof Error ? err.message : String(err), error: true })
+          setSeedError(err instanceof Error ? err.message : String(err))
         }
       })
     return () => {
@@ -119,13 +137,25 @@ export function PrCreateSheet({
     }
   }, [client, gitBranch, worktreeId])
 
-  const copy = hostedReviewCopy(draft?.prefill.provider)
+  const copy = hostedReviewCopy(fields?.provider)
   const title = t('pullRequest.createSheet.title', 'Create {{reviewLabel}}', {
     reviewLabel: copy.reviewLabel
   })
+  // The first edit turns the seeded fields into a kept draft. Later ones write only what they change, so a
+  // late Write with AI answer can't undo a toggle made meanwhile.
+  const keptRef = useRef(kept)
+  useLayoutEffect(() => {
+    keptRef.current = kept
+  })
   const update = (patch: Partial<Fields>) => {
-    editedRef.current = true
-    setFields((current) => (current ? { ...current, ...patch } : current))
+    if (!keptKey || !fields) {
+      return
+    }
+    if (keptRef.current) {
+      keepCreateField(keptKey, patch)
+    } else {
+      keepCreateFields(keptKey, { ...fields, ...patch })
+    }
   }
 
   // Closing the sheet cancels a running generation, drops its late answer and keeps typed fields; a reconnect does none.
@@ -134,9 +164,9 @@ export function PrCreateSheet({
   useLayoutEffect(() => {
     generatingRef.current = generating
   })
-  const closeTargetRef = useRef({ client, worktreeId, keepKey, draft, fields, onKeep })
+  const closeTargetRef = useRef({ client, worktreeId })
   useLayoutEffect(() => {
-    closeTargetRef.current = { client, worktreeId, keepKey, draft, fields, onKeep }
+    closeTargetRef.current = { client, worktreeId }
   })
   useEffect(
     () => () => {
@@ -145,25 +175,19 @@ export function PrCreateSheet({
       if (generatingRef.current && target.client) {
         void cancelMobilePrFields(target.client, target.worktreeId).catch(() => {})
       }
-      if (editedRef.current && target.keepKey && target.draft && target.fields) {
-        target.onKeep({ key: target.keepKey, draft: target.draft, fields: target.fields })
-      }
     },
     []
   )
 
   const writeWithAi = async () => {
-    if (!client || !fields || !draft || generating) {
+    if (!client || !fields || generating) {
       return
     }
     const generation = ++generationRef.current
     setGenerating(true)
     setMessage(null)
     try {
-      const result = await generateMobilePrFields(client, worktreeId, {
-        ...fields,
-        provider: draft.prefill.provider
-      })
+      const result = await generateMobilePrFields(client, worktreeId, fields)
       if (generation !== generationRef.current) {
         return
       }
@@ -190,7 +214,7 @@ export function PrCreateSheet({
       return
     }
     createInFlightRef.current = true
-    const createdKey = keepKey
+    const createdKey = keptKey
     setCreating(true)
     setMessage(null)
     setCommitFailure(null)
@@ -226,10 +250,12 @@ export function PrCreateSheet({
       }
       triggerSuccess()
       setCreating(false)
-      // The PR exists now, so nothing carries over to the next Create on this branch, even text kept
-      // when a branch or client change closed this sheet mid-run.
-      editedRef.current = false
-      onKeep((current) => (current?.key === createdKey ? null : current))
+      // The PR exists now, so nothing carries over to the next Create on this branch, even when a branch or
+      // client change closed this sheet mid-run.
+      setSeeded(fields)
+      if (createdKey) {
+        keepCreateFields(createdKey, null)
+      }
       const created = {
         url: outcome.url,
         warning: outcome.warning ?? null,
@@ -281,8 +307,8 @@ export function PrCreateSheet({
                 'Check out a branch before creating a pull request.'
               )}
             </Text>
-          ) : message ? (
-            <Text style={sheetStyles.error}>{message.text}</Text>
+          ) : seedError ? (
+            <Text style={sheetStyles.error}>{seedError}</Text>
           ) : (
             <ActivityIndicator color={colors.textSecondary} />
           )}

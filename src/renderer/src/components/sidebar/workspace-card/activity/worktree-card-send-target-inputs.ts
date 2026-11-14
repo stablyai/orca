@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import type { RunningAgentTargetState } from '@/lib/running-agent-targets'
+import type { RunningAgentTargetState } from '@/lib/agent-session/messaging/running-agent-targets'
 
 export type SendTargetInputsState = Pick<
   AppState,

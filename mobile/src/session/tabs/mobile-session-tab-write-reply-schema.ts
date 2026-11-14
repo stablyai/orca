@@ -1,5 +1,4 @@
 import * as z from 'zod'
-import '../../../../src/shared/zod-salvage'
 
 // Bare legacy success and delegated closes do not prove permanent retirement.
 export const sessionTabCloseReplySchema = z

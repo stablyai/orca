@@ -15,7 +15,7 @@ export function useReachableServerClients(
   serverClients: ReadonlyMap<ExecutionHostId, RpcClient>
 } {
   const relays = client !== null && relaysToServers(client, hostCapabilities)
-  const servers = useRelayHosts(active && relays ? client : null)
+  const servers = useRelayHosts(active && relays ? client : null, hostCapabilities)
   const readyKey = (servers ?? [])
     .filter((host) => host.relay === 'ready')
     .map((host) => host.hostId)

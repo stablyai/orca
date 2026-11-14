@@ -1,7 +1,6 @@
 import type { Editor } from '@tiptap/react'
 import { getLinkBubblePosition } from './RichMarkdownLinkBubble'
 import type { LinkBubbleState } from './RichMarkdownLinkBubble'
-import type { RichMarkdownHtmlSuperscriptLinkContext } from '../citations/rich-markdown-html-superscript-link-context'
 import {
   createEditableMarkdownLinkBubble,
   getRichMarkdownSelectionLinkBubble
@@ -10,7 +9,6 @@ import {
 export function handleRichMarkdownLinkShortcut({
   editor,
   event,
-  htmlSuperscriptLinkContext,
   isEditing,
   isMac,
   root,
@@ -19,7 +17,6 @@ export function handleRichMarkdownLinkShortcut({
 }: {
   editor: Editor | null
   event: KeyboardEvent
-  htmlSuperscriptLinkContext: RichMarkdownHtmlSuperscriptLinkContext
   isEditing: boolean
   isMac: boolean
   root: HTMLElement | null
@@ -36,18 +33,12 @@ export function handleRichMarkdownLinkShortcut({
   }
   if (isEditing) {
     setEditing(false)
-    if (!editor.isActive('link')) {
-      setLinkBubble(null)
-    }
+    setLinkBubble(null)
     editor.commands.focus()
     return true
   }
   // Citation atoms support action bubbles but cannot be edited through Markdown setLink/unsetLink.
-  const selectionBubble = getRichMarkdownSelectionLinkBubble(
-    editor,
-    root,
-    htmlSuperscriptLinkContext
-  )
+  const selectionBubble = getRichMarkdownSelectionLinkBubble(editor, root)
   if (selectionBubble) {
     setLinkBubble(selectionBubble)
     setEditing(selectionBubble.kind === 'markdown')

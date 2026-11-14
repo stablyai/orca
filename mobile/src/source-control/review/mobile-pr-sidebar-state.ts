@@ -1,22 +1,27 @@
 import {
   resolveGitHubWorkItemTarget,
   githubWorkItemTargetKey
-} from '../../../../src/shared/github/work-item-target'
-import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
-import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
+} from '../../../../src/shared/github/work-items/work-item-target'
+import type { PRCheckDetail } from '../../../../src/shared/github/checks/check-types'
+import type { PRInfo } from '../../../../src/shared/github/pull-requests/pull-request-types'
 import type { GitPushTarget } from '../../../../src/shared/worktree/types'
-import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
+import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-items/work-item-types'
 import type { HostedReviewInfo } from '../../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 import type { GitHubPrReadOutcome } from './github-pr-rpc'
-import { isGitHubPRSuppressed } from '../../../../src/shared/worktree/github-pr-suppression'
+import { isGitHubPRSuppressed } from '../../../../src/shared/worktree/hosted-review/github-pr-suppression'
+import {
+  prBranchFallbackNeedsHint,
+  resolvePRBranchFallback,
+  shouldAcceptMergedFallbackPR
+} from '../../../../src/shared/github/pull-requests/refresh/pr-branch-fallback-rule'
 import {
   shouldApplyBranchMismatchedLinkedPRClear,
   shouldApplyDivergedLinkedPRClear,
   shouldClearBranchMismatchedLinkedOpenPR,
   shouldClearDivergedLinkedMergedPR
-} from '../../../../src/shared/github/linked-pr-staleness'
-import type { MobileWorktreeSummary } from '../mobile-worktree-metadata-operations'
-import type { WorktreeGitHubPRLink } from '../mobile-pr-link'
+} from '../../../../src/shared/github/pull-requests/refresh/linked-pr-staleness'
+import type { MobileWorktreeSummary } from '../branches/mobile-worktree-metadata-operations'
+import type { WorktreeGitHubPRLink } from './mobile-pr-link'
 import { translate } from '../../i18n/mobile-i18n'
 
 export type PrSidebarData = {
@@ -72,6 +77,7 @@ export type PrSidebarLoadDeps = {
       branch: string
       linkedPRNumber?: number | null
       fallbackPRNumber?: number | null
+      acceptMergedFallbackPR?: boolean
       currentHeadOid?: string | null
       refresh?: boolean
     }
@@ -109,12 +115,25 @@ function resolveStaleLink(
   return null
 }
 
+/** The hosted-review hint a branch lookup fell back to, kept so a branch with no PR isn't asked twice per read. */
+export type PrBranchHint = { number: number | null; readAt: number }
+
 /** The branch's GitHub review: its PR and the workspace's push target, or none. */
 export type PrBranchReview =
-  | { kind: 'found'; pr: PRInfo; pushTarget: GitPushTarget | null }
-  | { kind: 'none' }
+  // linkedPRNumber: the link the PR was read with, so a later link change drops it as a fallback.
+  | { kind: 'found'; pr: PRInfo; pushTarget: GitPushTarget | null; linkedPRNumber: number | null }
+  | { kind: 'none'; hint?: PrBranchHint }
+
+// The host re-reads a selected branch's hosted review once a minute, so a younger hint is still its answer.
+const BRANCH_HINT_STALE_MS = 60_000
+
+function keptHint(previous: PrBranchReview | undefined): PrBranchHint | null {
+  const hint = previous?.kind === 'none' ? previous.hint : undefined
+  return hint && Date.now() - hint.readAt < BRANCH_HINT_STALE_MS ? hint : null
+}
 
 // Parallel link resolution also retains closed/merged reviews. A failed read throws its message, classified when shown.
+// Like desktop, the last PR result is the lookup's fallback, so the hint is read only for a branch with none.
 export async function loadPrBranchReview(
   deps: PrSidebarLoadDeps,
   args: {
@@ -122,37 +141,68 @@ export async function loadPrBranchReview(
     branch: string
     headSha?: string | null
     refresh?: boolean
+    previous?: PrBranchReview
   }
 ): Promise<PrBranchReview> {
-  const [hintOutcome, link] = await Promise.all([
-    deps.fetchForBranch(args.worktreeId, { branch: args.branch }),
-    deps.fetchWorktreeGitHubPRLink(args.worktreeId)
+  const previousRead = args.previous?.kind === 'found' ? args.previous : null
+  // Desktop drops its last PR when the workspace's link changes; a result read under another link is no fallback.
+  const fallbackPR = (linkedPRNumber: number | null) =>
+    previousRead && previousRead.linkedPRNumber === linkedPRNumber ? previousRead.pr : null
+  const kept = keptHint(args.previous)
+  // A failed hint read is no hint, and is not kept.
+  let hintRead: Promise<PrBranchHint | null> | undefined
+  const readHint = () =>
+    (hintRead ??= kept
+      ? Promise.resolve(kept)
+      : deps.fetchForBranch(args.worktreeId, { branch: args.branch }).then((outcome) =>
+          outcome.ok
+            ? {
+                number: outcome.result?.provider === 'github' ? outcome.result.number : null,
+                readAt: Date.now()
+              }
+            : null
+        ))
+  // The link isn't known yet: with no PR read before, start the hint alongside it (a linked PR wastes it);
+  // a link that changed since the last read waits for the hint instead.
+  const [link] = await Promise.all([
+    deps.fetchWorktreeGitHubPRLink(args.worktreeId),
+    prBranchFallbackNeedsHint({ linkedPRNumber: null, cachedPR: previousRead }) ? readHint() : null
   ])
-  const branchHint =
-    hintOutcome.ok && hintOutcome.result?.provider === 'github' ? hintOutcome.result.number : null
 
   const requestHeadOid = args.headSha ?? null
-  // Same as desktop: the explicit link wins; the branch's review is only a fallback.
-  const fetchPR = (linkedPRNumber: number | null) =>
-    deps.fetchPRForBranch(args.worktreeId, {
+  // Same as desktop: the explicit link wins; the last PR result, else the branch's review, is only a fallback.
+  const fetchPR = async (linkedPRNumber: number | null, cachedPR: PRInfo | null) => {
+    const fallback = resolvePRBranchFallback({
+      linkedPRNumber,
+      cachedPR,
+      hintPRNumber: prBranchFallbackNeedsHint({ linkedPRNumber, cachedPR })
+        ? ((await readHint())?.number ?? null)
+        : null,
+      currentHeadOid: requestHeadOid
+    })
+    return deps.fetchPRForBranch(args.worktreeId, {
       branch: args.branch,
       linkedPRNumber,
-      fallbackPRNumber: linkedPRNumber === null ? branchHint : null,
+      fallbackPRNumber: fallback.fallbackPRNumber,
+      ...(shouldAcceptMergedFallbackPR({ linkedPRNumber, ...fallback })
+        ? { acceptMergedFallbackPR: true }
+        : {}),
       currentHeadOid: requestHeadOid,
       ...(args.refresh ? { refresh: true } : {})
     })
+  }
   let linkedPR = link.linkedPR
-  let prOutcome = await fetchPR(linkedPR)
+  let prOutcome = await fetchPR(linkedPR, fallbackPR(linkedPR))
   const staleLink = prOutcome.ok
     ? resolveStaleLink(prOutcome.result, link, args.branch, requestHeadOid)
     : null
-  // Desktop drops a link the branch has moved past, then resolves by branch.
+  // Desktop drops a link the branch has moved past, then resolves by branch with only the hint.
   if (staleLink) {
     linkedPR = null
     // The refetch sends no link, so it need not wait for the clear to land.
     ;[, prOutcome] = await Promise.all([
       deps.clearWorktreeReviewLink(args.worktreeId, staleLink),
-      fetchPR(null)
+      fetchPR(null, null)
     ])
   }
   if (!prOutcome.ok) {
@@ -165,9 +215,15 @@ export async function loadPrBranchReview(
       prOutcome.result.number
     )
   ) {
-    return { kind: 'none' }
+    const hint = await hintRead
+    return hint ? { kind: 'none', hint } : { kind: 'none' }
   }
-  return { kind: 'found', pr: prOutcome.result, pushTarget: link.pushTarget }
+  return {
+    kind: 'found',
+    pr: prOutcome.result,
+    pushTarget: link.pushTarget,
+    linkedPRNumber: linkedPR
+  }
 }
 
 // What the screen shows for a PR read that failed with nothing accepted to keep.

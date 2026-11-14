@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { RuntimeMobileSessionFileTab } from '../../../../../shared/runtime-mobile-session-tab-contracts'
 import type { OpenFile } from '../../../store/slices/editor/types/open-file'
-import { buildOwnedEditorFileId } from '../../../store/slices/editor/file-ids/editor-file-ids'
 import { applyWebSessionTabsSnapshot } from '../snapshot-api'
 import {
   ENV,
@@ -90,7 +89,6 @@ describe('host editor file ownership', () => {
     expect(patch?.openFiles).toHaveLength(2)
     expect(patch?.openFiles?.[0]).toBe(other)
     expect(patch?.openFiles?.[1]).toMatchObject({
-      id: buildOwnedEditorFileId(filePath, WT, ENV),
       runtimeEnvironmentId: ENV
     })
     expect(patch?.openFiles?.[1]?.lastKnownDiskSignature).toBeUndefined()

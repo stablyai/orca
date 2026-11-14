@@ -5,7 +5,8 @@ import {
 import type { AcpStructuredSession } from '../session/acp-structured-session-contract'
 import type { AcpStructuredConnection } from '../process/acp-structured-connection'
 import type { AcpChildStops, AcpDialect } from '../acp-dialects/acp-dialect'
-import { AcpAgentError } from '../transport/acp-errors'
+import { AcpAgentError, AcpRequestTimeoutError } from '../transport/acp-errors'
+import type { InitializeResponse } from '../generated/acp-protocol.generated'
 import type {
   AgentChildWorkStopAcknowledgement,
   AgentSessionBackgroundTaskStops
@@ -72,13 +73,48 @@ async function probeAcpBackgroundTaskStop(
 
 export async function probeAcpChildStops(
   connection: AcpStructuredConnection,
-  dialect: AcpDialect
+  dialect: AcpDialect,
+  initialized: InitializeResponse
 ): Promise<AcpChildStops> {
   const [subagents, backgroundTasks] = await Promise.all([
-    probeAcpSubagentStop(connection, dialect),
+    dialect.childSessionStop?.supported(initialized) === true ||
+      probeAcpSubagentStop(connection, dialect),
     probeAcpBackgroundTaskStop(connection, dialect)
   ])
   return { subagents, backgroundTasks }
+}
+
+/** The reply only says the request arrived; the child's own report settles it. */
+async function closeAcpChildSession(
+  session: AcpStructuredSession,
+  id: string
+): Promise<ChildStopResult> {
+  const { children } = session.lane.translator
+  // Closing a child that has not started running interrupts nothing, so Stop stays available.
+  const started = children.started(id)
+  let answered = true
+  try {
+    await session.connection.closeSession(id)
+  } catch (error) {
+    if (!(error instanceof AcpAgentError || error instanceof AcpRequestTimeoutError)) {
+      throw error
+    }
+    answered = false
+  }
+  // An ending the child reported while the request was out also confirms the Stop.
+  return (answered && started) || !children.live().includes(id)
+    ? { cancelled: true }
+    : { cancelled: false, stillRunning: true }
+}
+
+/** A user's Stop also ends subagents that outlive the cancelled turn. */
+export function closeAcpChildSessions(session: AcpStructuredSession): void {
+  if (!session.childStops?.subagents || !session.spec.dialect.childSessionStop) {
+    return
+  }
+  for (const id of session.lane.translator.children.live()) {
+    void session.connection.closeSession(id).catch(() => undefined)
+  }
 }
 
 async function stopAcpSubagent(
@@ -145,13 +181,21 @@ export async function stopAcpChildren(
   taskIds: readonly string[],
   acknowledge: (acknowledgement: AgentChildWorkStopAcknowledgement) => void = () => {}
 ): Promise<{ cancelled: boolean; stillRunning?: true }> {
+  const childSessions =
+    session.childStops?.subagents === true && !!session.spec.dialect.childSessionStop
   const subagentStop = session.childStops?.subagents ? session.spec.dialect.subagentStop : undefined
   const taskStop = session.childStops?.backgroundTasks
     ? session.spec.dialect.backgroundTaskStop
     : undefined
   const routed = (id: string) =>
-    acpBackgroundTaskStopId(id) === undefined ? subagentStop !== undefined : taskStop !== undefined
-  if (session.fence !== fence || (!subagentStop && !taskStop) || !taskIds.every(routed)) {
+    acpBackgroundTaskStopId(id) === undefined
+      ? subagentStop !== undefined || childSessions
+      : taskStop !== undefined
+  if (
+    session.fence !== fence ||
+    (!subagentStop && !childSessions && !taskStop) ||
+    !taskIds.every(routed)
+  ) {
     throw new Error('ACP child cancellation is unavailable')
   }
   let cancelled = false
@@ -161,9 +205,11 @@ export async function stopAcpChildren(
     const result: ChildStopResult =
       taskId !== undefined && taskStop
         ? await stopAcpBackgroundTask(session, taskStop, taskId)
-        : subagentStop
-          ? await stopAcpSubagent(session, subagentStop, id)
-          : { cancelled: false }
+        : childSessions
+          ? await closeAcpChildSession(session, id)
+          : subagentStop
+            ? await stopAcpSubagent(session, subagentStop, id)
+            : { cancelled: false }
     cancelled ||= result.cancelled
     stillRunning ||= result.stillRunning === true
     if (result.acknowledged) {

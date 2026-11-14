@@ -20,16 +20,22 @@ export type HookSettingsPolicyDraft = Partial<
 >
 
 export function getLocalHookFields(
-  t: Translate = translate
+  t: Translate = translate,
+  isFolder = false
 ): readonly [LocalHookField, LocalHookField] {
   return [
     {
       name: 'setup',
-      label: t('auto.components.settings.RepositoryHooksSection.52b31baf02', 'Setup Script'),
-      description: t(
-        'auto.components.settings.RepositoryHooksSection.f0710e1c83',
-        'Runs after a new worktree is created; install deps, copy env files, run migrations.'
-      ),
+      label: t('auto.components.settings.RepositoryHooksSection.1ecf0b115a', 'Setup script'),
+      description: isFolder
+        ? t(
+            'components.settings.RepositoryHooksSection.folderSetupFieldDescription',
+            'Runs after a new workspace is created; create child worktrees, install deps, copy env files.'
+          )
+        : t(
+            'auto.components.settings.RepositoryHooksSection.f0710e1c83',
+            'Runs after a new worktree is created; install deps, copy env files, run migrations.'
+          ),
       placeholder: t(
         'auto.components.settings.RepositoryHooksSection.a3fc966677',
         '# e.g. pnpm install cp "$ORCA_ROOT_PATH/.env" "$ORCA_WORKTREE_PATH/.env"'
@@ -37,11 +43,16 @@ export function getLocalHookFields(
     },
     {
       name: 'archive',
-      label: t('auto.components.settings.RepositoryHooksSection.9a100323ff', 'Archive Script'),
-      description: t(
-        'auto.components.settings.RepositoryHooksSection.6f90ebe3fd',
-        'Runs before a worktree is archived or removed.'
-      ),
+      label: t('auto.components.settings.RepositoryHooksSection.bfdb1266ce', 'Archive script'),
+      description: isFolder
+        ? t(
+            'components.settings.RepositoryHooksSection.folderArchiveFieldDescription',
+            'Runs before a workspace is removed.'
+          )
+        : t(
+            'auto.components.settings.RepositoryHooksSection.6f90ebe3fd',
+            'Runs before a worktree is archived or removed.'
+          ),
       placeholder: t(
         'auto.components.settings.RepositoryHooksSection.9b821fa19d',
         '# e.g. echo "Cleaning up $ORCA_WORKSPACE_NAME"'
@@ -111,11 +122,33 @@ export function getLocalCommandSourcePolicyNotice(
       }
 }
 
-export function renderYamlScriptPreview(hooks: OrcaHooks | null): string {
+export type HookYamlPresentation = {
+  template: string
+  archive: boolean
+  issueCommand: boolean
+}
+
+export function renderYamlScriptPreview(
+  hooks: OrcaHooks | null,
+  support: Pick<HookYamlPresentation, 'archive' | 'issueCommand'>
+): string {
   const formatScript = (key: string, command?: string): string =>
     command ? `\n  ${key}: |\n${command.replace(/^/gm, '    ')}` : ''
-  const issueCommand = hooks?.issueCommand
-    ? `\nissueCommand: |\n${hooks.issueCommand.replace(/^/gm, '  ')}`
-    : ''
-  return `scripts:${formatScript('setup', hooks?.scripts.setup)}${formatScript('archive', hooks?.scripts.archive)}${issueCommand}`
+  const issueCommand =
+    support.issueCommand && hooks?.issueCommand
+      ? `\nissueCommand: |\n${hooks.issueCommand.replace(/^/gm, '  ')}`
+      : ''
+  return `scripts:${formatScript('setup', hooks?.scripts.setup)}${support.archive ? formatScript('archive', hooks?.scripts.archive) : ''}${issueCommand}`
+}
+
+export const GROUP_SETUP_HOOKS_TEMPLATE = 'scripts:\n  setup: |\n    echo "Setting up workspace"'
+
+export function groupHookYamlPresentation(archive: boolean): HookYamlPresentation {
+  return {
+    template:
+      GROUP_SETUP_HOOKS_TEMPLATE +
+      (archive ? '\n  archive: |\n    echo "Cleaning up workspace"' : ''),
+    archive,
+    issueCommand: false
+  }
 }

@@ -10,9 +10,8 @@ import type { Store } from '../../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { StatsCollector } from '../../stats/collector'
 import { registerFilesystemHandlers } from '../filesystem/filesystem'
-import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/commit-message-agent-environment'
+import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/execution/commit-message-agent-environment'
 import { registerFilesystemWatcherHandlers } from '../filesystem/watchers/filesystem-watcher-handlers'
-import { registerUsageProviderHandlers } from '../usage-provider-handlers'
 import { registerGitHubHandlers } from '../source-control/github'
 import { registerGitLabHandlers } from '../source-control/gitlab'
 import { registerHostedReviewHandlers } from '../source-control/hosted-review'
@@ -79,78 +78,42 @@ import { registerMiniMaxCredentialsHandlers } from '../minimax-credentials'
 import { registerZcodePlanCredentialsHandlers } from '../zcode-plan-credentials'
 import { registerGrokAccountHandlers } from '../grok-accounts'
 import { registerCursorAccountHandlers } from '../cursor-accounts'
-import { registerUpdaterHandlers } from '../../window/attach-main-window-services'
-import {
-  registerClipboardHandlers,
-  setTrustedClipboardRendererWebContentsId
-} from '../../window/clipboard-ipc-handlers'
+import { registerUpdaterHandlers } from '../../updater/lifecycle/main-window-updater'
+import { registerClipboardHandlers } from '../../window/clipboard/clipboard-ipc-handlers'
+import { setTrustedClipboardRendererWebContentsId } from '../../window/clipboard/clipboard-ipc-sender-trust'
 import { isDashboardPopoutRenderer } from '../../window/dashboard-popout-window'
-import type { ClaudeUsageStore } from '../../claude-usage/store'
-import type { CodexUsageStore } from '../../codex-usage/store'
-import type { OpenCodeUsageStore } from '../../opencode-usage/store'
-import type { MuseUsageStore } from '../../muse-usage/store'
 import type { RateLimitService } from '../../rate-limits/service/rate-limit-service'
 import type { CodexAccountService } from '../../codex-accounts/service'
 import type { ClaudeAccountService } from '../../claude-accounts/service'
-import type { AutomationService } from '../../automations/service'
+import type { AutomationService } from '../../automations/automation-service'
 import type { AgentAwakeService } from '../../power/agent-awake-service'
-import type { CrashReportStore } from '../../crash-reporting/crash-report-store'
+import type { CrashReportStore } from '../../crash-reporting/reports/crash-report-store'
 import type { KeybindingService } from '../../keybindings/keybinding-service'
-import type {
-  AiVaultPrepareSessionResumeArgs,
-  AiVaultPrepareSessionResumeResult
-} from '../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import {
   getSavedRuntimeAiVaultHostInfos,
   deleteRuntimeAiVaultSession,
   prepareRuntimeAiVaultSessionResume,
   resolveRuntimeAiVaultSessionTitles,
   scanRuntimeAiVaultSessions
-} from '../../ai-vault/runtime-session-scanner'
-import { callRuntimeSessionSearch } from '../../ai-vault/runtime-session-search-call'
+} from '../../ai-vault/runtime-hosts/runtime-session-scanner'
+import { callRuntimeSessionSearch } from '../../ai-vault/runtime-hosts/runtime-session-search-call'
 import { configureRuntimeAiVaultSessionDelete } from '../ai-vault/ai-vault-delete'
 import { ensureStructuredAgentSessionHostUnlessRefused } from '../../runtime/agent-session/structured-agent-session-host-refusal'
 import { getAgentSessionAttachmentStore } from '../../native-chat/agent-session-attachments/agent-session-attachment-store-registry'
 import type { PluginService } from '../../plugins/plugin-service'
 import type { PluginMarketplaceHandlerServices } from '../plugin-marketplaces'
-import { settleWithinMs } from '../../startup/quit/quit-teardown-deadline'
-import { getRuntimeEnvironmentRegistryRoot } from '../runtime-environments/runtime-environment-registry-root'
+import { getRuntimeEnvironmentRegistryRoot } from '../runtime-environments/catalog/runtime-environment-registry-root'
+import {
+  closeNotificationDismissalsBeforeRelaunch,
+  type CoreHandlerLifecycleOptions
+} from './core-handler-lifecycle'
 
 let registered = false
-// Same cap as the restart path's auth preservation: bookkeeping must not hold Restart on a stalled disk.
-const RELAUNCH_DISMISSAL_CLOSE_TIMEOUT_MS = 2_000
-
-async function closeNotificationDismissalsBeforeRelaunch(
-  runtime: OrcaRuntimeService
-): Promise<void> {
-  const result = await settleWithinMs(
-    runtime.closeNotificationDismissals(),
-    RELAUNCH_DISMISSAL_CLOSE_TIMEOUT_MS
-  )
-  if (result.outcome === 'timed-out') {
-    console.warn('[notifications] Relaunching before dismissal recovery state finished saving')
-  }
-}
-
-type CoreHandlerLifecycleOptions = {
-  onBeforeRelaunch?: () => void | Promise<void>
-  onOrcaProfileAuthMutation?: () => void
-  onBeforeOrcaProfileSignOut?: () => void
-  onAfterOrcaProfileSignOut?: () => void
-  getAdditionalAiVaultCodexHomePaths?: () => readonly string[]
-  prepareAiVaultSessionResume?: (
-    args: AiVaultPrepareSessionResumeArgs
-  ) => Promise<AiVaultPrepareSessionResumeResult>
-}
 
 export function registerCoreHandlers(
   store: Store,
   runtime: OrcaRuntimeService,
   stats: StatsCollector,
-  claudeUsage: ClaudeUsageStore,
-  codexUsage: CodexUsageStore,
-  openCodeUsage: OpenCodeUsageStore,
-  museUsage: MuseUsageStore,
   codexAccounts: CodexAccountService,
   claudeAccounts: ClaudeAccountService,
   rateLimits: RateLimitService,
@@ -188,7 +151,6 @@ export function registerCoreHandlers(
   })
   registerCliHandlers()
   registerPreflightHandlers(store)
-  registerUsageProviderHandlers({ claudeUsage, codexUsage, openCodeUsage, museUsage })
   registerCodexAccountHandlers(codexAccounts, () => store.getSettings())
   registerAgentHookHandlers(runtime, { getPtyIdForPaneKey })
   registerCodexConfigSyncHandlers(codexAccounts.runtimeHomeService)
@@ -199,7 +161,7 @@ export function registerCoreHandlers(
   registerGrokAccountHandlers()
   registerCursorAccountHandlers()
   registerRateLimitHandlers(rateLimits, codexAccounts)
-  registerGitHubHandlers(store, stats)
+  registerGitHubHandlers(store, stats, runtime)
   registerGitLabHandlers(store)
   registerHostedReviewHandlers(store, stats)
   registerLinearHandlers()
@@ -251,7 +213,7 @@ export function registerCoreHandlers(
   registerSessionHandlers(store, runtime)
   registerUIHandlers(store, { isDashboardPopoutRenderer })
   registerEmulatorFrameStreamHandlers()
-  registerEmulatorVideoStreamHandlers()
+  registerEmulatorVideoStreamHandlers((id) => runtime.getEmulatorBridge()?.getIosVideoStreamUrl(id))
   registerEmulatorScrcpyTouchHandler()
   registerEmulatorScrcpyKeyboardHandler()
   registerWorkspaceSpaceHandlers(store)
@@ -306,5 +268,5 @@ export function registerCoreHandlers(
     }
   })
   registerUpdaterHandlers(store)
-  registerSpeechHandlers(store)
+  registerSpeechHandlers(store, commitMessageAgentEnv)
 }

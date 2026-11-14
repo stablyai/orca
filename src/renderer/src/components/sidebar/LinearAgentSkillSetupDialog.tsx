@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { ORCA_LINEAR_SKILL_NAME } from '@/lib/agent-feature-skill-names'
+import { ORCA_LINEAR_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
 import { useTranslate } from '@/i18n/use-translate'
 
 type AgentSkillSetupPanelProps = ComponentProps<typeof AgentSkillSetupPanel>

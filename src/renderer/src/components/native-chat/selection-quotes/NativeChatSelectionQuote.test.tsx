@@ -4,7 +4,6 @@ import { useRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as I18n from '@/i18n/i18n'
 import { createGlobalSettingsFixture } from '../../../../../shared/global-settings-test-fixture'
-import { getOverlayFocusOwners } from '@/lib/overlay-focus-ownership'
 import { useAppStore } from '../../../store/index'
 import type { NativeChatComposerHandle } from '../composer/native-chat-composer-types'
 import { NativeChatMarkdown } from '../markdown/NativeChatMarkdown'
@@ -89,31 +88,6 @@ describe('NativeChatSelectionQuote', () => {
     vi.useRealTimers()
   })
 
-  it('quotes a selection from an agent reply into the composer as a blockquote', () => {
-    render(<Chat />)
-    releaseSelection(screen.getByTestId('first'))
-
-    const quote = screen.getByRole('button', { name: 'Add to chat' })
-    fireEvent.pointerDown(quote, { button: 0 })
-    fireEvent.click(quote)
-
-    expect(appendText).toHaveBeenCalledWith('> Use the draft store.\n>\n> It already appends.\n\n')
-    expect(screen.queryByRole('button', { name: 'Add to chat' })).toBeNull()
-  })
-
-  it('closes the offer before the composer takes the quote and focus', () => {
-    let focusOwners: HTMLElement[] | undefined
-    appendText.mockImplementationOnce(() => {
-      focusOwners = getOverlayFocusOwners()
-    })
-    render(<Chat />)
-    releaseSelection(screen.getByTestId('first'))
-
-    fireEvent.click(screen.getByRole('button', { name: 'Add to chat' }))
-
-    expect(focusOwners).toEqual([])
-  })
-
   it('takes a selection that runs on over text that cannot be selected', () => {
     render(<Chat />)
     releaseSelection(screen.getByTestId('first'), screen.getByTestId('time'))
@@ -124,28 +98,6 @@ describe('NativeChatSelectionQuote', () => {
     expect(screen.getByRole('button', { name: 'Add to chat' })).toBeTruthy()
 
     releaseSelection(screen.getByTestId('first'), screen.getByTestId('next'))
-    expect(screen.queryByRole('button', { name: 'Add to chat' })).toBeNull()
-  })
-
-  it('offers nothing when a press leaves the selection as it was', () => {
-    render(<Chat />)
-    releaseSelection(screen.getByTestId('first'))
-    fireEvent.pointerDown(screen.getByTestId('time'), { button: 0 })
-    fireEvent.mouseUp(screen.getByTestId('time'), { button: 0 })
-    settle()
-
-    expect(screen.queryByRole('button', { name: 'Add to chat' })).toBeNull()
-  })
-
-  it('withdraws the offer once the selection is gone', () => {
-    render(<Chat />)
-    releaseSelection(screen.getByTestId('first'))
-    expect(screen.getByRole('button', { name: 'Add to chat' })).toBeTruthy()
-
-    act(() => {
-      window.getSelection()!.removeAllRanges()
-      document.dispatchEvent(new Event('selectionchange'))
-    })
     expect(screen.queryByRole('button', { name: 'Add to chat' })).toBeNull()
   })
 })

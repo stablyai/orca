@@ -1,0 +1,26 @@
+[
+  {
+    "filePath": "src/main/startup/quit/main-process-quit.ts",
+    "kind": "object-property:message",
+    "text": "before-quit allowed for update install",
+    "dynamic": false,
+    "count": 1,
+    "reason": "Updater lifecycle diagnostics are not displayed as UI copy."
+  },
+  {
+    "filePath": "src/main/startup/quit/main-process-quit.ts",
+    "kind": "object-property:message",
+    "text": "will-quit cleanup for update install; daemonTeardown=disconnect",
+    "dynamic": false,
+    "count": 1,
+    "reason": "Updater lifecycle diagnostics are not displayed as UI copy."
+  },
+  {
+    "filePath": "src/main/startup/profile-startup/profile-state-recovery-preflight.ts",
+    "kind": "object-property:message",
+    "text": "Invalid profile-state recovery launch.",
+    "dynamic": false,
+    "count": 1,
+    "reason": "Existing recovery detail is user-visible and remains untranslated; tracked in issue 32207."
+  }
+]

@@ -13,6 +13,7 @@ export type AcpStructuredConnection = Pick<
   | 'setConfigOption'
   | 'setModel'
   | 'requestExtension'
+  | 'closeSession'
   | 'subscribe'
   | 'closed'
   | 'spawned'

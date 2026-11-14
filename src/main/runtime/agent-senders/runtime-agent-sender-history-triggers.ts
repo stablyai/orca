@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { projectionMutationTriggers } from '../orchestration/db/projection-mutation-triggers'
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import { tolerant } from './agent-sender-row-decoding'
 
@@ -65,26 +66,15 @@ CREATE TEMP TABLE IF NOT EXISTS agent_sender_tracked (
   kind TEXT NOT NULL, key TEXT NOT NULL, PRIMARY KEY (kind, key)) WITHOUT ROWID;
 CREATE TEMP TABLE IF NOT EXISTS agent_sender_dirty (
   kind TEXT NOT NULL, key TEXT NOT NULL, PRIMARY KEY (kind, key)) WITHOUT ROWID;
-${HISTORY_TRIGGERS.flatMap((trigger) => {
-  const events: { name: string; event: string; marks: string[] }[] = [
-    { name: 'insert', event: 'AFTER INSERT', marks: [markDirty('NEW', trigger)] },
-    { name: 'delete', event: 'AFTER DELETE', marks: [markDirty('OLD', trigger)] },
-    {
-      name: 'update',
-      event: `AFTER UPDATE OF ${trigger.columns}`,
-      marks: [markDirty('OLD', trigger), markDirty('NEW', trigger)]
-    }
-  ]
-  return events.map(
-    ({
-      name,
-      event,
-      marks
-    }) => `CREATE TEMP TRIGGER IF NOT EXISTS agent_sender_${trigger.table}_${name}
-${event} ON main.${trigger.table}
-BEGIN UPDATE temp.agent_sender_generation SET history = history + 1; ${marks.join(' ')} END;`
-  )
-}).join('\n')}
+${projectionMutationTriggers(
+  'agent_sender',
+  HISTORY_TRIGGERS.map((trigger) => ({
+    table: trigger.table,
+    columns: trigger.columns,
+    mark: (row) => markDirty(row, trigger)
+  })),
+  'UPDATE temp.agent_sender_generation SET history = history + 1;'
+)}
 ${['insert', 'delete', 'update']
   .map(
     (name) => `CREATE TEMP TRIGGER IF NOT EXISTS agent_sender_federated_dispatches_${name}

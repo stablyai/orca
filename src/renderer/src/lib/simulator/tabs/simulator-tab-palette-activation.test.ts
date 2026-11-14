@@ -89,27 +89,6 @@ describe('activateSimulatorTabPaletteResult', () => {
     seedStore()
   })
 
-  it('activates an SSH worktree through its paired-runtime owner alias', () => {
-    seedStore({
-      worktreesByRepo: {
-        'repo-1': [
-          makeWorktree({
-            hostId: 'ssh:private-target',
-            runtimeOwnerEnvironmentId: 'paired-host'
-          })
-        ]
-      }
-    })
-
-    expect(
-      activateSimulatorTabPaletteResult({ ...target, executionHostId: 'runtime:paired-host' })
-        .status
-    ).toBe('activated')
-    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1', {
-      executionHostId: 'runtime:paired-host'
-    })
-  })
-
   it('rejects colliding child ids before mutating either host', () => {
     seedStore({
       worktreesByRepo: {

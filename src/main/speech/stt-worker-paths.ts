@@ -1,9 +1,8 @@
-import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
 import {
-  SPEECH_RECOGNIZER_DIR_ENV,
-  speechRecognizerPackageName
+  hasSpeechEnginePackage,
+  SPEECH_RECOGNIZER_DIR_ENV
 } from '../../shared/speech-recognizer-package'
 import {
   currentWorkerEntryLayout,
@@ -17,34 +16,34 @@ export function getSttWorkerPath(): string {
   return resolveWorkerThreadEntryPath(currentWorkerEntryLayout(__dirname), 'stt-worker.js')
 }
 
-/** Recognizer directory, or null on hosts without one. */
-export function getSherpaModulePath(): string | null {
-  const nativePackage = speechRecognizerPackageName(process.platform, process.arch)
+function speechNodeModulesDirCandidates(): string[] {
   const resourcesPath =
     'resourcesPath' in process && typeof process.resourcesPath === 'string'
       ? process.resourcesPath
       : undefined
-
   if (getAppEnvironment().isPackaged() && resourcesPath) {
-    const resourcesNodeModule = join(resourcesPath, 'node_modules', nativePackage)
-    if (existsSync(resourcesNodeModule)) {
-      return resourcesNodeModule
-    }
-    return join(resourcesPath, 'app.asar.unpacked', 'node_modules', nativePackage)
+    return [join(resourcesPath, 'node_modules')]
   }
   if (getAppEnvironment().isPackaged()) {
     // orcad: only the installed app's copy, which `orca serve` names.
     const handed = process.env[SPEECH_RECOGNIZER_DIR_ENV]
-    return handed && existsSync(join(handed, 'sherpa-onnx.node')) ? handed : null
+    return handed ? [handed] : []
   }
+  return require.resolve.paths('transcribe-cpp') ?? []
+}
 
-  try {
-    return join(require.resolve(nativePackage), '..')
-  } catch {
-    return null
+// The app's engine packages don't change while it runs, so they are looked up once.
+let speechEngineModulesDir: string | null | undefined
+
+/** The node_modules directory holding transcribe-cpp, or null on hosts without it. */
+export function getSpeechEngineModulesDir(): string | null {
+  if (speechEngineModulesDir === undefined) {
+    speechEngineModulesDir =
+      speechNodeModulesDirCandidates().find((dir) => hasSpeechEnginePackage(dir)) ?? null
   }
+  return speechEngineModulesDir
 }
 
 export function hasLocalSpeechRecognizer(): boolean {
-  return getSherpaModulePath() !== null
+  return getSpeechEngineModulesDir() !== null
 }

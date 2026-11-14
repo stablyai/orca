@@ -1,13 +1,13 @@
 import { useCallback, useRef } from 'react'
 import type { ComponentRef } from 'react'
-import type { Text, View } from 'react-native'
+import type { HostInstance, Text } from 'react-native'
 import {
   useAnchoredDetailCard,
   type DetailCardMeasure
 } from '../../components/use-anchored-detail-card'
 
 export function useSessionTitleCard(besideTabs: boolean, obscured: boolean) {
-  const barRef = useRef<View>(null)
+  const barRef = useRef<HostInstance>(null)
   const titleRef = useRef<ComponentRef<typeof Text>>(null)
   // Below the session bar, lined up with the title's leading edge.
   const measure = useCallback<DetailCardMeasure>((place) => {

@@ -4,34 +4,37 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useForceReconnect } from '../transport/connection/host-client-hooks'
 import { useWorkspaceClient } from '../worktree/use-workspace-client'
 import { getWorktreeLabel } from '../worktree/worktree-label'
-import { useMobileGitRequests } from './use-mobile-git-requests'
-import { useMobileSourceControlLoaders } from './use-mobile-source-control-loaders'
-import { useMobileSourceControlOpeners } from './use-mobile-source-control-openers'
-import type { MobileSourceControlPrimaryActionArgs } from './mobile-source-control-primary-action'
-import { useMobileSourceControlSections } from './mobile-source-control-sections'
-import { useMobileSourceControlRunners } from './use-mobile-source-control-runners'
-import { useMobileSourceControlCreatePrAction } from './use-mobile-source-control-create-pr-action'
-import { useMobileSourceControlKeyboardLift } from './use-mobile-source-control-keyboard-lift'
-import type { RuntimeGitLocalBranches } from '../../../src/shared/runtime-types'
+import { workspaceDraftRowKey } from '../drafts/durable-draft-rows'
+import { useDurableDraftField } from '../drafts/durable-draft-fields'
+import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
+import { useMobileGitRequests } from './git/use-mobile-git-requests'
+import { useMobileSourceControlLoaders } from './changes/use-mobile-source-control-loaders'
+import { useMobileSourceControlOpeners } from './panel/use-mobile-source-control-openers'
+import type { MobileSourceControlPrimaryActionArgs } from './workflows/mobile-source-control-primary-action'
+import { useMobileSourceControlSections } from './changes/mobile-source-control-sections'
+import { useMobileSourceControlRunners } from './workflows/use-mobile-source-control-runners'
+import { useMobileSourceControlCreatePrAction } from './review/creation/use-mobile-source-control-create-pr-action'
+import { useKeyboardOcclusion as useMobileSourceControlKeyboardLift } from '../platform/keyboard/keyboard-occlusion'
+import type { RuntimeGitLocalBranches } from '../../../src/shared/runtime-worktree-contracts'
 import {
   buildMobileBranchCompareSection,
   canOpenMobileBranchCompareDiff
-} from './mobile-branch-compare'
+} from './branches/mobile-branch-compare'
 
 import {
   countStagedEntries,
   countUnstagedEntries,
   getStageablePaths,
-  getUnstageablePaths,
-  type MobileGitStatusEntry
-} from './mobile-git-status'
-import { getMobileCommitFailureStagedEntries } from './mobile-commit-failure-recovery'
-import { useMobileSourceControlCommitFailure } from './use-mobile-source-control-commit-failure'
+  getUnstageablePaths
+} from './changes/mobile-git-status'
+import type { MobileGitStatusEntry } from './git/git-status-reply-schema'
+import { getMobileCommitFailureStagedEntries } from './commits/mobile-commit-failure-recovery'
+import { useMobileSourceControlCommitFailure } from './commits/use-mobile-source-control-commit-failure'
 import {
   buildMobileGitStatusEntryViews,
   formatBranchLabel,
   type MobileBranchEntryView
-} from './mobile-source-control-screen-state'
+} from './changes/mobile-source-control-screen-state'
 
 export type MobileSourceControlStateParams = {
   hostId: string
@@ -48,7 +51,12 @@ export function useMobileSourceControlState(params: MobileSourceControlStatePara
   const { client, state: connState } = useWorkspaceClient(hostId)
   const forceReconnect = useForceReconnect()
   const [busyAction, setBusyAction] = useState<string | null>(null)
-  const [commitMessage, setCommitMessage] = useState('')
+  const executionHost = useWorkspaceExecutionHost()
+  // The message waits through leaving the screen and the app being killed; a commit clears it.
+  const [commitMessage, setCommitMessage] = useDurableDraftField(
+    workspaceDraftRowKey('commit', { hostId, executionHost, worktreeId }, ''),
+    'message'
+  )
   const [generatingMessage, setGeneratingMessage] = useState(false)
   const [showBranchPicker, setShowBranchPicker] = useState(false)
   const [localBranches, setLocalBranches] = useState<RuntimeGitLocalBranches | null>(null)

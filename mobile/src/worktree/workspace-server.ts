@@ -34,7 +34,7 @@ export function useWorkspaceServer(args: {
   const routeHost = workspaceRouteExecutionHost(client, desktopCapabilities, executionHost)
   const serverClient = client && routeHost ? scopeRpcClientToExecutionHost(client, routeHost) : null
   // The same feed the host list reads, so the desktop is not polled twice.
-  const hosts = useRelayHosts(routeHost ? client : null)
+  const hosts = useRelayHosts(routeHost ? client : null, desktopCapabilities)
   const selectedHost = hosts?.find((entry) => entry.hostId === routeHost)
   const state =
     connState === 'connected' && routeHost && hosts ? serverConnState(selectedHost) : connState

@@ -4,10 +4,10 @@ import {
   captureNativeChatStagedInput
 } from '../../drafts/native-chat-draft-attachment-staging'
 import { mayHoldAgentReferences } from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
-import { getAgentLabel } from '@/lib/agent-catalog'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
-import { MAX_SKILL_REFS } from '../../../../../../shared/rpc-contract/structured-agent-session-message-params'
+import { MAX_SKILL_REFS } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-message-params'
 import { SkillRefLimitError } from '../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   promptHasInteractionModeSkill,

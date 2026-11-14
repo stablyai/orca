@@ -1,7 +1,9 @@
 import { z } from 'zod'
-import { ghExecFileAsync } from '../../gh-utils'
-import { githubHostExecOptions, type GitHubApiRepository } from '../../github-api-repository'
-import { noteRepositoryRateLimitSpend } from '../../rate-limit'
+import { extractExecError } from '../../../git/command-runner/process-capture/exec-error'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { githubHostExecOptions } from '../../repositories/github-repository-host'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
+import { noteRepositoryRateLimitSpend } from '../../api/rate-limit'
 import type { GhExecOptions } from '../github-exec-scope'
 import { assertRateLimitBudget } from '../lookup/pr-lookup-rate-limit'
 import { isPendingApprovalSuiteWithoutRuns } from './pr-checks-response-mapping'
@@ -24,6 +26,12 @@ const commitStatusSchema = z.object({
   target_url: z.string().nullish(),
   created_at: z.string().nullish()
 })
+const workflowRunSchema = z.object({
+  id: z.number(),
+  check_suite_id: z.number().nullish(),
+  status: z.string().nullable(),
+  conclusion: z.string().nullable()
+})
 const checkSuiteSchema = z.object({
   id: z.number().optional(),
   status: z.string().nullable(),
@@ -33,7 +41,6 @@ const checkSuiteSchema = z.object({
 
 async function readPages<T>(
   repository: GitHubApiRepository,
-  headSha: string,
   options: GhExecOptions,
   endpoint: string,
   field: string,
@@ -48,7 +55,8 @@ async function readPages<T>(
   let total: number | undefined
   for (let page = 1; ; page++) {
     await assertRateLimitBudget('core', repository, options)
-    const path = `repos/${repository.owner}/${repository.repo}/commits/${encodeURIComponent(headSha)}/${endpoint}?per_page=100&page=${page}`
+    const separator = endpoint.includes('?') ? '&' : '?'
+    const path = `repos/${repository.owner}/${repository.repo}/${endpoint}${separator}per_page=100&page=${page}`
     const { stdout } = await ghExecFileAsync(
       ['api', ...(noCache ? [] : ['--cache', '60s']), path],
       { ...options, ...githubHostExecOptions(repository) }
@@ -74,23 +82,89 @@ async function readPages<T>(
   }
 }
 
-export function readRestPRCheckRuns(
+function commitEndpoint(headSha: string, endpoint: string): string {
+  return `commits/${encodeURIComponent(headSha)}/${endpoint}`
+}
+
+// Why: fine-grained tokens cannot be granted the Checks permission, but can read Actions.
+export function isCheckRunsPermissionDenied(err: unknown): boolean {
+  const { stderr, stdout } = extractExecError(err)
+  const message = `${stderr}\n${stdout}\n${err instanceof Error ? err.message : ''}`
+  return message.toLowerCase().includes('resource not accessible by personal access token')
+}
+
+function readHeadWorkflowRuns(
+  repository: GitHubApiRepository,
+  headSha: string,
+  options: GhExecOptions,
+  noCache: boolean,
+  pageLimit?: number
+) {
+  return readPages(
+    repository,
+    options,
+    `actions/runs?head_sha=${encodeURIComponent(headSha)}`,
+    'workflow_runs',
+    workflowRunSchema,
+    noCache,
+    pageLimit
+  )
+}
+
+/** The head commit's Actions jobs as check runs; a job's id is its check run's id. */
+async function readActionsJobsAsCheckRuns(
+  repository: GitHubApiRepository,
+  headSha: string,
+  options: GhExecOptions,
+  noCache: boolean,
+  pageLimit?: number
+): Promise<z.infer<typeof checkRunSchema>[]> {
+  const runs = await readHeadWorkflowRuns(repository, headSha, options, noCache, pageLimit)
+  const checkRuns: z.infer<typeof checkRunSchema>[] = []
+  for (const run of runs) {
+    const jobs = await readPages(
+      repository,
+      options,
+      `actions/runs/${run.id}/jobs?filter=latest`,
+      'jobs',
+      checkRunSchema,
+      noCache,
+      pageLimit
+    )
+    for (const job of jobs) {
+      checkRuns.push({
+        ...job,
+        details_url: job.html_url,
+        check_suite: run.check_suite_id ? { id: run.check_suite_id } : null
+      })
+    }
+  }
+  return checkRuns
+}
+
+export async function readRestPRCheckRuns(
   repository: GitHubApiRepository,
   headSha: string,
   options: GhExecOptions,
   noCache = true,
   pageLimit?: number
 ) {
-  return readPages(
-    repository,
-    headSha,
-    options,
-    'check-runs',
-    'check_runs',
-    checkRunSchema,
-    noCache,
-    pageLimit
-  )
+  try {
+    return await readPages(
+      repository,
+      options,
+      commitEndpoint(headSha, 'check-runs'),
+      'check_runs',
+      checkRunSchema,
+      noCache,
+      pageLimit
+    )
+  } catch (err) {
+    if (!isCheckRunsPermissionDenied(err)) {
+      throw err
+    }
+    return readActionsJobsAsCheckRuns(repository, headSha, options, noCache, pageLimit)
+  }
 }
 
 export function readRestPRCommitStatuses(
@@ -102,9 +176,8 @@ export function readRestPRCommitStatuses(
 ) {
   return readPages(
     repository,
-    headSha,
     options,
-    'status',
+    commitEndpoint(headSha, 'status'),
     'statuses',
     commitStatusSchema,
     noCache,
@@ -112,23 +185,36 @@ export function readRestPRCommitStatuses(
   )
 }
 
-export function readRestPRCheckSuites(
+export async function readRestPRCheckSuites(
   repository: GitHubApiRepository,
   headSha: string,
   options: GhExecOptions,
   noCache = true,
   pageLimit?: number
-) {
-  return readPages(
-    repository,
-    headSha,
-    options,
-    'check-suites',
-    'check_suites',
-    checkSuiteSchema,
-    noCache,
-    pageLimit
-  )
+): Promise<z.infer<typeof checkSuiteSchema>[]> {
+  try {
+    return await readPages(
+      repository,
+      options,
+      commitEndpoint(headSha, 'check-suites'),
+      'check_suites',
+      checkSuiteSchema,
+      noCache,
+      pageLimit
+    )
+  } catch (err) {
+    if (!isCheckRunsPermissionDenied(err)) {
+      throw err
+    }
+    // Each workflow run is its own check suite, so approval blockers still surface.
+    const runs = await readHeadWorkflowRuns(repository, headSha, options, noCache, pageLimit)
+    return runs.map((run) => ({
+      id: run.check_suite_id ?? undefined,
+      status: run.status,
+      conclusion: run.conclusion,
+      app: { name: 'GitHub Actions' }
+    }))
+  }
 }
 
 /** REST rows in the GraphQL rollup's field names, so both reads give a check the same identity. */

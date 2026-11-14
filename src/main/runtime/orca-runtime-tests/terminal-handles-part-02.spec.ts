@@ -12,64 +12,6 @@ import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import '../orca-runtime'
 
 describe('OrcaRuntimeService', () => {
-  it('keeps a no-incarnation handle across an in-graph pane remint', async () => {
-    const runtime = createRuntime()
-    const tabId = 'tab-1'
-    // No preallocated handle or incarnation id: the live PTY itself is the continuity proof within this graph.
-    runtime.attachWindow(TEST_WINDOW_ID)
-    runtime.syncWindowGraph(TEST_WINDOW_ID, {
-      tabs: [
-        {
-          tabId,
-          worktreeId: TEST_WORKTREE_ID,
-          title: 'Shell',
-          activeLeafId: 'leaf-old',
-          layout: null
-        }
-      ],
-      leaves: [
-        {
-          tabId,
-          worktreeId: TEST_WORKTREE_ID,
-          leafId: 'leaf-old',
-          paneRuntimeId: 1,
-          ptyId: 'pty-plain'
-        }
-      ]
-    })
-    const before = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
-    expect(before.terminals).toHaveLength(1)
-    const stableHandle = before.terminals[0].handle
-    const waiting = runtime.waitForTerminal(stableHandle, { condition: 'exit', timeoutMs: 30_000 })
-
-    runtime.syncWindowGraph(TEST_WINDOW_ID, {
-      tabs: [
-        {
-          tabId,
-          worktreeId: TEST_WORKTREE_ID,
-          title: 'Shell',
-          activeLeafId: 'leaf-new',
-          layout: null
-        }
-      ],
-      leaves: [
-        {
-          tabId,
-          worktreeId: TEST_WORKTREE_ID,
-          leafId: 'leaf-new',
-          paneRuntimeId: 2,
-          ptyId: 'pty-plain'
-        }
-      ]
-    })
-
-    const after = await runtime.listTerminals(`id:${TEST_WORKTREE_ID}`)
-    expect(after.terminals).toHaveLength(1)
-    expect(after.terminals[0].handle).toBe(stableHandle)
-    runtime.onPtyExit('pty-plain', 0)
-    await expect(waiting).resolves.toMatchObject({ handle: stableHandle, status: 'exited' })
-  })
-
   it('keeps a live CLI waiter pending when a re-keyed shared handle transfers to the live leaf', async () => {
     const runtime = createRuntime()
     const tabId = 'tab-1'

@@ -2,7 +2,7 @@ import {
   liveResumeRecord,
   statusRetainsResumableIdentity,
   type ResumeRecordTab
-} from '../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
+} from '../../../../shared/agent-session/lifecycle/resume/agent-resume-record-from-status'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { isLocalHookConnectionId } from '../../../../shared/wsl-hook-relay-contract'

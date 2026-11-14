@@ -1,3 +1,4 @@
+import { isWorktreeRetiredByRemoval } from '../../../../../shared/worktree/removal/removal-visibility'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { getFolderWorkspaceWorktreeHostId } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
@@ -7,6 +8,8 @@ type PickableWorktree = {
   id: string
   hostId?: string
   isArchived?: boolean
+  removing?: true
+  removalRecorded?: true
   lastActivityAt?: number
 }
 
@@ -22,7 +25,7 @@ export function pickWorkspaceToShow(
     hostId === undefined || hostId === LOCAL_EXECUTION_HOST_ID
   const worktree = Object.values(worktreesByRepo ?? {})
     .flat()
-    .filter((each) => !each.isArchived && isLocal(each.hostId))
+    .filter((each) => !each.isArchived && !isWorktreeRetiredByRemoval(each) && isLocal(each.hostId))
     .reduce<PickableWorktree | null>(
       (best, each) =>
         !best || (each.lastActivityAt ?? 0) > (best.lastActivityAt ?? 0) ? each : best,

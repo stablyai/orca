@@ -1,7 +1,3 @@
-import type { AppState } from '../../types'
-import type { GitHubPRRefreshCandidate } from '../../../../../shared/github/pull-request-refresh-types'
-import type { Repo } from '../../../../../shared/repo-types'
-import type { Worktree } from '../../../../../shared/worktree/types'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -10,18 +6,27 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
-import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
-import { resolveReviewRepository, reviewRepositoryMatchesWorkspace } from '@/lib/review-owner'
+
+import { isMacAppDataPath } from '@/app-shell/platform/passive-macos-app-data-access'
+import {
+  resolveReviewRepository,
+  reviewRepositoryMatchesWorkspace
+} from '@/lib/source-control/review/review-owner'
 import {
   findIndexedReviewRepository,
   hasUniqueIndexedRepositoryHost
 } from '@/lib/workspace/ownership/repository-owner-index'
 import { worktreeOwnerHostIds } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
-import { prCacheKey } from '../cache/cache-identity'
+import '../cache/cache-identity'
+import { getGitHubRepoCacheKey } from '../../../../../shared/github/cache/github-cache-key'
 import { settingsForGitHubRepoOwner } from '../work-items/work-item-routing'
 import { githubHostedReviewFallbackPRNumber } from '../pull-requests/pr-result-routing'
-import type { GitHubPRFallbackSource } from '../cache/cache-model'
+import { resolvePRBranchFallback } from '../../../../../shared/github/pull-requests/refresh/pr-branch-fallback-rule'
 import { selectWorktreesByRepo } from '../../workspaces/catalog/workspace-record-fields'
+import type { AppState } from '../../types'
+import type { GitHubPRRefreshCandidate } from '../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import type { Repo } from '../../../../../shared/repo-types'
+import type { Worktree } from '../../../../../shared/worktree/types'
 
 export function findWorktreeById(
   state: AppState,
@@ -232,7 +237,7 @@ export function buildPRRefreshCandidate(
     return null
   }
   const branch = worktree.branch.replace(/^refs\/heads\//, '')
-  const cacheKey = prCacheKey(
+  const cacheKey = getGitHubRepoCacheKey(
     repoPath ?? repo.path,
     repo.id,
     branch,
@@ -251,23 +256,12 @@ export function buildPRRefreshCandidate(
     repo.executionHostId,
     true
   )
-  const cachedFallbackPRNumber = cachedPR?.number ?? null
-  // Why: a merged PR is a valid fallback only while the worktree sits on its head or a confirmed-contained commit — else the branch moved on.
-  const cachedMergedPRMovedPastHead =
-    worktree.linkedPR == null &&
-    cachedPR?.state === 'merged' &&
-    cachedPR.headSha !== worktree.head &&
-    cachedPR.confirmedContainedHeadOid !== worktree.head
-  const fallbackPRNumber =
-    worktree.linkedPR == null && !cachedMergedPRMovedPastHead
-      ? (cachedFallbackPRNumber ?? hostedReviewFallbackPRNumber)
-      : null
-  const fallbackPRSource: GitHubPRFallbackSource | null =
-    worktree.linkedPR != null || fallbackPRNumber == null
-      ? null
-      : cachedFallbackPRNumber != null
-        ? 'pr-cache'
-        : 'hosted-review'
+  const { fallbackPRNumber, fallbackPRSource } = resolvePRBranchFallback({
+    linkedPRNumber: worktree.linkedPR ?? null,
+    cachedPR,
+    hintPRNumber: hostedReviewFallbackPRNumber,
+    currentHeadOid: worktree.head
+  })
   const sshStatus = repo.connectionId
     ? state.sshConnectionStates.get(repo.connectionId)?.status
     : null

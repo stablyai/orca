@@ -1,4 +1,4 @@
-import type { GitHubPRRefreshSkippedReason } from '../../../../../../shared/github/pull-request-refresh-types'
+import type { GitHubPRRefreshSkippedReason } from '../../../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { getGitHubUnavailableEmptyStateCopy } from '../../hosted-review/provider-actions/github-refresh-error-copy'
@@ -10,7 +10,7 @@ import {
   type ChecksPanelRecoveryAction,
   type ChecksPanelReviewState,
   type ChecksPanelReviewStateInput
-} from '../checks-panel-review-state-model'
+} from '../review-state/checks-panel-review-state-model'
 
 type KeyedCopy = { key: string; fallback: string }
 

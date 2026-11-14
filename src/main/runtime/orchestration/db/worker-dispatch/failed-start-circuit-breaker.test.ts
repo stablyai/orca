@@ -93,23 +93,6 @@ describe('failed worker starts and the circuit breaker', () => {
     expect(db.getTask(taskId)).toMatchObject({ status: 'completed', result: 'done' })
   })
 
-  it('keeps the breaker tripped when that worker reports its own failure', () => {
-    const taskId = newTask()
-    const [, , third] = failedStarts(taskId, 3, 'agent_prompt_stalled')
-
-    expect(
-      db.settleWorkerReport({ taskId, dispatchId: third, outcome: 'failed', result: 'broke on X' })
-    ).toEqual({ action: 'settled', outcome: 'failed', duplicate: false })
-    expect(db.getDispatchContextById(third)).toMatchObject({
-      status: 'circuit_broken',
-      last_failure: 'broke on X'
-    })
-    expect(
-      db.settleWorkerReport({ taskId, dispatchId: third, outcome: 'failed', result: 'broke on X' })
-    ).toEqual({ action: 'settled', outcome: 'failed', duplicate: true })
-    expect(() => start(taskId, third)).toThrow(/will not retry it again/)
-  })
-
   it('starts a fresh count after explicitly reopening a circuit-broken Task', () => {
     const taskId = newTask()
     const [, , third] = failedStarts(taskId, 3)

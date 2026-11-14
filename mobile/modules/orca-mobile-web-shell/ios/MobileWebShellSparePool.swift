@@ -7,6 +7,9 @@ private let minimumPhysicalMemory: UInt64 = 3 << 30
 /// A claim is adopted on the claiming screen's first commit; this only bounds a screen that never mounts.
 private let claimExpirySeconds: TimeInterval = 10
 
+/// iOS has no "memory is low" to ask before booting (Android's `lowMemory`), and pressure outlasts its warning.
+private let memoryWarningBackoffSeconds: TimeInterval = 180
+
 /// A booted document waiting for a screen. It keeps what the page reported, and the page's ready, for
 /// the view that adopts it: a parked page stops asking for init, so its ready is answered from here.
 final class MobileWebShellSpare: MobileWebShellDocumentSink {
@@ -56,11 +59,14 @@ final class MobileWebShellSparePool {
   private var parked: MobileWebShellSpare?
   private var claimed: MobileWebShellSpare?
   private let shown = NSHashTable<MobileWebShellDocument>.weakObjects()
+  private var memoryWarningUptime: TimeInterval?
 
-  /// Whether a spare for `directory` is parked after the call; never on a small phone, inactive app or shown page.
+  /// Whether a spare for `directory` is parked after the call; never on a small phone, inactive app or shown
+  /// page, nor soon after a memory warning.
   func prepare(directory: String, sessionId: String) -> Bool {
     guard
       ProcessInfo.processInfo.physicalMemory > minimumPhysicalMemory,
+      !recentlyWarnedAboutMemory(),
       UIApplication.shared.applicationState == .active,
       shown.allObjects.isEmpty,
       let window = keyWindow()
@@ -121,7 +127,13 @@ final class MobileWebShellSparePool {
     return document
   }
 
-  /// Memory pressure, the app leaving the foreground, files going away, or Home without a claim.
+  /// A spare is the first thing to give back: nothing is shown by it.
+  func didReceiveMemoryWarning() {
+    memoryWarningUptime = ProcessInfo.processInfo.systemUptime
+    discardAll()
+  }
+
+  /// The app leaving the foreground, files going away, Home without a claim, or memory pressure.
   func discardAll() {
     for spare in [parked, claimed].compactMap({ $0 }) {
       spare.document.destroy()
@@ -139,6 +151,11 @@ final class MobileWebShellSparePool {
       return
     }
     spare.document.destroy()
+  }
+
+  private func recentlyWarnedAboutMemory() -> Bool {
+    guard let memoryWarningUptime else { return false }
+    return ProcessInfo.processInfo.systemUptime - memoryWarningUptime < memoryWarningBackoffSeconds
   }
 
   private func keyWindow() -> UIWindow? {

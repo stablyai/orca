@@ -1,11 +1,15 @@
-import type { OwnerRepo } from '../../gh-utils'
-import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
+import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
+import { githubRepoIdentityKey } from '../../../../shared/github/repositories/repository-identity-key'
 import {
   getRemoteHeadBranchName,
   getRepoDefaultBranchName
 } from '../../../source-control/repo-default-branch'
-import type { GhExecOptions, HostedReviewLocalGitOptions } from './../github-exec-scope'
-import { ownerRepoFromPullRequestUrl } from './../github-exec-scope'
+import {
+  type GhExecOptions,
+  type HostedReviewLocalGitOptions,
+  ownerRepoFromPullRequestUrl
+} from './../github-exec-scope'
+
 import type { TrackedUpstreamBranch } from './tracked-upstream-cache'
 import {
   pullRequestHeadRepository,

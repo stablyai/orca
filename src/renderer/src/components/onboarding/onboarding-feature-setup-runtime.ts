@@ -1,5 +1,5 @@
 // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
-import type { ProjectAgentSkillRuntime } from '@/lib/project-skill-runtime'
+import type { ProjectAgentSkillRuntime } from '@/lib/skills/runtime/project-skill-runtime'
 
 export type OnboardingFeatureSetupRuntimeContext = {
   agentRuntime?: ProjectAgentSkillRuntime

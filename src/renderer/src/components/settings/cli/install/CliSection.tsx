@@ -4,11 +4,11 @@ import { FolderOpen, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import type { CliInstallStatus } from '../../../../../../shared/cli-install-types'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import { ORCA_CLI_SKILL_NAME } from '@/lib/agent-feature-skill-names'
+import { ORCA_CLI_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
@@ -19,13 +19,15 @@ import { CliRegistrationDialog } from './CliRegistrationDialog'
 import {
   getSelectedAgentRuntime,
   getSkillDiscoveryTargetForRuntime
-} from '../../../../lib/skill-runtime-command'
+} from '../../../../lib/skills/runtime/skill-runtime-command'
 import { WslCliRegistration } from './WslCliRegistration'
 import { SettingsGroup } from '../../section-layout/SettingsGroup'
+import { GENERAL_SETTING_ANCHORS } from '../../general/general-setting-anchors'
 import { useCliRegistrationActions } from './use-cli-registration-actions'
-import { useLocalCliSkillFreshnessName } from '../../../../hooks/use-local-cli-skill-freshness-name'
+import { useLocalCliSkillFreshnessName } from '../../../../hooks/skills/freshness/use-local-cli-skill-freshness-name'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { formatCliUserFacingDetail } from '@/lib/cli/cli-user-facing-detail'
 
 type CliSectionProps = {
   currentPlatform: string
@@ -42,7 +44,7 @@ function getRevealLabel(platform: string, t: Translate = translate): string {
   if (platform === 'win32') {
     return t('auto.components.settings.CliSection.cbe55e4d48', 'Show in Explorer')
   }
-  return t('auto.components.settings.CliSection.9fd4023db0', 'Show in File Manager')
+  return t('auto.components.settings.CliSection.71e5d9feae', 'Show in file manager')
 }
 
 function getInstallDescription(platform: string): string {
@@ -126,7 +128,7 @@ export function CliSection({
       if (mountedRef.current) {
         toast.error(
           error instanceof Error
-            ? error.message
+            ? formatCliUserFacingDetail(error.message) || error.message
             : translate(
                 'auto.components.settings.CliSection.7baec27029',
                 'Failed to load CLI status.'
@@ -152,18 +154,23 @@ export function CliSection({
   const canRevealCommandPath =
     status?.commandPath != null && ['installed', 'stale', 'conflict'].includes(status.state)
 
-  const shellCommandLabel = t('auto.components.settings.CliSection.38edbb5721', 'Shell command')
-  const agentSkillsLabel = t('auto.components.settings.CliSection.04873eea3e', 'Agent skills')
+  const shellCommandLabel = t(
+    'settings.general.cli.otherTerminals',
+    '{{command}} in other terminals',
+    { command: commandName }
+  )
+  const showDiagnostics = Boolean(
+    installFailure ||
+    pathStatusUnknown ||
+    status?.state === 'stale' ||
+    status?.state === 'conflict' ||
+    status?.state === 'unsupported' ||
+    (status?.state === 'installed' && status.pathConfigured === false)
+  )
 
   return (
     <div data-settings-section="cli">
-      <SettingsGroup
-        title={t('auto.components.settings.CliSection.c5c0f2641d', 'Orca CLI')}
-        description={t(
-          'auto.components.settings.CliSection.outsideOrcaDescription',
-          'Orca terminals already have `orca`. Turn this on to use `orca` from other terminals outside Orca.'
-        )}
-      >
+      <SettingsGroup title={t('settings.general.cli.title', 'Command line')}>
         <div data-settings-row="" className="space-y-3 py-3">
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-0.5">
@@ -176,7 +183,13 @@ export function CliSection({
                       'auto.components.settings.CliSection.d363e5929b',
                       'Checking CLI registration…'
                     )
-                  : (status?.detail ?? getInstallDescription(currentPlatform))}
+                  : showDiagnostics
+                    ? formatCliUserFacingDetail(status?.detail) ||
+                      getInstallDescription(currentPlatform)
+                    : t(
+                        'settings.general.cli.description',
+                        'Orca’s own terminals already have it.'
+                      )}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -213,7 +226,7 @@ export function CliSection({
             </div>
           </div>
 
-          {status?.commandPath ? (
+          {showDiagnostics && status?.commandPath ? (
             <p className="text-xs text-muted-foreground">
               {t('auto.components.settings.CliSection.15eaad0d31', 'Command path:')}{' '}
               <code className="rounded bg-muted px-1 py-0.5 text-[11px]">{status.commandPath}</code>
@@ -240,7 +253,9 @@ export function CliSection({
           ) : null}
 
           {!loading && !isSupported && !isBrowserManaged && status?.detail ? (
-            <p className="text-xs text-muted-foreground">{status.detail}</p>
+            <p className="text-xs text-muted-foreground">
+              {formatCliUserFacingDetail(status.detail)}
+            </p>
           ) : null}
 
           {installFailure ? (
@@ -268,7 +283,7 @@ export function CliSection({
             </div>
           ) : null}
 
-          {status?.commandPath ? (
+          {showDiagnostics && status?.commandPath ? (
             <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
@@ -289,21 +304,10 @@ export function CliSection({
         </div>
 
         {!isBrowserManaged ? (
-          <div data-settings-row="" className="py-3">
-            <div className="space-y-0.5">
-              <Label>{agentSkillsLabel}</Label>
-              <p className="text-xs text-muted-foreground">
-                {t(
-                  'auto.components.settings.CliSection.36a6f919ba',
-                  'Give agents Orca-aware workspace, terminal, and progress workflows.'
-                )}
-              </p>
-            </div>
-
+          <div id={GENERAL_SETTING_ANCHORS.cliSkill}>
             <AgentSkillSetupPanel
-              className="mt-3"
-              variant="inline"
-              title={t('auto.components.settings.CliSection.6053cf736c', 'CLI skill')}
+              variant="row"
+              title={t('settings.general.cli.skillTitle', 'Orca skill for agents')}
               description={t(
                 'auto.components.settings.CliSection.e8012c03a1',
                 'Enables agents to use Orca workspace, terminal, and progress commands.'

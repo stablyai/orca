@@ -7,8 +7,8 @@ import {
 import { AGENT_SESSION_CREATE_RUNTIME_CAPABILITIES } from './agent-session-create-capabilities'
 import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from './requests/agent-session-current-requests-capability'
 import { AGENT_SESSION_PERMISSION_MODES_RUNTIME_CAPABILITY } from './agent-session-permission-modes-capability'
-import { AGENT_SESSION_RESUME_RUNTIME_CAPABILITIES } from './lifecycle/agent-session-resume-runtime-capabilities'
-import { AGENT_SESSION_STOP_RUNTIME_CAPABILITIES } from './lifecycle/agent-session-stop-capabilities'
+import { AGENT_SESSION_RESUME_RUNTIME_CAPABILITIES } from './lifecycle/resume/agent-session-resume-runtime-capabilities'
+import { AGENT_SESSION_STOP_RUNTIME_CAPABILITIES } from './lifecycle/stopping/agent-session-stop-capabilities'
 import { AGENT_SESSION_WORKSPACE_SLEEP_MARK_RUNTIME_CAPABILITY } from './agent-session-workspace-sleep'
 import { STRUCTURED_AGENT_SESSION_SURFACE_RUNTIME_CAPABILITIES } from './structured-agent-session-surface-capabilities'
 
@@ -121,6 +121,9 @@ export const AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY =
   'agent-session.background-task-row-stop.v1' as const
 // Strict subscribe params refuse `capabilities` on older hosts; a client sends it only when advertised.
 export const AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY = 'agent-session.text-append.v1' as const
+// Why: a saved restore into a new tab names the pane that ran it; older hosts' strict schema rejects it.
+export const AGENT_SESSION_RESTORE_SOURCE_PANE_RUNTIME_CAPABILITY =
+  'agent-session.restore-source-pane.v1' as const
 // Hosts with only text-append.v1 drop `toolOutputAppend`; a reader tracking tool bases could evict a reply base they hold.
 export const AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY =
   'agent-session.tool-output-append.v1' as const
@@ -131,6 +134,7 @@ export const AGENT_SESSION_PR_EVENTS_RUNTIME_CAPABILITY = 'agent-session.pr-even
 // Individual client flags must not retain the unused host capability aggregate.
 export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
   [
+    AGENT_SESSION_RESTORE_SOURCE_PANE_RUNTIME_CAPABILITY,
     AGENT_SESSION_TEXT_ATTACHMENT_READ_CAPABILITY,
     ...AGENT_SESSION_STOP_RUNTIME_CAPABILITIES,
     ...AGENT_SESSION_CREATE_RUNTIME_CAPABILITIES,

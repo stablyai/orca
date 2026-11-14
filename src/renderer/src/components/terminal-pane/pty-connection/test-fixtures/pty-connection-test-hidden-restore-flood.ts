@@ -97,7 +97,9 @@ export async function connectVisiblePane(): Promise<PaneDrive> {
   const deps = buildPaneConnectionDeps(() => mockStoreState, {
     isVisibleRef: { current: true }
   })
-  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+    '@/lib/agent-status/aggregation/worktree-agent-status'
+  )
 
   const disposable = await connectMockPanePty(
     pane,

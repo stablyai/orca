@@ -1,10 +1,10 @@
 // Main frames/reconnect snapshots draw moves and select them unless selection changed; divider ratios persist on release.
 
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { TabSplitDirection } from '@/store/slices/tabs/tabs-slice-contract'
 import { sendLayoutCommandToOwner } from '@/runtime/workspace-layout/commands/layout-owner-command'
 import type { WindowLayoutCommand } from '@/runtime/workspace-layout/commands/layout-apply-send'
-import { isPaneColumnSplitDropNoOp } from '../../../../shared/workspace-layout/pane-column-split-drop-no-op'
+import { isPaneColumnSplitDropNoOp } from '../../../../shared/workspace-layout/tab-groups/pane-column-split-drop-no-op'
 import { mirrorWebRuntimeTabMove } from '../tab-bar/web-runtime-tab-move-mirror'
 import {
   expectMovedTabSelection,
@@ -12,9 +12,9 @@ import {
 } from '@/runtime/workspace-layout/intents/layout-owner-pane-intents'
 import { tabSelectionKey } from '@/store/slices/tabs/moved-tab-selection'
 import { layoutFramesFlowing } from '@/runtime/workspace-layout/frames/layout-frame-position'
-import { splitRatioIntentAt } from '../../../../shared/workspace-layout/split-ratio-intents'
-import { serverTabCount } from '@/lib/frame-drawn-desktop-created-tabs'
-import { tabOrderAnchor } from '../../../../shared/workspace-layout/tab-order'
+import { splitRatioIntentAt } from '../../../../shared/workspace-layout/tab-groups/split-ratio-intents'
+import { serverTabCount } from '@/store/workspace-layout/frames/frame-drawn-desktop-created-tabs'
+import { tabOrderAnchor } from '../../../../shared/workspace-layout/tab-groups/tab-order'
 
 export type TabDrop =
   | { kind: 'reorder'; tabId: string; groupId: string; tabOrder: string[] }

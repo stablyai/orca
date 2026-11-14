@@ -83,7 +83,7 @@ describe('nested deletion confirmation', () => {
       />
     )
     await review()
-    fireEvent.click(screen.getByRole('button', { name: 'Delete all listed worktrees' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
     await vi.waitFor(() => expect(mocks.refresh).toHaveBeenCalled())
     expect(mocks.remove).toHaveBeenCalledWith(target, true, {
       approvedNestedWorktrees: plan,
@@ -111,7 +111,7 @@ describe('nested deletion confirmation', () => {
       />
     )
     await review()
-    fireEvent.click(screen.getByRole('button', { name: 'Delete all listed worktrees' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Deleting…' })).toBeDisabled()
     expect(mocks.refresh).not.toHaveBeenCalled()
@@ -137,7 +137,7 @@ describe('nested deletion confirmation', () => {
         <DeleteNestedWorktreesDialog target={target} worktreeName="parent" dismissToast={vi.fn()} />
       )
       await review()
-      fireEvent.click(screen.getByRole('button', { name: 'Delete all listed worktrees' }))
+      fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
       await vi.waitFor(() =>
         expect(toast.error).toHaveBeenCalledWith('Failed to delete workspace', {
           description: 'Child archive hook failed'
@@ -145,9 +145,7 @@ describe('nested deletion confirmation', () => {
       )
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
       expect(mocks.refresh).toHaveBeenCalledOnce()
-      expect(
-        screen.queryByRole('button', { name: 'Delete all listed worktrees' })
-      ).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
       await review()
       await vi.waitFor(() => expect(mocks.preview).toHaveBeenCalledTimes(2))
     }

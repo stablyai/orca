@@ -7,7 +7,7 @@ import { ScrollArea } from '../../../ui/scroll-area'
 import { filterFontSuggestions, getRenderedFontSuggestions } from './font-suggestion-filter'
 import { useInstalledFontsUnavailable } from './installed-font-list'
 import { useTranslate } from '@/i18n/use-translate'
-import { buildAppFontFamily } from '@/lib/app-font-family'
+import { buildAppFontFamily } from '@/app-shell/appearance/app-font-family'
 
 // Why: these OS-shipped fonts draw pictographs or Greek for Latin letters, so their own name would be unreadable.
 const SYMBOL_FONT_FAMILIES = new Set([

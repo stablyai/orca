@@ -1,4 +1,4 @@
-import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
+import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status/ownership/agent-status-connection-ownership'
 import { useAppStore } from '@/store'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 

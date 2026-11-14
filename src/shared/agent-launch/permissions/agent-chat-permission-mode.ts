@@ -37,7 +37,7 @@ export const AGENT_CHAT_PERMISSION_MODE_ICON_NAMES = {
 export type AgentChatPermissionModeIconName =
   (typeof AGENT_CHAT_PERMISSION_MODE_ICON_NAMES)[AgentChatPermissionMode]
 
-export const AGENT_CHAT_PERMISSION_MODE_OPTION_ID = 'permissionMode'
+export { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from './agent-chat-permission-mode-option-id'
 
 export function isAgentChatPermissionMode(value: unknown): value is AgentChatPermissionMode {
   return AGENT_CHAT_PERMISSION_MODES.some((mode) => mode === value)

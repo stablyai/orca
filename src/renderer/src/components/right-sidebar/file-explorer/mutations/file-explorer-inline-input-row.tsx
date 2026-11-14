@@ -4,7 +4,7 @@ import { FolderIcon } from '@/components/FileTypeIcon'
 import {
   isImeCompositionKeyDown,
   useImeEnterGestureOwnership
-} from '@/lib/ime-composition-keyboard-event'
+} from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import type { TreeNode } from '../tree/file-explorer-types'
 
 export type InlineInput = {

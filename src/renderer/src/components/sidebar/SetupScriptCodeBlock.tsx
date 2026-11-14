@@ -1,9 +1,9 @@
 import React, { useId, useMemo, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
-import { countScriptLines } from '@/lib/script-textarea-rows'
+import { countScriptLines } from '@/components/script-editor/rows/script-textarea-rows'
 
 export const SETUP_SCRIPT_COLLAPSED_LINES = 5
 const LINE_HEIGHT_PX = 20

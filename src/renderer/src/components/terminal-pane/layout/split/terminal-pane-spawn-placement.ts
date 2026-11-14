@@ -1,6 +1,6 @@
-import type { TerminalPanePlacement } from '../../../../../../shared/workspace-layout/terminal-pane-placement'
+import type { TerminalPanePlacement } from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import { useAppStore } from '@/store/index'
-import { terminalPanePlacementRow } from '@/lib/terminal-pane-placement-row'
+import { terminalPanePlacementRow } from '@/components/terminal-pane/layout/ownership/terminal-pane-placement-row'
 import { serializePaneTree } from '../terminal-layout-dom-serialization'
 
 /** Adds what only the mounted tab knows: the new tab's row, or the tree after the split. */

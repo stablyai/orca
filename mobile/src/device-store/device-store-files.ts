@@ -1,9 +1,9 @@
 import { sha256 } from '@noble/hashes/sha256'
 import { bytesToHex } from '@noble/hashes/utils'
 import type { AESEncryptionKey } from 'expo-crypto'
-import { joinUri } from '../mobile-web-shell/generation-cache-uri'
-import type { GenerationFileSystem } from '../mobile-web-shell/generation-store-file-system'
-import { deriveHostCacheKey } from '../mobile-web-shell/host-cache-key'
+import { joinUri } from '../mobile-web-shell/generations/generation-cache-uri'
+import type { GenerationFileSystem } from '../mobile-web-shell/generations/generation-store-file-system'
+import { deriveHostCacheKey } from '../mobile-web-shell/generations/host-cache-key'
 import {
   openDeviceStoreValue,
   type DeviceStoreTable,

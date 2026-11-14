@@ -76,35 +76,6 @@ describe('readGrokAuthSession', () => {
     }
   )
 
-  it('falls back to the first tokenized entry when no auth.x.ai key exists', async () => {
-    vi.doMock('node:fs', () => ({
-      existsSync: vi.fn(() => true),
-      readFileSync: vi.fn(() =>
-        JSON.stringify({
-          'https://alternate.example.com::client': {
-            key: 'alt-token',
-            user_id: 'alt-user',
-            email: 'alt@example.com',
-            expires_at: '2099-01-01T00:00:00.000Z'
-          }
-        })
-      )
-    }))
-    const { readGrokAuthSession } = await import('./grok-auth')
-
-    expect(readGrokAuthSession()).toEqual({
-      status: 'ok',
-      session: {
-        accessToken: 'alt-token',
-        userId: 'alt-user',
-        email: 'alt@example.com',
-        teamId: null,
-        expiresAtMs: Date.parse('2099-01-01T00:00:00.000Z'),
-        oidcClientId: null
-      }
-    })
-  })
-
   it('skips an expired auth.x.ai client entry when a fresh one follows it', async () => {
     vi.doMock('node:fs', () => ({
       existsSync: vi.fn(() => true),

@@ -24,11 +24,11 @@ const intentKeys = [
 ]
 
 import { deleteRequestedEnvKeys } from '../ipc/pty/host-env/path'
-import { probeOpenCodeLaunchCapabilities } from './opencode-launch-capabilities'
-import { reserveOpenCodeStartupPrompt } from './opencode-startup-prompt-owner'
-import { installOpenCodeStartupPromptForLaunch } from './opencode-startup-prompt-installer'
+import { probeOpenCodeLaunchCapabilities } from './model-launch/opencode-launch-capabilities'
+import { reserveOpenCodeStartupPrompt } from './startup-prompts/opencode-startup-prompt-owner'
+import { installOpenCodeStartupPromptForLaunch } from './startup-prompts/opencode-startup-prompt-installer'
 import { needsOpenCodePrivateServer, withOpenCodeStandaloneServer } from './opencode-private-server'
-import { applyOpenCodeRootModelOverlay } from './opencode-root-model-launch'
+import { applyOpenCodeRootModelOverlay } from './model-launch/opencode-root-model-launch'
 
 export async function prepareOpenCodePtyLaunch(options: {
   command: string | undefined

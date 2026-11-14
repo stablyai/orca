@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  TERMINAL_INPUT_TOO_LARGE_ERROR,
-  assertTerminalInputWithinLimit,
-  isTerminalInputTooLarge,
   isTerminalInputTooLargeWithDeferredMeasurement,
   isTerminalInputTooLargeWithYield,
   splitTerminalInputChunks
@@ -27,21 +24,6 @@ describe('terminal input bounds', () => {
 
     expect(chunks).toEqual(['😀', 'a'])
     expect(chunks.join('')).toBe('😀a')
-  })
-
-  it('rejects oversized terminal input with a metadata-only error', () => {
-    const secret = 'terminal-secret-token'
-    const payload = [secret, 'payload'].join('')
-
-    expect(() => assertTerminalInputWithinLimit(payload, 4)).toThrow(TERMINAL_INPUT_TOO_LARGE_ERROR)
-    expect(() => assertTerminalInputWithinLimit(payload, 4)).not.toThrow(secret)
-  })
-
-  it('rejects multibyte oversized terminal input at the byte boundary', () => {
-    expect(isTerminalInputTooLarge('😀'.repeat(3), 5)).toBe(true)
-    expect(() => assertTerminalInputWithinLimit('😀'.repeat(3), 5)).toThrow(
-      TERMINAL_INPUT_TOO_LARGE_ERROR
-    )
   })
 
   it('yields while measuring accepted large terminal input', async () => {

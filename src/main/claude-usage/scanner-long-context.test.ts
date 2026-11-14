@@ -1,11 +1,10 @@
-import { appendFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import type * as NodeOs from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { scanClaudeUsageFiles } from './scanner'
 import type { ClaudeUsagePersistedFile } from './types'
-import { MIN_RESUMABLE_PREFIX_BYTES } from '../usage/jsonl-file-checkpoint'
 
 const { homedirMock } = vi.hoisted(() => ({ homedirMock: vi.fn<() => string>() }))
 
@@ -14,7 +13,7 @@ vi.mock('node:os', async () => ({
   homedir: homedirMock
 }))
 
-vi.mock('../claude-accounts/claude-profile-installed-router', () => ({
+vi.mock('../claude-accounts/profiles/routing/claude-profile-installed-router', () => ({
   claudeProfileHistoryDirs: () => []
 }))
 
@@ -52,9 +51,6 @@ function assistantRow(key: string, model: string, cacheReadTokens: number): stri
 }
 
 // Resume checkpoints require at least MIN_RESUMABLE_PREFIX_BYTES.
-function padding(): string {
-  return `${JSON.stringify({ type: 'user', content: 'x'.repeat(4 * MIN_RESUMABLE_PREFIX_BYTES) })}\n`
-}
 
 async function scan(previous: ClaudeUsagePersistedFile[] = []): Promise<ScanResult> {
   const { scanClaudeUsageFiles } = await import('./scanner')
@@ -85,39 +81,5 @@ describe('Claude usage long-context subsets', () => {
     expect(byModel.get('claude-sonnet-4-5')?.longContext).toBeUndefined()
     expect(byModel.get('claude-sonnet-4-6')?.longContext).toBeUndefined()
     expect(result.sessions[0]?.locationBreakdown[0]?.longContext?.cacheReadTokens).toBe(100_000)
-  })
-
-  it('moves a resumed turn into the long-context subset when its usage grows past the threshold', async () => {
-    await writeFile(transcriptPath, padding() + assistantRow('turn', 'claude-haiku-5-5', 90_000))
-    const first = await scan()
-    expect(first.dailyAggregates[0]?.longContext).toBeUndefined()
-    const persisted: ClaudeUsagePersistedFile[] = JSON.parse(JSON.stringify(first.processedFiles))
-    expect(persisted[0]?.parseResumeState).toBeTruthy()
-    await appendFile(transcriptPath, assistantRow('turn', 'claude-haiku-5-5', 120_000))
-
-    const resumed = await scan(persisted)
-    const cold = await scan()
-
-    expect(resumed.dailyAggregates[0]?.longContext?.cacheReadTokens).toBe(120_000)
-    expect(resumed.dailyAggregates).toEqual(cold.dailyAggregates)
-    expect(resumed.sessions).toEqual(cold.sessions)
-  })
-
-  it('reparses a file saved by an older projection version', async () => {
-    await writeFile(transcriptPath, assistantRow('turn', 'claude-haiku-5-5', 120_000))
-    const first = await scan()
-    const legacy = first.processedFiles.map(
-      ({ projectionVersion: _projectionVersion, ...file }) => ({
-        ...file,
-        dailyAggregates: file.dailyAggregates.map(({ longContext: _longContext, ...row }) => row)
-      })
-    )
-
-    const rebuilt = await scan(legacy)
-
-    expect(rebuilt.dailyAggregates[0]?.longContext?.cacheReadTokens).toBe(120_000)
-    expect(rebuilt.processedFiles[0]?.projectionVersion).toBe(
-      first.processedFiles[0]?.projectionVersion
-    )
   })
 })

@@ -1,13 +1,13 @@
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { Plus, LoaderCircle, RefreshCw, Search, X } from 'lucide-react'
 import LinearIssueAttributeFilterDropdowns from '@/components/linear-issue-attribute-filter-dropdowns'
 import { Input } from '@/components/ui/input'
-import { shouldSuppressEnterSubmit } from '@/lib/new-workspace-enter-guard'
+import { shouldSuppressEnterSubmit } from '@/lib/workspace/creation/new-workspace-enter-guard'
 import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 export function TaskPageLinearFilters({
   model

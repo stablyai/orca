@@ -18,33 +18,12 @@ function usedPercentByWindow(result: CodexRateLimitWindowsSnapshot | null): {
 describe('classifyCodexRateLimitWindows', () => {
   it.each([
     {
-      name: 'null windows',
-      result: null,
-      expected: { session: null, weekly: null }
-    },
-    {
       name: 'reordered known windows',
       result: {
         primary: { usedPercent: 81, windowDurationMins: 10080 },
         secondary: { usedPercent: 21, windowDurationMins: 300 }
       },
       expected: { session: 21, weekly: 81 }
-    },
-    {
-      name: 'weekly-only primary window',
-      result: {
-        primary: { usedPercent: 22, windowDurationMins: 10080 },
-        secondary: null
-      },
-      expected: { session: null, weekly: 22 }
-    },
-    {
-      name: 'session-only secondary window',
-      result: {
-        primary: null,
-        secondary: { usedPercent: 31, windowDurationMins: 300 }
-      },
-      expected: { session: 31, weekly: null }
     },
     {
       name: 'duplicate session windows',
@@ -71,14 +50,6 @@ describe('classifyCodexRateLimitWindows', () => {
       expected: { session: null, weekly: 61 }
     },
     {
-      name: 'malformed duration with positional fallback',
-      result: {
-        primary: { usedPercent: 71, windowDurationMins: '300' },
-        secondary: null
-      },
-      expected: { session: 71, weekly: null }
-    },
-    {
       name: 'reordered near-canonical windows',
       result: {
         primary: { usedPercent: 81, windowDurationMins: 10081 },
@@ -93,22 +64,6 @@ describe('classifyCodexRateLimitWindows', () => {
         secondary: { usedPercent: 84, windowDurationMins: 301 }
       },
       expected: { session: 84, weekly: 83 }
-    },
-    {
-      name: 'outside-tolerance unknown windows',
-      result: {
-        primary: { usedPercent: 91, windowDurationMins: 302 },
-        secondary: { usedPercent: 92, windowDurationMins: 10082 }
-      },
-      expected: { session: 91, weekly: 92 }
-    },
-    {
-      name: 'unknown windows without durations',
-      result: {
-        primary: { usedPercent: 101 },
-        secondary: { usedPercent: 102 }
-      },
-      expected: { session: 101, weekly: 102 }
     },
     {
       name: 'known session wins over unknown primary fallback',

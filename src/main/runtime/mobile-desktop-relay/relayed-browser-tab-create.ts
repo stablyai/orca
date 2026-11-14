@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { z } from 'zod'
-import { BrowserTabCreateParams } from '../../../shared/rpc-contract/browser-tab-create-params'
+import { BrowserTabCreateParams } from '../../../shared/rpc-contract/browser/browser-tab-create-params'
 import {
   RuntimeRpcEnvelopeSchema,
   type RuntimeRpcResponse

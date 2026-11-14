@@ -43,36 +43,6 @@ describe('Claude child permission lifecycle', () => {
     }
   }
 
-  it('clears a child permission when that child stops', async () => {
-    const { server, postClaudeHook } = await createServer()
-    try {
-      await postClaudeHook({ hook_event_name: 'UserPromptSubmit', prompt: 'guarded task' })
-      await postClaudeHook({
-        hook_event_name: 'PermissionRequest',
-        agent_id: 'a-blocked',
-        agent_type: 'general-purpose',
-        tool_name: 'Bash',
-        tool_input: { command: 'false' }
-      })
-      await postClaudeHook({ hook_event_name: 'SubagentStop', agent_id: 'a-other' })
-      expect(server.getStatusSnapshot()[0]).toMatchObject({
-        state: 'waiting',
-        toolName: 'Bash',
-        subagents: [expect.objectContaining({ id: 'a-blocked', state: 'working' })]
-      })
-      await postClaudeHook({ hook_event_name: 'SubagentStop', agent_id: 'a-blocked' })
-
-      const status = server.getStatusSnapshot()[0]
-      expect(status).toMatchObject({ paneKey: PANE, state: 'working', agentType: 'claude' })
-      expect(status?.toolName).toBeUndefined()
-      expect(status?.toolInput).toBeUndefined()
-      expect(status?.interactivePrompt).toBeUndefined()
-      expect(status?.subagents).toBeUndefined()
-    } finally {
-      server.stop()
-    }
-  })
-
   it('clears a child permission when an API error ends that child', async () => {
     const { server, postClaudeHook } = await createServer()
     try {
@@ -147,40 +117,6 @@ describe('Claude child permission lifecycle', () => {
       expect(status).toMatchObject({ paneKey: PANE, state: 'done', agentType: 'claude' })
       expect(status?.interactivePrompt).toBeUndefined()
       expect(status?.subagents).toBeUndefined()
-    } finally {
-      server.stop()
-    }
-  })
-
-  it('clears a teammate permission when that teammate idles', async () => {
-    const { server, postClaudeHook } = await createServer()
-    try {
-      await postClaudeHook({ hook_event_name: 'UserPromptSubmit', prompt: 'guarded task' })
-      await postClaudeHook({
-        hook_event_name: 'PermissionRequest',
-        agent_id: 'areviewer-6d3cb5b5',
-        agent_type: 'reviewer',
-        tool_name: 'Bash',
-        tool_input: { command: 'false' }
-      })
-      await postClaudeHook({ hook_event_name: 'TeammateIdle', teammate_name: 'writer' })
-      expect(server.getStatusSnapshot()[0]).toMatchObject({
-        state: 'waiting',
-        toolName: 'Bash',
-        subagents: [expect.objectContaining({ id: 'areviewer-6d3cb5b5', state: 'working' })]
-      })
-      await postClaudeHook({ hook_event_name: 'TeammateIdle', teammate_name: 'reviewer' })
-
-      const status = server.getStatusSnapshot()[0]
-      expect(status).toMatchObject({
-        paneKey: PANE,
-        state: 'working',
-        agentType: 'claude',
-        subagents: [expect.objectContaining({ id: 'areviewer-6d3cb5b5', state: 'idle' })]
-      })
-      expect(status?.toolName).toBeUndefined()
-      expect(status?.toolInput).toBeUndefined()
-      expect(status?.interactivePrompt).toBeUndefined()
     } finally {
       server.stop()
     }

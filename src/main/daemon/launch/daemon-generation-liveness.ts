@@ -66,7 +66,7 @@ export async function classifyDaemonGeneration(
     return hasErrorCode(error, 'ENOENT') ? 'exited' : byEndpoint()
   }
   const parsed = parseDaemonPidFile(contents)
-  // An empty legacy record parses as PID 0, which is not a daemon PID.
+  // A torn or non-positive record names no daemon PID; only the endpoint can decide.
   if (!parsed || !Number.isInteger(parsed.pid) || parsed.pid <= 0) {
     return byEndpoint()
   }

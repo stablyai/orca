@@ -5,8 +5,8 @@ import {
   AiVaultSearchStatusSchema
 } from '../../shared/ai-vault/search/ai-vault-search-contract'
 import { unavailableSessionSearchStatus } from '../../shared/ai-vault/search/ai-vault-search-client'
-import { sessionSearchScopeCatalog } from './session-search-scope-catalog'
-import { resolveSessionSearchScope } from './session-search-scope-resolution'
+import { sessionSearchScopeCatalog } from './scope/session-search-scope-catalog'
+import { resolveSessionSearchScope } from './scope/session-search-scope-resolution'
 import type {
   AiVaultSearchResponse,
   AiVaultSearchStatus

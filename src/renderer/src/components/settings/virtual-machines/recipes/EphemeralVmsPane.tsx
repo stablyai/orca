@@ -9,16 +9,16 @@ import { AgentSkillSetupPanel } from '../../../skills/setup/AgentSkillSetupPanel
 import { EphemeralVmRecipeRow } from './EphemeralVmRecipeRow'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { EPHEMERAL_VMS_SKILL_NAME } from '@/lib/agent-feature-skill-names'
+import { EPHEMERAL_VMS_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
+import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
 import {
   launchEnvironmentSetupAgent,
   pickEnvironmentSetupRepo
-} from '@/lib/environment-setup-agent-launch'
+} from '@/lib/agent-session/launch/environment-setup-agent-launch'
 
 type RecipeCatalogEntry = Awaited<
   ReturnType<typeof window.api.ephemeralVm.listRecipeCatalog>
@@ -37,6 +37,7 @@ export function EphemeralVmsPane(): React.JSX.Element {
   const [agentLaunching, setAgentLaunching] = useState(false)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const [catalog, setCatalog] = useState<RecipeCatalogEntry[]>([])
+  const [credentialEnvNames, setCredentialEnvNames] = useState<string[] | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [promptCopied, setPromptCopied] = useState(false)
   const mountedRef = useMountedRef()
@@ -92,6 +93,18 @@ export function EphemeralVmsPane(): React.JSX.Element {
   useEffect(() => {
     void refresh()
   }, [refresh])
+
+  useEffect(() => {
+    // The warning is advisory; if the names can't be read the list still works without it.
+    void window.api.ephemeralVm
+      .listCredentialEnvNames()
+      .then((names) => {
+        if (mountedRef.current) {
+          setCredentialEnvNames(names)
+        }
+      })
+      .catch(() => undefined)
+  }, [mountedRef])
 
   useEffect(() => {
     if (!window.api.plugins?.onChanged) {
@@ -302,6 +315,7 @@ export function EphemeralVmsPane(): React.JSX.Element {
                   key={`${entry.repoId}:${recipe.id}`}
                   entry={entry}
                   recipe={recipe}
+                  credentialEnvNames={credentialEnvNames}
                   onUse={() => openWorkspaceComposerForRecipe(entry.repoId, recipe.id)}
                 />
               ))}

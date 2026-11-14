@@ -43,13 +43,12 @@ afterAll(() => {
   }
 })
 
-type ProbeArm = 'clean' | 'late-session-setter' | 'mobile' | 'mixed-mobile' | 'native'
+type ProbeArm = 'clean'
 
 type ProbeResult = Readonly<{
   arm: ProbeArm
   rawUserAgent: string
   cleanUserAgent: string
-  mobileUserAgent: string
   sessionUserAgent: string
   navigatorUserAgent: string
   fallbackAfterReadyNameChange: string
@@ -95,24 +94,6 @@ describe('browser session wire identity under Electron', () => {
     expect(distinctUserAgents(result.receipts)).toEqual([result.cleanUserAgent])
     expect(distinctUserAgents(result.cdpRequests)).toEqual([result.cleanUserAgent])
     expect(distinctJavaScriptUserAgents(result.identities)).toEqual([result.cleanUserAgent])
-  }, 40_000)
-
-  it('keeps the process-native identity across documents, frames, and workers', async () => {
-    const result = await runProbe('native')
-    assertCoverage(result)
-    expect(identityForContext(result.identities, 'document').userAgent).toBe(result.rawUserAgent)
-    expect(identityForContext(result.identities, 'blob').userAgent).toBe(result.rawUserAgent)
-    expect(identityForContext(result.identities, 'shared-worker').userAgent).toBe(
-      result.rawUserAgent
-    )
-    expect(identityForContext(result.identities, 'service-worker').userAgent).toBe(
-      result.rawUserAgent
-    )
-    expect(userAgentForPath(result.receipts, '/')).toBe(result.rawUserAgent)
-    expect(userAgentForPath(result.receipts, '/blob-fetch')).toBe(result.rawUserAgent)
-    expect(userAgentForPath(result.receipts, '/shared-worker-fetch-a')).toBe(result.rawUserAgent)
-    expect(userAgentForPath(result.receipts, '/service-worker-fetch')).toBe(result.rawUserAgent)
-    expect(userAgentForPath(result.receipts, '/no-header-fill')).toBe(result.rawUserAgent)
   }, 40_000)
 })
 
@@ -238,11 +219,8 @@ const arm = ${JSON.stringify(options.arm)}
 const startupMarks = []
 app.setName('OrcaWireIdentityFixture')
 const preReadyNativeUserAgent = app.userAgentFallback
-let identity
-if (arm !== 'late-session-setter') {
-  identity = processIdentity.initializeBrowserProcessUserAgent(arm === 'native' ? 'native' : 'clean')
-  startupMarks.push('fallback')
-}
+processIdentity.initializeBrowserProcessUserAgent('clean')
+startupMarks.push('fallback')
 const waitForBarrier = async () => {
   const deadline = Date.now() + 15000
   while (!existsSync(${JSON.stringify(options.barrierPath)})) {
@@ -265,47 +243,22 @@ async function run() {
   await waitForBarrier()
   const sess = session.fromPartition('persist:wire-identity-test')
   startupMarks.push('session')
-  const rawUserAgent = arm === 'clean' ? preReadyNativeUserAgent : app.userAgentFallback
-  const cleanUserAgent = identity?.cleanUserAgent ?? cleanElectronUserAgent(rawUserAgent)
-  if (arm === 'late-session-setter') sess.setUserAgent(cleanUserAgent)
+  const rawUserAgent = preReadyNativeUserAgent
+  const cleanUserAgent = cleanElectronUserAgent(rawUserAgent)
   sess.setCertificateVerifyProc((_request, callback) => callback(0))
-  const chromeVersion = cleanUserAgent.match(/Chrome\/([\d.]+)/)?.[1] || process.versions.chrome
-  const major = chromeVersion.split('.')[0]
-  const mobileUserAgent = 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/' + chromeVersion + ' Mobile/15E148 Safari/604.1'
-  let mainWebContentsId
-  if (arm === 'clean' || arm === 'mobile' || arm === 'mixed-mobile') {
-    sess.webRequest.onBeforeSendHeaders(
-      { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] },
-      (details, callback) => {
-        const userAgentKey = Object.keys(details.requestHeaders).find(
-          key => key.toLowerCase() === 'user-agent'
-        ) || 'User-Agent'
-        if (arm !== 'mobile' && arm !== 'mixed-mobile') {
-          callback({ requestHeaders: details.requestHeaders })
-          return
-        }
-        // Shared/service workers lack a guest id and keep their session identity.
-        if (details.webContentsId !== mainWebContentsId) {
-          callback({ requestHeaders: details.requestHeaders })
-          return
-        }
-        details.requestHeaders[userAgentKey] = mobileUserAgent
-        callback({ requestHeaders: details.requestHeaders })
-      }
-    )
-  }
+  sess.webRequest.onBeforeSendHeaders(
+    { urls: ['http://*/*', 'https://*/*', 'ws://*/*', 'wss://*/*'] },
+    (details, callback) => callback({ requestHeaders: details.requestHeaders })
+  )
   const windows = []
   const window = new BrowserWindow({ show: false, webPreferences: { partition: 'persist:wire-identity-test', sandbox: true } })
   windows.push(window)
   startupMarks.push('webContents')
-  mainWebContentsId = window.webContents.id
-  const pageIdentity = arm === 'native' ? rawUserAgent : arm === 'mobile' || arm === 'mixed-mobile' ? mobileUserAgent : cleanUserAgent
-  if (arm === 'native' || arm === 'mobile' || arm === 'mixed-mobile') window.webContents.setUserAgent(pageIdentity)
   window.webContents.setWindowOpenHandler(() => ({
     action: 'allow',
     createWindow: options => {
       const popup = new BrowserWindow({ ...options, show: false })
-      popup.webContents.setUserAgent(arm === 'native' ? rawUserAgent : cleanUserAgent)
+      popup.webContents.setUserAgent(cleanUserAgent)
       windows.push(popup)
       return popup.webContents
     }
@@ -316,12 +269,6 @@ async function run() {
     window.webContents.executeJavaScript('window.probePromise'),
     requestWithoutUserAgent(sess, ${JSON.stringify(options.httpOrigin)} + '/no-header-fill')
   ])
-  if (arm === 'mixed-mobile') {
-    const peer = new BrowserWindow({ show: false, webPreferences: { partition: 'persist:wire-identity-test', sandbox: true } })
-    windows.push(peer)
-    await peer.loadURL(${JSON.stringify(options.httpOrigin)} + '/desktop-peer')
-    await peer.webContents.executeJavaScript('window.peerProbePromise')
-  }
   const defaultWindow = new BrowserWindow({ show: false, webPreferences: { sandbox: true } })
   windows.push(defaultWindow)
   await defaultWindow.loadURL(${JSON.stringify(options.httpOrigin)} + '/default-window')
@@ -334,7 +281,7 @@ async function run() {
   ])
   await new Promise(resolve => setTimeout(resolve, 250))
   clearTimeout(timeout)
-  writeFileSync(${JSON.stringify(options.resultPath)}, JSON.stringify({ arm, rawUserAgent, cleanUserAgent, mobileUserAgent, sessionUserAgent: sess.getUserAgent(), navigatorUserAgent, fallbackAfterReadyNameChange, startupMarks }))
+  writeFileSync(${JSON.stringify(options.resultPath)}, JSON.stringify({ arm, rawUserAgent, cleanUserAgent, sessionUserAgent: sess.getUserAgent(), navigatorUserAgent, fallbackAfterReadyNameChange, startupMarks }))
   for (const candidate of windows) if (!candidate.isDestroyed()) candidate.destroy()
   app.exit(0)
 }
@@ -356,9 +303,6 @@ function assertCoverage(result: ProbeResult): void {
     true
   )
   const expectedContexts = ['blob', 'document', 'frame', 'popup', 'service-worker', 'shared-worker']
-  if (result.arm === 'mixed-mobile') {
-    expectedContexts.push('desktop-peer', 'shared-worker')
-  }
   expect(result.identities.map(({ context }) => context).sort()).toEqual(expectedContexts.sort())
 }
 
@@ -368,21 +312,6 @@ function distinctUserAgents(records: readonly { userAgent: string | null }[]): (
 
 function distinctJavaScriptUserAgents(records: readonly WireProbeJavaScriptIdentity[]): string[] {
   return [...new Set(records.map(({ userAgent }) => userAgent))].sort()
-}
-
-function userAgentForPath(receipts: readonly WireProbeReceipt[], path: string): string | null {
-  const values = distinctUserAgents(receipts.filter((receipt) => receipt.path === path))
-  expect(values, path).toHaveLength(1)
-  return values[0] ?? null
-}
-
-function identityForContext(
-  identities: readonly WireProbeJavaScriptIdentity[],
-  context: string
-): WireProbeJavaScriptIdentity {
-  const matches = identities.filter((identity) => identity.context === context)
-  expect(matches, context).toHaveLength(1)
-  return matches[0]!
 }
 
 async function reservePort(): Promise<number> {

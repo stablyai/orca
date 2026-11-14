@@ -16,17 +16,21 @@ export async function probeTerminalProviderGoneSessions(
     return
   }
   const sizeBefore = goneSessionPtyIds.size
+  const changedPtyIds = new Set<string>()
   for (let offset = 0; offset < candidates.length; offset += 512) {
     const gone = await resolveGone(candidates.slice(offset, offset + 512)).catch(() => [])
     if (generation !== goneProbeGeneration) {
       return
     }
     for (const id of gone.filter((goneId) => !boundSessionPtyIds.has(goneId))) {
+      if (!goneSessionPtyIds.has(id)) {
+        changedPtyIds.add(id)
+      }
       goneSessionPtyIds.add(id)
     }
   }
   if (goneSessionPtyIds.size !== sizeBefore) {
-    publishTerminalProviderCapabilityChange()
+    publishTerminalProviderCapabilityChange(changedPtyIds)
   }
 }
 
@@ -34,7 +38,7 @@ export async function probeTerminalProviderGoneSessions(
 export function markTerminalProviderSessionBound(ptyId: string): void {
   boundSessionPtyIds.add(ptyId)
   if (goneSessionPtyIds.delete(ptyId)) {
-    publishTerminalProviderCapabilityChange()
+    publishTerminalProviderCapabilityChange([ptyId])
   }
 }
 

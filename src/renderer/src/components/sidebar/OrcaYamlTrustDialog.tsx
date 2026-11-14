@@ -9,13 +9,13 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
-import type { OrcaHookScriptKind } from '@/lib/orca-hook-trust'
+import type { OrcaHookTrustKind } from '../../../../shared/orca-hook-trust-entries'
 import { Trans } from 'react-i18next'
 import { i18n, translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
-type ScriptKind = OrcaHookScriptKind
+type ScriptKind = OrcaHookTrustKind
 
 type SkippedSetupReviewCopy = {
   title: string

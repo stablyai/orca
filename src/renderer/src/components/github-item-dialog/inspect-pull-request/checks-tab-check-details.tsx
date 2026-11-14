@@ -1,10 +1,10 @@
 import React from 'react'
 import { ExternalLink, LoaderCircle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import type { CheckDetailsLoadState } from '@/components/github-checks-tab-state'
-import type { PRCheckDetail } from '../../../../../shared/github/check-types'
+import type { PRCheckDetail } from '../../../../../shared/github/checks/check-types'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { getCheckConclusion } from '@/components/pr-check-counts'
 import {

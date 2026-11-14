@@ -1,4 +1,7 @@
-import { RuntimeConnectionChangedBeforeSendError } from '../../runtime/rpc/calls/runtime-rpc-result'
+import {
+  RuntimeConnectionChangedBeforeSendError,
+  unwrapRuntimeRpcResult
+} from '../../runtime/rpc/calls/runtime-rpc-result'
 import type { PreloadApi } from '../../../../preload/api-types'
 import type { WebRuntimeSubscribeOptions } from '../web-runtime-subscription-contract'
 import { parseExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
@@ -40,12 +43,19 @@ export async function callRuntimeEnvelope<TResult = unknown>(
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)
   }
-  const response = await runtimeCallQueuePool.enqueue(environment.id, method, () => {
-    if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
-      return Promise.resolve(manuallyDisconnectedResponse(environment))
-    }
-    return getClientForEnvironment(environment).call(method, params, { timeoutMs })
-  })
+  const response = await runtimeCallQueuePool.enqueue(
+    environment.id,
+    method,
+    () => {
+      if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
+        return Promise.resolve(manuallyDisconnectedResponse(environment))
+      }
+      return getClientForEnvironment(environment).call(method, params, { timeoutMs })
+    },
+    0,
+    undefined,
+    params
+  )
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)
   }
@@ -134,19 +144,26 @@ export async function callEnvironmentEnvelope<TResult = unknown>(
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)
   }
-  const response = await runtimeCallQueuePool.enqueue(environment.id, method, () => {
-    assertPairing()
-    if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
-      return Promise.resolve(manuallyDisconnectedResponse(environment))
-    }
-    return callPinnedToRuntime(
-      getClientForEnvironment(environment),
-      method,
-      params,
-      timeoutMs,
-      expectedEnvironmentRuntimeId
-    )
-  })
+  const response = await runtimeCallQueuePool.enqueue(
+    environment.id,
+    method,
+    () => {
+      assertPairing()
+      if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
+        return Promise.resolve(manuallyDisconnectedResponse(environment))
+      }
+      return callPinnedToRuntime(
+        getClientForEnvironment(environment),
+        method,
+        params,
+        timeoutMs,
+        expectedEnvironmentRuntimeId
+      )
+    },
+    0,
+    undefined,
+    params
+  )
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)
   }
@@ -159,12 +176,7 @@ export async function callRuntimeResult<TResult>(
   params?: unknown,
   timeoutMs?: number
 ): Promise<TResult> {
-  const response = await callRuntimeEnvelope(method, params, timeoutMs)
-  if (!response.ok) {
-    // Preserve error codes for recoverable-failure classification; human messages need not contain the token.
-    throw Object.assign(new Error(response.error.message), { code: response.error.code })
-  }
-  return response.result as TResult
+  return unwrapRuntimeRpcResult(await callRuntimeEnvelope<TResult>(method, params, timeoutMs))
 }
 
 export async function callRuntimeResultWithOwner<TResult>(

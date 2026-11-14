@@ -34,7 +34,7 @@ export function RuntimeEnvironmentSwitchDialog({
       <DialogContent className="max-w-sm sm:max-w-sm" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {t('auto.components.settings.RuntimeEnvironmentsPane.d570c35a99', 'Switch Server')}
+            {t('auto.components.settings.RuntimeEnvironmentsPane.6f303a89a3', 'Switch server')}
           </DialogTitle>
           <DialogDescription>
             {t(
@@ -91,7 +91,7 @@ export function RuntimeEnvironmentRemoveDialog({
       <DialogContent className="max-w-sm sm:max-w-sm" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {t('auto.components.settings.RuntimeEnvironmentsPane.bb90dd6487', 'Remove Server')}
+            {t('auto.components.settings.RuntimeEnvironmentsPane.4ae8a4a381', 'Remove server')}
           </DialogTitle>
           <DialogDescription>
             {removingActiveServer

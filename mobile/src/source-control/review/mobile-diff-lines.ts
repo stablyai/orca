@@ -1,3 +1,5 @@
+import { diffArrays, type ArrayChange } from 'diff'
+
 export type MobileDiffLineKind = 'context' | 'add' | 'delete'
 
 export type MobileDiffLine = {
@@ -8,6 +10,9 @@ export type MobileDiffLine = {
 }
 
 const MAX_DIFF_CELLS = 200_000
+// Why: Myers cost grows with the edit count; past this a mass rewrite falls back
+// to prefix/suffix, at about the cost of a full-size LCS table on Hermes.
+const MAX_EDIT_LENGTH = 250
 const MAX_MOBILE_DIFF_LINES = 2_500
 const MAX_BUILT_DIFF_LINES = MAX_MOBILE_DIFF_LINES + 1
 const TRUNCATED_LINE: MobileDiffLine = {
@@ -29,12 +34,12 @@ export function buildMobileDiffLines(
   const modifiedKeys = options?.ignoreTrimWhitespace
     ? modifiedLines.map((line) => line.trim())
     : modifiedLines
-  // Why: the LCS table is quadratic. Large generated files still need a
-  // responsive mobile preview, so fall back to prefix/suffix diffing.
+  // Why: the LCS table is quadratic, so large files use a Myers diff bounded by
+  // edit count, which keeps small edits in big files exact.
   const lines =
     originalLines.length * modifiedLines.length <= MAX_DIFF_CELLS
       ? buildLcsDiffLines(originalLines, modifiedLines, originalKeys, modifiedKeys)
-      : buildPrefixSuffixDiffLines(originalLines, modifiedLines, originalKeys, modifiedKeys)
+      : buildBoundedMyersDiffLines(originalLines, modifiedLines, originalKeys, modifiedKeys)
 
   return finalizeMobileDiffLines(lines)
 }
@@ -138,6 +143,61 @@ function buildLcsDiffLines(
     modifiedIndex += 1
   }
 
+  return lines
+}
+
+function buildBoundedMyersDiffLines(
+  originalLines: string[],
+  modifiedLines: string[],
+  originalKeys: string[],
+  modifiedKeys: string[]
+): MobileDiffLine[] {
+  const changes = diffArrays(originalKeys, modifiedKeys, { maxEditLength: MAX_EDIT_LENGTH })
+  return changes
+    ? buildChangeDiffLines(changes, originalLines, modifiedLines)
+    : buildPrefixSuffixDiffLines(originalLines, modifiedLines, originalKeys, modifiedKeys)
+}
+
+function buildChangeDiffLines(
+  changes: ArrayChange<string>[],
+  originalLines: string[],
+  modifiedLines: string[]
+): MobileDiffLine[] {
+  const lines: MobileDiffLine[] = []
+  let originalIndex = 0
+  let modifiedIndex = 0
+  for (const change of changes) {
+    for (let i = 0; i < change.count; i += 1) {
+      let line: MobileDiffLine
+      if (change.removed) {
+        line = {
+          kind: 'delete',
+          text: originalLines[originalIndex] ?? '',
+          oldLineNumber: originalIndex + 1
+        }
+        originalIndex += 1
+      } else if (change.added) {
+        line = {
+          kind: 'add',
+          text: modifiedLines[modifiedIndex] ?? '',
+          newLineNumber: modifiedIndex + 1
+        }
+        modifiedIndex += 1
+      } else {
+        line = {
+          kind: 'context',
+          text: modifiedLines[modifiedIndex] ?? '',
+          oldLineNumber: originalIndex + 1,
+          newLineNumber: modifiedIndex + 1
+        }
+        originalIndex += 1
+        modifiedIndex += 1
+      }
+      if (!appendDiffLine(lines, line)) {
+        return lines
+      }
+    }
+  }
   return lines
 }
 

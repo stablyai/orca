@@ -6,8 +6,8 @@ import type { RuntimePtySpawnState } from './spawn-state'
 import { startupCwdFallbackOutcome } from '../spawn-startup-target'
 import { commitPtySpawn } from '../spawn-commit-assembly'
 import type { PtySpawnPaneBinding } from '../spawn-commit-binding'
-import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/pty-binding-span'
-import { commitPtyWithOpenCodePromptIntent } from '../../../opencode/opencode-startup-prompt-owner'
+import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/terminal-bindings/pty-binding-span'
+import { commitPtyWithOpenCodePromptIntent } from '../../../opencode/startup-prompts/opencode-startup-prompt-owner'
 
 export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   return commitPtyWithOpenCodePromptIntent(ctx, () => {
@@ -32,7 +32,9 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         worktreeId: args.worktreeId,
         shellOverride: ctx.daemonShellOverride,
         rendererLaunchAuthority: null,
-        launchedAgent: null
+        launchedAgent: null,
+        // The runtime's own create records its launch once the spawn commits.
+        freshSpawn: false
       },
       preAllocatedHandle: args.preAllocatedHandle,
       // Runtime spawns bypass renderer IPC; publish reverse pane lookup for hooks and cleanup.

@@ -11,7 +11,7 @@ export function getMuseStatusBarToggleSearchEntry(): {
 } {
   return {
     id: 'muse',
-    title: translate('auto.components.settings.appearance.search.museUsageTitle', 'Muse Usage'),
+    title: translate('auto.components.settings.appearance.search.e8d2710689', 'Muse usage'),
     description: translate(
       'auto.components.settings.appearance.search.museUsageDescription',
       'Show Muse subscription quota in the status bar.'

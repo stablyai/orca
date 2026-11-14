@@ -1,7 +1,7 @@
 import type React from 'react'
 import { MoreHorizontal, Server } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { LoadingSpinner } from '../../LoadingSpinner'
 import { Button } from '../../ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '../../ui/dropdown-menu'

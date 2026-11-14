@@ -9,7 +9,7 @@ import {
   testState
 } from './persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createProfileStateStore } from './profile-state/profile-state-store-factory'
+import { createProfileStateStore } from './profile-state/startup/profile-state-store-factory'
 import type * as FsModule from 'node:fs'
 import {
   existsSync,

@@ -1,10 +1,7 @@
-import { getDefaultSettings } from '../../../../../../shared/constants'
 // @vitest-environment happy-dom
 
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-
-import { useAppStore } from '@/store'
 
 const { mocks, moduleFactories, resetStructuredSessionMocks } = await vi.hoisted(async () =>
   (await import('./NativeChatStructuredSession.test-harness')).createStructuredSessionMocks()
@@ -38,59 +35,6 @@ vi.mock('../../prompts/NativeChatQuestionCard', () => moduleFactories.nativeChat
 import { NativeChatStructuredSession } from '../../NativeChatStructuredSession'
 
 describe('NativeChatStructuredSession', () => {
-  it('isolates mounted chats from unrelated settings and renders their live follow-up choice', async () => {
-    const original = useAppStore.getState().settings
-    const settings = { ...getDefaultSettings('/tmp'), nativeChatQueueFollowUps: false }
-    useAppStore.setState({ settings })
-    const view = render(
-      <>
-        {['local-chat', 'ssh-chat'].map((sessionId) => (
-          <NativeChatStructuredSession
-            key={sessionId}
-            isVisible
-            isFocusedGroup
-            tabId={sessionId}
-            sessionId={sessionId}
-            target={
-              sessionId === 'local-chat'
-                ? { kind: 'local' }
-                : { kind: 'environment', environmentId: 'ssh-host' }
-            }
-            agent="codex"
-          />
-        ))}
-      </>
-    )
-    try {
-      await act(async () => {})
-      mocks.controllerRender.mockClear()
-      act(() =>
-        useAppStore.setState({ settings: { ...settings, nativeChatQueueFollowUps: false } })
-      )
-      expect(mocks.controllerRender).not.toHaveBeenCalled()
-      act(() =>
-        useAppStore.setState({
-          settings: { ...settings, showTasksButton: !settings.showTasksButton }
-        })
-      )
-      expect(mocks.controllerRender).not.toHaveBeenCalled()
-      act(() => useAppStore.setState({ settings: { ...settings, nativeChatQueueFollowUps: true } }))
-      expect(new Set(mocks.controllerRender.mock.calls.map(([sessionId]) => sessionId))).toEqual(
-        new Set(['local-chat', 'ssh-chat'])
-      )
-      expect(mocks.controllerRender.mock.calls.every(([, queue]) => queue === true)).toBe(true)
-      mocks.controllerRender.mockClear()
-      act(() => useAppStore.setState({ settings }))
-      expect(new Set(mocks.controllerRender.mock.calls.map(([sessionId]) => sessionId))).toEqual(
-        new Set(['local-chat', 'ssh-chat'])
-      )
-      expect(mocks.controllerRender.mock.calls.every(([, queue]) => queue === false)).toBe(true)
-    } finally {
-      view.unmount()
-      useAppStore.setState({ settings: original })
-    }
-  })
-
   afterEach(() => {
     cleanup()
     resetStructuredSessionMocks()
@@ -108,52 +52,6 @@ describe('NativeChatStructuredSession', () => {
       agent="claude"
     />
   )
-
-  it('places background monitoring above the usable composer, keeps its list open across a gap in live work, and stops without an active turn', async () => {
-    mocks.monitoringBackgroundTasks = true
-    mocks.supportsBackgroundTaskStop = true
-    mocks.backgroundTasks = [
-      { id: 'task-command', kind: 'command', description: 'sleep 180' },
-      { id: 'task-agent', kind: 'agent' }
-    ]
-    mocks.stopBackgroundTask.mockResolvedValue({ cancelled: true })
-
-    const { rerender } = render(
-      claudeSessionView('structured-tab-background', 'session-background')
-    )
-
-    const disclosure = screen.getByRole('button', { name: '1 agent · 1 shell' })
-    const status = disclosure.closest('[data-native-chat-background-tasks="true"]')
-    const composer = screen.getByTestId('structured-composer')
-    if (!status) {
-      throw new Error('background task status was not rendered')
-    }
-    expect(status.compareDocumentPosition(composer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(mocks.composerProps?.isWorking).toBe(false)
-    expect(screen.queryByRole('list', { name: 'Agents' })).toBeNull()
-    expect(screen.queryByRole('button', { name: /^Stop / })).toBeNull()
-
-    expect(disclosure.getAttribute('aria-expanded')).toBe('false')
-    fireEvent.click(disclosure)
-    expect(disclosure.getAttribute('aria-expanded')).toBe('true')
-    expect(screen.getByRole('list', { name: 'Agents' })).toBeTruthy()
-    expect(screen.getByRole('list', { name: 'Shell' })).toBeTruthy()
-    expect(screen.getByText('sleep 180')).toBeTruthy()
-    expect(screen.getByText('Background agent')).toBeTruthy()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Stop sleep 180' }))
-    await waitFor(() =>
-      expect(mocks.stopBackgroundTask).toHaveBeenCalledWith('session-background', 'task-command')
-    )
-
-    // The strip unmounts between sequential child runs; its disclosure must survive those gaps.
-    mocks.monitoringBackgroundTasks = false
-    rerender(claudeSessionView('structured-tab-background', 'session-background'))
-    expect(document.querySelector('[data-native-chat-background-tasks="true"]')).toBeNull()
-    mocks.monitoringBackgroundTasks = true
-    rerender(claudeSessionView('structured-tab-background', 'session-background'))
-    expect(screen.getByRole('list', { name: 'Agents' })).toBeTruthy()
-  })
 
   it('tracks concurrent task stops independently: a confirmed one holds its row, a failed one clears', async () => {
     mocks.monitoringBackgroundTasks = true

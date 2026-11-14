@@ -1,13 +1,12 @@
 import {
   readAgentSessionExecutionOptions,
   type AgentSessionExecutionOptions
-} from '../../../../shared/agent-session/options/agent-session-execution-options'
+} from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import {
   refuse,
   type AgentSessionWireRefusal
 } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionTurnContext } from '../operations/structured-agent-session-turns'
-import './structured-agent-session-options-read'
 import { structuredAgentSessionOptionOverridesRefusal } from './structured-agent-session-option-intent'
 
 /** Capture send-specific choices or saved defaults once under the acceptance lane. */

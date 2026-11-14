@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react'
-import type { PluginMarketplaceHostListing } from '../../../../../preload/api-types'
+import type { PluginMarketplaceHostListing } from '../../../../../preload/api/plugins/plugin-host-api'
 import type { PluginPagePreview } from './use-plugin-catalog'
 
 /** Pointer rest before a hover counts as intent. */

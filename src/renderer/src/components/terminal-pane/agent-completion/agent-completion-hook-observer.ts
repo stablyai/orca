@@ -4,6 +4,7 @@ import type {
   AgentCompletionStatusSnapshot
 } from './agent-completion-coordinator-types'
 import type { LastCompletionIdentity } from './agent-completion-identity-store'
+import { recordAgentFinishDropped } from '@/attention/agent-finish-drop-breadcrumb'
 
 type HookObserverState = {
   workingStatusObserved: boolean
@@ -160,6 +161,17 @@ export function createAgentCompletionHookObserver({
         state.lastCompletionIdentity?.lastTurnCompletedAtNotified === turnCompletedAt ||
         state.lastCompletedTurn === state.currentTurn)
     ) {
+      if (
+        state.lastCompletionSource === 'hook' &&
+        identity !== state.lastCompletionIdentity?.identity &&
+        !turnCompletedAtAlreadyHandled(turnCompletedAt) &&
+        state.lastCompletionIdentity?.lastTurnCompletedAtNotified !== turnCompletedAt
+      ) {
+        // An earlier, different hook end used up this turn and no working state followed, so this
+        // new end is swallowed. Revisions of the announced end and title or exit announcements are
+        // not drops.
+        recordAgentFinishDropped('turn-end-not-counted', { paneKey: options.paneKey })
+      }
       consumeStampedTailForCurrentCoordinator(turnCompletedAt)
       options.dispatchHookLifecycle?.(payload)
       return

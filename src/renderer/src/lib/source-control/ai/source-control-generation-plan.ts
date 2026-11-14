@@ -1,4 +1,4 @@
-import { textGenerationErrorText } from '@/lib/text-generation-error-copy'
+import { textGenerationErrorText } from '@/lib/text-generation/text-generation-error-copy'
 import { planCommitMessageGeneration } from '../../../../../shared/source-control/ai/generation/commit-message-plan'
 import {
   renderSourceControlActionCommandTemplate,

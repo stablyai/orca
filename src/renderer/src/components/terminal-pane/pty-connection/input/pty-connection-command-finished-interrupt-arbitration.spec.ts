@@ -60,8 +60,9 @@ export function registerPtyConnectionCommandFinishedInterruptArbitrationTests():
       'pins %s interrupt policy before acknowledged input and command exit cleanup',
       async (agentType) => {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks14 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks14 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
 
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport()

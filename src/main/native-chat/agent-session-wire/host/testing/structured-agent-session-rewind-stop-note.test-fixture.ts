@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../../../agent-session-journal/journal-observation.test-support'
 import { expect, vi, type Mock } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -6,7 +7,7 @@ import {
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import type { StructuredAgentSessionHost } from '../structured-agent-session-host'
@@ -16,7 +17,7 @@ import {
   hostTestAttachParams,
   hostTestMessage,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 export async function expectRawStopNoteRewindRecovery({
   host,
@@ -60,20 +61,22 @@ export async function expectRawStopNoteRewindRecovery({
     turnScope: AGENT_JOURNAL_THREAD_SCOPE
   })
   const target = agentJournalItemKey(targetIdentity)
-  expect(journal.snapshot().items.find((item) => item.itemId === noteId)?.body).toEqual({
+  expect(
+    (await readTestJournalItems(journal)).find((item) => item.itemId === noteId)?.body
+  ).toEqual({
     kind: 'status',
     text: 'Cancellation requested.'
   })
   rewind.mockImplementation(async () => ({ ok: true }))
-  const replace = journal.replaceEpochItems.bind(journal)
-  const crash = vi.spyOn(journal, 'replaceEpochItems').mockImplementationOnce(async (...args) => {
+  const replace = journal.completeRewind.bind(journal)
+  const crash = vi.spyOn(journal, 'completeRewind').mockImplementationOnce(async (...args) => {
     await replace(...args)
     throw new Error('crashed after commit')
   })
   await expect(
     host.rewind(caller, {
       itemId: target,
-      expectedEpoch: journal.epoch,
+      expectedEpoch: journal.physicalCursor().epoch,
       envelope: {
         sessionId: HOST_TEST_SESSION,
         clientOperationId: hostTestOperationId(),
@@ -81,7 +84,7 @@ export async function expectRawStopNoteRewindRecovery({
         payloadFingerprint: computeAgentSessionPayloadFingerprint({
           method: 'agentSession.rewind',
           sessionId: HOST_TEST_SESSION,
-          fields: { itemId: target, expectedEpoch: journal.epoch }
+          fields: { itemId: target, expectedEpoch: journal.physicalCursor().epoch }
         })
       }
     })
@@ -97,8 +100,10 @@ export async function expectRawStopNoteRewindRecovery({
   // Rewind settlement runs in startup after attach; drain serialization before asserting.
   await host.collaboratorsForTests().serialize(HOST_TEST_SESSION, async () => {})
   expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
-  expect(journal.itemBody(noteId)).toEqual(unconfirmed)
-  expect(journal.snapshot().items.find((item) => item.itemId === noteId)?.body).toEqual({
+  expect(await journal.reads.itemBody(noteId)).toEqual(unconfirmed)
+  expect(
+    (await readTestJournalItems(journal)).find((item) => item.itemId === noteId)?.body
+  ).toEqual({
     kind: 'status',
     text: 'Cancellation requested.'
   })

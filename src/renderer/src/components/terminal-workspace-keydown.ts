@@ -1,28 +1,31 @@
+import { reopenClosedWorkspaceTab } from './reopen-closed-workspace-tab'
 import { toast } from 'sonner'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
-import type { KeybindingActionId } from '../../../shared/keybindings'
 import { keybindingMatchesAction } from '../../../shared/keybindings'
+import type { KeybindingActionId } from '../../../shared/keybindings'
 import { matchesRecentTabSwitcherChord } from '../../../shared/window-shortcut-policy'
-import { useAppStore } from '../store'
+import { useAppStore } from '../store/index'
 import {
-  createFloatingWorkspaceBrowserTab,
-  createFloatingWorkspaceMarkdownTab,
-  createFloatingWorkspaceTerminalTab,
   handleEmptyFloatingWorkspacePanelCloseShortcut,
   isEventTargetInsideFloatingWorkspacePanel,
   isFloatingWorkspacePanelFocused
-} from '@/lib/floating-workspace-terminal-actions'
-import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
+} from '@/components/floating-terminal/floating-workspace-terminal-actions'
+import {
+  createFloatingWorkspaceBrowserTab,
+  createFloatingWorkspaceMarkdownTab,
+  createFloatingWorkspaceTerminalTab
+} from '@/components/floating-terminal/floating-workspace-tab-creation'
+import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
 import {
   ensureClientCreationActionAllowed,
   showClientCreationActionError
-} from '@/lib/client-creation-action-error'
+} from '@/lib/workspace/creation/surface-policy/client-creation-action-error'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { translate } from '@/i18n/i18n'
 import { getKeybindingContext } from './terminal-workspace-model'
-import { isAgentTerminalPreviewTarget } from './dashboard-popout/agent-terminal-preview-target'
+import { isAgentTerminalPreviewTarget } from './dashboard/terminal-preview/agent-terminal-preview-target'
 import { resolveTerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
-import { getDetectionTargetIdentityForWorktree } from '@/lib/agent-detection-target-inventory'
+import { getDetectionTargetIdentityForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import {
   launchAgentTabShortcut,
   launchFloatingWorkspaceAgentShortcut
@@ -47,7 +50,8 @@ export function handleTerminalWorkspaceKeyDown(
     mobileEmulatorEnabled,
     terminalShortcutPolicy
   } = controller
-  if (!activeWorktreeId) {
+  // Let the focused Settings recorder capture shortcuts without executing them.
+  if (event.target instanceof Element && event.target.closest('[data-shortcut-recorder-active]')) {
     return
   }
   const context = getKeybindingContext(event.target)
@@ -68,7 +72,7 @@ export function handleTerminalWorkspaceKeyDown(
       keybindings
     })
   }
-  if (!event.repeat) {
+  if (activeWorktreeId && !event.repeat) {
     const agentShortcut = resolveTerminalAgentTabShortcut({
       activeWorktreeId: floatingWorkspaceFocused ? FLOATING_TERMINAL_WORKTREE_ID : activeWorktreeId,
       keybindings,
@@ -110,10 +114,13 @@ export function handleTerminalWorkspaceKeyDown(
     event.preventDefault()
     notifyTerminalCapture('tab.reopenClosed')
     try {
-      useAppStore.getState().reopenClosedTab(activeWorktreeId)
+      reopenClosedWorkspaceTab(activeWorktreeId)
     } catch (error) {
       showClientCreationActionError(error)
     }
+    return
+  }
+  if (!activeWorktreeId) {
     return
   }
   if (!event.repeat && matchShortcut('tab.newBrowser')) {

@@ -9,7 +9,7 @@ import { MESSAGE_TYPES } from '../../../../orchestration/db/orchestration-record
 import {
   getLifecycleGroupRecipientError,
   isDispatchMutationMessageType
-} from '../../../../../../shared/rpc-contract/orchestration-params'
+} from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 
 const SEND_MESSAGE_TYPE_ERROR = [
   `Invalid --type. Expected one of: ${MESSAGE_TYPES.join(', ')}.`,
@@ -33,6 +33,8 @@ export const SendParams = z
     // Use remint-stable pane keys to attest worker_done/heartbeat; from handles only route.
     senderPaneKey: OptionalString,
     run: OptionalString,
+    // A paired server: this Orca carries the mail there and the replies back (`send --on`).
+    on: OptionalString,
     waitForLifecycleSettlement: OptionalBoolean,
     devMode: OptionalBoolean
   })

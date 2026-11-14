@@ -31,13 +31,15 @@ import {
 } from './delete-worktree-dialog-copy'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal'
+import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal/removal'
 import { useDeleteWorktreeStatusHydration } from './use-delete-worktree-status-hydration'
+import { useDeleteWorktreeAtRiskLocalFiles } from './use-delete-worktree-at-risk-local-files'
 import { useConfirmedWorktreeDeleteTargets } from './use-confirmed-worktree-delete-targets'
 import { runLineageDeleteAll } from './delete-worktree-lineage-delete-all'
 import { runDialogForceDelete } from './delete-worktree-dialog-force-delete'
 import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 import { useSidebarHostScopeOptions } from '../../worktree-list/controls/use-sidebar-host-scope-options'
+import { translateHostDisplayLabel } from '../../execution-host-label'
 import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { useDeleteWorktreeDialogTargets } from './use-delete-worktree-dialog-targets'
@@ -62,8 +64,8 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
   const { hostOptions } = useSidebarHostScopeOptions()
   const hostLabelById = useMemo(
-    () => new Map(hostOptions.map((host) => [host.id, host.label])),
-    [hostOptions]
+    () => new Map(hostOptions.map((host) => [host.id, translateHostDisplayLabel(host, t)])),
+    [hostOptions, t]
   )
   const isOpen = activeModal === 'delete-worktree'
   const worktreeId = typeof modalData.worktreeId === 'string' ? modalData.worktreeId : ''
@@ -190,6 +192,11 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     isOpen,
     deleteTargets,
     visibleTargets: worktrees,
+    repoMap
+  })
+  const atRiskLocalFilesByIdentity = useDeleteWorktreeAtRiskLocalFiles({
+    isOpen,
+    deleteTargets,
     repoMap
   })
   const dirtyChanges = useMemo(() => {
@@ -323,11 +330,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
         }}
       >
         <DialogHeader>
-          <DialogTitle className="text-sm">
-            {isBatchDelete
-              ? t('auto.components.sidebar.DeleteWorktreeDialog.86f0ae1257', 'Delete Workspaces')
-              : t('auto.components.sidebar.DeleteWorktreeDialog.fc23c4cbdf', 'Delete Workspace')}
-          </DialogTitle>
+          <DialogTitle size="compact">{t('common.delete', 'Delete')}</DialogTitle>
           <DeleteWorktreeDialogDescription
             showUnknownChangeLossWarning={hasUnknownChangeState}
             targetClassName={deleteCopy.targetClassName}
@@ -347,6 +350,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
             changeCheckStatesByWorktreeId={dirtyChanges.checkStates}
             dirtyChangeCountsByWorktreeId={dirtyChanges.counts}
             dirtyChangePreviewsByWorktreeId={dirtyChanges.previews}
+            atRiskLocalFilesByIdentity={atRiskLocalFilesByIdentity}
           />
 
           <RemovalUnsavedFilesNotice targets={unsavedTargets} enabled={isOpen} />
@@ -359,6 +363,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
               changeCheckStatesByWorktreeId={dirtyChanges.checkStates}
               dirtyChangeCountsByWorktreeId={dirtyChanges.counts}
               dirtyChangePreviewsByWorktreeId={dirtyChanges.previews}
+              atRiskLocalFilesByIdentity={atRiskLocalFilesByIdentity}
               preserveChildren={preserveChildrenSelected}
               canPreserveChildren={canPreserveChildren}
               disabled={isDeleting}
@@ -380,10 +385,6 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
             isDetachingChildren={isDetachingChildren}
             deleteDisabled={preserveChildrenSelected && !canPreserveChildren}
             canForceDelete={canForceDelete}
-            isBatchDelete={isBatchDelete}
-            worktreeCount={worktrees.length}
-            canDeleteAllLineage={deleteAllLineage}
-            lineageDeleteTargetCount={lineageDelete.deleteAllTargets.length}
             onCancel={() => handleOpenChange(false)}
             onForceDelete={
               preserveChildrenSelected ? handleDetachAndDelete : () => handleDelete(true)

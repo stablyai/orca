@@ -61,8 +61,9 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
 
     it('does not dispatch generic spinner completions when process inspection finds no agent', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-shell')
       transportFactoryQueue.push(transport)
 
@@ -101,8 +102,9 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
 
     it('queues the idle cursor reset behind hidden agent output', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks8 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks8 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -142,8 +144,9 @@ export function registerPtyConnectionTaskCompleteDispatchTests(): void {
 
     it('does not use stale agent status from an earlier turn in task-complete notifications', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks11 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks11 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { useNotificationDispatch } = await vi.importActual<
         typeof UseNotificationDispatchModule
       >('../../notifications/use-notification-dispatch')

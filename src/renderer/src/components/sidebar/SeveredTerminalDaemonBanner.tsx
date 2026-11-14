@@ -15,7 +15,7 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type {
   PtyManagementSeveredDaemon,
   PtyManagementSeveredDaemonRestartResult
-} from '../../../../preload/api-types'
+} from '../../../../preload/api/terminal/pty-management-api'
 
 const POLL_INTERVAL_MS = 60_000
 const DISMISSED_KEY = 'orca.severedTerminalDaemonBanner.dismissed'

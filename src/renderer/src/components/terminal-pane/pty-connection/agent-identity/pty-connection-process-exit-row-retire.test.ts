@@ -72,7 +72,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const { buildAgentStatusModuleMock } =
     await import('../test-fixtures/pty-connection-test-environment')
   return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
@@ -142,7 +142,9 @@ async function connectAgentPane(args: {
   terminal: ReturnType<typeof createPane>['terminal']
 }> {
   const { connectPanePty } = await import('../connect-pane-pty')
-  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+  const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+    '@/lib/agent-status/aggregation/worktree-agent-status'
+  )
   const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
   const transport = createMockTransport(args.ptyId)
   transport.connect.mockImplementation(async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
@@ -189,7 +191,11 @@ async function seedHookRow(
   // Why the real slice: the row must carry the acceptedStatusSeq a real accepted hook stamps.
   const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
   const realStore = createTestStore(
-    (await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')).isClaudeAgent
+    (
+      await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
+    ).isClaudeAgent
   )
   realStore.getState().setAgentStatus(paneKey, { state, prompt: 'ship it', agentType })
   const row = realStore.getState().agentStatusByPaneKey[paneKey]

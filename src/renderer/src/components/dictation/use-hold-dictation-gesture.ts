@@ -1,5 +1,5 @@
-import { useEffect, useEffectEvent, useRef } from 'react'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { useCallback, useEffect, useEffectEvent, useRef } from 'react'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import {
   keybindingMatchesAction,
   normalizeTerminalShortcutPolicy,
@@ -8,8 +8,8 @@ import {
 import { textInputOwnsComposition } from '../../../../shared/text-input-shortcut-policy'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { dictationShortcutMode } from '../../../../shared/dictation-shortcut-mode'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
-import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import { showTerminalShortcutCaptureNotification } from '@/lib/notifications/terminal-shortcut-capture-notification'
 import { getKeybindingContext } from '../terminal-workspace-model'
 
 type HoldDictationGestureOptions = {
@@ -124,7 +124,7 @@ export function useHoldDictationGesture({
   settings,
   startDictation,
   stopDictation
-}: HoldDictationGestureOptions): void {
+}: HoldDictationGestureOptions): { isHolding: () => boolean } {
   const activeHoldRef = useRef<ActiveHold | null>(null)
   const mode = dictationShortcutMode(settings?.voice)
   const enabled = settings?.voice?.enabled === true
@@ -236,4 +236,8 @@ export function useHoldDictationGesture({
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [mode, enabled])
+
+  // True while a held shortcut press is the one recording.
+  const isHolding = useCallback(() => activeHoldRef.current?.startedDictation === true, [])
+  return { isHolding }
 }

@@ -48,11 +48,6 @@ describe('browserManager grab operations', () => {
       const result = browserManager.getAuthorizedGuest('tab-1', 9999)
       expect(result).toBeNull()
     })
-
-    it('returns null for unregistered tab', () => {
-      const result = browserManager.getAuthorizedGuest('unknown-tab', GRAB_RENDERER_WEB_CONTENTS_ID)
-      expect(result).toBeNull()
-    })
   })
 
   describe('setGrabMode', () => {

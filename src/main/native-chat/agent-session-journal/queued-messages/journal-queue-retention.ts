@@ -1,3 +1,4 @@
+import type { JournalKeyedRead } from '../journal-keyed-storage'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
@@ -26,7 +27,7 @@ export function queuedChangeOf(
 /** Membership outlives automatic eligibility, but not a completed handoff. */
 export function isLiveJournalQueueCard(
   card: QueuedMessageRow,
-  submissions: ReadonlyMap<string, AgentJournalSubmission>
+  submissions: JournalKeyedRead<string, AgentJournalSubmission>
 ): boolean {
   const handoff = card.consumedAs ? submissions.get(card.consumedAs) : undefined
   return (
@@ -40,7 +41,7 @@ export function isLiveJournalQueueCard(
 
 export function queueNeedsReopen(
   cards: readonly QueuedMessageRow[],
-  submissions: ReadonlyMap<string, AgentJournalSubmission>
+  submissions: JournalKeyedRead<string, AgentJournalSubmission>
 ): boolean {
   return cards.some((card) => {
     if (card.state === 'waiting') {

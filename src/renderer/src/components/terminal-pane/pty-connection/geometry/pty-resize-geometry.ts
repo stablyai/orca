@@ -1,12 +1,12 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { ManagedPaneInternal } from '@/lib/pane-manager/pane-manager-types'
-import { safeFit } from '@/lib/pane-manager/pane-fit'
-import { requestStablePaneFit } from '@/lib/pane-manager/pane-fit-resize-observer'
-import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
+import { safeFit } from '@/lib/pane-manager/terminal-fit/pane-fit'
+import { requestStablePaneFit } from '@/lib/pane-manager/terminal-fit/pane-fit-resize-observer'
+import { getFitOverrideForPty } from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
 import { reconcilePtySizeAcrossFrames } from '../../viewport/pty-size-reconcile'
 import { shouldClaimRemoteDesktopViewport } from '../../viewport/remote-desktop-viewport-claim'
-import { deferTerminalGeometryMutationDuringRebuild } from '@/lib/pane-manager/terminal-scroll-intent-rebuild'
+import { deferTerminalGeometryMutationDuringRebuild } from '@/lib/pane-manager/terminal-scroll/terminal-scroll-intent-rebuild'
 
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 

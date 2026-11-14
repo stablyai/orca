@@ -4,7 +4,8 @@ import { JsonStringifyByteLimitError } from './json-stream/node-bounded-json-str
 import { readNodeFileSyncWithinLimit } from './file-content/node-bounded-file-reader'
 import { writeSecureJsonFileWithinLimit } from './secure-storage/bounded-secure-json-file'
 import { hardenExistingSecureFile } from './secure-storage/secure-file'
-import { toCleanupLastErrorFields, type EphemeralVmFailure } from './ephemeral-vm-failure-copy'
+import { toCleanupLastErrorFields, toLifecycleLastErrorFields } from './ephemeral-vm-failure-copy'
+import { notifyEphemeralVmRuntimesChanged } from './ephemeral-vm-runtime-store-events'
 import {
   featureEntryFromRuntime,
   featureIdentity,
@@ -24,9 +25,8 @@ import {
   EphemeralVmRuntimeRecordSchema,
   EphemeralVmRuntimeStoreSchema,
   RollbackEphemeralVmRuntimeStoreSchema,
-  type EphemeralVmCleanupStatus,
   type EphemeralVmRuntimeRecord,
-  type EphemeralVmRuntimeStatus,
+  type EphemeralVmRuntimeStatusPatch,
   type EphemeralVmRuntimeStore
 } from './ephemeral-vm-runtimes'
 import {
@@ -125,20 +125,7 @@ export function upsertEphemeralVmRuntimeRollbackRecovery(
 export function updateEphemeralVmRuntimeStatus(
   userDataPath: string,
   id: string,
-  args: {
-    status?: EphemeralVmRuntimeStatus
-    cleanupStatus?: EphemeralVmCleanupStatus
-    cleanupLastAttemptAt?: number
-    /** A string clears any stored code; null clears both. */
-    cleanupLastError?: string | EphemeralVmFailure | null
-    workspaceId?: string
-    workspaceName?: string
-    connectionMode?: EphemeralVmRuntimeRecord['connectionMode'] | null
-    runtimeEnvironmentId?: string
-    sshTargetId?: string | null
-    recipeResult?: EphemeralVmRuntimeRecord['recipeResult']
-    updatedAt?: number
-  }
+  args: EphemeralVmRuntimeStatusPatch
 ): EphemeralVmRuntimeRecord {
   const loaded = readEphemeralVmRuntimeStore(userDataPath)
   const existing = loaded.store.runtimes.find((entry) => entry.id === id)
@@ -162,6 +149,7 @@ export function updateEphemeralVmRuntimeStatus(
             : args.cleanupLastError
         )
       : {}),
+    ...toLifecycleLastErrorFields(args.lifecycleLastError),
     ...(args.workspaceId ? { workspaceId: args.workspaceId } : {}),
     ...(args.workspaceName ? { workspaceName: args.workspaceName } : {}),
     // null explicitly clears the field (e.g. terminal cleanup); undefined leaves it unchanged.
@@ -288,6 +276,7 @@ function writeEphemeralVmRuntimeStore(
     )
     // Main first so a record gaining its recipe result is never absent from both files.
     writeWriteAheadRuntimes(userDataPath, writeAhead)
+    notifyEphemeralVmRuntimesChanged()
     if (!features.writable && requiredFeatures.length > 0) {
       throw new EphemeralVmRuntimeStoreError(
         'runtime_error',

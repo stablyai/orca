@@ -8,6 +8,8 @@ export type BridgeSessionBack = {
   readonly storageKeys?: readonly string[]
   /** The page's `ready` said it reads `connectionPath` frames. */
   readonly connectionPathFrames?: true
+  /** The page's `ready` said it reads `appInactive` frames. */
+  readonly appInactiveFrames?: true
   readonly terminalKeyRailClaim?: { readonly inputOwner?: string }
 }
 

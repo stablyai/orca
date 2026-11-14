@@ -1,3 +1,5 @@
+import { testJournalWorkReader } from '../../../agent-session-journal/journal-current-work.test-fixture'
+import { readTestJournalSnapshot } from '../../../agent-session-journal/journal-observation.test-support'
 // Dismiss stale-generation prompts in the journal without stopping current turns or withdrawing queued work.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -6,12 +8,12 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournalIdentity } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { claudePromptCancelRoute } from '../../../../claude/structured/journal/claude-structured-prompt-replies'
 import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
-import { NO_STRUCTURED_AGENTS } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
+import { NO_STRUCTURED_AGENTS } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 import type { StructuredAgentSessionChatStopRun } from '../structured-agent-session-chat-stop'
 import { structuredQueuePauses } from '../../delivery/structured-agent-session-queued-pause'
 import { createStructuredAgentSessionLogger } from '../../host/structured-agent-session-logger'
@@ -73,11 +75,11 @@ async function endedCardAndLiveTurn(): Promise<{ journal: AgentSessionJournal; i
   return { journal, itemId: card.itemId }
 }
 
-function queueUntouched(journal: AgentSessionJournal): void {
-  expect(journal.queuedMessages.list().map((card) => [card.messageId, card.state])).toEqual([
-    ['queued-1', 'waiting']
-  ])
-  expect(structuredQueuePauses(journal)).toEqual([])
+async function queueUntouched(journal: AgentSessionJournal): Promise<void> {
+  expect((await journal.queuedMessages.list()).map((card) => [card.messageId, card.state])).toEqual(
+    [['queued-1', 'waiting']]
+  )
+  expect(await structuredQueuePauses(journal)).toEqual([])
 }
 
 function provider(routePromptCancel?: StructuredAgentSessionAdapter['routePromptCancel']) {
@@ -98,6 +100,7 @@ function context(
     logger: createStructuredAgentSessionLogger(),
     sessionId: 'session-1',
     journal,
+    readWork: testJournalWorkReader(journal, LIVE),
     fence: LIVE,
     agents: NO_STRUCTURED_AGENTS,
     agent: 'codex',
@@ -117,8 +120,10 @@ function chatStop() {
   }))
 }
 
-function resolution(journal: AgentSessionJournal, itemId: string) {
-  const body = journal.snapshot().items.find((item) => item.itemId === itemId)?.body
+async function resolution(journal: AgentSessionJournal, itemId: string) {
+  const body = (await readTestJournalSnapshot(journal)).items.find(
+    (item) => item.itemId === itemId
+  )?.body
   return body?.kind === 'approval' || body?.kind === 'question' ? body.resolution.state : undefined
 }
 
@@ -136,11 +141,11 @@ describe('a question an ended generation raised, cancelled from a client that st
     )
 
     expect(result).toMatchObject({ ok: true, value: { turnId: 'turn-2', cancelled: true } })
-    expect(resolution(journal, itemId)).toBe('cancelled')
+    expect(await resolution(journal, itemId)).toBe('cancelled')
     expect(stop).not.toHaveBeenCalled()
     expect(interrupt).not.toHaveBeenCalled()
     expect(agent.cancelTurn).not.toHaveBeenCalled()
     expect(agent.dismissPrompt).not.toHaveBeenCalled()
-    queueUntouched(journal)
+    await queueUntouched(journal)
   })
 })

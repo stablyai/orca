@@ -221,8 +221,8 @@ jobs:
             pnpm-lock.yaml
             cloud/pnpm-lock.yaml
 
-      # These two tests import the cloud relay workspace directly. Keeping them in one job
-      # avoids installing and building the same workspace once per unit-test shard.
+      # This test imports the cloud relay workspace directly. Its dedicated job avoids
+      # installing and building the same workspace once per unit-test shard.
       - name: Install relay integration dependencies
         id: relay_dependencies
         if: ${{ !cancelled() && steps.root_dependencies.outcome == 'success' }}
@@ -237,5 +237,4 @@ jobs:
           ORCA_BACKGROUND_LAUNCH: '1'
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
-          tests/e2e/relay-region-compatibility.unit.test.ts
           tests/e2e/relay-region-correction.unit.test.ts

@@ -1,5 +1,5 @@
 import { useTranslate } from '../../../i18n/use-translate'
-import { cn } from '../../../lib/utils'
+import { cn } from '../../../lib/class-names'
 import { ChevronDown } from 'lucide-react'
 import { Button } from '../../ui/button'
 import { Label } from '../../ui/label'

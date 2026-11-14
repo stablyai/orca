@@ -3,7 +3,7 @@ import {
   gitGraphSupport,
   gitGraphUpdateMessage,
   probeGitGraphSupport
-} from '@/lib/git-graph-tab'
+} from '@/lib/source-control/graph/git-graph-tab'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { runWorktreeDelete } from '@/components/sidebar/workspace-actions/deletion/delete-worktree-flow'
@@ -13,10 +13,10 @@ import { buildCmdJBrowserNavigationAction } from '@/components/cmd-j/browser-nav
 import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'
 import { findGroupAndWorktree } from '@/store/slices/tabs/tab-group-state'
 import {
-  getComposerEligibleRepos,
-  resolveComposerActiveRepoId,
-  resolveComposerGitRepoId
-} from '@/lib/new-workspace-composer-repo'
+  getNewWorkspaceDialogEligibleRepos,
+  resolveNewWorkspaceDialogGitRepoId
+} from '../../../../shared/new-workspace-dialog-repo'
+import { resolveComposerActiveRepoId } from '@/lib/workspace/creation/new-workspace-composer-repo'
 import type { QuickActionPaletteItem, SettingsPaletteItem } from './worktree-jump-palette-model'
 import type { WorktreeJumpPaletteLocalState } from './use-worktree-jump-palette-local-state'
 import type { WorktreeJumpPaletteOpenTabs } from './use-worktree-jump-palette-open-tabs'
@@ -30,8 +30,8 @@ function getComposerPrefetchRepoId(
   state: ReturnType<typeof useAppStore.getState>,
   initialRepoId?: string
 ): string | null {
-  const eligibleRepos = getComposerEligibleRepos(state.repos)
-  return resolveComposerGitRepoId({
+  const eligibleRepos = getNewWorkspaceDialogEligibleRepos(state.repos)
+  return resolveNewWorkspaceDialogGitRepoId({
     eligibleRepos,
     initialRepoId,
     activeRepoId: resolveComposerActiveRepoId(

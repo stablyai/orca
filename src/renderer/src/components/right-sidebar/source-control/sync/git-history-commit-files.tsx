@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import type React from 'react'
 import { ArrowUpRight } from 'lucide-react'
-import { STATUS_COLORS } from '../../../../lib/git-path-decoration'
+import { STATUS_COLORS } from '../../../../lib/source-control/paths/git-path-decoration'
 import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
 import {
   toPermanentSourceControlRowOpenEvent,

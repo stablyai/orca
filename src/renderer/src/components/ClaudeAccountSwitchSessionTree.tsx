@@ -2,7 +2,7 @@ import { Fragment, useLayoutEffect, useRef, useState } from 'react'
 import { Folder, GitBranch } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { formatAgentTypeLabel } from '../../../shared/agent-status/presentation/agent-type-label'
 import type { ClaudeAccountSwitchPromptSessions } from '@/lib/provider-accounts/claude-account-switch-sessions'
 import {
@@ -13,15 +13,15 @@ import {
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
-} from '@/lib/worktree-default-display-name'
+} from '@/lib/workspace/display/worktree-default-display-name'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
-import { useAppStore } from '../store'
-import { ResumeTreeRow } from './NativeChatResumeTreeRow'
+import { useAppStore } from '../store/index'
+import { ResumeTreeRow } from './native-chat-recovery/tree/NativeChatResumeTreeRow'
 import {
   resumeSelectionState,
   toggleResumeSelection
-} from './native-chat-resume-on-restart-grouping'
-import { moveInTree } from './native-chat-resume-tree-keys'
+} from './native-chat-recovery/tree/native-chat-resume-on-restart-grouping'
+import { moveInTree } from './native-chat-recovery/tree/native-chat-resume-tree-keys'
 
 type SessionRowData = ClaudeSessionMoveCandidate & { reason?: string }
 

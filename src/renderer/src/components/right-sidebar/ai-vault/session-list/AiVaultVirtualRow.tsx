@@ -7,7 +7,7 @@ import type {
   AiVaultSession
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AiVaultResumeStartup } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-startup'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { VaultGroupHeader } from '../panel/AiVaultPanelControls'
 import { VaultSessionRow } from './AiVaultSessionRow'
 import type { AiVaultSessionGroup } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-filters'
@@ -253,6 +253,7 @@ export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
                 }
               : undefined
           }
+          originalPaneTarget={originalPaneTarget}
           onJumpToOriginalPane={
             canJumpToOriginalPane ? () => onJumpToOriginalPane(row.session) : undefined
           }

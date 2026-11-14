@@ -10,8 +10,8 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
-import { observeOffscreenAnimation } from '@/lib/offscreen-animation-pause'
+import { cn } from '@/lib/class-names'
+import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useTranslate } from '@/i18n/use-translate'
 import { CHECK_COLOR, CHECK_ICON, checkPresentationKey } from './check-presentation'
 import { CheckRunDetails } from './check-run-details'
@@ -23,7 +23,7 @@ import {
   openAppHttpLink,
   openAppHttpLinkFromAnchor
 } from '@/lib/browser/navigation/app-http-link-open'
-import type { PRCheckDetail } from '../../../../../../shared/github/check-types'
+import type { PRCheckDetail } from '../../../../../../shared/github/checks/check-types'
 
 export function ChecksList(props: ChecksListProps): React.JSX.Element {
   const t = useTranslate()

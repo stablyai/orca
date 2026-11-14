@@ -2,24 +2,22 @@ import { useEffect, useState } from 'react'
 import { ExternalLink, Puzzle, Settings2 } from 'lucide-react'
 import { Trans } from 'react-i18next'
 import { toast } from 'sonner'
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { GhosttyDiscoveryRow } from './GhosttyDiscoveryRow'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { DiscoveryStatusEmitted } from '../../../../shared/onboarding-state-types'
 import { i18n, translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { ThemeSlotControl, useThemeLooks } from './ThemeLookGallery'
 import { ThemeLookCarousel, openThemePluginDirectory } from './ThemeLookCarousel'
-import { ThemeModeTiles } from './ThemeModeTiles'
-import type { ThemeLook, ThemeLookBase } from './onboarding-theme-looks'
+import { ThemeModeControl } from './ThemeModeControl'
 import { themeLookSettingsUpdate } from './onboarding-theme-look-settings'
-import {
-  terminalConfigImportSettingsUpdate,
-  type TerminalConfigImportPreview
-} from '../../../../shared/terminal/appearance/terminal-config-import-preview'
-import { getSystemPrefersDark } from '@/lib/terminal-theme'
+import { terminalConfigImportSettingsUpdate } from '../../../../shared/terminal/appearance/terminal-config-import-preview'
+import type { TerminalConfigImportPreview } from '../../../../shared/terminal/appearance/terminal-config-import-preview'
+import { getSystemPrefersDark } from '@/lib/terminal/appearance/terminal-theme'
 import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { DiscoveryStatusEmitted } from '../../../../shared/onboarding-state-types'
+import type { ThemeLook, ThemeLookBase } from './onboarding-theme-looks'
 
 type ThemeStepProps = {
   theme: GlobalSettings['theme']
@@ -208,12 +206,8 @@ export function ThemeStep({
       <section className="space-y-2.5">
         <ThemeSectionHeading
           title={t('components.onboarding.theme.looks.colorMode', 'Color mode')}
-          caption={t(
-            'components.onboarding.theme.looks.colorModeCaption',
-            'Light, dark, or follow your OS.'
-          )}
         />
-        <ThemeModeTiles
+        <ThemeModeControl
           value={theme}
           onChange={(id) => {
             setSystemSlot(null)
@@ -233,25 +227,7 @@ export function ThemeStep({
         }
         header={
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-            <ThemeSectionHeading
-              title={t('components.onboarding.theme.looks.themes', 'Theme')}
-              caption={
-                theme === 'system' && base !== osBase
-                  ? base === 'dark'
-                    ? t(
-                        'components.onboarding.theme.looks.showsWhenDark',
-                        'Shows when your system is dark'
-                      )
-                    : t(
-                        'components.onboarding.theme.looks.showsWhenLight',
-                        'Shows when your system is light'
-                      )
-                  : t(
-                      'components.onboarding.theme.looks.themesCaption',
-                      'Optional. Go further with app themes and terminal palettes.'
-                    )
-              }
-            />
+            <ThemeSectionHeading title={t('components.onboarding.theme.looks.themes', 'Theme')} />
             {theme === 'system' && (
               <div className="w-60 shrink-0">
                 <ThemeSlotControl value={base} osBase={osBase} onChange={setSystemSlot} />
@@ -347,17 +323,6 @@ function humanFields(diff: Partial<GlobalSettings>): string[] {
   return groups.filter(({ keys }) => keys.some((k) => k in diff)).map(({ label }) => label)
 }
 
-function ThemeSectionHeading({
-  title,
-  caption
-}: {
-  title: string
-  caption: string
-}): React.JSX.Element {
-  return (
-    <h3 className="text-sm font-medium text-foreground">
-      {title}
-      <span className="ml-2 text-xs font-normal text-muted-foreground">{caption}</span>
-    </h3>
-  )
+function ThemeSectionHeading({ title }: { title: string }): React.JSX.Element {
+  return <h3 className="text-sm font-medium text-foreground">{title}</h3>
 }

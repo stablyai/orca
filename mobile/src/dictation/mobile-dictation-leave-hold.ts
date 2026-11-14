@@ -7,9 +7,11 @@ export type MobileDictationLeaveHold = {
   hold: () => boolean
 }
 
-// Leaving unmounts the screen and with it what was said, so starting, recording or transcribing holds the first leave.
+// The dictation outlives its screen inside the page, but leaving the page's document ends it; that leave stops and inserts first.
 export function useMobileDictationLeaveHold(
-  dictation: UseMobileDictationResult
+  dictation: UseMobileDictationResult,
+  // True when leaving stays inside the page, where the floating pill carries the dictation on.
+  leaveKeepsPage: () => boolean
 ): MobileDictationLeaveHold {
   const { isStarting, isRecording, isProcessing, stop } = dictation
   const active = isStarting || isRecording || isProcessing
@@ -20,7 +22,7 @@ export function useMobileDictationLeaveHold(
   }
   const holdsLeave = active && !held
   const hold = useCallback(() => {
-    if (!holdsLeave) {
+    if (!holdsLeave || leaveKeepsPage()) {
       return false
     }
     setHeld(true)
@@ -28,7 +30,7 @@ export function useMobileDictationLeaveHold(
       void stop()
     }
     return true
-  }, [holdsLeave, isStarting, isRecording, stop])
+  }, [holdsLeave, isStarting, isRecording, leaveKeepsPage, stop])
 
   return { holdsLeave, hold }
 }

@@ -7,7 +7,7 @@ import {
   type WorktreeOperationRouteState
 } from './worktree-operation-route'
 import { routeForOwner } from './worktree-owner-route'
-import { getLocalPathOpenOwnerForRoute } from '../../local-path-open-guard'
+import { getLocalPathOpenOwnerForRoute } from '../../files/os-open/local-path-open-guard'
 
 export type WorktreeRowOpenInOwner = {
   runtimeEnvironmentId: string | null

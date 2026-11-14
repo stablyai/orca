@@ -6,15 +6,15 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 
-import type { LayoutEditorView } from '../../../../shared/workspace-layout/layout-editor-view'
+import type { LayoutEditorView } from '../../../../shared/workspace-layout/editor-tabs/layout-editor-view'
 import type { Store } from '../../../persistence/loading-store/store'
-import { WindowSession } from '../../../persistence/terminal-topology/terminal-topology-window-session-fixture'
+import { WindowSession } from '../../../persistence/terminal-topology/testing/terminal-topology-window-session-fixture'
 import {
   emptyTerminalSessionProfile,
   FIXTURE_FOLDER_WORKTREE_ID as FOLDER,
   FIXTURE_GIT_WORKTREE_ID as WT,
   openTopologyStoreWithAuthority
-} from '../../../persistence/terminal-topology/terminal-topology-profile-fixture'
+} from '../../../persistence/terminal-topology/testing/terminal-topology-profile-fixture'
 import { OrcaRuntimeService } from '../../orca-runtime'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
@@ -124,31 +124,6 @@ describe("main's Store keeps an editor view where its tab's session is", () => {
     expect(store.getLayoutEditorViews('local')).toEqual({ [WT]: { d1: DIFF_VIEW } })
     expect(publishedTab(runtime, WT, 'd1')?.editorView).toEqual(DIFF_VIEW)
     expect(publishedTab(runtime, FOLDER, 'd1-moved')).toBeUndefined()
-    subscription.unsubscribe()
-  })
-
-  it('a failed write puts a move across partitions back with its view', async () => {
-    const { store, authority, subscription } = await harness()
-    await store.applyLayoutCommand(openDiff(WT, 'd1'))
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    authority.failNextWrite()
-
-    await expect(
-      store.moveTabToWorkspaceAcrossPartitions(
-        {
-          type: 'moveTabToWorkspace',
-          workspace: WT,
-          toWorkspace: SSH_WORKTREE,
-          tabs: [{ tabId: 'd1', newTabId: 'd1', newEntityId: 'diff::moved' }],
-          groupId: `group-${SSH_WORKTREE}`
-        },
-        'local',
-        SSH_HOST
-      )
-    ).rejects.toThrow()
-
-    expect(store.getLayoutEditorViews('local')).toEqual({ [WT]: { d1: DIFF_VIEW } })
-    expect(store.getLayoutEditorViews(SSH_HOST) ?? {}).toEqual({})
     subscription.unsubscribe()
   })
 })

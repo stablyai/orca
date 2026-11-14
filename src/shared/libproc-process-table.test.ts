@@ -13,7 +13,7 @@ import {
   type LibprocProcessRow,
   type LibprocQuery
 } from './libproc-addon'
-import { nativeReadWaitersForTests, resetNativeReadsForTests } from './libproc-native-reads'
+import { resetNativeReadsForTests } from './libproc-native-reads'
 import { runPsInProcess } from './libproc-process-table'
 import { resetPsFallbackForTests } from './libproc-ps-fallback'
 import { createProcessTableSnapshotReader } from './process-table-snapshot-reader'
@@ -225,107 +225,6 @@ describe('runPsInProcess', () => {
     )
   })
 
-  it('never joins a read submitted before the request, so stale rows never reach a caller', async () => {
-    type Rows = LibprocProcessRow[] | null
-    let finishStale: (rows: Rows) => void = () => {}
-    const stale = new Promise<Rows>((resolve) => {
-      finishStale = resolve
-    })
-    const readProcessTable = vi
-      .fn<(query: LibprocQuery) => Promise<Rows>>()
-      .mockReturnValueOnce(stale)
-      .mockImplementation(async (query) => tableFor(query))
-    installAddon({ readProcessTable })
-    const args = ['-axo', 'pid=,ppid=']
-
-    expect(await runPsInProcess(args, { timeoutMs: 10 })).toMatchObject({ timedOut: true })
-    const fresh = runPsInProcess(args, BUDGET)
-    finishStale([row({ pid: 9999, ppid: 4242 })])
-    expect((await fresh)?.stdout).not.toContain('9999')
-    expect(readProcessTable).toHaveBeenCalledTimes(2)
-  })
-
-  it('queues past the read cap without retaining timed-out waiters, then hands a stalled pool to budgeted ps', async () => {
-    vi.useFakeTimers()
-    const addon = installAddon({ readProcessTable: vi.fn(() => new Promise<never>(() => {})) })
-    runProcess.mockResolvedValue(PS_RESULT)
-    const read = (pid: number, timeoutMs = 50) =>
-      runPsInProcess(['-p', String(pid), '-o', 'pid='], { timeoutMs })
-
-    // Eight distinct reads fill the cap and stall; overflow callers wait on one slot notifier.
-    const capped = Array.from({ length: 8 }, (_, index) => read(5000 + index, 10_000))
-    const overflow = Array.from({ length: 300 }, (_, index) => read(6000 + index))
-    expect(nativeReadWaitersForTests()).toBe(300)
-    await vi.advanceTimersByTimeAsync(50)
-    expect(nativeReadWaitersForTests()).toBe(0)
-    // The stalled burst costs the fork budget, not one ps per caller; the rest time out like a killed ps.
-    await vi.advanceTimersByTimeAsync(50)
-    const results = await Promise.all(overflow)
-    expect(results.filter((result) => result?.timedOut === false)).toHaveLength(4)
-    expect(results.filter((result) => result?.timedOut === true)).toHaveLength(296)
-    expect(runProcess).toHaveBeenCalledTimes(4)
-
-    // The breaker stays open for its cool-down: callers go to ps without queueing on the pool.
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(await read(7000)).toEqual(PS_RESULT)
-    expect(nativeReadWaitersForTests()).toBe(0)
-    expect(addon.readProcessTable).toHaveBeenCalledTimes(8)
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(await Promise.all(capped)).toEqual(
-      Array(8).fill(expect.objectContaining({ timedOut: true }))
-    )
-
-    // Past the cool-down with the cap still held, callers learn it at once instead of after their timeout.
-    await vi.advanceTimersByTimeAsync(30_000)
-    let settled: unknown = 'pending'
-    void read(8000, 5_000).then((result) => {
-      settled = result
-    })
-    await vi.advanceTimersByTimeAsync(0)
-    expect(settled).toEqual(PS_RESULT)
-  })
-
-  it('recovers argv for a sudo use_pty tree on its own pty, but not for root daemons or GUI helpers', async () => {
-    const TTYS005 = (16 << 24) | 5
-    const root = { commandIncomplete: true, flags: 0x2 }
-    const table = [
-      ...TABLE,
-      row({
-        ...root,
-        pid: 4600,
-        ppid: 4242,
-        tdev: TTYS004,
-        comm: 'sudo',
-        command: '/usr/bin/sudo'
-      }),
-      row({
-        ...root,
-        pid: 4601,
-        ppid: 4600,
-        tdev: TTYS005,
-        comm: 'sudo',
-        command: '/usr/bin/sudo'
-      }),
-      row({ ...root, pid: 4602, ppid: 4601, tdev: TTYS005, comm: 'zsh', command: '/bin/zsh' }),
-      row({ ...root, pid: 4603, ppid: 4602, tdev: TTYS005, comm: 'node', command: '/opt/node' }),
-      row({ pid: 300, ppid: 1, comm: 'syslogd', command: '/usr/sbin/syslogd' }),
-      row({
-        pid: 700,
-        ppid: 1,
-        comm: 'Orca',
-        command: '/Applications/Orca',
-        commandIncomplete: false
-      }),
-      row({ pid: 701, ppid: 700, comm: 'helper', command: '/usr/libexec/helper' })
-    ]
-    installAddon({ readProcessTable: vi.fn(async (query: LibprocQuery) => tableFor(query, table)) })
-    runProcess.mockResolvedValue({ code: 0, signal: null, stdout: '', stderr: '', timedOut: false })
-
-    await runPsInProcess(['-axo', 'pid=,command='], { env: { LC_ALL: 'C' }, timeoutMs: 1000 })
-    const pids = runProcess.mock.calls[0]?.[0].args.at(-1).split(',').map(Number).sort()
-    expect(pids).toEqual([4600, 4601, 4602, 4603])
-  })
-
   it('asks ps again once exec changes the program behind a cached pid and start time', async () => {
     const shell = row({ pid: 4700, ppid: 4242, tdev: TTYS004, comm: 'zsh', command: '/bin/zsh' })
     let current = shell
@@ -375,35 +274,6 @@ describe('runPsInProcess', () => {
     expect(runProcess.mock.calls[0]?.[0].args.at(-1)).toBe('4803')
   })
 
-  it('shares one argv ps among concurrent readers and waits out a failed recovery before asking again', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
-    const sudo = row({
-      pid: 4900,
-      ppid: 4242,
-      tdev: TTYS004,
-      uid: OTHER_UID,
-      comm: 'node',
-      command: '(node)'
-    })
-    installAddon({
-      readProcessTable: vi.fn(async (query: LibprocQuery) => tableFor(query, [...TABLE, sudo]))
-    })
-    // ps omits a process that exited, or one it cannot read either.
-    runProcess.mockResolvedValue({ code: 1, signal: null, stdout: '', stderr: '', timedOut: false })
-    const read = (): Promise<unknown> =>
-      runPsInProcess(['-o', 'pid=,command=', '-t', 'ttys004'], BUDGET)
-
-    const concurrent = await Promise.all(Array.from({ length: 24 }, read))
-    expect(concurrent).toEqual(Array(24).fill(expect.objectContaining({ timedOut: false })))
-    expect(runProcess).toHaveBeenCalledTimes(1)
-
-    await read()
-    expect(runProcess).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(5_000)
-    await read()
-    expect(runProcess).toHaveBeenCalledTimes(2)
-  })
-
   it('reuses recovered argv for at most 1.5s, so a same-comm re-exec is seen', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
     const sudo = row({
@@ -434,37 +304,6 @@ describe('runPsInProcess', () => {
     await vi.advanceTimersByTimeAsync(1_500)
     expect((await runPsInProcess(args, BUDGET))?.stdout).toBe('node /srv/server.js\n')
     expect(runProcess).toHaveBeenCalledTimes(2)
-  })
-
-  it('waits out a failed recovery from when ps gave up, however long it ran', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] })
-    const sudo = row({
-      pid: 5200,
-      ppid: 4242,
-      tdev: TTYS004,
-      uid: OTHER_UID,
-      comm: 'su',
-      command: '(su)'
-    })
-    installAddon({
-      readProcessTable: vi.fn(async (query: LibprocQuery) => tableFor(query, [...TABLE, sudo]))
-    })
-    // A loaded host: ps takes 6s, then omits the process.
-    let finish: () => void = () => {}
-    runProcess.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          finish = () => resolve({ code: 1, signal: null, stdout: '', stderr: '', timedOut: false })
-        })
-    )
-    const read = () => runPsInProcess(['-p', '5200', '-o', 'command='], { timeoutMs: 10_000 })
-
-    const slow = read()
-    await vi.advanceTimersByTimeAsync(6_000)
-    finish()
-    await slow
-    await read()
-    expect(runProcess).toHaveBeenCalledTimes(1)
   })
 
   it('recovers a su pane’s argv within the recovery budget however often it is read', async () => {

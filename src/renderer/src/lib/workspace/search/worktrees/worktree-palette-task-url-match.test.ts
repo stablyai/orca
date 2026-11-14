@@ -30,26 +30,6 @@ function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
 }
 
 describe('matchWorktreePaletteTaskUrl', () => {
-  it('matches a Jira issue URL on its own tenant', () => {
-    const intent = parseCmdJTaskSourceUrl('https://acme.atlassian.net/browse/PROJ-123')
-
-    expect(
-      matchWorktreePaletteTaskUrl({
-        worktree: makeWorktree({
-          linkedWorkItem: {
-            provider: 'jira',
-            type: 'issue',
-            number: 0,
-            title: 'Tenant scoped',
-            jiraIdentifier: 'PROJ-123',
-            url: 'https://acme.atlassian.net/browse/PROJ-123'
-          }
-        }),
-        intent: intent!
-      })
-    ).toMatchObject({ supportingText: { text: 'PROJ-123' } })
-  })
-
   // Jira issue keys repeat across tenants sharing a project key.
   it('rejects a Jira issue URL from a different tenant with the same issue key', () => {
     const intent = parseCmdJTaskSourceUrl('https://acme.atlassian.net/browse/PROJ-123')

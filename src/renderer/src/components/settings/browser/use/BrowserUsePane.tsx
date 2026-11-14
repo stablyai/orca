@@ -1,18 +1,21 @@
 import { useEffect, useState } from 'react'
-import { ORCA_CLI_SKILL_NAME } from '@/lib/agent-feature-skill-names'
+import { ORCA_CLI_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
 import { BROWSER_USE_ENABLED_STORAGE_KEY } from '@/lib/browser/browser-use-setup-state'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill
-} from '@/hooks/useInstalledAgentSkills'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
-import { cn } from '@/lib/utils'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
+import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
+import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../../store/index'
 import '../../../../../../shared/constants'
 import { BROWSER_FAMILY_LABELS } from '../../../../../../shared/browser/browser-family-labels'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { matchesSettingsSearch } from '../../search/settings-search'
-import { getBrowserUsePaneSearchEntries } from './browser-use-search'
+import {
+  BROWSER_USE_SETTINGS_TARGET_ID,
+  getBrowserUsePaneSearchEntries
+} from './browser-use-search'
 import { BrowserUseExamples } from './BrowserUseExamples'
 import { BrowserUseComputerUseNotice } from './BrowserUseComputerUseNotice'
 import { BrowserUseEnableSwitch } from './BrowserUseEnableSwitch'
@@ -88,10 +91,13 @@ export function BrowserUseSetup({
 
   if (!browserUseEnabled) {
     return (
-      <div className="flex items-center justify-between gap-4 py-3">
+      <div
+        id={BROWSER_USE_SETTINGS_TARGET_ID}
+        className="flex items-center justify-between gap-4 py-3"
+      >
         <div className="space-y-0.5">
           <p className="text-sm font-medium">
-            {t('auto.components.settings.BrowserUsePane.b8a1f2d84d', 'Agent Browser Use')}
+            {t('auto.components.settings.BrowserUsePane.507fdae102', 'Agent browser use')}
           </p>
           <p className="text-xs text-muted-foreground">
             {t(
@@ -109,11 +115,11 @@ export function BrowserUseSetup({
   }
 
   return (
-    <div className="space-y-3 py-4">
+    <div id={BROWSER_USE_SETTINGS_TARGET_ID} className="space-y-3 py-4">
       <div className="flex items-center justify-between gap-3">
         <div className="space-y-0.5">
           <p className="text-sm font-semibold">
-            {t('auto.components.settings.BrowserUsePane.b8a1f2d84d', 'Agent Browser Use')}
+            {t('auto.components.settings.BrowserUsePane.507fdae102', 'Agent browser use')}
           </p>
           <p className="text-xs text-muted-foreground">
             {t(
@@ -146,8 +152,8 @@ export function BrowserUseSetup({
       {showSkillStep ? (
         <SearchableSetting
           title={t(
-            'auto.components.settings.BrowserUsePane.2d6ead9ab2',
-            'Install Browser Use Skill'
+            'auto.components.settings.BrowserUsePane.4451b3c0a6',
+            'Install browser use skill'
           )}
           description={t(
             'auto.components.settings.BrowserUsePane.68ea76eb71',

@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 
-import { shouldPreserveEditableFocus } from '@/lib/editable-focus-preservation'
+import { focusNativeChatPromptCard } from '../../prompts/use-native-chat-prompt-card-focus'
+import { shouldPreserveEditableFocus } from '@/lib/text-input/focus/editable-focus-preservation'
 import { scheduleNextFrame } from '@/components/terminal-pane/input/ime/terminal-ime-input-context-refresh'
-import { getOverlayFocusOwners } from '@/lib/overlay-focus-ownership'
+import { getOverlayFocusOwners } from '@/lib/overlay-interaction/overlay-focus-ownership'
 import type { NativeChatComposerHandle } from '../native-chat-composer-types'
 import { registerNativeChatPane } from './native-chat-composer-mount'
 import {
@@ -64,7 +65,7 @@ export function useNativeChatComposerRevealFocus({
   }, [composerRef])
 
   useLayoutEffect(() => {
-    if (!revealed || !composerReady) {
+    if (!revealed || (!composerReady && !surfaceReady)) {
       return
     }
     const reclaim = (
@@ -75,6 +76,20 @@ export function useNativeChatComposerRevealFocus({
         claimedRef.current = true
         explicitRef.current = false
         setReclaimCount((count) => count + 1)
+        return
+      }
+      if (!composerReady) {
+        const root = rootRef.current
+        const active = root?.ownerDocument.activeElement ?? null
+        if (
+          root &&
+          (!onlyIfFocusUnclaimed || active === root.ownerDocument.body) &&
+          !shouldPreserveEditableFocus(active)
+        ) {
+          if (!focusNativeChatPromptCard(root, null)) {
+            root.focus({ preventScroll: true })
+          }
+        }
         return
       }
       if (onlyIfFocusUnclaimed) {
@@ -103,7 +118,7 @@ export function useNativeChatComposerRevealFocus({
       setReclaimCount((count) => count + 1)
     }
     return registerNativeChatComposerReclaim(tabId, reclaim, rootRef.current)
-  }, [composerReady, composerRef, revealed, rootRef, tabId])
+  }, [composerReady, composerRef, revealed, rootRef, surfaceReady, tabId])
 
   useEffect(() => {
     if (!revealed || !composerReady) {

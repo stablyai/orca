@@ -8,7 +8,7 @@ import {
   PROXY_URL_FAILURE_COPY,
   type ProxyUrlFailureCode
 } from '../../../../../../shared/network-proxy'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useAppStore } from '../../../../store/index'
 import { Button } from '../../../ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../../ui/collapsible'
@@ -18,6 +18,8 @@ import { Textarea } from '../../../ui/textarea'
 import { getAdvancedNetworkSearchEntries } from './advanced-network-search'
 import { NodeDistMirrorSettingField } from './NodeDistMirrorSettingField'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
+import { useSettingsTargetReveal } from '../../section-layout/settings-target-highlight'
+import { NODE_DIST_MIRROR_SETTINGS_TARGET_ID } from '../../navigation/settings-navigation-types'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from '../../search/settings-search'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -152,6 +154,7 @@ export function AdvancedNetworkSettingsSection({
   const t = useTranslate()
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const [proxyConfigOpen, setProxyConfigOpen] = useState(false)
+  const proxyRevealRef = useSettingsTargetReveal<HTMLDivElement>(() => setProxyConfigOpen(true))
   const proxyConfigForcedOpen =
     shouldOpenNetworkProxyConfig(searchQuery) || hasConfiguredNetworkProxy(settings)
   const proxyConfigExpanded = proxyConfigOpen || proxyConfigForcedOpen
@@ -245,7 +248,7 @@ export function AdvancedNetworkSettingsSection({
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0 space-y-0.5">
           <Label>
-            {t('auto.components.settings.AdvancedNetworkSettingsSection.f00daf6324', 'HTTP Proxy')}
+            {t('auto.components.settings.AdvancedNetworkSettingsSection.f8ec545b7c', 'HTTP proxy')}
           </Label>
           <p className="text-xs text-muted-foreground">
             {t(
@@ -256,7 +259,11 @@ export function AdvancedNetworkSettingsSection({
         </div>
       </div>
 
-      <Collapsible open={proxyConfigExpanded} onOpenChange={setProxyConfigOpen}>
+      <Collapsible
+        ref={proxyRevealRef}
+        open={proxyConfigExpanded}
+        onOpenChange={setProxyConfigOpen}
+      >
         <CollapsibleTrigger asChild>
           <Button
             type="button"
@@ -273,13 +280,14 @@ export function AdvancedNetworkSettingsSection({
             />
           </Button>
         </CollapsibleTrigger>
-        <CollapsibleContent>
+        {/* Mounted while closed so a settings jump can find and reveal the proxy fields. */}
+        <CollapsibleContent forceMount className="data-[state=closed]:hidden">
           <div className="mt-2 space-y-4 rounded-md border border-border/60 bg-muted/20 px-3 py-3">
             <div className="space-y-2">
               <Label htmlFor="settings-http-proxy-url">
                 {t(
-                  'auto.components.settings.AdvancedNetworkSettingsSection.f00daf6324',
-                  'HTTP Proxy'
+                  'auto.components.settings.AdvancedNetworkSettingsSection.f8ec545b7c',
+                  'HTTP proxy'
                 )}
               </Label>
               <Input
@@ -322,8 +330,8 @@ export function AdvancedNetworkSettingsSection({
             <div className="space-y-2">
               <Label htmlFor="settings-http-proxy-bypass-rules">
                 {t(
-                  'auto.components.settings.AdvancedNetworkSettingsSection.f6d76cc8f4',
-                  'Proxy Bypass Rules'
+                  'auto.components.settings.AdvancedNetworkSettingsSection.abbc3efa4a',
+                  'Proxy bypass rules'
                 )}
               </Label>
               <Textarea
@@ -350,10 +358,12 @@ export function AdvancedNetworkSettingsSection({
               </p>
             </div>
 
-            <NodeDistMirrorSettingField
-              value={settings.nodeDistMirrorUrl}
-              onCommit={(nodeDistMirrorUrl) => updateSettings({ nodeDistMirrorUrl })}
-            />
+            <div id={NODE_DIST_MIRROR_SETTINGS_TARGET_ID}>
+              <NodeDistMirrorSettingField
+                value={settings.nodeDistMirrorUrl}
+                onCommit={(nodeDistMirrorUrl) => updateSettings({ nodeDistMirrorUrl })}
+              />
+            </div>
           </div>
         </CollapsibleContent>
       </Collapsible>

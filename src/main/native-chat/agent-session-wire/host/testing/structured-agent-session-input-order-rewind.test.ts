@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../../../agent-session-journal/journal-observation.test-support'
 import { it, expect, vi } from 'vitest'
 import {
   createQueuedMessageTestRig,
@@ -8,13 +9,13 @@ import { eventually } from './structured-agent-session-queued-message-rig-provid
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey
 } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 
-it('preserves existing queuedAt across two live replacements despite an older original receipt', async () => {
+it('preserves queued command placement across two rewinds and later send settlement', async () => {
   const rewind = vi.fn(async () => ({ ok: true as const }))
   const rig = await createQueuedMessageTestRig({ restartable: true, rewind })
   try {
@@ -27,44 +28,28 @@ it('preserves existing queuedAt across two live replacements despite an older or
     )
     await rig.settleAccepted(second.id, 'second')
     const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
-    const epoch1 = journal.epoch
-    const original = journal.replaceEpochItems.bind(journal)
-    const snapshots: unknown[] = []
+    const epoch1 = (await journal.reads.cursor()).epoch
+    const original = journal.completeRewind.bind(journal)
+    let repeated = false
     let command: Promise<unknown> | undefined, rewindAgain: Promise<unknown> | undefined
     const c = hostTestOperationId()
     const fields = { command: 'compact' as const, delivery: 'queue-if-active' as const }
-    const capture = () => ({
-      epoch: journal.epoch,
-      submissions: journal.submissions().map((s) => ({
-        id: s.clientMessageId,
-        seq: s.acceptedSequence,
-        handed: s.handedOverAt,
-        state: s.dispatchState
-      })),
-      cards: journal.queuedMessages.list(),
-      pauses: journal.queuedMessages.pauses()
-    })
-    vi.spyOn(journal, 'replaceEpochItems').mockImplementation(async (...args) => {
-      snapshots.push(capture())
+    vi.spyOn(journal, 'completeRewind').mockImplementation(async (...args) => {
       const result = await original(...args)
-      snapshots.push(capture())
-      if (snapshots.length === 2) {
+      if (!repeated) {
+        repeated = true
         // Real admissions queue before delivery resumes after the first replacement.
         command = rig.host.conversationCommand(CALLER, {
           ...fields,
           envelope: rig.envelope(fields, 'agentSession.conversationCommand', c),
           userSend: true
         })
-        const target = journal
-          .snapshot()
-          .items.find(
-            (item) =>
-              item.body.kind === 'message' &&
-              item.body.blocks.some(
-                (block) => block.type === 'text' && block.text === 'work on this'
-              )
-          )!
-        const next = { itemId: target.itemId, expectedEpoch: journal.epoch }
+        const target = (await readTestJournalItems(journal)).find(
+          (item) =>
+            item.body.kind === 'message' &&
+            item.body.blocks.some((block) => block.type === 'text' && block.text === 'work on this')
+        )!
+        const next = { itemId: target.itemId, expectedEpoch: (await journal.reads.cursor()).epoch }
         rewindAgain = rig.host.rewind(CALLER, {
           ...next,
           envelope: rig.envelope(next, 'agentSession.rewind', hostTestOperationId())
@@ -83,35 +68,24 @@ it('preserves existing queuedAt across two live replacements despite an older or
     expect(await command).toMatchObject({ ok: true, value: { queued: { state: 'waiting' } } })
     const secondVerdict = await rewindAgain
     expect(secondVerdict).toMatchObject({ ok: true })
-    expect(snapshots).toHaveLength(4)
-    const receipt = rig.store.readCommandReceipt({ kind: 'global' }, m.id)
-    const card = journal.queuedMessages.get(c)!
-    expect(receipt).toMatchObject({
-      verdict: 'readable',
-      receipt: {
-        status: 'accepted',
-        method: 'agentSession.send',
-        sessionId: SESSION,
-        result: { kind: 'journal-row', epoch: epoch1 }
-      }
-    })
+    const card = (await journal.queuedMessages.get(c))!
     expect(card.queuedAt!.epoch).toBe(epoch1)
-    expect(journal.cursor().epoch).not.toBe(epoch1)
-    expect(card.queuedAt!.epoch).toBe(journal.physicalCursor().epoch)
     expect(card.queuedAt!.sequence).toBeGreaterThanOrEqual(
-      journal.submission(m.id)!.acceptedSequence!
+      (await journal.reads.submission(m.id))!.acceptedSequence!
     )
-    expect(journal.queuedMessages.pauses()).toEqual([])
+    expect(await journal.queuedMessages.pauses()).toEqual([])
     await eventually(async () => expect((await rig.submission(m.id))?.handedOverAt).toBeDefined())
     await rig.settleAccepted(m.id, 'M')
     await eventually(() => expect(rig.compact).toHaveBeenCalledTimes(1))
     const compact = rig.compact.mock.calls[0]![0].command
     rig.finishCompact()
-    await eventually(() =>
-      expect(journal.item(agentJournalItemKey(compact.identity))?.body).toMatchObject({
-        kind: 'turn',
-        state: 'completed'
-      })
+    await eventually(async () =>
+      expect((await journal.reads.item(agentJournalItemKey(compact.identity)))?.body).toMatchObject(
+        {
+          kind: 'turn',
+          state: 'completed'
+        }
+      )
     )
     expect(await rig.submission(m.id)).toMatchObject({ dispatchState: 'accepted' })
   } finally {
