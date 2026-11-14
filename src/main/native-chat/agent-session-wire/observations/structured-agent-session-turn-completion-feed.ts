@@ -34,7 +34,7 @@ export type StructuredAgentSessionTurnCompletionSubscriber = {
 type CompletionFeedCursor = { epoch: string; sequence: number }
 
 type CompletionFeedSession = {
-  journal: Pick<AgentSessionJournal, 'cursor'>
+  journal: Pick<AgentSessionJournal, 'cursor'> & Partial<Pick<AgentSessionJournal, 'threadGoal'>>
   params: { location: AgentSessionRecord['location'] }
 }
 
@@ -183,7 +183,10 @@ export class StructuredAgentSessionTurnCompletionFeed {
       state.owesWork ||
       !request ||
       (baseline.settled?.kind === request.kind && baseline.settled.id === request.id) ||
-      this.heldByLiveWork(sessionId, state, request)
+      this.heldByLiveWork(sessionId, state, request) ||
+      (request.outcome === 'success' &&
+        state.summary.status !== 'attention' &&
+        session.journal.threadGoal?.()?.status === 'active')
     ) {
       return null
     }
