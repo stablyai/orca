@@ -1,5 +1,6 @@
 // Validate persisted sessions at read boundaries so malformed legacy data never reaches React. Ignore unknown fields, validate fields we read, and salvage independent entries via zod-salvage; only non-session payloads reset to defaults.
 import { z } from 'zod'
+import { AI_VAULT_TITLE_AGENTS } from '../ai-vault/contracts/ai-vault-session-title'
 import {
   leafStringsSchema,
   terminalLayoutSnapshotSchema
@@ -45,7 +46,7 @@ export const terminalTabSchema = z.object({
   generatedTitle: z.string().nullable().optional(),
   aiVaultTitle: z
     .object({
-      agent: z.enum(['claude', 'codex']),
+      agent: z.enum(AI_VAULT_TITLE_AGENTS),
       sessionId: z.string(),
       title: z.string(),
       kind: z.enum(['named', 'fallback']).optional().catch(undefined)
@@ -91,7 +92,7 @@ const tabSchema = z.object({
   generatedLabel: z.string().nullable().optional(),
   aiVaultTitle: z
     .object({
-      agent: z.enum(['claude', 'codex']),
+      agent: z.enum(AI_VAULT_TITLE_AGENTS),
       sessionId: z.string(),
       title: z.string(),
       kind: z.enum(['named', 'fallback']).optional().catch(undefined)

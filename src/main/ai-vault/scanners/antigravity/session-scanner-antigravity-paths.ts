@@ -43,6 +43,22 @@ export function antigravityAcpSessionMetadataPath(historyPath: string, sessionId
   return join(dirname(historyPath), 'conversations', `${sessionId}.meta`)
 }
 
+/** Resolves `<home>/cache/conversation_metadata.json` for a brain transcript path, preserving separator style. */
+export function antigravityMetadataPathFromTranscriptPath(filePath: string): string | null {
+  if (!isAntigravityTranscriptPath(filePath)) {
+    return null
+  }
+  const match =
+    /^(.*)[\\/][^\\/]+[\\/][^\\/]+[\\/]\.system_generated[\\/]logs[\\/]transcript(?:_full)?\.jsonl$/.exec(
+      filePath
+    )
+  if (!match?.[1]) {
+    return null
+  }
+  const separator = filePath.includes('\\') ? '\\' : '/'
+  return `${match[1]}${separator}cache${separator}conversation_metadata.json`
+}
+
 function pathSegments(filePath: string): string[] {
   return filePath.split(/[\\/]+/).filter(Boolean)
 }

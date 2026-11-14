@@ -8,10 +8,13 @@ import {
 import { parseAgentSessionFileCached } from '../parse-cache/session-scanner-parse-cache'
 
 import {
-  codexHomeFromSessionFilePath,
-  readCodexSessionIndexTitles,
+  readCodexSessionIndexTitle,
   withCodexSessionIndexTitles
 } from '../scanners/codex/session-scanner-codex-title-index'
+import {
+  readAntigravityMetadataTitle,
+  withAntigravityMetadataTitles
+} from '../scanners/antigravity/session-scanner-antigravity-title-index'
 
 const TITLE_PARSE_CONCURRENCY = 4
 
@@ -46,28 +49,30 @@ async function readOneTitle(
       : title
   }
   try {
-    const home = request.agent === 'codex' ? codexHomeFromSessionFilePath(transcriptPath) : null
-    if (home) {
-      const title = (await readCodexSessionIndexTitles(home)).get(request.sessionId)
-      if (signal?.aborted) {
-        return null
+    const indexedTitle =
+      request.agent === 'codex'
+        ? await readCodexSessionIndexTitle(transcriptPath, null, request.sessionId)
+        : request.agent === 'antigravity'
+          ? await readAntigravityMetadataTitle(transcriptPath, request.sessionId, signal)
+          : null
+    if (signal?.aborted) {
+      return null
+    }
+    if (indexedTitle) {
+      const resolved: AiVaultSessionTitle = {
+        agent: request.agent,
+        sessionId: request.sessionId,
+        title: indexedTitle,
+        kind: 'named'
       }
-      if (title) {
-        const resolved: AiVaultSessionTitle = {
-          agent: request.agent,
-          sessionId: request.sessionId,
-          title,
-          kind: 'named'
-        }
-        cache?.set(resolved)
-        return resolved
-      }
+      cache?.set(resolved)
+      return resolved
     }
     const stats = await wslGatedLstat(transcriptPath, 'scan', signal)
     if (!stats.isFile() || signal?.aborted) {
       return null
     }
-    // Raw lstat matches scanner keys only for providers without content dependencies: Claude and Codex.
+    // Raw lstat matches scanner keys only for providers without content sidecar dependencies.
     const candidate = {
       agent: request.agent,
       file: {
@@ -129,7 +134,9 @@ export function readAiVaultSessionTitlesFromFiles(
   requests: AiVaultSessionTitleRequest[],
   options: { cache?: AiVaultSessionTitleCache; signal?: AbortSignal } = {}
 ): Promise<AiVaultSessionTitlesResult> {
-  return withCodexSessionIndexTitles(() => readSessionTitles(requests, options))
+  return withCodexSessionIndexTitles(() =>
+    withAntigravityMetadataTitles(() => readSessionTitles(requests, options))
+  )
 }
 
 async function readSessionTitles(
