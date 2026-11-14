@@ -1,5 +1,6 @@
 import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
 import { emitAgentSubjectReads } from '@/attention/agent-subject-read-actions'
+import { linkRecordWrite } from '@/store/keyed-record-transitions'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import {
   collectAcknowledgedAgentNotificationId,
@@ -73,7 +74,16 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
           return s
         }
         return {
-          ...(next ? { acknowledgedAgentsByPaneKey: next } : {}),
+          ...(next
+            ? {
+                // Card unread readers skip acknowledgements of panes they do not show.
+                acknowledgedAgentsByPaneKey: linkRecordWrite(
+                  next,
+                  s.acknowledgedAgentsByPaneKey,
+                  paneKeys
+                )
+              }
+            : {}),
           ...(nextUnreadCompletions ? { unreadAgentCompletionPanes: nextUnreadCompletions } : {}),
           ...(nextManual ? { manuallyUnreadTurnsByPaneKey: nextManual } : {})
         }
@@ -108,7 +118,16 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
           return s
         }
         return {
-          ...(next ? { acknowledgedAgentsByPaneKey: next } : {}),
+          ...(next
+            ? {
+                // Card unread readers skip acknowledgements of panes they do not show.
+                acknowledgedAgentsByPaneKey: linkRecordWrite(
+                  next,
+                  s.acknowledgedAgentsByPaneKey,
+                  paneKeys
+                )
+              }
+            : {}),
           ...(nextManual ? { manuallyUnreadTurnsByPaneKey: nextManual } : {})
         }
       }),

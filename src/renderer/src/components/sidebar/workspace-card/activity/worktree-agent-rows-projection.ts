@@ -9,6 +9,8 @@ import type { AppState } from '@/store/types'
 
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getAgentPaneExecutionHost } from '@/store/slices/agent-status/agent-pane-execution-host'
+import { recordChangeReaches } from '@/store/keyed-record-change-reads'
+import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 
 export const EMPTY_AGENT_ROWS: DashboardAgentRow[] = []
 
@@ -44,19 +46,39 @@ function rowBelongsToHost(
   )
 }
 
-/** Which host this workspace's rows run on, and the store inputs that answer can change with. */
+function sameInputs(left: readonly unknown[], right: readonly unknown[]): boolean {
+  return (
+    left.length === right.length && left.every((value, index) => Object.is(value, right[index]))
+  )
+}
+
+/**
+ * Which host this workspace's rows run on. Fixed workspace sources are compared by reference and
+ * the global tab-keyed layout/PTY maps by their changed keys, so other workspaces' writes skip it.
+ */
 function createHostOwnership(worktreeId: string, hostId: ExecutionHostId) {
   let ownerTabs: ReturnType<typeof getStructuredAgentSessionTabsByPaneKey> | undefined
   let needsWorkspaceOwner = false
-  return (state: AppState) => {
+  let catalog: readonly unknown[] = []
+  let workspaceOwner: ReturnType<typeof resolveQualifiedWorktreeExecutionOwner> = null
+  let sources: readonly unknown[] = []
+  let layouts: AppState['terminalLayoutsByTabId'] | undefined
+  let ptys: AppState['ptyIdsByTabId'] | undefined
+  let tabIds: ReadonlySet<string> = new Set()
+  const readTab = (key: string): boolean => tabIds.has(key)
+  const readSources = (state: AppState): readonly unknown[] => {
+    const worktrees = selectWorktreesByRepo(state)
+    if (catalog[0] !== worktrees || catalog[1] !== state.repos) {
+      catalog = [worktrees, state.repos]
+      workspaceOwner = resolveQualifiedWorktreeExecutionOwner(
+        worktrees,
+        state.repos,
+        worktreeId,
+        hostId
+      )
+    }
     const representedTabs = getStructuredAgentSessionTabsByPaneKey(
       state.unifiedTabsByWorktree[worktreeId]
-    )
-    const workspaceOwner = resolveQualifiedWorktreeExecutionOwner(
-      selectWorktreesByRepo(state),
-      state.repos,
-      worktreeId,
-      hostId
     )
     if (ownerTabs !== representedTabs) {
       ownerTabs = representedTabs
@@ -68,40 +90,59 @@ function createHostOwnership(worktreeId: string, hostId: ExecutionHostId) {
         }
       }
     }
-    let stampedHosts: Map<string, ExecutionHostId | undefined> | undefined
-    return {
-      inputs: [
-        representedTabs,
-        state.unifiedTabsByWorktree[worktreeId],
-        workspaceOwner?.hostId,
-        workspaceOwner?.worktree.runtimeOwnerEnvironmentId,
-        workspaceOwner?.worktree.hostId,
-        ...(needsWorkspaceOwner ? structuredAgentSessionOwnerInputs(state) : []),
-        state.terminalLayoutsByTabId,
-        state.ptyIdsByTabId
-      ],
-      belongs: (row: DashboardAgentRow): boolean => {
-        stampedHosts ??= new Map(
-          (state.unifiedTabsByWorktree[worktreeId] ?? [])
-            .filter((tab) => tab.contentType === 'terminal')
-            .map((tab) => [tab.entityId, tab.executionHostId])
-        )
-        return rowBelongsToHost(state, row, hostId, workspaceOwner, stampedHosts)
+    return [
+      representedTabs,
+      state.unifiedTabsByWorktree[worktreeId],
+      workspaceOwner?.hostId,
+      workspaceOwner?.worktree.runtimeOwnerEnvironmentId,
+      workspaceOwner?.worktree.hostId,
+      ...(needsWorkspaceOwner ? structuredAgentSessionOwnerInputs(state) : [])
+    ]
+  }
+  return {
+    /** Whether an input the last `record` read may have changed. */
+    stale(state: AppState): boolean {
+      if (
+        !sameInputs(readSources(state), sources) ||
+        recordChangeReaches(state.terminalLayoutsByTabId, layouts, readTab) ||
+        recordChangeReaches(state.ptyIdsByTabId, ptys, readTab)
+      ) {
+        return true
       }
+      // Writes that missed these tabs are settled, so later reads walk only newer changes.
+      layouts = state.terminalLayoutsByTabId
+      ptys = state.ptyIdsByTabId
+      return false
+    },
+    /** Notes what attributing `rows` reads, then returns the row predicate. */
+    record(state: AppState, rows: readonly (DashboardAgentRow | undefined)[]) {
+      sources = readSources(state)
+      layouts = state.terminalLayoutsByTabId
+      ptys = state.ptyIdsByTabId
+      const nextTabIds = new Set<string>()
+      for (const row of rows) {
+        const tabId = row && parsePaneKey(row.activationPaneKey ?? row.paneKey)?.tabId
+        if (tabId) {
+          nextTabIds.add(tabId)
+        }
+      }
+      tabIds = nextTabIds
+      const owner = workspaceOwner
+      const stampedHosts = new Map(
+        (state.unifiedTabsByWorktree[worktreeId] ?? [])
+          .filter((tab) => tab.contentType === 'terminal')
+          .map((tab) => [tab.entityId, tab.executionHostId])
+      )
+      return (row: DashboardAgentRow): boolean =>
+        rowBelongsToHost(state, row, hostId, owner, stampedHosts)
     }
   }
-}
-
-function sameInputs(left: readonly unknown[], right: readonly unknown[]): boolean {
-  return (
-    left.length === right.length && left.every((value, index) => Object.is(value, right[index]))
-  )
 }
 
 /** The row model shared by mounted cards and hidden-workspace summaries. */
 export function createWorktreeAgentRowsSelector(worktreeId: string, hostId?: ExecutionHostId) {
   const ownership = hostId ? createHostOwnership(worktreeId, hostId) : null
-  let previous: readonly unknown[] = []
+  let previous: DashboardAgentRow[] | undefined
   let result = EMPTY_AGENT_ROWS
   return (state: AppState): DashboardAgentRow[] => {
     // The keyed projection owns the workspace's rows; a host only filters them.
@@ -109,13 +150,11 @@ export function createWorktreeAgentRowsSelector(worktreeId: string, hostId?: Exe
     if (!ownership) {
       return rows
     }
-    const host = ownership(state)
-    const inputs = [rows, ...host.inputs]
-    if (sameInputs(inputs, previous)) {
+    if (rows === previous && !ownership.stale(state)) {
       return result
     }
-    previous = inputs
-    const owned = rows.filter(host.belongs)
+    previous = rows
+    const owned = rows.filter(ownership.record(state, rows))
     // Same-ID twins on another host are rare; an unfiltered list keeps the projection's rows.
     result = owned.length === rows.length ? rows : applyAgentRowLineage(owned)
     return result
@@ -129,16 +168,17 @@ export function createWorktreeAgentHostKeysSelector(worktreeId: string, hostId: 
   let result: readonly string[] = []
   return (state: AppState, keys: readonly string[]): readonly string[] => {
     const projection = state.agentStatusByPaneKey.projection
-    const rows = keys.map((key) => projection.row(key))
-    const host = ownership(state)
-    const inputs = [keys, ...rows, ...host.inputs]
-    if (sameInputs(inputs, previous)) {
+    // Any row change in this workspace moves its revision, so unchanged roots are not read.
+    const inputs = [keys, projection, projection.revision(worktreeId)]
+    if (sameInputs(inputs, previous) && !ownership.stale(state)) {
       return result
     }
     previous = inputs
+    const rows = keys.map((key) => projection.row(key))
+    const belongs = ownership.record(state, rows)
     const owned = keys.filter((_, index) => {
       const row = rows[index]
-      return !row || host.belongs(row)
+      return !row || belongs(row)
     })
     result = owned.length === keys.length ? keys : owned
     return result
