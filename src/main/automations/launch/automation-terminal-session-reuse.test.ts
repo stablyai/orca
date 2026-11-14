@@ -13,8 +13,13 @@ const PANE = 'original-tab:11111111-1111-4111-8111-111111111111'
 function reuse({
   restoreFails = false,
   deliveryFails = false,
-  adoptedState = null as string | null,
+  adoptedState = null,
   recorded = true
+}: {
+  restoreFails?: boolean
+  deliveryFails?: boolean
+  adoptedState?: string | null
+  recorded?: boolean
 } = {}) {
   deliver.mockClear()
   deliver.mockResolvedValue(!deliveryFails)
