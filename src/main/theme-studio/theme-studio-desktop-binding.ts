@@ -19,12 +19,44 @@ import { requestFromRenderer } from '../ipc/renderer-request-relay'
 import { captureOrcaChrome } from '../plugins/view/plugin-view-chrome-shot'
 import { isPluginShotWindowShown } from '../plugins/view/plugin-shot-policy'
 import type { PluginService } from '../plugins/plugin-service'
+import type { Store } from '../persistence/loading-store/store'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import { getUserPluginsDir } from '../plugins/plugin-discovery'
 import { readPluginLockfile } from '../plugins/installation/plugin-install-lockfile-store'
 import { ThemeStudioSession } from './theme-studio-session'
 import { createThemeStudioService, type ThemeStudioWindow } from './theme-studio-service'
 
 const REQUEST_TIMEOUT_MS = 10_000
+
+/** The settings a saved theme replaces, and that picking another theme changes. */
+const THEME_SLOT_KEYS = [
+  'theme',
+  'pluginAppThemeLight',
+  'pluginAppThemeDark',
+  'pluginIconTheme',
+  'terminalThemeDark',
+  'terminalThemeLight',
+  'terminalUseSeparateLightTheme',
+  'terminalColorOverrides',
+  'terminalColorOverridesLight',
+  'terminalPluginPalettes'
+] as const satisfies readonly (keyof GlobalSettings)[]
+
+function pickThemeSlots(settings: GlobalSettings): Partial<GlobalSettings> {
+  // Why null for unset plugin choices: an absent key would not clear what the saved theme set.
+  return {
+    theme: settings.theme,
+    pluginAppThemeLight: settings.pluginAppThemeLight ?? null,
+    pluginAppThemeDark: settings.pluginAppThemeDark ?? null,
+    pluginIconTheme: settings.pluginIconTheme ?? null,
+    terminalThemeDark: settings.terminalThemeDark,
+    terminalThemeLight: settings.terminalThemeLight,
+    terminalUseSeparateLightTheme: settings.terminalUseSeparateLightTheme,
+    terminalColorOverrides: settings.terminalColorOverrides,
+    terminalColorOverridesLight: settings.terminalColorOverridesLight,
+    terminalPluginPalettes: settings.terminalPluginPalettes ?? []
+  }
+}
 
 const THEME_STUDIO_CHANNELS = {
   request: THEME_STUDIO_REQUEST_CHANNEL,
@@ -52,7 +84,7 @@ export function bindThemeStudio(options: {
   userDataPath: string
   pluginService: PluginService
   getMainWindow: () => BrowserWindow | null
-  agentEditsAllowed: () => boolean
+  store: Pick<Store, 'getSettings' | 'updateSettings' | 'onSettingsChanged'>
 }): void {
   if (options.serveMode) {
     setThemeStudioForRpc(null)
@@ -81,13 +113,8 @@ export function bindThemeStudio(options: {
         }
         return reply.resolved
       },
-      select: async (pluginKey) => {
-        const reply = await ask(target, { kind: 'select', pluginKey })
-        return { selected: reply.selected === true, previous: reply.previous ?? {} }
-      },
-      restore: async (settings) => {
-        await ask(target, { kind: 'restore', settings })
-      },
+      select: async (pluginKey) =>
+        (await ask(target, { kind: 'select', pluginKey })).selected === true,
       capture: (mode) =>
         captureOrcaChrome(target, isPluginShotWindowShown(mainWindow), {
           region: 'window',
@@ -114,7 +141,13 @@ export function bindThemeStudio(options: {
     },
     installFolder: installHostWrittenPluginFolder,
     // Why default on: the setting is new, so a profile that never saw it allows edits.
-    agentEditsAllowed: () => options.agentEditsAllowed(),
+    agentEditsAllowed: () => options.store.getSettings().allowAgentThemeEdits !== false,
+    slots: {
+      snapshot: () => pickThemeSlots(options.store.getSettings()),
+      restore: (previous) => {
+        options.store.updateSettings(previous, { notifyListeners: true })
+      }
+    },
     pluginsRoot: join(root, 'plugins')
   })
   const fromMainWindow = (sender: WebContents): boolean => sender === contents()
@@ -130,11 +163,15 @@ export function bindThemeStudio(options: {
       void service.actFromWindow(parsed.data.action, parsed.data.revision)
     }
   })
-  ipcMain.handle(THEME_STUDIO_CURRENT_CHANNEL, (event) => {
-    const draft = session.draft
-    return fromMainWindow(event.sender) && draft
-      ? { revision: session.currentRevision, draft }
-      : null
+  options.store.onSettingsChanged((updates) => {
+    const slots = THEME_SLOT_KEYS.some((key) => key in updates)
+    const agentEditsOff = updates.allowAgentThemeEdits === false
+    if (slots || agentEditsOff) {
+      void service.settingsChanged({ slots, agentEditsOff })
+    }
   })
+  ipcMain.handle(THEME_STUDIO_CURRENT_CHANNEL, (event) =>
+    fromMainWindow(event.sender) ? session.preview() : null
+  )
   setThemeStudioForRpc(service)
 }

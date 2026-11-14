@@ -32,7 +32,12 @@ describe('ThemeStudioSession', () => {
     session.commit(draftWith('#222222'), 'Two')
     vi.advanceTimersByTime(20)
     expect(pushes).toEqual([
-      { revision: 3, draft: draftWith('#222222'), last: { label: 'Two' }, canUndo: true }
+      {
+        revision: session.currentRevision,
+        draft: draftWith('#222222'),
+        last: { label: 'Two' },
+        canUndo: true
+      }
     ])
   })
 
@@ -51,10 +56,11 @@ describe('ThemeStudioSession', () => {
 
   it("answers a report wait only with the current revision's report", async () => {
     session.begin(draftWith('#000000'), 'Start')
+    const revision = session.currentRevision
     const waiting = session.waitForReport(1000)
-    session.receiveReport({ revision: 0, modes: [] })
-    session.receiveReport({ revision: 1, modes: [] })
-    await expect(waiting).resolves.toEqual({ revision: 1, modes: [] })
+    session.receiveReport({ revision: revision - 1, modes: [] })
+    session.receiveReport({ revision, modes: [] })
+    await expect(waiting).resolves.toEqual({ revision, modes: [] })
   })
 
   it('survives a restart and ends cleanly', async () => {

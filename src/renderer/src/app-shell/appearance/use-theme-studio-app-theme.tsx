@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo } from 'react'
 import { toast } from 'sonner'
-import { useShallow } from 'zustand/react/shallow'
 import {
   completePluginAppThemeTokens,
   type PluginThemeRegistration
@@ -13,7 +12,6 @@ import { themeBuiltInTokens } from './theme-built-in-tokens'
 import { themeStudioReport } from './theme-studio-report'
 import { installThemeStudioBridge, sendThemeStudioUserAction } from './theme-studio-bridge'
 import { ThemeStudioNotice } from './ThemeStudioNotice'
-import { useAppStore } from '@/store/index'
 import { useThemeStudioPreviewStore } from '@/store/appearance/theme-studio-preview-store'
 
 const NOTICE_ID = 'theme-studio-preview'
@@ -37,26 +35,6 @@ function showNotice(preview: NonNullable<ThemeStudioPreview>): void {
     ),
     { id: NOTICE_ID, duration: Number.POSITIVE_INFINITY, unstyled: true, closeButton: false }
   )
-}
-
-/** Picking a theme in Settings while a draft is open ends it, as Discard would. */
-function useEndOnThemePick(active: boolean): void {
-  const slots = useAppStore(
-    useShallow((s) => [
-      s.settings?.pluginAppThemeDark ?? null,
-      s.settings?.pluginAppThemeLight ?? null,
-      s.settings?.terminalThemeDark ?? null,
-      s.settings?.terminalThemeLight ?? null
-    ])
-  )
-  const seen = useRef(slots)
-  useEffect(() => {
-    const changed = seen.current.some((slot, index) => slot !== slots[index])
-    seen.current = slots
-    if (active && changed) {
-      sendThemeStudioUserAction('ended')
-    }
-  }, [active, slots])
 }
 
 /**
@@ -92,7 +70,6 @@ export function useThemeStudioAppTheme(dark: boolean): {
       toast.dismiss(NOTICE_ID)
     }
   }, [preview])
-  useEndOnThemePick(preview !== null)
   return { paint, preview }
 }
 

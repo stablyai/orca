@@ -139,17 +139,21 @@ export function useDocumentAppearance(): void {
     if (ready && theme) {
       // Why no cache for a draft: a launch paints the user's own theme until main re-sends it.
       appPainted.current = applyPluginAppTheme(appTheme, draftTheme ? { storage: null } : {})
-      if (draftPreview) {
-        reportThemeStudioPaint(
-          draftPreview,
-          dark ? 'dark' : 'light',
-          draftTheme?.tokens ?? null,
-          appPainted.current,
-          editorTheme !== null
-        )
-      }
     }
-  }, [appTheme, draftTheme, draftPreview, editorTheme, ready, theme, dark])
+  }, [appTheme, draftTheme, ready, theme, dark])
+
+  // Why after the paint above: the report says what that paint actually left unpainted.
+  useEffect(() => {
+    if (ready && theme && draftPreview) {
+      reportThemeStudioPaint(
+        draftPreview,
+        dark ? 'dark' : 'light',
+        draftTheme?.tokens ?? null,
+        appPainted.current,
+        editorTheme !== null
+      )
+    }
+  }, [draftPreview, draftTheme, editorTheme, ready, theme, dark])
 
   const sidebarTint = useAppStore(
     useShallow((s) =>

@@ -56,13 +56,14 @@ export type ThemeStudioSessionDeps = {
  *  Idle costs nothing: no timers run unless an edit is waiting to paint or persist. */
 export class ThemeStudioSession {
   private readonly history = new ThemeStudioHistory()
-  private revision = 0
+  // Why a random start: a revision from before a restart must not match by accident.
+  private revision = Math.floor(Math.random() * 1_000) * 1_000
   private pushTimer: ReturnType<typeof setTimeout> | null = null
   private persistTimer: ReturnType<typeof setTimeout> | null = null
   private persisting: Promise<void> = Promise.resolve()
   private latestReport: ThemeStudioReport | null = null
   private waiters: { revision: number; resolve: (report: ThemeStudioReport | null) => void }[] = []
-  /** Set when the person ended the draft; the next agent change is refused once. */
+  /** Set when the person ended the draft; cleared only when an agent starts a new one. */
   private endedByUser: string | null = null
   /** Settles once a session a restart interrupted is restored; edits wait for it. */
   readonly ready: Promise<void>
@@ -120,11 +121,9 @@ export class ThemeStudioSession {
     return draft
   }
 
-  /** Returns, once, why the person ended the last draft. */
-  takeEndedByUser(): string | null {
-    const reason = this.endedByUser
-    this.endedByUser = null
-    return reason
+  /** Why the person ended the last draft; agents are refused until one explicitly starts anew. */
+  get endedByUserReason(): string | null {
+    return this.endedByUser
   }
 
   status(): ThemeStudioStatus {
@@ -163,6 +162,10 @@ export class ThemeStudioSession {
     const draft = this.requireDraft()
     this.history.push({ ...entry(draft, label, by), saved })
     this.changed()
+  }
+
+  peek(direction: 'undo' | 'redo'): { from: ThemeStudioEntry; to: ThemeStudioEntry } {
+    return this.history.peek(direction)
   }
 
   step(direction: 'undo' | 'redo'): { from: ThemeStudioEntry; to: ThemeStudioEntry } {
@@ -246,7 +249,8 @@ export class ThemeStudioSession {
     this.schedulePersist()
   }
 
-  private preview(): ThemeStudioPreview {
+  /** What the window should paint now, with the notice's details. */
+  preview(): ThemeStudioPreview {
     const draft = this.draft
     const current = this.history.current
     if (!draft || !current) {

@@ -47,7 +47,8 @@ async function callerOf(
   params: { terminal?: string; ifRevision?: number },
   context: RpcContext
 ): Promise<ThemeStudioCaller> {
-  const key = params.terminal ?? context.connectionId ?? context.clientId ?? 'local'
+  // Why not the connection: each CLI call opens a new one, so it would never run dry.
+  const key = params.terminal ?? `caller:${context.caller?.kind ?? 'unknown'}`
   const base = {
     key,
     ...(params.ifRevision === undefined ? {} : { ifRevision: params.ifRevision })

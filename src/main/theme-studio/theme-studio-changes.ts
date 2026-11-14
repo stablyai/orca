@@ -107,45 +107,49 @@ export async function checkDraft(
   if (!fix) {
     return core.mutation('Check')
   }
-  if (ids?.length) {
-    const { patch, fixed } = fixPatch(
-      await core.session.waitForReport(REPORT_TIMEOUT_MS),
-      new Set(ids)
-    )
-    if (fixed.length === 0) {
-      throw new ThemeStudioError(
-        THEME_STUDIO_ERROR_CODES.invalid,
-        `No fix for ${ids.join(', ')}.`,
-        {
-          nextSteps: ['Run `orca theme check --json` for the current finding ids.']
-        }
-      )
-    }
-    const label = `Fix ${fixed.length} contrast finding${fixed.length === 1 ? '' : 's'}`
-    core.session.commit(
-      applyThemeStudioPatch(core.session.requireDraft(), patch).draft,
-      label,
-      caller.by
-    )
-    return core.mutation(label, { autoFixed: fixed.length })
+  if (!ids?.length) {
+    const autoFixed = await core.fixIntoCurrentStep({ label: 'Fix contrast', by: caller.by })
+    return core.mutation(autoFixed ? 'Fix contrast' : 'Check', { autoFixed })
   }
-  core.session.commit(core.session.requireDraft(), 'Fix contrast', caller.by)
-  const autoFixed = await core.fixIntoCurrentStep()
-  return core.mutation('Fix contrast', { autoFixed })
+  const report = await core.session.waitForReport(REPORT_TIMEOUT_MS)
+  if (!report) {
+    throw new ThemeStudioError(
+      THEME_STUDIO_ERROR_CODES.invalid,
+      'The window did not report its contrast check in time.',
+      { nextSteps: ['Run the same command again.'] }
+    )
+  }
+  const { patch, fixed } = fixPatch(report, new Set(ids))
+  if (fixed.length === 0) {
+    throw new ThemeStudioError(THEME_STUDIO_ERROR_CODES.invalid, `No fix for ${ids.join(', ')}.`, {
+      nextSteps: ['Run `orca theme check --json` for the current finding ids.']
+    })
+  }
+  const label = `Fix ${fixed.length} contrast finding${fixed.length === 1 ? '' : 's'}`
+  core.session.commit(
+    applyThemeStudioPatch(core.session.requireDraft(), patch).draft,
+    label,
+    caller.by
+  )
+  return core.mutation(label, { autoFixed: fixed.length })
 }
 
-/** Undo/redo; stepping across a save puts back or re-selects the saved theme. */
+/** Undo/redo; stepping across a save puts back or re-selects the saved theme first, so a
+ *  failure leaves history where it was. */
 export async function stepDraft(
   core: ThemeStudioCore,
   direction: 'undo' | 'redo'
 ): Promise<ThemeStudioMutation> {
   const window = core.requireWindow()
-  const { from, to } = core.session.step(direction)
+  const { from, to } = core.session.peek(direction)
   if (direction === 'undo' && from.saved) {
-    await window.restore(from.saved.previous)
+    const { restorePoint } = from.saved
+    await core.writeSlots(async () => core.restoreSlots(restorePoint))
   } else if (direction === 'redo' && to.saved) {
-    await window.select(to.saved.pluginKey)
+    const { pluginKey } = to.saved
+    await core.writeSlots(() => window.select(pluginKey))
   }
+  core.session.step(direction)
   return core.mutation(
     `${direction === 'undo' ? 'Undo' : 'Redo'} ${(direction === 'undo' ? from : to).label}`
   )
@@ -160,8 +164,13 @@ export async function applyDraft(core: ThemeStudioCore, name: string | undefined
     core.deps.installedFrom
   )
   const installed = await core.deps.installFolder(folder)
-  const { selected, previous } = await window.select(installed.pluginKey)
-  core.session.markSaved(`Save as ${draft.name}`, { pluginKey: installed.pluginKey, previous }, by)
+  const restorePoint = core.rememberSlots()
+  const selected = await core.writeSlots(() => window.select(installed.pluginKey))
+  core.session.markSaved(
+    `Save as ${draft.name}`,
+    { pluginKey: installed.pluginKey, restorePoint },
+    by
+  )
   return {
     ...installed,
     name: draft.name,

@@ -103,7 +103,8 @@ export const THEME_COMMAND_SPECS: CommandSpec[] = [
       'only',
       'mode',
       'separate',
-      'scope'
+      'scope',
+      'if-revision'
     ],
     notes: [
       'Works in OKLCH, so lightness and readability move evenly across hues. --warmth tints greys and turns hues toward amber (positive) or blue (negative); --contrast moves the lightness of each color away from (positive) or toward (negative) the background it sits on (terminal colors from the terminal background), so `--contrast 20 --only worktree-sidebar` sets the sidebar further apart and keeps its text readable. Percentages run -100 to 100.',

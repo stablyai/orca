@@ -10,7 +10,7 @@ export const THEME_STUDIO_CURRENT_CHANNEL = 'themeStudio:current'
 export const THEME_STUDIO_REPORT_CHANNEL = 'themeStudio:report'
 export const THEME_STUDIO_REQUEST_CHANNEL = 'themeStudio:request'
 export const THEME_STUDIO_REPLY_CHANNEL = 'themeStudio:reply'
-/** Renderer → main: the user acted on the preview notice, or picked a theme in Settings. */
+/** Renderer → main: the user pressed Keep, Undo or Discard on the preview notice. */
 export const THEME_STUDIO_USER_ACTION_CHANNEL = 'themeStudio:userAction'
 
 const modeSchema = z.enum(THEME_STUDIO_MODES)
@@ -47,11 +47,7 @@ const resolveResultSchema = z.object({
 })
 export type ThemeStudioResolveResult = z.infer<typeof resolveResultSchema>
 
-export type ThemeStudioRequestBody =
-  | { kind: 'resolve' }
-  | { kind: 'select'; pluginKey: string }
-  /** Puts back the settings a `select` replaced, for an undo right after saving. */
-  | { kind: 'restore'; settings: Record<string, unknown> }
+export type ThemeStudioRequestBody = { kind: 'resolve' } | { kind: 'select'; pluginKey: string }
 export type ThemeStudioRequest = ThemeStudioRequestBody & { requestId: string }
 
 export const themeStudioReplySchema = z.discriminatedUnion('ok', [
@@ -59,9 +55,7 @@ export const themeStudioReplySchema = z.discriminatedUnion('ok', [
     requestId: z.string(),
     ok: z.literal(true),
     resolved: resolveResultSchema.optional(),
-    selected: z.boolean().optional(),
-    /** The settings `select` replaced, so an undo can put them back. */
-    previous: z.record(z.string(), z.unknown()).optional()
+    selected: z.boolean().optional()
   }),
   z.object({ requestId: z.string(), ok: z.literal(false), message: z.string().max(2048) })
 ])
@@ -85,8 +79,7 @@ export const themeStudioPreviewSchema = z
 export type ThemeStudioPreview = z.infer<typeof themeStudioPreviewSchema>
 
 export const themeStudioUserActionSchema = z.object({
-  /** `ended`: the user picked a theme in Settings, which ends the draft like Discard. */
-  action: z.enum(['keep', 'undo', 'discard', 'ended']),
+  action: z.enum(['keep', 'undo', 'discard']),
   revision: z.number().int().nonnegative()
 })
 export type ThemeStudioUserAction = z.infer<typeof themeStudioUserActionSchema>

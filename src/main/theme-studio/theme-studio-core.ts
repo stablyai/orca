@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import {
   applyThemeStudioPatch,
   THEME_STUDIO_MODES,
@@ -22,6 +24,7 @@ import {
 import { fixPatch, paintOutcome, type ThemeStudioPaint } from './theme-studio-fixes'
 
 export const REPORT_TIMEOUT_MS = 2_500
+const MAX_RESTORE_POINTS = 8
 const MAX_FIX_ROUNDS = 4
 
 export const THEME_STUDIO_CAPABILITIES = [
@@ -41,10 +44,8 @@ export const THEME_STUDIO_CAPABILITIES = [
 
 export type ThemeStudioWindow = {
   resolve(): Promise<ThemeStudioResolveResult>
-  /** Selects an installed theme plugin's themes, returning the settings it replaced. */
-  select(pluginKey: string): Promise<{ selected: boolean; previous: Record<string, unknown> }>
-  /** Puts back settings a `select` replaced. */
-  restore(settings: Record<string, unknown>): Promise<void>
+  /** Selects an installed theme plugin's themes for app and terminal, with Switch back. */
+  select(pluginKey: string): Promise<boolean>
   capture(mode: ThemeStudioMode | undefined): Promise<OrcaChromeCapture>
 }
 
@@ -60,6 +61,11 @@ export type ThemeStudioServiceDeps = {
   pluginsRoot: string
   /** Settings → Appearance "Let agents edit the theme". */
   agentEditsAllowed: () => boolean
+  /** The theme slots in settings, read and written by main directly. */
+  slots: {
+    snapshot(): Partial<GlobalSettings>
+    restore(previous: Partial<GlobalSettings>): void
+  }
 }
 
 /** Who asked: `key` scopes the rate limit, `by` labels history ("claude · Terminal 2"). */
@@ -137,20 +143,73 @@ export function createThemeStudioCore(deps: ThemeStudioServiceDeps) {
   }
 
   /** Applies the smallest fix of every finding into the current step; returns how many. */
-  async function fixIntoCurrentStep(): Promise<number> {
+  /** Applies the smallest fix of every finding, in rounds, into the current step, or into a new
+   *  step `newStep` names once there is something to fix; returns how many were fixed. */
+  async function fixIntoCurrentStep(newStep?: { label: string; by?: string }): Promise<number> {
     let total = 0
     for (let round = 0; round < MAX_FIX_ROUNDS; round += 1) {
       const { patch, fixed } = fixPatch(await session.waitForReport(REPORT_TIMEOUT_MS))
       if (fixed.length === 0) {
         break
       }
-      session.amend(applyThemeStudioPatch(session.requireDraft(), patch).draft, fixed.length)
+      const next = applyThemeStudioPatch(session.requireDraft(), patch).draft
+      if (newStep && total === 0) {
+        session.commit(next, newStep.label, newStep.by)
+        session.amend(next, fixed.length)
+      } else {
+        session.amend(next, fixed.length)
+      }
       total += fixed.length
     }
     return total
   }
 
-  return { deps, session, requireWindow, currentDraft, mutation, commitChange, fixIntoCurrentStep }
+  const restorePoints = new Map<string, Partial<GlobalSettings>>()
+  let writingSlots = false
+  /** Runs a studio write of the theme slots, so it is not mistaken for the person picking one. */
+  async function writeSlots<T>(work: () => Promise<T>): Promise<T> {
+    writingSlots = true
+    try {
+      return await work()
+    } finally {
+      writingSlots = false
+    }
+  }
+  /** Keeps the slots a save replaces, so undoing the save can put them back. */
+  function rememberSlots(): string {
+    const token = randomUUID()
+    restorePoints.set(token, deps.slots.snapshot())
+    const oldest = restorePoints.keys().next().value
+    if (restorePoints.size > MAX_RESTORE_POINTS && oldest !== undefined) {
+      restorePoints.delete(oldest)
+    }
+    return token
+  }
+  function restoreSlots(token: string): void {
+    const previous = restorePoints.get(token)
+    if (!previous) {
+      throw new ThemeStudioError(
+        THEME_STUDIO_ERROR_CODES.historyEnd,
+        'Orca restarted since saving, so it no longer knows the themes from before.',
+        { nextSteps: ['Ask the user to pick their previous theme in Settings → Appearance.'] }
+      )
+    }
+    deps.slots.restore(previous)
+  }
+
+  return {
+    deps,
+    session,
+    requireWindow,
+    currentDraft,
+    mutation,
+    commitChange,
+    fixIntoCurrentStep,
+    writeSlots,
+    rememberSlots,
+    restoreSlots,
+    isWritingSlots: () => writingSlots
+  }
 }
 
 export type ThemeStudioCore = ReturnType<typeof createThemeStudioCore>

@@ -185,6 +185,11 @@ export function themeStudioReport(input: {
     // Why dedupe: one pair is checked over several layers (chat), and the agent fixes it once.
     const findings = drops
       .map((drop) => findingFor(mode, drop, variant.tokens, input.probe))
+      .map((finding) =>
+        finding.fixes.length && !finding.command
+          ? { ...finding, command: `orca theme check --fix --finding ${finding.id}` }
+          : finding
+      )
       .filter((finding, index, all) => all.findIndex((other) => other.id === finding.id) === index)
     return [{ mode, shown: mode === input.shownMode, findings }]
   })

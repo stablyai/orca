@@ -12,8 +12,8 @@ export const MAX_THEME_STUDIO_HISTORY = 100
 
 const savedSchema = z.object({
   pluginKey: z.string(),
-  /** The settings saving replaced; undoing the save puts them back. */
-  previous: z.record(z.string(), z.unknown())
+  /** Names the slots saving replaced, kept by main; undoing the save puts them back. */
+  restorePoint: z.string().max(64)
 })
 
 export const themeStudioEntrySchema = z.object({
@@ -80,11 +80,10 @@ export class ThemeStudioHistory {
     }
   }
 
-  /** Moves one step and returns the step left behind (undo) or reached (redo). */
-  step(direction: 'undo' | 'redo'): { from: ThemeStudioEntry; to: ThemeStudioEntry } {
+  /** The step left behind (undo) or reached (redo), without moving. */
+  peek(direction: 'undo' | 'redo'): { from: ThemeStudioEntry; to: ThemeStudioEntry } {
     const from = this.current
-    const target = direction === 'undo' ? this.cursor - 1 : this.cursor + 1
-    const to = this.entries[target]
+    const to = this.entries[direction === 'undo' ? this.cursor - 1 : this.cursor + 1]
     if (!from || !to) {
       throw new ThemeStudioError(
         THEME_STUDIO_ERROR_CODES.historyEnd,
@@ -92,8 +91,14 @@ export class ThemeStudioHistory {
         { nextSteps: ['Run `orca theme history --json` to see the steps.'] }
       )
     }
-    this.cursor = target
     return { from, to }
+  }
+
+  /** Moves one step and returns the step left behind (undo) or reached (redo). */
+  step(direction: 'undo' | 'redo'): { from: ThemeStudioEntry; to: ThemeStudioEntry } {
+    const moved = this.peek(direction)
+    this.cursor += direction === 'undo' ? -1 : 1
+    return moved
   }
 
   clear(): void {

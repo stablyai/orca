@@ -58,11 +58,21 @@ export function assignmentsPatch(ctx: HandlerContext, modes: ThemeStudioMode[]):
 }
 
 async function readStdin(): Promise<string> {
+  if (process.stdin.isTTY) {
+    throw new RuntimeClientError('invalid_argument', '--patch-stdin needs the JSON piped in.', {
+      nextSteps: [
+        'Pipe it, for example `echo \'{"dark":{"set":{"sidebar":"#20160f"}}}\' | orca theme set --patch-stdin`.'
+      ]
+    })
+  }
   const chunks: Buffer[] = []
   for await (const chunk of process.stdin) {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)))
   }
-  return Buffer.concat(chunks).toString('utf8')
+  // Why strip a BOM: Windows PowerShell pipes UTF-8 with one, which JSON.parse refuses.
+  return Buffer.concat(chunks)
+    .toString('utf8')
+    .replace(/^\uFEFF/, '')
 }
 
 /** --patch <json|@file>, or --patch-stdin: the quoting-safe path, Windows shells included. */
