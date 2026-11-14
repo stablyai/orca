@@ -7,11 +7,12 @@ export const BROWSER_EXTENSION_DISCOVERY_TOUR = {
   steps: [
     {
       id: 'browser-extensions-intro',
-      title: 'Chrome extensions',
+      title: 'Bring your Chrome extensions',
       body: 'Install from the Chrome Web Store and pin them next to the address bar.',
       targetSelector: '[data-contextual-tour-target="browser-extensions-control"]',
       requiredForStart: true,
       preferredPlacement: 'bottom',
+      control: { kind: 'browser-extension-icons', colored: false },
       primaryAction: { kind: 'open-chrome-web-store', label: 'Open Web Store' },
       secondaryAction: { kind: 'complete', label: 'Got it' },
       advanceOnFeatureInteraction: 'browser-extensions'

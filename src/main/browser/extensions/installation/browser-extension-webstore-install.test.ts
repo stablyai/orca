@@ -17,9 +17,14 @@ const state = vi.hoisted(() => {
     enabled,
     load: vi.fn(
       async (_profileId: string, _extension: InstalledBrowserExtension): Promise<unknown> => ({})
-    )
+    ),
+    recordInstalled: vi.fn()
   }
 })
+
+vi.mock('../../../telemetry/browser-extensions-banner', () => ({
+  recordBrowserExtensionInstalled: state.recordInstalled
+}))
 
 vi.mock('electron', () => ({ app: { getPath: () => state.userData, on: vi.fn() } }))
 vi.mock('../tabs-and-windows/browser-extension-options-page', () => ({
@@ -66,6 +71,7 @@ beforeEach(async () => {
   state.enabled = {}
   state.load.mockReset()
   state.load.mockImplementation(async () => ({}))
+  state.recordInstalled.mockReset()
   vi.resetModules()
   install = await import('./browser-extension-webstore-install')
   mutationLock = await import('./browser-extension-mutation-lock')
@@ -143,5 +149,49 @@ describe('store installs', () => {
     expect(store().get(extensionId)?.version).toBe('1.0.0')
     expect(readdirSync(root())).toEqual(['1.0.0'])
     expect(state.load).toHaveBeenLastCalledWith('default', first)
+  })
+
+  it('reports a new extension once it has loaded, and not its later update', async () => {
+    await installVersion('1.0.0')
+    expect(state.recordInstalled).toHaveBeenCalledTimes(1)
+    expect(state.recordInstalled).toHaveBeenCalledWith('web_store')
+
+    await installVersion('1.1.0', null)
+    expect(state.recordInstalled).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports only the extension that loaded when another new one fails alongside it', async () => {
+    const otherKey = generateCrxTestKey('ecdsa')
+    const otherId = extensionIdFromPublicKey(otherKey.publicKeyDer)
+    const other: VerifiedCrx = {
+      extensionId: otherId,
+      publicKey: otherKey.publicKeyDer,
+      archive: Buffer.from(
+        zipSync({
+          'manifest.json': strToU8(
+            JSON.stringify({ name: 'Notes', version: '1.0.0', manifest_version: 3 })
+          )
+        })
+      )
+    }
+    let failFirst: (error: Error) => void = () => {}
+    state.load.mockImplementation((_profileId, extension) =>
+      extension.id === extensionId
+        ? new Promise((_resolve, reject) => (failFirst = reject))
+        : Promise.resolve({})
+    )
+
+    const failing = installVersion('1.0.0')
+    await vi.waitFor(() => expect(store().get(extensionId)).not.toBeNull())
+    await install.commitStagedWebStoreExtension(
+      await install.stageWebStoreExtension(other),
+      'default'
+    )
+    failFirst(new Error('Manifest is not valid'))
+    await expect(failing).rejects.toThrow('Manifest is not valid')
+
+    expect(store().get(extensionId)).toBeNull()
+    expect(store().get(otherId)).not.toBeNull()
+    expect(state.recordInstalled).toHaveBeenCalledTimes(1)
   })
 })
