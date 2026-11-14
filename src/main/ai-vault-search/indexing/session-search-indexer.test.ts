@@ -157,7 +157,7 @@ it('keeps ordinary hosts on newest-session polling until their next full sweep',
   const newest = transcriptPath('newest')
   await writeClaudeTranscript(older, ['older original'], 'older')
   await writeClaudeTranscript(newest, ['newest original'], 'newest')
-  const at = Date.now()
+  const at = Date.UTC(2099, 0, 1)
   await utimes(older, new Date(at - 20000), new Date(at - 20000))
   await utimes(newest, new Date(at), new Date(at))
   await newIndexer({ discoveryPolicy: 'periodic', recentPerAgent: 1 }).start()
