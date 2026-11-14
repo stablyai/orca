@@ -1,4 +1,5 @@
 import type Database from '../../../../sqlite/sync-database'
+import { refreshSchemaObjects } from '../schema/schema-object-refresh'
 import {
   REMOVED_WORK_INT_FIELD,
   REMOVED_WORK_LINEAGE_FIELDS,
@@ -200,23 +201,16 @@ const MOVED_RECORDED_SINCE_SQL = `MAX(datetime('now'), COALESCE(
   (SELECT datetime(MAX(created_at), '+1 second') FROM runs WHERE legacy = 0), ''))`
 
 /**
- * Recreated on every open, after every open step that creates Runs and before any that deletes work:
+ * Checked on every open (recreated when their SQL changed), after every open step that creates Runs and before any that deletes work:
  * the bodies name columns, so a body stamped once would keep an older build's columns. Coverage moves
  * whenever any trigger was missing before this open, so a record never claims removals it did not see.
  */
 export function installRemovedWorkCapture(db: Database.Database, captureWasIntact: boolean): void {
-  db.exec('BEGIN IMMEDIATE')
-  try {
-    db.exec(`
-      ${DROP_REMOVED_WORK_TRIGGERS_SQL}
-      ${CAPTURE_KINDS.map(captureTriggerSql).join('\n')}
-      INSERT OR ${captureWasIntact ? 'IGNORE' : 'REPLACE'} INTO removed_orchestration_work_coverage
-        (singleton, recorded_since)
-        VALUES (1, ${captureWasIntact ? "datetime('now')" : MOVED_RECORDED_SINCE_SQL});
-    `)
-    db.exec('COMMIT')
-  } catch (error) {
-    db.exec('ROLLBACK')
-    throw error
-  }
+  refreshSchemaObjects(
+    db,
+    CAPTURE_KINDS.map(captureTriggerSql),
+    `INSERT OR ${captureWasIntact ? 'IGNORE' : 'REPLACE'} INTO removed_orchestration_work_coverage
+      (singleton, recorded_since)
+      VALUES (1, ${captureWasIntact ? "datetime('now')" : MOVED_RECORDED_SINCE_SQL});`
+  )
 }
