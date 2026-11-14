@@ -22,6 +22,7 @@ import type {
 } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 import {
   NATIVE_CHAT_PERMISSION_MODE_ICONS,
+  nativeChatPermissionCurrentLabel,
   nativeChatPermissionModeDescription,
   nativeChatPermissionModeLabel,
   nativeChatPermissionPickerTitle
@@ -106,11 +107,7 @@ function NativeChatPermissionModePickerInner({
   const t = useTranslate()
   useUiLanguageRevision()
   const title = nativeChatPermissionPickerTitle(t)
-  const label = isAgentChatPermissionMode(current)
-    ? nativeChatPermissionModeLabel(current, t)
-    : current === 'own'
-      ? t('settings.agents.permissionOwnAll', "Agents' own settings")
-      : (currentLabel ?? title)
+  const label = nativeChatPermissionCurrentLabel(current, currentLabel, t) ?? title
   // `shrink` overrides the button's shrink-0 so a narrow composer truncates the mode name.
   return (
     <DropdownMenu>

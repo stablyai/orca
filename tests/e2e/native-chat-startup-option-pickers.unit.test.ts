@@ -3,6 +3,7 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { createElement } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
+import type * as I18nModule from '@/i18n/i18n'
 import { computeAgentSessionPayloadFingerprint } from '../../src/shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { claudeSessionIdForOrcaSession } from '../../src/main/claude/structured/claude-structured-session-id'
 import { hostTestMessage } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
@@ -17,7 +18,8 @@ import {
 } from '../../src/shared/agent-session/options/structured-agent-session-options'
 import { structuredAgentSessionOptionSnapshot } from '../../src/shared/agent-session/options/structured-agent-session-option-snapshot'
 
-vi.mock('@/i18n/i18n', () => ({
+vi.mock('@/i18n/i18n', async (importOriginal) => ({
+  ...(await importOriginal<typeof I18nModule>()),
   translate: (_key: string, fallback: string, values?: Record<string, string | number>) =>
     Object.entries(values ?? {}).reduce(
       (text, [key, value]) => text.replaceAll(`{{${key}}}`, String(value)),
