@@ -65,23 +65,26 @@ export function useAiVaultExecutionHostScope(args: {
       userChangedHostScopeRef.current = false
       return
     }
-    if (!userChangedHostScopeRef.current && executionHostScope !== defaultExecutionHostScope) {
+    // Closing the last tab clears the workspace; it does not select this computer.
+    if (
+      args.activeWorktreeId !== null &&
+      !userChangedHostScopeRef.current &&
+      executionHostScope !== defaultExecutionHostScope
+    ) {
       setExecutionHostScope(defaultExecutionHostScope)
     }
   }, [
     activeExecutionHostScope,
+    args.activeWorktreeId,
     args.availableExecutionHostScopes,
     defaultExecutionHostScope,
     executionHostScope
   ])
 
-  const handleExecutionHostScopeChange = useCallback(
-    (nextScope: ExecutionHostScope) => {
-      userChangedHostScopeRef.current = nextScope !== defaultExecutionHostScope
-      setExecutionHostScope(nextScope)
-    },
-    [defaultExecutionHostScope]
-  )
+  const handleExecutionHostScopeChange = useCallback((nextScope: ExecutionHostScope) => {
+    userChangedHostScopeRef.current = true
+    setExecutionHostScope(nextScope)
+  }, [])
 
   return {
     executionHostScope,

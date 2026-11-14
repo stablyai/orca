@@ -77,6 +77,50 @@ afterEach(() => {
 })
 
 describe('useAiVaultExecutionHostScope', () => {
+  it('keeps the remote server after clearing the last workspace, then follows a new workspace', async () => {
+    const remote = {
+      activeWorktreeId: 'repo-1::/remote/repo',
+      resumeTargetState: stateForWorktree({
+        worktreeId: 'repo-1::/remote/repo',
+        repoId: 'repo-1',
+        executionHostId: 'runtime:remote-server'
+      }),
+      availableExecutionHostScopes: ['runtime:remote-server'] as const
+    }
+    await renderHook(remote)
+    expect(latest?.executionHostScope).toBe('runtime:remote-server')
+
+    await renderHook({ ...remote, activeWorktreeId: null })
+    expect(latest?.executionHostScope).toBe('runtime:remote-server')
+
+    await renderHook({
+      ...remote,
+      activeWorktreeId: 'repo-2::/local/repo',
+      resumeTargetState: stateForWorktree({ worktreeId: 'repo-2::/local/repo', repoId: 'repo-2' })
+    })
+    expect(latest?.executionHostScope).toBe('local')
+  })
+
+  it('treats selecting the current workspace server as an explicit choice', async () => {
+    const props = {
+      activeWorktreeId: 'repo-1::/remote/repo',
+      resumeTargetState: stateForWorktree({
+        worktreeId: 'repo-1::/remote/repo',
+        repoId: 'repo-1',
+        executionHostId: 'runtime:remote-server'
+      }),
+      availableExecutionHostScopes: ['runtime:remote-server'] as const
+    }
+    await renderHook(props)
+    await act(async () => latest?.onExecutionHostScopeChange('runtime:remote-server'))
+    await renderHook({
+      ...props,
+      activeWorktreeId: 'repo-2::/local/repo',
+      resumeTargetState: stateForWorktree({ worktreeId: 'repo-2::/local/repo', repoId: 'repo-2' })
+    })
+    expect(latest?.executionHostScope).toBe('runtime:remote-server')
+  })
+
   it('does not claim local history when the active workspace host cannot be resolved (#13713)', async () => {
     await renderHook({
       activeWorktreeId: 'repo-1::/remote/repo',
