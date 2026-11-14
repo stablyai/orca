@@ -271,17 +271,21 @@ describe.skipIf(!isWindows || !e2eOptIn || process.env.CI !== 'true')(
 )
 
 async function foregroundWindowOwnerPid(): Promise<number> {
-  const { stdout } = await promisify(execFile)('powershell.exe', [
-    '-NoProfile',
-    '-NonInteractive',
-    '-Command',
+  const { stdout } = await promisify(execFile)(
+    'powershell.exe',
     [
-      'Add-Type -Name Foreground -Namespace OrcaE2E -MemberDefinition \'[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);\'',
-      '$owner = [uint32]0',
-      '[void][OrcaE2E.Foreground]::GetWindowThreadProcessId([OrcaE2E.Foreground]::GetForegroundWindow(), [ref]$owner)',
-      '$owner'
-    ].join('; ')
-  ])
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      [
+        'Add-Type -Name Foreground -Namespace OrcaE2E -MemberDefinition \'[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow(); [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hwnd, out uint pid);\'',
+        '$owner = [uint32]0',
+        '[void][OrcaE2E.Foreground]::GetWindowThreadProcessId([OrcaE2E.Foreground]::GetForegroundWindow(), [ref]$owner)',
+        '$owner'
+      ].join('; ')
+    ],
+    { windowsHide: true }
+  )
   return Number.parseInt(stdout.trim(), 10)
 }
 
@@ -297,9 +301,9 @@ describe.skipIf(!isWindows || !e2eOptIn || process.env.CI !== 'true')(
 
     afterAll(async () => {
       if (launchedPid !== null) {
-        await promisify(execFile)('taskkill.exe', ['/PID', String(launchedPid), '/F']).catch(
-          () => {}
-        )
+        await promisify(execFile)('taskkill.exe', ['/PID', String(launchedPid), '/F'], {
+          windowsHide: true
+        }).catch(() => {})
       }
       await stopOrcaRuntime()
     })

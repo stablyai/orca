@@ -1183,7 +1183,7 @@ const ORCA_COMPUTER_USE_MARKDOWN = [
   "",
   "## Starting Apps",
   "",
-  "Start a closed app with `ORCA computer launch-app <app>`, not `open -a` or `Start-Process`: those bring the app to the front and take the user's keyboard. `launch-app` starts it in the background on macOS and Windows, leaves an app that is already running alone, and reports `delivery` as measured: some apps, such as many Electron apps, still bring their own window forward when they open. Pass `--activate` only when the user asked for the app to come forward. On Linux it fails with `unsupported_capability`, because a newly started app usually comes to the front there; ask the user before starting one another way.",
+  "Start a closed app with `ORCA computer launch-app <app>`, not `open -a` or `Start-Process`: those bring the app to the front and take the user's keyboard. `launch-app` asks macOS and Windows to start it in the background and leaves an app that is already running alone. Some apps, such as many Electron apps, still bring their own window forward when they open, so read `delivery`: if it says `foreground`, tell the user the app came to the front. Pass `--activate` only when the user asked for the app to come forward. On Linux it fails with `unsupported_capability`, because a newly started app usually comes to the front there; ask the user before starting one another way.",
   "",
   "## Screenshots",
   "",

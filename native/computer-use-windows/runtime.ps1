@@ -1614,11 +1614,13 @@ function New-OrcaLaunchResult($Process, [bool]$Launched) {
     [pscustomobject]@{ ok = $true; app = New-OrcaAppRecord $Process; launched = $Launched; delivery = $delivery }
 }
 
-function Find-OrcaRunningLaunchTarget([string]$ProcessName) {
+function Find-OrcaRunningLaunchTarget([string]$ProcessName, [string]$ExecutablePath = "") {
     # Why: starting a running app again usually opens a second window over the user's work; tray-only apps count too.
     $session = [System.Diagnostics.Process]::GetCurrentProcess().SessionId
-    $running = @(Get-Process -Name ([WildcardPattern]::Escape($ProcessName)) -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $session }) |
-        Sort-Object { $_.MainWindowHandle -eq 0 } | Select-Object -First 1
+    $running = @(Get-Process -Name ([WildcardPattern]::Escape($ProcessName)) -ErrorAction SilentlyContinue | Where-Object {
+        # A resolved executable must be that file, not another copy with the same name.
+        $_.SessionId -eq $session -and ([string]::IsNullOrEmpty($ExecutablePath) -or [string]$_.Path -ieq $ExecutablePath)
+    }) | Sort-Object { $_.MainWindowHandle -eq 0 } | Select-Object -First 1
     if ($null -ne $running) { Assert-OrcaProcessAllowed $running }
     $running
 }
@@ -1626,14 +1628,16 @@ function Find-OrcaRunningLaunchTarget([string]$ProcessName) {
 function Invoke-OrcaLaunchApp($Operation) {
     $query = ([string]$Operation.app).Trim()
     if ([string]::IsNullOrWhiteSpace($query)) { throw 'appNotFound("")' }
-    $queryName = if ([System.IO.Path]::IsPathRooted($query)) { [System.IO.Path]::GetFileName($query) } else { $query }
-    if ($queryName.EndsWith(".exe", [System.StringComparison]::OrdinalIgnoreCase)) { $queryName = $queryName.Substring(0, $queryName.Length - 4) }
-    $running = Find-OrcaRunningLaunchTarget $queryName
-    if ($null -ne $running) { return New-OrcaLaunchResult $running $false }
+    # A bare name means any running copy; a path means that file, checked once it resolves.
+    if (-not [System.IO.Path]::IsPathRooted($query)) {
+        $queryName = if ($query.EndsWith(".exe", [System.StringComparison]::OrdinalIgnoreCase)) { $query.Substring(0, $query.Length - 4) } else { $query }
+        $running = Find-OrcaRunningLaunchTarget $queryName
+        if ($null -ne $running) { return New-OrcaLaunchResult $running $false }
+    }
 
-    $executable = Resolve-OrcaLaunchExecutable $query
+    $executable = [System.IO.Path]::GetFullPath((Resolve-OrcaLaunchExecutable $query))
     # Why: an App Paths alias can name a differently named executable.
-    $running = Find-OrcaRunningLaunchTarget ([System.IO.Path]::GetFileNameWithoutExtension($executable))
+    $running = Find-OrcaRunningLaunchTarget ([System.IO.Path]::GetFileNameWithoutExtension($executable)) $executable
     if ($null -ne $running) { return New-OrcaLaunchResult $running $false }
     $name = [System.IO.Path]::GetFileNameWithoutExtension($executable).ToLowerInvariant().Replace(" ", "")
     foreach ($fragment in $BlockedAppFragments) {
