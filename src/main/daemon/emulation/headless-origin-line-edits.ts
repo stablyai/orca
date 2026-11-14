@@ -13,15 +13,17 @@ export function replaceOriginCells(
   from = 0
 ): OriginLineState {
   const copied: [number, TerminalOriginRuns][] = []
-  for (let index = from; source && index < from + end - start; index++) {
+  for (let index = from; source?.components.size && index < from + end - start; index++) {
     const runs = source.components.get(index)
     if (runs) {
       copied.push([index - from + start, runs])
     }
   }
   const components = target.components
-  for (let index = start; index < end; index++) {
-    components.delete(index)
+  if (components.size) {
+    for (let index = start; index < end; index++) {
+      components.delete(index)
+    }
   }
   for (const [index, runs] of copied) {
     components.set(index, runs)

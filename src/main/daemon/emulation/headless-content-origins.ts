@@ -96,8 +96,10 @@ export class HeadlessContentOrigins {
     this.pending = undefined
     const state = this.lines.get(pending.line)!
     const components = state.components
-    for (let index = pending.start; index < pending.end; index++) {
-      components.delete(index)
+    if (components.size) {
+      for (let index = pending.start; index < pending.end; index++) {
+        components.delete(index)
+      }
     }
     this.assign(pending.line, {
       runs: writeTerminalOrigins(
