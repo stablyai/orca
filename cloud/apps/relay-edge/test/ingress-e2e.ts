@@ -97,7 +97,7 @@ async function ready(url: string, ms = 60_000): Promise<number> {
   const started = Date.now()
   while (Date.now() - started < ms) {
     try {
-      if ((await fetch(url)).ok) return Date.now() - started
+      if ((await fetch(url)).ok) {return Date.now() - started}
     } catch {}
     await sleep(20)
   }
@@ -158,7 +158,7 @@ async function main(): Promise<void> {
   record('proxy logs carry no address, path or token', !/127\.0\.0\.1|::1|\/v1\/|Bearer|eyJ/.test(logs), `${logs.split('\n').filter(Boolean).length} lines`)
   const failed = results.filter((r) => !r.ok)
   console.log(`\n${results.length - failed.length}/${results.length} passed`)
-  if (failed.length) process.exitCode = 1
+  if (failed.length) {process.exitCode = 1}
 }
 
 async function scenarios(key: KeyLike, proxy: ReturnType<typeof startProxy>): Promise<ReturnType<typeof startProxy>> {
@@ -197,7 +197,7 @@ async function scenarios(key: KeyLike, proxy: ReturnType<typeof startProxy>): Pr
   // The shipped desktop data socket accepts frames up to 1 MiB.
   const sizes = [32, 64 * 1024, 1024 * 1024]
   const started = Date.now()
-  for (const size of sizes) invitePhone.ws.send(randomBytes(size))
+  for (const size of sizes) {invitePhone.ws.send(randomBytes(size))}
   await waitFor(() => invitePhone.state.frames.length === sizes.length, 15_000)
   record(
     'phone ↔ desktop frames echo through ingress + edge splice unchanged (32 B, 64 KiB, 1 MiB)',
@@ -223,7 +223,7 @@ async function scenarios(key: KeyLike, proxy: ReturnType<typeof startProxy>): Pr
   // 4. Pre-auth limits key on the client the ingress saw (127.0.0.1 vs ::1), not on the proxy.
   const probeHost = newHost().relayHostId
   const fromV4: number[] = []
-  for (let i = 0; i < 65; i++) fromV4.push(await preauthStatus(`https://127.0.0.1:${PROXY_PORT}`, probeHost))
+  for (let i = 0; i < 65; i++) {fromV4.push(await preauthStatus(`https://127.0.0.1:${PROXY_PORT}`, probeHost))}
   const fromV6 = await preauthStatus(`https://[::1]:${PROXY_PORT}`, probeHost)
   record(
     'pre-auth: one client past the limit gets 429, another client behind the same ingress is still admitted',
@@ -251,7 +251,7 @@ async function scenarios(key: KeyLike, proxy: ReturnType<typeof startProxy>): Pr
     let attempts = 0
     const back = new Promise<{ client: ReturnType<typeof desktop>; ms: number }>((resolve, reject) => {
       const attempt = () => {
-        if (Date.now() - killedAt > 90_000) return reject(new Error(`desktop did not recover after ${attempts} dials`))
+        if (Date.now() - killedAt > 90_000) {return reject(new Error(`desktop did not recover after ${attempts} dials`))}
         attempts++
         const next = desktop(INGRESS, host, jwt)
         next.connect().then(
@@ -274,7 +274,7 @@ async function scenarios(key: KeyLike, proxy: ReturnType<typeof startProxy>): Pr
       if (p.state.hello?.ok === true) {
         phoneBack = Date.now() - killedAt
         p.ws.close()
-      } else await sleep(500)
+      } else {await sleep(500)}
     }
     record(
       `proxy ${mode}${downMs ? ` + ${downMs / 1000} s down` : ''}: clients see a close, then recover through the restarted proxy`,

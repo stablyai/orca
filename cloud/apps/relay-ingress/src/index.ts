@@ -11,12 +11,12 @@ import { createIngressProxy } from './proxy.js'
 
 function required(name: string): string {
   const value = process.env[name]
-  if (!value) throw new Error(`relay_ingress_config_${name.toLowerCase()}`)
+  if (!value) {throw new Error(`relay_ingress_config_${name.toLowerCase()}`)}
   return value
 }
 const int = (name: string, fallback: number) => {
   const value = Number(process.env[name] ?? fallback)
-  if (!Number.isSafeInteger(value) || value < 0) throw new Error(`relay_ingress_config_${name.toLowerCase()}`)
+  if (!Number.isSafeInteger(value) || value < 0) {throw new Error(`relay_ingress_config_${name.toLowerCase()}`)}
   return value
 }
 const readTls = () => ({ key: readFileSync(required('TLS_KEY_FILE')), cert: readFileSync(required('TLS_CERT_FILE')) })
@@ -24,11 +24,11 @@ const readTls = () => ({ key: readFileSync(required('TLS_KEY_FILE')), cert: read
 const publicOrigin = new URL(required('INGRESS_ORIGIN')).origin
 const upstream = new URL(required('UPSTREAM_URL'))
 const secret = readFileSync(required('INGRESS_SECRET_FILE'), 'utf8').trim()
-if (secret.length < 32) throw new Error('relay_ingress_config_secret')
-if (upstream.protocol !== 'https:') throw new Error('relay_ingress_config_upstream_url')
+if (secret.length < 32) {throw new Error('relay_ingress_config_secret')}
+if (upstream.protocol !== 'https:') {throw new Error('relay_ingress_config_upstream_url')}
 const idleTimeoutMs = int('IDLE_TIMEOUT_MS', 300_000)
 // Edge control pings arrive every 30 s, phones may idle longer; 120 s is the floor.
-if (idleTimeoutMs <= 120_000) throw new Error('relay_ingress_config_idle_timeout_ms')
+if (idleTimeoutMs <= 120_000) {throw new Error('relay_ingress_config_idle_timeout_ms')}
 
 const proxy = createIngressProxy({
   name: required('INGRESS_NAME'),

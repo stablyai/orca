@@ -55,17 +55,17 @@ export async function signIngressHeader(secret: string, claim: IngressClaim, now
 
 // secrets: every accepted secret (current first, then any being rotated out).
 export async function verifyIngressHeader(value: string | null, secrets: readonly string[], nowMs = Date.now()): Promise<IngressClaim | null> {
-  if (!value || secrets.length === 0) return null
+  if (!value || secrets.length === 0) {return null}
   const parts = value.split(' ')
-  if (parts.length !== 6 || parts[0] !== 'v1') return null
+  if (parts.length !== 6 || parts[0] !== 'v1') {return null}
   const [, name, origin, clientIp, seconds, mac] = parts as [string, string, string, string, string, string]
-  if (!NAME.test(name) || !isOrigin(origin) || !IP.test(clientIp) || !/^\d{1,12}$/.test(seconds)) return null
-  if (Math.abs(nowMs / 1000 - Number(seconds)) > INGRESS_MAX_SKEW_SECONDS) return null
-  if (!/^[A-Za-z0-9_-]{43}$/.test(mac)) return null
+  if (!NAME.test(name) || !isOrigin(origin) || !IP.test(clientIp) || !/^\d{1,12}$/.test(seconds)) {return null}
+  if (Math.abs(nowMs / 1000 - Number(seconds)) > INGRESS_MAX_SKEW_SECONDS) {return null}
+  if (!/^[A-Za-z0-9_-]{43}$/.test(mac)) {return null}
   const data = new TextEncoder().encode(parts.slice(0, 5).join(' '))
   const signature = fromBase64Url(mac)
   for (const secret of secrets) {
-    if (await crypto.subtle.verify('HMAC', await hmacKey(secret), signature, data)) return { name, origin, clientIp }
+    if (await crypto.subtle.verify('HMAC', await hmacKey(secret), signature, data)) {return { name, origin, clientIp }}
   }
   return null
 }
