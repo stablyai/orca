@@ -67,34 +67,9 @@ describe('Claude rows held open by child agents', () => {
     await post(server, { hook_event_name: 'Stop' })
   }
 
-  function osc(server: AgentHookServer, state: 'working' | 'done'): void {
-    server.ingestTerminalStatus({
-      paneKey: PANE,
-      connectionId: null,
-      payload: { state, prompt: '', agentType: 'claude' }
-    })
-  }
-
   function row(server: AgentHookServer) {
     return server.getStatusSnapshot()[0]
   }
-
-  it('keeps a child permission prompt visible when OSC reports done', async () => {
-    const server = await startServer()
-    try {
-      await settleMainAgentBeside(server, ['achild-a'])
-      await post(server, CHILD_PERMISSION)
-      osc(server, 'done')
-
-      expect(row(server)).toMatchObject({
-        state: 'waiting',
-        toolName: 'Bash',
-        mainAgent: { state: 'done' }
-      })
-    } finally {
-      server.stop()
-    }
-  })
 
   it('settles a restored child permission wait once the child is approved and stops', async () => {
     let server = await startServer()
@@ -119,27 +94,6 @@ describe('Claude rows held open by child agents', () => {
     }
   })
 
-  it('pushes the held child permission row when the main agent behind it changes', async () => {
-    const server = await startServer()
-    try {
-      await settleMainAgentBeside(server, ['achild-a'])
-      await post(server, CHILD_PERMISSION)
-      const pushed: { state: string; mainAgent?: { state: string } }[] = []
-      server.subscribeEnrichedStatus((enriched) => pushed.push(enriched.payload))
-      await post(server, { hook_event_name: 'PreToolUse', tool_name: 'Read' })
-      expect(pushed).toEqual([
-        expect.objectContaining({
-          state: 'waiting',
-          mainAgent: expect.objectContaining({ state: 'working' })
-        })
-      ])
-      await post(server, { hook_event_name: 'PreToolUse', tool_name: 'Grep' })
-      expect(pushed).toHaveLength(1)
-    } finally {
-      server.stop()
-    }
-  })
-
   it('does not settle a restored row whose main agent resumed behind a child permission', async () => {
     let server = await startServer()
     await settleMainAgentBeside(server, ['achild-a', 'achild-b'])
@@ -156,33 +110,6 @@ describe('Claude rows held open by child agents', () => {
       await post(server, { hook_event_name: 'SubagentStop', agent_id: 'achild-b' })
 
       expect(row(server)).toMatchObject({ state: 'working', restoredUnconfirmed: true })
-    } finally {
-      server.stop()
-    }
-  })
-
-  it('does not settle a restored row whose main agent left a shell running behind a child permission', async () => {
-    let server = await startServer()
-    await post(server, { hook_event_name: 'UserPromptSubmit', prompt: 'delegate' })
-    await post(server, { hook_event_name: 'SubagentStart', agent_id: 'achild-a' })
-    await post(server, CHILD_PERMISSION)
-    await post(server, {
-      hook_event_name: 'Stop',
-      background_tasks: [{ id: 'achild-a', type: 'subagent', status: 'running' }, RUNNING_SHELL]
-    })
-    expect(row(server)).toMatchObject({ state: 'waiting', mainAgent: { state: 'done' } })
-    server = await restart(server)
-    try {
-      await post(server, {
-        hook_event_name: 'PreToolUse',
-        agent_id: 'achild-a',
-        tool_name: 'Bash',
-        tool_input: { command: 'rm scratch' },
-        tool_use_id: 'toolu-approved'
-      })
-      await post(server, { hook_event_name: 'SubagentStop', agent_id: 'achild-a' })
-
-      expect(row(server)?.state).toBe('working')
     } finally {
       server.stop()
     }

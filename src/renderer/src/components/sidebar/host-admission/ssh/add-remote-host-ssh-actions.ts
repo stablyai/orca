@@ -5,7 +5,7 @@ import {
   getSshTargetDraftConnectionFields,
   hasAdvancedConnectionValues,
   type EditingTarget
-} from '../../../settings/ssh/targets/ssh-target-draft'
+} from '../../../ssh-host-form/ssh-target-draft'
 import {
   SSH_CONFIG_HOST_RESULT_LIMIT,
   type SshConfigHostSummary,

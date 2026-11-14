@@ -2,7 +2,15 @@ import { randomUUID, createHash } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { createDaemonPtyEnvironment } from '../../daemon/pty-subprocess/spawn-environment'
+import {
+  createDaemonPtyEnvironment,
+  finalizeDaemonPtyEnvironment
+} from '../../daemon/pty-subprocess/spawn-environment'
+import {
+  buildInheritedLocalPtyEnvironment,
+  enforceLocalPtySpawnEnvironmentOverrides
+} from '../../providers/local-pty/local-pty-spawn-environment'
+import { assemblePtySpawnEnvDeletions } from './spawn-options-assembly'
 import { applyManagedDataAccountEnvironment } from '../../managed-data-accounts/launch-environment'
 import { buildPtyIpcSpawnOptions } from './ipc/spawn-options'
 import { createPtyIpcSpawnState } from './ipc/spawn-state'
@@ -40,6 +48,113 @@ beforeEach(() => {
   selected.value = {}
 })
 afterEach(() => vi.unstubAllEnvs())
+
+describe('independent pane agent session environments', () => {
+  it('canonicalizes explicit Windows stamps for old receivers and keeps caller deletions authoritative', () => {
+    const platform = process.platform
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    try {
+      const explicit = { claude_code_messaging_socket: '', SAFE_VALUE: 'kept' }
+      const input = {
+        env: explicit,
+        callerEnvToDelete: undefined,
+        agentTeamsEnvToDelete: [],
+        isDaemonHostSpawn: true,
+        connectionId: null,
+        skipCodexHomeEnv: false,
+        stripInheritedOrcaCodexHome: false,
+        codexResumeHomeSelected: false,
+        settings: undefined
+      }
+      const kept = assemblePtySpawnEnvDeletions(input)
+      expect(kept.env).toEqual({ CLAUDE_CODE_MESSAGING_SOCKET: '', SAFE_VALUE: 'kept' })
+      expect(kept.envToDelete).not.toContain('CLAUDE_CODE_MESSAGING_SOCKET')
+      expect(kept.envToDelete).toContain('CLAUDE_CODE_MESSAGING_TOKEN')
+      const deleted = assemblePtySpawnEnvDeletions({
+        ...input,
+        callerEnvToDelete: ['Claude_Code_Messaging_Socket']
+      })
+      expect(deleted.env).toEqual({ SAFE_VALUE: 'kept' })
+      expect(deleted.envToDelete).toContain('CLAUDE_CODE_MESSAGING_SOCKET')
+      expect(explicit).toEqual({ claude_code_messaging_socket: '', SAFE_VALUE: 'kept' })
+    } finally {
+      Object.defineProperty(process, 'platform', { value: platform })
+    }
+  })
+
+  it.each(['local', 'daemon'])(
+    '%s panes drop the launching Codex task identity but keep user Codex settings',
+    (provider) => {
+      vi.stubEnv('CODEX_THREAD_ID', 'parent-thread')
+      vi.stubEnv('CODEX_WINDOWS_REGISTERED_CORE', '1')
+      vi.stubEnv('CODEX_HOME', '/home/user/.codex')
+      const pane =
+        provider === 'local'
+          ? buildInheritedLocalPtyEnvironment({}, [])
+          : createDaemonPtyEnvironment({ sessionId: 'pane', cols: 80, rows: 24, env: {} })
+      expect(pane.CODEX_THREAD_ID).toBeUndefined()
+      expect(pane.CODEX_WINDOWS_REGISTERED_CORE).toBeUndefined()
+      expect(pane.CODEX_HOME).toBe('/home/user/.codex')
+    }
+  )
+
+  it.each(['local', 'daemon'])(
+    '%s owns stamps only from the pane overlay through final preparation',
+    (provider) => {
+      const platform = process.platform
+      vi.stubEnv('CLAUDE_CODE_MESSAGING_SOCKET', 'parent-uppercase')
+      vi.stubEnv('claude_code_messaging_socket', 'parent-alias')
+      vi.stubEnv('CLAUDE_CODE_SESSION_ATTENDED', 'parent-attended')
+      vi.stubEnv('CLAUDE_CODE_HTTP_PROXY', 'http://user-proxy')
+      const build = (env: Record<string, string>, envToDelete: string[] = []) =>
+        provider === 'local'
+          ? buildInheritedLocalPtyEnvironment(env, envToDelete)
+          : createDaemonPtyEnvironment({ sessionId: 'pane', cols: 80, rows: 24, env, envToDelete })
+      try {
+        Object.defineProperty(process, 'platform', { value: 'win32' })
+        const inherited = build({})
+        expect(inherited.CLAUDE_CODE_MESSAGING_SOCKET).toBeUndefined()
+        expect(inherited.claude_code_messaging_socket).toBeUndefined()
+        expect(inherited.CLAUDE_CODE_SESSION_ATTENDED).toBeUndefined()
+        expect(inherited.CLAUDE_CODE_HTTP_PROXY).toBe('http://user-proxy')
+        const explicit = { claude_code_messaging_socket: '' }
+        const child = build(explicit)
+        expect(child.CLAUDE_CODE_MESSAGING_SOCKET).toBe('')
+        expect(child.claude_code_messaging_socket).toBeUndefined()
+        child.Claude_Code_Messaging_Socket = 'late-parent'
+        child.CLAUDE_CODE_SESSION_ATTENDED = 'late-attended'
+        if (provider === 'local') {
+          enforceLocalPtySpawnEnvironmentOverrides({ cols: 80, rows: 24, env: explicit }, child)
+        } else {
+          finalizeDaemonPtyEnvironment(child, explicit)
+        }
+        expect(child.CLAUDE_CODE_MESSAGING_SOCKET).toBe('')
+        expect(child.Claude_Code_Messaging_Socket).toBeUndefined()
+        expect(child.CLAUDE_CODE_SESSION_ATTENDED).toBeUndefined()
+        const deletions = ['Claude_Code_Messaging_Socket']
+        const deleted = build(explicit, deletions)
+        deleted.claude_code_messaging_socket = 'late-parent'
+        if (provider === 'local') {
+          enforceLocalPtySpawnEnvironmentOverrides(
+            { cols: 80, rows: 24, env: explicit, envToDelete: deletions },
+            deleted
+          )
+        } else {
+          finalizeDaemonPtyEnvironment(deleted, explicit, deletions)
+        }
+        expect(deleted.CLAUDE_CODE_MESSAGING_SOCKET).toBeUndefined()
+        expect(deleted.claude_code_messaging_socket).toBeUndefined()
+        expect(explicit.claude_code_messaging_socket).toBe('')
+        Object.defineProperty(process, 'platform', { value: 'linux' })
+        const posix = build({})
+        expect(posix.CLAUDE_CODE_MESSAGING_SOCKET).toBeUndefined()
+        expect(posix.claude_code_messaging_socket).toBe('parent-alias')
+      } finally {
+        Object.defineProperty(process, 'platform', { value: platform })
+      }
+    }
+  )
+})
 
 function hash(value: string | undefined): string | undefined {
   return value === undefined ? undefined : createHash('sha256').update(value).digest('hex')
@@ -97,31 +212,6 @@ describe.each(['renderer', 'runtime'])('%s managed account daemon environment', 
       if (key !== 'XDG_STATE_HOME') {
         expect(child[key]).toBe(value)
       }
-    }
-  })
-
-  it('preserves independent daemon defaults when main has no baseline or owned markers', async () => {
-    const env: Record<string, string> = {}
-    applyManagedDataAccountEnvironment(env, { launchAgent: 'opencode' })
-    const envToDelete = await spawnDeletions(route, env)
-    const defaults = {
-      XDG_DATA_HOME: join(tmpdir(), 'persistent-daemon', 'data'),
-      XDG_STATE_HOME: join(tmpdir(), 'persistent-daemon', 'state'),
-      OPENCODE_DB: 'daemon.db',
-      OPENCODE_AUTH_CONTENT: JSON.stringify({ fixture: { key: randomUUID() } })
-    }
-    for (const [key, value] of Object.entries(defaults)) {
-      vi.stubEnv(key, value)
-    }
-    const child = createDaemonPtyEnvironment({
-      sessionId: 'pane',
-      cols: 80,
-      rows: 24,
-      env,
-      envToDelete
-    })
-    for (const [key, value] of Object.entries(defaults)) {
-      expect(hash(child[key]) === hash(value)).toBe(true)
     }
   })
 

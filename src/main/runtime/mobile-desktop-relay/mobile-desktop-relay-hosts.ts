@@ -77,6 +77,8 @@ export type MobileDesktopRelayHosts = {
   ) => Promise<BrowserPageCreationPlacement>
   onEnvironmentRetired: (listener: (environmentId: string) => void) => () => void
   onStatusChanged: (listener: () => void) => () => void
+  /** The saved server list was edited (added, renamed, removed), here or by the CLI. */
+  onCatalogChanged?: (listener: () => void) => () => void
   /** Windowless server events: onChange fires on ready, catalog changes and reconnect replay.
    * catalog is false only for worktreesChanged; repo/project-group writes never emit that event alone. */
   watchChanges: (

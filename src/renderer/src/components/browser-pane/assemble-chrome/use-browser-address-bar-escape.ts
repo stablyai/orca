@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, type RefObject } from 'react'
-import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
+import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { requestBrowserFocus } from '../host-guest/browser-focus'
 
 /** Escape in the bar, in the order of Chromium's OmniboxEditModel::OnEscapeKeyPressed. */

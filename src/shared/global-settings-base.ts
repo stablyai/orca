@@ -2,6 +2,7 @@ import type { AntigravityChatAuthSettings } from './antigravity-chat-auth-config
 import type { EmulatorOpeningSettings } from './emulator-opening-preferences'
 import type { BrowserExtensionGlobalSettings } from './browser/extensions/browser-extension-settings'
 import type { ClaudeAgentViewSettings } from './claude-agent-view'
+import type { WorktreeCardDisplaySettings } from './worktree/card-display-settings-types'
 import type { BrowserLinkOpeningSettings } from './browser-link-opening-settings'
 import type { BrowserPasswordsGlobalSettings } from './browser-passwords-types'
 import type { ClaudeAccountSwitchSettings } from './claude-account-switch-settings'
@@ -23,6 +24,7 @@ import type { NestedWorkerDepthSettings } from './orchestration/workers/nested-w
 import type { SshRemoteControlSettings } from './ssh-remote-control-settings'
 import type { AgentWorkspaceTrustSettings } from './agent-launch/permissions/agent-workspace-trust-decision'
 import type { KeybindingGlobalSettings } from './keybindings/global-settings'
+import type { WorkspaceCleanupPolicySettings } from './workspace-cleanup/workspace-cleanup-policy'
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = AntigravityChatAuthSettings &
@@ -32,6 +34,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   NativeChatGlobalSettings &
   NativeChatIdleStopSettings &
   WorktreeDeletionPreferences &
+  WorktreeCardDisplaySettings &
   ClaudeAccountSwitchSettings &
   AgentPermissionGlobalSettings &
   ExternalConversationSettings &
@@ -49,4 +52,5 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   BrowserPasswordsGlobalSettings &
   NestedWorkerDepthSettings &
   AgentWorkspaceTrustSettings &
-  KeybindingGlobalSettings
+  KeybindingGlobalSettings &
+  WorkspaceCleanupPolicySettings

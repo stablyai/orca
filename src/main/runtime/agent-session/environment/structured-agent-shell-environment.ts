@@ -1,5 +1,8 @@
 import { agentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
-import { resolveLoginShellEnvironment } from '../../../startup/login-shell-environment'
+import {
+  loginShellEnvironmentRevision,
+  resolveLoginShellEnvironment
+} from '../../../startup/shell-environment/login-shell-environment'
 import { refreshAtRestCommandContext } from '../../../native-chat/agent-session-wire/options/at-rest-command-context'
 import {
   cachedPersistedWindowsPathSegments,
@@ -11,6 +14,8 @@ import {
   resolvePathEnvKey
 } from '../../../pty/environment/windows-path-segment-merge'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { overlayEnvironmentVariables } from '../../../../shared/environment-overlay'
+import { stripInheritedAgentSessionEnv } from '../../../../shared/agent-launch/startup/parent-agent-session-env'
 import {
   nativeChatShellEnvironmentPolicy,
   type NativeChatShellEnvironmentPolicy
@@ -27,24 +32,6 @@ function definedEnv(env: NodeJS.ProcessEnv): Record<string, string> {
     }
   }
   return defined
-}
-
-/** Overlays shell variables on Orca's env; win32 names are case-insensitive, so drop the base spelling. */
-function overlayShellVariables(
-  base: Record<string, string>,
-  shellVariables: Record<string, string>,
-  platform: NodeJS.Platform
-): Record<string, string> {
-  const merged = { ...base }
-  if (platform === 'win32') {
-    const overlaid = new Set(Object.keys(shellVariables).map((key) => key.toUpperCase()))
-    for (const key of Object.keys(merged)) {
-      if (overlaid.has(key.toUpperCase())) {
-        delete merged[key]
-      }
-    }
-  }
-  return { ...merged, ...shellVariables }
 }
 
 function pickShellVariables(
@@ -74,15 +61,17 @@ export function structuredAgentBaseEnvironment(input: {
   processEnv?: NodeJS.ProcessEnv
   platform?: NodeJS.Platform
 }): Record<string, string> {
-  if (input.policy.inheritAll) {
-    return definedEnv(input.shellEnv)
-  }
   const platform = input.platform ?? process.platform
-  return overlayShellVariables(
-    definedEnv(input.processEnv ?? process.env),
-    pickShellVariables(input.shellEnv, input.policy.names, platform),
-    platform
-  )
+  const base = input.policy.inheritAll
+    ? definedEnv(input.shellEnv)
+    : overlayEnvironmentVariables(
+        definedEnv(input.processEnv ?? process.env),
+        pickShellVariables(input.shellEnv, input.policy.names, platform),
+        platform
+      )
+  // The user's per-agent overlay, applied later, owns any deliberate session values.
+  stripInheritedAgentSessionEnv(base, { platform })
+  return base
 }
 
 // Share one capture across launch bursts while discovering newly installed CLIs without restart.
@@ -111,6 +100,11 @@ export async function hostShellEnvironment(cachedOnly = false): Promise<NodeJS.P
     await mergePersistedWindowsPathAsync(withSavedPath)
   }
   return withSavedPath
+}
+
+/** Moves whenever the capture `hostShellEnvironment` serves is replaced; synchronous, starts nothing. */
+export function hostShellEnvironmentRevision(): number {
+  return loginShellEnvironmentRevision()
 }
 
 /** After a missing-program lookup, await a capture (Windows: saved PATH read) started no earlier than askedAt; the shell timeout bounds it. */
@@ -210,7 +204,7 @@ export function createStructuredAgentEnvironmentResolvers(
   /** The shared base every agent's child env starts from, before its own overlay. */
   resolveBaseEnvironment: (cachedOnly?: boolean) => Promise<Record<string, string>>
   /** The base with the user's overlay for `agent` laid over it. */
-  resolveAgentEnvironment: (agent: string) => Promise<Record<string, string>>
+  resolveAgentEnvironment: (agent: string, cachedOnly?: boolean) => Promise<Record<string, string>>
   refreshAfterMissingProgram: (askedAt: number) => Promise<void>
   bindCatalogSources: (agents: readonly string[]) => () => void
 } {
@@ -246,8 +240,21 @@ export function createStructuredAgentEnvironmentResolvers(
           const base = structuredAgentBaseEnvironment({ shellEnv, policy, processEnv })
           return new Map(
             agents.map((agent) => {
-              const effective = { ...base, ...overlays.get(agent) }
-              return [agent, structuredAgentEnvironmentIdentity(effective)]
+              const effective = overlayEnvironmentVariables(
+                base,
+                overlays.get(agent),
+                process.platform
+              )
+              return [
+                agent,
+                structuredAgentEnvironmentIdentity(
+                  Object.fromEntries(
+                    Object.entries(effective).filter(([key]) =>
+                      process.platform === 'win32' ? key.toUpperCase() !== 'PATH' : key !== 'PATH'
+                    )
+                  )
+                )
+              ]
             })
           )
         }
@@ -258,10 +265,12 @@ export function createStructuredAgentEnvironmentResolvers(
       }
     },
     resolveBaseEnvironment: resolveBase,
-    resolveAgentEnvironment: async (agent) => ({
-      ...(await resolveBase()),
-      ...sources.resolveAgentLaunchEnv?.(agent)
-    })
+    resolveAgentEnvironment: async (agent, cachedOnly) =>
+      overlayEnvironmentVariables(
+        await resolveBase(cachedOnly),
+        sources.resolveAgentLaunchEnv?.(agent),
+        process.platform
+      )
   }
 }
 

@@ -1,10 +1,10 @@
-import type { BrowserScreenshotOptions } from '../../../../shared/rpc-contract/browser-observation-params'
+import type { BrowserScreenshotOptions } from '../../../../shared/rpc-contract/browser/browser-observation-params'
 import { z } from 'zod'
 import { app, nativeImage, type WebContents } from 'electron'
 import type {
   BrowserScreenshotResult,
   BrowserEvalResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../../browser-error'
 import {
   captureFullPageScreenshot,

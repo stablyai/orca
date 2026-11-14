@@ -1,5 +1,6 @@
+import { isWorktreeRetiredByRemoval } from '../../../../../shared/worktree/removal/removal-visibility'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../ownership/worktree-runtime-owner'
-import { noteUserWorkspaceOpen } from '../../workspace-switch-user-act'
+import { noteUserWorkspaceOpen } from './workspace-switch-user-act'
 import { useAppStore } from '@/store/index'
 import { activateWebRuntimeSessionWorktree } from '@/runtime/web-session-tabs-sync/actions/web-runtime-worktree-activation'
 import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
@@ -8,31 +9,30 @@ import { workspaceHasSleepingAgentSessions } from '@/lib/workspace/activation/wo
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/agent-session/resume/resume-sleeping-agent-session'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../../shared/workspace-scope'
-import {
-  folderWorkspaceActivationBlocked,
-  notifyBlockedFolderWorkspacePath
-} from '../../folder-workspace-path-status'
+import { notifyBlockedFolderWorkspacePath } from '../paths/folder-workspace-path-status'
+import { blocksFolderWorkspaceActivation } from '../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import {
   findFolderWorkspaceOwner,
   getRuntimeEnvironmentIdForFolderWorkspace
-} from '../../folder-workspace-runtime-owner'
+} from '../ownership/folder-workspace-runtime-owner'
 import '../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../../shared/folder-workspaces/folder-workspace-host-id'
-import {
-  ensureFolderWorkspaceInitialTerminal,
-  ensureWorktreeHasInitialTerminal
-} from '@/lib/workspace/activation/initial-surface/worktree-initial-terminal-seeding'
-import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
-import { applyWorktreeNavViewEntry } from '@/lib/worktree-nav-view-history-replay'
+import { ensureFolderWorkspaceInitialTerminal } from '@/lib/workspace/activation/initial-surface/folder-workspace-initial-terminal'
+import { ensureWorktreeHasInitialTerminal } from '@/lib/workspace/activation/initial-surface/worktree-initial-terminal-seeding'
+import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/runtime/hosted-terminals/restoration/web-runtime-worktree-terminal-after-wake'
+import { applyWorktreeNavViewEntry } from '@/lib/workspace/activation/worktree-nav-view-history-replay'
 import {
   activationProvidesInitialSurface,
   activationSeedsUserDefaultSurface,
   type WorktreeActivationOptions
 } from './worktree-activation-surface-selection'
 import { gateAndReseedEmptyWorkspace } from './worktree-activation-gated-empty-reseed'
-import { liftSidebarFiltersHidingWorktree } from './worktree-activation-sidebar-filters'
+import {
+  isWorktreeInHiddenProject,
+  liftSidebarFiltersHidingWorktree
+} from './worktree-activation-sidebar-filters'
 import { isFloatingWorkspaceId } from '../../../../../shared/floating-workspace-worktree'
-import { revealFloatingWorkspacePanel } from '../../floating-workspace-panel-reveal'
+import { revealFloatingWorkspacePanel } from '../../../components/floating-terminal/floating-workspace-panel-reveal'
 import { findPendingWorktreeCreationId } from '../creation/pending-worktree-creation'
 import {
   buildActivationStateTransition,
@@ -47,8 +47,7 @@ import {
   type WorkspaceActivationOutcome,
   type FolderWorkspaceActivationOptions,
   type WorkspaceRevealOptions
-} from '@/lib/worktree-activation-outcome'
-export type { ActivateAndRevealResult } from '@/lib/worktree-activation-outcome'
+} from '@/lib/workspace/activation/worktree-activation-outcome'
 
 const canInspectAgentActivationInventory = (): boolean =>
   typeof window !== 'undefined' &&
@@ -82,7 +81,7 @@ export function activateAndRevealFolderWorkspaceWithOutcome(
     },
     { runtimeEnvironmentId }
   )
-  if (folderWorkspaceActivationBlocked(pathStatus)) {
+  if (blocksFolderWorkspaceActivation(pathStatus)) {
     notifyBlockedFolderWorkspacePath(pathStatus, folderWorkspace.folderPath)
     return { refused: { reason: 'path-blocked', failureNotified: true } }
   }
@@ -104,6 +103,8 @@ export function activateAndRevealFolderWorkspaceWithOutcome(
   // Why: same ordering as the worktree path — gate first, then resume only when not deferring.
   const shouldGateAgentActivation =
     !opts?.startup &&
+    !opts?.setup &&
+    !opts?.backendStartupTerminalSpawned &&
     (workspaceHasSleepingAgentSessions(state, workspaceKey) ||
       (canInspectAgentActivationInventory() &&
         shouldAutoCreateInitialTerminal(
@@ -121,7 +122,9 @@ export function activateAndRevealFolderWorkspaceWithOutcome(
   const primaryTabId = shouldGateAgentActivation
     ? null
     : ensureFolderWorkspaceInitialTerminal(folderWorkspace, opts?.startup, providesInitialSurface, {
-        seedUserDefaultSurface
+        seedUserDefaultSurface,
+        setup: opts?.setup,
+        backendStartupTerminalSpawned: opts?.backendStartupTerminalSpawned
       })
 
   if (opts?.showWorkspaceList) {
@@ -135,7 +138,7 @@ export function activateAndRevealFolderWorkspaceWithOutcome(
     })
   }
 
-  if (opts?.providesInitialSurface !== true) {
+  if (opts?.providesInitialSurface !== true && !opts?.backendStartupTerminalSpawned) {
     ensureWebRuntimeWorktreeTerminalAfterWake(workspaceKey, {
       runtimeEnvironmentId,
       startup: opts?.startup,
@@ -158,7 +161,7 @@ export function activateAndRevealWorktreeWithOutcome(
     return { opened: { primaryTabId: null } }
   }
   const wt = state.getKnownWorktreeById(worktreeId, opts?.executionHostId)
-  if (!wt) {
+  if (!wt || isWorktreeRetiredByRemoval(wt)) {
     return { refused: { reason: 'workspace-missing', failureNotified: false } }
   }
   const pendingCreationId = findPendingWorktreeCreationId(state.pendingWorktreeCreations, wt.id)
@@ -257,11 +260,13 @@ export function activateAndRevealWorktreeWithOutcome(
   if (opts?.showWorkspaceList) {
     state.setSidebarBody('workspaces')
   }
-  if (opts?.clearSidebarFilters !== false) {
+  // No sidebar card to reveal; lifting filters for it would only discard the user's.
+  const inHiddenProject = isWorktreeInHiddenProject(wt)
+  if (opts?.clearSidebarFilters !== false && !inHiddenProject) {
     liftSidebarFiltersHidingWorktree(wt)
   }
 
-  if (opts?.revealInSidebar !== false) {
+  if (opts?.revealInSidebar !== false && !inHiddenProject) {
     if (opts?.sidebarRevealBehavior || opts?.executionHostId) {
       state.revealWorktreeInSidebar(worktreeId, {
         ...(opts.sidebarRevealBehavior ? { behavior: opts.sidebarRevealBehavior } : {}),

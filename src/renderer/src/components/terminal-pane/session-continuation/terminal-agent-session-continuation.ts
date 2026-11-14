@@ -4,7 +4,7 @@ import {
   buildAgentSessionContinuationPrompt,
   resolveAgentSessionContinuationTranscriptPath,
   type AgentSessionContinuationRequest
-} from '@/lib/agent-session-continuation'
+} from '@/lib/agent-session/context/agent-session-continuation'
 import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'

@@ -16,20 +16,20 @@ import {
 import {
   resolveSafePtyDefaultCwd,
   assertSafeAgentStartupCwd
-} from '../../providers/pty-default-cwd'
+} from '../../providers/working-directory/default-cwd'
 import {
   resolveEffectiveWindowsPowerShell,
   shouldProbeWindowsPowerShellAvailability,
   type WindowsPowerShellShellFamily
-} from '../../providers/windows-powershell'
+} from '../../providers/shell-launch/windows/powershell'
 import {
   buildWindowsPowerShellSpawnAttempts,
   type WindowsShellSpawnAttempt
-} from '../../providers/windows-shell-fallback-chain'
+} from '../../providers/shell-launch/windows/shell-fallback-chain'
 import {
   ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
   resolveWindowsShellLaunchArgs
-} from '../../providers/windows-shell-args'
+} from '../../providers/shell-launch/windows/shell-args'
 import { resolveUnixShellPath } from '../../providers/local-pty/local-pty-executable-spawn'
 import { selectShellStartupFeatures } from '../../pty/shell-startup/shell-startup-features'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
@@ -231,7 +231,7 @@ export function createPtyShellLaunchPlan(
   ) {
     addWslEnvKeys(env, [POWERLEVEL10K_WIZARD_DISABLE_ENV])
   }
-  finalizeDaemonPtyEnvironment(env, opts.env)
+  finalizeDaemonPtyEnvironment(env, opts.env, opts.envToDelete)
 
   return {
     shellPath,

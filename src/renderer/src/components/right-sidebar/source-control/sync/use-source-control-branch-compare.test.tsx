@@ -18,7 +18,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/runtime/source-control/git/runtime-git-diff-client', () => ({
   getRuntimeGitBranchCompare: mocks.getRuntimeGitBranchCompare
 }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => undefined }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionId: () => undefined
+}))
 vi.mock('@/store/index', () => {
   const state = {
     beginGitBranchCompareRequest: mocks.beginGitBranchCompareRequest,

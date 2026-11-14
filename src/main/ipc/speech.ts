@@ -1,8 +1,13 @@
-import { ipcMain, BrowserWindow, systemPreferences, type MessagePortMain } from 'electron'
+import {
+  ipcMain,
+  BrowserWindow,
+  systemPreferences,
+  type IpcMainInvokeEvent,
+  type MessagePortMain
+} from 'electron'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
-import { join } from 'node:path'
-import { writeFile, unlink } from 'node:fs/promises'
-import { createHash } from 'node:crypto'
+import { dictationTermsFor } from '../../shared/dictation-dictionary'
+import { dictationTextSettingsFor } from '../../shared/dictation-cleanup'
 import { SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
 import { deleteLocalSpeechModel } from '../speech/speech-model-deletion'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
@@ -11,10 +16,59 @@ import {
   getOpenAiSpeechApiKeyProtection,
   hasOpenAiSpeechApiKey
 } from '../speech/openai-api-key-store'
-import { saveVerifiedOpenAiSpeechApiKey } from '../speech/openai-api-key-verification'
+import {
+  saveVerifiedOpenAiCompatibleSpeechProvider,
+  saveVerifiedOpenAiSpeechApiKey
+} from '../speech/openai-api-key-verification'
+import {
+  clearOpenAiCompatibleSpeechProvider,
+  summarizeOpenAiCompatibleSpeechProvider
+} from '../speech/openai-compatible-speech-provider-store'
+import type { DictationContext, OpenAiCompatibleSpeechProvider } from '../../shared/speech-types'
 import type { Store } from '../persistence/loading-store/store'
+import type { DictationCleanupResult } from '../../shared/dictation-cleanup'
+import { cancelDictationCleanup, cleanUpDictatedText } from '../speech/dictation-cleanup-service'
+import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/execution/commit-message-agent-environment'
 
-export function registerSpeechHandlers(store: Store): void {
+// Ten minutes of fast speech is under 20,000 characters; anything far past it isn't dictation.
+const MAX_CLEANUP_TEXT_LENGTH = 100_000
+
+export function registerSpeechHandlers(
+  store: Store,
+  agentEnvResolvers?: CommitMessageAgentEnvironmentResolvers
+): void {
+  ipcMain.handle(
+    'speech:cleanUpDictation',
+    (
+      _event,
+      args: { text: string; context?: DictationContext; requestId: string }
+    ): Promise<DictationCleanupResult> => {
+      if (typeof args?.text !== 'string' || args.text.length > MAX_CLEANUP_TEXT_LENGTH) {
+        return Promise.resolve({
+          status: 'failed',
+          reason: 'Dictated text is too long to clean up.'
+        })
+      }
+      return cleanUpDictatedText(
+        {
+          text: args.text,
+          terms: dictationTermsFor(store.getSettings().voice, {
+            dictationTerms: args.context?.repoTerms,
+            displayName: args.context?.repoName
+          }),
+          requestId: typeof args.requestId === 'string' ? args.requestId : undefined
+        },
+        { getSettings: () => store.getSettings(), getAgentEnvResolvers: () => agentEnvResolvers }
+      )
+    }
+  )
+
+  ipcMain.handle('speech:cancelDictationCleanup', (_event, requestId: unknown) => {
+    if (typeof requestId === 'string') {
+      cancelDictationCleanup(requestId)
+    }
+  })
+
   ipcMain.handle('speech:getCatalog', () => {
     return SPEECH_MODEL_CATALOG
   })
@@ -35,6 +89,25 @@ export function registerSpeechHandlers(store: Store): void {
   ipcMain.handle('speech:clearOpenAiApiKey', async () => {
     clearOpenAiSpeechApiKey()
     return { configured: false, protection: null }
+  })
+
+  ipcMain.handle('speech:getOpenAiCompatibleProvider', () => {
+    try {
+      return summarizeOpenAiCompatibleSpeechProvider()
+    } catch {
+      return null
+    }
+  })
+
+  ipcMain.handle(
+    'speech:saveOpenAiCompatibleProvider',
+    async (_event, input: OpenAiCompatibleSpeechProvider) => {
+      await saveVerifiedOpenAiCompatibleSpeechProvider(input)
+    }
+  )
+
+  ipcMain.handle('speech:clearOpenAiCompatibleProvider', () => {
+    clearOpenAiCompatibleSpeechProvider()
   })
 
   ipcMain.handle('speech:downloadModel', async (event, modelId: string) => {
@@ -79,29 +152,6 @@ export function registerSpeechHandlers(store: Store): void {
     })
   })
 
-  const getHotwordsFilePath = (content: string): string => {
-    const digest = createHash('sha256').update(content).digest('hex').slice(0, 12)
-    // sherpa-onnx cannot read non-ASCII Windows paths; use the ASCII-safe model cache for hotwords.
-    return join(getSpeechModelManager(store).getModelsDir(), `speech-hotwords-${digest}.txt`)
-  }
-
-  const hotwordFileUsers = new Map<string, { users: number; written: boolean }>()
-  const retainHotwordsFile = (path: string): ((written: boolean) => void) => {
-    const entry = hotwordFileUsers.get(path) ?? { users: 0, written: false }
-    entry.users += 1
-    hotwordFileUsers.set(path, entry)
-    return (written) => {
-      entry.written ||= written
-      entry.users -= 1
-      if (entry.users === 0) {
-        hotwordFileUsers.delete(path)
-        if (entry.written) {
-          unlink(path).catch(() => {})
-        }
-      }
-    }
-  }
-
   // Renderer run ids restart per document; a retired document's owner must not be reused by its successor.
   const retiredDocumentCounts = new Map<number, number>()
   const getDesktopOwner = (senderId: number, sessionId: string): string =>
@@ -120,7 +170,7 @@ export function registerSpeechHandlers(store: Store): void {
 
   ipcMain.handle(
     'speech:startDictation',
-    async (event, modelId: string, hotwords?: string[], sessionId = 'desktop') => {
+    async (event, modelId: string, context?: DictationContext, sessionId = 'desktop') => {
       const senderId = event.sender.id
       const owner = getDesktopOwner(senderId, sessionId)
       const audioPort = pendingAudioPorts.get(owner)
@@ -131,8 +181,6 @@ export function registerSpeechHandlers(store: Store): void {
         audioPort?.close()
         return { directAudio }
       }
-      let resolvedHotwordsPath: string | undefined
-      let releaseHotwords: ((written: boolean) => void) | undefined
       let rendererRetired = false
       const rendererLifetime = abortWhenRendererGone(event.sender)
       let sessionListenerRemoved = false
@@ -174,14 +222,6 @@ export function registerSpeechHandlers(store: Store): void {
           }
         }
 
-        if (hotwords && hotwords.length > 0) {
-          const content = `${hotwords.map((w) => `${w} :2.0`).join('\n')}\n`
-          const hotwordsFilePath = getHotwordsFilePath(content)
-          releaseHotwords = retainHotwordsFile(hotwordsFilePath)
-          await writeFile(hotwordsFilePath, content, 'utf-8')
-          resolvedHotwordsPath = hotwordsFilePath
-        }
-
         if (rendererRetired || window.isDestroyed()) {
           cleanupSessionListener()
           return { directAudio }
@@ -206,6 +246,9 @@ export function registerSpeechHandlers(store: Store): void {
               case 'final':
                 window.webContents.send('speech:final', { text: msg.text ?? '', sessionId })
                 break
+              case 'speech-pending':
+                window.webContents.send('speech:pending', { pending: msg.pending, sessionId })
+                break
               case 'stopped':
                 cleanupSessionListener()
                 window.webContents.send('speech:stopped', { sessionId })
@@ -219,9 +262,12 @@ export function registerSpeechHandlers(store: Store): void {
                 break
             }
           },
-          resolvedHotwordsPath,
+          dictationTermsFor(store.getSettings().voice, {
+            dictationTerms: context?.repoTerms,
+            displayName: context?.repoName
+          }),
           owner,
-          store.getSettings().voice?.dictationLanguage
+          dictationTextSettingsFor(store.getSettings())
         )
         // Coalesced starts install no sink; only an accepted start supersedes the close hook.
         if (sessionReady) {
@@ -239,7 +285,6 @@ export function registerSpeechHandlers(store: Store): void {
         cleanupSessionListener()
         throw err
       } finally {
-        releaseHotwords?.(resolvedHotwordsPath !== undefined)
         if (!directAudio) {
           audioPort?.close()
         }
@@ -260,12 +305,16 @@ export function registerSpeechHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle('speech:stopDictation', async (_event, sessionId = 'desktop') => {
-    const owner = getDesktopOwner(_event.sender.id, sessionId)
-    const listener = dictationListeners.get(_event.sender.id)
-    await getSpeechSttService(store).stopDictation(owner)
-    if (listener?.owner === owner) {
-      listener.cleanup()
+  const handleStop =
+    (discard: boolean) =>
+    async (event: IpcMainInvokeEvent, sessionId = 'desktop'): Promise<void> => {
+      const owner = getDesktopOwner(event.sender.id, sessionId)
+      const listener = dictationListeners.get(event.sender.id)
+      await getSpeechSttService(store).stopDictation(owner, { discard })
+      if (listener?.owner === owner) {
+        listener.cleanup()
+      }
     }
-  })
+  ipcMain.handle('speech:stopDictation', handleStop(false))
+  ipcMain.handle('speech:cancelDictation', handleStop(true))
 }

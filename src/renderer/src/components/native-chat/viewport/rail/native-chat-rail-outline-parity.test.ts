@@ -97,6 +97,35 @@ describe('conversation outline parity with the loaded rail', () => {
     ])
   })
 
+  it('lists only messages a person wrote, each with its own reply', () => {
+    const mail = row(3, {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: 'You have 1 orchestration message.' }],
+      from: {
+        kind: 'agent',
+        senders: [],
+        orchestration: {
+          message: 'mail-notice',
+          mailbox: 'terminal',
+          dispatchId: null,
+          messages: [{ messageId: 'mail-1', runId: 'run-1', from: 'sender-1' }]
+        }
+      }
+    })
+    const journal: AgentJournalRenderItem[] = [
+      user(1, [{ type: 'text', text: 'Fix the parser' }]),
+      row(2, { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'On it.' }] }),
+      mail,
+      row(4, { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'Read it.' }] }),
+      user(5, [{ type: 'text', text: 'Thanks' }])
+    ]
+    expect(projectAgentSessionConversationOutline(journal, [])).toEqual([
+      { itemId: 'item-1', sequence: 1, preview: 'Fix the parser', imageCount: 0, reply: 'On it.' },
+      { itemId: 'item-5', sequence: 5, preview: 'Thanks', imageCount: 0 }
+    ])
+  })
+
   it('carries each entry its creation sequence, image count and the reply to it', () => {
     const outline = projectAgentSessionConversationOutline(JOURNAL, [REJECTED])
     expect(outline).toEqual([

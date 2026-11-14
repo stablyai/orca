@@ -56,7 +56,7 @@ import {
   requiresSystemSshForSecurityKey,
   shouldUseSystemSshTransport
 } from '../system-transport/ssh-transport-selection'
-import type { FileUploadSession } from '../../providers/filesystem-provider-contract'
+import type { FileUploadSession } from '../../providers/filesystem/provider-contract'
 import {
   openSshExecChannel,
   openSshSftpChannel,

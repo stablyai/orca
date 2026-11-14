@@ -3,7 +3,8 @@
 import type { Page } from '@stablyai/playwright-test'
 import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/remote-runtime/pairing/paired-runtime-connection'
 import { decodePairingOffer } from '../../../src/shared/remote-runtime/pairing/pairing'
-import { subscribeRemoteRuntimeRequest } from '../../../src/shared/remote-runtime/remote-runtime-client'
+import '../../../src/shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../../src/shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import type { RuntimeRpcResponse } from '../../../src/shared/runtime-rpc-envelope'
 import type { LiveLayoutFeed } from './workspace-layout-oracle-feed'
 
@@ -48,7 +49,7 @@ export async function subscribeHeadlessLayout(
   feed: LiveLayoutFeed
 ): Promise<{ close: () => void }> {
   feed.reopening()
-  const subscription = await subscribeRemoteRuntimeRequest<unknown>(
+  const subscription = await subscribeRemoteRuntimeTransport<unknown>(
     pairedRuntimeConnectionFromOffer(decodePairingOffer(pairingUrl)),
     'layout.subscribe',
     {},

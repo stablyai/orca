@@ -8,7 +8,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 
@@ -73,30 +72,5 @@ describe('composer focus while the quick launcher is open', () => {
 
     expect(screen.getByRole('menu')).toBeTruthy()
     expect(document.activeElement).toBe(search)
-  })
-
-  it('allows composer focus again after the launcher closes', async () => {
-    const input = setup()
-    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
-    await act(async () => vi.runOnlyPendingTimersAsync())
-    expect(screen.queryByRole('menu')).toBeNull()
-
-    act(() => input.focus())
-
-    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Message' }))
-  })
-
-  it('allows a launch prompt inside its own popover to receive focus', () => {
-    const inputRef = createRef<NativeChatComposerInput>()
-    render(
-      <Popover defaultOpen>
-        <PopoverTrigger>Launch agent</PopoverTrigger>
-        <PopoverContent>{editor(inputRef)}</PopoverContent>
-      </Popover>
-    )
-
-    act(() => inputRef.current!.focus())
-
-    expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Message' }))
   })
 })

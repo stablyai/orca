@@ -1,3 +1,8 @@
+import type { BrowserGuestMetadata } from '../../../../shared/browser/guest-lifecycle/browser-guest-metadata'
+import {
+  acceptBrowserGuestMetadata,
+  clearBrowserGuestMetadata
+} from './host-guest/browser-guest-metadata-cache'
 import { vi } from 'vitest'
 
 type Listener<T> = (event: T) => void
@@ -33,11 +38,18 @@ export function installClientHostedPaneApi(overrides?: {
   shell?: Record<string, unknown>
   runtimeEnvironments?: Record<string, unknown>
 }): void {
+  clearBrowserGuestMetadata()
+  guestStates.clear()
   const inert = (): (() => void) => () => {}
   Object.defineProperty(window, 'api', {
     configurable: true,
     value: {
       browser: {
+        getGuestMetadata: vi.fn(async ({ webContentsId }: { webContentsId: number }) =>
+          guestStates.get(webContentsId)
+        ),
+        onGuestMetadata: inert,
+        onGuestEscape: inert,
         onPopup: inert,
         onPermissionDenied: inert,
         onContextMenuRequested: inert,
@@ -73,4 +85,32 @@ export function installClientHostedPaneApi(overrides?: {
       }
     }
   })
+}
+
+const guestStates = new Map<number, BrowserGuestMetadata>()
+
+/** Supplies the main-owned observation the production preload bridge delivers. */
+export function reportClientHostedGuestMetadata(
+  patch: Partial<BrowserGuestMetadata> & { webContentsId: number }
+): BrowserGuestMetadata {
+  const previous = guestStates.get(patch.webContentsId)
+  const state: BrowserGuestMetadata = {
+    browserPageId: 'page-a',
+    navigationRevision: 1,
+    kind: 'snapshot',
+    url: 'about:blank',
+    title: 'New Tab',
+    loading: false,
+    canGoBack: true,
+    canGoForward: false,
+    errorPage: false,
+    loadError: null,
+    hasCertificateFailure: false,
+    ...previous,
+    ...patch,
+    revision: (previous?.revision ?? 0) + 1
+  }
+  guestStates.set(state.webContentsId, state)
+  acceptBrowserGuestMetadata(state)
+  return state
 }

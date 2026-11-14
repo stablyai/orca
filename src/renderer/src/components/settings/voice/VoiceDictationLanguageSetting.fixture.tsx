@@ -15,10 +15,10 @@ function model(
   return {
     id: label,
     label,
-    description: '',
     type,
     provider: 'local',
     language: 'multilingual',
+    languages: dictationLanguages ?? ['en'],
     sampleRate: 16000,
     streaming: false,
     dictationLanguages

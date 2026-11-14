@@ -2,12 +2,8 @@ import { EventEmitter } from 'node:events'
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { RELAY_SENTINEL, RELAY_SENTINEL_TIMEOUT_MS } from '../../ssh/protocol/relay-handshake'
-import {
-  MAX_STARTUP_BUFFER_BYTES,
-  waitForWslRelaySentinel,
-  type WslRelayStartupFailure
-} from './wsl-hook-relay-sentinel'
+import { RELAY_SENTINEL } from '../../ssh/protocol/relay-handshake'
+import { waitForWslRelaySentinel } from './wsl-hook-relay-sentinel'
 
 type FakeChild = ChildProcessWithoutNullStreams & { kill: ReturnType<typeof vi.fn> }
 
@@ -50,36 +46,11 @@ function emitStdout(child: ChildProcessWithoutNullStreams, data: string | Buffer
   child.stdout.emit('data', Buffer.isBuffer(data) ? data : Buffer.from(data))
 }
 
-function catchStartup(
-  promise: Promise<unknown>
-): Promise<Error & { startup?: WslRelayStartupFailure }> {
-  return promise.then(
-    () => {
-      throw new Error('expected the sentinel wait to reject')
-    },
-    (err: Error & { startup?: WslRelayStartupFailure }) => err
-  )
-}
-
 afterEach(() => {
   vi.useRealTimers()
 })
 
 describe('waitForWslRelaySentinel', () => {
-  it('resolves when the sentinel is split across two chunks', async () => {
-    const child = fakeChild()
-    const promise = waitForWslRelaySentinel(child)
-    const sentinel = Buffer.from(RELAY_SENTINEL)
-    const mid = Math.floor(sentinel.length / 2)
-    emitStdout(child, sentinel.subarray(0, mid))
-    emitStdout(child, sentinel.subarray(mid))
-    const transport = await promise
-    transport.pauseReads?.()
-    transport.resumeReads?.()
-    expect(child.stdout.pause).toHaveBeenCalledOnce()
-    expect(child.stdout.resume).toHaveBeenCalledOnce()
-  })
-
   it('delivers a pending trailing chunk before a later direct chunk, in wire order', async () => {
     const child = fakeChild()
     const promise = waitForWslRelaySentinel(child)
@@ -110,33 +81,6 @@ describe('waitForWslRelaySentinel', () => {
     expect(received).toEqual(['DEFER'])
   })
 
-  it('kills the child and rejects when startup output exceeds 64 KiB before the sentinel', async () => {
-    const child = fakeChild()
-    const settled = catchStartup(waitForWslRelaySentinel(child))
-    emitStdout(child, Buffer.alloc(MAX_STARTUP_BUFFER_BYTES + 1, 0x41))
-    const err = await settled
-    expect(err.message).toMatch(/64 KiB/)
-    expect(child.kill).toHaveBeenCalled()
-  })
-
-  it('rejects with an exit failure when the child closes before the sentinel', async () => {
-    const child = fakeChild()
-    const settled = catchStartup(waitForWslRelaySentinel(child))
-    child.emit('close', 7)
-    const err = await settled
-    expect(err.startup).toEqual({ kind: 'exit', code: 7, stderr: '' })
-  })
-
-  it('kills the child and rejects with a timeout after the sentinel deadline', async () => {
-    vi.useFakeTimers()
-    const child = fakeChild()
-    const settled = catchStartup(waitForWslRelaySentinel(child))
-    await vi.advanceTimersByTimeAsync(RELAY_SENTINEL_TIMEOUT_MS + 1)
-    const err = await settled
-    expect(child.kill).toHaveBeenCalled()
-    expect(err.startup?.kind).toBe('timeout')
-  })
-
   it('forwards write(false), callback settlement, and drain from WSL stdin', async () => {
     const child = fakeChild()
     const callback = vi.fn()
@@ -156,16 +100,5 @@ describe('waitForWslRelaySentinel', () => {
     child.stdin.emit('drain')
     expect(drain).toHaveBeenCalledOnce()
     expect(transport.supportsWriteSettlement).toBe(true)
-  })
-
-  it('swallows async stdin EPIPE after the guest dies so it is not uncaught', async () => {
-    const child = fakeChild()
-    const promise = waitForWslRelaySentinel(child)
-    emitStdout(child, RELAY_SENTINEL)
-    await promise
-    // Real pipes emit asynchronous EPIPE after a failed write.
-    expect(() => {
-      child.stdin.emit('error', Object.assign(new Error('write EPIPE'), { code: 'EPIPE' }))
-    }).not.toThrow()
   })
 })

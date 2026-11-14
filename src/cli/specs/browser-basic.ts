@@ -1,5 +1,5 @@
-import type { CommandSpec } from '../args'
-import { GLOBAL_FLAGS } from '../args'
+import type { CommandSpec } from '../discovery/command-spec'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
 import { withBrowserPageTarget } from './browser-page-target'
 import { BROWSER_WAIT_DEFAULT_TIMEOUT_MS } from '../../shared/browser-wait-timeout'
 
@@ -204,6 +204,12 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarget(
     path: ['tab', 'show'],
     summary: 'Show one browser tab by page id',
     usage: 'orca tab show --page <id> [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'page', 'worktree']
+  },
+  {
+    path: ['tab', 'annotations'],
+    summary: "Show the notes the user left on a browser tab and hasn't sent yet",
+    usage: 'orca tab annotations [--page <id>] [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'page', 'worktree']
   },
   {

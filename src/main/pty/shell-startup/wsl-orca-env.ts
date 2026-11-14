@@ -13,6 +13,7 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from '../../../shared/agent-launch/startup/setup-agent-sequencing'
+import { SETUP_RUNNER_PATH_ENV_KEYS } from '../../workspace-hooks/setup-hook-env-vars'
 import { getShellReadyWrapperRoot } from '../../providers/local-pty/local-pty-shell-ready-wrapper-root'
 import { ORCA_IMAGE_PROTOCOL_ENV } from '../../../shared/terminal/images/terminal-image-protocol'
 import {
@@ -59,11 +60,12 @@ function applyWslenvPassthrough(
 function worktreeSetupWslenvEntries(env: Record<string, string | undefined>): string[] {
   return [
     // Hooks need raw host paths translated (/p) and already-Linux paths unchanged (/u) (#9206).
-    ...['ORCA_ROOT_PATH', 'ORCA_WORKTREE_PATH', 'CONDUCTOR_ROOT_PATH', 'GHOSTX_ROOT_PATH'].map(
+    ...SETUP_RUNNER_PATH_ENV_KEYS.map(
       (name) => `${name}/${env[name]?.startsWith('/') ? 'u' : 'p'}`
     ),
-    // A display name, never a path.
-    'ORCA_WORKSPACE_NAME/u'
+    // Display names, never paths.
+    'ORCA_WORKSPACE_NAME/u',
+    'CONDUCTOR_WORKSPACE_NAME/u'
   ]
 }
 

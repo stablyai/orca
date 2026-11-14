@@ -1,4 +1,5 @@
-import { wslGatedReadFile } from '../../../native-chat/wsl-transcript-fs-access'
+import { waitForAiVaultScan } from '../../scan-lifecycle/ai-vault-scan-cancellation'
+import { wslGatedReadFile } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { unwrapMuseLogRecords } from '../../../../shared/muse-session-log'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -8,18 +9,15 @@ import {
   createAccumulator,
   finalizeSession,
   updateTimeline
-} from '../../session-scanner-accumulator'
-import { addSessionContent } from '../../session-scanner-messages'
+} from '../../parsing/session-scanner-accumulator'
+import { addSessionContent } from '../../parsing/session-scanner-messages'
 import { museSessionIdFromFilePath } from './session-scanner-muse-paths'
-import {
-  arrayValue,
-  extractString,
-  parseJsonObject,
-  timestampMs
-} from '../../session-scanner-values'
-import { asRecord } from '../../session-scanner-record-value'
-import { normalizeTitleText } from '../../session-scanner-text-normalization'
-import { numberValue } from '../../session-scanner-token-values'
+import { arrayValue, asRecord } from '../../parsing/session-record-fields'
+import { extractString } from '../../../../shared/trimmed-string'
+import { parseJsonObject } from '../../parsing/session-json-object'
+import { timestampMs } from '../../parsing/session-record-time'
+import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
+import { numberValue } from '../../parsing/session-scanner-token-values'
 
 type ParserSessionOptions = {
   executionHostId?: ExecutionHostId
@@ -217,15 +215,25 @@ function foldMuseLines(
 export async function parseMuseSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform,
-  messages?: TranscriptMessageSink
+  messages?: TranscriptMessageSink,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
-  return parseMuseSessionContent(
-    file,
-    await wslGatedReadFile(file.path, 'utf-8', 'scan'),
-    platform,
-    {},
-    messages
+  const content = await waitForAiVaultScan(
+    wslGatedReadFile(file.path, 'utf-8', 'scan', signal),
+    signal
   )
+  const accumulator = createAccumulator({
+    agent: 'muse',
+    file,
+    sessionId: museSessionIdFromFilePath(file.path),
+    messages
+  })
+  const dedupe: MuseDedupeState = { text: null, ms: null }
+  for (const line of content.split('\n')) {
+    foldMuseLines(accumulator, [line], dedupe)
+    await waitForAiVaultScan(messages?.drain?.() ?? Promise.resolve(), signal)
+  }
+  return finalizeSession(accumulator, platform)
 }
 
 export function parseMuseSessionContent(

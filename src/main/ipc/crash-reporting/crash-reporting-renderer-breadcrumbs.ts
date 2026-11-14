@@ -6,7 +6,7 @@ import {
 import {
   recordCoalescedCrashBreadcrumb,
   recordCrashBreadcrumb
-} from '../../crash-reporting/crash-breadcrumb-store'
+} from '../../crash-reporting/breadcrumbs/crash-breadcrumb-store'
 import { startSpan } from '../../observability/tracer'
 import { TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB } from '../../../shared/terminal/diagnostics/terminal-webgl-diagnostics'
 

@@ -61,7 +61,7 @@ export function isSettingsSearchQueryTooLarge(
 }
 
 // Turkish İ lowercases to i + U+0307; drop the dot so plain-i queries still match.
-function foldSettingsSearchText(value: string): string {
+export function foldSettingsSearchText(value: string): string {
   return value.toLowerCase().replaceAll('\u0307', '')
 }
 
@@ -101,9 +101,15 @@ function scoreSettingsSearchValues(
   )
 }
 
+export type SettingsSearchScoreOptions = {
+  /** Rank the first entry as the pane title; off for a single setting's entry. */
+  firstEntryIsPane?: boolean
+}
+
 export function scoreSettingsSearch(
   query: string,
-  entries: SettingsSearchEntry | SettingsSearchEntry[]
+  entries: SettingsSearchEntry | SettingsSearchEntry[],
+  { firstEntryIsPane = true }: SettingsSearchScoreOptions = {}
 ): number {
   if (isSettingsSearchQueryTooLarge(query)) {
     return SETTINGS_SEARCH_NO_MATCH_SCORE
@@ -116,7 +122,7 @@ export function scoreSettingsSearch(
   const values = Array.isArray(entries) ? entries : [entries]
   return values.reduce((score, entry, index) => {
     // The first entry is the pane title; rank it above setting titles.
-    const titleScore = index === 0 ? PANE_TITLE_SCORE : ENTRY_TITLE_SCORE
+    const titleScore = index === 0 && firstEntryIsPane ? PANE_TITLE_SCORE : ENTRY_TITLE_SCORE
     return Math.max(
       score,
       scoreSettingsSearchText(normalizedQuery, entry.title, titleScore),
@@ -138,7 +144,8 @@ export function getSettingsSectionSearchEntries(section: {
 export function rankSettingsSearchItems<T>(
   query: string,
   items: readonly T[],
-  getEntries: (item: T) => SettingsSearchEntry | SettingsSearchEntry[]
+  getEntries: (item: T) => SettingsSearchEntry | SettingsSearchEntry[],
+  getScoreOptions?: (item: T) => SettingsSearchScoreOptions
 ): RankedSettingsSearchItem<T>[] {
   if (isSettingsSearchQueryTooLarge(query)) {
     return []
@@ -151,7 +158,7 @@ export function rankSettingsSearchItems<T>(
     .map((item, index): SettingsSearchRankCandidate<T> => ({
       item,
       index,
-      score: scoreSettingsSearch(query, getEntries(item))
+      score: scoreSettingsSearch(query, getEntries(item), getScoreOptions?.(item))
     }))
     .filter((candidate) => candidate.score > SETTINGS_SEARCH_NO_MATCH_SCORE)
     .sort((a, b) => b.score - a.score || a.index - b.index)

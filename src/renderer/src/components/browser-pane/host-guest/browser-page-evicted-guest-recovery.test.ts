@@ -43,7 +43,6 @@ function createPage(id: string) {
     onUpdatePageStateRef: ref(vi.fn()),
     setGuestRecoveryGeneration: setGeneration,
     focusAddressBarNow: () => false,
-    syncNavigationState: vi.fn(),
     syncBrowserAnnotationViewportBridge: vi.fn()
   })
   return { webview, paintable, setGeneration, recovery: session.guestRecovery }

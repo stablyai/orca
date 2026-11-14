@@ -1,5 +1,5 @@
 import type { RuntimeRpcResponse } from '../../../../../shared/runtime-rpc-envelope'
-import { runtimeEnvironmentIdUnlessTwin } from '../../../lib/resolve-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '../../../lib/workspace/ownership/resolve-owner'
 import { useAppStore } from '../../../store/index'
 import { unwrapRuntimeRpcResult } from '../../rpc/calls/runtime-rpc-result'
 import { toRuntimeWorktreeSelector } from '../../rpc/targets/runtime-worktree-selector'

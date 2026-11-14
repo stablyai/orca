@@ -3,7 +3,6 @@ import { FolderTree } from 'lucide-react'
 import { CommandItem } from '@/components/ui/command'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { getPaletteHostBadge } from '@/components/cmd-j/palette-host-badge'
-import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
 import type {
   ProjectTargetPaletteItem,
@@ -42,10 +41,7 @@ export function WorktreeJumpPaletteProjectRow({
     <CommandItem
       value={renderKey}
       onSelect={() => controller.handleSelectItem(entry)}
-      className={cn(
-        'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-        'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
-      )}
+      shape="palette-row"
     >
       <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
         <FolderTree className="size-3.5" aria-hidden="true" />
@@ -101,10 +97,7 @@ export function WorktreeJumpPaletteActionRow({
       value={renderKey}
       disabled={entry.type === 'quick-action' && entry.result.disabled}
       onSelect={() => controller.handleSelectItem(entry)}
-      className={cn(
-        'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left outline-none transition-[background-color,border-color,box-shadow]',
-        'data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
-      )}
+      shape="palette-row"
     >
       <div className="flex h-5 w-4 shrink-0 items-center justify-center self-start text-muted-foreground/85">
         <Icon className="size-3.5" aria-hidden="true" />

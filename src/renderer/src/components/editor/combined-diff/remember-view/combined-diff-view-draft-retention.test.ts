@@ -32,8 +32,7 @@ function rememberView(index: number, section: Partial<DiffSection> = {}) {
       gitStatusSignature: '',
       sections,
       sectionHeights: {},
-      loadedIndices: [0],
-      sideBySide: false
+      loadedIndices: [0]
     }
   })
   return lease

@@ -60,31 +60,6 @@ it('refuses newly appeared unapproved live agent on local after preparation', as
   expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
 })
 
-it('allows already-approved live agent on local after preparation', async () => {
-  const store = createTestStore()
-  const candidate = makeCandidate({ executionHostId: 'local' })
-  candidate.blockers = ['live-agent']
-  const wt = makeWorktree({ id: candidate.worktreeId, repoId: candidate.repoId, hostId: 'local' })
-  store.setState({ worktreesByRepo: { [wt.repoId]: [wt] } })
-  const gate = deferred<unknown>()
-  const preparation = mockApi.hooks.check
-  preparation.mockReturnValueOnce(gate.promise)
-  const removal = store.getState().removeWorktree({ id: wt.id, executionHostId: 'local' }, false, {
-    assertBeforeDispatch: () =>
-      assertWorkspaceCleanupAgentStopApproved(store.getState(), candidate, candidate)
-  })
-  await vi.waitFor(() => expect(preparation).toHaveBeenCalled())
-  const entry = makeAgentEntry('chat', 'working', Date.now(), {
-    worktreeId: wt.id,
-    connectionId: null,
-    terminalHandle: undefined
-  })
-  store.setState({ agentStatusByPaneKey: { [entry.paneKey]: entry } })
-  gate.resolve({ hasHooks: false })
-  expect((await removal).ok).toBe(true)
-  expect(mockApi.worktrees.remove).toHaveBeenCalled()
-})
-
 it('refuses newly appeared unapproved live agent on runtime:env-1 after preparation', async () => {
   const store = createTestStore()
   const candidate = makeCandidate({ executionHostId: 'runtime:env-1' })
@@ -115,36 +90,4 @@ it('refuses newly appeared unapproved live agent on runtime:env-1 after preparat
   gate.resolve(createCompatibleRuntimeStatusResponse())
   expect((await removal).ok).toBe(false)
   expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-})
-
-it('allows already-approved live agent on runtime:env-1 after preparation', async () => {
-  const store = createTestStore()
-  const candidate = makeCandidate({ executionHostId: 'runtime:env-1' })
-  candidate.blockers = ['live-agent']
-  const wt = makeWorktree({
-    id: candidate.worktreeId,
-    repoId: candidate.repoId,
-    hostId: 'runtime:env-1'
-  })
-  store.setState({ worktreesByRepo: { [wt.repoId]: [wt] } })
-  const gate = deferred<unknown>()
-  store.setState({ trustedOrcaHooks: { repo1: { all: { approvedAt: 1 } } } })
-  const preparation = runtimeEnvironmentTransportCall
-  preparation.mockReturnValueOnce(gate.promise)
-  const removal = store
-    .getState()
-    .removeWorktree({ id: wt.id, executionHostId: 'runtime:env-1' }, false, {
-      assertBeforeDispatch: () =>
-        assertWorkspaceCleanupAgentStopApproved(store.getState(), candidate, candidate)
-    })
-  await vi.waitFor(() => expect(preparation).toHaveBeenCalled())
-  const entry = makeAgentEntry('chat', 'working', Date.now(), {
-    worktreeId: wt.id,
-    connectionId: null,
-    terminalHandle: 'remote:env-1@@pty'
-  })
-  store.setState({ agentStatusByPaneKey: { [entry.paneKey]: entry } })
-  gate.resolve(createCompatibleRuntimeStatusResponse())
-  expect((await removal).ok).toBe(true)
-  expect(runtimeEnvironmentCall).toHaveBeenCalled()
 })

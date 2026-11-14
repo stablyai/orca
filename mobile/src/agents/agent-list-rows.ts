@@ -4,9 +4,16 @@ import {
 } from '../../../src/shared/agent-status/presentation/agent-list-status'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import type { ConnectionState } from '../transport/connection/connection-state'
-import { agentDotState, agentRowTimeAt, type AgentDotState } from '../worktree/agent-row-display'
-import { flattenAgentRowLineage, type AgentRowNode } from '../worktree/agent-row-lineage'
-import type { HomeAgentEntry, HostWorktreeInfo } from '../worktree/home-worktree-info'
+import {
+  agentDotState,
+  agentRowTimeAt,
+  type AgentDotState
+} from '../worktree/agent-lineage/agent-row-display'
+import {
+  flattenAgentRowLineage,
+  type AgentRowNode
+} from '../worktree/agent-lineage/agent-row-lineage'
+import type { HomeAgentEntry, HostWorktreeInfo } from '../worktree/catalog/home-worktree-info'
 import { agentListTitle } from './agent-list-row-text'
 
 export type AgentStatusGroup = 'needs-you' | 'working' | 'done' | 'idle'
@@ -155,6 +162,18 @@ export function selectAgentsNeedingYou(input: AgentListInput): AgentListRow[] {
   return input.hosts
     .flatMap((host) => everyRow(hostAgents(input, host.id).roots))
     .filter(rowNeedsYou)
+    .map(asTopLevel)
+    .sort(byStatusThenRecent)
+}
+
+/** Live agents that need the user or are working, workers included: Feed's Active rows. */
+export function selectActiveAgents(input: AgentListInput): AgentListRow[] {
+  return input.hosts
+    .flatMap((host) => everyRow(hostAgents(input, host.id).roots))
+    .filter((row) => {
+      const group = agentStatusGroup(row.dotState)
+      return !row.stale && (group === 'needs-you' || group === 'working')
+    })
     .map(asTopLevel)
     .sort(byStatusThenRecent)
 }

@@ -9,7 +9,7 @@ import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTest
 import { clearRuntimeEnvironmentConnectionGenerations as clearRuntimeEnvironmentConnectionGenerationsForTests } from './runtime-status-connection-generation'
 import { createRuntimeStatusSlice } from './create-runtime-status-slice'
 import type { RuntimeStatusSlice } from './runtime-status-types'
-import '@/lib/provider-runtime-context'
+import '@/runtime/hosts/observations/provider-runtime-context'
 import '../../../../../shared/workspace-creator-visibility'
 import { stubRuntimeEnvironmentBridge } from '../../../runtime/rpc/testing/runtime-environment-bridge-fixture'
 

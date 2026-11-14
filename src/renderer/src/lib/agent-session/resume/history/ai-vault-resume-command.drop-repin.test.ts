@@ -5,7 +5,7 @@ import { makeWorktree } from '../../../../store/slices/worktrees/worktree.test-f
 import { describe, expect, it, vi } from 'vitest'
 import { buildAiVaultDropRepinStartup } from './ai-vault-resume-command'
 
-vi.mock('@/lib/new-workspace', () => ({
+vi.mock('@/lib/workspace/creation/new-workspace', () => ({
   CLIENT_PLATFORM: 'darwin'
 }))
 

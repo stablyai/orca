@@ -3,10 +3,10 @@ import { Loader2, Server, ServerOff } from 'lucide-react'
 import { toastSshConnectFailure } from '@/ssh/ssh-connect-failure-toast'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   connectRuntimeEnvironmentSshTarget,
   resyncRuntimeEnvironmentSshTargets

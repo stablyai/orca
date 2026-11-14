@@ -32,7 +32,7 @@ type BranchStartPointActionsInput = Pick<
 
 import { useCallback } from 'react'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import { resolveGitHubWorkItemIdentity } from '../../../../shared/new-workspace/github-work-item-identity'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'

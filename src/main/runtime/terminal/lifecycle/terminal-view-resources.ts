@@ -15,7 +15,7 @@ import type {
   RuntimeVisibleTerminalState
 } from '../records/runtime-terminal-state-records'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
-import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
+import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 import type { createAgentStatusOscProcessor } from '../../../../shared/agent-status/transport/agent-status-osc'
 import { RuntimeTerminalViewSubscribers } from '../view/runtime-terminal-view-subscribers'
 import { MainDaemonAttachments } from './main-daemon-attachments'
@@ -184,8 +184,8 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
     }
   >()
 
-  // Desktop mode prevents mobile fit until a deliberate gesture; absent mode defaults to auto, and restart clears modes.
-  protected mobileDisplayModes = new Map<string, 'desktop'>()
+  // Desktop mode prevents mobile fit until a deliberate gesture; absent mode uses the host default, and restart clears modes.
+  protected mobileDisplayModes = new Map<string, 'auto' | 'desktop'>()
 
   // Keep independent client records per PTY; subscribedAt selects restore baseline, lastActedAt selects the active viewport (docs/mobile-presence-lock.md).
   protected mobileSubscribers = new Map<

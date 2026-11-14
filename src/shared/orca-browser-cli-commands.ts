@@ -3,6 +3,7 @@ import { orcaCliInvocations } from './orca-cli-invocations'
 /** The browser CLI's command keys per handler group. Kept apart from the CLI's
  *  lazy handler imports so the renderer and mobile can read them too. */
 export const ORCA_BROWSER_CLI_COMMAND_KEYS = {
+  'browser-extension': ['extension list', 'extension reload'],
   'browser-identity': ['browser identity get', 'browser identity set'],
   'browser-nav': [
     'snapshot',
@@ -48,6 +49,7 @@ export const ORCA_BROWSER_CLI_COMMAND_KEYS = {
     'open-url',
     'tab list',
     'tab show',
+    'tab annotations',
     'tab current',
     'tab switch',
     'tab create',

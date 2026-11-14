@@ -243,8 +243,8 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
               this.setPtyManagementTitleFromObservedTitle(pty, title, at)
             )
           }
-          this.watchLaunchComposer(
-            result.id,
+          this.watchLaunchedAgent(
+            pty,
             recordTerminalLaunchMetadata(pty, result, launch, launchOpts.command)
           )
           if (!launch.adoptedStablePane) {

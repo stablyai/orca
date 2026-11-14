@@ -197,6 +197,7 @@ export abstract class OrcaRuntimeWithCreateAgentPromptRenderGate extends OrcaRun
       timeoutMs?: number
       signal?: AbortSignal
       launchReadiness?: boolean
+      acceptsMidTurnInput?: boolean
     }
   ): Promise<RuntimeTerminalWait> {
     // Switch point: a saved pane main holds with no terminal yet starts first (once, shared).

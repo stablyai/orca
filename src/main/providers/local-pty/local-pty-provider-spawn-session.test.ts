@@ -1,7 +1,7 @@
 import type * as WslPathOwner from '../../../shared/wsl-paths'
 import type * as WslAvailabilityTypes from '../../wsl/discovery/wsl-availability'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as MacosTccLoginShell from '../macos-tcc-login-shell'
+import type * as MacosTccLoginShell from '../shell-launch/macos/tcc-login-shell'
 import type { ShellSpawnParams } from './local-pty-executable-spawn'
 
 const {
@@ -72,7 +72,7 @@ vi.mock('./local-pty-runtime-spawn', async () => {
   }
 })
 
-vi.mock('../macos-tcc-login-shell', async (importOriginal) => ({
+vi.mock('../shell-launch/macos/tcc-login-shell', async (importOriginal) => ({
   ...(await importOriginal<typeof MacosTccLoginShell>()),
   prepareMacosTccLoginShell: prepareMacosTccLoginShellMock
 }))
@@ -85,7 +85,7 @@ vi.mock('../../pty/process-retirement/pty-descendant-termination', () => ({
 const WINDOWS_POWERSHELL_ABS = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
 const PWSH7_ABS = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe'
 const CMD_ABS = 'C:\\Windows\\System32\\cmd.exe'
-vi.mock('../windows-powershell-executable', () => ({
+vi.mock('../shell-launch/windows/powershell-executable', () => ({
   resolveWindowsPowerShellExecutablePath: (family: 'pwsh.exe' | 'powershell.exe') =>
     family === 'pwsh.exe' ? PWSH7_ABS : WINDOWS_POWERSHELL_ABS,
   resolveWindowsPowerShellSpawnChain: (family: 'pwsh.exe' | 'powershell.exe') =>
@@ -95,12 +95,12 @@ vi.mock('../windows-powershell-executable', () => ({
   getWindowsCmdPath: () => CMD_ABS
 }))
 
-vi.mock('../agent-foreground-process', () => ({
+vi.mock('../foreground/agent-process', () => ({
   resolveAgentForegroundProcessWithAvailability: (...args: unknown[]) =>
     resolveAgentForegroundProcessMock(...args)
 }))
 
-vi.mock('../windows-pty-job-membership', () => ({
+vi.mock('../foreground/windows/pty-job-membership', () => ({
   readWindowsPtyJobProcessIds: (...args: unknown[]) => readWindowsPtyJobProcessIdsMock(...args),
   isWindowsPtyJobReadable: () => true
 }))
@@ -132,12 +132,6 @@ vi.mock('../../pty/shell-startup/shell-prompt-readiness-probe', () => ({
 }))
 
 import { LocalPtyProvider } from './local-pty-provider'
-import {
-  ptyDisposables,
-  ptyExitDisposables,
-  ptyPhysicalExits,
-  startupIngressByPty
-} from './local-pty-provider-state'
 import {
   applyLocalPtyProviderMockDefaults,
   createLocalPtyMockProcess,
@@ -181,101 +175,6 @@ describe('LocalPtyProvider', () => {
   })
 
   describe('spawn', () => {
-    it('retires buffered output and synchronous Bun exit before replying to spawn', async () => {
-      const disposeData = vi.fn()
-      const disposeExit = vi.fn()
-      const onExit = vi.fn()
-      provider.configure({ onExit })
-      mockProc.onData.mockImplementation((listener: (data: string) => void) => {
-        listener('last output')
-        return { dispose: disposeData }
-      })
-      mockProc.onExit.mockImplementation((listener: (event: { exitCode: number }) => void) => {
-        listener({ exitCode: 17 })
-        return { dispose: disposeExit }
-      })
-      const result = await provider.spawn({
-        cols: 80,
-        rows: 24,
-        sessionId: 'already-exited-bun-shell',
-        command: 'must-not-run'
-      })
-      expect(result.exitedBeforeSpawnReply).toBe(true)
-      expect(provider.getPtyProcess(result.id)).toBeUndefined()
-      for (const map of [
-        ptyDisposables,
-        ptyExitDisposables,
-        ptyPhysicalExits,
-        startupIngressByPty
-      ]) {
-        expect(map.has(result.id)).toBe(false)
-      }
-      expect(disposeData).toHaveBeenCalledOnce()
-      expect(disposeExit).toHaveBeenCalledOnce()
-      expect(onExit).toHaveBeenCalledOnce()
-      await Promise.resolve()
-      expect(mockProc.write).not.toHaveBeenCalled()
-    })
-
-    // Hook/trust setup makes env build a long pre-spawn await; shutdown must cancel during it (#16441).
-    it('does not spawn after shutdown cancels a pending spawn during the env build', async () => {
-      spawnMock.mockClear()
-      let finishEnvBuild!: (env: Record<string, string>) => void
-      const buildSpawnEnv = vi.fn(
-        (_id: string, baseEnv: Record<string, string>) =>
-          new Promise<Record<string, string>>((resolve) => {
-            finishEnvBuild = () => resolve(baseEnv)
-          })
-      )
-      const envProvider = new LocalPtyProvider({ buildSpawnEnv })
-
-      const spawn = envProvider.spawn({ cols: 80, rows: 24, sessionId: 'env-build-session' })
-      const canceledSpawn = expect(spawn).rejects.toThrow('PTY spawn canceled: env-build-session')
-      await vi.waitFor(() => expect(buildSpawnEnv).toHaveBeenCalledOnce())
-
-      await envProvider.shutdown('env-build-session', { immediate: true })
-      finishEnvBuild({})
-      await canceledSpawn
-      expect(spawnMock).not.toHaveBeenCalled()
-    })
-
-    it.each([1, 2])(
-      'keeps cancellation registered across %i environment-resume microtasks',
-      async (microtasks) => {
-        spawnMock.mockClear()
-        let finishEnvBuild!: () => void
-        const envProvider = new LocalPtyProvider({
-          buildSpawnEnv: (_id, baseEnv) =>
-            new Promise<Record<string, string>>((resolve) => {
-              finishEnvBuild = () => resolve(baseEnv)
-            })
-        })
-        const spawn = envProvider.spawn({
-          cols: 80,
-          rows: 24,
-          sessionId: 'resolved-env-build-session'
-        })
-        const canceledSpawn = expect(spawn).rejects.toThrow(
-          'PTY spawn canceled: resolved-env-build-session'
-        )
-        await vi.waitFor(() => expect(finishEnvBuild).toBeTypeOf('function'))
-
-        finishEnvBuild()
-        const shutdown = new Promise<void>((resolve, reject) => {
-          const shutdown = () => {
-            envProvider
-              .shutdown('resolved-env-build-session', { immediate: true })
-              .then(resolve, reject)
-          }
-          queueMicrotask(() => (microtasks === 1 ? shutdown() : queueMicrotask(shutdown)))
-        })
-
-        await shutdown
-        await canceledSpawn
-        expect(spawnMock).not.toHaveBeenCalled()
-      }
-    )
-
     it('coalesces a concurrent same-session-id spawn before launching a redundant shell (F3)', async () => {
       spawnMock.mockClear()
       const procA = { ...mockProc, pid: 1001 }

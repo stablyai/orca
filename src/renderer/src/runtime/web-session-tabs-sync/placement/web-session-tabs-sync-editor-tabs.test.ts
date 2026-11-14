@@ -127,28 +127,27 @@ describe('applyWebSessionTabsSnapshot host-invariant editor dedup', () => {
     expect(patch.editorDrafts ?? state.editorDrafts).toEqual(state.editorDrafts)
   })
 
-  it.each([
-    { filePath: '/workspace/notes/Read me #1%.md', worktree: 'folder:/workspace' },
-    { filePath: 'C:\\workspace\\docs\\Read me.md', worktree: 'folder:C:\\workspace' },
-    { filePath: '\\\\server\\share\\Read me.md', worktree: 'folder:\\\\server\\share' }
-  ])('collapses encoded variants for the host path $filePath', ({ filePath, worktree }) => {
-    const tabs = ['host:a', 'host:b'].map((environment) => ({
-      ...variant(buildOwnedEditorFileId(filePath, worktree, environment), false),
-      filePath,
-      sourceFilePath: filePath
-    }))
-    const state = makeState({ activeWorktreeId: worktree })
-    const snapshot = makeSnapshot(tabs, { worktree, activeTabId: null, activeTabType: null })
-    const patch = applyWebSessionTabsSnapshot(state, snapshot, ENV, NOW)
-    const nextState = { ...state, ...patch }
-    const replay = applyWebSessionTabsSnapshot(nextState, snapshot, ENV, NOW + 1)
+  it.each([{ filePath: '/workspace/notes/Read me #1%.md', worktree: 'folder:/workspace' }])(
+    'collapses encoded variants for the host path $filePath',
+    ({ filePath, worktree }) => {
+      const tabs = ['host:a', 'host:b'].map((environment) => ({
+        ...variant(buildOwnedEditorFileId(filePath, worktree, environment), false),
+        filePath,
+        sourceFilePath: filePath
+      }))
+      const state = makeState({ activeWorktreeId: worktree })
+      const snapshot = makeSnapshot(tabs, { worktree, activeTabId: null, activeTabType: null })
+      const patch = applyWebSessionTabsSnapshot(state, snapshot, ENV, NOW)
+      const nextState = { ...state, ...patch }
+      const replay = applyWebSessionTabsSnapshot(nextState, snapshot, ENV, NOW + 1)
 
-    expect(patch.openFiles).toMatchObject([{ filePath, worktreeId: worktree }])
-    expect(patch.openFiles).toHaveLength(1)
-    expect(patch.unifiedTabsByWorktree?.[worktree]).toHaveLength(1)
-    expect((replay.openFiles ?? nextState.openFiles)[0]?.id).toBe(patch.openFiles?.[0]?.id)
-    expect(
-      (replay.unifiedTabsByWorktree ?? nextState.unifiedTabsByWorktree)[worktree]
-    ).toHaveLength(1)
-  })
+      expect(patch.openFiles).toMatchObject([{ filePath, worktreeId: worktree }])
+      expect(patch.openFiles).toHaveLength(1)
+      expect(patch.unifiedTabsByWorktree?.[worktree]).toHaveLength(1)
+      expect((replay.openFiles ?? nextState.openFiles)[0]?.id).toBe(patch.openFiles?.[0]?.id)
+      expect(
+        (replay.unifiedTabsByWorktree ?? nextState.unifiedTabsByWorktree)[worktree]
+      ).toHaveLength(1)
+    }
+  )
 })

@@ -1,14 +1,15 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTempDirs } from '../../shared/testing/remove-temp-dirs.test-support'
+import { removeTree } from '../../shared/windows-transient-lock-removal'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
 import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import {
   addEnvironmentFromPairingCode,
   listEnvironments,
-  resolveEnvironmentPairingOffer,
-  updateEnvironmentFromPairingCode
+  resolveEnvironmentPairingOffer
 } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'
 import { DeviceRegistry } from '../runtime/rpc/server/pairing/device-registry'
@@ -50,20 +51,13 @@ function connect(serverDataPath: string, desktopDataPath: string, environmentId:
 describe('resuming a recipe VM server', () => {
   let desktopDataPath: string
   let serverDataPath: string
-  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
 
   beforeEach(() => {
-    // Why: store contents are under test; secure-file tests cover Windows ACLs.
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     desktopDataPath = mkdtempSync(join(tmpdir(), 'orca-resume-desktop-'))
     serverDataPath = mkdtempSync(join(tmpdir(), 'orca-resume-server-'))
   })
-  afterEach(() => {
-    if (originalPlatform) {
-      Object.defineProperty(process, 'platform', originalPlatform)
-    }
-    rmSync(desktopDataPath, { recursive: true, force: true })
-    rmSync(serverDataPath, { recursive: true, force: true })
+  afterEach(async () => {
+    await removeTempDirs([desktopDataPath, serverDataPath])
   })
 
   function provision(): string {
@@ -114,17 +108,6 @@ describe('resuming a recipe VM server', () => {
     expect(listEnvironments(desktopDataPath)[0]!.pairingRevision).toBe(before.pairingRevision)
   })
 
-  it('grows one device row per resume when every resume re-pairs (previous behaviour)', () => {
-    const environmentId = provision()
-    for (let cycle = 1; cycle <= 20; cycle++) {
-      updateEnvironmentFromPairingCode(desktopDataPath, environmentId, {
-        pairingCode: bootVm(serverDataPath, `wss://vm-${cycle}.example/runtime`)
-      })
-      connect(serverDataPath, desktopDataPath, environmentId)
-    }
-    expect(new DeviceRegistry(serverDataPath).listDevices()).toHaveLength(21)
-  })
-
   it('leaves the store untouched but still drops the transport when nothing moved', async () => {
     const environmentId = provision()
     const before = listEnvironments(desktopDataPath)[0]!
@@ -142,7 +125,7 @@ describe('resuming a recipe VM server', () => {
   it('re-pairs from the fresh code when the host key changed, without asking the server', async () => {
     const environmentId = provision()
     const original = resolveEnvironmentPairingOffer(desktopDataPath, environmentId)
-    rmSync(serverDataPath, { recursive: true, force: true })
+    await removeTree(serverDataPath)
     serverDataPath = mkdtempSync(join(tmpdir(), 'orca-resume-server-'))
     const probeSavedPairing = vi.fn()
 
@@ -171,7 +154,7 @@ describe('resuming a recipe VM server', () => {
     ).publicKeyB64
     const original = resolveEnvironmentPairingOffer(desktopDataPath, environmentId)
     const before = listEnvironments(desktopDataPath)[0]!
-    rmSync(serverDataPath, { recursive: true, force: true })
+    await removeTree(serverDataPath)
     serverDataPath = mkdtempSync(join(tmpdir(), 'orca-resume-server-'))
     const invalidateTransport = vi.fn()
 

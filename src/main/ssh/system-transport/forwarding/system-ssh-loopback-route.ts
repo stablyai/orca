@@ -1,5 +1,5 @@
 /** On Windows, hold a proxied ssh -N -L once; route later execs through loopback to avoid repeated proxy handshakes without ControlMaster. */
-import type { ChildProcessHandle as ChildProcess } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 import {
   childProcessHasExited,
   signalProcessTree

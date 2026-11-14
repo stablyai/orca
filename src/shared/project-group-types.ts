@@ -1,9 +1,11 @@
+import type { RepoHookSettings } from './orca-yaml-hook-types'
 export type ProjectGroupCreatedFrom = 'manual' | 'folder-scan' | 'migration'
 
 export type ProjectGroup = {
   id: string
   name: string
   parentPath: string | null
+  hookSettings?: RepoHookSettings
   /** SSH target ID for folder-backed groups imported from a remote root. */
   connectionId?: string | null
   /** Renderer-owned host stamp for groups fetched from a runtime environment. */
@@ -19,8 +21,10 @@ export type ProjectGroup = {
 }
 
 export type ProjectGroupUpdate = Partial<
-  Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color'>
+  Pick<ProjectGroup, 'name' | 'isCollapsed' | 'tabOrder' | 'color' | 'hookSettings'>
 > & { rootProjectOrder?: number | null }
+
+export type ProjectGroupMutation = { groupId: string; updates: ProjectGroupUpdate }
 
 export type NestedRepoScanOptions = {
   maxDepth?: number
@@ -49,11 +53,14 @@ export type NestedRepoScanResult = {
 
 export type ProjectGroupImportMode = 'group' | 'separate'
 
+export type ProjectGroupImportErrorCode = 'not_in_scan' | 'not_git_repository' | 'import_failed'
+
 export type ProjectGroupImportProjectResult = {
   path: string
   projectId?: string
   status: 'imported' | 'already-known' | 'failed'
   error?: string
+  errorCode?: ProjectGroupImportErrorCode
 }
 
 export type ProjectGroupImportResult = {

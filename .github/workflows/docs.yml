@@ -204,7 +204,7 @@ jobs:
     timeout-minutes: 15
     environment:
       name: docs-production
-      url: https://www.onorca.dev/docs
+      url: https://orca.dev/docs
     env:
       VERCEL_TELEMETRY_DISABLED: '1'
     steps:

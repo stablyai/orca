@@ -1,6 +1,6 @@
 // Share native-chat event names and agent-kind mapping across tab toggles and composer sends.
 
-import { track } from '../../../lib/telemetry'
+import { track } from '../../../diagnostics/telemetry/telemetry'
 import { tuiAgentToAgentKind } from '../../../../../shared/agent-kind'
 import type { NativeChatRuntime } from '../../../../../shared/telemetry-native-feature-event-schemas'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'

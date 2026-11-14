@@ -1,5 +1,8 @@
 import type { SshTargetCreateInput, SshTargetUpdateInput } from '../../../../../../shared/ssh-types'
-import { getSshTargetDraftConnectionFields, type EditingTarget } from './ssh-target-draft'
+import {
+  getSshTargetDraftConnectionFields,
+  type EditingTarget
+} from '../../../ssh-host-form/ssh-target-draft'
 import { translate } from '../../../../i18n/i18n'
 
 type SshTargetSavePayload = {

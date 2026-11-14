@@ -1,0 +1,60 @@
+import { describe, expect, it } from 'vitest'
+import { VadPauseSegmenter } from './stt-vad-pause-segmenter'
+import { fakeVadSession } from './transcribe-cpp-fake.test-fixture'
+
+// 100 Hz audio in 10-sample (0.1 s) frames; each sample holds its frame's speech probability, so outputs show which frames survived.
+const RATE = 100
+const FRAME = 10
+
+const fakeVad = () => fakeVadSession(FRAME, (frame) => frame[0])
+
+function audio(frames: number[]): Float32Array {
+  return Float32Array.from(frames.flatMap((probability) => Array(FRAME).fill(probability)))
+}
+
+function framesOf(chunks: Float32Array[]): number[][] {
+  return chunks.map((chunk) =>
+    Array.from(
+      chunk.filter((_, index) => index % FRAME === 0),
+      (value) => Math.round(value * 100) / 100
+    )
+  )
+}
+
+describe('VadPauseSegmenter', () => {
+  it('commits a phrase at a 0.6 s pause, keeps 0.4 s ahead of the next, and drops the silence between', async () => {
+    const segmenter = new VadPauseSegmenter(fakeVad(), RATE, FRAME)
+    const first = await segmenter.push(audio([0.1, 0.9, 0.8, 0.7, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]))
+    expect(framesOf(first)).toEqual([[0.1, 0.9, 0.8, 0.7, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2]])
+    expect(segmenter.heldSamples).toBe(0)
+
+    const second = await segmenter.push(audio([0.1, 0.1, 0.1, 0.1, 0.1, 0.11, 0.12, 0.13, 0.14]))
+    expect(second).toEqual([])
+    // Only the last 0.4 s of that silence is held as the next phrase's lead-in.
+    expect(segmenter.heldSamples).toBe(4 * FRAME)
+
+    expect(await segmenter.push(audio([0.7, 0.6]))).toEqual([])
+    expect(framesOf(await segmenter.flush())).toEqual([[0.11, 0.12, 0.13, 0.14, 0.7, 0.6]])
+  })
+
+  it('keeps every held sample when the detector fails mid-dictation', async () => {
+    const vad = fakeVad()
+    const segmenter = new VadPauseSegmenter(
+      {
+        streamFeed: async (pcm) => {
+          if (pcm instanceof Float32Array && pcm[0] === 0.5) {
+            throw new Error('vad failed')
+          }
+          return vad.streamFeed(pcm)
+        },
+        streamFlush: vad.streamFlush
+      },
+      RATE,
+      FRAME
+    )
+    expect(await segmenter.push(audio([0.1, 0.2, 0.1, 0.1, 0.1, 0.9]))).toEqual([])
+    expect(await segmenter.push(audio([0.5, 0.1]))).toEqual([])
+    expect(await segmenter.push(audio([0.2]))).toEqual([])
+    expect(framesOf(await segmenter.flush())).toEqual([[0.2, 0.1, 0.1, 0.1, 0.9, 0.5, 0.1, 0.2]])
+  })
+})

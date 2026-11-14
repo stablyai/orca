@@ -1,3 +1,7 @@
+import {
+  conversationRecordReader,
+  type AgentSessionRecordReader
+} from '../orchestration/addressing/session-lineage/structured-session-lineage'
 import { createHash } from 'node:crypto'
 
 import { afterEach, expect, it, vi } from 'vitest'
@@ -26,25 +30,26 @@ import type { RuntimeLeafRecord } from '../terminal/records/runtime-terminal-sta
 
 import { makeTuiIdlePty } from '../terminal/wait/tui-idle-wait-test-harness'
 
-import '../orchestration/addressing/session-lineage/structured-session-lineage'
-import type { AgentSessionRecordReader } from '../orchestration/addressing/session-lineage/structured-session-lineage'
-
-import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+} from '../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import '../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 
 import '../rpc/methods/session-tabs/session-tabs-inventory'
 import { AGENT_SENDER_PANE_READS } from './runtime-agent-sender-worker-history'
-
-import '../orchestration/mailbox/structured-mail/structured-mail-source'
-import '../agent-session/records/agent-session-scale.test-fixture'
-import './runtime-agent-sender-publication'
+import {
+  scaleDirectory,
+  scaleRecord
+} from '../agent-session/records/agent-session-scale.test-fixture'
+import {
+  openTestAgentSessionRecordStore,
+  seedTestAgentSessionRecordStore
+} from '../agent-session/records/agent-session-record-store-test-harness'
 
 const unissued = (): never => {
   throw new Error('a sender build issued a terminal handle')
@@ -191,6 +196,41 @@ it('does not take a respawned or fresh terminal for the one a card was sent from
   h.handles.set('tab-1', 'term_fresh')
   expect(h.located(handle(1))).toBeUndefined()
   expect(h.located('term_fresh')).toBe(pane('tab-1'))
+})
+
+it('withdraws a closed chat sender while retaining another open chat', async () => {
+  const root = await scaleDirectory()
+  await seedTestAgentSessionRecordStore(root, {
+    records: [scaleRecord('closed-chat'), scaleRecord('open-chat')],
+    sessionTabs: [
+      { tabId: 'closed-tab', sessionId: 'closed-chat' },
+      { tabId: 'open-tab', sessionId: 'open-chat' }
+    ]
+  })
+  const store = await openTestAgentSessionRecordStore(root)
+  const h = harness(1, conversationRecordReader(store))
+  expect(h.projection.build().associations).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ identity: 'orca_session_id:closed-chat' }),
+      expect.objectContaining({ identity: 'orca_session_id:open-chat' })
+    ])
+  )
+  await store.setSessionTabVisibility('closed-chat', false)
+  const closed = h.projection.build()
+  expect(closed.associations.some((r) => r.identity === 'orca_session_id:closed-chat')).toBe(false)
+  expect(closed.associations).toContainEqual(
+    expect.objectContaining({ identity: 'orca_session_id:open-chat' })
+  )
+})
+
+it('reports only worktrees whose scope changed since their last frame', () => {
+  const h = harness(1)
+  const workspace = h.projection.buildForFrame('workspace')
+  const other = h.projection.buildForFrame('other')
+  h.worker(0)
+  expect(h.projection.changedScopes(['workspace', 'other', 'never-framed'])).toEqual(['workspace'])
+  expect(h.projection.build('other')).toBe(other)
+  expect(h.projection.build('workspace')).not.toBe(workspace)
 })
 
 it('keeps an existing subscriber owed its update when another client reads the newer scope', () => {

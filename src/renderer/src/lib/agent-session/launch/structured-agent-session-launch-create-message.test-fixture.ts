@@ -7,7 +7,7 @@ import {
   CreateIntentParams,
   SetOptionParams,
   SendParams
-} from '../../../../../shared/rpc-contract/structured-agent-session-params'
+} from '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
 import type { Tab } from '../../../../../shared/tab-types'
 import type { HostCreateSupport } from './structured-agent-session-host-admission'
 import { useAppStore } from '../../../store/index'
@@ -19,7 +19,8 @@ import '../../../components/native-chat/session/structured/read/structured-agent
 import { resetStructuredAgentSessionReadOwnersForTests } from '../../../components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import { resetHostModelCatalogSnapshotsForTests } from '../../../runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import { startStructuredAgentLaunch } from './structured-agent-session-launch'
-import { newAgentLaunchRequestId } from './routing/agent-launch-request-id'
+
+import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
 import { clearNativeChatComposerDraftsForTests as clearNativeChatDraftCacheForTests } from '../../../components/native-chat/drafts/native-chat-draft-reset'
 import { readNativeChatDraftCache } from '../../../components/native-chat/drafts/native-chat-draft-views'
 import { structuredAgentSessionDraftScopeKey } from '../../../components/native-chat/drafts/native-chat-draft-scope'
@@ -200,7 +201,7 @@ function created(params = createParams()) {
 const target = { kind: 'local' } as const
 const start = () =>
   startStructuredAgentLaunch('workspace-1', 'codex', {
-    requestId: newAgentLaunchRequestId(),
+    requestId: createNonSecureContextUuid(),
     executionHostId: 'local',
     prompt: 'opening text'
   })
@@ -232,7 +233,7 @@ function startLegacyActionLaunch(
     return { ok: true, value: { clientMessageId, submission: submission(clientMessageId) } }
   })
   const launch = startStructuredAgentLaunch('workspace-1', 'codex', {
-    requestId: newAgentLaunchRequestId(),
+    requestId: createNonSecureContextUuid(),
     executionHostId: 'local',
     prompt: 'opening text',
     launchOptions
@@ -285,7 +286,7 @@ export function legacyAction(
     }
   })
   const launch = startStructuredAgentLaunch('workspace-1', agent, {
-    requestId: newAgentLaunchRequestId(),
+    requestId: createNonSecureContextUuid(),
     executionHostId,
     prompt: 'opening text',
     ...(explicit ? { launchOptions: explicit } : {}),

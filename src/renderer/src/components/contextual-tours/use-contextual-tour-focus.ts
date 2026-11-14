@@ -1,4 +1,4 @@
-import { hasVisibleOverlay } from '@/lib/visible-overlay'
+import { hasVisibleOverlay } from '@/lib/overlay-interaction/visible-overlay'
 import { hasContextualTourActionStep } from '../../../../shared/contextual-tour-action-steps'
 import { useEffect, useRef, type RefObject } from 'react'
 import { getContextualTour, type ContextualTourId } from '../../../../shared/contextual-tours'

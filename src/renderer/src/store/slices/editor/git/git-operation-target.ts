@@ -2,9 +2,10 @@ import { toast } from 'sonner'
 import { getConnectionExecutionHostId } from '../../../../../../shared/execution-host'
 import { getRuntimeTargetHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { AppState } from '../../../types'
-import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
+import { runtimeTargetForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { GitRuntimeOperationOptions } from '../types/git-runtime-operation'
+import { translate } from '@/i18n/i18n'
 
 export const UNRESOLVED_GIT_HOST_ERROR =
   'The workspace host is unresolved. Refresh the workspace and retry.'
@@ -28,7 +29,12 @@ export function resolveGitOperationTarget(
 ): RuntimeClientTarget {
   const target = tryResolveGitOperationTarget(state, worktreeId, options)
   if (!target) {
-    toast.error(UNRESOLVED_GIT_HOST_ERROR)
+    toast.error(
+      translate(
+        'auto.store.slices.editor.gitOperationTarget.unresolvedHost',
+        'The workspace host is unresolved. Refresh the workspace and retry.'
+      )
+    )
     throw new Error(UNRESOLVED_GIT_HOST_ERROR)
   }
   return target

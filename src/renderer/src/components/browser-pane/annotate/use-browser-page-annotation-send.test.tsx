@@ -3,7 +3,7 @@ import '@testing-library/jest-dom/vitest'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { BrowserPageAnnotation } from '../../../../../shared/browser-grab-types'
+import type { BrowserPageAnnotation } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { createTestStore } from '@/store/slices/browser/browser-slice-test-harness'
 
 import { useBrowserPageAnnotationSend } from './use-browser-page-annotation-send'

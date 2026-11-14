@@ -3,13 +3,13 @@ import { useId, useState } from 'react'
 import { toast } from 'sonner'
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { SshTarget } from '../../../../../../shared/ssh-types'
-import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/managed-orcad-api'
+import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/runtime/managed-orcad-api'
 import { useTranslate } from '@/i18n/use-translate'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
 import { Button } from '../../../ui/button'
 import { Input } from '../../../ui/input'
 import { Label } from '../../../ui/label'
-import { SshTargetSelect } from '../../../host-picker/SshTargetSelect'
+import { HostCombobox } from '../../../host-picker/HostCombobox'
 
 const DEFAULT_REMOTE_PORT = '6768'
 
@@ -161,9 +161,9 @@ export function RuntimeSshAccessControl({
         <Label htmlFor={targetFieldId}>
           {t('auto.components.settings.managedServers.deploy.host', 'SSH host')}
         </Label>
-        <SshTargetSelect
+        <HostCombobox
           id={targetFieldId}
-          targets={targets}
+          options={targets}
           value={targetId}
           onChange={setTargetId}
           placeholder={t(

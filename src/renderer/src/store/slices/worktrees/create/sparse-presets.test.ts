@@ -76,24 +76,20 @@ describe('createSparsePresetsSlice', () => {
     expect(store.getState().sparsePresetsLoadStatusByRepo['repo-1']).toBe('loaded')
   })
 
-  it('does not save or synthesize a repo bucket when presets fail to load first', async () => {
+  it('does not cache a structured validation failure as a saved preset', async () => {
     const store = createTestStore()
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    mockApi.sparsePresets.list.mockRejectedValueOnce(new Error('disk failed'))
+    mockApi.sparsePresets.save.mockResolvedValueOnce({
+      errorCode: 'name_required',
+      error: 'Preset name is required.'
+    })
 
-    try {
-      const saved = await store.getState().saveSparsePreset({
-        repoId: 'repo-1',
-        name: 'Api',
-        directories: ['packages/api']
-      })
+    const saved = await store.getState().saveSparsePreset({
+      repoId: 'repo-1',
+      name: '',
+      directories: ['src']
+    })
 
-      expect(saved).toBeNull()
-      expect(mockApi.sparsePresets.save).not.toHaveBeenCalled()
-      expect(store.getState().sparsePresetsByRepo['repo-1']).toBeUndefined()
-      expect(store.getState().sparsePresetsLoadStatusByRepo['repo-1']).toBe('error')
-    } finally {
-      consoleError.mockRestore()
-    }
+    expect(saved).toBeNull()
+    expect(store.getState().sparsePresetsByRepo['repo-1']).toEqual([])
   })
 })

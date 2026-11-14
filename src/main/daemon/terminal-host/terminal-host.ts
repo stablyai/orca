@@ -1,9 +1,10 @@
+import type { DaemonLaunchNoteChange } from '../protocol/daemon-launch-note-protocol'
 import { terminalSessionExitCode } from './terminal-host-returned-process'
 import { runTerminalCreation, type PendingTerminalCreation } from './terminal-creation-work'
 import { beginTerminalHostFencedTermination } from './terminal-host-fenced-termination'
 import type { PtyFencedTerminationRequest } from '../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { Session } from '../sessions/session'
-import type { PtyProcessInspectionOptions } from '../../providers/pty-process-inspection'
+import type { PtyProcessInspectionOptions } from '../../providers/pty/process-inspection'
 import type { SessionInfo } from '../protocol/daemon-session-info'
 import type { TakePendingOutputResult } from '../protocol/daemon-rpc-contract'
 import type { TerminalSnapshot } from '../protocol/terminal-snapshot'
@@ -259,6 +260,10 @@ export class TerminalHost {
     return confirmTerminalHostShellForeground(this.sessions.get(sessionId), () =>
       this.sessions.get(sessionId)
     )
+  }
+
+  setLaunchNote(sessionId: string, change: DaemonLaunchNoteChange): void {
+    this.sessions.get(sessionId)?.launchNote.change(change)
   }
 
   clearScrollback(sessionId: string): void {

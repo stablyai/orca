@@ -1,8 +1,8 @@
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { authorityKey } from '../../../../../shared/host-authority'
-import { isExecutionHostAliasForWorktree } from '../../worktree-execution-host-alias'
-import { resolveOwner } from '../../resolve-owner'
+import { isExecutionHostAliasForWorktree } from '../../workspace/ownership/worktree-execution-host-alias'
+import { resolveOwner } from '../../workspace/ownership/resolve-owner'
 
 export function createBrowserLinkHostMatcher(
   state: AppState,

@@ -2,8 +2,7 @@
 
 import { createHash, randomUUID } from 'node:crypto'
 import { withTimeout } from '../../../../shared/promise-timeout-fallback'
-import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
-import { latestNativeChatOrcaStopCut } from '../../../../shared/native-chat/native-chat-orca-stop-cut'
+import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import {
   continuationDeps,
   RestartContinuationSupersededError,
@@ -44,13 +43,9 @@ export async function continueInterruptedStructuredAgentSessionTurn(
   }
 ): Promise<StructuredAgentSessionInterruptedContinuationOutcome> {
   const { sessionId, turnItemId } = input
-  const stillCut = (): boolean => {
+  const stillCut = async (): Promise<boolean> => {
     const journal = host.sessions.get(sessionId)?.journal
-    return (
-      journal !== undefined &&
-      latestNativeChatOrcaStopCut(journal.statusRead().items, journal.statusRead().submissions)
-        ?.turnItemId === turnItemId
-    )
+    return journal !== undefined && (await journal.reads.orcaStopCut())?.turnItemId === turnItemId
   }
   const continuationId = interruptedContinuationId(sessionId, turnItemId, host.now(), input.nonce)
   try {

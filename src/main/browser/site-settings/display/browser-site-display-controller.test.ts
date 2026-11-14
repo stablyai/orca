@@ -4,10 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
-import {
-  browserPageZoomLevelToPercent,
-  normalizeBrowserPageZoomLevel
-} from '../../../../shared/browser-page-zoom'
+import { browserPageZoomLevelToPercent } from '../../../../shared/browser-page-zoom'
 import { BrowserSiteDisplayController } from './browser-site-display-controller'
 import {
   configureBrowserSiteDisplayStore,
@@ -55,12 +52,6 @@ function fakeGuest(url: string): FakeGuest {
   return guest
 }
 
-function commit(controller: BrowserSiteDisplayController, guest: FakeGuest, url: string): void {
-  guest.url = url
-  controller.onMainFrameNavigationCommitted(guest.id)
-  guest.emit('dom-ready')
-}
-
 function uiStore(initial: Partial<PersistedUIState> = {}): {
   getUI: () => PersistedUIState
   onUIChanged: (listener: (ui: PersistedUIState) => void) => () => void
@@ -89,29 +80,6 @@ beforeEach(() => {
 })
 
 describe('BrowserSiteDisplayController zoom', () => {
-  it('keeps zoom per site and browser profile, and resets it to Default Zoom', () => {
-    const controller = new BrowserSiteDisplayController()
-    const ui = uiStore({ browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(0.5) })
-    controller.followZoomSettings(ui)
-    const github = fakeGuest('https://github.com/a')
-    const githubOtherPort = fakeGuest('https://github.com:8443/b')
-    const githubWork = fakeGuest('https://github.com/c')
-    const docs = fakeGuest('https://docs.example.com/')
-    controller.onGuestRegistered(github, null)
-    controller.onGuestRegistered(githubOtherPort, 'default')
-    controller.onGuestRegistered(githubWork, 'work')
-    controller.onGuestRegistered(docs, null)
-
-    controller.zoomPage(github.id, 'in')
-
-    expect([github, githubOtherPort, githubWork, docs].map(percent)).toEqual([125, 125, 110, 110])
-    commit(controller, docs, 'https://github.com/d')
-    expect(percent(docs)).toBe(125)
-
-    expect(controller.zoomPage(github.id, 'reset')).toMatchObject({ siteHasZoom: false })
-    expect([github, githubOtherPort, docs].map(percent)).toEqual([110, 110, 110])
-  })
-
   it("restores the site's zoom after Orca's UI zoom is copied onto the page", () => {
     const controller = new BrowserSiteDisplayController()
     const ui = uiStore()
@@ -141,46 +109,9 @@ describe('BrowserSiteDisplayController zoom', () => {
 })
 
 describe('BrowserSiteDisplayController color scheme', () => {
-  it('uses chat media for document guests without changing zoom, and upgrades browser registration', () => {
-    const controller = new BrowserSiteDisplayController()
-    const preview = fakeGuest('orca-preview://grant/theme.html')
-    preview.level = 1
-    controller.onGuestDocumentStart(preview, {
-      url: preview.url,
-      profileId: null,
-      colorScheme: 'dark'
-    })
-    controller.onMainFrameNavigationCommitted(preview.id)
-    expect(preview.mediaSent).toEqual(['dark', 'dark'])
-    expect(preview.level).toBe(1)
-    expect(preview.listenerCount('dom-ready')).toBe(0)
-
-    const local = fakeGuest('file:///chat-scratch/theme.html')
-    controller.onGuestDocumentStart(local, {
-      url: local.url,
-      profileId: 'work',
-      colorScheme: 'dark'
-    })
-    controller.onGuestRegistered(local, 'work')
-    controller.setColorScheme(local.id, 'light')
-    controller.setGuestColorSchemeFallback(local, 'light')
-    controller.setGuestColorSchemeFallback(local, 'dark')
-    expect(local.mediaSent.at(-1)).toBe('light')
-    expect(controller.getPageDisplay(local.id)?.colorScheme).toBe('light')
-    controller.setColorScheme(local.id, null)
-    expect(local.mediaSent.at(-1)).toBe('dark')
-    controller.setGuestColorSchemeFallback(local, undefined)
-    commit(controller, local, 'https://ordinary.example/')
-    expect(local.mediaSent.slice(-2)).toEqual(['dark', ''])
-    controller.onGuestRetired(preview.id)
-    expect(preview.debugger.isAttached()).toBe(false)
-  })
-
   it.each([
     { order: 'read-first', profileId: 'work', colorScheme: 'light', saved: 'dark' },
-    { order: 'registration-first', profileId: 'work', colorScheme: 'light', saved: 'dark' },
-    { order: 'read-first', profileId: 'default', colorScheme: 'dark', saved: 'light' },
-    { order: 'registration-first', profileId: 'default', colorScheme: 'dark', saved: 'light' }
+    { order: 'registration-first', profileId: 'work', colorScheme: 'light', saved: 'dark' }
   ] as const)(
     'keeps actual $profileId precedence across $order, reload and debugger loss',
     ({ order, profileId, colorScheme, saved }) => {

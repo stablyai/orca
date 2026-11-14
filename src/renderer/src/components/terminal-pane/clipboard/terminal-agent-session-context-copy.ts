@@ -1,5 +1,5 @@
 import type { ManagedPane } from '../../../lib/pane-manager/pane-manager-types'
-import { copyAgentSessionContext } from '../../../lib/copy-agent-session-context'
+import { copyAgentSessionContext } from '../../../lib/agent-session/context/copy-agent-session-context'
 import { translate } from '../../../i18n/i18n'
 
 // Standalone Copy Context omits the dialog’s fork instructions so it can be pasted into another tool.

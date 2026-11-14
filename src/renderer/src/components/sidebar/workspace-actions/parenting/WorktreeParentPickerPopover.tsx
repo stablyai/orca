@@ -11,14 +11,14 @@ import { toast } from 'sonner'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Command, CommandInput, CommandList } from '@/components/ui/command'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import {
   useAllWorktrees,
   useWorktreeMap
 } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import { useRepoMap } from '@/store/repos/use-repository-catalog'
-import { cn } from '@/lib/utils'
-import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
+import { cn } from '@/lib/class-names'
+import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { useWorktreeActivityStatuses } from '../../workspace-card/activity/use-worktree-activity-statuses'
 import { WorktreeParentPickerRow } from './WorktreeParentPickerRow'
 import { getEligibleWorktreeParents } from './worktree-parent-candidates'

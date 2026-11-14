@@ -7,8 +7,8 @@ import type { PtyChildProcessVerdict } from '../../../shared/terminal/pty/lifecy
 import type { RemoteForegroundEvidence } from '../../../shared/foreground-process-evidence'
 import { getCheapProcessTableSnapshot } from '../../../shared/cheap-process-table-snapshot-reader'
 import { getStrictProcessTableSnapshotWithAge } from '../../../shared/process-table-snapshot-reader'
-import { resolveRemoteForegroundEvidence } from '../../providers/agent-foreground-process'
-import { buildPaneProcessFingerprint } from '../../providers/posix-pane-foreground-fingerprint'
+import { resolveRemoteForegroundEvidence } from '../../providers/foreground/agent-process-batch'
+import { buildPaneProcessFingerprint } from '../../providers/foreground/posix-pane-fingerprint'
 import type { Session } from '../sessions/session'
 import { resolveSpawnFileForegroundFromRows } from '../pty-subprocess/spawn-file-foreground-process'
 import { inspectSpawnFileChildProcessesFromRows } from '../pty-subprocess/spawn-file-child-processes'
@@ -18,7 +18,7 @@ import {
   rememberSteadyStateAnchor
 } from './terminal-host-steady-state-anchor'
 import { SessionNotFoundError } from '../protocol/daemon-errors'
-import type { PtyProcessInspectionOptions } from '../../providers/pty-process-inspection'
+import type { PtyProcessInspectionOptions } from '../../providers/pty/process-inspection'
 
 export type TerminalHostProcessInspection = {
   foregroundObservation?: TerminalForegroundObservation

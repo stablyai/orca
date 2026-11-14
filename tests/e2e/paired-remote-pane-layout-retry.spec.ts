@@ -1,8 +1,6 @@
 import type { Page } from '@stablyai/playwright-test'
-import type {
-  RuntimeMobileSessionTabsResult,
-  RuntimeMobileSessionTerminalClientTab
-} from '../../src/shared/runtime-types'
+import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
+import type { RuntimeMobileSessionTerminalClientTab } from '../../src/shared/runtime-mobile-session-tab-contracts'
 import { toWebTerminalSurfaceTabId } from '../../src/shared/workspace-layout/terminal-surface-id'
 import type { TerminalLayoutSnapshot } from '../../src/shared/workspace-layout/terminal-tab-types'
 import {

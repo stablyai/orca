@@ -8,7 +8,7 @@ import {
   markTerminalFollowOutput,
   markTerminalPinnedViewport,
   syncTerminalScrollIntentFromViewport
-} from '@/lib/pane-manager/terminal-scroll-intent'
+} from '@/lib/pane-manager/terminal-scroll/terminal-scroll-intent'
 import type { resolveTerminalShortcutAction as resolveTerminalKeyboardShortcutAction } from './terminal-shortcut-policy'
 import { equalizeTerminalPanes } from '../../layout/ownership/terminal-pane-layout-owner-commands'
 

@@ -1,6 +1,6 @@
 import type { SshConnectionState, SshTarget } from '../../../../../../shared/ssh-types'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { DropdownMenuItem, DropdownMenuSeparator } from '../../../ui/dropdown-menu'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../../ui/dialog'
 import { sshHostServerStatusLine } from '@/ssh/ssh-host-server-status-copy'
@@ -9,14 +9,17 @@ import {
   SshHostKeepServerVersionDialog
 } from './SshHostKeepServerVersionDialog'
 import { SshHostDeltaMoveDialog } from './SshHostDeltaMoveDialog'
-import { SshHostNodeMirrorAction } from './SshHostNodeMirrorAction'
+import { SshHostNodeMirrorAction } from '../../../ssh-host-recovery/SshHostNodeMirrorAction'
 import { OpenPlainSshTerminalButton } from '../../../plain-ssh-terminal/OpenPlainSshTerminalButton'
-import { canMoveSshHostAnyway, SshHostMoveAnywayDialog } from './SshHostMoveAnywayAction'
+import {
+  canMoveSshHostAnyway,
+  SshHostMoveAnywayDialog
+} from '../../../ssh-host-recovery/SshHostMoveAnywayAction'
 import { canRestartSshHostServer, SshHostRestartServerDialog } from './SshHostRestartServerAction'
 import { canRecoverSshHostServer, SshHostRecoverServerDialog } from './SshHostRecoverServerAction'
 import { Button } from '../../../ui/button'
 import { isConnectingSshStatus } from '../../../../ssh/ssh-connection-recoverability'
-import { getManagedOrcadApi } from '../../runtime-environments/managed-servers/use-managed-server-catalog'
+import { getManagedOrcadApi } from '../../../../runtime/hosts/installation/managed-orcad-api-availability'
 
 export type SshTargetServerDialog =
   | 'details'

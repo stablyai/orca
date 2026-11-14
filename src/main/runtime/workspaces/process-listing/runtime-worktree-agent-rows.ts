@@ -75,6 +75,7 @@ export function attachRuntimeWorktreeAgentRows(args: {
       parent && parent.tabId === source.tabId ? null : args.conversationName?.(source)
     const row: RuntimeWorktreeAgentRow = {
       paneKey: source.paneKey,
+      ...(source.orcaSessionId ? { orcaSessionId: source.orcaSessionId } : {}),
       parentPaneKey,
       state: source.state,
       ...(source.workingMode ? { workingMode: source.workingMode } : {}),

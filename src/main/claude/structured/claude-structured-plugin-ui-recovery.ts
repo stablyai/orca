@@ -1,4 +1,4 @@
-import { claudeFocusedPlugin, ClaudePluginInputError } from '../claude-plugin-ui'
+import { claudeFocusedPlugin, ClaudePluginInputError } from '../sdk-transport/claude-plugin-ui'
 import type {
   ClaudeAcquisitionAttempt,
   ClaudeAcquireCallbacks,

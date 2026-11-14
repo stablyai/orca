@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { GRAB_BUDGET } from '../../../../../shared/browser-grab-types'
+import { GRAB_BUDGET } from '../../../../../shared/browser/element-grab/browser-grab-types'
 
 export const browserAnnotationLimitMessage = (t: Translate = translate): string =>
   t(

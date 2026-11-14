@@ -1,4 +1,4 @@
-import type { ChildProcessHandle } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 import type { SearchOptions, SearchResult } from '../../shared/file-search/code-search-types'
 import { RipgrepSearchDiagnostics } from '../../shared/ripgrep/ripgrep-search-diagnostics'
 import { SearchSubprocessLineAccumulator } from '../../shared/search-subprocess-lines'
@@ -45,7 +45,7 @@ export function runBundledRipgrepTextSearch({
   wslDistro?: string
   wslDistroForOutput?: string
   signal?: AbortSignal
-  onSpawn: (child: ChildProcessHandle) => () => void
+  onSpawn: (child: ChildProcess) => () => void
 }): Promise<SearchResult> {
   throwIfSignalAborted(signal)
   const maxResults = Math.max(
@@ -65,7 +65,7 @@ export function runBundledRipgrepTextSearch({
     let resolved = false
     let processErrorObserved = false
     let unavailableExitObserved = false
-    let child: ChildProcessHandle | null = null
+    let child: ChildProcess | null = null
     let killTimeout: ReturnType<typeof setTimeout> | undefined
     let releaseChild: (() => void) | undefined
 

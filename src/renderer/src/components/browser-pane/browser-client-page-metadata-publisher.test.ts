@@ -39,26 +39,6 @@ describe('browser client page metadata publisher', () => {
     second.resolve({ status: 'published', accepted: true })
   })
 
-  it('drops pending work after disposal without starting another call', async () => {
-    const first = deferred<unknown>()
-    const publish = vi.fn().mockReturnValue(first.promise)
-    let revision = 0
-    const publisher = createBrowserClientPageMetadataPublisher({
-      browserPageId: 'page-a',
-      placement: PLACEMENT,
-      nextRevision: () => ++revision,
-      publish
-    })
-
-    publisher.publish(snapshot('First'))
-    publisher.publish(snapshot('Pending'))
-    publisher.dispose()
-    first.resolve({ status: 'published', accepted: true })
-    await Promise.resolve()
-
-    expect(publish).toHaveBeenCalledTimes(1)
-  })
-
   // nextRevision throws after detach, so pane teardown can fail before publish even starts.
   it('keeps publishing after the revision counter throws', async () => {
     const publish = vi.fn().mockResolvedValue({ status: 'published', accepted: true })

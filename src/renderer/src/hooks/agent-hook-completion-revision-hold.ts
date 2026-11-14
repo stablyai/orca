@@ -2,6 +2,7 @@ import { useAppStore } from '@/store'
 import type { AgentCompletionStatusSnapshot } from '@/components/terminal-pane/agent-completion/agent-completion-coordinator-types'
 import { NOTIFICATION_COOLDOWN_MS } from '../../../shared/notification-burst-cooldown'
 import type { NotificationDispatchResult } from '../../../shared/notification-settings-types'
+import { recordAgentFinishDropped } from '@/attention/agent-finish-drop-breadcrumb'
 
 export type HookLaneCompletionSubmit = (
   onResult: (result: NotificationDispatchResult | null) => void
@@ -42,7 +43,11 @@ function clearTimer(requests: PaneRequests): void {
   }
 }
 
-function armHeldTimer(requests: PaneRequests, submitAfterCooldown: () => void): void {
+function armHeldTimer(
+  paneKey: string,
+  requests: PaneRequests,
+  submitAfterCooldown: () => void
+): void {
   const held = requests.held
   if (!held) {
     return
@@ -51,6 +56,7 @@ function armHeldTimer(requests: PaneRequests, submitAfterCooldown: () => void): 
   const cooldownEndsAt = requests.cooldownEndsAt
   if (cooldownEndsAt !== null && cooldownEndsAt > held.expiresAt) {
     requests.held = null
+    recordAgentFinishDropped('held-revision-expired', { paneKey })
     return
   }
   // Use fixed expiry so repeated revisions cannot retain an unanswered request forever.
@@ -60,6 +66,7 @@ function armHeldTimer(requests: PaneRequests, submitAfterCooldown: () => void): 
       requests.timer = null
       if (cooldownEndsAt === null) {
         requests.held = null
+        recordAgentFinishDropped('held-revision-expired', { paneKey })
         return
       }
       submitAfterCooldown()
@@ -88,7 +95,7 @@ function submitNow(
       clearTimer(requests)
       return
     }
-    armHeldTimer(requests, () => submitHeld(paneKey, requests))
+    armHeldTimer(paneKey, requests, () => submitHeld(paneKey, requests))
   })
   if (!sent && requests.requestSeq === seq) {
     requests.cooldownEndsAt = 0
@@ -140,7 +147,7 @@ export function submitHookLaneCompletion(
       expiresAt: requests.held?.expiresAt ?? Date.now() + 2 * NOTIFICATION_COOLDOWN_MS
     }
     const paneRequests = requests
-    armHeldTimer(requests, () => submitHeld(paneKey, paneRequests))
+    armHeldTimer(paneKey, requests, () => submitHeld(paneKey, paneRequests))
     return
   }
   clearTimer(requests)

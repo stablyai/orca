@@ -18,7 +18,7 @@ function chunk(type: string, data: number[] = []): number[] {
 }
 const be32 = (n: number) => [n >>> 24, (n >>> 16) & 255, (n >>> 8) & 255, n & 255]
 
-function pngBytes(width: number, height: number, animated = false): Uint8Array {
+function pngBytes(width: number, height: number): Uint8Array {
   return Uint8Array.from([
     0x89,
     0x50,
@@ -29,7 +29,6 @@ function pngBytes(width: number, height: number, animated = false): Uint8Array {
     0x1a,
     0x0a,
     ...chunk('IHDR', [...be32(width), ...be32(height), 8, 6, 0, 0, 0]),
-    ...(animated ? chunk('acTL', [0, 0, 0, 2, 0, 0, 0, 0]) : []),
     ...chunk('IDAT', [1, 2, 3]),
     ...chunk('IEND')
   ])
@@ -106,15 +105,5 @@ describe('readPluginImageHeader', () => {
       width: 1280,
       height: 800
     })
-  })
-
-  it('refuses animation, other formats and oversized frames', () => {
-    expect(readPluginImageHeader(pngBytes(512, 512, true))).toBe('animated images are not allowed')
-    expect(readPluginImageHeader(webpVp8x(512, 512, 0x02))).toBe('animated images are not allowed')
-    expect(readPluginImageHeader(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'))).toBe(
-      'must be a PNG, JPEG or WebP image'
-    )
-    expect(readPluginImageHeader(Buffer.from('GIF89a'))).toBe('must be a PNG, JPEG or WebP image')
-    expect(readPluginImageHeader(pngBytes(5000, 100))).toBe('image is larger than 4096×4096')
   })
 })

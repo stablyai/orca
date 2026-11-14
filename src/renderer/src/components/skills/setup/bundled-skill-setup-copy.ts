@@ -7,7 +7,7 @@ import {
   type BundledSkillLocation
 } from '../../../../../shared/bundled-skill-locations'
 import { bundledSkillInstallAgents } from '../../../../../shared/bundled-skill-summary'
-import { agentNames } from '../skill-plan-op-copy'
+import { agentNames } from '../freshness/skill-plan-op-copy'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 

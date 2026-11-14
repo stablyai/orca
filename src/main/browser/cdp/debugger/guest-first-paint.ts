@@ -1,5 +1,5 @@
 import type { WebContents } from 'electron'
-import type { CapturePaintHold } from '../commands/cdp-screenshot'
+import type { CapturePaintHold } from './guest-paint-hold'
 import { isEmbeddedGuest } from '../input/guest-direct-key-input'
 import {
   readRecord,

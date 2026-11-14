@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { isTwinRepo, runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
+import { isTwinRepo, runtimeTargetForRepoOwner } from '@/lib/workspace/ownership/repo-runtime-owner'
 import { projectViewCacheKeyTarget } from '@/store/github/cache/cache-identity'
 import type { GitHubWorkItemProjectOrigin } from './github-work-item-identity'
 

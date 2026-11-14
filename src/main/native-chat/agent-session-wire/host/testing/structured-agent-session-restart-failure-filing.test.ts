@@ -1,22 +1,24 @@
-import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  withTestAgentSessionDatabase,
+  openTestAgentSessionRecordStore
+} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../../../runtime/agent-session/records/agent-session-recovery-capsule'
-import { AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE } from '../../../../../shared/agent-session/lifecycle/agent-session-restart-continuation'
+import { AGENT_SESSION_RESTART_CONTINUATION_REFUSED_NOTE } from '../../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-continuation'
 import { StructuredAgentSessionResumeAdmission } from '../../recovery/structured-agent-session-restart-resume-runner'
 import {
   interruptedRestart,
   QUIT_CUT_NOTICE,
   readerNotes,
   statusNotes
-} from './structured-agent-session-restart-interruption-test-harness'
-import { CALLER, envelope } from './structured-agent-session-host-test-harness'
+} from './structured-agent-session-restart-interruption.test-fixture'
+import { CALLER, envelope } from './structured-agent-session-host.test-fixture'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   hostTestMessage
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -62,11 +64,13 @@ it('says so in the chat when the agent cannot start for the continuation', async
   // The failure note replaces the derived cut notice to avoid duplicate explanations.
   expect(await readerNotes(host)).toEqual(await statusNotes(host))
   await host.flushAllStreamedEvents()
-  openTestJournalHostDatabase(root)
-    .db.prepare(
-      "UPDATE agent_session_records SET record_json = json_set(record_json, '$.lease.minimumNextFence', 'bad') WHERE session_id = ?"
-    )
-    .run(SESSION)
+  await withTestAgentSessionDatabase(root, (db) =>
+    db
+      .prepare(
+        "UPDATE agent_session_records SET record_json = json_set(record_json, '$.lease.minimumNextFence', 'bad') WHERE session_id = ?"
+      )
+      .run(SESSION)
+  )
   const store = await openTestAgentSessionRecordStore(root)
   const restarted = new StructuredAgentSessionHost({ ...host.deps, store })
   const starts = acquire.mock.calls.length

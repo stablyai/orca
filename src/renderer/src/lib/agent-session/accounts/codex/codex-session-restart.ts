@@ -1,30 +1,27 @@
-import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store/index'
 import {
   confirmRuntimeTerminalForegroundProcess,
   inspectRuntimeTerminalProcess
 } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
-
 import { translate } from '@/i18n/i18n'
 import {
   getCodexAccountDisplayLabel,
   normalizeCodexAccountEmail
-} from '../../../codex-account-display-label'
+} from '../../../provider-accounts/codex-account-display-label'
 import { isShellProcess } from '../../../../../../shared/agent-status/process/shell-process-detection'
 import {
   isCodexForegroundProcess,
   isCodexRestartEligiblePane
 } from './codex-pane-restart-eligibility'
-import {
-  type TerminalProcessInspection as RuntimeTerminalProcessInspection,
-  isClientOnlyUnverifiableInspection
-} from '../../../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
+import { isClientOnlyUnverifiableInspection } from '../../../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
+import type { TerminalProcessInspection as RuntimeTerminalProcessInspection } from '../../../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import {
   getCodexAccountSwitchLaneMatcher,
   isForeignMachineCodexPtyId,
   isLocalCodexSelectionLaneKey,
   resolveCodexPaneSelectionLane
-} from '../../../codex-pane-selection-lane'
+} from '../codex-pane-selection-lane'
+import type { AppState } from '@/store/types'
 import type { CodexAccountSelectionTarget } from '../../../../../../shared/codex-selection-lane'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'

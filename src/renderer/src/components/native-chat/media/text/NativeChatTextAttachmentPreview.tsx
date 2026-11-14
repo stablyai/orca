@@ -8,7 +8,7 @@ import {
   DialogTitle,
   DialogDescription
 } from '@/components/ui/dialog'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'

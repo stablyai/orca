@@ -7,7 +7,7 @@ import type { CreateWorktreeResult } from '../../../../shared/worktree/create-ty
 import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
+import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import { createSequencedSetupAgentCommands } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import { getSetupRunnerCommandPlatformForPath } from '../../../../shared/agent-launch/startup/setup-runner-command'
@@ -23,7 +23,7 @@ import type {
   WorktreeTerminalProvisioningArgs
 } from './runtime-worktree-terminal-provisioning'
 
-type Ports = {
+export type RuntimeLocalWorktreeTerminalPorts = {
   canSpawn: boolean
   provisionInBackground?: () => boolean
   createTerminal: (
@@ -63,8 +63,8 @@ export type RuntimeLocalWorktreeTerminalStartupResult = {
 }
 
 export async function startRuntimeLocalWorktreeTerminals(args: {
-  request: RuntimeManagedWorktreeCreateArgs
-  repo: Repo
+  request: Omit<RuntimeManagedWorktreeCreateArgs, 'repoSelector' | 'name'>
+  repo: Pick<Repo, 'id'>
   worktree: Worktree
   setup?: CreateWorktreeResult['setup']
   defaultTabs?: CreateWorktreeResult['defaultTabs']
@@ -76,7 +76,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   promisedAgentChat?: boolean
   draftPaste?: WorktreeStartupDraftPaste
   warning?: string
-  ports: Ports
+  ports: RuntimeLocalWorktreeTerminalPorts
 }): Promise<RuntimeLocalWorktreeTerminalStartupResult> {
   const { request, repo, worktree, defaultTabs, startup, ports } = args
   let { setup } = args

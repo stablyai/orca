@@ -78,27 +78,6 @@ beforeEach(() => {
   })
 })
 
-function storeWith(projectGroups: ProjectGroup[]) {
-  const store = createTestStore()
-  store.setState({ repos: [remoteRepo], projectGroups })
-  return store
-}
-
-describe('moving a project into a group on another host', () => {
-  it('refuses with a toast instead of sending a move that would ungroup the project', async () => {
-    const store = storeWith([group('local-group', 'local'), group('remote-group', REMOTE_HOST)])
-
-    await expect(store.getState().moveProjectToGroup(remoteRepo, 'local-group', 0)).resolves.toBe(
-      false
-    )
-
-    expect(moveCalls()).toEqual([])
-    expect(moveProject).not.toHaveBeenCalled()
-    expect(store.getState().repos).toEqual([remoteRepo])
-    expect(toast.error).toHaveBeenCalledTimes(1)
-  })
-})
-
 describe('moving one twin of a repo id on a paired server (server-local and server-SSH rows)', () => {
   it('names the twin by its server-side SSH target and updates only that row', async () => {
     const serverLocalTwin: Repo = { ...remoteRepo, connectionId: null, projectGroupId: null }

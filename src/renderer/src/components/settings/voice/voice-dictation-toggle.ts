@@ -1,6 +1,8 @@
 import type { DeveloperPermissionRequestResult } from '../../../../../shared/developer-permissions-types'
 import type { FeatureTipId } from '../../../../../shared/feature-tips'
 import type { VoiceSettings } from '../../../../../shared/speech-types'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 
 type VoiceDictationToggleOptions = {
   voiceEnabled: boolean
@@ -57,4 +59,33 @@ export async function handleVoiceDictationToggle({
       setPermissionPending?.(false)
     }
   }
+}
+
+/** The toasts the Voice pane shows for each microphone permission outcome. */
+export const voiceDictationPermissionToasts = {
+  notifyPermissionGranted: () =>
+    toast.success(
+      translate('auto.components.settings.VoicePane.cd9fe37556', 'Microphone permission granted')
+    ),
+  notifyPermissionOpenedSystemSettings: () =>
+    toast.message(
+      translate(
+        'auto.components.settings.VoicePane.1eac933202',
+        'Opened macOS Privacy & Security. Enable dictation again after granting access.'
+      )
+    ),
+  notifyPermissionRequired: () =>
+    toast.message(
+      translate(
+        'auto.components.settings.VoicePane.f9a9cf6928',
+        'Microphone permission is required before enabling voice dictation.'
+      )
+    ),
+  notifyPermissionRequestFailed: () =>
+    toast.error(
+      translate(
+        'auto.components.settings.VoicePane.ad5d036ecc',
+        'Could not request microphone permission. Voice dictation was not enabled.'
+      )
+    )
 }

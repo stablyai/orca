@@ -1,6 +1,9 @@
 import { startTransition } from 'react'
 import type { AiVaultListResult } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
-import { hasInputBeenQuietFor, scheduleAfterInputQuiet } from '@/lib/input-quiet-scheduler'
+import {
+  hasInputBeenQuietFor,
+  scheduleAfterInputQuiet
+} from '@/lib/window-activity/input-quiet-scheduler'
 
 const AI_VAULT_PUBLICATION_QUIET_MS = 100
 const AI_VAULT_PUBLICATION_MAX_WAIT_MS = 1_000

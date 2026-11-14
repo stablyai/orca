@@ -27,7 +27,7 @@ import {
   readCompletedWorkerLedger,
   seedCurrentCodexTranscript
 } from './helpers/completed-worker-retirement-fixture'
-import { RuntimeClient } from '../../src/cli/runtime-client'
+import { RuntimeClient } from '../../src/cli/runtime/client'
 import type { RuntimeTerminalSummary } from '../../src/shared/runtime-types'
 import { splitWorktreeIdForFilesystem } from '../../src/shared/worktree/id'
 

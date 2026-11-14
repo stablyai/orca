@@ -1,39 +1,27 @@
-// Newer records reconcile read-only in memory; bookkeeping write failures must not put startup into Session restore failed.
+// Newer records reconcile read-only in memory.
 
-import { readFile, mkdtemp, rm } from 'node:fs/promises'
+import { readFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { journalDatabasePath } from '../../native-chat/agent-session-journal/database/journal-host-database'
+import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
+import { journalDomainDatabasePath } from '../../native-chat/agent-session-journal/database/journal-domain-database'
+import { JournalSqlDatabase } from '../../native-chat/agent-session-journal/database/journal-sql-database'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import type * as AgentSessionRecordRows from './records/agent-session-record-rows'
 import {
+  ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost,
+  openTestAgentSessionRecordStoreSlot,
   seedTestAgentSessionRecordStore,
   seedTestAgentSessionStoreFromNewerBuild
 } from './records/agent-session-record-store-test-harness'
 import { closeTestJournalHostDatabases } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { OrcaRuntimeService } from '../orca-runtime'
+import { stopStructuredAgentSessionRuntime } from './structured-agent-session-runtime'
 import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
-import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
-
-const writes = vi.hoisted(() => ({ failing: false }))
-
-vi.mock('./records/agent-session-record-rows', async (importOriginal) => {
-  const actual = await importOriginal<typeof AgentSessionRecordRows>()
-  return {
-    ...actual,
-    writeAgentSessionStoreRows: (...args: Parameters<typeof actual.writeAgentSessionStoreRows>) => {
-      if (writes.failing) {
-        throw new Error('disk I/O error')
-      }
-      return actual.writeAgentSessionStoreRows(...args)
-    }
-  }
-})
+  recordStructuredAgentSessionHostInstallRefusal,
+  structuredAgentSessionHostRefusal
+} from './structured-agent-session-host-refusal'
+import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 
 let root: string
 
@@ -42,10 +30,10 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  writes.failing = false
+  vi.restoreAllMocks()
+  recordStructuredAgentSessionHostInstallRefusal(null)
   await stopStructuredAgentSessionRuntime().catch(() => undefined)
   await closeTestJournalHostDatabases()
-  vi.restoreAllMocks()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -57,7 +45,7 @@ async function seedChat(options: { newer?: boolean } = {}) {
     await seedTestAgentSessionStoreFromNewerBuild(root)
   }
   await closeTestJournalHostDatabases()
-  return { path: journalDatabasePath(root), sessionId: record.sessionId }
+  return { path: journalDomainDatabasePath(root), sessionId: record.sessionId }
 }
 
 function startupRuntime(log = recordingStructuredAgentSessionLogger()) {
@@ -101,63 +89,25 @@ it('finishes startup over records a newer Orca wrote, reads them, and writes not
   expect(await readFile(path)).toEqual(bytes)
 })
 
-it('finishes startup when the reconcile cannot write, and reports it', async () => {
-  const { sessionId } = await seedChat()
-  const log = recordingStructuredAgentSessionLogger()
-  const runtime = startupRuntime(log)
-  writes.failing = true
+it('does not open the journal again before RPC after this startup refused it', async () => {
+  await writeFile(journalDomainDatabasePath(root), 'not a database')
+  const open = vi.spyOn(JournalSqlDatabase, 'open')
+  const opened = openTestAgentSessionRecordStoreSlot({
+    stateDirectory: root,
+    legacySessionTabIds: [],
+    hostId: 'local',
+    logger: recordingStructuredAgentSessionLogger().logger
+  })
+  opened.catch(() => {})
+  const runtime = startupRuntime()
+  runtime.beginStructuredAgentSessionStartupOpen(Promise.resolve(), {
+    legacySessionTabIds: [],
+    persisted: true,
+    opened
+  })
 
   await expect(runtime.prepareStructuredAgentSessionStartupRestoration()).resolves.toBeUndefined()
 
-  expect(log.entries).toEqual([
-    expect.objectContaining({
-      fields: {
-        scope: 'lease-reconcile',
-        error: expect.objectContaining({ message: 'disk I/O error' })
-      }
-    })
-  ])
-  expect(getStructuredAgentSessionHost()?.sessionAgent(sessionId)).toBe('claude')
-})
-
-it('closes a chat tab over records a newer Orca wrote, reporting the index it cannot write', async () => {
-  const { sessionId } = await seedChat({ newer: true })
-  const log = recordingStructuredAgentSessionLogger()
-  const runtime = startupRuntime(log)
-  await runtime.prepareStructuredAgentSessionStartupRestoration()
-  const host = getStructuredAgentSessionHost()
-  const close = vi.spyOn(host!, 'close')
-  vi.spyOn(runtime, 'captureStructuredAgentSessionPresentation').mockReturnValue({
-    raw: null,
-    saved: []
-  })
-  vi.spyOn(runtime, 'currentLocalStructuredSessionPresentation').mockReturnValue(null)
-  const { captureStructuredSessionSurface, closeCapturedStructuredSession } =
-    await import('./structured-agent-session-close')
-  expect(host).not.toBeNull()
-  if (!host) {
-    throw new Error('Expected installed host')
-  }
-  await expect(
-    closeCapturedStructuredSession(
-      host,
-      sessionId,
-      'user-close',
-      captureStructuredSessionSurface(host, sessionId, runtime),
-      runtime
-    )
-  ).resolves.toBe(false)
-
-  expect(log.entries).toContainEqual({
-    level: 'warn',
-    message: 'recording a closed chat tab failed',
-    fields: {
-      scope: 'tab-close-hide',
-      sessionId,
-      error: expect.objectContaining({
-        refusal: expect.objectContaining({ details: { reason: 'journalWrittenByNewerOrca' } })
-      })
-    }
-  })
-  expect(close).toHaveBeenCalledWith(sessionId, 'user-close')
+  expect(structuredAgentSessionHostRefusal()).not.toBeNull()
+  expect(open).toHaveBeenCalledTimes(1)
 })

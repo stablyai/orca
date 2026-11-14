@@ -1,7 +1,10 @@
 import { useAppStateValue, useAppStateViewActive } from '@/store/retained-views/app-state-view'
 import React, { useCallback } from 'react'
-import { useAppStore } from '@/store'
-import { getOverlayFocusOwners, overlayFocusContains } from '@/lib/overlay-focus-ownership'
+import { useAppStore } from '@/store/index'
+import {
+  getOverlayFocusOwners,
+  overlayFocusContains
+} from '@/lib/overlay-interaction/overlay-focus-ownership'
 import {
   Dialog,
   DialogContent,
@@ -14,8 +17,8 @@ import { useTranslate } from '@/i18n/use-translate'
 import {
   isWindowsTerminalCapabilityHost,
   useLocalWindowsTerminalCapabilities
-} from '@/lib/windows-terminal-capabilities'
-import { isWebClientLocation } from '@/lib/web-client-location'
+} from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useWindowsTerminalCapabilityOwnerKey } from '@/hooks/useWindowsTerminalCapabilityOwnerKey'
 import { resolveSettingsHostScope } from '@/components/settings/host-scope/settings-host-scope'
 

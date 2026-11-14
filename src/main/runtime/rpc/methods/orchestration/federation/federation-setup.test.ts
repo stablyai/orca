@@ -6,7 +6,7 @@ import '../../../../orchestration/db/messages/mailbox-routing-page'
 import '../../../../orchestration/db/dispatch-row-writer'
 import '../../../../orchestration/db/attempt-outcome-projection'
 import { ORCHESTRATION_METHODS } from '../orchestration'
-import { monitorFederatedSetup } from './federation-setup'
+import { monitorFederatedSetup } from '../../../../orchestration/legacy-remote/federation-setup'
 
 describe('orchestration federated setup evidence', () => {
   const databases: OrchestrationDb[] = []

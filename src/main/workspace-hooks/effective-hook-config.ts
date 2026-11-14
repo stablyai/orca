@@ -5,9 +5,9 @@ import type {
   OrcaHooks,
   SetupRunPolicy
 } from '../../shared/orca-yaml-hook-types'
-import type { Repo } from '../../shared/repo-types'
+import type { WorkspaceHookOwner } from '../../shared/workspace-hook-owner'
 import type { SetupDecision } from '../../shared/worktree/create-types'
-import type { WorktreeDefaultTabsLaunch } from '../../shared/worktree/launch-types'
+import type { WorktreeDefaultTabsLaunch } from '../../shared/worktree/creation/launch-types'
 
 function getEffectiveHookScript(
   yamlScript: string | undefined,
@@ -29,7 +29,7 @@ function getEffectiveHookScript(
 }
 
 export function getEffectiveHooksFromConfig(
-  repo: Repo,
+  repo: WorkspaceHookOwner,
   yamlHooks: OrcaHooks | null
 ): OrcaHooks | null {
   const localSetup = repo.hookSettings?.scripts.setup
@@ -57,11 +57,14 @@ export function getEffectiveHooksFromConfig(
   }
 }
 
-export function getEffectiveSetupRunPolicy(repo: Repo): SetupRunPolicy {
+export function getEffectiveSetupRunPolicy(repo: WorkspaceHookOwner): SetupRunPolicy {
   return repo.hookSettings?.setupRunPolicy ?? getDefaultRepoHookSettings().setupRunPolicy!
 }
 
-export function shouldRunSetupForCreate(repo: Repo, decision: SetupDecision = 'inherit'): boolean {
+export function shouldRunSetupForCreate(
+  repo: WorkspaceHookOwner,
+  decision: SetupDecision = 'inherit'
+): boolean {
   if (decision === 'run') {
     return true
   }
@@ -77,9 +80,20 @@ export function shouldRunSetupForCreate(repo: Repo, decision: SetupDecision = 'i
   return policy === 'run-by-default'
 }
 
+/** Unattended creates (orchestration workers) cannot ask, so only an explicit project skip turns setup off. */
+export function resolveUnattendedSetupDecision(
+  repo: WorkspaceHookOwner,
+  requested?: SetupDecision
+): Extract<SetupDecision, 'run' | 'skip'> {
+  if (requested === 'run' || requested === 'skip') {
+    return requested
+  }
+  return getEffectiveSetupRunPolicy(repo) === 'skip-by-default' ? 'skip' : 'run'
+}
+
 export function getDefaultTabsLaunch(
   hooks: OrcaHooks | null,
-  repo: Repo,
+  repo: WorkspaceHookOwner,
   decision: SetupDecision = 'inherit'
 ): WorktreeDefaultTabsLaunch | undefined {
   const tabs = hooks?.defaultTabs ?? []

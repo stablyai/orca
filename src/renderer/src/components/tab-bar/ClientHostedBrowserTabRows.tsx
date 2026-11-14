@@ -6,7 +6,7 @@ import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-br
 import {
   selectClientHostedBrowserRow,
   useActiveClientHostedBrowserRowId
-} from '@/lib/pane-manager/client-hosted-browser-row-state'
+} from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
 import { closeClientHostedBrowserRow } from '../../runtime/browser/closing/client-hosted-browser-row-close'
 import ClientHostedBrowserTab from './ClientHostedBrowserTab'
 

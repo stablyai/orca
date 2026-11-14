@@ -13,8 +13,8 @@ import { useAppStore } from '@/store/index'
 import {
   resolveDismissedOnboardingFolderAgentLaunch,
   revealOnboardingFolderWithAgentLaunch
-} from '@/lib/onboarding-folder-agent-launch'
-import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
+} from '@/components/onboarding/onboarding-folder-agent-launch'
+import { markOnboardingProjectAdded } from '@/components/onboarding/onboarding-project-checklist'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'

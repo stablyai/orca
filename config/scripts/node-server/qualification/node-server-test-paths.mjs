@@ -1,14 +1,11 @@
-/** Mirrors ORCA_REQUIRED_TEST_INPUTS_ENV in src/main/orcad/orcad-node-slot-fixture.ts. */
+/** Mirrors ORCA_REQUIRED_TEST_INPUTS_ENV in src/main/orcad/testing/native-slots/orcad-node-slot-fixture.ts. */
 export const REQUIRED_TEST_INPUTS_ENV = 'ORCA_REQUIRED_TEST_INPUTS'
 
-// Need the pinned Bun and the last Bun orcad slot beside the built Node slot (design D7).
-export const CROSS_RUNTIME_TEST_PATHS = [
-  'src/main/persistence/profile-state/profile-state-cross-runtime.integration.test.ts'
-]
+export const CROSS_RUNTIME_TEST_PATHS = []
 
 // Need the built desktop server template; CI runs them by path after build-orcad-template.mjs.
 export const TEMPLATE_TEST_PATHS = [
-  'src/main/orcad/orcad-packaged-structured-chat.integration.test.ts'
+  'src/main/orcad/testing/structured-chat/orcad-packaged-structured-chat.integration.test.ts'
 ]
 
 export function nodeServerTestPaths({
@@ -18,13 +15,13 @@ export function nodeServerTestPaths({
 } = {}) {
   return [
     'src/main/persistence/profile-state',
-    'src/main/persistence/loading-store/profile-state',
+    'src/main/persistence/loading-store/profile-writing/profile-state',
     'src/main/sqlite',
     // The orcad server's identity and stop path, which Windows SSH hosts rely on (W2).
-    'src/main/orcad/orcad-instance-lock.test.ts',
-    'src/main/orcad/orcad-process-start-time.test.ts',
-    'src/main/orcad/orcad-managed-stop.test.ts',
-    'src/main/orcad/orcad-managed-stop-cancellation.test.ts',
+    'src/main/orcad/instance-lock/orcad-instance-lock.test.ts',
+    'src/main/orcad/instance-lock/orcad-process-start-time.test.ts',
+    'src/main/orcad/host-lifecycle/managed-stop/orcad-managed-stop.test.ts',
+    'src/main/orcad/host-lifecycle/managed-stop/orcad-managed-stop-cancellation.test.ts',
     // The directory, not a prefix: its siblings are POSIX-host unit tests pr.yml already runs.
     'src/main/daemon/pty-subprocess/conpty-startup-input-reader.ts',
     'src/main/daemon/pty-subprocess/daemon-pty-physical-owner.ts',
@@ -38,22 +35,19 @@ export function nodeServerTestPaths({
     'src/main/daemon/pty-subprocess/spawn-environment.ts',
     'src/main/daemon/pty-subprocess/spawn-file-child-processes.ts',
     'src/main/daemon/pty-subprocess/spawn-file-foreground-process.ts',
-    'src/main/daemon/pty-subprocess/spawn-file-foreground-rejected-agents.test.ts',
     'src/main/daemon/pty-subprocess/spawn-preflight.ts',
     'src/main/daemon/pty-subprocess/subprocess-handle.ts',
-    'src/main/daemon/pty-subprocess/testing/pty-subprocess-spawn-file-foreground.test.ts',
-    'src/main/daemon/pty-subprocess/testing/pty-subprocess-io-failure-native.test.ts',
     ...(artifact
       ? [
           'tests/e2e/daemon-running-work-probe.unit.test.ts',
           'src/shared/terminal/pty/lifecycle/pty-running-work-probe.test.ts',
-          'src/main/orcad/orcad-packaged-node-pty.integration.test.ts',
-          'src/main/providers/agent-foreground-process-git-bash.win32.test.ts',
-          'src/main/orcad/orcad-cli-launcher.integration.test.ts',
-          'src/main/orcad/orcad-launcher-isolation.integration.test.ts',
-          'src/main/orcad/orcad-stop-request-shutdown.integration.test.ts',
-          'src/main/orcad/orcad-windows-conpty-breakaway.integration.test.ts',
-          'src/main/orcad/orcad-serve-parity.integration.test.ts',
+          'src/main/orcad/native-runtime/orcad-packaged-node-pty.integration.test.ts',
+          'src/main/daemon/pty-subprocess/testing/agent-foreground-process-git-bash.win32.test.ts',
+          'src/main/orcad/serve-startup/orcad-cli-launcher.integration.test.ts',
+          'src/main/orcad/runtime-launch/orcad-launcher-isolation.integration.test.ts',
+          'src/main/orcad/host-lifecycle/managed-stop/orcad-stop-request-shutdown.integration.test.ts',
+          'src/main/orcad/native-runtime/orcad-windows-conpty-breakaway.integration.test.ts',
+          'src/main/orcad/testing/serve-lifecycle/orcad-serve-parity.integration.test.ts',
           'config/scripts/archives/platform-command/zip-extractor-command.test.mjs'
         ]
       : []),

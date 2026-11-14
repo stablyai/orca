@@ -19,7 +19,7 @@ import { createSettingsSearchState, type SettingsSearchState } from './settings-
 import { isRuntimeCatalogListingStale } from '../runtime-status/runtime-status-hydration'
 import { normalizeDisabledTuiAgents } from '../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { sanitizeAgentLaunchProfileUpdates } from '../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
-import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-context'
+import { bumpProviderRuntimeSessionGeneration } from '@/runtime/hosts/observations/provider-runtime-context'
 import { normalizeUiLanguage } from '../../../../../shared/ui-language'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../../shared/terminal/replay/terminal-scrollback-policy'
 import { translate } from '@/i18n/i18n'

@@ -3,7 +3,7 @@ import { isWebviewDragPassthroughActive } from './host-guest/webview-drag-passth
 import {
   isBrowserPageRemotelyViewed,
   onBrowserRemoteViewerChange
-} from '../../lib/pane-manager/browser-remote-viewer-store'
+} from '../../runtime/browser/ownership/browser-remote-viewer-store'
 import type { BrowserClientRetainedRendererPage } from './browser-client-page-retained-state'
 
 export function syncBrowserClientPagePaintRetention(page: BrowserClientRetainedRendererPage): void {

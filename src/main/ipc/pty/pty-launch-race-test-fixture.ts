@@ -1,7 +1,7 @@
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { PersistPtyBindingArgs } from '../../persistence/loading-store/pty-binding-persistence'
-import { ptyBindingIsRefused } from '../../persistence/loading-store/pty-binding-refusals'
-import { applyPtyBinding } from '../../persistence/loading-store/pty-binding-session-update'
+import type { PersistPtyBindingArgs } from '../../persistence/loading-store/terminal-bindings/pty-binding-persistence'
+import { ptyBindingIsRefused } from '../../persistence/loading-store/terminal-bindings/pty-binding-refusals'
+import { applyPtyBinding } from '../../persistence/loading-store/terminal-bindings/pty-binding-session-update'
 import {
   withRuntimePaneAdmission,
   withDurableRuntimeStore

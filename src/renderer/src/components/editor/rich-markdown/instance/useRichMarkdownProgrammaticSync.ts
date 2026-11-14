@@ -1,3 +1,4 @@
+import type { EditorDiscardGeneration } from '../../save/flush/editor-discard-epoch'
 import { useEffect } from 'react'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { Editor } from '@tiptap/react'
@@ -13,10 +14,7 @@ import {
 } from '../images/rich-markdown-image-context'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { RichMarkdownEditorCodec } from '../document/rich-markdown-source-transport'
-import {
-  notifyStaleViewEditRejected,
-  staleViewEditEpoch
-} from '../../save/flush/editor-stale-view-edit'
+import { notifyStaleViewEditRejected } from '../../save/flush/editor-stale-view-edit'
 
 type RichMarkdownProgrammaticSyncOptions = {
   codec: RichMarkdownEditorCodec
@@ -36,7 +34,7 @@ type RichMarkdownProgrammaticSyncOptions = {
   runtimeTarget: RuntimeClientTarget | null
   /** Pending debounced commit, based on the text this view last synced. */
   serializeTimerRef: MutableRefObject<number | null>
-  pendingEditEpochRef: MutableRefObject<number>
+  pendingEditGenerationRef: MutableRefObject<EditorDiscardGeneration | null>
   slashMenuSetter: Dispatch<SetStateAction<SlashMenuState | null>>
   worktreeId: string
   worktreeRoot: string | null
@@ -65,7 +63,7 @@ export function useRichMarkdownProgrammaticSync({
   rootRef,
   runtimeTarget,
   serializeTimerRef,
-  pendingEditEpochRef,
+  pendingEditGenerationRef,
   slashMenuSetter,
   worktreeId,
   worktreeRoot
@@ -117,8 +115,8 @@ export function useRichMarkdownProgrammaticSync({
     if (!editor) {
       return
     }
-    const editEpoch = pendingEditEpochRef.current
-    const discarded = staleViewEditEpoch(fileId) !== editEpoch
+    const editGeneration = pendingEditGenerationRef.current
+    const discarded = editGeneration?.discarded === true
     const pendingTimer = serializeTimerRef.current
     if (content === lastCommittedMarkdownRef.current && !(pendingTimer !== null && discarded)) {
       return
@@ -128,7 +126,7 @@ export function useRichMarkdownProgrammaticSync({
       window.clearTimeout(pendingTimer)
       serializeTimerRef.current = null
       if (!discarded && !matchesSharedText) {
-        notifyStaleViewEditRejected(fileId, editEpoch)
+        notifyStaleViewEditRejected(editGeneration)
       }
     }
     if (matchesSharedText) {
@@ -169,7 +167,7 @@ export function useRichMarkdownProgrammaticSync({
     isApplyingProgrammaticUpdateRef,
     lastCommittedMarkdownRef,
     onContentChangeRef,
-    pendingEditEpochRef,
+    pendingEditGenerationRef,
     originalSourceRef,
     baseCanonicalRef,
     rootRef,

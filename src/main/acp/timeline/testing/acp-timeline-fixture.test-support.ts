@@ -69,10 +69,21 @@ function fixtureAnswer(
   }
 }
 
-export async function openAcpFixtureRig(dialect: AcpDialect = GROK_ACP_DIALECT) {
-  const rig = await openProviderTimelineRig()
+/** SQL admission resolves saved row placement on every lane, including after restart. */
+export async function openAcpFixtureRig(
+  dialect: AcpDialect = GROK_ACP_DIALECT,
+  { journalOwnership = false }: { journalOwnership?: boolean } = {}
+) {
   let providerSessionId = 'session-1'
-  const translator = () => new AcpTimelineTranslator({ sessionId: providerSessionId, dialect })
+  // Production lanes key the journal namespace by the provider session the reader resolves.
+  const rig = await openProviderTimelineRig(
+    journalOwnership ? { namespace: providerSessionId } : {}
+  )
+  const translator = () =>
+    new AcpTimelineTranslator({
+      sessionId: providerSessionId,
+      dialect
+    })
   let lane = translator()
   const records = acpSubagentRecords()
   // Preserve the host's last saved view after record retirement.

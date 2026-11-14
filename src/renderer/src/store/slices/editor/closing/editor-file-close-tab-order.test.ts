@@ -1,7 +1,7 @@
 import type { StoreApi } from 'zustand/vanilla'
 import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../../../types'
-import type { BrowserTab } from '../../../../../../shared/browser-workspace-types'
+import type { BrowserWorkspace } from '../../../../../../shared/browser-workspace-types'
 
 import '../../../../i18n/i18n'
 import { createEditorTabsStore } from '../editor-slice-test-harness'
@@ -20,7 +20,7 @@ function createEditorStore(overrides?: Partial<AppState>): StoreApi<AppState> {
   return store
 }
 
-function makeBrowserTab(id: string): BrowserTab {
+function makeBrowserTab(id: string): BrowserWorkspace {
   return {
     id,
     worktreeId: 'wt-1',

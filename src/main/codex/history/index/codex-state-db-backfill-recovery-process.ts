@@ -1,9 +1,9 @@
-import type { ChildProcessHandle } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 import { withCliRuntimeOnPath } from '../../../../shared/node-cli-command-resolution'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
-import { buildWslCodexAppServerArgs } from '../../../codex-accounts/wsl-codex-command'
+import { buildWslCodexAppServerArgs } from '../../../codex-cli/wsl-codex-command'
 import { CODEX_READ_ONLY_APP_SERVER_ARGS } from '../../../codex-cli/codex-read-only-app-server-args'
-import { terminateCodexProbeChild } from '../../../rate-limits/codex-probe-termination'
+import { terminateCodexProbeChild } from '../../../codex-cli/codex-probe-termination'
 import {
   createProviderSpawnSpec,
   type ProviderCloseRequest
@@ -18,7 +18,7 @@ const BACKFILL_RECOVERY_KILL_SITE = 'codex-state-db-backfill-recovery'
 const BACKFILL_RECOVERY_CLOSE_REQUEST: ProviderCloseRequest = 'stdin-end'
 
 export type CodexBackfillRecoveryProcess = {
-  child: ChildProcessHandle
+  child: ChildProcess
   supervised: boolean
 }
 
@@ -71,7 +71,7 @@ export function spawnCodexBackfillRecoveryProcess(
 }
 
 export async function stopCodexBackfillRecoveryProcess(
-  child: ChildProcessHandle,
+  child: ChildProcess,
   supervised: boolean
 ): Promise<void> {
   if (supervised) {

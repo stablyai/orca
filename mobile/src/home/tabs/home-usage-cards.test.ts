@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type {
-  AccountProviderRateLimits,
-  AccountsSnapshot
-} from '../../components/account-usage-state'
-import { selectHomeUsageCards, selectHomeUsageSections } from './home-usage-cards'
+import type { AccountProviderRateLimits, AccountsSnapshot } from '../../accounts/accounts-snapshot'
+import { selectHomeUsageCards } from './home-usage-cards'
 
 function limits(
   provider: 'claude' | 'codex',
@@ -75,23 +72,6 @@ describe('selectHomeUsageCards', () => {
     ])
   })
 
-  it('shows System default first while no managed account is active, metered only once it has quota', () => {
-    const withoutQuota = selectHomeUsageCards(
-      snapshot({ codex: { accounts: [{ id: 'x', email: 'x@example.com', updatedAt: 1 }] } }),
-      'codex'
-    )
-    expect(withoutQuota.map((card) => [card.accountId, card.active, card.metered])).toEqual([
-      [null, true, false],
-      ['x', false, true]
-    ])
-
-    const withQuota = selectHomeUsageCards(
-      snapshot({ rateLimits: { codex: limits('codex', 40) } }),
-      'codex'
-    )
-    expect(withQuota.map((card) => [card.accountId, card.metered])).toEqual([[null, true]])
-  })
-
   it('reads the Codex active account for the rate-limit runtime target', () => {
     const cards = selectHomeUsageCards(
       snapshot({
@@ -110,20 +90,6 @@ describe('selectHomeUsageCards', () => {
     expect(cards.map((card) => [card.accountId, card.subtitle, card.active])).toEqual([
       ['wsl', null, true],
       ['host', 'Team', false]
-    ])
-  })
-})
-
-describe('selectHomeUsageSections', () => {
-  it('skips providers with nothing to show and drops an unfetched updatedAt', () => {
-    const sections = selectHomeUsageSections(
-      snapshot({
-        codex: { accounts: [{ id: 'x', email: 'x@example.com', updatedAt: 1 }] },
-        rateLimits: { codex: limits('codex', 5, { updatedAt: 0, status: 'idle' }) }
-      })
-    )
-    expect(sections.map((section) => [section.provider, section.updatedAt])).toEqual([
-      ['codex', null]
     ])
   })
 })

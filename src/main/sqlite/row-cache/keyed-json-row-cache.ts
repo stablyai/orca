@@ -228,6 +228,9 @@ export class KeyedJsonRowCache {
       this.dataVersion = version
     } catch (error) {
       rollback(db)
+      // COMMIT can report an error after the rows landed; our own commit leaves data_version
+      // unchanged, so drop the baseline and re-read it before the next diff.
+      this.dataVersion = undefined
       throw error
     }
   }

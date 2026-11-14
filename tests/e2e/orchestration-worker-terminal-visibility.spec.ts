@@ -15,7 +15,7 @@ import {
   waitForSessionReady
 } from './helpers/store'
 import { waitForActivePaneHookDescriptor, waitForActivePanePtyId } from './helpers/terminal'
-import { RuntimeClient } from '../../src/cli/runtime-client'
+import { RuntimeClient } from '../../src/cli/runtime/client'
 import type { RuntimeTerminalListResult, RuntimeTerminalRead } from '../../src/shared/runtime-types'
 import { FAKE_CODEX_LAUNCH_PROBES_SOURCE } from './helpers/fake-codex-launch-probes'
 

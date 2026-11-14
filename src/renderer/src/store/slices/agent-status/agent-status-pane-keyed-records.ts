@@ -1,3 +1,4 @@
+import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 export const RECENTLY_CLOSED_AGENT_STATUS_TAB_IDS_MAX = 1024
 export const RECENTLY_RETIRED_AGENT_STATUS_PANE_KEYS_MAX = 1024
 
@@ -94,15 +95,14 @@ export function removePaneKeys<T>(
   paneKeys: ReadonlySet<string>
 ): Record<string, T> {
   // Probe requested own enumerable keys and clone on first match. Retirement touches many usually-empty records; retain no-op identity and exclude inherited toString/__proto__.
-  let next: Record<string, T> | null = null
+  const deletions: [string, null][] = []
   for (const key of paneKeys) {
     if (!Object.prototype.propertyIsEnumerable.call(record, key)) {
       continue
     }
-    next ??= { ...record }
-    delete next[key]
+    deletions.push([key, null])
   }
-  return next ?? record
+  return deletions.length > 0 ? replaceRecordEntries<T>(record, deletions) : record
 }
 
 export function removePaneKeysByTabPrefix<T>(

@@ -1,4 +1,4 @@
-import type { FloatingWorkspacePanelOwnedAction } from '@/lib/floating-workspace-shortcut-policy'
+import type { FloatingWorkspacePanelOwnedAction } from '@/components/floating-terminal/floating-workspace-shortcut-policy'
 import type { KeybindingActionId, PhysicalModifierToken } from '../../../../shared/keybindings'
 import type { TerminalAgentTabShortcut } from '@/components/terminal-agent-tab-shortcut'
 

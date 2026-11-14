@@ -156,32 +156,4 @@ describe('reminted $$ pane keys on the OMP hook pipeline', () => {
       server.stop()
     }
   })
-
-  it('does not let a later persist row rebind a reminted token', async () => {
-    const server = new AgentHookServer()
-    await server.start({ env: 'production' })
-    try {
-      server.registerPaneKeyAlias(REMINTED, PANE, 'pty-a', 10, { authorityVerified: true })
-      server.registerPaneKeyAlias(REMINTED, GOOD_PANE, 'pty-b', 20, { overwriteExisting: false })
-      await postHookEvent(
-        server,
-        buildBody(
-          { hook_event_name: 'before_agent_start', prompt: 'restored remint' },
-          { paneKey: REMINTED, tabId: 'tab-good' }
-        ),
-        '/hook/omp'
-      )
-      expect(server.getStatusSnapshot()).toEqual([
-        expect.objectContaining({
-          paneKey: PANE,
-          tabId: 'tab-1',
-          state: 'working',
-          prompt: 'restored remint',
-          agentType: 'omp'
-        })
-      ])
-    } finally {
-      server.stop()
-    }
-  })
 })

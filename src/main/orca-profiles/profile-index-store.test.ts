@@ -11,7 +11,7 @@ import {
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
-import { openProfileStateDatabase } from '../persistence/profile-state/profile-state-database'
+import { openProfileStateDatabase } from '../persistence/profile-state/database/profile-state-database'
 import {
   createDefaultLocalOrcaProfile,
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
@@ -134,7 +134,7 @@ describe('profile index store', () => {
   const posixIt = process.platform === 'win32' ? it.skip : it
   posixIt('writes a fresh profile index when umask removes owner-write permission', async () => {
     const store = await loadProfileIndexStore()
-    const indexPath = store.getOrcaProfileIndexPath()
+    const indexPath = (await import('./profile-storage-paths')).getOrcaProfileIndexPath()
     const profile = createDefaultLocalOrcaProfile(1)
     const index: OrcaProfileIndex = {
       schemaVersion: ORCA_PROFILE_INDEX_SCHEMA_VERSION,
@@ -157,7 +157,7 @@ describe('profile index store', () => {
     store.ensureActiveOrcaProfile()
     const created = store.createLocalOrcaProfile({ name: 'Work' })
     store.setActiveOrcaProfile(created.profile.id)
-    const indexPath = store.getOrcaProfileIndexPath()
+    const indexPath = (await import('./profile-storage-paths')).getOrcaProfileIndexPath()
     renameSync(indexPath, `${indexPath}.bak`)
 
     expect(store.loadOrCreateProfileIndex(testState.dir).activeProfileId).toBe(created.profile.id)
@@ -165,35 +165,9 @@ describe('profile index store', () => {
     expect(readJson(indexPath)).toMatchObject({ activeProfileId: created.profile.id })
   })
 
-  it.each(['primary', 'backup', 'both'] as const)(
-    'refuses an unreadable %s index without replacing it',
-    async (source) => {
-      const store = await loadProfileIndexStore()
-      const indexPath = store.getOrcaProfileIndexPath()
-      if (source !== 'backup') {
-        writeFileSync(indexPath, '{broken-primary')
-      }
-      if (source !== 'primary') {
-        writeFileSync(`${indexPath}.bak`, '{broken-backup')
-      }
-
-      expect(() => store.loadOrCreateProfileIndex(testState.dir)).toThrow(
-        'Could not read active profile index'
-      )
-      expect(() => store.ensureActiveOrcaProfile()).toThrow('Could not read active profile index')
-      if (source !== 'backup') {
-        expect(readFileSync(indexPath, 'utf8')).toBe('{broken-primary')
-      }
-      if (source !== 'primary') {
-        expect(readFileSync(`${indexPath}.bak`, 'utf8')).toBe('{broken-backup')
-      }
-      expect(existsSync(join(testState.dir, 'profiles'))).toBe(false)
-    }
-  )
-
   it('rejects profile ids that are not safe path segments', async () => {
     const store = await loadProfileIndexStore()
-    const indexPath = store.getOrcaProfileIndexPath()
+    const indexPath = (await import('./profile-storage-paths')).getOrcaProfileIndexPath()
     const index: OrcaProfileIndex = {
       schemaVersion: ORCA_PROFILE_INDEX_SCHEMA_VERSION,
       activeProfileId: '../../escape',

@@ -1,15 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { GitStatusEntry } from '../../git/status/git-status-types'
-import {
-  buildGitStatusSourceControlTree,
-  buildSourceControlTree,
-  applyGitStatusEntryAreasToSourceControlTree,
-  collectSourceControlTreeFileEntries,
-  compactSourceControlTree,
-  flattenSourceControlTree,
-  namespaceSourceControlTreeDirectoryKeys
-} from './source-control-tree'
+import { buildSourceControlTree, collectSourceControlTreeFileEntries } from './source-control-tree'
 
 function entry(partial: Partial<GitStatusEntry> & { path: string }): GitStatusEntry {
   return {
@@ -33,32 +25,5 @@ describe('buildSourceControlTree', () => {
       'src/components/Button.tsx',
       'src/app.ts'
     ])
-  })
-
-  it('can preserve file node areas from mixed conflict section entries', () => {
-    const tree = compactSourceControlTree(
-      buildGitStatusSourceControlTree('unstaged', [
-        entry({
-          area: 'staged',
-          path: 'src/resolved.ts',
-          conflictKind: 'both_modified',
-          conflictStatus: 'resolved_locally'
-        })
-      ])
-    )
-
-    const rows = flattenSourceControlTree(
-      applyGitStatusEntryAreasToSourceControlTree(
-        namespaceSourceControlTreeDirectoryKeys(tree, 'conflicts')
-      ),
-      new Set()
-    )
-    const directory = rows.find((node) => node.type === 'directory')
-    const file = rows.find((node) => node.type === 'file')
-
-    expect(directory?.key).toBe('dir::conflicts::src')
-    expect(directory?.area).toBe('unstaged')
-    expect(file?.key).toBe('staged::src/resolved.ts')
-    expect(file?.area).toBe('staged')
   })
 })

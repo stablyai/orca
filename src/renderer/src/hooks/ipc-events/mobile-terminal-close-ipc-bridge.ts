@@ -1,12 +1,12 @@
 import { createRuntimeFilePositionQueue } from './runtime-file-position'
 import { applyClosedTerminalLeafNotice } from '@/components/terminal-pane/layout/close/closed-terminal-leaf-notice'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../shared/editor-language/editor-language-detect'
 import { followWorkspaceSleep } from '@/components/sidebar/workspace-actions/sleep/workspace-sleep-follower'
 import { createProjectMovePauseFollower } from '@/components/sidebar/project-move-pause-follower'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
 import { persistWorkspaceSessionByHost } from '@/lib/workspace/persistence/workspace-session-host-persistence'
-import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
+import { revealWorkspaceSurface } from '@/lib/workspace/activation/workspace-surface-reveal'
 import { selectFloatingWorkspacePanelVisible } from '@/store/workspaces/floating/floating-workspace-panel-selector'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 import { useAppStore } from '../../store'
@@ -23,7 +23,7 @@ import {
   type RuntimeNavigationTarget
 } from '../../../../shared/runtime-navigation'
 
-// Explicit non-host targets stay off-screen without visit accounting; absent targets preserve older CLI/phone Open in session behavior.
+// Non-host targets stay off-screen without visit accounting; files.open always names a target, so absence is only legacy switching.
 function openRuntimeEditorTab(
   worktreeId: string,
   navigation: RuntimeNavigationTarget | undefined,

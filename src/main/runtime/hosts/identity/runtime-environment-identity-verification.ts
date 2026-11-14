@@ -2,7 +2,7 @@ import {
   getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment
 } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { sendRemoteRuntimeRequest } from '../../../../shared/remote-runtime/remote-runtime-client'
+import { sendRemoteRuntimeRequestOnSocket } from '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { verifyRemotePairingRuntimeStatus } from '../../../../shared/remote-runtime/pairing/remote-pairing-verification'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
 import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
@@ -32,14 +32,17 @@ export async function verifyRuntimePairingIdentity(
   signal?: AbortSignal
 ) {
   signal?.throwIfAborted()
-  const response = await sendRemoteRuntimeRequest<RuntimeStatus>(
+  const response = await sendRemoteRuntimeRequestOnSocket<RuntimeStatus>(
     connection,
     'status.get',
     undefined,
     15_000,
     undefined,
+    undefined,
     signal,
-    ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+    ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+    undefined,
+    undefined
   )
   signal?.throwIfAborted()
   if (!response.ok) {

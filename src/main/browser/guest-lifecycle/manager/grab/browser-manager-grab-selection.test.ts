@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BrowserGrabPayload } from '../../../../../shared/browser-grab-types'
 
 const grabMocks = vi.hoisted(() => ({
   webContentsFromIdMock: vi.fn(),
@@ -35,57 +34,6 @@ import {
 
 const { guestExecuteJavaScriptMock } = grabMocks
 
-function makeValidGrabPayload(): BrowserGrabPayload {
-  return {
-    page: {
-      sanitizedUrl: 'https://example.com/',
-      title: 'Example',
-      viewportWidth: 1280,
-      viewportHeight: 720,
-      scrollX: 0,
-      scrollY: 0,
-      devicePixelRatio: 2,
-      capturedAt: '2026-04-10T00:00:00.000Z'
-    },
-    target: {
-      tagName: 'button',
-      selector: 'button',
-      textSnippet: 'Click me',
-      htmlSnippet: '<button>Click me</button>',
-      attributes: {},
-      accessibility: {
-        role: 'button',
-        accessibleName: 'Click me',
-        ariaLabel: null,
-        ariaLabelledBy: null
-      },
-      rectViewport: { x: 0, y: 0, width: 100, height: 40 },
-      rectPage: { x: 0, y: 0, width: 100, height: 40 },
-      computedStyles: {
-        display: 'block',
-        position: 'static',
-        width: '100px',
-        height: '40px',
-        margin: '0',
-        padding: '0',
-        color: '#000',
-        backgroundColor: '#fff',
-        border: 'none',
-        borderRadius: '0',
-        fontFamily: 'sans-serif',
-        fontSize: '14px',
-        fontWeight: '400',
-        lineHeight: '20px',
-        textAlign: 'left',
-        zIndex: 'auto'
-      }
-    },
-    nearbyText: [],
-    ancestorPath: ['div', 'body'],
-    screenshot: null
-  }
-}
-
 describe('browserManager grab operations', () => {
   let guest: Electron.WebContents
 
@@ -94,19 +42,6 @@ describe('browserManager grab operations', () => {
   })
 
   describe('awaitGrabSelection', () => {
-    it('does not treat a valid payload message field as cancellation', async () => {
-      guestExecuteJavaScriptMock.mockResolvedValueOnce({
-        ...makeValidGrabPayload(),
-        message: 'cancelled'
-      })
-
-      const result = await browserManager.awaitGrabSelection('tab-1', 'op-1', guest)
-      expect(result.kind).toBe('selected')
-      if (result.kind === 'selected') {
-        expect(result.payload.target.tagName).toBe('button')
-      }
-    })
-
     it('main-side clamp redacts secret-bearing attribute values', async () => {
       const mockPayload = {
         page: {

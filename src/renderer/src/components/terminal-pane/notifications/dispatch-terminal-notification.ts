@@ -40,6 +40,7 @@ import {
   deliverAgentAttentionNotification,
   readAgentAttentionNotificationSound
 } from '../../../attention/agent-attention-notification-delivery'
+import { recordAgentFinishDropped } from '@/attention/agent-finish-drop-breadcrumb'
 
 const AGENT_NOTIFICATION_SNAPSHOT_MAX_AGE_MS = 10_000
 
@@ -114,6 +115,10 @@ export function dispatchTerminalNotification(
     hasFreshActiveHookStatus(storedAgentStatus, explicitTitleAgentType)
   ) {
     // Confirmed exit proves completion even when a title-only idle signal races behind active hook state.
+    recordAgentFinishDropped('fresh-active-hook-status', {
+      workspaceId: worktreeId,
+      paneKey: event.paneKey
+    })
     return false
   }
   // A dead process may never emit done; stale active hooks cannot label its completion prompt/state.
@@ -132,6 +137,10 @@ export function dispatchTerminalNotification(
         event.paneKey ? state.agentLaunchConfigByPaneKey[event.paneKey] : undefined
       ))
   ) {
+    recordAgentFinishDropped('superseded-snapshot', {
+      workspaceId: worktreeId,
+      paneKey: event.paneKey
+    })
     return false
   }
   const agentNotificationStateStartedAt =
@@ -154,7 +163,16 @@ export function dispatchTerminalNotification(
     createTerminalAttentionSurface(state)
   )
   if (!attentionDecision.admitted) {
+    if (event.source === 'agent-task-complete') {
+      recordAgentFinishDropped(attentionDecision.cause, {
+        workspaceId: worktreeId,
+        paneKey: event.paneKey
+      })
+    }
     return false
+  }
+  if (event.source === 'agent-task-complete' && attentionDecision.unread === null) {
+    recordAgentFinishDropped('viewed', { workspaceId: worktreeId, paneKey: event.paneKey })
   }
 
   // Desktop settings are applied in main after independent mobile delivery.

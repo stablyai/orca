@@ -1,4 +1,4 @@
-import { pickApprovedSetupHashes } from '../../../../shared/worktree/approved-setup-hashes'
+import { pickApprovedSetupHashes } from '../../../../shared/worktree/creation/approved-setup-hashes'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 import type { Worktree, WorkspaceAttachment } from '../../../../shared/worktree/types'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachments/workspace-attachment-mutation'
@@ -8,14 +8,10 @@ import {
   WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY
 } from '../../../../shared/workspace-attachments/workspace-attachment-capabilities'
 import type { PreloadApi } from '../../../../preload/api-types'
-import type {
-  ForceDeleteWorktreeBranchResult,
-  RemoveWorktreeResult
-} from '../../../../shared/worktree/create-types'
+import type { ForceDeleteWorktreeBranchResult } from '../../../../shared/worktree/create-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
-import { readRetiredNameRegistryForRepo } from '../../../../shared/worktree/retired-name-cache'
-import { EMPTY_RETIRED_NAME_REGISTRY } from '../../../../shared/worktree/retired-name-registry'
-import { worktreeRemovalReplyTimeoutMs } from '../../../../shared/worktree/archive-hook-removal-gate'
+import { readRetiredNameRegistryForRepo } from '../../../../shared/worktree/naming/retired-name-cache'
+import { EMPTY_RETIRED_NAME_REGISTRY } from '../../../../shared/worktree/naming/retired-name-registry'
 import { toRuntimeWorktreeSelector } from '../../runtime/rpc/targets/runtime-worktree-selector'
 import {
   getRemoteRuntimeStatus,
@@ -29,6 +25,7 @@ import {
   assertActiveEnvironment
 } from './web-runtime-session'
 import { callRuntimeDetectedWorktrees } from './web-runtime-worktree-catalog'
+import { createWebWorktreeRemovalCalls } from './web-worktree-removal-calls'
 import { noopUnsubscribe } from './web-storage'
 import { runApprovedSetupOnWebHost } from './web-approved-setup'
 import { emitWebWorkspaceSleep } from './web-workspace-sleep-notices'
@@ -201,22 +198,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
     sleepReopened: async () => {},
     resumeSleptPane: async () => false,
     retireStrandedSleepRecord: async () => {},
-    remove: async ({ worktreeId, hostId, force, allowUnverifiedPtyStop, skipArchive }) => {
-      invalidateRuntimeWorktreeCaches()
-      return callRuntimeResult<RemoveWorktreeResult>(
-        'worktree.rm',
-        {
-          worktree: toRuntimeWorktreeSelector(worktreeId),
-          ...(hostId ? { hostId } : {}),
-          force,
-          // Forward Force Delete waiver or paired clients stay wedged (#11960).
-          allowUnverifiedPtyStop,
-          runHooks: skipArchive !== true
-        },
-        // Why: the host replies once Git has deleted the checkout, past the default 30 s budget.
-        worktreeRemovalReplyTimeoutMs(skipArchive !== true)
-      )
-    },
+    ...createWebWorktreeRemovalCalls(),
     // Why: forget-locally clears a desktop workspace pinned to a dead SSH host; a paired web client has no such ghost state.
     forgetLocal: () => {
       throw new Error('Forgetting a workspace is unavailable in paired web clients.')
@@ -285,6 +267,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
     onChanged: () => noopUnsubscribe,
     onGitStatusMetadataChanged: () => noopUnsubscribe,
     onHeadIdentitiesChanged: () => noopUnsubscribe,
+    onMetadataSet: () => noopUnsubscribe,
     onBaseStatus: () => noopUnsubscribe,
     onRemoteBranchConflict: () => noopUnsubscribe
   }

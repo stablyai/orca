@@ -4,7 +4,7 @@ import { matchesRecentTabSwitcherChord } from '../../../../../../shared/window-s
 import {
   globalShortcutTargetYields,
   findPluginCommandForKeybinding
-} from '@/lib/plugin-command-keybindings'
+} from '@/lib/plugins/commands/plugin-command-keybindings'
 import { getKeybindingContext } from '../../../terminal-workspace-model'
 import {
   ModifierDoubleTapDetector,
@@ -15,16 +15,16 @@ import type { AgentType } from '../../../../../../shared/agent-status/contracts/
 import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveNativeChatTabAgentEvidence } from '../../../tab-bar/native-chat-tab-agent-evidence'
 import { canToggleNativeChat } from '../../../../../../shared/native-chat/native-chat-availability'
-import { isNativeChatTranscriptLocalReadable } from '../../../../../../shared/native-chat/transcript/native-chat-transcript-readability'
+import { isNativeChatTranscriptLocalReadable } from '../../../../../../shared/native-chat/transcript/messages/native-chat-transcript-readability'
 import { matchesNativeChatToggleShortcut } from './native-chat-shortcut'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
-import { resolveKeyboardWorkspaceId } from '@/lib/floating-workspace-terminal-actions'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
+import { resolveKeyboardWorkspaceId } from '@/components/floating-terminal/floating-workspace-terminal-actions'
 import {
   isNativeChatTabWideFallbackSafe,
   resolveNativeChatActiveLayoutLeafId
 } from './native-chat-leaf-routing'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 export function resolveNativeChatToggleShortcutDetectedAgent({
   terminalTabId,

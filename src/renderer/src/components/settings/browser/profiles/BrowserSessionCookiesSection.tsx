@@ -56,7 +56,7 @@ export function BrowserSessionCookiesSection({
   return (
     <SearchableSetting
       id="browser-session-cookies"
-      title={t('auto.components.settings.BrowserPane.113cd2dc9b', 'Session & Cookies')}
+      title={t('auto.components.settings.BrowserPane.bc44903d30', 'Session & cookies')}
       description={t(
         'auto.components.settings.BrowserPane.aa1074bfe9',
         'Manage browser profiles and import cookies from Chrome, Edge, Comet, or other browsers.'
@@ -88,7 +88,7 @@ export function BrowserSessionCookiesSection({
     >
       <div className="flex items-center justify-between gap-3">
         <div className="space-y-0.5">
-          <Label>{t('auto.components.settings.BrowserPane.2d66a6efb5', 'Session & Cookies')}</Label>
+          <Label>{t('auto.components.settings.BrowserPane.ddd634b250', 'Session & cookies')}</Label>
           <p className="text-xs text-muted-foreground">
             {t(
               'auto.components.settings.BrowserPane.cd47bc9622',
@@ -100,12 +100,15 @@ export function BrowserSessionCookiesSection({
         </div>
         <Button variant="outline" size="xs" onClick={onAddProfile} className="shrink-0 gap-1.5">
           <Plus className="size-3" />
-          {t('auto.components.settings.BrowserPane.6f2584b39e', 'Add Profile')}
+          {t('auto.components.settings.BrowserPane.549f28cf10', 'Add profile')}
         </Button>
       </div>
 
       {hostOptions.length > 1 ? (
-        <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2">
+        <div
+          data-settings-row=""
+          className="flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2"
+        >
           <div className="min-w-0 space-y-0.5">
             <Label className="text-xs">
               {t('auto.components.settings.BrowserPane.5e19a692f7', 'Host')}
@@ -166,7 +169,7 @@ export function BrowserSessionCookiesSection({
       </div>
       <div className="flex items-center justify-between gap-3 pt-3">
         <div className="min-w-0 space-y-0.5">
-          <Label>{t('browser.googleCookieClear.heading', 'Google Cookies')}</Label>
+          <Label>{t('browser.googleCookieClear.fe3f6e1721', 'Google cookies')}</Label>
           <p className="text-xs text-muted-foreground">
             {t(
               'browser.googleCookieClear.explanation',

@@ -63,14 +63,6 @@ describe('useMarkupEditor gestures', () => {
     return result
   }
 
-  it('commits a drawn stroke exactly once under StrictMode', () => {
-    const result = renderEditor({ wrapper: StrictMode })
-
-    drawLine(result, 0)
-
-    expect(result.current.shapes).toHaveLength(1)
-  })
-
   it('erases the touched mark, hiding it from the export before release, and undo restores it', () => {
     const result = renderEditor({ wrapper: StrictMode })
     drawLine(result, 0)

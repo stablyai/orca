@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildRows } from './build-rows.test-fixture'
-import { getWorktreeLineageGroupKey } from '../../../../../../shared/sidebar-list/group-keys'
+import { getWorktreeLineageGroupKey } from '../../../../../../shared/sidebar-list/sections/group-keys'
 
 import { worktree, repoMap } from './worktree-list-groups-test-fixtures'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'

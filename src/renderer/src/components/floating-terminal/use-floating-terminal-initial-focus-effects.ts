@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import { reportFloatingFocus } from './floating-terminal-focus-reporting'
 import type { FloatingWorkspaceChromeModel } from './use-floating-workspace-chrome-model'
 import type { FloatingTerminalPanelLocalState } from './use-floating-terminal-panel-local-state'

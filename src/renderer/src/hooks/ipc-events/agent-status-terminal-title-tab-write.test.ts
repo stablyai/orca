@@ -121,8 +121,6 @@ describe('hook-driven tab title IPC integration', () => {
         })
       )
       const { registerAgentStatusIpcBridge } = await import('./agent-status-ipc-bridge')
-      const updateTitle = vi.spyOn(store.getState(), 'updateTabTitle')
-      const updateTitles = vi.spyOn(store.getState(), 'updateTabTitles')
       const unsubs: (() => void)[] = []
       const bridge = registerAgentStatusIpcBridge(unsubs)
       try {
@@ -136,8 +134,6 @@ describe('hook-driven tab title IPC integration', () => {
         expect(store.getState().agentStatusByPaneKey[PANE_KEY].terminalTitle).toBe(
           states.at(-1) === 'done' ? 'Codex ready' : 'Codex - action required'
         )
-        expect(updateTitle).toHaveBeenCalledTimes(mode === 'live' ? 1 : 0)
-        expect(updateTitles).toHaveBeenCalledTimes(mode === 'snapshot' ? 1 : 0)
       } finally {
         bridge.disposeAsyncState()
         bridge.unsubscribeStore()

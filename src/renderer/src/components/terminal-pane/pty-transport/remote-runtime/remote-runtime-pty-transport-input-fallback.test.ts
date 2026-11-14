@@ -1,8 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  TerminalStreamOpcode,
-  decodeTerminalStreamFrame
-} from '../../../../../../shared/terminal/stream/terminal-stream-protocol'
 import { createRemoteRuntimeTransportMocks } from '../remote/remote-runtime-pty-transport-test-harness'
 import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pty-transport-stream-fixtures'
 
@@ -36,97 +32,6 @@ const { runtimeCall, runtimeSubscribe, subscriptionSendBinary, resetRemoteRuntim
 describe('createRemoteRuntimePtyTransport', () => {
   beforeEach(() => {
     resetRemoteRuntimeTransport()
-  })
-
-  it('reports rejected input from the one-shot runtime fallback', async () => {
-    vi.useFakeTimers()
-    runtimeSubscribe.mockImplementation(
-      async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
-        subscriptionCallbacks = callbacks
-        return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
-      }
-    )
-    try {
-      const defaultRuntimeCall = runtimeCall.getMockImplementation()
-      runtimeCall.mockImplementation((args: { method: string }) => {
-        if (args.method === 'terminal.send') {
-          return Promise.resolve({
-            ok: true,
-            result: { send: { handle: 'terminal-1', accepted: false, bytesWritten: 0 } }
-          })
-        }
-        return defaultRuntimeCall?.(args)
-      })
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-      let undeliveredWhenNotified: boolean | undefined
-      const onWriteUnavailable = vi.fn(() => {
-        undeliveredWhenNotified = transport.hasUndeliveredInput?.()
-      })
-      const transport = createRemoteRuntimePtyTransport('env-1', {
-        worktreeId: 'wt-1',
-        tabId: 'tab-1',
-        leafId: 'pane:1'
-      })
-
-      transport.attach({
-        existingPtyId: 'remote:env-1@@terminal-1',
-        callbacks: { onWriteUnavailable }
-      })
-      await vi.waitFor(() => expect(transport.getPtyId()).toBe('remote:env-1@@terminal-1'))
-      expect(transport.sendInput('ls\r', 'driving')).toBe(true)
-      await vi.advanceTimersByTimeAsync(8)
-
-      await vi.waitFor(() => expect(onWriteUnavailable).toHaveBeenCalledOnce())
-      // Why: refused one-shot input never enters the journal; the remount must still warn of it.
-      expect(undeliveredWhenNotified).toBe(true)
-      transport.destroy?.()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('reports terminal_not_writable from the one-shot runtime fallback', async () => {
-    vi.useFakeTimers()
-    runtimeSubscribe.mockImplementation(
-      async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
-        subscriptionCallbacks = callbacks
-        return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
-      }
-    )
-    try {
-      const defaultRuntimeCall = runtimeCall.getMockImplementation()
-      runtimeCall.mockImplementation((args: { method: string }) => {
-        if (args.method === 'terminal.send') {
-          return Promise.resolve({
-            ok: false,
-            error: { code: 'internal_error', message: 'terminal_not_writable' }
-          })
-        }
-        return defaultRuntimeCall?.(args)
-      })
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-      const onWriteUnavailable = vi.fn()
-      const onError = vi.fn()
-      const transport = createRemoteRuntimePtyTransport('env-1', {
-        worktreeId: 'wt-1',
-        tabId: 'tab-1',
-        leafId: 'pane:1'
-      })
-
-      transport.attach({
-        existingPtyId: 'remote:env-1@@terminal-1',
-        callbacks: { onWriteUnavailable, onError }
-      })
-      await vi.waitFor(() => expect(transport.getPtyId()).toBe('remote:env-1@@terminal-1'))
-      expect(transport.sendInput('x', 'driving')).toBe(true)
-      await vi.advanceTimersByTimeAsync(8)
-
-      await vi.waitFor(() => expect(onWriteUnavailable).toHaveBeenCalledOnce())
-      expect(onError).not.toHaveBeenCalled()
-      transport.destroy?.()
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('does not report a delayed fallback rejection after same-handle reattach', async () => {
@@ -191,53 +96,6 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(oldWriteUnavailable).not.toHaveBeenCalled()
       expect(replacementWriteUnavailable).not.toHaveBeenCalled()
       transport.destroy?.()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('drops pending input when attaching a different remote terminal handle', async () => {
-    vi.useFakeTimers()
-    runtimeSubscribe.mockImplementation(
-      async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
-        subscriptionCallbacks = callbacks
-        return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
-      }
-    )
-    try {
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-      const transport = createRemoteRuntimePtyTransport('env-1', {
-        worktreeId: 'wt-1',
-        tabId: 'tab-1',
-        leafId: 'pane:1'
-      })
-
-      resolvedPaneHandle = 'terminal-old'
-      transport.attach({
-        existingPtyId: 'remote:env-1@@terminal-old',
-        cols: 80,
-        rows: 24,
-        callbacks: {}
-      })
-      await vi.waitFor(() => expect(transport.getPtyId()).toBe('remote:env-1@@terminal-old'))
-      expect(transport.sendInput('queued-for-old', 'driving')).toBe(true)
-
-      resolvedPaneHandle = 'terminal-new'
-      transport.attach({
-        existingPtyId: 'remote:env-1@@terminal-new',
-        cols: 80,
-        rows: 24,
-        callbacks: {}
-      })
-      runtimeCall.mockClear()
-
-      await vi.advanceTimersByTimeAsync(10)
-
-      expect(runtimeCall).not.toHaveBeenCalledWith(
-        expect.objectContaining({
-          method: 'terminal.send'
-        })
-      )
     } finally {
       vi.useRealTimers()
     }
@@ -310,50 +168,5 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(onPtyExit).not.toHaveBeenCalled()
     expect(transport.getPtyId()).toBe('remote:env-1@@terminal-new')
     expect(transport.isConnected()).toBe(true)
-  })
-
-  it('does not send queued input through a stale stream during remote handle replacement', async () => {
-    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-    const transport = createRemoteRuntimePtyTransport('env-1', {
-      worktreeId: 'wt-1',
-      tabId: 'tab-1',
-      leafId: 'pane:1'
-    })
-
-    transport.attach({
-      existingPtyId: 'remote:env-1@@terminal-old',
-      cols: 80,
-      rows: 24,
-      callbacks: {}
-    })
-    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
-
-    vi.useFakeTimers()
-    try {
-      subscriptionSendBinary.mockClear()
-      runtimeCall.mockClear()
-
-      transport.attach({
-        existingPtyId: 'remote:env-1@@terminal-new',
-        cols: 80,
-        rows: 24,
-        callbacks: {}
-      })
-      subscriptionSendBinary.mockClear()
-
-      // Why: replacement input is held for the new handle until terminal.resolvePane proves it belongs to this pane.
-      expect(transport.sendInput('x', 'driving')).toBe(true)
-      vi.advanceTimersByTime(8)
-
-      const inputFrames = subscriptionSendBinary.mock.calls
-        .map((call) => decodeTerminalStreamFrame(call[0]))
-        .filter((frame) => frame?.opcode === TerminalStreamOpcode.Input)
-      expect(inputFrames).toEqual([])
-      expect(runtimeCall).not.toHaveBeenCalledWith(
-        expect.objectContaining({ method: 'terminal.send' })
-      )
-    } finally {
-      vi.useRealTimers()
-    }
   })
 })

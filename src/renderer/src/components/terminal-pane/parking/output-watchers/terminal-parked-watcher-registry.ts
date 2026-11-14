@@ -1,4 +1,10 @@
+import {
+  isTerminalNoticeLifetimeCurrent,
+  type TerminalNoticeLifetime
+} from '../../provider-notices/terminal-notice-lifetime'
 /** Store-free registry/disposal lets shutdown slices stop watchers synchronously without re-entering store initialization through the watcher lifecycle import. */
+import { WorkspaceParkedTerminalRegistry } from './workspace-parked-terminal-registry'
+import { invalidateTerminalParkingInputs } from '../terminal-parking-input-events'
 import type { NotificationWorkspaceOwner } from '../../../../../../shared/notification-source'
 import {
   discardPreHandlerPtyState,
@@ -6,9 +12,10 @@ import {
 } from '../../pty-transport/delivery/pty-pre-handler-buffer'
 import { parseRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
-import { releaseTerminalScrollIntentKey } from '../../../../lib/pane-manager/terminal-scroll-intent-key-store'
+import { releaseTerminalScrollIntentKey } from '../../../../lib/pane-manager/terminal-scroll/terminal-scroll-intent-key-store'
 
 export type ParkedTerminalPaneCapture = {
+  noticeLifetime?: TerminalNoticeLifetime
   workspaceOwner?: NotificationWorkspaceOwner
   ptyId: string | null
   /** PaneManager numeric pane id the live pane used for runtime titles. */
@@ -22,7 +29,83 @@ export type ParkedTerminalPaneCapture = {
 
 export type CapturedTabPanes = { worktreeId: string; panes: ParkedTerminalPaneCapture[] }
 
-export const capturedPanesByTabId = new Map<string, CapturedTabPanes>()
+const captureRevisions = new Map<string, number>()
+const captureTabIdsByPtyId = new Map<string, Set<string>>()
+const captureTabIdsByEnvironmentId = new Map<string, Set<string>>()
+
+function updateCaptureMembership(tabId: string, capture: CapturedTabPanes, add: boolean): void {
+  for (const pane of capture.panes) {
+    if (!pane.ptyId) {
+      continue
+    }
+    const environmentId = parseRemoteRuntimePtyId(pane.ptyId)?.environmentId
+    for (const [index, key] of [
+      [captureTabIdsByPtyId, pane.ptyId],
+      [captureTabIdsByEnvironmentId, environmentId]
+    ] as const) {
+      if (!key) {
+        continue
+      }
+      if (add) {
+        let ids = index.get(key)
+        if (!ids) {
+          index.set(key, (ids = new Set()))
+        }
+        ids.add(tabId)
+      } else {
+        const ids = index.get(key)
+        ids?.delete(tabId)
+        if (ids?.size === 0) {
+          index.delete(key)
+        }
+      }
+    }
+  }
+}
+
+export function capturedTerminalWorkspacesForPtyIds(ptyIds: Iterable<string>): Set<string> {
+  return capturedWorkspaceIds(captureTabIdsByPtyId, ptyIds)
+}
+
+export function capturedTerminalWorkspacesForEnvironmentIds(ids: Iterable<string>): Set<string> {
+  return capturedWorkspaceIds(captureTabIdsByEnvironmentId, ids)
+}
+
+function capturedWorkspaceIds(
+  index: ReadonlyMap<string, ReadonlySet<string>>,
+  keys: Iterable<string>
+) {
+  const worktreeIds = new Set<string>()
+  for (const key of keys) {
+    for (const tabId of index.get(key) ?? []) {
+      const capture = capturedPanesByTabId.get(tabId)
+      if (capture) {
+        worktreeIds.add(capture.worktreeId)
+      }
+    }
+  }
+  return worktreeIds
+}
+export const capturedPanesByTabId = new WorkspaceParkedTerminalRegistry<CapturedTabPanes>(
+  (tabId, worktreeId, previous, next) => {
+    if (previous) {
+      updateCaptureMembership(tabId, previous, false)
+    }
+    if (next) {
+      updateCaptureMembership(tabId, next, true)
+    }
+    if (capturedPanesByTabId.has(tabId)) {
+      captureRevisions.set(tabId, (captureRevisions.get(tabId) ?? 0) + 1)
+    } else {
+      captureRevisions.delete(tabId)
+    }
+    invalidateTerminalParkingInputs(worktreeId)
+  }
+)
+
+export function parkedTerminalCaptureRevision(tabId: string): number {
+  return captureRevisions.get(tabId) ?? 0
+}
 
 // Capture original runtime-title slots before numeric IDs disappear on unmount, or stale working titles can pin status.
 export function captureParkedTerminalPaneCandidates(
@@ -30,6 +113,20 @@ export function captureParkedTerminalPaneCandidates(
   worktreeId: string,
   panes: ParkedTerminalPaneCapture[]
 ): void {
+  const previous = new Map(
+    capturedPanesByTabId.get(tabId)?.panes.map((pane) => [pane.leafId, pane])
+  )
+  for (const pane of panes) {
+    const prior = previous.get(pane.leafId)?.noticeLifetime
+    if (
+      !pane.noticeLifetime &&
+      prior &&
+      prior.ptyId === pane.ptyId &&
+      isTerminalNoticeLifetimeCurrent(prior)
+    ) {
+      pane.noticeLifetime = prior
+    }
+  }
   capturedPanesByTabId.set(tabId, { worktreeId, panes })
 }
 
@@ -42,7 +139,22 @@ export type ParkedTabWatcherEntry = {
   disposersByPtyId: Map<string, () => void>
 }
 
-export const parkedWatchersByTabId = new Map<string, ParkedTabWatcherEntry>()
+export const parkedWatchersByTabId = new WorkspaceParkedTerminalRegistry<ParkedTabWatcherEntry>()
+const watcherTabIdsByPtyId = new Map<string, Set<string>>()
+
+export function retainParkedWatcherPty(tabId: string, ptyId: string): () => void {
+  let tabIds = watcherTabIdsByPtyId.get(ptyId)
+  if (!tabIds) {
+    watcherTabIdsByPtyId.set(ptyId, (tabIds = new Set()))
+  }
+  tabIds.add(tabId)
+  return () => {
+    tabIds.delete(tabId)
+    if (tabIds.size === 0) {
+      watcherTabIdsByPtyId.delete(ptyId)
+    }
+  }
+}
 
 export function getParkedTerminalWatcherTabIds(): string[] {
   return Array.from(parkedWatchersByTabId.keys())
@@ -99,17 +211,17 @@ export function retireParkedTerminalTab(tabId: string): void {
     }
     capturedPanesByTabId.delete(tabId)
   }
+  captureRevisions.delete(tabId)
 }
 
 /** Dispose sidecars only after shutdown commits; retain tab entries against stale-ID restarts until wake remints IDs. */
 export function disposeParkedTerminalWatchersForPtyIds(ptyIds: readonly string[]): void {
-  for (const entry of parkedWatchersByTabId.values()) {
-    for (const ptyId of ptyIds) {
-      const dispose = entry.disposersByPtyId.get(ptyId)
-      if (dispose) {
-        entry.disposersByPtyId.delete(ptyId)
-        dispose()
-      }
+  for (const ptyId of ptyIds) {
+    for (const tabId of Array.from(watcherTabIdsByPtyId.get(ptyId) ?? [])) {
+      const entry = parkedWatchersByTabId.get(tabId)
+      const dispose = entry?.disposersByPtyId.get(ptyId)
+      entry?.disposersByPtyId.delete(ptyId)
+      dispose?.()
     }
   }
 }
@@ -118,13 +230,15 @@ export function disposeParkedTerminalWatchersForWorktree(
   worktreeId: string,
   options?: { consumePreHandlerState?: boolean }
 ): void {
-  for (const [tabId, entry] of parkedWatchersByTabId) {
-    if (entry.worktreeId === worktreeId) {
-      if (options?.consumePreHandlerState) {
-        disposeRemovedWorktreeParkedTabWatchers(tabId, entry)
-      } else {
-        disposeParkedTabWatchers(tabId)
-      }
+  for (const tabId of Array.from(parkedWatchersByTabId.workspaceTabIds(worktreeId))) {
+    const entry = parkedWatchersByTabId.get(tabId)
+    if (!entry) {
+      continue
+    }
+    if (options?.consumePreHandlerState) {
+      disposeRemovedWorktreeParkedTabWatchers(tabId, entry)
+    } else {
+      disposeParkedTabWatchers(tabId)
     }
   }
 }
@@ -156,20 +270,22 @@ function disposeRemovedWorktreeParkedTabWatchers(
   disposeParkedTabWatchers(tabId)
 }
 
-/** Drops watchers and captures for worktrees that no longer exist. */
-export function pruneParkedTerminalWatchers(liveWorktreeIds: ReadonlySet<string>): void {
-  for (const [tabId, entry] of parkedWatchersByTabId) {
-    if (!liveWorktreeIds.has(entry.worktreeId)) {
-      disposeRemovedWorktreeParkedTabWatchers(tabId, entry)
-    }
+export function retireParkedTerminalWorktree(worktreeId: string): void {
+  disposeRemovedWorktreeParkedTerminalWatchers(worktreeId)
+  for (const tabId of Array.from(capturedPanesByTabId.workspaceTabIds(worktreeId))) {
+    retireParkedTerminalTab(tabId)
   }
-  for (const [tabId, capture] of capturedPanesByTabId) {
-    if (!liveWorktreeIds.has(capture.worktreeId)) {
-      for (const pane of capture.panes) {
-        // Workspace removal can bypass parked closeTab; release its strong scroll-intent keys too.
-        releaseTerminalScrollIntentKey(pane.leafId)
-      }
-      capturedPanesByTabId.delete(tabId)
+}
+
+/** Cold workspace-catalog replacement only; normal removals retire their addressed workspace. */
+export function pruneParkedTerminalWatchers(liveWorktreeIds: ReadonlySet<string>): void {
+  const registeredIds = new Set([
+    ...parkedWatchersByTabId.workspaceIds(),
+    ...capturedPanesByTabId.workspaceIds()
+  ])
+  for (const worktreeId of registeredIds) {
+    if (!liveWorktreeIds.has(worktreeId)) {
+      retireParkedTerminalWorktree(worktreeId)
     }
   }
 }

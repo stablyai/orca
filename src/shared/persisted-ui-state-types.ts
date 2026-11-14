@@ -1,6 +1,6 @@
 import type { GitHistoryRefs } from './git/history/git-history-types'
 import type { JiraQuickFilterState } from './jira/jira-quick-filters'
-import type { BrowserDevToolsDockLayout } from './browser-devtools-dock'
+import type { BrowserDevToolsDockLayout } from './browser/devtools/browser-devtools-dock'
 import type { JiraSavedFilterState } from './jira/jira-saved-filters'
 import type { ReleaseChannel } from './release-channel'
 import type { WorkspaceCleanupUIState } from './workspace-cleanup/workspace-cleanup'
@@ -9,6 +9,7 @@ import type { ContextualTourId } from './contextual-tours'
 import type { FeatureInteractionState } from './feature-interactions'
 import type { UsagePercentageDisplay } from './usage-percentage-display'
 import type { StatusBarUsageMode } from './status-bar-usage-mode'
+import type { StatusBarUsageFormat } from './status-bar-usage-format'
 import type { PersistedTrustedOrcaHooks } from './orca-yaml-hook-types'
 import type { CustomPet } from './pet-types'
 import type {
@@ -16,6 +17,7 @@ import type {
   AgentActivityDisplayMode,
   ManualRepoOrderEntry,
   ProjectOrderBy,
+  ActivityBarPosition,
   RightSidebarExplorerView,
   RightSidebarTab,
   StatusBarItem,
@@ -47,6 +49,8 @@ export type PersistedUIState = {
   rightSidebarTab: RightSidebarTab
   rightSidebarExplorerView: RightSidebarExplorerView
   rightSidebarWidth: number
+  /** Right sidebar activity-bar edge. Missing on older profiles, which stay at the top. */
+  activityBarPosition?: ActivityBarPosition
   markdownTocPanelWidth?: number
   combinedDiffFileTreeWidth?: number
   groupBy: 'none' | 'workspace-status' | 'repo' | 'pr-status'
@@ -148,6 +152,8 @@ export type PersistedUIState = {
   usagePercentageDisplay?: UsagePercentageDisplay
   /** Client-side footer presentation; verbose preserves the pre-roster all-window default. */
   statusBarUsageMode?: StatusBarUsageMode
+  /** User template for footer usage text; empty template keeps the built-in rendering. */
+  statusBarUsageFormat?: StatusBarUsageFormat
   dismissedUpdateVersion: string | null
   /** Version when the sign-out notice was seen or dismissed; any value suppresses future appearances. */
   dismissedUnexpectedSignoutVersion?: string | null
@@ -198,6 +204,10 @@ export type PersistedUIState = {
   codexTerminalServerIsolationNoticeSeen?: boolean
   /** Windows one-shot toast for Codex moving onto ~/.codex; set when shown, so absent means not yet seen. */
   codexSharedSettingsNoticeSeen?: boolean
+  /** One-shot sidebar note announcing the reworked experimental worktree cards; set on first evaluation, so absent means not yet decided. */
+  worktreeCardsUpdateNoticeSeen?: boolean
+  /** Retired launch card for the speech model update; kept because a paired client from that build still sends it. */
+  speechModelUpdateNoticeSeen?: boolean
   /** One-shot pane banner explaining Claude Code's own diff panel; set when the user closes it. */
   claudeDiffPanelNoticeSeen?: boolean
   /** Retired one-shot Claude sign-in toast; kept because a paired client from that build still sends it. */
@@ -215,6 +225,8 @@ export type PersistedUIState = {
   windowBounds?: { x: number; y: number; width: number; height: number } | null
   /** Whether the window was maximized when it was last closed. */
   windowMaximized?: boolean
+  /** Whether the window was in native fullscreen when it was last closed. */
+  windowFullScreen?: boolean
   /** Dashboard popout bounds, independent of main-window bounds. */
   dashboardPopoutBounds?: { x: number; y: number; width: number; height: number } | null
   /** Migrate legacy recent→smart once so later activity-based recent selections survive. */

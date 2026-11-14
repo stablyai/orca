@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
@@ -11,7 +11,7 @@ import type {
   Worktree
 } from '../../../../shared/worktree/types'
 import type { ExecutionHostRegistryEntry } from '../../../../shared/execution-host/execution-host-registry-entry'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import type { ComposerDecisions } from './composer-decisions'
 import type { ComposerStoreActions } from './composer-store-actions'
 import type { SparsePreset } from '../../../../shared/worktree/create-types'
@@ -21,7 +21,7 @@ import type { RuntimeEnvironmentStatus } from '../../../../shared/remote-runtime
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { WorkspaceHostScope } from '../../../../shared/ui-chrome-types'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
-import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
+import type { WorkspaceCreationTargetHint } from '@/lib/workspace/creation/project-host-workspace-target'
 
 export type ComposerTargetStoreModel = {
   initialRepoId: string | undefined

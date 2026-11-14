@@ -12,25 +12,25 @@ import {
 import { getCommitMessageModelDiscoveryHostKey } from '../../../shared/source-control/ai/generation/commit-message-host-key'
 import { computeBranchName, getConfiguredBranchPrefix } from '../../ipc/worktree-branch-name'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
-import { resolveLocalGitUsername } from '../../git/git-username'
+import { resolveLocalGitUsername } from '../../git/repositories/git-username'
 import { resolveGitRouteForHost } from '../../providers/execution-host-provider-dispatch'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
-import { withCheckoutLock } from '../../git/branch-switch'
+import { withCheckoutLock } from '../../git/worktrees/checkout/branch-switch'
 import {
   probeBranchUpstream,
   renameCurrentBranch,
   resolveUniqueBranchName,
   type GitExec
-} from '../../git/branch-rename'
+} from '../../git/worktrees/checkout/branch-rename'
 import {
   generateBranchNameFromContext,
-  resolveTextGenerationParams
+  resolveCommitMessageSettings as resolveTextGenerationParams
 } from '../../text-generation/commit-message-text-generation'
-import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/commit-message-agent-environment'
-import type { AgentGenerationFailureOutput } from '../../text-generation/agent-failure-output'
+import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/execution/commit-message-agent-environment'
+import type { AgentGenerationFailureOutput } from '../../text-generation/failures/agent-failure-output'
 import { resolveGenerationTarget } from './first-work-generation-target'
 import { runFolderWorkspaceTitleAutoRename } from './first-work-workspace-title-rename'
-import { isWslMoveRepoBlocked } from '../../persistence/moving-wsl-projects/wsl-move-background-backoff'
+import { isWslMoveRepoBlocked } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 import {
   clearFirstWorkGenerationFailures,
   isFirstWorkGenerationBackingOff,

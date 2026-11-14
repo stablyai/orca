@@ -79,7 +79,10 @@ function createHost(overrides: Partial<RuntimeBrowserCommandHost> = {}): Runtime
     resolveWorkspaceSelector: async (selector: string) => ({ id: selector.replace(/^id:/, '') }),
     resolveBrowserWorkspace: async (selector: string) => ({ id: selector.replace(/^id:/, '') }),
     getRuntimeBrowserPageRegistry: () => runtimeBrowserPages,
-    getBrowserHostLeaseRegistry: () => ({ getPlacement: () => undefined }),
+    getBrowserHostLeaseRegistry: () => ({
+      getPlacement: () => undefined,
+      cancelClientPageInitialization: () => false
+    }),
     getAuthoritativeWindow: vi.fn(),
     getAvailableAuthoritativeWindow: vi.fn(() => null),
     getOffscreenBrowserBackend: vi.fn(() => null),

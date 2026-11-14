@@ -10,21 +10,37 @@ export type StructuredSessionLaunchDirectory = {
 /** Mirror host-pinned chat directories; absent uses workspace resolution except floating chats, which remain unknown until pinned. */
 export type StructuredSessionLaunchDirectorySlice = {
   structuredSessionLaunchDirectoryByTabId: Record<string, StructuredSessionLaunchDirectory>
-  setStructuredSessionLaunchDirectory: (
-    tabId: string,
-    sessionId: string,
-    launchDirectory: string | undefined
-  ) => void
-  /** Only drops the entry while it still belongs to `sessionId`. */
-  clearStructuredSessionLaunchDirectory: (tabId: string, sessionId: string) => void
 }
 
-function withoutTab(
-  byTabId: Record<string, StructuredSessionLaunchDirectory>,
-  tabId: string
-): Record<string, StructuredSessionLaunchDirectory> {
+type LaunchDirectoriesByTabId = Record<string, StructuredSessionLaunchDirectory>
+
+function withoutTab(byTabId: LaunchDirectoriesByTabId, tabId: string): LaunchDirectoriesByTabId {
   const { [tabId]: _removed, ...rest } = byTabId
   return rest
+}
+
+export function withStructuredSessionLaunchDirectory(
+  byTabId: LaunchDirectoriesByTabId,
+  tabId: string,
+  sessionId: string,
+  launchDirectory: string | undefined
+): LaunchDirectoriesByTabId {
+  const current = byTabId[tabId]
+  if (!launchDirectory) {
+    return current ? withoutTab(byTabId, tabId) : byTabId
+  }
+  if (current?.sessionId === sessionId && current.launchDirectory === launchDirectory) {
+    return byTabId
+  }
+  return { ...byTabId, [tabId]: { sessionId, launchDirectory } }
+}
+
+export function withoutStructuredSessionLaunchDirectory(
+  byTabId: LaunchDirectoriesByTabId,
+  tabId: string,
+  sessionId: string
+): LaunchDirectoriesByTabId {
+  return byTabId[tabId]?.sessionId === sessionId ? withoutTab(byTabId, tabId) : byTabId
 }
 
 export const createStructuredSessionLaunchDirectorySlice: StateCreator<
@@ -32,42 +48,6 @@ export const createStructuredSessionLaunchDirectorySlice: StateCreator<
   [],
   [],
   StructuredSessionLaunchDirectorySlice
-> = (set) => ({
-  structuredSessionLaunchDirectoryByTabId: {},
-  setStructuredSessionLaunchDirectory: (tabId, sessionId, launchDirectory) => {
-    set((state) => {
-      const current = state.structuredSessionLaunchDirectoryByTabId[tabId]
-      if (!launchDirectory) {
-        return current
-          ? {
-              structuredSessionLaunchDirectoryByTabId: withoutTab(
-                state.structuredSessionLaunchDirectoryByTabId,
-                tabId
-              )
-            }
-          : state
-      }
-      if (current?.sessionId === sessionId && current.launchDirectory === launchDirectory) {
-        return state
-      }
-      return {
-        structuredSessionLaunchDirectoryByTabId: {
-          ...state.structuredSessionLaunchDirectoryByTabId,
-          [tabId]: { sessionId, launchDirectory }
-        }
-      }
-    })
-  },
-  clearStructuredSessionLaunchDirectory: (tabId, sessionId) => {
-    set((state) =>
-      state.structuredSessionLaunchDirectoryByTabId[tabId]?.sessionId === sessionId
-        ? {
-            structuredSessionLaunchDirectoryByTabId: withoutTab(
-              state.structuredSessionLaunchDirectoryByTabId,
-              tabId
-            )
-          }
-        : state
-    )
-  }
+> = () => ({
+  structuredSessionLaunchDirectoryByTabId: {}
 })

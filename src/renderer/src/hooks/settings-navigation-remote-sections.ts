@@ -1,3 +1,5 @@
+import { projectGroupHookOwner } from '../../../shared/workspace-hook-owner'
+import { getRepositoryGitHooksSearchEntries } from '@/components/settings/repository/hooks/repository-git-hooks-search-entries'
 import { getAdvancedPaneSearchEntries } from '@/components/settings/advanced/advanced-search'
 import { getDeveloperPermissionsPaneSearchEntries } from '@/components/settings/developer-permissions/developer-permissions-search'
 import { getExperimentalPaneSearchEntries } from '@/components/settings/advanced/experimental-search'
@@ -11,7 +13,7 @@ import { buildSettingsProjectList } from '@/components/settings/navigation/setti
 import { getSshPaneSearchEntries } from '@/components/settings/ssh/ssh-search'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { SettingsNavSection } from '@/lib/settings-navigation-types'
+import type { SettingsNavSection } from '@/components/settings/navigation/settings-navigation-types'
 import { getRepoKindLabel } from '../../../shared/repo-kind'
 import type { Repo } from '../../../shared/repo-types'
 import {
@@ -34,6 +36,7 @@ export function buildRemoteSettingsSections(
     isWebClient,
     isDev,
     repos,
+    projectGroups = [],
     projectGrouping
   }: SettingsNavigationBuildOptions,
   runtimeEnvironmentsSearchEntry: SettingsNavSection['searchEntries'][number],
@@ -153,6 +156,23 @@ export function buildRemoteSettingsSections(
           }
         ]
       : []),
+    ...projectGroups.flatMap((group) => {
+      const owner = projectGroupHookOwner(group)
+      return owner
+        ? [
+            {
+              id: `group-${encodeURIComponent(owner.id)}`,
+              title: group.settingsLabel ?? group.name,
+              description: owner.path,
+              icon: SlidersHorizontal,
+              searchEntries: getRepositoryGitHooksSearchEntries(owner, t, {
+                showArchive: group.supportsArchiveHooks === true
+              }),
+              group: 'repositories'
+            }
+          ]
+        : []
+    }),
     // Collapse host-specific repo rows to one project entry using the same inputs as settings panes.
     ...buildSettingsProjectList(repos, projectGrouping).map((settingsProject) => {
       const { project, representativeRepoId, setups, checkoutLabel } = settingsProject

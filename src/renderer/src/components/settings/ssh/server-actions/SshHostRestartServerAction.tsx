@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '../../../ui/dialog'
-import { getManagedOrcadApi } from '../../runtime-environments/managed-servers/use-managed-server-catalog'
+import { getManagedOrcadApi } from '../../../../runtime/hosts/installation/managed-orcad-api-availability'
 
 /** Offered only when the launching SSH session proved ended. */
 export function canRestartSshHostServer(status: SshManagedServerStatus | undefined): boolean {

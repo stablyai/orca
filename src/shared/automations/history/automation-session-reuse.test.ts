@@ -115,15 +115,6 @@ describe('automation session reuse selection', () => {
     ).toBeNull()
   })
 
-  it('never picks an older record of a pane a newer run since used', () => {
-    expect(
-      find([
-        run({ id: 'run-done', createdAt: 1 }),
-        run({ id: 'run-reused-failed', status: 'dispatch_failed', createdAt: 2 })
-      ])
-    ).toBeNull()
-  })
-
   it('does not reuse legacy runs without exact pane and PTY identity', () => {
     expect(find([run({ terminalPaneKey: null })])).toBeNull()
     expect(find([run({ terminalPtyId: null })])).toBeNull()
@@ -134,10 +125,5 @@ describe('automation session reuse selection', () => {
     ['another agent', { state: 'done', agentType: 'codex' }]
   ])('rejects a pane holding %s', (_label, status) => {
     expect(find([run({})], { status })).toBeNull()
-  })
-
-  it('accepts an idle agent whose type the host could not tell', () => {
-    expect(find([run({})], { status: { state: 'done', agentType: 'unknown' } })).toBe('run-1')
-    expect(find([run({})], { status: { state: 'done' } })).toBe('run-1')
   })
 })

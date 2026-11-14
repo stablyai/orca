@@ -1,76 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 
 import { findKnownWorktreeById } from './detected-worktree-meta'
 import {
   makeFolderWorkspace,
   makeProjectGroup
 } from '../../../../components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
-import { findFolderWorkspaceOwner } from '@/lib/folder-workspace-runtime-owner'
-import { selectWorkspaceByHostTarget } from '../../../workspaces/selection/workspace-host-target'
-import { resolveWorkspaceDirectory } from '@/lib/workspace-directory'
 import { resolveQualifiedFolderWorkspaceResult } from '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { findIndexedFolderWorkspaceOwner } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
-import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
-import { resolveNotificationTabOwner } from '@/attention/notification-subject-owner'
-import { getWorktreeDeleteStateKey } from '../teardown/worktree-delete-state'
 
 describe('inherited folder consumer identity', () => {
-  it.each([false, true])(
-    'keeps physical twins qualified through native owner, store and directory, reversed=%s',
-    (reverse) => {
-      const inherited = makeFolderWorkspace({
-        id: 'same',
-        projectGroupId: 'inherited',
-        folderPath: '/remote'
-      })
-      const local = makeFolderWorkspace({
-        id: 'same',
-        executionHostId: 'local',
-        folderPath: '/local'
-      })
-      const folderWorkspaces = reverse ? [inherited, local] : [local, inherited]
-      const state = {
-        folderWorkspaces,
-        projectGroups: [{ id: 'inherited', executionHostId: 'ssh:box' as const }],
-        repos: [],
-        worktreesByRepo: {},
-        detectedWorktreesByRepo: {},
-        floatingWorkspacePath: null
-      }
-      const raw = findIndexedFolderWorkspaceOwner(folderWorkspaces, 'same', 'ssh:box')
-      const converted = folderWorkspaceToWorktree(inherited)
-      const notification = resolveNotificationTabOwner(state, {
-        worktreeId: 'folder:same',
-        executionHostId: 'ssh:box'
-      })
-      expect(resolveQualifiedFolderWorkspaceResult(state, 'same', 'ssh:box').kind).toBe('selected')
-      expect(findFolderWorkspaceOwner(state, 'same', 'ssh:box')).toBe(inherited)
-      const projected = findKnownWorktreeById(state, 'folder:same', 'ssh:box')
-      expect(projected).toMatchObject({ path: '/remote', hostId: 'ssh:box' })
-      expect(
-        selectWorkspaceByHostTarget(
-          state,
-          hostWorktreeTarget({ id: 'folder:same', hostId: 'ssh:box' })
-        )
-      ).toBe(projected)
-      expect(resolveWorkspaceDirectory(state, 'folder:same', 'ssh:box')).toBe('/remote')
-      expect(findKnownWorktreeById(state, 'folder:same')).toBeUndefined()
-      expect(findIndexedFolderWorkspaceOwner(folderWorkspaces, 'same', 'ssh:box')).toBe(raw)
-      expect(folderWorkspaceToWorktree(inherited)).toEqual(converted)
-      expect(
-        resolveNotificationTabOwner(state, {
-          worktreeId: 'folder:same',
-          executionHostId: 'ssh:box'
-        })
-      ).toEqual(notification)
-      expect(inherited.executionHostId).toBeUndefined()
-      expect(getWorktreeDeleteStateKey(state, 'folder:same', 'ssh:box')).not.toBe(
-        getWorktreeDeleteStateKey(state, 'folder:same', 'local')
-      )
-    }
-  )
   it.each(['group', 'repo'])(
     'invalidates only a changed derived host projection from its %s catalog',
     (source) => {

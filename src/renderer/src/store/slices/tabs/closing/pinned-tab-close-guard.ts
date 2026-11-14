@@ -28,21 +28,18 @@ export function shouldConfirmPinnedTabClose(state: AppState): boolean {
   return state.settings?.confirmClosePinnedTab ?? true
 }
 
-/** Centralize pin confirmation across keyboard/native/menu paths; unpinned or disabled-confirmation closes proceed immediately. */
+/** Centralize close confirmation across keyboard/native/menu/CLI paths: unsent browser notes always ask; pins ask unless turned off. */
 export function guardPinnedTabClose(params: {
   isPinned: boolean
   tabLabel: string
   onClose: () => void
   onCancel?: () => void
+  /** The tab holds browser notes the user has not sent; closing discards them. */
+  unsentNotes?: boolean
 }): (() => void) | undefined {
-  const { isPinned, tabLabel, onClose, onCancel } = params
-  if (!isPinned) {
-    onClose()
-    return undefined
-  }
-
+  const { isPinned, tabLabel, onClose, onCancel, unsentNotes } = params
   const state = useAppStore.getState()
-  if (!shouldConfirmPinnedTabClose(state)) {
+  if (!unsentNotes && (!isPinned || !shouldConfirmPinnedTabClose(state))) {
     onClose()
     return undefined
   }
@@ -50,7 +47,8 @@ export function guardPinnedTabClose(params: {
   const request = {
     tabLabel,
     onConfirm: onClose,
-    ...(onCancel ? { onCancel } : {})
+    ...(onCancel ? { onCancel } : {}),
+    ...(unsentNotes ? { unsentNotes: true as const } : {})
   }
   state.requestPinnedTabCloseConfirm(request)
   return () => state.cancelPinnedTabCloseRequest(request)

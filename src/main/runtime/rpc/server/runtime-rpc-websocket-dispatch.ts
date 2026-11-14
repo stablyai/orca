@@ -6,17 +6,18 @@ import type {
 import { callerScopeOf, devicePrincipalOf } from './pairing/device-principal'
 import { registerSocketDeviceKey } from './runtime-rpc-device-key-registration'
 import { exchangeSocketPairingTicket } from './runtime-rpc-pairing-ticket-exchange'
-import type { AuthenticatedMobileSocket } from '../mobile-socket-wiring'
+import type { AuthenticatedMobileSocket } from '../mobile/mobile-socket-wiring'
 import type { RpcRequest, RpcResponse } from '../core'
-import type { WebSocketTransport } from '../ws-transport'
+import type { WebSocketTransport } from '../transports/websocket/ws-transport'
 import type { DeviceScope } from '../../../../shared/runtime-session-contracts'
 import { RuntimeRpcMobileDevices } from './runtime-rpc-mobile-devices'
 import { classifyRuntimeLongPoll } from './runtime-rpc-long-poll'
-import type { RpcBinarySender } from '../rpc-binary-sender'
+import type { RpcBinarySender } from '../transports/rpc-binary-sender'
 import { limitRuntimeRpcReplySize } from './runtime-rpc-reply-size-limit'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc-mobile-method-allowlist'
 import { MOBILE_RPC_METHOD_ROUTES } from './runtime-rpc-mobile-method-routing'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { WorktreeRemove } from '../../../../shared/rpc-contract/workspaces/worktree-params'
 
 // Stamp proven scope at transport boundary; status.get has no connection context.
 function injectDeviceScope(response: string, scope: DeviceScope): string {
@@ -48,6 +49,29 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
     const target = parseExecutionHostId(typeof executionHost === 'string' ? executionHost : null)
     if (target?.kind === 'local' || target?.kind === 'ssh') {
       return request
+    }
+    if (target?.kind === 'runtime' && request.method === 'worktree.rm') {
+      const params = WorktreeRemove.safeParse({
+        ...(typeof request.params === 'object' && request.params !== null ? request.params : {}),
+        hostId: target.id
+      })
+      try {
+        if (params.success && this.runtime.ownsRecipeWorkspaceRemoval?.(params.data)) {
+          return { ...request, params: params.data }
+        }
+      } catch (error) {
+        // Ambiguous ownership must answer the phone instead of leaving it waiting.
+        reply(
+          JSON.stringify(
+            this.buildError(
+              request.id,
+              'invalid_argument',
+              error instanceof Error ? error.message : String(error)
+            )
+          )
+        )
+        return null
+      }
     }
     // Phone workspace tags cannot choose routing; only this Mac's table does.
     if (target && MOBILE_RPC_METHOD_ROUTES.get(request.method) !== 'execution-host') {

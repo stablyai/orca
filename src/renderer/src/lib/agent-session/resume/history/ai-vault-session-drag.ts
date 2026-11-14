@@ -3,7 +3,7 @@ import {
   type AiVaultAgent
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { SleepingAgentLaunchConfig } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { measureClipboardTextByteLength } from '../../../../../../shared/clipboard-text'
+import { measureUtf8ByteLength } from '../../../../../../shared/utf8-byte-limits'
 import {
   normalizeExecutionHostId,
   type ExecutionHostId
@@ -212,7 +212,7 @@ export function readAiVaultSessionDragData(
 function isAiVaultSessionDragPayloadTooLarge(raw: string): boolean {
   return (
     raw.length > AI_VAULT_SESSION_DRAG_PAYLOAD_MAX_BYTES ||
-    measureClipboardTextByteLength(raw, {
+    measureUtf8ByteLength(raw, {
       stopAfterBytes: AI_VAULT_SESSION_DRAG_PAYLOAD_MAX_BYTES
     }).exceededLimit
   )

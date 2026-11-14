@@ -16,8 +16,8 @@ import {
   ensureDocPreviewGrant,
   releaseDocPreviewGrant,
   type DocPreviewGrantHandle
-} from '@/lib/doc-preview-grants'
-import { selectWorktreeHostDisplayLabel } from '@/lib/execution-host-display-label'
+} from '@/lib/browser/documents/doc-preview-grants'
+import { selectWorktreeHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
@@ -34,8 +34,8 @@ import { useDocPreviewWebviewHistory } from './doc-preview-webview-history'
 import { useDocPreviewGuestFocus } from './use-doc-preview-guest-focus'
 import { useDocPreviewGuestTools } from './use-doc-preview-guest-tools'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
-import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
-import { getOpenFileRevealOwner } from '@/lib/reveal-in-file-manager'
+import { formatClipboardFilePath } from '@/lib/clipboard/clipboard-file-path'
+import { getOpenFileRevealOwner } from '@/lib/files/os-open/reveal-in-file-manager'
 import { subscribeDocPreviewExternalLinkConfirmation } from './doc-preview-external-link-confirmation'
 
 type PreviewState = 'loading' | 'ready' | 'unavailable'

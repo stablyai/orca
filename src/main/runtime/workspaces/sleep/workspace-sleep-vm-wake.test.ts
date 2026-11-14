@@ -55,33 +55,30 @@ function sleep(workspaceSleep: WorkspaceSleepCoordinator) {
 }
 
 describe('WorkspaceSleepCoordinator VM wake', () => {
-  it('resumes a VM opened mid-suspend only after the suspend finishes', async () => {
+  it('destroys the VM only after a wake still running for it settles', async () => {
     const order: string[] = []
-    const suspending = gate()
-    const suspendStarted = gate()
+    const resuming = gate()
     const workspaceSleep = coordinator({
-      suspendVm: async () => {
-        order.push('suspend:start')
-        suspendStarted.open()
-        await suspending.opened
-        order.push('suspend:end')
-      },
+      suspendVm: async () => {},
       resumeVm: async () => {
-        order.push('resume')
+        order.push('resume:start')
+        await resuming.opened
+        order.push('resume:end')
         return null
       }
     })
 
-    const slept = sleep(workspaceSleep)
-    await suspendStarted.opened
     const woke = workspaceSleep.wakeVm(WORKTREE_ID)
-    suspending.open()
-    await Promise.all([slept, woke])
+    const destroyed = workspaceSleep.destroyVm(WORKTREE_ID, async () => {
+      order.push('destroy')
+    })
+    resuming.open()
+    await Promise.all([woke, destroyed])
 
-    expect(order).toEqual(['suspend:start', 'suspend:end', 'resume'])
+    expect(order).toEqual(['resume:start', 'resume:end', 'destroy'])
   })
 
-  it('keeps the VM up when the workspace is opened while its suspend waits behind a wake', async () => {
+  it("runs the user's Suspend VM after a wake already running, and reads it as asleep meanwhile", async () => {
     const order: string[] = []
     const resuming = gate()
     const workspaceSleep = coordinator({
@@ -96,15 +93,53 @@ describe('WorkspaceSleepCoordinator VM wake', () => {
     })
 
     const woke = workspaceSleep.wakeVm(WORKTREE_ID)
-    const slept = sleep(workspaceSleep)
-    // The sleep's mocks all resolve at once, so one macrotask lets it queue the suspend.
-    await new Promise((resolve) => setImmediate(resolve))
-    // A slept pane opened: it counts as a reopen but does not wake the VM itself.
+    const suspended = workspaceSleep.suspendVm(WORKTREE_ID)
+    expect(workspaceSleep.vmState(WORKTREE_ID, false)).toBe('waking')
+    resuming.open()
+    await woke
+    expect(workspaceSleep.vmState(WORKTREE_ID, false)).toBe('asleep')
+    await suspended
+
+    expect(order).toEqual(['resume', 'suspend'])
+    expect(workspaceSleep.vmState(WORKTREE_ID, true)).toBe('asleep')
+  })
+
+  it('drops a queued Suspend VM when the workspace is opened before its turn', async () => {
+    const order: string[] = []
+    const resuming = gate()
+    const workspaceSleep = coordinator({
+      suspendVm: async () => {
+        order.push('suspend')
+      },
+      resumeVm: async () => {
+        await resuming.opened
+        order.push('resume')
+        return null
+      }
+    })
+
+    const woke = workspaceSleep.wakeVm(WORKTREE_ID)
+    const suspended = workspaceSleep.suspendVm(WORKTREE_ID)
     workspaceSleep.noteReopened(WORKTREE_ID)
     resuming.open()
-    await Promise.all([woke, slept])
+    await Promise.all([woke, suspended])
 
     expect(order).toEqual(['resume'])
+  })
+
+  it('runs one suspend for a Suspend VM chosen twice before the first finishes', async () => {
+    const suspending = gate()
+    const suspendVm = vi.fn(async () => {
+      await suspending.opened
+    })
+    const workspaceSleep = coordinator({ suspendVm, resumeVm: async () => null })
+
+    const first = workspaceSleep.suspendVm(WORKTREE_ID)
+    const second = workspaceSleep.suspendVm(WORKTREE_ID)
+    suspending.open()
+    await Promise.all([first, second])
+
+    expect(suspendVm).toHaveBeenCalledTimes(1)
   })
 
   // #36923: clients reaching the VM's server learn where it stands from its pending operations,
@@ -126,24 +161,6 @@ describe('WorkspaceSleepCoordinator VM wake', () => {
     resuming.open()
     await expect(woke).rejects.toThrow('recipe resume failed')
     expect(workspaceSleep.vmState(WORKTREE_ID, true)).toBe('asleep')
-  })
-
-  it('keeps reporting a wake still reconnecting as waking, though a sleep queued a suspend after it', async () => {
-    const resuming = gate()
-    const workspaceSleep = coordinator({
-      suspendVm: async () => {},
-      resumeVm: async () => {
-        await resuming.opened
-        return null
-      }
-    })
-
-    const woke = workspaceSleep.wakeVm(WORKTREE_ID)
-    const slept = sleep(workspaceSleep)
-    await new Promise((resolve) => setImmediate(resolve))
-    expect(workspaceSleep.vmState(WORKTREE_ID, false)).toBe('waking')
-    resuming.open()
-    await Promise.all([woke, slept])
   })
 
   // The host holds a client's open of the workspace until the VM is up.
@@ -192,17 +209,6 @@ describe('WorkspaceSleepCoordinator VM wake', () => {
     expect(order).toEqual(['suspend:start', 'suspend:end', 'resume'])
   })
 
-  it('keeps a running VM up for an open that lands while a sleep is on its way', async () => {
-    const suspendVm = vi.fn(async () => {})
-    const workspaceSleep = coordinator({ suspendVm, resumeVm: async () => null })
-
-    const slept = sleep(workspaceSleep)
-    await expect(workspaceSleep.holdOpen(WORKTREE_ID, false, 60_000)).resolves.toBe('up')
-    await slept
-
-    expect(suspendVm).not.toHaveBeenCalled()
-  })
-
   it('lets a Sleep asked for while an open is held win', async () => {
     const order: string[] = []
     const resuming = gate()
@@ -236,20 +242,6 @@ describe('WorkspaceSleepCoordinator VM wake', () => {
     await expect(workspaceSleep.holdOpen(WORKTREE_ID, true, 60_000)).resolves.toBe('wake-failed')
     await expect(workspaceSleep.holdOpen(WORKTREE_ID, true, 60_000)).resolves.toBe('wake-failed')
     expect(resumeVm).toHaveBeenCalledTimes(2)
-  })
-
-  it('answers waking when the hold runs out before the VM is up', async () => {
-    const resuming = gate()
-    const workspaceSleep = coordinator({
-      suspendVm: async () => {},
-      resumeVm: async () => {
-        await resuming.opened
-        return null
-      }
-    })
-
-    await expect(workspaceSleep.holdOpen(WORKTREE_ID, true, 5)).resolves.toBe('waking')
-    resuming.open()
   })
 
   it('stops a workspace asked to sleep during a wake only after the wake, unless it is opened again', async () => {

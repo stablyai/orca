@@ -3,7 +3,7 @@ import {
   getWorkspaceIntentName,
   getLinearIssueWorkspaceName
 } from '../../../../../../shared/workspace-name'
-import { getWorkspaceSeedName } from '@/lib/new-workspace'
+import { getWorkspaceSeedName } from '@/lib/workspace/creation/new-workspace'
 import type { LaunchableWorkItem } from '@/lib/workspace/creation/work-item/launch-work-item-direct-types'
 
 export function getDirectWorkItemWorkspaceNames(

@@ -1,6 +1,6 @@
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../../core'
-import type { OrcadFeature } from '../../orcad-feature-readiness'
-import { rpcCallerOperationKey } from '../../rpc-caller-identity'
+import type { OrcadFeature } from '../../startup/orcad-readiness'
+import { rpcCallerOperationKey } from '../../callers/rpc-caller-identity'
 import { HostAccountSignInFlows } from '../../../agent-session/environment/host-account-sign-in-flows'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import {
@@ -22,7 +22,7 @@ import {
   HostAccountSignInWaitParams,
   HostAccountSignInFlowParams,
   HostAccountSignInCodeParams
-} from '../../../../../shared/rpc-contract/accounts-params'
+} from '../../../../../shared/rpc-contract/accounts/accounts-params'
 import { HostAccountLaunchEnvParams } from '../../../../../shared/agent-launch/startup/host-account-launch-env'
 import { withTimeout } from '../../../../../shared/promise-timeout-fallback'
 

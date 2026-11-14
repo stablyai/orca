@@ -1,4 +1,4 @@
-import { track } from '@/lib/telemetry'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import {
   buildNestedRepoImportActionTelemetry,
   type NestedRepoTelemetryRuntimeKind

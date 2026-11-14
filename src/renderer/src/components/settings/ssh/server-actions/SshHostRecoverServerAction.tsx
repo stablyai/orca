@@ -6,7 +6,7 @@ import {
   type OrcadStaleLockEvidence
 } from '../../../../../../shared/orcad-stale-lock-reclaim'
 import type { SshManagedServerStatus } from '../../../../../../shared/ssh-types'
-import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/managed-orcad-api'
+import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/runtime/managed-orcad-api'
 import { quotePosixShellUnlessPlain } from '../../../../../../shared/shell/launch/shell-argument-quoting'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
@@ -22,7 +22,7 @@ import {
   DialogTitle
 } from '../../../ui/dialog'
 import { Label } from '../../../ui/label'
-import { getManagedOrcadApi } from '../../runtime-environments/managed-servers/use-managed-server-catalog'
+import { getManagedOrcadApi } from '../../../../runtime/hosts/installation/managed-orcad-api-availability'
 
 /** Offered only when the slot's own refusal named the command, so that build supports it. */
 export function canRecoverSshHostServer(status: SshManagedServerStatus | undefined): boolean {

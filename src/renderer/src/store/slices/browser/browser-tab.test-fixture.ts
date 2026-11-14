@@ -1,8 +1,8 @@
-import type { BrowserTab } from '../../../../../shared/browser-workspace-types'
+import type { BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
 
 export function makeBrowserTab(
-  overrides: Partial<BrowserTab> & { id: string; worktreeId: string; url: string }
-): BrowserTab {
+  overrides: Partial<BrowserWorkspace> & { id: string; worktreeId: string; url: string }
+): BrowserWorkspace {
   return {
     title: overrides.url,
     loading: false,

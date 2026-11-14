@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SshTarget } from '../../../shared/ssh-types'
 
 type MockConnectionRecord = {
@@ -57,6 +57,11 @@ import {
 import { isAuthError } from './reconnect/ssh-reconnect-error-classification'
 import './ssh-session-start-failure'
 import { recordSshUserDisconnected, resetSshUserDisconnectsForTests } from './ssh-user-disconnect'
+
+beforeEach(resetSshCredentialDeclinesForTests)
+beforeEach(resetSshUserDisconnectsForTests)
+afterEach(resetSshCredentialDeclinesForTests)
+afterEach(resetSshUserDisconnectsForTests)
 
 const target = {
   id: 'target-1',
@@ -185,7 +190,6 @@ describe('SshConnectionManager after a cancelled sign-in', () => {
   beforeEach(() => {
     mockState.connectResults.length = 0
     mockState.instances.length = 0
-    resetSshCredentialDeclinesForTests()
   })
 
   it('refuses an automatic dial as an auth failure without opening a connection', async () => {
@@ -227,7 +231,6 @@ describe('SshConnectionManager after a user Disconnect', () => {
   beforeEach(() => {
     mockState.connectResults.length = 0
     mockState.instances.length = 0
-    resetSshUserDisconnectsForTests()
   })
 
   it('refuses the background dials that revived the host, without opening a connection', async () => {

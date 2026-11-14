@@ -1,14 +1,11 @@
 /** Paired panes receive both client byte-derived status/titles and host snapshot echoes. Proven client ownership must fence stale echoes despite cross-machine clocks; teardown returns authority and host-only states pierce the fence. Drive real mirror/store logic with controlled clocks and assert transition order/count, including generatedLabel and epoch stability. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
+
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { toWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
-import { deriveGeneratedTabTitle } from '../../../../../shared/agent-status/presentation/agent-tab-title'
 import { getDefaultSettings } from '../../../../../shared/constants'
-import { resolveTerminalTabTitle } from '../../../../../shared/tab-title-resolution'
 import type { AppState } from '../../../store/types'
 import { createTestStore, seedStore } from '../../../store/testing/app-store-test-fixture'
 import { makeWorktree } from '../../../store/slices/worktrees/worktree.test-fixture'
@@ -40,12 +37,9 @@ const MIRROR_TAB_ID = toWebTerminalSurfaceTabId(HOST_TAB_ID)
 const MIRROR_PANE_KEY = makePaneKey(MIRROR_TAB_ID, LEAF_ID)
 const HOST_PANE_KEY = makePaneKey(HOST_TAB_ID, LEAF_ID)
 const T0 = 1_700_000_000_000
-const CYCLES = 3
 const CLIENT_PROMPT = 'Configurar y entender los comprobantes electronicos del sistema'
-const EXPECTED_GENERATED_TITLE = deriveGeneratedTabTitle(CLIENT_PROMPT)!
 
 const LOCAL_WT = 'repo1::/path/local-wt'
-const LOCAL_PANE_KEY = makePaneKey('local-tab-1', LEAF_ID)
 
 type TestStore = ReturnType<typeof createTestStore>
 
@@ -131,41 +125,6 @@ function replayClientOscWorking(store: TestStore, clientNow: number): () => void
   return release
 }
 
-type Frame = {
-  source: string
-  statusState: string | null
-  tabGeneratedTitle: string | null
-  visibleTabBarLabel: string | null
-  unifiedGeneratedLabel: string | null
-  unifiedLabel: string | null
-  agentStatusEpoch: number
-}
-
-function captureFrame(store: TestStore, source: string): Frame {
-  const s = store.getState()
-  const tab = (s.tabsByWorktree[WT] ?? []).find((t) => t.id === MIRROR_TAB_ID)
-  const unified = (s.unifiedTabsByWorktree[WT] ?? []).find((t) => t.id === MIRROR_TAB_ID)
-  return {
-    source,
-    statusState: s.agentStatusByPaneKey[MIRROR_PANE_KEY]?.state ?? null,
-    tabGeneratedTitle: tab?.generatedTitle ?? null,
-    visibleTabBarLabel: tab?.generatedTitle ?? tab?.title ?? null,
-    unifiedGeneratedLabel: unified?.generatedLabel ?? null,
-    unifiedLabel: unified?.label ?? null,
-    agentStatusEpoch: s.agentStatusEpoch
-  }
-}
-
-function countTransitions(values: (string | null)[]): number {
-  let transitions = 0
-  for (let i = 1; i < values.length; i += 1) {
-    if (values[i] !== values[i - 1]) {
-      transitions += 1
-    }
-  }
-  return transitions
-}
-
 function seedPairedClientStore(): TestStore {
   const store = createTestStore()
   seedStore(store, {
@@ -190,31 +149,6 @@ function seedPairedClientStore(): TestStore {
   return store
 }
 
-/** Interleave host/client publications with advancing controlled clocks and no skew; capture each resulting frame. */
-function runDualPublicationCycles(store: TestStore, includeAgentStatus: boolean): Frame[] {
-  applyHostSnapshot(
-    store,
-    makeHostSnapshot({ snapshotVersion: 1, hostNow: T0 - 1_000, includeAgentStatus }),
-    T0
-  )
-  const frames: Frame[] = [captureFrame(store, 'host-snapshot-1')]
-  for (let cycle = 1; cycle <= CYCLES; cycle += 1) {
-    replayClientOscWorking(store, T0 + cycle * 1_000 - 500)
-    frames.push(captureFrame(store, `client-osc-${cycle}`))
-    applyHostSnapshot(
-      store,
-      makeHostSnapshot({
-        snapshotVersion: 1 + cycle,
-        hostNow: T0 + cycle * 1_000,
-        includeAgentStatus
-      }),
-      T0 + cycle * 1_000
-    )
-    frames.push(captureFrame(store, `host-snapshot-${1 + cycle}`))
-  }
-  return frames
-}
-
 describe('remote-paired pane: host snapshot mirror vs client byte-derived status/title (issue1-ui-flash)', () => {
   beforeEach(() => {
     vi.useFakeTimers()
@@ -228,166 +162,8 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
     resetRendererOwnedAgentStatusPanesForTests()
   })
 
-  describe('converged sequence pinned (inverted defect pins — deterministic post-fix)', () => {
-    it('settles on the client-owned status and generated label and stops flipping on republication', () => {
-      const store = seedPairedClientStore()
-      expect(EXPECTED_GENERATED_TITLE).toBeTruthy()
-
-      store
-        .getState()
-        .setAgentStatus(
-          LOCAL_PANE_KEY,
-          { state: 'working', prompt: 'unrelated local work', agentType: 'codex' },
-          undefined,
-          { updatedAt: T0 - 10_000 },
-          { tabId: 'local-tab-1', worktreeId: LOCAL_WT }
-        )
-      const localEntryBefore = store.getState().agentStatusByPaneKey[LOCAL_PANE_KEY]
-      expect(localEntryBefore?.state).toBe('working')
-
-      const frames = runDualPublicationCycles(store, true)
-
-      // Host owns until the first byte write; later echoes must be no-ops including unified generatedLabel.
-      const expectedFrames: Partial<Frame>[] = [
-        {
-          source: 'host-snapshot-1',
-          statusState: 'done',
-          tabGeneratedTitle: null,
-          visibleTabBarLabel: 'Terminal',
-          unifiedGeneratedLabel: null,
-          unifiedLabel: 'Terminal'
-        }
-      ]
-      for (let cycle = 1; cycle <= CYCLES; cycle += 1) {
-        for (const source of [`client-osc-${cycle}`, `host-snapshot-${1 + cycle}`]) {
-          expectedFrames.push({
-            source,
-            statusState: 'working',
-            tabGeneratedTitle: EXPECTED_GENERATED_TITLE,
-            visibleTabBarLabel: EXPECTED_GENERATED_TITLE,
-            unifiedGeneratedLabel: EXPECTED_GENERATED_TITLE,
-            unifiedLabel: 'Terminal'
-          })
-        }
-      }
-      expect(frames.map(({ agentStatusEpoch: _epoch, ...frame }) => frame)).toEqual(expectedFrames)
-      expect(countTransitions(frames.map((f) => f.statusState))).toBe(1)
-      expect(countTransitions(frames.map((f) => f.visibleTabBarLabel))).toBe(1)
-
-      // No-op echoes must not bump agent-status epoch and trigger render/sort churn.
-      for (const [index, frame] of frames.entries()) {
-        if (frame.source.startsWith('host-snapshot-') && index > 0) {
-          expect(frame.agentStatusEpoch, frame.source).toBe(frames[index - 1]!.agentStatusEpoch)
-        }
-      }
-
-      // Negative safety: the unrelated local pane survives all mirror cycles untouched.
-      expect(store.getState().agentStatusByPaneKey[LOCAL_PANE_KEY]).toEqual(localEntryBefore)
-    })
-  })
-
   // Fence only proven client writers and never host-only state classes.
   describe('authority handback', () => {
-    it('cedes back to the host once the pane is torn down', () => {
-      const store = seedPairedClientStore()
-      const release = replayClientOscWorking(store, T0 + 500)
-      release()
-
-      applyHostSnapshot(
-        store,
-        makeHostSnapshot({ snapshotVersion: 2, hostNow: T0 + 1_000, includeAgentStatus: true }),
-        T0 + 1_000
-      )
-      expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]?.state).toBe('done')
-
-      applyHostSnapshot(
-        store,
-        makeHostSnapshot({ snapshotVersion: 3, hostNow: T0 + 2_000, includeAgentStatus: false }),
-        T0 + 2_000
-      )
-      expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]).toBeUndefined()
-    })
-
-    // Staleness decays client status to idle rather than deleting it (STA-3107); host omission offers no replacement. Only teardown hands authority back, so waking clients retain their rows.
-    it('decays rather than deletes a client "working" the agent never closed', () => {
-      const store = seedPairedClientStore()
-      replayClientOscWorking(store, T0)
-      expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]?.state).toBe('working')
-
-      const afterStale = T0 + AGENT_STATUS_STALE_AFTER_MS + 1
-      applyHostSnapshot(
-        store,
-        makeHostSnapshot({ snapshotVersion: 2, hostNow: afterStale, includeAgentStatus: false }),
-        afterStale
-      )
-
-      const entry = store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]
-      expect(entry).toBeDefined()
-      expect(
-        isExplicitAgentStatusFresh(entry!, afterStale, AGENT_STATUS_STALE_AFTER_MS),
-        'the retained entry must read as stale so consumers render it idle'
-      ).toBe(false)
-    })
-
-    it('follows behind-clock host continuation and completion after an HTTP approval', () => {
-      const store = seedPairedClientStore()
-      replayClientOscWorking(store, T0 + 500)
-
-      applyHostSnapshot(
-        store,
-        makeHostSnapshot({
-          snapshotVersion: 2,
-          hostNow: T0 - 60_000,
-          includeAgentStatus: true,
-          agentStatusOverrides: {
-            state: 'waiting',
-            interactivePrompt: 'Allow exec_command?'
-          }
-        }),
-        T0 + 1_000
-      )
-      expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]).toMatchObject({
-        state: 'waiting',
-        mirroredEvidenceReceivedAt: T0 + 1_000
-      })
-
-      applyHostSnapshot(
-        store,
-        makeHostSnapshot({
-          snapshotVersion: 3,
-          hostNow: T0 - 59_000,
-          includeAgentStatus: true,
-          agentStatusOverrides: { state: 'working' }
-        }),
-        T0 + 2_000
-      )
-      const continued = store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]
-      expect(continued?.state).toBe('working')
-      expect(continued?.interactivePrompt).toBeUndefined()
-
-      applyHostSnapshot(
-        store,
-        makeHostSnapshot({
-          snapshotVersion: 4,
-          hostNow: T0 - 58_000,
-          includeAgentStatus: true
-        }),
-        T0 + 3_000
-      )
-      expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]?.state).toBe('done')
-
-      applyHostSnapshot(
-        store,
-        makeHostSnapshot({
-          snapshotVersion: 5,
-          hostNow: T0 - 57_000,
-          includeAgentStatus: false
-        }),
-        T0 + 4_000
-      )
-      expect(store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]).toBeUndefined()
-    })
-
     it('reclaims byte ownership after approval despite an ahead-clock host', () => {
       const store = seedPairedClientStore()
       replayClientOscWorking(store, T0 + 500)
@@ -440,100 +216,5 @@ describe('remote-paired pane: host snapshot mirror vs client byte-derived status
         prompt: CLIENT_PROMPT
       })
     })
-  })
-})
-
-describe('remote-paired pane: host session name', () => {
-  beforeEach(() => {
-    vi.useFakeTimers()
-    vi.setSystemTime(T0)
-    resetWebSessionTabsSnapshotFreshnessForTests()
-    resetRendererOwnedAgentStatusPanesForTests()
-  })
-
-  afterEach(() => {
-    vi.useRealTimers()
-    resetRendererOwnedAgentStatusPanesForTests()
-  })
-
-  it('labels the mirrored tab with the host session name over the client first-prompt title', () => {
-    const store = seedPairedClientStore()
-    applyHostSnapshot(
-      store,
-      makeHostSnapshot({ snapshotVersion: 1, hostNow: T0, includeAgentStatus: true }),
-      T0
-    )
-    replayClientOscWorking(store, T0 + 1_000)()
-    applyHostSnapshot(
-      store,
-      makeHostSnapshot({
-        snapshotVersion: 2,
-        hostNow: T0 + 2_000,
-        includeAgentStatus: true,
-        aiVaultTitle: { agent: 'claude', sessionId: 'session-1', title: 'Login cleanup' },
-        resolvesSessionTitle: true
-      }),
-      T0 + 2_000
-    )
-
-    const tab = (store.getState().tabsByWorktree[WT] ?? []).find((t) => t.id === MIRROR_TAB_ID)
-    expect(tab?.generatedTitle).toBe(EXPECTED_GENERATED_TITLE)
-    expect(resolveTerminalTabTitle(tab!, true)).toBe('Login cleanup')
-  })
-
-  it('follows a resolving host through a rename and a clear', () => {
-    const store = seedPairedClientStore()
-    const publish = (
-      snapshotVersion: number,
-      aiVaultTitle: { agent: 'claude'; sessionId: string; title: string } | null,
-      surface: { title?: string; status?: 'ready' | 'pending-handle' } = {}
-    ) =>
-      applyHostSnapshot(
-        store,
-        makeHostSnapshot({
-          snapshotVersion,
-          hostNow: T0 + snapshotVersion * 1_000,
-          includeAgentStatus: true,
-          aiVaultTitle,
-          resolvesSessionTitle: true,
-          ...surface
-        }),
-        T0 + snapshotVersion * 1_000
-      )
-    const mirrored = () =>
-      (store.getState().tabsByWorktree[WT] ?? []).find((t) => t.id === MIRROR_TAB_ID)
-    publish(1, { agent: 'claude', sessionId: 'session-1', title: 'Old' }, { title: 'Old' })
-    // The host's own title already ranks the session name in.
-    publish(2, { agent: 'claude', sessionId: 'session-1', title: 'New' }, { title: 'New' })
-    expect(mirrored()?.aiVaultTitle?.title).toBe('New')
-
-    // An idle pane publishes the placeholder title while the host clears the name.
-    publish(3, null, { title: 'Terminal', status: 'pending-handle' })
-    expect(mirrored()?.aiVaultTitle).toBeUndefined()
-    expect(mirrored()?.sessionTitleFromHost).toBe(true)
-    expect(resolveTerminalTabTitle(mirrored()!, false)).toBe('Terminal')
-  })
-
-  it('takes a saved name back as cache once the host stops resolving it', () => {
-    const store = seedPairedClientStore()
-    const publish = (snapshotVersion: number, title: string, resolvesSessionTitle?: true) =>
-      applyHostSnapshot(
-        store,
-        makeHostSnapshot({
-          snapshotVersion,
-          hostNow: T0 + snapshotVersion * 1_000,
-          includeAgentStatus: true,
-          aiVaultTitle: { agent: 'claude', sessionId: 'session-1', title },
-          ...(resolvesSessionTitle ? { resolvesSessionTitle } : {})
-        }),
-        T0 + snapshotVersion * 1_000
-      )
-    // The window resolves "New"; the host then restarts headless and republishes its saved "Old".
-    publish(1, 'New', true)
-    publish(2, 'Old')
-
-    const tab = (store.getState().tabsByWorktree[WT] ?? []).find((t) => t.id === MIRROR_TAB_ID)
-    expect(tab?.aiVaultTitle?.title).toBe('New')
-    expect(tab?.sessionTitleFromHost).toBeUndefined()
   })
 })

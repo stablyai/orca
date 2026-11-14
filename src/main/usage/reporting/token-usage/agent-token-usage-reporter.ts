@@ -1,0 +1,125 @@
+import { readFile } from 'node:fs/promises'
+import { z } from 'zod'
+import {
+  agentTokenCountsSchema,
+  agentTokenUsageSchema,
+  type AgentTokenUsage
+} from '../../../../shared/telemetry-agent-token-usage-schema'
+import type { UsageTelemetryHost } from '../../usage-store-host'
+import { UsageCacheSnapshotWriter } from '../../cache/usage-cache-snapshot-writer'
+import type { AgentTokenSession } from './agent-token-usage'
+
+const stateSchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    snapshots: z.array(agentTokenUsageSchema)
+  })
+  .strict()
+
+/** Cumulative snapshots: consumers select the highest revision per provider/session, never sum retries. */
+export class AgentTokenUsageReporter {
+  private snapshots: Map<string, AgentTokenUsage> | null = null
+  private readonly acceptedRevisions = new Map<string, number>()
+  private readonly writer: UsageCacheSnapshotWriter
+  private pending: Promise<void> = Promise.resolve()
+
+  constructor(
+    private readonly file: string,
+    private readonly provider: AgentTokenUsage['provider'],
+    private readonly getSessionIds: (providerSessionIds: readonly string[]) => Promise<string[]>,
+    private readonly telemetry: UsageTelemetryHost
+  ) {
+    this.writer = new UsageCacheSnapshotWriter('[agent-token-usage]', () => file)
+  }
+
+  report(sessions: AgentTokenSession[]): Promise<void> {
+    const operation = this.pending.then(() => this.publish(sessions))
+    this.pending = operation.catch(() => {})
+    return operation
+  }
+
+  async flush(): Promise<void> {
+    await this.pending
+    await this.writer.flush()
+  }
+
+  private async publish(sessions: AgentTokenSession[]): Promise<void> {
+    if (!(await this.telemetry.isEnabled())) {
+      return
+    }
+    const rows = sessions.flatMap(({ providerSessionId, ...counts }) => {
+      const parsed = agentTokenCountsSchema.safeParse(counts)
+      return parsed.success ? [{ providerSessionId, counts: parsed.data }] : []
+    })
+    const ids = await this.getSessionIds(rows.map((row) => row.providerSessionId))
+    if (!(await this.telemetry.isEnabled())) {
+      return
+    }
+    const previous = this.snapshots ?? (await this.load())
+    const next = new Map(previous)
+    let changed = false
+    for (const [index, { counts }] of rows.entries()) {
+      const id = ids[index]
+      const existing = next.get(id)
+      if (
+        existing &&
+        existing.input_tokens === counts.input_tokens &&
+        existing.output_tokens === counts.output_tokens &&
+        existing.cached_input_tokens === counts.cached_input_tokens &&
+        existing.cache_write_input_tokens === counts.cache_write_input_tokens
+      ) {
+        continue
+      }
+      next.set(
+        id,
+        agentTokenUsageSchema.parse({
+          ...counts,
+          provider: this.provider,
+          analytics_session_id: id,
+          revision: (existing?.revision ?? 0) + 1
+        })
+      )
+      changed = true
+    }
+    // Persist revisions before capture so a restart can only retry the same snapshot or a newer one.
+    if (changed) {
+      await this.writer.write(() =>
+        JSON.stringify({ schemaVersion: 1, snapshots: [...next.values()] })
+      )
+    }
+    this.snapshots = next
+    for (const snapshot of next.values()) {
+      if (this.acceptedRevisions.get(snapshot.analytics_session_id) === snapshot.revision) {
+        continue
+      }
+      if (!(await this.telemetry.capture(snapshot))) {
+        break
+      }
+      // Queue acceptance only deduplicates this process; restart must retry undelivered snapshots.
+      this.acceptedRevisions.set(snapshot.analytics_session_id, snapshot.revision)
+    }
+  }
+
+  private async load(): Promise<Map<string, AgentTokenUsage>> {
+    let content: string
+    try {
+      content = await readFile(this.file, 'utf8')
+    } catch (error) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+        return new Map()
+      }
+      throw error
+    }
+    const state = stateSchema.parse(JSON.parse(content))
+    const snapshots = new Map(
+      state.snapshots.map((snapshot) => [snapshot.analytics_session_id, snapshot])
+    )
+    if (
+      snapshots.size !== state.snapshots.length ||
+      state.snapshots.some((snapshot) => snapshot.provider !== this.provider)
+    ) {
+      throw new Error('Invalid agent token usage state')
+    }
+    return snapshots
+  }
+}

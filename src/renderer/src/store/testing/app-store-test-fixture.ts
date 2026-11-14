@@ -42,21 +42,25 @@ import { createRuntimeStatusSlice } from '../slices/runtime-status/create-runtim
 import { createPullRequestGenerationSlice } from '../slices/hosted-review/generation/pull-request-generation'
 import { createCommitMessageGenerationSlice } from '../slices/hosted-review/generation/commit-message-generation'
 import { createPinnedTabCloseConfirmSlice } from '../slices/tabs/pinned-tab-close-confirm'
-import { createRecentlyClosedTerminalTabsSlice } from '../terminals/recently-closed-terminal-tabs'
+import { createRecentlyClosedTerminalTabsSlice } from '../terminals/tabs/recently-closed-terminal-tabs'
 import { createRecentlyClosedTabsSlice } from '../slices/tabs/recently-closed-tabs'
 import { createOrcaProfilesSlice } from '../slices/orca-profiles/create-orca-profiles-slice'
 import { createNewIssueDraftSlice } from '../slices/task-creation/new-issue-draft'
 import { createFeedbackDraftSlice } from '../slices/feedback/feedback-draft'
 import { createTaskCreationDraftsSlice } from '../slices/task-creation/task-creation-drafts'
 import { createRemoteServerUpdatesSlice } from '../slices/runtime-host-updates/remote-server-updates'
-import { createTerminalQuickCommandHostsSlice } from '../terminals/terminal-quick-command-hosts'
+import { createTerminalQuickCommandHostsSlice } from '../terminals/quick-commands/terminal-quick-command-hosts'
 import { createStructuredSessionLaunchDirectorySlice } from '../slices/agent-status/structured-session-launch-directories'
 import { createStructuredChatSleptAtSlice } from '../slices/agent-status/structured-chat-slept-at'
+import { createStructuredChatCompanionWritesSlice } from '../slices/agent-status/structured-chat-companion-writes'
 import { createWorkspaceAttentionSlice } from '../slices/workspace-attention/workspace-attention-slice'
+import { createEphemeralVmLifecycleSlice } from '../slices/ephemeral-vm/ephemeral-vm-lifecycle'
 import '@/i18n/i18n'
 import { withEditorBufferRecords } from '../slices/editor/buffers/editor-buffer-record-lifecycle'
 import { withAgentConversationRetention } from '../slices/agent-status/agent-conversation-retention'
 import { TEST_REPO } from '../repos/repo.test-fixture'
+import { resetProviderRuntimeSessionGenerationForTests } from '@/runtime/hosts/observations/provider-runtime-context'
+import { markHydratedBrowserPageHandles } from '../slices/browser/hosts/browser-initialization-presentation-ownership'
 
 const withTestStorePolicies = (creator: StateCreator<AppState, [], []>, check: boolean) =>
   withEditorBufferRecords(withAgentConversationRetention(creator), check)
@@ -64,6 +68,8 @@ const withTestStorePolicies = (creator: StateCreator<AppState, [], []>, check: b
 export function createTestStore(
   isClaudeAgent: Parameters<typeof createTerminalSlice>[3] = undefined
 ) {
+  // Why: the session generation is module state; a shared test worker would carry another file's bumps into this store.
+  resetProviderRuntimeSessionGenerationForTests()
   // Why the record middleware: views of one file share a record only through it, as in the app.
   return create<AppState>()(
     withTestStorePolicies(
@@ -117,7 +123,9 @@ export function createTestStore(
         ...createTerminalQuickCommandHostsSlice(...a),
         ...createStructuredSessionLaunchDirectorySlice(...a),
         ...createStructuredChatSleptAtSlice(...a),
-        ...createWorkspaceAttentionSlice(...a)
+        ...createStructuredChatCompanionWritesSlice(...a),
+        ...createWorkspaceAttentionSlice(...a),
+        ...createEphemeralVmLifecycleSlice(...a)
       }),
       true
     )
@@ -129,6 +137,12 @@ export function seedStore(
   state: Partial<AppState>
 ): void {
   // Centralize fixture to keep cascade suites within max-lines limits without suppressing growth checks.
+  if (
+    state.remoteBrowserPageHandlesByPageId &&
+    state.remoteBrowserPageHandlesByPageId !== store.getState().remoteBrowserPageHandlesByPageId
+  ) {
+    markHydratedBrowserPageHandles(state.remoteBrowserPageHandlesByPageId)
+  }
   store.setState({
     repos: [{ ...TEST_REPO, executionHostId: 'local' }],
     ...state

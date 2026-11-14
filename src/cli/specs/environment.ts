@@ -1,5 +1,6 @@
-import type { CommandSpec } from '../args'
-import { GLOBAL_FLAGS, LOCAL_COMMAND_FLAGS } from '../args'
+import type { CommandSpec } from '../discovery/command-spec'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
+import { LOCAL_COMMAND_FLAGS } from '../arguments/args'
 
 export const ENVIRONMENT_COMMAND_SPECS: CommandSpec[] = [
   {

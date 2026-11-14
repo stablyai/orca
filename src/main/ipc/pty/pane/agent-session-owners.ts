@@ -6,7 +6,7 @@ import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session/
 import { ClaimedAgentPtyOwnerRegistry } from '../../../../shared/claimed-agent-pty-owner'
 import { isPtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
+import type { PtySpawnResult } from '../../../providers/pty/spawn-result'
 import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { registeredPtyProviders, tryGetProviderForPty } from '../provider/registry'

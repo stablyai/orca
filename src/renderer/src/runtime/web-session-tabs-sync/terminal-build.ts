@@ -3,13 +3,14 @@ import type {
   TerminalLayoutSnapshot,
   TerminalTab
 } from '../../../../shared/workspace-layout/terminal-tab-types'
-import { normalizeTerminalLayoutPtyOwnership } from '../../../../shared/workspace-layout/terminal-layout-pty-ownership'
+import { normalizeTerminalLayoutPtyOwnership } from '../../../../shared/workspace-layout/terminal-topology/terminal-layout-pty-ownership'
 import { resolvePaneAgentOwnerRecord } from '../../../../shared/agent-status/identity/pane-agent-owner'
 import { normalizeCompatibleAgentTitleForOwner } from '../../../../shared/agent-status/title/agent-title-owner'
 import { getRemoteRuntimePtyEnvironmentId } from '../hosted-terminals/identity/remote-runtime-pty-owner'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
-import type { MirroredTerminalTab, TerminalSurface, ReadyTerminalSurface } from './state'
+import type { MirroredTerminalTab, ReadyTerminalSurface } from './state'
+import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import { chooseRemoteTerminalLayout, isTerminalSurfaceTab } from './terminal-surfaces'
 
 function pendingBindingBelongsToEnvironment(
@@ -25,7 +26,7 @@ function pendingBindingBelongsToEnvironment(
 
 /** Keep a known pane binding while the host briefly publishes its surface as pending. */
 function retainPendingTerminalBindings(
-  surfaces: readonly TerminalSurface[],
+  surfaces: readonly RuntimeMobileSessionTerminalClientTab[],
   existingLayout: TerminalLayoutSnapshot | undefined,
   ptyIdsByLeafId: Record<string, string>,
   environmentId: string,
@@ -67,7 +68,7 @@ export function buildMirroredTerminalTabs(
   focusTarget?: { parentTabId: string; leafId: string },
   terminalPtyMode: 'local' | 'remote' = 'remote'
 ): MirroredTerminalTab[] {
-  const groups = new Map<string, TerminalSurface[]>()
+  const groups = new Map<string, RuntimeMobileSessionTerminalClientTab[]>()
   for (const tab of snapshot.tabs.filter(isTerminalSurfaceTab)) {
     const group = groups.get(tab.parentTabId) ?? []
     group.push(tab)
@@ -114,7 +115,9 @@ export function buildMirroredTerminalTabs(
     const ptyIds = layoutPtyEntries
       .map(([, ptyId]) => ptyId)
       .filter((ptyId) => livePtyIds.has(ptyId))
-    let retainedSurfaceByPrunedLeafId: Map<string, TerminalSurface> | undefined
+    let retainedSurfaceByPrunedLeafId:
+      | Map<string, RuntimeMobileSessionTerminalClientTab>
+      | undefined
     if (layoutPtyEntries.length < Object.keys(ptyIdsByLeafId).length) {
       const retainedLeafIdByPtyId = new Map(
         layoutPtyEntries.map(([leafId, ptyId]) => [ptyId, leafId])

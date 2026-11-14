@@ -14,12 +14,13 @@ import { PAIRING_OFFER_VERSION } from '../../../../shared/remote-runtime/pairing
 
 const sendRequest = vi.hoisted(() => vi.fn())
 const extraCapabilities = vi.hoisted((): string[] => [])
-vi.mock('../../../../shared/remote-runtime/remote-runtime-client', () => ({
-  sendRemoteRuntimeRequestWithStatusPreflight: async (
+vi.mock('../../../../shared/remote-runtime/requests/remote-runtime-request-socket', () => ({
+  sendRemoteRuntimeRequestOnSocket: async (
     pairing: unknown,
     method: string,
     params: unknown,
     _timeoutMs: number,
+    _envelope: unknown,
     validate: (response: unknown) => void
   ) => {
     validate({

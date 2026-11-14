@@ -1,3 +1,4 @@
+import { cachedBrowserGuestMetadata } from './browser-guest-metadata-cache'
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
 import {
   normalizeBrowserNavigationUrl,
@@ -16,7 +17,7 @@ import {
 import {
   browserNavigationLeavesFaviconOrigin,
   pickDisplayableFaviconUrl
-} from '../describe-page/browser-favicon-url'
+} from '../../../../../shared/browser/browser-favicon-url'
 import {
   applyBrowserExtensionPageFavicon,
   isChromeExtensionPageUrl
@@ -91,13 +92,8 @@ export function createBrowserPageWebviewNavigationHandlers({
     }
     const browserStartedUrl = redactKagiSessionToken(event.url)
     const startedUrl = normalizeBrowserNavigationUrl(browserStartedUrl) ?? browserStartedUrl
-    // Read the departing URL from the guest; Orca sets lastKnownWebviewUrlRef to the destination before assigning src.
-    let committedUrl: string | null = null
-    try {
-      committedUrl = webview.getURL() || null
-    } catch {
-      // Why: a guest that hasn't attached yet rejects getURL(); an unknown origin keeps the icon.
-    }
+    // The cached committed URL still describes the departing document after src receives a destination.
+    const committedUrl = cachedBrowserGuestMetadata(webview)?.url ?? null
     if (browserNavigationLeavesFaviconOrigin(committedUrl, startedUrl)) {
       faviconUrlRef.current = null
       onUpdatePageStateRef.current(browserTabId, { faviconUrl: null })
@@ -111,7 +107,6 @@ export function createBrowserPageWebviewNavigationHandlers({
     // Same-URL reloads replace the document too; in-place updates are judged once they commit.
     invalidateBrowserAnnotationDocumentRef.current()
     setBrowserOverlayViewport({ scrollX: 0, scrollY: 0, version: 0 })
-    onUpdatePageStateRef.current(browserTabId, { loading: true })
     const pendingRecoveryNavigation = recoveryNavigationValidationRef.current
     const browserStartedUrl = redactKagiSessionToken(event.url)
     const startedUrl = normalizeBrowserNavigationUrl(browserStartedUrl) ?? browserStartedUrl
@@ -134,7 +129,7 @@ export function createBrowserPageWebviewNavigationHandlers({
     if (event.isMainFrame === false) {
       return
     }
-    const currentUrl = event.url ?? webview.getURL() ?? webview.src ?? 'about:blank'
+    const currentUrl = event.url ?? cachedBrowserGuestMetadata(webview)?.url ?? 'about:blank'
     if (isChromiumErrorPage(currentUrl)) {
       return
     }
@@ -145,29 +140,19 @@ export function createBrowserPageWebviewNavigationHandlers({
     if (lastKnownWebviewUrlRef.current?.split('#')[0] !== normalizedBrowserModelUrl.split('#')[0]) {
       invalidateBrowserAnnotationDocumentRef.current()
     }
+    const urlChanged = lastKnownWebviewUrlRef.current !== normalizedBrowserModelUrl
     lastKnownWebviewUrlRef.current = normalizedBrowserModelUrl
     rememberLiveBrowserUrl(browserTabId, browserModelUrl)
     // Why: don't overwrite in-progress typing (see above).
     if (document.activeElement !== addressBarInputRef.current) {
       setAddressBarValue(toDisplayUrl(browserModelUrl))
     }
-    if (persistUrl) {
+    if (persistUrl && urlChanged) {
       onSetUrlRef.current(browserTabId, browserModelUrl, { preserveLoadError })
     }
-    onUpdatePageStateRef.current(browserTabId, {
-      title: webview.getTitle() || browserModelUrl,
-      canGoBack: webview.canGoBack(),
-      canGoForward: webview.canGoForward()
-    })
   }
 
-  const currentGuestUrl = (): string | null => {
-    try {
-      return webview.getURL() || null
-    } catch {
-      return null
-    }
-  }
+  const currentGuestUrl = (): string | null => cachedBrowserGuestMetadata(webview)?.url ?? null
   const showExtensionPageFavicon = (): void => {
     applyBrowserExtensionPageFavicon(
       browserTabId,
@@ -189,6 +174,9 @@ export function createBrowserPageWebviewNavigationHandlers({
     }
     const preserveRecoveryError =
       activeLoadFailureRef.current?.code === BROWSER_GUEST_RECOVERY_ERROR_CODE
+    if (!preserveRecoveryError) {
+      activeLoadFailureRef.current = null
+    }
     handleDidNavigate(event, true, preserveRecoveryError)
   }
 
@@ -199,15 +187,10 @@ export function createBrowserPageWebviewNavigationHandlers({
   }
 
   const handleTitleUpdate = (event: { title?: string }): void => {
-    try {
-      const currentUrl = webview.getURL() || browserTabUrl
-      const browserModelUrl = redactKagiSessionToken(currentUrl)
-      const title = getBrowserDisplayTitle(event.title, browserModelUrl)
-      onUpdatePageStateRef.current(browserTabId, { title })
-      addBrowserHistoryEntryRef.current(browserModelUrl, title, faviconUrlRef.current)
-    } catch {
-      // Why: title-updated can fire before dom-ready, making getURL() throw.
-    }
+    const currentUrl = cachedBrowserGuestMetadata(webview)?.url || browserTabUrl
+    const browserModelUrl = redactKagiSessionToken(currentUrl)
+    const title = getBrowserDisplayTitle(event.title, browserModelUrl)
+    addBrowserHistoryEntryRef.current(browserModelUrl, title, faviconUrlRef.current)
   }
 
   const handleFaviconUpdate = (event: { favicons?: string[] }): void => {

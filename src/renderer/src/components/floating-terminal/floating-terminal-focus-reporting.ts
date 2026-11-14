@@ -1,7 +1,7 @@
 import {
   isEventTargetInsideFloatingWorkspacePanel,
   isFloatingWorkspaceTerminalInputTarget
-} from '@/lib/floating-workspace-terminal-actions'
+} from '@/components/floating-terminal/floating-workspace-terminal-actions'
 
 let lastReportedFloatingFocus: { panelFocused: boolean; terminalFocused: boolean } | null = null
 let lastReportedFloatingFocusFn: unknown = null

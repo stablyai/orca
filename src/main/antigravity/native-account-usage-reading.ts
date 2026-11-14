@@ -2,7 +2,7 @@ import type { ProviderRateLimits, RateLimitRuntimeTarget } from '../../shared/ra
 import {
   isSameRuntimeTarget,
   type AntigravityUsageLogin
-} from '../rate-limits/antigravity-account-usage'
+} from '../rate-limits/providers/antigravity/antigravity-account-usage'
 import type { StoredAntigravityAccount, StoredAntigravityUsage } from './native-account-store'
 import type { AntigravityNativeCredential } from './native-credential-codec'
 

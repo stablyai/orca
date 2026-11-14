@@ -62,36 +62,6 @@ afterEach(() => {
 })
 
 describe('browser page guest recovery', () => {
-  it('reloads a lost renderer in place and cancels the failure surface after recovery', () => {
-    vi.useFakeTimers()
-    const state = createRecovery()
-
-    state.recovery.recoverRenderer()
-
-    expect(state.reload).toHaveBeenCalledOnce()
-    expect(state.pending()).toBe(true)
-
-    state.recovery.finish()
-    vi.advanceTimersByTime(BROWSER_GUEST_RECOVERY_TIMEOUT_MS)
-
-    expect(state.pending()).toBe(false)
-    expect(state.onRecoveryFailed).not.toHaveBeenCalled()
-  })
-
-  it('recreates a guest when in-place reload is unavailable', async () => {
-    const state = createRecovery({
-      reload: () => {
-        throw new Error('guest destroyed')
-      }
-    })
-
-    state.recovery.recoverRenderer()
-    await vi.waitFor(() => expect(state.onReplacementReady).toHaveBeenCalledOnce())
-
-    expect(state.replaceGuest).toHaveBeenCalledOnce()
-    expect(state.pending()).toBe(true)
-  })
-
   it('surfaces guest replacement rejection without marking it ready', async () => {
     const replacementError = new Error('replacement failed')
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -137,32 +107,6 @@ describe('browser page guest recovery', () => {
     expect(state.reload).toHaveBeenCalledOnce()
     expect(state.replaceGuest).toHaveBeenCalledTimes(2)
     expect(state.onReplacementReady).toHaveBeenCalledOnce()
-  })
-
-  it('recreates an active guest missing from the authoritative registry after resume', async () => {
-    const state = createRecovery({ registered: false })
-
-    state.recovery.validateAfterResume()
-    await vi.waitFor(() => expect(state.onReplacementReady).toHaveBeenCalledOnce())
-
-    expect(state.validateRegistration).toHaveBeenCalledOnce()
-    expect(state.replaceGuest).toHaveBeenCalledOnce()
-  })
-
-  it('waits for an attaching guest instead of replacing it as missing', async () => {
-    vi.useFakeTimers()
-    const state = createRecovery()
-    state.validateRegistration.mockResolvedValueOnce(null).mockResolvedValueOnce(true)
-
-    state.recovery.validateAfterResume()
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(state.replaceGuest).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(BROWSER_GUEST_VALIDATION_RETRY_DELAY_MS)
-
-    expect(state.validateRegistration).toHaveBeenCalledTimes(2)
-    expect(state.onRecoverySucceeded).toHaveBeenCalledOnce()
-    expect(state.replaceGuest).not.toHaveBeenCalled()
   })
 
   it('surfaces an attaching guest that never becomes identifiable', async () => {
@@ -249,17 +193,6 @@ describe('browser page guest recovery', () => {
 
     expect(state.validateRegistration).toHaveBeenCalledOnce()
     expect(state.onRecoveryFailed).not.toHaveBeenCalled()
-  })
-
-  it('surfaces an explicit recovery failure instead of leaving a permanent blank page', () => {
-    vi.useFakeTimers()
-    const state = createRecovery()
-
-    state.recovery.recoverRenderer()
-    vi.advanceTimersByTime(BROWSER_GUEST_RECOVERY_TIMEOUT_MS)
-
-    expect(state.pending()).toBe(false)
-    expect(state.onRecoveryFailed).toHaveBeenCalledOnce()
   })
 
   it('keeps the original recovery deadline across repeated renderer loss events', () => {

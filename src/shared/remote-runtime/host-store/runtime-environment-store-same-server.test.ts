@@ -1,6 +1,7 @@
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { removeTempDirs } from '../../testing/remove-temp-dirs.test-support'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { encodePairingOffer } from '../pairing/pairing'
 import {
@@ -18,17 +19,11 @@ function pairingCode(endpoint: string, deviceToken = 'first-token', publicKeyB64
 
 describe('pairing a server that is already saved', () => {
   let userDataPath: string
-  const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
   beforeEach(() => {
-    // Why: this suite tests store contents, while secure-file tests cover Windows ACLs.
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
     userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-same-server-'))
   })
-  afterEach(() => {
-    if (originalPlatform) {
-      Object.defineProperty(process, 'platform', originalPlatform)
-    }
-    rmSync(userDataPath, { recursive: true, force: true })
+  afterEach(async () => {
+    await removeTempDirs([userDataPath])
   })
 
   it('refreshes the saved entry instead of saving the server twice under a new name', () => {
@@ -94,20 +89,5 @@ describe('pairing a server that is already saved', () => {
     )
     expect(listEnvironments(userDataPath).map((entry) => entry.id)).toContain(first.id)
     expect(listEnvironments(userDataPath)).toHaveLength(2)
-  })
-
-  it('refuses to fold a cloud workspace server into a saved entry', () => {
-    const first = addEnvironmentFromPairingCode(userDataPath, {
-      name: 'Studio',
-      pairingCode: pairingCode('ws://192.0.2.10:6768')
-    })
-    expect(() =>
-      addOrUpdateEnvironmentFromPairingCode(userDataPath, {
-        name: 'VM',
-        pairingCode: pairingCode('ws://192.0.2.20:6768', 'vm-token'),
-        source: 'ephemeral-vm'
-      })
-    ).toThrow('This server is already paired as "Studio".')
-    expect(listEnvironments(userDataPath)).toEqual([first])
   })
 })

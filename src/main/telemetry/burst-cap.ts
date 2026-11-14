@@ -1,6 +1,7 @@
 // Per-event refill caps runaway producers; non-refilling session/consent ceilings bound aggregate volume. Reset per telemetry session and warn once per bucket so overflow cannot flood stderr.
 
 import { eventSchemas, type EventName } from '../../shared/telemetry-events'
+import { isProtectedMilestoneEvent } from './event-sampling'
 
 const PER_EVENT_DEFAULT_CAPACITY = 30
 const PER_EVENT_AGENT_ERROR_CAPACITY = 20
@@ -58,6 +59,11 @@ export function consumeBurstToken(name: EventName): boolean {
       console.warn(`[telemetry] per-event burst cap hit for '${name}'; dropping further events`)
     }
     return false
+  }
+  // Once-per-day milestones keep their own bucket so noisy diagnostics cannot starve them.
+  if (isProtectedMilestoneEvent(name)) {
+    bucket.tokens -= 1
+    return true
   }
   if (perSessionCount >= PER_SESSION_CEILING) {
     if (!perSessionWarned) {

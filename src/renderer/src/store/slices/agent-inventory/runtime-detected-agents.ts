@@ -1,12 +1,18 @@
+import {
+  callRuntimeAgentDetection,
+  RuntimeAgentDetectionNeedsServerUpdateError,
+  type NestedSshAgentDetection
+} from './runtime-agent-detection-request'
+export {
+  callRuntimeAgentDetection,
+  RuntimeAgentDetectionNeedsServerUpdateError
+} from './runtime-agent-detection-request'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { getRuntimeEnvironmentStatus } from '@/runtime/rpc/compatibility/runtime-compatibility-probe'
-import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
-import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import { PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY } from '../../../../../shared/preflight-runtime-capabilities'
 import {
   getRuntimeAgentInventoryEnvironmentId,
   getRuntimeAgentInventoryKey
@@ -27,7 +33,8 @@ export type RuntimeDetectedAgentsSlice = {
   /** Refresh login-shell PATH; fall back to detectAgents only for servers predating refreshAgents. */
   refreshRuntimeDetectedAgents: (
     environmentId: string,
-    worktreeId?: string | null
+    worktreeId?: string | null,
+    options?: { userInitiated?: boolean }
   ) => Promise<TuiAgent[]>
   clearRuntimeDetectedAgents: (environmentId: string) => void
   /** Prune removed environments’ inventories via setRuntimeEnvironments. */
@@ -38,54 +45,10 @@ export type RuntimeDetectedAgentsSlice = {
 const runtimeDetectPromises = new Map<string, Promise<TuiAgent[]>>()
 const latestOutcome = new Map<string, 'pending' | 'successful' | 'failed'>()
 const runtimeRefreshPromises = new Map<string, Promise<TuiAgent[]>>()
+const explicitRefreshes = new WeakSet<Promise<TuiAgent[]>>()
 
 function isRuntimeMethodNotFoundError(error: unknown): boolean {
   return error instanceof RuntimeRpcCallError && error.code === 'method_not_found'
-}
-
-export class RuntimeAgentDetectionNeedsServerUpdateError extends Error {
-  constructor() {
-    super("Update Orca on this server to list this workspace's agents.")
-    this.name = 'RuntimeAgentDetectionNeedsServerUpdateError'
-  }
-}
-
-/** A paired host's workspace that lives on one of that host's own SSH targets. */
-type NestedSshAgentDetection<T> = {
-  connectionId: string
-  call: (params: { connectionId: string }) => Promise<T>
-}
-
-/** Old hosts can supply workspace agents via host defaults only on known non-Windows platforms; host-default requests remain synchronous. */
-export function callRuntimeAgentDetection<T>(
-  environmentId: string,
-  worktreeId: string | null | undefined,
-  call: (params: { worktreeId: string } | undefined) => Promise<T>,
-  nestedSsh?: NestedSshAgentDetection<T>
-): Promise<T> {
-  if (!worktreeId) {
-    return call(undefined)
-  }
-  const capability = PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY
-  return runtimeEnvironmentSupportsCapability(environmentId, capability).then(async (supported) => {
-    if (supported) {
-      return call({ worktreeId })
-    }
-    // Why: a fresh status both reports the platform and catches an in-place upgrade.
-    const status = await getRuntimeEnvironmentStatus(environmentId)
-    if (status.capabilities?.includes(capability)) {
-      return call({ worktreeId })
-    }
-    // Why: the host's SSH workspace runs on its SSH target, which old hosts already probe by id.
-    if (nestedSsh) {
-      return nestedSsh.call({ connectionId: nestedSsh.connectionId })
-    }
-    // Why: an old Windows host's default omits a WSL workspace's agents; an absent platform may be one.
-    if (!status.hostPlatform || status.hostPlatform === 'win32') {
-      throw new RuntimeAgentDetectionNeedsServerUpdateError()
-    }
-    return call(undefined)
-  })
 }
 
 type PairingFence = { expectedEnvironmentPairingRevision: number | undefined }
@@ -257,10 +220,14 @@ export const createRuntimeDetectedAgentsSlice: (
       return pending
     },
 
-    refreshRuntimeDetectedAgents: (environmentId: string, worktreeId?: string | null) => {
+    refreshRuntimeDetectedAgents: (
+      environmentId: string,
+      worktreeId?: string | null,
+      options = {}
+    ) => {
       const key = getRuntimeAgentInventoryKey(environmentId, worktreeId)
       const inflight = runtimeRefreshPromises.get(key)
-      if (inflight) {
+      if (inflight && (!options.userInitiated || explicitRefreshes.has(inflight))) {
         return inflight
       }
 
@@ -273,20 +240,35 @@ export const createRuntimeDetectedAgentsSlice: (
 
       const target = { kind: 'environment', environmentId } as const
       const fence = capturePairingFence(environmentId)
-      const pending = callRuntimeAgentDetection(
-        environmentId,
-        worktreeId,
-        (params) =>
-          callRuntimeRpc<{ agents: TuiAgent[] }>(target, 'preflight.refreshAgents', params, fence)
-            .then((result) => result.agents)
-            .catch((error) => {
-              if (!isRuntimeMethodNotFoundError(error)) {
-                throw error
-              }
-              // Fallback only for old servers; repeating disconnect/runtime failures just doubles remote work.
-              return callRuntimeRpc<TuiAgent[]>(target, 'preflight.detectAgents', params, fence)
-            }),
-        nestedSshDetection(target, worktreeId, fence)
+      const request = () =>
+        callRuntimeAgentDetection(
+          environmentId,
+          worktreeId,
+          (params) =>
+            callRuntimeRpc<{ agents: TuiAgent[] }>(
+              target,
+              'preflight.refreshAgents',
+              options.userInitiated ? { ...params, userInitiated: true } : params,
+              fence
+            )
+              .then((result) => result.agents)
+              .catch((error) => {
+                if (!isRuntimeMethodNotFoundError(error)) {
+                  throw error
+                }
+                // Fallback only for old servers; repeating disconnect/runtime failures just doubles remote work.
+                return callRuntimeRpc<TuiAgent[]>(target, 'preflight.detectAgents', params, fence)
+              }),
+          nestedSshDetection(target, worktreeId, fence)
+        )
+      const pending = (
+        inflight
+          ? inflight.then(() =>
+              runtimeRefreshPromises.get(key) === pending
+                ? request()
+                : (get().runtimeDetectedAgentIds[key] ?? [])
+            )
+          : request()
       )
         .then((typed) => {
           // Ignore refreshes detached by environment removal or re-pair.
@@ -319,6 +301,9 @@ export const createRuntimeDetectedAgentsSlice: (
           }
         })
 
+      if (options.userInitiated) {
+        explicitRefreshes.add(pending)
+      }
       runtimeRefreshPromises.set(key, pending)
       return pending
     },

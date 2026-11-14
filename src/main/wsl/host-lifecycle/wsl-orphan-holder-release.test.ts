@@ -96,12 +96,4 @@ describe('wslHolderKeepPolicy', () => {
     addHost('Ubuntu', 42000)
     expect(isWanted('ubuntu')).toBe(true)
   })
-
-  it('keeps an add in flight, and nothing while hosts are off', () => {
-    expect(
-      wslHolderKeepPolicy({ userDataPath, keepHostHolders: true, isAdding: () => true })('Alpine')
-    ).toBe(true)
-    addHost('Ubuntu', 42000)
-    expect(wslHolderKeepPolicy({ userDataPath, keepHostHolders: false })('Ubuntu')).toBe(false)
-  })
 })

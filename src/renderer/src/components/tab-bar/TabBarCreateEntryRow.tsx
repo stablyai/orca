@@ -12,9 +12,9 @@ import {
   Smartphone,
   TerminalSquare
 } from 'lucide-react'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { PluginContributionIcon } from '../plugins/PluginContributionIcon'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { FilePathCursorTooltip, FilenameFirstPath } from '@/components/file-path-cursor-tooltip'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'

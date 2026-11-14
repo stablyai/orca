@@ -5,7 +5,7 @@ import { writeSecureJsonFile } from '../../../../shared/secure-storage/secure-fi
 
 export function writeRuntimeMetadata(userDataPath: string, metadata: RuntimeMetadata): void {
   const metadataPath = getRuntimeMetadataPath(userDataPath)
-  writeMetadataFile(metadataPath, metadata)
+  writeSecureJsonFile(metadataPath, metadata)
 }
 
 export function readRuntimeMetadata(userDataPath: string): RuntimeMetadata | null {
@@ -54,8 +54,4 @@ export function clearRuntimeMetadataIfOwned(
     return
   }
   clearRuntimeMetadata(userDataPath)
-}
-
-function writeMetadataFile(path: string, metadata: RuntimeMetadata): void {
-  writeSecureJsonFile(path, metadata)
 }

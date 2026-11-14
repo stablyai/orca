@@ -1,5 +1,5 @@
 import { useCallback } from 'react'
-import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
+import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { useAppStore } from '@/store'
 import type { BrowserAddressBarSuggestion } from '../assemble-chrome/browser-address-bar-suggestions'
 

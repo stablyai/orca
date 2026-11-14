@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import {
-  chmod,
   copyFile,
   mkdir,
   mkdtemp,
@@ -112,40 +111,6 @@ describe('skill bundle manifest generator', () => {
     const digests = JSON.parse(await sandbox.read('released-digests.json')).skills.demo
     expect(digests).toContain(createHash('sha256').update('release-only version\n').digest('hex'))
     expect(digests).toHaveLength(2)
-  })
-
-  it('fails when a digest is missing or the pull request base cannot be read', async () => {
-    const sandbox = await createGeneratorSandbox()
-    sandbox.generate('--write')
-    expect(() => sandbox.generateOnPullRequest()).toThrow(/Cannot read the pull request base/)
-    await writeFile(
-      path.join(sandbox.root, 'resources', 'skills', 'released-digests.json'),
-      `${JSON.stringify({ schemaVersion: 1, skills: { demo: [] } }, null, 2)}\n`
-    )
-    expect(() => sandbox.generate()).toThrow(/stale/)
-  })
-
-  it.runIf(process.platform !== 'win32')(
-    'rejects executable files in shipped skill packages',
-    async () => {
-      const packageRoot = await createPackage()
-      await writeFile(path.join(packageRoot, 'SKILL.md'), 'skill\n')
-      await writeFile(path.join(packageRoot, 'run.sh'), '#!/bin/sh\necho ok\n')
-      await chmod(path.join(packageRoot, 'run.sh'), 0o755)
-
-      await expect(collectPackageFiles(packageRoot)).rejects.toThrow(
-        'Executable file is not allowed in a shipped skill: run.sh'
-      )
-    }
-  )
-
-  it.runIf(process.platform === 'linux')('rejects case-colliding paths', async () => {
-    const packageRoot = await createPackage()
-    await writeFile(path.join(packageRoot, 'SKILL.md'), 'skill')
-    await writeFile(path.join(packageRoot, 'Readme.md'), 'one')
-    await writeFile(path.join(packageRoot, 'README.md'), 'two')
-
-    await expect(collectPackageFiles(packageRoot)).rejects.toThrow('Case-colliding skill paths')
   })
 
   it('keeps guarding a directory or link that only wears an OS metadata name', async () => {

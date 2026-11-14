@@ -6,12 +6,13 @@ import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import { useTranslate } from '@/i18n/use-translate'
+import { translateHostDisplayLabel } from '../../sidebar/execution-host-label'
 import { QuickCommandsScopeFilter } from './QuickCommandsScopeFilter'
 
 type QuickCommandsToolbarProps = {
   query: string
   setQuery: (query: string) => void
-  hostOptions: readonly { id: ExecutionHostId; label: string }[]
+  hostOptions: readonly { id: ExecutionHostId; label: string; isDefaultLocalLabel?: boolean }[]
   showHostSelect: boolean
   selectedHostId: ExecutionHostId
   onHostChange: (hostId: ExecutionHostId) => void
@@ -91,7 +92,7 @@ export function QuickCommandsToolbar({
           <SelectContent>
             {hostOptions.map((host) => (
               <SelectItem key={host.id} value={host.id}>
-                {host.label}
+                {translateHostDisplayLabel(host)}
               </SelectItem>
             ))}
           </SelectContent>
@@ -107,7 +108,7 @@ export function QuickCommandsToolbar({
         className="ml-auto"
       >
         <Plus />
-        {t('auto.components.settings.QuickCommandsPane.5aacc8f7dc', 'Add Command')}
+        {t('auto.components.settings.QuickCommandsPane.f8cf6fc086', 'Add command')}
       </Button>
     </div>
   )

@@ -1,15 +1,17 @@
-import type { ITheme } from '@xterm/xterm'
-import { cn } from '@/lib/utils'
-import { getBuiltinTheme } from '@/lib/terminal-theme'
+import { cn } from '@/lib/class-names'
+import '@/lib/terminal/appearance/terminal-theme'
+import { getTheme } from '@/lib/terminal/appearance/terminal-themes-data'
 import {
   DEFAULT_TERMINAL_THEME_DARK,
   DEFAULT_TERMINAL_THEME_LIGHT
 } from '../../../../../../shared/terminal-themes/terminal-theme-selection'
 import { IpynbMarkdownCell } from '../cells/IpynbCellEditor'
 import { IpynbHtmlOutput } from './IpynbHtmlOutput'
-import { parseAnsiSegments, type AnsiColor } from './ipynb-ansi'
-import type { IpynbCell, IpynbOutput, IpynbOutputItem } from '../document/ipynb-parse'
+import { parseAnsiSegments } from './ipynb-ansi'
+import type { AnsiColor } from './ipynb-ansi'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import type { ITheme } from '@xterm/xterm'
+import type { IpynbCell, IpynbOutput, IpynbOutputItem } from '../document/ipynb-parse'
 
 const ANSI_PALETTE_KEYS = [
   'black',
@@ -32,8 +34,8 @@ const ANSI_PALETTE_KEYS = [
 
 // Why: the default terminal themes already carry ANSI palettes tuned for Orca's dark and light surfaces.
 const ANSI_PALETTES = {
-  dark: ANSI_PALETTE_KEYS.map((key) => getBuiltinTheme(DEFAULT_TERMINAL_THEME_DARK)?.[key]),
-  light: ANSI_PALETTE_KEYS.map((key) => getBuiltinTheme(DEFAULT_TERMINAL_THEME_LIGHT)?.[key])
+  dark: ANSI_PALETTE_KEYS.map((key) => getTheme(DEFAULT_TERMINAL_THEME_DARK)?.[key]),
+  light: ANSI_PALETTE_KEYS.map((key) => getTheme(DEFAULT_TERMINAL_THEME_LIGHT)?.[key])
 }
 
 function valueToText(value: unknown): string {

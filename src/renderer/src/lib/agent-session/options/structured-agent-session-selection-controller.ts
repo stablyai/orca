@@ -10,7 +10,7 @@ import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtim
 import {
   createStructuredSessionSelectionController,
   type StructuredSessionSelectionController
-} from '../../../../../shared/agent-session/options/structured-agent-session-selection-operations'
+} from '../../../../../shared/agent-session/options/selection/structured-agent-session-selection-operations'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { enqueueSessionOptionSettingsWrite } from '@/components/native-chat/session/options/native-chat-session-option-settings-write'

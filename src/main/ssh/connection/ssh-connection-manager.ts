@@ -9,6 +9,7 @@ import {
 import { createSshUserDisconnectedError, isSshUserDisconnected } from './ssh-user-disconnect'
 import { SSH_CONNECT_IN_PROGRESS_SUFFIX } from '../../../shared/ssh-sign-in-required-copy'
 import { markSshSessionStartFailure } from './ssh-session-start-failure'
+import { createSshHostAsleepError, isSshHostHeldAsleep } from './ssh-host-sleep-hold'
 
 /** A remembered sign-in only applies to the endpoint it was given for; an edited host must ask. */
 function signInEndpoint(target: SshTarget): string {
@@ -54,6 +55,10 @@ export class SshConnectionManager {
     // Refuse user-disconnected hosts before pool reuse, including transports opened by connection tests (#30086).
     if (!options?.probe && isSshUserDisconnected(target.id)) {
       throw createSshUserDisconnectedError(target.label)
+    }
+    // A sleeping VM's host takes no login until its workspace wakes; that wake marks it waking first.
+    if (!options?.probe && isSshHostHeldAsleep(target.id)) {
+      throw createSshHostAsleepError(target.label)
     }
     const existing = this.connections.get(target.id)
     if (existing?.getState().status === 'connected') {

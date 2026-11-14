@@ -1,10 +1,10 @@
-import type { PtyManagementDaemonCwdClass } from '../../../../preload/api-types'
+import type { DaemonPtyCwdClass } from '../../../../shared/daemon-adoption-telemetry'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 
 /** Use the same macOS folder phrase in toast and remedy so they read as one notice. */
 export function macFolderAccessFolderName(
-  cwdClass: PtyManagementDaemonCwdClass,
+  cwdClass: DaemonPtyCwdClass,
   t: Translate = translate
 ): string {
   switch (cwdClass) {

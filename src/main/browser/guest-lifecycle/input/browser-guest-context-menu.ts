@@ -4,10 +4,11 @@ import {
   normalizeExternalBrowserUrl,
   redactKagiSessionToken
 } from '../../../../shared/browser-url'
-import type { BrowserContextMenuRequestedEvent } from '../../../../shared/browser-guest-events'
-import { readContextMenuSpelling } from '../../../window/editable-context-menu'
+import type { BrowserContextMenuRequestedEvent } from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
+import { readContextMenuSpelling } from '../../../window/editing/editable-context-menu'
 import { readGuestNavigationState } from '../navigation/browser-guest-navigation-state'
 import type { ResolveRenderer } from '../browser-guest-renderer-target'
+// oxlint-disable-next-line import/no-cycle -- browser subsystem singleton hub (browserManager); breaking it needs DI and test-mock updates, left for a human
 import { buildBrowserExtensionPageContextMenu } from '../../extensions/context-menus/browser-extension-context-menu-host'
 
 export function setupGuestContextMenu(args: {

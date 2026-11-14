@@ -15,7 +15,7 @@ import {
   selectLiveAgentStatusEntriesForWorktree,
   selectRetainedAgentEntriesForWorktree
 } from '@/components/sidebar/workspace-card/activity/worktree-agent-row-selectors'
-import { isExecutionHostAliasForWorktree } from '@/lib/worktree-execution-host-alias'
+import { isExecutionHostAliasForWorktree } from '@/lib/workspace/ownership/worktree-execution-host-alias'
 import {
   findIndexedDetectedWorktrees,
   findIndexedWorktreeOwnerForHost

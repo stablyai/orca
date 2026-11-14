@@ -8,12 +8,10 @@ import {
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
 import type { SshConnectionState } from '../../../shared/ssh-types'
-import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import { MobileRelayHostCatalog } from './mobile-relay-host-catalog'
-import { PairedServerRowsProducer } from '../sidebar-inputs/paired-server-rows-producer'
+import { PairedServerRowsProducer } from '../sidebar-inputs/workspace-rows/paired-server-rows-producer'
 
 function answer(capable: boolean): RuntimeStatus {
   return {
@@ -69,6 +67,7 @@ function fakeHosts(
     environments,
     pairingRevision: 1,
     retire: (_environmentId: string) => {},
+    statusChanged: () => {},
     sshTargetLabels: new Map<string, string>(),
     sshConnectionStates: new Map<string, SshConnectionState>()
   }
@@ -119,19 +118,16 @@ function fakeHosts(
       state.retire = listener
       return () => {}
     },
-    onStatusChanged: () => () => {},
+    onStatusChanged: (listener) => {
+      state.statusChanged = listener
+      return () => {}
+    },
     watchChanges: () => ({ close: () => {}, current: () => true })
   }
   return { hosts, call, state }
 }
 
-function catalog(
-  hosts: MobileDesktopRelayHosts,
-  labels = new Map(),
-  desktop: {
-    sessions?: Record<string, Partial<WorkspaceSessionState>>
-  } = {}
-) {
+function catalog(hosts: MobileDesktopRelayHosts) {
   const serverRows = new PairedServerRowsProducer({
     hasDemand: () => false,
     hostLabelOverrides: () => new Map()
@@ -141,11 +137,8 @@ function catalog(
     catalog: new MobileRelayHostCatalog({
       hosts,
       serverRows,
-      hostLabelOverrides: () => labels,
-      getWorkspaceSession: (hostId) => {
-        const session = desktop.sessions?.[hostId]
-        return session ? { ...getDefaultWorkspaceSession(), ...session } : null
-      }
+      hostLabelOverrides: () => new Map(),
+      getWorkspaceSession: () => null
     })
   }
 }

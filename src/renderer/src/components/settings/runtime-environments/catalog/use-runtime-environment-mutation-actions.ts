@@ -6,7 +6,7 @@ import type { GlobalSettings } from '../../../../../../shared/global-settings-ty
 import type { PublicKnownRuntimeEnvironment } from '../../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
 import { isRuntimeEnvironmentRemovalBlocked } from './runtime-environment-host-details'
-import { defaultServerNameForAccessLink } from './runtime-server-default-name'
+import { defaultServerNameForAccessLink } from '../../../../../../shared/remote-runtime/host-catalog/runtime-host-default-name'
 import { forgetCachedRuntimeHostDetails } from './use-runtime-environment-catalog'
 import type { RuntimeHostAccessFailure } from '../../../runtime-access/RuntimeHostAccessFailureAlert'
 import { warnWslHostServerStop } from '../../../sidebar/wsl-host-removal'

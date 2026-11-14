@@ -17,7 +17,7 @@ vi.mock('@/i18n/i18n', () => ({
     fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => options?.[name] ?? '')
 }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionIdForFile: mocks.getConnectionIdForFile
 }))
 

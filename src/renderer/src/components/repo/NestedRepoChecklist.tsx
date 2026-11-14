@@ -1,7 +1,7 @@
 import { useCallback, useMemo, type Dispatch, type SetStateAction } from 'react'
 import { GitBranch } from 'lucide-react'
 import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   getRepoDisplayLabelKey,
   getRepoDisplayLabelsByPath

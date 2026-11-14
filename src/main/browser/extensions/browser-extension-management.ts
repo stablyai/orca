@@ -1,3 +1,4 @@
+import { recordBrowserExtensionInstalled } from '../../telemetry/browser-extensions-banner'
 import { isAbsolute } from 'node:path'
 import type {
   BrowserExtensionActionResult,
@@ -48,7 +49,7 @@ import { notifyChromeWebStoreUninstalled } from './web-store/browser-extension-w
 
 async function settle(action: () => Promise<void>): Promise<BrowserExtensionActionResult> {
   if (!isBrowserExtensionSupportEnabled()) {
-    return { ok: false, error: 'Turn on browser extensions in Settings › Experimental' }
+    return { ok: false, error: 'Turn on browser extensions in Settings › Browser › Extensions' }
   }
   try {
     await action()
@@ -58,6 +59,7 @@ async function settle(action: () => Promise<void>): Promise<BrowserExtensionActi
   }
 }
 
+/** Lists host-installed extensions with enablement and load status for the requested browser profile. */
 export async function listBrowserExtensionsForProfile(
   browserProfileId: string
 ): Promise<BrowserExtensionListResult> {
@@ -72,6 +74,7 @@ export async function listBrowserExtensionsForProfile(
       name: extension.name,
       version: extension.version,
       source: extension.source,
+      path: extension.path,
       enabled: enabled.has(extension.id),
       iconDataUrl: await readBrowserExtensionIconDataUrl(extension.path, extension.iconPath),
       hasOptionsPage: extension.optionsPage !== null,
@@ -139,8 +142,11 @@ export function removeBrowserExtension(extensionId: string): Promise<BrowserExte
       )
       forgetPinnedBrowserExtension(extensionId)
       getBrowserExtensionProfileStateStore().forgetExtension(extensionId)
-      getBrowserExtensionSyncStorageStore().forgetExtension(extensionId)
-      getBrowserExtensionDnrStore().forgetExtension(extensionId)
+      // Why awaited: keep the install record until the extension's saved data is deleted.
+      await Promise.all([
+        getBrowserExtensionSyncStorageStore().forgetExtension(extensionId),
+        getBrowserExtensionDnrStore().forgetExtension(extensionId)
+      ])
       forgetBrowserExtensionLoadFailures({ extensionId })
       forgetHeldBrowserExtensionUpdate(extensionId)
       await getBrowserExtensionInstallStore().remove(extensionId)
@@ -182,6 +188,8 @@ export function reloadUnpackedBrowserExtension(
       }
       store.save(record, true)
       await reloadBrowserExtensionWhereEnabled(record, { refresh: true })
+      // Why: a CLI reload can change name, version or options page while Settings is open.
+      notifyBrowserExtensionListChanged()
     })
   )
 }
@@ -239,6 +247,9 @@ export function addUnpackedBrowserExtension(
       browserSessionRegistry.updateEnabledExtensionIds((byProfile) =>
         withExtensionEnabled(byProfile, browserProfileId, loaded.id, true)
       )
+      if (!existing) {
+        recordBrowserExtensionInstalled('unpacked')
+      }
     })
     notifyBrowserExtensionListChanged()
   })
@@ -254,6 +265,6 @@ export function openBrowserExtensionOptions(
     if (!extension) {
       throw new Error('Turn the extension on to open its options')
     }
-    await openBrowserExtensionOptionsPage(browserProfileId, extension)
+    await openBrowserExtensionOptionsPage(browserProfileId, extension, { active: true })
   })
 }

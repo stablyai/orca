@@ -19,6 +19,11 @@ const { activateAndRevealWorkspace } = vi.hoisted(() => ({
 
 vi.mock('@/lib/workspace/activation/worktree-activation', () => ({ activateAndRevealWorkspace }))
 
+const emptyExtraSources = vi.hoisted(() => [])
+vi.mock('@/components/cmd-j/palette-extra-sources', () => ({
+  usePaletteExtraSources: () => emptyExtraSources
+}))
+
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactI18Next>()
   return {
@@ -232,17 +237,6 @@ describe('WorktreeJumpPalette', () => {
       navigationIntent: 'user-open',
       executionHostId: 'runtime:builder'
     })
-  })
-
-  it('refreshes the folder catalog while the palette is open', async () => {
-    await renderPalette({ repos: [], worktreesByRepo: {}, folderWorkspaces: [] })
-    await act(async () => {
-      useAppStore.setState({ folderWorkspaces: [makeFolderWorkspace()] })
-    })
-    expect(getWorktreeRows()).toHaveLength(1)
-    expect(getWorktreeRows()[0]).toContain('Design workspace')
-    await act(async () => useAppStore.setState({ folderWorkspaces: [] }))
-    expect(getWorktreeRows()).toEqual([])
   })
 
   it.each([true, false])(

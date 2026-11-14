@@ -13,7 +13,8 @@ import { resolvePtyFirstSize, type PtyGridSize } from '../../../ipc/pty/pty-firs
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { randomUUID } from 'node:crypto'
 import { paneStartFailure } from '../surface/pane-start-statuses'
-import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-pane-layout-tree'
+import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
+import { recordFreshLaunch } from './launch-evidence'
 
 export type SplitPaneSource = { worktreeId: string; tabId: string; leafId: string }
 
@@ -137,6 +138,9 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
     const createdPty = this.getOrCreatePtyWorktreeRecord(result.id)
     if (!createdPty) {
       throw new Error('terminal_exited')
+    }
+    if (!result.isReattach) {
+      recordFreshLaunch(createdPty)
     }
     recordPtySurface(
       this.terminalIdentity,

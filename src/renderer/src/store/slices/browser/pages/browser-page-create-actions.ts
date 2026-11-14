@@ -1,3 +1,4 @@
+import { copyBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import type {
   BrowserSlice,
   BrowserSliceGet,
@@ -10,9 +11,10 @@ import {
   findWorkspace,
   mirrorWorkspaceFromActivePage
 } from './browser-page-records'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../../shared/constants'
+import '../../../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../../../shared/browser/browser-blank-page'
 import { closeRemoteBrowserPageInOwningEnvironment } from '../hosts/browser-remote-close'
-import { releaseDocPreviewGrant } from '@/lib/doc-preview-grants'
+import { releaseDocPreviewGrant } from '@/lib/browser/documents/doc-preview-grants'
 import { admitBrowserPageMount } from '@/components/browser-pane/host-guest/browser-page-mount-admission'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import { sendBrowserLayoutCommand } from '../tabs/browser-layout-owner-commands'
@@ -153,9 +155,10 @@ export function createBrowserPageCreateActions(
           if (remoteHandle) {
             remotePagesToClose.push({ worktreeId: page.worktreeId, handle: remoteHandle })
           }
-          const nextRemoteBrowserPageHandlesByPageId = {
-            ...s.remoteBrowserPageHandlesByPageId
-          }
+          const nextRemoteBrowserPageHandlesByPageId = copyBrowserPageHandles(
+            s.remoteBrowserPageHandlesByPageId,
+            [pageId]
+          )
           delete nextRemoteBrowserPageHandlesByPageId[pageId]
           const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
           const nextBrowserAnnotationMarkerIdsByPageId = { ...s.browserAnnotationMarkerIdsByPageId }

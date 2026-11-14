@@ -1,7 +1,7 @@
 import { syncPaneOutputCadences } from '../pty-transport/renderer-active-pty'
 import type { ManagedPane, PaneSpawnHints } from '@/lib/pane-manager/pane-manager-types'
 import { useAppStore } from '@/store/index'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { createOsc52OscHandler } from '../../../../../shared/osc52-clipboard'
 import {

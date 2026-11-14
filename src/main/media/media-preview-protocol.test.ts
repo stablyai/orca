@@ -15,7 +15,7 @@ vi.mock('../ipc/filesystem/access/local-file-access-resolution', () => ({
   resolveLocalFileRequestPath: authorize
 }))
 
-vi.mock('../ipc/runtime-environments/runtime-environment-registry-root', () => ({
+vi.mock('../ipc/runtime-environments/catalog/runtime-environment-registry-root', () => ({
   readRegisteredPairingRevision: vi.fn(() => 9)
 }))
 vi.mock('./remote-file-preview-reader', async (importOriginal) => ({

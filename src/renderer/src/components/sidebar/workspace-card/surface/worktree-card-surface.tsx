@@ -1,7 +1,7 @@
 import React from 'react'
 import { LoaderCircle } from 'lucide-react'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { AutoRenameFailedDialog } from '../identity/AutoRenameFailedDialog'
 import WorktreeContextMenu from '../../workspace-actions/context-menu/WorktreeContextMenu'
 import { useIsSleepingWorktree } from '../../workspace-actions/sleep/use-worktree-sleep-state'
@@ -9,6 +9,7 @@ import { getWorktreeCardFrameGeometry } from './worktree-card-frame-geometry'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 import { DEFAULT_WORKSPACE_CARD_TEMPLATE } from '../template/default-workspace-card'
 import { renderWorkspaceCardTemplate } from '../template/render-workspace-card-template'
+import { WorktreeCardTitleStatusProvider } from './worktree-card-title-status'
 
 export function WorktreeCardSurface({ card }: { card: WorktreeCardController }): React.JSX.Element {
   const {
@@ -47,7 +48,7 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
   const isSleeping = useIsSleepingWorktree(worktree.id)
   const geometryFor = (statusLane: boolean) =>
     getWorktreeCardFrameGeometry({ flushSurface, contentIndent, statusLane })
-  const { content: parentCardContent, frame } = renderWorkspaceCardTemplate(
+  const { content: templateContent, frame } = renderWorkspaceCardTemplate(
     card,
     DEFAULT_WORKSPACE_CARD_TEMPLATE,
     (templateFrame) => {
@@ -57,13 +58,20 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         : undefined
     }
   )
+  const parentCardContent = newCardStyle ? (
+    // One roll-up per card feeds the status lane, the title and the title's right-hand slot.
+    <WorktreeCardTitleStatusProvider card={card}>{templateContent}</WorktreeCardTitleStatusProvider>
+  ) : (
+    templateContent
+  )
   const { cardStyle } = geometryFor(frame.statusLane)
   const titleOnlyCard = frame.singleLine
 
   const cardBody = (
     <div
       className={cn(
-        'relative flex cursor-pointer flex-col pr-1.5 transition-[background-color,border-color,opacity,box-shadow] duration-200 outline-none select-none',
+        'relative flex cursor-pointer flex-col transition-[background-color,border-color,opacity,box-shadow] duration-200 outline-none select-none',
+        'pr-1.5',
         titleOnlyCard ? 'py-2' : 'pt-1.25 pb-1.5',
         flushSurface ? 'ml-1 w-[calc(100%-0.25rem)]' : 'ml-1',
         'overflow-hidden rounded-lg',

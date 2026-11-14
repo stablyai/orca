@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import type { ContextualTourStepId } from '../../../../shared/contextual-tours'
 
 export type LocalizedContextualTourStepCopy = {
@@ -94,16 +94,6 @@ const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
       'Each worktree gets its own branch, so parallel work stays separate.'
     )
   }),
-  'browser-grab': () => ({
-    title: translate(
-      'auto.components.contextual.tours.contextual.tour.step.copy.browser.grab.title',
-      'Grab page context for agents'
-    ),
-    body: translate(
-      'auto.components.contextual.tours.contextual.tour.step.copy.browser.grab.body',
-      "Use the grab tool to copy a page element's context for agents."
-    )
-  }),
   'browser-annotate': () => ({
     title: translate(
       'auto.components.contextual.tours.contextual.tour.step.copy.browser.annotate.title',
@@ -122,6 +112,24 @@ const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
     body: translate(
       'auto.components.contextual.tours.contextual.tour.step.copy.browser.logins.body',
       'Bring your existing logins into Orca to stay signed in immediately.'
+    )
+  }),
+  'browser-extensions-intro': () => ({
+    title: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.browser.extensions.intro.title',
+      'Bring your Chrome extensions'
+    ),
+    body: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.browser.extensions.intro.body',
+      'Install from the Chrome Web Store and pin them next to the address bar.'
+    ),
+    primaryActionLabel: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.browser.extensions.intro.action',
+      'Open Web Store'
+    ),
+    secondaryActionLabel: translate(
+      'auto.components.contextual.tours.contextual.tour.step.copy.browser.extensions.intro.secondaryAction',
+      'Got it'
     )
   }),
   'client-hosted-browser-intro': () => ({

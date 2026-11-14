@@ -39,4 +39,44 @@ describe('conversation outline read', () => {
     expect(replyBytes(outline)).toBeLessThanOrEqual(HISTORY_PAGE_CONTENT_BUDGET_BYTES)
     expect(outline.entries.at(-1)?.itemId).toBe('user-10000')
   })
+
+  // Newer clients ignore an unmarked outline, which older hosts may fill with agent-written inputs.
+  it('marks its outline as listing only messages a person wrote', () => {
+    expect(readAgentSessionConversationOutline(snapshot([]))).toEqual({
+      sessionId: 'session-1',
+      humanMessagesOnly: true,
+      cursor: { epoch: 'epoch-1', sequence: 0 },
+      entries: [],
+      omittedEntries: 0
+    })
+  })
+
+  it('omits sent [Image #N] markers from user message outline previews', () => {
+    const outline = readAgentSessionConversationOutline(
+      snapshot([
+        {
+          itemId: 'user-1',
+          revision: 1,
+          sequence: 1,
+          observedAt: 1,
+          body: {
+            kind: 'message',
+            role: 'user',
+            blocks: [
+              { type: 'text', text: 'Compare [Image #1] with baseline' },
+              { type: 'image-ref', path: '/tmp/shot.png' }
+            ]
+          }
+        }
+      ])
+    )
+    expect(outline.entries).toEqual([
+      {
+        itemId: 'user-1',
+        sequence: 1,
+        preview: 'Compare with baseline',
+        imageCount: 1
+      }
+    ])
+  })
 })

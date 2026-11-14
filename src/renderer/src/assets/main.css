@@ -49,6 +49,10 @@
   --text-2xs--line-height: calc(1 / 0.6875);
   --text-3xs: 0.625rem;
   --text-3xs--line-height: calc(0.875 / 0.625);
+  --text-settings-detail: 0.78125rem;
+  --text-settings-detail--line-height: 1.35;
+  --text-settings-heading: 0.9375rem;
+  --text-settings-heading--line-height: 1.4;
   --text-chat-code: 0.75rem;
   --text-chat-code--line-height: calc(1 / 0.75);
 }
@@ -61,6 +65,7 @@
   --color-chat-foreground: var(--chat-foreground);
   --color-chat-foreground-strong: var(--chat-foreground-strong);
   --color-chat-foreground-faint: var(--chat-foreground-faint);
+  --color-chat-unread: var(--chat-unread);
   --color-chat-user-surface: var(--chat-user-surface);
   --color-chat-user-border: var(--chat-user-border);
   --color-chat-code-foreground: var(--chat-code-foreground);
@@ -96,6 +101,10 @@
   --color-agent-question: var(--agent-question);
   --color-agent-working: var(--agent-working);
   --color-agent-question-text: var(--agent-question-text);
+  --color-question-card-border: var(--question-card-border);
+  --color-question-option-border: var(--question-option-border);
+  --color-chat-focus-ring: var(--chat-focus-ring);
+  --color-unread: var(--unread);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -171,6 +180,7 @@
   --color-git-graph-lane-5: var(--git-graph-lane-5);
   --color-annotation-highlight: var(--annotation-highlight);
   --shadow-floating: 0 10px 24px rgb(0 0 0 / 0.18);
+  --shadow-notice: var(--notice-shadow);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -257,6 +267,11 @@
   --agent-working: var(--color-yellow-500);
   /* Legible weight for text/glyphs on a tinted --agent-question surface. */
   --agent-question-text: var(--color-orange-700);
+  /* Answer card edge and the outline shared by its option tiles, badges, answer field and Skip. */
+  --question-card-border-mix: 14%;
+  --question-option-border-mix: 16%;
+  /* A finished agent result the user hasn't seen; blue so it never reads as a state color. */
+  --unread: var(--color-blue-500);
   /* Keep PR-state hues stable across theme changes. */
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
@@ -374,6 +389,9 @@
   --ai-action-accent: var(--color-violet-400);
   --agent-question: var(--color-orange-500);
   --agent-question-text: var(--color-orange-300);
+  --question-card-border-mix: 16%;
+  --question-option-border-mix: 12%;
+  --unread: var(--color-blue-400);
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
   --workspace-status-progress: #d4a300;
@@ -537,6 +555,68 @@
   --linear-priority-bar-inactive-fill: color-mix(in srgb, lch(39.576 1.25 282) 62%, transparent);
 }
 
+/* One lifted surface for toasts and corner notification cards; the default card/popover blends into the app.
+   App themes replace the surface, fill and edge colors with readable ones (notice-surface-tokens.ts). */
+:root {
+  --notice-accent: var(--accent);
+  --notice-accent-foreground: var(--accent-foreground);
+  --notice-edge: var(--border);
+  --notice-input: var(--input);
+  --notice-muted: var(--muted);
+  --notice-muted-foreground: var(--muted-foreground);
+  --notice-outline-edge: transparent;
+  --notice-secondary-edge: transparent;
+  --notice-surface: var(--popover);
+  --notice-border: color-mix(in srgb, var(--popover-foreground) 14%, transparent);
+  --notice-secondary: color-mix(in srgb, var(--foreground) 6%, var(--notice-surface));
+  --notice-shadow: 0 11px 32px -6px rgb(0 0 0 / 0.2), 0 2px 6px rgb(0 0 0 / 0.08);
+}
+
+.dark {
+  --notice-surface: color-mix(in srgb, var(--foreground) 7%, var(--popover));
+  --notice-border: color-mix(in srgb, var(--popover-foreground) 15%, transparent);
+  --notice-secondary: color-mix(in srgb, var(--foreground) 10%, var(--notice-surface));
+  --notice-shadow:
+    0 11px 32px -6px rgb(0 0 0 / 0.55), 0 2px 6px rgb(0 0 0 / 0.22),
+    inset 0 1px 0 rgb(255 255 255 / 0.06);
+}
+
+/* Why: buttons, text and inner panels paint from these; foregrounds pair with the popover the surface lifts,
+   and every remapped foreground keeps its surface (outline buttons paint text-foreground on bg-background). */
+[data-sonner-toaster],
+.notification-card-stack {
+  --popover: var(--notice-surface);
+  --card: var(--notice-surface);
+  --background: var(--notice-surface);
+  --foreground: var(--popover-foreground);
+  --card-foreground: var(--popover-foreground);
+  --muted: var(--notice-muted);
+  --muted-foreground: var(--notice-muted-foreground);
+  --secondary: var(--notice-secondary);
+  --secondary-foreground: var(--popover-foreground);
+  --accent: var(--notice-accent);
+  --accent-foreground: var(--notice-accent-foreground);
+  --input: var(--notice-input);
+  --border: var(--notice-edge);
+}
+
+/* Why inset outline: an edge for themes that leave secondary buttons unfilled, without moving layout. */
+:is([data-sonner-toaster], .notification-card-stack)
+  :is(
+    [data-slot='button'][data-variant='secondary'],
+    [data-sonner-toast] [data-button][data-cancel]
+  ) {
+  outline: 1px solid var(--notice-secondary-edge);
+  outline-offset: -1px;
+}
+
+.dark
+  :is([data-sonner-toaster], .notification-card-stack)
+  [data-slot='button'][data-variant='outline'] {
+  outline: 1px solid var(--notice-outline-edge);
+  outline-offset: -1px;
+}
+
 [data-sonner-toaster] {
   font-family: var(--font-sans);
   /* Why: above the floating workspace (z-45 panel, z-46 launcher), which parks in the toasts' corner. */
@@ -559,7 +639,7 @@ body[data-modal-overlay-open] [data-toasts-raised] [data-sonner-toaster] {
   flex-wrap: wrap;
   gap: 10px;
   padding: 14px 16px;
-  box-shadow: var(--shadow-floating);
+  box-shadow: var(--notice-shadow);
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-icon] {
@@ -644,28 +724,21 @@ body[data-modal-overlay-open]
   pointer-events: auto;
 }
 
-[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
+[data-sonner-toaster][data-sonner-theme]
+  [data-sonner-toast][data-styled='true']
+  [data-close-button] {
   /* Override Sonner’s dark defaults so the close icon contrasts in both themes. */
   color: var(--popover-foreground);
   background: var(--popover);
-  border-color: rgb(0 0 0 / 0.14);
+  border-color: var(--notice-border);
 }
 
-[data-sonner-toaster][data-sonner-theme='dark']
+[data-sonner-toaster][data-sonner-theme]
   [data-sonner-toast][data-styled='true']
-  [data-close-button] {
-  color: var(--popover-foreground);
-  background: var(--popover);
-  border-color: rgb(255 255 255 / 0.14);
-}
-
-.dark [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button] {
-  border-color: rgb(255 255 255 / 0.14);
-}
-
-[data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-close-button]:hover {
+  [data-close-button]:hover {
   color: var(--accent-foreground);
   background: var(--accent);
+  border-color: var(--notice-border);
 }
 
 /* Re-evaluate chat colors where the appearance producer supplies their source colors. */
@@ -738,9 +811,22 @@ body[data-modal-overlay-open]
     var(--chat-source-foreground) var(--chat-composer-border-mix),
     transparent
   );
+  /* From the chat's own foreground, so the edges stay visible when chat follows the terminal's colors. */
+  --question-card-border: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--question-card-border-mix),
+    transparent
+  );
+  --question-option-border: color-mix(
+    in srgb,
+    var(--chat-source-foreground) var(--question-option-border-mix),
+    transparent
+  );
   /* Mixed toward the foreground so each clears text contrast on the canvas in either scheme. */
   --chat-focus-ring: color-mix(in srgb, var(--chat-source-foreground) 50%, var(--chat-canvas));
   --chat-warning: color-mix(in srgb, var(--status-warning) 70%, var(--chat-source-foreground));
+  /* What the reader has not seen yet: the transcript's "New" marker, in the note hue. */
+  --chat-unread: color-mix(in srgb, var(--callout-note) 70%, var(--chat-source-foreground));
   --chat-diff-added: color-mix(in srgb, var(--diff-added) 70%, var(--chat-source-foreground));
   --chat-diff-removed: color-mix(in srgb, var(--diff-removed) 70%, var(--chat-source-foreground));
   --chat-link: color-mix(
@@ -801,6 +887,31 @@ body[data-modal-overlay-open]
 
   :where(button:disabled) {
     cursor: default;
+  }
+}
+
+/* Outline interaction cues are scoped to dialog footer actions only. #41870 applied them to
+   every Button/Toggle/SelectTrigger, which read as noise on dense toolbar icon buttons.
+   Unlayered on purpose so it beats the Button's `outline-none` utility. Uses :focus (not
+   :focus-visible) so a dialog's auto-focused default action is visibly marked on open, and
+   clears the Button's focus-visible ring so the two cues don't stack. */
+[data-slot='dialog-footer'] [data-slot='button']:not(:disabled, [aria-disabled='true']) {
+  @media (hover: hover) {
+    &:hover {
+      outline: 1px solid var(--ring);
+      outline-offset: 1px;
+    }
+  }
+
+  &:focus {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    --tw-ring-shadow: 0 0 #0000;
+  }
+
+  &:active {
+    outline: 2px solid var(--ring);
+    outline-offset: 0;
   }
 }
 
@@ -1056,7 +1167,9 @@ body[data-modal-overlay-open]
     [data-slot='command-dialog-content'],
     [data-slot='sheet-content'],
     [data-onboarding-overlay]
-  ):has(~ [data-slot='dialog-overlay'], ~ [data-slot='sheet-overlay']) {
+  ):has(
+    ~ :is([data-slot='dialog-overlay'], [data-slot='sheet-overlay']):not([data-state='closed'])
+  ) {
   filter: blur(2px);
 }
 
@@ -1523,6 +1636,20 @@ html.native-shell .app-layout {
   color: var(--accent-foreground);
 }
 
+/* Why: the split-pane landing card is a flat surface, so its highlight is a plain fill on
+   --popover with no ring; these out-rank the palette rules above in both themes. */
+.split-pane-landing [data-slot='command-item'].jump-palette-item[data-selected='true'] {
+  --jump-palette-selection-surface: color-mix(in srgb, var(--foreground) 12%, var(--popover));
+  background: var(--jump-palette-selection-surface);
+  box-shadow: none;
+}
+
+.dark .split-pane-landing [data-slot='command-item'].jump-palette-item[data-selected='true'] {
+  --jump-palette-selection-surface: color-mix(in srgb, var(--foreground) 8%, var(--popover));
+  background: var(--jump-palette-selection-surface);
+  box-shadow: none;
+}
+
 [data-file-explorer-row][data-selected='true'] {
   /* Why: flat bg-accent ≈ panel background in light mode, so selection mixes
      foreground into accent and adds an inset ring to stay legible in both themes. */
@@ -1572,6 +1699,7 @@ html.native-shell .app-layout {
 
 /* Why: the brighter border carries the selected state; a translucent wash keeps
    card text legible instead of lifting the surface toward the foreground color. */
+[data-worktree-family-segment='primary'],
 [data-worktree-card-surface][data-worktree-card-active='primary'] {
   border-color: var(
     --worktree-sidebar-active-border,
@@ -1584,6 +1712,7 @@ html.native-shell .app-layout {
   box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 4%, transparent);
 }
 
+.dark [data-worktree-family-segment='primary'],
 .dark [data-worktree-card-surface][data-worktree-card-active='primary'] {
   border-color: var(
     --worktree-sidebar-active-border,
@@ -1609,16 +1738,32 @@ html.native-shell .app-layout {
   }
 }
 
+[data-worktree-family-segment='secondary'],
 [data-worktree-card-surface][data-worktree-card-active='secondary'] {
   border-color: color-mix(in srgb, var(--sidebar-ring) 25%, transparent);
   background: color-mix(in srgb, var(--sidebar-accent) 45%, transparent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 15%, transparent);
 }
 
+.dark [data-worktree-family-segment='secondary'],
 .dark [data-worktree-card-surface][data-worktree-card-active='secondary'] {
   border-color: color-mix(in srgb, var(--sidebar-ring) 28%, transparent);
   background: color-mix(in srgb, var(--sidebar-accent) 34%, transparent);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-ring) 18%, transparent);
+}
+
+/* Family paint owns the surface in both themes, including secondary occurrences. */
+.worktree-sidebar-family-root [data-worktree-card-surface][data-worktree-card-active],
+.dark .worktree-sidebar-family-root [data-worktree-card-surface][data-worktree-card-active] {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* Continuous segments must not cast a horizontal shadow at every virtual boundary. */
+[data-worktree-family-segment],
+.dark [data-worktree-family-segment] {
+  box-shadow: none;
 }
 
 /* #19624: mix text tokens toward sidebar in oklab for theme-stable perceptual dimming; preserve unread amber at full brightness. */
@@ -1639,16 +1784,12 @@ html.native-shell .app-layout {
 }
 
 .worktree-agent-row-hover:hover {
-  background: color-mix(in srgb, var(--sidebar-foreground) 1.25%, transparent);
+  background: var(--worktree-sidebar-accent);
 }
 
 .worktree-agent-row-hover[data-focused-agent-pane='true'] {
   /* Mix sidebar-foreground into faint light-mode accent, retaining enough contrast for muted timestamps. */
   background: color-mix(in srgb, var(--sidebar-foreground) 12%, var(--sidebar-accent));
-}
-
-.dark .worktree-agent-row-hover:hover {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .dark .worktree-agent-row-hover[data-focused-agent-pane='true'] {
@@ -2004,16 +2145,7 @@ html.native-shell .app-layout {
   .compact-agent-row.worktree-agent-lineage-parent-row.worktree-agent-row-hover:hover,
 [data-compact-agent-list='true']
   .compact-agent-row.worktree-agent-lineage-child-row.worktree-agent-row-hover:hover {
-  background: color-mix(in srgb, var(--sidebar-foreground) 1.25%, transparent);
-}
-
-.dark
-  [data-compact-agent-list='true']
-  .compact-agent-row.worktree-agent-lineage-parent-row.worktree-agent-row-hover:hover,
-.dark
-  [data-compact-agent-list='true']
-  .compact-agent-row.worktree-agent-lineage-child-row.worktree-agent-row-hover:hover {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  background: var(--worktree-sidebar-accent);
 }
 
 [data-compact-agent-list='true']
@@ -2130,6 +2262,43 @@ html.native-shell .app-layout {
   }
 }
 
+/* Search and deep-link target: a tint out to the enclosing card's edges that fades.
+   An inset shadow carries the tint so a highlighted card keeps its own fill and corners.
+   The bleed vars are measured per target, since nested and sub-row targets sit further in. */
+.settings-target-highlight {
+  --settings-target-tint: color-mix(in srgb, var(--foreground) 8%, transparent);
+  box-shadow:
+    inset 0 0 0 100vmax var(--settings-target-tint),
+    calc(-1 * var(--settings-target-bleed-left, 0px)) 0 0 var(--settings-target-tint),
+    var(--settings-target-bleed-right, 0px) 0 0 var(--settings-target-tint);
+}
+
+[data-settings-scroll-list] .settings-target-highlight {
+  --settings-target-tint: color-mix(in srgb, var(--foreground) 12%, transparent);
+  border-radius: var(--radius-md);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .settings-target-highlight {
+    animation: settings-target-highlight-fade 3s ease-out forwards;
+  }
+}
+
+@keyframes settings-target-highlight-fade {
+  60% {
+    box-shadow:
+      inset 0 0 0 100vmax var(--settings-target-tint),
+      calc(-1 * var(--settings-target-bleed-left, 0px)) 0 0 var(--settings-target-tint),
+      var(--settings-target-bleed-right, 0px) 0 0 var(--settings-target-tint);
+  }
+  100% {
+    box-shadow:
+      inset 0 0 0 100vmax transparent,
+      calc(-1 * var(--settings-target-bleed-left, 0px)) 0 0 transparent,
+      var(--settings-target-bleed-right, 0px) 0 0 transparent;
+  }
+}
+
 @keyframes settings-shell-enter {
   from {
     opacity: 0;
@@ -2144,6 +2313,43 @@ html.native-shell .app-layout {
 
 .settings-view-shell {
   animation: settings-shell-enter 180ms ease-out;
+}
+
+/* Shared row primitives also render outside Settings; their density stays local to this page. */
+.settings-view-shell > :not(aside) [data-slot='label'],
+.settings-view-shell > :not(aside) [data-source-title] {
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+
+.settings-view-shell > :not(aside) p.text-xs,
+.settings-view-shell > :not(aside) p.text-2xs,
+.settings-view-shell > :not(aside) p[class~='text-[10px]'],
+.settings-view-shell > :not(aside) p[class~='text-[11px]'],
+.settings-view-shell > :not(aside) p[class~='text-[12px]'],
+.settings-view-shell > :not(aside) p[class~='text-[13px]'],
+.settings-view-shell > :not(aside) [data-source-path] {
+  font-size: var(--text-settings-detail);
+  line-height: 1.35;
+}
+
+.settings-view-shell > :not(aside) [data-slot='select-trigger'],
+.settings-view-shell > :not(aside) button[role='combobox'] {
+  min-height: 28px;
+  height: 28px;
+}
+
+.settings-view-shell > :not(aside) [data-settings-row]:not(:has([data-settings-row])) {
+  padding-block: 9px;
+  min-height: 44px;
+}
+
+.settings-view-shell > :not(aside) [data-settings-group-heading] {
+  font-size: var(--text-settings-heading);
+}
+
+.settings-view-shell > :not(aside) [data-settings-group-description] {
+  font-size: var(--text-settings-detail);
 }
 
 .repo-icon-emoji-picker .EmojiPickerReact {

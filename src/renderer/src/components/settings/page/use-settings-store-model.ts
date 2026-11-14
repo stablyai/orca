@@ -1,3 +1,5 @@
+import { useSupportedGroupHookSettings } from '@/hooks/use-supported-group-hook-settings'
+import type { GeneralSubPage } from '../general/general-sub-pages'
 import { useCallback, useMemo, useState } from 'react'
 import type { OrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
 import type { ProjectHostSetup } from '../../../../../shared/project-types'
@@ -6,22 +8,22 @@ import { useAppStore } from '../../../store/index'
 import { useProjectHostSetupProjection } from '@/store/projects/use-project-host-setup-projection'
 import { usePluginFontFamilies } from '@/store/plugins/appearance/plugin-fonts'
 import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
-import { isMacUserAgent, isWindowsUserAgent } from '@/lib/user-agent-platform'
+import { isMacUserAgent, isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import {
   COMPUTER_USE_SKILL_NAME,
   LINEAR_AGENT_SKILL_NAMES,
   ORCHESTRATION_SKILL_NAME
-} from '@/lib/agent-feature-skill-names'
+} from '@/lib/skills/installation/agent-feature-skill-names'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill,
   useInstalledAgentSkillNames
-} from '@/hooks/useInstalledAgentSkills'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+} from '@/hooks/skills/discovery/useInstalledAgentSkills'
+import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
 import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
-import { useSkillFreshness } from '@/hooks/useSkillFreshness'
+import { useSkillFreshness } from '@/hooks/skills/freshness/useSkillFreshness'
 import {
   getFallbackTerminalFonts,
   mergeFontSuggestions,
@@ -38,13 +40,14 @@ import {
 } from '../navigation/settings-project-list'
 import { resolveSettingsHostScope } from '../host-scope/settings-host-scope'
 import { useSettingsHostNavigation } from '../host-scope/use-settings-host-navigation'
-import { defaultScopeHost } from '@/lib/default-creation-host'
+import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
 import {
   blockRemovalForUnsavedFiles,
   projectRemovalTargets
 } from '@/components/sidebar/workspace-actions/deletion/removal-unsaved-files'
 
 export function useSettingsStoreModel() {
+  const hookSettingsGroups = useSupportedGroupHookSettings()
   const settings = useAppStore((s) => s.settings)
   const keybindings = useAppStore((s) => s.keybindings)
   const updateSettings = useAppStore((s) => s.updateSettings)
@@ -155,11 +158,12 @@ export function useSettingsStoreModel() {
     [fontSuggestions]
   )
   const [activeSectionId, setActiveSectionId] = useState('general')
+  const [generalSubPage, setGeneralSubPage] = useState<GeneralSubPage | null>(null)
   const [mountedSectionIds, setMountedSectionIds] = useState<Set<string>>(
     getInitialMountedSectionIds
   )
   const [pendingNavRequestTick, setPendingNavRequestTick] = useState(0)
-  const [highlightedSettingsTargetId, setHighlightedSettingsTargetId] = useState<string | null>(
+  const [highlightedSettingsTarget, setHighlightedSettingsTarget] = useState<{ id: string } | null>(
     null
   )
   const [quickCommandAddIntentSignal, setQuickCommandAddIntentSignal] = useState(0)
@@ -203,6 +207,9 @@ export function useSettingsStoreModel() {
   )
 
   return {
+    hookSettingsGroups,
+    generalSubPage,
+    setGeneralSubPage,
     settings,
     keybindings,
     updateSettings,
@@ -259,8 +266,8 @@ export function useSettingsStoreModel() {
     setMountedSectionIds,
     pendingNavRequestTick,
     setPendingNavRequestTick,
-    highlightedSettingsTargetId,
-    setHighlightedSettingsTargetId,
+    highlightedSettingsTarget,
+    setHighlightedSettingsTarget,
     quickCommandAddIntentSignal,
     setQuickCommandAddIntentSignal,
     sshHostAddIntentSignal,

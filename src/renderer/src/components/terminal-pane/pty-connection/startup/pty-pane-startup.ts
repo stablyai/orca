@@ -11,7 +11,8 @@ import type { SessionOptionValue } from '../../../../../../shared/native-chat/in
 import type { AgentPaneLaunchRequest } from '../../../../../../shared/agent-launch/contracts/agent-pane-launch-request'
 
 export type PtyPaneStartup = {
-  command: string
+  /** Absent when the startup carries only spawn env, e.g. a paired viewer's plain terminal (#39852). */
+  command?: string
   /** Renderer-delivered startup input for callers that need xterm paste
    *  semantics before the submit Enter. */
   delivery?: 'terminal-paste'

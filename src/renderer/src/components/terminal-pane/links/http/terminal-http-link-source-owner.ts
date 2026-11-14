@@ -3,8 +3,8 @@ import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/hosted-terminals/ide
 import { parseRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parseAppSshPtyId } from '../../../../../../shared/ssh-pty-id'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
-import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
-import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
+import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/worktree-operation-route'
 import { legacyRelayBridgedPane } from '../../pty-transport/legacy-relay/legacy-relay-bridge-panes'
 
 type OwnerTransport = Pick<PtyTransport, 'getPtyId' | 'getRuntimeEnvironmentId' | 'getConnectionId'>

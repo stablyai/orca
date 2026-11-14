@@ -10,8 +10,8 @@ import {
 } from '../activation/orcad-activation-record'
 
 const mocks = vi.hoisted(() => ({ send: vi.fn(), ensure: vi.fn(), verify: vi.fn() }))
-vi.mock('../../../shared/remote-runtime/remote-runtime-client', () => ({
-  sendRemoteRuntimeRequestWithStatusPreflight: mocks.send
+vi.mock('../../../shared/remote-runtime/requests/remote-runtime-request-socket', () => ({
+  sendRemoteRuntimeRequestOnSocket: mocks.send
 }))
 vi.mock('./orcad-managed-tunnel', () => ({
   ensureOrcadManagedTunnel: mocks.ensure
@@ -44,10 +44,12 @@ const unverifiable = {
 const census = { liveSessions: 2, startedSinceActivation: 1, daemonProtocolVersion: 7 }
 
 function answerWith(capabilities: string[], response: unknown) {
-  mocks.send.mockImplementation(async (_pairing, _method, _params, _timeout, validate) => {
-    validate({ ok: true, result: { capabilities } })
-    return response
-  })
+  mocks.send.mockImplementation(
+    async (_pairing, _method, _params, _timeout, _envelope, validate) => {
+      validate({ ok: true, result: { capabilities } })
+      return response
+    }
+  )
 }
 
 describe('managed orcad terminal census client', () => {

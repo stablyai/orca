@@ -21,7 +21,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/language-detect', () => ({
+vi.mock('../../../../../../shared/editor-language/editor-language-detect', () => ({
   detectLanguage: (filePath: string) => (filePath.endsWith('.md') ? 'markdown' : 'plaintext')
 }))
 
@@ -30,7 +30,7 @@ vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: vi.fn(() => null)
 }))
 

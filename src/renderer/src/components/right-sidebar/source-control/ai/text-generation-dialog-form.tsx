@@ -1,4 +1,4 @@
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import React, { useCallback, useMemo, useState } from 'react'
 import { RefreshCw, Save, Sparkles, Terminal, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -12,10 +12,10 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
-import { commitMessagePickerModel } from '@/components/feature-wall/ai-commit-pr-picker'
+import { commitMessagePickerModel } from '@/components/feature-wall/commit-pr-settings/ai-commit-pr-picker'
 import type { AgentPickerEntry } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
 import { planSourceControlTextGeneration } from '@/lib/source-control/ai/source-control-generation-plan'
 import {

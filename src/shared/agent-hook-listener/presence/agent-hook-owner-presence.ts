@@ -22,6 +22,7 @@ import {
   type HookRootCompletion
 } from './hook-root-attempts'
 import { readTmuxHookPane, readTmuxHookPaneHint } from '../../tmux-client-attachment'
+import { prefetchJcodeHelperSession } from '../../jcode-helper-sessions'
 
 function recordedOwner(
   previous: AgentHookEventPayload | undefined
@@ -208,7 +209,8 @@ export function restateHookRoot(
 }
 
 /** Confirm an old owner's exit on its execution host before accepting a replacement, then read
- *  whether a process acquiring the pane belongs to its job; both settle before provider folds. */
+ *  whether a process acquiring the pane belongs to its job, and whether a Jcode hook comes from a
+ *  swarm helper's session; all settle before provider folds. */
 export function checkHookOwnerPresence(
   state: HookListenerState,
   source: AgentHookSource,
@@ -221,6 +223,25 @@ export function checkHookOwnerPresence(
   if (!hook) {
     return undefined
   }
+  const { envelope } = hook
+  // Off the hook path: normalization reads the cached verdict synchronously.
+  const helperRead =
+    source === 'jcode'
+      ? prefetchJcodeHelperSession(envelope.hookPayloadRecord.session_id)
+      : undefined
+  const ownerCheck = checkHookOwner(state, source, hook, check, acquisition)
+  return helperRead && ownerCheck
+    ? Promise.all([helperRead, ownerCheck])
+    : (ownerCheck ?? helperRead)
+}
+
+function checkHookOwner(
+  state: HookListenerState,
+  source: AgentHookSource,
+  hook: NonNullable<ReturnType<typeof readHookPaneOwner>>,
+  check: (paneKey: string) => Promise<unknown>,
+  acquisition?: HookRootAcquisition
+): Promise<unknown> | undefined {
   const { envelope, sender } = hook
   const acquire = (): Promise<unknown> | undefined => {
     const process = sender.process

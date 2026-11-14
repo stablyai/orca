@@ -6,7 +6,7 @@ import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../journal/agent-session
 import { readWholeAgentSessionFailureFact } from '../failures/agent-session-failure'
 import type { AgentJournalStatusItem } from '../journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../journal/agent-session-journal-turn-scope'
-import { readAgentSessionOrcaStop } from '../lifecycle/agent-session-orca-stop'
+import { readAgentSessionOrcaStop } from '../lifecycle/stopping/agent-session-orca-stop'
 import type { NativeChatTextBlock } from '../../native-chat/native-chat-types'
 import {
   AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION,

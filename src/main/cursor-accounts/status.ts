@@ -1,6 +1,6 @@
 import type { CursorAccountStatus } from '../../shared/rate-limit-types'
-import { readCursorAuthSession } from '../rate-limits/cursor-auth'
-import { isCursorSessionTokenExpired } from '../rate-limits/cursor-session-token'
+import { readCursorAuthSession } from '../rate-limits/providers/cursor/cursor-auth'
+import { isCursorSessionTokenExpired } from '../rate-limits/providers/cursor/cursor-session-token'
 
 function signedOut(error: string | null): CursorAccountStatus {
   return {

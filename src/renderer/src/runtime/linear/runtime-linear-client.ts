@@ -13,7 +13,7 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import {
   rowLessSourceTarget,
   type RowLessSource as RuntimeLinearSettings
-} from '@/lib/default-creation-host'
+} from '@/runtime/hosts/selection/default-creation-host'
 import { isRuntimeProviderSearchQueryWithinLimit } from '../issue-search/runtime-provider-search-bounds'
 import type { LinearIssueAttributeFilter } from '../../../../shared/linear/issue-attribute-filter'
 import {

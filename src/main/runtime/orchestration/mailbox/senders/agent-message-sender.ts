@@ -43,9 +43,11 @@ export function agentMessageSender(
 ): AgentMessageSender {
   const party = senderParty(address, db)
   const snapshot = snapshotSender(senderSnapshot, party, reportedDispatchId)
+  // Mail from another server is named by its label: "term_9f3c on Jinwoo's Mac".
+  const peerLabel = !snapshot.name && db?.isPeerMailSenderLabel(address) ? address : null
   return {
     party,
-    name: agentMessageSenderName(snapshot.name),
+    name: agentMessageSenderName(snapshot.name ?? peerLabel),
     ...(snapshot.agent ? { agent: snapshot.agent } : {})
   }
 }

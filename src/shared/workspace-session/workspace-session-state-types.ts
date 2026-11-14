@@ -4,12 +4,13 @@ import type { WorkspaceKey } from '../workspace-scope'
 import type { Tab, TabGroup, TabGroupLayoutNode, WorkspaceVisibleTabType } from '../tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../workspace-layout/terminal-tab-types'
 import type { BrowserHistoryEntry, BrowserPage, BrowserWorkspace } from '../browser-workspace-types'
+import type { BrowserPageAnnotation } from '../browser/element-grab/browser-grab-types'
 import type { WorkspaceDocHistoryEntry } from './workspace-doc-history'
 import type { ClientHostedBrowserCloseIntent } from './client-hosted-browser-close-intent'
-import type { PairedTerminalTabCloseIntent } from '../workspace-layout/paired-terminal-tab-close-intent'
+import type { PairedTerminalTabCloseIntent } from '../workspace-layout/terminal-surfaces/paired-terminal-tab-close-intent'
 import type { PersistedClientHostedBrowserPage } from './client-hosted-browser-page-record'
-import type { ClosedTerminalTabTombstonesByTabId } from '../workspace-layout/closed-terminal-tab-tombstones'
-import type { ClosedTerminalPanesByPaneKey } from '../workspace-layout/closed-terminal-panes'
+import type { ClosedTerminalTabTombstonesByTabId } from '../workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
+import type { ClosedTerminalPanesByPaneKey } from '../workspace-layout/terminal-surfaces/closed-terminal-panes'
 
 /** Persist edit-mode files only; reconstruct transient diffs/conflicts from git state. */
 export type PersistedOpenFile = {
@@ -31,6 +32,9 @@ export type PersistedOpenFile = {
   /** Opt-in streaming append for a read-only local log tab. */
   liveTail?: boolean
 }
+
+/** A saved page carries its unsent notes; the store keeps them in browserAnnotationsByPageId. */
+export type PersistedBrowserPage = BrowserPage & { annotations?: BrowserPageAnnotation[] }
 
 export type WorkspaceSessionState = {
   activeRepoId: string | null
@@ -56,7 +60,7 @@ export type WorkspaceSessionState = {
   /** Persisted browser workspaces, keyed by worktree ID. */
   browserTabsByWorktree?: Record<string, BrowserWorkspace[]>
   /** Persisted browser pages, keyed by workspace ID. */
-  browserPagesByWorkspace?: Record<string, BrowserPage[]>
+  browserPagesByWorkspace?: Record<string, PersistedBrowserPage[]>
   /** Per-worktree active browser workspace ID at shutdown. */
   activeBrowserTabIdByWorktree?: Record<string, string | null>
   /** Runtime-authoritative logical client-hosted pages; desktop browserPagesByWorkspace holds the client half. */

@@ -128,6 +128,41 @@ describe('resolveAiVaultSessionWorktreeInfo', () => {
     })
   })
 
+  it('uses the live recorded folder workspace when several folder workspaces share one path', () => {
+    const worktrees = [
+      makeWorktree({ id: 'folder:topic-a', displayName: 'Topic A', path: '/repo/shared' }),
+      makeWorktree({ id: 'folder:topic-b', displayName: 'Topic B', path: '/repo/shared' }),
+      makeWorktree({
+        id: 'folder:topic-c',
+        displayName: 'Topic C',
+        path: '/repo/shared',
+        isArchived: true
+      })
+    ]
+    const resolveRecorded = (workspaceId: string) =>
+      resolveAiVaultSessionWorktreeInfo({
+        session: {
+          ...baseSession,
+          cwd: '/repo/shared',
+          structuredSession: { sessionId: 'session-1', workspaceId }
+        },
+        worktrees,
+        activeWorktreeId: null
+      })
+
+    expect(resolveRecorded('folder:topic-b')).toMatchObject({
+      label: 'Topic B',
+      path: '/repo/shared',
+      status: 'active',
+      worktreeId: 'folder:topic-b'
+    })
+    // An archived recorded workspace falls back to the live cwd owner.
+    expect(resolveRecorded('folder:topic-c')).toMatchObject({
+      status: 'active',
+      worktreeId: 'folder:topic-a'
+    })
+  })
+
   it('uses repo host ownership when a legacy worktree lacks host metadata', () => {
     const worktree = makeWorktree({
       id: 'repo-ssh::/srv/orca',

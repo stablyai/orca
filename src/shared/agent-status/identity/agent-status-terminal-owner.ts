@@ -3,6 +3,20 @@ import { splitWorktreeIdForFilesystem, worktreeIdsEqual } from '../../worktree/i
 import { parseWslUncPath } from '../../wsl-paths'
 
 type TerminalOwner = { connectionId?: string | null; worktreeId?: string }
+type SessionOwner = TerminalOwner & { providerSession?: { id: string } }
+
+/** Missing session identity cannot prove that a terminal's root was replaced. */
+export function sameAgentStatusSessionOwner(
+  previous: SessionOwner,
+  incoming: SessionOwner
+): boolean {
+  return (
+    sameAgentStatusTerminalOwner(previous, incoming) &&
+    (!previous.providerSession?.id ||
+      !incoming.providerSession?.id ||
+      previous.providerSession.id === incoming.providerSession.id)
+  )
+}
 
 function wslDistroForWorktree(worktreeId: string | undefined): string | null {
   const worktreePath = worktreeId

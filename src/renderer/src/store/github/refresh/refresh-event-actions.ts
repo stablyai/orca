@@ -1,13 +1,10 @@
-import { capturePRCheckContract } from '@/lib/pr-check-observation-contract'
+import { capturePRCheckContract } from '@/lib/source-control/checks/pr-check-observation-contract'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
 import { getHostedReviewCacheKey } from '../../slices/hosted-review/hosted-review-cache-identity'
-import {
-  capPrRefreshSequences,
-  capPrRefreshStates,
-  pruneExpiredPRRefreshStates
-} from './pr-refresh-state'
+import { capPrRefreshStates, pruneExpiredPRRefreshStates } from './pr-refresh-state'
+import { capRecordByInsertionOrder } from '../cache/cache-policy'
 import {
   applyGitHubPRResultToCaches,
   deletePRRefreshStartedEntry,
@@ -26,12 +23,15 @@ import {
 } from '../pull-requests/linked-review-clear'
 import { getGitHubRepoLookupIndex } from '../repositories/github-repo-lookup-index'
 import { getRefreshAliasExecutionHostId } from '../repositories/repository-routing'
-import { buildWorktreeLookupIndex, isStaleExactLinkedPRLookup } from './worktree-refresh'
+import {
+  buildWorktreeLookupIndex,
+  isStaleExactLinkedPRLookup,
+  type WorktreeLookupIndex
+} from './worktree-refresh'
 import {
   shouldClearBranchMismatchedLinkedOpenPR,
   shouldClearDivergedLinkedMergedPR
-} from '../../../../../shared/github/linked-pr-staleness'
-import type { WorktreeLookupIndex } from './worktree-refresh'
+} from '../../../../../shared/github/pull-requests/refresh/linked-pr-staleness'
 
 export const createRefreshEventActions = (
   set: Parameters<StateCreator<AppState>>[0],
@@ -69,8 +69,14 @@ export const createRefreshEventActions = (
           nextSequences[alias.cacheKey] ?? 0,
           prRefreshStartedLinkedReviewScopes.get(alias.cacheKey)?.sequence ?? 0
         )
+        const completesOwnedRequest =
+          event.status === 'skipped' &&
+          event.sequence === previousSequence &&
+          nextStates[alias.cacheKey]?.status === 'in-flight'
         if (
-          event.outcome ? event.sequence < previousSequence : event.sequence <= previousSequence
+          event.outcome
+            ? event.sequence < previousSequence
+            : event.sequence <= previousSequence && !completesOwnedRequest
         ) {
           if (event.outcome || event.status !== 'in-flight') {
             deletePRRefreshStartedEntry(event.sequence, alias.cacheKey)
@@ -260,7 +266,7 @@ export const createRefreshEventActions = (
       // Preserve root identity so no-op writes do not notify every store subscriber.
       return changed
         ? {
-            prRefreshSequences: capPrRefreshSequences(nextSequences),
+            prRefreshSequences: capRecordByInsertionOrder(nextSequences),
             // Why: bound prRefreshStates with status-aware eviction so visible in-progress pills survive.
             prRefreshStates: capPrRefreshStates(nextStates),
             prCache: nextPRCache,

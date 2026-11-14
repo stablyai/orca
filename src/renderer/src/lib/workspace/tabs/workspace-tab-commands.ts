@@ -6,6 +6,7 @@ import {
   resolvePinnedTabLabel
 } from '@/store/slices/tabs/closing/pinned-tab-close-guard'
 import { createWorkspaceTabCloseCommands } from '@/components/tab-group/workspace-tab-close-commands'
+import { hasUnsentBrowserNotes } from '@/store/slices/browser/annotations/browser-page-annotation'
 import { captureWorkspaceEmptiedReaction } from '@/components/tab-group/workspace-emptied-reaction'
 import {
   handleSwitchRecentTab,
@@ -19,8 +20,8 @@ import {
   isFloatingWorkspacePanelFocused,
   switchFloatingWorkspaceRecentTab,
   switchFloatingWorkspaceTab
-} from '../../floating-workspace-terminal-actions'
-import { TOGGLE_FLOATING_TERMINAL_EVENT } from '../../floating-terminal'
+} from '../../../components/floating-terminal/floating-workspace-terminal-actions'
+import { TOGGLE_FLOATING_TERMINAL_EVENT } from '../../../components/floating-terminal/floating-terminal'
 import { closeWorkspaceBrowserTab } from '../../browser/workspace/workspace-browser-tab-close'
 import { resolveBrowserWorkspaceOwner } from '../../browser/workspace/browser-workspace-source-resolution'
 
@@ -174,6 +175,11 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
     if ((command.bulk || command.skipEmptyCheck) && tab.isPinned) {
       return true
     }
+    const unsentNotes = tab.contentType === 'browser' && hasUnsentBrowserNotes(state, tab.entityId)
+    // Bulk closes keep a tab holding unsent notes open, as they keep pinned tabs.
+    if (command.bulk && unsentNotes) {
+      return true
+    }
     // Why before the pin guard: its prompt takes focus, and the floating panel's reaction reads focus.
     const whenEmptied =
       command.bulk || command.skipEmptyCheck
@@ -189,7 +195,8 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
       guardPinnedTabClose({
         isPinned: tab.isPinned === true,
         tabLabel: resolvePinnedTabLabel(state, target.worktreeId, tab.id),
-        onClose: close
+        onClose: close,
+        unsentNotes
       })
     }
     return true

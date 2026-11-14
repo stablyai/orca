@@ -16,10 +16,8 @@ import {
   findDuplicateIds,
   getUnifiedTabPaletteExecutionHostId,
   isUnifiedTabOwnedByWorktree
-} from '../../unified-tab-host-ownership'
+} from '../../workspace/ownership/unified-tab-host-ownership'
 import { maxValidPaletteActivityTimestamp } from '../../../../../shared/palette-match/palette-ranking'
-
-type BrowserPaletteActiveTabType = WorkspaceVisibleTabType
 
 export type BuildSearchableBrowserPagesOptions = {
   worktrees: readonly Worktree[]
@@ -34,7 +32,7 @@ export type BuildSearchableBrowserPagesOptions = {
   activeBrowserTabId: string | null
   activeWorktreeId: string | null
   activeWorkspaceExecutionHostId?: ExecutionHostId | null
-  activeTabType: BrowserPaletteActiveTabType
+  activeTabType: WorkspaceVisibleTabType
 }
 
 export function buildSearchableBrowserPages({

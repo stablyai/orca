@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 
 import { useAppStore } from '../store'
-import { focusTerminalTabSurface } from '../lib/focus-terminal-tab-surface'
+import { focusTerminalTabSurface } from '../components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import {
   ORCA_BROWSER_FOCUS_REQUEST_EVENT,
   queueBrowserFocusRequest,

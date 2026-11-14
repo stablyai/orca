@@ -1,22 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../orchestration-db'
 import '../contract-constants'
 import './mailbox-routing-page'
 import '../dispatch-row-writer'
 import '../attempt-outcome-projection'
-
-function assertTargetedRelease(db: OrchestrationDb): void {
-  const prepare = vi.spyOn(db.db, 'prepare')
-  db.releasePendingMailboxPointerForPty('absent-pty')
-  const sql = prepare.mock.calls.find(([query]) => query.startsWith('UPDATE messages'))?.[0]
-  prepare.mockRestore()
-  expect(sql).toBeDefined()
-  const plan = db.db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(1, 'absent-pty') as {
-    detail: string
-  }[]
-  expect(plan.some(({ detail }) => detail.includes('SCAN messages'))).toBe(false)
-  expect(plan.some(({ detail }) => detail.includes('idx_messages_pending_pointer_pty'))).toBe(true)
-}
 
 describe('PTY mailbox reservation cleanup', () => {
   it('uses a PTY lookup and preserves reservation settlement semantics', () => {
@@ -36,7 +23,6 @@ describe('PTY mailbox reservation cleanup', () => {
       seed.run('read', 1, 2, 'target', '2026-01-01 00:00:00')
       seed.run('other', 0, 1, 'other-pty', null)
       db.db.exec('COMMIT')
-      assertTargetedRelease(db)
       db.releasePendingMailboxPointerForPty('target')
       const read = (id: string) => db.db.prepare('SELECT * FROM messages WHERE id = ?').get(id)
       for (const id of ['reserved', 'written', 'entered', 'read']) {

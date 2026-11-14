@@ -1,6 +1,7 @@
 import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
-import { convertBrowserPageToWorkspaceDoc } from '@/lib/file-preview'
-import { resolveWorkspaceDocAddressTarget } from '@/lib/workspace-doc-address-input'
+import '@/lib/browser/documents/file-preview'
+import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-preview-page-conversion'
+import { resolveWorkspaceDocAddressTarget } from '@/lib/browser/documents/workspace-doc-address-input'
 import { useAppStore } from '@/store'
 
 /** Consume workspace paths before URL resolution targets the wrong host or a refused file: URL; return false to continue URL handling. */

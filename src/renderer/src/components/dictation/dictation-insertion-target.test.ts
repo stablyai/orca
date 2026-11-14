@@ -5,8 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES,
   TEXT_CONTROL_PASTE_MAX_BYTES
-} from '@/lib/text-control-paste'
-import { insertText } from './dictation-insertion-target'
+} from '@/lib/text-input/paste/text-control-paste-model'
+import { captureInsertionTarget, insertText } from './dictation-insertion-target'
 
 type DocumentWithExecCommand = Document & {
   execCommand?: (commandId: string, showUi?: boolean, value?: string) => boolean
@@ -18,6 +18,7 @@ afterEach(() => {
   document.body.replaceChildren()
   vi.useRealTimers()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   Object.defineProperty(document, 'execCommand', {
     configurable: true,
     value: originalExecCommand
@@ -45,6 +46,24 @@ function installExecCommandMock(
 }
 
 describe('dictation insertion target', () => {
+  it('sends text dictated into a focused browser page to that page', async () => {
+    const insertDictationText = vi.fn(async () => true)
+    vi.stubGlobal('api', { browser: { insertDictationText } })
+    const viewport = document.createElement('div')
+    viewport.dataset.browserPageViewportId = 'page-1'
+    const guest = document.createElement('webview')
+    guest.tabIndex = 0
+    viewport.appendChild(guest)
+    document.body.appendChild(viewport)
+    guest.focus()
+
+    const target = captureInsertionTarget()
+    expect(target).toEqual({ kind: 'browser', browserPageId: 'page-1' })
+    await expect(insertText('hello', target!)).resolves.toBe(true)
+
+    expect(insertDictationText).toHaveBeenCalledWith({ browserPageId: 'page-1', text: 'hello' })
+  })
+
   it('cancels chunked contenteditable dictation when the target disconnects', async () => {
     vi.useFakeTimers()
     const editor = appendContentEditable()

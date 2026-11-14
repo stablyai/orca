@@ -11,9 +11,9 @@ import type {
 } from '../../shared/artifacts/artifacts'
 import { assertArtifactSharingAllowed } from '../../shared/artifacts/artifact-sharing-gate'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
-import { getOrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
-import { prepareArtifactCloudUse } from '../orca-profiles/profile-artifact-cloud-cleanup'
-import { runWithFreshOrcaCloudSession } from '../orca-profiles/profile-cloud-session-refresh'
+import { getOrcaCloudAuthConfig } from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
+import { prepareArtifactCloudUse } from '../orca-profiles/cloud-auth/profile-artifact-cloud-cleanup'
+import { runWithFreshOrcaCloudSession } from '../orca-profiles/cloud-session/profile-cloud-session-refresh'
 import {
   allowsArtifactCloudAuthOverride,
   resolveArtifactCloudApiUrl
@@ -29,7 +29,7 @@ import {
 import type { ActiveOrcaProfileState } from '../orca-profiles/profile-index-store'
 import { artifactRequest, artifactWriteBody } from './artifact-cloud-request'
 import { ArtifactPublisher } from './artifact-publisher'
-import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
+import { OrcaCloudRequestError } from '../orca-profiles/cloud-auth/profile-cloud-client'
 
 type ArtifactAuthContext = {
   profileId: string
