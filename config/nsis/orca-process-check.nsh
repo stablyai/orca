@@ -1,5 +1,6 @@
 ; Defining the hook suppresses electron-builder's process-info declarations.
 !include "getProcessInfo.nsh"
+!include "${__FILEDIR__}\orca-runtime-write-check.nsh"
 Var pid
 Var /GLOBAL IsPowerShellAvailable
 
@@ -14,4 +15,5 @@ Var /GLOBAL IsPowerShellAvailable
     StrCpy $IsPowerShellAvailable 0
   ${endIf}
   !insertmacro _CHECK_APP_RUNNING
+  !insertmacro ORCA_CHECK_RUNTIME_EXECUTABLE_WRITABLE
 !macroend
