@@ -1,3 +1,4 @@
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { formatMessagePointer } from '../formatting/message-formatting'
 import type {
   OrchestrationMailboxPointerMessage,
@@ -35,6 +36,7 @@ type StagePointerArgs<TWaiter extends OrchestrationMessageWaiter> = {
   deps: PointerDeliveryDependencies<TWaiter>
   state: OrchestrationMailboxPointerState
   terminal: OrchestrationMailboxTerminal
+  agent?: TuiAgent
   mailboxHandle: string
   messages: readonly OrchestrationMailboxPointerMessage[]
   heldDeliveryId?: string
@@ -49,7 +51,7 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
   args: StagePointerArgs<TWaiter>
 ): void {
   const { ptyId } = args.terminal
-  const expectedTarget = args.deps.resolveSubmitTarget(ptyId)
+  const expectedTarget = args.deps.resolveSubmitTarget(ptyId, undefined, undefined, args.agent)
   if (!expectedTarget) {
     return
   }
@@ -77,6 +79,7 @@ export function stageOrchestrationMailboxPointer<TWaiter extends OrchestrationMe
   )
   const flight = args.state.beginFlight(ptyId)
   flight.processIncarnation = expectedTarget.processIncarnation
+  flight.agent = expectedTarget.agent
   flight.stagedPointerText = pointerText.trim()
   flight.stagedMessageIds = args.messages.map((message) => message.id)
   try {

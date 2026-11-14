@@ -36,16 +36,19 @@ export abstract class OrcaRuntimeWithForegroundInspection extends OrcaRuntimeWit
   async inspectMailboxForeground(ptyId: string, agent?: TuiAgent) {
     const pty = this.ptysById.get(ptyId)
     const incarnation = pty?.incarnationId
+    const controller = this.ptyController
     const result = await readMailboxForeground(
-      this.ptyController,
+      controller,
       this.launchedAgentHost(ptyId),
       ptyId,
       agent,
       incarnation ?? undefined
     )
-    return this.ptysById.get(ptyId) === pty && pty?.incarnationId === incarnation
+    return this.ptyController === controller &&
+      this.ptysById.get(ptyId) === pty &&
+      pty?.incarnationId === incarnation
       ? result
-      : 'unknown'
+      : { foreground: 'unknown' as const }
   }
 
   /** Whether the pane's execution host can find a launched agent in front: a Windows one cannot. */

@@ -99,7 +99,7 @@ export function reconcileUncertainMailboxPointers<T extends OrchestrationMessage
   }
 }
 
-export function deferForPendingOrchestrationMailboxPointer<
+export function reconcilePendingOrchestrationMailboxPointer<
   T extends OrchestrationMessageWaiter
 >(args: {
   deps: PointerDeliveryDependencies<T>
@@ -110,19 +110,12 @@ export function deferForPendingOrchestrationMailboxPointer<
   redrive: () => void
 }): boolean {
   if (args.messages.length === 0) {
-    return !args.hasEligibleMail
+    return false
   }
   const retained = resumePendingOrchestrationMailboxPointer(args)
   args.reconcile()
-  if (
-    retained &&
-    (!args.hasEligibleMail || args.deps.readComposerText?.(args.terminal.ptyId) !== '')
-  ) {
-    return true
-  }
-  if (!args.hasEligibleMail) {
+  if (!retained && !args.hasEligibleMail) {
     args.redrive()
-    return true
   }
-  return false
+  return retained
 }

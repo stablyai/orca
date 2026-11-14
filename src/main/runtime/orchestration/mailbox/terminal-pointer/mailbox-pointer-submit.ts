@@ -1,5 +1,9 @@
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { terminalComposerTextOwnsPointer } from '../../../terminal/wait/terminal-delivery-refusal'
-import type { MailboxForeground } from '../../../terminal/wait/launched-agent-foreground'
+import type {
+  MailboxForeground,
+  MailboxForegroundInspection
+} from '../../../terminal/wait/launched-agent-foreground'
 import type { MailboxDeliveryDecision } from '../notifications/mailbox-delivery-recheck'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import {
@@ -24,15 +28,20 @@ export type PointerSubmitDependencies = {
   resolveSubmitTarget: (
     ptyId: string,
     foreground?: MailboxForeground,
-    stagedText?: string
+    stagedText?: string,
+    agent?: TuiAgent
   ) => OrchestrationMailboxPointerSubmitTarget | null
   isAgentSettledForDelivery?: (
     ptyId: string,
     foreground?: MailboxForeground,
-    stagedText?: string
+    stagedText?: string,
+    agent?: TuiAgent
   ) => boolean
-  readComposerText?: (ptyId: string) => string | null
-  readForeground: (ptyId: string) => Promise<MailboxForeground>
+  readComposerText?: (ptyId: string, agent?: TuiAgent) => string | null
+  readForeground: (
+    ptyId: string,
+    agent?: TuiAgent
+  ) => Promise<MailboxForeground | MailboxForegroundInspection>
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
   isPtyAwaitingUserInput: (ptyId: string) => boolean
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
@@ -45,6 +54,7 @@ export type PointerSubmitDependencies = {
 export type OrchestrationMailboxPointerSubmitTarget = {
   terminal: OrchestrationMailboxTerminal
   processIncarnation: string
+  agent?: TuiAgent
 }
 
 export type PointerSubmitInput = {
@@ -87,7 +97,7 @@ export function submitOrchestrationMailboxPointer(
         clearAndRedrive = true
         return
       }
-      const composerBeforeProbe = deps.readComposerText?.(input.ptyId)
+      const composerBeforeProbe = deps.readComposerText?.(input.ptyId, input.expectedTarget.agent)
       if (
         isRecovering() &&
         !terminalComposerTextOwnsPointer(composerBeforeProbe, input.stagedText) &&
@@ -105,14 +115,22 @@ export function submitOrchestrationMailboxPointer(
         uncertain = true
         return
       }
-      if (isRecovering() && deps.isAgentSettledForDelivery?.(input.ptyId) === false) {
+      if (
+        isRecovering() &&
+        deps.isAgentSettledForDelivery?.(
+          input.ptyId,
+          undefined,
+          input.stagedText,
+          input.expectedTarget.agent
+        ) === false
+      ) {
         preserveFlight = true
         return
       }
       const foreground = await deps.state.foreground.probeForeground(
         input.ptyId,
         input.expectedTarget.processIncarnation,
-        () => deps.readForeground(input.ptyId)
+        () => deps.readForeground(input.ptyId, input.expectedTarget.agent)
       )
       if (!deps.state.isCurrentFlight(input.ptyId, input.flight)) {
         finalizeReservation = false
@@ -121,7 +139,8 @@ export function submitOrchestrationMailboxPointer(
       const target = deps.resolveSubmitTarget(
         input.ptyId,
         isRecovering() && foreground.foreground !== 'agent' ? undefined : foreground.foreground,
-        input.stagedText
+        input.stagedText,
+        input.expectedTarget.agent ?? foreground.agent
       )
       const terminal =
         target?.terminal.handle === input.expectedTarget.terminal.handle &&
@@ -134,6 +153,14 @@ export function submitOrchestrationMailboxPointer(
         clearAndRedrive = true
         return
       }
+      if (
+        input.expectedTarget.agent &&
+        (foreground.foreground === 'agent' || isRecovering()) &&
+        foreground.agent !== input.expectedTarget.agent
+      ) {
+        preserveFlight = true
+        return
+      }
       if (isRecovering() && foreground.foreground !== 'agent') {
         deps.state.foreground.applyForeground(input.ptyId, foreground, foreground.foreground)
         preserveFlight = true
@@ -141,9 +168,13 @@ export function submitOrchestrationMailboxPointer(
       }
       const queueSafe = !!terminal && isMailboxTerminalTakingInput(terminal)
       const settled =
-        deps.isAgentSettledForDelivery?.(input.ptyId, foreground.foreground, input.stagedText) !==
-        false
-      const composer = deps.readComposerText?.(input.ptyId)
+        deps.isAgentSettledForDelivery?.(
+          input.ptyId,
+          foreground.foreground,
+          input.stagedText,
+          input.expectedTarget.agent ?? foreground.agent
+        ) !== false
+      const composer = deps.readComposerText?.(input.ptyId, input.expectedTarget.agent)
       const ownPointer = terminalComposerTextOwnsPointer(composer, input.stagedText)
       if (
         !deps.state.foreground.applyForeground(

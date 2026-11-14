@@ -1,4 +1,8 @@
-import type { MailboxForeground } from '../../../terminal/wait/launched-agent-foreground'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import type {
+  MailboxForeground,
+  MailboxForegroundInspection
+} from '../../../terminal/wait/launched-agent-foreground'
 import type { MailboxDeliveryDecision } from '../notifications/mailbox-delivery-recheck'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { OrchestrationMailboxDeliveryTarget } from '../routing/mailbox-delivery-target'
@@ -32,7 +36,8 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
   isAgentSettledForDelivery: (
     ptyId: string,
     foreground?: MailboxForeground,
-    stagedText?: string
+    stagedText?: string,
+    agent?: TuiAgent
   ) => boolean
   isPtyAwaitingUserInput: (ptyId: string) => boolean
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
@@ -40,10 +45,14 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
   resolveSubmitTarget: (
     ptyId: string,
     foreground?: MailboxForeground,
-    stagedText?: string
+    stagedText?: string,
+    agent?: TuiAgent
   ) => OrchestrationMailboxPointerSubmitTarget | null
-  readComposerText?: (ptyId: string) => string | null
-  readForeground: (ptyId: string) => Promise<MailboxForeground>
+  readComposerText?: (ptyId: string, agent?: TuiAgent) => string | null
+  readForeground: (
+    ptyId: string,
+    agent?: TuiAgent
+  ) => Promise<MailboxForeground | MailboxForegroundInspection>
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
   isForegroundCandidate?: (terminal: OrchestrationMailboxTerminal) => boolean
   needsForegroundEvaluation?: (ptyId: string) => boolean
@@ -58,6 +67,7 @@ export type PointerDeliveryOptions = {
   reservedTypes?: ReadonlySet<string>
   skipAbsenceProbe?: boolean
   foreground?: MailboxForeground
+  agent?: TuiAgent
   foregroundFollowup?: boolean
   foregroundProbeIncarnation?: string
 }

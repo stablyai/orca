@@ -1,4 +1,7 @@
-import type { MailboxForeground } from '../../../terminal/wait/launched-agent-foreground'
+import type {
+  MailboxForeground,
+  MailboxForegroundInspection
+} from '../../../terminal/wait/launched-agent-foreground'
 import { PrioritySemaphore } from '../../../../../shared/priority-semaphore'
 
 type ForegroundObservation = {
@@ -18,6 +21,7 @@ export type OrchestrationMailboxForegroundObservation = {
 
 export type OrchestrationMailboxForegroundProbe = OrchestrationMailboxForegroundObservation & {
   foreground: MailboxForeground
+  agent?: MailboxForegroundInspection['agent']
 }
 
 export class MailboxForegroundEvidence {
@@ -33,7 +37,7 @@ export class MailboxForegroundEvidence {
   probeForeground(
     ptyId: string,
     processIncarnation: string,
-    read: () => Promise<MailboxForeground>
+    read: () => Promise<MailboxForeground | MailboxForegroundInspection>
   ): Promise<OrchestrationMailboxForegroundProbe> {
     const observation = this.captureForegroundObservation(ptyId, processIncarnation)
     const pending = this.foregroundProbes.get(ptyId)
@@ -52,7 +56,10 @@ export class MailboxForegroundEvidence {
         }
       })
       .catch(() => 'unknown' as const)
-      .then((foreground) => ({ foreground, ...observation }))
+      .then((result) => ({
+        ...(typeof result === 'string' ? { foreground: result } : result),
+        ...observation
+      }))
       .finally(() => {
         if (this.foregroundProbes.get(ptyId) === probe) {
           this.foregroundProbes.delete(ptyId)

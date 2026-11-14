@@ -1,3 +1,4 @@
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
 import { MailboxForegroundEvidence } from './mailbox-foreground-evidence'
 export type {
   OrchestrationMailboxForegroundObservation,
@@ -12,6 +13,7 @@ export type OrchestrationMailboxDeliveryFlight = {
   idleObservedWhileDeferred: boolean
   /** The incarnation that staged this flight, so retirement can name the rows it owns. */
   processIncarnation?: string
+  agent?: TuiAgent
   stagedPointerText?: string
 }
 

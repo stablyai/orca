@@ -157,7 +157,12 @@ export function resumeDeferredMailboxPointer<T extends OrchestrationMessageWaite
     !state.hasActiveFlight(ptyId) &&
     (state.hasRecoveryFlight(ptyId) ||
       ((!coldParked || terminal.lastAgentStatus === 'idle') &&
-        deps.isAgentSettledForDelivery(ptyId)))
+        deps.isAgentSettledForDelivery(
+          ptyId,
+          undefined,
+          undefined,
+          state.flightForPty(ptyId)?.agent
+        )))
   ) {
     state.takeDeferredEnter(ptyId)?.()
   }

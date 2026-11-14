@@ -23,7 +23,7 @@ import {
   MAILBOX_POINTER_WRITE_ATTEMPTED
 } from '../../db/messages/mailbox-pointer-enter-state'
 import {
-  deferForPendingOrchestrationMailboxPointer,
+  reconcilePendingOrchestrationMailboxPointer,
   reconcileUncertainMailboxPointers
 } from './mailbox-pointer-resume'
 import { stageOrchestrationMailboxPointer, pointerEnterDelayMs } from './mailbox-pointer-stage'
@@ -44,7 +44,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   deliver(terminal: OrchestrationMailboxTerminal, options: PointerDeliveryOptions): void {
     try {
       const db = this.deps.getDb()
-      const mailboxHandle = options.mailboxHandle
+      const { mailboxHandle, foreground, agent } = options
       const isOwnDirectMailbox = mailboxHandle === terminal.handle
       if (
         !db ||
@@ -55,7 +55,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         return
       }
       const { ptyId } = terminal
-      const target = this.deps.resolveSubmitTarget(ptyId, options.foreground)
+      const target = this.deps.resolveSubmitTarget(ptyId, foreground, undefined, agent)
       if (!target) {
         return
       }
@@ -68,14 +68,11 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         options.foreground === undefined &&
         (this.needsForegroundEvaluation(ptyId) || this.deps.isForegroundCandidate?.(terminal))
       if (
-        !foregroundHeld &&
-        (!isMailboxTerminalTakingInput(terminal) ||
-          !this.deps.isAgentSettledForDelivery(ptyId, options.foreground))
+        (!foregroundHeld &&
+          (!isMailboxTerminalTakingInput(terminal) ||
+            !this.deps.isAgentSettledForDelivery(ptyId, foreground, undefined, agent))) ||
+        this.state.hasActiveWatermark(mailboxHandle)
       ) {
-        this.parkRedelivery(mailboxHandle, options.reservedTypes)
-        return
-      }
-      if (this.state.hasActiveWatermark(mailboxHandle)) {
         this.parkRedelivery(mailboxHandle, options.reservedTypes)
         return
       }
@@ -92,39 +89,41 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         reservedTypes: options.reservedTypes,
         excludeRunOwnedDirect: isOwnDirectMailbox
       })
+      const retained = reconcilePendingOrchestrationMailboxPointer({
+        deps: this.deps,
+        terminal,
+        messages: pending,
+        hasEligibleMail: unread.length > 0,
+        reconcile: () => this.reconcileUncertainMail(ptyId),
+        redrive: () => this.redrive(mailboxHandle, true)
+      })
+      const newestSequence = unread.at(-1)?.sequence ?? pending.at(-1)?.sequence
+      if (newestSequence !== undefined && unread.length > 0) {
+        if (this.state.noteMailSequence(ptyId, newestSequence)) {
+          this.deps.onDeliveryDecision(ptyId, { reset: true })
+        }
+        if (
+          this.deps.deliveryTarget.deferForAbsenceProbe(
+            ptyId,
+            mailboxHandle,
+            options.skipAbsenceProbe,
+            (probedMailbox) => this.redeliverAfterProbe(ptyId, probedMailbox)
+          )
+        ) {
+          return
+        }
+        if (this.foregroundDelivery.defer(this.deps, this, ptyId, options, target)) {
+          return
+        }
+      }
       if (
-        deferForPendingOrchestrationMailboxPointer({
-          deps: this.deps,
-          terminal,
-          messages: pending,
-          hasEligibleMail: unread.length > 0,
-          reconcile: () => this.reconcileUncertainMail(ptyId),
-          redrive: () => this.redrive(mailboxHandle, true)
-        })
+        newestSequence === undefined ||
+        unread.length === 0 ||
+        (retained && this.deps.readComposerText?.(ptyId, agent) !== '')
       ) {
         return
-      }
-      const newestSequence = unread.at(-1)?.sequence ?? pending.at(-1)?.sequence
-      if (newestSequence === undefined) {
-        return
-      }
-      if (this.state.noteMailSequence(ptyId, newestSequence)) {
-        this.deps.onDeliveryDecision(ptyId, { reset: true })
       }
       if (!this.state.releaseSupersededWatermark(mailboxHandle, newestSequence, ptyId)) {
-        return
-      }
-      if (
-        this.deps.deliveryTarget.deferForAbsenceProbe(
-          ptyId,
-          mailboxHandle,
-          options.skipAbsenceProbe,
-          (probedMailbox) => this.redeliverAfterProbe(ptyId, probedMailbox)
-        )
-      ) {
-        return
-      }
-      if (this.foregroundDelivery.defer(this.deps, this, ptyId, options, target)) {
         return
       }
       if (
@@ -139,6 +138,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         deps: this.deps,
         state: this.state,
         terminal,
+        agent: options.agent,
         mailboxHandle,
         messages: unread,
         heldDeliveryId,

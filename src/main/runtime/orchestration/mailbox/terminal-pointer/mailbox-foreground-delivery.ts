@@ -66,8 +66,16 @@ export class MailboxForegroundDelivery {
       .probeForeground(ptyId, target.processIncarnation)
       .then((foreground) => {
         this.mailboxesByPty.delete(ptyId)
-        const current = deps.resolveSubmitTarget(ptyId, foreground.foreground)
-        if (current?.processIncarnation !== target.processIncarnation) {
+        const current = deps.resolveSubmitTarget(
+          ptyId,
+          foreground.foreground,
+          undefined,
+          foreground.agent
+        )
+        if (
+          current?.processIncarnation !== target.processIncarnation ||
+          current.terminal.handle !== target.terminal.handle
+        ) {
           return
         }
         const applied = delivery.applyForeground(
@@ -76,7 +84,12 @@ export class MailboxForegroundDelivery {
           foreground.foreground,
           foreground.foreground === 'agent' &&
             isMailboxTerminalTakingInput(current.terminal) &&
-            deps.isAgentSettledForDelivery(ptyId, foreground.foreground)
+            deps.isAgentSettledForDelivery(
+              ptyId,
+              foreground.foreground,
+              undefined,
+              foreground.agent
+            )
         )
         if (applied && delivery.isForegroundHeld(ptyId)) {
           return
@@ -92,6 +105,7 @@ export class MailboxForegroundDelivery {
               mailboxHandle: probedMailbox,
               reservedTypes,
               foreground: applied ? foreground.foreground : undefined,
+              agent: applied ? foreground.agent : undefined,
               foregroundFollowup: true,
               skipAbsenceProbe: true,
               foregroundProbeIncarnation: applied ? target.processIncarnation : undefined
