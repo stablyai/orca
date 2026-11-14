@@ -19935,7 +19935,8 @@
         "unconfirmedDetail": "它可能已經開啟。請先檢查工作階段歷史記錄，再建立分支。",
         "failed": "{{agent}} 無法從此聊天建立分支",
         "hostUnsupported": "此主機執行的是舊版 Orca。請更新主機上的 Orca 後再試一次。",
-        "failedDetail": "聊天未變更。請再試一次。"
+        "failedDetail": "聊天未變更。請再試一次。",
+        "commandWorking": "{{agent}} 回覆期間無法建立分支。回覆結束後，請再次執行 /fork。"
       },
       "cardKindHidden": {
         "description": "你可以隨時在此處變更",

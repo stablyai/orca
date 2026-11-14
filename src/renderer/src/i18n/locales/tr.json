@@ -20220,7 +20220,8 @@
         "unconfirmed": "{{agent}} çatallamayı doğrulayamadı",
         "unconfirmedDetail": "Yine de açılmış olabilir. Yeniden çatallamadan önce Oturum Geçmişini kontrol edin.",
         "failed": "{{agent}} bu sohbeti çatallayamadı",
-        "failedDetail": "Sohbetiniz değişmedi. Tekrar deneyin."
+        "failedDetail": "Sohbetiniz değişmedi. Tekrar deneyin.",
+        "commandWorking": "{{agent}} yanıt verirken çatallanamaz. Yanıt bittiğinde /fork komutunu yeniden çalıştırın."
       },
       "cardKindHidden": {
         "description": "Bunu istediğiniz zaman şuradan değiştirebilirsiniz:",

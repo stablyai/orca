@@ -20245,7 +20245,8 @@
         "unconfirmedDetail": "Der Chat wurde möglicherweise dennoch geöffnet. Prüfe den Sitzungsverlauf, bevor du erneut abzweigst.",
         "failed": "{{agent}} konnte diesen Chat nicht abzweigen",
         "hostUnsupported": "Auf diesem Host läuft eine ältere Orca-Version. Aktualisiere Orca auf dem Host und versuche es erneut.",
-        "failedDetail": "Dein Chat ist unverändert. Versuche es erneut."
+        "failedDetail": "Dein Chat ist unverändert. Versuche es erneut.",
+        "commandWorking": "Abzweigen ist nicht möglich, während {{agent}} antwortet. Führe /fork erneut aus, wenn die Antwort fertig ist."
       },
       "cardKindHidden": {
         "description": "Das kannst du jederzeit hier ändern:",

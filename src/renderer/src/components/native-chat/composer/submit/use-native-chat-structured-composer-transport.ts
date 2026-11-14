@@ -38,7 +38,8 @@ function nativeChatSessionAttachmentNotReadyNotice(
 
 function nativeChatForkCommand(
   fork: NativeChatPaneFork | undefined,
-  isWorking: boolean
+  isWorking: boolean,
+  agent: AgentType
 ): NativeChatStructuredComposerTransport['fork'] {
   // Offered once the host and agent confirm they can fork, as the response action is enabled.
   if (fork?.support.kind !== 'known') {
@@ -46,10 +47,12 @@ function nativeChatForkCommand(
   }
   return {
     run: () => {
+      // Refused, not deferred: the user retries once the reply ends.
       if (isWorking) {
         return translate(
           'components.native-chat.fork.commandWorking',
-          'Wait for the response to finish, then fork.'
+          'Can’t fork while {{agent}} is replying. Run /fork again when it finishes.',
+          { agent: structuredAgentLabel(agent) }
         )
       }
       const outcome = fork.forkLatest()
@@ -120,7 +123,7 @@ export function useNativeChatStructuredComposerTransport(args: {
                 })
             }
           : undefined,
-      fork: nativeChatForkCommand(fork, controller.isWorking),
+      fork: nativeChatForkCommand(fork, controller.isWorking, props.agent),
       capturePresentation: controller.capturePresentation,
       ...(sideChat ? { sideChat } : {}),
       send: (text, attachments, ...request) => {

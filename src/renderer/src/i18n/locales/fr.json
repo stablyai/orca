@@ -20315,7 +20315,8 @@
         "unconfirmedDetail": "La conversation s’est peut-être ouverte malgré tout. Consultez l’historique des sessions avant de réessayer.",
         "failed": "{{agent}} n’a pas pu créer de branche de cette conversation",
         "hostUnsupported": "Cet hôte utilise une ancienne version d’Orca. Mettez Orca à jour sur l’hôte, puis réessayez.",
-        "failedDetail": "Votre conversation est inchangée. Réessayez."
+        "failedDetail": "Votre conversation est inchangée. Réessayez.",
+        "commandWorking": "Impossible de créer une branche pendant que {{agent}} répond. Relancez /fork quand la réponse est terminée."
       },
       "cardKindHidden": {
         "description": "Vous pouvez modifier cela à tout moment dans",
