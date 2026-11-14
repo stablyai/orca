@@ -668,6 +668,9 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    outputs:
+      tag_object: ${{ steps.draft.outputs.tag_object }}
+      release_sha: ${{ steps.draft.outputs.release_sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -685,7 +688,9 @@ jobs:
             config/scripts/release/publication/assert-github-release-is-draft.mjs
 
       - name: Create draft release with bounded generated notes
+        id: draft
         env:
+          SOURCE_SHA: ${{ needs.cut.outputs.source_sha }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
         run: node config/scripts/release/publication/create-draft-release.mjs "$TAG"
@@ -2187,6 +2192,7 @@ jobs:
   publish-release:
     needs:
       - cut
+      - create-release
       - build
       - build-mac
       - verify-mac-build
@@ -2197,6 +2203,7 @@ jobs:
     if: >-
       !cancelled() &&
       needs.cut.result == 'success' &&
+      needs.create-release.result == 'success' &&
       needs.build.result == 'success' &&
       needs.build-mac.result == 'success' &&
       needs.verify-mac-build.result == 'success' &&
@@ -2242,6 +2249,33 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
         run: node config/scripts/release/publication/verify-release-required-assets.mjs "$TAG"
+
+      - name: Verify release tag still matches the drafted source
+        # Why: the draft targets default-branch metadata, so undrafting after a moved or deleted tag would publish
+        # these assets under the wrong commit. Fail unless the tag is still the object create-release verified.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.cut.outputs.tag }}
+          TAG_OBJECT: ${{ needs.create-release.outputs.tag_object }}
+          RELEASE_SHA: ${{ needs.create-release.outputs.release_sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$TAG_OBJECT" =~ ^[0-9a-f]{40}$ || ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::create-release did not record the verified tag object and release commit for $TAG."
+            exit 1
+          fi
+          ref_json="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG")"
+          ref="$(jq -r '.ref' <<<"$ref_json")"
+          object="$(jq -r '.object.sha' <<<"$ref_json")"
+          type="$(jq -r '.object.type' <<<"$ref_json")"
+          commit="$object"
+          if [[ "$type" == "tag" ]]; then
+            commit="$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$object" | jq -r 'select(.object.type == "commit") | .object.sha')"
+          fi
+          if [[ "$ref" != "refs/tags/$TAG" || "$object" != "$TAG_OBJECT" || "$commit" != "$RELEASE_SHA" ]]; then
+            echo "::error::Remote tag $TAG no longer resolves to verified object $TAG_OBJECT (commit $RELEASE_SHA); refusing to publish."
+            exit 1
+          fi
 
       - name: Publish release
         # Reassert prerelease from tag: on 2026-04-27 builder flipped RC to false/latest and broke release math; builder output is not authoritative.
