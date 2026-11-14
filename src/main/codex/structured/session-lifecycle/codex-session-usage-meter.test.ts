@@ -7,18 +7,29 @@ import {
   THREAD_ID
 } from './codex-structured-session-adapter-fixture'
 
-async function fixture(resumed = false) {
+async function fixture(options: { resumed?: boolean; rerouteBeforeOpen?: boolean } = {}) {
   const settings = { model: 'gpt-live', effort: 'low', modelProvider: 'openai' }
   const codex = fakeCodex({
     'account/read': () => ({
       account: { type: 'chatgpt', id: 'account-1', email: 'private@invalid.test', planType: 'pro' }
     }),
-    'thread/start': () => ({
-      thread: { id: THREAD_ID, modelProvider: 'openai', status: { type: 'idle' } },
-      model: 'gpt-live',
-      reasoningEffort: 'low',
-      modelProvider: 'openai'
-    }),
+    'thread/start': () => {
+      if (options.rerouteBeforeOpen) {
+        codex.connections[0]!.handlers.onNotification?.('model/rerouted', {
+          threadId: THREAD_ID,
+          turnId: 'opening-turn',
+          fromModel: 'gpt-live',
+          toModel: 'gpt-other',
+          reason: 'capacity'
+        })
+      }
+      return {
+        thread: { id: THREAD_ID, modelProvider: 'openai', status: { type: 'idle' } },
+        model: 'gpt-live',
+        reasoningEffort: 'low',
+        modelProvider: 'openai'
+      }
+    },
     'thread/resume': () => ({
       thread: { id: THREAD_ID, modelProvider: 'openai', status: { type: 'idle' } },
       model: 'gpt-live',
@@ -26,9 +37,11 @@ async function fixture(resumed = false) {
       modelProvider: 'openai'
     })
   })
-  const adapter = adapterFor(codex, { resumeThreadId: resumed ? THREAD_ID : null })
+  const adapter = adapterFor(codex, { resumeThreadId: options.resumed ? THREAD_ID : null })
   await acquireReadyCodexForTest(adapter, {
-    identity: identityFor('session-1'),
+    identity: options.rerouteBeforeOpen
+      ? { ...identityFor('session-1'), providerHandle: null }
+      : identityFor('session-1'),
     fence: 7,
     spawnToken: 'spawn-9'
   })
@@ -95,7 +108,7 @@ it('reads an actual held account and cumulative tokens without requiring worker 
 })
 
 it('never assumes a zero baseline for a resumed thread and keeps counter corruption unknown', async () => {
-  const f = await fixture(true)
+  const f = await fixture({ resumed: true })
   try {
     expect(await f.read()).toBeNull()
     f.usage()
@@ -109,9 +122,14 @@ it('never assumes a zero baseline for a resumed thread and keeps counter corrupt
   }
 })
 
-it.each([false, true])(
-  'keeps a primary reroute unverifiable with an existing counter: %s',
-  async (hasCounter) => {
+it.each([
+  { hasCounter: false, threadId: THREAD_ID },
+  { hasCounter: true, threadId: THREAD_ID },
+  { hasCounter: false, threadId: undefined },
+  { hasCounter: true, threadId: undefined }
+])(
+  'keeps primary or unscopable reroute usage unverifiable: %j',
+  async ({ hasCounter, threadId }) => {
     const f = await fixture()
     try {
       if (hasCounter) {
@@ -127,7 +145,7 @@ it.each([false, true])(
       }
       f.notify('model/rerouted', reroute)
       expect(before?.isCurrent()).toBe(true)
-      f.notify('model/rerouted', { ...reroute, threadId: THREAD_ID })
+      f.notify('model/rerouted', { ...reroute, threadId })
       expect(before?.isCurrent()).toBe(false)
       expect(await f.read()).toBeNull()
       f.usage(120)
@@ -137,6 +155,17 @@ it.each([false, true])(
     }
   }
 )
+
+it('keeps usage unknown when a reroute arrives before the primary opening reply', async () => {
+  const f = await fixture({ rerouteBeforeOpen: true })
+  try {
+    expect(await f.read()).toBeNull()
+    f.usage()
+    expect(await f.read()).toBeNull()
+  } finally {
+    await f.adapter.closeAll()
+  }
+})
 
 it('requires a new provider counter after every turn before measuring another interval', async () => {
   const f = await fixture()

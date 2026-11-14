@@ -48,18 +48,24 @@ export function codexAcquisitionNotificationHandler(input: {
       method === 'turn/started' ? input.dispatchEchoes.latestSequence() : undefined
     // Stamp status on receipt so buffering cannot reorder it relative to replies.
     const threadId = readCodexThreadId(params)
+    const primaryThreadId = input.primaryThreadId()
     const execution = input.acquisition.execution
-    if (threadId && threadId === input.primaryThreadId()) {
-      if (method === 'model/rerouted') {
-        input.acquisition.usageMeter.invalidateUsage()
-        if (execution) {
-          execution.invalidated = true
-          execution.usage = undefined
-          execution.usageUnverifiable = true
-          execution.controls.stop()
-          execution.checkpoint?.()
-        }
-      } else if (method === 'thread/tokenUsage/updated') {
+    // Only a known foreign thread can exclude a reroute from this acquisition.
+    if (
+      method === 'model/rerouted' &&
+      (!threadId || !primaryThreadId || threadId === primaryThreadId)
+    ) {
+      input.acquisition.usageMeter.invalidateUsage()
+      if (execution) {
+        execution.invalidated = true
+        execution.usage = undefined
+        execution.usageUnverifiable = true
+        execution.controls.stop()
+        execution.checkpoint?.()
+      }
+    }
+    if (threadId && threadId === primaryThreadId) {
+      if (method === 'thread/tokenUsage/updated') {
         input.acquisition.usageMeter.observe(params, threadId, input.now())
       } else if (method === 'turn/started') {
         input.acquisition.usageMeter.activity(false)
