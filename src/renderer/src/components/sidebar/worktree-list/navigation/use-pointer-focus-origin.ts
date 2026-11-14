@@ -15,8 +15,17 @@ export function useListPointerFocusOrigin(scrollRef: React.RefObject<HTMLElement
     }
     const handleFocusOut = (event: FocusEvent) => {
       const list = scrollRef.current
+      if (!list || !(event.target instanceof Node) || !list.contains(event.target)) {
+        return
+      }
+      // Why: a click can focus a row control (section header, Cancel) rather than the list, so
+      // clear on focus leaving the list subtree, not only the list element itself.
+      const next = event.relatedTarget
+      if (next instanceof Node && list.contains(next)) {
+        return
+      }
       // Window blur also fires focusout; focus returning to the app is not a new keyboard entry.
-      if (list && event.target === list && document.hasFocus()) {
+      if (document.hasFocus()) {
         list.removeAttribute(LIST_POINTER_FOCUS_ATTRIBUTE)
       }
     }
