@@ -95,6 +95,8 @@ export type NativeChatComposerFieldProps = {
   agent?: string
   launchPrompt?: { placeholder: string }
   workspaceFooter?: React.ReactNode
+  /** Send opens `/btw` and `/side` drafts as side chats here. */
+  sideChat?: boolean
 }
 
 /** After a clear suppressed by IME, preserve only the composed segment; compare both ends because the caret need not be at the end. */
@@ -168,7 +170,8 @@ export function NativeChatComposerField({
   goalMode,
   agent,
   launchPrompt,
-  workspaceFooter
+  workspaceFooter,
+  sideChat
 }: NativeChatComposerFieldProps): React.JSX.Element {
   const t = useTranslate()
   const draftNotSaved = useNativeChatComposerDraftUnsaved(draftScopeKey)
@@ -339,6 +342,7 @@ export function NativeChatComposerField({
               isComposing={imeEnterGesture.isComposing}
               initialValue={draft}
               disabled={disabled}
+              sideChat={sideChat}
               onChange={editorChange}
               onKeyDownCapture={editorKeyDownCapture}
               onKeyUp={editorKeyUp}
