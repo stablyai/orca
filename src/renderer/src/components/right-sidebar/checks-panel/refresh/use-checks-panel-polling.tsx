@@ -13,14 +13,14 @@ import {
   checksPanelAsyncResultKey,
   checksPanelHostedReviewAsyncResultKey
 } from './checks-panel-async-result-key'
-import type { ChecksPanelContextState } from '../use-checks-panel-context-state'
-import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'
-import type { ChecksPanelComposerState } from '../use-checks-panel-composer-state'
+import type { ChecksPanelContextState } from '../review-state/use-checks-panel-context-state'
+import type { ChecksPanelControllerState } from '../panel/use-checks-panel-controller-state'
+import type { ChecksPanelComposerState } from '../review-actions/use-checks-panel-composer-state'
 import {
   fetchGitLabMRDetailsForChecks,
   gitLabMRCommentsToPRComments
-} from '../gitlab-review-client'
-import { checksPanelLoadErrorMessage } from '../checks-panel-forge-owner'
+} from '../review-data/gitlab-review-client'
+import { checksPanelLoadErrorMessage } from '../review-data/checks-panel-forge-owner'
 import { forgeOwnerHostIdForWorkspace } from '@/runtime/source-control/forge/forge-credential-target'
 import { isWslDistroNotRunningRefusal } from '../../../../../../shared/wsl-distro-not-running-refusal'
 import { translate } from '@/i18n/i18n'

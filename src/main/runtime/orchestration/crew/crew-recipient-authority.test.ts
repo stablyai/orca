@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
 import { agentSessionRecordFixture } from '../../../native-chat/testing/agent-session-record-test-fixture'
-import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { isOrcaSessionId, formatOrcaSessionAddress } from '../../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
 import { CrewReadModel } from './crew-read-model'

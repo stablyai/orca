@@ -1,21 +1,22 @@
+import { readTestHostJournal } from '../../src/main/native-chat/agent-session-journal/journal-observation.test-support'
 // @vitest-environment happy-dom
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { createElement } from 'react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../src/shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../src/shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import { claudeSessionIdForOrcaSession } from '../../src/main/claude/structured/claude-structured-session-id'
-import { hostTestMessage } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { hostTestMessage } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { StructuredAgentSessionStartupAttempts } from '../../src/main/native-chat/agent-session-wire/startup/structured-agent-session-startup-attempt'
 import { createScriptedClaudeRuntime } from '../../src/main/runtime/agent-session/installation/structured-claude-scripted-runtime-test-support'
 import { TooltipProvider } from '../../src/renderer/src/components/ui/tooltip'
 import { NativeChatSessionOptionPickers } from '../../src/renderer/src/components/native-chat/session/options/controls/NativeChatSessionOptionPickers'
-import { structuredAgentSessionSeedCatalog } from '../../src/shared/agent-session/options/structured-agent-session-seed-catalog'
+import { structuredAgentSessionSeedCatalog } from '../../src/shared/agent-session/options/model-catalog/structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionOptions,
   createStructuredAgentSessionOptionState
 } from '../../src/shared/agent-session/options/structured-agent-session-options'
-import { structuredAgentSessionOptionSnapshot } from '../../src/shared/agent-session/options/structured-agent-session-option-snapshot'
+import { structuredAgentSessionOptionSnapshot } from '../../src/shared/agent-session/options/view/structured-agent-session-option-snapshot'
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string, values?: Record<string, string | number>) =>
@@ -163,7 +164,7 @@ it('picks model then effort through the menus during startup and uses both in th
     child.answerInit()
     await Promise.all(picked)
     await vi.waitFor(async () => {
-      const reply = (await host.journalSnapshot(SESSION)).items.find(
+      const reply = (await readTestHostJournal(host, SESSION)).items.find(
         (item) => item.body.kind === 'message' && item.body.role === 'assistant'
       )
       expect(reply?.body).toMatchObject({

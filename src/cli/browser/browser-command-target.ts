@@ -2,7 +2,7 @@ import { BROWSER_EXPECT_URL_RUNTIME_CAPABILITY } from '../../shared/browser/runt
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import { getOptionalStringFlag, getPresentStringFlag } from '../arguments/flags'
 import type { RuntimeClient } from '../runtime/client'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { assertLocalCwdWorktreeSelector } from '../hosts/local-environment-selector'
 import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
 import {

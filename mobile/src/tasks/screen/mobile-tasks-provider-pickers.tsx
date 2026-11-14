@@ -1,5 +1,5 @@
 import type { ConnectionPresentationModel } from '../screen-state/use-mobile-tasks-connection-presentation'
-import { PickerModal } from '../../components/PickerModal'
+import { PickerModal } from '../../components/sheets/PickerModal'
 import { View, Text, Pressable, ScrollView } from 'react-native'
 import type { TaskProvider } from '../../../../src/shared/work-items/task-providers'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'

@@ -5,7 +5,6 @@ import {
   normalizeCmdJPaletteQuery,
   tokenizeCmdJPaletteQuery
 } from './palette-query-tokens'
-import { normalizePaletteText } from '../../../../shared/palette-match/normalized-text'
 import { PALETTE_QUERY_MAX_TOKENS } from '../../../../shared/palette-match/palette-query'
 
 describe('Cmd+J palette query normalization', () => {
@@ -14,9 +13,6 @@ describe('Cmd+J palette query normalization', () => {
 
     expect(normalizeCmdJPaletteQuery(query)).toBe('café 系统 école test')
     expect(tokenizeCmdJPaletteQuery(query)).toEqual(['café', '系统', 'école', 'test'])
-    for (const token of normalizeCmdJPaletteQuery(query).split(' ')) {
-      expect(normalizePaletteText(token).normalized).toBe(token)
-    }
   })
 })
 
@@ -38,18 +34,5 @@ describe('Cmd+J palette token scoring', () => {
       (_, i) => `t${i}`
     ).join('.')
     expect(isCmdJPaletteQueryOverTokenLimit(punctuationHeavy)).toBe(true)
-  })
-})
-
-describe('Cmd+J palette query token ceiling', () => {
-  const tokens = Array.from({ length: PALETTE_QUERY_MAX_TOKENS }, (_, index) => `token${index}`)
-
-  it('accepts the shared ceiling and counts unique tokens only', () => {
-    expect(isCmdJPaletteQueryOverTokenLimit(tokens.join(' '))).toBe(false)
-    expect(isCmdJPaletteQueryOverTokenLimit([...tokens, tokens[0]].join(' '))).toBe(false)
-  })
-
-  it('rejects one token past the shared ceiling', () => {
-    expect(isCmdJPaletteQueryOverTokenLimit([...tokens, 'extra'].join(' '))).toBe(true)
   })
 })

@@ -1,8 +1,12 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { isContextualTourSessionConsumed } from '@/store/slices/ui/ui-slice-tour-actions'
 import type { ContextualTourId } from '../../../../shared/contextual-tours'
 import type { FeatureInteractionState } from '../../../../shared/feature-interactions'
+import {
+  activeBrowserExtensionsBanner,
+  type BrowserExtensionsBannerAssignmentReply
+} from '../../../../shared/browser/extensions/browser-extensions-banner'
 import { requestContextualTourWhenReady } from '@/components/contextual-tours/request-contextual-tour-when-ready'
 
 // Why renderer start: "a later visit" means the browser was first opened before this app session.
@@ -47,10 +51,34 @@ export function shouldRequestBrowserExtensionsTour(
   return firstBrowserVisitAt !== undefined && firstBrowserVisitAt < input.sessionStartedAt
 }
 
+let assignmentRequest: Promise<BrowserExtensionsBannerAssignmentReply['status']> | null = null
+
+/** Mounted panes share one request; a client that cannot ask keeps the default banner. */
+function requestBrowserExtensionsBannerAssignment(): Promise<
+  BrowserExtensionsBannerAssignmentReply['status']
+> {
+  assignmentRequest ??= Promise.resolve()
+    .then(() => window.api.telemetryAssignBrowserExtensionsBanner())
+    .then(
+      (reply) => {
+        const status = reply?.status
+        return status === 'active' || status === 'deferred' || status === 'not_ready'
+          ? status
+          : 'not_enrolled'
+      },
+      () => 'not_enrolled' as const
+    )
+    .finally(() => {
+      assignmentRequest = null
+    })
+  return assignmentRequest
+}
+
 /** Requests the one-time extensions callout once the active page has an extensions toolbar. */
 export function useBrowserExtensionsTour(enabled: boolean, toolbarReady: boolean): void {
-  const eligible = useAppStore(
-    (s) =>
+  // 'assign': main has not yet said which banner this install follows; 'show': it may be requested.
+  const step = useAppStore((s) => {
+    const eligible =
       enabled &&
       toolbarReady &&
       s.activeContextualTourId === null &&
@@ -66,9 +94,31 @@ export function useBrowserExtensionsTour(enabled: boolean, toolbarReady: boolean
         featureInteractions: s.featureInteractions,
         sessionStartedAt: SESSION_STARTED_AT
       })
-  )
-  useEffect(() => {
     if (!eligible) {
+      return null
+    }
+    const banner = activeBrowserExtensionsBanner(s.settings?.telemetry?.browserExtensionsBanner)
+    return banner === undefined ? 'assign' : banner === 'none' ? null : 'show'
+  })
+  const [usesDefaultBanner, setUsesDefaultBanner] = useState(false)
+  useEffect(() => {
+    if (step !== 'assign' || usesDefaultBanner) {
+      return
+    }
+    let disposed = false
+    void requestBrowserExtensionsBannerAssignment().then((status) => {
+      // An assigned banner arrives through settings; other replies leave this launch without one.
+      if (!disposed && status === 'not_enrolled') {
+        setUsesDefaultBanner(true)
+      }
+    })
+    return () => {
+      disposed = true
+    }
+  }, [step, usesDefaultBanner])
+  const show = step === 'show' || (step === 'assign' && usesDefaultBanner)
+  useEffect(() => {
+    if (!show) {
       return
     }
     // Forced like the client-hosted intro so pre-onboarding users get it; the gate above
@@ -85,5 +135,5 @@ export function useBrowserExtensionsTour(enabled: boolean, toolbarReady: boolean
         )
       }
     })
-  }, [eligible])
+  }, [show])
 }

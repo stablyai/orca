@@ -1,20 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import '../../../../shared/worktree/host-qualified-identity'
 import '../../../../shared/ai-vault/search/ai-vault-search-test-fixture'
 import '../../../ai-vault/structured-sessions/structured-session-ownership.test-support'
 import '../../../ai-vault/structured-sessions/structured-session-ownership'
-import { hostTestState } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
+import { hostTestState } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host.test-fixture'
 import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import '../../../native-chat/agent-session-journal/journal-store-factory'
-import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { scaleDirectory, scaleRecord } from './agent-session-scale.test-fixture'
-import '../../workspaces/references/runtime-reference-find'
-import '../../../../shared/workspace-attachments/workspace-reference-identity'
 import { createReferenceAgentIndex } from '../../workspaces/references/runtime-reference-agents'
 import {
   seedTestAgentSessionRecordStore,
-  openTestAgentSessionRecordStore
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
 } from './agent-session-record-store-test-harness'
 import { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import '../../orchestration/db/contract-constants'
@@ -30,13 +26,18 @@ import {
   structuredWorkerIdentities,
   structuredWorkerProcessIncarnation
 } from '../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
-import './agent-session-record-store-slot'
-import '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import {
+  openAgentSessionRecordStoreOnce,
+  retireAgentSessionRecordStore
+} from './agent-session-record-store-slot'
+import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { conversationRecordReader } from '../../orchestration/addressing/session-lineage/structured-session-lineage'
 import '../structured-agent-session-create-adoption'
-import '../../workspaces/removal/structured-session-worktree-teardown'
-import './agent-session-store-state'
+import {
+  journalSqlReaderPath,
+  journalSqlWorkerPath
+} from '../../../native-chat/agent-session-journal/journal-sql-worker-bundle.test-fixture'
 
 const referenceRuntime = {
   getOrchestrationFleetAgentStatusSnapshot: () => [],
@@ -58,7 +59,7 @@ function clearedRecord(sessionId: string, successor: string): AgentSessionRecord
   }
 }
 
-describe('real conversation inventory work', () => {
+describe('persisted conversation inventory identity', () => {
   it('keeps global worker identity separate from candidate inventory and retains closure/loop outcomes', async () => {
     const rootId = testOrcaSessionId('global-root')
     const successor = testOrcaSessionId('visible-successor')
@@ -84,7 +85,7 @@ describe('real conversation inventory work', () => {
     const host = new StructuredAgentSessionHost({
       ...hostTestState().host.deps,
       store: globalStore,
-      journalDatabase: openTestJournalHostDatabase(globalRoot)
+      journalDatabase: await openTestAgentSessionDatabase(globalRoot)
     })
     setStructuredAgentSessionHost(host)
     const db = new OrchestrationDb(':memory:')
@@ -139,6 +140,61 @@ describe('real conversation inventory work', () => {
     } finally {
       structuredWorkerIdentities.forget(handle)
       db.close()
+    }
+  })
+
+  it('uses the opened cold inventory without importing its predecessor into absent global identity', async () => {
+    const root = await scaleDirectory()
+    const predecessor = testOrcaSessionId('cold-root')
+    const successor = testOrcaSessionId('cold-successor')
+    await seedTestAgentSessionRecordStore(root, {
+      records: [clearedRecord(predecessor, successor), scaleRecord(successor)],
+      sessionTabs: [{ tabId: 'cold-tab', sessionId: successor }]
+    })
+    const opened = await openAgentSessionRecordStoreOnce({
+      legacySessionTabIds: [],
+      stateDirectory: root,
+      hostId: 'local',
+      logger: createStructuredAgentSessionLogger(),
+      writerPath: journalSqlWorkerPath(),
+      readerPath: journalSqlReaderPath(),
+      onMaintenanceTick: () => {}
+    })
+    const db = new OrchestrationDb(':memory:')
+    try {
+      const run = db.createRun({
+        objective: 'cold identity',
+        coordinatorHandle: null,
+        coordinatorPaneKey: null
+      })
+      db.createDispatchContext({
+        taskId: db.createTask({ runId: run.id, spec: 'predecessor' }).id,
+        assigneeHandle: mintStructuredWorkerHandle(),
+        processIncarnation: structuredWorkerProcessIncarnation(predecessor),
+        creator: { kind: 'system' },
+        maxDepth: Number.MAX_SAFE_INTEGER
+      })
+      for (const index of [
+        createReferenceAgentIndex(referenceRuntime, db),
+        createReferenceAgentIndex(referenceRuntime, db, conversationRecordReader(opened.store))
+      ]) {
+        expect([...index.values()].flat()).toMatchObject([
+          {
+            sessionId: successor,
+            mailbox: `orca_session_id:${successor}`,
+            liveness: 'unverifiable'
+          }
+        ])
+      }
+      expect(resolveOrcaSessionParty(successor, db)).toMatchObject({
+        orcaSessionId: successor,
+        terminalHandle: null
+      })
+    } finally {
+      db.close()
+      await retireAgentSessionRecordStore(async (released) => {
+        await released?.journalDatabase.close()
+      })
     }
   })
 })

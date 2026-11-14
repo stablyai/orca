@@ -14,7 +14,7 @@ import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-
 import { worktreeRowSurface } from './worktree-row-locators'
 import { readFreshTerminalInventory } from './helpers/terminal-inventory-observation'
 import { RuntimeClient } from '../../src/cli/runtime/client'
-import { RuntimeRpcFailureError } from '../../src/cli/runtime/types'
+import { RuntimeRpcFailureError } from '../../src/cli/runtime/connection/types'
 import type {
   RuntimeTerminalClose,
   RuntimeTerminalListResult,

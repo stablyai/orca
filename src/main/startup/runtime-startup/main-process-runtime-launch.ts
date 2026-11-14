@@ -1,7 +1,4 @@
-import {
-  settleDesktopActivation,
-  e2eHeadlessServeWithoutBrowser
-} from './runtime-launch-activation'
+import { settleDesktopActivation } from './runtime-launch-activation'
 import { app, type BrowserWindow } from 'electron'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { placeUnshownLiveTerminalsBestEffort } from '../../runtime/terminal/adoption/unshown-live-terminal-placement'
@@ -14,9 +11,7 @@ import { resolveServePinnedBindHost } from '../serve-launch/serve-pinned-bind-ho
 import { isOrcadSidecarLaunch } from '../../window/activation/foreground-activation-policy'
 import { registerMobileHandlers } from '../../ipc/mobile'
 import { createRuntimeEnvironmentMobileRelayHosts } from '../../ipc/runtime-environments/mobile-relay/runtime-environment-mobile-relay-hosts'
-
 import { registerHeadlessPtyRuntime } from '../../ipc/pty/register-headless-runtime'
-
 import { publishHeadlessRuntimeGraph } from '../../runtime/session-graph/headless-runtime-graph'
 import { OffscreenBrowserBackend } from '../../browser/backends/offscreen-browser-backend'
 import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
@@ -37,7 +32,6 @@ import { repairKnownPoisonedInstallDirBeforeWindow } from '../windows-install-pe
 import { installServeQuitHandling } from '../serve-launch/serve-quit-handling'
 import { installCloudSessionShutdownFlush } from '../cloud-startup/cloud-session-shutdown-flush'
 import { registerHeadlessServeSshHandlers } from '../serve-launch/headless-serve-ssh-registration'
-
 import {
   recordRuntimeRpcStartFailure,
   showRuntimeRpcStartupFailureDialog
@@ -59,6 +53,8 @@ import { resolveUpdateInstallMode } from '../../updater/updater-service'
 import { scheduleAgentLaunchRecordWarmup } from '../agent-accounts/agent-launch-record-warmup'
 import { emitServeBrowserIdentityActionLine } from '../../server/serve-stdout-boundary'
 import { getBrowserIdentityModeStatus } from '../../browser/identity/mode/browser-identity-mode-store'
+import { beginChatJournalStartup, chatJournalHostServing } from './chat-journal-startup'
+import { e2eHeadlessServeWithoutBrowser } from '../serve-launch/e2e-headless-serve-without-browser'
 
 type RuntimeService = NonNullable<typeof state.runtime>
 
@@ -207,6 +203,7 @@ async function launchServeMode(
   void scheduleAllPendingHistoryTreeRemovals()
   emitServeBrowserIdentityActionLine(getBrowserIdentityModeStatus())
   await printServeReady(serveOptions)
+  chatJournalHostServing()
   const store = state.store!
   setupHeadlessServeAutoUpdater(store, {
     onBeforeUpdateQuit: () =>
@@ -240,6 +237,7 @@ async function launchDesktopMode(
       )
   ])
   scheduleAgentLaunchRecordWarmup(win)
+  chatJournalHostServing()
   if (!runtimeRpcStartResult.ok) {
     // Await i18n only for the failure dialog; parallel launch must not show English fallback to non-English users.
     void state.mainProcessI18nReady.then(() =>
@@ -317,6 +315,7 @@ export async function initializeMainProcessRuntimeLaunch(
     await shellPathReady
     bindTerminalRuntimeStartupServices(Promise.resolve(startTerminalRuntimeStartupServices()))
   }
+  beginChatJournalStartup(runtime, serveOptions !== null)
   app.on('activate', options.handleMacAppActivation)
   if (serveOptions) {
     await launchServeMode(runtime, runtimeRpc, serveOptions)

@@ -3,7 +3,7 @@ import { PLUGIN_HOST_API } from '../../../../shared/plugins/workers/plugin-host-
 import { PLUGIN_TERMINAL_READ_MAX_LINES } from '../../../../shared/plugins/workers/plugin-host-api-workspace-methods'
 import { bind, type BoundPluginHostMethod } from './plugin-host-method-bind'
 import { PluginHostCallError } from './plugin-host-call-scope'
-import { claimPluginReplacedActionRun } from '../../plugin-command-replacement-deadline'
+import { claimPluginReplacedActionRun } from '../../commands/plugin-command-replacement-deadline'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   pluginHostEffect as effect,

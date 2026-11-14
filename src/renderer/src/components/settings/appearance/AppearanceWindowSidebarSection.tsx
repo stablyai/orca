@@ -12,7 +12,7 @@ import {
   SettingsSegmentedControl,
   SettingsSwitchRow
 } from '../form-controls/SettingsFormControls'
-import { useAvailableStatusBarToggles } from '../../status-bar/use-available-status-bar-toggles'
+import { useAvailableStatusBarToggles } from '../../status-bar/composition/use-available-status-bar-toggles'
 import { getLayoutEntries, getFollowSymlinkedDirectoriesEntry } from './appearance-search'
 import {
   getSidebarEntries,

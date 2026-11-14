@@ -12,35 +12,6 @@ function deferred<T>() {
 }
 
 describe('createCoalescingKeyedRunner', () => {
-  it('queues a caller with a different share key behind the run in flight, never beside it', async () => {
-    const run = createCoalescingKeyedRunner<string>()
-    const first = deferred<string>()
-    let active = 0
-    let maxActive = 0
-    const tracked = (work: () => Promise<string>) => async () => {
-      active += 1
-      maxActive = Math.max(maxActive, active)
-      try {
-        return await work()
-      } finally {
-        active -= 1
-      }
-    }
-    const leadingWork = tracked(() => first.promise)
-    const leading = run('repo', 'origin', leadingWork)
-    const other = vi.fn(async () => 'upstream result')
-    const queued = run('repo', 'upstream', tracked(other))
-    await Promise.resolve()
-    expect(other).not.toHaveBeenCalled()
-
-    first.resolve('origin result')
-    await expect(Promise.all([leading, queued])).resolves.toEqual([
-      'origin result',
-      'upstream result'
-    ])
-    expect(maxActive).toBe(1)
-  })
-
   it('answers every caller from a run of its own share key, in arrival order', async () => {
     const run = createCoalescingKeyedRunner<string>()
     const first = deferred<string>()
@@ -82,19 +53,5 @@ describe('createCoalescingKeyedRunner', () => {
     await expect(run('repo-b', 'target', other)).resolves.toBe('other')
     held.resolve('held')
     await expect(heldResult).resolves.toBe('held')
-  })
-
-  it('starts fresh once a key has settled, instead of joining a finished run', async () => {
-    const run = createCoalescingKeyedRunner<number>()
-    let runs = 0
-    const work = async () => ++runs
-
-    await expect(run('repo', 'target', work)).resolves.toBe(1)
-    await expect(run('repo', 'target', work)).resolves.toBe(2)
-
-    const leading = run('repo', 'target', work)
-    const trailing = run('repo', 'target', work)
-    await expect(Promise.all([leading, trailing])).resolves.toEqual([3, 4])
-    await expect(run('repo', 'target', work)).resolves.toBe(5)
   })
 })

@@ -6,11 +6,9 @@ import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session
 import type { StructuredAgentSessionHostSession } from '../host/structured-agent-session-host-types'
 import type { AgentSessionIdleConfirmation } from '../providers/structured-agent-session-adapter'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
-import type { StructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
-import {
-  heldStructuredAgentSessionCurrentWork,
-  type StructuredAgentSessionCurrentWorkHost
-} from '../observations/structured-agent-session-host-current-work'
+import type { StructuredAgentSessionCurrentWorkHost } from '../observations/structured-agent-session-host-current-work'
+import { readHostStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
+import type { JournalWorkAnswer } from '../../agent-session-journal/journal-work-read'
 
 type RunningChild = NonNullable<StructuredAgentSessionHostSession['child']>
 
@@ -48,10 +46,7 @@ export type StructuredAgentSessionIdleSweepDeps = {
 
 export type StructuredAgentSessionChildWorkReads = {
   /** Ended-generation turns/prompts cannot retain children; null means no held conversation. */
-  currentWork: () => Pick<
-    StructuredAgentSessionCurrentWork,
-    'activeTurnId' | 'hasActionablePrompt'
-  > | null
+  currentWork: () => Promise<JournalWorkAnswer<'child-work'> | null>
   /** Provider evidence; bounded stores may have refused a record. */
   childWorkOpen: () => boolean
   hasOpenDispatch: () => boolean
@@ -60,15 +55,15 @@ export type StructuredAgentSessionChildWorkReads = {
 
 /** Check turn, child, dispatch, held-send and prompt work without building a snapshot. */
 export function structuredAgentSessionChildHasOpenWork(
-  reads: StructuredAgentSessionChildWorkReads
+  reads: Omit<StructuredAgentSessionChildWorkReads, 'currentWork'>,
+  work: JournalWorkAnswer<'child-work'> | null
 ): boolean {
-  const work = reads.currentWork()
   return (
-    (work !== null && work.activeTurnId() !== null) ||
+    work?.activeTurn === true ||
     reads.childWorkOpen() ||
     reads.hasOpenDispatch() ||
     reads.providerHoldsDispatch() ||
-    (work !== null && work.hasActionablePrompt())
+    work?.actionablePrompt === true
   )
 }
 
@@ -158,7 +153,11 @@ export class StructuredAgentSessionIdleSweep {
       return null
     }
     // Renew owed work every tick to allow a full window for the lead’s post-child wake-up.
-    if (session.child && session.child.phase !== 'starting' && this.owesWork(sessionId, session)) {
+    if (
+      session.child &&
+      session.child.phase !== 'starting' &&
+      (await this.owesWork(sessionId, session))
+    ) {
       this.deps.sessions.touch(sessionId)
       return null
     }
@@ -185,29 +184,30 @@ export class StructuredAgentSessionIdleSweep {
     return null
   }
 
-  private queuedOrDelivering(sessionId: string, session: StructuredAgentSessionHostSession) {
+  private async queuedOrDelivering(sessionId: string, session: StructuredAgentSessionHostSession) {
     return (
       this.deps.deliveryActive(sessionId) ||
-      session.journal.inputOrder.recoverableSubmissions().some(isQueuedAgentJournalSubmission)
+      (await session.journal.reads.input({ kind: 'recoverable-submissions' })).submissions.some(
+        isQueuedAgentJournalSubmission
+      )
     )
   }
 
   /** Without a child, leftover turns/prompts are history and cannot retain the handle. */
-  private owesWork(sessionId: string, session: StructuredAgentSessionHostSession): boolean {
+  private async owesWork(
+    sessionId: string,
+    session: StructuredAgentSessionHostSession
+  ): Promise<boolean> {
     return (
-      this.queuedOrDelivering(sessionId, session) ||
-      structuredAgentSessionChildHasOpenWork({
-        currentWork: () =>
-          heldStructuredAgentSessionCurrentWork(
-            this.deps.store,
-            sessionId,
-            session.journal,
-            session
-          ),
-        childWorkOpen: () => this.deps.childWorkOpen(sessionId),
-        hasOpenDispatch: () => this.deps.hasOpenDispatch(sessionId),
-        providerHoldsDispatch: () => this.deps.providerHoldsDispatch(sessionId)
-      })
+      (await this.queuedOrDelivering(sessionId, session)) ||
+      structuredAgentSessionChildHasOpenWork(
+        {
+          childWorkOpen: () => this.deps.childWorkOpen(sessionId),
+          hasOpenDispatch: () => this.deps.hasOpenDispatch(sessionId),
+          providerHoldsDispatch: () => this.deps.providerHoldsDispatch(sessionId)
+        },
+        await readHostStructuredAgentSessionWork(this.deps, sessionId, { kind: 'child-work' })
+      )
     )
   }
 }

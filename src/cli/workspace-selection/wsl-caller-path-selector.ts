@@ -6,7 +6,7 @@ import {
 } from '../../shared/cross-platform-path'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import type { RuntimeClient } from '../runtime/client'
-import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
+import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
 
 async function listFolderPaths(client: RuntimeClient): Promise<string[]> {
   try {

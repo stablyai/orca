@@ -5,11 +5,11 @@ import {
   type AgentJournalMessageItem,
   AGENT_JOURNAL_THREAD_SCOPE
 } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { structuredAgentSessionPayloadFingerprint } from '../../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { structuredAgentSessionPayloadFingerprint } from '../../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 
 import { readAgentSessionHistory } from '../agent-session-history-page'
 
-import { fixture, IDENTITY, body, item } from './agent-session-history-contract-test-fixture'
+import { fixture, IDENTITY, body, item } from './agent-session-history-contract.test-fixture'
 
 describe('projectJournalBatch', () => {
   it('publishes every nested lifecycle mutation atomically at the outer cursor', async () => {
@@ -45,7 +45,7 @@ describe('projectJournalBatch', () => {
       ]
     })
 
-    const page = readAgentSessionHistory(fixture.journal, {
+    const page = await readAgentSessionHistory(fixture.journal, {
       sessionId: 'session-1',
       direction: 'after',
       cursor,
@@ -58,7 +58,7 @@ describe('projectJournalBatch', () => {
     expect(page.page.removedItemIds).toHaveLength(1)
     expect(new Set(page.page.items.map((entry) => entry.sequence)).size).toBe(1)
 
-    const tail = readAgentSessionHistory(fixture.journal, {
+    const tail = await readAgentSessionHistory(fixture.journal, {
       sessionId: 'session-1',
       direction: 'tail',
       limit: 1
@@ -103,7 +103,7 @@ describe('projectJournalBatch', () => {
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
 
-    const page = readAgentSessionHistory(fixture.journal, {
+    const page = await readAgentSessionHistory(fixture.journal, {
       sessionId: IDENTITY.sessionId,
       direction: 'after',
       cursor

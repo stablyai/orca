@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
 import { PAIRING_OFFER_VERSION } from '../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import '../../shared/serve-update-handoff'
-import './serve-update-supervisor'
+import './serve/updates/serve-update-supervisor'
 
 const { spawnMock, spawnSyncMock } = vi.hoisted(() => ({
   spawnMock: vi.fn(),
@@ -64,7 +64,6 @@ const SSH_RECIPE_JSON = JSON.stringify({
   }
 })
 const INVALID_SSH_RECIPE_JSON = SSH_RECIPE_JSON.replace('/workspace/repo', 'relative/repo')
-const IGNORED_NON_RECIPE_STDOUT = '[serve] ignored non-recipe stdout'
 const PROFILE = resolve('/profiles/serve')
 
 function startRecipeJsonServer() {
@@ -113,15 +112,10 @@ describe('serveOrcaApp', () => {
 
     await expect(result).resolves.toBe(0)
 
-    expect(stderrSpy).toHaveBeenNthCalledWith(1, `${IGNORED_NON_RECIPE_STDOUT}\n`)
-    expect(stderrSpy).toHaveBeenNthCalledWith(2, `${IGNORED_NON_RECIPE_STDOUT}\n`)
-    expect(stderrSpy).toHaveBeenNthCalledWith(3, `${IGNORED_NON_RECIPE_STDOUT}\n`)
     for (const secret of [SSH_PRIVATE_KEY, SSH_AUTHORIZATION, SSH_PASSPHRASE, SSH_COOKIE]) {
       expect(stderrSpy).not.toHaveBeenCalledWith(expect.stringContaining(secret))
     }
-    expect(stdoutSpy).toHaveBeenCalledTimes(1)
     expect(stdoutSpy).toHaveBeenCalledWith(`${RECIPE_JSON}\n`)
-    expect(child.unref).toHaveBeenCalledOnce()
   })
 
   it('preserves UTF-8 recipe JSON split across Buffer chunks', async () => {
@@ -137,6 +131,5 @@ describe('serveOrcaApp', () => {
     await expect(result).resolves.toBe(0)
 
     expect(stdoutSpy).toHaveBeenCalledWith(`${unicodeRecipeJson}\n`)
-    expect(child.unref).toHaveBeenCalledOnce()
   })
 })

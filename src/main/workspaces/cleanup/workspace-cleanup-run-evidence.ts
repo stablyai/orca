@@ -181,21 +181,23 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
 }): Promise<WorkspaceCleanupWorkspace[]> {
   const { store, runtime, globalRules, now, worktreeId, signal } = args
   const repos = listWorkspaceCleanupOwnedRepos(store)
-  const ps = await runtime.getWorktreePs(WORKTREE_PS_LIMIT)
+  // A re-check projects only its target, so M removals don't rebuild the whole host's listing M times.
+  const ps = await runtime.getWorktreePs(WORKTREE_PS_LIMIT, true, false, worktreeId)
   if (ps.truncated) {
     throw new Error('Could not list every workspace on this host.')
   }
-  const summaries = ps.worktrees.filter(
-    (summary) =>
-      isOwnedSummary(summary, repos) &&
-      (worktreeId === undefined || summary.worktreeId === worktreeId)
-  )
+  const summaries = ps.worktrees.filter((summary) => isOwnedSummary(summary, repos))
   const policies = new Map<string, ResolvedWorkspaceCleanupPolicy>()
-  for (const repo of repos.values()) {
-    policies.set(
-      repo.id,
-      resolveWorkspaceCleanupPolicy({ workspaceCleanupPolicy: globalRules }, repo)
-    )
+  for (const summary of summaries) {
+    if (!policies.has(summary.repoId)) {
+      policies.set(
+        summary.repoId,
+        resolveWorkspaceCleanupPolicy(
+          { workspaceCleanupPolicy: globalRules },
+          repos.get(summary.repoId)!
+        )
+      )
+    }
   }
   const gitTargets = summaries
     .filter((summary) => {

@@ -8,7 +8,7 @@ import { AcpConnectionClosedError } from '../acp/transport/acp-errors'
 import {
   isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
-} from '../../shared/agent-session/lifecycle/agent-session-account-home'
+} from '../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { ANTIGRAVITY_ACP_HOME } from '../../shared/antigravity-session-origin'
 import { compareAppVersions, isValidAppVersion } from '../../shared/app-version'
 import { initializeAntigravityAcp } from './antigravity-acp-runtime-probe'

@@ -16,11 +16,11 @@ import {
 } from '../../../shared/plugins/frames/plugin-panel-shell'
 import type { PluginFrameTheme } from '../../../shared/plugins/frames/plugin-frame-bridge'
 import { isPluginSourceModulePath } from '../../../shared/plugins/frames/plugin-frame-source-modules'
-import type { ValidDiscoveredPlugin } from '../plugin-discovery'
+import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import {
   readContainedPluginArtifactBytes,
   resolveContainedPluginArtifact
-} from '../plugin-artifact-validation'
+} from '../artifacts/plugin-contained-artifact'
 import {
   createPluginFrameIntegrity,
   matchesVerifiedDigest,

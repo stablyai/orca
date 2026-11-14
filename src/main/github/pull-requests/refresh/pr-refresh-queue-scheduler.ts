@@ -9,8 +9,7 @@ import {
   isBudgetedBackground,
   isMergeabilityPendingOutcome,
   sameAliasRequestIdentity,
-  visibleCandidateAfterOutcome,
-  visibleFollowUpPriority
+  visibleCandidateAfterOutcome
 } from './pr-refresh-candidate-policy'
 import type {
   PreparedPRBranchRead,
@@ -110,7 +109,7 @@ export class PRRefreshQueueScheduler {
       candidate: current,
       aliases: new Map(aliases.map((alias) => [alias.cacheKey, alias])),
       reason: 'visible',
-      priority: visibleFollowUpPriority(current, priority),
+      priority,
       dueAt,
       queuedAt: this.queue.nextOrder(),
       followUp: !foreground,
@@ -250,7 +249,7 @@ export class PRRefreshQueueScheduler {
       candidate: followUpCandidate,
       aliases: new Map(aliases.map((alias) => [alias.cacheKey, alias])),
       reason: 'visible',
-      priority: visibleFollowUpPriority(followUpCandidate, priority),
+      priority,
       dueAt,
       queuedAt: this.queue.nextOrder(),
       bypassBackgroundBudget: pendingDueAt !== null,
@@ -262,7 +261,7 @@ export class PRRefreshQueueScheduler {
 
   ordered(): PRRefreshQueueEntry[] {
     this.watchJobs.age(this.queue.values(), Date.now())
-    return this.queue.ordered((a, b) => this.pacing.order(a, b))
+    return this.queue.ordered((a, b) => this.pacing.activeOrder(a, b))
   }
 
   nextQueuedWakeDelay(excludedKey: string): number | null {

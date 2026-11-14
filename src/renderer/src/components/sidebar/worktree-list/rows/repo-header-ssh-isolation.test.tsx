@@ -2,7 +2,7 @@
 
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { RepoHeaderCreateWorkspaceButton } from './repo-header-project-actions'
 import { makeRepo } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'

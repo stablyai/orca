@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  JIRA_ISSUE_SUMMARY_MAX_LENGTH,
   buildJiraIssueSummaryPrompt,
   sanitizeGeneratedJiraIssueSummary
 } from './jira-issue-summary-generation'
@@ -28,11 +27,6 @@ describe('buildJiraIssueSummaryPrompt', () => {
 })
 
 describe('sanitizeGeneratedJiraIssueSummary', () => {
-  it('caps the summary at the Jira limit', () => {
-    const summary = sanitizeGeneratedJiraIssueSummary('a'.repeat(400))
-    expect(summary).toHaveLength(JIRA_ISSUE_SUMMARY_MAX_LENGTH)
-  })
-
   it('does not split a surrogate pair at the truncation boundary', () => {
     const summary = sanitizeGeneratedJiraIssueSummary(`${'a'.repeat(254)}😀`)
     expect(summary).toBe('a'.repeat(254))

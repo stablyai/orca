@@ -9,7 +9,7 @@ import type { CommandHandler, HandlerContext } from '../dispatch/dispatch'
 import { getOptionalStringFlag } from '../arguments/flags'
 import { printResult } from '../output/command-result-output'
 import { formatPortsScan } from './ports-format'
-import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
+import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
 import {
   normalizeWorktreeSelectorForCaller,

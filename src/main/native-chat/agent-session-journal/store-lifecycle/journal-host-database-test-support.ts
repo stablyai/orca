@@ -1,22 +1,21 @@
+import { insertJournalDomainQueueRow } from '../journal-domain-queue-rows'
+import type { QueuedMessageRow } from '../queued-messages/queued-message-table'
+import {
+  withTestAgentSessionDatabase,
+  openTestAgentSessionDatabase,
+  closeTestAgentSessionDatabase,
+  closeTestAgentSessionRecordStores
+} from '../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { AgentSessionJournalProviderHandle } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { journalRowSchemaVersion } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { agentSessionJournalProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentSessionJournalProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { JournalHostDatabase } from '../database/journal-host-database'
 import { restoreJournal, type JournalLoad } from '../replay/journal-open'
-import {
-  buildJournalQueueRow,
-  type JournalQueueChange
-} from '../queued-messages/journal-queue-events'
 import { fields } from '../outcomes/journal-state-schema'
 import { journalOutcomeSource } from '../outcomes/journal-outcome-format'
 import { decodeJournalOutcome, type JournalOutcome } from '../outcomes/journal-outcome-codec'
-import { applyJournalRow } from '../projection/journal-reducer'
-import {
-  assertTestJournalHistoricalInputs,
-  pinTestJournalInputMode
-} from '../replay/journal-historical-inputs.test-support'
 
 import '../durable-rows/journal-row-schema'
 import { serializeJournalRow } from '../durable-rows/journal-row-encoding'
@@ -48,11 +47,13 @@ export function openTestJournalHostDatabase(stateDirectory: string): JournalHost
 
 export async function closeTestJournalHostDatabase(stateDirectory: string): Promise<void> {
   const directory = resolve(stateDirectory)
+  await closeTestAgentSessionDatabase(directory)
   await opened.get(directory)?.close()
   opened.delete(directory)
 }
 
 export async function closeTestJournalHostDatabases(): Promise<void> {
+  await closeTestAgentSessionRecordStores()
   for (const database of opened.values()) {
     await database.close()
   }
@@ -73,19 +74,18 @@ export function createTrackedJournalOpener(
   fixture: { legacyInputs?: boolean } = {}
 ): TrackedJournalOpener {
   const journals: AgentSessionJournal[] = []
+  const directories = new Set<string>()
   return {
     open: async ({ stateDirectory, ...options }) => {
+      directories.add(resolve(stateDirectory))
       if (fixture.legacyInputs) {
         seedLegacyTestJournal(openTestJournalHostDatabase(stateDirectory), options)
       }
       const { openAgentSessionJournal } = await import('../journal-store-factory')
       const journal = await openAgentSessionJournal({
         ...options,
-        database: openTestJournalHostDatabase(stateDirectory)
+        database: await openTestAgentSessionDatabase(stateDirectory)
       })
-      if (fixture.legacyInputs) {
-        pinTestJournalInputMode(journal)
-      }
       journals.push(journal)
       return journal
     },
@@ -95,7 +95,10 @@ export function createTrackedJournalOpener(
     },
     closeAll: async () => {
       await Promise.allSettled(journals.splice(0).map((journal) => journal.close()))
-      await closeTestJournalHostDatabases()
+      for (const directory of directories) {
+        await closeTestJournalHostDatabase(directory)
+      }
+      directories.clear()
     }
   }
 }
@@ -208,20 +211,6 @@ export function deleteTestJournalRow(db: Database.Database, sessionId: string, s
   )
 }
 
-/** Persist a prior-build queue row verbatim, then replay it through the production fold. */
-export function appendTestJournalQueueRow(
-  db: Database.Database,
-  journal: AgentSessionJournal,
-  messageId: string,
-  change: JournalQueueChange
-): void {
-  const state = journal['state']
-  assertTestJournalHistoricalInputs(db, journal)
-  const row = buildJournalQueueRow(state, messageId, change, state.lastSequence + 1, Date.now())
-  insertTestJournalRow(db, state.sessionId, row)
-  applyJournalRow(state, row)
-}
-
 /** Unannotated submissions and terminal rows emitted by the legacy writer in one source epoch. */
 export function writeTestLegacyTerminalGaps(
   db: Database.Database,
@@ -300,4 +289,19 @@ export function readTestQueueChanges(
       { messageId, op: first ? 'queued' : card.state, returned: first && card.state === 'returned' }
     ]
   })
+}
+
+/** Seed a prior-build card already converted into the domain database. */
+export async function seedTestJournalQueueCard(
+  stateDirectory: string,
+  journal: AgentSessionJournal,
+  card: Omit<QueuedMessageRow, 'fingerprint'>
+): Promise<void> {
+  await withTestAgentSessionDatabase(stateDirectory, (db) =>
+    insertJournalDomainQueueRow(
+      db,
+      { sessionId: journal.identity.sessionId, epoch: journal.cursor().epoch },
+      { ...card, fingerprint: '' }
+    )
+  )
 }

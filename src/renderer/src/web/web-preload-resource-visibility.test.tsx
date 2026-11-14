@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { useResourceViewVisible } from '../components/status-bar/use-resource-view-visible'
+import { useResourceViewVisible } from '../components/status-bar/resources/use-resource-view-visible'
 import { installWebPreloadApi } from './web-preload-api'
 
 afterEach(() => {

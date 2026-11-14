@@ -20,7 +20,8 @@ import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { getRepositoryLocalCommandsSectionId } from '../repository-settings-targets'
 import {
   getLocalHookFields,
-  getLocalCommandSourcePolicyNotice
+  getLocalCommandSourcePolicyNotice,
+  type HookYamlPresentation
 } from './repository-hook-settings-draft'
 import {
   LocalCommandSourceNotice,
@@ -40,6 +41,7 @@ type RepositoryHooksSectionProps = {
   repo: WorkspaceHookOwner
   gitRepo?: Repo
   showArchive?: boolean
+  yamlPresentation?: HookYamlPresentation
   setupExample?: string
   yamlHooks: OrcaHooks | null
   hasHooksFile: boolean
@@ -56,6 +58,7 @@ export function RepositoryHooksSection({
   gitRepo,
   setupExample,
   showArchive = true,
+  yamlPresentation,
   yamlHooks,
   hasHooksFile,
   hooksInspectionReady,
@@ -308,6 +311,7 @@ export function RepositoryHooksSection({
         >
           <RepositoryHookCommandSourceSetting
             setupOnly={!showArchive}
+            yamlPresentation={yamlPresentation}
             searchQuery={settingsSearchQuery}
             selectedPolicy={selectedCommandSourcePolicy}
             yamlState={yamlState}

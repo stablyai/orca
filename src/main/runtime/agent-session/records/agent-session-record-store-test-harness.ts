@@ -1,19 +1,29 @@
-/** Centralize store fixtures in the host chat-journal DB; closeTestJournalHostDatabases owns their cleanup. */
+// @orca-isolated-worker -- Suite hooks own the temporary SQL worker bundle.
+import { afterAll } from 'vitest'
+/** Centralize store fixtures in the worker-owned journal DB; closeTestAgentSessionRecordStores owns their cleanup. */
 
-import type { AgentSessionOperationRow } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
-import type { PersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-legacy-handoff-lease'
+import { resolve } from 'node:path'
+import type { AgentSessionOperationRow } from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
+import type { PersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/leases/agent-session-legacy-handoff-lease'
 import {
   encodePersistedAgentSessionProviderHandle,
   isAgentSessionProviderHandle
-} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+} from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { JOURNAL_DB_SCHEMA_VERSION } from '../../../native-chat/agent-session-journal/database/journal-database-schema'
 import {
-  closeTestJournalHostDatabase,
-  openTestJournalHostDatabase
-} from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+  initializeJournalDomainDatabase,
+  openJournalDomainDatabase
+} from '../../../native-chat/agent-session-journal/database/journal-domain-database'
+import { JOURNAL_DOMAIN_SCHEMA_VERSION } from '../../../native-chat/agent-session-journal/database/journal-domain-migrations'
+import { JournalSqlDatabase } from '../../../native-chat/agent-session-journal/database/journal-sql-database'
+import {
+  journalSqlReaderPath,
+  journalSqlWorkerPath
+} from '../../../native-chat/agent-session-journal/journal-sql-worker-bundle.test-fixture'
 import type Database from '../../../sqlite/sync-database'
 import { AgentSessionRecordStore } from './agent-session-record-store'
+import { openAgentSessionRecordStoreOnce } from './agent-session-record-store-slot'
+import { ensureStructuredAgentSessionHost } from '../structured-agent-session-runtime'
 import type { RetiredAgentSessionClaimKey } from './agent-session-store-state'
 
 const TEST_HOST_ID = 'local'
@@ -29,19 +39,95 @@ export type PersistedTestAgentSessionStore = {
   sessionTabs?: { tabId: string; sessionId: string }[]
 }
 
-function databaseFor(stateDirectory: string): Database.Database {
-  return openTestJournalHostDatabase(stateDirectory).db
+const databases = new Map<string, Promise<JournalSqlDatabase>>()
+
+afterAll(closeTestAgentSessionRecordStores)
+
+export async function ensureTestStructuredAgentSessionHost(
+  deps: Parameters<typeof ensureStructuredAgentSessionHost>[0]
+): ReturnType<typeof ensureStructuredAgentSessionHost> {
+  await openTestAgentSessionRecordStoreSlot({
+    stateDirectory: deps.stateDirectory,
+    hostId: deps.hostId,
+    logger: deps.logger,
+    legacySessionTabIds: deps.legacySessionTabIds ?? []
+  })
+  return ensureStructuredAgentSessionHost(deps)
+}
+
+export function openTestAgentSessionRecordStoreSlot(
+  location: Omit<
+    Parameters<typeof openAgentSessionRecordStoreOnce>[0],
+    'writerPath' | 'readerPath' | 'onMaintenanceTick'
+  > &
+    Partial<Pick<Parameters<typeof openAgentSessionRecordStoreOnce>[0], 'onMaintenanceTick'>>
+): ReturnType<typeof openAgentSessionRecordStoreOnce> {
+  return openAgentSessionRecordStoreOnce({
+    onMaintenanceTick: () => {},
+    ...location,
+    writerPath: journalSqlWorkerPath(),
+    readerPath: journalSqlReaderPath()
+  })
+}
+
+/** Stores reopened in one directory share its writer, like one runtime's slot. */
+export function openTestAgentSessionDatabase(stateDirectory: string): Promise<JournalSqlDatabase> {
+  const directory = resolve(stateDirectory)
+  let opened = databases.get(directory)
+  if (!opened) {
+    opened = JournalSqlDatabase.open(directory, {
+      writerPath: journalSqlWorkerPath(),
+      readerPath: journalSqlReaderPath(),
+      onMaintenanceError: () => {}
+    })
+    databases.set(directory, opened)
+  }
+  return opened
+}
+
+export async function closeTestAgentSessionDatabase(stateDirectory: string): Promise<void> {
+  const directory = resolve(stateDirectory)
+  const opened = databases.get(directory)
+  databases.delete(directory)
+  await (await opened)?.close()
+}
+
+export async function closeTestAgentSessionRecordStores(): Promise<void> {
+  const opened = [...databases.values()]
+  databases.clear()
+  await Promise.all(opened.map(async (database) => (await database).close()))
 }
 
 export async function openTestAgentSessionRecordStore(
   stateDirectory: string,
-  options: { hostId?: string; legacySessionTabIds?: readonly string[] } = {}
+  options: {
+    hostId?: string
+    legacySessionTabIds?: readonly string[]
+    mode?: 'observe'
+  } = {}
 ): Promise<AgentSessionRecordStore> {
+  const journalDatabase = await openTestAgentSessionDatabase(stateDirectory)
   return AgentSessionRecordStore.open({
-    journalDatabase: openTestJournalHostDatabase(stateDirectory),
+    journalDatabase,
+    records: await (options.mode === 'observe'
+      ? journalDatabase.loadRecords()
+      : journalDatabase.installRecords()),
     hostId: options.hostId ?? TEST_HOST_ID,
     legacySessionTabIds: options.legacySessionTabIds ?? []
   })
+}
+
+/** A separate connection to the store's file, for seeding, read-back and injected failures. */
+export async function withTestAgentSessionDatabase<T>(
+  stateDirectory: string,
+  read: (db: Database.Database) => T
+): Promise<T> {
+  const { db } = openJournalDomainDatabase(await initializeJournalDomainDatabase(stateDirectory))
+  try {
+    return read(db)
+  } finally {
+    db.close()
+  }
 }
 
 function writePersisted(db: Database.Database, persisted: PersistedTestAgentSessionStore): void {
@@ -114,35 +200,40 @@ export async function seedTestAgentSessionRecordStore(
     sessionTabs?: { tabId: string; sessionId: string }[]
   }
 ): Promise<void> {
-  writePersisted(databaseFor(stateDirectory), {
-    records: Object.fromEntries(
-      seed.records.map((record) => [record.sessionId, storedTestAgentSessionRecord(record)])
-    ),
-    operations: {},
-    retiredClaimKeys: [],
-    unusableRecords: {},
-    ...(seed.sessionTabs ? { sessionTabs: seed.sessionTabs } : {})
-  })
+  await withTestAgentSessionDatabase(stateDirectory, (db) =>
+    writePersisted(db, {
+      records: Object.fromEntries(
+        seed.records.map((record) => [record.sessionId, storedTestAgentSessionRecord(record)])
+      ),
+      operations: {},
+      retiredClaimKeys: [],
+      unusableRecords: {},
+      ...(seed.sessionTabs ? { sessionTabs: seed.sessionTabs } : {})
+    })
+  )
 }
 
 /** Seed a newer-build database that this host can read but never write. */
 export async function seedTestAgentSessionStoreFromNewerBuild(
   stateDirectory: string
 ): Promise<void> {
-  openTestJournalHostDatabase(stateDirectory).db.pragma(
-    `user_version = ${JOURNAL_DB_SCHEMA_VERSION + 1}`
+  await closeTestAgentSessionRecordStores()
+  await withTestAgentSessionDatabase(stateDirectory, (db) =>
+    db.pragma(`user_version = ${JOURNAL_DOMAIN_SCHEMA_VERSION + 1}`)
   )
-  await closeTestJournalHostDatabase(stateDirectory)
 }
 
 function parsed(json: unknown): unknown {
   return typeof json === 'string' ? JSON.parse(json) : null
 }
 
-export async function readPersistedTestAgentSessionStore(
+export function readPersistedTestAgentSessionStore(
   stateDirectory: string
 ): Promise<PersistedTestAgentSessionStore> {
-  const db = databaseFor(stateDirectory)
+  return withTestAgentSessionDatabase(stateDirectory, readPersisted)
+}
+
+function readPersisted(db: Database.Database): PersistedTestAgentSessionStore {
   const persisted: PersistedTestAgentSessionStore = {
     records: {},
     operations: {},
@@ -202,5 +293,5 @@ export async function editPersistedTestAgentSessionStore(
 ): Promise<void> {
   const persisted = await readPersistedTestAgentSessionStore(stateDirectory)
   edit(persisted)
-  writePersisted(databaseFor(stateDirectory), persisted)
+  await withTestAgentSessionDatabase(stateDirectory, (db) => writePersisted(db, persisted))
 }
