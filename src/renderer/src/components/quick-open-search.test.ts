@@ -114,3 +114,25 @@ it.each([
 ])('retains real trailing separator boundaries for %s', (query, path) => {
   expect(rankQuickOpenFiles(query, prepareQuickOpenFiles([path]))).toHaveLength(1)
 })
+
+it('matches a composed query against a path stored in decomposed Unicode form', () => {
+  // macOS often stores Hangul names decomposed (NFD); keyboards type them composed (NFC).
+  const decomposedPath = 'docs/\u1112\u1161\u11ab\u1100\u1173\u11af.md'
+
+  expect(
+    rankQuickOpenFiles('\ud55c\uae00', prepareQuickOpenFiles([decomposedPath])).map(
+      (item) => item.path
+    )
+  ).toEqual([decomposedPath])
+})
+
+it('matches a decomposed query against a path stored in composed Unicode form', () => {
+  const composedPath = 'docs/\ud55c\uae00.md'
+
+  expect(
+    rankQuickOpenFiles(
+      '\u1112\u1161\u11ab\u1100\u1173\u11af',
+      prepareQuickOpenFiles([composedPath])
+    ).map((item) => item.path)
+  ).toEqual([composedPath])
+})
