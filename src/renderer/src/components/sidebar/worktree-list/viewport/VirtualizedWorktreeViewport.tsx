@@ -36,6 +36,8 @@ import { buildWorktreeVirtualRowContext } from './virtual-row-context'
 import type { RepoHeaderProjectActions } from '../rows/repo-header-project-actions'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/slices/worktrees/listing/worktree-visibility-defaults-by-host'
 import { renderWorktreeVirtualRow } from '../rows/virtual-row-dispatch'
+import { getProjectGroupColors } from './project-group-colors'
+import { ProjectGroupBackgrounds } from './ProjectGroupBackgrounds'
 
 const EMPTY_HOST_OPTIONS: NonNullable<VirtualizedWorktreeViewportProps['hostOptions']> = []
 
@@ -127,6 +129,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   )
 
   const renderRows = rows
+  const groupColors = useMemo(() => getProjectGroupColors(rows, groupBy), [rows, groupBy])
   const { projection, activeFamilyRoots, firstHeaderIndex } = useLineageRowProjection({
     ...rowProps,
     newCardStyle
@@ -336,6 +339,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const draggingIdentity = runtime.worktreeDragState.draggingWorktreeId
   const hiddenDragRanges = useDraggedSubtreeRanges(projection, draggingIdentity)
   const rowContext = buildWorktreeVirtualRowContext({
+    projectGroupColors: groupColors,
     dragUnitsByRow: rowGeometry.ranges.byRow,
     hiddenDragRanges,
     props: rowProps,
@@ -405,6 +409,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
           className="relative w-full"
           style={{ height: `${virtualization.virtualizer.getTotalSize()}px` }}
         >
+          <ProjectGroupBackgrounds colors={groupColors} virtualItems={virtualItems} />
           {renderWorktreeSidebarDropIndicators({
             headerDrag,
             worktreeDragState: runtime.worktreeDragState

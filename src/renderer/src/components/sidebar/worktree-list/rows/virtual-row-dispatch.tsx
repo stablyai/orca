@@ -33,8 +33,13 @@ import { renderWorktreeSectionHeaderRow } from './SectionHeader'
 import type { SectionHeaderRowContext } from './section-header-row-context'
 import type { WorktreeRowDragState } from '../drag/row-state'
 import type { Translate } from '@/i18n/use-translate'
+import {
+  getProjectGroupBackgroundStyle,
+  type ProjectGroupColor
+} from '../viewport/project-group-colors'
 
 export type WorktreeVirtualRowContext = {
+  projectGroupColors?: readonly (ProjectGroupColor | null)[]
   dragUnitsByRow: ReadonlyMap<number, { identity: string }>
   hiddenDragRanges: readonly { start: number; end: number }[]
   projection: LineageRowProjection
@@ -141,7 +146,10 @@ export function renderWorktreeVirtualRow(
           index: vItem.index,
           firstHeaderIndex: ctx.firstHeaderIndex
         }),
-        measureVirtualRowElement: ctx.measureVirtualRowElement
+        measureVirtualRowElement: ctx.measureVirtualRowElement,
+        projectGroupBackgroundStyle: getProjectGroupBackgroundStyle(
+          ctx.projectGroupColors?.[vItem.index]
+        )
       },
       t
     )
