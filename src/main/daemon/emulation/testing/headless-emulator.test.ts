@@ -457,7 +457,7 @@ it('keeps loaded-cell snapshots and copied mixed glyphs independent of later sou
     line.copyCellsFrom(line, 0, 1, 2, false)
     origins.end()
     expect(eligible(1, 3)).toBe(false)
-    expect(copy.translateToString(true)).toBe('QZ  X')
+    expect(copy.translateToString(true)).toBe('Q́  X')
     line.copyFrom(copy)
     expect(eligible(0, 1)).toBe(true)
     expect(eligible(4, 5)).toBe(false)
