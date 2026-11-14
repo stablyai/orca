@@ -290,7 +290,7 @@ describe('cross-version structured agent sessions', () => {
       })
       const released = await baseline.clientProjection()
       const fold = (frames: readonly AgentSessionSubscribeEvent[]) =>
-        frames.reduce(
+        frames.reduce<ReturnType<typeof released.reduceStructuredAgentSession>>(
           (state, event) => released.reduceStructuredAgentSession(state, { type: 'event', event }),
           { ...released.EMPTY_STRUCTURED_AGENT_SESSION, epoch: held.epoch, cursor: held }
         )
