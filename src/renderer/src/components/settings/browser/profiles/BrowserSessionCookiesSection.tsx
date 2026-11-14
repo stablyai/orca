@@ -6,7 +6,12 @@ import { Label } from '../../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { BrowserProfileRow, type BrowserProfileRowProps } from './BrowserProfileRow'
-import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../../../shared/execution-host'
+import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import { SettingsSwitchRow } from '../../form-controls/SettingsFormControls'
 import { useTranslate } from '@/i18n/use-translate'
 import { translateSearchKeyword } from '../../search/settings-search-keywords'
 
@@ -28,6 +33,8 @@ type BrowserSessionCookiesSectionProps = {
   onSelectHost: (hostId: ExecutionHostId) => void
   onSelectDefaultProfile: () => void
   onSelectProfile: (profileId: string) => void
+  settings: Pick<GlobalSettings, 'browserCookieReimportOnLaunch'>
+  updateSettings: (updates: Partial<GlobalSettings>) => void
 }
 
 export function BrowserSessionCookiesSection({
@@ -41,7 +48,9 @@ export function BrowserSessionCookiesSection({
   onAddProfile,
   onSelectHost,
   onSelectDefaultProfile,
-  onSelectProfile
+  onSelectProfile,
+  settings,
+  updateSettings
 }: BrowserSessionCookiesSectionProps): React.JSX.Element {
   const t = useTranslate()
   const activeProfile = [defaultProfile, ...nonDefaultProfiles].find(
@@ -82,7 +91,9 @@ export function BrowserSessionCookiesSection({
         'chrome',
         'edge',
         'arc',
-        'profile'
+        'profile',
+        'launch',
+        'restart'
       ]}
       className="space-y-3 py-3"
     >
@@ -167,6 +178,22 @@ export function BrowserSessionCookiesSection({
           />
         ))}
       </div>
+      {/* Why local only: launch re-import runs in this computer's Orca and reads its browsers. */}
+      {selectedHostId === LOCAL_EXECUTION_HOST_ID ? (
+        <SettingsSwitchRow
+          label={t('settings.browser.cookieReimportOnLaunch.label', 'Re-import cookies on launch')}
+          description={t(
+            'settings.browser.cookieReimportOnLaunch.description',
+            'Each time Orca starts, import cookies again from the browser each profile was imported from. Sites that keep you signed in with session cookies stay signed in after a restart.'
+          )}
+          checked={settings.browserCookieReimportOnLaunch === true}
+          onChange={() =>
+            updateSettings({
+              browserCookieReimportOnLaunch: settings.browserCookieReimportOnLaunch !== true
+            })
+          }
+        />
+      ) : null}
       <div className="flex items-center justify-between gap-3 pt-3">
         <div className="min-w-0 space-y-0.5">
           <Label>{t('browser.googleCookieClear.fe3f6e1721', 'Google cookies')}</Label>

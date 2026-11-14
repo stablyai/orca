@@ -1,6 +1,7 @@
 import type { AntigravityChatAuthSettings } from './antigravity-chat-auth-config'
 import type { EmulatorOpeningSettings } from './emulator-opening-preferences'
 import type { BrowserExtensionGlobalSettings } from './browser/extensions/browser-extension-settings'
+import type { BrowserCookieReimportSettings } from './browser/cookies/browser-cookie-reimport-settings'
 import type { ClaudeAgentViewSettings } from './claude-agent-view'
 import type { WorktreeCardDisplaySettings } from './worktree/card-display-settings-types'
 import type { BrowserLinkOpeningSettings } from './browser-link-opening-settings'
@@ -40,6 +41,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   ExternalConversationSettings &
   BrowserLinkOpeningSettings &
   BrowserExtensionGlobalSettings &
+  BrowserCookieReimportSettings &
   PluginAppearanceSettings &
   EditorTypographySettings &
   PluginFileTypeSuggestionSettings &

@@ -148,6 +148,7 @@ export type BrowserSessionProfileSource = {
     | 'vivaldi'
     | 'manual'
   profileName?: string
+  profileDirectory?: string
   importedAt: number
 }
 

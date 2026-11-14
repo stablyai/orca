@@ -18,11 +18,8 @@ import { browserManager } from '../../../browser/guest-lifecycle/manager/browser
 import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'
 import { waitForTabRegistration } from '../../../ipc/browser/browser-tab-registration-wait'
-import {
-  detectInstalledBrowsers,
-  selectBrowserProfile
-} from '../../../browser/cookies/sources/browser-cookie-detection'
-import { importCookiesFromBrowser } from '../../../browser/cookies/browser-cookie-import'
+import { detectInstalledBrowsers } from '../../../browser/cookies/sources/browser-cookie-detection'
+import { importBrowserCookiesIntoProfile } from '../../../browser/cookies/browser-profile-cookie-import'
 import type {
   BrowserCommandTargetParams,
   RuntimeBrowserCommandHost
@@ -265,44 +262,15 @@ export class RuntimeBrowserProfiles {
     if (!profile) {
       return browserCookieImportFailure('profileNotFound')
     }
-    if (
-      params.browserProfile &&
-      (/[/\\]/.test(params.browserProfile) || params.browserProfile.includes('..'))
-    ) {
-      return browserCookieImportFailure('invalidBrowserProfile')
-    }
-
-    const browsers = detectInstalledBrowsers()
-    let browser = browsers.find((candidate) => candidate.family === params.browserFamily)
-    if (!browser) {
-      return browserCookieImportFailure('browserNotFound')
-    }
-
-    if (params.browserProfile && params.browserProfile !== browser.selectedProfile) {
-      const reselected = selectBrowserProfile(browser, params.browserProfile)
-      if (!reselected) {
-        return browserCookieImportFailure('browserProfileDatabaseMissing', {
-          profile: params.browserProfile
-        })
-      }
-      browser = reselected
-    }
-
-    const result = await importCookiesFromBrowser(browser, profile.partition, {
-      canReportPartitionSkippedCookies: params.supportsPartitionSkippedCookies === true
-    })
+    const result = await importBrowserCookiesIntoProfile(
+      profile,
+      params.browserFamily,
+      params.browserProfile,
+      { canReportPartitionSkippedCookies: params.supportsPartitionSkippedCookies === true }
+    )
     if (!result.ok) {
       return result
     }
-
-    const profileName =
-      browser.profiles.find((candidate) => candidate.directory === browser.selectedProfile)?.name ??
-      browser.selectedProfile
-    browserSessionRegistry.updateProfileSource(params.profileId, {
-      browserFamily: browser.family,
-      profileName,
-      importedAt: Date.now()
-    })
     return { ...result, profileId: params.profileId, executorRuntimeId: this.host.getRuntimeId() }
   }
 

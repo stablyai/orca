@@ -8,11 +8,8 @@ import { getPairedRuntimeBrowserClientRouteIdentity } from '../../browser/client
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import { pickCookieFile } from '../../browser/cookies/imports/cookie-file-picker'
 import { importCookiesFromFile } from '../../browser/cookies/imports/import-cookie-file'
-import {
-  detectInstalledBrowsers,
-  selectBrowserProfile
-} from '../../browser/cookies/sources/browser-cookie-detection'
-import { importCookiesFromBrowser } from '../../browser/cookies/browser-cookie-import'
+import { detectInstalledBrowsers } from '../../browser/cookies/sources/browser-cookie-detection'
+import { importBrowserCookiesIntoProfile } from '../../browser/cookies/browser-profile-cookie-import'
 import type {
   BrowserCookieImportResult,
   BrowserSessionProfile,
@@ -232,44 +229,14 @@ export function registerBrowserSessionProfileHandlers(): void {
       if (!profile) {
         return browserCookieImportFailure('profileNotFound')
       }
-
-      // Renderer profile names become paths; reject traversal before cookie import.
-      if (
-        args.browserProfile &&
-        (/[/\\]/.test(args.browserProfile) || args.browserProfile.includes('..'))
-      ) {
-        return browserCookieImportFailure('invalidBrowserProfile')
-      }
-
-      const browsers = detectInstalledBrowsers()
-      let browser = browsers.find((b) => b.family === args.browserFamily)
-      if (!browser) {
-        return browserCookieImportFailure('browserNotFound')
-      }
-
-      if (args.browserProfile && args.browserProfile !== browser.selectedProfile) {
-        const reselected = selectBrowserProfile(browser, args.browserProfile)
-        if (!reselected) {
-          return browserCookieImportFailure('browserProfileDatabaseMissing', {
-            profile: args.browserProfile
-          })
-        }
-        browser = reselected
-      }
-
-      const result = await importCookiesFromBrowser(browser, profile.partition)
-      if (result.ok) {
-        const profileName =
-          browser.profiles.find((p) => p.directory === browser.selectedProfile)?.name ??
-          browser.selectedProfile
-        browserSessionRegistry.updateProfileSource(args.profileId, {
-          browserFamily: browser.family,
-          profileName,
-          importedAt: Date.now()
-        })
-        return retainLocalGoogleCookieClearTarget(result, profile, args.profileId)
-      }
-      return result
+      const result = await importBrowserCookiesIntoProfile(
+        profile,
+        args.browserFamily,
+        args.browserProfile
+      )
+      return result.ok
+        ? retainLocalGoogleCookieClearTarget(result, profile, args.profileId)
+        : result
     }
   )
 }

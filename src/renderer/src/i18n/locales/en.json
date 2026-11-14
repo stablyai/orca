@@ -1008,6 +1008,12 @@
         "title": "Passwords",
         "description": "Saved logins for Orca’s browser: add, import, edit and delete them.",
         "httpSuffix": " · http"
+      },
+      "cookieReimportOnLaunch": {
+        "label": "Re-import cookies on launch",
+        "description": "Each time Orca starts, import cookies again from the browser each profile was imported from. Sites that keep you signed in with session cookies stay signed in after a restart.",
+        "launchKeyword": "launch",
+        "restartKeyword": "restart"
       }
     },
     "agents": {

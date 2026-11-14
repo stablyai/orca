@@ -106,6 +106,8 @@ function SessionSection() {
       onSelectHost={(host) => void store.getState().setBrowserSessionHostId(host)}
       onSelectDefaultProfile={() => store.getState().setDefaultBrowserSessionProfileId(null)}
       onSelectProfile={store.getState().setDefaultBrowserSessionProfileId}
+      settings={{}}
+      updateSettings={() => {}}
     />
   )
 }
