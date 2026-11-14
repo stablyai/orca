@@ -153,6 +153,42 @@ describe('an empty pane whose first hook cannot be proved', () => {
       expect(server.exits).toBe(0)
     }
   )
+
+  it('lets the pane’s proved root replace an exited fallback without clearing pane state or probing it', async () => {
+    const server = await createServer()
+    runningPane(
+      49970,
+      [49970, 101, 49970, 'claude', 'S+'],
+      [49969, 49970, 49970, 'sh -c claude-hook.sh', 'S']
+    )
+    io.resolveRoot.mockResolvedValueOnce(null)
+    await hook(server, 'UserPromptSubmit', {
+      session: 'session-a',
+      pid: 49969,
+      prompt: 'Keep prompt across fallback replacement'
+    })
+    expect(server.presence()).toMatchObject({ process: capture(49969), fallback: true })
+    live.delete(49969)
+    probe.mockImplementation(async (identity) =>
+      identity && live.has(identity.pid) ? 'live' : 'exited'
+    )
+    const snapshots: Array<string | undefined> = []
+    server.subscribeStatusChanges(() => {
+      snapshots.push(server.row()?.state ?? 'idle')
+    })
+
+    await hook(server, 'PostToolUse', { session: 'session-a', pid: 49970 })
+    expect(probe).not.toHaveBeenCalledWith(capture(49969))
+    expect(server.exits).toBe(0)
+    expect(snapshots).toEqual(['working'])
+    expect(server.row()).toMatchObject({
+      state: 'working',
+      prompt: 'Keep prompt across fallback replacement'
+    })
+    expect(server.foldedPrompt()).toBe('Keep prompt across fallback replacement')
+    expect(server.presence()).toMatchObject({ process: capture(49970), session: 'session-a' })
+    expect(server.presence()?.fallback).toBeUndefined()
+  })
 })
 
 describe('a Claude in a tmux session the pane does not show', () => {
