@@ -38,11 +38,11 @@ import {
 } from './dialog/use-workspace-cleanup-dialog-lifecycle'
 import { useWorkspaceCleanupFacetRows } from './browse/use-workspace-cleanup-facet-rows'
 import { useWorkspaceCleanupGitEvidence } from './candidate-evidence/use-workspace-cleanup-git-evidence'
+import { useWorkspaceCleanupBulkSelection } from './browse/use-workspace-cleanup-bulk-selection'
 import { useWorkspaceCleanupIgnore } from './browse/use-workspace-cleanup-ignore'
-import { useWorkspaceCleanupRowOrder } from './candidate-list/use-workspace-cleanup-row-order'
+import { useWorkspaceCleanupHeldRows } from './candidate-list/use-workspace-cleanup-row-order'
 import { openWorkspaceCleanupForgetLocally } from './removal/workspace-cleanup-forget-locally-button'
 import {
-  formatVanishedSelectionNotice,
   formatWithheldSelectionNotice,
   toggleSetMember
 } from './browse/workspace-cleanup-selection-model'
@@ -89,6 +89,7 @@ function WorkspaceCleanupDialogContent({
   useEffect(() => {
     if (open && !wasOpenRef.current) {
       setOpenedAt(Date.now())
+      listInteractedRef.current = false
     }
     wasOpenRef.current = open
   }, [open])
@@ -129,10 +130,33 @@ function WorkspaceCleanupDialogContent({
     now: facetNow,
     facetPanelOpen
   })
-  const rows = useWorkspaceCleanupRowOrder({
-    rows: facetRows.rows,
-    streaming: loading,
-    sort: browse.sort
+  const selectedIdsRef = useRef(selectedIds)
+  useEffect(() => {
+    selectedIdsRef.current = selectedIds
+  }, [selectedIds])
+  // Held order must never wait on the user's first touch, so interaction is tracked in a ref.
+  const listInteractedRef = useRef(false)
+  const markListInteracted = useCallback(() => {
+    listInteractedRef.current = true
+  }, [])
+  useEffect(() => {
+    // Wheel/scrollbar scrolling counts: the user is reading the list at its current positions.
+    rowsScrollElement?.addEventListener('scroll', markListInteracted, { passive: true })
+    return () => rowsScrollElement?.removeEventListener('scroll', markListInteracted)
+  }, [markListInteracted, rowsScrollElement])
+  const liveRowByIdentity = useMemo(
+    () => new Map(facetRows.allRows.map((row) => [row.identity, row])),
+    [facetRows.allRows]
+  )
+  const orderResetKey = `${browse.sort.field}:${browse.sort.direction}:${JSON.stringify(browse.filters)}`
+  const { rows, resetOrder } = useWorkspaceCleanupHeldRows({
+    liveRows: facetRows.rows,
+    liveRowByIdentity,
+    resetKey: orderResetKey,
+    open,
+    loading,
+    // Re-sorting at settle is safe only while the user has not started working in the list.
+    shouldResortAtSettle: () => selectedIdsRef.current.size === 0 && !listInteractedRef.current
   })
   // Host-qualify selection: identical workspace IDs on different hosts must never confirm one row and delete another (STA-4343).
   const candidateIdentities = useMemo(
@@ -201,31 +225,22 @@ function WorkspaceCleanupDialogContent({
     pruneSelectionToVisibleRows()
   }, [browse.filters, open, removal.confirming])
 
-  const pruneVanishedSelections = useEffectEvent(() => {
-    const isDeleting = (identity: string): boolean => deletingIdentities.has(identity)
-    const kept = [...selectedIds].filter(
-      (identity) => candidateIdentities.has(identity) && !isDeleting(identity)
-    )
-    if (kept.length === selectedIds.size) {
-      return
-    }
-    const vanishedCount = [...selectedIds].filter(
-      (identity) => !candidateIdentities.has(identity) && !isDeleting(identity)
-    ).length
-    setSelectedIds(new Set(kept))
-    if (vanishedCount > 0) {
-      toast.info(formatVanishedSelectionNotice(vanishedCount))
-    }
-  })
-
-  useEffect(() => {
-    if (loading) {
-      return
-    }
-    pruneVanishedSelections()
-  }, [candidateIdentities, deletingIdentities, loading])
-
-  const { ignoreCandidate, restoreCandidate } = useWorkspaceCleanupIgnore(setSelectedIds)
+  const ignoreHook = useWorkspaceCleanupIgnore(setSelectedIds)
+  // Ignore/Restore is an explicit action on a row, so the list re-derives its order and filter.
+  const ignoreCandidate = useCallback(
+    (candidate: WorkspaceCleanupCandidate) => {
+      ignoreHook.ignoreCandidate(candidate)
+      resetOrder()
+    },
+    [ignoreHook, resetOrder]
+  )
+  const restoreCandidate = useCallback(
+    (candidate: WorkspaceCleanupCandidate) => {
+      ignoreHook.restoreCandidate(candidate)
+      resetOrder()
+    },
+    [ignoreHook, resetOrder]
+  )
 
   const toggleExpandedRow = useCallback((identity: string) => {
     setExpandedRowIds((current) => toggleSetMember(current, identity))
@@ -238,39 +253,16 @@ function WorkspaceCleanupDialogContent({
     [setSelectedIds]
   )
 
-  const selectableIdentities = useMemo(
-    () =>
-      removal.removalInFlight
-        ? []
-        : facetRows.selectableIdentities.filter((identity) => !deletingIdentities.has(identity)),
-    [deletingIdentities, facetRows.selectableIdentities, removal.removalInFlight]
-  )
-  const selectedSelectableCount = useMemo(() => {
-    let count = 0
-    for (const identity of selectableIdentities) {
-      if (selectedIds.has(identity)) {
-        count += 1
-      }
-    }
-    return count
-  }, [selectableIdentities, selectedIds])
-
-  const toggleSelectAll = useCallback(
-    (selectAll: boolean) => {
-      setSelectedIds((current) => {
-        const next = new Set(current)
-        for (const identity of selectableIdentities) {
-          if (selectAll) {
-            next.add(identity)
-          } else {
-            next.delete(identity)
-          }
-        }
-        return next
-      })
-    },
-    [selectableIdentities, setSelectedIds]
-  )
+  const bulk = useWorkspaceCleanupBulkSelection({
+    rows,
+    selectedIds,
+    setSelectedIds,
+    deletingIdentities,
+    removalInFlight: removal.removalInFlight,
+    evidencedCandidates,
+    candidateIdentities,
+    loading
+  })
 
   const openConfirmRemove = removal.openConfirmRemove
   const handleRemoveRow = useCallback(
@@ -340,8 +332,9 @@ function WorkspaceCleanupDialogContent({
               facetRows={facetRows}
               facetPanelOpen={facetPanelOpen}
               onFacetPanelOpenChange={setFacetPanelOpen}
-              selectableCount={selectableIdentities.length}
-              selectedSelectableCount={selectedSelectableCount}
+              selectableCount={bulk.bulkSelectableCount}
+              selectedBulkCount={bulk.selectedBulkCount}
+              selectedSelectableCount={bulk.selectedDisplayedCount}
               selectedCount={selectedCount}
               deleteDisabled={
                 selectedCount === 0 || removal.removalProgress !== null || removal.removalInFlight
@@ -352,11 +345,15 @@ function WorkspaceCleanupDialogContent({
               gitPendingCount={gitEvidence.pendingWorktreeIds.size}
               gitCheckedTotal={gitEvidence.totalCount}
               onRunSpaceScan={runSpaceScan}
-              onToggleSelectAll={toggleSelectAll}
+              onToggleSelectAll={bulk.toggleSelectAll}
             />
 
             <ScrollArea className="min-h-0 flex-1" viewportRef={setRowsScrollElement}>
-              <div>
+              <div
+                onPointerOver={markListInteracted}
+                onFocusCapture={markListInteracted}
+                onKeyDown={markListInteracted}
+              >
                 {initialLoading ? <WorkspaceCleanupSkeletonRows /> : null}
                 <WorkspaceCleanupRowList
                   rows={rows}
