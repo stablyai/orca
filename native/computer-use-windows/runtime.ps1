@@ -1000,7 +1000,8 @@ function Invoke-OrcaEditTextInsertion($Edit, [int]$Index, [string]$Text, [switch
     $limit = [OrcaDesktopWin32]::SendControlMessage($Edit.handle, 0x00D5, [IntPtr]::Zero, [IntPtr]::Zero)
     if ($null -ne $limit -and $limit -gt 0) {
         # Why: RichEdit counts a line break as one character, so its lengths are compared without CRLF.
-        $current = if ($null -ne $before) { (ConvertTo-OrcaEditNewlines $before $Edit.rich).Length } else { [OrcaDesktopWin32]::SendControlMessage($Edit.handle, 0x000E, [IntPtr]::Zero, [IntPtr]::Zero) }
+        # Why: a readback cut at the read limit holds only a prefix, so the field reports its own length then.
+        $current = if ($null -ne $before -and $before.Length -lt $EditReadbackLimit) { (ConvertTo-OrcaEditNewlines $before $Edit.rich).Length } else { [OrcaDesktopWin32]::SendControlMessage($Edit.handle, 0x000E, [IntPtr]::Zero, [IntPtr]::Zero) }
         $replaced = if ($ReplaceAll) { $current } elseif ($null -ne $selection) { [Math]::Abs($selection[1] - $selection[0]) } else { 0 }
         $length = $current - $replaced + (ConvertTo-OrcaEditNewlines $Text $Edit.rich).Length
         if ($null -ne $current -and $length -gt $limit) { throw "element $Index text is not settable: the result would be $length characters, past the field's $limit-character limit" }
