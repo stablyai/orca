@@ -38,6 +38,9 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       const terminal = this.deps.deliveryTarget.resolveTerminal(handle)
       // Skip ownership resolution, and the reconciliation it schedules, for a terminal deliver() would refuse.
       if (!terminal || !isMailboxTerminalTakingInput(terminal)) {
+        if (terminal) {
+          this.deps.isAgentSettledForDelivery(terminal.ptyId)
+        }
         return
       }
       const mailboxHandle = this.deps.mailboxOwner.resolve(terminal, handle)
@@ -70,7 +73,8 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     }
     const { ptyId } = terminal
     // Gate live, settled input at this shared commit point; refusal parks for recheck instead of dropping mail.
-    if (!isMailboxTerminalTakingInput(terminal) || !this.deps.isAgentSettledForDelivery(ptyId)) {
+    const settled = this.deps.isAgentSettledForDelivery(ptyId)
+    if (!isMailboxTerminalTakingInput(terminal) || !settled) {
       this.parkRedelivery(mailboxHandle, options.reservedTypes)
       return
     }

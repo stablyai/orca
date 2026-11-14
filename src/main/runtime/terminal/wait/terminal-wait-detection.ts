@@ -18,6 +18,16 @@ import {
   isSettledAfter,
   isUnblockedAfter
 } from '../../agent-state-rules/blocked-text-layer'
+import {
+  lowercaseTerminalSupport,
+  offsetTerminalSupport,
+  type TerminalContentOrigin,
+  type TerminalSupportQuery
+} from '../../../../shared/terminal/output/terminal-content-origin'
+import {
+  lastSupportedIndex,
+  supportedRegexMatches
+} from '../../../../shared/terminal/output/terminal-supported-occurrences'
 
 // Include Orca ready titles and agents that state rest in words.
 const EXPLICIT_IDLE_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
@@ -45,9 +55,16 @@ export function isKnownReadyPromptPreview(preview: string): boolean {
 }
 
 /** Codex 0.157 discards input behind its provisional startup header; hold anchors veto ready text. */
-export function isKnownReadyPromptSettled(preview: string): boolean {
-  const normalized = preview.toLowerCase()
-  return isSettledAfter(normalized, findPromptAnchorIndexes(normalized).ready)
+export function isKnownReadyPromptSettled(
+  preview: string,
+  support?: TerminalSupportQuery
+): boolean {
+  const normalized = lowercaseTerminalSupport(preview, support)
+  return isSettledAfter(
+    normalized.text,
+    findPromptAnchorIndexes(normalized.text, normalized.query).ready,
+    normalized.query
+  )
 }
 
 /** Agent screen refusals also veto shared text. Quiet-only rules settle here only without an output clock; clocked panes use isQuietReadyScreenBody. */
@@ -55,10 +72,12 @@ export function isKnownReadyPromptBody(
   waitText: string,
   agent: TuiAgent | null,
   readScreenLines: () => readonly string[] | null,
-  hasOutputClock: boolean
+  hasOutputClock: boolean,
+  support?: TerminalSupportQuery,
+  contentScope?: TerminalContentOrigin
 ): boolean {
   if (agent === 'qoder' || agent === 'qoder-cn') {
-    return isQoderComposerReady(readScreenLines())
+    return isQoderComposerReady(readScreenLines(), contentScope)
   }
   // With an output clock, this agent settles only after quiet.
   if (hasOutputClock && holdsReadyTextToQuiet(agent)) {
@@ -67,28 +86,34 @@ export function isKnownReadyPromptBody(
   const ruled = evaluateAgentStateRules(agent, {
     readScreenLines,
     readText: () => waitText.toLowerCase(),
-    hasOutputClock
+    hasOutputClock,
+    textSupport: lowercaseTerminalSupport(waitText, support).query,
+    contentScope
   })
   if (ruled !== null) {
     return isStrongIdle(ruled) && (!ruled.requiresQuiet || !hasOutputClock)
   }
-  return isKnownReadyPromptSettled(waitText)
+  return isKnownReadyPromptSettled(waitText, support)
 }
 
 /** Mid-turn ready screens/text require quiet. Require Muse identity so pasted transcripts and pagers cannot settle unknown panes. */
 export function isQuietReadyScreenBody(
   waitText: string,
   agent: TuiAgent | null,
-  readScreenLines: () => readonly string[] | null
+  readScreenLines: () => readonly string[] | null,
+  support?: TerminalSupportQuery,
+  contentScope?: TerminalContentOrigin
 ): boolean {
   if (hasQuietReadyRules(agent)) {
     const ruled = evaluateAgentStateRules(agent, {
       readScreenLines,
-      readText: () => waitText.toLowerCase()
+      readText: () => waitText.toLowerCase(),
+      textSupport: lowercaseTerminalSupport(waitText, support).query,
+      contentScope
     })
     return ruled !== null && isStrongIdle(ruled) && ruled.requiresQuiet
   }
-  return (agent === null || agent === 'muse') && isMuseReadyPromptPreview(waitText)
+  return (agent === null || agent === 'muse') && isMuseReadyPromptPreview(waitText, support)
 }
 
 function isStrongIdle(
@@ -97,26 +122,32 @@ function isStrongIdle(
   return verdict.state === 'idle' && verdict.strength === 'strong'
 }
 
-export function isMuseReadyPromptPreview(preview: string): boolean {
-  const normalized = preview.toLowerCase()
-  return isUnblockedAfter(normalized, findMuseReadyPromptIndex(normalized))
+export function isMuseReadyPromptPreview(preview: string, support?: TerminalSupportQuery): boolean {
+  const normalized = lowercaseTerminalSupport(preview, support)
+  return isUnblockedAfter(
+    normalized.text,
+    findMuseReadyPromptIndex(normalized.text, normalized.query),
+    normalized.query
+  )
 }
 
 export function detectTerminalWaitBlockedReason(
-  preview: string
+  preview: string,
+  support?: TerminalSupportQuery
 ): RuntimeTerminalWaitBlockedReason | null {
-  const normalized = preview.toLowerCase()
-  return findActionableTerminalWaitBlockedSignal(normalized)?.reason ?? null
+  const normalized = lowercaseTerminalSupport(preview, support)
+  return findActionableTerminalWaitBlockedSignal(normalized.text, normalized.query)?.reason ?? null
 }
 
 export function findActionableTerminalWaitBlockedSignal(
-  normalized: string
+  normalized: string,
+  support?: TerminalSupportQuery
 ): { reason: RuntimeTerminalWaitBlockedReason; index: number } | null {
-  const blockedSignal = findTerminalWaitBlockedSignal(normalized)
+  const blockedSignal = findTerminalWaitBlockedSignal(normalized, { support })
   if (blockedSignal === null) {
     return null
   }
-  const dismissedModalIndex = findDismissedStartupModalIndex(normalized)
+  const dismissedModalIndex = findDismissedStartupModalIndex(normalized, support)
   // A later live prompt dismisses the modal even mid-turn; Cursor never titles itself idle.
   return dismissedModalIndex !== null && dismissedModalIndex > blockedSignal.index
     ? null
@@ -124,22 +155,32 @@ export function findActionableTerminalWaitBlockedSignal(
 }
 
 // Live idle/busy prompts supersede startup modals; Muse still needs anchors outside agent-state-rules.
-function findDismissedStartupModalIndex(normalized: string): number | null {
-  const live = findPromptAnchorIndexes(normalized).live
-  const muse = findMuseReadyPromptIndex(normalized)
+function findDismissedStartupModalIndex(
+  normalized: string,
+  support?: TerminalSupportQuery
+): number | null {
+  const live = findPromptAnchorIndexes(normalized, support).live
+  const muse = findMuseReadyPromptIndex(normalized, support)
   return live === null || muse === null ? (live ?? muse) : Math.max(live, muse)
 }
 
 // Muse keeps its bare-cwd OSC title; its composer (❯ under a rule, labeled "voice input" only where voice exists) proves readiness.
 const MUSE_COMPOSER_RE = /\u2500\u2500\s*\u276F/
 
-function findMuseReadyPromptIndex(normalized: string): number | null {
-  const headerIndex = normalized.lastIndexOf('muse code')
+function findMuseReadyPromptIndex(
+  normalized: string,
+  support?: TerminalSupportQuery
+): number | null {
+  const headerIndex = lastSupportedIndex(normalized, 'muse code', support)
   if (headerIndex === -1) {
     return null
   }
   const segment = normalized.slice(headerIndex)
-  const voiceComposer =
-    segment.includes('voice') && segment.includes('input') && segment.includes('❯')
-  return voiceComposer || MUSE_COMPOSER_RE.test(segment) ? headerIndex : null
+  const query = offsetTerminalSupport(support, headerIndex)
+  const voiceComposer = ['voice', 'input', '❯'].every(
+    (term) => lastSupportedIndex(segment, term, query) !== -1
+  )
+  return voiceComposer || supportedRegexMatches(segment, MUSE_COMPOSER_RE, query).length > 0
+    ? headerIndex
+    : null
 }

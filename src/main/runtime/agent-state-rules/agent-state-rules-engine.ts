@@ -13,6 +13,15 @@ import {
 import { compileTextAnchor } from './agent-state-text-anchors'
 import { isSettledAfter } from './blocked-text-layer'
 import { isCodexComposerReadyScreen, isCodexHeaderReadyScreen } from './codex-screen-predicates'
+import {
+  joinedTerminalOrigins,
+  lowercaseTerminalSupport,
+  terminalSupportQuery,
+  terminalScreenSupport,
+  type TerminalContentOrigin,
+  type TerminalSupportQuery,
+  type TerminalScreenSupportQuery
+} from '../../../shared/terminal/output/terminal-content-origin'
 
 export type AgentStateVerdict = { ruleId: string } & AgentStateRuleAnswer
 
@@ -24,6 +33,8 @@ export type AgentStateRegions = {
   readTitleStatus?: () => AgentStatus | null
   /** False for restored/adopted panes without an output clock; absent means clocked. */
   hasOutputClock?: boolean
+  textSupport?: TerminalSupportQuery
+  contentScope?: TerminalContentOrigin
 }
 
 type Region = AgentStateRuleCondition['region']
@@ -36,6 +47,9 @@ type RegionReads = {
   screenText: RegionReader<string>
   text: RegionReader<string>
   title: RegionReader<AgentStatus>
+  screenSupport: () => TerminalScreenSupportQuery | undefined
+  screenTextSupport: () => TerminalSupportQuery | undefined
+  textSupport?: TerminalSupportQuery
 }
 
 type CompiledRule = {
@@ -45,7 +59,10 @@ type CompiledRule = {
   matches: (reads: RegionReads) => boolean
 }
 
-const NAMED_SCREEN_PREDICATES: Record<NamedScreenPredicate, (screen: string) => boolean> = {
+const NAMED_SCREEN_PREDICATES: Record<
+  NamedScreenPredicate,
+  (screen: string, support?: TerminalSupportQuery) => boolean
+> = {
   'codex-header-ready': isCodexHeaderReadyScreen,
   'codex-composer-ready': isCodexComposerReadyScreen
 }
@@ -63,10 +80,11 @@ function compileCondition(
     case 'screen': {
       if (when.predicate) {
         const predicate = NAMED_SCREEN_PREDICATES[when.predicate]
-        return (reads) => readThen(reads.screenText, predicate)
+        return (reads) =>
+          readThen(reads.screenText, (text) => predicate(text, reads.screenTextSupport()))
       }
       const matches = compileScreenCondition(when)
-      return (reads) => readThen(reads.screen, matches)
+      return (reads) => readThen(reads.screen, (lines) => matches(lines, reads.screenSupport()))
     }
     case 'title':
       return (reads) => readThen(reads.title, (status) => status === when.status)
@@ -78,7 +96,9 @@ function compileCondition(
       }
       const find = compileTextAnchor(anchor.when, anchor.answer)
       return (reads) =>
-        readThen(reads.text, (text) => isSettledAfter(text, find(text)?.index ?? null))
+        readThen(reads.text, (text) =>
+          isSettledAfter(text, find(text, reads.textSupport)?.index ?? null, reads.textSupport)
+        )
     }
   }
 }
@@ -165,9 +185,26 @@ export function evaluateCompiledRules(
   regions: AgentStateRegions
 ): AgentStateVerdict | null {
   const screen = memoize(regions.readScreenLines)
+  const screenText = memoize(() => {
+    const lines = screen()
+    if (!lines) {
+      return null
+    }
+    const joined = joinedTerminalOrigins(lines)
+    return lowercaseTerminalSupport(
+      joined.text,
+      terminalSupportQuery(joined.origins, regions.contentScope)
+    )
+  })
   const reads: RegionReads = {
     screen,
-    screenText: memoize(() => screen()?.join('\n').toLowerCase() ?? null),
+    screenText: () => screenText()?.text ?? null,
+    screenTextSupport: () => screenText()?.query,
+    screenSupport: () => {
+      const lines = screen()
+      return lines ? terminalScreenSupport(lines, regions.contentScope) : undefined
+    },
+    textSupport: regions.textSupport,
     text: memoize(regions.readText),
     title: memoize(regions.readTitleStatus)
   }

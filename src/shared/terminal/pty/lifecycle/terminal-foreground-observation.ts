@@ -13,6 +13,7 @@ export type TerminalForegroundSample =
       source: 'pty-master' | 'posix-process-table' | 'windows-console'
       foregroundKind: 'shell' | 'non-shell'
       processName: string | null
+      inputMode?: 'noninteractive'
       tty?: string
       foregroundPgid?: number
     }
@@ -65,6 +66,8 @@ export function isTerminalForegroundObservation(
     (value.foregroundKind === 'shell' || value.foregroundKind === 'non-shell') &&
     'processName' in value &&
     (value.processName === null || text(value.processName)) &&
+    (!('inputMode' in value) ||
+      (value.inputMode === 'noninteractive' && value.foregroundKind === 'non-shell')) &&
     (!('tty' in value) || text(value.tty)) &&
     (!('foregroundPgid' in value) || (integer(value.foregroundPgid) && value.foregroundPgid > 0))
   )

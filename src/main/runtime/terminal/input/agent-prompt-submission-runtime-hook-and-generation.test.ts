@@ -142,59 +142,67 @@ describe('agent prompt submission runtime hook and generation cases', () => {
     expect(writes.filter((data) => data === '\r')).toHaveLength(1)
   })
 
-  it('reserves a hook-only turn start for the oldest queued prompt receipt', async () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(1_000)
-    const hook = { state: 'working' as const, stateStartedAt: 1_000 }
-    const { runtime, handle, writes } = await createHookOnlyPromptRuntime(hook, 'codex')
-
-    const firstPromise = runtime.sendTerminalAgentPrompt(handle, 'first prompt', {
-      inputKind: 'driving',
-      acceptQueued: true,
-      requestId: 'hook-queued-first',
-      observationTimeoutMs: 0
-    })
-    await vi.runAllTimersAsync()
-    const first = await firstPromise
-    expect(first.prompt?.stages).toEqual(['input_accepted'])
-
-    const firstObserved = runtime.observeTerminalAgentPrompt(handle, first.prompt!, 20_000)
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-prompt' }),
-      write: (_ptyId, data) => {
-        writes.push(data)
-        if (data === '\r') {
-          hook.stateStartedAt = Date.now()
+  it.each([false, true])(
+    'reserves a hook-only turn start for the oldest live prompt (replace controller: %s)',
+    async (replaceController) => {
+      vi.useFakeTimers()
+      vi.setSystemTime(1_000)
+      const hook = { state: 'working' as const, stateStartedAt: 1_000 }
+      const { runtime, handle, writes } = await createHookOnlyPromptRuntime(hook, 'codex')
+      let answer = false
+      const controller = {
+        spawn: vi.fn().mockResolvedValue({ id: 'pty-prompt' }),
+        write: (_ptyId: string, data: string) => {
+          writes.push(data)
+          if (data === '\r' && answer) {
+            hook.stateStartedAt = Date.now()
+          }
+          return true
+        },
+        kill: () => true,
+        getForegroundProcess: async () => null
+      }
+      runtime.setPtyController(controller)
+      const firstPromise = runtime.sendTerminalAgentPrompt(handle, 'first prompt', {
+        inputKind: 'driving',
+        acceptQueued: true,
+        requestId: 'hook-queued-first',
+        observationTimeoutMs: 0
+      })
+      await vi.runAllTimersAsync()
+      const first = await firstPromise
+      expect(first.prompt?.stages).toEqual(['input_accepted'])
+      if (replaceController) {
+        runtime.setPtyController({ ...controller })
+      }
+      const firstObserved = runtime.observeTerminalAgentPrompt(handle, first.prompt!, 20_000)
+      answer = true
+      const secondPromise = runtime.sendTerminalAgentPrompt(handle, 'second prompt', {
+        inputKind: 'driving',
+        acceptQueued: true,
+        requestId: 'hook-queued-second',
+        observationTimeoutMs: 500
+      })
+      await vi.runAllTimersAsync()
+      await expect(firstObserved).resolves.toMatchObject({
+        stages: replaceController ? ['input_accepted'] : ['input_accepted', 'turn_started']
+      })
+      const second = await secondPromise
+      expect(second).toMatchObject({
+        prompt: {
+          stages: replaceController ? ['input_accepted', 'turn_started'] : ['input_accepted']
         }
-        return true
-      },
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    const secondPromise = runtime.sendTerminalAgentPrompt(handle, 'second prompt', {
-      inputKind: 'driving',
-      acceptQueued: true,
-      requestId: 'hook-queued-second',
-      observationTimeoutMs: 500
-    })
-    await vi.runAllTimersAsync()
-
-    await expect(firstObserved).resolves.toMatchObject({
-      stages: ['input_accepted', 'turn_started']
-    })
-    const second = await secondPromise
-    expect(second).toMatchObject({
-      prompt: { stages: ['input_accepted'] }
-    })
-
-    const secondObserved = runtime.observeTerminalAgentPrompt(handle, second.prompt!, 1_000)
-    hook.stateStartedAt += 1
-    await vi.advanceTimersByTimeAsync(50)
-
-    await expect(secondObserved).resolves.toMatchObject({
-      stages: ['input_accepted', 'turn_started']
-    })
-  })
+      })
+      if (!replaceController) {
+        const secondObserved = runtime.observeTerminalAgentPrompt(handle, second.prompt!, 1_000)
+        hook.stateStartedAt += 1
+        await vi.advanceTimersByTimeAsync(50)
+        await expect(secondObserved).resolves.toMatchObject({
+          stages: ['input_accepted', 'turn_started']
+        })
+      }
+    }
+  )
 
   it('does not write Enter after the PTY generation changes during settlement', async () => {
     vi.useFakeTimers()

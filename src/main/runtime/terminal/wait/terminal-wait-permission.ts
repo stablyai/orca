@@ -1,12 +1,23 @@
 import { OrcaRuntimeWithAgentPromptRequestCorrelation } from '../input/orca-runtime-agent-prompt-request-correlation'
 import type { RuntimeTerminalAgentStatusSnapshot } from '../query/runtime-terminal-agent-status-query'
+import { lastSupportedIndex } from '../../../../shared/terminal/output/terminal-supported-occurrences'
+import { readTerminalActionText, type TerminalActionText } from '../output/terminal-action-text'
+import { terminalTitleIsPredecessor } from '../input/terminal-command-paint'
+import {
+  joinedTerminalOrigins,
+  terminalSupportQuery
+} from '../../../../shared/terminal/output/terminal-content-origin'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/runtime-terminal-contracts'
 import {
   detectExplicitIdleStatusFromTitle,
   detectTerminalWaitBlockedReason
 } from './terminal-wait-detection'
-import { isOpenCodeNativeTitle } from '../../../../shared/agent-status/title/providers/opencode-terminal-title'
+import {
+  judgeTerminalPermissionEvidence,
+  resolveTerminalPermissionEvidence,
+  type TerminalPermissionDecision
+} from './terminal-permission-evidence'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type {
@@ -15,19 +26,10 @@ import type {
 } from '../records/runtime-terminal-state-records'
 import { renewRuntimeMobileAgentStatusFromPtyTitle } from '../../session-lifecycle/projection/runtime-mobile-agent-status-projection'
 import { getDisplayPromptLifecycle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
-import { createTerminalInputReservation } from '../input/terminal-input-admission'
-import type { RuntimeTerminalWriteOptions } from '../input/runtime-terminal-writer'
-import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
-import { resolvePtyWriteHostPlatform } from '../input/pty-write-host-platform'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
-import type { AgentPromptActivity } from '../input/agent-prompt-submission-verification'
 import { hasExplicitIdleTitle } from './tui-idle-evidence'
-import {
-  readTuiIdleHookTurn,
-  retainedTailIncludes,
-  type TuiIdleHookTurn
-} from './tui-idle-hook-lane'
+import { readTuiIdleHookTurn, type TuiIdleHookTurn } from './tui-idle-hook-lane'
 import { selectFreshExplicitAgentStatusRow } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { isClaudeDialogHoldingPane } from './claude-open-dialog-hold'
 
@@ -102,6 +104,13 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
       ptyId,
       observed ? screen.lines.join('\n') : undefined
     )
+    if (observed) {
+      const joined = joinedTerminalOrigins(screen.lines)
+      terminal.waitTextSupport = terminalSupportQuery(
+        joined.origins,
+        this.ptysById.get(ptyId)?.commandPaint?.contentOrigin
+      )
+    }
     const explicitStatus = this.getFreshExplicitAgentStatusForHandle(handle, ptyId)
     return {
       terminal,
@@ -132,38 +141,49 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
     lifecycle: { status: AgentStatus | null; updatedAt: number } | null | undefined,
     observedOnScreen = false
   ): RuntimeTerminalWaitBlockedReason | null {
-    const blockedByWaitText = detectTerminalWaitBlockedReason(terminal.waitText)
-    if (!blockedByWaitText) {
-      return null
+    return resolveTerminalPermissionEvidence(terminal, explicitStatus, lifecycle, observedOnScreen)
+  }
+
+  protected readCommonTerminalPermission(
+    ptyId: string,
+    action: TerminalActionText,
+    candidate: RuntimeTerminalWaitBlockedReason | null,
+    screen?: readonly string[] | null
+  ): TerminalPermissionDecision {
+    const handle =
+      this.handleByPtyId.get(ptyId) ?? this.getExistingTerminalHandlesForPtyId(ptyId)[0]
+    if (!handle || this.getTerminalAgentStatusPtyId(handle) !== ptyId) {
+      return candidate ? { kind: 'unresolved', reason: candidate } : { kind: 'none' }
     }
-    const liveTitleClearsBlockedText =
-      terminal.titleStatusIsLive &&
-      terminal.titleStatus !== null &&
-      terminal.titleStatus !== 'permission' &&
-      (!observedOnScreen ||
-        terminal.titleStatus !== 'idle' ||
-        detectExplicitIdleStatusFromTitle(terminal.title ?? '') === 'idle') &&
-      !isOpenCodeNativeTitle(terminal.title) &&
-      blockedByWaitText !== 'agent-approval-prompt'
-    if (liveTitleClearsBlockedText && lifecycle?.status !== terminal.titleStatus) {
-      return null
+    const { terminal, lifecycle } = this.getTerminalWaitPermissionInputs(handle, ptyId)
+    terminal.waitText = action.text
+    terminal.waitTextSupport = action.query
+    const lines =
+      screen === undefined
+        ? this.getPaneAgentForTuiIdle(ptyId) === 'claude'
+          ? this.readCaughtUpProjectedScreen(ptyId)
+          : this.readCaughtUpRuledScreen(ptyId)?.lines
+        : screen
+    if (lines) {
+      const joined = joinedTerminalOrigins(lines)
+      const reason = detectTerminalWaitBlockedReason(
+        joined.text,
+        terminalSupportQuery(joined.origins, this.ptysById.get(ptyId)?.commandPaint?.contentOrigin)
+      )
+      if (reason) {
+        return { kind: 'current', reason }
+      }
     }
-    if (blockedByWaitText === 'agent-approval-prompt') {
-      return blockedByWaitText
+    if (!candidate) {
+      return { kind: 'none' }
     }
-    const newestPermissionAt = Math.max(
-      explicitStatus?.status === 'permission' ? explicitStatus.updatedAt : -1,
-      lifecycle?.status === 'permission' ? lifecycle.updatedAt : -1,
-      terminal.waitBlockedAt ?? -1
+    return judgeTerminalPermissionEvidence(
+      terminal,
+      this.getFreshExplicitAgentStatusForHandle(handle, ptyId),
+      lifecycle,
+      false,
+      candidate
     )
-    const newestClearAt = Math.max(
-      explicitStatus && explicitStatus.status !== 'permission' ? explicitStatus.updatedAt : -1,
-      lifecycle?.status && lifecycle.status !== 'permission' ? lifecycle.updatedAt : -1
-    )
-    return (observedOnScreen && newestClearAt < 0) ||
-      (newestPermissionAt >= 0 && newestPermissionAt >= newestClearAt)
-      ? blockedByWaitText
-      : null
   }
 
   /** Compare display-projected title and lifecycle together; mixing an echoed stale-working clear with native lifecycle can hide a later dialog. */
@@ -177,6 +197,20 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
   } {
     const clear = this.getPtyTitleDisplayClear(ptyId)
     const snapshot = this.terminalAgentStatus.getSnapshot(handle, ptyId, clear)
+    const pty = this.ptysById.get(ptyId)
+    const action = pty ? readTerminalActionText(pty) : undefined
+    if (
+      action?.query &&
+      (waitTextOverride === undefined
+        ? snapshot.waitText === action.text || action.text === ''
+        : waitTextOverride === action.text)
+    ) {
+      snapshot.waitText = action.text
+      snapshot.waitTextSupport = action.query
+    }
+    if (pty && terminalTitleIsPredecessor(pty)) {
+      snapshot.titleStatusIsLive = false
+    }
     return {
       terminal:
         waitTextOverride === undefined ? snapshot : { ...snapshot, waitText: waitTextOverride },
@@ -201,10 +235,13 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
       wslDistro: pty.wslDistro,
       launchToken: pty.launchToken,
       titleObservedAtEpochMs: pty.lastOscTitleEpochMs,
-      hasExplicitIdleTitle: hasExplicitIdleTitle(pty),
+      hasExplicitIdleTitle: !terminalTitleIsPredecessor(pty) && hasExplicitIdleTitle(pty),
       respawnedAt: this.agentPromptExplicitStatusFloorByPtyId.get(ptyId),
       lastInputAt: this.terminalRunFacts.readLastInputAt(ptyId),
-      tailIncludes: (text) => retainedTailIncludes(pty.tailBuffer, pty.tailPartialLine, text),
+      tailIncludes: (text) => {
+        const action = readTerminalActionText(pty)
+        return lastSupportedIndex(action.text, text, action.query) !== -1
+      },
       resolveBlockedText: (state, row) =>
         this.resolveTuiIdleHookBlockedText(ptyId, handles, state, row)
     })
@@ -215,7 +252,8 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
     return isClaudeDialogHoldingPane({
       row: join ? selectFreshExplicitAgentStatusRow(join) : null,
       respawnedAt: this.agentPromptExplicitStatusFloorByPtyId.get(ptyId),
-      readScreenLines: () => this.readLiveTerminalScreenLines(ptyId)
+      readScreenLines: () => this.readLiveTerminalScreenLines(ptyId),
+      contentScope: this.ptysById.get(ptyId)?.commandPaint?.contentOrigin
     })
   }
 
@@ -254,7 +292,7 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
     }
     try {
       return this.resolveAuthoritativeTerminalWaitPermission(
-        this.getTerminalAgentStatusSnapshot(handle, ptyId),
+        this.getTerminalWaitPermissionInputs(handle, ptyId).terminal,
         { status: state === 'done' ? 'idle' : state, updatedAt: row.receivedAt },
         this.agentPromptLifecycleByPtyId.get(ptyId)
       )
@@ -270,56 +308,6 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
     options: { preserveQuestionUnderShellTitle?: boolean } = {}
   ): AgentStatusEntry | null {
     return renewRuntimeMobileAgentStatusFromPtyTitle(status, pty, options)
-  }
-
-  protected writeTerminalAction(
-    ptyId: string,
-    action: { text?: string; enter?: boolean; interrupt?: boolean },
-    payload: string,
-    options: RuntimeTerminalWriteOptions
-  ): Promise<WriteSettlement | undefined> {
-    return this.terminalWriter.writeAction(ptyId, action, payload, {
-      ...options,
-      reserveWrite: createTerminalInputReservation(this, options.inputSource, options.reserveWrite)
-    })
-  }
-
-  protected writeTerminalInputChunks(
-    ptyId: string,
-    text: string,
-    options: RuntimeTerminalWriteOptions
-  ): Promise<WriteSettlement | undefined> {
-    return this.terminalWriter.writeChunks(ptyId, text, {
-      ...options,
-      reserveWrite: createTerminalInputReservation(this, options.inputSource, options.reserveWrite)
-    })
-  }
-
-  protected getPtyWriteHostPlatform(ptyId: string): NodeJS.Platform {
-    return resolvePtyWriteHostPlatform(this.ptysById.get(ptyId))
-  }
-
-  protected getPtyAgent(ptyId: string): TerminalAgent | null {
-    const pty = this.ptysById.get(ptyId)
-    return pty?.launchAgent ?? pty?.foregroundAgent ?? null
-  }
-
-  protected isAgentPromptPermissionBlocked(
-    baseline: AgentPromptActivity,
-    current: AgentPromptActivity
-  ): boolean {
-    return (
-      current.status === 'permission' || current.permissionSequence > baseline.permissionSequence
-    )
-  }
-
-  protected assertAgentPromptPermissionSafe(
-    baseline: AgentPromptActivity,
-    current: AgentPromptActivity
-  ): void {
-    if (this.isAgentPromptPermissionBlocked(baseline, current)) {
-      throw new Error('agent_prompt_blocked')
-    }
   }
 
   protected assertAgentPromptGeneration(ptyId: string, expected: number): void {

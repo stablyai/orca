@@ -144,6 +144,7 @@ function finishPointerWriteAndStageEnter<TWaiter extends OrchestrationMessageWai
           resolveSubmitTarget: args.deps.resolveSubmitTarget,
           isLeafPtyProvenAbsent: args.deps.isLeafPtyProvenAbsent,
           isPtyAwaitingUserInput: args.deps.isPtyAwaitingUserInput,
+          isAgentSettledForDelivery: args.deps.isAgentSettledForDelivery,
           writePty: args.deps.writePty,
           settle: args.settle,
           redrive: args.redrive

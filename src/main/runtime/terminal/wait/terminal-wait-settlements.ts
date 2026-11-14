@@ -7,8 +7,9 @@ import {
 } from './terminal-wait-results'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
-import { buildTerminalWaitText } from './terminal-wait-tail-state'
-import { evaluateTuiIdle } from './tui-idle-evidence'
+import { readTerminalActionText } from '../output/terminal-action-text'
+import { terminalTitleIsPredecessor } from '../input/terminal-command-paint'
+import { evaluateTuiIdle, type TuiIdleVerdict } from './tui-idle-evidence'
 import { settlesForMidTurnInput, terminalDeliveryRefusal } from './terminal-delivery-refusal'
 import { ptyTuiIdleEvidence } from './tui-idle-evidence-source'
 import { TUI_IDLE_QUIESCENCE_MS } from './terminal-idle-policy'
@@ -44,10 +45,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       return
     }
     // Re-rank titles: weak readiness cannot see tail-truncated dialogs and must wait for a rendered-screen poll.
-    const evidence = ptyTuiIdleEvidence(this.tuiIdleEvidenceSource, pty, () =>
-      buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
-    )
-    const verdict = evaluateTuiIdle(evidence)
+    const verdict = this.evaluateTuiIdleForPty(pty)
     for (const waiter of waiters) {
       if (verdict.kind === 'blocked') {
         this.terminalWaiters.resolve(
@@ -67,13 +65,24 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     }
   }
 
+  protected wakeInterestedTerminalDelivery(ptyId: string): void {
+    const interest = this.deliveryStartupObservationStopsByPtyId.get(ptyId)
+    if (interest) {
+      queueMicrotask(() => {
+        if (this.deliveryStartupObservationStopsByPtyId.get(ptyId) === interest) {
+          this.deliverPendingMessagesForPty(ptyId)
+        }
+      })
+    }
+  }
+
   /** Point a terminal at its mail once it takes input and is settled; refusal re-arms the recheck. */
   protected deliverPendingMessagesForPty(ptyId: string): void {
     const terminal = this.getOrchestrationMailboxTerminal(ptyId)
     if (
       terminal &&
-      isMailboxTerminalTakingInput(terminal) &&
-      this.checkDeliverySettledAndArmRecheck(ptyId)
+      this.checkDeliverySettledAndArmRecheck(ptyId) &&
+      isMailboxTerminalTakingInput(terminal)
     ) {
       this.orchestrationMailboxNotifications.deliverForTerminal(terminal)
     }
@@ -81,7 +90,12 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
 
   /** Edge-driven delivery needs a one-shot recheck when quiet evidence may later settle; otherwise hookless agents can strand queued mail without another title/graph/message edge. */
   protected checkDeliverySettledAndArmRecheck(ptyId: string): boolean {
-    if (this.isAgentSettledForDelivery(ptyId)) {
+    const terminal = this.getOrchestrationMailboxTerminal(ptyId)
+    if (
+      terminal &&
+      isMailboxTerminalTakingInput(terminal) &&
+      this.isAgentSettledForDelivery(ptyId)
+    ) {
       this.clearDeliveryRecheck(ptyId)
       return true
     }
@@ -90,6 +104,8 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
   }
 
   protected clearDeliveryRecheck(ptyId: string): void {
+    this.deliveryStartupObservationStopsByPtyId.get(ptyId)?.()
+    this.deliveryStartupObservationStopsByPtyId.delete(ptyId)
     const timer = this.deliveryRecheckTimersByPtyId.get(ptyId)
     if (timer) {
       clearTimeout(timer)
@@ -104,6 +120,24 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     // Refusal can lift without another edge (hook deadlines, foreground recognition), but only waiting work needs the retry.
     const terminal = this.getOrchestrationMailboxTerminal(ptyId)
     if (!terminal || !this.orchestrationMailboxNotifications.hasDeliverableMail(terminal)) {
+      this.clearDeliveryRecheck(ptyId)
+      return
+    }
+    if (!this.deliveryStartupObservationStopsByPtyId.has(ptyId)) {
+      this.deliveryStartupObservationStopsByPtyId.set(
+        ptyId,
+        this.ptyForegroundAgent.startup.watch(ptyId, () => this.deliverPendingMessagesForPty(ptyId))
+      )
+    }
+    this.ptyForegroundAgent.startup.refresh(ptyId)
+    const pty = this.ptysById.get(ptyId)
+    const modeRemainingMs = this.ptyForegroundAgent.startup.noninteractiveRemainingMs(ptyId)
+    if (
+      modeRemainingMs === undefined &&
+      pty &&
+      pty.commandPaint?.commandActive === false &&
+      !this.terminalHasCurrentAgentMailAuthority(pty)
+    ) {
       return
     }
     // Schedule just beyond the quiet window and re-arm from fresher output if still streaming.
@@ -112,9 +146,11 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       outputAt === null ? 0 : TUI_IDLE_QUIESCENCE_MS - (Date.now() - outputAt)
     // A dialog or draft lifts only when the user acts, so poll it slowly rather than at 20 Hz.
     const delay =
-      this.ptyDeliveryHold(ptyId) !== null || quietRemainingMs <= 0
-        ? DIALOG_HOLD_RECHECK_MS
-        : quietRemainingMs + 50
+      modeRemainingMs !== undefined
+        ? modeRemainingMs + 1
+        : this.ptyDeliveryHold(ptyId) !== null || quietRemainingMs <= 0
+          ? DIALOG_HOLD_RECHECK_MS
+          : quietRemainingMs + 50
     const timer = setTimeout(() => {
       this.deliveryRecheckTimersByPtyId.delete(ptyId)
       // Delivery rechecks settlement first; the agent may have become busy again.
@@ -143,26 +179,35 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     if (!pty) {
       return 'no-terminal'
     }
+    if (!this.terminalHasCurrentAgentMailAuthority(pty)) {
+      return { kind: 'busy-program' }
+    }
     const hold = this.ptyDeliveryHold(ptyId)
     if (hold) {
       return { kind: hold }
     }
-    const { verdict, readScreenInputVeto } = this.deliveryTuiVerdict(pty)
+    const { verdict, readScreenInputVeto, terminalAgent } = this.deliveryTuiVerdict(pty)
     return terminalDeliveryRefusal({
       verdict,
-      recognizedAgent: !!this.getPaneTerminalAgent(ptyId),
+      recognizedAgent: !!terminalAgent,
       readScreenInputVeto
     })
   }
 
   private deliveryTuiVerdict(pty: RuntimePtyWorktreeRecord) {
-    const evidence = ptyTuiIdleEvidence(this.tuiIdleEvidenceSource, pty, () =>
-      buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+    const evidence = ptyTuiIdleEvidence(
+      this.tuiIdleEvidenceSource,
+      pty,
+      () => readTerminalActionText(pty).text
     )
     // Why no blocked reader: a refusal here re-arms a recheck that a lingering tail prompt
     // would spin, so delivery keeps its own, blocked-blind, reading of the same ranking.
     const verdict = evaluateTuiIdle({ ...evidence, readTailBlockedReason: () => null })
-    return { verdict, readScreenInputVeto: evidence.readScreenInputVeto }
+    return {
+      verdict,
+      terminalAgent: evidence.terminalAgent,
+      readScreenInputVeto: evidence.readScreenInputVeto
+    }
   }
 
   /** An unsent draft would be submitted with the injected text; the cap bounds an abandoned or misread one.
@@ -200,8 +245,17 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       : !!readTerminalComposerTypedText(context)
   }
 
+  protected evaluateTuiIdleForPty(pty: RuntimePtyWorktreeRecord): TuiIdleVerdict {
+    return evaluateTuiIdle(
+      ptyTuiIdleEvidence(this.tuiIdleEvidenceSource, pty, () => readTerminalActionText(pty).text)
+    )
+  }
+
   protected getAdoptedPtyExplicitIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null {
     const title = pty.lastOscTitle ?? this.getAdoptedPtyTitle(pty)
+    if (terminalTitleIsPredecessor(pty, title)) {
+      return null
+    }
     return title ? detectExplicitIdleStatusFromTitle(title) : null
   }
 

@@ -12,13 +12,20 @@ import {
   writeRetainedRow,
   type RetainedTerminalRow
 } from './terminal-tail-redraw-row'
+import {
+  getTerminalLineOrigins,
+  setTerminalLineOrigins,
+  sliceTerminalOrigins,
+  type TerminalOriginRuns
+} from '../../../../../shared/terminal/output/terminal-content-origin'
 
 export function appendNormalizedToMultilineTailBufferUnwindowed(
   previousLines: string[],
   boundedPreviousPartialLine: string,
   normalizedChunk: string,
   previousPartialWasCapped: boolean,
-  previousRedrawCursor: RetainedTailRedrawCursor | null
+  previousRedrawCursor: RetainedTailRedrawCursor | null,
+  origins?: { partial: TerminalOriginRuns; chunk: TerminalOriginRuns }
 ): {
   lines: string[]
   partialLine: string
@@ -26,10 +33,13 @@ export function appendNormalizedToMultilineTailBufferUnwindowed(
   truncated: boolean
   newCompleteLines: number
   newlyCompletedLines: string[]
+  partialOrigins?: TerminalOriginRuns
 } {
   const rows: RetainedTerminalRow[] = [
-    ...previousLines.map((line) => retainedRow(line, true)),
-    retainedRow(boundedPreviousPartialLine, false)
+    ...previousLines.map((line, index) =>
+      retainedRow(line, true, getTerminalLineOrigins(previousLines)?.[index])
+    ),
+    retainedRow(boundedPreviousPartialLine, false, origins?.partial)
   ]
   let cursorRow = previousRedrawCursor
     ? Math.max(0, rows.length - 1 - previousRedrawCursor.rowFromEnd)
@@ -92,7 +102,7 @@ export function appendNormalizedToMultilineTailBufferUnwindowed(
     return row
   }
   const writeText = (start: number, end: number): void => {
-    writeRetainedRow(cursorRowForEdit(), cursorColumn, normalizedChunk, start, end)
+    writeRetainedRow(cursorRowForEdit(), cursorColumn, normalizedChunk, start, end, origins?.chunk)
     cursorColumn += end - start
   }
   const eraseLine = (mode: number): void => {
@@ -165,7 +175,8 @@ export function appendNormalizedToMultilineTailBufferUnwindowed(
     newCompleteLines,
     newlyCompletedLineStart > 0
       ? newlyCompletedLines.slice(newlyCompletedLineStart)
-      : newlyCompletedLines
+      : newlyCompletedLines,
+    origins !== undefined
   )
 }
 
@@ -184,7 +195,8 @@ function finalizeRetainedTerminalRows(
   cursorColumn: number,
   initialTruncated: boolean,
   newCompleteLines: number,
-  newlyCompletedLines: string[]
+  newlyCompletedLines: string[],
+  captureOrigins: boolean
 ): {
   lines: string[]
   partialLine: string
@@ -192,11 +204,13 @@ function finalizeRetainedTerminalRows(
   truncated: boolean
   newCompleteLines: number
   newlyCompletedLines: string[]
+  partialOrigins?: TerminalOriginRuns
 } {
   let truncated = initialTruncated
   let retainedRows = rows.map((row) => ({
     text: retainedRowSnapshot(row),
-    completed: row.completed
+    completed: row.completed,
+    origins: sliceTerminalOrigins(row.origins, 0, retainedRowSnapshot(row).length)
   }))
 
   if (retainedRows.length > MAX_TAIL_LINES + 1) {
@@ -228,17 +242,29 @@ function finalizeRetainedTerminalRows(
 
   const lastRow = retainedRows.at(-1)
   let partialLine = lastRow && !lastRow.completed ? lastRow.text : ''
+  let partialOrigins = lastRow && !lastRow.completed ? lastRow.origins : []
   let lines = (lastRow && !lastRow.completed ? retainedRows.slice(0, -1) : retainedRows).map(
     (row) => row.text
   )
 
   if (partialLine.length > MAX_TAIL_PARTIAL_CHARS) {
+    partialOrigins = sliceTerminalOrigins(
+      partialOrigins,
+      partialLine.length - MAX_TAIL_PARTIAL_CHARS
+    )
     partialLine = partialLine.slice(-MAX_TAIL_PARTIAL_CHARS)
     truncated = true
   }
   if (lines.length > MAX_TAIL_LINES) {
     lines = lines.slice(lines.length - MAX_TAIL_LINES)
     truncated = true
+  }
+  const completedRows = lastRow && !lastRow.completed ? retainedRows.slice(0, -1) : retainedRows
+  if (rows.some((row) => row.origins !== undefined)) {
+    setTerminalLineOrigins(
+      lines,
+      completedRows.slice(-lines.length).map((row) => row.origins)
+    )
   }
   const outputRowCount = lines.length + 1
   const defaultCursorRow = outputRowCount - 1
@@ -258,6 +284,7 @@ function finalizeRetainedTerminalRows(
     redrawCursor,
     truncated,
     newCompleteLines,
-    newlyCompletedLines
+    newlyCompletedLines,
+    ...(captureOrigins ? { partialOrigins } : {})
   }
 }

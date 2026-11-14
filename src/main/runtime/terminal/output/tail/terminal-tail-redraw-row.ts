@@ -1,4 +1,9 @@
 import { ownRetainedString } from '../../../../../shared/own-retained-string'
+import {
+  sliceTerminalOrigins,
+  writeTerminalOrigins,
+  type TerminalOriginRuns
+} from '../../../../../shared/terminal/output/terminal-content-origin'
 
 // Splice strings once per run; unchanged/revisited rows reuse cached newline snapshots.
 export type RetainedTerminalRow = {
@@ -12,9 +17,14 @@ export type RetainedTerminalRow = {
   /** Upper bound on the backing string `text` may slice; 0 when `text` owns its storage. */
   backing: number
   completed: boolean
+  origins?: TerminalOriginRuns
 }
 
-export function retainedRow(text: string, completed: boolean): RetainedTerminalRow {
+export function retainedRow(
+  text: string,
+  completed: boolean,
+  origins?: TerminalOriginRuns
+): RetainedTerminalRow {
   // A carried row may be a snapshot that slices up to twice its length.
   return {
     text,
@@ -22,7 +32,8 @@ export function retainedRow(text: string, completed: boolean): RetainedTerminalR
     contentEnd: -1,
     blankPrefix: 0,
     backing: 2 * text.length,
-    completed
+    completed,
+    origins
   }
 }
 
@@ -36,10 +47,19 @@ export function writeRetainedRow(
   column: number,
   source: string,
   start: number,
-  end: number
+  end: number,
+  origins?: TerminalOriginRuns
 ): void {
   const text = row.text
   const runLength = end - start
+  if (row.origins || origins) {
+    row.origins = writeTerminalOrigins(
+      row.origins ?? [],
+      column,
+      column + runLength,
+      sliceTerminalOrigins(origins, start, end)
+    )
+  }
   const overlap = Math.max(0, Math.min(text.length - column, runLength))
   let offset = 0
   while (
@@ -110,6 +130,9 @@ export function eraseRetainedRow(row: RetainedTerminalRow, mode: number, column:
   const text = row.text
   if (mode === 2 || mode === 0) {
     const keep = mode === 2 ? 0 : column
+    if (row.origins) {
+      row.origins = sliceTerminalOrigins(row.origins, 0, keep)
+    }
     if (keep >= text.length) {
       return
     }
@@ -127,6 +150,9 @@ export function eraseRetainedRow(row: RetainedTerminalRow, mode: number, column:
     return
   }
   const blankCount = Math.min(column + 1, text.length)
+  if (row.origins) {
+    row.origins = writeTerminalOrigins(row.origins, 0, blankCount)
+  }
   let firstNonBlank = row.blankPrefix
   while (firstNonBlank < blankCount && text.charCodeAt(firstNonBlank) === 0x20) {
     firstNonBlank += 1

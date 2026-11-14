@@ -2,8 +2,7 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import { resolveDraftPasteReadyTimeoutMs } from '../../../../shared/draft-paste-ready-timeout'
 import type { LaunchedAgentForeground } from './launched-agent-foreground'
 import { readFreshComposerHold } from './launched-agent-composer-readiness'
-import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
-import { buildTerminalWaitText } from './terminal-wait-tail-state'
+import { readTerminalActionText, type ActionTextRecord } from '../output/terminal-action-text'
 import {
   waitForWorktreeStartupDraft,
   type WorktreeStartupReadinessHost
@@ -17,13 +16,15 @@ const SUBMIT_WAITS_FOR_LAUNCH_COMPOSER: ReadonlySet<TuiAgent> = new Set([
 
 /** A startup dialog or hold anchor on the pane's tail or screen vetoes a ready signal. */
 export function readPtyFreshComposerHold(
-  pty: Pick<RuntimePtyWorktreeRecord, 'tailBuffer' | 'tailPartialLine' | 'preview'> | undefined,
+  pty: ActionTextRecord | undefined,
   screenLines: readonly string[] | null
 ): 'dialog' | 'starting' | null {
   return pty
     ? readFreshComposerHold(
-        buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview),
-        screenLines
+        readTerminalActionText(pty).text,
+        screenLines,
+        readTerminalActionText(pty).query,
+        pty.commandPaint?.contentOrigin
       )
     : null
 }

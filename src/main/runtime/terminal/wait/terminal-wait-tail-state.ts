@@ -1,7 +1,17 @@
+import {
+  terminalSupportQuery,
+  lowercaseTerminalSupport,
+  type TerminalContentOrigin,
+  type TerminalOriginRuns
+} from '../../../../shared/terminal/output/terminal-content-origin'
+import { readTerminalActionText, type ActionTextRecord } from '../output/terminal-action-text'
 import type { RuntimeTerminalWaitBlockedReason } from '../../../../shared/runtime-terminal-contracts'
 import { buildTailLines } from '../output/tail/terminal-tail-state'
 import { tailMayContainBlockedSignal } from '../output/tail/terminal-tail-sentinel-index'
-import { findActionableTerminalWaitBlockedSignal } from './terminal-wait-detection'
+import {
+  detectTerminalWaitBlockedReason,
+  findActionableTerminalWaitBlockedSignal
+} from './terminal-wait-detection'
 import { terminalWaitBlockedSentinelRe } from '../../agent-state-rules/blocked-text-layer'
 
 export function buildTerminalWaitText(
@@ -17,8 +27,26 @@ export function buildTerminalWaitText(
   return waitText.length > 0 ? waitText : preview
 }
 
+/** Re-rank live state after awaits without rebuilding an unchanged tail within that tick. */
+export function createTerminalWaitTailReader(record: ActionTextRecord) {
+  let previous: ReturnType<typeof readTerminalActionText> | undefined
+  let blocked: RuntimeTerminalWaitBlockedReason | null = null
+  return {
+    readText: () => readTerminalActionText(record).text,
+    readBlockedReason: () => {
+      const current = readTerminalActionText(record)
+      if (current !== previous) {
+        previous = current
+        blocked = detectTerminalWaitBlockedReason(current.text, current.query)
+      }
+      return blocked
+    }
+  }
+}
+
 export type TerminalTailWaitState = {
   waitText: string
+  origins?: TerminalOriginRuns
   signal: { reason: RuntimeTerminalWaitBlockedReason; index: number } | null
   // Preview fallback changes every append and cannot seed the next cached tail state.
   fromTail: boolean
@@ -28,13 +56,19 @@ export type TerminalTailWaitState = {
 export function computeTerminalTailWaitState(
   lines: string[],
   partialLine: string,
-  preview: string
+  preview: string,
+  action?: ActionTextRecord
 ): TerminalTailWaitState {
   const tailInspection = inspectTerminalWaitTail(lines, partialLine)
   if (!tailInspection.fromTail) {
+    const view = action ? readTerminalActionText(action) : undefined
     return {
-      waitText: preview,
-      signal: findActionableTerminalWaitBlockedSignal(preview.toLowerCase()),
+      waitText: view?.text ?? preview,
+      origins: view?.origins,
+      signal: findActionableTerminalWaitBlockedSignal(
+        view?.lower ?? preview.toLowerCase(),
+        view?.lowerQuery
+      ),
       fromTail: false
     }
   }
@@ -42,15 +76,22 @@ export function computeTerminalTailWaitState(
     // Signal-free chunks need no retained 256KiB waitText rebuild.
     return { waitText: '', signal: null, fromTail: true }
   }
-  const tailText = buildTailLines(lines, partialLine)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .join('\n')
+  const actionText = action ? readTerminalActionText(action) : undefined
+  const tailText =
+    actionText?.text ??
+    buildTailLines(lines, partialLine)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .join('\n')
   const fromTail = tailText.length > 0
-  const waitText = fromTail ? tailText : preview
+  const waitText = actionText ? actionText.text : fromTail ? tailText : preview
   return {
     waitText,
-    signal: findActionableTerminalWaitBlockedSignal(waitText.toLowerCase()),
+    origins: actionText?.origins,
+    signal: findActionableTerminalWaitBlockedSignal(
+      actionText?.lower ?? waitText.toLowerCase(),
+      actionText?.lowerQuery
+    ),
     fromTail
   }
 }
@@ -80,17 +121,32 @@ function hasVisibleTailLine(lines: string[]): boolean {
 export function tailGainedNewerBlockedReason(
   previous: TerminalTailWaitState,
   next: TerminalTailWaitState,
-  appendedText: string
+  appendedText: string,
+  appendedOrigins: TerminalOriginRuns = [],
+  scope?: TerminalContentOrigin
 ): boolean {
   if (next.signal === null) {
     return false
   }
   // Permission prompts span chunks; stamp first blocking or a newer prompt after stale blocked text.
-  if (previous.signal === null) {
+  const prior = lowercaseTerminalSupport(
+    previous.waitText,
+    terminalSupportQuery(previous.origins ?? [], scope)
+  )
+  const previousSignal = findActionableTerminalWaitBlockedSignal(prior.text, prior.query)
+  if (previousSignal === null) {
     return true
   }
-  const appendCandidateSignal = findActionableTerminalWaitBlockedSignal(
-    `${previous.waitText}${appendedText}`.toLowerCase()
-  )
-  return appendCandidateSignal !== null && appendCandidateSignal.index > previous.signal.index
+  const combined = previous.waitText + appendedText
+  const origins = [
+    ...(previous.origins ?? []),
+    ...appendedOrigins.map((run) => ({
+      ...run,
+      start: run.start + previous.waitText.length,
+      end: run.end + previous.waitText.length
+    }))
+  ]
+  const normalized = lowercaseTerminalSupport(combined, terminalSupportQuery(origins, scope))
+  const appended = findActionableTerminalWaitBlockedSignal(normalized.text, normalized.query)
+  return appended !== null && appended.index > previousSignal.index
 }

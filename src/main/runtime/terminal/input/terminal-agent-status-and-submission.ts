@@ -15,6 +15,15 @@ import { readAgentPromptWaitText } from './agent-prompt-submission-verification'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 
 export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWithPluginHookedTerminalInput {
+  protected isAgentPromptPermissionBlocked(
+    baseline: AgentPromptActivity,
+    current: AgentPromptActivity
+  ): boolean {
+    return (
+      current.status === 'permission' || current.permissionSequence > baseline.permissionSequence
+    )
+  }
+
   protected abstract getPaneKeyForTerminalHandle(handle: string): string | null
 
   protected async serializeAgentPromptSubmission<T>(

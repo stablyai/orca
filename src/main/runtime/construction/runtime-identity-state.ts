@@ -32,10 +32,8 @@ import { WorktreeTerminalMutationLock } from '../workspaces/lifecycle/worktree-t
 import { RemoteRuntimeTerminalCreateIdempotency } from '../terminal/identity/remote-runtime-terminal-create-idempotency'
 import type { PtyIncarnationId } from '../../../shared/terminal/pty/lifecycle/pty-incarnation'
 
-import type { KeyedTrailingEdgeCoalescer } from '../client/events/keyed-trailing-edge-coalescer'
 import { createMobileSessionTabsNotifyCoalescer } from '../session-lifecycle/publication/mobile-session-tabs-notify-coalescer'
 
-import type { MobileSessionTabsAgentStatusHeartbeat } from '../session-lifecycle/publication/mobile-session-tabs-agent-status-heartbeat'
 import { createMobileSessionTabsAgentStatusHeartbeat } from '../session-lifecycle/publication/mobile-session-tabs-agent-status-heartbeat'
 import { TerminalFocusNavigationCoalescer } from '../terminal/focus/terminal-focus-navigation-coalescer'
 import type {
@@ -58,6 +56,7 @@ import {
   type TerminalSpawnCommit
 } from '../terminal/lifecycle/terminal-run-facts'
 import type { TuiIdleEvidenceSource } from '../terminal/wait/tui-idle-evidence-source'
+import type { RuntimePtyForegroundAgent } from '../terminal/lifecycle/runtime-pty-foreground-agent'
 import { hasTerminalCommandPainted } from '../terminal/input/terminal-command-paint'
 import {
   TUI_IDLE_DEFAULT_TIMEOUT_MS,
@@ -86,6 +85,10 @@ export type MobileSessionTabSubscription = {
 }
 
 export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServices {
+  protected abstract readCommonTerminalPermission(
+    ...args: Parameters<NonNullable<TuiIdleEvidenceSource['readPermissionEvidence']>>
+  ): ReturnType<NonNullable<TuiIdleEvidenceSource['readPermissionEvidence']>>
+
   protected getLeafKey(tabId: string, leafId: string): string {
     return `${tabId}::${leafId}`
   }
@@ -251,12 +254,11 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     this.intentionalPtyStops.noteSpawnCommit(commit.id)
   }
 
-  protected readonly mobileSessionTabsNotifyCoalescer: KeyedTrailingEdgeCoalescer =
-    createMobileSessionTabsNotifyCoalescer((worktreeId) =>
-      this.flushScheduledMobileSessionTabsChanged(worktreeId)
-    )
+  protected readonly mobileSessionTabsNotifyCoalescer = createMobileSessionTabsNotifyCoalescer(
+    (worktreeId) => this.flushScheduledMobileSessionTabsChanged(worktreeId)
+  )
 
-  protected readonly mobileSessionTabsAgentStatusHeartbeat: MobileSessionTabsAgentStatusHeartbeat =
+  protected readonly mobileSessionTabsAgentStatusHeartbeat =
     createMobileSessionTabsAgentStatusHeartbeat(
       (ptyId) => this.getMobileSessionWorktreeIdsForPty(ptyId),
       (worktreeId) => this.touchMobileSessionTabsForWorktree(worktreeId)
@@ -281,6 +283,8 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
   }
 
   protected deliveryRecheckTimersByPtyId = new Map<string, ReturnType<typeof setTimeout>>()
+  protected deliveryStartupObservationStopsByPtyId = new Map<string, () => void>()
+  protected abstract readonly ptyForegroundAgent: RuntimePtyForegroundAgent
 
   // Sequence authoritative graph statements to distinguish absent surfaces from unpublished ones.
   protected abstract readonly graphSequence: number
@@ -332,15 +336,23 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
 
   // Every tui-idle site must rank the same pane evidence identically.
   protected readonly tuiIdleEvidenceSource: TuiIdleEvidenceSource = {
+    readPermissionEvidence: (...args) => this.readCommonTerminalPermission(...args),
+    captureGeneration: (ptyId) => this.ptyForegroundAgent.captureGeneration(ptyId),
     quiescenceMs: TUI_IDLE_QUIESCENCE_MS,
     getAdoptedPtyIdleStatus: (pty) => this.getAdoptedPtyExplicitIdleStatus(pty),
     getPaneAgent: (ptyId) => this.getPaneAgentForTuiIdle(ptyId),
+    getPaneTerminalAgent: (ptyId) => this.getPaneTerminalAgent(ptyId),
     getFirstPartyAgentStatus: (ptyId) =>
       (ptyId ? this.ptysById.get(ptyId)?.lastExplicitAgentStatus : null) ?? null,
     getHookTurn: (ptyId, agent) => this.readTuiIdleHookTurnForPty(ptyId, agent),
     readScreenLines: (ptyId) => this.readLiveTerminalScreenLines(ptyId),
     readRuledScreen: (ptyId) => this.readRuledScreen(ptyId),
     getOutputClockAt: (ptyId) => this.readOutputClockAt(ptyId),
+    startupObservation: {
+      read: (ptyId) => this.ptyForegroundAgent.startup.read(ptyId),
+      watch: (ptyId, changed) => this.ptyForegroundAgent.startup.watch(ptyId, changed),
+      refresh: (ptyId) => this.ptyForegroundAgent.startup.refresh(ptyId)
+    },
     isSettledForDelivery: (ptyId) => this.isAgentSettledForDelivery(ptyId)
   }
 
@@ -355,9 +367,7 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     // Runtime emulator reads avoid a provider round trip on every poll.
     readVisibleScreen: (ptyId) =>
       this.headlessTerminals.has(ptyId)
-        ? this.readHeadlessVisibleTerminalState(ptyId).then(
-            (screen) => screen?.lines.join('\n') ?? null
-          )
+        ? this.readHeadlessVisibleTerminalState(ptyId).then((screen) => screen?.lines ?? null)
         : null,
     resolve: (waiter, result) => this.terminalWaiters.resolve(waiter, result)
   })

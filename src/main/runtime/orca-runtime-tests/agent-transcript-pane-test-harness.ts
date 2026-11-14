@@ -6,6 +6,7 @@ import type { TerminalProcessInspection as PtyProcessInspection } from '../../..
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { committingSpawn, registerBoundPty } from './bind-first-pane.test-fixture'
+import type { RuntimePtyController } from '../terminal/lifecycle/runtime-pty-controller-contract'
 
 const TRANSCRIPT_PANE_LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const TRANSCRIPT_PANE_TAB_ID = 'tab-1'
@@ -22,6 +23,7 @@ export type TranscriptPaneOptions = {
   remoteWindowsHost?: boolean
   foregroundProbeHangs?: boolean
   onForegroundProbe?: () => void
+  foregroundProcessRead?: () => Promise<string | null>
   /** Controller grid size; the runtime emulator defaults to 80x24. */
   size?: { cols: number; rows: number }
   confirmedForegroundProcess?: string | null
@@ -32,6 +34,8 @@ export type TranscriptPaneOptions = {
   paneRootPid?: number
   onShellForegroundProof?: () => void
   onWrite?: (data: string) => void
+  writeWithSettlement?: RuntimePtyController['writeWithSettlement']
+  serializeProviderBuffer?: RuntimePtyController['serializeProviderBuffer']
 }
 
 function transcriptLayoutStore(): RuntimeStore {
@@ -92,10 +96,17 @@ export async function createTranscriptPane(
       options.onWrite?.(data)
       return true
     },
+    ...(options.writeWithSettlement ? { writeWithSettlement: options.writeWithSettlement } : {}),
+    ...(options.serializeProviderBuffer
+      ? { serializeProviderBuffer: options.serializeProviderBuffer }
+      : {}),
     kill: () => true,
     getSize: () => options.size ?? null,
     getForegroundProcess: (): Promise<string | null> => {
       options.onForegroundProbe?.()
+      if (options.foregroundProcessRead) {
+        return options.foregroundProcessRead()
+      }
       return options.foregroundProbeHangs === true
         ? new Promise<string | null>(() => {})
         : Promise.resolve(options.foregroundProcess)

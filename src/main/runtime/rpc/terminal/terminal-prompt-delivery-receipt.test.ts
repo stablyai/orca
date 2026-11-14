@@ -133,6 +133,37 @@ describe('durable terminal prompt delivery receipts', () => {
     harness.db.close()
   })
 
+  it('preserves an accepted receipt when replay occurs under a positive noninteractive mode', async () => {
+    vi.useFakeTimers()
+    const harness = await createHarness('codex', true)
+    try {
+      const accepted = harness.dispatcher.dispatch(
+        request(harness.handle, 'accepted-before-mode', 'send once')
+      )
+      await vi.runAllTimersAsync()
+      await expect(accepted).resolves.toMatchObject({
+        ok: true,
+        result: { send: { accepted: true, prompt: { stages: ['input_accepted'] } } }
+      })
+      const written = [...harness.writes]
+      vi.spyOn(harness.runtime, 'terminalAgentInputMode').mockReturnValue('noninteractive')
+      expect(() => harness.runtime.assertTerminalAgentPromptInputSupported(harness.handle)).toThrow(
+        'terminal_guard_not_writable'
+      )
+      const replay = harness.dispatcher.dispatch(
+        request(harness.handle, 'accepted-before-mode', 'send once', 1_000)
+      )
+      await vi.runAllTimersAsync()
+      await expect(replay).resolves.toMatchObject({
+        ok: true,
+        result: { send: { accepted: true, prompt: { stages: ['input_accepted'] } } }
+      })
+      expect(harness.writes).toEqual(written)
+    } finally {
+      harness.db.close()
+    }
+  })
+
   it('does not let a later queued request claim an earlier lifecycle transition', async () => {
     vi.useFakeTimers()
     const harness = await createHarness('codex', true)
