@@ -2,6 +2,7 @@ import { useAppStore } from '@/store'
 import { useMemo } from 'react'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getRenderRowKey, type RenderRow } from './render-row'
+import { getProjectGroupThreads } from '../viewport/project-group-colors'
 import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity,
@@ -17,7 +18,8 @@ import {
   NEW_CARD_STYLE_STATUS_LANE_EXTRA_PULLBACK,
   FLUSH_CARD_MIN_CONTENT_INSET,
   WORKTREE_CARD_SURFACE_MARGIN,
-  LINEAGE_CHILDREN_INLINE_OFFSET
+  LINEAGE_CHILDREN_INLINE_OFFSET,
+  PROJECT_GROUP_HEADER_INDENT
 } from '../rows/indentation'
 
 export type LineageRowFrame = {
@@ -45,11 +47,17 @@ export function buildLineageRowProjection(
   const frames: LineageRowFrame[] = []
   const occurrencesByIdentity = new Map<string, number[]>()
   const stack: number[] = []
+  let isProjectSection = false
   const close = (next: number) => {
     const index = stack.pop()!
     frames[index].end = next - 1
   }
   rows.forEach((row, index) => {
+    if (row.type === 'host-header') {
+      isProjectSection = false
+    } else if (row.type === 'header') {
+      isProjectSection = Boolean(row.repo || row.projectGroup)
+    }
     const key = getRenderRowKey(row)
     rowKeys.push(key)
     rowIndexByKey.set(key, index)
@@ -104,7 +112,11 @@ export function buildLineageRowProjection(
                   groupDepth: row.groupDepth
                 })
             }
-      frame.left = geometry.surfaceInset
+      frame.left =
+        geometry.surfaceInset +
+        (parent === null && groupBy === 'repo' && isProjectSection
+          ? PROJECT_GROUP_HEADER_INDENT
+          : 0)
       frame.contentIndent = Math.max(0, geometry.cardContentIndent)
       if (parent !== null) {
         const ancestor = frames[parent]
@@ -150,7 +162,13 @@ export function buildLineageRowProjection(
     const next = frames[index + 1]
     frame.after = next?.root === frame.root ? 0 : 6
   })
-  return { frames, occurrencesByIdentity, rowIndexByKey, restoreSignal: JSON.stringify(rowKeys) }
+  return {
+    frames,
+    projectGroupThreads: getProjectGroupThreads(rows, groupBy, frames),
+    occurrencesByIdentity,
+    rowIndexByKey,
+    restoreSignal: JSON.stringify(rowKeys)
+  }
 }
 
 export function useDraggedSubtreeRanges(

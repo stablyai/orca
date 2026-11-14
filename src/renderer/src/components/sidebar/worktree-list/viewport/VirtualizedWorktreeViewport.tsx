@@ -36,6 +36,9 @@ import { buildWorktreeVirtualRowContext } from './virtual-row-context'
 import type { RepoHeaderProjectActions } from '../rows/repo-header-project-actions'
 import { getRepoOwnerWorktreeVisibilityDefaults } from '../../../../store/slices/worktrees/listing/worktree-visibility-defaults-by-host'
 import { renderWorktreeVirtualRow } from '../rows/virtual-row-dispatch'
+import { getProjectGroupColors } from './project-group-colors'
+import { ProjectGroupBackgrounds } from './ProjectGroupBackgrounds'
+import { ProjectGroupThreadGuides } from './ProjectGroupThreadGuides'
 
 const EMPTY_HOST_OPTIONS: NonNullable<VirtualizedWorktreeViewportProps['hostOptions']> = []
 
@@ -126,7 +129,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     [keyboardPreview, props]
   )
 
-  const renderRows = rows
+  const groupColors = useMemo(() => getProjectGroupColors(rows, groupBy), [rows, groupBy])
   const { projection, activeFamilyRoots, firstHeaderIndex } = useLineageRowProjection({
     ...rowProps,
     newCardStyle
@@ -134,7 +137,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
 
   const headerDrag = useWorktreeSidebarHeaderDrag({
     rows,
-    renderRows,
+    renderRows: rows,
     firstHeaderIndex,
     allRepoIds: props.allRepoIds,
     repoMap,
@@ -148,7 +151,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   })
 
   const virtualization = useWorktreeListVirtualizer({
-    renderRows,
+    renderRows: rows,
     projection,
     firstHeaderIndex,
     scrollRef,
@@ -199,7 +202,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     clearPendingRevealWorktreeId: props.clearPendingRevealWorktreeId,
     clearPendingRevealSidebarRow: props.clearPendingRevealSidebarRow,
     agentSendTargetWorktreeId: props.agentSendTargetWorktreeId,
-    renderRows,
+    renderRows: rows,
     virtualizer: virtualization.virtualizer,
     scrollRef,
     worktrees: props.worktrees,
@@ -225,7 +228,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   })
 
   const { virtualItems, measureVirtualRowElement } = useVirtualRowMeasurementSync({
-    renderRows,
+    renderRows: rows,
     virtualization,
     scrollRef,
     scrollOffsetRef,
@@ -291,7 +294,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
     worktreeMap,
     groupBy,
     newCardStyle,
-    renderRows,
+    renderRows: rows,
     virtualItems,
     scrollRef
   })
@@ -336,12 +339,13 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   const draggingIdentity = runtime.worktreeDragState.draggingWorktreeId
   const hiddenDragRanges = useDraggedSubtreeRanges(projection, draggingIdentity)
   const rowContext = buildWorktreeVirtualRowContext({
+    projectGroupColors: groupColors,
     dragUnitsByRow: rowGeometry.ranges.byRow,
     hiddenDragRanges,
     props: rowProps,
     projection,
     activeFamilyRoots,
-    renderRows,
+    renderRows: rows,
     firstHeaderIndex,
     virtualization,
     measureVirtualRowElement,
@@ -385,7 +389,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
             : rowProps.activeWorkspaceExecutionHostId,
           primaryActiveRowKey: primaryActive.primaryActiveWorktreeRow?.rowKey,
           pinnedDisplayPolicy,
-          renderRows,
+          renderRows: rows,
           virtualItems
         })}
         onKeyDown={handleContainerKeyDown}
@@ -405,12 +409,14 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
           className="relative w-full"
           style={{ height: `${virtualization.virtualizer.getTotalSize()}px` }}
         >
+          <ProjectGroupBackgrounds colors={groupColors} virtualItems={virtualItems} />
+          <ProjectGroupThreadGuides context={rowContext} virtualItems={virtualItems} />
           {renderWorktreeSidebarDropIndicators({
             headerDrag,
             worktreeDragState: runtime.worktreeDragState
           })}
           {virtualItems.map((vItem) => {
-            const row = renderRows[vItem.index]
+            const row = rows[vItem.index]
             return row ? renderWorktreeVirtualRow(rowContext, row, vItem, t) : null
           })}
         </div>

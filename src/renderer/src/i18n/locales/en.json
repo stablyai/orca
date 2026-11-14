@@ -8083,6 +8083,21 @@
           "browseFolder": "Browse folder…",
           "cloneFromUrl": "Clone from URL…",
           "createNewProject": "Create new project…"
+        },
+        "groupColor": {
+          "gray": "Gray",
+          "red": "Red",
+          "orange": "Orange",
+          "yellow": "Yellow",
+          "green": "Green",
+          "teal": "Teal",
+          "purple": "Purple",
+          "pink": "Pink",
+          "saveFailed": "Could not save group color",
+          "label": "Group color",
+          "none": "No color",
+          "saving": "Saving group color…",
+          "inherit": "Use parent color"
         }
       },
       "shared": {

@@ -16,7 +16,11 @@ import {
   repoMatchesHostIdentity
 } from '../repos/repo-host-identity'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
-import { ipcOrRuntimeTargetForHostId } from '../../runtime/rpc/targets/runtime-client-target'
+import {
+  getRuntimeTargetHostId,
+  ipcOrRuntimeTargetForHostId
+} from '../../runtime/rpc/targets/runtime-client-target'
+import { runKeyedSerializedOperation } from '../../../../shared/concurrency/keyed-serialized-operations'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { ProjectRemovalFailure, RepoSlice } from '../repos/repo-state'
 import { mergeProjectCompatibilityForHostRepoChange } from '../repos/repo-catalog-identity'
@@ -48,6 +52,7 @@ export function createProjectGroupMutationActions(
   | 'deleteProjectGroupWithContainedProjects'
   | 'moveProjectToGroup'
 > {
+  const updateQueues = new Map<string, Promise<void>>()
   return {
     createProjectGroup: async (name, hostId) => {
       try {
@@ -97,8 +102,19 @@ export function createProjectGroupMutationActions(
       }
     },
 
-    updateProjectGroup: (groupId, updates, options) =>
-      get().updateProjectGroups([{ groupId, updates, hostId: options?.hostId }]),
+    updateProjectGroup: (groupId, updates, options) => {
+      const state = get()
+      const target = runtimeTargetForProjectGroupOwner(state, groupId, options?.hostId)
+      if (!target) {
+        return Promise.resolve(false)
+      }
+      const hostId =
+        resolveProjectGroupOwnerHostId(state, groupId, options?.hostId) ??
+        getRuntimeTargetHostId(target)
+      return runKeyedSerializedOperation(updateQueues, JSON.stringify([hostId, groupId]), () =>
+        get().updateProjectGroups([{ groupId, updates, hostId }])
+      )
+    },
 
     deleteProjectGroup: async (groupId, options) => {
       try {
