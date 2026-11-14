@@ -36,6 +36,29 @@ describe('Start on active account after a refused pinned launch', () => {
     expect(refusedStartups.size).toBe(0)
   })
 
+  it('marks a launch pane replay as replacing its refused launch', () => {
+    const refusedStartups = new Map<number, NonNullable<PtyPaneStartup>>()
+    const launch = {
+      agent: 'claude' as const,
+      target: { kind: 'existing' as const, worktree: 'wt-1' }
+    }
+    const launchPaneStartup = { agentLaunch: { launch } }
+    recordRefusedClaudeLaunchStartup(refusedStartups, 2, refusal, launchPaneStartup)
+    const restartPane = vi.fn()
+
+    startRefusedPaneOnActiveClaudeAccount({
+      paneId: 2,
+      refusedStartups,
+      restartPane,
+      openNewTab: vi.fn()
+    })
+
+    expect(restartPane.mock.calls[0]?.[1].agentLaunch).toEqual({
+      launch,
+      replacesRefusedLaunch: true
+    })
+  })
+
   it('ignores errors that are not pinned-account refusals', () => {
     const refusedStartups = new Map<number, NonNullable<PtyPaneStartup>>()
     recordRefusedClaudeLaunchStartup(refusedStartups, 2, 'spawn failed', resumedStartup)

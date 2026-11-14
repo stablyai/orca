@@ -12,6 +12,7 @@ import type { Store } from '../../../persistence/loading-store/store'
 import { resolveEarlyPaneKey } from './spawn-begin'
 import type { PtyIpcSpawnState } from './spawn-state'
 import type { PtySpawnIpcArgs } from './spawn-types'
+import { isLaunchConfigClaudeAccountId } from '../../../../shared/claude/project-claude-account-preference'
 
 function closedInSession(store: Store | undefined, paneKey: string): boolean {
   const pane = parsePaneKey(paneKey)
@@ -22,6 +23,18 @@ function closedInSession(store: Store | undefined, paneKey: string): boolean {
     (session.terminalSurfaceTombstonesByPaneKey?.[paneKey] ||
       hasClosedTerminalTabRecord(session.closedTerminalTabTombstonesByTabId, pane.tabId))
   )
+}
+
+/** Keeps the pane's own account choice, such as a retry on the active account, over the plan. */
+function withRequestedClaudeAccount(
+  planned: PtySpawnIpcArgs['launchConfig'],
+  requested: PtySpawnIpcArgs['launchConfig']
+): PtySpawnIpcArgs['launchConfig'] {
+  // Why checked: launchConfig is untrusted IPC JSON.
+  const accountId = requested?.claudeAccountId
+  return planned && isLaunchConfigClaudeAccountId(accountId)
+    ? { ...planned, claudeAccountId: accountId }
+    : planned
 }
 
 function withPlannedLaunch(
@@ -37,9 +50,10 @@ function withPlannedLaunch(
     telemetry: _telemetry,
     ...pane
   } = args
+  const launchConfig = withRequestedClaudeAccount(planned.launchConfig, args.launchConfig)
   const launchToken = agentLaunchTokenFor(
     {
-      launchConfig: planned.launchConfig,
+      launchConfig,
       ...(typeof args.launchToken === 'string' ? { launchToken: args.launchToken } : {})
     },
     randomUUID
@@ -57,7 +71,7 @@ function withPlannedLaunch(
         }
       : {}),
     ...(launchToken ? { launchToken } : {}),
-    ...(planned.launchConfig ? { launchConfig: planned.launchConfig } : {}),
+    ...(launchConfig ? { launchConfig } : {}),
     ...(planned.launchAgent ? { launchAgent: planned.launchAgent } : {}),
     ...(args.connectionId && args.startupCommandDelivery
       ? { startupCommandDelivery: args.startupCommandDelivery }

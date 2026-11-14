@@ -192,9 +192,14 @@ export async function resolveAgentLaunchModeOnHost(
   }
   const requested = settled.reason === 'requested'
   // Why refused: an explicit chat request must not quietly become a terminal before anything opens.
-  return requested && context?.phase === 'before-effects'
-    ? unavailableLaunchMode('pinned_claude_account', vocabulary, true, { ...context, agent })
-    : downgraded('pinned_claude_account', vocabulary, requested, PROJECT_CLAUDE_ACCOUNT_DETAIL)
+  return unavailableLaunchMode(
+    'pinned_claude_account',
+    vocabulary,
+    requested,
+    context && { ...context, agent },
+    true,
+    PROJECT_CLAUDE_ACCOUNT_DETAIL
+  )
 }
 
 /** Unknown host support must fall back to a terminal. */
@@ -277,14 +282,15 @@ function unavailableLaunchMode(
   vocabulary: AgentLaunchModeVocabulary,
   requested: boolean,
   context?: AgentLaunchModeSettlement,
-  conclusive = true
+  conclusive = true,
+  detail?: string
 ): AgentLaunchModeReceipt {
   if (requested && conclusive && context?.phase === 'before-effects') {
     throw new AgentLaunchSurfaceUnavailableError(
-      `${formatAgentTypeLabel(context.agent)} can't open as a chat here because ${DOWNGRADE_DETAIL[reason]}. Start it in a terminal instead.`
+      `${formatAgentTypeLabel(context.agent)} can't open as a chat here because ${detail ?? DOWNGRADE_DETAIL[reason]}. Start it in a terminal instead.`
     )
   }
-  return downgraded(reason, vocabulary, requested)
+  return downgraded(reason, vocabulary, requested, detail)
 }
 
 function downgraded(

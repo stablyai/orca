@@ -1,5 +1,8 @@
 import { resolveEarlyPaneKey as resolvePaneCoordinates } from '../spawn-pane-coordinates'
-import { resolveAgentLaunchPaneVerdict } from '../../../agent-launch/agent-launch-pane-attachment'
+import {
+  forgetFailedAgentLaunches,
+  resolveAgentLaunchPaneVerdict
+} from '../../../agent-launch/agent-launch-pane-attachment'
 import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import { agentLaunchPaneLiveness } from '../pane/agent-launch-pane-evidence'
 import { makePaneSpawnReservationKey } from '../pane/spawn-reservation'
@@ -14,8 +17,25 @@ export function resolveEarlyPaneSpawnReservationKey(args: PtySpawnIpcArgs): stri
   return makePaneSpawnReservationKey(args.worktreeId, args.connectionId, resolveEarlyPaneKey(args))
 }
 
+function replacesRefusedLaunch(args: PtySpawnIpcArgs): boolean {
+  const request = args.agentLaunch
+  return (
+    typeof request === 'object' &&
+    request !== null &&
+    'replacesRefusedLaunch' in request &&
+    request.replacesRefusedLaunch === true
+  )
+}
+
 export async function checkPtyIpcLaunchPane(ctx: PtyIpcSpawnState): Promise<void> {
   const args = ctx.args
+  if (replacesRefusedLaunch(args) && args.worktreeId && args.tabId && args.leafId) {
+    forgetFailedAgentLaunches(args.worktreeId, {
+      kind: 'pane',
+      tabId: args.tabId,
+      leafId: args.leafId
+    })
+  }
   // Launch panes adopt their agent instead of starting a shell; explicit restarts already own the reservation.
   const launchPaneKey = ctx.paneSpawnReservation ? null : resolveEarlyPaneKey(args)
   const launchVerdict =

@@ -18,7 +18,12 @@ export async function planQueuedPaneAgentLaunch(
   },
   pane: Pick<
     PtySpawnIpcArgs,
-    'connectionId' | 'commandDelivery' | 'startupCommandDelivery' | 'trustWorktreeId' | 'cwd'
+    | 'connectionId'
+    | 'commandDelivery'
+    | 'startupCommandDelivery'
+    | 'trustWorktreeId'
+    | 'cwd'
+    | 'launchConfig'
   > = {}
 ): Promise<PtySpawnIpcArgs> {
   const runtime = new OrcaRuntimeService(partialRuntimeStore({ getSettings: () => settings }))

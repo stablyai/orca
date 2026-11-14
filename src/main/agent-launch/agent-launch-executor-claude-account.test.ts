@@ -20,6 +20,13 @@ describe('a launch into a project with a saved Claude account', () => {
     expect(result.receipt.detail).toContain('saved account')
   })
 
+  it('refuses an explicit chat with the saved-account reason, not --account', async () => {
+    const h = harness({ repos: [PINNED_REPO] })
+    const launch = h.run({ agent: 'claude', target: EXISTING, surface: 'chat' })
+    await expect(launch).rejects.toThrow(/saved account/)
+    await expect(launch).rejects.not.toThrow(/--account/)
+  })
+
   it("keeps the host's own reason when the workspace could never pin", async () => {
     const h = harness({
       repos: [PINNED_REPO],

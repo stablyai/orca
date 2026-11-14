@@ -54,6 +54,9 @@ export function redirectsPtylessPaneActivation(input: {
 export function withActiveClaudeAccount(startup: RefusedStartup): RefusedStartup {
   return {
     ...startup,
+    ...(startup.agentLaunch
+      ? { agentLaunch: { ...startup.agentLaunch, replacesRefusedLaunch: true } }
+      : {}),
     launchConfig: {
       ...(startup.launchConfig ?? { agentArgs: '', agentEnv: {} }),
       claudeAccountId: ACTIVE_CLAUDE_ACCOUNT
