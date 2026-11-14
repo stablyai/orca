@@ -61,6 +61,7 @@ export function fakeClaude(providerSession: string) {
         return { env: {} }
       },
       renameSession: async () => {},
+      enableRemoteControl: async () => ({}),
       getContextUsage: async () => {
         connection.calls.push({ subtype: 'get_context_usage' })
         return contextUsage()

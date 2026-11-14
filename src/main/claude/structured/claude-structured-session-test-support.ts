@@ -70,6 +70,8 @@ export function fakeClaude(
     replayUuid?: string | null
     replayUuids?: (string | null)[]
     capabilities?: string[]
+    /** Extra initialize response fields, such as `remote_control_auto_enable`. */
+    initResponseFields?: Record<string, unknown>
     unprovenCloseVerdict?: ClaudeStreamJsonConnection['exitVerdict']
     routes?: Record<string, Route>
   } = {}
@@ -105,7 +107,8 @@ export function fakeClaude(
         models: config.initModels ?? [{ value: 'claude-sonnet', displayName: 'Sonnet' }],
         ...(config.capabilities ? { capabilities: config.capabilities } : {}),
         ...(config.initCommands === undefined ? {} : { commands: config.initCommands }),
-        ...(config.initAccount === undefined ? {} : { account: config.initAccount })
+        ...(config.initAccount === undefined ? {} : { account: config.initAccount }),
+        ...config.initResponseFields
       },
       deliver: () => {
         if (config.initProof === 'init') {
@@ -142,6 +145,7 @@ export function fakeClaude(
       resumeReading: () => {},
       initializationResult: () => initialization.read(connection.calls),
       renameSession: async () => {},
+      enableRemoteControl: async () => (await routed('remote_control')) ?? {},
       getContextUsage: async () => {
         connection.calls.push({ subtype: 'get_context_usage' })
         return config.contextUsage ?? {}
