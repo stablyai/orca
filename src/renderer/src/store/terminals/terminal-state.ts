@@ -24,7 +24,7 @@ import type {
 } from '@/components/native-chat/drafts/native-chat-launch-prompt'
 import type { HostSessionSlices } from '@/lib/workspace/persistence/workspace-session-host-split'
 import type {
-  AccountRestartAgent,
+  PaneAccountRestart,
   AutomaticAgentResumeClaim,
   CodexRestartNotice
 } from './terminal-contracts'
@@ -45,7 +45,7 @@ export type TerminalState = {
   suppressedPtyExitIds: Record<string, true>
   pendingPtyShutdownIds: Record<string, number>
   /** Account-switch restarts awaiting execution, keyed by the PTY they replace. */
-  pendingPaneAccountRestarts: Record<string, AccountRestartAgent>
+  paneAccountRestarts: Record<string, PaneAccountRestart>
   codexRestartNoticeByPtyId: Record<string, CodexRestartNotice>
   expandedPaneByTabId: Record<string, boolean>
   canExpandPaneByTabId: Record<string, boolean>

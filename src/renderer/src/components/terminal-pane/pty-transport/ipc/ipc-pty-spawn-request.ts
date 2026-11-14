@@ -95,11 +95,15 @@ export async function spawnIpcPty(
     agentLaunch
   } = transportOptions
   const resumesAgent = Boolean(connectOptions.resumeProviderSession ?? resumeProviderSession)
-  const spawnIntent =
-    resumesAgent && !admittedSessionId ? connectOptions.resumeSpawnIntent : undefined
+  const spawnIntent = connectOptions.accountRestart
+    ? 'user-resume'
+    : resumesAgent && !admittedSessionId
+      ? connectOptions.resumeSpawnIntent
+      : undefined
   // Why: a reattach under an admitted session id must never stop the PTY it is reattaching.
   const replacesPtyId = admittedSessionId ? null : (connectOptions.claimReplacedPtyId?.() ?? null)
   return window.api.pty.spawn({
+    ...(connectOptions.accountRestart ? { accountRestart: connectOptions.accountRestart } : {}),
     cols: connectOptions.cols ?? 80,
     rows: connectOptions.rows ?? 24,
     cwd,

@@ -1,60 +1,98 @@
-import { awaitsCodexRestartAnswer } from '@/components/codex-restart-notice-state'
-import type { CodexRestartNotice } from '@/store/terminals/terminal-contracts'
+import {
+  selectWorktreesByRepo,
+  selectFolderWorkspaces,
+  selectDetectedWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import {
+  eligibleCodexRestartPtyIds,
+  codexRestartTabIndex,
+  currentCodexRestartPanes,
+  isCodexAccountRestart,
+  isCurrentCodexAccountRestart,
+  type CodexRestartPopulationState
+} from '@/store/terminals/codex-account-restart-continuation'
+import type { CodexAccountRestart } from '@/store/terminals/terminal-contracts'
 
-type TabLookup = Record<string, { id: string }[]>
-
-export type CodexRestartStatusSummaryInput = {
-  tabsByWorktree: TabLookup
-  ptyIdsByTabId: Record<string, string[]>
-  codexRestartNoticeByPtyId: Record<string, CodexRestartNotice | undefined>
-}
-
+export type CodexRestartStatusSummaryInput = CodexRestartPopulationState
 export type CodexRestartStatusSummary = {
   stalePtyIds: string[]
   staleSessionCount: number
-  staleTabCount: number
-  staleWorktreeCount: number
+  failures: CodexAccountRestart[]
+  attentionCount: number
 }
-
-const EMPTY_CODEX_RESTART_STATUS_SUMMARY: CodexRestartStatusSummary = {
+const EMPTY: CodexRestartStatusSummary = {
   stalePtyIds: [],
   staleSessionCount: 0,
-  staleTabCount: 0,
-  staleWorktreeCount: 0
+  failures: [],
+  attentionCount: 0
 }
 
-export function summarizeCodexRestartStatus({
-  tabsByWorktree,
-  ptyIdsByTabId,
-  codexRestartNoticeByPtyId
-}: CodexRestartStatusSummaryInput): CodexRestartStatusSummary {
-  // Exclude scheduled restarts and dismissed notices; dismissed records retain launch-account memory only.
-  const stalePtyIds = Object.entries(codexRestartNoticeByPtyId)
-    .filter(([, notice]) => awaitsCodexRestartAnswer(notice))
-    .map(([ptyId]) => ptyId)
-  if (stalePtyIds.length === 0) {
-    return EMPTY_CODEX_RESTART_STATUS_SUMMARY
+export function summarizeCodexRestartStatus(
+  state: CodexRestartStatusSummaryInput
+): CodexRestartStatusSummary {
+  const requests = Object.values(state.paneAccountRestarts ?? {}).filter(isCodexAccountRestart)
+  if (requests.length === 0 && Object.keys(state.codexRestartNoticeByPtyId).length === 0) {
+    return EMPTY
   }
-
-  const stalePtyIdSet = new Set(stalePtyIds)
-  const staleTabIds = new Set<string>()
-  for (const [tabId, ptyIds] of Object.entries(ptyIdsByTabId)) {
-    if (ptyIds.some((ptyId) => stalePtyIdSet.has(ptyId))) {
-      staleTabIds.add(tabId)
-    }
-  }
-
-  const staleWorktreeIds = new Set<string>()
-  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    if (tabs.some((tab) => staleTabIds.has(tab.id))) {
-      staleWorktreeIds.add(worktreeId)
-    }
-  }
-
+  const panes = currentCodexRestartPanes(state)
+  const tabs = requests.length > 0 ? codexRestartTabIndex(state) : undefined
+  const currentRequests = requests.filter((r) => isCurrentCodexAccountRestart(state, r, tabs))
+  const failures = currentRequests.filter((r) => ['failed', 'unresolved'].includes(r.phase))
+  const stalePtyIds = eligibleCodexRestartPtyIds(state, panes, currentRequests)
   return {
     stalePtyIds,
     staleSessionCount: stalePtyIds.length,
-    staleTabCount: staleTabIds.size,
-    staleWorktreeCount: staleWorktreeIds.size
+    failures,
+    attentionCount: stalePtyIds.length + failures.length
   }
+}
+let previous: CodexRestartStatusSummaryInput | undefined
+let summary = EMPTY
+export function selectCodexRestartStatus(
+  state: CodexRestartStatusSummaryInput
+): CodexRestartStatusSummary {
+  if (
+    !previous ||
+    previous.codexRestartNoticeByPtyId !== state.codexRestartNoticeByPtyId ||
+    previous.paneAccountRestarts !== state.paneAccountRestarts ||
+    previous.ptyIdsByTabId !== state.ptyIdsByTabId ||
+    previous.tabsByWorktree !== state.tabsByWorktree ||
+    previous.terminalLayoutsByTabId !== state.terminalLayoutsByTabId ||
+    previous.repos !== state.repos ||
+    selectWorktreesByRepo(previous) !== selectWorktreesByRepo(state) ||
+    selectDetectedWorktreesByRepo(previous) !== selectDetectedWorktreesByRepo(state) ||
+    selectFolderWorkspaces(previous) !== selectFolderWorkspaces(state) ||
+    previous.projectGroups !== state.projectGroups ||
+    previous.restoredRuntimeHostIdByWorkspaceSessionKey !==
+      state.restoredRuntimeHostIdByWorkspaceSessionKey ||
+    previous.activeWorktreeId !== state.activeWorktreeId ||
+    previous.activeWorkspaceExecutionHostId !== state.activeWorkspaceExecutionHostId ||
+    previous.runtimeEnvironments !== state.runtimeEnvironments ||
+    previous.runtimeEnvironmentCatalogHydrated !== state.runtimeEnvironmentCatalogHydrated ||
+    previous.removedRuntimeEnvironmentIds !== state.removedRuntimeEnvironmentIds
+  ) {
+    previous = {
+      repos: state.repos,
+      worktreesByRepo: selectWorktreesByRepo(state),
+      detectedWorktreesByRepo: selectDetectedWorktreesByRepo(state),
+      folderWorkspaces: selectFolderWorkspaces(state),
+      projectGroups: state.projectGroups,
+      restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
+      activeWorktreeId: state.activeWorktreeId,
+      activeWorkspaceExecutionHostId: state.activeWorkspaceExecutionHostId,
+      runtimeEnvironments: state.runtimeEnvironments,
+      runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated,
+      removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds,
+      tabsByWorktree: state.tabsByWorktree,
+      terminalLayoutsByTabId: state.terminalLayoutsByTabId,
+      ptyIdsByTabId: state.ptyIdsByTabId,
+      paneAccountRestarts: state.paneAccountRestarts,
+      codexRestartNoticeByPtyId: state.codexRestartNoticeByPtyId
+    }
+    summary = summarizeCodexRestartStatus(state)
+  }
+  return summary
+}
+export function selectCodexStaleSessionCount(state: CodexRestartStatusSummaryInput): number {
+  return selectCodexRestartStatus(state).attentionCount
 }

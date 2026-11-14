@@ -1,25 +1,14 @@
+import { AccountRestartConditionSchema } from '../../terminal/pty/lifecycle/account-restart-contract'
 import * as z from 'zod'
 import { TERMINAL_KITTY_FILE_MAX_BYTES } from '../../terminal/images/terminal-kitty-file'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../rpc-param-primitives'
 import { isTuiAgent } from '../../agent-launch/catalog/tui-agent-config'
 import { SpawnIntentParam } from './agent-session-params'
-import {
-  canonicalizeWindowsShellOverride,
-  isSupportedWindowsShellOverride,
-  listSupportedWindowsShellOverrides
-} from '../../windows-terminal-shell'
+import { WindowsShellOverrideParam } from './windows-terminal-shell-param'
+export { WindowsShellOverrideParam } from './windows-terminal-shell-param'
 import { TERMINAL_PANE_SPLIT_SOURCES } from '../../feature-education-telemetry'
 import { OptionalExecutionHostId } from '../workspaces/worktree-params'
 import { AGENT_STATUS_INTERACTIVE_PROMPT_MAX_LENGTH } from '../../agent-status/contracts/agent-status-types'
-
-// Refuse at the authoritative host boundary instead of returning an opaque relay spawn failure.
-export const WindowsShellOverrideParam = z
-  .string()
-  .refine(isSupportedWindowsShellOverride, {
-    message: `shell must be one of: ${listSupportedWindowsShellOverrides().join(', ')}`
-  })
-  // Canonicalize host-side to the .exe spellings exact-matched by spawn, even if the client did not.
-  .transform((shell) => canonicalizeWindowsShellOverride(shell) ?? shell)
 
 const TerminalSurfaceCloseIdentity = z.object({
   worktreeId: requiredString('Missing worktree id'),
@@ -114,7 +103,8 @@ export const TerminalResolveActive = z.object({
 
 export const TerminalResolvePane = z.object({
   paneKey: requiredString('Missing pane key'),
-  worktreeId: OptionalString
+  worktreeId: OptionalString,
+  accountRestart: z.literal(true).optional()
 })
 
 export const TerminalAgentId = z.object({
@@ -251,6 +241,7 @@ export const ResumeProviderSessionParam = z.object({
 })
 
 export const TerminalCreateParams = z.object({
+  accountRestart: AccountRestartConditionSchema.optional(),
   worktree: OptionalString,
   clientMutationId: z.string().min(1).max(128).optional(),
   reconcileExisting: z.boolean().optional(),

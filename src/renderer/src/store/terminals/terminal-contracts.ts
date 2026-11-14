@@ -1,5 +1,10 @@
+import type { AccountRestartCondition } from '../../../../shared/terminal/pty/lifecycle/account-restart-contract'
+import type {
+  SleepingAgentLaunchConfig,
+  AgentProviderSessionMetadata
+} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { AgentAccountRestartResumeInput } from '@/lib/agent-session/accounts/agent-account-restart-startup'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
 import type { HostSessionSlices } from '@/lib/workspace/persistence/workspace-session-host-split'
@@ -25,6 +30,7 @@ export type AutomaticAgentResumeClaim = {
 export type AccountRestartAgent = 'codex' | 'claude'
 
 export type CodexRestartNotice = {
+  incarnationId?: string
   previousAccountLabel: string
   nextAccountLabel: string
   /** Labels are display-only; account ids disambiguate equal labels and A→B→A collapse. */
@@ -45,3 +51,41 @@ export type HydrateWorkspaceSessionOptions = {
   /** Runtime partitions the cold read loaded; omitted leaves the store's copy. */
   hydratedRuntimeSessionHostIds?: ExecutionHostId[]
 } & WorkspaceSessionHydrationOptions
+
+export type CodexAccountRestart = {
+  agent: 'codex'
+  requestId: string
+  attemptId: string
+  executorId?: string
+  worktreeId: string
+  tabId: string
+  tabCreatedAt: number
+  leafId: string | null
+  oldPtyId: string
+  connectionId?: string | null
+  oldIncarnationId?: string
+  environmentId: string | null
+  pairingRevision?: number
+  runtimeId?: string
+  cwd?: string
+  shellOverride?: string
+  projectRuntime?: ProjectExecutionRuntimeResolution
+  hostId: string
+  hostEpoch?: string
+  phase: 'accepted' | 'claimed' | 'dispatched' | 'deferred' | 'failed' | 'unresolved'
+  startupInput: AgentAccountRestartResumeInput
+  startup: {
+    command: string
+    startupCommandDelivery: 'shell-ready'
+    launchAgent: 'codex' | 'claude'
+    env?: Record<string, string>
+    launchConfig?: SleepingAgentLaunchConfig
+    resumeProviderSession?: AgentProviderSessionMetadata
+  } | null
+  resultPtyId?: string
+  resultIncarnationId?: string
+  condition?: AccountRestartCondition
+  error?: string
+}
+
+export type PaneAccountRestart = AccountRestartAgent | CodexAccountRestart

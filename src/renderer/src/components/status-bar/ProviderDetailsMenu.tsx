@@ -29,6 +29,7 @@ export function ProviderDetailsMenu({
   triggerContent,
   trigger,
   accountLabel,
+  bannerContent,
   panelFooter,
   variant = 'default'
 }: {
@@ -45,6 +46,8 @@ export function ProviderDetailsMenu({
   triggerContent?: React.ReactNode
   trigger?: React.ReactElement
   accountLabel?: string
+  /** Account variant only: rendered under the provider header, above the usage card. */
+  bannerContent?: React.ReactNode
   panelFooter?: React.ReactNode
   variant?: 'default' | 'account'
 }): React.JSX.Element {
@@ -71,6 +74,7 @@ export function ProviderDetailsMenu({
             <ProviderIdentityCard
               p={provider}
               accountLabel={accountLabel}
+              banner={bannerContent}
               footer={panelFooter}
               usagePercentageDisplay={usagePercentageDisplay}
             />

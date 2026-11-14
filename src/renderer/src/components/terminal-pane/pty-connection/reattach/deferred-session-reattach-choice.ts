@@ -1,3 +1,4 @@
+import { isCodexAccountRestart } from '@/store/terminals/codex-account-restart-continuation'
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useAppStore } from '@/store/index'
@@ -13,6 +14,18 @@ import { startDeferredSessionReattachUnlessHiddenAgentResume } from '../spawn/hi
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 export function runDeferredSessionReattachChoice(session: ConnectPanePtySession): void {
+  const account = useAppStore.getState().paneAccountRestarts[session.cacheKey]
+  if (isCodexAccountRestart(account)) {
+    if (session.deps.accountRestartToken) {
+      session.startFreshSpawn()
+      return
+    }
+    {
+      // A remount cannot turn the saved continuation into a generic recovery shell.
+      session.settlePaneAttachAttempt?.('failed')
+      return
+    }
+  }
   // An explicit replacement owns its startup; saved recovery state must not substitute another agent.
   if (session.pendingReplacedPtyId) {
     session.startFreshSpawn()

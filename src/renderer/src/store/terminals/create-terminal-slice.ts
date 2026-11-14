@@ -1,3 +1,5 @@
+import { releaseRetiredAccountRestartSlots } from '@/components/terminal-pane/account-restart/detached/detached-pane-restart-slots'
+import { withCodexAccountRestartPruning } from './codex-account-restart-continuation'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { TerminalSlice, TerminalStoreGet } from './terminal-state'
@@ -30,80 +32,93 @@ export const createTerminalSlice: (
     ...Parameters<StateCreator<AppState, [], [], TerminalSlice>>,
     isClaudeAgent?: Parameters<typeof createTerminalEphemeralActions>[2]
   ]
-) => TerminalSlice = (set, get, api, isClaudeAgent = undefined) => ({
-  tabsByWorktree: {},
-  activeTabId: null,
-  activeTabIdByWorktree: {},
-  ptyIdsByTabId: {},
-  runtimePaneTitlesByTabId: {},
-  suppressedPtyExitIds: {},
-  pendingPtyShutdownIds: {},
-  pendingPaneAccountRestarts: {},
-  codexRestartNoticeByPtyId: {},
-  expandedPaneByTabId: {},
-  canExpandPaneByTabId: {},
-  terminalLayoutsByTabId: {},
-  terminalPaneStartsByPaneKey: {},
-  terminalPaneResumeOutcomesByPaneKey: {},
-  localOnlyScrollbackByTabId: {},
-  pendingStartupByTabId: {},
-  pendingInitialCwdByTabId: {},
-  pendingIssueCommandSplitByTabId: {},
-  automaticAgentResumeClaimsByTabId: {},
-  nativeChatLaunchPromptByTabId: {},
-  nativeChatLaunchDraftByTabId: {},
-  tabBarOrderByWorktree: {},
-  workspaceSessionReady: false,
-  terminalStartupRestorationReady: false,
-  setTerminalStartupRestorationReady: (value) => {
-    set({ terminalStartupRestorationReady: value })
-  },
-  restoredRuntimeHostIdByWorkspaceSessionKey: {},
-  contestedHostWorkspaceSessions: {},
-  contestedPrimaryHostBySessionKey: {},
-  hydratedRuntimeSessionHostIds: [],
-  defaultTerminalTabsAppliedByWorktreeId: {},
-  closedTerminalTabTombstonesByTabId: {},
-  hydrationSucceeded: false,
-  pendingReconnectWorktreeIds: [],
-  pendingReconnectTabByWorktree: {},
-  pendingReconnectPtyIdByTabId: {},
-  lastKnownRelayPtyIdByTabId: {},
-  unverifiedPtyLossTabIds: {},
-  disownedPtyIds: {},
-  pendingSnapshotByPtyId: {},
-  pendingColdRestoreByPtyId: {},
-  deferredSshReconnectTargets: [],
-  deferredSshSessionIdsByTabId: {},
-  cacheTimerByKey: {},
-  lastTerminalInputAtByPaneKey: {},
-  recentQuickCommandIdByGroup: {},
-  ...createTerminalEphemeralActions(set, get, isClaudeAgent),
-  ...createTerminalTabCreationActions(set, get, api.subscribe),
-  ...createTerminalTabAgentLaunchPaneActions(set),
-  ...createActiveWorkspaceTerminalActions(set, get),
-  ...createTerminalTabCloseActions(set, get),
-  ...createTerminalTabNavigationActions(set, get),
-  ...withLayoutOwnerTerminalTabChanges(
-    {
-      ...createTerminalTabPresentationActions(set, get),
-      ...createTerminalTabAppearanceActions(set, get)
+) => TerminalSlice = (setState, get, api, isClaudeAgent = undefined) => {
+  const set: typeof setState = (update) => {
+    const before = get().paneAccountRestarts
+    try {
+      setState((state) => {
+        const patch = typeof update === 'function' ? update(state) : update
+        return patch === state ? state : withCodexAccountRestartPruning(state, patch)
+      })
+    } finally {
+      releaseRetiredAccountRestartSlots(before, get().paneAccountRestarts)
+    }
+  }
+  return {
+    tabsByWorktree: {},
+    activeTabId: null,
+    activeTabIdByWorktree: {},
+    ptyIdsByTabId: {},
+    runtimePaneTitlesByTabId: {},
+    suppressedPtyExitIds: {},
+    pendingPtyShutdownIds: {},
+    paneAccountRestarts: {},
+    codexRestartNoticeByPtyId: {},
+    expandedPaneByTabId: {},
+    canExpandPaneByTabId: {},
+    terminalLayoutsByTabId: {},
+    terminalPaneStartsByPaneKey: {},
+    terminalPaneResumeOutcomesByPaneKey: {},
+    localOnlyScrollbackByTabId: {},
+    pendingStartupByTabId: {},
+    pendingInitialCwdByTabId: {},
+    pendingIssueCommandSplitByTabId: {},
+    automaticAgentResumeClaimsByTabId: {},
+    nativeChatLaunchPromptByTabId: {},
+    nativeChatLaunchDraftByTabId: {},
+    tabBarOrderByWorktree: {},
+    workspaceSessionReady: false,
+    terminalStartupRestorationReady: false,
+    setTerminalStartupRestorationReady: (value) => {
+      set({ terminalStartupRestorationReady: value })
     },
-    get
-  ),
-  ...createTerminalPtyBindingActions(set, get),
-  ...createTerminalPtyReleaseActions(set, get),
-  ...createTerminalUnverifiedPtyLossActions(set),
-  ...createTerminalDisownedPtySourceActions(set),
-  ...createTerminalPaneHibernationActions(set, get),
-  ...createTerminalShutdownActions(set, get),
-  ...createTerminalRestartActions(set, get),
-  ...createTerminalLayoutActions(set, get),
-  ...createTerminalStartupQueueActions(set, get),
-  ...createWorkspaceTerminalHydrationActions(set, get),
-  ...createWorkspaceTerminalReconnectActions(set, get),
-  ...createPairedTerminalTabCloseIntentSlice(set)
-})
+    restoredRuntimeHostIdByWorkspaceSessionKey: {},
+    contestedHostWorkspaceSessions: {},
+    contestedPrimaryHostBySessionKey: {},
+    hydratedRuntimeSessionHostIds: [],
+    defaultTerminalTabsAppliedByWorktreeId: {},
+    closedTerminalTabTombstonesByTabId: {},
+    hydrationSucceeded: false,
+    pendingReconnectWorktreeIds: [],
+    pendingReconnectTabByWorktree: {},
+    pendingReconnectPtyIdByTabId: {},
+    lastKnownRelayPtyIdByTabId: {},
+    unverifiedPtyLossTabIds: {},
+    disownedPtyIds: {},
+    pendingSnapshotByPtyId: {},
+    pendingColdRestoreByPtyId: {},
+    deferredSshReconnectTargets: [],
+    deferredSshSessionIdsByTabId: {},
+    cacheTimerByKey: {},
+    lastTerminalInputAtByPaneKey: {},
+    recentQuickCommandIdByGroup: {},
+    ...createTerminalEphemeralActions(set, get, isClaudeAgent),
+    ...createTerminalTabCreationActions(set, get, api.subscribe),
+    ...createTerminalTabAgentLaunchPaneActions(set),
+    ...createActiveWorkspaceTerminalActions(set, get),
+    ...createTerminalTabCloseActions(set, get),
+    ...createTerminalTabNavigationActions(set, get),
+    ...withLayoutOwnerTerminalTabChanges(
+      {
+        ...createTerminalTabPresentationActions(set, get),
+        ...createTerminalTabAppearanceActions(set, get)
+      },
+      get
+    ),
+    ...createTerminalPtyBindingActions(set, get),
+    ...createTerminalPtyReleaseActions(set, get),
+    ...createTerminalUnverifiedPtyLossActions(set),
+    ...createTerminalDisownedPtySourceActions(set),
+    ...createTerminalPaneHibernationActions(set, get),
+    ...createTerminalShutdownActions(set, get),
+    ...createTerminalRestartActions(set, get),
+    ...createTerminalLayoutActions(set, get),
+    ...createTerminalStartupQueueActions(set, get),
+    ...createWorkspaceTerminalHydrationActions(set, get),
+    ...createWorkspaceTerminalReconnectActions(set, get),
+    ...createPairedTerminalTabCloseIntentSlice(set)
+  }
+}
 
 /** Switch point: a terminal tab's own changes go to main first, from every caller. */
 function withLayoutOwnerTerminalTabChanges<

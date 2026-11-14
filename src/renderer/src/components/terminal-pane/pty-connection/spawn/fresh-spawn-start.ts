@@ -1,5 +1,10 @@
+import { releaseDeferredCwdFence } from './deferred-cwd-spawn-fence'
+export { releaseDeferredCwdFence } from './deferred-cwd-spawn-fence'
+import { settleFreshPaneSpawn, accountRestartConnectOptions } from './fresh-pane-spawn-settlement'
+import { continueCodexAccountRestart } from '../../account-restart/codex-account-restart-execution'
+import { currentCodexAccountRestart } from '@/store/terminals/codex-account-restart-continuation'
 import { applyTerminalLaunchResult } from '../startup/terminal-launch-result-policy'
-import { armPaneOwnerRetry, isPaneOwnerRefusal } from '../host-ownership/pane-owner-recovery'
+import { isPaneOwnerRefusal } from '../host-ownership/pane-owner-recovery'
 import type { SpawnDeferralReason } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { useAppStore } from '@/store/index'
@@ -7,7 +12,6 @@ import { hasWorktreeTeardownStarted } from '@/store/slices/worktrees/teardown/wo
 import { hasPtySerializer } from '../../snapshots/pty-buffer-serializer'
 import { writeTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
 
-import { settleSpawnThatLeftPaneUnbound } from './unbound-pane-spawn-recovery'
 import { STARTUP_CWD_FALLBACK_NOTICE } from '../../../../../../shared/startup-cwd-fallback'
 import { pendingSpawnByPaneKey, pendingSpawnGenerationByPaneKey } from './pending-pane-spawn'
 import { shouldWritePtyOutputForeground } from '../output/foreground-output-visibility'
@@ -20,17 +24,6 @@ import type {
 
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { findTerminalTabForPane } from '../terminal-tab-id'
-
-export function releaseDeferredCwdFence(session: ConnectPanePtySession): void {
-  if (!session.transport.getPtyId()) {
-    session.transport.abandonPreconnectInput?.()
-    try {
-      session.deps.onDeferredCwdSpawnFailed?.()
-    } catch {
-      // Cleanup must not turn a settled spawn into an unhandled rejection.
-    }
-  }
-}
 
 export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
   session.startFreshSpawn = (
@@ -81,9 +74,13 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     session.transportConnectInFlightSince = Date.now()
     session.pendingSpawnDeferral = null
     const visibleAtSpawn = session.deps.isVisibleRef.current === true
+    const accountToken = session.deps.accountRestartToken
+    let accountError: string | null = null
+    let accountDeferred = false
     let ownerRefused = false
     const outputCallbacks = session.captureTransportOutputCallbacks(
       (message: string) => {
+        accountError = message
         ownerRefused ||= isPaneOwnerRefusal(message)
         session.reportError(message)
       },
@@ -92,6 +89,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     )
     const spawnedRaw = session.transport.connect({
       url: '',
+      ...accountRestartConnectOptions(session, outputCallbacks.generation),
       cols: session.cols,
       rows: session.rows,
       ...(startupOverride?.command ? { command: startupOverride.command } : {}),
@@ -110,9 +108,10 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       ...(session.shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
       // Why: a restart swaps one live session for one, and main stops the old PTY before admission.
       resumeSpawnIntent:
-        visibleAtSpawn || session.userRestart ? 'user-resume' : 'automatic-restore',
+        visibleAtSpawn || session.userRestart || accountToken ? 'user-resume' : 'automatic-restore',
       ...(session.userRestart ? { claimReplacedPtyId: session.claimPendingReplacedPtyId } : {}),
-      shouldContinue: () =>
+      shouldContinue: (result) =>
+        (!accountToken || continueCodexAccountRestart(accountToken, result)) &&
         !session.disposed &&
         (findTerminalTabForPane(useAppStore.getState(), session.deps.worktreeId, session.deps.tabId)
           ?.generation ?? 0) === session.tabGeneration,
@@ -142,6 +141,16 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           : session.pendingSpawnDeferral
         session.pendingSpawnDeferral = null
         if (deferral) {
+          accountDeferred = true
+          if (accountToken) {
+            const current = currentCodexAccountRestart(useAppStore.getState(), accountToken)
+            if (current?.phase === 'unresolved') {
+              clearPreSignaledSerializer()
+              session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
+              return null
+            }
+            useAppStore.getState().updateCodexAccountRestart(accountToken, { phase: 'deferred' })
+          }
           // Why before the launch-config cleanup below: a deferred launch is postponed, not dead.
           clearPreSignaledSerializer()
           session.finishReattachLiveDataDeferral(false, outputCallbacks.generation)
@@ -266,6 +275,7 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       })
       .catch(async (error: unknown) => {
         const message = error instanceof Error ? error.message : String(error)
+        accountError = message
         if (!ownerRefused && isPaneOwnerRefusal(message)) {
           outputCallbacks.callbacks.onError(message)
         }
@@ -286,35 +296,17 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
           pendingSpawnGenerationByPaneKey.delete(session.pendingSpawnKey)
         }
       })
-    void trackedPromise.then((spawnedPtyId) => {
-      if (spawnedPtyId) {
-        // Fresh-spawn recovery has no reattach settle point; report binding here so healed attempts cannot remain pending and block later recovery.
-        session.settlePaneAttachAttempt?.('success')
-        return
-      }
-      queueMicrotask(() => {
-        if (
-          session.disposed ||
-          outputCallbacks.generation !== session.transportStreamGeneration ||
-          session.transport.getPtyId() ||
-          pendingSpawnByPaneKey.has(session.pendingSpawnKey)
-        ) {
-          return
-        }
-        if (ownerRefused) {
-          armPaneOwnerRetry(session, outputCallbacks.generation, () =>
-            session.startFreshSpawn(startupOverride, options)
-          )
-          session.settlePaneAttachAttempt?.('failed')
-          return
-        }
-        if (session.deferredSpawn) {
-          // Why no remount: the host would defer the remount's restore again, in a loop.
-          return
-        }
-        settleSpawnThatLeftPaneUnbound(session)
+    void trackedPromise.then((spawnedPtyId) =>
+      settleFreshPaneSpawn(session, {
+        spawnedPtyId,
+        accountError,
+        accountDeferred,
+        ownerRefused,
+        generation: outputCallbacks.generation,
+        startupOverride,
+        options
       })
-    })
+    )
     // Key concurrent spawns by tab and pane so a remount cannot adopt its sibling’s PTY.
     pendingSpawnByPaneKey.set(session.pendingSpawnKey, trackedPromise)
     pendingSpawnGenerationByPaneKey.set(session.pendingSpawnKey, session.tabGeneration)

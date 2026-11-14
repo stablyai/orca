@@ -1,3 +1,4 @@
+import { isCodexAccountRestart } from '../codex-account-restart-continuation'
 import { replaceTabBuckets, replaceRecordEntries } from '@/store/keyed-record-transitions'
 import { getFirstTerminalTabOwnerWorktreeId } from '../ownership/terminal-tab-owner-index'
 import {
@@ -143,7 +144,7 @@ export function createTerminalPtyBindingActions(
           replacementPtyId ? [ptyId, replacementPtyId] : [ptyId]
         )
         const hasReplacementPendingRestart = replacementPtyId
-          ? replacementPtyId in s.pendingPaneAccountRestarts
+          ? replacementPtyId in s.paneAccountRestarts
           : false
         const hasReplacementRestartNotice = replacementPtyId
           ? replacementPtyId in s.codexRestartNoticeByPtyId
@@ -152,8 +153,8 @@ export function createTerminalPtyBindingActions(
           ? replacementPtyId in s.migrationUnsupportedByPtyId
           : false
         const nextPendingPaneAccountRestarts = hasReplacementPendingRestart
-          ? { ...s.pendingPaneAccountRestarts }
-          : s.pendingPaneAccountRestarts
+          ? { ...s.paneAccountRestarts }
+          : s.paneAccountRestarts
         const nextCodexRestartNoticeByPtyId = hasReplacementRestartNotice
           ? { ...s.codexRestartNoticeByPtyId }
           : s.codexRestartNoticeByPtyId
@@ -167,7 +168,16 @@ export function createTerminalPtyBindingActions(
           }
           if (hasReplacementRestartNotice) {
             const replacedNotice = nextCodexRestartNoticeByPtyId[replacementPtyId]
-            nextCodexRestartNoticeByPtyId[ptyId] ??= replacedNotice
+            const retiresAccountRequest = Object.values(s.paneAccountRestarts).some(
+              (request) =>
+                isCodexAccountRestart(request) &&
+                request.tabId === tabId &&
+                request.oldPtyId === replacementPtyId &&
+                request.resultPtyId !== ptyId
+            )
+            nextCodexRestartNoticeByPtyId[ptyId] ??= retiresAccountRequest
+              ? { ...replacedNotice, restartRequested: undefined, incarnationId: undefined }
+              : replacedNotice
             delete nextCodexRestartNoticeByPtyId[replacementPtyId]
           }
           if (hasReplacementMigrationUnsupported) {
@@ -204,7 +214,7 @@ export function createTerminalPtyBindingActions(
             ? { disownedPtyIds: nextDisownedPtyIds }
             : {}),
           suppressedPtyExitIds: nextSuppressedPtyExitIds,
-          pendingPaneAccountRestarts: nextPendingPaneAccountRestarts,
+          paneAccountRestarts: nextPendingPaneAccountRestarts,
           codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
           migrationUnsupportedByPtyId: nextMigrationUnsupportedByPtyId,
           ...(nextTerminalLayoutsByTabId !== s.terminalLayoutsByTabId

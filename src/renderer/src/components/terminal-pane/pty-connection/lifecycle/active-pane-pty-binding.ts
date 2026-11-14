@@ -1,3 +1,4 @@
+import { currentCodexAccountRestart } from '@/store/terminals/codex-account-restart-continuation'
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useAppStore } from '@/store'
@@ -30,6 +31,12 @@ export function installActivePanePtyBinding(session: ConnectPanePtySession): voi
       return false
     }
     const state = useAppStore.getState()
+    if (
+      session.deps.accountRestartToken &&
+      !currentCodexAccountRestart(state, session.deps.accountRestartToken)
+    ) {
+      return false
+    }
     const leafId = session.pane.leafId
     const existingPtyId = leafId
       ? state.terminalLayoutsByTabId[session.deps.tabId]?.ptyIdsByLeafId?.[leafId]
@@ -61,6 +68,9 @@ export function installActivePanePtyBinding(session: ConnectPanePtySession): voi
       ) {
         return false
       }
+    }
+    if (session.deps.accountRestartToken) {
+      state.updateCodexAccountRestart(session.deps.accountRestartToken, { resultPtyId: ptyId })
     }
     session.bindProcessExitState(ptyId, options.replacePtyId)
     if (session.activePanePtyBinding && session.activePanePtyBinding !== ptyId) {

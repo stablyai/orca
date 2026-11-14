@@ -1,3 +1,6 @@
+import type { AccountRestartCondition } from '../../../../shared/terminal/pty/lifecycle/account-restart-contract'
+import type { AccountRestartOperation } from '../pane/account-restart-owner'
+import type { ReplacedPaneOwner } from '../pane/replaced-pane-owner'
 import type { TerminalViewAttributes } from '../../../../shared/terminal/protocol/queries/terminal-view-attributes'
 import type { PtySpawnSizeSeed } from '../spawn-options-assembly'
 import type { PtySpawnOutcome } from '../spawn-outcome'
@@ -33,6 +36,8 @@ import type { StartupCwdFallback } from '../../../../shared/startup-cwd-fallback
 import type { TerminalWorkspaceLaunchScope } from '../../../runtime/orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 
 export type RuntimePtySpawnState = {
+  replacedPaneOwner?: ReplacedPaneOwner | null
+  accountRestartOperation?: AccountRestartOperation
   deps: PtyRuntimeControllerDeps
   args: RuntimePtySpawnArgs
   codexHomeLaunchStartedAt: Date | undefined
@@ -109,6 +114,7 @@ export type RuntimePtySpawnState = {
 }
 
 export type RuntimePtySpawnArgs = {
+  accountRestart?: AccountRestartCondition
   resolvedWorkspace?: TerminalWorkspaceLaunchScope
   cols: number
   rows: number

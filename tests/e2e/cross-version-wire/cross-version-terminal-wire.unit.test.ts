@@ -70,7 +70,10 @@ afterEach(() => {
 function expectJourneyActuallyRan(record: JourneyRecord): void {
   // Require an observable journey so an inert harness cannot make every pairing pass.
   expect(record.completed).toEqual([...JOURNEY_STEPS])
-  expect(record.frameSequence).toEqual(EXPECTED_JOURNEY_FRAMES)
+  // ACK batches can flush between journey steps; every frame still must decode below.
+  expect(record.frameSequence.filter((frame) => frame !== 'C>H Ack')).toEqual(
+    EXPECTED_JOURNEY_FRAMES
+  )
   expect(record.subscribedEvents).toHaveLength(2)
   expect(record.snapshotStarts).toHaveLength(3)
   expect(record.missingRuntimeMethods).toEqual([])

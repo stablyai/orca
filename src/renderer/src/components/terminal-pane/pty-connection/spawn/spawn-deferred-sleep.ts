@@ -1,3 +1,4 @@
+import { currentCodexAccountRestart } from '@/store/terminals/codex-account-restart-continuation'
 import { isColdRestoreStartup, paneResumeRecord } from '../startup/pane-resume-record'
 import { releaseDeferredCwdFence } from './fresh-spawn-start'
 import { isMainResumedSleepPaneCurrent, mainResumedSleepPane } from './main-resumed-sleep-pane'
@@ -131,7 +132,13 @@ export function installSpawnDeferredSleep(session: ConnectPanePtySession): void 
     releaseDeferredCwdFence(session)
     session.keepUnrunResumeHandle(startupOverride)
     session.deferredSpawn = { reason, startupOverride, options }
-    const deferral = { reason, resume: () => void session.resumeDeferredSpawn() }
+    const deferral = {
+      reason,
+      resume: () => void session.resumeDeferredSpawn(),
+      ...(session.deps.accountRestartToken
+        ? { accountRestart: session.deps.accountRestartToken }
+        : {})
+    }
     setPaneSpawnDeferral(session.cacheKey, deferral)
     if (reason === 'paused') {
       // Why no background retry: a crash pause is cleared by the user, not by waiting.
@@ -224,6 +231,11 @@ export function installSpawnDeferredSleep(session: ConnectPanePtySession): void 
   }
 
   session.disposeSpawnDeferral = (): void => {
+    const token = session.deps.accountRestartToken
+    const state = useAppStore.getState()
+    if (token && currentCodexAccountRestart(state, token)?.phase === 'deferred') {
+      state.updateCodexAccountRestart(token, { phase: 'accepted' })
+    }
     session.deferredSpawn = null
     cancelDeferredRestoreRetry(session.cacheKey)
     clearPaneSpawnDeferral(session.cacheKey)

@@ -1,3 +1,4 @@
+import { releaseRetiredAccountRestartSlots } from '@/components/terminal-pane/account-restart/detached/detached-pane-restart-slots'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type {
@@ -64,7 +65,7 @@ export function getLocalSshTargetConnectionGeneration(targetId: string): number 
   return localTargetConnectionGenerations.get(targetId)
 }
 
-export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) => ({
+export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set, get) => ({
   sshConnectionStates: new Map(),
   sshTargetLabels: new Map(),
   sshTargetGenerations: new Map(),
@@ -121,8 +122,14 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
         sshTargetsHydrated: true
       }
     }),
-  clearRemovedSshTargetState: (targetId) =>
-    set((s) => buildRemovedSshTargetCleanupPatch(s, targetId) ?? s),
+  clearRemovedSshTargetState: (targetId) => {
+    const before = get().paneAccountRestarts
+    try {
+      set((s) => buildRemovedSshTargetCleanupPatch(s, targetId) ?? s)
+    } finally {
+      releaseRetiredAccountRestartSlots(before, get().paneAccountRestarts)
+    }
+  },
   enqueueSshCredentialRequest: (req) =>
     set((s) => ({ sshCredentialQueue: [...s.sshCredentialQueue, req] })),
   removeSshCredentialRequest: (requestId) =>

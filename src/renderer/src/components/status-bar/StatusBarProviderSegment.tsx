@@ -132,19 +132,25 @@ export function getUsageTone(p: ProviderRateLimits): UsageTone {
 export function UsageOverflowChip({
   hidden,
   providerCount,
-  display
+  display,
+  restartPending = false
 }: {
   hidden: readonly ProviderRateLimits[]
   providerCount: number
   display: UsagePercentageDisplay
+  /** A hidden chip has a pending account restart: fill amber like its badge would be. */
+  restartPending?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const tones = hidden.map(getUsageTone)
-  const tone = tones.includes('urgent')
-    ? 'urgent'
-    : tones.includes('warning')
-      ? 'warning'
-      : 'normal'
+  // Why: one tone value, so the restart recipe never shares a specificity tie with a usage-tone color.
+  const tone = restartPending
+    ? 'restart'
+    : tones.includes('urgent')
+      ? 'urgent'
+      : tones.includes('warning')
+        ? 'warning'
+        : 'normal'
   const names = hidden
     .map((p) => {
       const tightest = getTightestUsageSection(p, t)
@@ -163,7 +169,7 @@ export function UsageOverflowChip({
       title={t('auto.components.status.bar.StatusBar.hiddenUsageProviders', 'Also: {{value0}}', {
         value0: names
       })}
-      className="inline-grid h-4 items-center justify-items-center rounded-full border border-border px-1.5 text-[11px] font-medium tabular-nums text-foreground data-[tone=urgent]:border-destructive/40 data-[tone=urgent]:text-destructive data-[tone=warning]:border-status-warning-border data-[tone=warning]:text-status-warning data-[usage-collapsed=true]:invisible data-[usage-collapsed=true]:absolute"
+      className="inline-grid h-4 items-center justify-items-center rounded-full border border-border px-1.5 text-[11px] font-medium tabular-nums text-foreground data-[tone=urgent]:border-destructive/40 data-[tone=urgent]:text-destructive data-[tone=warning]:border-status-warning-border data-[tone=warning]:text-status-warning data-[usage-collapsed=true]:invisible data-[usage-collapsed=true]:absolute data-[tone=restart]:border-transparent data-[tone=restart]:bg-status-warning data-[tone=restart]:text-status-warning-foreground"
     >
       {/* Why: count changes must not invalidate density measurements and restart probing. */}
       <span aria-hidden="true" className="invisible col-start-1 row-start-1">

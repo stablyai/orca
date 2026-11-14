@@ -1,3 +1,5 @@
+import { releaseRetiredAccountRestartSlots } from '@/components/terminal-pane/account-restart/detached/detached-pane-restart-slots'
+import { withCodexAccountRestartPruning } from '@/store/terminals/codex-account-restart-continuation'
 import { retireRemovedNativeChatTabs } from '@/components/native-chat/session/native-chat-removed-tab-retirement'
 // Select moved tabs with the frame showing the move (L120); a later reply may already be superseded by another drag.
 
@@ -100,6 +102,13 @@ export function showFramePatch(
       (shown.patch.unifiedTabsByWorktree ?? before.unifiedTabsByWorktree)[key] ?? []
     )
   }
-  store.setState(shown.patch)
+  try {
+    store.setState(withCodexAccountRestartPruning(before, shown.patch))
+  } finally {
+    releaseRetiredAccountRestartSlots(
+      before.paneAccountRestarts,
+      store.getState().paneAccountRestarts
+    )
+  }
   return shown.taken
 }

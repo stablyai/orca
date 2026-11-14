@@ -148,6 +148,7 @@
   --color-status-success-border: var(--status-success-border);
   --color-status-warning: var(--status-warning);
   --color-status-warning-text: var(--status-warning-text);
+  --color-status-warning-foreground: var(--status-warning-foreground);
   --color-jira-priority-high: var(--jira-priority-high);
   --color-jira-priority-medium: var(--jira-priority-medium);
   --color-jira-priority-low: var(--jira-priority-low);
@@ -463,6 +464,8 @@
   --status-warning: #ca8a04;
   /* Why: raw amber is under 3:1 on white; small warning text needs the darker mix. */
   --status-warning-text: color-mix(in srgb, var(--status-warning) 70%, var(--foreground));
+  /* Ink on solid amber in both themes (6:1 on light amber, 9.6:1 on dark). */
+  --status-warning-foreground: #1c1300;
   --jira-priority-high: var(--destructive);
   --jira-priority-medium: var(--status-warning);
   --jira-priority-low: var(--callout-note);
@@ -499,6 +502,7 @@
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
   --status-warning: #eab308;
   --status-warning-text: var(--status-warning);
+  --status-warning-foreground: #1c1300;
   --jira-priority-high: var(--destructive);
   --jira-priority-medium: var(--status-warning);
   --jira-priority-low: var(--callout-note);

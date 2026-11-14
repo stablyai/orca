@@ -149,7 +149,7 @@ export function findQueuedClaudeRestartsOnAccount(args: {
   for (const pane of localClaudePanes(state, args.owner, args.target)) {
     if (
       pane.inLane &&
-      state.pendingPaneAccountRestarts[pane.ptyId] === 'claude' &&
+      state.paneAccountRestarts[pane.ptyId] === 'claude' &&
       isClaudePaneOnAccount(
         resolveClaudePaneFolder(pane.transcriptPath, saved, host),
         args.accountId,
@@ -214,7 +214,7 @@ function scanPane(
   if (isClaudePaneOnAccount(folder, args.toAccountId, args.host)) {
     return null
   }
-  const resumable = resolveAgentAccountRestartResumeStartup('claude', {
+  const resumable = resolveAgentAccountRestartResumeStartup(useAppStore.getState(), 'claude', {
     tabId: pane.tabId,
     leafId: pane.leafId,
     worktreeId: pane.worktreeId,

@@ -56,16 +56,32 @@ export { formatResetCountdown }
 export function formatResetCreditExpiry(
   expiresAt: number | null | undefined,
   count: number,
-  t: Translate = translate
+  t: Translate = translate,
+  /** Lowercase clause that follows "N resets available ·" on one line. */
+  { inline = false }: { inline?: boolean } = {}
 ): string | null {
   if (!expiresAt) {
     return null
   }
   const duration = formatResetDuration(expiresAt - Date.now())
   if (duration === 'now') {
+    if (inline) {
+      return count > 1
+        ? t('auto.components.status.bar.tooltip.inlineNextExpiresNow', 'next expires now')
+        : t('auto.components.status.bar.tooltip.inlineExpiresNow', 'expires now')
+    }
     return count > 1
       ? t('auto.components.status.bar.tooltip.7ec6e030a0', 'Next expires now')
       : t('auto.components.status.bar.tooltip.d1e442a9e5', 'Expires now')
+  }
+  if (inline) {
+    return count > 1
+      ? t('auto.components.status.bar.tooltip.inlineNextExpiresIn', 'next expires in {{value0}}', {
+          value0: duration
+        })
+      : t('auto.components.status.bar.tooltip.inlineExpiresIn', 'expires in {{value0}}', {
+          value0: duration
+        })
   }
   return count > 1
     ? t('auto.components.status.bar.tooltip.6cf9eaed10', 'Next expires in {{value0}}', {

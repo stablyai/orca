@@ -14,11 +14,7 @@ import type { WorkspaceLinkedItem as FolderWorkspaceLinkedTask } from '../../../
 import { slugifyForWorkspaceName } from '../../../../../shared/workspace-name'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 
-export const CLIENT_PLATFORM: NodeJS.Platform = navigator.userAgent.includes('Windows')
-  ? 'win32'
-  : navigator.userAgent.includes('Mac')
-    ? 'darwin'
-    : 'linux'
+export { CLIENT_PLATFORM } from '../../../app-shell/platform/client-platform'
 
 export type LinkedWorkItemSummary = Omit<FolderWorkspaceLinkedTask, 'provider'> & {
   provider?: FolderWorkspaceLinkedTask['provider']

@@ -9,11 +9,14 @@ import { formatTimeAgo, ProviderIcon, ProviderPanel } from './tooltip'
 export function ProviderIdentityCard({
   p,
   accountLabel,
+  banner,
   footer,
   usagePercentageDisplay
 }: {
   p: ProviderRateLimits
   accountLabel?: string
+  /** Full-bleed notice between the header and the usage card. */
+  banner?: React.ReactNode
   footer?: React.ReactNode
   usagePercentageDisplay: UsagePercentageDisplay
 }): React.JSX.Element {
@@ -33,6 +36,7 @@ export function ProviderIdentityCard({
             : t('auto.components.status.bar.tooltip.notYetUpdated', 'Not yet updated')}
         </span>
       </div>
+      {banner}
       <Card size="sm">
         <div className="space-y-3 px-2.5">
           {accountLabel ? (

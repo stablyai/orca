@@ -16,29 +16,39 @@ function CodexRestartChip(
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
 const PTY_ONE = 'worktree-1@@pty-1'
-const PTY_TWO = 'worktree-1@@pty-2'
 
 let container: HTMLDivElement
 let forgetStalePanes: ReturnType<typeof vi.fn>
 let root: Root
 
-function notice(previousAccountLabel: string, nextAccountLabel: string) {
-  return { previousAccountLabel, nextAccountLabel }
-}
-
-function button(scope: ParentNode, label: string): HTMLButtonElement {
-  const match = Array.from(scope.querySelectorAll('button')).find(
-    (candidate) => candidate.textContent?.trim() === label
-  )
-  if (!match) {
-    throw new Error(`missing ${label} button`)
-  }
-  return match
-}
-
 beforeEach(() => {
   returnFocus.mockReset()
   useAppStore.setState(useAppStore.getInitialState(), true)
+  useAppStore.setState({
+    tabsByWorktree: {
+      wt: [
+        {
+          id: 'tab',
+          worktreeId: 'wt',
+          createdAt: 1,
+          ptyId: PTY_ONE,
+          title: '',
+          customTitle: null,
+          color: null,
+          sortOrder: 0
+        }
+      ]
+    },
+    terminalLayoutsByTabId: {
+      tab: {
+        root: { type: 'leaf', leafId: '00000000-0000-4000-8000-000000000001' },
+        activeLeafId: '00000000-0000-4000-8000-000000000001',
+        expandedLeafId: null,
+        ptyIdsByLeafId: { '00000000-0000-4000-8000-000000000001': PTY_ONE }
+      }
+    },
+    ptyIdsByTabId: { tab: [PTY_ONE] }
+  })
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -55,34 +65,6 @@ afterEach(() => {
   })
   container.remove()
   useAppStore.setState(useAppStore.getInitialState(), true)
-})
-
-describe('CodexRestartChip pane ownership', () => {
-  it('follows a pane replacement id without acting on the retired PTY', async () => {
-    useAppStore.setState({
-      codexRestartNoticeByPtyId: {
-        [PTY_ONE]: notice('retired@example.com', 'target@example.com')
-      }
-    })
-    await act(async () => {
-      root.render(<CodexRestartChip ptyId={PTY_ONE} />)
-    })
-
-    await act(async () => {
-      useAppStore.setState({
-        codexRestartNoticeByPtyId: {
-          [PTY_TWO]: notice('replacement@example.com', 'target@example.com')
-        }
-      })
-      root.render(<CodexRestartChip ptyId={PTY_TWO} />)
-    })
-    await act(async () => {
-      button(container, 'Restart').click()
-    })
-
-    expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({ [PTY_TWO]: 'codex' })
-    expect(useAppStore.getState().pendingPaneAccountRestarts[PTY_ONE]).toBeUndefined()
-  })
 })
 
 describe('CodexRestartChip pane focus', () => {

@@ -135,7 +135,7 @@ function seedPanes(panes: SeededPane[]): void {
     paneForegroundAgentByPaneKey: {},
     agentLaunchConfigByPaneKey: {},
     sleepingAgentSessionsByPaneKey: {},
-    pendingPaneAccountRestarts: {}
+    paneAccountRestarts: {}
   })
 }
 
@@ -266,7 +266,7 @@ describe('findQueuedClaudeRestartsOnAccount', () => {
     ])
     laneByPtyId[ptyId(4)] = 'wsl:Ubuntu'
     useAppStore.setState({
-      pendingPaneAccountRestarts: {
+      paneAccountRestarts: {
         [ptyId(1)]: 'claude',
         [ptyId(2)]: 'claude',
         [ptyId(4)]: 'claude'

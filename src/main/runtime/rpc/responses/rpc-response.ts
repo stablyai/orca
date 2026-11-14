@@ -1,3 +1,4 @@
+import { withAccountRestartReceipt } from './account-restart-rpc-failure'
 import { BranchSwitchCollisionError } from '../../../git/worktrees/checkout/branch-switch-target'
 import { SparsePresetValidationError } from '../../../../shared/worktree/creation/sparse-preset-failure'
 import {
@@ -203,6 +204,10 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
 ])
 
 export function mapRuntimeError(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
+  return withAccountRestartReceipt(mapRuntimeFailure(id, meta, error), error)
+}
+
+function mapRuntimeFailure(id: string, meta: RpcEnvelopeMeta, error: unknown): RpcFailure {
   const message = error instanceof Error ? error.message : String(error)
   if (isAgentSessionRefusalError(error)) {
     return agentSessionRefusalErrorResponse(id, meta, error)

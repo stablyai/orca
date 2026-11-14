@@ -1,3 +1,13 @@
+import {
+  isCodexAccountRestart,
+  codexAccountRestartToken,
+  currentCodexAccountRestart
+} from '@/store/terminals/codex-account-restart-continuation'
+import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
+import {
+  prepareCodexAccountRestart,
+  failCodexAccountRestart
+} from './codex-account-restart-execution'
 import { useEffect } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../../store'
@@ -37,6 +47,36 @@ export function useReadyPaneAccountRestarts({
       return
     }
     for (const pane of manager.getPanes()) {
+      const key = makePaneKey(tabId, pane.leafId)
+      const queued = useAppStore.getState().paneAccountRestarts[key]
+      if (isCodexAccountRestart(queued) && queued.phase === 'accepted') {
+        const request = useAppStore.getState().claimCodexAccountRestart(key)
+        if (!request) {
+          continue
+        }
+        const token = codexAccountRestartToken(request)
+        void prepareCodexAccountRestart(request)
+          .then((condition) => {
+            const latest = currentCodexAccountRestart(useAppStore.getState(), token)
+            if (!condition || !latest?.startup) {
+              return
+            }
+            if (
+              managerRef.current !== manager ||
+              !manager.getPanes().some((p) => p.id === pane.id && p.leafId === latest.leafId)
+            ) {
+              useAppStore.getState().updateCodexAccountRestart(token, { phase: 'accepted' })
+              return
+            }
+            handleRestartPane(pane.id, latest.startup, {
+              focus: true,
+              accountRestart: condition,
+              accountRestartToken: token
+            })
+          })
+          .catch((error) => failCodexAccountRestart(token, error))
+        continue
+      }
       const ptyId = paneTransportsRef.current.get(pane.id)?.getPtyId()
       if (
         !ptyId ||

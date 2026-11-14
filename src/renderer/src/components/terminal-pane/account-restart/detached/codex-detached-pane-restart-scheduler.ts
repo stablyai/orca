@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
+import type { PaneAccountRestart } from '@/store/terminals/terminal-contracts'
 import {
   resetDetachedCodexPaneRestartClaimsForTests,
   sweepUnclaimedCodexPaneRestarts
@@ -10,13 +10,17 @@ let executorGeneration = 0
 let sweepQueued = false
 
 export function hasAddedPendingCodexPaneRestart(
-  current: Record<string, AccountRestartAgent>,
-  previous: Record<string, AccountRestartAgent>
+  current: Record<string, PaneAccountRestart>,
+  previous: Record<string, PaneAccountRestart>
 ): boolean {
   if (current === previous) {
     return false
   }
-  return Object.keys(current).some((ptyId) => !previous[ptyId])
+  return Object.entries(current).some(([key, value]) =>
+    typeof value === 'object'
+      ? value.phase === 'accepted' && (typeof previous[key] !== 'object' || previous[key] !== value)
+      : !previous[key]
+  )
 }
 
 /** Installed once at app startup; returns the uninstaller (tests). */
@@ -26,12 +30,12 @@ export function installCodexDetachedPaneRestartExecutor(): () => void {
   const unsubscribe = useAppStore.subscribe((state, previousState) => {
     if (
       hasAddedPendingCodexPaneRestart(
-        state.pendingPaneAccountRestarts,
-        previousState.pendingPaneAccountRestarts
+        state.paneAccountRestarts,
+        previousState.paneAccountRestarts
       ) ||
       // Why: a deferred Claude restart runs once its turn ends, which only a status change reports.
       (state.agentStatusByPaneKey !== previousState.agentStatusByPaneKey &&
-        Object.values(state.pendingPaneAccountRestarts).includes('claude'))
+        Object.values(state.paneAccountRestarts).includes('claude'))
     ) {
       scheduleClaimSweep()
     }

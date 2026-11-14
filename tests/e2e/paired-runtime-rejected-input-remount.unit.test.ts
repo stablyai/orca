@@ -325,6 +325,7 @@ describe('host-rejected paired-runtime input reaches a pane remount', () => {
       consumePendingColdRestore: vi.fn(() => null),
       consumePendingSnapshot: vi.fn(() => null),
       runtimePaneTitlesByTabId: {},
+      paneAccountRestarts: {},
       agentStatusByPaneKey: {},
       retainedAgentsByPaneKey: {},
       paneForegroundAgentByPaneKey: {},

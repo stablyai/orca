@@ -1,3 +1,6 @@
+import { getTerminalNoticeLifetime } from '@/components/terminal-pane/provider-notices/terminal-notice-lifetime'
+import { currentCodexRestartPanes } from '@/store/terminals/codex-account-restart-continuation'
+import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { useAppStore } from '@/store/index'
 import {
   confirmRuntimeTerminalForegroundProcess,
@@ -28,6 +31,8 @@ import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui
 
 export type CodexPaneScanResult = {
   ptyId: string
+  origin?: Parameters<AppState['markCodexRestartNotices']>[0][number]['origin']
+  incarnationId?: string
   /** The pane may be shown a restart prompt (see isCodexRestartEligiblePane). */
   eligible: boolean
   /** Inspection failed or the handle was stale, so a later read may answer differently. */
@@ -82,18 +87,31 @@ async function scanCodexPanes(
     isLaneInScope: (laneKey: string) => boolean
   }
 ): Promise<CodexPaneScanResult[]> {
+  const eligiblePanes = currentCodexRestartPanes(state)
   const panes = Object.values(state.tabsByWorktree)
     .flat()
     .flatMap((tab) =>
       (state.ptyIdsByTabId[tab.id] ?? [])
-        .filter((ptyId) => args.ptyIdFilter === null || args.ptyIdFilter.has(ptyId))
-        .map((ptyId) => ({ tab, ptyId }))
+        .filter(
+          (ptyId) =>
+            eligiblePanes.has(ptyId) && (args.ptyIdFilter === null || args.ptyIdFilter.has(ptyId))
+        )
+        .map((ptyId) => ({ tab, ptyId, lifetime: getTerminalNoticeLifetime(ptyId) }))
     )
   const recordedLanes = await readRecordedCodexPaneLanes(panes.map((pane) => pane.ptyId))
 
   // Labels can remain fallback names; use live process evidence plus recorded launchAgent to find Codex.
   return Promise.all(
-    panes.map(async ({ tab, ptyId }) => {
+    panes.map(async ({ tab, ptyId, lifetime }) => {
+      const pane = eligiblePanes.get(ptyId)
+      const origin = pane
+        ? {
+            key: pane.key,
+            tabCreatedAt: pane.tabCreatedAt,
+            hostId: getExecutionHostIdForWorktree(state, pane.worktreeId),
+            lifetime
+          }
+        : undefined
       const lane = resolveCodexPaneSelectionLane({
         state,
         tab,
@@ -123,6 +141,12 @@ async function scanCodexPanes(
           (await isConfirmedCodexForegroundDespiteShellReading(ptyId, tab.launchAgent, inspection)))
       return {
         ptyId,
+        origin,
+        ...(inspection &&
+        !isClientOnlyUnverifiableInspection(inspection) &&
+        inspection.foregroundObservation
+          ? { incarnationId: inspection.foregroundObservation.ptyIncarnationId }
+          : {}),
         eligible,
         inconclusive: inspection === null || isClientOnlyUnverifiableInspection(inspection),
         launchedCodex: tab.launchAgent === 'codex',
@@ -193,6 +217,8 @@ export async function markLiveCodexSessionsForRestart(args: {
         return [
           {
             ptyId: scan.ptyId,
+            origin: scan.origin,
+            incarnationId: scan.incarnationId,
             previousAccountLabel: args.previousAccountLabel,
             nextAccountLabel: args.nextAccountLabel,
             previousAccountId: stalePane.launchAccountId,
@@ -203,6 +229,8 @@ export async function markLiveCodexSessionsForRestart(args: {
       return [
         {
           ptyId: scan.ptyId,
+          origin: scan.origin,
+          incarnationId: scan.incarnationId,
           previousAccountLabel: args.previousAccountLabel,
           nextAccountLabel: args.nextAccountLabel,
           ...(args.previousAccountId === undefined
@@ -239,6 +267,8 @@ export async function markRestoredStaleCodexSessionsForRestart(args?: {
   const noticedPtyIds = useAppStore.getState().markCodexRestartNotices(
     stalePanes.map((pane) => ({
       ptyId: pane.ptyId,
+      origin: scans.find((scan) => scan.ptyId === pane.ptyId)?.origin,
+      incarnationId: scans.find((scan) => scan.ptyId === pane.ptyId)?.incarnationId,
       previousAccountLabel: resolveAccountLabel(pane.launchAccountId),
       nextAccountLabel: resolveAccountLabel(pane.activeAccountId),
       // Main decides staleness by ID; colliding labels cannot answer the store’s identity checks.

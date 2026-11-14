@@ -1,3 +1,5 @@
+import { resolveTerminalPaneWorktreeId } from '../identity/runtime-terminal-pane-identity'
+import { resolveAccountRestartPane, boundLaunchToken } from './account-restart-pane-snapshot'
 import { terminalLaunchFacts } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { OrcaRuntimeWithCreateTerminal } from '../launch/terminal-create'
 import { OrcaRuntimeWithRestoredHandlePaneStart } from '../surface/restored-handle-pane-start'
@@ -9,7 +11,6 @@ import type {
 } from '../../../../shared/runtime-terminal-contracts'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import type { RuntimeProviderSnapshotReadOptions } from '../output/provider-snapshot-read-options'
-import type { TerminalHandleRecord } from '../identity/terminal-handle-records'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
@@ -42,10 +43,6 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     pty: RuntimePtyWorktreeRecord,
     worktreesById: Map<string, ResolvedWorktree>
   ): RuntimeTerminalSummary
-  protected abstract getLiveLeafForHandle(handle: string): {
-    record: TerminalHandleRecord
-    leaf: RuntimeLeafRecord
-  }
   protected abstract buildTerminalSummary(
     leaf: RuntimeLeafRecord,
     worktreesById: Map<string, ResolvedWorktree>,
@@ -57,9 +54,21 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     opts?: { cursor?: number; limit?: number }
   ): RuntimeTerminalRead
 
-  resolveTerminalPane(paneKey: string, expectedWorktreeId?: string): RuntimeTerminalResolvePane {
-    // Why: the renderer context menu only knows the stable pane key; main owns
-    // the runtime terminal handle that agents and CLI commands can address.
+  resolveTerminalPane(
+    paneKey: string,
+    expectedWorktreeId?: string,
+    accountRestart = false
+  ): RuntimeTerminalResolvePane {
+    if (accountRestart) {
+      return resolveAccountRestartPane(
+        this.store,
+        paneKey,
+        expectedWorktreeId,
+        this.getWorkspaceSessionHostIdForTab.bind(this),
+        () => this.resolveTerminalPane(paneKey, expectedWorktreeId)
+      )
+    }
+    // Main resolves the handle; clients know only the pane key.
     const handle = this.getTerminalHandleForPaneKey(paneKey)
     if (!handle) {
       throw new Error('terminal_not_found')
@@ -68,18 +77,11 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     const parsed = parsePaneKey(paneKey)
     const leaf = parsed ? this.leaves.get(this.getLeafKey(parsed.tabId, parsed.leafId)) : null
     const pty = this.getPtyRecordForPaneKey(paneKey)
-    const candidateWorktreeIds = [leaf?.worktreeId, pty?.worktreeId].filter(
-      (worktreeId): worktreeId is string => Boolean(worktreeId)
+    const worktreeId = resolveTerminalPaneWorktreeId(
+      leaf?.worktreeId,
+      pty?.worktreeId,
+      expectedWorktreeId
     )
-    const worktreeId = candidateWorktreeIds[0] ?? null
-    if (
-      (candidateWorktreeIds.length > 1 && new Set(candidateWorktreeIds).size > 1) ||
-      (expectedWorktreeId && candidateWorktreeIds.some((id) => id !== expectedWorktreeId)) ||
-      (expectedWorktreeId && candidateWorktreeIds.length === 0)
-    ) {
-      // Why: pane coordinates restored by a paired client must not cross workspace ownership.
-      throw new Error('terminal_not_found')
-    }
     if (parsed && !leaf && pty && !pty.connected && worktreeId) {
       // An exited PTY outlives its tab; once the host closed that tab the pane is gone, and a client
       // must not read the leftover record as a pane the host still owns (#9194).
@@ -97,6 +99,7 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
       leafId: parsed?.leafId ?? record?.leafId ?? '',
       ptyId: record?.ptyId ?? null,
       connected: pty?.connected === true,
+      ...boundLaunchToken(pty, record?.ptyId),
       ...(worktreeId ? { worktreeId } : {}),
       ...this.getPtyExecutionHostMetadata(record?.ptyId ?? pty?.ptyId ?? null)
     }

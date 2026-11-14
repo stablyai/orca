@@ -27,6 +27,11 @@ import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/components/floating-terminal/f
 import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/FloatingTerminalIconContextMenu'
 import { ClaudeSwitcherMenu } from './ClaudeSwitcherMenu'
 import { CodexSwitcherMenu } from './CodexSwitcherMenu'
+import {
+  CodexRestartBadge,
+  codexRestartBadgeLabel,
+  useCodexStaleSessionCount
+} from './CodexRestartBadge'
 import { ProviderDetailsMenu } from './ProviderDetailsMenu'
 import { AntigravityUsageMenu } from './AntigravityUsageMenu'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
@@ -67,6 +72,7 @@ export function StatusBarSurface({
   // Memoized labels still need to follow language changes.
   useTranslation()
   const controller = useStatusBarController(floatingTerminalOpen)
+  const codexStaleSessionCount = useCodexStaleSessionCount()
   if (!controller) {
     return null
   }
@@ -118,6 +124,7 @@ export function StatusBarSurface({
     usageMode,
     t
   )
+  const usageLabel = t('auto.components.status.bar.UsageRosterPanel.title', 'Usage')
 
   return (
     <div
@@ -158,7 +165,11 @@ export function StatusBarSurface({
                   <button
                     type="button"
                     className="inline-flex items-center gap-3 rounded px-1 py-0.5 hover:bg-accent/70"
-                    aria-label={t('auto.components.status.bar.UsageRosterPanel.title', 'Usage')}
+                    aria-label={
+                      codexStaleSessionCount > 0
+                        ? `${usageLabel}. ${codexRestartBadgeLabel(codexStaleSessionCount, t)}`
+                        : usageLabel
+                    }
                   >
                     {unitLabelState !== 'absent' ? (
                       <UsageUnitLabel
@@ -171,11 +182,16 @@ export function StatusBarSurface({
                       <span
                         key={p.provider}
                         data-usage-chip={p.provider}
-                        data-usage-urgent={getUsageTone(p) === 'urgent'}
+                        // Why: a pending restart pins the Codex chip like an urgent one, so its badge stays visible
+                        // and is always measured inside its chip (a badge outside it made density oscillate).
+                        data-usage-urgent={
+                          getUsageTone(p) === 'urgent' ||
+                          (p.provider === 'codex' && codexStaleSessionCount > 0)
+                        }
                         data-usage-percentage={usageChipShowsPercentage(p, usageMode, t)}
                         data-usage-collapsed={collapsedUsageProviders.includes(p.provider)}
                         aria-hidden={collapsedUsageProviders.includes(p.provider)}
-                        className="inline-flex data-[usage-collapsed=true]:invisible data-[usage-collapsed=true]:absolute"
+                        className="inline-flex items-center gap-1 data-[usage-collapsed=true]:invisible data-[usage-collapsed=true]:absolute"
                       >
                         <ProviderSegment
                           p={p}
@@ -183,6 +199,9 @@ export function StatusBarSurface({
                           display={usagePercentageDisplay}
                           mode={usageMode}
                         />
+                        {p.provider === 'codex' ? (
+                          <CodexRestartBadge count={codexStaleSessionCount} />
+                        ) : null}
                       </span>
                     ))}
                     {collapseUsage ? (
@@ -192,6 +211,9 @@ export function StatusBarSurface({
                           collapsedUsageProviders.includes(p.provider)
                         )}
                         display={usagePercentageDisplay}
+                        restartPending={
+                          codexStaleSessionCount > 0 && collapsedUsageProviders.includes('codex')
+                        }
                       />
                     ) : null}
                   </button>

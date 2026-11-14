@@ -33,7 +33,11 @@ const buttonVariants = cva(
         'pane-title-close': 'pane-title-close',
         // The worktree card's "rename failed" chip, for a failure the user can open.
         'destructive-chip':
-          'border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive'
+          'border border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15 hover:text-destructive',
+        // The one action in an inline warning banner; keep it the only solid button on its surface.
+        // focus: overrides keep the fill when it wraps a menu item, which menus highlight by focusing.
+        warning:
+          'bg-status-warning font-semibold text-status-warning-foreground hover:bg-[color-mix(in_srgb,var(--status-warning)_88%,black)] focus:bg-[color-mix(in_srgb,var(--status-warning)_88%,black)] dark:focus:bg-[color-mix(in_srgb,var(--status-warning)_88%,black)]'
       },
       size: {
         default: 'h-9 px-4 py-2 has-[>svg]:px-3',

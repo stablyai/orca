@@ -257,6 +257,7 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
       tabsByWorktree: { 'wt-1': [{ id: 'tab-1', ptyId: 'fish-pty' }] },
       unifiedTabsByWorktree: {},
       ptyIdsByTabId: { 'tab-1': ['fish-pty'] },
+      paneAccountRestarts: {},
       terminalPaneStartsByPaneKey: {},
       terminalPaneResumeOutcomesByPaneKey: {},
       terminalLayoutsByTabId: {

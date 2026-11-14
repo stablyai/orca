@@ -87,6 +87,13 @@ export async function connectIpcPty(
     // Fence before spawning: redeployed relays recycle IDs, so earlier buffered state belongs to a previous PTY lifetime.
     const priorIncarnationFence = currentPreHandlerPtySequence()
     const spawnResult = await spawnIpcPty(transportOptions, options, admittedSessionId)
+    if (
+      (options.accountRestart || options.isAccountRestartCurrent) &&
+      options.shouldContinue &&
+      !options.shouldContinue(spawnResult)
+    ) {
+      return
+    }
     settleAgentLaunchPaneStart(transportOptions.tabId, transportOptions.leafId, spawnResult.id)
     // Any resolved spawn or cold restore is live under this id, even if this transport was destroyed meanwhile.
     markTerminalProviderSessionBound(spawnResult.id)
@@ -202,7 +209,7 @@ function handleConnectError(
   }
   const deferral = readTerminalSpawnDeferral(message)
   if (deferral) {
-    context.getCallbacks().onSpawnDeferred?.(deferral)
+    context.getCallbacks().onSpawnDeferred?.(deferral, message)
     return undefined
   }
   if (connectionId && options.sessionId && message.includes(SSH_PTY_CONNECTION_MISMATCH_MARKER)) {

@@ -1,3 +1,5 @@
+import type { TerminalNoticeLifetime } from '@/components/terminal-pane/provider-notices/terminal-notice-lifetime'
+import type { CodexAccountRestartToken } from './codex-account-restart-continuation'
 import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { TerminalState } from './terminal-state'
 import type { Tab } from '../../../../shared/tab-types'
@@ -31,6 +33,7 @@ import type {
   TerminalTabRetirementPlan
 } from './retirement/terminal-tab-retirement'
 import type {
+  CodexAccountRestart,
   AccountRestartAgent,
   TerminalCreationExecutionFacts,
   AutomaticAgentResumeClaim,
@@ -188,13 +191,36 @@ export type TerminalActions = {
   isPtyShutdownPending: (ptyId: string) => boolean
   /** Codex also marks its restart notices answered. */
   queuePaneAccountRestarts: (ptyIds: string[], agent: AccountRestartAgent) => void
+  claimCodexAccountRestart: (key: string) => CodexAccountRestart | null
+  updateCodexAccountRestart: (
+    token: CodexAccountRestartToken,
+    patch: Partial<
+      Pick<
+        CodexAccountRestart,
+        'phase' | 'condition' | 'error' | 'resultPtyId' | 'resultIncarnationId'
+      >
+    > | null
+  ) => void
+  retryCodexAccountRestart: (token: CodexAccountRestartToken) => void
   consumePendingPaneAccountRestart: (ptyId: string) => AccountRestartAgent | null
   markCodexRestartNotices: (
     notices: (Pick<CodexRestartNotice, 'previousAccountLabel' | 'nextAccountLabel'> &
       Partial<Pick<CodexRestartNotice, 'previousAccountId' | 'nextAccountId'>> & {
         ptyId: string
+        incarnationId?: string
+        origin?: {
+          key: string
+          tabCreatedAt: number
+          hostId: string
+          lifetime?: TerminalNoticeLifetime
+        }
       })[]
   ) => string[]
+  retireCodexRestartEndpoint: (
+    ptyId: string,
+    incarnationId: string,
+    currentAttempt?: CodexAccountRestartToken
+  ) => void
   clearCodexRestartNotice: (ptyId: string) => void
   dismissCodexRestartNotices: (ptyIds: string[]) => void
   reopenCodexRestartPrompt: (ptyId: string) => void

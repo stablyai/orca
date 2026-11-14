@@ -48,7 +48,11 @@ export function buildWorktreePurgeSurfacePatch(
     codexRestartNoticeByPtyId: omitByPtyId(s.codexRestartNoticeByPtyId),
     migrationUnsupportedByPtyId: omitByPtyId(s.migrationUnsupportedByPtyId),
     suppressedPtyExitIds: omitByPtyId(s.suppressedPtyExitIds),
-    pendingPaneAccountRestarts: omitByPtyId(s.pendingPaneAccountRestarts),
+    paneAccountRestarts: Object.fromEntries(
+      Object.entries(omitByPtyId(s.paneAccountRestarts)).filter(
+        ([, r]) => typeof r === 'string' || !doomedTabIds.has(r.tabId)
+      )
+    ),
     // Evict bulk-purged agent/unread/input state; retainedAgents and orchestration self-heal via pruning/full sync.
     agentStatusByPaneKey: nextAgentStatusByPaneKey,
     ...(nextAgentStatusByPaneKey !== s.agentStatusByPaneKey

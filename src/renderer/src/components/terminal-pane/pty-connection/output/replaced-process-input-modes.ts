@@ -1,3 +1,4 @@
+import { useAppStore } from '@/store'
 import { PROCESS_BOUNDARY_GROUND } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
@@ -17,6 +18,16 @@ export function bindReplacedProcessInputModes(session: ConnectPanePtySession): v
   session.noteBoundProcessIncarnation = (incarnationId: string | null | undefined): void => {
     if (!incarnationId || incarnationId === session.inputModeOwnerIncarnationId) {
       return
+    }
+    const ptyId = session.transport.getPtyId()
+    if (
+      ptyId &&
+      !session.disposed &&
+      session.deps.paneTransportsRef?.current.get(session.pane.id) === session.transport
+    ) {
+      useAppStore
+        .getState()
+        .retireCodexRestartEndpoint?.(ptyId, incarnationId, session.deps.accountRestartToken)
     }
     if (session.inputModeOwnerIncarnationId !== null) {
       session.groundInputModesForNewProcess()

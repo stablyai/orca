@@ -1,3 +1,7 @@
+import {
+  isCodexAccountRestart,
+  isCurrentCodexAccountRestart
+} from '@/store/terminals/codex-account-restart-continuation'
 import { useAppStore } from '@/store/index'
 import { blocksCodexPaneInput } from '../../../codex-restart-notice-state'
 
@@ -20,22 +24,46 @@ export function hasCodexRestartNotices(
 export function isCodexPaneStale(args: {
   tabId: string
   worktreeId: string
+  leafId: string
   panePtyId: string | null
+  paneIncarnationId?: string | null
 }): boolean {
   const state = useAppStore.getState()
   const { codexRestartNoticeByPtyId } = state
+  if (args.panePtyId) {
+    const request =
+      state.paneAccountRestarts[`${args.tabId}:${args.leafId}`] ??
+      state.paneAccountRestarts[`${args.tabId}:unresolved`]
+    const expectedIncarnation = isCodexAccountRestart(request)
+      ? (request.oldIncarnationId ??
+        (request.condition?.expected.kind === 'endpoint'
+          ? request.condition.expected.incarnationId
+          : undefined))
+      : undefined
+    if (
+      isCodexAccountRestart(request) &&
+      request.oldPtyId === args.panePtyId &&
+      request.worktreeId === args.worktreeId &&
+      (!args.paneIncarnationId ||
+        !expectedIncarnation ||
+        args.paneIncarnationId === expectedIncarnation) &&
+      isCurrentCodexAccountRestart(state, request)
+    ) {
+      return true
+    }
+  }
   if (!hasCodexRestartNotices(codexRestartNoticeByPtyId)) {
     return false
   }
   // The bound PTY owns this pane’s input; tab.ptyId may name a sibling whose notice must not block this keyboard.
   if (args.panePtyId) {
-    return blocksCodexPaneInput(codexRestartNoticeByPtyId[args.panePtyId])
-  }
-
-  // Only unbound panes use the persisted tab ID: transports refuse writes until bound, so input can only arm recovery.
-  const tab = (state.tabsByWorktree[args.worktreeId] ?? []).find((entry) => entry.id === args.tabId)
-  if (tab?.ptyId && blocksCodexPaneInput(codexRestartNoticeByPtyId[tab.ptyId])) {
-    return true
+    const notice = codexRestartNoticeByPtyId[args.panePtyId]
+    return (
+      blocksCodexPaneInput(notice) &&
+      (!args.paneIncarnationId ||
+        !notice?.incarnationId ||
+        notice.incarnationId === args.paneIncarnationId)
+    )
   }
 
   return false

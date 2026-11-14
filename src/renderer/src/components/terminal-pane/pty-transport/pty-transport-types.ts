@@ -1,3 +1,4 @@
+import type { AccountRestartCondition } from '../../../../../shared/terminal/pty/lifecycle/account-restart-contract'
 import type { TerminalOutputCadence } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import type { FreshWorkspaceAgentLaunch } from '@/lib/workspace/creation/worktree-startup-payload'
 import type { TerminalAttachmentLaunchResult } from '../../../../../shared/terminal/pty/lifecycle/terminal-attachment-launch-result'
@@ -150,7 +151,7 @@ type PtyCallbacks = {
   onOutputPauseChanged?: (paused: boolean, supported: boolean, dropsReported?: boolean) => void
   onPausedOutputDropped?: () => void
   /** The host kept this restore asleep; no process started and the resume handle is intact. */
-  onSpawnDeferred?: (reason: SpawnDeferralReason) => void
+  onSpawnDeferred?: (reason: SpawnDeferralReason, failure?: string) => void
 }
 
 /** What started a pane's recovery: the server connection, or only this pane's stream. */
@@ -186,6 +187,7 @@ export type PtyTransport = {
     /** Layout-owner build: attach to `sessionId` or start nothing; main starts the pane. */
     attachOnlyView?: true
     /** Sent only when this connect resumes an agent, and only to hosts that accept it. */
+    accountRestart?: AccountRestartCondition
     resumeSpawnIntent?: RestoreSpawnIntent
     /** A restore no user act asked for: main holds a stopped WSL distro's pane instead of starting it. */
     wslPassiveRestore?: true
@@ -201,8 +203,9 @@ export type PtyTransport = {
     startupCommandDelivery?: StartupCommandDelivery
     /** Consume only at fresh spawn dispatch; main stops the returned predecessor before resolving ownership. Reattach leaves retirement with the caller. */
     claimReplacedPtyId?: () => string | null
-    /** Reject a stale pane after any pre-spawn test gate but before creating a PTY. */
-    shouldContinue?: () => boolean
+    /** Fence dispatch and, for account restarts, acceptance before binding a returned owner. */
+    isAccountRestartCurrent?: () => boolean
+    shouldContinue?: (result?: { id: string; incarnationId?: string | null }) => boolean
     callbacks: PtyCallbacks
   }) => void | Promise<void | string | PtyConnectResult>
   attach: (options: {
