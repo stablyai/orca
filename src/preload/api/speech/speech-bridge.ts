@@ -1,3 +1,4 @@
+import type { NativeChatEdgeSpeechRequest } from '../../../shared/native-chat/native-chat-speech'
 import type { SecretAtRestProtection } from '../../../shared/secret-at-rest-protection'
 import type { DictationCleanupResult } from '../../../shared/dictation-cleanup'
 import { ipcRenderer } from 'electron'
@@ -95,6 +96,9 @@ export const speechApi = {
     }
     return ipcRenderer.invoke('speech:stopDictation', sessionId)
   },
+  synthesize: (request: NativeChatEdgeSpeechRequest): Promise<{ audioBase64: string }> =>
+    ipcRenderer.invoke('speech:synthesize', request),
+  cancelSynthesis: (): Promise<void> => ipcRenderer.invoke('speech:cancelSynthesis'),
   cancelDictation: (sessionId: string): Promise<void> => {
     audioPorts.get(sessionId)?.close()
     audioPorts.delete(sessionId)

@@ -2,6 +2,7 @@ import { publishSettingsUpdate } from './settings-update-effects'
 import { legacyChatPermissionWrite } from './legacy-chat-permission-write'
 import { stampDefaultOnMigrationGuards } from './default-on-migration-guards'
 import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat/native-chat-appearance-settings'
+import { normalizeNativeChatSpeechSettings } from '../../../shared/native-chat/native-chat-speech'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { normalizeDisabledTuiAgents } from '../../../shared/agent-launch/catalog/tui-agent-selection'
 import {
@@ -93,6 +94,9 @@ export function updateSettings(
     sanitizedUpdates.nativeChatAppearance = normalizeNativeChatAppearanceSettings(
       updates.nativeChatAppearance
     )
+  }
+  if ('nativeChatSpeech' in updates) {
+    sanitizedUpdates.nativeChatSpeech = normalizeNativeChatSpeechSettings(updates.nativeChatSpeech)
   }
   if ('disabledTuiAgents' in updates) {
     sanitizedUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)

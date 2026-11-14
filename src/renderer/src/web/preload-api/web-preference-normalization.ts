@@ -5,6 +5,7 @@ import {
 } from '../../../../shared/plugin-theme-settings'
 import { isAgentChatPermissionMode } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
+import { normalizeNativeChatSpeechSettings } from '../../../../shared/native-chat/native-chat-speech'
 import {
   normalizeAgentDefaultSurface,
   carriedChatUiLaunchSettings
@@ -296,6 +297,9 @@ export function mergeSettings(
       Object.hasOwn(updates, 'nativeChatAppearance')
         ? updates.nativeChatAppearance
         : base.nativeChatAppearance
+    ),
+    nativeChatSpeech: normalizeNativeChatSpeechSettings(
+      Object.hasOwn(updates, 'nativeChatSpeech') ? updates.nativeChatSpeech : base.nativeChatSpeech
     ),
     uiLanguage: normalizeUiLanguage(updates.uiLanguage ?? base.uiLanguage)
   }

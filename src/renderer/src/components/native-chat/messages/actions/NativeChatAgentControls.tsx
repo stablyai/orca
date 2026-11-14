@@ -2,16 +2,19 @@ import { ArrowUp } from 'lucide-react'
 import { cn } from '../../../../lib/class-names'
 import { useTranslate } from '../../../../i18n/use-translate'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
+import { NativeChatSpeakButton } from './NativeChatSpeakButton'
 import { NativeChatMessageTimestamp } from '../rows/NativeChatMessageTimestamp'
 import { withoutNativeChatVisualDirectiveLines } from '../../../../../../shared/native-chat/native-chat-visual-directive'
 
 export function NativeChatAgentControls({
+  messageId,
   markdown,
   timestamp,
   onScrollToTop,
   action,
   className
 }: {
+  messageId: string
   markdown: string
   timestamp: number | null
   onScrollToTop: () => void
@@ -25,6 +28,9 @@ export function NativeChatAgentControls({
     <div data-native-chat-find-skip className={cn('flex items-center gap-1', className)}>
       {/* A visual line means nothing pasted outside Orca, so the copy leaves it out. An image-only
           response has nothing to copy, so it has no Copy. */}
+      {markdown.length > 0 ? (
+        <NativeChatSpeakButton messageId={messageId} markdown={markdown} />
+      ) : null}
       {markdown.length > 0 ? (
         <NativeChatCopyButton text={withoutNativeChatVisualDirectiveLines(markdown)} />
       ) : null}

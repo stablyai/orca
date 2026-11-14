@@ -29,6 +29,7 @@ import type { Store } from '../persistence/loading-store/store'
 import type { DictationCleanupResult } from '../../shared/dictation-cleanup'
 import { cancelDictationCleanup, cleanUpDictatedText } from '../speech/dictation-cleanup-service'
 import type { CommitMessageAgentEnvironmentResolvers } from '../text-generation/execution/commit-message-agent-environment'
+import { registerSpeechTtsHandlers } from './speech-tts'
 
 // Ten minutes of fast speech is under 20,000 characters; anything far past it isn't dictation.
 const MAX_CLEANUP_TEXT_LENGTH = 100_000
@@ -37,6 +38,8 @@ export function registerSpeechHandlers(
   store: Store,
   agentEnvResolvers?: CommitMessageAgentEnvironmentResolvers
 ): void {
+  registerSpeechTtsHandlers()
+
   ipcMain.handle(
     'speech:cleanUpDictation',
     (

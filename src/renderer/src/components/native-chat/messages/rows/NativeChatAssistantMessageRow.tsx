@@ -14,6 +14,7 @@ import {
   NativeChatPlainCodeBlock
 } from '../../markdown/code/NativeChatCodeBlock'
 import { NativeChatAgentControls } from '../actions/NativeChatAgentControls'
+import { useNativeChatAutoSpeech } from '../actions/use-native-chat-auto-speech'
 import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAttachments'
 import { NativeChatForkAction } from '../actions/NativeChatForkAction'
 import type { useNativeChatWorkRun } from '../../tools/runs/use-native-chat-work-run'
@@ -62,6 +63,15 @@ export function NativeChatAssistantMessageRow({
   const isSystem = message.role === 'system'
   // The same words slot construction chooses the turn's action holder by; Copy needs them.
   const words = nativeChatAgentRowWords(message, t)
+  const answer =
+    message.role === 'assistant' && words.length > 0 && (endsResponse ?? !continuesTurn)
+  // The turn's last reply is the result. Read it when the turn stops, not when a later step replaces it.
+  useNativeChatAutoSpeech({
+    messageId: message.id,
+    markdown: words,
+    answer,
+    working: activeTurnIsWorking === true
+  })
   // Hide controls on system asides and the still-working frontier, where more content may arrive. In
   // a turn they belong to its holder, which may draw only images when folding hid its words.
   const showControls =
@@ -80,8 +90,9 @@ export function NativeChatAssistantMessageRow({
   return (
     <div
       ref={rowRef}
-      // The context menu offers Copy message only where the row's controls offer Copy.
+      // The context menu offers Copy and Speak only where the row's controls offer them.
       data-native-chat-message-id={showControls && words.length > 0 ? message.id : undefined}
+      data-native-chat-speakable={showControls && words.length > 0 ? '' : undefined}
       data-native-chat-message-tone={isSystem ? 'faint' : undefined}
       className={cn(
         'group relative max-w-full select-text text-sm leading-relaxed text-chat-foreground',
@@ -110,6 +121,7 @@ export function NativeChatAssistantMessageRow({
       {toolRun ? <NativeChatToolRun {...toolRun} /> : null}
       {showControls ? (
         <NativeChatAgentControls
+          messageId={message.id}
           markdown={words}
           timestamp={message.timestamp}
           onScrollToTop={scrollToTop}

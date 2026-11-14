@@ -4,6 +4,7 @@ import { NativeChatResolvedView } from './NativeChatResolvedView'
 import { useNativeChatStatusEntry } from './session/status/use-native-chat-status-entry'
 import type { NativeChatViewProps } from './native-chat-view-types'
 import { NativeChatPaneFileDropSurface } from './attachments/intake/NativeChatPaneFileDropSurface'
+import { NativeChatSpeechPreferencesPublisher } from './messages/actions/NativeChatSpeechPreferencesPublisher'
 import { NativeChatVisualOwnerProvider } from './media/visuals/native-chat-visual-owner'
 import { NativeChatFileLinkExistenceProvider } from './links/actions/use-native-chat-file-link-existence'
 import { NativeChatMarkdownImageOwnerProvider } from './media/images/native-chat-markdown-image-owner'
@@ -11,6 +12,7 @@ import { NativeChatMarkdownImageOwnerProvider } from './media/images/native-chat
 export default function NativeChatView(props: NativeChatViewProps): React.JSX.Element {
   return (
     <NativeChatPaneFileDropSurface className="relative flex h-full min-h-0 min-w-0 w-full">
+      <NativeChatSpeechPreferencesPublisher />
       {props.mode === 'structured' ? (
         <NativeChatVisualOwnerProvider
           key={props.sessionId}

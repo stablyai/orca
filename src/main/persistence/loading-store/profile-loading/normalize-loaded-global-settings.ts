@@ -1,5 +1,6 @@
 import { normalizeAgentDefaultSurface } from '../../../../shared/native-chat/native-chat-providers'
 import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
+import { normalizeNativeChatSpeechSettings } from '../../../../shared/native-chat/native-chat-speech'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
 import { normalizePRBotAuthorOverrides } from '../../../../shared/source-control/review-comments/pr-bot-author-overrides'
 import { normalizeTerminalQuickCommands } from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
@@ -98,6 +99,7 @@ export function normalizeLoadedGlobalSettings(
     nativeChatAppearance: normalizeNativeChatAppearanceSettings(
       parsed.settings?.nativeChatAppearance
     ),
+    nativeChatSpeech: normalizeNativeChatSpeechSettings(parsed.settings?.nativeChatSpeech),
     worktreeVisibilityDefaults: migratedExternalVisibility.defaults,
     workspaceCleanupPolicy: normalizeWorkspaceCleanupRules(parsed.settings?.workspaceCleanupPolicy),
     prBotAuthorOverrides: normalizePRBotAuthorOverrides(parsed.settings?.prBotAuthorOverrides),
