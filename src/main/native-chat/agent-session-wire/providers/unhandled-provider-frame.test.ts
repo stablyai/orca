@@ -93,6 +93,73 @@ describe('unhandledProviderFrameJournalItem hook failures', () => {
     expect(item?.body.presentation).toBeUndefined()
   })
 
+  it('marks a failed Claude Stop hook whose hook_name carries a matcher suffix', () => {
+    const item = unhandledProviderFrameJournalItem('claude', 'message:system:hook_response', {
+      hook_name: 'Stop:guard',
+      hook_event: 'Stop',
+      outcome: 'error',
+      exit_code: 1,
+      stderr: 'boom'
+    })
+    expect(item?.body).toMatchObject({
+      tone: 'error',
+      presentation: AGENT_SESSION_HOOK_FAILED_PRESENTATION,
+      text: 'Claude Stop:guard hook failed (exit code 1): boom'
+    })
+  })
+
+  it('marks a failed Claude Stop hook when only hook_event is present', () => {
+    const item = unhandledProviderFrameJournalItem('claude', 'message:system:hook_response', {
+      hook_event: 'Stop',
+      outcome: 'error',
+      exit_code: 1,
+      stderr: 'boom'
+    })
+    expect(item?.body).toMatchObject({
+      presentation: AGENT_SESSION_HOOK_FAILED_PRESENTATION,
+      text: 'Claude Stop hook failed (exit code 1): boom'
+    })
+  })
+
+  it('marks a failed Claude Stop hook when only a matcher-suffixed hook_name is present', () => {
+    const item = unhandledProviderFrameJournalItem('claude', 'message:system:hook_response', {
+      hook_name: 'Stop:guard',
+      outcome: 'error',
+      exit_code: 1,
+      stderr: 'boom'
+    })
+    expect(item?.body).toMatchObject({
+      presentation: AGENT_SESSION_HOOK_FAILED_PRESENTATION,
+      text: 'Claude Stop:guard hook failed (exit code 1): boom'
+    })
+  })
+
+  it('leaves a failed PostToolUse Claude hook with a matcher suffix without the Stop-hook marker', () => {
+    const item = unhandledProviderFrameJournalItem('claude', 'message:system:hook_response', {
+      hook_name: 'PostToolUse:Bash',
+      hook_event: 'PostToolUse',
+      outcome: 'error',
+      exit_code: 1,
+      stderr: 'Script not found'
+    })
+    expect(item?.body).toMatchObject({
+      tone: 'error',
+      text: 'Claude PostToolUse:Bash hook failed (exit code 1): Script not found'
+    })
+    expect(item?.body.presentation).toBeUndefined()
+  })
+
+  it('leaves a failed Claude hook with a matcher suffix and no hook_event without the Stop-hook marker', () => {
+    const item = unhandledProviderFrameJournalItem('claude', 'message:system:hook_response', {
+      hook_name: 'PreToolUse:Write',
+      outcome: 'error',
+      exit_code: 1,
+      stderr: 'nope'
+    })
+    expect(item?.body).toMatchObject({ tone: 'error' })
+    expect(item?.body.presentation).toBeUndefined()
+  })
+
   it('still suppresses a successful Codex hook completion', () => {
     const item = unhandledProviderFrameJournalItem(
       'codex',

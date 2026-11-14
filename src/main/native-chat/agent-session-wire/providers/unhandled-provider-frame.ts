@@ -126,6 +126,9 @@ function hookFailureFrameText(
   }
   if (provider === 'claude' && kind === 'message:system:hook_response') {
     const name = hookText(payload.hook_name) ?? hookText(payload.hook_event)
+    // hook_name carries the matcher-suffixed display name (for example Stop:guard);
+    // hook_event carries the bare event name, so identify Stop hooks from the event.
+    const eventName = (hookText(payload.hook_event) ?? hookText(payload.hook_name))?.toLowerCase()
     const code = payload.exit_code
     const exit =
       typeof code === 'number' && Number.isSafeInteger(code) && code !== 0
@@ -135,7 +138,7 @@ function hookFailureFrameText(
       hookText(payload.stderr) ?? hookText(payload.output) ?? hookText(payload.stdout) ?? fallback
     return {
       text: `Claude${name ? ` ${name}` : ''} hook failed${exit}${detail ? `: ${detail}` : '.'}`,
-      stopHook: name?.toLowerCase() === 'stop'
+      stopHook: eventName === 'stop' || eventName?.startsWith('stop:') === true
     }
   }
   return null
