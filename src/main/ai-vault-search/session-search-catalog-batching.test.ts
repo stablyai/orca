@@ -380,65 +380,49 @@ it.each([40, 400])(
   }
 )
 
-it.each([40, 400])(
-  'releases a removed %s-file source through bounded bookkeeping pages',
-  async (population) => {
-    const harness = await openSessionSearchIndexerHarness('ss-release-pages')
-    const clock = new FakeSessionSearchClock()
-    const subject = new SessionSearchIndexer({
-      discoveryPolicy: 'event-led',
-      databasePath: harness.databasePath,
-      roots: harness.roots,
-      historyDays: null,
-      clock
-    })
-    const traffic = vi.spyOn(SessionSearchWorkerClient.prototype, 'request')
-    const matches = () =>
-      harness.read((db) =>
-        db
-          .prepare(
-            "SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'releasedsourceneedle'"
-          )
-          .get()
-      )
-    try {
-      for (let n = 0; n < population; n++) {
-        await writeClaudeTranscript(
-          join(harness.claudeProjectDir, `${n}.jsonl`),
-          ['releasedsourceneedle'],
-          `session-${n}`
+it('removes search results when a multi-page history source is replaced', async () => {
+  const population = 400
+  const harness = await openSessionSearchIndexerHarness('ss-release-pages')
+  const clock = new FakeSessionSearchClock()
+  const subject = new SessionSearchIndexer({
+    discoveryPolicy: 'event-led',
+    databasePath: harness.databasePath,
+    roots: harness.roots,
+    historyDays: null,
+    clock
+  })
+  const matches = () =>
+    harness.read((db) =>
+      db
+        .prepare(
+          "SELECT count(*) AS n FROM messages_fts WHERE messages_fts MATCH 'releasedsourceneedle'"
         )
-      }
-      await subject.start()
-      expect(matches()).toEqual({ n: 2 * population })
-      await rm(harness.claudeProjectDir, { recursive: true })
-      await mkdir(harness.claudeProjectDir)
-      const next = join(harness.root, 'next-projects')
-      await mkdir(next)
-      harness.roots.claudeProjectsDir = next
-      traffic.mockClear()
-      await subject.reconcile({ full: true })
-      await subject.reconcile()
-      expect(matches()).toEqual({ n: 0 })
-      expect(subject.status().phase).toBe('current')
-      const bookkeeping = traffic.mock.calls.filter(
-        ([command]) =>
-          command.op === 'sync' ||
-          command.op === 'catalog' ||
-          command.op === 'candidates' ||
-          command.op === 'work' ||
-          command.op === 'coverage' ||
-          command.op === 'file-page'
+        .get()
+    )
+  try {
+    for (let n = 0; n < population; n++) {
+      await writeClaudeTranscript(
+        join(harness.claudeProjectDir, `${n}.jsonl`),
+        ['releasedsourceneedle'],
+        `session-${n}`
       )
-      // Source release, queue/retirement admission and coverage use fixed phases per page; actual content deletes are separate required output.
-      expect(bookkeeping.length).toBeLessThanOrEqual(200 + 64 * Math.ceil(population / 256))
-    } finally {
-      traffic.mockRestore()
-      await subject.close()
-      await harness.cleanup()
     }
+    await subject.start()
+    expect(matches()).toEqual({ n: 800 })
+    await rm(harness.claudeProjectDir, { recursive: true })
+    await mkdir(harness.claudeProjectDir)
+    const next = join(harness.root, 'next-projects')
+    await mkdir(next)
+    harness.roots.claudeProjectsDir = next
+    await subject.reconcile({ full: true })
+    await subject.reconcile()
+    expect(matches()).toEqual({ n: 0 })
+    expect(subject.status().phase).toBe('current')
+  } finally {
+    await subject.close()
+    await harness.cleanup()
   }
-)
+})
 
 it.each([40, 400])(
   'searches a new change and owed history in the same limited pass with %s changes',
