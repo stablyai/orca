@@ -18,7 +18,7 @@ import {
   type FileContent,
   type ReloadContentOptions
 } from './editor-panel-content-types'
-import { buildPdfScalePreferenceKey } from './pdf-scale-preference-storage'
+import { buildFileViewPreferenceKey as buildPdfScalePreferenceKey } from './view-mode/file-view-preference-storage'
 import { useTranslate } from '@/i18n/use-translate'
 import { useEditorConflictNavigation } from './useEditorConflictNavigation'
 import { useMarkdownDocuments } from './markdown/documents/useMarkdownDocuments'

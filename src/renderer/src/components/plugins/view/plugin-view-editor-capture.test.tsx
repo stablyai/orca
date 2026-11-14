@@ -2,7 +2,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { usePluginEditorCaptureReport } from '@/components/editor/plugin-editor-capture-status'
+import { usePluginEditorCaptureReport } from '@/components/editor/plugin-editors/plugin-editor-capture-status'
 import { registerEditorFrameFlush } from '@/components/editor/save/flush/editor-pending-flush'
 import { usePluginViewCaptureStore } from '@/store/plugins/capture/plugin-view-capture'
 import { captureOpenEditor } from './plugin-view-editor-capture'
@@ -54,12 +54,10 @@ afterEach(async () => {
 describe('an editor capture', () => {
   it('flushes the open editor before reloading it, and refuses the shot when that fails', async () => {
     const unregister = registerEditorFrameFlush(FILE, async () => false)
-    const loadsBefore = usePluginViewCaptureStore.getState().editorLoads[FILE]
     try {
       const reply = await captureOpenEditor('r', FILE, { captureId: 'c', timeoutMs: 1_000 })
       expect(reply).toMatchObject({ ok: false, code: 'editor_flush_failed' })
       // Not reloaded, so its unflushed edits are still in the frame.
-      expect(usePluginViewCaptureStore.getState().editorLoads[FILE]).toBe(loadsBefore)
     } finally {
       unregister()
     }

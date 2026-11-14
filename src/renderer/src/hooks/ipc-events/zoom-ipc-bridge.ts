@@ -14,7 +14,7 @@ import { dispatchBrowserPageZoom } from '@/components/browser-pane/host-guest/br
 import {
   requestFrontDialogViewerZoom,
   requestViewerZoom
-} from '@/components/editor/viewer-zoom-request'
+} from '@/components/editor/viewer-viewport/viewer-zoom-request'
 
 export function registerZoomIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
