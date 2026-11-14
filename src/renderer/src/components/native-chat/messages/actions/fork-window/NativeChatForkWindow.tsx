@@ -114,6 +114,7 @@ function ForkWindow({
     >
       <DialogContent
         className="sm:max-w-[480px]"
+        scrollable
         onOpenAutoFocus={(event) => {
           // Enter confirms the defaults.
           event.preventDefault()
