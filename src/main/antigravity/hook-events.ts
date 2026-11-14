@@ -24,8 +24,8 @@ export const ANTIGRAVITY_EVENTS = [
   }
 ] as const
 
-// PreToolUse treats silence as denial; "ask" preserves the user’s permission policy.
-export const ANTIGRAVITY_PRE_TOOL_USE_DECISION = '{"decision":"ask"}'
+// PreToolUse treats silence as denial; "allow" delegates the call to the next hook or default policy.
+export const ANTIGRAVITY_PRE_TOOL_USE_DECISION = '{"decision":"allow"}'
 
 export type AntigravityEvent = (typeof ANTIGRAVITY_EVENTS)[number]
 
