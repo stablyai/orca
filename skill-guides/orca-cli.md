@@ -176,6 +176,38 @@ ORCA worktree create --name task --parent-worktree active --setup skip --json
 - Let Orca choose setup terminal placement from repo settings, including tab vs split behavior.
 - `worktree create` makes a new checkout. For a fresh agent in the **current** checkout, use `ORCA agent launch --agent codex --json`.
 
+## Cleanup safety
+
+Before generic Git or directory cleanup, inspect `ORCA worktree list --json` and
+`ORCA worktree ps --json` on the relevant Orca runtime. Treat returned membership
+as protection evidence, not a complete ownership inventory: visible rows can omit
+hidden or residual registrations and failed scans. These commands are not a
+strictly read-only census; resolution can update or prune metadata.
+
+Match the execution host and canonical path on the **owning filesystem**, including
+symlink/junction aliases and managed paths outside conventional workspace roots.
+Directory prefixes can add protection, never authorize removal. Do not resolve SSH
+paths locally, merge identical path strings across hosts, or blindly fold path case.
+`--environment local` selects this machine's answering runtime, including its SSH
+host rows; a paired server is a separate control plane requiring its exact saved
+`--environment` or returned address route. Host metadata alone is not a route.
+Native folder workspaces are not Git worktrees: `ps`/`show` can inspect them, and
+`worktree rm` forgets the workspace while retaining its directory.
+
+Check response shape, row/count consistency, `truncated`, and `hostScope`. Errors,
+timeouts, old or malformed replies, missing scope, unknown hosts, or partial
+discovery leave candidates protected. Raising `--limit` can resolve a page cap;
+matching counts, `truncated: false`, and represented hosts cannot prove successful
+scans or coverage of hidden/residual registrations. If supported discovery cannot
+establish complete ownership for a candidate, preserve it and report uncertainty.
+
+Immediately before any otherwise-authorized removal, refresh membership and
+exclusive-use checks; a new owner preserves the candidate. This is a point-in-time
+check, not an atomic deletion guard or a runtime safety guarantee. Explicit user
+authority to discard one cancelled isolated lane has additional stop and ownership
+proofs: see [Recovery and cleanup](orchestration/references/recovery-and-cleanup.md),
+loaded with `ORCA skills get orchestration --reference references/recovery-and-cleanup.md`.
+
 ## Review and issue references
 
 ```text
