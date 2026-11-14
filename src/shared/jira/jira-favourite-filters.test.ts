@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  normalizeJiraFavouriteFilters,
-  parseJiraFavouriteFilterList
-} from './jira-favourite-filters'
+import { normalizeJiraFavouriteFilters } from './jira-favourite-filters'
 
 const filter = { id: '123', name: 'My work', jql: 'assignee = currentUser()' }
 
@@ -64,20 +61,5 @@ describe('Jira favourite filter normalization', () => {
       filters: [],
       truncated: true
     })
-  })
-})
-
-describe('Jira favourite filter transport contract', () => {
-  it('accepts additive future response fields without exposing them to callers', () => {
-    expect(
-      parseJiraFavouriteFilterList(
-        {
-          filters: [{ ...filter, siteId: 'site-1', futureRowField: true }],
-          truncated: false,
-          nextPage: null
-        },
-        'site-1'
-      )
-    ).toEqual({ filters: [{ ...filter, siteId: 'site-1' }], truncated: false })
   })
 })

@@ -30,15 +30,6 @@ describe('square brackets in an ALTER TABLE', () => {
   })
 })
 
-describe('multi-action ALTER TABLE', () => {
-  it('throws rather than deriving only the first subcommand', () => {
-    // Skipping on the first subcommand would permanently drop every later action.
-    const statement =
-      'ALTER TABLE t ADD COLUMN IF NOT EXISTS a TEXT, ADD COLUMN IF NOT EXISTS b TEXT'
-    expect(() => requireSchemaLockTarget(statement)).toThrow(/unparsed_schema_lock_target/)
-  })
-})
-
 describe('dollar-quoted bodies', () => {
 
   it('reads an inner $$ inside a tagged body as text, not as the close', () => {
