@@ -53,7 +53,7 @@ export function codexAcquisitionNotificationHandler(input: {
       if (method === 'thread/tokenUsage/updated') {
         input.acquisition.usageMeter.observe(params, threadId, input.now())
       } else if (method === 'turn/started') {
-        input.acquisition.usageMeter.started()
+        input.acquisition.usageMeter.activity(false)
       } else if (method === 'turn/completed') {
         input.acquisition.usageMeter.activity(true)
       } else if (method === 'thread/status/changed') {

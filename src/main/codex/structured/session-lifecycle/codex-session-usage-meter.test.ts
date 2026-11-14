@@ -109,6 +109,27 @@ it('never assumes a zero baseline for a resumed thread and keeps counter corrupt
   }
 })
 
+it('requires a new provider counter after every turn before measuring another interval', async () => {
+  const f = await fixture()
+  try {
+    f.usage()
+    expect((await f.read())?.meter.usage.totalTokens).toBe(99)
+    f.notify('turn/started', { threadId: THREAD_ID, turn: { id: 'missing-counter' } })
+    f.notify('turn/completed', {
+      threadId: THREAD_ID,
+      turn: { id: 'missing-counter', status: 'completed' }
+    })
+    expect(await f.read()).toBeNull()
+    f.usage(120)
+    expect((await f.read())?.meter.usage.totalTokens).toBe(120)
+    f.notify('thread/status/changed', { threadId: THREAD_ID, status: { type: 'active' } })
+    f.notify('thread/status/changed', { threadId: THREAD_ID, status: { type: 'idle' } })
+    expect(await f.read()).toBeNull()
+  } finally {
+    await f.adapter.closeAll()
+  }
+})
+
 it('changes the meter identity after model or account changes even when the original values return', async () => {
   const f = await fixture()
   try {

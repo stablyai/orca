@@ -10,7 +10,7 @@ import {
 import '../protocol/structured-agent-session-rpc-client.test-fixture'
 
 vi.mock('../../../../agent-session/records/agent-session-execution-runtime', () => ({
-  executionBuildHash: '1234567890abcdef'
+  usageBuildHash: '1234567890abcdef'
 }))
 
 afterEach(clearStructuredHostStub)

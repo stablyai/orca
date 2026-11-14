@@ -15,3 +15,21 @@ export const executionBuildHash = (() => {
     return 'unknown'
   }
 })()
+
+export function readSessionUsageBuildHash(desktopEntry?: string): string {
+  if (executionBuildHash !== 'unknown') {
+    return executionBuildHash
+  }
+  try {
+    return desktopEntry && basename(desktopEntry) === 'index.js'
+      ? hashOrcadLauncher(desktopEntry)
+      : 'unknown'
+  } catch {
+    return 'unknown'
+  }
+}
+
+// Capture the executing bundle before an updater can replace its bytes on disk.
+export const usageBuildHash = readSessionUsageBuildHash(
+  process.versions.electron && typeof __filename === 'string' ? __filename : undefined
+)

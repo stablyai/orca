@@ -44,17 +44,13 @@ export class CodexCumulativeUsageMeter {
     }
   }
 
-  started(): void {
-    this.activity(false)
-    if (this.origin === 'fresh-thread') {
-      this.origin = 'provider-counter'
-      this.usage = undefined
-    }
-  }
-
   activity(quiescent: boolean): void {
     this.activityRevision += 1
     this.quiescent = quiescent
+    if (!quiescent) {
+      this.origin = 'provider-counter'
+      this.usage = undefined
+    }
   }
 
   observe(params: unknown, threadId: string, now: number): void {

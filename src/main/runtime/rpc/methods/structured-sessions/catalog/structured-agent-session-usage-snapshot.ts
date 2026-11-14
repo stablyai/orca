@@ -4,7 +4,7 @@ import { requireInstalledStructuredHost } from '../creation/structured-agent-ses
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { AgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-record'
 import { isNativeLocalLocation } from '../../../../../../shared/execution-host'
-import { executionBuildHash } from '../../../../agent-session/records/agent-session-execution-runtime'
+import { usageBuildHash } from '../../../../agent-session/records/agent-session-execution-runtime'
 import type { AgentSessionUsageSnapshot } from '../../../../../../shared/agent-session/agent-session-usage-meter'
 
 function custody(record: AgentSessionRecord): string {
@@ -34,7 +34,7 @@ export const STRUCTURED_AGENT_SESSION_USAGE_SNAPSHOT_METHODS = [
       }
       const runtimeId = ctx.runtime.getRuntimeId()
       const owner = record.lease.ownerProcess
-      if (!runtimeId || executionBuildHash === 'unknown') {
+      if (!runtimeId || usageBuildHash === 'unknown') {
         return { status: 'unknown', reason: 'runtimeUnknown' }
       }
       if (
@@ -64,7 +64,7 @@ export const STRUCTURED_AGENT_SESSION_USAGE_SNAPSHOT_METHODS = [
       }
       return {
         status: 'ok',
-        runtime: { runtimeId, pid: process.pid, buildHash: executionBuildHash },
+        runtime: { runtimeId, pid: process.pid, buildHash: usageBuildHash },
         meter: read.meter
       }
     }
