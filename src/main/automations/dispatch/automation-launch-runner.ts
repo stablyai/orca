@@ -75,7 +75,8 @@ export async function runAutomationLaunch(ctx: AutomationLaunchContext): Promise
       status: refusal ? 'skipped_unavailable' : 'dispatch_failed',
       workspaceId: automation.workspaceId,
       ...(error instanceof AutomationRunLaunchError ? error.target : {}),
-      // A partial start opened the agent's terminal or session before failing.
+      // A partial start produced the agent's terminal or session before failing, so it
+      // counts as launched at the dispatch-start time.
       ...(error instanceof AutomationRunLaunchError && openedAgent(error.target)
         ? { launchedAt: dispatchedAt }
         : {}),
@@ -157,7 +158,7 @@ export async function runAutomationLaunch(ctx: AutomationLaunchContext): Promise
   return updated.run
 }
 
-/** The launch got as far as the agent's terminal or chat session. */
+/** The launch got as far as producing the agent's terminal or chat session. */
 function openedAgent(target: AutomationLaunch | undefined): boolean {
   return Boolean(
     target && (target.terminalPaneKey || target.terminalSessionId || target.chatSessionId)

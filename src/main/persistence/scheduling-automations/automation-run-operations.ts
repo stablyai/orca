@@ -229,7 +229,7 @@ export function updateAutomationRun(
     startedAt: current.startedAt ?? now,
     dispatchedAt:
       result.status === 'dispatched' ? (result.dispatchedAt ?? now) : current.dispatchedAt,
-    // Launch evidence is durable: the first recorded launch time survives later rewrites.
+    // Launch evidence is durable: the first recorded dispatch-start time survives later rewrites.
     ...((current.launchedAt ?? result.launchedAt) !== undefined
       ? { launchedAt: current.launchedAt ?? result.launchedAt }
       : {}),

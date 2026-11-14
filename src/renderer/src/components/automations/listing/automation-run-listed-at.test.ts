@@ -66,7 +66,7 @@ describe('when a run launched', () => {
     ).toBeNull()
   })
 
-  it('uses the recorded launch time of a run that failed after its agent opened', () => {
+  it('uses the recorded launch time of a run that failed after launching', () => {
     // Delivery failed before dispatch, then retention cleared the pane: only launchedAt remains.
     expect(getAutomationRunLaunchedAt(run({ sessionKind: 'terminal', launchedAt: 7 }))).toBe(7)
     expect(getAutomationRunLaunchedAt(run({ launchedAt: 7 }))).toBe(7)

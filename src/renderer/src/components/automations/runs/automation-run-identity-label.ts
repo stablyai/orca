@@ -67,8 +67,8 @@ export const RUN_START_DRIFT_LABEL_MS = 60_000
 
 /**
  * When a run actually launched, or null.
- * - `launchedAt` is recorded when the agent's terminal or session opened, and survives
- *   retention and later failures; it is the evidence whenever present.
+ * - `launchedAt` is the dispatch-start time, recorded only once the launch produced a terminal
+ *   or session; it survives retention and later failures and is the evidence whenever present.
  * - Older records: dispatched and completed runs use their dispatch (or start) time; a failed
  *   terminal run uses `dispatchedAt` (set only at dispatch) or, with a pane, `startedAt`; a
  *   failed chat run needs a chat session, because the chat launcher stamps `dispatchedAt` even
