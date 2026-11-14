@@ -173,7 +173,12 @@ export function parseTccLogVerdict(
 
   const relevantGroups = [...groups.values()].filter((group) => group.relevant)
   const decided = relevantGroups.filter((group) => group.result !== null)
+  // Overlapping requests can resolve out of order; a later "allowed" must not mask a denial.
+  const denied = decided.filter((group) => group.result?.authValue === '0')
   const chosen =
+    denied.findLast(
+      (group) => group.service !== null && SERVICE_BY_NAME[group.service] === subject.cwdClass
+    ) ??
     decided.findLast(
       (group) => group.service !== null && SERVICE_BY_NAME[group.service] === subject.cwdClass
     ) ??

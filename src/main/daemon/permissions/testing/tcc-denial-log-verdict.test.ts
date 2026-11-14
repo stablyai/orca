@@ -149,6 +149,23 @@ describe('parseTccLogVerdict', () => {
     expect(documents).toMatchObject({ service: 'documents', authValue: 'allowed' })
   })
 
+  it('keeps a denial that resolves after a later request was allowed', () => {
+    const [send, ctx, attribution, deniedResult] = HELPER_DOWNLOADS_REFUSED
+    const later = [send, ctx, attribution].map((entry) =>
+      entry.replaceAll('msgID=153.1126', 'msgID=153.1127')
+    )
+    const allowedResult = deniedResult
+      .replace('msgID=153.1126', 'msgID=153.1127')
+      .replace('authValue=0', 'authValue=2')
+    // Request 1126 starts first, 1127 is allowed, then 1126 is refused.
+    const verdict = parseTccLogVerdict(
+      ndjson([send, ctx, attribution, ...later, allowedResult, deniedResult]),
+      SUBJECT,
+      'ok'
+    )
+    expect(verdict).toMatchObject({ authValue: 'denied', service: 'downloads' })
+  })
+
   it('flags a failed stored requirement but not the routine "anchor apple" check', () => {
     const routine = line(
       '20:06:45.144194',
