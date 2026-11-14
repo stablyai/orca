@@ -13,8 +13,7 @@ import {
   POST_PUSH_DELAY_MS,
   refreshKey,
   sameAliasRequestIdentity,
-  shouldSkipFresh,
-  visibleFollowUpPriority
+  shouldSkipFresh
 } from './pr-refresh-candidate-policy'
 
 export type PRRefreshQueueEntry = {
@@ -123,7 +122,6 @@ export class PRRefreshQueue {
         continue
       }
       entry.candidate = candidateFor(entry.key, entry.candidate)
-      entry.priority = visibleFollowUpPriority(entry.candidate, entry.priority)
       entry.dueAt = Math.max(
         freshRetryAt(entry.candidate) ?? Date.now(),
         this.backgroundNotBefore.get(entry.key)?.until ?? 0
@@ -277,14 +275,14 @@ export class PRRefreshQueue {
   }
 
   ordered(
-    pacingOrder: (a: PRRefreshQueueEntry, b: PRRefreshQueueEntry) => number
+    activeOrder: (a: PRRefreshQueueEntry, b: PRRefreshQueueEntry) => number
   ): PRRefreshQueueEntry[] {
     const now = Date.now()
     return Array.from(this.entries.values()).sort((a, b) => {
       const aReady = a.dueAt <= now
       const bReady = b.dueAt <= now
       if (aReady && bReady) {
-        return pacingOrder(a, b) || b.priority - a.priority || a.dueAt - b.dueAt
+        return b.priority - a.priority || activeOrder(a, b) || a.dueAt - b.dueAt
       }
       if (aReady !== bReady) {
         return aReady ? -1 : 1

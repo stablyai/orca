@@ -217,19 +217,6 @@ export function visibleCandidateAfterOutcome(
   }
 }
 
-const SELECTED_VISIBLE_PRIORITY = 80
-const LIST_VISIBLE_PRIORITY = 40
-
-/** The selected workspace's follow-up wins the next list-budget slot; a deselected one rejoins list order. */
-export function visibleFollowUpPriority(
-  candidate: GitHubPRRefreshCandidate,
-  priority: number
-): number {
-  return candidate.isSelected === true
-    ? Math.max(priority, SELECTED_VISIBLE_PRIORITY)
-    : Math.min(priority, LIST_VISIBLE_PRIORITY)
-}
-
 export function hasStaleHead(candidate: GitHubPRRefreshCandidate): boolean {
   return (
     candidate.currentHeadOid != null &&
