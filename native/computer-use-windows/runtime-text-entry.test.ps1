@@ -77,6 +77,7 @@ function Send-OrcaKey { [OrcaDesktopWin32]::Calls.Add("sendkeys") }
 function Send-OrcaHotkey { [OrcaDesktopWin32]::Calls.Add("sendkeys") }
 function Send-OrcaPasteText { [OrcaDesktopWin32]::Calls.Add("sendkeys") }
 function New-OrcaSnapshot { [pscustomobject]@{} }
+function Test-OrcaTextPatternReadOnly { $false }
 function Restore-OrcaWindow { [OrcaDesktopWin32]::Calls.Add("activate"); $null }
 
 function New-TestElement([string]$ClassName, [int64]$Handle, [bool]$Enabled = $true, [string]$ControlType = "ControlType.Document") {

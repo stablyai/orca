@@ -1089,6 +1089,15 @@ function Invoke-OrcaValueTextInsertion($Element, [int]$Index, [string]$Text) {
     [pscustomobject]@{ path = "accessibility"; actionName = "setValue"; fallbackReason = $null; verification = $verification }
 }
 
+function Test-OrcaTextPatternReadOnly($Element) {
+    try {
+        $range = $Element.GetCurrentPattern([Windows.Automation.TextPattern]::Pattern).DocumentRange
+        $range.GetAttributeValue([Windows.Automation.TextPattern]::IsReadOnlyAttribute) -eq $true
+    } catch {
+        $false
+    }
+}
+
 function Invoke-OrcaElementTextInsertion($Element, $Record, $Process, $RootElement, $Operation, [string]$Text) {
     if ($null -eq $Element) {
         throw "stale element: element $($Record.index) is gone; run get-app-state again and use a fresh element index"
@@ -1105,6 +1114,8 @@ function Invoke-OrcaElementTextInsertion($Element, $Record, $Process, $RootEleme
     }
     $action = Invoke-OrcaValueTextInsertion $Element $index $Text
     if ($null -ne $action) { return $action }
+    # Why: a read-only document with no ValuePattern (WPF RichTextBox) says so only through TextPattern; keys would do nothing.
+    if (Test-OrcaTextPatternReadOnly $Element) { throw "element $index text is not settable: the field is read-only" }
     if (-not [bool]$Operation.restoreWindow) {
         throw (New-OrcaForegroundRefusal $Process "element $index accepts text only as keys, which go only to the window in front" "" "takes the user's keyboard")
     }
