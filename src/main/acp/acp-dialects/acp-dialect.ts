@@ -156,6 +156,17 @@ export type AcpDialect = {
     defaultEffort?: string
     declaredDefaultEffort?: string | null
   }
+  /** Derive a grouped model's effort choices from the session's flat model inventory. */
+  groupedModelEfforts?(
+    modelId: string,
+    availableModels: readonly ModelInfo[]
+  ):
+    | {
+        efforts: AgentSessionOptionChoice[]
+        defaultEffort?: string
+        declaredDefaultEffort?: string | null
+      }
+    | undefined
   /** Native thinking choices remain valid across models; the agent clamps unsupported levels. */
   clampsUnlistedEffort?: true
   /** Opt-in because advertising forms changes agent behaviour; requests use the generic handlers. */

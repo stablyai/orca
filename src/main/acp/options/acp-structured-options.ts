@@ -1,7 +1,6 @@
-import { acpSelectChoices } from './acp-select-choices'
+import { acpListedModels, acpSelectChoices } from './acp-select-choices'
 import { acpInitializeForkSupport } from '../capabilities/acp-fork-support'
 import type {
-  AgentSessionModelOption,
   AgentSessionOptionChoice,
   AgentSessionSlashCommand
 } from '../../../shared/agent-session/agent-session-wire'
@@ -37,6 +36,7 @@ export class AcpStructuredOptions {
     private readonly dialect: Pick<
       AcpDialect,
       | 'modelEfforts'
+      | 'groupedModelEfforts'
       | 'withheldCommands'
       | 'effortChangesModel'
       | 'clampsUnlistedEffort'
@@ -244,38 +244,13 @@ export class AcpStructuredOptions {
         }))
       : []
     const currentModel = (modelOption?.currentValue ?? this.models?.currentModelId) || undefined
-    const listed: { id: string; label: string; description?: string }[] = modelOption
-      ? acpSelectChoices(modelOption).map((choice) => ({
-          id: choice.value,
-          label: choice.name,
-          ...(choice.description ? { description: choice.description } : {})
-        }))
-      : (this.models?.availableModels.map((model) => ({
-          id: model.modelId,
-          label: model.name,
-          ...(model.description ? { description: model.description } : {})
-        })) ?? [])
-    const models: AgentSessionModelOption[] = listed.map((model) => {
-      const info = this.models?.availableModels.find((entry) => entry.modelId === model.id)
-      const advertised = info ? this.dialect.modelEfforts?.(info) : undefined
-      // A current-session menu supplies no negative evidence about an unobserved model.
-      const sessionMenu =
-        model.id === currentModel
-          ? { efforts: sessionEfforts }
-          : (modelOption || effortOption) && !advertised
-            ? { efforts: [], effortsKnown: false as const }
-            : { efforts: [] }
-      return {
-        ...model,
-        isDefault: false,
-        // Fall back to the running session's menu when the advertised menu is empty.
-        ...(advertised && (advertised.efforts.length > 0 || model.id !== currentModel)
-          ? advertised
-          : sessionMenu),
-        ...(advertised?.declaredDefaultEffort !== undefined
-          ? { declaredDefaultEffort: advertised.declaredDefaultEffort }
-          : {})
-      }
+    const models = acpListedModels({
+      modelOption,
+      effortOption,
+      sessionEfforts,
+      currentModel,
+      models: this.models,
+      dialect: this.dialect
     })
     const confirmed = [...(currentModel ? ['model'] : []), ...(effortOption ? ['effort'] : [])]
     return {
