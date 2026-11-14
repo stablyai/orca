@@ -8,6 +8,8 @@ import type { GitPushTarget } from '../../../../src/shared/worktree/types'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-items/work-item-types'
 import type { HostedReviewInfo } from '../../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 import type { GitHubPrReadOutcome } from './github-pr-rpc'
+import type { GitHubPrForBranchRead } from './pr-for-branch-revalidation'
+import type { HostReadIntent } from '../../query/host-read-intent'
 import { isGitHubPRSuppressed } from '../../../../src/shared/worktree/hosted-review/github-pr-suppression'
 import {
   prBranchFallbackNeedsHint,
@@ -80,8 +82,9 @@ export type PrSidebarLoadDeps = {
       acceptMergedFallbackPR?: boolean
       currentHeadOid?: string | null
       refresh?: boolean
+      intent?: HostReadIntent
     }
-  ) => Promise<GitHubPrReadOutcome<PRInfo | null>>
+  ) => Promise<GitHubPrForBranchRead>
 }
 
 // The guard desktop applies before persisting the clear, or null when the link still holds.
@@ -118,11 +121,14 @@ function resolveStaleLink(
 /** The hosted-review hint a branch lookup fell back to, kept so a branch with no PR isn't asked twice per read. */
 export type PrBranchHint = { number: number | null; readAt: number }
 
-/** The branch's GitHub review: its PR and the workspace's push target, or none. */
+/** The branch's GitHub review: its PR and the workspace's push target, or none. `retryAfterMs`:
+ *  the host is still revalidating this answer, so the screen reads again that soon. */
 export type PrBranchReview =
   // linkedPRNumber: the link the PR was read with, so a later link change drops it as a fallback.
-  | { kind: 'found'; pr: PRInfo; pushTarget: GitPushTarget | null; linkedPRNumber: number | null }
-  | { kind: 'none'; hint?: PrBranchHint }
+  (
+    | { kind: 'found'; pr: PRInfo; pushTarget: GitPushTarget | null; linkedPRNumber: number | null }
+    | { kind: 'none'; hint?: PrBranchHint }
+  ) & { retryAfterMs?: number }
 
 // The host re-reads a selected branch's hosted review once a minute, so a younger hint is still its answer.
 const BRANCH_HINT_STALE_MS = 60_000
@@ -141,6 +147,7 @@ export async function loadPrBranchReview(
     branch: string
     headSha?: string | null
     refresh?: boolean
+    intent?: HostReadIntent
     previous?: PrBranchReview
   }
 ): Promise<PrBranchReview> {
@@ -188,11 +195,32 @@ export async function loadPrBranchReview(
         ? { acceptMergedFallbackPR: true }
         : {}),
       currentHeadOid: requestHeadOid,
-      ...(args.refresh ? { refresh: true } : {})
+      ...(args.refresh ? { refresh: true } : {}),
+      // Only a revalidation of an answer already shown may be told to wait.
+      ...(args.intent === 'background' && !args.previous ? {} : { intent: args.intent })
     })
   }
   let linkedPR = link.linkedPR
+  // The host kept no answer for this read: what is shown stays while the current link and
+  // suppression would still show it, never a PR this read unlinked.
+  const unanswered = (outcome: GitHubPrForBranchRead, unlinked: number | null = null) => {
+    const shown = args.previous
+    if (!outcome.ok || !outcome.revalidationOnly || !shown) {
+      return null
+    }
+    const context = { linkedPR, suppressedGitHubPR: link.suppressedGitHubPR }
+    return shown.kind === 'found' &&
+      (shown.linkedPRNumber !== linkedPR ||
+        shown.pr.number === unlinked ||
+        isGitHubPRSuppressed(context, shown.pr.number))
+      ? null
+      : { ...shown, retryAfterMs: outcome.retryAfterMs }
+  }
   let prOutcome = await fetchPR(linkedPR, fallbackPR(linkedPR))
+  const unchanged = unanswered(prOutcome)
+  if (unchanged) {
+    return unchanged
+  }
   const staleLink = prOutcome.ok
     ? resolveStaleLink(prOutcome.result, link, args.branch, requestHeadOid)
     : null
@@ -204,6 +232,10 @@ export async function loadPrBranchReview(
       deps.clearWorktreeReviewLink(args.worktreeId, staleLink),
       fetchPR(null, null)
     ])
+    const relinked = unanswered(prOutcome, link.linkedPR)
+    if (relinked) {
+      return relinked
+    }
   }
   if (!prOutcome.ok) {
     throw new Error(prOutcome.error)
@@ -216,13 +248,18 @@ export async function loadPrBranchReview(
     )
   ) {
     const hint = await hintRead
-    return hint ? { kind: 'none', hint } : { kind: 'none' }
+    return {
+      kind: 'none',
+      ...(hint ? { hint } : {}),
+      ...(prOutcome.retryAfterMs === undefined ? {} : { retryAfterMs: prOutcome.retryAfterMs })
+    }
   }
   return {
     kind: 'found',
     pr: prOutcome.result,
     pushTarget: link.pushTarget,
-    linkedPRNumber: linkedPR
+    linkedPRNumber: linkedPR,
+    ...(prOutcome.retryAfterMs === undefined ? {} : { retryAfterMs: prOutcome.retryAfterMs })
   }
 }
 

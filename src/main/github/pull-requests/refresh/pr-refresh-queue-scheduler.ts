@@ -3,19 +3,23 @@ import type {
   GitHubPRRefreshCandidate,
   PRRefreshOutcome
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
+import type { PreparedPRBranchRead } from '../../client/lookup/pr-for-branch-outcome'
+import type {
+  PRBranchReadProducer,
+  PRBranchReadRequest
+} from '../../client/lookup/pr-branch-read-resources'
+import { exactRequestMatcher } from '../../client/lookup/pr-read-identity'
 import {
   aliasFromCandidate,
-  freshRetryAt,
+  automaticDueAt,
+  candidateReadRequest,
   isBudgetedBackground,
   isMergeabilityPendingOutcome,
+  refreshKey,
   sameAliasRequestIdentity,
   visibleCandidateAfterOutcome,
   visibleFollowUpPriority
 } from './pr-refresh-candidate-policy'
-import type {
-  PreparedPRBranchRead,
-  PRReadSettlement
-} from '../../client/lookup/pr-for-branch-outcome'
 import type { PRRefreshEventPublisher } from './pr-refresh-event-publisher'
 import type { PRRefreshPacing } from './pr-refresh-pacing'
 import type { PRRefreshQueue, PRRefreshQueueEntry } from './pr-refresh-queue'
@@ -53,140 +57,6 @@ export class PRRefreshQueueScheduler {
     }, delay)
   }
 
-  settleRead(
-    key: string,
-    candidate: GitHubPRRefreshCandidate,
-    aliases: GitHubPRRefreshAlias[],
-    prepared: PreparedPRBranchRead,
-    requestSequence: number,
-    hosted = false
-  ): PRReadSettlement {
-    return (outcome, producer) => {
-      if (!prepared.isCurrent()) {
-        return outcome
-      }
-      const settled =
-        producer.retained &&
-        outcome.kind === 'upstream-error' &&
-        (hosted || this.visibility.has(key))
-          ? this.retry.settleProducerError(
-              outcome,
-              key,
-              hosted
-                ? { ...candidate, isSelected: false }
-                : this.visibility.candidate(key, candidate),
-              prepared,
-              this.queue,
-              this.queue.ownsRequest(key, requestSequence)
-            )
-          : outcome
-      this.events.observe(candidate, settled, aliases)
-      return settled
-    }
-  }
-
-  completeWithoutOutcome(
-    key: string,
-    candidate: GitHubPRRefreshCandidate,
-    aliases: GitHubPRRefreshAlias[],
-    priority: number,
-    windowId?: number,
-    foreground = false
-  ): void {
-    if (!this.visibility.has(key) || this.queue.get(key)) {
-      return
-    }
-    const current = this.visibility.candidate(key, candidate)
-    const dueAt = Math.max(
-      freshRetryAt(current, foreground) ?? Date.now(),
-      this.queue.backgroundGateUntil(key),
-      this.retry.manualGateUntil(key)
-    )
-    if (!Number.isFinite(dueAt)) {
-      return
-    }
-    this.queue.setVisibleFollowUp({
-      key,
-      candidate: current,
-      aliases: new Map(aliases.map((alias) => [alias.cacheKey, alias])),
-      reason: 'visible',
-      priority: visibleFollowUpPriority(current, priority),
-      dueAt,
-      queuedAt: this.queue.nextOrder(),
-      followUp: !foreground,
-      foreground,
-      windowId
-    })
-    this.schedule(Math.max(0, dueAt - Date.now()))
-  }
-
-  finishWithoutOutcome(
-    next: PRRefreshQueueEntry,
-    aliases: GitHubPRRefreshAlias[],
-    requestSequence: number
-  ): void {
-    next.hosted?.finish(null)
-    if (!next.hosted && this.queue.ownsRequest(next.key, requestSequence)) {
-      this.events.broadcast(
-        { aliases, reason: next.reason, status: 'skipped', skippedReason: 'fresh' },
-        requestSequence
-      )
-      if (next.watch) {
-        this.watchJobs.skipped(next)
-      } else {
-        this.completeWithoutOutcome(
-          next.key,
-          next.candidate,
-          aliases,
-          next.priority,
-          next.windowId,
-          next.foreground
-        )
-      }
-    }
-  }
-
-  consumeGatedError(
-    entry: PRRefreshQueueEntry,
-    prepared: PreparedPRBranchRead,
-    requestSequence: number,
-    requestStartedAt: number
-  ): boolean {
-    if (
-      entry.hosted ||
-      entry.watch ||
-      entry.bypassBackgroundBudget ||
-      (entry.reason !== 'visible' && entry.reason !== 'swr') ||
-      !prepared.isCurrent()
-    ) {
-      return false
-    }
-    const outcome = prepared.cached()?.outcome
-    if (outcome?.kind !== 'upstream-error') {
-      return false
-    }
-    const retryAt = Math.max(outcome.nextAutoRetryAt ?? 0, outcome.retryDisabledUntil ?? 0)
-    if (retryAt <= Date.now()) {
-      return false
-    }
-    const aliases = Array.from(entry.aliases.values())
-    this.retry.noteManualGate(entry.key, outcome)
-    this.events.broadcast(
-      { aliases, reason: entry.reason, outcome, requestStartedAt },
-      requestSequence
-    )
-    this.scheduleVisibleFollowUp(
-      entry.key,
-      entry.candidate,
-      outcome,
-      entry.priority,
-      aliases,
-      entry.windowId,
-      { plannedRetryAt: retryAt }
-    )
-    return true
-  }
-
   scheduleVisibleFollowUp(
     key: string,
     candidate: GitHubPRRefreshCandidate,
@@ -197,26 +67,22 @@ export class PRRefreshQueueScheduler {
     options?: { pendingMergeabilityDelayMs?: number; plannedRetryAt?: number }
   ): void {
     if (outcome.kind === 'upstream-error') {
+      const retryCandidate = this.visibility.candidate(key, candidate)
       const retryAt = Math.max(
-        options?.plannedRetryAt ??
-          this.retry.nextVisibleErrorRetryAt(key, this.visibility.candidate(key, candidate)),
+        options?.plannedRetryAt ?? this.retry.nextVisibleErrorRetryAt(key, retryCandidate),
         this.retry.manualGateUntil(key)
       )
-      this.queue.protectBackgroundUntil(key, retryAt)
-      if (!this.visibility.has(key)) {
-        return
-      }
-      this.queue.setVisibleFollowUp({
+      this.queue.protectBackgroundUntil(
         key,
-        candidate,
-        aliases: new Map(aliases.map((alias) => [alias.cacheKey, alias])),
-        reason: 'visible',
-        priority,
-        dueAt: retryAt,
-        queuedAt: this.queue.nextOrder(),
-        windowId
-      })
-      this.schedule(retryAt - Date.now())
+        Math.max(
+          this.retry.errorGateAt(key, retryCandidate, retryAt),
+          this.retry.manualGateUntil(key)
+        )
+      )
+      // Auto-refresh off: no timed retry; the next selection, push or manual refresh reads again.
+      if (Number.isFinite(retryAt)) {
+        this.scheduleErrorRetry(key, candidate, retryAt, priority, aliases, windowId)
+      }
       return
     }
     this.retry.reset(key)
@@ -226,7 +92,7 @@ export class PRRefreshQueueScheduler {
       return
     }
     const followUpCandidate = this.visibility.candidate(key, refreshed)
-    const regularDueAt = freshRetryAt(followUpCandidate) ?? Date.now()
+    const regularDueAt = automaticDueAt(followUpCandidate) ?? Number.POSITIVE_INFINITY
     const pendingDueAt =
       options?.pendingMergeabilityDelayMs !== undefined && isMergeabilityPendingOutcome(outcome)
         ? outcome.fetchedAt + options.pendingMergeabilityDelayMs
@@ -260,7 +126,135 @@ export class PRRefreshQueueScheduler {
     this.schedule(Math.max(0, dueAt - Date.now()))
   }
 
+  /** Queues the automatic follow-up the current cadence gives a visible row whose timed work came
+   *  back, due now if its data is already stale; none when the cadence gives it no timer. It stays
+   *  an automatic follow-up while it waits, so the next Off retires it. A `foreground` row (a
+   *  return or a user's refresh whose read a newer read replaced) queues its return again instead,
+   *  which a kept newer result answers from the exact cache. Both wait for the key's gates. */
+  restoreFollowUp(
+    key: string,
+    candidate: GitHubPRRefreshCandidate,
+    priority: number,
+    aliases: GitHubPRRefreshAlias[],
+    windowId?: number,
+    foreground = false
+  ): void {
+    const current = this.visibility.candidate(key, candidate)
+    const dueAt = foreground ? Date.now() : automaticDueAt(current)
+    if (dueAt === null || !this.visibility.has(key)) {
+      return
+    }
+    const gatedDueAt = Math.max(dueAt, this.queue.backgroundGateUntil(key))
+    this.queue.setVisibleFollowUp({
+      key,
+      candidate: current,
+      aliases: new Map(aliases.map((alias) => [alias.cacheKey, alias])),
+      reason: 'visible',
+      priority: visibleFollowUpPriority(current, priority),
+      dueAt: gatedDueAt,
+      queuedAt: this.queue.nextOrder(),
+      followUp: !foreground,
+      foreground,
+      windowId
+    })
+    this.schedule(Math.max(0, gatedDueAt - Date.now()))
+  }
+
+  /** A full provider read of a visible row's exact request that the row's own queue did not run
+   *  (another client's read, a host job, a provider lookup) plans the row's next automatic work as
+   *  the row's own read would: its failure's retry, or the interval after its data. Work an action
+   *  or a return queued keeps its own reason; a read a newer read already replaced plans nothing. */
+  reconcileCompletion(
+    outcome: PRRefreshOutcome,
+    prepared: PreparedPRBranchRead,
+    request: PRBranchReadRequest,
+    producer: PRBranchReadProducer
+  ): PRRefreshOutcome {
+    const key = refreshKey(request)
+    const representative = this.visibility.shown(key)
+    if (!representative || !producer.current?.()) {
+      return outcome
+    }
+    const matchesCurrentRequest = () => {
+      const sameRequest = exactRequestMatcher(
+        candidateReadRequest(representative, 'visible'),
+        prepared.key
+      )
+      return (shown: GitHubPRRefreshCandidate) =>
+        sameRequest(candidateReadRequest(shown, 'visible'))
+    }
+    const shown = this.visibility.shown(key, matchesCurrentRequest())
+    if (!shown) {
+      return outcome
+    }
+    const pending = this.queue.get(key)
+    const candidate = this.visibility.candidate(key, shown)
+    // The row's failure is settled whatever is queued for it, so the last check before any read
+    // of the row (`admitPreparedRead`) finds it, even when the exact cache had no room for it.
+    const settled = this.retry.settleProducerError(
+      outcome,
+      key,
+      candidate,
+      prepared,
+      this.queue,
+      producer,
+      true,
+      () => {
+        return this.visibility.has(key) && this.visibility.hasDemand(key, matchesCurrentRequest())
+      }
+    )
+    // A rate limit the read reported holds the row's retries, as a local read's would.
+    this.retry.noteManualGate(key, settled)
+    if (pending && !pending.followUp && !pending.errorRetry) {
+      // A return or an action queued for the row keeps its own plan; a success ends any failure.
+      if (settled.kind !== 'upstream-error') {
+        this.retry.reset(key)
+      }
+      return settled
+    }
+    const aliases = pending ? Array.from(pending.aliases.values()) : [aliasFromCandidate(shown)]
+    this.scheduleVisibleFollowUp(key, candidate, settled, 40, aliases, pending?.windowId, {
+      plannedRetryAt: this.retry.errorFollowUpAt(key, candidate, settled, true)
+    })
+    // A follow-up already due sooner (one a replaced read kept for its row) still runs then: it
+    // shows this result from the exact cache, which this read alone never sends to the row.
+    const planned = this.queue.get(key)
+    if (settled.kind !== 'upstream-error' && pending?.followUp && planned?.followUp) {
+      planned.dueAt = Math.min(planned.dueAt, pending.dueAt)
+      this.schedule(Math.max(0, planned.dueAt - Date.now()))
+    }
+    return settled
+  }
+
+  /** Queues the automatic retry a failure earned; it stays an error retry until it runs, is
+   *  replaced or a cadence change retires it. */
+  scheduleErrorRetry(
+    key: string,
+    candidate: GitHubPRRefreshCandidate,
+    retryAt: number,
+    priority: number,
+    aliases: GitHubPRRefreshAlias[],
+    windowId?: number
+  ): void {
+    if (!this.visibility.has(key)) {
+      return
+    }
+    this.queue.setVisibleFollowUp({
+      key,
+      candidate,
+      aliases: new Map(aliases.map((alias) => [alias.cacheKey, alias])),
+      reason: 'visible',
+      priority,
+      dueAt: retryAt,
+      queuedAt: this.queue.nextOrder(),
+      errorRetry: true,
+      windowId
+    })
+    this.schedule(retryAt - Date.now())
+  }
+
   ordered(): PRRefreshQueueEntry[] {
+    this.visibility.prune()
     this.watchJobs.age(this.queue.values(), Date.now())
     return this.queue.ordered((a, b) => this.pacing.order(a, b))
   }

@@ -2,13 +2,22 @@ import { isWindowVisible } from './window-visibility-interval'
 
 export type WindowVisibilityTimeoutPollerTimer = ReturnType<typeof setTimeout>
 
+/** Why a run started: its own timer, the window coming back, an explicit refresh, or install. */
+export type WindowVisibilityPollerTrigger = 'timer' | 'visibility' | 'refresh' | 'install'
+
 export function installWindowVisibilityTimeoutPoller(args: {
-  run: () => Promise<void> | void
+  run: (context: { trigger: WindowVisibilityPollerTrigger }) => Promise<void> | void
   getDelayMs: () => number | null
+  /** With `getDelayMs` null (no timer): whether the window regaining focus still runs once, because
+   *  the timer was stopped by a setting (PR auto-refresh off) rather than by the data being settled.
+   *  Default: focus only matters while a timer is wanted. */
+  refreshOnFocusWhileStopped?: () => boolean
+  /** Keep one eligible return while a request runs; the caller decides whether its completion can satisfy it. */
+  replayVisibilityWhileInFlight?: () => boolean
   cooldownMs?: number
   setTimeoutFn?: (callback: () => void, delayMs: number) => WindowVisibilityTimeoutPollerTimer
   clearTimeoutFn?: (handle: WindowVisibilityTimeoutPollerTimer) => void
-}): (() => void) & { refresh: () => void } {
+}): (() => void) & { refresh: () => void; replan: () => void } {
   const setTimeoutFn =
     args.setTimeoutFn ??
     ((callback: () => void, delayMs: number): WindowVisibilityTimeoutPollerTimer =>
@@ -19,6 +28,7 @@ export function installWindowVisibilityTimeoutPoller(args: {
   let timeoutId: WindowVisibilityTimeoutPollerTimer | null = null
   let disposed = false
   let inFlight = false
+  let visibilityPending = false
   let lastRunAt = -Infinity
 
   const clearScheduledPoll = (): void => {
@@ -40,14 +50,21 @@ export function installWindowVisibilityTimeoutPoller(args: {
     }
     timeoutId = setTimeoutFn(() => {
       timeoutId = null
-      runAndSchedule()
+      runAndSchedule('timer')
     }, remainingMs ?? delayMs)
   }
 
-  function runAndSchedule(explicitRefresh = false): void {
-    if (disposed || !isWindowVisible() || inFlight) {
+  function runAndSchedule(trigger: WindowVisibilityPollerTrigger): void {
+    if (disposed || !isWindowVisible()) {
       return
     }
+    if (inFlight) {
+      if (trigger === 'visibility' && args.replayVisibilityWhileInFlight?.()) {
+        visibilityPending = true
+      }
+      return
+    }
+    const explicitRefresh = trigger === 'refresh'
     const elapsedMs = Date.now() - lastRunAt
     const cooldownRemainingMs = (args.cooldownMs ?? 0) - elapsedMs
     if (cooldownRemainingMs > 0) {
@@ -55,7 +72,7 @@ export function installWindowVisibilityTimeoutPoller(args: {
         clearScheduledPoll()
         timeoutId = setTimeoutFn(() => {
           timeoutId = null
-          runAndSchedule(true)
+          runAndSchedule('refresh')
         }, cooldownRemainingMs)
       }
       return
@@ -65,10 +82,15 @@ export function installWindowVisibilityTimeoutPoller(args: {
     inFlight = true
     const finish = (): void => {
       inFlight = false
-      schedulePoll()
+      if (visibilityPending) {
+        visibilityPending = false
+        runAndSchedule('visibility')
+      } else {
+        schedulePoll()
+      }
     }
     try {
-      void Promise.resolve(args.run()).then(finish, finish)
+      void Promise.resolve(args.run({ trigger })).then(finish, finish)
     } catch {
       finish()
     }
@@ -84,18 +106,21 @@ export function installWindowVisibilityTimeoutPoller(args: {
         }
         return
       }
-      runAndSchedule()
+      runAndSchedule('visibility')
     } else {
       clearScheduledPoll()
     }
   }
+  // Focus without a visibility change (the user switched apps) is the user coming back: run when a
+  // timer is wanted, or when only a setting stopped it. The run keeps the cooldown and in-flight
+  // guards, and schedules no timer afterwards while the delay stays null.
   const reconcileFocus = (): void => {
-    if (args.getDelayMs() !== null) {
+    if (args.getDelayMs() !== null || args.refreshOnFocusWhileStopped?.() === true) {
       reconcileVisibility()
     }
   }
 
-  runAndSchedule()
+  runAndSchedule('install')
   if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
     window.addEventListener('focus', reconcileFocus)
   }
@@ -105,6 +130,7 @@ export function installWindowVisibilityTimeoutPoller(args: {
 
   const cleanup = (): void => {
     disposed = true
+    visibilityPending = false
     clearScheduledPoll()
     if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
       window.removeEventListener('focus', reconcileFocus)
@@ -113,5 +139,13 @@ export function installWindowVisibilityTimeoutPoller(args: {
       document.removeEventListener('visibilitychange', reconcileVisibility)
     }
   }
-  return Object.assign(cleanup, { refresh: () => runAndSchedule(true) })
+  return Object.assign(cleanup, {
+    refresh: () => runAndSchedule('refresh'),
+    // The delay policy changed: arm or disarm the next tick without running anything now.
+    replan: () => {
+      if (!inFlight) {
+        schedulePoll()
+      }
+    }
+  })
 }

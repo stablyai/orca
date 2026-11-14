@@ -1,6 +1,12 @@
 import { useEffect, useRef, type RefObject } from 'react'
-import { REVIEW_REFRESH_COOLDOWN_MS } from '../../../../../../shared/review-refresh-policy'
+import {
+  REVIEW_REFRESH_COOLDOWN_MS,
+  subscribePRAutoRefreshCadence,
+  type PRAutoRefreshCadence
+} from '../../../../../../shared/review-refresh-policy'
 import { installWindowVisibilityTimeoutPoller } from '@/lib/window-activity/window-visibility-timeout-poller'
+import { getPRRefreshOwnerRuntimeEnvironmentId } from '@/store/github/repositories/repository-routing'
+import { hostPRAutoRefreshCadence } from '@/store/github/refresh/remote-host-pr-auto-refresh-cadence'
 import type { ChecksDetailPollingPolicy } from '../../../../../../shared/github/checks/checks-detail-polling-policy'
 import type { ChecksPanelPollingInput, ChecksPanelPollingState } from './use-checks-panel-polling'
 
@@ -35,7 +41,7 @@ export function useChecksDetailTimer({
   const lastIdentityRef = useRef<string | null>(null)
   const lastAttemptAtRef = useRef(-Infinity)
   const nextAttemptAtRef = useRef(-Infinity)
-  const inFlightRef = useRef<{ identity: string; token: symbol } | null>(null)
+  const inFlightRef = useRef<{ identity: string; token: symbol; background: boolean } | null>(null)
   // The first read after the panel opens (or its review changes) is the user looking; later polls are background (E9).
   const wakeNextReadRef = useRef(true)
   useEffect(() => {
@@ -55,16 +61,35 @@ export function useChecksDetailTimer({
       wakeNextReadRef.current = true
       return
     }
-    const policyDelay = (): number | null => {
+    const ownerCadence = (): PRAutoRefreshCadence => {
+      const current = modelRef.current
+      // The host that reads these checks owns the cadence: a paired host's setting, else this app's.
+      return hostPRAutoRefreshCadence(
+        getPRRefreshOwnerRuntimeEnvironmentId({
+          cacheKey: current.prCacheKey ?? '',
+          executionHostId: current.repo?.executionHostId ?? null
+        })
+      )
+    }
+    const policyDelay = (cadence: PRAutoRefreshCadence = ownerCadence()): number | null => {
       const current = modelRef.current
       return policyRef.current.delayMs(
         current.activeGitLabReview?.state ?? current.pr?.state,
         current.activeGitLabReview?.status ?? current.pr?.checksStatus,
-        current.pollIntervalRef.current
+        current.pollIntervalRef.current,
+        cadence
       )
     }
+    // Under a stretched or stopped cadence the window coming back still reads checks older than
+    // Default's delay, never sooner: the cadence slows the timer, not the user's return.
+    const returnReadDue = (now: number): boolean => {
+      const defaultDelay = ownerCadence() === 'default' ? null : policyDelay('default')
+      return defaultDelay !== null && now - lastAttemptAtRef.current >= defaultDelay
+    }
+    const stoppedByCadence = (): boolean =>
+      ownerCadence() === 'off' && policyDelay('default') !== null
     const cleanup = installWindowVisibilityTimeoutPoller({
-      run: async () => {
+      run: async ({ trigger }) => {
         if (inFlightRef.current?.identity === requestIdentity) {
           return
         }
@@ -72,30 +97,48 @@ export function useChecksDetailTimer({
         const nextAttemptAt = nextAttemptAtRef.current
         if (
           now - lastAttemptAtRef.current < REVIEW_REFRESH_COOLDOWN_MS ||
-          (Number.isFinite(nextAttemptAt)
-            ? now < nextAttemptAt
-            : nextAttemptAt === Infinity &&
-              !forceNextFetchRef.current &&
-              now - lastAttemptAtRef.current < 60_000)
+          (!(
+            wakeNextReadRef.current ||
+            forceNextFetchRef.current ||
+            (trigger === 'visibility' && returnReadDue(now))
+          ) &&
+            (Number.isFinite(nextAttemptAt)
+              ? now < nextAttemptAt
+              : nextAttemptAt === Infinity &&
+                !forceNextFetchRef.current &&
+                (stoppedByCadence() || now - lastAttemptAtRef.current < 60_000)))
         ) {
           return
         }
         const token = Symbol()
-        inFlightRef.current = { identity: requestIdentity, token }
         const shown = wakeNextReadRef.current
+        const force =
+          forceNextFetchRef.current ||
+          trigger === 'visibility' ||
+          (shown && Number.isFinite(lastAttemptAtRef.current))
         wakeNextReadRef.current = false
         lastAttemptAtRef.current = now
         nextAttemptAtRef.current = Infinity
-        const force = forceNextFetchRef.current
         forceNextFetchRef.current = false
+        // Only the timer's own tick is a background read the host may pace; the window coming
+        // back, the panel opening and a changed aggregate state must read fresh.
+        const background = trigger === 'timer' && !shown && !force
+        inFlightRef.current = { identity: requestIdentity, token, background }
         try {
           await (isGitLabReview
             ? fetchGitLabDetails(shown ? {} : { background: true })
-            : fetchChecks({ force, ...(shown ? { wakeWslDistro: true } : {}) }))
+            : fetchChecks({
+                force,
+                ...(shown ? { wakeWslDistro: true } : {}),
+                ...(background ? { background: true } : {})
+              }))
         } finally {
           if (inFlightRef.current?.token === token) {
             inFlightRef.current = null
             if (lastIdentityRef.current === requestIdentity) {
+              if (!background && modelRef.current.isPanelVisible) {
+                wakeNextReadRef.current = false
+              }
               const delay = policyDelay()
               nextAttemptAtRef.current = delay === null ? Infinity : Date.now() + delay
               refreshRef.current?.()
@@ -108,19 +151,45 @@ export function useChecksDetailTimer({
         if (inFlightRef.current?.identity === requestIdentity) {
           return delay
         }
+        if (wakeNextReadRef.current || forceNextFetchRef.current) {
+          return Math.max(0, lastAttemptAtRef.current + REVIEW_REFRESH_COOLDOWN_MS - Date.now())
+        }
         if (delay === null) {
-          return forceNextFetchRef.current
-            ? Math.max(0, lastAttemptAtRef.current + REVIEW_REFRESH_COOLDOWN_MS - Date.now())
-            : null
+          return null
         }
         return Number.isFinite(nextAttemptAtRef.current)
           ? Math.max(0, nextAttemptAtRef.current - Date.now())
           : delay
+      },
+      // Returning to the window is a promised foreground read in every mode: when only the owning
+      // host's cadence (not settled checks) stopped the timer, focus still reads once.
+      refreshOnFocusWhileStopped: stoppedByCadence,
+      replayVisibilityWhileInFlight: () => {
+        const current = inFlightRef.current
+        const qualified =
+          current?.identity === requestIdentity && current.background && returnReadDue(Date.now())
+        if (qualified) {
+          forceNextFetchRef.current = true
+        }
+        return qualified
       }
     })
     refreshRef.current = cleanup.refresh
+    // A cadence change (this app's or the owning host's) re-plans a mounted panel at once: a timer
+    // stopped under "off" starts again, and one armed for Default is disarmed.
+    const unsubscribeCadence = subscribePRAutoRefreshCadence(() => {
+      if (inFlightRef.current?.identity === requestIdentity) {
+        return
+      }
+      const delay = policyDelay()
+      if (Number.isFinite(lastAttemptAtRef.current)) {
+        nextAttemptAtRef.current = delay === null ? Infinity : lastAttemptAtRef.current + delay
+      }
+      cleanup.replan()
+    })
     return () => {
       refreshRef.current = null
+      unsubscribeCadence()
       cleanup()
     }
   }, [

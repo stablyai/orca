@@ -3,9 +3,11 @@ import type {
   PRRefreshOutcome,
   PRSnapshotReply
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
-import { reviewRefreshIntervalMs } from '../../../../shared/review-refresh-policy'
-import { deliverablePRBranchOutcome } from '../../client/lookup/pr-branch-read-resources'
+import { getPRAutoRefreshCadence } from '../../../../shared/review-refresh-policy'
+import { freshTimedPROutcome } from './pr-refresh-candidate-policy'
 import type { PreparedPRBranchRead } from '../../client/lookup/pr-for-branch-outcome'
+import { deliverablePRBranchOutcome } from '../../client/lookup/pr-branch-read-resources'
+import { hostedPRReadSettlement } from './hosted-pr-read-settlement'
 import type { PRRefreshQueue, PRRefreshQueueEntry } from './pr-refresh-queue'
 import type { PRRefreshPacing } from './pr-refresh-pacing'
 import type { PRRefreshRetryState } from './pr-refresh-retry-state'
@@ -40,31 +42,16 @@ export class HostedPRReadJobs {
     ) => void
   ) {}
 
+  private get owners(): Parameters<typeof hostedPRReadSettlement>[0] {
+    return { queue: this.queue, retry: this.retry, observe: this.observe }
+  }
+
   has(prepared: PreparedPRBranchRead): boolean {
     return this.jobs.has(`hosted::${prepared.key}`)
   }
 
   fresh(prepared: PreparedPRBranchRead): PRRefreshOutcome | null {
-    return this.freshOutcome(prepared.cached())
-  }
-
-  freshOutcome(
-    cached: ReturnType<PreparedPRBranchRead['cached']>,
-    selected = true
-  ): PRRefreshOutcome | null {
-    if (!cached || cached.outcome.kind === 'upstream-error') {
-      return null
-    }
-    const outcome = cached.outcome
-    const interval =
-      cached.quietIntervalMs ??
-      reviewRefreshIntervalMs({
-        state: outcome.kind === 'found' ? outcome.pr.state : null,
-        checksStatus: outcome.kind === 'found' ? outcome.pr.checksStatus : null,
-        hasReview: outcome.kind === 'found',
-        selected
-      })
-    return interval === null || Date.now() - outcome.fetchedAt < interval ? outcome : null
+    return freshTimedPROutcome(prepared.cached())
   }
 
   private async legacyRead(
@@ -73,11 +60,8 @@ export class HostedPRReadJobs {
   ): Promise<PRRefreshOutcome> {
     const current = await prepared.reprepare()
     try {
-      const result = await current.readResult((outcome) => {
-        this.observe(candidate, outcome)
-        return outcome
-      })
-      return result!.outcome
+      const settle = hostedPRReadSettlement(this.owners, candidate, current, false)
+      return (await current.readResult(settle))!.outcome
     } finally {
       current.release()
     }
@@ -93,6 +77,7 @@ export class HostedPRReadJobs {
     )
   }
 
+  /** When a client should ask again for this request: the next budgeted start, or its gate. */
   retryAfterMs(prepared: PreparedPRBranchRead): number {
     return Math.max(
       RETRY_MS,
@@ -138,26 +123,16 @@ export class HostedPRReadJobs {
     acceptRevalidationOnly: boolean
   ): Promise<PRSnapshotReply> {
     try {
-      const result = await prepared.readResult((outcome) => {
-        const settled =
-          acceptRevalidationOnly && outcome.kind === 'upstream-error'
-            ? this.retry.settleProducerError(
-                outcome,
-                `hosted::${prepared.key}`,
-                { ...candidate, isSelected: false },
-                prepared,
-                this.queue,
-                true
-              )
-            : outcome
-        this.observe(candidate, settled)
-        return settled
-      }, acceptRevalidationOnly)
-      const outcome = result
-        ? acceptRevalidationOnly
+      const result = await prepared.readResult(
+        hostedPRReadSettlement(this.owners, candidate, prepared, acceptRevalidationOnly),
+        acceptRevalidationOnly
+      )
+      // A client that takes receipts gets only the request's current result; another gets its own.
+      const outcome = !result
+        ? null
+        : acceptRevalidationOnly
           ? deliverablePRBranchOutcome(prepared, result)
           : result.outcome
-        : null
       return await this.complete(prepared, candidate, outcome, acceptRevalidationOnly)
     } finally {
       prepared.release()
@@ -191,7 +166,9 @@ export class HostedPRReadJobs {
     }
     const fallback = () => this.complete(prepared, candidate, null, acceptRevalidationOnly)
     const gate = this.gateUntil(prepared)
-    if (prepared.cached()?.outcome.kind === 'upstream-error' && gate > Date.now()) {
+    // Off plans no automatic error retry; a foreground or manual read retries instead.
+    const failed = prepared.cached()?.outcome.kind === 'upstream-error'
+    if (failed && (gate > Date.now() || getPRAutoRefreshCadence() === 'off')) {
       return fallback()
     }
     let job = this.jobs.get(key)
@@ -227,10 +204,7 @@ export class HostedPRReadJobs {
           if (this.jobs.get(key) === job) {
             this.jobs.delete(key)
           }
-          const listenersAtCompletion = Array.from(listeners)
-          for (const listener of listenersAtCompletion) {
-            listener(outcome)
-          }
+          Array.from(listeners).forEach((listener) => listener(outcome))
           listeners.clear()
         }
       }
@@ -291,18 +265,45 @@ export class HostedPRReadJobs {
       }
     })
   }
+  /** A cadence change: Off retires every job not yet started, including one the drainer holds
+   *  while it awaits quota (ending its lease makes the drainer drop it); others wait for their
+   *  retimed gate. */
+  retime(): void {
+    const off = getPRAutoRefreshCadence() === 'off'
+    for (const [key, job] of this.jobs) {
+      const entry = this.queue.get(key)
+      if (job.running) {
+        continue
+      }
+      if (off) {
+        job.expiresAt = 0
+        if (!(entry?.hosted === job && this.completeFromCache(entry))) {
+          job.finish(null)
+        }
+      } else if (entry?.hosted === job) {
+        entry.dueAt = Math.min(job.expiresAt, Math.max(Date.now(), this.gateUntil(job.prepared)))
+      }
+    }
+  }
+
+  /** Ends a job that need not start: its answer is fresh, its scope changed, its lease ended, or it
+   *  is no longer the job this owner keeps for its key (retired while the drainer awaited quota,
+   *  maybe replaced). Only its own queue entry is removed. */
   completeFromCache(entry: PRRefreshQueueEntry): boolean {
     const job = entry.hosted
     if (!job) {
       return false
     }
-    const current = job.prepared.isCurrent()
-    const fresh = current ? this.fresh(job.prepared) : null
-    if (job.expiresAt > Date.now() && current && !fresh && job.prepared.canRetain()) {
+    const fresh = job.prepared.isCurrent() ? this.fresh(job.prepared) : null
+    const live =
+      this.jobs.get(entry.key) === job && job.prepared.isCurrent() && job.expiresAt > Date.now()
+    if (live && !fresh && job.prepared.canRetain()) {
       return false
     }
-    this.queue.delete(entry.key)
-    job.finish(current && job.expiresAt > Date.now() ? fresh : null)
+    if (this.queue.get(entry.key) === entry) {
+      this.queue.delete(entry.key)
+    }
+    job.finish(live ? fresh : null)
     return true
   }
 }

@@ -1,4 +1,5 @@
 import type { QueryClient, QueryKey } from '@tanstack/react-query'
+import { hostReadIntent } from '../../query/host-read-intent'
 import type { PRComment } from '../../../../src/shared/github/comments/comment-types'
 import type { PRCheckDetail } from '../../../../src/shared/github/checks/check-types'
 import {
@@ -165,6 +166,7 @@ export const prBranchReviewQuery = defineHostQuery({
           headSha: input.head,
           // Only an action's read re-learns host status; revalidations reuse what this connection knows.
           refresh: read.live,
+          intent: hostReadIntent(read, previous),
           previous
         }
       ),
@@ -178,19 +180,14 @@ export const prChecksQuery = defineHostQuery({
   refetchOnWindowFocus: true,
   // The event also fires when the checks rollup moves, which the summary alone can't list.
   signal: pullRequestChangedSignal,
-  fetch: async (
-    client,
-    target,
-    input: PrChecksInput,
-    _previous,
-    read
-  ): Promise<PRCheckDetail[]> => {
+  fetch: async (client, target, input: PrChecksInput, previous, read): Promise<PRCheckDetail[]> => {
     const outcome = await fetchPRChecks(client, target.worktree ?? '', {
       prNumber: input.number,
       headSha: input.head,
       // Fork checks must use the PR's own repo identity.
       prRepo: prRepoSlug(input),
-      refresh: read.live
+      refresh: read.live,
+      background: hostReadIntent(read, previous) === 'background'
     })
     if (!outcome.ok) {
       throw new Error(outcome.error)

@@ -3871,7 +3871,8 @@
             "linkedPRNumber": null,
             "fallbackPRNumber": 12,
             "acceptMergedFallbackPR": true,
-            "currentHeadOid": null
+            "currentHeadOid": null,
+            "reason": "active"
           },
           "paramsFollowDivergence": true,
           "reply": {

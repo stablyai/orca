@@ -177,6 +177,7 @@ export type RuntimeStore = {
     prBotAuthorOverrides?: GlobalSettings['prBotAuthorOverrides']
     sourceControlGroupOrder?: GlobalSettings['sourceControlGroupOrder']
     sourceControlCompareAgainstUpstream?: GlobalSettings['sourceControlCompareAgainstUpstream']
+    prAutoRefresh?: GlobalSettings['prAutoRefresh']
     diffShowWhitespace?: GlobalSettings['diffShowWhitespace']
     artifactSharingEnabled?: GlobalSettings['artifactSharingEnabled']
     terminalQuickCommands?: GlobalSettings['terminalQuickCommands']

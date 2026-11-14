@@ -1,0 +1,117 @@
+// @vitest-environment happy-dom
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { i18n } from '@/i18n/i18n'
+import { PRAutoRefreshControl } from './PRAutoRefreshControl'
+
+vi.mock('@/store/index', async () => {
+  const { useStore } = await import('zustand')
+  const { createStore } = await import('zustand/vanilla')
+  const store = createStore(() => ({ settingsSearchQuery: '' }))
+  return {
+    useAppStore: Object.assign((select: (s: unknown) => unknown) => useStore(store, select), store)
+  }
+})
+
+let container: HTMLDivElement
+let root: Root
+beforeEach(async () => {
+  await i18n.changeLanguage('en')
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true
+  container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+})
+afterEach(() => {
+  act(() => root.unmount())
+  document.body.replaceChildren()
+})
+
+function text(testId: string): string | null {
+  return container.querySelector(`[data-testid="${testId}"]`)?.textContent ?? null
+}
+
+describe('PRAutoRefreshControl', () => {
+  it('offers every cadence and reports the one the user picks', async () => {
+    const onChange = vi.fn()
+    await act(async () =>
+      root.render(
+        <PRAutoRefreshControl cadence="reduced" onChange={onChange} remoteHostName={null} />
+      )
+    )
+    expect(text('pr-auto-refresh-host-note')).toBeNull()
+
+    const minimal = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('button[role="radio"]')
+    ).find((button) => button.textContent === 'Minimal')
+    if (!minimal) {
+      throw new Error('No Minimal option')
+    }
+    await act(async () => minimal.click())
+    expect(onChange).toHaveBeenCalledWith('minimal')
+  })
+
+  it('names the paired host whose timers and clients the setting changes', async () => {
+    await act(async () =>
+      root.render(
+        <PRAutoRefreshControl
+          cadence="default"
+          onChange={() => {}}
+          remoteHostName="Boston build server"
+        />
+      )
+    )
+    expect(text('pr-auto-refresh-host-note')).toBe(
+      'Applies to Boston build server and every client connected to it.'
+    )
+    const group = container.querySelector('[role="radiogroup"]')
+    const describedBy = group?.getAttribute('aria-describedby') ?? ''
+    for (const id of describedBy.split(' ')) {
+      expect(document.getElementById(id)).not.toBeNull()
+    }
+  })
+
+  it('tells the user it is still reading a remote host and keeps the options disabled', async () => {
+    await act(async () =>
+      root.render(
+        <PRAutoRefreshControl
+          cadence={null}
+          onChange={() => {}}
+          remoteHostName="Boston build server"
+        />
+      )
+    )
+    expect(text('pr-auto-refresh-hint')).toBe(
+      'Reading the current setting from Boston build server…'
+    )
+    for (const button of container.querySelectorAll('button[role="radio"]')) {
+      expect(button.getAttribute('aria-disabled')).toBe('true')
+    }
+  })
+
+  it('shows an older host as Default, disabled, with the reason and no scope note', async () => {
+    const onChange = vi.fn()
+    await act(async () =>
+      root.render(
+        <PRAutoRefreshControl
+          cadence={null}
+          unsupported
+          onChange={onChange}
+          remoteHostName="Boston build server"
+        />
+      )
+    )
+    expect(text('pr-auto-refresh-hint')).toBe(
+      'Boston build server runs an older Orca without this setting, so it refreshes at Default. Update Orca on that server to change it.'
+    )
+    expect(text('pr-auto-refresh-host-note')).toBeNull()
+    const radios = Array.from(container.querySelectorAll<HTMLButtonElement>('button[role="radio"]'))
+    expect(radios.find((b) => b.getAttribute('aria-checked') === 'true')?.textContent).toBe(
+      'Default'
+    )
+    for (const button of radios) {
+      expect(button.getAttribute('aria-disabled')).toBe('true')
+    }
+  })
+})

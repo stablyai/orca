@@ -4,6 +4,7 @@ import {
   __resetHostedReviewBranchCacheForTests,
   withHostedReviewBranchCache
 } from './hosted-review-branch-cache'
+import { setPRAutoRefreshCadence } from '../../shared/review-refresh-policy'
 import {
   HOSTED_REVIEW_LOOKUP_DEADLINE_MS,
   LOOKUP_BACKOFF_MAX_MS,
@@ -115,6 +116,43 @@ describe('hosted review branch cache (#11532)', () => {
         withHostedReviewBranchCache(identity, { headOid: null }, recovered)
       ).resolves.toEqual(mergedReview)
       expect(recovered).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('host PR auto-refresh cadence', () => {
+    afterEach(() => {
+      setPRAutoRefreshCadence('default')
+    })
+
+    it('re-reads a found review after a minute by default', async () => {
+      const lookup = vi.fn(async () => openReview)
+      await withHostedReviewBranchCache(identity, { headOid: null }, lookup)
+      vi.advanceTimersByTime(60_000)
+      await withHostedReviewBranchCache(identity, { headOid: null }, lookup)
+      expect(lookup).toHaveBeenCalledTimes(2)
+    })
+
+    it('keeps a found review five times longer when reduced', async () => {
+      setPRAutoRefreshCadence('reduced')
+      const lookup = vi.fn(async () => openReview)
+      await withHostedReviewBranchCache(identity, { headOid: null }, lookup)
+      vi.advanceTimersByTime(4 * 60_000)
+      await withHostedReviewBranchCache(identity, { headOid: null }, lookup)
+      expect(lookup).toHaveBeenCalledTimes(1)
+      vi.advanceTimersByTime(60_000)
+      await withHostedReviewBranchCache(identity, { headOid: null }, lookup)
+      expect(lookup).toHaveBeenCalledTimes(2)
+    })
+
+    it('serves the cached answer until a forced or user read when off', async () => {
+      setPRAutoRefreshCadence('off')
+      const lookup = vi.fn(async () => openReview)
+      await withHostedReviewBranchCache(identity, { headOid: null }, lookup)
+      vi.advanceTimersByTime(24 * 60 * 60_000)
+      await withHostedReviewBranchCache(identity, { headOid: null }, lookup)
+      expect(lookup).toHaveBeenCalledTimes(1)
+      await withHostedReviewBranchCache(identity, { headOid: null, userRefresh: true }, lookup)
+      expect(lookup).toHaveBeenCalledTimes(2)
     })
   })
 })

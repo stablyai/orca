@@ -147,6 +147,7 @@ export function startPullRequestLookup(args: {
                   ...requestOptions,
                   repoOwnerExecutionHostId: options?.repoOwnerExecutionHostId
                 })
+            // Why: a reply without data leaves the shown PR as it is; queued work delivers the newer one.
             return isPRRevalidationOnly(response)
               ? response
               : normalizeGitHubPRForBranchOutcome(response)

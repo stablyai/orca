@@ -6,7 +6,12 @@ import {
 } from '../../../../src/shared/github/checks/checks-detail-polling-policy'
 import type { PRCheckDetail } from '../../../../src/shared/github/checks/check-types'
 import type { PRInfo } from '../../../../src/shared/github/pull-requests/pull-request-types'
+import type { PRAutoRefreshCadence } from '../../../../src/shared/review-refresh-policy'
 import { useHostQuery } from '../../query/host-query'
+import {
+  NO_SOURCE_CONTROL_SETTINGS_INPUT,
+  sourceControlSettingsQuery
+} from '../../source-control/settings/mobile-source-control-settings'
 import {
   NO_BRANCH,
   NO_CHECKS,
@@ -43,6 +48,7 @@ type Cadence = {
 }
 
 const FIRST_BACKOFF_MS = 60_000
+const REVALIDATION_RETRY_FLOOR_MS = 10_000
 const NO_HOST = { hostId: '', client: null }
 const NO_TARGET = { exec: 'local' as const }
 
@@ -88,10 +94,11 @@ function stepCadence(
   return cadence
 }
 
-function pollDelayMs(
+export function pollDelayMs(
   cadence: Cadence,
   state: PRInfo['state'],
-  checksStatus: PRInfo['checksStatus'] | undefined
+  checksStatus: PRInfo['checksStatus'] | undefined,
+  hostCadence: PRAutoRefreshCadence = 'default'
 ): number | null {
   const policy = new ChecksDetailPollingPolicy()
   if (cadence.failed) {
@@ -99,7 +106,8 @@ function pollDelayMs(
   } else if (cadence.checks) {
     policy.accept(cadence.checks)
   }
-  return policy.delayMs(state, checksStatus, cadence.backoffMs)
+  // The host that reads the PR owns the cadence; the phone's timer follows it (and the host caps it).
+  return policy.delayMs(state, checksStatus, cadence.backoffMs, hostCadence)
 }
 
 // Desktop's checks-panel cadence (shared policy): 1 min while open, backing off to 2 min when nothing
@@ -128,14 +136,26 @@ export function useMobilePrPolling({ queries, state, live, connected }: Input): 
   const current = cadence.resource === resource ? cadence : freshCadence(resource)
   const prState = pr?.state
   const checksStatus = pr?.checksStatus
+  const hostSettings = useHostQuery(
+    sourceControlSettingsQuery,
+    host,
+    { exec: target.exec },
+    NO_SOURCE_CONTROL_SETTINGS_INPUT,
+    { enabled: running }
+  )
+  const hostCadence = hostSettings.data?.prAutoRefresh ?? 'default'
   const delay = useMemo(
-    () => (running && prState ? pollDelayMs(current, prState, checksStatus) : null),
-    [running, current, prState, checksStatus]
+    () => (running && prState ? pollDelayMs(current, prState, checksStatus, hostCadence) : null),
+    [running, current, prState, checksStatus, hostCadence]
   )
   const refetchInterval = delay ?? false
   useHostQuery(prBranchReviewQuery, host, target, queries?.branchInput ?? NO_BRANCH, {
     enabled: running && queries?.branchInput != null,
-    refetchInterval
+    // A host still revalidating the shown answer asks to be read again soon; "off" asks nothing.
+    refetchInterval: (review) =>
+      running && hostCadence !== 'off' && review?.retryAfterMs !== undefined
+        ? Math.max(REVALIDATION_RETRY_FLOOR_MS, review.retryAfterMs)
+        : refetchInterval
   })
   const checksRead = useHostQuery(prChecksQuery, host, target, queries?.checksInput ?? NO_CHECKS, {
     enabled: running && queries?.checksInput != null,
@@ -156,5 +176,7 @@ export function useMobilePrPolling({ queries, state, live, connected }: Input): 
     setCadence(next)
   }
 
-  return { polling: pr !== null && running && (pr.state === 'open' || pr.state === 'draft') }
+  return {
+    polling: pr !== null && delay !== null && (pr.state === 'open' || pr.state === 'draft')
+  }
 }

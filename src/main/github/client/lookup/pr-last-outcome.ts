@@ -205,6 +205,7 @@ export function readTimedPROutcome(
 ): {
   outcome: PRRefreshOutcome
   quietIntervalMs: number | null
+  /** The start of the provider read that produced it. */
   sequence: number
 } | null {
   const entry = exactOutcomes.get(requestKey)

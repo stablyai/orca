@@ -1,5 +1,6 @@
 import { REVIEW_REFRESH_COOLDOWN_MS } from '../../../../shared/review-refresh-policy'
 import type { HostedPRReadJob } from './hosted-pr-read-jobs'
+import type { PRWatchPlan } from './pr-refresh-watch-jobs'
 import type {
   GitHubPRRefreshAlias,
   GitHubPRRefreshCandidate,
@@ -7,10 +8,11 @@ import type {
 } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import {
   aliasFromCandidate,
+  automaticDueAt,
   bypassesFreshnessDelay,
-  foregroundExposureDueAt,
   freshRetryAt,
   POST_PUSH_DELAY_MS,
+  foregroundExposureAgeMs,
   refreshKey,
   sameAliasRequestIdentity,
   shouldSkipFresh,
@@ -28,10 +30,15 @@ export type PRRefreshQueueEntry = {
   bypassBackgroundBudget?: boolean
   activeDelayNotified?: boolean
   followUp?: boolean
+  /** A timed retry of a failed visible read; re-planned when the auto-refresh cadence changes. */
+  errorRetry?: boolean
+  /** Due because a foreground exposure found its data older than the Default interval. */
   foreground?: boolean
   windowId?: number
   /** A watch job: the PR's current head, or with `headSha` one earlier head's checks. */
   watch?: { prKey: string; headSha?: string }
+  /** What the watch's due time was planned from, so a cadence change can derive it again. */
+  watchPlan?: PRWatchPlan
   hosted?: HostedPRReadJob
 }
 
@@ -49,6 +56,7 @@ import {
   mergeFollowUpAlias,
   dropSupersededWorktreeAliases
 } from './pr-refresh-queue-aliases'
+import { mergeCapturedRequest } from './pr-refresh-request-merge'
 
 export class PRRefreshQueue {
   private readonly entries = new Map<string, PRRefreshQueueEntry>()
@@ -125,7 +133,7 @@ export class PRRefreshQueue {
       entry.candidate = candidateFor(entry.key, entry.candidate)
       entry.priority = visibleFollowUpPriority(entry.candidate, entry.priority)
       entry.dueAt = Math.max(
-        freshRetryAt(entry.candidate) ?? Date.now(),
+        automaticDueAt(entry.candidate) ?? Number.POSITIVE_INFINITY,
         this.backgroundNotBefore.get(entry.key)?.until ?? 0
       )
       if (!Number.isFinite(entry.dueAt)) {
@@ -139,15 +147,28 @@ export class PRRefreshQueue {
     reason: GitHubPRRefreshReason,
     priority: number,
     windowId?: number,
-    reexposed = false
+    reexposed = false,
+    { routine = false }: { routine?: boolean } = {}
   ): PRRefreshEnqueue {
     const alias = aliasFromCandidate(candidate)
     const key = refreshKey(candidate)
     const existing = this.entries.get(key)
     const freshDueAt = shouldSkipFresh(candidate, reason) ? freshRetryAt(candidate) : null
-    const exposureDueAt = foregroundExposureDueAt(candidate, reexposed)
+    const exposureAgeMs = foregroundExposureAgeMs(candidate, reason, priority, reexposed)
+    const exposureDueAt =
+      exposureAgeMs !== null &&
+      candidate.cachedFetchedAt != null &&
+      Date.now() - candidate.cachedFetchedAt >= exposureAgeMs
+        ? Date.now()
+        : null
+    // A routine report of a row still shown as the same request is due only when the cadence gives
+    // it a read, never as discovery.
+    const routineDueAt = routine ? (automaticDueAt(candidate) ?? Number.POSITIVE_INFINITY) : null
     const dueAt = Math.max(
-      exposureDueAt ?? freshDueAt ?? Date.now() + (reason === 'post-push' ? POST_PUSH_DELAY_MS : 0),
+      routineDueAt ??
+        exposureDueAt ??
+        freshDueAt ??
+        Date.now() + (reason === 'post-push' ? POST_PUSH_DELAY_MS : 0),
       bypassesFreshnessDelay(reason) ? 0 : (this.backgroundNotBefore.get(key)?.until ?? 0)
     )
     if (!Number.isFinite(dueAt) && !existing) {
@@ -162,7 +183,8 @@ export class PRRefreshQueue {
         priority,
         dueAt,
         queuedAt: this.nextOrder(),
-        followUp: reason === 'visible' && freshDueAt !== null && exposureDueAt === null,
+        followUp:
+          routine || (reason === 'visible' && freshDueAt !== null && exposureDueAt === null),
         foreground: exposureDueAt !== null,
         windowId
       })
@@ -171,12 +193,14 @@ export class PRRefreshQueue {
 
     setLiveAlias(existing.aliases, alias)
     if (
+      !routine &&
       reason === 'visible' &&
       (exposureDueAt !== null || !shouldSkipFresh(candidate, reason)) &&
       existing.reason === 'visible'
     ) {
       existing.dueAt = Math.min(existing.dueAt, dueAt)
       existing.followUp = false
+      existing.errorRetry = false
       existing.foreground ||= exposureDueAt !== null
     }
     const shouldPromote =
@@ -237,16 +261,11 @@ export class PRRefreshQueue {
     }
   }
 
-  removeInvisibleVisibleEntries(isVisible: (key: string) => boolean): PRRefreshQueueEntry[] {
-    const removed: PRRefreshQueueEntry[] = []
-    for (const [key, entry] of this.entries) {
-      if (entry.reason !== 'visible' || isVisible(key)) {
-        continue
-      }
-      this.entries.delete(key)
-      removed.push(entry)
-    }
-    return removed
+  /** Puts back work that waited for quota and may not start yet, merged with what was queued for
+   *  its key meanwhile. A host job keeps its own entry. */
+  requeueCaptured(entry: PRRefreshQueueEntry): void {
+    const current = this.entries.get(entry.key)
+    this.set(entry.key, current && !entry.hosted ? mergeCapturedRequest(current, entry) : entry)
   }
 
   setVisibleFollowUp(entry: PRRefreshQueueEntry): void {

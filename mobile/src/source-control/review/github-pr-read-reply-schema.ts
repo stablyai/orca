@@ -1,5 +1,9 @@
 import * as z from 'zod'
 import { salvagedOptional, salvagingArray } from '../../../../src/shared/zod-salvage'
+import {
+  isPRRevalidationOnly,
+  type PRRevalidationOnly
+} from '../../../../src/shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { PRInfo } from '../../../../src/shared/github/pull-requests/pull-request-types'
 import type {
   GitHubWorkItem,
@@ -165,20 +169,38 @@ const pullRequestSchema = z
   )
 
 // Expose only fields actually sent/read; do not fabricate PRRefreshOutcome metadata.
+// `retryAfterMs`: the host is still revalidating this answer and asks to be read again that soon.
 export type GitHubPrForBranchOutcome =
   | { kind: 'upstream-error'; message: string }
-  | { kind: 'found'; pr: PRInfo }
+  | { kind: 'found'; pr: PRInfo; retryAfterMs?: number }
+  | { kind: 'no-pr'; retryAfterMs: number }
+  | { kind: 'revalidating'; retryAfterMs: number }
+
+const revalidationSchema = z.looseObject({ retryAfterMs: z.number().finite().nonnegative() })
+
+function receiptRetryAfterMs(revalidation: unknown): { retryAfterMs?: number } {
+  const receipt = revalidationSchema.safeParse(revalidation)
+  return receipt.success ? { retryAfterMs: receipt.data.retryAfterMs } : {}
+}
 
 // Accept legacy bare PR/null and classified outcomes; preserve upstream-error text as an in-band host result.
 export const githubPrForBranchSchema: z.ZodType<GitHubPrForBranchOutcome | null, unknown> = z.union(
   [
+    // A host that kept no answer for this read only says when to read again; it carries no data.
+    z.custom<PRRevalidationOnly>(isPRRevalidationOnly).transform((reply) => ({
+      kind: 'revalidating' as const,
+      retryAfterMs: reply.revalidation.retryAfterMs
+    })),
     z
       .looseObject({ kind: z.literal('upstream-error'), message: prText('message') })
       .transform((outcome) => ({
         kind: 'upstream-error' as const,
         message: outcome.message ?? ''
       })),
-    z.looseObject({ kind: z.literal('no-pr') }).transform(() => null),
+    z.looseObject({ kind: z.literal('no-pr') }).transform((outcome) => {
+      const { retryAfterMs } = receiptRetryAfterMs(outcome.revalidation)
+      return retryAfterMs === undefined ? null : { kind: 'no-pr' as const, retryAfterMs }
+    }),
     z.looseObject({ kind: z.literal('found'), pr: pullRequestSchema }).transform((outcome, ctx) => {
       if (!outcome.pr) {
         ctx.addIssue({
@@ -188,7 +210,11 @@ export const githubPrForBranchSchema: z.ZodType<GitHubPrForBranchOutcome | null,
         })
         return z.NEVER
       }
-      return { kind: 'found' as const, pr: outcome.pr }
+      return {
+        kind: 'found' as const,
+        pr: outcome.pr,
+        ...receiptRetryAfterMs(outcome.revalidation)
+      }
     }),
     pullRequestSchema.transform((pr, ctx) => {
       if (!pr) {

@@ -7,10 +7,7 @@ import { getHostedReviewCacheKey } from '../store/slices/hosted-review/hosted-re
 import { getVisibleHostedReviewWorkspaces } from '../store/slices/hosted-review/refresh/visible-hosted-review-refresh-targets'
 import { shouldCoordinateVisibleGitHubReview } from '../store/slices/hosted-review/refresh/visible-hosted-review-refresh-ownership'
 import { getPRRefreshRuntimeRepoTarget } from '../store/github/repositories/repository-routing'
-import {
-  reviewRefreshIntervalMs,
-  REVIEW_REFRESH_COOLDOWN_MS
-} from '../../../shared/review-refresh-policy'
+import { reviewForegroundFreshnessMs } from '../../../shared/review-refresh-policy'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
@@ -139,13 +136,13 @@ export function refreshForegroundVisibleReview(state: AppState): void {
   ) {
     return
   }
-  const interval =
-    reviewRefreshIntervalMs({
-      state: candidate.cachedPRState,
-      checksStatus: candidate.cachedChecksStatus,
-      hasReview: candidate.cachedHasPR,
-      selected: true
-    }) ?? REVIEW_REFRESH_COOLDOWN_MS
+  // Window return is the user looking: a stretched cadence still reads data older than Default's.
+  const interval = reviewForegroundFreshnessMs({
+    state: candidate.cachedPRState,
+    checksStatus: candidate.cachedChecksStatus,
+    hasReview: candidate.cachedHasPR,
+    selected: true
+  })
   if (
     candidate.cachedFetchedAt == null ||
     Date.now() - candidate.cachedFetchedAt >= interval ||

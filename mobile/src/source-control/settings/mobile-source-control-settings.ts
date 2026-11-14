@@ -13,16 +13,19 @@ import {
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 
-const DESKTOP_DEFAULTS: MobileSourceControlSettings = {
+export const DESKTOP_SOURCE_CONTROL_DEFAULTS: MobileSourceControlSettings = {
   groupOrder: DEFAULT_SOURCE_CONTROL_GROUP_ORDER,
   compareAgainstUpstream: false,
-  diffShowWhitespace: false
+  diffShowWhitespace: false,
+  prAutoRefresh: 'default'
 }
+const DESKTOP_DEFAULTS = DESKTOP_SOURCE_CONTROL_DEFAULTS
 
-const NO_INPUT = {}
+export const NO_SOURCE_CONTROL_SETTINGS_INPUT = {}
+const NO_INPUT = NO_SOURCE_CONTROL_SETTINGS_INPUT
 
 // A host without settingsChanged gets a reread on every mount and foreground, behind the cached copy.
-const sourceControlSettingsQuery = defineHostQuery({
+export const sourceControlSettingsQuery = defineHostQuery({
   family: 'settings.sourceControl',
   staleTime: 0,
   refetchOnWindowFocus: true,

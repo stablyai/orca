@@ -64,8 +64,17 @@ export function clientModuleMock(mocks: PRRefreshCoordinatorMocks): ClientModule
   return {
     getPRForBranchOutcome: mocks.getPRForBranchOutcomeMock,
     preparePRBranchRead: async (...args) => {
+      const { prBranchReadKeys } = await import('../../client/lookup/pr-read-identity')
+      const key = prBranchReadKeys(
+        args[0],
+        args[1],
+        args[2] ?? null,
+        args[3] ?? null,
+        args[4] ?? null,
+        args[5] ?? {}
+      )[1]
       const prepared: PreparedPRBranchRead = {
-        key: '',
+        key,
         reprepare: async () => prepared,
         cached: () => null,
         isCurrent: () => true,
@@ -81,14 +90,13 @@ export function clientModuleMock(mocks: PRRefreshCoordinatorMocks): ClientModule
           const outcome = await mocks.getPRForBranchOutcomeMock(...args)
           return settle ? settle(outcome, { retained: true }) : outcome
         },
-        readResult: async (settle) => ({
-          outcome: await prepared.read(settle),
-          sequence: 0,
-          current: () => true
-        }),
-        readRetained: async (settle) => {
+        readResult: async (settle) => {
           const outcome = await mocks.getPRForBranchOutcomeMock(...args)
-          return settle ? settle(outcome, { retained: true }) : outcome
+          return {
+            outcome: settle ? settle(outcome, { retained: true }) : outcome,
+            sequence: 0,
+            current: () => true
+          }
         }
       }
       return prepared

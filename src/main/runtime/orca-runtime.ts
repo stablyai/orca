@@ -5,6 +5,7 @@ import { installRuntimeLinearCommandSurface } from './integrations/linear/runtim
 import { publishNativeChatPreferenceChanges } from './agent-session/launch/runtime-native-chat-preference-events'
 import { publishSettingsChanges } from './client/settings/runtime-settings-change-events'
 import { publishWorkspaceViewChanges } from './client/settings/runtime-workspace-view-change-events'
+import { syncPRAutoRefreshCadence } from '../github/pull-requests/refresh/pr-auto-refresh-cadence-sync'
 import {
   OrcaRuntimeWithSidebarTemporal,
   sidebarFactsRuntime
@@ -206,6 +207,7 @@ class OrcaRuntimeService extends OrcaRuntimeSidebarBase {
     publishWorkspaceViewChanges(this.store, (event) => this.emitClientEvent(event))
     publishNativeChatPreferenceChanges(this.store, (event) => this.emitClientEvent(event))
     publishSettingsChanges(this.store, (event) => this.emitClientEvent(event))
+    syncPRAutoRefreshCadence(this.store)
   }
 
   /** What mobileRelay.hosts.list answers changed. */

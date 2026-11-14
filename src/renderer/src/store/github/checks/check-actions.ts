@@ -176,7 +176,9 @@ export const createCheckActions = (
                 headSha,
                 prRepo: prRepo ?? null,
                 noCache,
-                ...(userRefresh ? { userRefresh: true } : {})
+                ...(userRefresh ? { userRefresh: true } : {}),
+                // A timer tick is budgeted background work the host paces by its own cadence.
+                ...(options?.background && !noCache ? { reason: 'swr' } : {})
               },
               { timeoutMs: 30_000 }
             )

@@ -20,7 +20,8 @@ import {
 } from '../pull-requests/refresh/pr-refresh-coordinator'
 import {
   prChecksDone,
-  prWatchNextDueAt,
+  prWatchPlanDueAt,
+  prWatchReadPlan,
   type PRWatchJob
 } from '../pull-requests/refresh/pr-refresh-watch-jobs'
 import { deletePRMovedHeads, endPRWatchState } from './pr-check-event-tables'
@@ -245,9 +246,10 @@ export class PRWatchService {
       return
     }
     // Any read of the PR, a sidebar's included, serves the watch's next due read.
-    const nextDueAt = prWatchNextDueAt(outcome)
-    if (nextDueAt !== null) {
-      schedulePRWatchRead({ prKey }, active, nextDueAt, { defer: true })
+    const plan = prWatchReadPlan(outcome)
+    const nextDueAt = plan && prWatchPlanDueAt(plan)
+    if (plan && nextDueAt !== null) {
+      schedulePRWatchRead({ prKey }, active, nextDueAt, { defer: true, plan })
     }
   }
 
