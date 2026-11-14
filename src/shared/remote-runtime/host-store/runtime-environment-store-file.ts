@@ -96,9 +96,17 @@ export function readEnvironmentStore(
   userDataPath: string,
   options: EnvironmentStoreRecordsReadOptions = {}
 ): MergedEnvironmentStore {
-  // Windows hits must re-verify ACLs anyway, which costs as much as the read it would skip (measured).
-  if (options.requireStoreFile || options.recoverBlankStore || process.platform === 'win32') {
+  if (options.requireStoreFile || options.recoverBlankStore) {
     return readEnvironmentStoreUncached(userDataPath, options)
+  }
+  return structuredClone(readSharedEnvironmentStore(userDataPath))
+}
+
+/** The registry as last read, shared with every caller: never mutate it; clone what you keep. */
+export function readSharedEnvironmentStore(userDataPath: string): MergedEnvironmentStore {
+  // Windows hits must re-verify ACLs anyway, which costs as much as the read it would skip (measured).
+  if (process.platform === 'win32') {
+    return readEnvironmentStoreUncached(userDataPath, {})
   }
   const storePath = getEnvironmentStorePath(userDataPath)
   const sidecarPath = getRuntimeEnvironmentSidecarPath(userDataPath)
@@ -126,7 +134,7 @@ export function readEnvironmentStore(
             ? { deployments: [], unreadableEnvironmentIds: new Set() }
             : parseWslHostDeploymentsText(wslPath, wslText)
       }),
-    () => readEnvironmentStoreUncached(userDataPath, options)
+    () => readEnvironmentStoreUncached(userDataPath, {})
   )
 }
 
