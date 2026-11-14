@@ -233,6 +233,9 @@ export type AgentSessionStatusSummary = {
   turnOutcome?: AgentTurnOutcome
   /** Host-derived, unpersisted Stop progress while working until its turn ends; clear a settled no-op Stop. Older hosts omit it and older clients ignore it. */
   stopping?: true
+  /** The agent asked a question its turn does not wait on (Codex's async question), and the person
+   *  has not answered it yet. Turn status is unchanged; only the lead state shows it. Older hosts omit it. */
+  awaitsAnswer?: true
   /** Optional live provider tasks let lists show children without journal subscriptions; derive from children when published. */
   backgroundTasks?: AgentSessionBackgroundTask[]
   /** Running/monitoring child views (decodeAgentChildWorkViews); finished children use background tasks only. Omit usage and per-tick freshness here; the background-task channel carries those ticks. Older hosts omit this. */
