@@ -8,7 +8,6 @@ import { createTestStore } from '../../testing/app-store-test-fixture'
 import { makeOpenFile } from '../editor/types/open-file.test-fixture'
 import { makeTabGroup, makeUnifiedTab } from './tab-group.test-fixture'
 import { seedThreePaneLayout } from './three-pane-layout.test-fixture'
-import { makeBrowserTab } from '../browser/browser-tab.test-fixture'
 
 import { drawTabsFromMain } from './tabs-drawn-from-main.test-fixture'
 
