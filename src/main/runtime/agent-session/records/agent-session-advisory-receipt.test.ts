@@ -108,4 +108,31 @@ it('preserves owned advisory closure, including unadmitted failure, without acce
   expect(applyAgentSessionAdvisoryReceipt(closed, write).advisoryReceipt).toMatchObject({
     closure: { root: 'exited', tree: 'exited', observedAt: 1800000002000 }
   })
+  const released = {
+    ...captured,
+    lease: {
+      ...captured.lease,
+      claimStatus: 'released' as const,
+      runtimeFence: 8,
+      ownerProcess: null,
+      reservedSpawnToken: null
+    }
+  }
+  const finalWrite = {
+    ...write,
+    receipt: {
+      ...receipt,
+      closure: { root: 'exited' as const, tree: 'exited' as const, observedAt: 1800000002000 }
+    }
+  }
+  expect(applyAgentSessionAdvisoryReceipt(released, finalWrite).advisoryReceipt).toMatchObject({
+    closure: { root: 'exited', tree: 'exited' }
+  })
+  for (const replaced of [
+    { ...released, lease: { ...released.lease, runtimeFence: 9 } },
+    { ...released, lease: { ...record.lease, runtimeFence: 8 } }
+  ]) {
+    expect(() => applyAgentSessionAdvisoryReceipt(replaced, finalWrite)).toThrow('receipt')
+  }
+  expect(() => applyAgentSessionAdvisoryReceipt(released, write)).toThrow('receipt')
 })

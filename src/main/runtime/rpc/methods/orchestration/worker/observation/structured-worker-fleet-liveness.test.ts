@@ -8,6 +8,7 @@ import {
 } from '../../../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import type { AgentSessionRecord } from '../../../../../../../shared/agent-session/lifecycle/agent-session-record'
 import { agentSessionAdvisoryPolicyFingerprint } from '../../../../../../../shared/agent-session/agent-session-advisory-policy'
+import { agentSessionExecutionPolicyFingerprint } from '../../../../../../../shared/agent-session/agent-session-execution-policy'
 import type { FleetAgentStatusEvidence } from '../../../../../../../shared/orchestration/fleet/orchestration-fleet-agent-status-evidence'
 import {
   structuredAgentSessionPaneKey,
@@ -61,7 +62,10 @@ function record(
 function installHost(current: AgentSessionRecord, attached: boolean) {
   const host = {
     deps: {
-      adapter: { readExecutionEvidence: async () => null },
+      adapter: {
+        readExecutionEvidence: async () => null,
+        readExecutionQualification: async () => null
+      },
       store: {
         getRecord: () => current,
         getConversation: () => agentSessionConversationView(current),
@@ -112,11 +116,14 @@ describe('worker-list liveness for chat-mode workers', () => {
     vi.restoreAllMocks()
   })
 
-  function seed(advisoryPolicyFingerprint?: string) {
+  function seed(advisoryPolicyFingerprint?: string, executionPolicyFingerprint?: string) {
     const task = db.createTask({ runId: 'run_legacy_local', spec: 'structured work' })
     const { dispatch } = db.createStartingWorkerDispatch({
       taskId: task.id,
-      startOptions: advisoryPolicyFingerprint ? { advisoryPolicyFingerprint } : {},
+      startOptions: {
+        ...(advisoryPolicyFingerprint ? { advisoryPolicyFingerprint } : {}),
+        ...(executionPolicyFingerprint ? { executionPolicyFingerprint } : {})
+      },
       creator: { kind: 'system' },
       maxDepth: 9
     })
@@ -371,6 +378,101 @@ describe('worker-list liveness for chat-mode workers', () => {
       reason: 'identity_changed'
     })
   })
+
+  it.each(['fence', 'host', 'policy', 'location', 'renewal'])(
+    'discards a historical receipt when %s custody changes during native metadata read',
+    async (change) => {
+      const current = record('codex', {
+        claimStatus: 'released',
+        runtimeFence: 8,
+        ownerProcess: null,
+        reservedSpawnToken: null
+      })
+      current.schemaVersion = 4
+      current.location.workspaceKind = 'folder'
+      const policy = {
+        schema: 1 as const,
+        sourcePin: 'a'.repeat(40),
+        accountFingerprint: `codex:${'b'.repeat(64)}`,
+        model: 'fixture',
+        effort: 'low',
+        access: 'read-only' as const,
+        deadlineAt: 1800000120000
+      }
+      current.executionPolicy = policy
+      const fingerprint = agentSessionExecutionPolicyFingerprint(policy)
+      const dispatchId = seed(undefined, fingerprint)
+      current.executionReceipt = {
+        version: 1,
+        spawnTokenHash: 'c'.repeat(64),
+        invalidated: false,
+        turnCompleted: true,
+        runtime: { runtimeId: 'retired-runtime', pid: 4242, buildHash: '0123456789abcdef' },
+        execution: {
+          version: 1,
+          agent: 'codex',
+          modelProvider: 'openai',
+          sessionId: SESSION,
+          runtimeFence: 7,
+          acquisitionGeneration: 'generation',
+          observedAt: 1800000000000,
+          cwd: '/fixture',
+          model: 'fixture',
+          effort: 'low',
+          account: { type: 'chatgpt', fingerprint: `codex:${'b'.repeat(64)}`, plan: 'pro' },
+          permissions: {
+            approvalPolicy: 'never',
+            approvalsReviewer: 'user',
+            sandbox: { type: 'readOnly', networkAccess: false }
+          },
+          bounded: {
+            policyFingerprint: fingerprint,
+            deadlineAt: 1800000120000,
+            toolsIsolated: true,
+            inputAdmitted: true,
+            workspaceRootsSource: 'thread-open'
+          }
+        },
+        closure: { root: 'exited', tree: 'exited', observedAt: 1800000001000 }
+      }
+      const host = installHost(current, false)
+      host.deps.adapter.readExecutionQualification = async () => {
+        if (change === 'fence') {
+          current.lease.runtimeFence = 9
+        }
+        if (change === 'host') {
+          installHost(record('codex', { runtimeFence: 9 }), false)
+        }
+        if (change === 'policy') {
+          current.executionPolicy = { ...policy, sourcePin: 'd'.repeat(40) }
+        }
+        if (change === 'location') {
+          current.location.workspaceId = 'replacement'
+        }
+        if (change === 'renewal') {
+          current.lease.lastRenewedAt += 1
+        }
+        return null
+      }
+      const result = await readStructuredWorkerSettings(
+        {
+          ensureStructuredAgentSessionHost: async () => {},
+          getRuntimeId: () => 'current-runtime'
+        },
+        db,
+        dispatchId
+      )
+      if (change === 'renewal') {
+        expect(result).toMatchObject({
+          kind: 'execution-receipt',
+          sessionId: SESSION,
+          runtimeFence: 7
+        })
+      } else {
+        expect(result).toEqual({ kind: 'unknown', reason: 'identity_changed' })
+      }
+    }
+  )
 
   it('keeps at-rest and failed provider reads unknown', async () => {
     const dispatchId = seed()

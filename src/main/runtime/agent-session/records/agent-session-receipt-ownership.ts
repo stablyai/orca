@@ -16,15 +16,25 @@ export function reconcileOwnedAgentSessionReceipt<T extends Receipt>(
   previous: T | null
 ): T {
   const hash = createHash('sha256').update(input.spawnToken).digest('hex')
+  const releasedFinal =
+    record.lease.claimStatus === 'released' &&
+    !record.lease.ownerProcess &&
+    !record.lease.reservedSpawnToken &&
+    previous !== null &&
+    record.lease.runtimeFence === input.fence + 1 &&
+    receipt.closure?.root === 'exited' &&
+    receipt.closure.tree === 'exited'
   if (
     input.sessionId !== record.sessionId ||
     receipt.execution.sessionId !== record.sessionId ||
-    input.fence !== record.lease.runtimeFence ||
+    (input.fence !== record.lease.runtimeFence && !releasedFinal) ||
     receipt.execution.runtimeFence !== input.fence ||
     receipt.execution.acquisitionGeneration !== input.generation ||
     receipt.spawnTokenHash !== hash ||
     (previous &&
-      (previous.execution.acquisitionGeneration !== input.generation ||
+      (previous.execution.sessionId !== record.sessionId ||
+        previous.execution.runtimeFence !== input.fence ||
+        previous.execution.acquisitionGeneration !== input.generation ||
         previous.spawnTokenHash !== hash)) ||
     !(
       (record.lease.claimStatus === 'live' &&

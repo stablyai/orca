@@ -197,6 +197,12 @@ export async function acquireClaudeSession({
         attempt.connection === liveSession.connection
           ? liveSession.acquisitionGeneration
           : null,
+      receiptGeneration: () =>
+        liveSession &&
+        attempt.connection === liveSession.connection &&
+        (sessions.get(sessionId) === liveSession || exits.get(sessionId)?.session === liveSession)
+          ? liveSession.acquisitionGeneration
+          : null,
       handlers: {
         onMessage,
         ...permissions.handlers,

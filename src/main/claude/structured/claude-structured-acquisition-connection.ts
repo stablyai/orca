@@ -19,17 +19,19 @@ export async function openClaudeAcquisitionConnection({
   input,
   deps,
   handlers,
-  currentGeneration
+  currentGeneration,
+  receiptGeneration
 }: Pick<ClaudeSessionAcquisitionInput, 'input' | 'deps'> & {
   launch: ClaudeAcquisitionLaunch
   handlers: ClaudeStreamJsonConnectionHandlers
   currentGeneration: () => string | null
+  receiptGeneration: () => string | null
 }) {
   let onAdvisoryReport
   let opened: ClaudeStreamJsonConnection | null = null
   let recordingFailed = false
   const onAdvisoryObservation = (observation: AgentSessionAdvisoryObservation) => {
-    const generation = currentGeneration()
+    const generation = receiptGeneration()
     if (recordingFailed || !generation || !deps.onAdvisoryReceipt) {
       return
     }

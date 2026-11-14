@@ -5,6 +5,32 @@ import type { OrchestrationDb } from '../../../../orchestration/db/orchestration
 import type { OrchestrationWorkerSettings } from '../../../../../../shared/orchestration/workers/orchestration-worker-settings'
 import type { StructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { workerStartOptionsExecutionPolicyFingerprint } from '../../../../orchestration/workers/launch/worker-launch-observation'
+import type { AgentSessionRecord } from '../../../../../../shared/agent-session/lifecycle/agent-session-record'
+
+function receiptCustody(record: AgentSessionRecord): string {
+  const lease = record.lease
+  return JSON.stringify([
+    record.sessionId,
+    record.schemaVersion,
+    record.provider,
+    record.location,
+    record.accountHome,
+    record.providerHandleChain,
+    record.executionPolicy,
+    [
+      lease.runtimeKind,
+      lease.runtimeFence,
+      lease.claimStatus,
+      lease.ownerProcess,
+      lease.reservedSpawnToken,
+      lease.provenHandleLinkId,
+      lease.claimKeyId,
+      lease.handoffStage,
+      lease.handoffOperationId,
+      lease.unreconciled
+    ]
+  ])
+}
 
 export async function readWorkerExecutionReceipt(
   host: StructuredAgentSessionHost,
@@ -15,7 +41,7 @@ export async function readWorkerExecutionReceipt(
   const dispatch = db.getDispatchContextById(dispatchId)
   const sessionId = dispatch?.assignee_orca_session_id
   const record = sessionId && host.deps.store.getRecord(sessionId)
-  if (!record?.executionPolicy) {
+  if (!sessionId || !record?.executionPolicy) {
     return null
   }
   const parsed = agentSessionExecutionReceiptSchema.safeParse(record.executionReceipt)
@@ -52,11 +78,19 @@ export async function readWorkerExecutionReceipt(
   ) {
     return unknown
   }
+  const custody = receiptCustody(record)
   const metadata = await host.deps.adapter?.readExecutionQualification?.(record).catch(() => null)
-  const after = host.deps.store.getRecord(record.sessionId)
+  const after = host.deps.store.getRecord(sessionId)
+  const afterDispatch = db.getDispatchContextById(dispatchId)
   if (
-    after?.executionReceipt !== record.executionReceipt ||
-    db.getDispatchContextById(dispatchId)?.assignee_orca_session_id !== sessionId ||
+    !after ||
+    !afterDispatch ||
+    receiptCustody(after) !== custody ||
+    after.executionReceipt !== record.executionReceipt ||
+    afterDispatch.assignee_orca_session_id !== sessionId ||
+    afterDispatch.task_id !== dispatch.task_id ||
+    afterDispatch.run_id !== dispatch.run_id ||
+    db.getTask(dispatch.task_id)?.run_id !== dispatch.run_id ||
     workerStartOptionsExecutionPolicyFingerprint(
       db.getWorkerDispatch(dispatchId)?.start_options ?? ''
     ) !== fingerprint

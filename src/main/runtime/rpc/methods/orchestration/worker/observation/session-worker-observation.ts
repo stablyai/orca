@@ -120,6 +120,9 @@ export async function readStructuredWorkerSettings(
       dispatchId,
       runtime.getRuntimeId?.()
     )
+    if (getStructuredAgentSessionHost() !== host) {
+      return { kind: 'unknown', reason: 'identity_changed' }
+    }
     if (historical) {
       return historical
     }
@@ -130,6 +133,9 @@ export async function readStructuredWorkerSettings(
       runtime.getRuntimeId?.()
     )
     if (advisoryReceipt) {
+      if (getStructuredAgentSessionHost() !== host) {
+        return { kind: 'unknown', reason: 'identity_changed' }
+      }
       return advisoryReceipt
     }
     const held = holdStructuredWorker(identity, db)
