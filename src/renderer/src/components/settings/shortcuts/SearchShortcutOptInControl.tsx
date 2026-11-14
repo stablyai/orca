@@ -5,6 +5,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '../../../store/index'
 import {
+  requestSearchShortcutChoice,
   useSearchShortcutOfferState,
   type SearchShortcutOfferState
 } from '@/lib/keyboard/search-shortcut-offer'
@@ -41,21 +42,11 @@ function SearchShortcutOptInRow({ state }: { state: SearchShortcutOfferState }):
   const choose = async (choice: SearchShortcutChoice): Promise<void> => {
     setPending(true)
     setNotice(null)
-    try {
-      const outcome = await setSearchShortcutChoice(choice)
-      if (mountedRef.current) {
-        // A superseded save is explained by the row's own accepted-but-taken description.
-        setNotice(outcome === 'applied' || outcome === 'superseded' ? null : outcome)
-      }
-    } catch (error) {
-      console.error('Failed to save Search shortcut choice:', error)
-      if (mountedRef.current) {
-        setNotice('error')
-      }
-    } finally {
-      if (mountedRef.current) {
-        setPending(false)
-      }
+    const outcome = await requestSearchShortcutChoice(setSearchShortcutChoice, choice)
+    if (mountedRef.current) {
+      // A superseded save is explained by the row's own accepted-but-taken description.
+      setNotice(outcome === 'applied' || outcome === 'superseded' ? null : outcome)
+      setPending(false)
     }
   }
 

@@ -47,9 +47,7 @@ export const getSearchShortcutOptInSearchEntry = createLocalizedCatalog(
       ...translateSearchKeyword('auto.components.settings.shortcuts.search.0ecba9aa5f', 'keyboard'),
       ...translateSearchKeyword('searchShortcutOptIn.keywordSearch', 'search'),
       ...translateSearchKeyword('searchShortcutOptIn.keywordClear', 'clear'),
-      ...translateSearchKeyword('searchShortcutOptIn.keywordPalette', 'palette'),
-      'cmd+k',
-      'ctrl+k'
+      ...translateSearchKeyword('searchShortcutOptIn.keywordPalette', 'palette')
     ]
   })
 )

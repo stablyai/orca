@@ -13,7 +13,9 @@ import {
 import { toSearchShortcutPluginOwners } from '../../../../shared/keybindings/search-shortcut-plugin-owners'
 import type {
   KeybindingFileSnapshot,
-  KeybindingPlatform
+  KeybindingPlatform,
+  SearchShortcutChoice,
+  SearchShortcutChoiceResult
 } from '../../../../shared/keybindings/types'
 
 export type SearchShortcutOfferState = {
@@ -84,4 +86,21 @@ export function useSearchShortcutOfferState(
     snapshot,
     usePluginPanelsStore((state) => state.plugins)
   )
+}
+
+export type SearchShortcutRequestOutcome = SearchShortcutChoiceResult['outcome'] | 'error'
+
+/** Module-level so components keep their try/catch out of React Compiler's reach. */
+export async function requestSearchShortcutChoice(
+  setSearchShortcutChoice: (
+    choice: SearchShortcutChoice
+  ) => Promise<SearchShortcutChoiceResult['outcome']>,
+  choice: SearchShortcutChoice
+): Promise<SearchShortcutRequestOutcome> {
+  try {
+    return await setSearchShortcutChoice(choice)
+  } catch (error) {
+    console.error('Failed to save Search shortcut choice:', error)
+    return 'error'
+  }
 }

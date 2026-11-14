@@ -5,6 +5,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store/index'
 import {
+  requestSearchShortcutChoice,
   useLegacySearchShortcutSnapshot,
   useSearchShortcutOfferState,
   type SearchShortcutOfferState
@@ -50,53 +51,45 @@ function SearchShortcutOfferPrompt({
   const choose = async (choice: SearchShortcutChoice): Promise<void> => {
     setPending(true)
     setFailed(false)
-    try {
-      const outcome = await setSearchShortcutChoice(choice)
-      if (choice === 'dismissed') {
-        if (outcome === 'unconfirmed') {
-          // The dismissal may be live, which unmounts this footer, so feedback must outlive it.
-          showUnconfirmedToast(t)
-        } else if (outcome !== 'applied' && mountedRef.current) {
-          setFailed(true)
-        }
-      } else if (outcome === 'applied' || outcome === 'superseded') {
-        // The footer unmounts with the new snapshot, so confirmation and Undo move to a toast.
-        toast.success(
-          outcome === 'applied'
-            ? t('searchShortcutOptIn.acceptedToast', '{{key}} now opens Search', keys)
-            : t(
-                'searchShortcutOptIn.supersededToast',
-                '{{key}} was just assigned to another shortcut',
-                keys
-              ),
-          {
-            description:
-              outcome === 'superseded'
-                ? t(
-                    'searchShortcutOptIn.supersededDetail',
-                    'Your later change was kept. See Settings › Shortcuts.'
-                  )
-                : undefined,
-            action: {
-              label: t('searchShortcutOptIn.undo', 'Undo'),
-              onClick: () => void undoSearchShortcut(setSearchShortcutChoice, t)
-            }
-          }
-        )
-      } else if (outcome === 'unconfirmed') {
+    const outcome = await requestSearchShortcutChoice(setSearchShortcutChoice, choice)
+    if (choice === 'dismissed') {
+      if (outcome === 'unconfirmed') {
+        // The dismissal may be live, which unmounts this footer, so feedback must outlive it.
         showUnconfirmedToast(t)
-      } else if (mountedRef.current) {
+      } else if (outcome !== 'applied' && mountedRef.current) {
         setFailed(true)
       }
-    } catch (error) {
-      console.error('Failed to save Search shortcut choice:', error)
-      if (mountedRef.current) {
-        setFailed(true)
-      }
-    } finally {
-      if (mountedRef.current) {
-        setPending(false)
-      }
+    } else if (outcome === 'applied' || outcome === 'superseded') {
+      // The footer unmounts with the new snapshot, so confirmation and Undo move to a toast.
+      toast.success(
+        outcome === 'applied'
+          ? t('searchShortcutOptIn.acceptedToast', '{{key}} now opens Search', keys)
+          : t(
+              'searchShortcutOptIn.supersededToast',
+              '{{key}} was just assigned to another shortcut',
+              keys
+            ),
+        {
+          description:
+            outcome === 'superseded'
+              ? t(
+                  'searchShortcutOptIn.supersededDetail',
+                  'Your later change was kept. See Settings › Shortcuts.'
+                )
+              : undefined,
+          action: {
+            label: t('searchShortcutOptIn.undo', 'Undo'),
+            onClick: () => void undoSearchShortcut(setSearchShortcutChoice, t)
+          }
+        }
+      )
+    } else if (outcome === 'unconfirmed') {
+      showUnconfirmedToast(t)
+    } else if (mountedRef.current) {
+      setFailed(true)
+    }
+    if (mountedRef.current) {
+      setPending(false)
     }
   }
 
@@ -152,13 +145,7 @@ async function undoSearchShortcut(
   ) => Promise<SearchShortcutChoiceResult['outcome']>,
   t: ReturnType<typeof useTranslate>
 ): Promise<void> {
-  let outcome: SearchShortcutChoiceResult['outcome'] | 'error'
-  try {
-    outcome = await setSearchShortcutChoice('dismissed')
-  } catch (error) {
-    console.error('Failed to undo Search shortcut choice:', error)
-    outcome = 'error'
-  }
+  const outcome = await requestSearchShortcutChoice(setSearchShortcutChoice, 'dismissed')
   if (outcome === 'applied') {
     // Later explicit edits survive Undo, so name the result, not specific chords.
     toast(
