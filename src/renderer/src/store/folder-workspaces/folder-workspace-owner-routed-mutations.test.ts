@@ -64,6 +64,16 @@ beforeEach(() => {
         delete: folderWorkspacesDelete,
         list: folderWorkspacesList
       },
+      projectGroups: {
+        checkHooks: vi.fn(async () => ({
+          status: 'ok',
+          hasHooks: false,
+          hooks: null,
+          mayNeedUpdate: false,
+          setupRunPolicy: 'ask',
+          setupConfig: null
+        }))
+      },
       runtimeEnvironments: { call: runtimeEnvironmentTransportCall }
     }
   })

@@ -7332,12 +7332,6 @@
             "title": "에이전트 최대 절전",
             "toggleLabel": "에이전트 최대 절전 전환"
           },
-          "newWorktreeCardStyle": {
-            "copy": "업데이트된 워크트리 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다.",
-            "description": "업데이트된 워크트리 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다.",
-            "title": "새 카드 스타일",
-            "toggleLabel": "새 카드 스타일 전환"
-          },
           "nativeChat": {
             "shellEnvNamesLabel": "셸에서 전달할 변수",
             "shellEnvNamePlaceholder": "변수 이름",
@@ -9456,11 +9450,9 @@
             "newWorktreeCardStyle": {
               "card": "카드",
               "cards": "카드",
-              "description": "업데이트된 워크트리 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다.",
               "menu": "메뉴",
               "metadata": "메타데이터",
               "status": "상태",
-              "title": "새 카드 스타일",
               "worktree": "워크트리",
               "worktrees": "worktrees"
             },
@@ -16852,8 +16844,7 @@
           "historyUnavailable_other": "자동화 {{count}}개의 실행 기록을 사용할 수 없습니다. 집계에는 사용 가능한 기록만 포함됩니다."
         },
         "AutomationsPageBreadcrumb": {
-          "ariaLabel": "자동화 탐색경로",
-          "runDetails": "실행 세부정보"
+          "ariaLabel": "자동화 탐색경로"
         },
         "AutomationCustomCronPanel": {
           "3e3b2c369f": "Cron 식",
@@ -16886,8 +16877,6 @@
           "18763ded26": "일정",
           "dbef8dc110": "이 SSH 자동화는 Orca가 SSH 호스트에 연결할 수 있는 동안에만 실행됩니다. 다시 연결에 대화형 자격 증명이 필요하거나 호스트를 사용할 수 없는 경우 실행이 건너뛴 것으로 기록됩니다.",
           "1f6026358e": "자동화 삭제",
-          "d79452fb30": "자동화 재개",
-          "91a4155e95": "자동화 일시 중지",
           "2fb1605beb": "지금 실행",
           "221916d93c": "agent 작업 예약을 시작하려면 자동화를 만드세요.",
           "b09b2384fd": "일시중지됨",
@@ -16964,18 +16953,12 @@
         },
         "AutomationRunHistory": {
           "402651bfb6": "아직 실행이 없습니다.",
-          "9974a2b429": "상태",
           "13988187b3": "토큰",
           "86a248187e": "경비",
           "149c0b49c7": "워크스페이스",
           "8faaa00726": "실행",
-          "53fc5f07ab": "실행 기록",
-          "a00e38d1a3": "해당 없음",
+          "a00e38d1a3": "—",
           "historyUnavailable": "이 호스트에서는 실행 기록을 사용할 수 없습니다. 이는 자동화가 실패했거나 실행이 없음을 의미하지 않습니다."
-        },
-        "AutomationRunPageFrame": {
-          "40a511bed4": "실행 컨텍스트",
-          "33741dd973": "실행으로 돌아가기"
         },
         "AutomationSchedulePicker": {
           "9e677335b0": "분",
@@ -17001,10 +16984,8 @@
           "5ad314118e": "세션"
         },
         "AutomationsPage": {
-          "c3a28c9793": "실행을 보려면 자동화를 선택하세요.",
           "295698292f": "재실행",
           "0e110a3469": "실행",
-          "bb1b2cd31e": "개요",
           "25060635c6": "새로 추가",
           "d207ab4c25": "템플릿에서 시작",
           "15e0bfb13b": "삭제",
@@ -17042,8 +17023,6 @@
           "8500baacb4": "외부 소스",
           "36f71740a7": "선택된 워크스페이스",
           "cd8397cc32": "실행될 때마다 새로운 워크스페이스",
-          "pendingAutomationMissing": "자동화를 더 이상 사용할 수 없습니다.",
-          "pendingAutomationRunMissing": "실행 기록을 더 이상 사용할 수 없습니다.",
           "paused": "일시 중지됨",
           "missingWorkspace": "워크스페이스 없음",
           "usageUnavailable": "사용량을 사용할 수 없음",
@@ -17052,7 +17031,6 @@
           "latestSavedOutput": "최근 저장된 출력",
           "fullOutputUnavailable": "전체 출력을 불러오지 못했습니다.",
           "retryFullOutput": "다시 시도",
-          "backToList": "모든 자동화",
           "tableName": "이름",
           "tableProject": "프로젝트",
           "tableHost": "호스트",
@@ -17062,7 +17040,6 @@
           "rowActions": "자동화 작업",
           "tableLastRun": "마지막 실행",
           "ownerChanged": "이 자동화로 인해 호스트가 변경되었습니다. 새로고침하고 다시 시도하세요.",
-          "runError": "오류:",
           "deleteAutomationDescription": "<name/> 및 실행 기록을 삭제합니다. 이전 실행에서 생성된 워크스페이스는 삭제되지 않습니다.",
           "deleteExternalAutomationDescription": "<host/>의 <provider/>에서 <name/>을(를) 삭제합니다.",
           "runUsageSummaryTokens_other": "예상 {{cost}} · {{tokens}} 토큰"
@@ -17358,12 +17335,11 @@
           "noWorkspaceLaunched": "시작된 워크스페이스 없음"
         },
         "runWorkspaceDisplay": {
-          "notLaunched": "시작되지 않음",
-          "namedWorkspaceGone": "{{name}} (더 이상 사용할 수 없음)"
+          "notLaunched": "시작되지 않음"
         },
         "usage": {
           "tokensAndCost_other": "{{tokens}} 토큰 · {{cost}}",
-          "costUnavailable": "알 수 없음"
+          "costUnavailable": "—"
         },
         "externalDisplay": {
           "sshHost": "SSH 호스트",
@@ -19532,7 +19508,8 @@
         "unconfirmedDetail": "채팅이 열렸을 수 있습니다. 다시 분기하기 전에 세션 기록을 확인하세요.",
         "failed": "{{agent}}이(가) 이 채팅을 분기하지 못했습니다",
         "hostUnsupported": "이 호스트에서 이전 버전의 Orca가 실행 중입니다. 호스트의 Orca를 업데이트하고 다시 시도하세요.",
-        "failedDetail": "채팅은 변경되지 않았습니다. 다시 시도하세요."
+        "failedDetail": "채팅은 변경되지 않았습니다. 다시 시도하세요.",
+        "commandWorking": "{{agent}}이(가) 응답하는 동안에는 분기할 수 없습니다. 응답이 끝나면 /fork를 다시 실행하세요."
       },
       "cardKindHidden": {
         "description": "다음에서 언제든 변경할 수 있습니다:",

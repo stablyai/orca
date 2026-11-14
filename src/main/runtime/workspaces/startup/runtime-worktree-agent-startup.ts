@@ -39,7 +39,7 @@ type AttributedWorktreeStartupLaunch = WorktreeStartupLaunch & {
 }
 
 type StartupEnvironment = {
-  repo: Repo
+  repo: Pick<Repo, 'path' | 'connectionId' | 'executionHostId'>
   settings: ReturnType<RuntimeStore['getSettings']>
   /** Resolve the execution host's quoting/spawn fact, or the repair error that refuses startup. */
   getLaunchRuntime: (agent: TuiAgent) => ReturnType<typeof resolveStartupAgentLaunchRuntime>
@@ -257,7 +257,7 @@ export async function buildWorktreeStartupForAgent(
 }
 
 export async function resolveWorktreeCreateAgentStartup(
-  args: RuntimeManagedWorktreeCreateArgs,
+  args: Omit<RuntimeManagedWorktreeCreateArgs, 'repoSelector' | 'name'>,
   build: (
     agent: TuiAgent,
     prompt: string | undefined,

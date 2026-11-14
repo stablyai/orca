@@ -13,6 +13,7 @@ import { removeTree } from '../../../../shared/windows-transient-lock-removal'
 
 import { listWorktreesStrict } from '../catalog/worktree-listing'
 import { removeWorktree } from './worktree-removal'
+import { assertWorktreeCleanForRemoval } from './worktree-removal-preflight'
 import { areWorktreePathsEqual } from '../catalog/worktree-path-comparison'
 import { isPrunableGitFileWorktree } from '../../../workspaces/removal/worktree-prunable-git-file'
 import { removeStaleLocalWorktreeRegistration } from '../../../workspaces/removal/local-worktree-removal-recovery'
@@ -145,6 +146,31 @@ describe('worktree removal against the real Git binary', () => {
     await removeWorktree(repoPath, subWorktreePath, true)
     expect(await isRegistered(subWorktreePath)).toBe(false)
   })
+
+  // Builds a ~48k-entry real Git index (>10 MiB of ls-files output), which is slow on Windows runners.
+  it('finds a checked-out submodule in an index listing larger than the Git output buffer', async () => {
+    const blob = (await git(['hash-object', '-w', 'seed.txt'], worktreePath)).trim()
+    const head = (await git(['rev-parse', 'HEAD'], worktreePath)).trim()
+    const entries = Array.from(
+      { length: 48_000 },
+      (_, i) => `100644 ${blob}\t${'nested-directory/'.repeat(12)}file-${i}.txt\n`
+    )
+    // Sorts last, so the gitlink is only seen after more than 10 MiB of listing.
+    entries.push(`160000 ${head}\tzz-vendor\n`)
+    const indexInfo = execFileAsync('git', ['update-index', '--index-info'], { cwd: worktreePath })
+    indexInfo.child.stdin?.end(entries.join(''))
+    await indexInfo
+    await mkdir(join(worktreePath, 'zz-vendor', '.git'), { recursive: true })
+
+    await expect(
+      assertWorktreeCleanForRemoval(
+        worktreePath,
+        false,
+        {},
+        join(repoPath, '.git', 'worktrees', 'feature')
+      )
+    ).rejects.toThrow('Worktree has uncommitted or untracked changes, and it contains submodules.')
+  }, 60_000)
 
   it('prunes a proven malformed registration while retaining checkout files and its branch', async () => {
     const markerPath = join(worktreePath, '.git')

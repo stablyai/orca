@@ -158,6 +158,11 @@ function runBridgeProcess(
 
 export function mapBridgeError(message: string): RuntimeClientError {
   const text = message.trim() || 'desktop provider failed'
+  // Why: refusals that name their code must keep it even when the explanation matches a looser rule below.
+  const coded = /^(background_unavailable|element_not_enabled):/.exec(text)?.[1]
+  if (coded) {
+    return new RuntimeClientError(coded, text)
+  }
   if (/text_input_incomplete|window_not_responding/i.test(text)) {
     return new RuntimeClientError('action_timeout', text)
   }
@@ -170,6 +175,9 @@ export function mapBridgeError(message: string): RuntimeClientError {
   if (/appBlocked|app blocked/i.test(text)) {
     return new RuntimeClientError('app_blocked', text)
   }
+  if (/app_launch_failed/.test(text)) {
+    return new RuntimeClientError('app_launch_failed', text)
+  }
   if (
     /unsupported capability|hotkey.*require|paste_text requires|modified clicks require xdotool|GDK is required for non-character key synthesis/i.test(
       text
@@ -178,7 +186,7 @@ export function mapBridgeError(message: string): RuntimeClientError {
     return new RuntimeClientError('unsupported_capability', text)
   }
   if (
-    /unsupported mouse button|unsupported scroll direction|unsupported (?:key|modifier)|windowId is not supported|must be a positive|must be a finite number|\b(?:x|y|from_x|from_y|to_x|to_y|pages|click_count|text|key|direction) is required\b/i.test(
+    /unsupported mouse button|unsupported scroll direction|outside the target window|unsupported (?:key|modifier)|windowId is not supported|must be a positive|must be a finite number|\b(?:x|y|from_x|from_y|to_x|to_y|pages|click_count|text|key|direction) is required\b/i.test(
       text
     )
   ) {

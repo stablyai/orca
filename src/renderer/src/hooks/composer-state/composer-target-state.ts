@@ -137,6 +137,8 @@ export function useComposerTargetState(
     updateRepo: composerTargetStore.updateRepo
   })
   const derivedComposerState = useDerivedComposerState({
+    selectedProjectGroup: initialTargetState.selectedProjectGroup,
+    isProjectGroupTarget: runtimeTargetSelection.isProjectGroupTarget,
     agentPrompt: sourceContextState.agentPrompt,
     checkedHooksContextKey: asyncComposerState.checkedHooksContextKey,
     enableIssueAutomation: composerTargetStore.enableIssueAutomation,

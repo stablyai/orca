@@ -44,6 +44,8 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
   const [landingRequestKey, setLandingRequestKey] = useState('')
   const [tasksRefreshing, setTasksRefreshing] = useState(false)
   const [tasksFiltering, setTasksFiltering] = useState(false)
+  // Why: the landing fetch replaces every page when it lands, so paging while it runs would be undone.
+  const [githubListRevalidating, setGithubListRevalidating] = useState(false)
   const [tasksError, setTasksError] = useState<string | null>(null)
   // Why: per-repo failure count for the "N of M" banner; IPC rejections use tasksError instead so partial-failure and hard-reject don't double-show.
   const [failedCount, setFailedCount] = useState(0)
@@ -195,6 +197,8 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
     setTasksRefreshing,
     tasksFiltering,
     setTasksFiltering,
+    githubListRevalidating,
+    setGithubListRevalidating,
     tasksError,
     setTasksError,
     failedCount,

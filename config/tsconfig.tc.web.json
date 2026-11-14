@@ -1,6 +1,7 @@
 {
   "extends": "./tsconfig.web.json",
   "exclude": [
+    "../src/renderer/src/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-host-platform.test.ts",
     "../src/renderer/src/components/browser-pane/ClientHostedBrowserPagePane.test.tsx",
     "../src/renderer/src/runtime/provider-accounts/observations/provider-account-observation.test-fixture.ts",
     "../src/shared/**/*.test.ts",

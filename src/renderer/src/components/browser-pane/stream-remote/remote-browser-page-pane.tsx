@@ -21,7 +21,7 @@ import {
 import type {
   BrowserChromeShortcutScope,
   BrowserPageUrlSetter,
-  BrowserTabPageState
+  BrowserPageStateWriter
 } from '../describe-page/browser-page-types'
 import type { RemoteBrowserPaneNotice } from './remote-browser-page-input-model'
 import { useRemoteBrowserPageLifecycle } from './use-remote-browser-page-lifecycle'
@@ -57,10 +57,9 @@ export function RemoteBrowserPagePane({
   worktreeId: string
   isActive: boolean
   chromeShortcutScope: BrowserChromeShortcutScope
-  onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
+  onUpdatePageState: BrowserPageStateWriter
   onSetUrl: BrowserPageUrlSetter
 }): React.JSX.Element {
-  const activeRuntimeEnvironmentId = runtimeEnvironmentId
   const addressBarInputRef = useRef<HTMLInputElement | null>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
   const remoteViewportRef = useRef<HTMLDivElement | null>(null)
@@ -94,16 +93,15 @@ export function RemoteBrowserPagePane({
 
   // Why: runtimes predating browser.certificate-trust.v1 can't honor a proceed request, so hide "Proceed Anyway" until support is advertised.
   const [remoteCertificateTrustSupported, setRemoteCertificateTrustSupported] = useState(false)
-  const remoteCertificateEnvironmentId = remotePageHandle?.environmentId ?? null
   const certificateChallengeId = certificateFailure?.challengeId ?? null
   useEffect(() => {
-    if (!remoteCertificateEnvironmentId || !certificateChallengeId) {
+    if (!remotePageHandle?.environmentId || !certificateChallengeId) {
       setRemoteCertificateTrustSupported(false)
       return
     }
     let cancelled = false
     void runtimeEnvironmentSupportsCapability(
-      remoteCertificateEnvironmentId,
+      remotePageHandle?.environmentId,
       BROWSER_CERTIFICATE_TRUST_RUNTIME_CAPABILITY
     )
       .then((supported) => {
@@ -119,7 +117,7 @@ export function RemoteBrowserPagePane({
     return () => {
       cancelled = true
     }
-  }, [remoteCertificateEnvironmentId, certificateChallengeId])
+  }, [remotePageHandle?.environmentId, certificateChallengeId])
 
   const {
     enqueueRemoteInput,
@@ -154,7 +152,7 @@ export function RemoteBrowserPagePane({
   } = useRemoteBrowserPageLifecycle({
     browserTab,
     worktreeId,
-    activeRuntimeEnvironmentId,
+    activeRuntimeEnvironmentId: runtimeEnvironmentId,
     isActive,
     setPaneNotice,
     setPaneBusy,
@@ -174,6 +172,7 @@ export function RemoteBrowserPagePane({
 
   const {
     applyRemoteTabInfo,
+    prepareCertificateProceed,
     scheduleRemoteTabInfoRefresh,
     runRemoteNavigation,
     navigateToUrl,
@@ -224,7 +223,7 @@ export function RemoteBrowserPagePane({
   }, [hasStreamFrame])
 
   const { reconnectRemoteStream } = useRemoteBrowserPageStream({
-    activeRuntimeEnvironmentId,
+    activeRuntimeEnvironmentId: runtimeEnvironmentId,
     browserPageId: browserTab.id,
     isActive,
     lifecycle,
@@ -405,7 +404,7 @@ export function RemoteBrowserPagePane({
         remoteCertificateTrustSupported={remoteCertificateTrustSupported}
         certificateFailure={certificateFailure}
         remotePageHandle={remotePageHandle}
-        activeRuntimeEnvironmentId={activeRuntimeEnvironmentId}
+        activeRuntimeEnvironmentId={runtimeEnvironmentId}
         worktreeId={worktreeId}
         runtimeWorktree={runtimeWorktree}
         runtimeTarget={runtimeTarget}
@@ -413,6 +412,7 @@ export function RemoteBrowserPagePane({
         onGoto={(url) => runRemoteNavigation('browser.goto', url)}
         onNavigateToUrl={navigateToUrl}
         onReconnect={reconnectRemoteStream}
+        onBeforeProceedCertificate={prepareCertificateProceed}
         handleRemotePointerDown={handleRemotePointerDown}
         handleRemotePointerUp={handleRemotePointerUp}
         handleRemoteContextMenu={handleRemoteContextMenu}

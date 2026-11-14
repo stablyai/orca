@@ -104,6 +104,7 @@
   --color-question-card-border: var(--question-card-border);
   --color-question-option-border: var(--question-option-border);
   --color-chat-focus-ring: var(--chat-focus-ring);
+  --color-unread: var(--unread);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -269,6 +270,8 @@
   /* Answer card edge and the outline shared by its option tiles, badges, answer field and Skip. */
   --question-card-border-mix: 14%;
   --question-option-border-mix: 16%;
+  /* A finished agent result the user hasn't seen; blue so it never reads as a state color. */
+  --unread: var(--color-blue-500);
   /* Keep PR-state hues stable across theme changes. */
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
@@ -388,6 +391,7 @@
   --agent-question-text: var(--color-orange-300);
   --question-card-border-mix: 16%;
   --question-option-border-mix: 12%;
+  --unread: var(--color-blue-400);
   --workspace-status-done: #c7a594;
   --workspace-status-review: #16a34a;
   --workspace-status-progress: #d4a300;
@@ -552,20 +556,25 @@
 }
 
 /* One lifted surface for toasts and corner notification cards; the default card/popover blends into the app.
-   App themes replace the surface, secondary and muted colors with readable hex (notice-surface-tokens.ts). */
+   App themes replace the surface, fill and edge colors with readable ones (notice-surface-tokens.ts). */
 :root {
+  --notice-accent: var(--accent);
+  --notice-accent-foreground: var(--accent-foreground);
+  --notice-edge: var(--border);
+  --notice-input: var(--input);
   --notice-muted: var(--muted);
   --notice-muted-foreground: var(--muted-foreground);
+  --notice-outline-edge: transparent;
   --notice-secondary-edge: transparent;
   --notice-surface: var(--popover);
-  --notice-border: color-mix(in srgb, var(--foreground) 14%, transparent);
+  --notice-border: color-mix(in srgb, var(--popover-foreground) 14%, transparent);
   --notice-secondary: color-mix(in srgb, var(--foreground) 6%, var(--notice-surface));
   --notice-shadow: 0 11px 32px -6px rgb(0 0 0 / 0.2), 0 2px 6px rgb(0 0 0 / 0.08);
 }
 
 .dark {
   --notice-surface: color-mix(in srgb, var(--foreground) 7%, var(--popover));
-  --notice-border: color-mix(in srgb, var(--foreground) 15%, transparent);
+  --notice-border: color-mix(in srgb, var(--popover-foreground) 15%, transparent);
   --notice-secondary: color-mix(in srgb, var(--foreground) 10%, var(--notice-surface));
   --notice-shadow:
     0 11px 32px -6px rgb(0 0 0 / 0.55), 0 2px 6px rgb(0 0 0 / 0.22),
@@ -585,6 +594,10 @@
   --muted-foreground: var(--notice-muted-foreground);
   --secondary: var(--notice-secondary);
   --secondary-foreground: var(--popover-foreground);
+  --accent: var(--notice-accent);
+  --accent-foreground: var(--notice-accent-foreground);
+  --input: var(--notice-input);
+  --border: var(--notice-edge);
 }
 
 /* Why inset outline: an edge for themes that leave secondary buttons unfilled, without moving layout. */
@@ -594,6 +607,13 @@
     [data-sonner-toast] [data-button][data-cancel]
   ) {
   outline: 1px solid var(--notice-secondary-edge);
+  outline-offset: -1px;
+}
+
+.dark
+  :is([data-sonner-toaster], .notification-card-stack)
+  [data-slot='button'][data-variant='outline'] {
+  outline: 1px solid var(--notice-outline-edge);
   outline-offset: -1px;
 }
 
@@ -870,20 +890,26 @@ body[data-modal-overlay-open]
   }
 }
 
-@utility control-interaction {
+/* Outline interaction cues are scoped to dialog footer actions only. #41870 applied them to
+   every Button/Toggle/SelectTrigger, which read as noise on dense toolbar icon buttons.
+   Unlayered on purpose so it beats the Button's `outline-none` utility. Uses :focus (not
+   :focus-visible) so a dialog's auto-focused default action is visibly marked on open, and
+   clears the Button's focus-visible ring so the two cues don't stack. */
+[data-slot='dialog-footer'] [data-slot='button']:not(:disabled, [aria-disabled='true']) {
   @media (hover: hover) {
-    &:not(:disabled, [aria-disabled='true']):hover {
+    &:hover {
       outline: 1px solid var(--ring);
       outline-offset: 1px;
     }
   }
 
-  &:not(:disabled, [aria-disabled='true']):focus {
+  &:focus {
     outline: 2px solid var(--ring);
     outline-offset: 2px;
+    --tw-ring-shadow: 0 0 #0000;
   }
 
-  &:not(:disabled, [aria-disabled='true']):active {
+  &:active {
     outline: 2px solid var(--ring);
     outline-offset: 0;
   }
@@ -1766,16 +1792,12 @@ html.notch-shell body {
 }
 
 .worktree-agent-row-hover:hover {
-  background: color-mix(in srgb, var(--sidebar-foreground) 1.25%, transparent);
+  background: var(--worktree-sidebar-accent);
 }
 
 .worktree-agent-row-hover[data-focused-agent-pane='true'] {
   /* Mix sidebar-foreground into faint light-mode accent, retaining enough contrast for muted timestamps. */
   background: color-mix(in srgb, var(--sidebar-foreground) 12%, var(--sidebar-accent));
-}
-
-.dark .worktree-agent-row-hover:hover {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .dark .worktree-agent-row-hover[data-focused-agent-pane='true'] {
@@ -2131,16 +2153,7 @@ html.notch-shell body {
   .compact-agent-row.worktree-agent-lineage-parent-row.worktree-agent-row-hover:hover,
 [data-compact-agent-list='true']
   .compact-agent-row.worktree-agent-lineage-child-row.worktree-agent-row-hover:hover {
-  background: color-mix(in srgb, var(--sidebar-foreground) 1.25%, transparent);
-}
-
-.dark
-  [data-compact-agent-list='true']
-  .compact-agent-row.worktree-agent-lineage-parent-row.worktree-agent-row-hover:hover,
-.dark
-  [data-compact-agent-list='true']
-  .compact-agent-row.worktree-agent-lineage-child-row.worktree-agent-row-hover:hover {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  background: var(--worktree-sidebar-accent);
 }
 
 [data-compact-agent-list='true']

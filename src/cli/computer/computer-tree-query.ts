@@ -40,12 +40,18 @@ export function computerTreeElementsMatching(
   return elements.filter((element) => elementText(element).toLowerCase().includes(needle))
 }
 
-// Providers render traits after the role, whose own text may hold parentheses: `12 button (selected, disabled) Save`.
+// For hosts without `disabledElementIndexes`. Traits follow a role that may hold parentheses
+// (`12 button (selected, disabled) Save`), so a label reading `(disabled)` also matches.
 const DISABLED_TRAIT =
   /\((?:(?:selected|expanded|settable), )*disabled(?:, (?:selected|expanded|settable))*\)/u
 
-export function isComputerTreeElementDisabled(element: ComputerTreeElement): boolean {
-  return DISABLED_TRAIT.test(element.lines[0])
+export function isComputerTreeElementDisabled(
+  element: ComputerTreeElement,
+  disabledIndexes?: ReadonlySet<number>
+): boolean {
+  return disabledIndexes
+    ? disabledIndexes.has(element.index)
+    : DISABLED_TRAIT.test(element.lines[0])
 }
 
 function elementText(element: ComputerTreeElement): string {

@@ -4,7 +4,7 @@ import {
   REACT_COMPILER_OPTIONS,
   isReactCompilerEnabled,
   reactCompilerExcludePattern
-} from './react-compiler'
+} from './react-compiler.ts'
 
 const rendererSource = /\/src\/renderer\/src\/.*\.tsx?$/
 // Only shipped code is compiled; tests, fixtures, mocks and harnesses run as written.

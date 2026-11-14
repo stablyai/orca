@@ -176,15 +176,20 @@ export function useDetectedAgents(
     // Imperative action reads avoid six inert subscriptions per retained tab bar.
     const state = useAppStore.getState()
     if (targetKind === 'runtime' && targetId) {
-      return state.refreshRuntimeDetectedAgents(targetId, runtimeWorktreeId)
+      return state.refreshRuntimeDetectedAgents(targetId, runtimeWorktreeId, {
+        userInitiated: true
+      })
     }
     if (targetKind === 'ssh' && targetId) {
       return state.refreshRemoteDetectedAgents(targetId)
     }
     // Only the refresh control calls this: a user act that may start a stopped WSL distro.
     return includeDisabled
-      ? state.refreshAllDetectedAgents(localWorktreeId, { wakeWslDistro: true })
-      : state.refreshDetectedAgents(localWorktreeId, { wakeWslDistro: true })
+      ? state.refreshAllDetectedAgents(localWorktreeId, {
+          wakeWslDistro: true,
+          userInitiated: true
+        })
+      : state.refreshDetectedAgents(localWorktreeId, { wakeWslDistro: true, userInitiated: true })
   }, [includeDisabled, isUnknown, localWorktreeId, runtimeWorktreeId, targetKind, targetId])
 
   useEffect(() => {
