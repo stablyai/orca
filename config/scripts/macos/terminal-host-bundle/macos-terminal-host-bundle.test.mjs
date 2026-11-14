@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -7,8 +8,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 const require = createRequire(new URL('../../macos-terminal-host-bundle.test.mjs', import.meta.url))
 const {
   assembleMacTerminalHost,
+  assertMacTerminalHostUuid,
   daemonBareRequires,
   findUnresolvedDaemonRequires,
+  giveMacTerminalHostUuid,
   parseBuildVersionMinos
 } = require('./macos/terminal-host-bundle/macos-terminal-host-bundle.cjs')
 describe('terminal host binary checks', () => {
@@ -182,5 +185,29 @@ describe.skipIf(process.platform !== 'darwin')('terminal host assembly', () => {
         info: {}
       })
     ).toThrow(/loads a module by a computed name/)
+  })
+
+  it('replaces the stock UUID of the host executable with the one the release check expects', () => {
+    writeFileSync(
+      join(appPath, 'Contents', 'Info.plist'),
+      '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleExecutable</key><string>Orca</string></dict></plist>'
+    )
+    // A real platform-signed fat binary stands in for Node, which shares one UUID across installs.
+    copyFileSync('/usr/bin/true', join(root, 'node'))
+    const paths = assembleMacTerminalHost({
+      appPath,
+      nodeExecutable: join(root, 'node'),
+      iconPath: join(root, 'icon.icns'),
+      info: {}
+    })
+    expect(() => assertMacTerminalHostUuid(appPath, 'com.stablyai.orca')).toThrow(
+      'has UUID 87685E34-3144-3992-8AEB-93E63AB4BDD9'
+    )
+    giveMacTerminalHostUuid(appPath, 'com.stablyai.orca')
+    execFileSync(paths.executable)
+    const uuids = execFileSync('dwarfdump', ['--uuid', paths.executable], { encoding: 'utf8' })
+    expect(uuids).toContain('B8F3D296-B92E-86AC-98A1-E6AAC7D5764A (x86_64)')
+    expect(uuids).toContain('853646BB-8156-858A-85C1-7133D1ADB3FB (arm64e)')
+    assertMacTerminalHostUuid(appPath, 'com.stablyai.orca')
   })
 })

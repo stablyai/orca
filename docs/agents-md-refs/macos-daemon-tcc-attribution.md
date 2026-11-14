@@ -118,10 +118,18 @@ macOS register it, so retirement runs `lsregister -u` on the bundle before delet
 Retirement recognizes both `Orca Agents.app` and the legacy `Orca Terminal Host.app` inside unused
 copies, so changing the current bundle name does not leave old LaunchServices registrations behind.
 
-The helper's main-executable UUID is Node's, shared by every official Node 24.21.0 binary of that
-architecture, so it is not unique to Orca. Local Network access still passed in the signed spike:
-macOS matched the client by its code signature, and the job's `AssociatedBundleIdentifiers` ties it
-to Orca. Do not register copies explicitly (`lsregister -f` or `LSRegisterURL`).
+Do not register copies explicitly (`lsregister -f` or `LSRegisterURL`).
+
+## Executable UUID
+
+macOS Local Network privacy maps a process to its app by the executable's `LC_UUID`. Stock Node's
+UUID is shared by every official Node binary of that version and architecture (nvm, Homebrew, Volta
+installs), so a helper left on it was looked up as whichever app macOS last saw with that UUID, and
+Local Network access failed or prompted again (#21988). The build rewrites the helper's `LC_UUID`
+per CPU type before signing, with the helper the main executable uses
+(`macos-executable-uuid.cjs`); `MAC_TERMINAL_HOST_UUID` in `macos-terminal-host-bundle.cjs` picks
+a UUID of its own or the main executable's. `verifyMacTerminalHost` and the release check after
+notarization fail a build whose helper carries any other UUID.
 
 ## Rollback
 

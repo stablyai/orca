@@ -14,9 +14,16 @@ const {
 const { builtinModules } = require('node:module')
 const { basename, dirname, join, relative, resolve, sep } = require('node:path')
 const { pathToFileURL } = require('node:url')
+const {
+  assertMacExecutableUuid,
+  giveMacExecutableUniqueUuid
+} = require('../../desktop-distribution/macos/macos-executable-uuid.cjs')
 
 const MAC_TERMINAL_HOST_NAME = 'Orca Agents'
 const MAC_TERMINAL_HOST_EXECUTABLE = 'Orca Agents'
+// Stock Node's UUID is shared with every Node install, so macOS Local Network matched the host to other apps.
+// 'own': a UUID unique to the host; 'app': the main executable's, so both bundles of the id share one UUID.
+const MAC_TERMINAL_HOST_UUID = 'own'
 const macTerminalHostSignIgnore = [`/Contents/Helpers/${MAC_TERMINAL_HOST_NAME}\\.app(/|$)`]
 const NODE_PTY_FILES = [
   'package.json',
@@ -56,6 +63,31 @@ function macTerminalHostPaths(appPath) {
     ptyNode: join(ptyRelease, 'pty.node'),
     spawnHelper: join(ptyRelease, 'spawn-helper')
   }
+}
+
+/** The executable name the host's UUID derives from, per MAC_TERMINAL_HOST_UUID. */
+function macTerminalHostUuidName(appPath) {
+  return MAC_TERMINAL_HOST_UUID === 'app'
+    ? readPlist(join(appPath, 'Contents', 'Info.plist')).CFBundleExecutable
+    : MAC_TERMINAL_HOST_EXECUTABLE
+}
+
+/** Before signing: replaces stock Node's UUID with the one MAC_TERMINAL_HOST_UUID selects. */
+function giveMacTerminalHostUuid(appPath, appId) {
+  giveMacExecutableUniqueUuid(
+    macTerminalHostPaths(appPath).executable,
+    appId,
+    macTerminalHostUuidName(appPath)
+  )
+}
+
+/** Throws when the host executable does not carry the UUID MAC_TERMINAL_HOST_UUID selects. */
+function assertMacTerminalHostUuid(appPath, appId) {
+  assertMacExecutableUuid(
+    macTerminalHostPaths(appPath).executable,
+    appId,
+    macTerminalHostUuidName(appPath)
+  )
 }
 
 function packageNameOf(specifier) {
@@ -325,16 +357,18 @@ async function buildMacTerminalHost({
   signCode
 }) {
   const { NODE_RUNTIME_DARWIN_MINIMUM_OS } = await loadNodeRuntimePin()
+  const appInfo = readPlist(join(appPath, 'Contents', 'Info.plist'))
   const paths = assembleMacTerminalHost({
     appPath,
     nodeExecutable: await pinnedDarwinNode(arch),
     iconPath,
     info: buildMacTerminalHostInfo({
-      appInfo: readPlist(join(appPath, 'Contents', 'Info.plist')),
+      appInfo,
       usageDescriptions,
       minimumOs: NODE_RUNTIME_DARWIN_MINIMUM_OS
     })
   })
+  giveMacTerminalHostUuid(appPath, appInfo.CFBundleIdentifier)
   await signCode(paths.ptyNode, {})
   await signCode(paths.spawnHelper, {})
   await signCode(paths.bundle, { entitlements: entitlementsPath })
@@ -392,6 +426,11 @@ async function verifyMacTerminalHost({ appPath, arch, usageDescriptions, expecte
       `the Node binary's minos is ${minos}, but NODE_RUNTIME_DARWIN_MINIMUM_OS is ${minimumOs}`
     )
   }
+  try {
+    assertMacTerminalHostUuid(appPath, appId)
+  } catch (error) {
+    problems.push(error.message)
+  }
   for (const binary of [paths.executable, paths.ptyNode, paths.spawnHelper]) {
     const archs = lipoArchsToNodeArchs(spawnChecked('/usr/bin/lipo', ['-archs', binary]).stdout)
     if (archs.length !== 1 || archs[0] !== arch) {
@@ -424,11 +463,13 @@ async function verifyMacTerminalHost({ appPath, arch, usageDescriptions, expecte
 module.exports = {
   MAC_TERMINAL_HOST_NAME,
   assembleMacTerminalHost,
+  assertMacTerminalHostUuid,
   buildMacTerminalHost,
   buildMacTerminalHostInfo,
   daemonBareRequires,
   findMacTerminalHostInfoProblems,
   findUnresolvedDaemonRequires,
+  giveMacTerminalHostUuid,
   lipoArchsToNodeArchs,
   macTerminalHostPaths,
   macTerminalHostSignIgnore,
