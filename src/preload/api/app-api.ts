@@ -68,7 +68,7 @@ export type AppApi = {
   /** Subscribes to active macOS input-source changes. No-op in the browser fallback. */
   onKeyboardLayoutChanged: (callback: (event: KeyboardLayoutChangeEvent) => void) => () => void
   /** No-op on Windows/Linux. */
-  setUnreadDockBadgeCount: (count: number) => Promise<void>
+  setUnreadDockBadgeCount: (count: number, needsInput?: boolean) => Promise<void>
   getFloatingTerminalCwd: (args?: FloatingTerminalCwdRequest) => Promise<string>
   /** App-owned directory for auto-created Floating Workspace notes. */
   getFloatingMarkdownDirectory: () => Promise<string>
