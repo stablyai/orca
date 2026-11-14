@@ -1,0 +1,52 @@
+diff --git a/src/common/buffer/BufferLine.ts b/src/common/buffer/BufferLine.ts
+index d21032f31175f9f6d738b5724e4365e85a2e2a54..eaa998c7c1159b12005ceeb81aeefd10aa04f3fb 100644
+--- a/src/common/buffer/BufferLine.ts
++++ b/src/common/buffer/BufferLine.ts
+@@ -66,7 +66,13 @@ const $extended = DEFAULT_ATTR_DATA.extended.clone() as IExtendedAttrsExt;
+  * (if only one particular value is needed) or `loadCell`. For `loadCell` in a loop
+  * memory allocs / GC pressure can be greatly reduced by reusing the CellData object.
+  */
++export interface IBufferLineMutationObserver {
++  codepointWritten(line: BufferLine, column: number, codepoint: number, width: number): void;
++  codepointCombined(line: BufferLine, column: number, beforeUtf16Length: number, afterUtf16Length: number): void;
++}
++
+ export class BufferLine implements IBufferLine {
++  declare mutationObserver?: IBufferLineMutationObserver;
+   protected _data: Uint32Array;
+   /** Sparse cache; only read when `IS_COMBINED_MASK` is set in `_data`. */
+   protected _combined: {[index: number]: string} = {};
+@@ -281,6 +287,7 @@ export class BufferLine implements IBufferLine {
+     this._data[$idx + Cell.CONTENT] = codePoint | (width << Content.WIDTH_SHIFT);
+     this._data[$idx + Cell.FG] = attrs.fg;
+     this._data[$idx + Cell.BG] = attrs.bg;
++    this.mutationObserver?.codepointWritten(this, index, codePoint, width);
+   }
+ 
+   /**
+@@ -292,6 +299,12 @@ export class BufferLine implements IBufferLine {
+   public addCodepointToCell(index: number, codePoint: number, width: number): void {
+     this._cacheValid = false;
+     let content = this._data[index * Constants.CELL_INDICIES + Cell.CONTENT];
++    const observer = this.mutationObserver;
++    const beforeLength = observer
++      ? (content & Content.IS_COMBINED_MASK)
++        ? this._combined[index].length
++        : (content & Content.CODEPOINT_MASK) ? ((content & Content.CODEPOINT_MASK) > 0xffff ? 2 : 1) : 0
++      : 0;
+     if (content & Content.IS_COMBINED_MASK) {
+       // we already have a combined string, simply add
+       this._combined[index] += stringFromCodePoint(codePoint);
+@@ -314,6 +327,12 @@ export class BufferLine implements IBufferLine {
+       content |= width << Content.WIDTH_SHIFT;
+     }
+     this._data[index * Constants.CELL_INDICIES + Cell.CONTENT] = content;
++    if (observer) {
++      const afterLength = (content & Content.IS_COMBINED_MASK)
++        ? this._combined[index].length
++        : (content & Content.CODEPOINT_MASK) ? ((content & Content.CODEPOINT_MASK) > 0xffff ? 2 : 1) : 0;
++      observer.codepointCombined(this, index, beforeLength, afterLength);
++    }
+   }
+ 
+   public insertCells(pos: number, n: number, fillCellData: ICellData): void {

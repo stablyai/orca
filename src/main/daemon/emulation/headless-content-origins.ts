@@ -135,8 +135,25 @@ export class HeadlessContentOrigins {
     }
   }
 
-  combined(line: OriginBufferLine, index: number, code: number, width: number): void {
-    const combine = readOriginLineAttachment(line)!.originals.addCodepointToCell
+  codepointWritten(line: OriginBufferLine, index: number, code: number, width: number): void {
+    const state = readOriginLineAttachment(line)!
+    if (state.editing) {
+      this.edits.erase(state, index)
+    } else {
+      this.printed(line, index, width, code)
+    }
+  }
+
+  codepointCombined(
+    line: OriginBufferLine,
+    index: number,
+    beforeLength: number,
+    afterLength: number
+  ): void {
+    if (beforeLength === 0 && afterLength > 0) {
+      this.writeCell(line, index, terminalOriginSpan(1, this.origin))
+      return
+    }
     const pending = this.pending
     if (
       pending?.line === line &&
@@ -144,7 +161,6 @@ export class HeadlessContentOrigins {
       index < pending.end &&
       pending.origin === this.origin
     ) {
-      combine.call(line, index, code, width)
       return
     }
     const state = this.state(line)
@@ -157,25 +173,19 @@ export class HeadlessContentOrigins {
           baseOrigin.owner === this.origin.owner &&
           baseOrigin.epoch === this.origin.epoch))
     ) {
-      combine.call(line, index, code, width)
       this.revision++
       return
     }
-    const before = line.getString(index)
-    const base =
-      state.components?.get(index) ??
-      terminalOriginSpan(before.length, terminalOriginAt(state.runs, index))
-    combine.call(line, index, code, width)
+    const base = state.components?.get(index) ?? terminalOriginSpan(beforeLength, baseOrigin)
     let components = state.components
-    const after = line.getString(index)
     const joined = writeTerminalOrigins(
       base,
-      before.length,
-      after.length,
-      terminalOriginSpan(after.length - before.length, this.origin)
+      beforeLength,
+      afterLength,
+      terminalOriginSpan(afterLength - beforeLength, this.origin)
     )
     const uniform = this.origin
-      ? joined.length === 1 && joined[0]!.start === 0 && joined[0]!.end === after.length
+      ? joined.length === 1 && joined[0]!.start === 0 && joined[0]!.end === afterLength
       : joined.length === 0
     if (uniform) {
       components?.delete(index)
@@ -277,6 +287,7 @@ export class HeadlessContentOrigins {
       editing: false,
       recordSets: true
     })
+    line.mutationObserver = this
     Object.assign(line, originals.set ? ORIGIN_LINE_HOOKS : REQUIRED_ORIGIN_LINE_HOOKS)
     return line
   }

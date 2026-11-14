@@ -12,6 +12,7 @@ import {
 export type OriginCell = IBufferCell
 type OriginCellAttributes = { fg?: number; bg?: number }
 export type OriginBufferLine = {
+  mutationObserver?: Pick<HeadlessContentOrigins, 'codepointWritten' | 'codepointCombined'>
   length: number
   getString(index: number): string
   hasContent(index: number): number
@@ -76,8 +77,6 @@ export type OriginLineMethods = Pick<
   OriginBufferLine,
   | 'loadCell'
   | 'setCell'
-  | 'setCellFromCodepoint'
-  | 'addCodepointToCell'
   | 'set'
   | 'insertCells'
   | 'deleteCells'

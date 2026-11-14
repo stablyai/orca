@@ -455,3 +455,35 @@ it('keeps loaded-cell snapshots and copied mixed glyphs independent of later sou
     terminal.dispose()
   }
 })
+
+it('attributes an empty-base native combine without affecting an interleaved default editor', async () => {
+  const terminal = new Terminal({ cols: 8, rows: 2, allowProposedApi: true })
+  const plain = new Terminal({ cols: 8, rows: 2, allowProposedApi: true })
+  const origins = new HeadlessContentOrigins(terminal)
+  const owner = {}
+  const old = { owner, epoch: 1 }
+  const current = { owner, epoch: 2 }
+  try {
+    origins.begin(old)
+    await new Promise<void>((resolve) => terminal.write('界X', resolve))
+    origins.end()
+    origins.begin(current)
+    await new Promise<void>((resolve) => terminal.write('\r\x1b[2G\x1b[@', resolve))
+    const line = originTerminalCore(terminal)!.buffers.active.lines.get(0)!
+    const defaultLine = originTerminalCore(plain)!.buffers.active.lines.get(0)!
+    defaultLine.addCodepointToCell(0, 0x1f600, 0)
+    line.addCodepointToCell(2, 0x1f600, 0)
+    origins.end()
+    const lines = origins.read(current)
+    expect(lines[0]).toBe('  😀X')
+    expect(plain.buffer.active.getLine(0)!.translateToString(true)).toBe('😀')
+    expect(terminalScreenSupport(lines, current)?.(0, 2, 4)).toBe(true)
+    expect(terminalScreenSupport(lines, current)?.(0, 4, 5)).toBe(false)
+    expect(
+      terminalScreenSupport(origins.read({ owner, epoch: 3 }), { owner, epoch: 3 })?.(0, 2, 4)
+    ).toBe(false)
+  } finally {
+    terminal.dispose()
+    plain.dispose()
+  }
+})

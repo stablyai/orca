@@ -206,6 +206,7 @@ patchedDependencies:
   '@xterm/addon-search@0.17.0-beta.330': eee5338dd2621ece46e79c61ec06766cd7fadaf79ffdb24e2a8ab68e97ef31f0
   '@xterm/addon-serialize@0.15.0-beta.330': 17ca66ab9c7f52fc2fee94053b3b587c1210da468f3ddc7c4f5dba50b521c93e
   '@xterm/addon-webgl@0.20.0-beta.329': 0d63e956bc68b3f56942e2ed9325e2bf2b1dab76ab403a0690b94232b5ef4aab
+  '@xterm/headless@6.1.0-beta.334': ecd2211461223bbd077cd6667672781ca503cde23ffdff382c20db6003804254
   '@xterm/xterm@6.1.0-beta.336': 4b7fbfe7a7f626843ab88535cc6e2181872ea7c107876b15406a295182bc3c2c
   glob@13.0.6: 163edae2cab27bf7a8cf791c9a0ee368b596bfef898e490b3b77e7e44a8f0223
   i18next-cli@1.74.2: 2ee32eef742615cd133e1a6940f027deb3723a8430bb7953bba3a6769b0aac47
@@ -246,7 +247,7 @@ importers:
         version: 0.15.0-beta.330(patch_hash=17ca66ab9c7f52fc2fee94053b3b587c1210da468f3ddc7c4f5dba50b521c93e)(@xterm/xterm@6.1.0-beta.336(patch_hash=4b7fbfe7a7f626843ab88535cc6e2181872ea7c107876b15406a295182bc3c2c))
       '@xterm/headless':
         specifier: 6.1.0-beta.334
-        version: 6.1.0-beta.334
+        version: 6.1.0-beta.334(patch_hash=ecd2211461223bbd077cd6667672781ca503cde23ffdff382c20db6003804254)
       agent-browser:
         specifier: ~0.39.4
         version: 0.39.4
@@ -11515,7 +11516,7 @@ snapshots:
     dependencies:
       '@xterm/xterm': 6.1.0-beta.336(patch_hash=4b7fbfe7a7f626843ab88535cc6e2181872ea7c107876b15406a295182bc3c2c)
 
-  '@xterm/headless@6.1.0-beta.334': {}
+  '@xterm/headless@6.1.0-beta.334(patch_hash=ecd2211461223bbd077cd6667672781ca503cde23ffdff382c20db6003804254)': {}
 
   '@xterm/xterm@6.1.0-beta.336(patch_hash=4b7fbfe7a7f626843ab88535cc6e2181872ea7c107876b15406a295182bc3c2c)': {}
 

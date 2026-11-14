@@ -7,8 +7,6 @@ import {
 const LINE_METHOD_NAMES = [
   'loadCell',
   'setCell',
-  'setCellFromCodepoint',
-  'addCodepointToCell',
   'set',
   'insertCells',
   'deleteCells',
@@ -27,18 +25,6 @@ export const ORIGIN_LINE_HOOKS: OriginLineMethods = {
   },
   setCell(this: OriginBufferLine, index, cell) {
     readOriginLineAttachment(this)!.owner.setCell(this, index, cell)
-  },
-  setCellFromCodepoint(this: OriginBufferLine, index, code, width, attrs) {
-    const state = readOriginLineAttachment(this)!
-    state.originals.setCellFromCodepoint.call(this, index, code, width, attrs)
-    if (state.editing) {
-      state.owner.edits.erase(state, index)
-    } else {
-      state.owner.printed(this, index, width, code)
-    }
-  },
-  addCodepointToCell(this: OriginBufferLine, index, code, width) {
-    readOriginLineAttachment(this)!.owner.combined(this, index, code, width)
   },
   set(this: OriginBufferLine, index, cell) {
     const state = readOriginLineAttachment(this)!
@@ -91,8 +77,6 @@ export function captureOriginLineMethods(
   return {
     loadCell: line.loadCell,
     setCell: line.setCell,
-    setCellFromCodepoint: line.setCellFromCodepoint,
-    addCodepointToCell: line.addCodepointToCell,
     set: line.set,
     insertCells: line.insertCells,
     deleteCells: line.deleteCells,

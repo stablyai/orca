@@ -24,7 +24,8 @@ import {
   escapeRegExp,
   formatCheckFailure,
   normalizePnpmDiff,
-  pnpmDiffEnvironment
+  pnpmDiffEnvironment,
+  splitPatchEntries
 } from './xterm-patch-text.mjs'
 
 const DEFAULT_REPO_ROOT = path.resolve(import.meta.dirname, '../../..', '..')
@@ -252,8 +253,67 @@ function assertToolchain(upstreamRoot, manifest) {
   }
 }
 
+function publishedRoot(upstreamRoot, packageEntry) {
+  return path.join(upstreamRoot, packageEntry.packageDir, packageEntry.publishedDir ?? '.')
+}
+
+function mapSources(directory, relative) {
+  const map = JSON.parse(readFileSync(path.join(directory, relative), 'utf8'))
+  const sources = new Map()
+  for (let index = 0; index < map.sources.length; index++) {
+    const match = /(?:^|\/)src\/(.+)$/.exec(map.sources[index])
+    if (!match) {
+      continue
+    }
+    const source = `src/${match[1]}`
+    const content = map.sourcesContent?.[index]
+    if (source.split('/').includes('..') || typeof content !== 'string' || !content) {
+      throw new Error(`${relative}: invalid embedded source ${source}`)
+    }
+    sources.set(source, content)
+  }
+  if (!sources.size) {
+    throw new Error(`${relative}: no embedded package source`)
+  }
+  return sources
+}
+
+function assertMapSourcesMatch(directory, upstreamRoot, packageEntry) {
+  for (const relative of packageEntry.sourceMaps) {
+    for (const [source, content] of mapSources(directory, relative)) {
+      const checkout = readFileSync(
+        path.join(upstreamRoot, packageEntry.packageDir, source),
+        'utf8'
+      )
+      if (content !== checkout) {
+        throw new Error(`${relative}: embedded ${source} differs from the checkout`)
+      }
+    }
+  }
+}
+
+function assertMapSourceChanges(pristineDir, patchedDir, packageEntry, sourcePatch) {
+  const expected = splitPatchEntries(sourcePatch)
+    .map((entry) => entry.path)
+    .sort()
+  for (const relative of packageEntry.sourceMaps) {
+    const pristine = mapSources(pristineDir, relative)
+    const patched = mapSources(patchedDir, relative)
+    const changed = [...new Set([...pristine.keys(), ...patched.keys()])]
+      .filter((source) => pristine.get(source) !== patched.get(source))
+      .sort()
+    if (JSON.stringify(changed) !== JSON.stringify(expected)) {
+      throw new Error(`${relative}: embedded source changes disagree with the source patch`)
+    }
+  }
+}
+
 // Match published src to pinned commit except publish-time version stamp; mismatch invalidates generated hunks.
 function assertPristineSourceMatches(pristineDir, upstreamRoot, packageEntry) {
+  if (packageEntry.sourceMaps) {
+    assertMapSourcesMatch(pristineDir, upstreamRoot, packageEntry)
+    return
+  }
   const stampFile = packageEntry.versionStampFile
   const sourceRoot = path.join(pristineDir, 'src')
   const drifted = listFilesRelative(sourceRoot)
@@ -275,7 +335,7 @@ function assertPristineSourceMatches(pristineDir, upstreamRoot, packageEntry) {
 
 function buildPackage(upstreamRoot, packageEntry, manifest) {
   const packageRoot = path.join(upstreamRoot, packageEntry.packageDir)
-  for (const directory of ['lib', 'out', 'out-esbuild']) {
+  for (const directory of packageEntry.cleanPaths ?? ['lib', 'out', 'out-esbuild']) {
     rmSync(path.join(packageRoot, directory), { recursive: true, force: true })
   }
   if (packageEntry.versionStampFile) {
@@ -293,7 +353,7 @@ function buildPackage(upstreamRoot, packageEntry, manifest) {
 
 /** Proves the pinned toolchain still reproduces the untouched published bundles. */
 function assertReproducesPristineBundles(pristineDir, upstreamRoot, packageEntry) {
-  const packageRoot = path.join(upstreamRoot, packageEntry.packageDir)
+  const packageRoot = publishedRoot(upstreamRoot, packageEntry)
   const drifted = listFilesRelative(pristineDir)
     .filter((relative) =>
       packageEntry.generatedPaths.some((prefix) => toPosix(relative).startsWith(prefix))
@@ -321,7 +381,7 @@ function toPosix(value) {
 function overlayBuildOutput(pristineDir, upstreamRoot, packageEntry, destination) {
   rmSync(destination, { recursive: true, force: true })
   cpSync(pristineDir, destination, { recursive: true })
-  const packageRoot = path.join(upstreamRoot, packageEntry.packageDir)
+  const packageRoot = publishedRoot(upstreamRoot, packageEntry)
   for (const relative of listFilesRelative(pristineDir)) {
     // Exclude registry version/commit stamp: build tree cannot reproduce it and patch must not change it.
     if (relative === 'package.json') {
@@ -409,7 +469,12 @@ function regeneratePackage(packageEntry, manifest, context) {
     )
   }
   const patch = diffFolders(pristineDir, patchedDir)
-  assertSourceDerivationsAgree(source, patch)
+  if (packageEntry.sourceMaps) {
+    assertMapSourcesMatch(patchedDir, upstreamRoot, packageEntry)
+    assertMapSourceChanges(pristineDir, patchedDir, packageEntry, source)
+  } else {
+    assertSourceDerivationsAgree(source, patch)
+  }
   return { patch, source }
 }
 
