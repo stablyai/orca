@@ -21163,12 +21163,8 @@
         "started_other": "Kicked off {{count}} subagents",
         "ran_one": "Ran {{count}} subagent",
         "ran_other": "Ran {{count}} subagents",
-        "backToMain": "Back to main agent",
         "mainAgent": "Main agent",
-        "promptFromMain": "Prompt from main agent",
         "clickToOpen": "Click to open",
-        "backTo": "Back to {{value0}}",
-        "path": "Subagent path",
         "stateHeading": {
           "completed": "Completed",
           "working": "Working",
@@ -21180,7 +21176,14 @@
         "noSteps": "No steps yet",
         "beforeClear": "This subagent ran before the chat was cleared",
         "stoppedBeforeReply": "Stopped before replying",
-        "noReply": "Ended without a reply"
+        "noReply": "Ended without a reply",
+        "prompt": "Prompt",
+        "result": "Result",
+        "close": "Close",
+        "needsYou": "Needs you",
+        "agentNeedsYou": "{{name}} needs you",
+        "mainNeedsYou": "Main agent needs you",
+        "show": "Show"
       },
       "rewind": {
         "unsupported": "This chat can't go back to an earlier message.",

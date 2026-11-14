@@ -19570,7 +19570,14 @@
         "tokens": "{{value0}} token",
         "unnamed": "子代理程式",
         "started_other": "已啟動 {{count}} 個子代理程式",
-        "ran_other": "已執行 {{count}} 個子代理程式"
+        "ran_other": "已執行 {{count}} 個子代理程式",
+        "prompt": "提示詞",
+        "result": "結果",
+        "close": "關閉",
+        "needsYou": "需要你處理",
+        "agentNeedsYou": "{{name}} 需要你處理",
+        "mainNeedsYou": "主代理程式需要你處理",
+        "show": "查看"
       },
       "rewind": {
         "unsupported": "此聊天無法返回到更早的訊息。",

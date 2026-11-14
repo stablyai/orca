@@ -19157,7 +19157,14 @@
         "tokens": "{{value0}} 토큰",
         "unnamed": "하위 에이전트",
         "started_other": "하위 에이전트 {{count}}개 시작",
-        "ran_other": "하위 에이전트 {{count}}개 실행"
+        "ran_other": "하위 에이전트 {{count}}개 실행",
+        "prompt": "프롬프트",
+        "result": "결과",
+        "close": "닫기",
+        "needsYou": "확인 필요",
+        "agentNeedsYou": "{{name}}에서 확인이 필요합니다",
+        "mainNeedsYou": "메인 에이전트에서 확인이 필요합니다",
+        "show": "보기"
       },
       "drop": {
         "messageTitle": "놓아서 이 메시지에 첨부",

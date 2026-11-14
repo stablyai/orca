@@ -19160,7 +19160,14 @@
         "tokens": "{{value0}} トークン",
         "unnamed": "サブ Agent",
         "started_other": "{{count}} 個のサブ Agent を起動しました",
-        "ran_other": "{{count}} 個のサブ Agent を実行しました"
+        "ran_other": "{{count}} 個のサブ Agent を実行しました",
+        "prompt": "プロンプト",
+        "result": "結果",
+        "close": "閉じる",
+        "needsYou": "対応が必要",
+        "agentNeedsYou": "{{name}} が対応を待っています",
+        "mainNeedsYou": "メイン Agent が対応を待っています",
+        "show": "表示"
       },
       "drop": {
         "messageTitle": "ドロップしてこのメッセージに添付",

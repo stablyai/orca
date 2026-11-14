@@ -19530,7 +19530,14 @@
         "started_many": "Inició {{count}} subagentes",
         "ran_one": "Ejecutó {{count}} subagente",
         "ran_other": "Ejecutó {{count}} subagentes",
-        "ran_many": "Ejecutó {{count}} subagentes"
+        "ran_many": "Ejecutó {{count}} subagentes",
+        "prompt": "Prompt",
+        "result": "Resultado",
+        "close": "Cerrar",
+        "needsYou": "Te necesita",
+        "agentNeedsYou": "{{name}} te necesita",
+        "mainNeedsYou": "El agente principal te necesita",
+        "show": "Mostrar"
       },
       "queuedMessages": {
         "alreadySent": "Este mensaje ya se envió.",

@@ -19853,7 +19853,14 @@
         "started_one": "{{count}} alt ajan başlatıldı",
         "started_other": "{{count}} alt ajan başlatıldı",
         "ran_one": "{{count}} alt ajan çalıştırıldı",
-        "ran_other": "{{count}} alt ajan çalıştırıldı"
+        "ran_other": "{{count}} alt ajan çalıştırıldı",
+        "prompt": "İstem",
+        "result": "Sonuç",
+        "close": "Kapat",
+        "needsYou": "Yanıtınız gerekiyor",
+        "agentNeedsYou": "{{name}} yanıtınızı bekliyor",
+        "mainNeedsYou": "Ana ajan yanıtınızı bekliyor",
+        "show": "Göster"
       },
       "rewind": {
         "unsupported": "Bu sohbette önceki bir mesaja dönülemiyor.",

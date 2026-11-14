@@ -21089,7 +21089,14 @@
         "started_many": "Iniciou {{count}} subagentes",
         "ran_one": "Executou {{count}} subagente",
         "ran_other": "Executou {{count}} subagentes",
-        "ran_many": "Executou {{count}} subagentes"
+        "ran_many": "Executou {{count}} subagentes",
+        "prompt": "Prompt",
+        "result": "Resultado",
+        "close": "Fechar",
+        "needsYou": "Precisa de você",
+        "agentNeedsYou": "{{name}} precisa de você",
+        "mainNeedsYou": "O agente principal precisa de você",
+        "show": "Mostrar"
       },
       "drop": {
         "title": "Solte para anexar a este chat",

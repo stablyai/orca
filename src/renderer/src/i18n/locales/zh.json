@@ -19426,7 +19426,14 @@
         "tokens": "{{value0}} 个 token",
         "unnamed": "子代理",
         "started_other": "已启动 {{count}} 个子智能体",
-        "ran_other": "已运行 {{count}} 个子智能体"
+        "ran_other": "已运行 {{count}} 个子智能体",
+        "prompt": "提示词",
+        "result": "结果",
+        "close": "关闭",
+        "needsYou": "需要你处理",
+        "agentNeedsYou": "{{name}} 需要你处理",
+        "mainNeedsYou": "主智能体需要你处理",
+        "show": "查看"
       },
       "drop": {
         "messageTitle": "拖放以附加到此消息",

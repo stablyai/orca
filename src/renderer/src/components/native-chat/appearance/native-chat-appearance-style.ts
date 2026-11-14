@@ -20,8 +20,9 @@ import type { GlobalSettings } from '../../../../../shared/global-settings-types
 
 export const NATIVE_CHAT_APPEARANCE_ROOT_CLASS = 'native-chat-appearance bg-chat-canvas'
 // One fixed bottom gap: the last row never hangs its controls; rail padding covers its 34px macOS overlay.
-export function nativeChatTranscriptOuterClass(railVisible: boolean): string {
-  return railVisible ? 'px-9 pt-10 pb-5' : 'px-3 pt-10 pb-5 sm:px-4'
+/** A subagent sheet's header already tops its transcript, so it pads like the sheet's body. */
+export function nativeChatTranscriptOuterClass(railVisible: boolean, inSheet = false): string {
+  return inSheet ? 'px-4 py-3' : railVisible ? 'px-9 pt-10 pb-5' : 'px-3 pt-10 pb-5 sm:px-4'
 }
 export const NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS =
   'mx-auto flex w-full max-w-(--chat-content-max-width) flex-col gap-5 px-[5px]'

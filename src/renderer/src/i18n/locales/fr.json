@@ -19939,7 +19939,14 @@
         "started_many": "A lancé {{count}} sous-agents",
         "ran_one": "A exécuté {{count}} sous-agent",
         "ran_other": "A exécuté {{count}} sous-agents",
-        "ran_many": "A exécuté {{count}} sous-agents"
+        "ran_many": "A exécuté {{count}} sous-agents",
+        "prompt": "Prompt",
+        "result": "Résultat",
+        "close": "Fermer",
+        "needsYou": "Vous attend",
+        "agentNeedsYou": "{{name}} vous attend",
+        "mainNeedsYou": "L’agent principal vous attend",
+        "show": "Afficher"
       },
       "drop": {
         "messageTitle": "Déposez pour joindre à ce message",

@@ -30,7 +30,7 @@ import {
   nativeChatSubagentEndingMessage,
   type NativeChatSubagentAside
 } from './native-chat-subagent-ending'
-import { NativeChatSubagentViewBar } from './NativeChatSubagentViewBar'
+import { NativeChatSubagentSheetHeader } from './NativeChatSubagentSheetHeader'
 import { NativeChatSubagentPrompt } from './NativeChatSubagentPrompt'
 import { nativeChatSubagentHandoff } from './native-chat-subagent-handoff'
 
@@ -77,7 +77,7 @@ export function useNativeChatSubagentScope({
   isWorking: boolean
 }) {
   const agentId = view?.agentId ?? null
-  // The conversation names its subagents only for heads, which need rows; a subagent's bar lists them all.
+  // The conversation names its subagents only for heads, which need rows; a subagent's header lists them all.
   const entries = useMemo(
     () =>
       agentId === null && subagentRows.size === 0
@@ -166,16 +166,18 @@ export function useNativeChatSubagentScope({
       agentId !== null && handoff?.prompt ? (
         <NativeChatSubagentPrompt agentId={agentId} prompt={handoff.prompt} />
       ) : null,
-    /** Drawn above a subagent's own transcript. */
-    bar:
-      agentId !== null && open ? (
-        <NativeChatSubagentViewBar
+    /** Drawn above a subagent's own transcript in its sheet. */
+    header:
+      agentId !== null && open && view?.sheet ? (
+        <NativeChatSubagentSheetHeader
           chain={chain}
           entries={entries}
           subagentRows={subagentRows}
           onOpen={open}
+          controls={view.sheet}
         />
       ) : null,
+    inSheet: view?.sheet !== undefined,
     messages,
     heads,
     rowsInOrder,

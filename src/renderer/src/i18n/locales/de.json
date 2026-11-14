@@ -19875,7 +19875,14 @@
         "started_one": "{{count}} Unteragent gestartet",
         "started_other": "{{count}} Unteragenten gestartet",
         "ran_one": "{{count}} Unteragent ausgeführt",
-        "ran_other": "{{count}} Unteragenten ausgeführt"
+        "ran_other": "{{count}} Unteragenten ausgeführt",
+        "prompt": "Prompt",
+        "result": "Ergebnis",
+        "close": "Schließen",
+        "needsYou": "Braucht dich",
+        "agentNeedsYou": "{{name}} braucht dich",
+        "mainNeedsYou": "Haupt-Agent braucht dich",
+        "show": "Anzeigen"
       },
       "rewind": {
         "unsupported": "Dieser Chat kann nicht zu einer früheren Nachricht zurückgesetzt werden.",

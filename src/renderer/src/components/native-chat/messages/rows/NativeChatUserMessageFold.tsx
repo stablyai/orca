@@ -14,18 +14,25 @@ export function NativeChatUserMessageFold({
   markdown,
   onRefolded,
   className,
+  foldLines,
   children
 }: {
   messageId: string
   markdown: string
   className?: string
+  /** Folds any text taller than this many lines, instead of only long prompts at the usual height. */
+  foldLines?: number
   /** After the reader folded the prompt again, once its new height is laid out. */
   onRefolded?: () => void
   children: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const disclosure = useNativeChatDisclosure(`user-message:${messageId}`, false)
-  const longText = useMemo(() => nativeChatUserMessageFolds(markdown), [markdown])
+  // A line-count fold measures every text; the clip decides whether it fits.
+  const longText = useMemo(
+    () => foldLines !== undefined || nativeChatUserMessageFolds(markdown),
+    [foldLines, markdown]
+  )
   // A fold clips but still lays out the whole text, so it needs the composer's long-run rule.
   const unkerned = useMemo(() => nativeChatTextHasUnkernedRun(markdown), [markdown])
   // Measure each text revision; long-text heuristics can select a prompt that already fits the clip.
@@ -64,7 +71,10 @@ export function NativeChatUserMessageFold({
           className,
           folded && 'max-h-44 overflow-hidden mask-b-from-[calc(100%-1.75rem)]'
         )}
-        style={unkerned ? NATIVE_CHAT_UNKERNED_CSS : undefined}
+        style={{
+          ...(unkerned ? NATIVE_CHAT_UNKERNED_CSS : undefined),
+          ...(folded && foldLines !== undefined ? { maxHeight: `${foldLines}lh` } : undefined)
+        }}
         // Tabbing to a link under the fold scrolls the preview to it; the top returns once focus leaves.
         onBlur={(event) => {
           if (document.hasFocus() && !event.currentTarget.contains(event.relatedTarget)) {
