@@ -43,6 +43,8 @@ export function NativeChatForkWindowTargetFields(props: {
   agents: readonly TuiAgent[]
   agent: TuiAgent
   detectingAgents: boolean
+  /** Other hosts are hidden only because the same agent's exact copy can't leave this one. */
+  otherHostsNeedAnotherAgent: boolean
   onAgentChange: (agent: TuiAgent) => void
   runAs: NativeChatForkRunAs
   /** False where the chat can't start a subagent at all (terminal chats). */
@@ -171,6 +173,14 @@ export function NativeChatForkWindowTargetFields(props: {
             {t(
               'components.native-chat.fork.window.detectingAgents',
               'Looking for other agents on this host…'
+            )}
+          </p>
+        ) : null}
+        {props.otherHostsNeedAnotherAgent ? (
+          <p className="text-xs text-muted-foreground">
+            {t(
+              'components.native-chat.fork.window.otherHostsNeedAgent',
+              'To fork onto another host, pick another agent.'
             )}
           </p>
         ) : null}

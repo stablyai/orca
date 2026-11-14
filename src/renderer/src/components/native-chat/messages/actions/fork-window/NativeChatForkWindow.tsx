@@ -157,6 +157,7 @@ function ForkWindow({
             agents={state.agents}
             agent={state.agent}
             detectingAgents={state.detecting}
+            otherHostsNeedAnotherAgent={state.otherHostsNeedAnotherAgent}
             onAgentChange={state.setAgent}
             runAs={state.runAs}
             runAsShown={source.subagentOffered}

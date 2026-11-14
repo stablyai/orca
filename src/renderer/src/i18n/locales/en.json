@@ -21602,6 +21602,7 @@
           "agentLabel": "Agent",
           "sameAgent": "{{agent}} (same agent)",
           "detectingAgents": "Looking for other agents on this host…",
+          "otherHostsNeedAgent": "To fork onto another host, pick another agent.",
           "runAsLabel": "Run as",
           "runAsOpen": "Open it",
           "runAsSubagent": "Background subagent",

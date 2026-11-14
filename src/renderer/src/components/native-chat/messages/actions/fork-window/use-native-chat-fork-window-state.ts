@@ -86,6 +86,11 @@ export function useNativeChatForkWindowState(
   })
   const host =
     hostChoices.find((choice) => choice.id === hostPick && !choice.disabled) ?? hostChoices[0]
+  // An exact copy this host can't export stays here; picking another agent opens the other hosts.
+  const otherHostsNeedAnotherAgent =
+    hostChoices.length === 1 &&
+    agents.length > 1 &&
+    hosts.some((choice) => choice.id !== sourceHostId)
   const sameHost = host.id === sourceHostId
   const route = nativeChatForkRoute({
     sourceHostId,
@@ -111,7 +116,9 @@ export function useNativeChatForkWindowState(
   })
   const runAs: NativeChatForkRunAs = subagentAllowed ? runAsPick : 'open'
   const slug = slugifyForWorkspaceName(name)
+  // At a usage limit the default agent is only known once detection answers; Enter waits for it.
   const ready =
+    !(detecting && source.usageLimited) &&
     (workspace.kind !== 'existing' || existingId !== null) &&
     (workspace.kind !== 'new-worktree' || slug.length > 0) &&
     (runAs !== 'subagent' || task.trim().length > 0)
@@ -138,7 +145,8 @@ export function useNativeChatForkWindowState(
     hostChoices,
     selectHost: (hostId: string) => {
       const picked = hostChoices.find((choice) => choice.id === hostId)
-      if (picked) {
+      // Re-picking the current host keeps the workspace already chosen there.
+      if (picked && picked.id !== host.id) {
         setHostPick(picked.id)
         setWorkspacePick(
           picked.id === sourceHostId ? start.workspace : { kind: 'existing', worktreeId: '' }
@@ -152,6 +160,7 @@ export function useNativeChatForkWindowState(
     agents,
     agent,
     detecting,
+    otherHostsNeedAnotherAgent,
     setAgent: setAgentPick,
     runAs,
     subagentAllowed,
