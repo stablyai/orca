@@ -3,7 +3,10 @@ import {
   wslGatedReaddir,
   wslGatedStat
 } from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
-import { throwIfAiVaultScanCancelled } from '../scan-lifecycle/ai-vault-scan-cancellation'
+import {
+  throwIfAiVaultScanCancelled,
+  waitForAiVaultScan
+} from '../scan-lifecycle/ai-vault-scan-cancellation'
 
 type Count = { version: string; count: number }
 const counts = new Map<string, Count>()
@@ -15,13 +18,13 @@ export async function countSessionSubagentDirectory(
   signal?: AbortSignal
 ): Promise<number> {
   try {
-    const stats = await wslGatedStat(path, 'scan', signal)
+    const stats = await waitForAiVaultScan(wslGatedStat(path, 'scan', signal), signal)
     const version = `${stats.dev}:${stats.ino}:${stats.birthtimeMs}:${stats.mtimeMs}:${stats.ctimeMs}`
     const previous = counts.get(path)
     if (previous?.version === version) {
       return previous.count
     }
-    const entries = await wslGatedReaddir(path, 'scan', signal)
+    const entries = await waitForAiVaultScan(wslGatedReaddir(path, 'scan', signal), signal)
     throwIfAiVaultScanCancelled(signal)
     const count = entries.filter(accepts).length
     counts.delete(path)
