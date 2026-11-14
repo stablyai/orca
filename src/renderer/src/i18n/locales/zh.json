@@ -19391,7 +19391,9 @@
         "stateWaitingCount": "{{value0}} 等待",
         "stateWorkingCount": "{{value0}} 处理中"
       },
-      "railLabel": "你的消息",
+      "railLabel": "历史对话",
+      "railExpand": "展开消息目录",
+      "railCollapse": "收起消息目录",
       "railImageMessage": "图片附件",
       "railEmptyMessage": "消息",
       "ask": {

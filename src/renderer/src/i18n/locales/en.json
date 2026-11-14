@@ -21052,7 +21052,9 @@
       "loadingEarlier": "Loading…",
       "loadEarlier": "Load earlier messages",
       "loadingEarlierMessages": "Loading earlier messages…",
-      "railLabel": "Your messages",
+      "railLabel": "Chat history",
+      "railExpand": "Expand message list",
+      "railCollapse": "Collapse message list",
       "railImageMessage": "Image attachment",
       "railEmptyMessage": "Message",
       "prompt": {
