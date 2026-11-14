@@ -65,6 +65,7 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
   preserveCreateLookupOnCloseRef,
   selectedItemId,
   selectionItemIds,
+  defaultSelectionItemId,
   showCreateAction,
   deferredQuery,
   prefetchCreateWorkspaceBaseForComposer,
@@ -157,6 +158,7 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
           currentSelectedItemId: selectedItemId,
           queryChanged: false,
           selectableItemIds: selectionItemIds,
+          defaultSelectableItemId: defaultSelectionItemId,
           showCreateAction,
           autoSelectCreateAction: taskSourceUrl !== null
         })
@@ -167,12 +169,18 @@ export function useWorktreeJumpPaletteSelectionLifecycle({
     [setSelectedItemId]
   )
   // Late cmdk callbacks can restore stale cursors; commit the new list head when deferred query changes.
+  // The empty query clears instead: a re-run mount effect (StrictMode) would commit the head before recent tabs load.
   useLayoutEffect(() => {
+    if (!deferredQuery) {
+      setSelectedItemId('')
+      return
+    }
     setSelectedItemId(
       getNextWorktreePaletteSelection({
         currentSelectedItemId: '',
         queryChanged: true,
         selectableItemIds: selectionItemIds,
+        defaultSelectableItemId: defaultSelectionItemId,
         showCreateAction,
         autoSelectCreateAction: taskSourceUrl !== null
       })

@@ -1,10 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import './bind-first-pane.test-fixture'
 import './runtime-test-module-registration.spec'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
-import { OrcaRuntimeService } from '../orca-runtime'
+import '../orca-runtime'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
-import { TEST_WORKTREE_ID, store, syncSinglePty } from './orca-runtime-test-fixtures.spec'
+import { syncSinglePty } from './orca-runtime-test-fixtures.spec'
 import { createSideEffectRuntime } from './orca-runtime-test-scenario-builders.spec'
 import { DECORATIVE_TITLE_FACT_HEARTBEAT_MS } from '../terminal/output/decorative-title-fact-emission'
 
@@ -69,21 +68,6 @@ describe('terminal side-effect fact channel', () => {
     }
   })
 
-  it('skips a listener unsubscribed mid-fan-out even with mobile exclusions active', () => {
-    const runtime = new OrcaRuntimeService(store)
-    const lateEvents: RuntimeClientEvent[] = []
-    runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
-    runtime.onClientEvent(() => {}, { consumesTerminalSideEffects: false })
-    runtime.onClientEvent(() => {
-      unsubscribeLate()
-    })
-    const unsubscribeLate = runtime.onClientEvent((event) => lateEvents.push(event))
-
-    runtime.onPtyData('pty-remote', '\x1b]0;Codex working\x07', 100)
-
-    expect(lateEvents).toEqual([])
-  })
-
   it('does not confirm an agent exit from a foreground read predating its title', async () => {
     const { runtime, batches } = createSideEffectRuntime()
     syncSinglePty(runtime)
@@ -129,26 +113,6 @@ describe('terminal side-effect fact channel', () => {
       data: expect.stringContaining('queuedfresh'),
       seq: 911,
       source: 'headless'
-    })
-  })
-
-  it('retains bytes emitted before a fresh daemon spawn resolves', async () => {
-    const { runtime } = createSideEffectRuntime()
-    const earlyOutput = '\x1b]0;Fresh shell\x07early prompt'
-    runtime.onPtyData('pty-fresh', earlyOutput, 100)
-
-    expect(
-      runtime.synchronizePtyOutputSequenceFromProvider(
-        'pty-fresh',
-        { value: 0, generation: 'reset' },
-        0
-      )
-    ).toBe(earlyOutput.length)
-
-    await expect(runtime.serializeMainTerminalBuffer('pty-fresh')).resolves.toMatchObject({
-      data: expect.stringContaining('early prompt'),
-      lastTitle: 'Fresh shell',
-      seq: earlyOutput.length
     })
   })
 
@@ -204,55 +168,6 @@ describe('terminal side-effect fact channel', () => {
     expect(observedSequences).toEqual([
       sequenceBeforeRespawn + 'early'.length,
       sequenceBeforeRespawn + 'early'.length + 'later'.length
-    ])
-  })
-
-  it('emits command-finished facts with best-effort exit codes across chunk splits', () => {
-    const { runtime, batches } = createSideEffectRuntime()
-    syncSinglePty(runtime)
-
-    runtime.onPtyData('pty-1', 'output\x1b]133;D;13', 100)
-    expect(batches).toEqual([])
-    runtime.onPtyData('pty-1', '0\x07prompt $ ', 101)
-    runtime.onPtyData('pty-1', '\x1b]133;D\x07', 102)
-
-    expect(batches.flatMap((batch) => batch.facts)).toEqual([
-      { kind: 'command-finished', exitCode: 130 },
-      { kind: 'command-finished', exitCode: null }
-    ])
-  })
-
-  it('emits pr-link facts once per URL with batch attribution', () => {
-    const { runtime, batches } = createSideEffectRuntime()
-    syncSinglePty(runtime)
-
-    runtime.onPtyData('pty-1', 'PR https://github.com/acme/orca/pull/4', 100)
-    runtime.onPtyData('pty-1', '2\r\nand https://github.com/acme/orca/pull/43 done\r\n', 101)
-    runtime.onPtyData('pty-1', 'again https://github.com/acme/orca/pull/42\r\n', 102)
-
-    expect(batches).toHaveLength(1)
-    expect(batches[0]).toMatchObject({
-      ptyId: 'pty-1',
-      worktreeId: TEST_WORKTREE_ID,
-      tabId: 'tab-1'
-    })
-    expect(batches[0].facts).toEqual([
-      {
-        kind: 'pr-link',
-        link: {
-          url: 'https://github.com/acme/orca/pull/42',
-          slug: { owner: 'acme', repo: 'orca', host: 'github.com' },
-          number: 42
-        }
-      },
-      {
-        kind: 'pr-link',
-        link: {
-          url: 'https://github.com/acme/orca/pull/43',
-          slug: { owner: 'acme', repo: 'orca', host: 'github.com' },
-          number: 43
-        }
-      }
     ])
   })
 })

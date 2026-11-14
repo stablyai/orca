@@ -1,11 +1,11 @@
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
-import { githubProjectIdentityKey } from '../../src/shared/github/project-identity'
-import type { GitHubProjectTable } from '../../src/shared/github/project-types'
+import { githubProjectIdentityKey } from '../../src/shared/github/projects/project-identity'
+import type { GitHubProjectTable } from '../../src/shared/github/projects/project-types'
 import type {
   ClearProjectItemFieldArgs,
   UpdateProjectItemFieldArgs
-} from '../../src/shared/github/project-request-types'
+} from '../../src/shared/github/projects/project-request-types'
 
 type BoardFieldCall = UpdateProjectItemFieldArgs | ClearProjectItemFieldArgs
 

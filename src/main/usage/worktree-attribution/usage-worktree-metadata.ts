@@ -6,8 +6,9 @@ import {
   splitWorktreeIdForFilesystem
 } from '../../../shared/worktree/id'
 import { isFolderRepo } from '../../../shared/repo-kind'
-import type { Store } from '../../persistence/loading-store/store'
+import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import { getRepoRoutingConnectionId } from '../../../shared/execution-host'
+import { canonicalWorktreePath } from '../../git/worktrees/catalog/worktree-path-comparison'
 
 export type UsageWorktreeRef = {
   worktreeId: string
@@ -19,8 +20,17 @@ function getDefaultUsageWorktreeLabel(pathValue: string): string {
   return basename(pathValue)
 }
 
+export type UsageWorktreeSource = {
+  getRepos: () => Repo[]
+  getAllWorktreeMeta: () => Record<string, Pick<WorktreeMeta, 'displayName'>>
+  /** Worktrees seen before, removed ones included, keyed by id with their display names. */
+  getRememberedWorktreeDisplayNames: () => ReadonlyMap<string, string>
+  /** Resolves once remembered worktrees are read; attribution before that would drop removed ones. */
+  whenLoaded: () => Promise<void>
+}
+
 export function loadKnownUsageWorktreesByRepo(
-  store: Pick<Store, 'getAllWorktreeMeta'>,
+  store: Pick<UsageWorktreeSource, 'getAllWorktreeMeta' | 'getRememberedWorktreeDisplayNames'>,
   repos: Repo[]
 ): Map<string, UsageWorktreeRef[]> {
   const localRepos = repos.filter((repo) => !getRepoRoutingConnectionId(repo))
@@ -46,29 +56,43 @@ export function loadKnownUsageWorktreesByRepo(
     seenPathsByRepo.set(repo.id, new Set([repo.path]))
   }
 
-  // Background analytics must not spawn git scans that re-touch macOS protected folders.
-  for (const [worktreeId, meta] of Object.entries(store.getAllWorktreeMeta())) {
+  const claimedPaths = new Set(localRepos.map((repo) => canonicalWorktreePath(repo.path)))
+  const addWorktree = (worktreeId: string, displayName: string, remembered: boolean): void => {
     const parsed = splitWorktreeId(worktreeId)
     if (!parsed) {
-      continue
+      return
     }
     const repo = localReposById.get(parsed.repoId)
     if (!repo) {
-      continue
+      return
     }
     const worktreePath = isFolderRepo(repo)
       ? (splitWorktreeIdForFilesystem(worktreeId)?.worktreePath ?? parsed.worktreePath)
       : parsed.worktreePath
     const seenPaths = seenPathsByRepo.get(parsed.repoId)
-    if (seenPaths?.has(worktreePath)) {
-      continue
+    const canonicalPath = canonicalWorktreePath(worktreePath)
+    // Live rows claim paths first, so a reused path is never credited to a removed worktree.
+    if (seenPaths?.has(worktreePath) || (remembered && claimedPaths.has(canonicalPath))) {
+      return
     }
     seenPaths?.add(worktreePath)
+    claimedPaths.add(canonicalPath)
     worktreesByRepo.get(parsed.repoId)?.push({
       worktreeId,
       path: worktreePath,
-      displayName: meta.displayName || getDefaultUsageWorktreeLabel(worktreePath)
+      displayName: displayName || getDefaultUsageWorktreeLabel(worktreePath)
     })
+  }
+
+  // Background analytics must not spawn git scans that re-touch macOS protected folders.
+  const liveMeta = store.getAllWorktreeMeta()
+  for (const [worktreeId, meta] of Object.entries(liveMeta)) {
+    addWorktree(worktreeId, meta.displayName, false)
+  }
+  for (const [worktreeId, displayName] of store.getRememberedWorktreeDisplayNames()) {
+    if (!Object.hasOwn(liveMeta, worktreeId)) {
+      addWorktree(worktreeId, displayName, true)
+    }
   }
 
   return worktreesByRepo

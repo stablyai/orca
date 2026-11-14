@@ -1,4 +1,4 @@
-import type { PtyProcessInfo } from '../../../providers/pty-provider-contract'
+import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 
 export type OwnerCandidate<T> = { provider: T; process: PtyProcessInfo }
 

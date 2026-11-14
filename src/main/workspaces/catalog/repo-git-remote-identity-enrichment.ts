@@ -12,7 +12,7 @@ import { getProjectProviderIdentity } from '../../../shared/project-host-setup-p
 import { getStoredRepoExecutionHostId } from '../execution-host/repo-execution-host'
 import { probeGitRemoteIdentity } from './repo-git-remote-identity'
 import { getProjectRuntimeReadGitOptions } from '../execution-host/project-runtime-git-options'
-import { isLocalGitRuntimeRouterInstalled } from '../../git/command-runner/local-git-runtime-route'
+import { isLocalGitRuntimeRouterInstalled } from '../../git/command-runner/host-routing/local-git-runtime-route'
 import type { ProjectRuntimeResolutionStore } from '../execution-host/local-project-runtime-resolution'
 import { isWslMoveRepoBlocked } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 import { blockedWslDistroForPath, wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'

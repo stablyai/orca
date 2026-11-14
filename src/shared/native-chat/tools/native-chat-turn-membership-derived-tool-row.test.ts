@@ -5,8 +5,8 @@ import type {
 } from '../../agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../agent-session/journal/agent-session-journal-turn-scope'
 import { foldToolMessages } from './native-chat-tool-fold'
-import { nativeChatRowsInDrawOrder } from '../transcript/native-chat-turn-grouping'
-import { nativeChatTurnMembership } from '../transcript/native-chat-turn-membership'
+import { nativeChatRowsInDrawOrder } from '../transcript/turns/native-chat-turn-grouping'
+import { nativeChatTurnMembership } from '../transcript/turns/native-chat-turn-membership'
 import type { NativeChatMessage, NativeChatRole } from '../native-chat-types'
 import { projectStructuredItemsToNativeChat } from '../../agent-session/view/structured-agent-session-projection'
 

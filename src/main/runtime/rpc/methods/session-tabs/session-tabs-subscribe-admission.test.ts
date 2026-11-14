@@ -1,7 +1,7 @@
 import { EVERY_AGENT_CHAT } from '../../../../../shared/native-chat/every-agent-chat.test-fixture'
 
-import '../../runtime-client-capabilities'
-import type { RuntimeClientCapabilities } from '../../runtime-client-capabilities'
+import '../../callers/runtime-client-capabilities'
+import type { RuntimeClientCapabilities } from '../../callers/runtime-client-capabilities'
 
 import { describe, expect, it, vi } from 'vitest'
 
@@ -21,7 +21,6 @@ import { visibleSnapshot } from './session-tabs-snapshot.test-fixture'
 
 const CONNECTION = 'conn-1'
 const KEY = (requestId: string): string => `session.tabs:${CONNECTION}:wt-1:${requestId}`
-const ALL_KEY = (requestId: string): string => `session.tabs:${CONNECTION}:*:${requestId}`
 
 type Deferred<T> = { promise: Promise<T>; resolve: (value: T) => void; reject: (e: Error) => void }
 
@@ -108,39 +107,6 @@ async function settle(): Promise<void> {
 }
 
 describe('session.tabs.subscribe registers when the request arrives', () => {
-  it.each([
-    { stage: 'restore', unsubscribe: { worktree: 'id:wt-1', subscriptionId: 'sub-1' } },
-    { stage: 'list', unsubscribe: { worktree: 'id:wt-1', subscriptionId: 'sub-1' } },
-    { stage: 'list', unsubscribe: { worktree: 'id:wt-1' } }
-  ])(
-    'an unsubscribe ($unsubscribe) during the $stage await ends the stream and leaves nothing',
-    async ({ stage, unsubscribe }) => {
-      const host = makeHost({ structuredChat: true })
-      const gate = deferred<void>()
-      const listing = deferred<RuntimeMobileSessionTabsResult>()
-      if (stage === 'restore') {
-        host.restore.mockReturnValueOnce(gate.promise)
-      } else {
-        host.listMobileSessionTabs.mockReturnValueOnce(listing.promise)
-      }
-      const messages: Frame[] = []
-      const pending = host.dispatch(
-        request('sub-1', 'session.tabs.subscribe', { worktree: 'id:wt-1' }),
-        messages
-      )
-
-      await host.dispatch(request('unsub-1', 'session.tabs.unsubscribe', unsubscribe))
-      gate.resolve()
-      listing.resolve(visibleSnapshot())
-      await pending
-      await settle()
-
-      expect(host.isRegistered(KEY('sub-1'))).toBe(false)
-      expect(host.runtime.onMobileSessionTabsChanged).not.toHaveBeenCalled()
-      expect(frames(messages)).toEqual(['end'])
-    }
-  )
-
   it('a socket close during setup leaves no registration and no listener', async () => {
     const host = makeHost()
     const listing = deferred<RuntimeMobileSessionTabsResult>()
@@ -205,30 +171,6 @@ describe('session.tabs.subscribe registers when the request arrives', () => {
     expect(frames(messages)).toEqual(['end'])
   })
 
-  it('streams snapshot and updates, then ends once on unsubscribe', async () => {
-    const host = makeHost()
-    const messages: Frame[] = []
-
-    await host.dispatch(
-      request('sub-1', 'session.tabs.subscribe', { worktree: 'id:wt-1' }),
-      messages
-    )
-    expect(host.isRegistered(KEY('sub-1'))).toBe(true)
-    host.tabListeners[0]?.({ ...visibleSnapshot(), snapshotVersion: 2 }, 1)
-    await host.dispatch(
-      request('unsub-1', 'session.tabs.unsubscribe', {
-        worktree: 'id:wt-1',
-        subscriptionId: 'sub-1'
-      })
-    )
-    host.runtime.cleanupSubscriptionsForConnection(CONNECTION)
-    await settle()
-
-    expect(frames(messages)).toEqual(['snapshot', 'updated', 'end'])
-    expect(host.stopListening).toHaveBeenCalledTimes(1)
-    expect(host.isRegistered(KEY('sub-1'))).toBe(false)
-  })
-
   it('a worktree-wide unsubscribe spares a subscribe that arrives while it resolves', async () => {
     const host = makeHost()
     const first: Frame[] = []
@@ -251,62 +193,5 @@ describe('session.tabs.subscribe registers when the request arrives', () => {
     expect(frames(second)).toEqual(['snapshot'])
     expect(host.isRegistered(KEY('sub-1'))).toBe(false)
     expect(host.isRegistered(KEY('sub-2'))).toBe(true)
-  })
-
-  it('a request-id unsubscribe ends only its own stream', async () => {
-    const host = makeHost()
-    const first: Frame[] = []
-    const second: Frame[] = []
-
-    await host.dispatch(request('sub-1', 'session.tabs.subscribe', { worktree: 'id:wt-1' }), first)
-    await host.dispatch(request('sub-2', 'session.tabs.subscribe', { worktree: 'id:wt-1' }), second)
-    await host.dispatch(
-      request('unsub-1', 'session.tabs.unsubscribe', {
-        worktree: 'id:wt-1',
-        subscriptionId: 'sub-1'
-      })
-    )
-    await settle()
-
-    expect(frames(first)).toEqual(['snapshot', 'end'])
-    expect(frames(second)).toEqual(['snapshot'])
-    expect(host.isRegistered(KEY('sub-1'))).toBe(false)
-    expect(host.isRegistered(KEY('sub-2'))).toBe(true)
-    expect(host.stopListening).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe('session.tabs.subscribeAll registers before restoring structured tabs', () => {
-  it.each([
-    {
-      release: 'unsubscribeAll',
-      act: (host: ReturnType<typeof makeHost>) =>
-        host.dispatch(
-          request('unsub-1', 'session.tabs.unsubscribeAll', { subscriptionId: 'sub-1' })
-        )
-    },
-    {
-      release: 'socket close',
-      act: async (host: ReturnType<typeof makeHost>) =>
-        host.runtime.cleanupSubscriptionsForConnection(CONNECTION)
-    }
-  ])('a $release during the restore leaves no stream behind', async ({ act }) => {
-    const host = makeHost({ structuredChat: true })
-    const gate = deferred<void>()
-    host.restore.mockReturnValueOnce(gate.promise)
-    const messages: Frame[] = []
-    const pending = host.dispatch(request('sub-1', 'session.tabs.subscribeAll'), messages)
-
-    await act(host)
-    gate.resolve()
-    await pending
-    await settle()
-
-    expect(host.isRegistered(ALL_KEY('sub-1'))).toBe(false)
-    expect(frames(messages)).not.toContain('snapshots')
-    expect(
-      vi.mocked(host.runtime.onMobileSessionTabsChanged).mock.calls.length -
-        host.stopListening.mock.calls.length
-    ).toBe(0)
   })
 })

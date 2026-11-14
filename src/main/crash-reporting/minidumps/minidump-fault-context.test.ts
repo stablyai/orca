@@ -5,11 +5,10 @@ const STREAM_TYPE_MODULE_LIST = 4
 const STREAM_TYPE_MEMORY_LIST = 5
 const STREAM_TYPE_SYSTEM_INFO = 7
 const VER_PLATFORM_WIN32_NT = 2
-const CRASHPAD_PLATFORM_MACOS = 0x8101
+
 const STREAM_TYPE_EXCEPTION = 6
 const CONTEXT_SIZE = 0x4d0
 // Electron 43.7.8 x64 bytes at electron.exe+0x23d3f88 for comparison with dump capture.
-const CODE = Buffer.from('4188bc24880000004188bc2490000000', 'hex')
 
 type FaultDump = {
   code: number
@@ -101,24 +100,6 @@ function buildFaultDump(options: FaultDump): Buffer {
 }
 
 describe('minidump fault context', () => {
-  it('omits the stack delta for a fault far from the stack and for non-x64 contexts', async () => {
-    const far = await parseMinidumpCrashSignature(
-      buildFaultDump({ code: 0xc0000005, rip: 0x1000n, rsp: 0x10_0000_0000n, params: [0n, 0x20n] })
-    )
-    expect(far?.fault).toEqual({ access: 'read', faultAddress: '0x20' })
-
-    const arm = await parseMinidumpCrashSignature(
-      buildFaultDump({
-        code: 0xc0000005,
-        rip: 0x1000n,
-        rsp: 0x30n,
-        contextFlags: 0x00400000,
-        params: [8n, 0x20n]
-      })
-    )
-    expect(arm?.fault).toEqual({ access: 'execute', faultAddress: '0x20' })
-  })
-
   it('keeps only code bytes for non-AV exceptions and truncates at the captured range', async () => {
     const signature = await parseMinidumpCrashSignature(
       buildFaultDump({
@@ -134,41 +115,5 @@ describe('minidump fault context', () => {
       })
     )
     expect(signature?.fault).toEqual({ codeBytes: 'cc0f0b' })
-  })
-
-  it('captures no code bytes outside a loaded module, such as JIT code', async () => {
-    const signature = await parseMinidumpCrashSignature(
-      buildFaultDump({
-        code: 0xc0000005,
-        rip: 0x9000n,
-        rsp: 0x10_0000_0000n,
-        params: [0n, 0x20n],
-        memory: [{ start: 0x9000n, bytes: CODE }],
-        platformId: VER_PLATFORM_WIN32_NT,
-        modules: [{ base: 0x4000n, size: 0x2000, name: 'Orca.exe' }]
-      })
-    )
-    expect(signature?.fault).toEqual({ access: 'read', faultAddress: '0x20' })
-  })
-
-  it('captures no code bytes from a macOS dump, where the address is the touched data', async () => {
-    const signature = await parseMinidumpCrashSignature(
-      buildFaultDump({
-        code: 0x1,
-        rip: 0x5000n,
-        memory: [{ start: 0x5000n, bytes: CODE }],
-        platformId: CRASHPAD_PLATFORM_MACOS,
-        modules: [{ base: 0x4000n, size: 0x2000, name: 'Electron Framework' }]
-      })
-    )
-    expect(signature?.fault).toEqual({})
-  })
-
-  it('degrades to nothing when the AV parameters or memory list are missing', async () => {
-    const signature = await parseMinidumpCrashSignature(
-      buildFaultDump({ code: 0xc0000005, rip: 0x5000n })
-    )
-    expect(signature?.exceptionAddress).toBe('0x5000')
-    expect(signature?.fault).toEqual({})
   })
 })

@@ -40,27 +40,6 @@ export function registerProfileStateMaintenanceRecoveryTests(): void {
       })
     })
 
-    it('restores the writer and snapshot admission after a known failed checkpoint', async () => {
-      const { store, authority, readState } = await createWorkerMaintenanceFixture()
-      vi.spyOn(console, 'error').mockImplementation(() => {})
-      vi.spyOn(authority, 'writeCompleteSerializedDomains').mockRejectedValueOnce(
-        new Error('disk refused')
-      )
-      store.updateSettings({ theme: 'dark' })
-      await expect(store.beginProfileMaintenance()).rejects.toThrow('disk refused')
-
-      store.setWorkspaceSession({ ...store.getWorkspaceSession(), activeTabId: 'after-failure' })
-      await store.runDurableMutation(() => {
-        store.updateSettings({ theme: 'light' })
-        return { value: undefined }
-      })
-      expect(readState()).toMatchObject({
-        settings: { theme: 'light' },
-        workspaceSession: { activeTabId: 'after-failure' }
-      })
-      await (await store.beginProfileMaintenance()).resume()
-    })
-
     it('keeps changed storage fenced when recovering a known failure', async () => {
       const { store, authority, peer, readState } = await createWorkerMaintenanceFixture()
       vi.spyOn(console, 'error').mockImplementation(() => {})

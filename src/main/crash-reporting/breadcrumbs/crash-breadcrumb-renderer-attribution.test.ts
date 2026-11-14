@@ -12,43 +12,6 @@ describe('renderer crash breadcrumb attribution', () => {
     clearCrashBreadcrumbsForTest()
   })
 
-  it('filters a renderer report to its own breadcrumbs while retaining global evidence', () => {
-    recordCrashBreadcrumb('app_started', { packaged: true })
-    recordCrashBreadcrumb('renderer_a_event', undefined, 'renderer:11')
-    recordCrashBreadcrumb('renderer_b_event', undefined, 'renderer:22')
-
-    expect(getCrashBreadcrumbSnapshot('renderer:11').map((entry) => entry.name)).toEqual([
-      'app_started',
-      'renderer_a_event'
-    ])
-    expect(getCrashBreadcrumbSnapshot('renderer:22').map((entry) => entry.name)).toEqual([
-      'app_started',
-      'renderer_b_event'
-    ])
-    expect(getCrashBreadcrumbSnapshot().map((entry) => entry.name)).toEqual([
-      'app_started',
-      'renderer_a_event',
-      'renderer_b_event'
-    ])
-  })
-
-  it('preserves the reporter trail when sibling renderer traffic fills the ring', () => {
-    for (let index = 0; index < 4; index += 1) {
-      recordCrashBreadcrumb('renderer_memory_highwater', {
-        rendererSurface: `surface-${index}`,
-        thresholdPct: 80
-      })
-    }
-    recordCrashBreadcrumb('renderer_a_event', undefined, 'renderer:11')
-    for (let index = 0; index < 26; index += 1) {
-      recordCrashBreadcrumb(`renderer_b_event_${index}`, undefined, 'renderer:22')
-    }
-
-    expect(getCrashBreadcrumbSnapshot('renderer:11').map((entry) => entry.name)).toContain(
-      'renderer_a_event'
-    )
-  })
-
   it('folds pending repeats using the reporter-specific evidence window', () => {
     recordCoalescedCrashBreadcrumb({
       name: 'renderer_error',

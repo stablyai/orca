@@ -44,7 +44,7 @@ const layoutFunctions = layoutAst.statements.filter(
 assert.equal(layoutFunctions.length, layoutNames.length)
 const layoutSubset = `import { isTerminalLeafId } from ${JSON.stringify(path.resolve('src/shared/workspace-layout/stable-pane-id.ts'))};
 import { readSplitRatio } from '@/lib/pane-manager/pane-layout/pane-split-ratio';
-import { SPLIT_RATIO_TOLERANCE } from ${JSON.stringify(path.resolve('src/shared/workspace-layout/terminal-pane-tree.ts'))};
+import { SPLIT_RATIO_TOLERANCE } from ${JSON.stringify(path.resolve('src/shared/workspace-layout/terminal-topology/terminal-pane-tree.ts'))};
 ${layoutFunctions.map((node) => node.getText(layoutAst)).join('\n')}`
 
 async function load(source) {
@@ -65,6 +65,11 @@ async function load(source) {
             resolveDir: path.dirname(entry)
           }))
           // Historical inputs keep their bodies while imports select this checkout's defining owners.
+          builder.onResolve({ filter: /(?:^|[/\\])terminal-pane-layout-tree$/ }, () => ({
+            path: path.resolve(
+              'src/shared/workspace-layout/terminal-topology/terminal-pane-layout-tree.ts'
+            )
+          }))
           builder.onResolve({ filter: /^(?:\.\.\/)+shared\// }, (args) => {
             const target = path.resolve('src/shared', args.path.split('/shared/')[1])
             return { path: existsSync(target) ? target : `${target}.ts` }

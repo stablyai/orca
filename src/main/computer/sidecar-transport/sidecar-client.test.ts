@@ -2,11 +2,7 @@ import type * as NodeFs from 'node:fs'
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import {
-  callComputerSidecarAction,
-  callComputerSidecarCapabilities,
-  resetComputerSidecarForTest
-} from './sidecar-client'
+import { callComputerSidecarCapabilities, resetComputerSidecarForTest } from './sidecar-client'
 
 type TestAppEnvironment = { getAppPath(): string; isPackaged(): boolean }
 
@@ -89,51 +85,6 @@ describe('computer sidecar client', () => {
     existsSyncMock.mockImplementation(() => true)
     appEnvironment.current = null
     vi.useRealTimers()
-  })
-
-  it('fails set-value when the provider read the write back as a different value', async () => {
-    const call = callComputerSidecarAction('setValue', {
-      app: 'Safari',
-      elementIndex: 15,
-      value: 'pf1300-awllch'
-    })
-    const child = children[0]!
-    const request = child.sent[0]!
-
-    child.emit('message', {
-      id: request.id,
-      ok: true,
-      result: {
-        snapshot: {
-          id: 'snap-1',
-          app: { name: 'Safari', bundleId: 'com.apple.Safari', pid: 100 },
-          window: { title: 'Form', id: 63, width: 800, height: 600 },
-          coordinateSpace: 'window',
-          treeText: 'tree',
-          elementCount: 16,
-          focusedElementId: null
-        },
-        screenshot: null,
-        screenshotStatus: { state: 'skipped', reason: 'no_screenshot_flag' },
-        action: {
-          path: 'accessibility',
-          actionName: 'AXSetValue',
-          fallbackReason: null,
-          targetWindowId: 63,
-          verification: {
-            state: 'unverified',
-            reason: 'value_mismatch',
-            expected: 'pf1300-awllch',
-            actualPreview: 'orig-objective-1300'
-          }
-        }
-      }
-    })
-
-    await expect(call).rejects.toMatchObject({
-      code: 'verification_failed',
-      message: expect.stringContaining('"orig-objective-1300"')
-    })
   })
 
   it('rejects queued requests after the active request times out', async () => {

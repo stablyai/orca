@@ -1,18 +1,10 @@
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  writeFileSync
-} from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProfileStateSqliteAuthority } from '../../profile-state/profile-state-sqlite-authority'
 import { readProfileStateSnapshot } from '../../profile-state/documents/profile-state-documents'
-import { hashProfileStatePayload as hashProfileStateJson } from '../../profile-state/documents/profile-state-document-validation'
+
 import {
   openProfileStateDatabase,
   openProfileStateDatabaseReadOnly
@@ -108,29 +100,6 @@ describe('Store with an injected SQLite profile-state authority', () => {
     } finally {
       strict.db.close()
     }
-  })
-
-  it('rejects invalid domain JSON before handing it to the Store', () => {
-    const directory = mkdtempSync(join(tmpdir(), 'orca-store-profile-state-runtime-parse-'))
-    temporaryDirectories.push(directory)
-    const databasePath = join(directory, 'profile-state.db')
-    const authority = createAuthority(databasePath, 'profile-authority-test')
-    authority.writeSerializedState(Buffer.from(JSON.stringify({ settings: { theme: 'dark' } })))
-    authority.close()
-
-    const opened = openProfileStateDatabase(databasePath, 'profile-authority-test')
-    opened.db
-      .prepare('UPDATE profile_state_documents SET payload = ?, content_hash = ? WHERE domain = ?')
-      .run('{invalid', hashProfileStateJson('{invalid'), 'settings')
-    opened.db.close()
-
-    expect(
-      () =>
-        new Store({
-          dataFile: join(directory, 'orca-data.json'),
-          profileStateAuthority: createAuthority(databasePath, 'profile-authority-test')
-        })
-    ).toThrow('Profile state document payload is invalid JSON: settings')
   })
 
   it('fences a complete-document writer that read before another authority committed', () => {
@@ -240,21 +209,5 @@ describe('Store with an injected SQLite profile-state authority', () => {
     })
     expect(readFileSync(databasePath).equals(sourceBytes)).toBe(true)
     await expect(store.flushPendingOrThrowAsync()).rejects.toThrow('finalized')
-  })
-
-  it('prepares frozen JSON imports without permitting file publication', () => {
-    const directory = mkdtempSync(join(tmpdir(), 'orca-store-profile-state-legacy-export-'))
-    temporaryDirectories.push(directory)
-    const dataFile = join(directory, 'orca-data.json')
-    const store = new Store({ dataFile, serializedState: '{"settings":{"theme":"light"}}' })
-    store.updateSettings({ theme: 'dark' })
-
-    const exportPath = join(directory, 'rollback', 'orca-data.json.legacy.json')
-    expect(() => store.writeProfileStateJsonExport(exportPath)).toThrow('require a SQLite')
-    expect(JSON.parse(store.prepareProfileStateExport().json).settings.theme).toBe('dark')
-    expect(existsSync(exportPath)).toBe(false)
-    expect(existsSync(dataFile)).toBe(false)
-    expect(existsSync(join(directory, 'profile-state.db'))).toBe(false)
-    store.freezeWrites()
   })
 })

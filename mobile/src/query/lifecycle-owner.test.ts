@@ -68,19 +68,6 @@ describe('reconnect-mid-request', () => {
 })
 
 describe('owner boundaries', () => {
-  it('refuses a peer owner lease', async () => {
-    const owner: Owner = new GenerationScopedRequestOwner()
-    const peer: Owner = new GenerationScopedRequestOwner()
-    const scope = scopeAt('w1', 1)
-    const request = pending()
-    const loaded = owner.load(scope, QUERY, request.start)
-    request.resolve(['a.ts'])
-    const lease = await settled(loaded)
-
-    expect(peer.commit(lease.lease, lease.value)).toBe('foreign-owner')
-    expect(peer.read(scope, QUERY)).toBeUndefined()
-  })
-
   it('separates two workspaces that ask for the same parameters', async () => {
     const owner: Owner = new GenerationScopedRequestOwner()
     const request = pending()

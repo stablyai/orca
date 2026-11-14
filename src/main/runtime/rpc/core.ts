@@ -1,9 +1,9 @@
-import type { RuntimeClientCapabilities } from './runtime-client-capabilities'
+import type { RuntimeClientCapabilities } from './callers/runtime-client-capabilities'
 import type { ZodError, ZodType } from 'zod'
 import type { TerminalStreamFrame } from '../../../shared/terminal/stream/terminal-stream-protocol'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrchestrationCompatibilityCallerAuthority } from '../orchestration/terminal-authority/orchestration-compatibility-authority'
-import type { StructuredAgentCliSourceEvidence } from '../../native-chat/structured-agent-cli-source'
+import type { StructuredAgentCliSourceEvidence } from '../../native-chat/conversation-adoption/structured-agent-cli-source'
 import type {
   DeviceCredentialInstalled,
   PairingGetEndpointsParams,
@@ -21,11 +21,11 @@ import type {
 } from '../../../shared/delegated-mobile-device-contract'
 import type { OrchestrationCompatibilityEvidence } from '../../../shared/orchestration/orchestration-compatibility-evidence'
 import type { OrchestrationEntryCaller } from '../orchestration/addressing/orchestration-caller-identity'
-import type { RpcCallerIdentity } from './rpc-caller-identity'
+import type { RpcCallerIdentity } from './callers/rpc-caller-identity'
 import type { OrcadPeerDesktopsResult } from '../../../shared/orcad-peer-desktops-contract'
-import type { RpcBinarySender } from './rpc-binary-sender'
-import type { RpcMethodPermission } from './rpc-method-permission'
-import type { OrcadFeatureRequirement } from './orcad-feature-readiness'
+import type { RpcBinarySender } from './transports/rpc-binary-sender'
+import type { RpcMethodPermission } from './callers/rpc-method-permission'
+import type { OrcadFeatureRequirement } from './startup/orcad-readiness'
 import {
   runsOrchestrationAccessCheck,
   type OrchestrationMethodAccessDeclaration
@@ -128,6 +128,8 @@ export type RpcContext = {
   pairedDeviceParentId?: string
   // Host-assigned transport identity; absent means the caller could not be established.
   caller?: RpcCallerIdentity
+  // Set only by the in-process plugin host: the plugin a call acts for, kept as provenance.
+  plugin?: { key: string; name: string; assertActive?: () => void }
   // Only phones receive truncated payloads; undefined in-process callers remain unclipped.
   clientKind?: 'mobile' | 'runtime'
   // Session-tab streams re-project with .current; other readers use the request-time clientCapabilities.

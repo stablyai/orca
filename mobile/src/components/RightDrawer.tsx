@@ -169,14 +169,14 @@ function MountedRightDrawer({
 
 const styles = themedStyleSheet(() => ({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 1000
   },
   root: {
     flex: 1
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.5)'
   },
   anchor: {

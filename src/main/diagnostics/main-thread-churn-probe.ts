@@ -1,4 +1,4 @@
-import { writeStartupDiagnosticLine } from '../startup/startup-diagnostics'
+import { writeStartupDiagnosticLine } from '../startup/diagnostics/startup-diagnostics'
 
 export const MAIN_THREAD_DIAGNOSTICS_ENV = 'ORCA_MAIN_THREAD_DIAGNOSTICS'
 

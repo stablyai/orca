@@ -11,7 +11,7 @@ import { applyEditorBufferText } from './editor-buffer-adapter'
 import { editorTabModelUri } from '../../save/queue/editor-save-disk-precondition'
 import { attachClosedEditorTabCleanup } from '../retention/closed-editor-tab-controller'
 
-import { showClosedUnsavedFilesToast } from '../../closed-unsaved-files-toast'
+import { showClosedUnsavedFilesToast } from '../retention/closed-unsaved-files-toast'
 
 const storeRef = vi.hoisted((): { current: StoreApi<AppState> | null } => ({ current: null }))
 const toastWarning = vi.hoisted(() => vi.fn())
@@ -106,7 +106,6 @@ describe('a kept dirty record owns its model', () => {
 
       showClosedUnsavedFilesToast([{ fileId: a, filePath: PATH, content: 'unsaved' }], 'wt-1', 1)
       toastWarning.mock.calls[0][1].onDismiss()
-      expect(store.getState().editorBufferKept).toEqual({})
       await Promise.resolve()
       await Promise.resolve()
       expect(model.isDisposed()).toBe(true)

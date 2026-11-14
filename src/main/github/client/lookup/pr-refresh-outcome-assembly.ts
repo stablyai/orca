@@ -2,14 +2,14 @@ import {
   classifyPRCheckRollupResult,
   summarizePRCheckRollup
 } from '../../../../shared/source-control/checks/pr-check-status'
-import type { PRRefreshOutcome } from '../../../../shared/github/pull-request-refresh-types'
+import type { PRRefreshOutcome } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type {
   PRConflictSummary,
   PRMergeableState,
   GitHubPRStack
-} from '../../../../shared/github/pull-request-types'
-import { mapPRState } from '../../mappers'
-import type { OwnerRepo } from '../../gh-utils'
+} from '../../../../shared/github/pull-requests/pull-request-types'
+import { mapPRState } from '../../api/github-read-response'
+import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type { PullRequestLookupData } from './pull-request-lookup-data'
 
 // Main-only: the full rollup stays off the renderer broadcast, beside the outcome it was read for.

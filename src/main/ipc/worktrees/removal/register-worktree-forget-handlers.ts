@@ -25,7 +25,7 @@ import {
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
 import { getLocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { forceDeleteLocalBranch } from '../../../git/worktrees/removal/worktree-branch-removal'
-import { gitExecFileAsync } from '../../../git/runner'
+import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import type { RemoveWorktreeArgs } from '../ipc-context-schemas'
 import { getWorktreeRemovalInFlightKey } from './worktree-removal-coordinator'
 import { getFolderWorkspaceRootId } from '../folder-workspace-model'

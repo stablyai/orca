@@ -1,4 +1,4 @@
-import type { PtySpawnResult } from '../../providers/pty-spawn-result'
+import type { PtySpawnResult } from '../../providers/pty/spawn-result'
 import { wslHookRelayManager } from './wsl-hook-relay-manager'
 
 type ReattachResult = Pick<PtySpawnResult, 'isReattach' | 'wslDistro'>

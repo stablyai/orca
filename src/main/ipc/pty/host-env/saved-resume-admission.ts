@@ -1,11 +1,11 @@
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import {
   normalizeAgentProviderSession,
-  agentProviderSessionsEqual,
   type AgentProviderSessionMetadata,
   type SleepingAgentLaunchConfig,
   type SleepingAgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import type {
   AgentStatusIpcPayload,
   RefusedPaneResume
@@ -21,7 +21,7 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import {
   keysMayMatch,
   terminalConversationKey
-} from '../../../native-chat/structured-conversation-key'
+} from '../../../native-chat/conversation-adoption/structured-conversation-key'
 
 export type ResumeSpawnArgs = {
   connectionId?: string | null

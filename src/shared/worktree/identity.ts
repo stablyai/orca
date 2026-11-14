@@ -24,3 +24,17 @@ export function createWorktreeIdentity(ref: WorktreeIdentityRef): WorktreeIdenti
     instanceId: ref.instanceId
   }
 }
+
+/** The identity key a worktree's metadata gives it, as `mergeWorktree` derives `identity.key`. */
+export function worktreeMetaIdentityKey(
+  worktreeId: string,
+  meta: { instanceId?: string; hostId?: ExecutionHostId } | undefined
+): string | undefined {
+  return meta?.instanceId && meta.hostId
+    ? canonicalWorktreeIdentity({
+        worktreeId,
+        executionHostId: meta.hostId,
+        instanceId: meta.instanceId
+      })
+    : undefined
+}

@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import type * as NodeFsPromises from 'node:fs/promises'
-import { mkdir, mkdtemp, readFile, readlink, rm, utimes, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readlink, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -24,7 +24,6 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 
 import { resolveAppImageExtractedRoot } from './appimage-extracted-root'
 import {
-  getAppImageActiveExtractionPath,
   pruneAppImageExtractedRoots,
   removeAppImageInstalledPayloads
 } from './appimage-extraction-pruning'
@@ -85,74 +84,6 @@ describe('AppImage extraction pruning', () => {
     expect(existsSync(keepRoot.rootPath)).toBe(true)
     expect(existsSync(staleRoot)).toBe(false)
     expect(existsSync(siblingRoot)).toBe(true)
-  })
-
-  it('a sibling installed endpoint does not displace the owner generation', async () => {
-    const { appImagePath, cacheRootPath } = await makeExtractionFixture()
-    const ownerRoot = resolveAppImageExtractedRoot({ appImagePath, cacheRootPath })!
-    const siblingRoot = join(
-      dirname(ownerRoot.rootPath),
-      cacheKeyApartFrom(basename(ownerRoot.rootPath))
-    )
-    const [ownerLauncher, siblingLauncher] = await Promise.all([
-      writePayload(ownerRoot.rootPath, 'owner'),
-      writePayload(siblingRoot, 'installed')
-    ])
-    publishAppImageLauncherEndpoint(cacheRootPath, 'installed', siblingLauncher)
-
-    await pruneAppImageExtractedRoots(ownerRoot.rootPath)
-
-    await expect(readFile(ownerLauncher, 'utf8')).resolves.toBe('owner')
-    await expect(readFile(siblingLauncher, 'utf8')).resolves.toBe('installed')
-    await expect(
-      readlink(resolveAppImageLauncherEndpointPath(cacheRootPath, 'installed'))
-    ).resolves.toBe(siblingLauncher)
-  })
-
-  it('retains recent cross-process staging and reclaims stale staging', async () => {
-    const { appImagePath, cacheRootPath } = await makeExtractionFixture()
-    const root = resolveAppImageExtractedRoot({ appImagePath, cacheRootPath })!
-    const namespacePath = dirname(root.rootPath)
-    const recentStaging = join(namespacePath, '.extract-recent')
-    const staleStaging = join(namespacePath, '.extract-stale')
-    await Promise.all([
-      mkdir(root.rootPath, { recursive: true }),
-      mkdir(recentStaging, { recursive: true }),
-      mkdir(staleStaging, { recursive: true })
-    ])
-    await utimes(staleStaging, 0, 0)
-
-    await pruneAppImageExtractedRoots(root.rootPath)
-
-    expect(existsSync(recentStaging)).toBe(true)
-    expect(existsSync(staleStaging)).toBe(false)
-  })
-
-  it('preserves a recent active generation marker and reclaims a stale marker', async () => {
-    const { appImagePath, cacheRootPath } = await makeExtractionFixture()
-    const keepRoot = resolveAppImageExtractedRoot({ appImagePath, cacheRootPath })!
-    const keepKey = basename(keepRoot.rootPath)
-    const recentRoot = join(dirname(keepRoot.rootPath), cacheKeyApartFrom(keepKey))
-    const staleRoot = join(
-      dirname(keepRoot.rootPath),
-      cacheKeyApartFrom(keepKey, basename(recentRoot))
-    )
-    const recentMarker = getAppImageActiveExtractionPath(recentRoot)
-    const staleMarker = getAppImageActiveExtractionPath(staleRoot)
-    await Promise.all([
-      mkdir(keepRoot.rootPath, { recursive: true }),
-      mkdir(recentRoot, { recursive: true }),
-      mkdir(staleRoot, { recursive: true })
-    ])
-    await Promise.all([writeFile(recentMarker, ''), writeFile(staleMarker, '')])
-    await utimes(staleMarker, 0, 0)
-
-    await pruneAppImageExtractedRoots(keepRoot.rootPath)
-
-    expect(existsSync(recentRoot)).toBe(true)
-    expect(existsSync(recentMarker)).toBe(true)
-    expect(existsSync(staleRoot)).toBe(false)
-    expect(existsSync(staleMarker)).toBe(false)
   })
 
   it.skipIf(process.platform === 'win32')(

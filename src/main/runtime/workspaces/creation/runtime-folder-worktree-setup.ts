@@ -4,7 +4,7 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
+import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {
   startRuntimeLocalWorktreeTerminals,

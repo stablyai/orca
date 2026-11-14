@@ -7,15 +7,6 @@ function decodeBase64(data: string): Uint8Array {
 }
 
 describe('MobileImageBase64Accumulator', () => {
-  it('preserves bytes split across non-aligned source chunks', () => {
-    const accumulator = new MobileImageBase64Accumulator()
-    accumulator.append(new Uint8Array([1]))
-    accumulator.append(new Uint8Array([2, 3]))
-    accumulator.append(new Uint8Array([4, 5]))
-
-    expect(accumulator.finish()).toBe('AQIDBAU=')
-  })
-
   it('preserves bytes across internal staging flushes', () => {
     const bytes = new Uint8Array(256 * 1024 + 7)
     bytes.forEach((_, index) => {

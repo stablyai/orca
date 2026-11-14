@@ -1,11 +1,11 @@
 import { usableJournalHistoryOrigin } from '../../agent-session-journal/context-epochs/journal-history-origin'
-import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { JournalOperationReceipt } from '../../agent-session-journal/writing/journal-row-writer'
 import type {
   AgentSessionRewindParams,
   AgentSessionRewindRecord,
   AgentSessionRewindResult
-} from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
+} from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import type { AgentSessionMutationResult } from '../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionMutationContext } from '../operations/structured-agent-session-mutation-context'
 import { runWithReadyStructuredAgentSessionOperation } from '../operations/structured-agent-session-ready-operation'
@@ -17,6 +17,7 @@ import type { StructuredAgentSessionAttachContext } from '../acquisition/structu
 import type { StructuredAgentSessionCaller } from '../host/structured-agent-session-host-types'
 import { admitAndRunAgentSessionMutation } from '../operations/structured-agent-session-mutation-admission'
 import { hostStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-host-current-work'
+import { readHostStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
 import { conversationCommandBlocked } from '../operations/structured-conversation-command-admission'
 import { completedStructuredRewind } from './structured-rewind-replay'
 import { rewindRefusal, rewindRefusalBehindClear } from './structured-rewind-refusal'
@@ -67,6 +68,12 @@ export async function rewindStructuredAgentSession(
       journal: () => context.sessions.get(sessionId)?.journal,
       currentWork: () =>
         hostStructuredAgentSessionCurrentWork({ store, sessions: context.sessions }, sessionId),
+      readWork: (operation) =>
+        readHostStructuredAgentSessionWork(
+          { store, sessions: context.sessions },
+          sessionId,
+          operation
+        ),
       publish: (journal) => context.publish(sessionId, journal),
       now: context.now,
       plan: {
@@ -80,8 +87,12 @@ export async function rewindStructuredAgentSession(
         }),
         settlesWithWrite: true,
         successReceipt: () => ({
-          write: (db) => completionReceipt!.write(db),
-          committed: () => completionReceipt!.committed()
+          stage: (stage) => {
+            if (!completionReceipt?.stage) {
+              throw new Error('rewind completion requires writer staging')
+            }
+            return completionReceipt.stage(stage)
+          }
         }),
         replay: (_ctx, outcome) => {
           if (outcome.status === 'succeeded' && outcome.rewind) {
@@ -104,20 +115,18 @@ export async function rewindStructuredAgentSession(
             return rewindRefusal('outcome-unknown')
           }
           const childWork = { views: readChildWork(sessionId), open: childWorkOpen(sessionId) }
-          if (conversationCommandBlocked(ctx, record, childWork, 'handover')) {
+          if (await conversationCommandBlocked(ctx, record, childWork, 'handover')) {
             return rewindRefusal('busy')
           }
           if (ctx.journal.cursor().epoch !== params.expectedEpoch) {
             return rewindRefusal('stale-epoch')
           }
-          if (
-            !isStructuredRewindTarget(ctx.journal, params.itemId, record.forkedFrom?.childBoundary)
-          ) {
+          if (!(await isStructuredRewindTarget(ctx.journal, params.itemId))) {
             return rewindRefusal('invalid-target')
           }
           const head = agentSessionProviderHandleChainHead(record.providerHandleChain)?.handle
           const cut = head
-            ? structuredRewindCut(ctx.journal, {
+            ? await structuredRewindCut(ctx.journal, {
                 itemId: params.itemId,
                 provider: record.provider,
                 nativeId: head.nativeId
@@ -148,20 +157,20 @@ export async function rewindStructuredAgentSession(
           if ('beforeTurnId' in cut && !proof?.ok) {
             return rewindRefusal(proof?.reason ?? 'unsupported')
           }
-          const contextFloor = ctx.journal.context.floor()
+          const contextFloor = (await ctx.journal.reads.rewindTarget(params.itemId)).floor
           const prepared: AgentSessionRewindRecord = {
             operationId: clientOperationId,
             callerKey: caller.callerKey,
             itemId: params.itemId,
-            providerItemId: providerItemIdOf(ctx.journal, params.itemId),
+            providerItemId: await providerItemIdOf(ctx.journal, params.itemId),
             expectedEpoch: params.expectedEpoch,
             phase: 'prepared',
             ...(fork?.ok
               ? {
                   providerFork: {
                     ...fork.fork,
-                    ...(usableJournalHistoryOrigin(ctx.journal.historyOrigin())?.kind ===
-                    'native_copy'
+                    ...(usableJournalHistoryOrigin(await ctx.journal.reads.historyOrigin())
+                      ?.kind === 'native_copy'
                       ? {}
                       : { coverage: undefined })
                   }
@@ -214,25 +223,19 @@ export async function rewindStructuredAgentSession(
             journal,
             fence,
             undefined,
-            (rewind, currentFence, cursor, cancel, childBoundary) => {
-              completionReceipt = store.conversationReceipts.rewind(
-                sessionId,
-                currentFence,
-                rewind,
-                cursor,
-                cancel,
-                childBoundary
-              )
+            (rewind, currentFence) => {
+              completionReceipt = store.conversationReceipts.rewind(sessionId, currentFence, rewind)
               return ctx.operationReceipt!
             }
           )
           context.publish(sessionId, journal)
+          const cursor = await journal.reads.cursor()
           return {
             ok: true,
             value: {
               itemId: params.itemId,
-              epoch: journal.cursor().epoch,
-              ...(contextFloor ? { sequence: journal.cursor().sequence } : {})
+              epoch: cursor.epoch,
+              ...(contextFloor ? { sequence: cursor.sequence } : {})
             }
           }
         }
@@ -242,7 +245,7 @@ export async function rewindStructuredAgentSession(
       ? {
           ...result,
           fence: store.getConversation(sessionId)?.currentFence ?? result.fence,
-          cursor: context.sessions.get(sessionId)!.journal.cursor()
+          cursor: await context.sessions.get(sessionId)!.journal.reads.cursor()
         }
       : result
   }

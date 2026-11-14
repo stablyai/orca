@@ -1,7 +1,15 @@
+import {
+  acceptBrowserGuestMetadata,
+  clearBrowserGuestMetadata
+} from '@/components/browser-pane/host-guest/browser-guest-metadata-cache'
 import { rememberLiveBrowserUrl } from '@/components/browser-pane/describe-page/live-browser-url-registry'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { findVisibleBrowserLinkTarget } from '@/lib/browser/navigation/visible-browser-link-target'
 import { openUrlInTabBesideBrowserPage } from '@/lib/browser/palette/browser-page-tab-opening'
+import {
+  isClientHostedBrowserSourcePage,
+  openClientHostedUrlBesideBrowserPage
+} from '@/lib/browser/palette/open-client-hosted-link-beside-page'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { useAppStore } from '../../store'
@@ -74,12 +82,17 @@ export function registerBrowserStateIpcBridge(
       }
       useAppStore.getState().updateBrowserPageState(browserPageId, {
         loading: false,
-        loadError,
-        canGoBack: false,
-        canGoForward: false
+        loadError
       })
     })
   )
+  const unsubscribeMetadata = window.api.browser.onGuestMetadata?.(acceptBrowserGuestMetadata)
+  if (unsubscribeMetadata) {
+    unsubs.push(() => {
+      unsubscribeMetadata()
+      clearBrowserGuestMetadata()
+    })
+  }
   const unsubscribeCertificateFailure = window.api.browser.onCertificateFailureChanged?.(
     ({ browserPageId, failure }) => {
       if (isRuntimeEnvironmentActive() && !isClientHostedBrowserPage(browserPageId)) {
@@ -208,7 +221,21 @@ export function registerBrowserStateIpcBridge(
       const sourcePage = Object.values(store.browserPagesByWorkspace)
         .flat()
         .find((page) => page.id === browserPageId)
-      if (!sourcePage || runtimeEnvironmentIdOrLocalUnlessTwin(store, sourcePage.worktreeId)) {
+      if (!sourcePage) {
+        return
+      }
+      // Client-hosted guests live on this desktop, so a paired worktree must not drop their popups.
+      if (isClientHostedBrowserSourcePage(browserPageId)) {
+        openClientHostedUrlBesideBrowserPage({
+          sourcePageId: browserPageId,
+          worktreeId: sourcePage.worktreeId,
+          url,
+          activate: activate ?? true,
+          onOpened: markBrowserPageOpenedByPage
+        })
+        return
+      }
+      if (runtimeEnvironmentIdOrLocalUnlessTwin(store, sourcePage.worktreeId)) {
         return
       }
       const placement = findVisibleBrowserLinkTarget(store, sourcePage.worktreeId)

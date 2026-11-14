@@ -1,14 +1,21 @@
 import React, { useEffect, useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { ChevronRight, Loader2 } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
+import { Loader2 } from 'lucide-react'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
+import type { Worktree } from '../../../../../shared/worktree/types'
 import type { AutomationRunsDashboardEntry } from './automation-runs-dashboard-model'
+import { getAutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
 import {
-  formatAutomationDateTimeWithRelative,
-  getAutomationRunStatusLabel,
-  getAutomationRunStatusVariant
-} from '../automation-page-parts'
+  AUTOMATION_RUNS_DASHBOARD_GRID_CLASS,
+  AutomationRunIdentityCell,
+  AutomationRunResultCell,
+  AutomationRunSpendCell,
+  AutomationRunTableHeaderCells,
+  AutomationRunWorkspaceCell
+} from './AutomationRunTableCells'
+import { useRevealAutomationRun } from './use-reveal-automation-run'
+import { automationRunFocusKey } from './automations-reveal-run'
 
 const RUN_ROW_HEIGHT_PX = 59
 const RUN_ROW_OVERSCAN = 10
@@ -19,16 +26,18 @@ export function AutomationRunsTable({
   loading,
   hasMore,
   onLoadMore,
-  onOpenRun
+  onOpenRun,
+  worktreeForRun
 }: {
   entries: readonly AutomationRunsDashboardEntry[]
   loading: boolean
   hasMore: boolean
   onLoadMore: () => void
   onOpenRun: (entry: AutomationRunsDashboardEntry) => void
+  /** The live workspace a run launched, if it still exists. */
+  worktreeForRun: (entry: AutomationRunsDashboardEntry) => Worktree | null
 }): React.JSX.Element {
   const t = useTranslate()
-  const intlLocale = useIntlLocale()
   const scrollRef = useRef<HTMLDivElement>(null)
   const loadMoreRequestedRef = useRef(false)
   useEffect(() => {
@@ -44,12 +53,22 @@ export function AutomationRunsTable({
     initialRect: RUNS_VIEWPORT_INITIAL_RECT,
     getItemKey: (index) => entries[index]?.key ?? index
   })
+  useRevealAutomationRun(
+    // Why: the same run id can appear under two hosts; the qualified key picks the right row.
+    (runId, runKey) =>
+      entries.findIndex((entry) =>
+        runKey
+          ? automationRunFocusKey(entry.row.key, entry.run.id) === runKey
+          : entry.run.id === runId
+      ),
+    (index) => virtualizer.scrollToIndex(index, { align: 'auto' })
+  )
 
   return (
-    <div className="flex min-h-[18rem] flex-col overflow-hidden rounded-lg border border-border/60 bg-card">
+    <div className="flex min-h-[15rem] flex-1 flex-col overflow-hidden rounded-lg border border-border/60 bg-card">
       <div
         ref={scrollRef}
-        className="scrollbar-sleek flex h-[calc(100vh-21rem)] min-h-[15rem] flex-col overflow-auto"
+        className="scrollbar-sleek flex min-h-0 flex-1 flex-col overflow-auto"
         onScroll={(event) => {
           const { clientHeight, scrollHeight, scrollTop } = event.currentTarget
           const nearEnd = scrollHeight - scrollTop - clientHeight < RUN_ROW_HEIGHT_PX * 10
@@ -59,16 +78,13 @@ export function AutomationRunsTable({
           }
         }}
       >
-        <div className="sticky top-0 z-10 grid shrink-0 grid-cols-[minmax(11rem,1.4fr)_minmax(10rem,1fr)_minmax(5rem,.55fr)_minmax(8rem,.8fr)_minmax(7rem,auto)] gap-3 border-b border-border/60 bg-card px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-          <div>
-            {t('auto.components.automations.AutomationRunsDashboard.automation', 'Automation')}
-          </div>
-          <div>
-            {t('auto.components.automations.AutomationRunsDashboard.triggered', 'Triggered')}
-          </div>
-          <div>{t('auto.components.automations.AutomationRunsDashboard.trigger', 'Trigger')}</div>
-          <div>{t('auto.components.automations.AutomationRunsDashboard.host', 'Host')}</div>
-          <div>{t('auto.components.automations.AutomationRunsDashboard.status', 'Status')}</div>
+        <div
+          className={cn(
+            AUTOMATION_RUNS_DASHBOARD_GRID_CLASS,
+            'sticky top-0 z-10 shrink-0 border-b border-border/60 bg-card px-4 py-2 text-2xs font-semibold uppercase tracking-wider text-muted-foreground'
+          )}
+        >
+          <AutomationRunTableHeaderCells withAutomation />
         </div>
         {loading && entries.length === 0 ? (
           <div className="flex min-h-0 flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -105,39 +121,32 @@ export function AutomationRunsTable({
                   <button
                     type="button"
                     data-testid="automation-runs-row"
-                    className="grid w-full grid-cols-[minmax(11rem,1.4fr)_minmax(10rem,1fr)_minmax(5rem,.55fr)_minmax(8rem,.8fr)_minmax(7rem,auto)] items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    data-automation-run-id={entry.run.id}
+                    data-automation-run-key={automationRunFocusKey(entry.row.key, entry.run.id)}
+                    className={cn(
+                      AUTOMATION_RUNS_DASHBOARD_GRID_CLASS,
+                      'items-center px-4 py-2.5 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'
+                    )}
                     onClick={() => onOpenRun(entry)}
                   >
-                    <div className="min-w-0">
-                      <div className="truncate font-medium">{entry.row.automation.name}</div>
-                      <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                        {entry.run.title}
-                      </div>
+                    <AutomationRunIdentityCell run={entry.run} />
+                    <div className="min-w-0 truncate" title={entry.row.automation.name}>
+                      {entry.row.automation.name}
                     </div>
-                    <div className="min-w-0 truncate text-xs">
-                      {formatAutomationDateTimeWithRelative(
-                        entry.run.scheduledFor,
-                        undefined,
-                        t,
-                        intlLocale
+                    <AutomationRunResultCell status={entry.run.status} />
+                    <AutomationRunWorkspaceCell
+                      display={getAutomationRunWorkspaceDisplay(
+                        {
+                          run: entry.run,
+                          worktree: entry.run.workspaceId ? worktreeForRun(entry) : null
+                        },
+                        t
                       )}
-                    </div>
-                    <div className="capitalize text-xs text-muted-foreground">
-                      {entry.run.trigger}
-                    </div>
-                    <div className="min-w-0 truncate text-xs" title={entry.row.hostLabel}>
-                      {entry.row.hostLabel ||
-                        t(
-                          `auto.components.automations.AutomationRunsDashboard.${entry.scope}`,
-                          entry.scope === 'local' ? 'Local' : 'Remote'
-                        )}
-                    </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <Badge variant={getAutomationRunStatusVariant(entry.run.status)}>
-                        {getAutomationRunStatusLabel(entry.run.status, t)}
-                      </Badge>
-                      <ChevronRight className="size-3.5 text-muted-foreground" />
-                    </div>
+                    />
+                    <AutomationRunSpendCell
+                      estimatedCostUsd={entry.run.estimatedCostUsd}
+                      usageKnown={entry.run.usageKnown}
+                    />
                   </button>
                 </div>
               )

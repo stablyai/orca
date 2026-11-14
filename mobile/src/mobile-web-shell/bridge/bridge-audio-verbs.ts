@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import { MAX_DICTATION_AUDIO_CHUNK_BYTES } from '../../../../src/shared/rpc-contract/speech-params'
+import { MAX_DICTATION_AUDIO_CHUNK_BYTES } from '../../../../src/shared/rpc-contract/speech/speech-params'
 
 // The shell owns microphone PCM and its wake lock; the page owns dictation state/RPCs. Pull from the ring through existing request/reply rather than adding a push frame.
 // Keep verb grant segments lowercase: a camel-cased audio.readChunk would fail manifest grammar and reject the whole bundle.

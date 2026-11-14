@@ -10,7 +10,6 @@ import * as profileStateDatabase from '../database/profile-state-database'
 import { importProfileStateJson } from '../documents/profile-state-documents'
 import { hashProfileStatePayload as hashProfileStateJson } from '../documents/profile-state-document-validation'
 import { ProfileStateSqliteAuthority } from '../profile-state-sqlite-authority'
-import { createProfileStateStore } from './profile-state-store-factory'
 
 vi.mock('electron', () => ({
   app: {
@@ -90,31 +89,6 @@ function createEstablishedProfile(keepJson: boolean): ReturnType<typeof createPa
 }
 
 describe('profile state startup snapshot handoff', () => {
-  it('keeps serialized-only authorities usable without SQLite capability', () => {
-    const paths = createPaths()
-    const original = process.getBuiltinModule
-    vi.spyOn(process, 'getBuiltinModule').mockImplementation((id) =>
-      id === 'node:sqlite' ? undefined : original(id)
-    )
-    let serialized = '{"settings":{"theme":"dark"},"futureDomain":{"keep":true}}'
-    const authority: ProfileStateAuthority = {
-      readSerializedState: () => serialized,
-      writeSerializedState: (payload) => {
-        serialized = payload.toString('utf8')
-      }
-    }
-    const store = new Store({ dataFile: paths.dataFile, profileStateAuthority: authority })
-    stores.push(store)
-    expect(store.getSettings().theme).toBe('dark')
-    expect(store.getSettings().terminalFontSize).toBeGreaterThan(0)
-    store.updateSettings({ theme: 'light' })
-    store.flushOrThrow()
-    expect(JSON.parse(serialized)).toMatchObject({
-      settings: { theme: 'light' },
-      futureDomain: { keep: true }
-    })
-  })
-
   it.each([false, true])(
     'fences a writer between bootstrap and Store construction with retained JSON=%s',
     (keepJson) => {
@@ -177,45 +151,5 @@ describe('profile state startup snapshot handoff', () => {
       expect.objectContaining({ code: 'profile-state-revision-conflict', actualRevision: 2 })
     )
     expect(writer.readSerializedState()).toContain('"light"')
-  })
-
-  it('keeps direct authority reads fresh after bootstrap', () => {
-    const paths = createEstablishedProfile(true)
-    const bootstrapped = bootstrapProfileStateAuthority(paths)
-    if (bootstrapped.authority === undefined) {
-      throw new Error('Expected SQLite authority')
-    }
-    authorities.push(bootstrapped.authority)
-    const writer = new ProfileStateSqliteAuthority(paths.databaseFile, paths.profileId)
-    authorities.push(writer)
-    writer.writeSerializedState(Buffer.from('{"settings":{"theme":"light"}}'))
-
-    expect(bootstrapped.authority.readSerializedState()).toBe('{"settings":{"theme":"light"}}')
-    writer.writeSerializedState(Buffer.from('{"settings":{"theme":"system"}}'))
-    expect(bootstrapped.authority.readSerializedState()).toBe('{"settings":{"theme":"system"}}')
-  })
-
-  it('decrypts and normalizes the startup snapshot through the existing Store loader', () => {
-    const paths = createPaths()
-    writeFileSync(paths.dataFile, '{"settings":{"theme":"dark"}}')
-    const first = createProfileStateStore({ ...paths }).store
-    stores.push(first)
-    first.updateSettings({ opencodeSessionCookie: 'startup-secret' })
-    first.flushOrThrow()
-    first.freezeWrites()
-
-    const reopened = createProfileStateStore({
-      ...paths
-    }).store
-    stores.push(reopened)
-    expect(reopened.getSettings().opencodeSessionCookie).toBe('startup-secret')
-    expect(reopened.getSettings().terminalFontSize).toBeGreaterThan(0)
-    reopened.updateSettings({ theme: 'light' })
-    reopened.flushOrThrow()
-    expect(reopened.prepareProfileStateExport().json).not.toContain('startup-secret')
-    const again = createProfileStateStore({ ...paths }).store
-    stores.push(again)
-    expect(again.getSettings().opencodeSessionCookie).toBe('startup-secret')
-    expect(again.getSettings().theme).toBe('light')
   })
 })

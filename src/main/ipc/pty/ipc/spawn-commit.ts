@@ -8,8 +8,8 @@ import { startupCwdFallbackOutcome } from '../spawn-startup-target'
 import { commitPtySpawn } from '../spawn-commit-assembly'
 import type { PtySpawnPaneBinding } from '../spawn-commit-binding'
 import { spawnCommitBindingOrigin } from '../../../persistence/loading-store/terminal-bindings/pty-binding-span'
-import { parseTerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-pane-placement'
-import { commitPtyWithOpenCodePromptIntent } from '../../../opencode/opencode-startup-prompt-owner'
+import { parseTerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
+import { commitPtyWithOpenCodePromptIntent } from '../../../opencode/startup-prompts/opencode-startup-prompt-owner'
 import { resumeSpawnRefusal, savedResumeResult } from '../host-env/saved-resume-admission'
 
 export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnOutcome> {

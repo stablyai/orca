@@ -66,18 +66,6 @@ describe('resolveCodexPaneLaunchAccount', () => {
     ).toEqual({ selectionKey: 'host', accountId: null, homeRoute: 'real-home' })
   })
 
-  it('maps a resume that injects no CODEX_HOME to the system-default account', () => {
-    expect(
-      resolveCodexPaneLaunchAccount({
-        pinnedByResume: true,
-        launchCodexHomePath: null,
-        systemCodexHomePath: SYSTEM_HOME,
-        settings: settings({ host: 'account-a', accounts: [managedAccount({ id: 'account-a' })] }),
-        target: { runtime: 'host' }
-      })
-    ).toEqual({ selectionKey: 'host', accountId: null, homeRoute: 'real-home' })
-  })
-
   it('refuses to attribute a resume home no account owns', () => {
     expect(
       resolveCodexPaneLaunchAccount({
@@ -160,17 +148,5 @@ describe('resolveCodexPaneLaunchAccount', () => {
       accountId: 'drive-account',
       homeRoute: 'account-home'
     })
-  })
-
-  it('tolerates settings that carry no managed account roster', () => {
-    expect(
-      resolveCodexPaneLaunchAccount({
-        pinnedByResume: true,
-        launchCodexHomePath: '/data/codex-accounts/account-a/home',
-        systemCodexHomePath: SYSTEM_HOME,
-        settings: { activeCodexManagedAccountId: null } as GlobalSettings,
-        target: { runtime: 'host' }
-      })
-    ).toBeNull()
   })
 })

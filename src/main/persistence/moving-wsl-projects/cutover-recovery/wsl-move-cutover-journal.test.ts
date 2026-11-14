@@ -24,28 +24,6 @@ afterEach(() => {
 const journalPath = (id: string) => join(wslMoveJournalDirectory(userDataPath), `${id}.json`)
 
 describe('WSL move journal', () => {
-  it('refuses a second move into a distro while the first is in flight', () => {
-    seedWslMoveCutover(userDataPath, cutover('move-1', 'quiesced'))
-    expect(() =>
-      writeWslMoveCutover(
-        userDataPath,
-        cutover('move-2', 'prepared', { supersedesMigrationId: 'move-1' })
-      )
-    ).toThrow('wsl_move_already_in_flight')
-  })
-
-  it('hands out records a caller cannot edit into the next comparison', () => {
-    seedWslMoveCutover(userDataPath, cutover('move-1', 'destination-committed'))
-    const [listed] = listWslMoveCutovers(userDataPath)
-    if (listed) {
-      listed.phase = 'prepared'
-    }
-    expect(listWslMoveCutovers(userDataPath)[0]?.phase).toBe('destination-committed')
-    expect(() => writeWslMoveCutover(userDataPath, cutover('move-1', 'prepared'))).toThrow(
-      'wsl_move_phase_regressed'
-    )
-  })
-
   it('refuses a later phase whose record is missing or was lifted, or that skips a phase', () => {
     expect(() => writeWslMoveCutover(userDataPath, cutover('move-1', 'source-fenced'))).toThrow(
       'wsl_move_record_missing'

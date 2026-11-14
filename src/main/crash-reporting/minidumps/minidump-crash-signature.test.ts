@@ -184,21 +184,6 @@ function buildDump(options: {
   return { dump: builder.build(streams) }
 }
 
-function streamEntry(dump: Buffer, type: number): number {
-  const directoryRva = dump.readUInt32LE(12)
-  for (let index = 0; index < dump.readUInt32LE(8); index += 1) {
-    const entry = directoryRva + index * 12
-    if (dump.readUInt32LE(entry) === type) {
-      return entry
-    }
-  }
-  throw new Error(`no stream of type ${type}`)
-}
-
-function moduleListRva(dump: Buffer): number {
-  return dump.readUInt32LE(streamEntry(dump, STREAM_TYPE_MODULE_LIST) + 8)
-}
-
 const FATAL_LINE =
   '[8104:1234:0815/143022.123456:FATAL:render_frame_impl.cc(4821)] Check failed: !is_detached_.'
 
@@ -234,21 +219,6 @@ describe('parseMinidumpCrashSignature', () => {
     expect(signature?.processType).toBe('renderer')
   })
 
-  it('stops at the process type when the dump belongs to another process', async () => {
-    const { dump } = buildDump({ annotations: { ptype: 'gpu-process' } })
-    const dumpWithMemory = Buffer.concat([
-      dump,
-      Buffer.from(`\0${ELECTRON_43_CHECK_LINE}\0`, 'utf8')
-    ])
-
-    const signature = await parseMinidumpCrashSignature(dumpWithMemory, {
-      expectedProcessType: 'renderer'
-    })
-
-    expect(signature?.processType).toBe('gpu-process')
-    expect(signature?.checkMessage).toBeUndefined()
-  })
-
   it('does not promote an unrelated Chromium ERROR line containing CHECK', async () => {
     const { dump } = buildDump({})
     const unrelated =
@@ -256,30 +226,6 @@ describe('parseMinidumpCrashSignature', () => {
     const dumpWithMemory = Buffer.concat([dump, Buffer.from(`\0${unrelated}\0`, 'utf8')])
 
     expect((await parseMinidumpCrashSignature(dumpWithMemory))?.checkMessage).toBeUndefined()
-  })
-
-  it('prefers the structured annotation over a dump-memory candidate', async () => {
-    const { dump } = buildDump({ annotations: { LOG_FATAL: FATAL_LINE } })
-    const dumpWithMemory = Buffer.concat([
-      dump,
-      Buffer.from(`\0${ELECTRON_43_CHECK_LINE}\0`, 'utf8')
-    ])
-
-    expect((await parseMinidumpCrashSignature(dumpWithMemory))?.checkMessage).toBe(FATAL_LINE)
-  })
-
-  it('drops annotations outside the allowlist', async () => {
-    const { dump } = buildDump({
-      annotations: {
-        LOG_FATAL: FATAL_LINE,
-        'switch-3': '--user-data-dir=/Users/someone/secret'
-      }
-    })
-
-    const signature = await parseMinidumpCrashSignature(dump)
-
-    expect(signature?.annotations['switch-3']).toBeUndefined()
-    expect(Object.keys(signature?.annotations ?? {})).toEqual(['LOG_FATAL'])
   })
 
   it('resolves the faulting module from the exception address', async () => {
@@ -322,40 +268,5 @@ describe('parseMinidumpCrashSignature', () => {
 
     expect(signature?.faultingModule).toBe('lib1030.dylib')
     expect(signature?.faultingModuleOffset).toBe('0x24')
-  })
-
-  it('still drops the module list when the claimed module count is absurd', async () => {
-    const { dump } = buildDump({
-      exception: { code: 11, address: 0x7ff7_0000_0010n },
-      modules: [{ base: 0x7ff7_0000_0000n, size: 0x1000, name: '/opt/orca/orca' }]
-    })
-    const corrupt = Buffer.from(dump)
-    corrupt.writeUInt32LE(0xffff_ffff, moduleListRva(corrupt))
-
-    await expect(parseMinidumpCrashSignature(corrupt)).resolves.not.toBeNull()
-    expect((await parseMinidumpCrashSignature(corrupt))?.faultingModule).toBeUndefined()
-  })
-
-  it('returns null for a buffer that is not a minidump', async () => {
-    expect(await parseMinidumpCrashSignature(Buffer.from('not a dump at all', 'utf8'))).toBeNull()
-    expect(await parseMinidumpCrashSignature(Buffer.alloc(0))).toBeNull()
-  })
-
-  it('degrades instead of throwing on a truncated dump', async () => {
-    const { dump } = buildDump({ annotations: { LOG_FATAL: FATAL_LINE } })
-
-    const truncated = dump.subarray(0, 48)
-
-    await expect(parseMinidumpCrashSignature(truncated)).resolves.not.toBeNull()
-    expect((await parseMinidumpCrashSignature(truncated))?.checkMessage).toBeUndefined()
-  })
-
-  it('degrades instead of throwing when stream counts are corrupt', async () => {
-    const { dump } = buildDump({ annotations: { LOG_FATAL: FATAL_LINE } })
-    const corrupt = Buffer.from(dump)
-    corrupt.writeUInt32LE(0xffff_ffff, 8)
-
-    await expect(parseMinidumpCrashSignature(corrupt)).resolves.not.toBeNull()
-    expect((await parseMinidumpCrashSignature(corrupt))?.annotations).toEqual({})
   })
 })

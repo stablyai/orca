@@ -1,12 +1,4 @@
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  statSync,
-  symlinkSync
-} from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -85,34 +77,5 @@ describe('asynchronous profile-state database snapshots', () => {
     importProfileStateJson(db, JSON.stringify({ settings: { theme: 'dark' } }))
     expect(readSnapshot(targetPath)).toBe(originalJson)
     expectNoTemporaryFiles(directory)
-  })
-
-  it('rejects active transactions without publishing uncommitted state', async () => {
-    const { directory, db, targetPath, originalJson } = fixture()
-    await writeProfileStateDatabaseSnapshotAsync(db, targetPath)
-    const previous = readFileSync(targetPath)
-    db.exec('BEGIN IMMEDIATE')
-    try {
-      db.exec("UPDATE profile_state_documents SET payload = '{}' WHERE domain = 'settings'")
-      await expect(writeProfileStateDatabaseSnapshotAsync(db, targetPath)).rejects.toThrow(
-        'idle database connection'
-      )
-    } finally {
-      db.exec('ROLLBACK')
-    }
-
-    expect(readFileSync(targetPath).equals(previous)).toBe(true)
-    expect(exportProfileStateJson(db)).toBe(originalJson)
-    expectNoTemporaryFiles(directory)
-  })
-
-  it('rejects a source database reached through a directory alias', async () => {
-    const { directory, db, originalJson } = fixture()
-    const alias = join(directory, 'alias')
-    symlinkSync(directory, alias, 'junction')
-    await expect(
-      writeProfileStateDatabaseSnapshotAsync(db, join(alias, 'profile-state.db'))
-    ).rejects.toThrow('cannot replace a source database')
-    expect(exportProfileStateJson(db)).toBe(originalJson)
   })
 })

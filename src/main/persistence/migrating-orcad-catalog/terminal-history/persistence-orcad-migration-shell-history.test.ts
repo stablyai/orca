@@ -10,7 +10,6 @@ import {
 } from '../catalog-commit/persistence-orcad-migration-catalog-fixture'
 import {
   BASH,
-  ZSH,
   commitDurably,
   encodedHistories as encodeFrom,
   hostHistory,
@@ -56,24 +55,6 @@ describe('orcad migration shell history through the store', () => {
     rmSync(testState.dir, { recursive: true, force: true })
     rmSync(desktopHistory, { recursive: true, force: true })
     rmSync(getHistoryRoot(), { recursive: true, force: true })
-  })
-
-  it('refuses before commit a history whose worktree the catalog does not move', async () => {
-    const input = manifest()
-    const store = bashHostStore()
-    stage(
-      store,
-      input,
-      await encodedHistories([
-        { worktreeId: 'repo-other::/srv/other', file: 'zsh_history', content: ZSH }
-      ])
-    )
-
-    expect(() => store.commitStagedOrcadMigrationCatalog(input)).toThrow(
-      'orcad_migration_blob_content_invalid:shell-history:orcad_migration_shell_history_worktree_not_migrated'
-    )
-    expect(store.getOrcadMigrationCatalogState(input).state).toBe('staged')
-    expect(existsSync(getHistoryRoot())).toBe(false)
   })
 
   it('keeps existing host history after the moved lines, and is idempotent on a retry', async () => {

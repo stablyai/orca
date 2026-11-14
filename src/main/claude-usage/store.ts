@@ -1,5 +1,4 @@
 import { claudeTokenSessions } from '../usage/reporting/token-usage/agent-token-usage'
-import { app } from 'electron'
 import { join } from 'node:path'
 import type {
   ClaudeUsageBreakdownKind,
@@ -12,7 +11,7 @@ import type {
   ClaudeUsageSummary
 } from '../../shared/claude-usage-types'
 import type { AutomationRunUsage } from '../../shared/automations/history/automation-run'
-import type { Store } from '../persistence/loading-store/store'
+import type { UsageStoreHost } from '../usage/usage-store-host'
 import type { ClaudeUsagePersistedState } from './types'
 import {
   scanClaudeUsageFilesViaWorker,
@@ -23,14 +22,15 @@ import { buildBreakdown, buildDaily, buildSummary } from './claude-usage-report-
 import { buildRecentSessions } from './claude-usage-session-rows'
 import type { AutomationUsageLookupInput } from './claude-usage-automation-attribution'
 import { resolveAutomationRunUsage } from './claude-usage-automation-attribution'
-import { parseClaudeUsageReport, serializeClaudeUsageReport } from './persisted-usage-report'
+import {
+  parseClaudeUsageReport,
+  readClaudeUsageReportFile,
+  serializeClaudeUsageReport
+} from './persisted-usage-report'
 
 // Pre-v6 totals lack stable fork ownership or the 1-hour cache-write split and must be rescanned.
 // v7 stores protected column checkpoints on the worker and a separately protected report.
 const SCHEMA_VERSION = 7
-
-// Capture after configureDevUserDataPath(), before app.setName() changes the derived userData path.
-let _claudeUsageFile: string | null = null
 
 function getDefaultState(): ClaudeUsagePersistedState {
   return {
@@ -63,38 +63,32 @@ function normalizePersistedState(state: ClaudeUsagePersistedState): ClaudeUsageP
   }
 }
 
-export function initClaudeUsagePath(): void {
-  _claudeUsageFile = join(app.getPath('userData'), 'orca-claude-usage.json')
-}
-
-function getClaudeUsageFile(): string {
-  if (!_claudeUsageFile) {
-    _claudeUsageFile = join(app.getPath('userData'), 'orca-claude-usage.json')
-  }
-  return _claudeUsageFile
-}
-
 export class ClaudeUsageStore extends UsageProviderStoreLifecycle<
   'processedFiles',
   ClaudeUsagePersistedState,
   'hasAnyClaudeData'
 > {
-  constructor(store: Pick<Store, 'getRepos' | 'getAllWorktreeMeta'>) {
-    super(store, {
+  constructor(host: UsageStoreHost) {
+    super(host, {
       tokenUsage: {
         provider: 'claude',
         selectSessions: (state) => claudeTokenSessions(state.sessions)
       },
       logTag: '[claude-usage]',
-      resolveCacheFile: getClaudeUsageFile,
+      resolveCacheFile: () => join(host.userDataPath, 'orca-claude-usage.json'),
       createDefaultState: getDefaultState,
       normalizeState: normalizePersistedState,
       parseReport: parseClaudeUsageReport,
+      readFallbackCache: readClaudeUsageReportFile,
       serializeReport: serializeClaudeUsageReport,
       providerId: 'claude',
       sourceKey: 'processedFiles',
       dataPresenceKey: 'hasAnyClaudeData',
-      scan: scanClaudeUsageFilesViaWorker,
+      scan: async (worktrees, sourceCache) => {
+        const profileDirs = await host.claudeProfileDirs()
+        host.signal.throwIfAborted()
+        return scanClaudeUsageFilesViaWorker(worktrees, sourceCache, profileDirs)
+      },
       splitCacheFile: splitUsageCacheFileViaWorker
     })
   }

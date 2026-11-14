@@ -125,7 +125,9 @@ export function registerFilesystemReadHandlers(context: FilesystemHandlerContext
           }
           return args.includeLocalLogMetadata === true
             ? readLocalLogSnapshot(filePath)
-            : readLocalFileContent(filePath)
+            : readLocalFileContent(filePath, {
+                imageBySignature: args.access?.kind === 'chat-image'
+              })
         },
         { wake: args.wakeWslDistro === true }
       )

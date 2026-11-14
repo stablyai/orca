@@ -1,6 +1,6 @@
 import { Import } from 'lucide-react'
 import { ORCA_CLI_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
-import { useMobileEmulatorAgentSetupState } from '../../../emulator-pane/use-mobile-emulator-agent-setup-state'
+import { useMobileEmulatorAgentSetupState } from '../../../emulator-pane/agent-setup/use-mobile-emulator-agent-setup-state'
 import { AgentSkillSetupPanel } from '../../../skills/setup/AgentSkillSetupPanel'
 import { MobileEmulatorExamples } from './MobileEmulatorExamples'
 import { useTranslate } from '@/i18n/use-translate'

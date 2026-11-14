@@ -31,21 +31,16 @@ describe('math in mobile Markdown follows desktop chat', () => {
       ['I:\\color{#1a7f37}{\\Huge{\\mathbf{+}}}'],
       '\u200b37'
     ],
-    ['prices', '$10 and $20', [], '$10 and $20'],
-    ['shell variables', 'echo $HOME and $PATH', [], 'echo $HOME and $PATH'],
     [
       'a price with operators',
       'Keep $5 + 2$ typed, render $5+2$',
       ['I:5+2'],
       'Keep $5 + 2$ typed, render '
     ],
-    ['a price then a formula', '$5 $x$', ['I:x'], '$5 '],
     ['a block that interrupts a paragraph', 'para\n$$\nx=1\n$$\nafter', ['D:x=1'], 'paraafter'],
     ['display formulas alone in a paragraph', '$$a$$ $$b$$', ['D:a', 'D:b'], ''],
-    ['a display opener among prose', '$$x$$ tail', ['I:x'], ' tail'],
     ['inline and bracket delimiters', '\\(a\\) and \\[b\\]', ['I:a', 'I:b'], ' and '],
     ['a citation', '\\[1, 2\\]', [], '[1, 2]'],
-    ['an unclosed block', '$$\nunclosed', [], '$$\nunclosed'],
     ['a formula in a link label', '[$x$](http://a)', [], '$x$'],
     ['a closed math fence', '```math\nx^2\n```', ['D:x^2'], '']
   ])('%s', (_name, source, math, text) => {

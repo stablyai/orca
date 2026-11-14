@@ -7,7 +7,7 @@ import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import {
   isCrossStoreWorkspaceLineage,
   validCrossStoreLineage
-} from '../../../../shared/worktree/cross-store-lineage-records'
+} from '../../../../shared/worktree/lineage/cross-store-lineage-records'
 import { ownsRawIdBucket } from './metadata-lineage-operations'
 import type { StoreRuntimeState } from '../store-runtime-state'
 import { type WriteSchedulingOperations, scheduleSave } from '../profile-writing/write-scheduling'

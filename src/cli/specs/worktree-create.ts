@@ -1,5 +1,5 @@
-import type { CommandSpec } from '../args'
-import { GLOBAL_FLAGS } from '../args'
+import type { CommandSpec } from '../discovery/command-spec'
+import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boundary'
 
 export const WORKTREE_CREATE_COMMAND_SPEC: CommandSpec = {
   path: ['worktree', 'create'],
@@ -56,7 +56,7 @@ export const WORKTREE_CREATE_COMMAND_SPEC: CommandSpec = {
     'With --agent --json, result.launch says what started: launch.outcome.kind (structured chat or terminal), launch.outcome.handle, and launch.receipt.detail for why. An Orca host older than this returns the terminal agent handle in result.agentTerminalHandle instead.',
     'Repo-defined setup hooks follow the repository setup policy; pass --setup run to force them.',
     'Pass --activate when the CLI caller intentionally wants to reveal the new worktree in the app.',
-    'Passing --run-hooks is kept as a legacy alias for --setup run and reveals the worktree.',
+    'Passing --run-hooks is kept as a legacy alias for --setup run and reveals the worktree; agents should pass --setup run instead unless the user asked to switch to it.',
     'Use --pr for GitHub pull requests; --gitlab-issue and --gitlab-mr write separate GitLab links. GitLab URLs must match the stored source project or remote; they cannot select a foreign project.'
   ],
   examples: [

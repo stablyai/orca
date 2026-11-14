@@ -1,9 +1,7 @@
 import { expect, it, vi } from 'vitest'
 
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-runtime-capabilities'
-
-import { HOST_TEST_SESSION } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
-
+import { HOST_TEST_SESSION } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import {
   WORKTREE,
   store,

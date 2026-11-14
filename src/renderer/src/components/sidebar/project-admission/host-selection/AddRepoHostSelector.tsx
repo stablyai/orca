@@ -38,7 +38,7 @@ type AddRepoHostSelectorProps = {
   onOpenWslHostsSetting?: () => void
 }
 
-function getHostStatusDetail(host: SidebarHostOption, t?: Translate): string {
+export function getAddRepoHostStatusDetail(host: SidebarHostOption, t?: Translate): string {
   // A disabled WSL feature is not a disconnected-host failure.
   if (host.wslUnavailable) {
     return translateExecutionHostDetail(host.detail)
@@ -96,7 +96,7 @@ export function AddRepoHostSelector({
             <span className="min-w-0 truncate">{sidebarHostDisplayLabel(selectedHost, t)}</span>
             {selectedHost.health !== 'local' ? (
               <span
-                title={getHostStatusDetail(selectedHost, t)}
+                title={getAddRepoHostStatusDetail(selectedHost, t)}
                 className="shrink-0 text-[11px] font-normal text-muted-foreground"
               >
                 {getSidebarHostHealthLabel(
@@ -279,7 +279,7 @@ export function AddRepoHostSelector({
                       </span>
                       <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
                         <span className="min-w-0 flex-1 truncate" title={host.failureReason}>
-                          {getHostStatusDetail(host, t)}
+                          {getAddRepoHostStatusDetail(host, t)}
                         </span>
                       </span>
                     </span>

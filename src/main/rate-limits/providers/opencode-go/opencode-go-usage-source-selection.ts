@@ -8,7 +8,7 @@ import {
   type OpenCodeGoApiKeyResolution
 } from './opencode-go-api-key-source'
 import { makeOpenCodeGoZenBalance, type OpenCodeGoUsageWindows } from './opencode-go-status-parsing'
-import type { OpenCodeCredentialBackend } from '../../../opencode/opencode-credential-backend'
+import type { OpenCodeCredentialBackend } from '../../../opencode/accounts/opencode-credential-backend'
 import {
   fetchOpenCodeGoUsageWithApiKey,
   type OpenCodeGoUsageApiOutcome

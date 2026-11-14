@@ -124,14 +124,6 @@ export const composerInputStyles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md,
     backgroundColor: colors.surfaceBright
   },
-  // Send while Cmd/Ctrl is held: desktop's icon-and-label pill.
-  sendPreviewButton: {
-    ...labelControl,
-    flexDirection: 'row',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.surfaceBright
-  },
   // Unframed, so a small inset is enough and leaves a long label more room.
   ghostLabelButton: {
     ...labelControl,

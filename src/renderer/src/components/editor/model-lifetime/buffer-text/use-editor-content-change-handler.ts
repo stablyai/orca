@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import type { DiffContent, FileContent } from '../../editor-panel-content-types'
+import type { DiffContent, FileContent } from '../../loading/editor-panel-content-types'
 import { isEditorContentUnchanged } from './editor-content-dirty-state'
 import { applyEditorBufferText } from './editor-buffer-adapter'
 

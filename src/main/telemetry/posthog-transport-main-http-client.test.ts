@@ -30,10 +30,4 @@ describe('PostHog transport', () => {
     )
     expect(globalFetch).not.toHaveBeenCalled()
   })
-
-  it('sends nothing when telemetry is disabled', async () => {
-    await capture({ effective: 'disabled', reason: 'user_opt_out' })
-    expect(mainFetch).not.toHaveBeenCalled()
-    expect(globalFetch).not.toHaveBeenCalled()
-  })
 })

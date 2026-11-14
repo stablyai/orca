@@ -18,6 +18,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { AutomationListRow } from '../listing/automation-list-row-identity'
+import type { Worktree } from '../../../../../shared/worktree/types'
 import {
   countAutomationRunOutcomes,
   filterAutomationRunsDashboardEntries,
@@ -55,7 +56,8 @@ export function AutomationRunsDashboard({
   onLoadMore,
   now,
   onRefresh,
-  onOpenRun
+  onOpenRun,
+  worktreeForRun
 }: {
   rows: readonly AutomationListRow[]
   entries: readonly AutomationRunsDashboardEntry[]
@@ -66,6 +68,7 @@ export function AutomationRunsDashboard({
   now: number
   onRefresh: () => void
   onOpenRun: (entry: AutomationRunsDashboardEntry) => void
+  worktreeForRun: (entry: AutomationRunsDashboardEntry) => Worktree | null
 }): React.JSX.Element {
   const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
@@ -112,8 +115,8 @@ export function AutomationRunsDashboard({
   }
 
   return (
-    <div className="scrollbar-sleek min-h-0 flex-1 overflow-auto px-3 pb-4 md:px-5">
-      <div className="w-full">
+    <div className="flex min-h-0 flex-1 flex-col pt-4">
+      <div className="flex min-h-0 w-full flex-1 flex-col">
         <div className="mb-3 flex shrink-0 items-end gap-2">
           <div className="relative w-full max-w-xs">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -125,9 +128,10 @@ export function AutomationRunsDashboard({
                 'Search runs…'
               )}
               aria-label={t(
-                'auto.components.automations.AutomationRunsDashboard.search',
-                'Search runs…'
+                'auto.components.automations.AutomationRunsDashboard.searchLabel',
+                'Search runs'
               )}
+              data-automations-page-search=""
               className="h-8 pl-8 text-xs"
             />
           </div>
@@ -213,8 +217,8 @@ export function AutomationRunsDashboard({
           </Tooltip>
         </div>
 
-        <div>
-          <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+        <div className="flex min-h-0 flex-1 flex-col">
+          <div className="mb-3 grid shrink-0 grid-cols-2 gap-2 md:grid-cols-4">
             <SummaryCard
               label={t(
                 'auto.components.automations.AutomationRunsDashboard.successful24h',
@@ -268,6 +272,7 @@ export function AutomationRunsDashboard({
             hasMore={hasMore}
             onLoadMore={onLoadMore}
             onOpenRun={onOpenRun}
+            worktreeForRun={worktreeForRun}
           />
         </div>
       </div>

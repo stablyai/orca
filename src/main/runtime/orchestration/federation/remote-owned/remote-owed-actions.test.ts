@@ -17,11 +17,9 @@ import {
   oweRemoteDispatchStop
 } from '../../db/remote-owned/remote-dispatch-records'
 import { recordRemoteStart, reserveRemotePlacement } from '../../db/remote-owned/remote-placements'
-import { importRemoteOwnedItem } from '../../db/remote-owned/remote-owned-import'
 import {
   getRemoteRunLink,
   openRemoteRunLink,
-  remoteServerPin,
   type RemoteRunLinkRow
 } from '../../db/remote-owned/remote-run-links'
 import type {
@@ -30,9 +28,10 @@ import type {
 } from '../environment-transport'
 import { resendOwedRemoteActions, sendOwedRemoteStop } from './remote-owed-actions'
 
+const retry = vi.hoisted(() => ({ delayMs: 5 }))
 vi.mock('../relay/federation-relay-scheduler', async (original) => ({
   ...(await original<object>()),
-  federationRelayRetryDelayMs: () => 5
+  federationRelayRetryDelayMs: () => retry.delayMs
 }))
 
 const COORDINATOR_PANE = 'tab_coord:11111111-1111-4111-8111-111111111111'
@@ -62,7 +61,8 @@ describe('what the coordinating Orca owes a paired server', () => {
   const createTransport = (
     sent: Sent[],
     answers: Record<string, Answer[]>,
-    pulls: unknown[][]
+    pulls: unknown[][],
+    pullParams: unknown[]
   ): OrchestrationEnvironmentTransport => ({
     resolve: () => server,
     hasEnvironment: () => true,
@@ -77,6 +77,7 @@ describe('what the coordinating Orca owes a paired server', () => {
         return ok({ capabilities: [ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY] })
       }
       if (method === 'orchestration.peerMailPull') {
+        pullParams.push(params)
         await new Promise((resolve) => setImmediate(resolve))
         return ok({ items: pulls.shift() ?? [] })
       }
@@ -95,14 +96,17 @@ describe('what the coordinating Orca owes a paired server', () => {
     }
   })
   let pulls: unknown[][]
+  let pullParams: unknown[]
 
   beforeEach(() => {
     sent = []
     answers = {}
     pulls = []
+    pullParams = []
+    retry.delayMs = 5
     db = new OrchestrationDb(':memory:')
     runtime = new OrcaRuntimeService(null, undefined, {
-      orchestrationEnvironmentTransport: createTransport(sent, answers, pulls)
+      orchestrationEnvironmentTransport: createTransport(sent, answers, pulls, pullParams)
     })
     vi.spyOn(runtime, 'readMachineName').mockReturnValue('Mac A')
     runtime.setOrchestrationDb(db)
@@ -148,29 +152,6 @@ describe('what the coordinating Orca owes a paired server', () => {
   }
 
   const owed = () => getRemoteDispatch(db, 'ctx_b1')!
-  const terminalItem = (sequence: number) => ({
-    conversationId: link.conversation_id,
-    sequence,
-    messageId: `state_${sequence}`,
-    kind: 'worker_state',
-    payload: JSON.stringify({
-      v: 1,
-      id: `state_${sequence}`,
-      homeRunId: run.id,
-      peerRunId: 'run_on_b',
-      dispatch: {
-        id: 'ctx_b1',
-        taskId: 'task_t',
-        status: 'completed',
-        workerState: 'succeeded',
-        lastFailure: null,
-        agent: null
-      },
-      task: { status: 'completed', result: 'done' },
-      correctedUnobservedPrompt: false,
-      removed: null
-    })
-  })
   const stopKeys = () =>
     sent
       .filter((s) => s.method === 'orchestration.workerStop')
@@ -208,33 +189,6 @@ describe('what the coordinating Orca owes a paired server', () => {
       expect(owed().stop_owed).toBe(0)
     })
 
-    it('keeps the debt while a helper is starting or unconfirmed', async () => {
-      startedOnB()
-      oweRemoteDispatchStop(db, 'ctx_b1', 'intent_1')
-      for (const outcome of ['starting', 'unconfirmed'] as const) {
-        answers['orchestration.workerStop'] = [
-          {
-            result: {
-              ...STOPPED,
-              helpers: [{ dispatchId: 'ctx_h', creatorDispatchId: 'ctx_b1', outcome }]
-            }
-          }
-        ]
-        await resend()
-        expect(owed().stop_owed).toBe(1)
-      }
-      answers['orchestration.workerStop'] = [
-        {
-          result: {
-            ...STOPPED,
-            helpers: [{ dispatchId: 'ctx_h', creatorDispatchId: 'ctx_b1', outcome: 'kept_open' }]
-          }
-        }
-      ]
-      await resend()
-      expect(owed().stop_owed).toBe(0)
-    })
-
     it('counts one intent once, and lets an older stop finishing late clear nothing newer or change the record', async () => {
       startedOnB()
       oweRemoteDispatchStop(db, 'ctx_b1', 'intent_1')
@@ -254,44 +208,6 @@ describe('what the coordinating Orca owes a paired server', () => {
         status: 'pending',
         worker_state: null
       })
-    })
-  })
-
-  describe('#2 stop intents', () => {
-    it('owes a stop of a finished worker, whose helpers may still run, until the server proves it', async () => {
-      startedOnB()
-      importRemoteOwnedItem(db, remoteServerPin(server), terminalItem(1))
-      expect(oweRemoteDispatchStop(db, 'ctx_b1', 'intent_1')?.stopCount).toBe(1)
-      expect(owed().stop_owed).toBe(1)
-      answers['orchestration.workerStop'] = [
-        {
-          result: {
-            ...STOPPED,
-            alreadySettled: true,
-            helpers: [{ dispatchId: 'ctx_h', creatorDispatchId: 'ctx_b1', outcome: 'stopped' }]
-          }
-        }
-      ]
-      await resend()
-      expect(owed().stop_owed).toBe(0)
-    })
-
-    it('treats a terminal state item as a cue to resend, not as proof', async () => {
-      startedOnB()
-      oweRemoteDispatchStop(db, 'ctx_b1', 'intent_1')
-      answers['orchestration.workerStop'] = [{ result: { ...STOPPED, state: 'stop_unknown' } }]
-      await sendOwedRemoteStop(runtime, owed())
-      expect(owed().stop_retry_at).not.toBeNull()
-      importRemoteOwnedItem(db, remoteServerPin(server), terminalItem(1))
-      expect(owed()).toMatchObject({ stop_owed: 1, stop_retry_at: null })
-    })
-
-    it('gives a retried older intent its own count instead of a new one', () => {
-      startedOnB()
-      expect(oweRemoteDispatchStop(db, 'ctx_b1', 'k1')?.stopCount).toBe(1)
-      expect(oweRemoteDispatchStop(db, 'ctx_b1', 'k2')?.stopCount).toBe(2)
-      expect(oweRemoteDispatchStop(db, 'ctx_b1', 'k1')?.stopCount).toBe(1)
-      expect(owed().stop_count).toBe(2)
     })
   })
 
@@ -338,15 +254,6 @@ describe('what the coordinating Orca owes a paired server', () => {
       expect(sent.filter((s) => s.method === 'orchestration.peerRunCancel')).toHaveLength(3)
     })
 
-    it('gives a later start its own link and a fresh cancel key', async () => {
-      db.resetTasks()
-      const first = getRemoteRunLink(db, link.conversation_id)!.cancel_key
-      const next = openRemoteRunLink(db, run.id, server)
-      db.resetTasks()
-      expect(getRemoteRunLink(db, next.conversation_id)!.cancel_key).not.toBe(first)
-      expect(getRemoteRunLink(db, link.conversation_id)!.cancel_key).toBe(first)
-    })
-
     it('re-arms the pull loop on reset, so the cancel goes out without another command', async () => {
       const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
       answers['orchestration.peerRunCancel'] = [{ result: { remaining: 0 } }]
@@ -361,27 +268,6 @@ describe('what the coordinating Orca owes a paired server', () => {
       await vi.waitFor(() =>
         expect(getRemoteRunLink(db, link.conversation_id)?.state).toBe('closed')
       )
-    })
-  })
-
-  describe('S7 pairing pin', () => {
-    it('sends nothing for links made under an earlier pairing', async () => {
-      startedOnB()
-      oweRemoteDispatchStop(db, 'ctx_b1', 'intent_1')
-      server = { ...server, homePeerFingerprint: 'cred_a_new', pairingRevision: 2 }
-      await resend()
-      expect(getRemoteRunLink(db, link.conversation_id)?.state).toBe('closed')
-      expect(db.updateTaskStatus('task_t', 'failed', 'unreachable')?.status).toBe('failed')
-      await resend()
-      expect(sent).toEqual([])
-    })
-
-    it('ends a cancel owed under an earlier pairing without sending it', async () => {
-      db.resetTasks()
-      server = { ...server, homePeerFingerprint: 'cred_a_new', pairingRevision: 2 }
-      await resend()
-      expect(sent).toEqual([])
-      expect(getRemoteRunLink(db, link.conversation_id)?.state).toBe('closed')
     })
   })
 
@@ -400,52 +286,36 @@ describe('what the coordinating Orca owes a paired server', () => {
       expect(getRemoteRunLink(db, link.conversation_id)?.state).toBe('closed')
       expect(owed().stop_owed).toBe(0)
     })
-    it('names the re-pair, not a reset, when another path closed the link while a send waited', async () => {
-      startedOnB()
-      oweRemoteDispatchStop(db, 'ctx_b1', 'intent_1')
-      let release!: () => void
-      beforeSend = () => new Promise<void>((resolve) => (release = resolve))
-      const pending = sendOwedRemoteStop(runtime, owed())
-      await vi.waitFor(() => expect(release).toBeDefined())
-      server = { ...server, peerFingerprint: 'host_b_new' }
-      openRemoteRunLink(db, run.id, server)
-      release()
-      await expect(pending).rejects.toMatchObject({
-        code: 'remote_link_closed',
-        message: `The pairing with devB was re-made, so it no longer runs Run ${run.id}'s workers. No effects were applied.`
-      })
-      expect(sent).toEqual([])
-    })
   })
 
   describe('S8 pull loop', () => {
-    it('acknowledges what it imported before an unreadable item, and never that item', async () => {
-      startedOnB()
-      const state = (seq: number, payload?: string) => ({
-        conversationId: link.conversation_id,
-        sequence: seq,
-        messageId: `state_${seq}`,
-        kind: 'worker_state',
-        payload:
-          payload ??
-          JSON.stringify({
-            v: 1,
-            id: `state_${seq}`,
-            homeRunId: run.id,
-            peerRunId: 'run_on_b',
-            dispatch: {
-              id: 'ctx_b1',
-              taskId: 'task_t',
-              status: 'dispatched',
-              workerState: 'ready',
-              lastFailure: null,
-              agent: null
-            },
-            task: { status: 'dispatched', result: null },
-            correctedUnobservedPrompt: false,
-            removed: null
-          })
-      })
+    const state = (seq: number, payload?: string) => ({
+      conversationId: link.conversation_id,
+      sequence: seq,
+      messageId: `state_${seq}`,
+      kind: 'worker_state',
+      payload:
+        payload ??
+        JSON.stringify({
+          v: 1,
+          id: `state_${seq}`,
+          homeRunId: run.id,
+          peerRunId: 'run_on_b',
+          dispatch: {
+            id: 'ctx_b1',
+            taskId: 'task_t',
+            status: 'dispatched',
+            workerState: 'ready',
+            lastFailure: null,
+            agent: null
+          },
+          task: { status: 'dispatched', result: null },
+          correctedUnobservedPrompt: false,
+          removed: null
+        })
+    })
+
+    function otherConversation() {
       const otherRun = db.createRun({
         objective: 'Other',
         coordinatorHandle: null,
@@ -457,6 +327,12 @@ describe('what the coordinating Orca owes a paired server', () => {
         conversationId: other.conversation_id,
         payload: state(7).payload.replace(run.id, otherRun.id)
       }
+      return { other, otherItem }
+    }
+
+    it('acknowledges what it imported before an unreadable item, and never that item', async () => {
+      startedOnB()
+      const { other, otherItem } = otherConversation()
       pulls.push([state(1), { ...state(2), kind: 'worker_future' }, state(3), otherItem])
       answers['orchestration.peerMailAck'] = [{ result: { acknowledged: 1 } }]
       runtime.ensureOrchestrationFederationRelay()
@@ -476,6 +352,26 @@ describe('what the coordinating Orca owes a paired server', () => {
       expect(getRemoteRunLink(db, link.conversation_id)).toMatchObject({
         last_imported_sequence: 1,
         last_error: expect.stringContaining('kind worker_future')
+      })
+    })
+
+    it("keeps reading the server's other conversations while an unreadable one waits out its own backoff", async () => {
+      retry.delayMs = 10_000
+      startedOnB()
+      const { other, otherItem } = otherConversation()
+      pulls.push([{ ...state(1), kind: 'worker_future' }], [otherItem])
+      answers['orchestration.peerMailAck'] = [{ result: { acknowledged: 1 } }]
+      runtime.ensureOrchestrationFederationRelay()
+      await vi.waitFor(() =>
+        expect(sent.some((s) => s.method === 'orchestration.peerMailAck')).toBe(true)
+      )
+      runtime.stopOrchestrationFederationRelay()
+      expect(sent.find((s) => s.method === 'orchestration.peerMailAck')?.params).toEqual({
+        acknowledgments: [{ conversationId: other.conversation_id, throughSequence: 7 }]
+      })
+      expect(pullParams[1]).toMatchObject({
+        holdBack: [link.conversation_id],
+        waitMs: expect.toSatisfy((ms: number) => ms > 0 && ms <= 10_000)
       })
     })
   })

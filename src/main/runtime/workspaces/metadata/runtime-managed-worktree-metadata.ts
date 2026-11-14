@@ -1,4 +1,4 @@
-import { getRepoRegistrationHostIds } from '../../../../shared/repo-host-identity'
+import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import type { GitPushTarget, Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import {
@@ -7,7 +7,7 @@ import {
   worktreeWorkspaceKey
 } from '../../../../shared/workspace-scope'
 import { splitWorktreeId } from '../../../../shared/worktree/id'
-import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/sort-order-update'
+import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/metadata/sort-order-update'
 import { stripOrcaProvenanceMetaUpdates } from '../../../workspaces/removal/worktree-removal-safety'
 import { isRemovedFolderWorkspaceInstance } from '../../../workspaces/catalog/folder-workspace-meta-presence'
 import { worktreeRowTarget } from '../../../persistence/host-qualified-worktree-meta'
@@ -183,12 +183,14 @@ export function persistRuntimeManagedWorktreeSortOrder(args: {
   /** `sortOrders` omitted: the repo has same-id copies, which an id-keyed patch cannot tell apart. */
   notifyChanged: (repoId: string, sortOrders?: WorktreeSortOrderUpdate[]) => void
 }): { updated: number } {
+  const repos = createRepoRowExecutionHostLookup(args.store.getRepos())
   // Skip moving projects but save/publish the rest; report only written orders.
   const updates = writeWorktreeSortOrder(
     args.store,
     { orderedIds: args.orderedIds, hostIds: args.hostIds },
     (worktreeId) => isWslMoveWorkspaceBlocked(args.store, worktreeId),
-    Date.now()
+    Date.now(),
+    repos
   )
   if (updates.length === 0) {
     return { updated: 0 }
@@ -202,7 +204,7 @@ export function persistRuntimeManagedWorktreeSortOrder(args: {
     }
   }
   for (const [repoId, sortOrders] of updatesByRepo) {
-    const isTwin = getRepoRegistrationHostIds(args.store.getRepos(), repoId).size > 1
+    const isTwin = repos.registrationHostsFor(repoId).size > 1
     args.notifyChanged(repoId, isTwin ? undefined : sortOrders)
   }
   return { updated: updates.length }

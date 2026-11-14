@@ -1,9 +1,9 @@
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
-import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../../../shared/worktree/hosted-review-links'
+import { CLEARED_HOSTED_REVIEW_SELECTION_UPDATES } from '../../../../../shared/worktree/hosted-review/hosted-review-links'
 import {
   shouldApplyBranchMismatchedLinkedPRClear,
   shouldApplyDivergedLinkedPRClear
-} from '../../../../../shared/github/linked-pr-staleness'
+} from '../../../../../shared/github/pull-requests/refresh/linked-pr-staleness'
 import { getHostedReviewLinkMutationGeneration } from '../../slices/worktrees/metadata/hosted-review-link-mutation'
 import { tryRuntimeTargetForWorktreeOwner } from '../../slices/worktrees/listing/worktree-owner-target'
 import { hasUniqueIndexedRepositoryHost } from '@/lib/workspace/ownership/repository-owner-index'

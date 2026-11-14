@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { normalizeSetupHookTrust, readRepoHooksSetupCommand } from '../tasks/setup-hook-trust'
+import {
+  normalizeSetupHookTrust,
+  readRepoHooksSetupCommand
+} from '../new-workspace/creation/setup-hook-trust'
 import { newWorkspaceSetupHooksRead } from './new-workspace-operations'
-import type { WorkspaceCreateSetupDecision } from '../tasks/workspace-create-params'
+import type { SetupDecision as WorkspaceCreateSetupDecision } from '../../../src/shared/worktree/create-types'
 import type { MobileWorkspaceRepo, SetupHookDetails } from './new-worktree-modal-types'
 
 type SetupScriptValues = {

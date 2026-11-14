@@ -1,5 +1,5 @@
 import type { ComponentType, Ref } from 'react'
-import { Pressable, type View } from 'react-native'
+import { Pressable, type HostInstance } from 'react-native'
 import { colors, feedback, radii } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
@@ -9,7 +9,7 @@ export const NAV_BAR_BUTTON_SIZE = 36
 type IconProps = { size?: number; color?: string; strokeWidth?: number }
 
 type NavBarButtonProps = {
-  ref?: Ref<View>
+  ref?: Ref<HostInstance>
   icon: ComponentType<IconProps>
   accessibilityLabel: string
   onPress: () => void
