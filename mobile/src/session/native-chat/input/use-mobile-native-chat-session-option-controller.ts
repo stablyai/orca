@@ -11,7 +11,7 @@ import { writeMobileNativeChatSessionOptions } from './mobile-native-chat-sessio
 import { getAgentSessionOptionCatalog } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog'
 import type { AgentSessionOptionCatalog } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog-types'
 import type { AgentSessionConversationCommand } from '../../../../../src/shared/agent-session/agent-session-conversation-command'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useState } from 'react'
 import type {
   NativeChatSessionOptionSettingsMutation,
   SessionOptionDescriptor,
@@ -122,45 +122,54 @@ export function useMobileNativeChatSessionOptionController(args: {
   )
   const selectedTab = args.activeSessionTab
   const optionScopeKey = mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId)
-  const owner = useMemo<NativeChatSessionOptionOwner | undefined>(() => {
-    if (!args.readSessionTab || !activeSessionTabId || !agent || selectedTab?.type !== 'terminal') {
-      return undefined
-    }
-    const bindingFor = (tab: MobileNativeChatTab): NativeChatSessionOptionBinding => ({
-      agent: tab.agentStatus?.agentType ?? tab.launchAgent ?? agent,
-      connectionId: hostId,
-      worktreeId,
-      terminalHandle: tab.terminal ?? tab.agentStatus?.terminalHandle,
-      ptyId: tab.ptyId,
-      incarnationId: tab.incarnationId,
-      providerSession: tab.agentStatus?.providerSession
-    })
-    const binding = { ...bindingFor(selectedTab), agent }
-    return createNativeChatSessionOptionOwner(
-      optionScopeKey ? readNativeChatSessionOptionSeedBinding(optionScopeKey, binding) : binding,
-      () => {
-        const tab = args.readSessionTab?.(activeSessionTabId)
-        return tab?.type === 'terminal' ? bindingFor(tab) : null
-      }
-    )
-  }, [
-    args.readSessionTab,
-    activeSessionTabId,
-    agent,
-    hostId,
+  const bindingFor = (
+    tab: MobileNativeChatTab,
+    fallbackAgent: string
+  ): NativeChatSessionOptionBinding => ({
+    agent: tab.agentStatus?.agentType ?? tab.launchAgent ?? fallbackAgent,
+    connectionId: hostId,
     worktreeId,
-    optionScopeKey,
-    selectedTab?.type,
-    selectedTab?.terminal,
-    selectedTab?.ptyId,
-    selectedTab?.incarnationId,
-    selectedTab?.launchAgent,
-    selectedTab?.agentStatus?.agentType,
-    selectedTab?.agentStatus?.terminalHandle,
-    selectedTab?.agentStatus?.providerSession?.key,
-    selectedTab?.agentStatus?.providerSession?.id,
-    selectedTab?.agentStatus?.providerSession?.transcriptPath
-  ])
+    terminalHandle: tab.terminal ?? tab.agentStatus?.terminalHandle,
+    ptyId: tab.ptyId,
+    incarnationId: tab.incarnationId,
+    providerSession: tab.agentStatus?.providerSession
+  })
+  const candidate =
+    agent && selectedTab?.type === 'terminal' ? { ...bindingFor(selectedTab, agent), agent } : null
+  const [heldOwner, setHeldOwner] = useState<{
+    scopeKey: string | null
+    owner: NativeChatSessionOptionOwner
+  } | null>(null)
+  let selectedOwner = heldOwner
+  if (!args.readSessionTab || !activeSessionTabId || !agent || !candidate) {
+    selectedOwner = null
+  } else if (
+    !heldOwner ||
+    heldOwner.scopeKey !== optionScopeKey ||
+    !sameNativeChatSessionOptionBinding(heldOwner.owner.getSnapshot(), candidate)
+  ) {
+    selectedOwner = {
+      scopeKey: optionScopeKey,
+      owner: createNativeChatSessionOptionOwner(
+        optionScopeKey
+          ? readNativeChatSessionOptionSeedBinding(optionScopeKey, candidate)
+          : candidate,
+        () => {
+          const tab = args.readSessionTab?.(activeSessionTabId)
+          return tab?.type === 'terminal' ? bindingFor(tab, agent) : null
+        }
+      )
+    }
+  }
+  if (selectedOwner !== heldOwner) {
+    setHeldOwner(selectedOwner)
+  }
+  const owner = selectedOwner?.owner
+  useLayoutEffect(() => {
+    if (candidate) {
+      owner?.captureBinding(candidate)
+    }
+  }, [owner, candidate])
   const dispatchOptionCommand = useCallback(
     async (command: string, options?: NativeChatSessionOptionDispatchOptions) => {
       if (args.terminalInputEnabled === false) {

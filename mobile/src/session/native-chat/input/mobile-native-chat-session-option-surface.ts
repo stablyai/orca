@@ -1,3 +1,4 @@
+import { sessionOptionControlNotSent } from '../../../../../src/shared/native-chat/input/native-chat-session-option-apply-failure'
 import { getAgentSessionOptionCatalog } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog'
 import type { CatalogModel } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog-types'
 import {
@@ -65,15 +66,18 @@ export function createMobileSurfaceEntry(args: {
         activeIdentity.current !== identity ||
         args.captured.isDispatchTargetCurrent?.() === false
       ) {
-        throw new Error('The chat changed before the command was sent.')
+        throw sessionOptionControlNotSent(agent)
       }
-      const outcome = await args.captured.dispatchCommand(command, options)
+      const outcome = await latest.current.dispatchCommand(command, options)
       if (typeof outcome === 'object') {
         return outcome
       }
       // Desktop commits a pick only after the terminal confirms the write.
-      if (outcome === 'rejected' || outcome === 'unknown') {
-        throw new Error('The terminal did not accept the command.')
+      if (outcome === 'rejected') {
+        throw sessionOptionControlNotSent(agent)
+      }
+      if (outcome === 'unknown') {
+        return { outcome: 'unknown' }
       }
     },
     onAgentPicker: () => {

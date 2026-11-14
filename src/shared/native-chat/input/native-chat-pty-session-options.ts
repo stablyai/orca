@@ -1,3 +1,4 @@
+import { sessionOptionControlNotSent } from './native-chat-session-option-apply-failure'
 import { getAgentSessionOptionCatalog } from '../../agent-session/options/agent-session-option-catalog'
 import type { CatalogModel } from '../../agent-session/options/agent-session-option-catalog-types'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
@@ -178,12 +179,9 @@ export function createNativeChatPtySessionOptions(
     if (!args.owner) {
       return run()
     }
-    if (hasSubscribed && listeners.size === 0) {
-      throw new Error('The chat is no longer open.')
-    }
-    const held = acquire()
+    const held = hasSubscribed && listeners.size === 0 ? null : acquire()
     if (!held) {
-      throw new Error('The chat changed before the command was sent.')
+      throw sessionOptionControlNotSent(args.agent)
     }
     operationLease = held
     record = held.record
@@ -242,7 +240,7 @@ export function createNativeChatPtySessionOptions(
     getRecord: () => record,
     dispatchCommand: (command, options) => {
       if (!canCommit()) {
-        throw new Error('The chat changed before the command was sent.')
+        throw sessionOptionControlNotSent(args.agent)
       }
       return args.dispatchCommand(command, options)
     },

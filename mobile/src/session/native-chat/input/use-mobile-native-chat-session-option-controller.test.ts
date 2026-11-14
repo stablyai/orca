@@ -1,5 +1,6 @@
-import { createElement } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+// @vitest-environment happy-dom
+import { act, createElement } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { clearNativeChatSessionOptionCacheForTests } from '../../../../../src/shared/native-chat/input/native-chat-session-option-cache'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
@@ -14,11 +15,133 @@ vi.mock('./mobile-native-chat-session-option-persistence', () => ({
 }))
 
 describe('useMobileNativeChatSessionOptionController on a structured chat', () => {
-  let renderer: ReactTestRenderer | null = null
+  let renderer: Root | null = null
   beforeEach(clearNativeChatSessionOptionCacheForTests)
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+  })
+
+  it('applies a fresh-terminal pick across pending renders and first session metadata, and reports refusal', async () => {
+    let tab: MobileSessionTab = {
+      type: 'terminal',
+      id: 'claude-tab',
+      terminal: 'claude-handle',
+      ptyId: 'claude-pty',
+      incarnationId: 'claude-incarnation',
+      title: 'Claude',
+      isActive: true,
+      launchAgent: 'claude'
+    }
+    const readSessionTab = () => tab
+    const activeHandleRef = { current: 'claude-handle' }
+    const deviceTokenRef = { current: 'phone-device' }
+    const dispatchCommand = vi.fn()
+    const onSendError = vi.fn()
+    const readSeededLaunchDraftSeed = () => null
+    const toggleTabChatView = vi.fn()
+    let refuse = false
+    const controls: unknown[] = []
+    const client: RpcClient = {
+      sendRequest: async (method, params, options) => {
+        options?.beforeSend?.()
+        if (method === 'status.get') {
+          return { ok: true, id: 'status', result: { capabilities: ['terminal.model-control.v1'] } }
+        }
+        controls.push(params)
+        return {
+          ok: true,
+          id: 'control',
+          result: {
+            control: refuse
+              ? { outcome: 'blocked', reason: 'admission', agent: 'claude' }
+              : { outcome: 'applied' }
+          }
+        }
+      },
+      subscribe: () => () => {},
+      updateTerminalSubscriptionViewport: () => {},
+      getState: () => 'connected',
+      getReconnectAttempt: () => 0,
+      getLastConnectedAt: () => 1,
+      onStateChange: () => () => {},
+      notifyForeground: () => {},
+      close: () => {}
+    }
+    let seen: ReturnType<typeof useMobileNativeChatSessionOptionController> | null = null
+    function Harness(): null {
+      seen = useMobileNativeChatSessionOptionController({
+        client,
+        activeChatStructured: false,
+        activeSessionTab: tab,
+        readSessionTab,
+        activeHandleRef,
+        activeSessionTabId: 'claude-tab',
+        agent: 'claude',
+        dispatchCommand,
+        onSendError,
+        hasSeededLaunchDraft: () => readSeededLaunchDraftSeed() !== null,
+        deviceTokenRef,
+        terminalInputEnabled: true,
+        hostId: 'host',
+        isTabChatView: () => true,
+        isWorking: false,
+        reportedModel: null,
+        structured: { snapshot: [], pendingId: null, setOption: vi.fn(), invokeAction: vi.fn() },
+        toggleTabChatView,
+        worktreeId: 'worktree'
+      })
+      return null
+    }
+    act(() => {
+      renderer = createRoot(document.createElement('div'))
+      renderer.render(createElement(Harness))
+    })
+    let picked!: Promise<boolean>
+    act(() => {
+      picked = seen!.nativeChatSessionOptions!.controller.setOption('model', 'opus')
+      tab = {
+        ...tab,
+        agentStatus: {
+          agentType: 'claude',
+          state: 'waiting',
+          prompt: '',
+          updatedAt: 1,
+          stateStartedAt: 1,
+          paneKey: 'pane',
+          stateHistory: [],
+          providerSession: { key: 'session_id', id: 'first-session' }
+        }
+      }
+      renderer!.render(createElement(Harness))
+    })
+    await act(async () => {
+      expect(await picked).toBe(true)
+    })
+    expect(controls).toMatchObject([
+      {
+        terminal: 'claude-handle',
+        expectedIncarnationId: 'claude-incarnation',
+        client: { id: 'phone-device', type: 'mobile' },
+        agent: 'claude',
+        intent: { kind: 'set', optionId: 'model', value: 'opus' }
+      }
+    ])
+    expect(seen!.nativeChatSessionOptions!.controller.snapshot[0].kind).toMatchObject({
+      currentValue: 'opus'
+    })
+    refuse = true
+    act(() => {
+      picked = seen!.nativeChatSessionOptions!.controller.setOption('model', 'haiku')
+    })
+    await act(async () => {
+      expect(await picked).toBe(false)
+    })
+    expect(onSendError.mock.calls).toHaveLength(1)
+    expect(dispatchCommand).not.toHaveBeenCalled()
+    expect(seen!.nativeChatSessionOptions!.controller.snapshot[0].kind).toMatchObject({
+      currentValue: 'opus'
+    })
   })
 
   it.each([false, true])(
@@ -87,7 +210,8 @@ describe('useMobileNativeChatSessionOptionController on a structured chat', () =
         return null
       }
       act(() => {
-        renderer = create(createElement(Harness))
+        renderer = createRoot(document.createElement('div'))
+        renderer.render(createElement(Harness))
       })
       await act(async () => {
         expect(await seen.current!.nativeChatSessionOptions!.controller.invokeAction('model')).toBe(

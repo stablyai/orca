@@ -143,15 +143,7 @@ export function useMobileNativeChatSessionOptions(
       captured: args
     })
     return created
-  }, [
-    agent,
-    canSwitchOmpModel,
-    identity,
-    scopeKey,
-    args.owner,
-    args.dispatchCommand,
-    args.writeSettings
-  ])
+  }, [agent, canSwitchOmpModel, identity, scopeKey, args.owner, args.writeSettings])
   const surface = entry?.surface ?? null
   useLayoutEffect(() => {
     surface?.reconcileOwner()
@@ -250,8 +242,8 @@ export function useMobileNativeChatSessionOptions(
               error instanceof SessionOptionApplyError &&
               (error.code === 'controlUnavailable' || error.code === 'controlNotSent') &&
               activeIdentityRef.current === operation.identity &&
-              latest.current.isDispatchTargetCurrent?.() !== false &&
               (!operation.owner ||
+                operation.owner === latest.current.owner ||
                 (currentBinding &&
                   sameNativeChatSessionOptionBinding(
                     operation.owner.getSnapshot(),

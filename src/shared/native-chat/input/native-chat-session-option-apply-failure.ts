@@ -1,3 +1,4 @@
+import { tuiAgentDisplayName } from '../../agent-launch/catalog/tui-agent-display-names'
 import type { NativeChatSessionOptionDispatchResult } from './native-chat-session-option-dispatch'
 
 // One English table for local session-option refusals; the renderer translates by code.
@@ -33,6 +34,14 @@ export class SessionOptionApplyError extends Error {
     this.optionId = optionId
     this.agent = agent
   }
+}
+
+export function sessionOptionControlNotSent(agent: string): SessionOptionApplyError {
+  return new SessionOptionApplyError(
+    'controlNotSent',
+    undefined,
+    tuiAgentDisplayName(agent) ?? agent
+  )
 }
 
 export function assertControlNotBlocked(
