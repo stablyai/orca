@@ -15,23 +15,31 @@ import { useAppStore } from '@/store/index'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { gitGraphScope } from '@/lib/source-control/graph/git-graph-tab'
 import { gitGraphWorkspaceCatalog } from './git-graph-workspace-navigation'
+import { GitGraphRefWorkspaceAgents } from './git-graph-ref-workspace-agents'
 import { useTranslate } from '@/i18n/use-translate'
 import type { GitHistoryItemRef } from '../../../../../shared/git/history/git-history-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { cn } from '@/lib/class-names'
 
-export function useGitGraphWorkspaces(scope: ReturnType<typeof gitGraphScope>) {
+export function useGitGraphWorkspaces(
+  scope: ReturnType<typeof gitGraphScope>,
+  // Agent sessions also run in the workspace showing the graph, which is not a switch target.
+  withCurrent = false
+) {
   const worktrees = useAppStore(selectWorktreesByRepo)
   const repos = useAppStore((state) => state.repos)
   return useMemo(
     () =>
       new Map(
-        gitGraphWorkspaceCatalog(scope, { repos, worktreesByRepo: worktrees }).map((row) => [
+        [
+          ...gitGraphWorkspaceCatalog(scope, { repos, worktreesByRepo: worktrees }),
+          ...(withCurrent && scope ? [scope.worktree] : [])
+        ].map((row) => [
           row.branch.startsWith('refs/heads/') ? row.branch : `refs/heads/${row.branch}`,
           row
         ])
       ),
-    [scope, worktrees, repos]
+    [scope, worktrees, repos, withCurrent]
   )
 }
 
@@ -39,6 +47,7 @@ export function GitGraphRefs({
   references,
   currentRefId,
   workspaces,
+  agentWorkspaces,
   onSwitch,
   onCheckout,
   controller,
@@ -47,6 +56,7 @@ export function GitGraphRefs({
   references: GitHistoryItemRef[]
   currentRefId?: string
   workspaces: Map<string, Worktree>
+  agentWorkspaces: Map<string, Worktree>
   onSwitch: (refId: string) => Promise<void>
   onCheckout: (ref: GitHistoryItemRef) => void
   controller: GitGraphCommitActionsController
@@ -74,41 +84,48 @@ export function GitGraphRefs({
       inline.push(ref)
     }
   }
-  const badge = (ref: GitHistoryItemRef) => (
-    <ContextMenuTrigger asChild key={ref.id}>
-      <span
-        onContextMenu={(event) => {
-          event.stopPropagation()
-          setMenuRef(ref)
-        }}
-        className={cn(
-          'inline-flex min-w-0 max-w-full shrink items-center gap-1 rounded-full border px-1.5 text-2xs text-muted-foreground',
-          ref.id === currentRefId && 'bg-accent font-medium text-foreground'
-        )}
-      >
-        <span className="min-w-0 truncate" title={ref.name}>
-          {ref.name}
+  const badge = (ref: GitHistoryItemRef) => {
+    const workspace = workspaces.get(ref.id)
+    const agentWorkspace = agentWorkspaces.get(ref.id)
+    return (
+      <ContextMenuTrigger asChild key={ref.id}>
+        <span
+          onContextMenu={(event) => {
+            event.stopPropagation()
+            setMenuRef(ref)
+          }}
+          className={cn(
+            'inline-flex min-w-0 max-w-full shrink items-center gap-1 rounded-full border px-1.5 text-2xs text-muted-foreground',
+            ref.id === currentRefId && 'bg-accent font-medium text-foreground'
+          )}
+        >
+          <span className="min-w-0 truncate" title={ref.name}>
+            {ref.name}
+          </span>
+          {agentWorkspace && <GitGraphRefWorkspaceAgents worktree={agentWorkspace} />}
+          {workspace && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  className="shrink-0"
+                  aria-label={t('gitGraph.switchWorkspace', 'Switch to workspace')}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    void onSwitch(ref.id)
+                  }}
+                >
+                  <ArrowUpRight className="size-3" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {t('gitGraph.switchWorkspace', 'Switch to workspace')}
+              </TooltipContent>
+            </Tooltip>
+          )}
         </span>
-        {workspaces.has(ref.id) && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                className="shrink-0"
-                aria-label={t('gitGraph.switchWorkspace', 'Switch to workspace')}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  void onSwitch(ref.id)
-                }}
-              >
-                <ArrowUpRight className="size-3" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent>{t('gitGraph.switchWorkspace', 'Switch to workspace')}</TooltipContent>
-          </Tooltip>
-        )}
-      </span>
-    </ContextMenuTrigger>
-  )
+      </ContextMenuTrigger>
+    )
+  }
   return (
     <ContextMenu
       onOpenChange={(open) => {
