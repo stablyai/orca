@@ -5,7 +5,7 @@ import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from '../../agent-sessi
 import { AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION } from '../../agent-session/journal/agent-session-hook-outcome'
 import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../agent-session/lifecycle/agent-session-orca-stop'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../../agent-session/journal/agent-session-turn-notice'
-import { nativeChatRowRendersContent } from './native-chat-row-content'
+import { deriveNativeChatRowContent, nativeChatRowRendersContent } from './native-chat-row-content'
 import { isStoppedBeforeStartBlock } from '../native-chat-stopped-before-start'
 import { nativeChatRowRendersProse } from '../native-chat-trailing-run'
 import { isGeneratedImageOperation } from '../native-chat-generated-image'
@@ -33,6 +33,8 @@ export type NativeChatTurnFoldRow = {
   explainsTurn: boolean
   /** A person's steer or a Stop hook's send-back interrupts the turn, so the prose before this row is an answer too. */
   endsAnswer: boolean
+  /** How an agent's spoken reply ends; a row draws its tool calls after its words, so `work` means work followed them. */
+  replyEnd: 'words' | 'work' | undefined
 }
 
 const rowFacts = new WeakMap<NativeChatMessage, NativeChatTurnFoldRow>()
@@ -56,7 +58,8 @@ function deriveTurnFoldRow(
   turnKey: string | undefined,
   hasReceipt: boolean
 ): NativeChatTurnFoldRow {
-  return {
+  const content = deriveNativeChatRowContent(message.blocks)
+  const facts = {
     turnKey,
     role: message.role,
     rendersProse:
@@ -91,14 +94,17 @@ function deriveTurnFoldRow(
       ) ||
       (message.blocks.some(isGeneratedImageOperation) &&
         message.blocks.some((block) => block.type === 'image-ref')),
-    // Messages another agent sent are work inside the turn, not a person's boundary.
+    // Another agent's message and an orphaned tool result are work inside the turn, not a person's boundary.
     endsAnswer:
-      (message.role === 'user' && message.from === undefined) ||
+      (message.role === 'user' && message.from === undefined && content.tools.length === 0) ||
       message.blocks.some(
         (block) =>
           block.type === 'text' && block.presentation === AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION
       )
   }
+  const speaks =
+    message.role === 'assistant' && content.hasText && !facts.outlivesTurn && !facts.explainsTurn
+  return { ...facts, replyEnd: speaks ? (content.tools.length > 0 ? 'work' : 'words') : undefined }
 }
 
 export type NativeChatTurnFold = {
@@ -113,19 +119,13 @@ export const NATIVE_CHAT_EMPTY_TURN_FOLD: NativeChatTurnFold = {
   foldableTurnKeys: new Set()
 }
 
-/** Spawn rosters and turn notices report on the turn; they are not the agent talking. */
-function isReply(row: NativeChatTurnFoldRow): boolean {
-  return row.role === 'assistant' && row.rendersProse && !row.outlivesTurn && !row.explainsTurn
-}
-
 /** Last assistant prose/system failure per turn, before each steer or send-back, and before another reply; no answer means fold all work. */
 export function nativeChatTurnAnswerRows(
   rows: readonly NativeChatTurnFoldRow[]
 ): ReadonlySet<number> {
   const answers = new Set<number>()
   const latest = new Map<string, number>()
-  let previousDrawn: NativeChatTurnFoldRow | undefined
-  let previousDrawnIndex = -1
+  const previousDrawn = new Map<string, number>()
   for (const [index, row] of rows.entries()) {
     if (row.turnKey === undefined) {
       continue
@@ -136,12 +136,12 @@ export function nativeChatTurnAnswerRows(
       latest.delete(row.turnKey)
     }
     if (row.draws) {
-      // Back-to-back replies all stay visible; only a reply that work follows folds.
-      if (previousDrawn?.turnKey === row.turnKey && isReply(previousDrawn) && isReply(row)) {
-        answers.add(previousDrawnIndex)
+      // Back-to-back replies within a turn all stay visible; a reply that work follows folds.
+      const previous = previousDrawn.get(row.turnKey)
+      if (previous !== undefined && rows[previous]?.replyEnd === 'words' && row.replyEnd) {
+        answers.add(previous)
       }
-      previousDrawn = row
-      previousDrawnIndex = index
+      previousDrawn.set(row.turnKey, index)
     }
     const isCandidate =
       row.rendersProse &&

@@ -17,6 +17,7 @@ function row(overrides: Partial<NativeChatTurnFoldRow> = {}): NativeChatTurnFold
     reportsFailure: false,
     explainsTurn: false,
     endsAnswer: false,
+    replyEnd: undefined,
     ...overrides
   }
 }
@@ -148,33 +149,53 @@ describe('nativeChatTurnFold', () => {
     expect([...foldedRows].sort()).toEqual([1, 2])
   })
 
-  it('keeps the reply a steer interrupted, but not one before another agent’s message', () => {
+  it('keeps the reply a steer interrupted, but not one before another agent’s message or a tool result', () => {
     const steer = message('steer', 'user', 'Also, which branch are you on?')
     const agentNote: NativeChatMessage = {
       ...message('note', 'user', 'Worker finished.'),
       from: { kind: 'agent', senders: [], orchestration: null }
     }
     const ack = message('ack', 'assistant', 'On main; continuing.')
-    const messages = [PROMPT, PREAMBLE, WORK, steer, ack, agentNote, WORK, ANSWER]
+    const orphanResult: NativeChatMessage = {
+      ...message('orphan', 'user', ''),
+      blocks: [{ type: 'tool-result', callId: 'gone', output: 'ok' }],
+      unpairedToolResults: true
+    }
+    const messages = [PROMPT, PREAMBLE, WORK, steer, ack, agentNote, orphanResult, WORK, ANSWER]
     const rows = messages.map((item) => nativeChatTurnFoldRow(item, 'turn-1', false))
     const { foldedRows } = nativeChatTurnFold({
       rows,
       settledTurnKeys: SETTLED,
       expandedTurnKeys: NONE
     })
-    expect([...nativeChatTurnAnswerRows(rows)]).toEqual([1, 7])
-    expect([...foldedRows]).toEqual([2, 4, 6])
+    expect([...nativeChatTurnAnswerRows(rows)]).toEqual([1, 8])
+    expect([...foldedRows]).toEqual([2, 4, 7])
   })
 
-  it('keeps replies that directly follow each other, folding only the one before work', () => {
-    const rows = [row({ role: 'user' }), row(), row(), row({ rendersProse: false }), row()]
+  it('keeps back-to-back replies, but not a reply whose own row continues into work', () => {
+    const NOTE = message('note', 'assistant', 'Checked the config.')
+    const NARRATION: NativeChatMessage = {
+      ...WORK,
+      id: 'narration',
+      blocks: [{ type: 'text', text: 'I will run the tests.' }, ...WORK.blocks]
+    }
+    const messages = [PROMPT, NOTE, PREAMBLE, WORK, NARRATION, ANSWER]
+    const rows = messages.map((item) => nativeChatTurnFoldRow(item, 'turn-1', false))
     const { foldedRows } = nativeChatTurnFold({
       rows,
       settledTurnKeys: SETTLED,
       expandedTurnKeys: NONE
     })
-    expect([...nativeChatTurnAnswerRows(rows)]).toEqual([1, 4])
-    expect([...foldedRows]).toEqual([2, 3])
+    expect([...nativeChatTurnAnswerRows(rows)]).toEqual([1, 5])
+    expect([...foldedRows]).toEqual([2, 3, 4])
+  })
+
+  it('judges back-to-back replies within their own turn when another turn’s rows interleave', () => {
+    const late = message('late', 'assistant', 'Other turn.')
+    const messages = [PROMPT, PREAMBLE, late, ANSWER]
+    const keys = ['turn-1', 'turn-1', 'turn-2', 'turn-1']
+    const rows = messages.map((item, index) => nativeChatTurnFoldRow(item, keys[index], false))
+    expect([...nativeChatTurnAnswerRows(rows)].sort()).toEqual([1, 2, 3])
   })
 
   it('never folds a compaction report, and keeps the last prose as the answer', () => {
