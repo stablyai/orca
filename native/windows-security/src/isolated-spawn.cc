@@ -1,8 +1,11 @@
 // libuv spawns with bInheritHandles=TRUE and no handle list, so every inheritable handle in Orca
 // reaches a long-lived child. This spawn lists exactly one NUL handle, used for all three stdio.
-// Flags mirror libuv's detached spawn plus CREATE_BREAKAWAY_FROM_JOB: a holder must outlive a
-// kill-on-close job Orca was launched into (an OpenSSH session's, a terminal's). A job that forbids
-// breakaway fails that with ERROR_ACCESS_DENIED; the spawn then retries inside it and reports so.
+// Flags follow libuv's detached spawn, with CREATE_NO_WINDOW in place of DETACHED_PROCESS: a
+// console-less holder makes Windows open a new, visible console for every console program it starts
+// (wsl.exe starts one, which shows as an empty Windows Terminal window), while a windowless console
+// is inherited. CREATE_BREAKAWAY_FROM_JOB: a holder must outlive a kill-on-close job Orca was
+// launched into (an OpenSSH session's, a terminal's). A job that forbids breakaway fails that with
+// ERROR_ACCESS_DENIED; the spawn then retries inside it and reports so.
 
 #include "isolated-spawn.h"
 
@@ -93,7 +96,7 @@ Napi::Value SpawnDetachedIsolated(const Napi::CallbackInfo& info) {
   startup.StartupInfo.hStdError = nul;
   startup.lpAttributeList = attributes;
   PROCESS_INFORMATION created{};
-  const DWORD flags = CREATE_UNICODE_ENVIRONMENT | DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP |
+  const DWORD flags = CREATE_UNICODE_ENVIRONMENT | CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP |
                       EXTENDED_STARTUPINFO_PRESENT;
   DWORD error = ERROR_SUCCESS;
   auto create = [&](DWORD extra) {
