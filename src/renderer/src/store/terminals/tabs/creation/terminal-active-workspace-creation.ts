@@ -13,10 +13,10 @@ export function createActiveWorkspaceTerminalActions(
   get: TerminalStoreGet
 ): Pick<TerminalSlice, 'openNewTerminalTabInActiveWorkspace'> {
   return {
-    openNewTerminalTabInActiveWorkspace: async (groupId) => {
+    openNewTerminalTabInActiveWorkspace: async (groupId, options) => {
       const worktreeId = get().activeWorktreeId
       if (worktreeId) {
-        await openNewTerminalTabInWorkspace(get, worktreeId, groupId)
+        await openNewTerminalTabInWorkspace(get, worktreeId, groupId, undefined, options)
       }
     }
   }
@@ -26,7 +26,8 @@ export async function openNewTerminalTabInWorkspace(
   get: TerminalStoreGet,
   worktreeId: string,
   groupId?: string,
-  split?: TabSplitTarget
+  split?: TabSplitTarget,
+  options?: { placementFixed?: boolean }
 ): Promise<void> {
   const state = get()
   const workspaceScope = parseWorkspaceKey(worktreeId)
@@ -64,7 +65,8 @@ export async function openNewTerminalTabInWorkspace(
           environmentId: runtimeEnvironmentId,
           targetGroupId: splitGroupId ?? groupId,
           activate: true,
-          selectWorktree: !split
+          selectWorktree: !split,
+          ...(split || options?.placementFixed ? { placementFixed: true } : {})
         },
         { userAct: true }
       )
@@ -77,7 +79,12 @@ export async function openNewTerminalTabInWorkspace(
   if (isWebClientLocation() && worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
     return
   }
-  const terminal = get().createTab(worktreeId, groupId, undefined, split ? { split } : undefined)
+  const terminal = get().createTab(
+    worktreeId,
+    groupId,
+    undefined,
+    split ? { split } : options?.placementFixed ? { placementFixed: true } : undefined
+  )
   get().setActiveTab(terminal.id)
   get().setActiveTabType('terminal', worktreeId)
   const latest = get()

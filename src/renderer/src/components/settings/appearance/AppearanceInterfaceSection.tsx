@@ -13,6 +13,8 @@ import { ShortcutHintList } from './AppearanceShortcutHintList'
 import { FontAutocomplete } from './fonts/FontAutocomplete'
 import { SettingsRow, SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { DEFAULT_APP_FONT_FAMILY } from '../../../../../shared/constants'
+import { SinglePaneWidthSetting } from './SinglePaneWidthSetting'
+import { getEditorThemeSlots } from './themes/editor-theme-slots'
 import {
   APPEARANCE_EDITOR_THEME_SETTING_ID,
   getCodeEditorThemeEntries,
@@ -70,24 +72,7 @@ export function AppearanceInterfaceSection({
     }
   ]
   const editorThemeEntry = getCodeEditorThemeEntries()[0]
-  const editorThemeSlots = [
-    {
-      base: 'light' as const,
-      title: t('settings.appearance.editorTheme.light', 'Light editor theme'),
-      description: t(
-        'settings.appearance.editorTheme.lightDescription',
-        'Code editor, diff and notebook colors while the app is light.'
-      )
-    },
-    {
-      base: 'dark' as const,
-      title: t('settings.appearance.editorTheme.dark', 'Dark editor theme'),
-      description: t(
-        'settings.appearance.editorTheme.darkDescription',
-        'Code editor, diff and notebook colors while the app is dark.'
-      )
-    }
-  ]
+  const editorThemeSlots = getEditorThemeSlots(t)
   const iconThemeTitle = t(
     'auto.components.settings.AppearanceInterfaceSection.pluginIconTheme.title',
     'Icon theme'
@@ -292,6 +277,8 @@ export function AppearanceInterfaceSection({
           }
         />
       </SearchableSetting>
+
+      <SinglePaneWidthSetting settings={settings} updateSettings={updateSettings} />
 
       {showAdvanced ? (
         <SettingsGroupDisclosure>

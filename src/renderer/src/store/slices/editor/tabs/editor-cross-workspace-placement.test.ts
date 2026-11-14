@@ -16,6 +16,7 @@ import { removeWorktreeLayout } from '../../tabs/worktree-layout-lifecycle'
 import { buildHydratedTabState } from '../../tabs/tabs-hydration'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
 import { closeMobileSessionTabInStore } from '@/runtime/web-session-tabs-sync/closing/mobile-session-tab-close'
+import { seedThreePaneLayout } from '../../tabs/three-pane-layout.test-fixture'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
@@ -212,6 +213,8 @@ it('shares child-owned diff content across folder and child views, with independ
 })
 
 it('replaces only the folder preview and preserves a child placement and split', async () => {
+  // Why: three panes keep automatic placement out of a test about in-group preview replacement.
+  seedThreePaneLayout(useAppStore, FOLDER)
   openDiff(FOLDER, 'a.ts', true)
   await main.settle()
   const original = tabs(FOLDER)[0]!

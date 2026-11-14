@@ -43,6 +43,7 @@ export async function launchAgentInWebHostTab(args: {
   workspaceExecutionHostId?: LaunchAgentInNewTabArgs['workspaceExecutionHostId']
   environmentId: string | null
   groupId?: string
+  placementFixed?: boolean
   cwd?: string | null
   trustWorktreeId?: string
   buildStartup: (choices: AgentLaunchChoices | undefined) => LaunchAgentStartupPromptPlan
@@ -124,6 +125,7 @@ export async function launchAgentInWebHostTab(args: {
       environmentId,
       ...(args.trustWorktreeId ? { trustWorktreeId: args.trustWorktreeId } : {}),
       targetGroupId: groupId,
+      ...(args.placementFixed ? { placementFixed: true } : {}),
       activate: args.activate !== false,
       ...(args.activate === false ? { selectWorktree: false } : {}),
       ...(args.selectWorktree !== undefined ? { selectWorktree: args.selectWorktree } : {}),

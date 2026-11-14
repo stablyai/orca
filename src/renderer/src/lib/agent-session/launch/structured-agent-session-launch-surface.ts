@@ -149,6 +149,7 @@ export function openStructuredAgentSessionProvisionalTab(args: {
   sessionId: string
   agent: TuiAgent
   targetGroupId?: string
+  placementFixed?: boolean
   /** The tab the chat opens right after, in that tab's group. */
   afterTabId?: string
   activate?: boolean
@@ -181,6 +182,7 @@ export function openStructuredAgentSessionProvisionalTab(args: {
       agentSessionAgent: args.agent,
       label: defaultAgentChatLabel(args.agent),
       targetGroupId,
+      ...(args.placementFixed ? { placementFixed: true } : {}),
       ...(args.afterTabId ? { afterTabId: args.afterTabId } : {}),
       activate: args.activate !== false
     })

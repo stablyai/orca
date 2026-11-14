@@ -34,6 +34,7 @@ import { createTestStore, seedStore } from '../../testing/app-store-test-fixture
 import { makeWorktree } from '../worktrees/worktree.test-fixture'
 
 import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
+import { seedThreePaneLayout } from './three-pane-layout.test-fixture'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
@@ -56,6 +57,8 @@ function makeSeededStore(): ReturnType<typeof createTestStore> {
     },
     activeWorktreeId: WT
   })
+  // Why: three panes keep automatic placement out of a test about in-group tab positions.
+  seedThreePaneLayout(store, WT)
   return store
 }
 

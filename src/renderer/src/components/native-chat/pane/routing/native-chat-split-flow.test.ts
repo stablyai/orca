@@ -141,13 +141,16 @@ it('settles real host terminal creation after later navigation', async () => {
     const laterWorkspace = folderWorkspaceKey('another-folder')
     store.getState().setActiveWorktree(laterWorkspace, 'local')
     await vi.advanceTimersByTimeAsync(10_500)
+    // Why: a terminal opened on a lone chat pane lands in a new pane split beside it.
+    const groups = store.getState().groupsByWorktree[worktreeId]
+    expect(groups.map((group) => group.id)).toEqual([source.groupId, expect.any(String)])
     expect(call).toHaveBeenCalledWith(
       expect.objectContaining({
         selector: 'paired-host',
         method: 'session.tabs.createTerminal',
         params: expect.objectContaining({
           worktree: `id:${worktreeId}`,
-          targetGroupId: source.groupId
+          targetGroupId: groups[1]?.id
         })
       })
     )
@@ -157,7 +160,6 @@ it('settles real host terminal creation after later navigation', async () => {
       activeWorkspaceExecutionHostId: 'runtime:paired-host'
     })
     expect(store.getState().unifiedTabsByWorktree[worktreeId]).toEqual([source])
-    expect(store.getState().groupsByWorktree[worktreeId]).toHaveLength(1)
     expect(store.getState().tabsByWorktree[worktreeId] ?? []).toEqual([])
   } finally {
     vi.useRealTimers()
