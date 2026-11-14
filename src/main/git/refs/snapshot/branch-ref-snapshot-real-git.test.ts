@@ -1,5 +1,5 @@
 import { createNativeChatReviewMenu } from '../../../../shared/native-chat/input/native-chat-review-menu'
-import { mkdtemp, mkdir, realpath, rename, rm, symlink } from 'node:fs/promises'
+import { mkdtemp, mkdir, realpath, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { tmpdir } from 'node:os'
@@ -306,13 +306,13 @@ it.each([1000, 10000])(
   'loads %i review branches with one population read and no per-row child',
   async (population) => {
     const { root, tagOid } = await fixture()
-    await gitExecFileAsync(['update-ref', '--stdin'], {
-      cwd: root,
-      stdin: Array.from(
-        { length: population },
-        (_, i) => `create refs/heads/review-${i} ${tagOid}\n`
-      ).join('')
-    })
+    await writeFile(
+      join(root, '.git', 'packed-refs'),
+      Array.from({ length: population }, (_, i) => `refs/heads/review-${i}`)
+        .sort()
+        .map((ref) => `${tagOid} ${ref}\n`)
+        .join('')
+    )
     vi.stubEnv('ORCA_MAIN_THREAD_DIAGNOSTICS', '1')
     drainSubprocessSpawnStats()
     const branches = vi.fn(async () => (await listLocalBranches(root)).branches)
