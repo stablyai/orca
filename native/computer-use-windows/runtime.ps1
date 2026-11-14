@@ -989,7 +989,7 @@ function ConvertTo-OrcaEditNewlines([string]$Text, [bool]$Collapse) {
     $normalized -replace "`n", "`r`n"
 }
 
-function Invoke-OrcaEditTextInsertion($Edit, [int]$Index, [string]$Text) {
+function Invoke-OrcaEditTextInsertion($Edit, [int]$Index, [string]$Text, [switch]$ReplaceAll) {
     Assert-OrcaWindowOwner $Edit.handle $Edit.processId
     $style = [OrcaDesktopWin32]::GetWindowLong($Edit.handle, -16)
     if (($style -band 0x0800) -ne 0) { throw "element $Index text is not settable: the field is read-only" }
@@ -998,9 +998,12 @@ function Invoke-OrcaEditTextInsertion($Edit, [int]$Index, [string]$Text) {
     $selection = [OrcaDesktopWin32]::GetEditSelection($Edit.handle)
     # Why: an edit cuts text past its EM_SETLIMITTEXT limit, which would leave a partial write; refuse it untouched instead.
     $limit = [OrcaDesktopWin32]::SendControlMessage($Edit.handle, 0x00D5, [IntPtr]::Zero, [IntPtr]::Zero)
-    if ($null -ne $limit -and $limit -gt 0 -and $null -ne $before -and $null -ne $selection) {
-        $length = $before.Length - [Math]::Abs($selection[1] - $selection[0]) + $insert.Length
-        if ($length -gt $limit) { throw "element $Index text is not settable: the result would be $length characters, past the field's $limit-character limit" }
+    if ($null -ne $limit -and $limit -gt 0) {
+        # Why: RichEdit counts a line break as one character, so its lengths are compared without CRLF.
+        $current = if ($null -ne $before) { (ConvertTo-OrcaEditNewlines $before $Edit.rich).Length } else { [OrcaDesktopWin32]::SendControlMessage($Edit.handle, 0x000E, [IntPtr]::Zero, [IntPtr]::Zero) }
+        $replaced = if ($ReplaceAll) { $current } elseif ($null -ne $selection) { [Math]::Abs($selection[1] - $selection[0]) } else { 0 }
+        $length = $current - $replaced + (ConvertTo-OrcaEditNewlines $Text $Edit.rich).Length
+        if ($null -ne $current -and $length -gt $limit) { throw "element $Index text is not settable: the result would be $length characters, past the field's $limit-character limit" }
     }
     Assert-OrcaWindowOwner $Edit.handle $Edit.processId
     if (-not [OrcaDesktopWin32]::ReplaceEditSelection($Edit.handle, $insert)) {
@@ -1897,8 +1900,13 @@ function Set-OrcaNativeComboValue($Element, $Process, [string]$Value) {
     $first = [OrcaDesktopWin32]::FindControlString($combo, 0x0158, -1, $Value)
     $hit = $first
     for ($step = 0; $null -ne $hit -and $hit -ge 0 -and $step -lt $count; $step++) {
-        if ([OrcaDesktopWin32]::GetControlItemText($combo, 0x0149, 0x0148, [int]$hit) -ceq $Value) { $exact += [int]$hit }
+        $text = [OrcaDesktopWin32]::GetControlItemText($combo, 0x0149, 0x0148, [int]$hit)
+        if ($text -ceq $Value) { $exact += [int]$hit }
         $hit = [OrcaDesktopWin32]::FindControlString($combo, 0x0158, [int]$hit, $Value)
+        # Why: a search or read the combo didn't answer could hide a second option with the same name.
+        if ($null -eq $text -or $null -eq $hit) {
+            throw "window_not_responding: the combo box did not answer its option search in time; nothing was selected"
+        }
         if ($hit -eq $first) { break }
     }
     if ($exact.Count -eq 0) { return $null }
@@ -1937,7 +1945,7 @@ function Set-OrcaNativeEditValue($Element, $Process, [int]$Index, [string]$Value
     if ($null -eq [OrcaDesktopWin32]::SendControlMessage($edit.handle, 0x00B1, [IntPtr]::Zero, [IntPtr](-1))) {
         throw "window_not_responding: the text field did not answer in time; nothing was written"
     }
-    $action = Invoke-OrcaEditTextInsertion $edit $Index $Value
+    $action = Invoke-OrcaEditTextInsertion $edit $Index $Value -ReplaceAll
     $verification = if ($action.verification.state -eq "verified") {
         [pscustomobject]@{ state = "verified"; property = "value" }
     } elseif ($action.verification.reason -eq "text_mismatch") {

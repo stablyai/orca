@@ -145,6 +145,15 @@ $outcome = Invoke-TestOperation ([pscustomobject]@{ tool = "type_text"; app = "F
 if ($outcome.message -notlike "element 7 text is not settable: the result would be 6 characters, past the field's 5-character limit") { throw "over-limit insertion, received '$($outcome.message)'" }
 Assert-TestEqual ([OrcaDesktopWin32]::EditText) "old" "over-limit insertion leaves the field untouched"
 
+# A password field can't be read back, yet its limit still holds.
+[OrcaDesktopWin32]::Reset("", 0, 0)
+[OrcaDesktopWin32]::Limit = 2
+$secret = New-TestElement "Edit" 303
+$secret.live.Current.IsPassword = $true
+$outcome = Invoke-TestOperation ([pscustomobject]@{ tool = "type_text"; app = "Fixture"; text = "abc"; element = $secret })
+if ($outcome.message -notlike "*past the field's 2-character limit") { throw "over-limit password insertion, received '$($outcome.message)'" }
+Assert-TestEqual ([OrcaDesktopWin32]::Calls.Count) 0 "over-limit password insertion sends nothing"
+
 # Edit messages would bypass a disabled field's lock, so a disabled field is refused untouched.
 [OrcaDesktopWin32]::Reset("", 0, 0)
 $outcome = Invoke-TestOperation ([pscustomobject]@{ tool = "type_text"; app = "Fixture"; text = "x"; element = (New-TestElement "Edit" 303 $false) })
