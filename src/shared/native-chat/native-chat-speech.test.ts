@@ -70,6 +70,15 @@ describe('native chat speech text', () => {
     expect(nativeChatTextForSpeech('Жирный <strong>текст</strong>')).toBe('Жирный  текст')
   })
 
+  it('speaks autolinks and keeps markdown that is inside code', () => {
+    expect(nativeChatTextForSpeech('Смотри <https://example.com/docs> и <dev@example.com>.')).toBe(
+      'Смотри https://example.com/docs и dev@example.com.'
+    )
+    expect(nativeChatTextForSpeech('Вызови `[name](path)` и\n\n```md\n[name](path)\n```')).toBe(
+      'Вызови [name](path) и\n\n[name](path)'
+    )
+  })
+
   it('splits English words out of a Russian sentence and keeps English phrases together', () => {
     expect(
       segmentNativeChatSpeech('Функция useState возвращает значение из API.').map((segment) => [

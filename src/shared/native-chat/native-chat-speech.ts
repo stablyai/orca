@@ -35,16 +35,23 @@ export type NativeChatEdgeSpeechRequest = {
 }
 
 const DEFAULT_VOICE: NativeChatSpeechVoice = 'ru-RU-SvetlanaNeural'
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** Main-process rejection when the user stops neural speech. A dropped socket uses a different message. */
+export const EDGE_SPEECH_CANCELLED_MESSAGE = 'Edge speech was cancelled'
 const RUSSIAN_LETTER = /[\u0400-\u04FF\u0500-\u052F]/
 const ENGLISH_LETTER = /[A-Za-z]/
 
 export function normalizeNativeChatSpeechSettings(
   value: unknown
 ): NativeChatSpeechSettings | undefined {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+  if (!isRecord(value)) {
     return undefined
   }
-  const record = value as Record<string, unknown>
+  const record = value
   const normalized: NativeChatSpeechSettings = {}
   if (record.enabled === false) {
     normalized.enabled = false
@@ -79,10 +86,12 @@ export function resolveNativeChatSpeechSettings(value: unknown): ResolvedNativeC
 }
 
 const HTML_TAG = /<\/?[A-Za-z][^<>\n]*>/g
+const AUTOLINK =
+  /<(https?:\/\/[^\s<>]+|mailto:[^\s<>]+|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})>/g
 
 /**
  * Holds fenced and inline code so a later HTML strip cannot eat generics such as `Promise<void>`.
- * The held spans go back before markdown is unwrapped, so the code words are still spoken.
+ * The words come back after markdown cleanup, so a literal link inside code stays intact.
  */
 function holdSpeechCode(markdown: string): { text: string; held: string[] } {
   const held: string[] = []
@@ -94,14 +103,24 @@ function holdSpeechCode(markdown: string): { text: string; held: string[] } {
   return { text, held }
 }
 
+function spokenCode(span: string): string {
+  const fence = /^```[\w-]*[ \t]*\n?([\s\S]*?)```$/.exec(span)
+  if (fence) {
+    return `\n${fence[1] ?? ''}\n`
+  }
+  const inline = /^`([^`]+)`$/.exec(span)
+  if (inline) {
+    return inline[1] ?? ''
+  }
+  return span
+}
+
 /** Words to speak: markdown markers go, the words under them stay, including code. */
 export function nativeChatTextForSpeech(markdown: string): string {
   const { text, held } = holdSpeechCode(markdown)
   return text
+    .replace(AUTOLINK, '$1')
     .replace(HTML_TAG, ' ')
-    .replace(/\uE000(\d+)\uE001/g, (_match, index: string) => held[Number(index)] ?? '')
-    .replace(/```[\w-]*[ \t]*\n?([\s\S]*?)```/g, (_match, code: string) => `\n${code}\n`)
-    .replace(/`([^`]+)`/g, '$1')
     .replace(/!\[[^\]]*]\([^)]*\)/g, ' ')
     .replace(/\[([^\]]+)]\([^)]*\)/g, '$1')
     .replace(/^\s{0,3}#{1,6}\s+/gm, '')
@@ -111,6 +130,7 @@ export function nativeChatTextForSpeech(markdown: string): string {
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/(^|[\s])\*([^*\n]+)\*(?=[\s.,!?]|$)/g, '$1$2')
     .replace(/~~([^~]+)~~/g, '$1')
+    .replace(/\uE000(\d+)\uE001/g, (_match, index: string) => spokenCode(held[Number(index)] ?? ''))
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()

@@ -1,50 +1,67 @@
 import { randomUUID } from 'node:crypto'
-import WebSocket from 'ws'
 import {
   chunkNativeChatSpeech,
+  EDGE_SPEECH_CANCELLED_MESSAGE,
   type NativeChatEdgeSpeechRequest
 } from '../../shared/native-chat/native-chat-speech'
+import { openEdgeSpeechSocket, type EdgeSpeechSocket } from './edge-speech-socket'
 import { edgeTtsWebSocketUrl } from './edge-tts-token'
 
-const VOICES = new Set(['ru-RU-SvetlanaNeural', 'ru-RU-DmitryNeural'])
 const MAX_TEXT_LENGTH = 20_000
 const CHUNK_LIMIT = 3_000
 const SOCKET_TIMEOUT_MS = 20_000
 
-const SOCKET_HEADERS = {
-  Pragma: 'no-cache',
-  'Cache-Control': 'no-cache',
-  Origin: 'chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold',
-  'User-Agent':
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36 Edg/143.0.0.0'
+export type { EdgeSpeechHandlers, EdgeSpeechSocket } from './edge-speech-socket'
+
+type EdgeSpeechJob = {
+  cancelled: boolean
+  socket: EdgeSpeechSocket | null
+  fail: ((error: Error) => void) | null
 }
 
-let activeSocket: WebSocket | null = null
+let activeJob: EdgeSpeechJob | null = null
 
 export function cancelEdgeSpeech(): void {
-  activeSocket?.close()
-  activeSocket = null
+  const job = activeJob
+  if (!job || job.cancelled) {
+    return
+  }
+  // A later turn.end must not resolve this job or let the next chunk open a socket.
+  job.cancelled = true
+  const socket = job.socket
+  job.socket = null
+  socket?.close()
+  job.fail?.(new Error(EDGE_SPEECH_CANCELLED_MESSAGE))
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isEdgeVoice(value: unknown): value is NativeChatEdgeSpeechRequest['voice'] {
+  return value === 'ru-RU-SvetlanaNeural' || value === 'ru-RU-DmitryNeural'
 }
 
 export function parseEdgeSpeechRequest(request: unknown): NativeChatEdgeSpeechRequest {
-  if (!request || typeof request !== 'object') {
+  if (!isRecord(request)) {
     throw new Error('Speech request is invalid')
   }
-  const record = request as { text?: unknown; voice?: unknown; rate?: unknown }
-  if (typeof record.text !== 'string' || record.text.trim().length === 0) {
+  const text = request.text
+  if (typeof text !== 'string' || text.trim().length === 0) {
     throw new Error('Nothing to speak')
   }
-  if (record.text.length > MAX_TEXT_LENGTH) {
+  if (text.length > MAX_TEXT_LENGTH) {
     throw new Error('That reply is too long to speak')
   }
-  if (typeof record.voice !== 'string' || !VOICES.has(record.voice)) {
+  if (!isEdgeVoice(request.voice)) {
     throw new Error('Unknown speech voice')
   }
+  const rateValue = request.rate
   const rate =
-    typeof record.rate === 'number' && Number.isFinite(record.rate)
-      ? Math.min(2, Math.max(0.5, record.rate))
+    typeof rateValue === 'number' && Number.isFinite(rateValue)
+      ? Math.min(2, Math.max(0.5, rateValue))
       : 1
-  return { text: record.text, voice: record.voice as NativeChatEdgeSpeechRequest['voice'], rate }
+  return { text, voice: request.voice, rate }
 }
 
 export function edgeSpeechRate(rate: number): string {
@@ -98,7 +115,8 @@ export function readEdgeBinaryAudio(message: Buffer): Buffer | null {
   if (!header.includes('Path:audio') || !header.includes('audio/mpeg')) {
     return null
   }
-  const audio = message.subarray(2 + headerLength + 2)
+  // The 2-byte length is already consumed. Skipping two more bytes drops the MP3 frame sync.
+  const audio = message.subarray(2 + headerLength)
   return audio.length > 0 ? audio : null
 }
 
@@ -111,32 +129,43 @@ function edgeSsml(text: string, voice: string, rate: number): string {
   )
 }
 
-function bufferFromSocketMessage(data: Buffer | ArrayBuffer | Buffer[]): Buffer {
+function bufferFromSocketMessage(data: unknown): Buffer | null {
   if (Buffer.isBuffer(data)) {
     return data
   }
-  if (Array.isArray(data)) {
-    return Buffer.concat(data)
+  if (data instanceof ArrayBuffer) {
+    return Buffer.from(data)
   }
-  return Buffer.from(data)
+  if (!Array.isArray(data)) {
+    return null
+  }
+  const parts: Buffer[] = []
+  for (const part of data) {
+    if (!Buffer.isBuffer(part)) {
+      return null
+    }
+    parts.push(part)
+  }
+  return Buffer.concat(parts)
 }
 
-function synthesizeChunk(text: string, voice: string, rate: number): Promise<Buffer> {
-  cancelEdgeSpeech()
-  const socket = new WebSocket(edgeTtsWebSocketUrl(randomUUID().replaceAll('-', '')), {
-    headers: {
-      ...SOCKET_HEADERS,
-      Cookie: `muid=${randomUUID().replaceAll('-', '').toUpperCase()};`
-    },
-    handshakeTimeout: 10_000
-  })
-  activeSocket = socket
+function synthesizeChunk(
+  text: string,
+  voice: string,
+  rate: number,
+  job: EdgeSpeechJob,
+  openSocket: (url: string) => EdgeSpeechSocket
+): Promise<Buffer> {
+  if (job.cancelled) {
+    return Promise.reject(new Error(EDGE_SPEECH_CANCELLED_MESSAGE))
+  }
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = []
     let settled = false
     let completed = false
     let timedOut = false
     let timer: ReturnType<typeof setTimeout> | undefined
+    let socket: EdgeSpeechSocket | null = null
     const finish = (error: Error | null, audio?: Buffer): void => {
       if (settled) {
         return
@@ -145,8 +174,11 @@ function synthesizeChunk(text: string, voice: string, rate: number): Promise<Buf
       if (timer) {
         clearTimeout(timer)
       }
-      if (activeSocket === socket) {
-        activeSocket = null
+      if (job.fail === rejectWith) {
+        job.fail = null
+      }
+      if (socket && job.socket === socket) {
+        job.socket = null
       }
       if (error) {
         reject(error)
@@ -154,60 +186,101 @@ function synthesizeChunk(text: string, voice: string, rate: number): Promise<Buf
       }
       resolve(audio ?? Buffer.alloc(0))
     }
-    const fail = (error: Error): void => finish(error)
+    const rejectWith = (error: Error): void => finish(error)
+    // Arm the job before connect so a stop during open rejects this chunk and closes its socket.
+    job.fail = rejectWith
+    socket = openSocket(edgeTtsWebSocketUrl(randomUUID().replaceAll('-', '')))
+    job.socket = socket
+    if (job.cancelled) {
+      socket.close()
+      rejectWith(new Error(EDGE_SPEECH_CANCELLED_MESSAGE))
+      return
+    }
+    const connected = socket
     timer = setTimeout(() => {
       timedOut = true
-      socket.close()
-      fail(new Error('Edge speech timed out'))
+      connected.close()
+      rejectWith(new Error('Edge speech timed out'))
     }, SOCKET_TIMEOUT_MS)
-    socket.on('error', () => fail(new Error('Edge speech connection failed')))
-    socket.on('close', () => {
-      if (!completed && !timedOut) {
-        fail(new Error('Edge speech was cancelled'))
-      }
-    })
-    socket.on('unexpected-response', (request, response) => {
-      // ws keeps the handshake open once this listener exists. Drain it or each refusal leaks.
-      response.resume()
-      request.destroy()
-      fail(new Error(`Edge speech refused the connection (${response.statusCode ?? 'unknown'})`))
-    })
-    socket.on('open', () => {
-      const timestamp = edgeSpeechTimestamp()
-      socket.send(
-        `X-Timestamp:${timestamp}\r\nContent-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n` +
-          '{"context":{"synthesis":{"audio":{"metadataoptions":{"sentenceBoundaryEnabled":"false","wordBoundaryEnabled":"false"},"outputFormat":"audio-24khz-48kbitrate-mono-mp3"}}}}\r\n'
-      )
-      socket.send(
-        `X-RequestId:${randomUUID().replaceAll('-', '')}\r\nContent-Type:application/ssml+xml\r\nX-Timestamp:${timestamp}Z\r\nPath:ssml\r\n\r\n${edgeSsml(text, voice, rate)}`
-      )
-    })
-    socket.on('message', (data, isBinary) => {
-      if (!isBinary) {
-        if (String(data).includes('Path:turn.end')) {
-          completed = true
-          socket.close()
-          if (chunks.length === 0) {
-            fail(new Error('Edge speech returned no audio'))
-            return
-          }
-          finish(null, Buffer.concat(chunks))
+    connected.subscribe({
+      open: () => {
+        const timestamp = edgeSpeechTimestamp()
+        connected.send(
+          `X-Timestamp:${timestamp}\r\nContent-Type:application/json; charset=utf-8\r\nPath:speech.config\r\n\r\n` +
+            '{"context":{"synthesis":{"audio":{"metadataoptions":{"sentenceBoundaryEnabled":"false","wordBoundaryEnabled":"false"},"outputFormat":"audio-24khz-48kbitrate-mono-mp3"}}}}\r\n'
+        )
+        connected.send(
+          `X-RequestId:${randomUUID().replaceAll('-', '')}\r\nContent-Type:application/ssml+xml\r\nX-Timestamp:${timestamp}Z\r\nPath:ssml\r\n\r\n${edgeSsml(text, voice, rate)}`
+        )
+      },
+      error: () => {
+        rejectWith(new Error('Edge speech connection failed'))
+        connected.close()
+      },
+      close: () => {
+        if (job.cancelled) {
+          rejectWith(new Error(EDGE_SPEECH_CANCELLED_MESSAGE))
+          return
         }
-        return
-      }
-      const audio = readEdgeBinaryAudio(bufferFromSocketMessage(data))
-      if (audio) {
-        chunks.push(audio)
+        if (!completed && !timedOut) {
+          rejectWith(new Error('Edge speech connection closed'))
+        }
+      },
+      unexpectedResponse: (request, response) => {
+        // ws keeps the handshake open once this listener exists. Drain it or each refusal leaks.
+        // Settle first: destroy can emit close, and that close is not a user stop or a dropped socket.
+        response.resume()
+        rejectWith(
+          new Error(`Edge speech refused the connection (${response.statusCode ?? 'unknown'})`)
+        )
+        request.destroy()
+      },
+      message: (data, isBinary) => {
+        if (job.cancelled) {
+          return
+        }
+        if (!isBinary) {
+          if (String(data).includes('Path:turn.end')) {
+            completed = true
+            connected.close()
+            if (chunks.length === 0) {
+              rejectWith(new Error('Edge speech returned no audio'))
+              return
+            }
+            finish(null, Buffer.concat(chunks))
+          }
+          return
+        }
+        const audio = bufferFromSocketMessage(data)
+        const mpeg = audio ? readEdgeBinaryAudio(audio) : null
+        if (mpeg) {
+          chunks.push(mpeg)
+        }
       }
     })
   })
 }
 
-export async function synthesizeEdgeSpeech(request: unknown): Promise<{ audioBase64: string }> {
+export async function synthesizeEdgeSpeech(
+  request: unknown,
+  openSocket: (url: string) => EdgeSpeechSocket = openEdgeSpeechSocket
+): Promise<{ audioBase64: string }> {
   const parsed = parseEdgeSpeechRequest(request)
-  const parts: Buffer[] = []
-  for (const chunk of chunkNativeChatSpeech(parsed.text, CHUNK_LIMIT)) {
-    parts.push(await synthesizeChunk(chunk, parsed.voice, parsed.rate))
+  cancelEdgeSpeech()
+  const job: EdgeSpeechJob = { cancelled: false, socket: null, fail: null }
+  activeJob = job
+  try {
+    const parts: Buffer[] = []
+    for (const chunk of chunkNativeChatSpeech(parsed.text, CHUNK_LIMIT)) {
+      if (job.cancelled) {
+        throw new Error(EDGE_SPEECH_CANCELLED_MESSAGE)
+      }
+      parts.push(await synthesizeChunk(chunk, parsed.voice, parsed.rate, job, openSocket))
+    }
+    return { audioBase64: Buffer.concat(parts).toString('base64') }
+  } finally {
+    if (activeJob === job) {
+      activeJob = null
+    }
   }
-  return { audioBase64: Buffer.concat(parts).toString('base64') }
 }

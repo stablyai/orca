@@ -1,5 +1,7 @@
+import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import {
   chunkNativeChatSpeech,
+  EDGE_SPEECH_CANCELLED_MESSAGE,
   nativeChatTextForSpeech,
   segmentNativeChatSpeech,
   type ResolvedNativeChatSpeech
@@ -19,16 +21,36 @@ export type WebSpeechUtterance = {
   onerror: (() => void) | null
 }
 
-export type WebSpeechSynth = {
-  cancel: () => void
-  speak: (utterance: WebSpeechUtterance) => void
-  getVoices: () => WebSpeechVoice[]
+type SpokenUtterance<TVoice extends WebSpeechVoice> = {
+  lang: 'ru-RU' | 'en-US'
+  rate: number
+  voice: TVoice | null
+  done: () => void
 }
 
 let speakingMessageId: string | null = null
 let speechGeneration = 0
 let currentAudio: HTMLAudioElement | null = null
+let neuralCancel: Promise<void> = Promise.resolve()
 const listeners = new Set<SpeechListener>()
+
+/** Main-process cancels run in order, and the next neural speak waits until that order is idle. */
+function enqueueNeuralCancel(): Promise<void> {
+  if (typeof window === 'undefined') {
+    return neuralCancel
+  }
+  const cancel = window.api?.speech.cancelSynthesis
+  if (!cancel) {
+    return neuralCancel
+  }
+  neuralCancel = neuralCancel
+    .then(() => cancel())
+    .then(
+      () => undefined,
+      () => undefined
+    )
+  return neuralCancel
+}
 
 function emitSpeechChange(): void {
   for (const listener of listeners) {
@@ -55,12 +77,17 @@ function setSpeaking(messageId: string | null): void {
   emitSpeechChange()
 }
 
+/** Electron wraps a main-process rejection; a dropped socket must still fall back to the system voice. */
+export function isEdgeSpeechCancelled(error: unknown): boolean {
+  return readIpcErrorMessage(error) === EDGE_SPEECH_CANCELLED_MESSAGE
+}
+
 export function stopNativeChatSpeech(): void {
   speechGeneration += 1
   if (typeof window !== 'undefined') {
     window.speechSynthesis?.cancel()
-    void window.api?.speech.cancelSynthesis?.()
   }
+  void enqueueNeuralCancel()
   if (currentAudio) {
     currentAudio.pause()
     currentAudio.src = ''
@@ -69,9 +96,11 @@ export function stopNativeChatSpeech(): void {
   setSpeaking(null)
 }
 
-function voiceFor(synth: WebSpeechSynth, lang: 'ru-RU' | 'en-US'): WebSpeechVoice | null {
+function voiceFor<TVoice extends WebSpeechVoice>(
+  voices: readonly TVoice[],
+  lang: 'ru-RU' | 'en-US'
+): TVoice | null {
   const prefix = lang.slice(0, 2).toLowerCase()
-  const voices = synth.getVoices()
   return (
     voices.find((voice) => voice.lang.toLowerCase().startsWith(prefix) && voice.localService) ??
     voices.find((voice) => voice.lang.toLowerCase().startsWith(prefix)) ??
@@ -80,11 +109,16 @@ function voiceFor(synth: WebSpeechSynth, lang: 'ru-RU' | 'en-US'): WebSpeechVoic
 }
 
 /** Queue one utterance per language run. `cancelled` stops the queue without a further utterance. */
-export function speakWebSpeechSegments(options: {
+export function speakWebSpeechSegments<TUtterance, TVoice extends WebSpeechVoice>(options: {
   text: string
   rate: number
-  synth: WebSpeechSynth
-  createUtterance: (text: string) => WebSpeechUtterance
+  synth: {
+    cancel: () => void
+    speak: (utterance: TUtterance) => void
+    getVoices: () => readonly TVoice[]
+  }
+  createUtterance: (text: string) => TUtterance
+  bindUtterance: (utterance: TUtterance, spoken: SpokenUtterance<TVoice>) => void
   cancelled: () => boolean
 }): Promise<void> {
   const segments = segmentNativeChatSpeech(options.text).flatMap((segment) =>
@@ -107,11 +141,12 @@ export function speakWebSpeechSegments(options: {
         return
       }
       const utterance = options.createUtterance(segment.text)
-      utterance.lang = segment.lang
-      utterance.rate = options.rate
-      utterance.voice = voiceFor(options.synth, segment.lang)
-      utterance.onend = next
-      utterance.onerror = next
+      options.bindUtterance(utterance, {
+        lang: segment.lang,
+        rate: options.rate,
+        voice: voiceFor(options.synth.getVoices(), segment.lang),
+        done: next
+      })
       options.synth.speak(utterance)
     }
     next()
@@ -194,15 +229,22 @@ async function speakWithSystem(text: string, rate: number, token: number): Promi
   if (token !== speechGeneration) {
     return
   }
-  await speakWebSpeechSegments({
+  await speakWebSpeechSegments<SpeechSynthesisUtterance, SpeechSynthesisVoice>({
     text,
     rate,
     synth: {
       cancel: () => synth.cancel(),
       getVoices: () => synth.getVoices(),
-      speak: (utterance) => synth.speak(utterance as SpeechSynthesisUtterance)
+      speak: (utterance) => synth.speak(utterance)
     },
-    createUtterance: (value) => new SpeechSynthesisUtterance(value) as WebSpeechUtterance,
+    createUtterance: (value) => new SpeechSynthesisUtterance(value),
+    bindUtterance: (utterance, spoken) => {
+      utterance.lang = spoken.lang
+      utterance.rate = spoken.rate
+      utterance.voice = spoken.voice
+      utterance.onend = spoken.done
+      utterance.onerror = spoken.done
+    },
     cancelled: () => token !== speechGeneration
   })
 }
@@ -234,10 +276,18 @@ export async function speakNativeChatMessage(input: {
   setSpeaking(input.messageId)
   try {
     if (input.settings.engine === 'edge') {
+      const pendingCancel = neuralCancel
+      await pendingCancel
+      if (token !== speechGeneration) {
+        return
+      }
       try {
         await speakWithEdge(text, input.settings, token)
         return
       } catch (error) {
+        if (token !== speechGeneration || isEdgeSpeechCancelled(error)) {
+          return
+        }
         console.error('Neural speech failed, using the system voice', error)
       }
     }
