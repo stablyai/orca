@@ -4,7 +4,7 @@ import '@/components/terminal-pane/layout/terminal-layout-leaf-traversal'
 import { collectLayoutLeafIdsInOrder } from '../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import { getPtyIdForPaneKey } from './pane-key-pty-id'
 
-import { getFirstTerminalTab } from '@/store/terminals/terminal-tab-owner-index'
+import { getFirstTerminalTab } from '@/store/terminals/ownership/terminal-tab-owner-index'
 import type { StoreSnapshot } from './agent-hook-completion-notification-types'
 
 const emptyTerminalTabs: StoreSnapshot['tabsByWorktree'] = {}

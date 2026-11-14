@@ -2,7 +2,7 @@ import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agen
 import {
   makeFacets,
   makeFacetCandidate
-} from '@/components/workspace-cleanup/workspace-cleanup-facet.test.fixture'
+} from '@/components/workspace-cleanup/query/workspace-cleanup-facet.test.fixture'
 import { expect, it } from 'vitest'
 import { createTestStore } from '../../testing/app-store-test-fixture'
 import { makeTab } from '../../terminals/testing/terminal-tab.test-fixture'
@@ -11,7 +11,7 @@ import { makeWorktree } from '../worktrees/worktree.test-fixture'
 import { makeCandidate, WORKTREE_ID } from './workspace-cleanup-slice-test-harness'
 import { getWorkspaceCleanupAgentEvidence } from './workspace-cleanup-agent-evidence'
 import { getWorkspaceCleanupCandidateIdentity } from '../../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
-import { matchesWorkspaceCleanupAgent } from '@/components/workspace-cleanup/workspace-cleanup-facet-matchers'
+import { matchesWorkspaceCleanupAgent } from '@/components/workspace-cleanup/query/workspace-cleanup-facet-matchers'
 
 it('counts current Done agents only for their workspace host', () => {
   const store = createTestStore()
