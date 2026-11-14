@@ -1,5 +1,5 @@
 import type { MobileFileMedia } from '../media/mobile-file-media'
-import type { MobileDiffLine } from '../../source-control/review/mobile-diff-lines'
+import type { MobileDiffLine } from '../../source-control/review/diff-state/mobile-diff-lines'
 import type { FileDocState, MarkdownDocState, ReadyFileDocState } from './session-document-state'
 
 export function claimDocumentRead(sequences: Map<string, number>, tabId: string): number {

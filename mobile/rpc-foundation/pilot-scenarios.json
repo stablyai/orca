@@ -263,7 +263,9 @@
       "id": "settings-bot-overrides-fulfilled",
       "operation": "settings.bot-overrides",
       "family": "settings.bot-overrides",
-      "sites": ["mobile/src/source-control/review/use-pr-bot-author-overrides.ts"],
+      "sites": [
+        "mobile/src/source-control/review/pull-request/comments/use-pr-bot-author-overrides.ts"
+      ],
       "schedules": ["settings-first"],
       "steps": [
         {
@@ -1547,7 +1549,9 @@
       "id": "settings-bot-overrides-refresh-refused",
       "operation": "settings.bot-overrides",
       "family": "settings.bot-overrides",
-      "sites": ["mobile/src/source-control/review/use-pr-bot-author-overrides.ts"],
+      "sites": [
+        "mobile/src/source-control/review/pull-request/comments/use-pr-bot-author-overrides.ts"
+      ],
       "schedules": ["success-then-refused"],
       "steps": [
         {
@@ -2449,7 +2453,7 @@
       "id": "sc-pr-link-hosted-review",
       "operation": "source-control.pr-link",
       "family": "worktree.review-link",
-      "sites": ["mobile/src/source-control/review/mobile-pr-link.ts"],
+      "sites": ["mobile/src/source-control/review/creation/mobile-pr-link.ts"],
       "schedules": [],
       "steps": [
         {
@@ -2497,7 +2501,7 @@
       "id": "sc-pr-link-read",
       "operation": "source-control.pr-link",
       "family": "worktree.review-link",
-      "sites": ["mobile/src/source-control/review/mobile-pr-link.ts"],
+      "sites": ["mobile/src/source-control/review/creation/mobile-pr-link.ts"],
       "schedules": [],
       "steps": [
         {
@@ -2788,7 +2792,7 @@
       "family": "hostedReview.create-chain",
       "sites": [
         "mobile/src/source-control/review/creation/mobile-hosted-review-service.ts",
-        "mobile/src/source-control/review/mobile-pr-link.ts"
+        "mobile/src/source-control/review/creation/mobile-pr-link.ts"
       ],
       "schedules": [],
       "steps": [
@@ -2844,7 +2848,7 @@
       "family": "hostedReview.create-chain",
       "sites": [
         "mobile/src/source-control/review/creation/mobile-hosted-review-service.ts",
-        "mobile/src/source-control/review/mobile-pr-link.ts"
+        "mobile/src/source-control/review/creation/mobile-pr-link.ts"
       ],
       "schedules": [],
       "steps": [
@@ -3685,9 +3689,9 @@
       "operation": "session.pr-sidebar",
       "family": "session.pr-sidebar",
       "sites": [
-        "mobile/src/source-control/review/use-mobile-pr-sidebar-controller.ts",
-        "mobile/src/source-control/review/mobile-pr-queries.ts",
-        "mobile/src/source-control/review/mobile-pr-sidebar-state.ts"
+        "mobile/src/source-control/review/pull-request/use-mobile-pr-sidebar-controller.ts",
+        "mobile/src/source-control/review/pull-request/mobile-pr-queries.ts",
+        "mobile/src/source-control/review/pull-request/mobile-pr-sidebar-state.ts"
       ],
       "schedules": [],
       "steps": [
@@ -4077,10 +4081,10 @@
       "operation": "session.pr-sidebar",
       "family": "session.pr-sidebar",
       "sites": [
-        "mobile/src/source-control/review/use-mobile-pr-sidebar-controller.ts",
-        "mobile/src/source-control/review/mobile-pr-queries.ts",
-        "mobile/src/source-control/review/mobile-pr-sidebar-state.ts",
-        "mobile/src/source-control/review/pr-comment-writes.ts"
+        "mobile/src/source-control/review/pull-request/use-mobile-pr-sidebar-controller.ts",
+        "mobile/src/source-control/review/pull-request/mobile-pr-queries.ts",
+        "mobile/src/source-control/review/pull-request/mobile-pr-sidebar-state.ts",
+        "mobile/src/source-control/review/pull-request/comments/pr-comment-writes.ts"
       ],
       "schedules": [],
       "steps": [
@@ -4276,7 +4280,7 @@
       "id": "pr-triage-prompt-not-delivered",
       "operation": "session.pr-triage-launch",
       "family": "session.pr-triage",
-      "sites": ["mobile/src/source-control/review/pr-ai-triage-launch.ts"],
+      "sites": ["mobile/src/source-control/review/agent-launch/pr-ai-triage-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4369,7 +4373,7 @@
       "id": "pr-triage-launch-unconfirmed",
       "operation": "session.pr-triage-launch",
       "family": "session.pr-triage",
-      "sites": ["mobile/src/source-control/review/pr-ai-triage-launch.ts"],
+      "sites": ["mobile/src/source-control/review/agent-launch/pr-ai-triage-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4449,7 +4453,7 @@
       "id": "pr-triage-update-required",
       "operation": "session.pr-triage-launch",
       "family": "session.pr-triage",
-      "sites": ["mobile/src/source-control/review/pr-ai-triage-launch.ts"],
+      "sites": ["mobile/src/source-control/review/agent-launch/pr-ai-triage-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -4469,8 +4473,8 @@
       "operation": "session.diff-review-load",
       "family": "session.diff-review",
       "sites": [
-        "mobile/src/source-control/review/mobile-diff-review-loaders.ts",
-        "mobile/src/source-control/review/mobile-diff-review-snapshot-loader.ts"
+        "mobile/src/source-control/review/diff-loading/mobile-diff-review-loaders.ts",
+        "mobile/src/source-control/review/diff-loading/mobile-diff-review-snapshot-loader.ts"
       ],
       "schedules": [],
       "steps": [
@@ -7224,10 +7228,10 @@
       "operation": "session.diff-review-actions",
       "family": "session.diff-review-actions",
       "sites": [
-        "mobile/src/source-control/review/use-mobile-diff-review-interactions.ts",
-        "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
-        "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
-        "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/source-control/review/diff-actions/use-mobile-diff-review-interactions.ts",
+        "mobile/src/source-control/review/review-notes/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/source-control/review/diff-actions/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/source-control/review/diff-actions/use-mobile-diff-review-send-actions.ts",
         "mobile/src/session/native-chat/composer/delivery/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],

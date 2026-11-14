@@ -27,7 +27,7 @@ import { isFilePathCodeSpan } from '../../../components/markdown-file-path-detec
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../../transport/rpc/rpc-operation-result-reader'
 import type { ConnectionState } from '../../../transport/connection/connection-state'
-import { fetchGithubRepoSlug } from '../../../source-control/review/github-pr-rpc'
+import { fetchGithubRepoSlug } from '../../../source-control/review/github-operations/github-pr-rpc'
 import { nativeChatRepoListRead } from '../../agent-launch/mobile-runtime-repo-operations'
 
 const chatPathsExistRead = bindDeferredRpcOperation(

@@ -1,0 +1,300 @@
+import { useMemo, useState } from 'react'
+import { KeyboardAvoidingView, Pressable, Text, View } from 'react-native'
+import { Copy, Plus, Send, Trash2, X } from 'lucide-react-native'
+import type { DiffComment } from '../../../../../src/shared/diff-comment-types'
+import { colors } from '../../../theme/mobile-theme'
+import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import type { Translate } from '../../../i18n/mobile-i18n'
+import { sendSheetMessage } from './mobile-diff-review-send-copy'
+import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
+import type { ActionSheetAction } from '../../../components/ActionSheetModal'
+import { ActionSheetContent } from '../../../components/ActionSheetModal'
+import { ConfirmContent } from '../../../components/ConfirmModal'
+import { KeyedBottomDrawer } from '../../../components/bottom-drawer/keyed-bottom-drawer'
+import type { ComposerState, SendSheetState } from '../diff-state/mobile-diff-review-screen-model'
+import { reviewSheetKey, type ReviewSheet } from '../diff-actions/mobile-diff-review-sheets'
+import type { useMobileDiffReviewController } from '../use-mobile-diff-review-controller'
+import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { MessageBox } from '../../../components/composer-input/MessageBox'
+import { composerInputStyles } from '../../../components/composer-input/composer-input-styles'
+import { hostOs } from '../../../platform/host-os'
+import { MobileDiffReviewFilesSheet } from './MobileDiffReviewFilesSheet'
+import { MobileDiffReviewRangeSheet } from './MobileDiffReviewRangeSheet'
+import { mobileDiffReviewFilesSubtitle } from '../diff-state/mobile-diff-review-screen-model'
+
+type Props = {
+  controller: ReturnType<typeof useMobileDiffReviewController>
+}
+
+export function MobileDiffReviewDrawers({ controller }: Props) {
+  // Jump to file stays full height through its close, after the request has cleared.
+  const [lastKind, setLastKind] = useState<ReviewSheet['kind'] | null>(null)
+  if (controller.sheet && controller.sheet.kind !== lastKind) {
+    setLastKind(controller.sheet.kind)
+  }
+  const filesSheet = (controller.sheet?.kind ?? lastKind) === 'files'
+  // One drawer for every review sheet: iOS cannot present a sheet while another is still closing.
+  return (
+    <KeyedBottomDrawer
+      sheet={controller.sheet}
+      sheetKey={reviewSheetKey}
+      onClose={(presented) => controller.closeSheet(presented.kind)}
+      fillAvailable={filesSheet}
+      contentScrollable={!filesSheet}
+      dragContentToDismiss={!filesSheet}
+    >
+      {(presented) => <ReviewSheetContent controller={controller} sheet={presented} />}
+    </KeyedBottomDrawer>
+  )
+}
+
+function ReviewSheetContent({ controller, sheet }: Props & { sheet: ReviewSheet }) {
+  const t = useMobileTranslation()
+  switch (sheet.kind) {
+    case 'send':
+      return <SendNotesContent controller={controller} load={sheet.load} only={sheet.only} />
+    case 'discard':
+      return (
+        <ConfirmContent
+          title={t('components.diffReviewDrawers.discardTitle', 'Discard File')}
+          message={t(
+            'components.diffReviewDrawers.discardMessage',
+            'Discard changes to "{{filePath}}"? This cannot be undone.',
+            { filePath: sheet.target.filePath }
+          )}
+          confirmLabel={t('components.diffReviewDrawers.discard', 'Discard')}
+          destructive
+          onConfirm={() => {
+            controller.closeSheet('discard')
+            void controller.runGitMutation('git.discard', sheet.target)
+          }}
+          onCancel={() => controller.closeSheet('discard')}
+        />
+      )
+    case 'composer':
+      return <NoteComposerContent controller={controller} composer={sheet.composer} />
+    case 'completion':
+      return <CompletionContent controller={controller} />
+    case 'range':
+      return <MobileDiffReviewRangeSheet controller={controller} range={sheet} />
+    case 'files':
+      return (
+        <MobileDiffReviewFilesSheet
+          queue={controller.filteredQueue}
+          currentKey={controller.currentItem?.key ?? null}
+          subtitle={mobileDiffReviewFilesSubtitle({
+            scope: controller.currentItem?.scope ?? null,
+            count: controller.filteredQueue.length,
+            viewedCount: controller.reviewedCount
+          })}
+          onSelect={(item) => {
+            controller.selectItem(item)
+            controller.closeSheet('files')
+          }}
+          onToggleViewed={(item) => void controller.toggleItemViewed(item)}
+          onClose={() => controller.closeSheet('files')}
+        />
+      )
+  }
+}
+
+function SendNotesContent({
+  controller,
+  load,
+  only
+}: Props & { load: SendSheetState; only?: readonly string[] }) {
+  const t = useMobileTranslation()
+  const sendActions = useSendActions(controller, load, only)
+  return (
+    <ActionSheetContent
+      title={t('components.diffReviewDrawers.sendNotes', 'Send Notes')}
+      message={sendSheetMessage(t, controller, load)}
+      actions={sendActions}
+      onClose={() => controller.closeSheet('send')}
+    />
+  )
+}
+
+function useSendActions(
+  controller: ReturnType<typeof useMobileDiffReviewController>,
+  load: SendSheetState,
+  only: readonly string[] | undefined
+) {
+  const t = useMobileTranslation()
+  return useMemo<ActionSheetAction[]>(() => {
+    const comments = only
+      ? controller.unsentComments.filter((comment) => only.includes(comment.id))
+      : controller.unsentComments
+    const terminalActions =
+      load.kind === 'ready' || load.kind === 'error'
+        ? load.terminals.map((terminal) => ({
+            id: `terminal:${terminal.terminal}`,
+            label: t('components.diffReviewDrawers.terminalLabel', '{{title}} ({{id}})', {
+              title: terminal.title || t('components.diffReviewDrawers.terminal', 'Terminal'),
+              id: terminal.terminal.slice(0, 6)
+            }),
+            icon: Send,
+            disabled: comments.length === 0,
+            skipAutoClose: true,
+            onPress: () => void controller.sendPromptToTerminal(terminal.terminal, comments)
+          }))
+        : []
+    return [
+      ...terminalActions,
+      {
+        id: 'newAgentSession',
+        label: t('components.diffReviewDrawers.newAgentSession', 'New Agent Session'),
+        icon: Plus,
+        disabled: comments.length === 0 || controller.agentLaunchAvailability !== 'available',
+        ...(controller.agentLaunchAvailability === 'update-required'
+          ? {
+              hint: t('components.diffReviewDrawers.updateRequired', 'Update Orca on your computer')
+            }
+          : controller.agentLaunchAvailability === 'unverified'
+            ? {
+                hint: t(
+                  'components.diffReviewDrawers.statusUnreadable',
+                  "Could not read this host's status. Retrying…"
+                )
+              }
+            : {}),
+        skipAutoClose: true,
+        onPress: () => void controller.createTerminalAndSend(comments)
+      },
+      {
+        id: 'copyNotes',
+        label: t('components.diffReviewDrawers.copyNotes', 'Copy Notes'),
+        icon: Copy,
+        // A sheet for one new note copies that note, not every note in the workspace.
+        disabled: only
+          ? comments.length === 0
+          : controller.screenState.kind !== 'ready' || controller.screenState.comments.length === 0,
+        onPress: () => void controller.copyNotes(only ? comments : undefined)
+      }
+    ]
+  }, [controller, load, only, t])
+}
+
+function NoteComposerContent({ controller, composer }: Props & { composer: ComposerState }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  return (
+    <KeyboardAvoidingView behavior={hostOs() === 'ios' ? 'padding' : undefined}>
+      <View style={styles.composerHeader}>
+        <View>
+          <Text style={styles.drawerTitle}>
+            {composer.mode === 'edit'
+              ? t('components.diffReviewDrawers.editNote', 'Edit Note')
+              : t('components.diffReviewDrawers.addNote', 'Add Note')}
+          </Text>
+          <Text style={styles.drawerSubtitle}>
+            {composer.mode === 'create' && composer.lineNumber > 0
+              ? t('components.diffReviewDrawers.lineNumber', 'Line {{lineNumber}}', {
+                  lineNumber: composer.lineNumber
+                })
+              : t('components.diffReviewDrawers.fileNote', 'File note')}
+          </Text>
+        </View>
+        <Pressable
+          style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
+          onPress={controller.closeComposer}
+          accessibilityRole="button"
+          accessibilityLabel={t('components.diffReviewDrawers.cancelNote', 'Cancel note')}
+        >
+          <X size={18} color={colors.textPrimary} strokeWidth={2.2} />
+        </Pressable>
+      </View>
+      <MessageBox
+        value={controller.composerBody}
+        onChangeText={controller.setComposerBody}
+        autoFocus
+        placeholder={t('components.diffReviewDrawers.reviewNote', 'Review note')}
+        accessibilityLabel={composerLabel(t, composer)}
+        onSend={() => void controller.saveComposer()}
+        sendAccessibilityLabel={saveLabel(t, composer)}
+        leading={
+          composer.mode === 'edit' ? <DeleteNoteButton onPress={controller.deleteComment} /> : null
+        }
+      />
+    </KeyboardAvoidingView>
+  )
+}
+
+function composerLabel(
+  t: Translate,
+  composer: { mode: 'create'; lineNumber: number } | { mode: 'edit'; comment: DiffComment } | null
+): string {
+  return composer?.mode === 'create' && composer.lineNumber > 0
+    ? t('components.diffReviewDrawers.saveLineNote', 'Save note on line {{lineNumber}}', {
+        lineNumber: composer.lineNumber
+      })
+    : t('components.diffReviewDrawers.reviewNote', 'Review note')
+}
+
+function saveLabel(t: Translate, composer: ComposerState): string {
+  return composer.mode === 'create' && composer.lineNumber > 0
+    ? composerLabel(t, composer)
+    : t('session.diffLineRow.saveNote', 'Save note')
+}
+
+function DeleteNoteButton({ onPress }: { onPress: () => Promise<void> }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  return (
+    <Pressable
+      style={({ pressed }) => [
+        composerInputStyles.ghostButton,
+        pressed && composerInputStyles.pressed
+      ]}
+      onPress={() => void onPress()}
+      accessibilityRole="button"
+      accessibilityLabel={t('components.diffReviewDrawers.deleteNote', 'Delete note')}
+    >
+      <Trash2 size={18} color={colors.statusRed} strokeWidth={2} />
+    </Pressable>
+  )
+}
+
+function CompletionContent({ controller }: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const fileCount = controller.filteredQueue.length
+  const count = controller.screenState.kind === 'ready' ? controller.screenState.comments.length : 0
+  const files =
+    fileCount === 1
+      ? t('components.diffReviewDrawers.viewedFiles_one', '{{count}} file viewed', {
+          count: fileCount
+        })
+      : t('components.diffReviewDrawers.viewedFiles_other', '{{count}} files viewed', {
+          count: fileCount
+        })
+  const notes =
+    count === 1
+      ? t('components.diffReviewDrawers.notes_one', '{{count}} note', { count })
+      : t('components.diffReviewDrawers.notes_other', '{{count}} notes', { count })
+  return (
+    <>
+      <Text style={styles.drawerTitle}>
+        {t('components.diffReviewDrawers.allViewedTitle', 'All files viewed')}
+      </Text>
+      <Text style={styles.drawerSubtitle}>{`${files} · ${notes}`}</Text>
+      <View style={styles.drawerButtonRow}>
+        <Pressable
+          style={({ pressed }) => [styles.primaryButton, pressed && styles.buttonPressed]}
+          disabled={controller.unsentComments.length === 0}
+          onPress={() => void controller.openSendSheet()}
+          accessibilityRole="button"
+          accessibilityLabel={t(
+            'components.diffReviewDrawers.sendNotesLabel',
+            'Send notes to agent'
+          )}
+        >
+          <Send size={14} color={colors.bgBase} strokeWidth={2.2} />
+          <Text style={styles.primaryButtonText}>
+            {t('components.diffReviewDrawers.sendNotes', 'Send Notes')}
+          </Text>
+        </Pressable>
+      </View>
+    </>
+  )
+}

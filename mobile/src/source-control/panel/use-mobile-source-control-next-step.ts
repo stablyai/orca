@@ -1,17 +1,20 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useHostProtocolGates } from '../../components/host-protocol-gates-context'
-import { presentPrMerge } from '../../components/pr-sidebar/pr-actions-state'
-import { useMobilePrActions } from '../review/use-mobile-pr-actions'
-import '../review/pr-actions-engine'
-import type { PrActionBusyKey } from '../review/pr-actions-engine'
-import { prActionSlices, type PrSlice } from '../review/mobile-pr-queries'
-import { useMobilePrAiTriage, type PrAiTriageKey } from '../review/use-mobile-pr-ai-triage'
+import { presentPrMerge } from '../review/pull-request/actions/pr-actions-state'
+import { useMobilePrActions } from '../review/pull-request/actions/use-mobile-pr-actions'
+import '../review/pull-request/actions/pr-actions-engine'
+import type { PrActionBusyKey } from '../review/pull-request/actions/pr-actions-engine'
+import { prActionSlices, type PrSlice } from '../review/pull-request/mobile-pr-queries'
+import {
+  useMobilePrAiTriage,
+  type PrAiTriageKey
+} from '../review/agent-launch/use-mobile-pr-ai-triage'
 import {
   buildPrFixChecksPrompt,
   buildResolveConflictsPrompt as buildReviewConflictsPrompt
-} from '../review/pr-ai-triage-prompt'
-import type { PrSidebarState } from '../review/mobile-pr-sidebar-state'
+} from '../review/agent-launch/pr-ai-triage-prompt'
+import type { PrSidebarState } from '../review/pull-request/mobile-pr-sidebar-state'
 import { buildResolveConflictsPrompt } from '../../../../src/shared/source-control/recovery/source-control-conflict-prompts'
 import { resolveGitHubPRMergeMethods } from '../../../../src/shared/github/pull-requests/merge/pull-request-merge-methods'
 import type { GitHubPRMergeMethod } from '../../../../src/shared/github/pull-requests/pull-request-types'

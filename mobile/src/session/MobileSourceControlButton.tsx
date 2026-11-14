@@ -1,6 +1,6 @@
 import { GitBranch } from 'lucide-react-native'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
-import { prStateIcon } from '../components/pr-state-token'
+import { prStateIcon } from '../source-control/review/status/pr-state-token'
 import { prStateColor } from '../components/WorktreeMetaGlyphs'
 import {
   HOST_LIST_TARGET,

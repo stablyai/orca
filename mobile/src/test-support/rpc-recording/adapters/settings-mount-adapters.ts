@@ -1,4 +1,4 @@
-import type * as UsePrBotAuthorOverridesModule from '../../../source-control/review/use-pr-bot-author-overrides'
+import type * as UsePrBotAuthorOverridesModule from '../../../source-control/review/pull-request/comments/use-pr-bot-author-overrides'
 import type * as UseNewWorkspaceRuntimeContextModule from '../../../components/use-new-workspace-runtime-context'
 import type * as UseHostRepoMetadataModule from '../../../host-screen/catalog/use-host-repo-metadata'
 import type * as UseMobileTasksRuntimeHydrationModule from '../../../tasks/screen-state/use-mobile-tasks-runtime-hydration'
@@ -23,7 +23,7 @@ export function settingsMountAdapters(
   return {
     'settings.bot-overrides': ({ client }) => {
       const useOverrides = modules.load<typeof UsePrBotAuthorOverridesModule>(
-        'mobile/src/source-control/review/use-pr-bot-author-overrides.ts'
+        'mobile/src/source-control/review/pull-request/comments/use-pr-bot-author-overrides.ts'
       ).usePRBotAuthorOverrides
       let state: ReadonlySet<string> = new Set()
       let revision = 1

@@ -1,5 +1,5 @@
 import { requireGitHubTaskTarget, sameGitHubTask } from '../item-detail/github-task-identity'
-import { withGitHubTargetOperation } from '../../source-control/review/github-work-item-operation'
+import { withGitHubTargetOperation } from '../../source-control/review/github-operations/github-work-item-operation'
 import type { ProjectReviewCheckActionsModel } from './use-mobile-tasks-project-review-check-actions'
 import { useCallback } from 'react'
 import type { DetailComment, GitHubDetailFile } from '../mobile-tasks-provider-detail-types'

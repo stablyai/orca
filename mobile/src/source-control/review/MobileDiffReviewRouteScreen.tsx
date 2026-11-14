@@ -1,8 +1,11 @@
 import { useCallback, useMemo } from 'react'
 import { useLocalSearchParams } from 'expo-router'
-import { MobileDiffReviewScreenView } from '../../components/MobileDiffReviewScreenView'
-import { firstReviewParam } from './mobile-diff-review-screen-model'
-import { normalizeReviewAreaParam, scopeForTargetArea } from './mobile-diff-review-positioning'
+import { MobileDiffReviewScreenView } from './diff-screen/MobileDiffReviewScreenView'
+import { firstReviewParam } from './diff-state/mobile-diff-review-screen-model'
+import {
+  normalizeReviewAreaParam,
+  scopeForTargetArea
+} from './diff-state/mobile-diff-review-positioning'
 import { useMobileDiffReviewController } from './use-mobile-diff-review-controller'
 import { useForceReconnect } from '../../transport/connection/host-client-hooks'
 import { useWorkspaceClient } from '../../worktree/execution-hosts/use-workspace-client'

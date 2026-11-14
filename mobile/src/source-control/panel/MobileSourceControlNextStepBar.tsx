@@ -23,7 +23,7 @@ import { AgentLaunchNotice } from '../../components/AgentLaunchNotice'
 import { ConfirmModal } from '../../components/ConfirmModal'
 import type { MobileMergeConfirm } from './use-mobile-source-control-next-step'
 import type { MobileAgentLaunchAvailability } from '../../session/agent-launch/mobile-agent-launch-availability'
-import type { PrAiTriageLaunchNotice } from '../review/use-mobile-pr-ai-triage'
+import type { PrAiTriageLaunchNotice } from '../review/agent-launch/use-mobile-pr-ai-triage'
 import type {
   MobileNextStepBarView,
   MobileNextStepIcon,
