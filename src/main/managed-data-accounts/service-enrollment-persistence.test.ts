@@ -30,7 +30,7 @@ beforeEach(() => {
     .prepare('INSERT INTO credential VALUES (?, ?)')
     .run('google', '{"type":"key","key":"test-only-key"}')
   database.close()
-  service = new ManagedDataAccountService(join(root, 'managed'))
+  service = new ManagedDataAccountService(join(root, 'managed'), undefined, { platform: 'linux' })
 })
 
 afterEach(() => {

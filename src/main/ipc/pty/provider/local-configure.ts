@@ -85,7 +85,7 @@ export function configureLocalPtyProvider(args: {
       launchAgent: ctx?.launchAgent,
       launchCommand: ctx?.command
     })
-    const env = buildPtyHostEnv(id, baseEnv, {
+    const env = await buildPtyHostEnv(id, baseEnv, {
       isPackaged: getAppEnvironment().isPackaged(),
       resourcesPath: process.resourcesPath,
       userDataPath: getAppEnvironment().getPath('userData'),

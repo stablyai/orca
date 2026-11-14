@@ -15,6 +15,7 @@ import {
   withInteractiveLoginCleanup,
   type InteractiveLoginSession
 } from './interactive-login-interruption'
+import { runDevinLoginWithCredentialCapture } from './devin-login-credential-capture'
 import { getWslAccountTarget } from './account-wsl-location'
 import { formatDataAccounts } from './account-list-format'
 
@@ -77,33 +78,38 @@ export async function addDataAccount(
     },
     async () => {
       const dataHome = join(directory, 'data')
-      await login(
-        provider,
-        provider === 'opencode'
-          ? [
-              'auth',
-              'login',
-              ...(typeof integration === 'string' ? [integration] : []),
-              ...loginOptions,
-              '--standalone'
-            ]
-          : ['auth', 'login', '--force-manual-token-flow'],
-        {
-          XDG_DATA_HOME: dataHome,
-          XDG_CONFIG_HOME: join(directory, 'config'),
-          XDG_CACHE_HOME: join(directory, 'cache'),
-          XDG_STATE_HOME: join(directory, 'state'),
-          ...(provider === 'opencode'
-            ? {
-                OPENCODE_CONFIG_DIR: join(directory, 'config', 'opencode'),
-                OPENCODE_AUTH_CONTENT: '',
-                OPENCODE_DB: 'opencode.db'
-              }
-            : {})
-        },
-        ctx.json,
-        session
-      )
+      const runLogin = (extraEnv: Record<string, string>) =>
+        login(
+          provider,
+          provider === 'opencode'
+            ? [
+                'auth',
+                'login',
+                ...(typeof integration === 'string' ? [integration] : []),
+                ...loginOptions,
+                '--standalone'
+              ]
+            : ['auth', 'login', '--force-manual-token-flow'],
+          {
+            XDG_DATA_HOME: dataHome,
+            XDG_CONFIG_HOME: join(directory, 'config'),
+            XDG_CACHE_HOME: join(directory, 'cache'),
+            XDG_STATE_HOME: join(directory, 'state'),
+            ...(provider === 'opencode'
+              ? {
+                  OPENCODE_CONFIG_DIR: join(directory, 'config', 'opencode'),
+                  OPENCODE_AUTH_CONTENT: '',
+                  OPENCODE_DB: 'opencode.db'
+                }
+              : {}),
+            ...extraEnv
+          },
+          ctx.json,
+          session
+        )
+      await (provider === 'devin'
+        ? runDevinLoginWithCredentialCapture(dataHome, runLogin)
+        : runLogin({}))
       session.registering = true
       return ctx.client.call<ManagedDataAccountsState>('accounts.addDataFromHome', {
         provider,

@@ -72,13 +72,13 @@ afterEach(() => {
 })
 
 describe('OpenCode installation uses the current enabled agents', () => {
-  it('refuses spawn if a prepared startup intent loses its owned installer', () => {
+  it('refuses spawn if a prepared startup intent loses its owned installer', async () => {
     mkdirSync(fixture.userData, { recursive: true })
     writeFileSync(
       join(fixture.userData, 'opencode-startup-prompt-overlays'),
       'blocked fixture root'
     )
-    expect(() =>
+    await expect(
       buildPtyHostEnv(
         'owned-launch',
         {
@@ -89,7 +89,7 @@ describe('OpenCode installation uses the current enabled agents', () => {
         },
         { ...options, agentStatusHooksEnabled: false }
       )
-    ).toThrow('launch was canceled')
+    ).rejects.toThrow('launch was canceled')
     expect(readFileSync(join(custom, 'opencode.json'), 'utf8')).toBe('{"model":"fixture"}')
     expect(readFileSync(join(custom, 'plugins', 'user.js'), 'utf8')).toBe('// user plugin')
   })
