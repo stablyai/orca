@@ -241,6 +241,9 @@ importers:
       '@parcel/watcher':
         specifier: ^2.5.6
         version: 2.5.6
+      '@xmldom/xmldom':
+        specifier: 0.8.15
+        version: 0.8.15
       '@xterm/addon-serialize':
         specifier: 0.15.0-beta.330
         version: 0.15.0-beta.330(patch_hash=17ca66ab9c7f52fc2fee94053b3b587c1210da468f3ddc7c4f5dba50b521c93e)(@xterm/xterm@6.1.0-beta.336(patch_hash=4b7fbfe7a7f626843ab88535cc6e2181872ea7c107876b15406a295182bc3c2c))
