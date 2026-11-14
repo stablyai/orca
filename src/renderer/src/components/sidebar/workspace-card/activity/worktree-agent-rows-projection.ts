@@ -120,7 +120,8 @@ export function createWorktreeAgentRowsSelector(worktreeId: string, hostId?: Exe
       workspaceOwner?.hostId,
       workspaceOwner?.worktree.runtimeOwnerEnvironmentId,
       workspaceOwner?.worktree.hostId,
-      ...(needsWorkspaceOwner ? structuredAgentSessionOwnerInputs(state) : [])
+      ...(needsWorkspaceOwner ? structuredAgentSessionOwnerInputs(state) : []),
+      ...(hostId ? [state.terminalLayoutsByTabId, state.ptyIdsByTabId] : [])
     ]
     if (
       inputs.length === previous.length &&

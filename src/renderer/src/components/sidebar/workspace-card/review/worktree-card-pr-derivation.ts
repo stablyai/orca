@@ -104,7 +104,12 @@ export function deriveWorktreeCardPrDisplay(
     !hasNonGitHubLinkedReview &&
     cachedBranchPRCanDriveDisplay &&
     (hostedReview === undefined ||
-      (cachedMergedBranchPRMatchesCurrentHead && !hostedReviewMatchesHeadMatchedCachedMergedPR) ||
+      (cachedMergedBranchPRMatchesCurrentHead &&
+        !hostedReviewMatchesHeadMatchedCachedMergedPR &&
+        (hostedReview == null ||
+          (hostedReview.provider === 'github' && hostedReview.number === cachedBranchPR.number) ||
+          (cachedBranchPRFetchedAt !== undefined &&
+            cachedBranchPRFetchedAt > (hostedReviewEntry?.fetchedAt ?? 0)))) ||
       (hostedReview === null &&
         ((cachedBranchPRFetchedAt !== undefined &&
           cachedBranchPRFetchedAt > (hostedReviewEntry?.fetchedAt ?? 0)) ||
