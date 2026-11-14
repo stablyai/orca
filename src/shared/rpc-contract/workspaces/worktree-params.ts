@@ -17,7 +17,7 @@ import { DiffCommentSchema, MobileDiffReviewSchema } from '../../diff-comment-sc
 import { TaskSourceContextSchema } from '../../work-items/task-source-context-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../workspace-attachments/workspace-linked-item-source-context'
 import { CrossStoreParentRefSchema } from './cross-store-parent-params'
-import { isValidWorkspaceUrl } from '../workspace-url'
+import { isValidWorkspaceUrl } from '../../workspace-url'
 
 export const OptionalExecutionHostId = z
   .string()
