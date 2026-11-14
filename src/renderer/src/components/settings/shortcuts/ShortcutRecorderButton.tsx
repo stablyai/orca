@@ -70,6 +70,12 @@ export function ShortcutRecorderButton({
     // ShortcutsPane owns the global recorder-focus flag across rows.
   }, [recording])
 
+  const cancelRecording = (): void => {
+    doubleTapDetectorRef.current?.reset()
+    onClearError(actionId)
+    onCancelRecording()
+  }
+
   const handleRecordKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>): void => {
     if (!recording) {
       if (event.key === 'Enter' || event.key === ' ') {
@@ -83,9 +89,7 @@ export function ShortcutRecorderButton({
     event.stopPropagation()
 
     if (event.key === 'Escape') {
-      doubleTapDetectorRef.current?.reset()
-      onClearError(actionId)
-      onCancelRecording()
+      cancelRecording()
       return
     }
 
@@ -189,6 +193,12 @@ export function ShortcutRecorderButton({
           onClick={() => {
             if (!recording) {
               onStartRecording(actionId, bindingIndex)
+            }
+          }}
+          // Keys only reach a focused recorder; without this, losing focus strands it recording.
+          onBlur={() => {
+            if (recording) {
+              cancelRecording()
             }
           }}
           onKeyDown={handleRecordKeyDown}
