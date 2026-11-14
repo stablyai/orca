@@ -5,6 +5,7 @@ import { markQoderWorkspaceTrusted } from '../../qoder/workspace-trust'
 import {
   type AgentTrustPreset,
   markAntigravityWorkspaceTrusted,
+  markCodewhaleProjectTrusted,
   markCodexProjectTrusted,
   markCopilotFolderTrusted,
   markCursorWorkspaceTrusted,
@@ -31,6 +32,7 @@ export type WorkspaceTrustHost = {
   guestWorkspacePath?: string
   /** KIMI_CODE_HOME for the launched Kimi; unset means `<agentHome>/.kimi-code`. */
   kimiHome?: string
+  codewhaleEnv?: Record<string, string | undefined>
   deadlineMs: number
 }
 
@@ -50,6 +52,8 @@ export const AGENT_TRUST_INHERITS_FROM_A_HOME: Record<AgentTrustPreset, boolean>
   qoder: true,
   'qoder-cn': true,
   antigravity: false,
+  // Why: Codewhale matches the exact workspace entry it canonicalizes, like Codex.
+  codewhale: false,
   kimi: false
 }
 
@@ -65,6 +69,7 @@ export const AGENT_TRUST_KEYED_BY_START_FOLDER: Record<AgentTrustPreset, boolean
   qoder: false,
   'qoder-cn': false,
   antigravity: false,
+  codewhale: false,
   kimi: true
 }
 
@@ -108,6 +113,8 @@ async function writePreset(
       return markQoderWorkspaceTrusted(storedPath, host.agentHome)
     case 'antigravity':
       return markAntigravityWorkspaceTrusted(storedPath, host.agentHome, host.guestWorkspacePath)
+    case 'codewhale':
+      return markCodewhaleProjectTrusted(storedPath, host.agentHome, host.codewhaleEnv)
     case 'kimi':
       return markKimiWorkspaceTrusted(
         storedPath,

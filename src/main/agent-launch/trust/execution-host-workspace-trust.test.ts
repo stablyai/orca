@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, sep } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -51,6 +59,28 @@ function trustWritten(preset: AgentTrustPreset): boolean {
 }
 
 describe('applyWorkspaceTrustOnThisHost', () => {
+  it('writes codewhale trust where its home and config overrides point', async () => {
+    const workspace = join(root, 'projects', 'app')
+    mkdirSync(workspace, { recursive: true })
+    await applyWorkspaceTrustOnThisHost('codewhale', workspace, thisHost())
+    expect(trustWritten('codewhale')).toBe(true)
+    for (const codewhaleEnv of [
+      { CODEWHALE_HOME: join(root, 'custom-home') },
+      { CODEWHALE_CONFIG_PATH: join(root, 'custom-config.toml') },
+      {
+        CODEWHALE_HOME: join(root, 'ignored-home'),
+        CODEWHALE_CONFIG_PATH: join(root, 'override.toml')
+      },
+      { CODEWHALE_CONFIG_PATH: '~/tilde-config.toml' }
+    ]) {
+      await applyWorkspaceTrustOnThisHost('codewhale', workspace, thisHost({ codewhaleEnv }))
+      const file =
+        codewhaleEnv.CODEWHALE_CONFIG_PATH?.replace(/^~\//, `${state.home}/`) ??
+        join(codewhaleEnv.CODEWHALE_HOME!, 'config.toml')
+      expect(readFileSync(file, 'utf-8')).toContain(`[projects."${workspace}"]`)
+    }
+  })
+
   const tooBroad: [string, () => { workspace: string; homes?: string[] }][] = [
     ['the home', () => ({ workspace: state.home })],
     ['a folder containing the home', () => ({ workspace: join(root, 'home') })],
