@@ -1,7 +1,7 @@
 import { useContext, useMemo, useState } from 'react'
 import { replaceEqualDeep } from '@tanstack/react-query'
 import { MOBILE_RELAY_HOST_WORKTREE_DELTAS_RUNTIME_CAPABILITY } from '../../../../src/shared/mobile-desktop-relay-contract'
-import { useOptionalHostProtocolGates } from '../../components/host-protocol-gates-context'
+import { useOptionalHostProtocolGates } from '../../components/host-connection/host-protocol-gates-context'
 import {
   HOST_LIST_POLL_MS,
   HOST_LIST_TARGET,

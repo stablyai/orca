@@ -13,13 +13,13 @@ import {
   keyContextUsageRows,
   type NativeChatContextUsageSummary
 } from '../../../../../../src/shared/native-chat/native-chat-context-usage-summary'
-import { AnchoredDetailCardLayer } from '../../../../components/AnchoredDetailCard'
-import { DetailCardFocusBoundary } from '../../../../components/detail-card-host'
+import { AnchoredDetailCardLayer } from '../../../../components/detail-cards/AnchoredDetailCard'
+import { DetailCardFocusBoundary } from '../../../../components/detail-cards/detail-card-host'
 import {
   useAnchoredDetailCard,
   type DetailCardMeasure
-} from '../../../../components/use-anchored-detail-card'
-import { useDetailCardScope } from '../../../../components/use-detail-card-scope'
+} from '../../../../components/detail-cards/use-anchored-detail-card'
+import { useDetailCardScope } from '../../../../components/detail-cards/use-detail-card-scope'
 import {
   COMPOSER_CONTROL_HIT_SLOP,
   composerInputStyles as inputStyles

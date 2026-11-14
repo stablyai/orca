@@ -29,7 +29,7 @@ vi.mock('react-native', async () => {
     useWindowDimensions: () => ({ width: 400, height: 800 })
   }
 })
-vi.mock('../../../../components/AgentStateDot', () => ({
+vi.mock('../../../../agents/presentation/AgentStateDot', () => ({
   AgentStateDot: 'AgentStateDot',
   AGENT_STATE_DOT_SIZE: 10
 }))

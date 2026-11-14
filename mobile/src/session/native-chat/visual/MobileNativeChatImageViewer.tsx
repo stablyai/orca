@@ -16,7 +16,7 @@ import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { PanZoomSize } from '../../../../../src/shared/pan-zoom-view'
 import { MobilePanZoomImage } from '../../../files/media/presentation/MobilePanZoomImage'
-import { REDUCED_MOTION_FADE_MS, SHEET_CURVE } from '../../../components/sheet-motion-values'
+import { REDUCED_MOTION_FADE_MS, SHEET_CURVE } from '../../../components/motion/sheet-motion-values'
 import { useReducedMotionEnabled } from '../../../platform/accessibility/use-reduced-motion'
 
 const VIEWER_EASING = Easing.bezier(...SHEET_CURVE)

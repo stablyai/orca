@@ -1,6 +1,9 @@
 import { useState } from 'react'
 import { Copy, ExternalLink, Globe } from 'lucide-react-native'
-import { ActionSheetModal, type ActionSheetAction } from '../../../../components/ActionSheetModal'
+import {
+  ActionSheetModal,
+  type ActionSheetAction
+} from '../../../../components/sheets/ActionSheetModal'
 import { openExternalLink } from '../../../../platform/external-links/external-link'
 import { useClipboardWriter } from '../../../../platform/clipboard/clipboard'
 import { triggerError, triggerSuccess } from '../../../../platform/haptics/haptics'

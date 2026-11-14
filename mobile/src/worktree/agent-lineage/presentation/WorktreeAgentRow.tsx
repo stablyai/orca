@@ -12,8 +12,8 @@ import {
   agentRowTimeAt,
   formatTimeAgo
 } from '../agent-row-display'
-import { AgentStateDot } from '../../../components/AgentStateDot'
-import { MobileAgentIcon } from '../../../components/MobileAgentIcon'
+import { AgentStateDot } from '../../../agents/presentation/AgentStateDot'
+import { MobileAgentIcon } from '../../../components/icons/MobileAgentIcon'
 import type { AgentChildRowModel } from '../../../../../src/shared/agent-status/presentation/agent-child-row-model'
 import { mobileAgentChildRowText } from '../mobile-agent-child-row-text'
 

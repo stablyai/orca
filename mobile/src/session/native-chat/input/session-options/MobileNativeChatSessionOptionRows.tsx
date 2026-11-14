@@ -22,7 +22,7 @@ import {
   speedButtonTiers
 } from '../../../../../../src/shared/native-chat/input/session-options/native-chat-session-speed-tiers'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
-import { MobileSwitch } from '../../../../components/MobileSwitch'
+import { MobileSwitch } from '../../../../components/controls/MobileSwitch'
 
 export function SessionOptionCaption({ children }: { children: string }): React.JSX.Element {
   useMobileColorScheme()

@@ -41,7 +41,7 @@ vi.mock('lucide-react-native', () => ({
   Strikethrough: () => null
 }))
 
-vi.mock('../TextInputModal', async () => {
+vi.mock('../sheets/TextInputModal', async () => {
   const React = await import('react')
   return {
     TextInputModal: (props: Record<string, unknown>) => React.createElement('TextInputModal', props)

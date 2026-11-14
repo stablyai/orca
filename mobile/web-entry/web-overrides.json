@@ -170,7 +170,7 @@
       "reason": "expo-image-picker and expo-document-picker are native modules whose import runs a codegen lookup that throws in a browser, and the route manifest imports every route, so one of them in a page closure takes the whole bundle down rather than one picker. This one asks the shell through native.media.pick, reads the bytes back a chunk at a time over native.media.read because a picked image reaches 18 MiB raw against an 8 MiB reply ceiling, and releases every handle it was handed, including the ones its caller never took. The pasteboard is not here: clipboard.web.ts owns it on both platforms and reaches the same verbs for an image."
     },
     {
-      "file": "src/components/AuthFailedBannerActions.web.tsx",
+      "file": "src/components/host-connection/AuthFailedBannerActions.web.tsx",
       "reason": "The auth-failed banner offers Retry, Re-pair and Remove, and on the page only Re-pair works. /pair-scan sits outside the page's route root of app/h (config/scripts/mobile-web-app/mobile-web-app-route-manifest.mjs:6), so route-handoff.web.ts:207 hands the push to the shell, which opens the native scan screen and returns to the same page document on Back. Retry and Remove are inert here: forceReconnect is null (client-context.web.tsx:45, read through host-client-hooks.ts:88) and removal refuses (page-host-removal-refusal.ts). The banner is reachable on the page because the shell forwards the native client's state (mobile-web-shell/bridge-host.ts:301) and auth-failed is in the wire enum (bridge/bridge-envelope.ts:44). So this one renders Re-pair as native does and one line naming the app for reconnect and removal."
     },
     {
@@ -226,7 +226,7 @@
       "reason": "The iPhone Duo key rail is drawn by the shell in a side inset strip the page cannot reach. The native file has no shell around it and answers no rail; this one reads whether the shell shows one from `init` and takes its presses from the bridge."
     },
     {
-      "file": "src/components/use-working-motion.web.ts",
+      "file": "src/components/motion/use-working-motion.web.ts",
       "reason": "React Native Web has no native animation driver, so every working ring and live tool-run pulse ran as its own JS loop writing a style each frame on the page's main thread, which is busiest while a reply streams. The native file keeps the native-driver loops; this one runs the same spin and pulse as Web Animations on the element, which the compositor plays, with one shared phase like desktop's spinner."
     },
     {

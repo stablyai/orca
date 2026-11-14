@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { useHostProtocolGates } from '../../components/host-protocol-gates-context'
+import { useHostProtocolGates } from '../../components/host-connection/host-protocol-gates-context'
 import { presentPrMerge } from '../review/pull-request/actions/pr-actions-state'
 import { useMobilePrActions } from '../review/pull-request/actions/use-mobile-pr-actions'
 import '../review/pull-request/actions/pr-actions-engine'

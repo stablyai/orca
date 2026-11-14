@@ -5,7 +5,7 @@ import { nativeChatReasoningDisclosureKey } from '../../../../../../src/shared/n
 import { formatMobileNativeChatActiveTurnLabel } from './native-chat-turn-status-copy'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../../../../platform/text-selection/inline-text-selection'
-import { LoadingSpinner } from '../../../../components/LoadingSpinner'
+import { LoadingSpinner } from '../../../../components/feedback/LoadingSpinner'
 import { colors, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'

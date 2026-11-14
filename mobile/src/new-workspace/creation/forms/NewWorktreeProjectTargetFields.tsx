@@ -1,7 +1,7 @@
 import { View } from 'react-native'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { HostKindIcon } from '../../../components/HostKindIcon'
+import { HostKindIcon } from '../../../components/icons/HostKindIcon'
 import {
   LIST_LEADING_INSET,
   ListGroup,

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Platform, Pressable, Text, View, type TextStyle } from 'react-native'
-import { MobileEdgeFade } from '../../../../components/MobileEdgeFade'
+import { MobileEdgeFade } from '../../../../components/list/MobileEdgeFade'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography, pressedStyle } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'

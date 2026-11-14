@@ -6,7 +6,7 @@ import { projectGroupIdFromRepoId } from '../../../../src/shared/folder-workspac
 import { getRepoExecutionHostId } from '../../../../src/shared/execution-host'
 import { WORKTREE_CREATE_EXACT_NAME_RUNTIME_CAPABILITY } from '../../../../src/shared/worktree-runtime-capabilities'
 import { ListGroup, ListRow, SectionHeader } from '../../components/list/ListGroup'
-import { MobileStateView } from '../../components/MobileStateView'
+import { MobileStateView } from '../../components/feedback/MobileStateView'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useHostQuery } from '../../query/host-query'
 import { colors, spacing } from '../../theme/mobile-theme'

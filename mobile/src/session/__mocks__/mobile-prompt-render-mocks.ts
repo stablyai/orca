@@ -82,8 +82,10 @@ vi.mock('../native-chat/input/session-options/MobileNativeChatSessionOptionPicke
 vi.mock('../native-chat/composer/menus/MobileNativeChatComposerMenu', () => ({
   MobileNativeChatComposerSuggestions: 'Suggestions'
 }))
-vi.mock('../../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))
-vi.mock('../../components/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
+vi.mock('../../components/sheets/ActionSheetModal', () => ({
+  ActionSheetModal: 'ActionSheetModal'
+}))
+vi.mock('../../components/reorder/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
 vi.mock('react-native-reanimated', async () => {
   const { useRef } = await import('react')
   return {

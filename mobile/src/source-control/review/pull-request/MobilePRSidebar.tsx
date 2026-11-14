@@ -19,7 +19,7 @@ import {
   RotateCw,
   type LucideIcon
 } from 'lucide-react-native'
-import { MobileLoadErrorState, MobileStateView } from '../../../components/MobileStateView'
+import { MobileLoadErrorState, MobileStateView } from '../../../components/feedback/MobileStateView'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { colors } from '../../../theme/mobile-theme'

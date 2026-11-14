@@ -13,8 +13,8 @@ import {
   runMatchesOutcome
 } from '../../automations/automation-run-presentation'
 import { formatAutomationSchedule } from '../../automations/automation-schedule-label'
-import { AgentSpinner } from '../../components/AgentSpinner'
-import { MobileSwitch } from '../../components/MobileSwitch'
+import { AgentSpinner } from '../../agents/presentation/AgentSpinner'
+import { MobileSwitch } from '../../components/controls/MobileSwitch'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { mobileTuiAgentLabel } from '../../agents/mobile-tui-agents'
 import { colors } from '../../theme/mobile-theme'

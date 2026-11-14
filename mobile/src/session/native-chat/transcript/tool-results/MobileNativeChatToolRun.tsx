@@ -11,7 +11,7 @@ import {
   type ScrollViewInstance
 } from 'react-native'
 import { Check } from 'lucide-react-native'
-import { useWorkingPulse } from '../../../../components/use-working-motion'
+import { useWorkingPulse } from '../../../../components/motion/use-working-motion'
 import { MobileNativeChatReplyRevealsContext } from './mobile-native-chat-reply-reveals'
 import {
   nativeChatToolActivityCopy,

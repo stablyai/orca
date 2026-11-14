@@ -17,7 +17,7 @@ import { isFloatingWorkspaceWorktreeId } from './floating-workspace'
 import { useLiveWorktreeName } from '../worktree/row-presentation/use-live-worktree-name'
 import { useMissingWorktreeBounce } from './use-missing-worktree-bounce'
 import { hostRouteWithNotice } from '../host-route-notice'
-import { useHostProtocolGates } from '../components/host-protocol-gates-context'
+import { useHostProtocolGates } from '../components/host-connection/host-protocol-gates-context'
 
 export function useMobileSessionFoundation() {
   const {

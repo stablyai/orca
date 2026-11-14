@@ -22,7 +22,7 @@ function MobileNativeChatComposer({
   return createElement(NativeChatComposer, { ...props, getComposerEditGeneration })
 }
 
-vi.mock('../../../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
+vi.mock('../../../components/controls/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('./commands/MobileNativeChatContextUsageRing', () => ({
   useMobileNativeChatContextRing: () => ({ barProps: {}, ring: null })
 }))

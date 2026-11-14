@@ -4,7 +4,7 @@ import type {
   AgentSmartKeyName,
   AgentSmartKeySet
 } from '../../../../../src/shared/terminal/input/agent-smart-keys'
-import { MobileAgentIcon } from '../../../components/MobileAgentIcon'
+import { MobileAgentIcon } from '../../../components/icons/MobileAgentIcon'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'

@@ -15,7 +15,7 @@ import { colors } from '../src/theme/mobile-theme'
 import { startMobileAppearance } from '../src/theme/mobile-appearance'
 import { themedStyleSheet } from '../src/theme/themed-styles'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
-import { OrcaLogo } from '../src/components/OrcaLogo'
+import { OrcaLogo } from '../src/components/icons/OrcaLogo'
 import { RpcClientProvider } from '../src/transport/connection/client-context'
 import { OrcaQueryProvider } from '../src/query/orca-query-provider'
 import { getNotificationNavigationTarget } from '../src/notifications/navigation/notification-routing'
@@ -39,7 +39,7 @@ import { startMobileUiLanguage } from '../src/i18n/ui-language-preference'
 import { subscribeMobileUiLanguage } from '../src/i18n/mobile-i18n'
 import { startDeviceStore } from '../src/device-store/device-store'
 
-export { NativeScreenRecovery as ErrorBoundary } from '../src/components/NativeScreenRecovery'
+export { NativeScreenRecovery as ErrorBoundary } from '../src/components/feedback/NativeScreenRecovery'
 
 // Keep splash visible until React content is ready to avoid a blank frame.
 SplashScreen.preventAutoHideAsync()

@@ -11,7 +11,7 @@ import {
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useWorkspaceOnPairedHost } from '../../../navigation/workspace-execution-host'
 import type { useMobileDiffReviewController } from '../use-mobile-diff-review-controller'
-import type { ActionSheetAction } from '../../../components/ActionSheetModal'
+import type { ActionSheetAction } from '../../../components/sheets/ActionSheetModal'
 
 // The review screen's ⋯ menu: rarer file actions, the notes, and Discard last.
 export function useMobileDiffReviewOverflowActions(

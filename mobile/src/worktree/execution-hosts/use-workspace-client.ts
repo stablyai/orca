@@ -1,5 +1,5 @@
 import { useContext } from 'react'
-import { useHostProtocolGates } from '../../components/host-protocol-gates-context'
+import { useHostProtocolGates } from '../../components/host-connection/host-protocol-gates-context'
 import { useHostClient } from '../../transport/connection/host-client-hooks'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../transport/connection/connection-state'

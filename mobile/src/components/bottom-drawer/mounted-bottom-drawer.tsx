@@ -16,7 +16,7 @@ import { spacing } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { resolveBottomDrawerFillHeight } from './bottom-drawer-fill-height'
 import { resolveBottomDrawerKeyboardInset } from './bottom-drawer-keyboard-inset'
-import { AutoHeight } from '../AutoHeight'
+import { AutoHeight } from '../motion/AutoHeight'
 import {
   bottomDrawerOffset,
   bottomDrawerScrim,

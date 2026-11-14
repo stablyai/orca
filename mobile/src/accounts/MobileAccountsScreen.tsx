@@ -7,7 +7,10 @@ import { loadHosts, peekHosts } from '../host-catalog/host-store'
 import { useForceReconnect, useHostClient } from '../transport/connection/host-client-hooks'
 import { useHostConnectionInputs } from '../transport/connection/client-context-connection-metrics'
 import { classifyConnection, isConnectionOutage } from '../transport/connection/connection-health'
-import { HostOfflineBanner, useHostOfflineBanner } from '../components/HostOfflineBanner'
+import {
+  HostOfflineBanner,
+  useHostOfflineBanner
+} from '../components/host-connection/HostOfflineBanner'
 import { useRefreshHint } from '../query/refresh-hint'
 import { MobileAccountsLoadState } from './MobileAccountsLoadState'
 import { colors, spacing } from '../theme/mobile-theme'
@@ -15,7 +18,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-accounts-screen-styles'
 import { useNow } from '../hooks/use-now'
-import { ClaudeIcon, OpenAIIcon } from '../components/AgentIcons'
+import { ClaudeIcon, OpenAIIcon } from '../components/icons/AgentIcons'
 import './usage/UsageBar'
 import {
   type ProviderKey,
@@ -24,7 +27,7 @@ import {
   getOtherUsageProviders,
   hasActiveProviderUsage
 } from './usage/usage-selectors'
-import { MobileAgentIcon } from '../components/MobileAgentIcon'
+import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import { getProviderDisplayName } from '../../../src/shared/usage-provider-windows'
 import { ProviderUsageWindows } from './ProviderUsageWindows'
 import {
@@ -33,7 +36,7 @@ import {
 } from './usage/codex-reset-credit'
 import { CodexResetCreditAction } from './usage/CodexResetCreditAction'
 import { useCodexResetCreditAction } from './usage/use-codex-reset-credit-action'
-import { ConfirmModal } from '../components/ConfirmModal'
+import { ConfirmModal } from '../components/sheets/ConfirmModal'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'

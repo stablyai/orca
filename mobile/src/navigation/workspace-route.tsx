@@ -6,7 +6,7 @@ import { WorkspaceExecutionHostContext } from './workspace-execution-host'
 import {
   HostStatusGatesContext,
   useOptionalHostProtocolGates
-} from '../components/host-protocol-gates-context'
+} from '../components/host-connection/host-protocol-gates-context'
 import { PageRouteUnavailableScreen } from '../mobile-web-shell/PageRouteUnavailableScreen'
 import { useHostClient } from '../transport/connection/host-client-hooks'
 import { WorkspaceServerContext } from '../worktree/execution-hosts/workspace-server-context'

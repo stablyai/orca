@@ -1,6 +1,6 @@
 import { Text, View } from 'react-native'
 import { CircleAlert, FolderTree, WifiOff } from 'lucide-react-native'
-import { MobileNoMatchState, MobileStateView } from '../../components/MobileStateView'
+import { MobileNoMatchState, MobileStateView } from '../../components/feedback/MobileStateView'
 import { colors, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'

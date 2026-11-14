@@ -5,7 +5,7 @@ import {
   svgMarkupDataUri
 } from '../../../../../src/shared/file-preview/svg-document'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import { MobileLoadErrorState } from '../../../components/MobileStateView'
+import { MobileLoadErrorState } from '../../../components/feedback/MobileStateView'
 import { MobilePanZoomImage } from '../../media/presentation/MobilePanZoomImage'
 import { MobilePreviewSourceTabs, type MobilePreviewMode } from './MobilePreviewSourceTabs'
 

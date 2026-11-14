@@ -1,5 +1,5 @@
 import { Check, Columns2, LayoutGrid, Rows2, SquareTerminal } from 'lucide-react-native'
-import { ActionSheetModal } from '../../../components/ActionSheetModal'
+import { ActionSheetModal } from '../../../components/sheets/ActionSheetModal'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import type { TerminalSplitLayout } from '../../../storage/preferences'
 import type { MobileSessionController } from '../../../session/use-mobile-session-controller'

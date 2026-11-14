@@ -6,7 +6,10 @@ import { View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { ChevronLeft, History, RefreshCw } from 'lucide-react-native'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { MobileSegmentedControl, type MobileSegment } from '../components/MobileSegmentedControl'
+import {
+  MobileSegmentedControl,
+  type MobileSegment
+} from '../components/controls/MobileSegmentedControl'
 import { BottomSearchBar } from '../components/nav-bar/BottomSearchBar'
 import { NavBar } from '../components/nav-bar/NavBar'
 import { NavBarButton } from '../components/nav-bar/NavBarButton'
@@ -40,9 +43,9 @@ import {
   MobileNoMatchState,
   MobileOfflineState,
   MobileStateView
-} from '../components/MobileStateView'
+} from '../components/feedback/MobileStateView'
 import { AgentHistoryResumeNotice, AgentHistoryScanNotices } from './AgentHistoryNotices'
-import { TransientToast, useTransientToast } from '../components/TransientToast'
+import { TransientToast, useTransientToast } from '../components/feedback/TransientToast'
 import { useNow } from '../hooks/use-now'
 import { useMobileResumeOperationOwnership } from './use-mobile-resume-operation-ownership'
 import type { Translate } from '../i18n/mobile-i18n'

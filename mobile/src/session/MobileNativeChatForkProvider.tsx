@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
-import { useHostProtocolGates } from '../components/host-protocol-gates-context'
+import { useHostProtocolGates } from '../components/host-connection/host-protocol-gates-context'
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type { StructuredAgentSessionForkSource } from '../../../src/shared/agent-session/structured-agent-session-create'
 import { MobileNativeChatForkedFromContext } from './native-chat/transcript/notices/mobile-native-chat-notice-context'
