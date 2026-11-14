@@ -153,7 +153,7 @@ it('picks model then effort through the menus during startup and uses both in th
         })
       )
     )
-    fireEvent.click(screen.getByRole('button', { name: 'Model opus, Effort High' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Model opus\b/ }))
     fireEvent.click(await screen.findByRole('option', { name: 'sonnet' }))
     fireEvent.click(await screen.findByRole('radio', { name: 'Low' }))
     const body = hostTestMessage('reply using these choices')

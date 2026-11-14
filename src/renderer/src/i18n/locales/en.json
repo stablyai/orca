@@ -20809,7 +20809,9 @@
           "medium": "Med",
           "xhigh": "XHigh"
         },
-        "imageUnavailable": "Preview unavailable"
+        "imageUnavailable": "Preview unavailable",
+        "modelAndEffortValue": "{{model}} · {{effort}}",
+        "modelAndEffort": "Model and effort"
       },
       "tool": {
         "exitCode": "exit {{value0}}",
