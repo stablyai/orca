@@ -307,3 +307,31 @@ it('keeps the created tab usable when an older desktop cannot receive its long i
     await h.close()
   }
 })
+
+it('joins native retirement after asynchronous focus publication rejects before reusing the page ID', async () => {
+  const h = createRecoveryLoop([])
+  try {
+    h.attach()
+    const focus = vi.fn(async () => {}).mockRejectedValueOnce(new Error('profile writes frozen'))
+    const request = ordinaryPageRpc(h, false, focus)
+    const cleanup = h.holdRetirement('failed-focus')
+    const creating = request('browser.tabCreate', 'failed-focus', new AbortController().signal)
+    await cleanup.started
+    expect(h.pages.getPage('failed-focus')).toBeDefined()
+    expect(h.executor.snapshotPageInventory().map((page) => page.browserPageId)).toEqual([
+      'failed-focus'
+    ])
+    cleanup.release()
+    expect(await creating).toEqual([expect.objectContaining({ ok: false })])
+    expect(h.pages.getPage('failed-focus')).toBeUndefined()
+    expect(h.authority.getPlacement('failed-focus')).toBeUndefined()
+    expect(h.authority.getClientPageExecutionHostKey('failed-focus')).toBeUndefined()
+    expect(h.executor.snapshotPageInventory()).toEqual([])
+    expect(
+      await request('browser.tabCreate', 'failed-focus', new AbortController().signal)
+    ).toEqual([expect.objectContaining({ ok: true })])
+    expect(h.pages.getPage('failed-focus')).toBeDefined()
+  } finally {
+    await h.close()
+  }
+})

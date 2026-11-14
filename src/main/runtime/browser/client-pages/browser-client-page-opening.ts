@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { BrowserError } from '../../../browser/browser-error'
+import { retireFailedBrowserClientPagePublication } from './browser-client-page-close'
 import '../../../browser/network/execution-routes/browser-network-execution-route'
 import { browserNetworkExecutionHostKey } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
@@ -134,9 +135,7 @@ export async function createBrowserClientPage(
   try {
     await publication
   } catch (error) {
-    if (pages.retirePage(browserPageId, created.placement)) {
-      host.retireRuntimeOwnedBrowserSessionTab?.(worktree.id, browserPageId)
-    }
+    await retireFailedBrowserClientPagePublication(host, browserPageId, created.placement)
     throw error
   }
   if (url !== 'about:blank') {

@@ -6,12 +6,17 @@ import { vi } from 'vitest'
 import { orcadClientPageCommand } from '../../../orcad/browser-providers/orcad-client-page-commands'
 import type { RuntimeBrowserCommandHost } from '../commands/browser-command-contracts'
 
-export function ordinaryPageRpc(h: ReturnType<typeof createRecoveryLoop>, remote = false) {
+export function ordinaryPageRpc(
+  h: ReturnType<typeof createRecoveryLoop>,
+  remote = false,
+  focus?: RuntimeBrowserCommandHost['markHeadlessBrowserSessionTabActive']
+) {
   h.native.dependencies.retainNetworkRoute.mockImplementation(async (key) => ({
     ...h.native.route,
     key
   }))
   const host: RuntimeBrowserCommandHost = {
+    markHeadlessBrowserSessionTabActive: focus,
     getRuntimeId: () => 'runtime-a',
     resolveWorkspaceSelector: async () => ({ id: 'repo-1::/tmp/worktree-a' }),
     getAgentBrowserBridge: () => null,
@@ -84,6 +89,7 @@ export function ordinaryPageRpc(h: ReturnType<typeof createRecoveryLoop>, remote
             ? {
                 worktree: 'id:repo-1::/tmp/worktree-a',
                 page,
+                ...(focus ? { activate: true, targetGroupId: 'target-group' } : {}),
                 ...(remote
                   ? {}
                   : { placement: { kind: 'client', browserHostClientId: 'client-a' } })

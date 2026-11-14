@@ -1,4 +1,8 @@
 import { BrowserError } from '../../../browser/browser-error'
+import {
+  sameRuntimeBrowserPlacement,
+  type RuntimeBrowserPlacement
+} from '../../../../shared/runtime-browser-placement'
 import { closeRuntimeBrowserClientPage } from './runtime-browser-client-page-creation'
 import type { RuntimeBrowserClientPage } from './runtime-browser-page-registry'
 import type { RuntimeBrowserCommandHost } from '../commands/browser-command-contracts'
@@ -14,6 +18,17 @@ export type BrowserClientPageCloseHost = Pick<
 >
 
 type PageCloseParams = { page?: string; worktree?: string }
+
+export async function retireFailedBrowserClientPagePublication(
+  host: BrowserClientPageCloseHost,
+  browserPageId: string,
+  placement: RuntimeBrowserPlacement
+): Promise<void> {
+  const page = host.getRuntimeBrowserPageRegistry().getPage(browserPageId)
+  if (page && sameRuntimeBrowserPlacement(page.placement, placement)) {
+    await retireRuntimeBrowserClientPage(host, page)
+  }
+}
 
 export async function retireRuntimeBrowserClientPage(
   host: BrowserClientPageCloseHost,
