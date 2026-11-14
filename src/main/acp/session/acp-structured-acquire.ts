@@ -105,7 +105,11 @@ export async function acquireAcpStructuredSession(input: {
     },
     {
       clientInfo: { name: 'orca', version: '1' },
-      clientCapabilities: spec.dialect.clientCapabilities,
+      // Only a chat can show a URL request's card, so other connections never advertise it.
+      clientCapabilities: {
+        ...spec.dialect.clientCapabilities,
+        elicitation: { ...spec.dialect.clientCapabilities?.elicitation, url: {} }
+      },
       retryBusyPrompts: spec.agent === 'omp',
       ...(spec.signIn ? { signIn: spec.signIn } : {}),
       onPermission: (request, context) => {

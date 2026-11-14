@@ -10,6 +10,11 @@ export function publishExternalLinkOpener(opener: ExternalLinkOpener): void {
   post = opener
 }
 
+/** False for a URL the shell would refuse, such as one past the bridge's length limit. */
+export function canOpenExternalLink(url: string): boolean {
+  return readBridgeExternalLinkUrl(url) !== null
+}
+
 export function openExternalLink(url: string): void {
   // Validate before posting: the shell drops refused frames without a reply, which would otherwise look like successful navigation.
   if (readBridgeExternalLinkUrl(url) === null) {

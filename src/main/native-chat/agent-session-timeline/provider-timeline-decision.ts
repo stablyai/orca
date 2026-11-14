@@ -12,6 +12,7 @@ import {
   decideFrame,
   decideItem,
   decideRequest,
+  decideRequestSubject,
   decideWithdrawal
 } from './provider-timeline-item-decisions'
 import type { ProviderTimelineTurnRef } from './provider-timeline-rows'
@@ -108,6 +109,8 @@ export function decideProviderTimelineEvent(
       return decideRequest(input, event)
     case 'request.withdrawn':
       return decideWithdrawal(input, event)
+    case 'request.subject':
+      return decideRequestSubject(input, event)
     case 'context.usage':
       return decideContextUsage(input, event)
     case 'provider.frame':

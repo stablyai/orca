@@ -8,6 +8,7 @@ import {
 import type { AcpToolTimeline } from '../timeline/acp-tool-timeline'
 import { AcpRpcError } from '../transport/acp-errors'
 import { ACP_FORM_ELICITATION_METHOD, acpFormElicitationPresentation } from './acp-form-elicitation'
+import { acpUrlElicitationPresentation, isAcpUrlElicitation } from './acp-url-elicitation'
 import { readAcpPermissionRequest } from '../protocol/acp-permission-requests'
 import { isAgentJournalPromptIntent } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
@@ -105,7 +106,11 @@ export function translateAcpRequest(
   const presentation =
     options.dialect.request?.(method, params) ??
     (method === 'session/request_permission' ? acpPermissionPresentation(params) : undefined) ??
-    (method === ACP_FORM_ELICITATION_METHOD ? acpFormElicitationPresentation(params) : undefined)
+    (method === ACP_FORM_ELICITATION_METHOD
+      ? isAcpUrlElicitation(params)
+        ? acpUrlElicitationPresentation(params)
+        : acpFormElicitationPresentation(params)
+      : undefined)
   if (!presentation) {
     // OpenCode 1.x repeats completed writes through unadvertised client methods; omit their rows.
     if (UNADVERTISED_CLIENT_METHOD.test(method)) {

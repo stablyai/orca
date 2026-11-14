@@ -160,6 +160,37 @@ export function decideRequest(
   }
 }
 
+export function decideRequestSubject(
+  input: ProviderTimelineDecisionInput,
+  event: Extract<ProviderTimelineDecidedEvent, { type: 'request.subject' }>
+): ProviderTimelineDecision {
+  const { journal, context } = input
+  if (journal && !context.rows.heldRequest(event.request, journal)) {
+    return { dropped: 'request-unknown' }
+  }
+  return {
+    settle: {
+      what: 'request-subject',
+      resolve: (at) => {
+        const row = context.rows.heldRequest(event.request, at)
+        const held = row ? at.item(row.itemId) : null
+        // A revision while pending would make the person's answer stale.
+        if (!row || held?.body.kind !== 'approval' || held.body.resolution.state === 'pending') {
+          return []
+        }
+        return [
+          {
+            kind: 'item',
+            identity: row.identity,
+            body: { ...held.body, subject: event.subject },
+            turnScope: held.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
+          }
+        ]
+      }
+    }
+  }
+}
+
 export function decideWithdrawal(
   input: ProviderTimelineDecisionInput,
   event: Extract<ProviderTimelineDecidedEvent, { type: 'request.withdrawn' }>

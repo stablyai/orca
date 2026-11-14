@@ -21532,6 +21532,15 @@
         "questionNotSentDetail": "Your question is still in this chat. Send /btw again to retry.",
         "questionUnconfirmed": "{{agent}} couldn't confirm the side chat got your question",
         "questionUnconfirmedDetail": "Check the side chat before asking again. Your question is still in this chat."
+      },
+      "urlRequest": {
+        "title": "Sign-in requested",
+        "open": "Open sign-in page",
+        "decline": "Decline",
+        "opened": "Opened the sign-in page in your browser.",
+        "openAgain": "Open again",
+        "finished": "Sign-in finished",
+        "finishedWith": "Sign-in finished · {{message}}"
       }
     },
     "tab": {

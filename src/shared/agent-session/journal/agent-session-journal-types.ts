@@ -182,6 +182,7 @@ export type {
   AgentJournalApprovalMatchedAskRule,
   AgentJournalApprovalSubject,
   AgentJournalPlanApprovalSubject,
+  AgentJournalUrlApprovalSubject,
   AgentJournalUnknownApprovalSubject,
   AgentJournalUnknownKind
 } from './agent-session-journal-approval-subject'
