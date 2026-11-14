@@ -50,7 +50,16 @@ export function codexAcquisitionNotificationHandler(input: {
     const threadId = readCodexThreadId(params)
     const execution = input.acquisition.execution
     if (threadId && threadId === input.primaryThreadId()) {
-      if (method === 'thread/tokenUsage/updated') {
+      if (method === 'model/rerouted') {
+        input.acquisition.usageMeter.invalidateUsage()
+        if (execution) {
+          execution.invalidated = true
+          execution.usage = undefined
+          execution.usageUnverifiable = true
+          execution.controls.stop()
+          execution.checkpoint?.()
+        }
+      } else if (method === 'thread/tokenUsage/updated') {
         input.acquisition.usageMeter.observe(params, threadId, input.now())
       } else if (method === 'turn/started') {
         input.acquisition.usageMeter.activity(false)

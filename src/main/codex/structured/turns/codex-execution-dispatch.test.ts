@@ -223,6 +223,45 @@ it('retains the reported opening roots and stops a bounded child on native setti
   }
 })
 
+it('stops a bounded primary-model reroute and retains unknown mixed-model usage after later counters', async () => {
+  const { adapter, codex, receipts } = await bounded({
+    type: 'chatgpt',
+    id: 'account-1',
+    planType: 'pro'
+  })
+  try {
+    await adapter.dispatch(input)
+    const notify = codex.connections[0]!.handlers.onNotification!
+    const reroute = {
+      threadId: 'foreign-thread',
+      turnId: 'turn-1',
+      fromModel: 'gpt-live',
+      toModel: 'gpt-other',
+      reason: 'capacity'
+    }
+    notify('model/rerouted', reroute)
+    expect(codex.connections[0]!.closed).toBe(false)
+    notify('model/rerouted', { ...reroute, threadId: THREAD_ID })
+    expect(codex.connections[0]!.closed).toBe(true)
+    notify('thread/tokenUsage/updated', {
+      threadId: THREAD_ID,
+      tokenUsage: {
+        total: {
+          totalTokens: 99,
+          inputTokens: 80,
+          cachedInputTokens: 32,
+          outputTokens: 19,
+          reasoningOutputTokens: 12
+        }
+      }
+    })
+  } finally {
+    await adapter.closeAll()
+  }
+  expect(receipts.at(-1)?.receipt.invalidated).toBe(true)
+  expect(receipts.at(-1)?.receipt.execution?.usage).toBeUndefined()
+})
+
 it.each([
   { totalTokens: 100 },
   { reasoningOutputTokens: 20 },

@@ -44,6 +44,12 @@ export class CodexCumulativeUsageMeter {
     }
   }
 
+  invalidateUsage(): void {
+    this.invalidate()
+    this.usage = undefined
+    this.corrupt = true
+  }
+
   activity(quiescent: boolean): void {
     this.activityRevision += 1
     this.quiescent = quiescent

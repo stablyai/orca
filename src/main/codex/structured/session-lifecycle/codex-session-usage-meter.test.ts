@@ -109,6 +109,35 @@ it('never assumes a zero baseline for a resumed thread and keeps counter corrupt
   }
 })
 
+it.each([false, true])(
+  'keeps a primary reroute unverifiable with an existing counter: %s',
+  async (hasCounter) => {
+    const f = await fixture()
+    try {
+      if (hasCounter) {
+        f.usage()
+      }
+      const before = await f.read()
+      const reroute = {
+        threadId: 'foreign-thread',
+        turnId: 'turn-1',
+        fromModel: 'gpt-live',
+        toModel: 'gpt-other',
+        reason: 'capacity'
+      }
+      f.notify('model/rerouted', reroute)
+      expect(before?.isCurrent()).toBe(true)
+      f.notify('model/rerouted', { ...reroute, threadId: THREAD_ID })
+      expect(before?.isCurrent()).toBe(false)
+      expect(await f.read()).toBeNull()
+      f.usage(120)
+      expect(await f.read()).toBeNull()
+    } finally {
+      await f.adapter.closeAll()
+    }
+  }
+)
+
 it('requires a new provider counter after every turn before measuring another interval', async () => {
   const f = await fixture()
   try {
