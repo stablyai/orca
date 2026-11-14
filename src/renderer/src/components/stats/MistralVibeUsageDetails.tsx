@@ -75,6 +75,13 @@ export function MistralVibeUsageDetails({
         rows={recentSessions}
         getActivity={(row) => row.events}
         getTrailingTokens={(row) => row.totalTokens}
+        getModelSuffix={(row) =>
+          row.estimatedCostUsd === null ? (
+            <span className="ml-1 text-xs text-muted-foreground">
+              {t('auto.components.stats.MistralVibeUsagePane.unpricedModel', '• unpriced')}
+            </span>
+          ) : null
+        }
       />
     </>
   )

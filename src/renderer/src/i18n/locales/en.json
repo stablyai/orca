@@ -6067,6 +6067,7 @@
           "refreshAriaLabel": "Refresh Mistral Vibe usage",
           "emptyMessage": "No local Mistral Vibe usage found yet for this scope.",
           "costNote": "Cost uses the per-model prices in your Vibe config.toml; models without prices are excluded.",
+          "unpricedModel": "• unpriced",
           "recentSessionsDescription": "Most recent local Mistral Vibe sessions in this scope."
         },
         "MuseUsagePane": {

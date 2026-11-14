@@ -28,6 +28,11 @@ export function parseVibeSessionIndex(text: string): MistralVibeUsageParsedEvent
     if (!sessionId || updatedAt <= 0) {
       continue
     }
+    // Finite values past the Date range still throw on toISOString; skip them instead of failing the scan.
+    const updatedAtDate = new Date(updatedAt)
+    if (Number.isNaN(updatedAtDate.getTime())) {
+      continue
+    }
     const usage = record(session?.tokenUsage)
     const inputTokens = ensureNumber(usage?.inputTokens)
     const outputTokens = ensureNumber(usage?.outputTokens)
@@ -38,7 +43,7 @@ export function parseVibeSessionIndex(text: string): MistralVibeUsageParsedEvent
     const metadata = record(entry?.metadata)
     events.push({
       sessionId,
-      timestamp: new Date(updatedAt).toISOString(),
+      timestamp: updatedAtDate.toISOString(),
       eventKey: sessionId,
       model: extractString(metadata?.active_model),
       cwd: extractString(metadata?.cwd),

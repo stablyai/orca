@@ -33,9 +33,22 @@ async function readText(path: string): Promise<string | null> {
   }
 }
 
+function isMissingPathError(error: unknown): boolean {
+  return error instanceof Error && 'code' in error && error.code === 'ENOENT'
+}
+
 async function readPricing(configPath: string): Promise<Map<string, VibeModelPricing>> {
-  const text = await readText(configPath)
-  return text === null ? new Map() : parseVibeModelPricing(text)
+  let text: string
+  try {
+    text = await readFile(configPath, 'utf-8')
+  } catch (error) {
+    // An absent config means no custom prices; any other failure must not be cached as "unpriced".
+    if (isMissingPathError(error)) {
+      return new Map()
+    }
+    throw error
+  }
+  return parseVibeModelPricing(text)
 }
 
 export async function scanMistralVibeUsageFiles(
