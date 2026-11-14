@@ -48,8 +48,12 @@ export function ExperimentalPane({
   const showNewWorktreeCardStyle = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().newWorktreeCardStyle
   ])
+  const showWorkspacePopout = matchesSettingsSearch(searchQuery, [
+    getExperimentalSearchEntry().workspacePopout
+  ])
   const agentHibernationEnabled = settings.experimentalAgentHibernation === true
   const newWorktreeCardStyleEnabled = settings.experimentalNewWorktreeCardStyle === true
+  const workspacePopoutEnabled = settings.experimentalWorkspacePopout === true
   // Use the planner’s clamped millisecond value/default while editing minutes.
   const agentHibernationIdleMinutes = Math.round(
     getEffectiveAgentHibernationIdleMs(settings.agentHibernationIdleMs) / MS_PER_MINUTE
@@ -243,6 +247,51 @@ export function ExperimentalPane({
                 onCheckedChange={() =>
                   updateSettings({
                     experimentalNewWorktreeCardStyle: !newWorktreeCardStyleEnabled
+                  })
+                }
+              />
+            </div>
+          </SearchableSetting>
+        ) : null}
+
+        {showWorkspacePopout ? (
+          <SearchableSetting
+            title={t(
+              'auto.components.settings.ExperimentalPane.workspacePopout.title',
+              'Pop-out terminals'
+            )}
+            description={t(
+              'auto.components.settings.ExperimentalPane.workspacePopout.description',
+              'Open workspace terminals in separate lightweight satellite windows.'
+            )}
+            keywords={getExperimentalSearchEntry().workspacePopout.keywords}
+            className="space-y-3 py-3"
+            id="experimental-workspace-popout"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 shrink space-y-0.5">
+                <Label>
+                  {t(
+                    'auto.components.settings.ExperimentalPane.workspacePopout.title',
+                    'Pop-out terminals'
+                  )}
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {t(
+                    'auto.components.settings.ExperimentalPane.workspacePopout.copy',
+                    'Open workspace terminals in separate lightweight satellite windows.'
+                  )}
+                </p>
+              </div>
+              <Switch
+                checked={workspacePopoutEnabled}
+                aria-label={t(
+                  'auto.components.settings.ExperimentalPane.workspacePopout.toggleLabel',
+                  'Toggle pop-out terminals'
+                )}
+                onCheckedChange={() =>
+                  updateSettings({
+                    experimentalWorkspacePopout: !workspacePopoutEnabled
                   })
                 }
               />

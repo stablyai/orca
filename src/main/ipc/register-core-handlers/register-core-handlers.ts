@@ -39,6 +39,7 @@ import { registerNotificationHandlers } from '../notifications'
 import { registerNotebookHandlers } from '../notebook'
 import { registerOnboardingHandlers } from '../onboarding'
 import { registerDashboardPopoutHandlers } from '../dashboard-popout'
+import { registerWorkspacePopoutHandlers } from '../workspace-popout'
 import { registerWorkspaceSpaceWindowHandlers } from '../workspace-space/workspace-space-window'
 import { registerTerminalPreviewHandlers } from '../terminal-preview'
 import { registerDeveloperPermissionHandlers } from '../developer-permissions'
@@ -82,6 +83,7 @@ import { registerUpdaterHandlers } from '../../updater/lifecycle/main-window-upd
 import { registerClipboardHandlers } from '../../window/clipboard/clipboard-ipc-handlers'
 import { setTrustedClipboardRendererWebContentsId } from '../../window/clipboard/clipboard-ipc-sender-trust'
 import { isDashboardPopoutRenderer } from '../../window/dashboard-popout-window'
+import { isWorkspacePopoutRenderer } from '../../window/workspace-popout-window'
 import type { RateLimitService } from '../../rate-limits/service/rate-limit-service'
 import type { CodexAccountService } from '../../codex-accounts/service'
 import type { ClaudeAccountService } from '../../claude-accounts/service'
@@ -205,6 +207,7 @@ export function registerCoreHandlers(
   registerNotebookHandlers(store)
   registerOnboardingHandlers(store)
   registerDashboardPopoutHandlers(store, keybindings)
+  registerWorkspacePopoutHandlers(store, keybindings)
   registerWorkspaceSpaceWindowHandlers(store)
   registerTerminalPreviewHandlers(runtime)
   registerDeveloperPermissionHandlers()
@@ -236,8 +239,8 @@ export function registerCoreHandlers(
   registerBrowserHandlers(store)
   registerShellHandlers(store)
   registerPetHandlers()
-  registerSessionHandlers(store, runtime)
-  registerUIHandlers(store, { isDashboardPopoutRenderer })
+  registerSessionHandlers(store, runtime, { isWorkspacePopoutRenderer })
+  registerUIHandlers(store, { isDashboardPopoutRenderer, isWorkspacePopoutRenderer })
   registerEmulatorFrameStreamHandlers()
   registerEmulatorVideoStreamHandlers((id) => runtime.getEmulatorBridge()?.getIosVideoStreamUrl(id))
   registerEmulatorScrcpyTouchHandler()
@@ -248,7 +251,7 @@ export function registerCoreHandlers(
   registerLocalhostWorktreeLabelHandlers(store)
   registerFilesystemHandlers(store, commitMessageAgentEnv)
   registerFilesystemWatcherHandlers()
-  registerRuntimeHandlers(runtime)
+  registerRuntimeHandlers(runtime, { isWorkspacePopoutRenderer })
   registerRuntimeEnvironmentHandlers(store)
   registerWslHostHandlers({
     store,

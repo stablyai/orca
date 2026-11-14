@@ -1,7 +1,7 @@
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { useCallback, useEffect } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { X, Minimize2, Pin } from 'lucide-react'
+import { X, Minimize2, Pin, ExternalLink } from 'lucide-react'
 import { stripLeadingAgentTitleDecoration } from '../../../../shared/agent-status/title/agent-title-decoration'
 import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { basename } from '@/lib/path'
@@ -39,12 +39,15 @@ import type { NativeChatTabSession } from './tab-session-history-switch'
 import type { StructuredChatTabNamingFailure } from '@/runtime/native-chat/naming/structured-conversation-name'
 import { useNativeChatNamingFailure } from './use-native-chat-naming-failure'
 import { NativeChatNamingErrorBlock, NativeChatNamingFailedDialog } from './NativeChatNamingFailure'
+import { useIsTabPoppedOut } from '@/lib/workspace-popout/workspace-popout-state'
 
 /** What the strip draws for a terminal or native chat tab; never a source of agent identity. */
 type SortableTabModel = Pick<
   TerminalTab,
   'id' | 'worktreeId' | 'title' | 'customTitle' | 'color' | 'shellOverride' | 'launchAgent'
->
+> & {
+  ptyId?: string | null
+}
 
 export type SortableTabProps = {
   tab: SortableTabModel
@@ -81,37 +84,26 @@ export type SortableTabProps = {
   namingFailure?: StructuredChatTabNamingFailure | null
 }
 
-export default function SortableTab({
-  tab,
-  agent: tabAgent,
-  unifiedTabId,
-  groupId,
-  tabCount,
-  hasTabsToRight,
-  hasTabsToLeft,
-  isActive,
-  isPinned,
-  isExpanded,
-  onActivate,
-  onClose,
-  onCloseOthers,
-  onCloseToRight,
-  onCloseToLeft,
-  onCloseSplitPane,
-  onSetCustomTitle,
-  onSetTabColor,
-  onTogglePin,
-  onToggleExpand,
-  dragData,
-  dropIndicator,
-  includeTopTabBorder = true,
-  canToggleViewMode = false,
-  isChatView = false,
-  onToggleViewMode,
-  canSplitTerminal = true,
-  nativeChat,
-  namingFailure
-}: SortableTabProps): React.JSX.Element {
+export default function SortableTab(props: SortableTabProps): React.JSX.Element {
+  const {
+    tab,
+    agent: tabAgent,
+    unifiedTabId,
+    groupId,
+    hasTabsToRight,
+    isActive,
+    isPinned,
+    isExpanded,
+    onActivate,
+    onClose,
+    onSetCustomTitle,
+    onToggleExpand,
+    dragData,
+    dropIndicator,
+    includeTopTabBorder = true,
+    nativeChat,
+    namingFailure
+  } = props
   const t = useTranslate()
   const naming = useNativeChatNamingFailure(namingFailure)
   // Why: agent-completion unread exists even with terminal-attention off; collapse both sources to one primitive so unrelated tabs don't re-render.
@@ -199,6 +191,7 @@ export default function SortableTab({
   })
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
   const slotProps = useTabStripSlotProps(tab.id, isActive, 'terminal')
+  const isPoppedOut = useIsTabPoppedOut(tab.id)
   const tabTitle = tab.customTitle ?? tab.title
   const tabRoot = (
     <div
@@ -226,21 +219,15 @@ export default function SortableTab({
           dragListeners?.onPointerDown as ((event: React.PointerEvent<Element>) => void) | undefined
         )
       }}
-      // Why: block middle-click auto-scroll; don't close here — removing the element pre-mouseup triggers a Linux X11 paste.
       onMouseDown={preventMiddleButtonDefault}
       onMouseUp={preventMiddleButtonDefault}
       onAuxClick={(e) => {
-        if (isEditing) {
+        if (isEditing || isPinned || e.button !== 1) {
           return
         }
-        if (e.button === 1) {
-          e.preventDefault()
-          e.stopPropagation()
-          if (isPinned) {
-            return
-          }
-          onClose(tab.id)
-        }
+        e.preventDefault()
+        e.stopPropagation()
+        onClose(tab.id)
       }}
     >
       {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
@@ -286,6 +273,15 @@ export default function SortableTab({
         />
       ) : (
         <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{displayTitle}</span>
+      )}
+      {isPoppedOut && !isEditing && (
+        <ExternalLink
+          className="mr-1 size-3 shrink-0 text-muted-foreground"
+          aria-label={t(
+            'components.tab.bar.SortableTab.poppedOutBadge',
+            'Opened in companion window'
+          )}
+        />
       )}
       {tab.color && !isEditing && (
         <span
@@ -395,31 +391,11 @@ export default function SortableTab({
       </ContextMenuTrigger>
 
       <SortableTabContextMenu
+        {...props}
         open={menuOpen}
         sessionSwitchOpening={openingId}
         onSessionSwitchComplete={onComplete}
-        tab={tab}
-        unifiedTabId={unifiedTabId}
-        groupId={groupId}
-        isActive={isActive}
-        tabCount={tabCount}
-        hasTabsToRight={hasTabsToRight}
-        hasTabsToLeft={hasTabsToLeft}
-        isPinned={isPinned}
-        onActivate={onActivate}
-        onClose={onClose}
-        onCloseOthers={onCloseOthers}
-        onCloseToRight={onCloseToRight}
-        onCloseToLeft={onCloseToLeft}
-        onCloseSplitPane={onCloseSplitPane}
         onRenameOpen={handleRenameOpen}
-        onSetTabColor={onSetTabColor}
-        onTogglePin={onTogglePin}
-        canToggleViewMode={canToggleViewMode}
-        isChatView={isChatView}
-        onToggleViewMode={onToggleViewMode}
-        canSplitTerminal={canSplitTerminal}
-        nativeChat={nativeChat}
       />
       {naming ? <NativeChatNamingFailedDialog naming={naming} chatName={displayTitle} /> : null}
     </ContextMenu>

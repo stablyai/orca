@@ -21767,7 +21767,13 @@
         "SortableTabContextMenu": {
           "switchToTerminalView": "Alternar para visualização de terminal",
           "switchToChatView": "Alternar para visualização de chat",
-          "allowAutoClose": "Permitir fechamento automático"
+          "allowAutoClose": "Permitir fechamento automático",
+          "moveToNewWindow": "Mover para nova janela",
+          "dockPopout": "Encaixar janela",
+          "focusPopout": "Exibir janela"
+        },
+        "SortableTab": {
+          "poppedOutBadge": "Aberta em janela separada"
         },
         "BrowserTab": {
           "closeOthers": "Fechar Outras",

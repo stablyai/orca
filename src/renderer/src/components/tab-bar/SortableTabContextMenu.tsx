@@ -1,4 +1,4 @@
-import { Pencil, Pin, PinOff, SquareTerminal, Timer, X } from 'lucide-react'
+import { ExternalLink, Pencil, Pin, PinOff, SquareTerminal, Timer, X } from 'lucide-react'
 import {
   ContextMenuItem,
   ContextMenuSeparator,
@@ -16,6 +16,12 @@ import type { NativeChatTabSession } from './tab-session-history-switch'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
 import { useAllowAutoClose } from './use-allow-auto-close'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
+import {
+  useIsTabPoppedOut,
+  popOutTerminalTab,
+  dockTerminalTab,
+  focusTerminalTab
+} from '@/lib/workspace-popout/workspace-popout-state'
 
 const TAB_COLORS = [
   {
@@ -81,7 +87,7 @@ const TAB_COLORS = [
 ] as const
 
 type SortableTabContextMenuProps = {
-  tab: Pick<TerminalTab, 'id' | 'worktreeId' | 'color'>
+  tab: Pick<TerminalTab, 'id' | 'worktreeId' | 'color'> & { ptyId?: string | null; title?: string }
   unifiedTabId: string
   groupId: string
   isActive: boolean
@@ -140,6 +146,14 @@ export function SortableTabContextMenu({
 
   const closeShortcut = useOptionalShortcutLabel('tab.close')
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
+  const popOutShortcut = useOptionalShortcutLabel('terminal.popOut')
+  const workspacePopoutEnabled = useAppStore(
+    (state) => state.settings?.experimentalWorkspacePopout !== false
+  )
+  const ptyIdFromStore = useAppStore((state) => state.ptyIdsByTabId[tab.id]?.[0])
+  const effectivePtyId = tab.ptyId ?? ptyIdFromStore
+  const isPoppedOut = useIsTabPoppedOut(tab.id)
+  const canPopOut = workspacePopoutEnabled && Boolean(effectivePtyId)
   // Keep the route back from chat even while switching terminals into chat is disabled.
   const showTerminalViewSwitch = canToggleViewMode && isChatView && onToggleViewMode !== undefined
 
@@ -166,6 +180,52 @@ export function SortableTabContextMenu({
         splitDownShortcut={splitDownShortcut}
         showTerminalSplit={canSplitTerminal}
       />
+      {canPopOut ? (
+        <>
+          <ContextMenuSeparator />
+          {isPoppedOut ? (
+            <>
+              <ContextMenuItem
+                onSelect={() => {
+                  void focusTerminalTab(tab.worktreeId)
+                }}
+              >
+                <ExternalLink className="size-3.5 shrink-0" />
+                {t('components.tab.bar.SortableTabContextMenu.focusPopout', 'Show Window')}
+              </ContextMenuItem>
+              <ContextMenuItem
+                onSelect={() => {
+                  void dockTerminalTab(tab.worktreeId)
+                }}
+              >
+                <SquareTerminal className="size-3.5 shrink-0" />
+                {t(
+                  'components.tab.bar.SortableTabContextMenu.dockPopout',
+                  'Reattach to Main Window'
+                )}
+              </ContextMenuItem>
+            </>
+          ) : (
+            <ContextMenuItem
+              onSelect={() => {
+                if (effectivePtyId) {
+                  void popOutTerminalTab({
+                    worktreeId: tab.worktreeId,
+                    tabId: tab.id,
+                    ptyId: effectivePtyId,
+                    terminalInput: null,
+                    title: tab.title ?? 'Terminal'
+                  })
+                }
+              }}
+            >
+              <ExternalLink className="size-3.5 shrink-0" />
+              {t('components.tab.bar.SortableTabContextMenu.moveToNewWindow', 'Move to New Window')}
+              {popOutShortcut ? <ContextMenuShortcut>{popOutShortcut}</ContextMenuShortcut> : null}
+            </ContextMenuItem>
+          )}
+        </>
+      ) : null}
       {showTerminalViewSwitch ? (
         <>
           <ContextMenuSeparator />

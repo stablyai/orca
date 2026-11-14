@@ -21513,7 +21513,13 @@
         "SortableTabContextMenu": {
           "switchToTerminalView": "Continue with Terminal Agent",
           "switchToChatView": "Continue in Chat UI",
-          "allowAutoClose": "Allow Auto-Close"
+          "allowAutoClose": "Allow Auto-Close",
+          "moveToNewWindow": "Move to New Window",
+          "dockPopout": "Reattach to Main Window",
+          "focusPopout": "Show Window"
+        },
+        "SortableTab": {
+          "poppedOutBadge": "Opened in companion window"
         },
         "BrowserTab": {
           "closeOthers": "Close Others",

@@ -6,7 +6,7 @@ import {
   isBackgroundLaunch,
   showWindowWithoutStealingFocus
 } from './activation/foreground-activation-policy'
-import { rectHasVisibleAreaOnAnyDisplay } from './presentation/window-bounds-validation'
+import { resolveRestoredBounds } from './presentation/window-bounds-validation'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
 import { installPrivilegedWindowNavigationPolicy } from './security/privileged-window-navigation'
 import { stepUIZoomLevel, type UIZoomDirection } from '../../shared/ui-zoom-level'
@@ -104,27 +104,6 @@ function loadDashboardPopout(window: BrowserWindow): void {
   }
 }
 
-function resolveRestoredBounds(store: Store | null): {
-  x: number
-  y: number
-  width: number
-  height: number
-} | null {
-  const raw = store?.getUI().dashboardPopoutBounds ?? null
-  if (
-    raw &&
-    raw.width >= MIN_WIDTH &&
-    raw.height >= MIN_HEIGHT &&
-    rectHasVisibleAreaOnAnyDisplay(raw, MIN_WIDTH / 2, MIN_HEIGHT / 2)
-  ) {
-    return raw
-  }
-  if (raw) {
-    console.warn('[dashboard-popout] Discarding off-screen/near-min popout bounds:', raw)
-  }
-  return null
-}
-
 /** Reuse a native-framed companion window with the main preload and its own popout.html renderer. */
 export function createOrFocusDashboardPopout(
   store: Store | null,
@@ -143,7 +122,11 @@ export function createOrFocusDashboardPopout(
     return dashboardPopoutWindow
   }
 
-  const savedBounds = resolveRestoredBounds(store)
+  const savedBounds = resolveRestoredBounds(store?.getUI().dashboardPopoutBounds, {
+    minWidth: MIN_WIDTH,
+    minHeight: MIN_HEIGHT,
+    logTag: '[dashboard-popout]'
+  })
 
   // Serve-only: this window lists saved WSL hosts and their Connect, as the main window does.
   const wslArguments = wslHostsWindowArguments()

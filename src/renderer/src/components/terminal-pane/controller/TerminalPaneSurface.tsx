@@ -22,6 +22,7 @@ import { handleInternalTerminalFileDrop } from '../input/file-drop/terminal-drop
 import { TerminalQuickCommandEditorDialog } from '../quick-commands/TerminalQuickCommandEditorDialog'
 import { TerminalPaneNativeChatPortal } from '../chat/TerminalPaneNativeChatPortal'
 import { TerminalPaneSleepingPortals } from '../session-restore/spawn-deferral/TerminalPaneSleepingPortals'
+import { TerminalPanePopoutPortals } from '../popout/TerminalPanePopoutPortals'
 import { TerminalPaneCodexRestartPortals } from './TerminalPaneCodexRestartPortals'
 import { TerminalPaneMobileDriverPortals } from '../mobile-driver/TerminalPaneMobileDriverPortals'
 import { TerminalPaneProcessExitPortals } from '../process-exit/TerminalPaneProcessExitPortals'
@@ -386,6 +387,7 @@ export function TerminalPaneSurface({
       <TerminalPaneRecoveryPortals controller={controller} />
       <TerminalPaneSleepingPortals controller={controller} />
       <TerminalPaneMobileDriverPortals controller={controller} />
+      <TerminalPanePopoutPortals controller={controller} />
       <CloseTerminalDialog
         open={pendingCloseConfirmation !== null}
         copyKind={pendingCloseConfirmation?.copyKind}

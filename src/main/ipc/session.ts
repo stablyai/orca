@@ -10,12 +10,19 @@ import { windowViewPatchForMain, windowViewSaveForMain } from '../persistence/wi
 import { reportWindowSaveDrift } from '../persistence/window-save-divergence'
 import { windowSaveKeepingMainSleepRecords } from '../persistence/window-save-sleep-records'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import type { WebContents } from 'electron'
+import { isWorkspacePopoutRenderer } from '../window/workspace-popout-window'
 import type {
   WorkspaceSessionPatch,
   WorkspaceSessionState
 } from '../../shared/workspace-session/workspace-session-state-types'
 
-export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeService): void {
+export function registerSessionHandlers(
+  store: Store,
+  runtime: OrcaRuntimeService,
+  options?: { isWorkspacePopoutRenderer?: (sender: WebContents) => boolean }
+): void {
+  const isPopout = options?.isWorkspacePopoutRenderer ?? isWorkspacePopoutRenderer
   // Why: renderer saves would change a fenced host's frozen source partition, or write back what a
   // WSL move rewrote under this window before main reloads it.
   const isFenced = (hostId?: string | null): boolean =>
@@ -47,7 +54,10 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     )
   }
 
-  ipcMain.handle('session:set', (_event, args: WorkspaceSessionState, hostId?: string | null) => {
+  ipcMain.handle('session:set', (event, args: WorkspaceSessionState, hostId?: string | null) => {
+    if (event?.sender && isPopout(event.sender as WebContents)) {
+      return
+    }
     if (!isFenced(hostId)) {
       store.setWorkspaceSession(
         ORCA_LAYOUT_OWNER_IS_MAIN
@@ -58,7 +68,10 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     }
   })
 
-  ipcMain.handle('session:patch', (_event, args: WorkspaceSessionPatch, hostId?: string | null) => {
+  ipcMain.handle('session:patch', (event, args: WorkspaceSessionPatch, hostId?: string | null) => {
+    if (event?.sender && isPopout(event.sender as WebContents)) {
+      return
+    }
     if (!isFenced(hostId)) {
       store.patchWorkspaceSession(
         ORCA_LAYOUT_OWNER_IS_MAIN
@@ -72,7 +85,10 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
   // Window saves cannot shrink main-owned membership; closes must commit explicitly.
   ipcMain.handle(
     'session:close-terminal-surface',
-    (_event, args: { worktreeId?: unknown; target?: unknown; reason?: unknown } | undefined) => {
+    (event, args: { worktreeId?: unknown; target?: unknown; reason?: unknown } | undefined) => {
+      if (event?.sender && isPopout(event.sender as WebContents)) {
+        return null
+      }
       const target = parseTerminalSurfaceCloseTarget(args?.target)
       if (typeof args?.worktreeId !== 'string' || !target) {
         throw new Error('invalid_terminal_surface')

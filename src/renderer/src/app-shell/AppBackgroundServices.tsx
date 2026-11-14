@@ -15,6 +15,9 @@ import { NativeChatVisualGuestThemePublisher } from '../components/native-chat/m
 import { usePairedMobileDevices } from '../components/mobile/paired-mobile-devices'
 
 const DashboardPopoutBridge = lazy(() => import('../components/dashboard/DashboardPopoutBridge'))
+const WorkspacePopoutBridge = lazy(
+  () => import('../components/workspace-popout/WorkspacePopoutBridge')
+)
 const AgentListVerdictPublisher = lazy(
   () => import('../components/activity/agent-list-verdict-publisher')
 )
@@ -24,6 +27,9 @@ export function AppBackgroundServices(): React.JSX.Element {
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const dashboardPopoutEnabled = useAppStore(
     (s) => s.settings?.experimentalAgentDashboardPopout === true
+  )
+  const workspacePopoutEnabled = useAppStore(
+    (s) => s.settings?.experimentalWorkspacePopout === true
   )
   const canPublishAgentList = Boolean(window.api.agentStatus?.publishListVerdicts)
   // The list builds on every agent update, so only a desktop with a paired phone pays for it.
@@ -44,6 +50,11 @@ export function AppBackgroundServices(): React.JSX.Element {
       {dashboardPopoutEnabled ? (
         <Suspense fallback={null}>
           <DashboardPopoutBridge />
+        </Suspense>
+      ) : null}
+      {workspacePopoutEnabled ? (
+        <Suspense fallback={null}>
+          <WorkspacePopoutBridge />
         </Suspense>
       ) : null}
       <AgentHibernationGate />

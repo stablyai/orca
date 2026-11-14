@@ -37,7 +37,13 @@ const PREVIEW_SCROLLBACK_ROWS = 24
 const PREVIEW_SCROLLBACK_BUFFER_ROWS = 1000
 const FALLBACK_COLS = 80
 const FALLBACK_ROWS = 24
-const RESYNC_RETRY_DELAY_MS = 150
+export const RESYNC_RETRY_BASE_MS = 150
+export const RESYNC_RETRY_MAX_MS = 2000
+export const RESYNC_ALERT_THRESHOLD = 10
+
+export function computeResyncBackoffDelay(attemptCount: number): number {
+  return Math.min(RESYNC_RETRY_MAX_MS, RESYNC_RETRY_BASE_MS * 2 ** Math.max(0, attemptCount - 1))
+}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
@@ -64,6 +70,7 @@ export function AgentTerminalPreview({
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
   const [linkRequest, setLinkRequest] = useState<LinkActionRequest | null>(null)
+  const [resyncSaturated, setResyncSaturated] = useState(false)
   const linkSourceRef = useRef(linkSource)
   const browserForegroundRef = useRef(onBrowserForeground)
   const settings = useAppStore((state) => state.settings)
@@ -145,6 +152,7 @@ export function AgentTerminalPreview({
     let refreshInFlight = false
     let refreshAgain = false
     let retryTimer: ReturnType<typeof setTimeout> | null = null
+    let resyncAttemptCount = 0
     const pendingLivePayloads: Extract<TerminalPreviewDataPayload, { type: 'data' }>[] = []
 
     const boxFit = createPreviewBoxFit({ container, getTerminal: () => terminal })
@@ -251,6 +259,11 @@ export function AgentTerminalPreview({
       }
       if (connection.resyncRequired) {
         refreshAgain = false
+        resyncAttemptCount++
+        if (resyncAttemptCount >= RESYNC_ALERT_THRESHOLD) {
+          setResyncSaturated(true)
+        }
+        const delay = computeResyncBackoffDelay(resyncAttemptCount)
         // Why: sustained output can overflow every capture; delay retries so recovery cannot spin two serializations per event-loop turn.
         writeReplayed('', () => {
           if (disposed || retryTimer) {
@@ -259,12 +272,16 @@ export function AgentTerminalPreview({
           retryTimer = setTimeout(() => {
             retryTimer = null
             requestRefresh()
-          }, RESYNC_RETRY_DELAY_MS)
+          }, delay)
         })
-      } else if (refreshAgain) {
-        refreshAgain = false
-        // Queue behind every replay write so replacement never clears a half-parsed frame.
-        writeReplayed('', requestRefresh)
+      } else {
+        resyncAttemptCount = 0
+        setResyncSaturated(false)
+        if (refreshAgain) {
+          refreshAgain = false
+          // Queue behind every replay write so replacement never clears a half-parsed frame.
+          writeReplayed('', requestRefresh)
+        }
       }
       boxFit.schedule()
       gridClaim.schedule()
@@ -377,6 +394,18 @@ export function AgentTerminalPreview({
           }
           onOpenSettings={onBrowserForeground ?? null}
         />
+      ) : null}
+      {resyncSaturated ? (
+        <div
+          role="alert"
+          data-testid="terminal-preview-saturation-warning"
+          className="absolute top-2 left-2 right-2 z-20 rounded bg-status-warning-background border border-status-warning-border px-3 py-1.5 text-xs text-status-warning-text backdrop-blur"
+        >
+          {t(
+            'auto.components.terminalPreview.saturationWarning',
+            'High terminal output rate: reconnection throttled.'
+          )}
+        </div>
       ) : null}
       {ptyGone ? (
         <div className="absolute inset-0 flex items-center justify-center px-2.5 py-8 text-center text-[11px] text-muted-foreground">

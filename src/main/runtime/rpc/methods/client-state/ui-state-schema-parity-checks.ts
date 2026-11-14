@@ -11,6 +11,7 @@ type MainOwnedUIState =
   | '_explorerDisplayRootMigrated'
   | 'trayMinimizeNoticeShown'
   | 'dashboardPopoutBounds'
+  | 'workspacePopoutBounds'
   | 'windowFullScreen'
   | '_expandedWorktreeCardPropertiesDefaulted'
   | '_jiraIssueWorktreeCardPropertyDefaulted'

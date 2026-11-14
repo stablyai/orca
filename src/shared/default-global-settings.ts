@@ -295,16 +295,12 @@ export function buildDefaultSettings(args: {
     experimentalConnectors: false,
     experimentalWslHosts: false,
     experimentalOrchestrationPanel: false,
+    experimentalWorkspacePopout: true,
     compactWorktreeCards: false,
     // Why: local desktop stays the default until the user picks a saved runtime environment.
     activeRuntimeEnvironmentId: null,
     // Why: hydrate a stable empty shape so renderer optional-chained reads never hit undefined.
-    githubProjects: {
-      pinned: [],
-      recent: [],
-      lastViewByProject: {},
-      activeProject: null
-    },
+    githubProjects: { pinned: [], recent: [], lastViewByProject: {}, activeProject: null },
     // Why: keep agent/model maps empty so first use follows the default agent's model, not a frozen stale choice.
     commitMessageAi: {
       enabled: true,

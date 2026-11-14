@@ -153,7 +153,9 @@ const STATIC_TITLE_COPY = {
     translate(
       'keybindings.title.terminalSwitchInputSource',
       'Switch input source / language (native)'
-    )
+    ),
+  'terminal.popOut': () =>
+    translate('keybindings.title.terminalPopOut', 'Move terminal to new window')
 } satisfies Record<StaticKeybindingActionId, () => string>
 
 const GROUP_COPY = {

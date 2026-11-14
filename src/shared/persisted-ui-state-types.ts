@@ -227,6 +227,8 @@ export type PersistedUIState = {
   windowFullScreen?: boolean
   /** Dashboard popout bounds, independent of main-window bounds. */
   dashboardPopoutBounds?: { x: number; y: number; width: number; height: number } | null
+  /** Workspace popout satellite bounds, independent of main-window bounds. */
+  workspacePopoutBounds?: { x: number; y: number; width: number; height: number } | null
   /** Migrate legacy recent→smart once so later activity-based recent selections survive. */
   _sortBySmartMigrated?: boolean
   /** Rollback field only: every load stamps it, so it cannot gate migration; use _inlineAgentsDefaultedForAllUsers. */

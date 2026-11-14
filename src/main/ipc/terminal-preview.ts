@@ -5,6 +5,7 @@ import type {
 } from '../../shared/terminal/replay/terminal-preview'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { isDashboardPopoutRenderer } from '../window/dashboard-popout-window'
+import { isWorkspacePopoutRenderer } from '../window/workspace-popout-window'
 import { isTrustedUIRenderer } from './ui'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 import {
@@ -20,7 +21,11 @@ function isValidPtyId(value: unknown): value is string {
 
 // Both popout and main-renderer overlay host previews; trusted UI already has ordinary PTY access.
 function isTerminalPreviewRenderer(sender: WebContents): boolean {
-  return isDashboardPopoutRenderer(sender) || isTrustedUIRenderer(sender)
+  return (
+    isDashboardPopoutRenderer(sender) ||
+    isTrustedUIRenderer(sender) ||
+    isWorkspacePopoutRenderer(sender)
+  )
 }
 /** Pop-out terminal transport with an atomic snapshot/live boundary. */
 export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): void {
@@ -34,8 +39,18 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
   // Unsubscribe or renderer document retirement releases the host pane's grid claim.
   const fitClaimsByContents = new Map<number, Map<string, symbol>>()
   const rendererLifetimes = new Map<number, ReturnType<typeof abortWhenRendererGone>>()
+  const viewerKeysByContentsId = new Map<number, string>()
 
-  const previewViewerKey = (contentsId: number): string => `dashboard-popout:${contentsId}`
+  const previewViewerKey = (sender: WebContents): string => {
+    const prefix = isWorkspacePopoutRenderer(sender) ? 'workspace-popout' : 'dashboard-popout'
+    const key = `${prefix}:${sender.id}`
+    viewerKeysByContentsId.set(sender.id, key)
+    return key
+  }
+
+  const getViewerKey = (contentsId: number): string => {
+    return viewerKeysByContentsId.get(contentsId) ?? `dashboard-popout:${contentsId}`
+  }
 
   const releaseFitClaim = (contentsId: number, ptyId: string): void => {
     const claimed = fitClaimsByContents.get(contentsId)
@@ -46,7 +61,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
       fitClaimsByContents.delete(contentsId)
     }
     void runtime
-      .unregisterRemoteDesktopViewer(ptyId, previewViewerKey(contentsId))
+      .unregisterRemoteDesktopViewer(ptyId, getViewerKey(contentsId))
       .catch(() => undefined)
   }
 
@@ -71,6 +86,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
     for (const ptyId of fitClaimsByContents.get(contentsId)?.keys() ?? []) {
       releaseFitClaim(contentsId, ptyId)
     }
+    viewerKeysByContentsId.delete(contentsId)
   }
 
   const subscriptionsFor = (contents: WebContents): Map<string, TerminalPreviewOutputStream> => {
@@ -219,7 +235,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
       }
       const claimToken = Symbol('terminal-preview-fit')
       claimed.set(ptyId, claimToken)
-      const viewerKey = previewViewerKey(event.sender.id)
+      const viewerKey = previewViewerKey(event.sender)
       try {
         const applied = await runtime.updateRemoteDesktopViewer(
           ptyId,

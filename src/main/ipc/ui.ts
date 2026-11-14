@@ -55,7 +55,10 @@ export function getTrustedUIRendererWindow(): BrowserWindow | null {
 
 export function registerUIHandlers(
   store: Store,
-  options: { isDashboardPopoutRenderer?: (sender: WebContents) => boolean } = {}
+  options: {
+    isDashboardPopoutRenderer?: (sender: WebContents) => boolean
+    isWorkspacePopoutRenderer?: (sender: WebContents) => boolean
+  } = {}
 ): void {
   store.onUIChanged((ui) => sendToTrustedUIRenderer('ui:stateChanged', ui))
 
@@ -112,7 +115,8 @@ export function registerUIHandlers(
   ipcMain.on('ui:performNativeSelectionAction', (event, action: unknown) => {
     if (
       !isTrustedUIRenderer(event.sender) &&
-      options.isDashboardPopoutRenderer?.(event.sender) !== true
+      options.isDashboardPopoutRenderer?.(event.sender) !== true &&
+      options.isWorkspacePopoutRenderer?.(event.sender) !== true
     ) {
       return
     }

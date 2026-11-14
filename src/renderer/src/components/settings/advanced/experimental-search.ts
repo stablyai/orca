@@ -182,6 +182,38 @@ export const getExperimentalSearchEntry = createLocalizedCatalog(
           )
         ]
       },
+      workspacePopout: {
+        title: translate(
+          'auto.components.settings.experimental.search.workspacePopout.title',
+          'Pop-out terminals'
+        ),
+        description: translate(
+          'auto.components.settings.experimental.search.workspacePopout.description',
+          'Open workspace terminals in separate lightweight satellite windows.'
+        ),
+        keywords: [
+          ...translateSearchKeyword(
+            'auto.components.settings.experimental.search.0d24759f14',
+            'experimental'
+          ),
+          ...translateSearchKeyword(
+            'auto.components.settings.experimental.search.workspacePopout.popout',
+            'popout'
+          ),
+          ...translateSearchKeyword(
+            'auto.components.settings.experimental.search.workspacePopout.terminal',
+            'terminal'
+          ),
+          ...translateSearchKeyword(
+            'auto.components.settings.experimental.search.workspacePopout.window',
+            'window'
+          ),
+          ...translateSearchKeyword(
+            'auto.components.settings.experimental.search.workspacePopout.satellite',
+            'satellite'
+          )
+        ]
+      },
       newWorktreeCardStyle: getNewWorktreeCardStyleSearchEntry(),
       ephemeralVms: getEphemeralVmsSearchEntry()
     }) satisfies Record<string, SettingsSearchEntry>

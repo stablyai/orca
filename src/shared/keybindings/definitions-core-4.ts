@@ -127,5 +127,23 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     },
     // Why: macOS uses Shift+Space as an input-source shortcut; Orca otherwise rejects Shift-only bindings to avoid stealing typed text.
     allowShiftOnlyKeybindings: true
+  },
+  {
+    id: 'terminal.popOut',
+    title: 'Move Terminal to New Window',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: [
+      'shortcut',
+      'terminal',
+      'popout',
+      'pop out',
+      'window',
+      'detach',
+      'tearoff',
+      'satellite',
+      'multi-window'
+    ],
+    defaultBindings: platformBindings([])
   }
 ]

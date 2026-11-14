@@ -17,6 +17,8 @@ import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
 import { DesktopRuntimeSenderLifecycle } from './desktop-runtime-sender-lifecycle'
 import { toWorkspaceLifecycleResult } from '../ephemeral-vm/workspace-lifecycle-result'
 import { publishMobileProjectSections } from '../runtime/sidebar-inputs/catalog/mobile-project-sections-snapshot'
+import type { WebContents } from 'electron'
+import { isWorkspacePopoutRenderer } from '../window/workspace-popout-window'
 
 function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -27,7 +29,11 @@ function boundTerminalFitRestore(pending: Promise<boolean>): Promise<boolean> {
   return Promise.race([pending, deadline]).finally(() => clearTimeout(timer))
 }
 
-export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
+export function registerRuntimeHandlers(
+  runtime: OrcaRuntimeService,
+  options?: { isWorkspacePopoutRenderer?: (sender: WebContents) => boolean }
+): void {
+  const isPopout = options?.isWorkspacePopoutRenderer ?? isWorkspacePopoutRenderer
   const pendingTerminalFitRestores = new Map<string, Promise<boolean>>()
   const desktopSenders = new DesktopRuntimeSenderLifecycle(runtime)
   ipcMain.removeHandler('runtime:syncWindowGraph')
@@ -53,6 +59,9 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
   ipcMain.handle(
     'runtime:syncWindowGraph',
     (event, graph: RuntimeRendererSyncWindowGraph): RuntimeSyncWindowGraphResult => {
+      if (event?.sender && isPopout(event.sender as WebContents)) {
+        throw new Error('Runtime graph sync cannot originate from a satellite window')
+      }
       const window = BrowserWindow.fromWebContents(event.sender)
       if (!window) {
         throw new Error('Runtime graph sync must originate from a BrowserWindow')
