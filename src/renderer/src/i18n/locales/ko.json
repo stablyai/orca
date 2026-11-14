@@ -7332,12 +7332,6 @@
             "title": "에이전트 최대 절전",
             "toggleLabel": "에이전트 최대 절전 전환"
           },
-          "newWorktreeCardStyle": {
-            "copy": "업데이트된 워크트리 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다.",
-            "description": "업데이트된 워크트리 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다.",
-            "title": "새 카드 스타일",
-            "toggleLabel": "새 카드 스타일 전환"
-          },
           "nativeChat": {
             "shellEnvNamesLabel": "셸에서 전달할 변수",
             "shellEnvNamePlaceholder": "변수 이름",
@@ -9456,11 +9450,9 @@
             "newWorktreeCardStyle": {
               "card": "카드",
               "cards": "카드",
-              "description": "업데이트된 워크트리 카드 레이아웃, 메타데이터 배치, 카드 표시 메뉴 옵션 및 상태 표시를 미리 봅니다.",
               "menu": "메뉴",
               "metadata": "메타데이터",
               "status": "상태",
-              "title": "새 카드 스타일",
               "worktree": "워크트리",
               "worktrees": "worktrees"
             },
