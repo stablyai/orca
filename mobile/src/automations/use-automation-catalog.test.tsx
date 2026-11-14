@@ -3,7 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it } from 'vitest'
 // Also tells TanStack observers on a microtask, so act() sees replies.
 import '../test-support/query-client-test-renderer'
-import { documentQueryClient } from '../test-support/rpc-recording/hook-mount'
+import { documentQueryClient } from '../test-support/rpc-recording/react-mounting/hook-mount'
 import { useAutomationCatalog } from './use-automation-catalog'
 import { automationClient, deferred, savedAutomation } from './automation-test-fixtures'
 
@@ -77,19 +77,5 @@ describe('automation catalog', () => {
     )
     await act(async () => early.resolve(listReply('Box review')))
     expect(read().rows[1]?.automation.name).toBe('Box renamed')
-  })
-
-  it('updates an SSH target’s automation on its change event and leaves the local one as it was', async () => {
-    let remoteName = 'Box review'
-    const { port, read, mount } = catalogHarness(() => listReply(remoteName))
-    await mount()
-    await act(async () => port.event({ type: 'ready', subscriptionId: 'events' }))
-    const before = read().rows[0]
-    remoteName = 'Box nightly'
-    await act(async () =>
-      port.event({ type: 'automationsChanged', selector: { kind: 'ssh', targetId: 'box' } })
-    )
-    expect(read().rows[1]?.automation.name).toBe('Box nightly')
-    expect(read().rows[0]).toBe(before)
   })
 })

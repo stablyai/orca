@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { hookMount, performHookAction } from '../../test-support/rpc-recording/hook-mount'
-import { mountFixture } from '../../test-support/rpc-recording/recorder-fixture-shape'
+import {
+  hookMount,
+  performHookAction
+} from '../../test-support/rpc-recording/react-mounting/hook-mount'
+import { mountFixture } from '../../test-support/rpc-recording/react-mounting/recorder-fixture-shape'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import type { MarkdownDocState } from './session-document-state'
 import { useMobileSessionDocumentReaders } from './use-mobile-session-document-readers'

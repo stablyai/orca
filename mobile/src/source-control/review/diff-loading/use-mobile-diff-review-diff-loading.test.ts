@@ -5,7 +5,7 @@ import { createFakeRpcClient, rpcSuccess } from '../../../mobile-web-shell/bridg
 import {
   documentQueryClient,
   settleQueryNotifications
-} from '../../../test-support/rpc-recording/hook-mount'
+} from '../../../test-support/rpc-recording/react-mounting/hook-mount'
 import type { RpcResponse } from '../../../transport/rpc/rpc-wire-types'
 import type { MobileDiffReviewQueueItem } from '../diff-state/mobile-diff-review-queue'
 import type {

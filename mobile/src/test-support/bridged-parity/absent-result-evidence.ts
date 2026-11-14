@@ -7,9 +7,9 @@ import {
   checkpointKeys,
   checkpointListDifference,
   recordingDifferences
-} from '../rpc-recording/golden-difference'
-import type { Recording, RecordingScenario } from '../rpc-recording/recording-scenario'
-import { captureError, captureValue } from '../rpc-recording/recording-values'
+} from '../rpc-recording/goldens/golden-difference'
+import type { Recording, RecordingScenario } from '../rpc-recording/scenarios/recording-scenario'
+import { captureError, captureValue } from '../rpc-recording/goldens/recording-values'
 import { ordinalField } from './divergence-classes'
 import { isKeyedObject, sameParams } from './divergence-evidence'
 

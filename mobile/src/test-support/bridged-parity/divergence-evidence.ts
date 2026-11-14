@@ -1,9 +1,12 @@
 import type { BridgeRpcClientDiagnostic } from '../../mobile-web-shell/bridge/client-state/bridge-client-diagnostics'
 import { readBridgeHostMessage } from '../../mobile-web-shell/bridge/protocol/bridge-envelope'
-import { checkpointListDifference, recordingDifferences } from '../rpc-recording/golden-difference'
-import { RecordingParamsMismatch } from '../rpc-recording/recording-mismatch'
-import type { Recording, RecordingScenario } from '../rpc-recording/recording-scenario'
-import { captureValue } from '../rpc-recording/recording-values'
+import {
+  checkpointListDifference,
+  recordingDifferences
+} from '../rpc-recording/goldens/golden-difference'
+import { RecordingParamsMismatch } from '../rpc-recording/execution/recording-mismatch'
+import type { Recording, RecordingScenario } from '../rpc-recording/scenarios/recording-scenario'
+import { captureValue } from '../rpc-recording/goldens/recording-values'
 import type { ParamsMismatchEvidence } from './divergence-classes'
 
 // Analyze recorded evidence outside the recorder so observation cannot alter capture.

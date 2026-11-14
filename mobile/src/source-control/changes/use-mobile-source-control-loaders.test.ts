@@ -22,7 +22,7 @@ import { createOrcaQueryClient } from '../../query/orca-query-client'
 import {
   documentQueryClient,
   settleQueryNotifications
-} from '../../test-support/rpc-recording/hook-mount'
+} from '../../test-support/rpc-recording/react-mounting/hook-mount'
 
 // Changes under Review is unfocused; flipping this and re-rendering models the push and the return.
 const focus = vi.hoisted(() => ({ current: true }))

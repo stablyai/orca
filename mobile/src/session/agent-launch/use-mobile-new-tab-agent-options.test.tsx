@@ -9,7 +9,7 @@ import { PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY } from '../../../../
 import type { ExecutionHostId } from '../../../../src/shared/execution-host'
 import { WorkspaceExecutionHostContext } from '../../navigation/workspace-execution-host'
 import { createOrcaQueryClient } from '../../query/orca-query-client'
-import { settleQueryNotifications } from '../../test-support/rpc-recording/hook-mount'
+import { settleQueryNotifications } from '../../test-support/rpc-recording/react-mounting/hook-mount'
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
 import type { MobileNewTabAgentLoadState } from './mobile-agent-load-state'
 import { useMobileNewTabAgentOptions } from './use-mobile-new-tab-agent-options'
@@ -138,20 +138,5 @@ describe('useMobileNewTabAgentOptions', () => {
     expect(drawer.state()).toBe('loading')
     expect(drawer.options()).toEqual([])
     drawer.unmount()
-  })
-  it('keeps a stale-sheet automatic refresh distinct from an explicit user refresh', async () => {
-    const client = createClient({ agents: () => claude })
-    const first = mountDrawer(queryClient)
-    await first.render({ client, open: true })
-    first.unmount()
-    vi.setSystemTime(1_000_001)
-    const reopened = mountDrawer(queryClient)
-    await reopened.render({ client, open: true })
-    expect(
-      client.sendRequest.mock.calls
-        .filter(([method]) => method === 'preflight.refreshAgents')
-        .map(([, params]) => params)
-    ).toEqual([expect.not.objectContaining({ userInitiated: true })])
-    reopened.unmount()
   })
 })

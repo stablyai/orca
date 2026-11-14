@@ -1,7 +1,7 @@
-import type { OperationMutation } from '../operation-module-loader'
+import type { OperationMutation } from '../module-mounting/operation-module-loader'
 
 // Schema loosenings need malformed matrix variants, unit pins or consumer pins; valid pilot replies cannot detect them.
-// Keep mutations off the recording path, as enforced by mutant-seam.test.ts.
+// Keep mutations off the recording path.
 // Required-member tests must omit one member at a time; ownership tests must distinguish absent, null and named hosts.
 export const REPLY_SCHEMA_MUTATIONS = {
   // Killed by file-tab-doc-reply-schema unit tests; matrix omissions also omit siblings, masking this missing-content requirement.

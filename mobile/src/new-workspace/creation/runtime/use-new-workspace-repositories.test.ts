@@ -2,7 +2,10 @@ import { act } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../../../src/shared/execution-host'
 import { FakeSession } from '../../../transport/connection/mobile-endpoint-supervisor-test-fakes'
-import { hookMount, settleQueryNotifications } from '../../../test-support/rpc-recording/hook-mount'
+import {
+  hookMount,
+  settleQueryNotifications
+} from '../../../test-support/rpc-recording/react-mounting/hook-mount'
 import type { MobileWorkspaceRepo } from '../forms/new-worktree-modal-types'
 import { useNewWorkspaceRepositories } from './use-new-workspace-repositories'
 

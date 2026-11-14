@@ -10,7 +10,7 @@ const nodeFiles = [
   'src/terminal/document/native-document-bundle.test.ts',
   'src/transport/encryption/mobile-e2ee-v2-client-session.test.ts',
   'src/transport/encryption/mobile-e2ee-v2-physical-channel.test.ts',
-  'src/test-support/rpc-recording/family-recordings.test.ts'
+  'src/test-support/rpc-recording/goldens/family-recordings.test.ts'
 ]
 
 const config = mergeConfig(original, { cacheDir: process.env.ORCA_MOBILE_CI_CACHE_DIR })
