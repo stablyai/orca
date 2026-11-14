@@ -4132,6 +4132,8 @@
                 "uploadingFiles_other": "{{count}} dosya çalışma zamanına yükleniyor…",
                 "uploadingFiles_one": "{{count}} dosya çalışma zamanına yükleniyor…",
                 "uploadingFilesToRemote_other": "{{count}} dosya uzak ortama yükleniyor…",
+                "writeTargetGone": "Yükleme tamamlandı, ancak yolu yazacak terminal açık değildi. Dosyaların konumu:",
+                "writeTargetGoneCopyFailed": "Yollar kopyalanamadı.",
                 "uploadingFilesToRemote_one": "{{count}} dosya uzak ortama yükleniyor…"
               }
             }
