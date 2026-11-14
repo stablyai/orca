@@ -17,11 +17,10 @@
     "./scripts/test-runtime/node-worker/vitest-node-runtime-pool.ts",
     "./scripts/test-runtime/module-cache/vitest-module-cache-resolution-key.ts",
     "../src/main/**/*",
-    "../src/cli/runtime/transport.ts",
-    "../src/cli/runtime/envelope-schema.ts",
-    "../src/cli/runtime/types.ts",
-    "../src/cli/runtime/runtime-access-denied.ts",
-    "../src/cli/runtime/runtime-pid-liveness.ts",
+    "../src/cli/runtime/connection/transport.ts",
+    "../src/cli/runtime/connection/types.ts",
+    "../src/cli/runtime/connection/runtime-access-denied.ts",
+    "../src/cli/runtime/connection/runtime-pid-liveness.ts",
     "../src/renderer/src/store/slices/worktrees/create/worktree-create-payload.ts",
     "../src/renderer/src/runtime/repo-hooks/orca-hook-trust.ts",
     "../src/renderer/src/components/native-chat/native-chat-resolution-receipt.ts",
@@ -42,6 +41,7 @@
   ],
   "compilerOptions": {
     "composite": true,
+    "rewriteRelativeImportExtensions": true,
     "types": ["electron-vite/node"]
   }
 }

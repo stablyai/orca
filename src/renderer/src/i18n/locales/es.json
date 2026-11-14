@@ -330,6 +330,8 @@
       }
     },
     "agents": {
+      "installedRegion": "Agentes instalados",
+      "availableRegion": "Agentes disponibles para instalar",
       "codexTerminalServerIsolation": {
         "title": "Ejecutar cada terminal del Codex en su propio servidor",
         "description": "Mantiene el estado de Orca y las pestañas de cierre funcionando correctamente. Desactivar para utilizar el servidor compartido de Codex y la descripción general de sus agentes. Se aplica a terminales nuevos."
@@ -16875,7 +16877,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Extensiones de Chrome",
+                        "title": "Trae tus extensiones de Chrome",
+                        "everydayTitle": "Tus herramientas de navegador de cada día, en Orca",
                         "body": "Instala extensiones desde Chrome Web Store y fíjalas junto a la barra de direcciones.",
                         "action": "Abrir Web Store",
                         "secondaryAction": "Entendido"
@@ -19706,7 +19709,8 @@
         "safetyReviewApproved": "{{agent}} aprobó esta acción. Ver detalles.",
         "safetyReview": "{{agent}} notificó una advertencia de revisión de seguridad. Ver detalles.",
         "truncatedResponse": "Respuesta del proveedor truncada (tamaño original: {{bytes}} bytes).",
-        "forkedFrom": "Rama creada desde"
+        "forkedFrom": "Rama creada desde",
+        "forkedFromUnknown": "Rama creada desde otro chat"
       },
       "providerFrame": {
         "byteCount_one": "{{count}} byte",
@@ -20019,7 +20023,12 @@
         "failed": "{{agent}} no pudo crear una rama de este chat",
         "hostUnsupported": "Este host ejecuta una versión anterior de Orca. Actualiza Orca en el host y vuelve a intentarlo.",
         "failedDetail": "Tu chat no ha cambiado. Inténtalo de nuevo.",
-        "commandWorking": "No se puede crear una rama mientras {{agent}} responde. Vuelve a ejecutar /fork cuando termine."
+        "commandWorking": "No se puede crear una rama mientras {{agent}} responde. Vuelve a ejecutar /fork cuando termine.",
+        "mark": "Rama ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "Rama: {{name}}",
+        "sourceTooltip": "Rama de {{name}}",
+        "unknownSourceTooltip": "Rama de otro chat"
       },
       "cardKindHidden": {
         "description": "Puedes cambiar esto en cualquier momento en",

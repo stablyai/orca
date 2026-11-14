@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { basename, dirname, join, resolve, sep } from 'node:path'
-import { hashPluginTree } from '../../../main/plugins/plugin-content-hash'
+import { hashPluginTree } from '../../../main/plugins/artifacts/plugin-content-hash'
 import {
   validateDeclaredPluginArtifacts,
   validatePluginInstallContent
-} from '../../../main/plugins/plugin-artifact-validation'
+} from '../../../main/plugins/artifacts/plugin-artifact-validation'
 import { PLUGIN_CATALOG_FILENAME } from '../../../shared/plugins/catalog/plugin-catalog'
 import {
   pluginApprovalGrants,

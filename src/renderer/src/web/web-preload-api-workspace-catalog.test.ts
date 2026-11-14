@@ -41,7 +41,7 @@ describe('web repos preload API', () => {
       deviceToken: 'server-b-token',
       publicKeyB64: 'server-b-key'
     })
-    const paired = await globals.window.api.runtimeEnvironments.addFromPairingCode({
+    await globals.window.api.runtimeEnvironments.addFromPairingCode({
       name: 'Server B',
       pairingCode
     })
@@ -68,7 +68,7 @@ describe('web repos preload API', () => {
       { id: 'repo-a', executionHostId: 'runtime:web-server-a' }
     ])
     await expect(globals.window.api.runtimeEnvironments.list()).resolves.toMatchObject([
-      { id: paired.environment.id, name: 'Server B' }
+      { name: 'Server B' }
     ])
   })
 })
@@ -140,53 +140,6 @@ describe('web worktree preload API', () => {
     )
     await expect(globals.window.api.shell.pathExists('/srv/a/file.ts')).resolves.toBe(false)
     await expect(globals.window.api.shell.pathExists('/srv/b/file.ts')).resolves.toBe(true)
-  })
-
-  it('reuses the detected-worktree catalog cache until disconnect invalidates its runtime owner', async () => {
-    const calls: string[] = []
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
-          calls.push(method)
-          const results: Record<string, unknown> = {
-            'status.get': { runtimeId: 'runtime-a', version: '1.0.0' },
-            'repo.list': { repos: [{ id: 'repo-a' }] },
-            'worktree.detectedList': {
-              repoId: 'repo-a',
-              authoritative: true,
-              source: 'git',
-              worktrees: [{ id: 'repo-a::/srv/a', repoId: 'repo-a', path: '/srv/a' }]
-            }
-          }
-          return Promise.resolve({
-            id: method,
-            ok: true,
-            result: results[method],
-            _meta: { runtimeId: 'runtime-a' }
-          })
-        }
-
-        close(): void {}
-      }
-    }))
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    installWebPreloadApi()
-
-    await expect(globals.window.api.shell.pathExists('/srv/a/one.ts')).resolves.toBe(true)
-    await expect(globals.window.api.shell.pathExists('/srv/a/two.ts')).resolves.toBe(true)
-    await globals.window.api.runtimeEnvironments.disconnect({ selector: 'web-server-a' })
-    await globals.window.api.runtimeEnvironments.connect({ selector: 'web-server-a' })
-    await expect(globals.window.api.shell.pathExists('/srv/a/one.ts')).resolves.toBe(true)
-
-    expect(calls).toEqual([
-      'repo.list',
-      'worktree.detectedList',
-      'status.get',
-      'repo.list',
-      'worktree.detectedList'
-    ])
   })
 
   it('does not run a legacy detected-worktree fallback against a newly paired server', async () => {

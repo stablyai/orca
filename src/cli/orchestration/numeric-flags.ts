@@ -1,5 +1,5 @@
 import { parsePositiveSafeIntegerText } from '../../shared/timer-delay'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 export function getOptionalPositiveIntegerValueFlag(
   flags: Map<string, string | boolean>,

@@ -4,7 +4,7 @@ import { isRootAgentJournalItem } from '../../../../../../shared/agent-session/j
 import { NativeChatForkSlotContext } from '../actions/native-chat-fork-context'
 import { nativeChatAgentRowWords } from './native-chat-message-row-words'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
-import type { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/native-chat-row-content'
+import type { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 import type { MessageRowProps } from './NativeChatMessageRow'
 import { NativeChatPacedMarkdown } from '../../markdown/NativeChatPacedMarkdown'
 import { NATIVE_CHAT_QUOTE_SOURCE_PROPS } from '../../selection-quotes/native-chat-quote-selection'

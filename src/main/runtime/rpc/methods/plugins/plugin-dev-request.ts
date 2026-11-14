@@ -1,6 +1,6 @@
 import { defineMethod } from '../../core'
 import { PluginDevRequestParams } from '../../../../../shared/rpc-contract/plugins/plugins-params'
-import { requestPluginDevPanelHandler } from '../../../../plugins/plugin-dev-panel-request'
+import { requestPluginDevPanelHandler } from '../../../../plugins/development/plugin-dev-panel-request'
 import { requirePluginService } from './plugins'
 
 export const PLUGIN_DEV_REQUEST_METHODS = [

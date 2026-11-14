@@ -1,3 +1,4 @@
+import { readTestJournalSnapshot } from '../../../agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -6,14 +7,14 @@ import { agentJournalToolCallLifecycle } from '../../../../../shared/agent-journ
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalItemBody } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentSessionDeathEvidence } from '../../../../../shared/agent-session/lifecycle/agent-session-death-evidence'
-import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import type { AgentSessionDeathEvidence } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-death-evidence'
+import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import '../structured-agent-session-dead-generation-settlement'
 import { settleStaleStructuredAgentSessionState } from '../structured-agent-session-stale-state-settlement'
 
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const SESSION = 'session-late-proof'
 const THREAD = 'thread-1'
@@ -90,16 +91,18 @@ function settle(fence: number, deathEvidence: AgentSessionDeathEvidence | null) 
   })
 }
 
-function turnState(turnId: string) {
-  const item = journal
-    .snapshot()
-    .items.find((row) => readAgentJournalTurn(row.body)?.turnId === turnId)
+async function turnState(turnId: string) {
+  const item = (await readTestJournalSnapshot(journal)).items.find(
+    (row) => readAgentJournalTurn(row.body)?.turnId === turnId
+  )
   return readAgentJournalTurn(item?.body)?.state
 }
 
-function callLifecycle(turnId: string, ordinal: number) {
+async function callLifecycle(turnId: string, ordinal: number) {
   const key = agentJournalItemKey(identityOf(turnId, ordinal))
-  const body = journal.snapshot().items.find((item) => item.itemId === key)?.body
+  const body = (await readTestJournalSnapshot(journal)).items.find(
+    (item) => item.itemId === key
+  )?.body
   return body?.kind === 'tool-call' ? agentJournalToolCallLifecycle(body) : undefined
 }
 
@@ -112,14 +115,14 @@ describe('a proof written after an unverifiable settle', () => {
     ])
 
     await settle(2, null)
-    expect(turnState('turn-1')).toBe('unverifiable')
-    expect(callLifecycle('turn-1', 1)).toBe('failed')
+    expect(await turnState('turn-1')).toBe('unverifiable')
+    expect(await callLifecycle('turn-1', 1)).toBe('failed')
 
     await settle(3, proofFor(1))
-    expect(turnState('turn-1')).toBe('interrupted')
-    expect(callLifecycle('turn-1', 1)).toBe('interrupted')
-    expect(callLifecycle('turn-1', 2)).toBe('failed')
-    expect(callLifecycle('turn-1', 3)).toBe('completed')
+    expect(await turnState('turn-1')).toBe('interrupted')
+    expect(await callLifecycle('turn-1', 1)).toBe('interrupted')
+    expect(await callLifecycle('turn-1', 2)).toBe('failed')
+    expect(await callLifecycle('turn-1', 3)).toBe('completed')
 
     const corrected = journal.cursor()
     await expect(settle(4, proofFor(1))).resolves.toBe(0)
@@ -131,7 +134,7 @@ describe('a proof written after an unverifiable settle', () => {
     await settle(2, null)
     await seedTurn('turn-2', 2)
     await settle(3, null)
-    expect(callLifecycle('turn-2', 1)).toBe('failed')
+    expect(await callLifecycle('turn-2', 1)).toBe('failed')
 
     const unrevised = journal.cursor()
     // Other-owner and legacy ownerless proof cannot settle this generation.
@@ -140,8 +143,8 @@ describe('a proof written after an unverifiable settle', () => {
     expect(journal.cursor()).toEqual(unrevised)
 
     await settle(4, proofFor(1))
-    expect(callLifecycle('turn-1', 1)).toBe('interrupted')
-    expect(turnState('turn-2')).toBe('unverifiable')
-    expect(callLifecycle('turn-2', 1)).toBe('failed')
+    expect(await callLifecycle('turn-1', 1)).toBe('interrupted')
+    expect(await turnState('turn-2')).toBe('unverifiable')
+    expect(await callLifecycle('turn-2', 1)).toBe('failed')
   })
 })

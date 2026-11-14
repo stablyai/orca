@@ -96,7 +96,8 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
       }
       const process = await spawned.read(session.connection.pid)
       if (session.connection.closed || attempt.signal.aborted) {
-        throw new Error('Pi exited while starting')
+        const ending = attempt.signal.aborted ? undefined : this.endings.get(id, session.generation)
+        throw ending ?? new Error('Pi exited while starting')
       }
       return {
         process,
@@ -141,7 +142,7 @@ export class PiRpcSessionAdapter implements StructuredAgentSessionAdapter {
 
   cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = async (input) => {
     const session = this.session(input.sessionId, input.fence)
-    const turnId = input.resolveLiveTurnId ? input.resolveLiveTurnId() : session.lane.openTurnId
+    const turnId = await (input.resolveLiveTurnId?.() ?? session.lane.openTurnId)
     if (input.turnId !== undefined && input.turnId !== turnId) {
       return { cancelled: false }
     }

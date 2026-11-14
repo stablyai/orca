@@ -3,7 +3,7 @@ import {
   relativePathInsideRoot,
   resolveRuntimePath
 } from '../../../../src/shared/cross-platform-path'
-import { routeMarkdownHref } from '../../components/markdown-href-routing'
+import { routeMarkdownHref } from '../../components/markdown/links/markdown-href-routing'
 import type { MobileFilePreviewRpcSender } from '../preview/mobile-file-preview-operations'
 import { loadMobileFilePreview } from '../preview/mobile-file-preview-request'
 import { classifyMobileArtifact } from '../preview/mobile-artifact-kind'

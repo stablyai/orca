@@ -1,4 +1,5 @@
 import { senderDispatchLaunch } from './sender-dispatch-launch'
+import { agentSessionRecordShownName } from '../../../agent-session/records/agent-session-record-shown-name'
 import { readWorkerTerminalHostScope } from '../../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import { crewDisplayName } from '../../crew/crew-rules'
 import type { AgentMessageSender } from '../../../../../shared/agent-session/agent-session-message-source'
@@ -288,7 +289,8 @@ export function structuredChatNaming(
   }
   const tab = sources.chatTab(record.location.workspaceId, record.sessionId)
   const fallback = tab?.label.trim() || defaultAgentChatLabel(record.provider)
-  const ownName = structuredChatDisplayName(tab?.customLabel, record.conversationName, '') || null
+  const shownName = sources.records ? agentSessionRecordShownName(sources.records, record) : null
+  const ownName = structuredChatDisplayName(tab?.customLabel, shownName, '') || null
   return { ownName, fallback, agent: record.provider }
 }
 

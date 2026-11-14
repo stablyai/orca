@@ -22,7 +22,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   {
     name: 'core',
     keys: ['claude-teams', 'open', 'serve', 'status'],
-    load: async () => (await import('../runtime/cli-lifecycle-handlers.js')).CORE_HANDLERS
+    load: async () => (await import('../runtime/commands/cli-lifecycle-handlers.js')).CORE_HANDLERS
   },
   ...SERVE_PAIRING_HANDLER_GROUPS,
   {

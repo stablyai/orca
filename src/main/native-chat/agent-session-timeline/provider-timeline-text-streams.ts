@@ -2,59 +2,42 @@
 // Flush text at event barriers or coalescing windows. Recheck turn settlement on every write,
 // retaining stopped keys until their boundary so trailing deltas cannot escape into thread messages.
 
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemBody,
-  type AgentJournalProducerLinkage
+import type {
+  AgentJournalRenderItem,
+  AgentJournalProducerLinkage
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
 import {
   createAgentSessionDeltaCoalescer,
   type AgentSessionDeltaCoalescerDeps
 } from '../agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
 import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'
-import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/journal-ingress/structured-agent-session-transition'
 import {
   providerTimelinePlacement,
+  providerTimelineScopeItemIds,
   type ProviderTimelineContext
 } from './provider-timeline-context'
-import type { ProviderTimelineResolvedWrite } from './provider-timeline-decision'
 import type {
   ProviderTimelineJoin,
   ProviderTimelineTextChannel,
   ProviderTimelineTextItem
 } from './provider-timeline-event'
+import {
+  providerTimelineLiveText,
+  providerTimelineTextBody,
+  type ProviderTimelineStream
+} from './provider-timeline-text-stream'
+import { splitProviderTimelineTextBlocks } from './provider-timeline-text-blocks'
 import { providerTimelineKeyPart } from './provider-timeline-identity'
 import { ProviderTimelinePlan, type ProviderTimelineSink } from './provider-timeline-plan'
-import {
-  providerKey,
-  providerTimelineTurnRowState,
-  turnOf,
-  type ProviderTimelineRowId
-} from './provider-timeline-rows'
+import { providerKey, turnOf } from './provider-timeline-rows'
 import type { ProviderTimelineState } from './provider-timeline-state'
-
-export type ProviderTimelineStream = {
-  id: string
-  /** Named deltas and snapshots share the same row identity. */
-  key: string
-  row: ProviderTimelineRowId
-  /** New rows use this scope; existing rows retain theirs. */
-  scope: AgentJournalTurnScope
-  named: boolean
-  channel: ProviderTimelineTextChannel
-  producer: AgentJournalProducerLinkage | undefined
-  /** Whitespace-only streams cannot complete a message. */
-  written: boolean
-  /** Once a write finds a settled turn, later text cannot land. */
-  stoppedIn: string | null
-}
 
 export class ProviderTimelineTextStreams {
   private readonly streams = new Map<string, ProviderTimelineStream>()
   private readonly byId = new Map<string, ProviderTimelineStream>()
   private readonly stopped = new Map<string, string>()
   private readonly coalescer
+  private readonly releaseLiveText: (() => void) | undefined
 
   constructor(
     private readonly deps: {
@@ -70,6 +53,10 @@ export class ProviderTimelineTextStreams {
       // Live identities must survive until the provider closes them or their turn ends.
       isProtected: () => true,
       emit: (id, text) => this.flushOnWindow(id, text)
+    })
+    this.releaseLiveText = deps.sink.bindLiveText?.({
+      read: (epoch) => this.liveText(epoch),
+      flush: () => this.flush()
     })
   }
 
@@ -91,7 +78,7 @@ export class ProviderTimelineTextStreams {
       this.stop(stream, stream.stoppedIn)
       return undefined
     }
-    return stream
+    return stream?.closing ? undefined : stream
   }
 
   /** Drop trailing text for the same stopped turn, including events naming no turn. */
@@ -122,10 +109,15 @@ export class ProviderTimelineTextStreams {
       key: this.key(input.item, input.join),
       row: rows.item('item', key, thread),
       scope: providerTimelinePlacement(this.deps.context, input.state, input.join),
+      scopeItemIds: providerTimelineScopeItemIds(this.deps.context, input.join),
       named,
       channel: input.channel,
       producer: input.producer,
-      written: false,
+      committed: null,
+      queuedLength: 0,
+      savedAt: 0,
+      pending: 0,
+      closing: false,
       stoppedIn: null
     }
   }
@@ -145,14 +137,23 @@ export class ProviderTimelineTextStreams {
         this.byId.set(stream.id, stream)
       }
       this.coalescer.append(stream.id, text)
+      const snapshot = this.coalescer.snapshot(stream.id)
+      if (stream.queuedLength === 0 && snapshot && snapshot.text.trim().length > 0) {
+        const start = new ProviderTimelinePlan()
+        this.planText(start, stream, snapshot.text)
+        start.submit(this.deps.sink)
+      }
     })
   }
 
   /** Flush preceding text before the event’s own writes. */
   planFlush(plan: ProviderTimelinePlan, except?: ProviderTimelineStream): void {
-    for (const { key, snapshot } of this.coalescer.dirty()) {
-      const stream = this.byId.get(key)
-      if (stream && stream !== except) {
+    for (const stream of this.byId.values()) {
+      if (stream.closing) {
+        continue
+      }
+      const snapshot = this.coalescer.snapshot(stream.id)
+      if (snapshot && stream !== except && snapshot.text.length !== stream.queuedLength) {
         this.planText(plan, stream, snapshot.text)
       }
     }
@@ -185,15 +186,20 @@ export class ProviderTimelineTextStreams {
   ): void {
     const released = [...this.streams.values()].filter(which)
     if (released.length > 0) {
-      plan.onAdmitted(() => released.forEach((stream) => this.forget(stream)))
+      plan.onAdmitted(() =>
+        released.forEach((stream) => {
+          stream.closing = true
+        })
+      )
+      plan.onPublished(() => released.forEach((stream) => this.forget(stream)))
     }
   }
 
   planClose(plan: ProviderTimelinePlan, stream: ProviderTimelineStream, finalText?: string): void {
     if (finalText === undefined) {
-      const owed = this.coalescer.dirty().find(({ key }) => key === stream.id)
-      if (owed) {
-        this.planText(plan, stream, owed.snapshot.text)
+      const owed = this.coalescer.snapshot(stream.id)
+      if (owed && owed.text.length !== stream.queuedLength) {
+        this.planText(plan, stream, owed.text)
       }
     } else {
       this.planText(plan, stream, finalText, true)
@@ -202,14 +208,30 @@ export class ProviderTimelineTextStreams {
   }
 
   flush(): void {
+    const plan = new ProviderTimelinePlan()
+    this.planFlush(plan)
+    plan.submit(this.deps.sink)
     this.coalescer.flushAll()
   }
 
   /** Drops buffered text; apply session.ended first to flush it. */
   dispose(): void {
-    Array.from(this.byId.values()).forEach((stream) => this.forget(stream))
-    this.stopped.clear()
-    this.coalescer.dispose()
+    const finish = (): void => {
+      Array.from(this.byId.values()).forEach((stream) => this.forget(stream))
+      this.stopped.clear()
+      this.releaseLiveText?.()
+      this.coalescer.dispose()
+    }
+    const written = this.deps.sink.written?.()
+    if (written) {
+      void written.then((result) => {
+        if (result.ok) {
+          finish()
+        }
+      })
+    } else {
+      finish()
+    }
   }
 
   /** Retain refused text only for retryable backpressure. */
@@ -218,10 +240,29 @@ export class ProviderTimelineTextStreams {
     if (!stream) {
       return true
     }
-    const plan = new ProviderTimelinePlan()
-    this.planText(plan, stream, text)
-    const admission = plan.submit(this.deps.sink)
-    return admission.accepted || admission.reason !== 'backpressure'
+    if (stream.closing || stream.stoppedIn !== null) {
+      return true
+    }
+    const now = Date.now()
+    if (stream.pending === 0 && (stream.queuedLength === 0 || now - stream.savedAt >= 400)) {
+      const ready = stream.queuedLength === 0 ? text : splitProviderTimelineTextBlocks(text).ready
+      if (ready.length > stream.queuedLength) {
+        const plan = new ProviderTimelinePlan()
+        this.planText(plan, stream, ready)
+        const admission = plan.submit(this.deps.sink)
+        if (!admission.accepted && admission.reason === 'backpressure') {
+          return false
+        }
+      }
+    }
+    const admission = this.deps.sink.publishLiveText?.()
+    return admission?.accepted !== false || admission.reason !== 'backpressure'
+  }
+
+  private liveText(epoch: string): AgentJournalRenderItem[] {
+    return [...this.byId.values()].flatMap((stream) =>
+      providerTimelineLiveText(stream, epoch, this.coalescer.snapshot(stream.id))
+    )
   }
 
   private planText(
@@ -231,54 +272,49 @@ export class ProviderTimelineTextStreams {
     providerFinal = false
   ): void {
     const empty = providerFinal ? text.length === 0 : text.trim().length === 0
-    if (!stream.written && empty) {
+    if (stream.queuedLength === 0 && empty) {
       plan.onAdmitted(() => this.coalescer.markFlushed(stream.id))
       return
     }
-    const body = this.message(stream, text)
-    plan.item({
-      reservedBytes: estimateStructuredAgentSessionItemBytes(stream.row.identity, body),
-      resolve: (journal) => this.resolveText(stream, body, journal),
-      options: { ...stream.producer, turnScope: stream.scope }
-    })
+    const body = providerTimelineTextBody(stream, text)
+    plan.item(
+      {
+        reservedBytes: estimateStructuredAgentSessionItemBytes(stream.row.identity, body),
+        resolution: {
+          kind: 'text-snapshot',
+          identity: stream.row.identity,
+          body,
+          scopeItemIds: stream.scopeItemIds
+        },
+        options: { ...stream.producer, turnScope: stream.scope }
+      },
+      false,
+      (outcome, committed) => {
+        stream.pending = Math.max(0, stream.pending - 1)
+        if (outcome.kind === 'committed' && outcome.wrote) {
+          stream.savedAt = Date.now()
+          const item = committed.items?.find((item) => item.itemId === stream.row.itemId)
+          if (item && committed.cursor) {
+            const { body: _body, ...placement } = item
+            stream.committed = { epoch: committed.cursor.epoch, placement }
+          }
+        }
+        if (
+          outcome.kind === 'dropped' &&
+          outcome.turnItemId &&
+          this.streams.get(stream.key) === stream
+        ) {
+          this.stop(stream, outcome.turnItemId)
+        }
+      }
+    )
     plan.onAdmitted(() => {
-      stream.written = true
-      this.coalescer.markFlushed(stream.id)
+      stream.queuedLength = text.length
+      stream.pending += 1
     })
-  }
-
-  /** Recheck every write so no stream appends after any writer settles its turn. */
-  private resolveText(
-    stream: ProviderTimelineStream,
-    body: AgentJournalItemBody,
-    journal: StructuredAgentSessionTransitionJournal
-  ): ProviderTimelineResolvedWrite | null {
-    if (stream.stoppedIn !== null) {
-      return null
-    }
-    const turn = this.rowTurn(stream, journal)
-    if (turn !== null && providerTimelineTurnRowState(journal, turn) === 'settled') {
-      stream.stoppedIn = turn
-      return null
-    }
-    return { identity: stream.row.identity, body }
-  }
-
-  /** Prefer the persisted scope, otherwise the pending row’s placement. */
-  private rowTurn(
-    stream: ProviderTimelineStream,
-    journal: StructuredAgentSessionTransitionJournal
-  ): string | null {
-    const held = journal.item(stream.row.itemId)
-    return turnOf(held ? (held.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE) : stream.scope)
-  }
-
-  private message(stream: ProviderTimelineStream, text: string): AgentJournalItemBody {
-    return {
-      kind: 'message',
-      role: stream.channel === 'assistant' ? 'assistant' : 'reasoning',
-      blocks: [{ type: 'text', text }]
-    }
+    plan.onPublished(() => {
+      this.deps.sink.publishLiveText?.()
+    })
   }
 
   private stop(stream: ProviderTimelineStream, turnItemId: string): void {

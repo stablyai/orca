@@ -165,7 +165,9 @@ export function buildRemoteSettingsSections(
               title: group.settingsLabel ?? group.name,
               description: owner.path,
               icon: SlidersHorizontal,
-              searchEntries: getRepositoryGitHooksSearchEntries(owner, t, { showArchive: false }),
+              searchEntries: getRepositoryGitHooksSearchEntries(owner, t, {
+                showArchive: group.supportsArchiveHooks === true
+              }),
               group: 'repositories'
             }
           ]

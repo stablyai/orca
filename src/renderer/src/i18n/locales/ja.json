@@ -442,6 +442,8 @@
       }
     },
     "agents": {
+      "installedRegion": "インストール済みの Agent",
+      "availableRegion": "インストール可能な Agent",
       "codexTerminalServerIsolation": {
         "title": "各 Codex ターミナルを独自のサーバー上で実行する",
         "description": "Orca のステータスとタブを閉じる動作が正しく動作するようにします。 Codex の共有サーバーとその Agent の概要を使用するには、オフにします。新規ターミナルに適用されます。"
@@ -2108,9 +2110,9 @@
         "pasteTooLarge": "貼り付け内容が大きすぎます。"
       },
       "useMacosTccPromptNotice": {
-        "titleOne": "macOS が Agent を中断しました",
-        "titleMany": "macOS が Agent を {{count}} 回中断しました",
-        "subtitle": "フルディスクアクセスを有効にすると、こうしたファイルの確認ダイアログが表示されなくなります。",
+        "titleOne": "macOS がファイルの確認ダイアログを表示しました",
+        "titleMany": "macOS がファイルの確認ダイアログを {{count}} 回表示しました",
+        "subtitle": "フルディスクアクセスを有効にすると、こうした確認ダイアログが表示されなくなります。",
         "enable": "フルディスクアクセスをオンにする",
         "close": "閉じる",
         "dismiss": "今後表示しない"
@@ -14049,10 +14051,6 @@
             "locallyResolvedConflictOfKind": "ローカルで解決済みの競合 ({{kind}})",
             "locallyResolvedConflict": "ローカルで解決済みの競合",
             "pushesToForkTarget": "フォーク {{target}} にプッシュ",
-            "mergedReviewUncommitted_other": "{{review}} はマージ済みですが、このワークスペースにはそれに含まれていない未コミットの変更が {{count}} 件あります。",
-            "mergedReviewHeadMoved": "{{review}} はマージ済みですが、このブランチの現在のコミットが含まれているかを確認できませんでした。",
-            "mergedReviewNothingLeft": "{{review}} はマージ済みで、このブランチのコミット済みの変更が含まれています。",
-            "mergedReviewSafeToDelete": "{{review}} はマージ済みで、このブランチのコミット済みの変更が含まれています。ただし、このワークスペースを削除すると、無視されたファイルは失われる可能性があります。",
             "abortRebaseConfirmTitle": "リベースを中止しますか？",
             "abortMergeConfirmTitle": "マージを中止しますか？",
             "abortRebaseConfirmDescription": "進行中のリベースを中止します。このリベース中に行った競合の解決が破棄される場合があります。",
@@ -17353,7 +17351,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Chrome 拡張機能",
+                        "title": "Chrome 拡張機能をそのまま使おう",
+                        "everydayTitle": "いつものブラウザツールを Orca で",
                         "body": "Chrome ウェブストアからインストールし、アドレスバーの横に固定できます。",
                         "action": "ウェブストアを開く",
                         "secondaryAction": "了解"
@@ -20147,7 +20146,8 @@
         "safetyReview": "{{agent}} が安全性レビューの警告を報告しました。詳細を表示。",
         "truncatedResponse": "プロバイダーの応答は切り詰められています（元のサイズ：{{bytes}} バイト）。",
         "modelFallback": "Claude がモデルを切り替えました: {{from}} → {{to}}。",
-        "forkedFrom": "分岐元"
+        "forkedFrom": "分岐元",
+        "forkedFromUnknown": "別のチャットから分岐"
       },
       "providerFrame": {
         "byteCount_other": "{{count}} バイト"
@@ -20619,7 +20619,12 @@
         "commandDescription": "このチャットを最新の応答から分岐",
         "commandWorking": "{{agent}} の応答中は分岐できません。応答が終わったら、もう一度 /fork を実行してください。",
         "commandNothing": "分岐できる応答はまだありません。",
-        "commandTakesNoText": "/fork だけを送信してから、新しいチャットに入力してください。"
+        "commandTakesNoText": "/fork だけを送信してから、新しいチャットに入力してください。",
+        "mark": "分岐 ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "分岐: {{name}}",
+        "sourceTooltip": "{{name}} から分岐",
+        "unknownSourceTooltip": "別のチャットから分岐"
       },
       "usage": {
         "description": "このチャットの Codex アカウントの使用量を表示",

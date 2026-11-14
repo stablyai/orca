@@ -4,6 +4,8 @@ export const WORKER_THREAD_ENTRY_NAMES = [
   'foreign-sqlite-reader-entry',
   'agent-identity-worker-entry',
   'session-search-worker-entry',
+  'journal-sql-worker-entry',
+  'journal-sql-reader-entry',
   'main-thread-hang-watchdog-entry',
   'port-scan-command-worker-entry',
   'command-path-directory-worker-entry',

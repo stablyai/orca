@@ -1,7 +1,7 @@
 import {
   readAgentSessionExecutionOptions,
   type AgentSessionExecutionOptions
-} from '../../../../shared/agent-session/options/agent-session-execution-options'
+} from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import {
   refuse,
   type AgentSessionWireRefusal

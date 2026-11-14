@@ -1,4 +1,4 @@
-import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -8,7 +8,7 @@ import { agentSessionFailureFact } from '../../../../shared/agent-session/failur
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentChildWorkEvidence } from '../../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import { makeStructuredAgentStatusSubject } from '../../../../shared/agent-status/contracts/agent-status-subject'
-import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
@@ -18,11 +18,11 @@ import { AgentHookServer, _internals } from '../../../agent-hooks/server/agent-h
 import { createTrackedJournalOpener } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store'
 import { StructuredAgentSessionStatusFeed } from '../../../native-chat/agent-session-wire/observations/structured-agent-session-status-feed'
-import { indexedStatusFeedSession } from '../../../native-chat/agent-session-wire/observations/testing/structured-agent-session-status-feed-test-session'
+import { indexedStatusFeedSession } from '../../../native-chat/agent-session-wire/observations/testing/structured-agent-session-status-feed-test-session.test-fixture'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 import { collectRuntimeWorktreeAgentSources } from './runtime-worktree-agent-sources'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 vi.mock('../../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../../telemetry/cohort-classifier', () => ({
@@ -75,7 +75,7 @@ async function openJournal(): Promise<AgentSessionJournal> {
 }
 
 /** Publish through the real host feed. */
-function publishedSummary(journal: AgentSessionJournal): AgentSessionStatusSummary {
+async function publishedSummary(journal: AgentSessionJournal): Promise<AgentSessionStatusSummary> {
   const session = indexedStatusFeedSession({ journal })
   const feed = new StructuredAgentSessionStatusFeed({
     logger: createStructuredAgentSessionLogger(),
@@ -83,6 +83,7 @@ function publishedSummary(journal: AgentSessionJournal): AgentSessionStatusSumma
     getConversation: () => agentSessionConversationView(agentSessionRecordFixture()),
     now: () => 1_000
   })
+  await feed.publish(SESSION, journal, { replay: true })
   const events: AgentSessionStatusEvent[] = []
   feed.subscribe({ id: 'list', emit: (event) => events.push(event) })
   const snapshot = events.find((event) => event.type === 'snapshot')
@@ -138,15 +139,16 @@ describe('a request that failed reads as failed through the feed, the ingest and
       fence: 1,
       handoverRecorded: true
     })
-    await journal.rejectQueuedSubmissions(
-      1,
-      agentSessionFailureWords(agentSessionFailureFact('notSignedIn'), {
+    await journal.write({
+      kind: 'queued-reject',
+      fence: 1,
+      rejection: agentSessionFailureWords(agentSessionFailureFact('notSignedIn'), {
         surface: 'rejection',
         agentName: 'Claude'
       })
-    )
+    })
 
-    const summary = publishedSummary(journal)
+    const summary = await publishedSummary(journal)
     expect(summary).toMatchObject({ status: 'idle', turnOutcome: 'failure', latestPrompt: 'hello' })
     const { status, ps } = ingest(summary)
     expect(status).toMatchObject({
@@ -175,7 +177,7 @@ describe('a request that failed reads as failed through the feed, the ingest and
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
 
-    const { status, ps } = ingest(publishedSummary(journal))
+    const { status, ps } = ingest(await publishedSummary(journal))
     expect(status).toMatchObject({ state: 'done', interrupted: true })
     expect(ps).toMatchObject({
       mainAgent: { state: 'done', outcome: 'cancellation' },
@@ -191,7 +193,7 @@ describe('a request that failed reads as failed through the feed, the ingest and
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
     // The row folds the host's live child records, never the summary's task list.
-    const { status, ps } = ingest(publishedSummary(journal), [
+    const { status, ps } = ingest(await publishedSummary(journal), [
       {
         type: 'live',
         observedAt: 1_000,
@@ -229,12 +231,15 @@ describe('a request that failed reads as failed through the feed, the ingest and
       fence: 1,
       handoverRecorded: true
     })
-    await journal.rejectQueuedSubmissions(
-      1,
-      agentSessionFailureWords(agentSessionFailureFact('cancelled'), { surface: 'rejection' })
-    )
+    await journal.write({
+      kind: 'queued-reject',
+      fence: 1,
+      rejection: agentSessionFailureWords(agentSessionFailureFact('cancelled'), {
+        surface: 'rejection'
+      })
+    })
 
-    expect(publishedSummary(journal)).toMatchObject({ status: null })
-    expect(ingest(publishedSummary(journal)).ps).toBeUndefined()
+    expect(await publishedSummary(journal)).toMatchObject({ status: null })
+    expect(ingest(await publishedSummary(journal)).ps).toBeUndefined()
   })
 })

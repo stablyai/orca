@@ -124,12 +124,17 @@ Do not register copies explicitly (`lsregister -f` or `LSRegisterURL`).
 
 Terminal processes' responsible process is the helper, and macOS Local Network privacy maps a
 responsible process to an app by its main executable's `LC_UUID` (TN3179). Stock Node's UUID is
-shared by every install of that Node build (nvm, Homebrew, other apps), so with it Local Network
-attributed Orca terminals to other programs and blocked LAN access while System Settings showed
-Orca allowed (#21988). Packaging rewrites the helper executable's UUID before signing, the same
-way as the main executable's (#41676): derived from the app id, `Orca Agents` and the CPU type, so
-it is unique to Orca and stable across releases. `verifyMacTerminalHost` and the release check
-fail if it drifts.
+shared by every install of that Node build, so with it Orca's terminals and any other program on
+that Node shared Local Network decisions in both directions, and LAN access was blocked while System
+Settings showed Orca allowed (#21988).
+
+Local Network also caches one UUID per bundle id, and the helper shares `com.stablyai.orca` with
+the app. A helper UUID of its own keeps replacing the app's cached UUID and back: in testing it
+flip-flopped, blocked some terminal and app connections, and prompted again after an update. So
+packaging gives the helper exactly the main executable's UUID per CPU type (#41676: derived from
+the app id, the app's executable name and the CPU type), stable across releases.
+`verifyMacTerminalHost` and the release check fail if it drifts. The designated requirement is
+unchanged, so file-access grants are unaffected.
 
 ## Rollback
 
