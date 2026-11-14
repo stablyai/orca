@@ -4,6 +4,8 @@ import {
   legacyAgentSessionQuestionAnswers
 } from '../../../shared/agent-session/agent-session-question-answer'
 import { AcpRpcError } from '../transport/acp-errors'
+import { acpFormElicitationPresentation } from '../requests/acp-form-elicitation'
+import { acpUrlElicitationPresentation } from '../requests/acp-url-elicitation'
 import {
   pendingAcpResolution,
   type AcpRequestPresentation,
@@ -101,6 +103,32 @@ function questionRequest(params: unknown): AcpRequestPresentation {
   }
 }
 
+const mcpElicitSchema = z.looseObject({ serverName: z.string(), message: z.string() })
+const formReplySchema = z.object({ action: z.string(), content: z.unknown().optional() })
+
+/** An MCP server's `elicitation/create` that Grok forwards: a URL to open, or a form to fill. */
+function mcpElicitRequest(params: unknown): AcpRequestPresentation {
+  const parsed = mcpElicitSchema.safeParse(params)
+  if (!parsed.success) {
+    throw new AcpRpcError(-32602, 'Invalid MCP elicitation request')
+  }
+  const { serverName, message } = parsed.data
+  // Name the server, since the request is its, not Grok's.
+  const named = { ...parsed.data, message: serverName ? `${serverName}: ${message}` : message }
+  if (parsed.data.mode === 'url') {
+    return acpUrlElicitationPresentation(named, (action) => ({ outcome: action }))
+  }
+  const form = acpFormElicitationPresentation(named)
+  return {
+    ...form,
+    // Grok reads the same answer under `outcome` rather than ACP's `action`.
+    reply: (response) => {
+      const { action, content } = formReplySchema.parse(form.reply(response))
+      return { outcome: action, ...(content === undefined ? {} : { content }) }
+    }
+  }
+}
+
 const PLAN_SHOWN_FEEDBACK =
   'Orca showed your plan to the user. Stop here and wait for their feedback or a request to implement it in a later turn.'
 
@@ -128,6 +156,9 @@ export function grokSettleRequest(
 export function grokRequest(method: string, params: unknown): AcpRequestPresentation | undefined {
   if (['_x.ai/ask_user_question', 'x.ai/ask_user_question'].includes(method)) {
     return questionRequest(params)
+  }
+  if (['_x.ai/mcp/elicit', 'x.ai/mcp/elicit'].includes(method)) {
+    return mcpElicitRequest(params)
   }
   return undefined
 }

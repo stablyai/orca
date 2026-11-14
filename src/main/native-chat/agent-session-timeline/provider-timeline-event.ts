@@ -6,6 +6,7 @@
 import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
 import type {
   AgentJournalApprovalItem,
+  AgentJournalApprovalSubject,
   AgentJournalItemBody,
   AgentJournalProducerLinkage,
   AgentJournalQuestionItem
@@ -86,6 +87,8 @@ export type ProviderTimelineEvent =
       Joined)
   /** Withdraw only unanswered requests. */
   | { type: 'request.withdrawn'; request: string }
+  /** Replace an answered approval's subject, keeping the answer; unanswered requests stay as they are. */
+  | { type: 'request.subject'; request: string; subject: AgentJournalApprovalSubject }
   /** Use the named turn, otherwise open turn, otherwise last turn. */
   | ({ type: 'context.usage'; usage: AgentSessionContextUsage } & Joined)
   | { type: 'activity'; text: string | null }

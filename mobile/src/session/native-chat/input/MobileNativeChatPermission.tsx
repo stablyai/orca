@@ -11,9 +11,18 @@ import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {
   isNewerApprovalSubject,
-  isPlanApprovalSubject
+  isPlanApprovalSubject,
+  isUrlApprovalSubject,
+  URL_APPROVAL_DECLINE_OPTION_ID,
+  URL_APPROVAL_OPEN_OPTION_ID
 } from '../../../../../src/shared/agent-session/agent-session-approval-subject'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
+import {
+  canOpenUrlRequestPage,
+  MobileNativeChatUrlTarget,
+  openUrlRequestPage
+} from './MobileNativeChatUrlRequest'
+import { structuredApprovalOptionId } from './mobile-structured-agent-prompts'
 
 function MobileNativeChatPermissionImpl({
   permission,
@@ -36,6 +45,17 @@ function MobileNativeChatPermissionImpl({
   const submittingRef = useRef(false)
   // Unknown newer-host subjects allow only cancellation; preserve their detail for the reader.
   const newerSubject = isNewerApprovalSubject(permission.subject)
+  // A page to open: its option opens it, and the back-out stays quiet.
+  const url = isUrlApprovalSubject(permission.subject) ? permission.subject.url : null
+  const title = url === null ? permission.title : t('chat.urlRequest.title', 'Sign-in requested')
+  const optionLabel = (option: MobileChatPermission['options'][number]): string =>
+    url === null
+      ? option.label
+      : structuredApprovalOptionId(option.send) === URL_APPROVAL_OPEN_OPTION_ID
+        ? t('chat.urlRequest.open', 'Open sign-in page')
+        : structuredApprovalOptionId(option.send) === URL_APPROVAL_DECLINE_OPTION_ID
+          ? t('chat.urlRequest.decline', 'Decline')
+          : option.label
   const respond = async (send: string): Promise<void> => {
     if (submittingRef.current) {
       return
@@ -58,7 +78,7 @@ function MobileNativeChatPermissionImpl({
           numberOfLines={2}
           ellipsizeMode="tail"
         >
-          {permission.title}
+          {title}
         </Text>
         <MobileNativeChatCardHeaderAction
           prompt={permission.prompt}
@@ -71,21 +91,39 @@ function MobileNativeChatPermissionImpl({
       <View testID="native-chat-approval-actions" style={styles.options}>
         {permission.options.map((option, index) => {
           const isPrimary = index === 0 && !permission.neutralOptions
+          const opensUrl =
+            url !== null && structuredApprovalOptionId(option.send) === URL_APPROVAL_OPEN_OPTION_ID
+          const unopenable = opensUrl && !canOpenUrlRequestPage(url)
           return (
             <Pressable
               key={`${option.send}:${option.label}`}
               style={({ pressed }) => [
                 styles.option,
-                isPrimary ? styles.optionPrimary : styles.optionSecondary,
+                isPrimary
+                  ? styles.optionPrimary
+                  : url === null
+                    ? styles.optionSecondary
+                    : styles.optionQuiet,
                 pressed && !submitting && styles.optionPressed,
-                newerSubject && styles.disabled
+                (newerSubject || unopenable) && styles.disabled
               ]}
               hitSlop={6}
-              onPress={() => respond(option.send)}
-              disabled={submitting || newerSubject}
+              onPress={() => {
+                if (opensUrl && !submittingRef.current) {
+                  openUrlRequestPage(url)
+                }
+                void respond(option.send)
+              }}
+              disabled={submitting || newerSubject || unopenable}
             >
-              <Text style={[styles.optionText, isPrimary && styles.optionTextPrimary]}>
-                {option.label}
+              <Text
+                style={[
+                  styles.optionText,
+                  isPrimary && styles.optionTextPrimary,
+                  !isPrimary && url !== null && styles.optionTextQuiet
+                ]}
+              >
+                {optionLabel(option)}
               </Text>
             </Pressable>
           )
@@ -165,6 +203,8 @@ function MobileNativeChatPermissionContext({
             </Text>
           ) : null}
         </View>
+      ) : isUrlApprovalSubject(permission.subject) ? (
+        <MobileNativeChatUrlTarget url={permission.subject.url} />
       ) : permission.detail ? (
         <MobileNativeChatPermissionDetail detail={permission.detail} />
       ) : null}
@@ -274,6 +314,9 @@ const styles = themedStyleSheet(() => ({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle
   },
+  optionQuiet: {
+    backgroundColor: 'transparent'
+  },
   optionPressed: {
     opacity: 0.7
   },
@@ -287,5 +330,8 @@ const styles = themedStyleSheet(() => ({
   },
   optionTextPrimary: {
     color: colors.onAccent
+  },
+  optionTextQuiet: {
+    color: colors.textSecondary
   }
 }))

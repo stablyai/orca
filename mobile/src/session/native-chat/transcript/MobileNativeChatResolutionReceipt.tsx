@@ -16,6 +16,8 @@ import { scaledType } from './mobile-native-chat-message-styles'
 import { MobileNativeChatMessageTime } from './MobileNativeChatMessageTime'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { urlApprovalProgress } from '../../../../../src/shared/agent-session/agent-session-approval-subject'
+import { MobileNativeChatUrlRequestReceipt } from '../input/MobileNativeChatUrlRequest'
 
 export function MobileNativeChatResolutionReceipt({
   body,
@@ -40,6 +42,10 @@ export function MobileNativeChatResolutionReceipt({
         listsQuestions={!awaiting}
       />
     ) : null
+  }
+  const urlProgress = body.kind === 'approval' ? urlApprovalProgress(body) : null
+  if (body.kind === 'approval' && urlProgress) {
+    return <MobileNativeChatUrlRequestReceipt body={body} {...urlProgress} fontScale={fontScale} />
   }
   const { resolution } = body
   const device = nativeChatReceiptDevice(resolution, {
