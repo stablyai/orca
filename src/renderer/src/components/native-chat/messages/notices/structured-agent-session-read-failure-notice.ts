@@ -7,6 +7,7 @@ import {
 import type { AgentSessionRefusalReference } from '../../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { isFinalAgentSessionReadRefusal } from '../../../../../../shared/agent-session/failures/structured-agent-session-read-refusal'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
+import type { NativeChatHostOutage } from '../../host-access/use-native-chat-host-outage'
 
 export type StructuredAgentSessionReadFailureNotice = {
   text: string
@@ -28,4 +29,14 @@ export function structuredAgentSessionReadFailureNotice(
     named: refusal?.details?.reason !== undefined,
     final: isFinalAgentSessionReadRefusal(refusal)
   }
+}
+
+/** A lost contact is the host notice's to say; the read adds only a refusal the host sent. */
+export function structuredAgentSessionPaneReadFailure(
+  read: { status: string; readRefusal: AgentSessionRefusalReference | undefined },
+  hostOutage: NativeChatHostOutage | null
+): StructuredAgentSessionReadFailureNotice | null {
+  return read.status === 'error' && !(hostOutage && !read.readRefusal)
+    ? structuredAgentSessionReadFailureNotice(read.readRefusal)
+    : null
 }

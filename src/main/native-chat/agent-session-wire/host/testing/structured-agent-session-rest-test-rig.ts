@@ -52,6 +52,7 @@ export type RestTestAdapter = {
   holdsDispatch: Mock<NonNullable<StructuredAgentSessionAdapter['holdsDispatch']>>
   confirmIdle: Mock<NonNullable<StructuredAgentSessionAdapter['confirmIdle']>>
   readOptions: Mock<NonNullable<StructuredAgentSessionAdapter['readOptions']>>
+  startVoiceConversation: Mock<NonNullable<StructuredAgentSessionAdapter['startVoiceConversation']>>
 }
 
 export type RestTestRig = {
@@ -171,7 +172,8 @@ export async function createRestTestRig(
     acknowledgeSessionRelease: vi.fn(),
     holdsDispatch: vi.fn(() => false),
     confirmIdle: vi.fn(() => undefined),
-    readOptions: vi.fn(async () => ({ models: [], current: { model: 'gpt-live' } }))
+    readOptions: vi.fn(async () => ({ models: [], current: { model: 'gpt-live' } })),
+    startVoiceConversation: vi.fn(() => ({ stop: () => {} }))
   }
   const starts = structuredAgentSessionHeldStarts(() => rig.host)
   const hostFor = (overrides: Partial<StructuredAgentSessionHostDeps>) =>

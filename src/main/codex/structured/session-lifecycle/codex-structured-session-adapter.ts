@@ -49,18 +49,22 @@ import {
   cancelCodexStructuredTurn
 } from '../prompts/codex-structured-prompt-ownership'
 import { renameCodexProviderSession } from './codex-provider-session-rename'
-import * as codexRewind from '../threads/codex-structured-rewind'
 import * as turnEnd from '../turns/codex-structured-turn-end-settlement'
 import { codexAcquireFailure } from '../../app-server/codex-startup-outcome'
-import { openCodexStart, recoverCodexRewindAtStart } from './codex-structured-start-verdict'
+import { openCodexStart } from './codex-structured-start-verdict'
+import { codexRewindsForgettingVoice } from './codex-structured-rewind-voice'
+import { codexLiveProviderProcess } from './codex-structured-provider-liveness'
+import { CodexRealtimeVoice } from '../realtime/codex-realtime-voice'
 
 export class CodexStructuredSessionAdapter implements SessionAdapter {
   private readonly sessions = new Map<string, CodexSession>()
   private readonly acquisitions = new CodexAcquisitionRegistry()
   private readonly notificationRetries: ReturnType<typeof createCodexStructuredNotificationRetry>
   private readonly teardown: CodexStructuredSessionTeardown
+  private readonly voice = new CodexRealtimeVoice()
 
   constructor(private readonly deps: CodexStructuredSessionAdapterDeps) {
+    this.deps = deps = this.voice.endWithChildren(deps, (id) => this.sessions.get(id)?.connection)
     this.atRestCommands = deps.atRestCommands
     this.notificationRetries = createCodexStructuredNotificationRetry({
       sessionFor: (sessionId) => this.sessions.get(sessionId),
@@ -119,7 +123,8 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
       handleUnhandledFrame: (sessionId, kind, payload) =>
         this.handleUnhandledFrame(sessionId, kind, payload),
       forceCloseUnexpected: (sessionId, fence, acquisitionGeneration, reason) =>
-        this.teardown.forceCloseUnexpected(sessionId, fence, acquisitionGeneration, reason)
+        this.teardown.forceCloseUnexpected(sessionId, fence, acquisitionGeneration, reason),
+      observeRealtime: this.voice.observe
     }).catch((error: unknown) => {
       throw codexAcquireFailure(error)
     })
@@ -201,19 +206,7 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
   heldSends = (sessionId: string): ReadonlySet<string> | undefined =>
     this.sessions.get(sessionId)?.dispatchEchoes.heldSends()
 
-  holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean => {
-    const session = this.sessions.get(sessionId)
-    const starting = this.acquisitions.get(sessionId)
-    if (starting?.acquisitionGeneration === acquisitionGeneration) {
-      return !starting.exitProven && starting.window.connection?.pid !== undefined
-    }
-    return (
-      session?.acquisitionGeneration === acquisitionGeneration &&
-      session.connection.pid !== undefined &&
-      !session.ended &&
-      session.exitObservedAt === undefined
-    )
-  }
+  holdsLiveProviderProcess = codexLiveProviderProcess(this.sessions, this.acquisitions)
 
   backgroundTaskStops: NonNullable<SessionAdapter['backgroundTaskStops']> = (sessionId) =>
     backgroundStops.codexBackgroundTaskStops(this.sessions.get(sessionId))
@@ -283,14 +276,14 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
       ? { supported: false, reason: 'history-not-paginated' }
       : { supported: true }
 
-  prepareRewind: NonNullable<SessionAdapter['prepareRewind']> = (input) =>
-    codexRewind.prepareCodexRewind(this.session(input.sessionId), input, this.deps.requestTimeoutMs)
-
-  rewind: NonNullable<SessionAdapter['rewind']> = (input) =>
-    codexRewind.rewindCodexSession(this.session(input.sessionId), input, this.deps.requestTimeoutMs)
-
-  recoverRewind: NonNullable<SessionAdapter['recoverRewind']> = (input) =>
-    recoverCodexRewindAtStart(this.sessions, input, this.deps.requestTimeoutMs)
+  private readonly rewinds = codexRewindsForgettingVoice(
+    this.sessions,
+    this.voice,
+    () => this.deps.requestTimeoutMs
+  )
+  prepareRewind: NonNullable<SessionAdapter['prepareRewind']> = this.rewinds.prepare
+  rewind: NonNullable<SessionAdapter['rewind']> = this.rewinds.rewind
+  recoverRewind: NonNullable<SessionAdapter['recoverRewind']> = this.rewinds.recover
 
   startupEnding = (id: string, generation: string) => this.acquisitions.endings.get(id, generation)
   retireStartup = (sessionId: string, generation: string) =>
@@ -308,6 +301,12 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
       () => this.sessions.get(input.sessionId) === session
     )
   }
+
+  startVoiceConversation: NonNullable<SessionAdapter['startVoiceConversation']> =
+    this.rewinds.startVoice
+  listVoiceConversationVoices = (sessionId: string) =>
+    this.voice.listVoices(this.sessions.get(sessionId))
+  confirmIdle = (sessionId: string) => this.voice.confirmIdle(sessionId)
 
   answerPrompt: SessionAdapter['answerPrompt'] = (request) =>
     answerCodexStructuredPrompt({ request, sessions: this.sessions })

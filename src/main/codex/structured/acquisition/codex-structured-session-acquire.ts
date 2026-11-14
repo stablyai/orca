@@ -42,6 +42,7 @@ import type { CodexStructuredNotificationRetry } from '../session-lifecycle/code
 import type { deliverCodexServerRequest } from '../session-lifecycle/codex-structured-provider-events'
 import { codexAcquisitionNotificationHandler } from './codex-structured-acquisition-notification'
 import { codexStartFailure } from '../../app-server/codex-startup-outcome'
+import type { CodexRealtimeVoice } from '../realtime/codex-realtime-voice'
 
 export async function acquireCodexStructuredSession(input: {
   input: StructuredAgentSessionAcquireInput
@@ -61,6 +62,7 @@ export async function acquireCodexStructuredSession(input: {
   ) => void
   handleUnhandledFrame: (sessionId: string, kind: string, payload: unknown) => void
   forceCloseUnexpected: CodexStructuredSessionTeardown['forceCloseUnexpected']
+  observeRealtime?: CodexRealtimeVoice['observe']
 }): Promise<AgentSessionAcquisition> {
   const { input: acquireInput, deps, sessions, acquisitions, notificationRetries } = input
   const sessionId = acquireInput.identity.sessionId
@@ -152,7 +154,8 @@ export async function acquireCodexStructuredSession(input: {
           primaryThreadId: () => primaryThreadId,
           notificationRetries,
           deliver: input.deliver,
-          now: deps.now ?? Date.now
+          now: deps.now ?? Date.now,
+          observeRealtime: input.observeRealtime
         }),
         onServerRequest: (request) =>
           input.deliver(

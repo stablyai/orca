@@ -41,6 +41,7 @@ import { useNativeChatFileLinkContext } from '@/components/native-chat/links/act
 import { useRecheckNativeChatFileLinksWhenTurnEnds } from '@/components/native-chat/links/actions/use-native-chat-file-link-existence'
 import { useNativeChatTabOwnerWorktreeId } from '@/components/native-chat/pane/ownership/use-native-chat-tab-owner'
 import { useStructuredAgentSession } from '@/components/native-chat/session/structured/use-structured-agent-session'
+import { NativeChatCodexVoiceStripSlot } from '@/components/native-chat/voice/NativeChatCodexVoiceProvider'
 import { useNativeChatImageRuntimeContext } from '@/components/native-chat/media/images/native-chat-image-runtime-context'
 import { useStructuredNativeChatPaneCommands } from '@/components/native-chat/pane/actions/use-structured-native-chat-pane-commands'
 import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'
@@ -66,7 +67,7 @@ import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agen
 import { useNativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/use-native-chat-structured-composer-transport'
 import { NativeChatStructuredComposerTabStrips } from '@/components/native-chat/pane/actions/NativeChatStructuredComposerTabStrips'
 import { nativeChatPaneHeader } from '@/components/native-chat/pane/actions/NativeChatPaneHeader'
-import { structuredAgentSessionReadFailureNotice } from '@/components/native-chat/messages/notices/structured-agent-session-read-failure-notice'
+import { structuredAgentSessionPaneReadFailure } from '@/components/native-chat/messages/notices/structured-agent-session-read-failure-notice'
 import { useStructuredAgentSessionDeliveryNotices } from '@/components/native-chat/session/structured/delivery/use-structured-agent-session-delivery-notices'
 import { dispatchWasWithdrawn } from '../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import { useNativeChatHostOutage } from '@/components/native-chat/host-access/use-native-chat-host-outage'
@@ -148,11 +149,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
     startFailures,
     agentName: agentLabel
   })
-  // A lost contact is the host notice's to say; the read adds only a refusal the host sent.
-  const readFailure =
-    controller.status === 'error' && !(hostOutage && !controller.readRefusal)
-      ? structuredAgentSessionReadFailureNotice(controller.readRefusal)
-      : null
+  const readFailure = structuredAgentSessionPaneReadFailure(controller, hostOutage)
   // Final read refusal replaces the pane because no existing action can succeed.
   const viewState = selectNativeChatViewState(session, { readRetries: readFailure?.final !== true })
   const paneActive = props.isVisible && props.isFocusedGroup
@@ -342,6 +339,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
           )}
         </NativeChatContextClearFade>
       </NativeChatCrewFrame>
+      {readFailure?.final ? <NativeChatCodexVoiceStripSlot /> : null}
       {readFailure?.final ? null : (
         <>
           {/* Keep queued drafts outside the transcript and above the background-task dock. */}
@@ -361,6 +359,7 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             target={props.target}
             isVisible={props.isVisible}
           />
+          <NativeChatCodexVoiceStripSlot promptKind={prompt?.body.kind} />
           {prompt || subagentOpen ? null : (
             <NativeChatStructuredComposerTabStrips
               tabId={props.tabId}
