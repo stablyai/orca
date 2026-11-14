@@ -89,7 +89,7 @@ export class CodexAppliedSettings {
     return () => this.pending.delete(write)
   }
 
-  private equivalent(choices: Settings): boolean {
+  equivalent(choices: Settings): boolean {
     const keys = ['model', 'effort'] as const
     if (keys.some((key) => choices[key] !== undefined && choices[key] !== this.snapshot[key])) {
       return false

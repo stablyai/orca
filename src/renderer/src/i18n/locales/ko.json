@@ -22598,10 +22598,7 @@
       "instructions": "검토 지침 입력",
       "searchBranches": "브랜치 검색…",
       "searchCommits": "커밋 검색…",
-      "title": "변경 사항 검토",
-      "back": "검토 대상으로 돌아가기",
-      "run": "실행",
-      "done": "완료"
+      "title": "변경 사항 검토"
     }
   },
   "runtime": {

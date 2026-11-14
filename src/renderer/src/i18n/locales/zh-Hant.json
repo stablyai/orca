@@ -22273,10 +22273,7 @@
       "instructions": "輸入審查指令",
       "searchBranches": "搜尋分支…",
       "searchCommits": "搜尋提交…",
-      "title": "審查變更",
-      "back": "返回審查目標",
-      "run": "執行",
-      "done": "完成"
+      "title": "審查變更"
     }
   },
   "quitAndStopAllSessions": {

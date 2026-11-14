@@ -85,7 +85,15 @@ export async function dispatchMobileStructuredCommand(input: {
         fields: { scope: 'background-terminals' },
         timeoutMs: input.timeoutMs
       })
-      if (result.status !== 'accepted') {
+      if (result.status === 'unknown') {
+        unknown = true
+        input.onError(
+          translate(
+            'session.structuredComposerCommand.operationUnconfirmed',
+            'Conversation operation was not confirmed.'
+          )
+        )
+      } else if (result.status !== 'accepted') {
         input.onError(result.message)
       }
       return result.status === 'accepted' && result.value.cancelled

@@ -23278,10 +23278,7 @@
       "instructions": "Introduce las instrucciones de revisión",
       "searchBranches": "Buscar ramas…",
       "searchCommits": "Buscar commits…",
-      "title": "Revisar cambios",
-      "back": "Volver a los objetivos de revisión",
-      "run": "Ejecutar",
-      "done": "Listo"
+      "title": "Revisar cambios"
     }
   },
   "runtime": {

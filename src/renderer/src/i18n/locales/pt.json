@@ -23846,10 +23846,7 @@
       "instructions": "Digite as instruções de revisão",
       "searchBranches": "Buscar branches…",
       "searchCommits": "Buscar commits…",
-      "title": "Revisar alterações",
-      "back": "Voltar aos alvos da revisão",
-      "run": "Executar",
-      "done": "Concluído"
+      "title": "Revisar alterações"
     }
   },
   "runtime": {

@@ -24613,10 +24613,7 @@
       "instructions": "Enter review instructions",
       "searchBranches": "Search branches…",
       "searchCommits": "Search commits…",
-      "title": "Review changes",
-      "back": "Back to review targets",
-      "run": "Run",
-      "done": "Done"
+      "title": "Review changes"
     }
   },
   "quitAndStopAllSessions": {

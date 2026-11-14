@@ -1,7 +1,10 @@
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
 import { resolvedCodexGoalSettings } from './codex-structured-message-options'
-import { codexMethodUnavailable } from '../catalog/codex-structured-applied-settings'
+import {
+  CodexAppliedSettings,
+  codexMethodUnavailable
+} from '../catalog/codex-structured-applied-settings'
 import { readCodexTurnId } from '../../app-server/codex-structured-thread-facts'
 import { isCodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
 import {
@@ -20,7 +23,19 @@ export async function reviewCodexStructuredSession(
     model: session.appliedTurnOptions?.model ?? session.reportedOptions.model,
     effort: session.appliedTurnOptions?.effort ?? session.reportedOptions.effort
   }
-  if (Object.entries(choices).some(([key, value]) => value !== current[key])) {
+  const settings = (session.appliedSettings ??= new CodexAppliedSettings())
+  if (!settings.equivalent(choices)) {
+    const previousApplied = session.appliedTurnOptions
+    const previousInput = session.appliedTurnInputOptions
+    const known = { ...previousApplied }
+    const knownInput = { ...previousInput }
+    for (const key of Object.keys(choices)) {
+      delete known[key]
+      delete knownInput[key]
+    }
+    session.appliedTurnOptions = known
+    session.appliedTurnInputOptions = knownInput
+    const discard = settings.attempt(choices)
     try {
       await session.connection.request(
         'thread/settings/update',
@@ -30,6 +45,14 @@ export async function reviewCodexStructuredSession(
       session.appliedTurnOptions = { ...session.appliedTurnOptions, ...choices }
       session.appliedTurnInputOptions = { ...session.appliedTurnInputOptions, ...choices }
     } catch (error) {
+      if (
+        isCodexAppServerRequestError(error) ||
+        codexMethodUnavailable(error, 'thread/settings/update')
+      ) {
+        discard()
+        session.appliedTurnOptions = previousApplied
+        session.appliedTurnInputOptions = previousInput
+      }
       if (codexMethodUnavailable(error, 'thread/settings/update')) {
         session.translator?.forgetCommand(input.command.turnId)
         return {

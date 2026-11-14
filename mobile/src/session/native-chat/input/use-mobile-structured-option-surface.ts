@@ -73,8 +73,12 @@ export function useMobileStructuredOptionSurface(args: {
           hasGit: !args.worktreeId.startsWith('folder:'),
           branches,
           commits: async () =>
-            gitHistoryRead.interpret(await gitHistoryRead.request(client, { worktree, limit: 100 }))
-              .items,
+            gitHistoryRead
+              .interpret(await gitHistoryRead.request(client, { worktree, limit: 100 }))
+              .items.map((commit) => ({
+                id: commit.id,
+                subject: commit.subject ?? commit.id.slice(0, 7)
+              })),
           run: review,
           onError: (message) => args.onError?.(message)
         })

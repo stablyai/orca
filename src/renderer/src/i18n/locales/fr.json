@@ -23301,10 +23301,7 @@
       "instructions": "Saisir les instructions de revue",
       "searchBranches": "Rechercher des branches…",
       "searchCommits": "Rechercher des commits…",
-      "title": "Examiner les modifications",
-      "back": "Revenir aux cibles de revue",
-      "run": "Exécuter",
-      "done": "Terminé"
+      "title": "Examiner les modifications"
     }
   },
   "runtime": {

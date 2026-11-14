@@ -458,6 +458,66 @@ it('uses the reported settings for a first review without an unnecessary setting
   }
 })
 
+it('corrects captured settings after an applied update loses its reply', async () => {
+  let model = 'gpt-live'
+  let effort = 'medium'
+  let loseReply = true
+  const reviewed: { model: string; effort: string }[] = []
+  const codex = fakeCodex({
+    'thread/settings/update': (params) => {
+      model = String(params?.model)
+      effort = String(params?.effort)
+      if (loseReply) {
+        loseReply = false
+        throw new Error('settings reply timed out')
+      }
+      return {}
+    },
+    'review/start': () => {
+      reviewed.push({ model, effort })
+      return { turn: { id: 'review-native' } }
+    }
+  })
+  const adapter = adapterFor(codex)
+  try {
+    await acquireReadyCodexForTest(adapter, {
+      identity: identityFor(SESSION),
+      fence: 7,
+      spawnToken: 'spawn-9'
+    })
+    const command = { ...COMMAND, name: 'review' as const, review: { type: 'custom' as const } }
+    expect(
+      await adapter.review({
+        sessionId: SESSION,
+        fence: 7,
+        command,
+        executionOptions: { model: 'gpt-review', effort: 'high' }
+      })
+    ).toMatchObject({ state: 'rejected' })
+    expect(reviewed).toEqual([])
+    expect(
+      await adapter.review({
+        sessionId: SESSION,
+        fence: 7,
+        command,
+        executionOptions: { model: 'gpt-live', effort: 'medium' }
+      })
+    ).toMatchObject({ state: 'accepted' })
+    expect(
+      codex.connections[0]!.calls.filter(
+        ({ method }) => method === 'thread/settings/update' || method === 'review/start'
+      ).map(({ method, params }) => ({ method, model: params?.model, effort: params?.effort }))
+    ).toEqual([
+      { method: 'thread/settings/update', model: 'gpt-review', effort: 'high' },
+      { method: 'thread/settings/update', model: 'gpt-live', effort: 'medium' },
+      { method: 'review/start', model: undefined, effort: undefined }
+    ])
+    expect(reviewed).toEqual([{ model: 'gpt-live', effort: 'medium' }])
+  } finally {
+    await adapter.closeAll()
+  }
+})
+
 it('cleans the main thread terminals with one native operation and no subagent interruption', async () => {
   const codex = fakeCodex()
   const adapter = adapterFor(codex)

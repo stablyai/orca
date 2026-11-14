@@ -22606,10 +22606,7 @@
       "instructions": "レビューの指示を入力",
       "searchBranches": "ブランチを検索…",
       "searchCommits": "コミットを検索…",
-      "title": "変更をレビュー",
-      "back": "レビュー対象に戻る",
-      "run": "実行",
-      "done": "完了"
+      "title": "変更をレビュー"
     }
   },
   "runtime": {

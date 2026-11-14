@@ -22578,10 +22578,7 @@
       "instructions": "İnceleme talimatlarını girin",
       "searchBranches": "Dallarda ara…",
       "searchCommits": "Commit ara…",
-      "title": "Değişiklikleri incele",
-      "back": "İnceleme hedeflerine dön",
-      "run": "Çalıştır",
-      "done": "Bitti"
+      "title": "Değişiklikleri incele"
     }
   },
   "quitAndStopAllSessions": {

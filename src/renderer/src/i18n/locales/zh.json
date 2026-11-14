@@ -22716,10 +22716,7 @@
       "instructions": "输入审查指令",
       "searchBranches": "搜索分支…",
       "searchCommits": "搜索提交…",
-      "title": "审查更改",
-      "back": "返回审查目标",
-      "run": "运行",
-      "done": "完成"
+      "title": "审查更改"
     }
   },
   "quitAndStopAllSessions": {

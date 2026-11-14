@@ -9,16 +9,16 @@ import { emitNativeChatSendClassified } from '@/components/native-chat/telemetry
 export function useNativeChatSendClassification(
   agent: AgentType,
   commands: readonly SlashCommandSuggestion[],
-  skillOrigin: RefObject<string | null>,
+  skillOriginRef: RefObject<string | null>,
   prefix: '$' | '/' | null
 ) {
   return useCallback(
     (value: string) => {
-      const outcome = classifyNativeChatSend(value, commands, skillOrigin.current, prefix)
+      const outcome = classifyNativeChatSend(value, commands, skillOriginRef.current, prefix)
       emitNativeChatSendClassified({ agent, outcome })
       return outcome
     },
-    [agent, commands, prefix, skillOrigin]
+    [agent, commands, prefix, skillOriginRef]
   )
 }
 

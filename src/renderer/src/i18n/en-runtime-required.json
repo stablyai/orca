@@ -2307,13 +2307,6 @@
     "unhide": "Show All",
     "zoom": "Zoom"
   },
-  "nativeChat": {
-    "review": {
-      "back": "Back to review targets",
-      "done": "Done",
-      "run": "Run"
-    }
-  },
   "pet": {
     "defaultLabels": {
       "bundle": "Pet bundle",

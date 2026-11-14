@@ -22765,10 +22765,7 @@
       "instructions": "Prüfanweisungen eingeben",
       "searchBranches": "Branches suchen…",
       "searchCommits": "Commits suchen…",
-      "title": "Änderungen prüfen",
-      "back": "Zurück zu den Prüfzielen",
-      "run": "Ausführen",
-      "done": "Fertig"
+      "title": "Änderungen prüfen"
     }
   },
   "quitAndStopAllSessions": {

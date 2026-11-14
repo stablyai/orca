@@ -19,7 +19,7 @@ import type {
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentSessionThreadGoalChange } from '../../../../../../shared/agent-session/agent-session-thread-goal-wire'
 import { translate } from '@/i18n/i18n'
-import type { Translate } from '@/i18n/use-translate'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 
 function nativeChatSessionAttachmentNotReadyNotice(
@@ -102,6 +102,7 @@ export function useNativeChatStructuredComposerTransport(args: {
     props.agent,
     controller.acceptsImages
   )
+  const t = useTranslate()
   const { fork, sideChat } = forks
   return useMemo((): NativeChatStructuredComposerTransport => {
     const threadGoal = controller.threadGoal
@@ -172,17 +173,14 @@ export function useNativeChatStructuredComposerTransport(args: {
                   ).branches
                 menu = createNativeChatReviewMenu({
                   copy: {
-                    baseBranch: translate(
-                      'nativeChat.review.baseBranch',
-                      'Review against a base branch'
-                    ),
-                    uncommittedChanges: translate(
+                    baseBranch: t('nativeChat.review.baseBranch', 'Review against a base branch'),
+                    uncommittedChanges: t(
                       'nativeChat.review.uncommittedChanges',
                       'Review uncommitted changes'
                     ),
-                    commit: translate('nativeChat.review.commit', 'Review a commit'),
-                    custom: translate('nativeChat.review.custom', 'Custom review instructions'),
-                    loadFailed: translate(
+                    commit: t('nativeChat.review.commit', 'Review a commit'),
+                    custom: t('nativeChat.review.custom', 'Custom review instructions'),
+                    loadFailed: t(
                       'nativeChat.review.loadFailed',
                       'Codex could not load review targets. Try /review again.'
                     )
@@ -256,6 +254,7 @@ export function useNativeChatStructuredComposerTransport(args: {
         : {})
     }
   }, [
+    t,
     acceptsImages,
     controller,
     fork,
