@@ -7,8 +7,7 @@ import { selectProjectGroupRemovalTargets } from './project-group-removal-target
 import {
   isProjectGroupJoinableFromCatalog,
   projectGroupMatchesOwnerHost,
-  resolveProjectGroupOwnerHostId,
-  runtimeTargetForProjectGroupOwner
+  resolveProjectGroupMutationTarget
 } from './project-group-owner-routing'
 import {
   findRepoForHost,
@@ -102,11 +101,11 @@ export function createProjectGroupMutationActions(
 
     deleteProjectGroup: async (groupId, options) => {
       try {
-        const ownerHostId = resolveProjectGroupOwnerHostId(get(), groupId, options?.hostId)
-        const target = runtimeTargetForProjectGroupOwner(get(), groupId, options?.hostId)
-        if (!target) {
+        const route = resolveProjectGroupMutationTarget(get(), groupId, options?.hostId)
+        if (!route) {
           return false
         }
+        const { target, ownerHostId } = route
         const deleted =
           target.kind === 'local'
             ? await window.api.projectGroups.delete({ groupId })
@@ -130,27 +129,28 @@ export function createProjectGroupMutationActions(
     },
 
     deleteProjectGroupWithContainedProjects: async (groupId, options) => {
-      const ownerHostId = resolveProjectGroupOwnerHostId(get(), groupId, options.hostId)
-      const targets = selectProjectGroupRemovalTargets(
-        get().projectGroups,
-        get().repos,
-        groupId,
-        ownerHostId
-      )
-      const requestedProjectIds = options.removeContainedProjects ? targets.projectIds : []
-      if (!targets.groupExists) {
+      const route = resolveProjectGroupMutationTarget(get(), groupId, options.hostId)
+      const targets = route
+        ? selectProjectGroupRemovalTargets(
+            get().projectGroups,
+            get().repos,
+            groupId,
+            route.ownerHostId
+          )
+        : null
+      if (!route || !targets?.groupExists) {
         return {
           status: 'missing-group',
           groupId,
-          requestedProjectIds,
+          requestedProjectIds: [],
           removedProjectIds: [],
           failedProjectRemovals: []
         }
       }
+      const { ownerHostId } = route
+      const requestedProjectIds = options.removeContainedProjects ? targets.projectIds : []
 
-      const deleted = await get().deleteProjectGroup(groupId, {
-        hostId: ownerHostId ?? undefined
-      })
+      const deleted = await get().deleteProjectGroup(groupId, { hostId: ownerHostId })
       if (!deleted) {
         return {
           status: 'group-delete-failed',
@@ -183,12 +183,7 @@ export function createProjectGroupMutationActions(
       }
       for (const projectId of new Set(targets.projectIds)) {
         const members = membersById.get(projectId) ?? []
-        // Why: an unstamped group already routes to the focused host, so only that host's member is removed.
-        const focusedMember = ownerHostId
-          ? null
-          : findRepoForHost(members, projectId, { settings: get().settings })
-        const removable = ownerHostId ? members : focusedMember ? [focusedMember] : []
-        const removableHostIds = removable.map((row) => getRepoExecutionHostId(row))
+        const removableHostIds = members.map((row) => getRepoExecutionHostId(row))
         for (const hostId of removableHostIds) {
           try {
             await get().removeProject(projectId, {
@@ -199,12 +194,9 @@ export function createProjectGroupMutationActions(
             console.error('Failed to remove contained project:', err)
           }
         }
-        // Why: an ambiguous unstamped member with no focused-host row was left in place, so it counts as remaining.
-        const stillExists =
-          (members.length > 0 && removableHostIds.length === 0) ||
-          removableHostIds.some((hostId) =>
-            get().repos.some((repo) => repoMatchesHostIdentity(repo, projectId, hostId))
-          )
+        const stillExists = removableHostIds.some((hostId) =>
+          get().repos.some((repo) => repoMatchesHostIdentity(repo, projectId, hostId))
+        )
         if (stillExists) {
           failedProjectRemovals.push({
             projectId,

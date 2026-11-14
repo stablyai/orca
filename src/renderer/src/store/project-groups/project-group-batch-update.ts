@@ -3,12 +3,8 @@ import type { AppState } from '../types'
 import type { RepoSlice } from '../repos/repo-state'
 import type { ProjectGroup, ProjectGroupMutation } from '../../../../shared/project-group-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import {
-  catalogOwnsHost,
-  resolveProjectGroupOwnerHostId,
-  runtimeTargetForProjectGroupOwner
-} from './project-group-owner-routing'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { catalogOwnsHost, resolveProjectGroupMutationTarget } from './project-group-owner-routing'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'
 import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
 import { persistProjectGroupUpdates } from './project-group-update-persistence'
@@ -23,15 +19,15 @@ export function createProjectGroupBatchUpdateAction(
       string,
       {
         target: RuntimeClientTarget
-        mutations: (ProjectGroupMutation & { ownerHostId: string | null })[]
+        mutations: (ProjectGroupMutation & { ownerHostId: ExecutionHostId })[]
       }
     >()
     for (const { groupId, updates, hostId } of mutations) {
-      const target = runtimeTargetForProjectGroupOwner(state, groupId, hostId)
-      if (!target) {
+      const route = resolveProjectGroupMutationTarget(state, groupId, hostId)
+      if (!route) {
         return false
       }
-      const ownerHostId = resolveProjectGroupOwnerHostId(state, groupId, hostId)
+      const { target, ownerHostId } = route
       const key = getRuntimeTargetHostId(target)
       let batch = batches.get(key)
       if (!batch) {
@@ -59,7 +55,7 @@ export function createProjectGroupBatchUpdateAction(
         }
       })
     )
-    const updatedById = new Map<string, Map<string | null, ProjectGroup>>()
+    const updatedById = new Map<string, Map<ExecutionHostId, ProjectGroup>>()
     let saved = true
     for (const { group, groupId, ownerHostId } of results.flat()) {
       if (!group) {
@@ -81,7 +77,6 @@ export function createProjectGroupBatchUpdateAction(
           return (
             owners?.get(hostId) ??
             (catalogOwnsHost('local', hostId) ? owners?.get('local') : undefined) ??
-            owners?.get(null) ??
             group
           )
         }),

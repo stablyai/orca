@@ -1,4 +1,3 @@
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import {
   getRepoExecutionHostId,
@@ -14,11 +13,9 @@ import {
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 type ProjectGroupOwnerRecord = Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>
-type RoutingSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 
 type ProjectGroupOwnerRoutingState = {
   projectGroups: readonly ProjectGroupOwnerRecord[]
-  settings: RoutingSettings
 }
 
 // Normalize legacy padded/invalid host stamps so routing and catalog identity agree.
@@ -41,33 +38,19 @@ export function projectGroupMatchesOwnerHost(
   return ownerHostId ? catalogOwnsHost(ownerHostId, getRepoExecutionHostId(group)) : true
 }
 
-export function resolveProjectGroupOwnerHostId(
+/** Resolve catalog ownership and transport together so reconciliation cannot follow focus. */
+export function resolveProjectGroupMutationTarget(
   state: ProjectGroupOwnerRoutingState,
   groupId: string,
   hostId?: ExecutionHostId
-): ExecutionHostId | null {
+): { target: RuntimeClientTarget; ownerHostId: ExecutionHostId } | null {
   const owner = findIndexedProjectGroupOwner(state.projectGroups, groupId, hostId)
   if (!owner) {
     return null
   }
-  if (hostId) {
-    return hostId
-  }
-  // Why: an unstamped row carries no owner, so keep the focused-host behavior instead of assuming local.
-  if (!owner.executionHostId && !owner.connectionId) {
-    return null
-  }
-  return getRepoExecutionHostId(owner)
-}
-
-/** Route group mutations to owner; null without a row. Direct SSH groups use this app’s catalog/IPC. */
-export function runtimeTargetForProjectGroupOwner(
-  state: Pick<ProjectGroupOwnerRoutingState, 'projectGroups'>,
-  groupId: string,
-  hostId?: ExecutionHostId
-): RuntimeClientTarget | null {
-  const owner = findIndexedProjectGroupOwner(state.projectGroups, groupId, hostId)
-  return owner ? ipcOrRuntimeTargetForHostId(hostId ?? getRepoExecutionHostId(owner)) : null
+  const ownerHostId = getRepoExecutionHostId(owner)
+  const target = ipcOrRuntimeTargetForHostId(hostId ?? ownerHostId)
+  return target ? { target, ownerHostId } : null
 }
 
 /** Refuse known groups absent from the target catalog; host would silently clear unknown membership. */
