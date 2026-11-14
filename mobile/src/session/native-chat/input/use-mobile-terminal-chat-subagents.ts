@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import type { AgentSessionBackgroundTask } from '../../../../../src/shared/agent-session/agent-session-background-task-wire'
 import { decodeAgentChildWorkViews } from '../../../../../src/shared/agent-status/child-work/agent-status-child-work-view-wire'
 import { isAgentStatusFresh } from '../../../../../src/shared/agent-status/contracts/agent-status-freshness'
@@ -11,6 +11,7 @@ import {
 } from '../../../../../src/shared/agent-status/presentation/agent-child-row-model'
 import { agentChildRowContextForSessionStream } from '../../../../../src/shared/agent-status/presentation/agent-child-row-stream-context'
 import { buildRunningAgentChildRowModels } from '../../../../../src/shared/running-agent-child-rows'
+import { useSharedNowSnapshot } from '../../../hooks/use-now'
 import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-background-tasks'
 
 /** A terminal chat's strip input: the rows its hook row decides, and no Stop to offer. */
@@ -26,10 +27,10 @@ const NONE_RUNNING: RunningSubagents = {
   rowContext: agentChildRowContextForSessionStream(true, 0)
 }
 
-/** Hook subagents report only their role, so the shared name rule would tail every row with its id. */
-function withoutIdTail(row: AgentChildRowModel): AgentChildRowModel {
+/** A role-only subagent would get an id tail from the shared name rule, and the flat list already holds nested agents, so owned links would repeat them. */
+function asFlatStripRow(row: AgentChildRowModel): AgentChildRowModel {
   const { idSuffix: _idTail, ...named } = row
-  return { ...named, owned: row.owned.map(withoutIdTail) }
+  return { ...named, owned: [] }
 }
 
 /** Read a terminal tab's hook row as the workspace list does, so the two cannot disagree. */
@@ -53,7 +54,7 @@ function runningSubagents(
         subagents: decodeAgentSubagentsField(status.subagents)
       },
       rowContext
-    ).map(withoutIdTail)
+    ).map(asFlatStripRow)
   }
 }
 
@@ -65,7 +66,12 @@ export function useMobileTerminalChatSubagents(args: {
   turnActive: boolean
 }): MobileTerminalChatSubagents | null {
   const { connected, sessionKey, status, turnActive } = args
-  const parentEvidenceFresh = status != null && isAgentStatusFresh(status)
+  // A quiet row must still decay, so re-read freshness on the shared clock; it re-renders only on a flip.
+  const readFresh = useCallback(
+    (now: number) => status != null && isAgentStatusFresh(status, now),
+    [status]
+  )
+  const parentEvidenceFresh = useSharedNowSnapshot(30_000, readFresh)
   const reported = useMemo(
     () => (status ? runningSubagents(status, { connected, parentEvidenceFresh }) : NONE_RUNNING),
     [status, connected, parentEvidenceFresh]

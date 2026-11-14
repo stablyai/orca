@@ -6,6 +6,10 @@ import { useMobileTerminalChatSubagents } from './use-mobile-terminal-chat-subag
 
 const NOW = 10_000_000
 
+vi.mock('../../../hooks/use-now', () => ({
+  useSharedNowSnapshot: <T>(_intervalMs: number, read: (now: number) => T): T => read(Date.now())
+}))
+
 afterEach(() => {
   vi.useRealTimers()
 })
