@@ -41,7 +41,6 @@ export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void
           return
         }
         runBuiltInOrReplacement('workspace.openBoard', () => {
-          store.setSidebarOpen(true)
           window.dispatchEvent(new CustomEvent(TOGGLE_WORKSPACE_BOARD_EVENT))
         })
       })
