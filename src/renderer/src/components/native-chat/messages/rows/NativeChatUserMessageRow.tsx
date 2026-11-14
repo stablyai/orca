@@ -8,6 +8,8 @@ import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-clie
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatDeliveryNotice } from './NativeChatMessageRow'
 import { NativeChatRewindAction } from '../actions/NativeChatRewindAction'
+import { NativeChatCollapseResponseAction } from '../actions/NativeChatCollapseResponseAction'
+import { useNativeChatCollapsedResponse } from '../disclosure/native-chat-collapsed-responses'
 import type { NativeChatRewindSurface } from '../actions/use-native-chat-rewind-host'
 import { NativeChatMarkdown } from '../../markdown/NativeChatMarkdown'
 import { NativeChatUserMessageFold } from './NativeChatUserMessageFold'
@@ -24,26 +26,38 @@ const USER_META_REVEAL =
 
 /** Sending replaces the timestamp without changing row height; image-only prompts offer no text copy. */
 function UserMessageMeta({
+  messageId,
   markdown,
   timestamp,
   sending,
   rewind
 }: {
+  messageId: string
   markdown: string
   timestamp: number | null
   sending: boolean
   rewind?: { itemId: string; surface: NativeChatRewindSurface }
 }): React.JSX.Element | null {
   const t = useTranslate()
-  if (!markdown && timestamp === null && !sending && !rewind) {
+  const response = useNativeChatCollapsedResponse(messageId)
+  const collapsible = response?.answered === true
+  if (!markdown && timestamp === null && !sending && !rewind && !collapsible) {
     return null
   }
+  // A folded response keeps its toggle on screen so the reader can find the way back.
+  const pinned = sending || response?.collapsed === true
   return (
     <div
       // Hover-only once sent, so find skips it; "Sending…" stays on screen and stays findable.
       data-native-chat-find-skip={sending ? undefined : true}
-      className={cn('flex select-none items-center gap-1', !sending && USER_META_REVEAL)}
+      className={cn('flex select-none items-center gap-1', !pinned && USER_META_REVEAL)}
     >
+      {collapsible && response ? (
+        <NativeChatCollapseResponseAction
+          collapsed={response.collapsed}
+          onToggle={response.toggle}
+        />
+      ) : null}
       {markdown ? (
         <NativeChatCopyButton text={markdown} className={sending ? USER_META_REVEAL : undefined} />
       ) : null}
@@ -151,6 +165,7 @@ export function NativeChatUserMessageRow({
       ) : null}
       {!from ? (
         <UserMessageMeta
+          messageId={message.id}
           markdown={markdown}
           timestamp={message.timestamp}
           sending={sending}

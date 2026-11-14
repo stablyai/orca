@@ -45,6 +45,7 @@ import type { NativeChatSubagentView } from './subagents/native-chat-open-subage
 import type { StructuredAgentSubagentRoster } from '../../../../shared/agent-session/view/structured-agent-session-subagent-roster'
 import type { NativeChatTranscriptSlot } from './conversation/slots/native-chat-transcript-slots'
 import { toggleNativeChatExpandedKey } from './messages/disclosure/native-chat-expanded-keys'
+import { useNativeChatResponseFolding } from './messages/disclosure/native-chat-collapsed-responses'
 import {
   useNativeChatSideChatForkOffer,
   useNativeChatSideChatForkPointReport
@@ -226,7 +227,8 @@ export function NativeChatMessageList({
       activityText: turnActivity?.text
     }
   })
-  const { slots: allSlots, liveLine } = transcript
+  const folding = useNativeChatResponseFolding(transcript, { liveTurnKey, awaitingInput, hostWork })
+  const allSlots = folding.slots
   useNativeChatSideChatForkPointReport(transcript.forkPoint)
   // A message waiting behind the live turn draws after that turn's live activity, not inside it.
   const { slots, waitingSlots } = useMemo(
@@ -393,12 +395,13 @@ export function NativeChatMessageList({
                     timedRows={timedRows}
                     loadedMessageIds={loadedMessageIds}
                     context={rowContext}
+                    collapsedResponses={folding.responses}
                     window={transcriptWindow}
                     newRowsMarker={newRows.marker}
                     forwardGesture={readerInput.forwardedGesture}
                   />
-                  {liveLine ? (
-                    <NativeChatTurnActivityLine line={liveLine} />
+                  {transcript.liveLine ? (
+                    <NativeChatTurnActivityLine line={transcript.liveLine} />
                   ) : tailRow === 'awaiting-input' ? (
                     <NativeChatAwaitingInputRow subject={null} pending />
                   ) : null}
