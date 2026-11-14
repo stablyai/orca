@@ -69,7 +69,8 @@
 4 src/main/persistence/profile-state/database/profile-state-revision.ts
 3 src/main/persistence/profile-state/database/profile-state-write-transaction.ts
 2 src/main/persistence/profile-state/document-parts/profile-state-document-parts-reader.ts
-25 src/main/persistence/profile-state/document-parts/profile-state-document-parts-storage.ts
+4 src/main/persistence/profile-state/document-parts/profile-state-document-parts-metadata.ts
+21 src/main/persistence/profile-state/document-parts/profile-state-document-parts-storage.ts
 3 src/main/persistence/profile-state/document-parts/profile-state-document-parts.ts
 4 src/main/persistence/profile-state/document-parts/profile-state-legacy-document-refresh.ts
 2 src/main/persistence/profile-state/documents/profile-state-document-reader.ts
