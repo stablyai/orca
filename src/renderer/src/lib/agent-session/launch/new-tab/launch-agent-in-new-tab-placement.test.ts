@@ -3,9 +3,9 @@ import { mockCreateTab } from './launch-agent-in-new-tab-test-fixture'
 
 describe('launchAgentInNewTab terminal tab activation', () => {
   it('keeps a pinned panel launch in that panel', async () => {
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+    const { launchAgentInNewTabWithOutcome } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({
+    launchAgentInNewTabWithOutcome({
       requestId: 'request-pinned',
       agent: 'codex',
       worktreeId: 'wt-1',
