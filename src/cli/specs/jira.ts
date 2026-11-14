@@ -78,6 +78,18 @@ export const JIRA_COMMAND_SPECS: CommandSpec[] = [
     examples: ['orca jira project fields --project ENG --type 10001 --json']
   },
   {
+    path: ['jira', 'field', 'list'],
+    summary: "List the fields on a Jira issue's edit screen with their values",
+    usage: 'orca jira field list <key> [--site <id>] [--json]',
+    allowedFlags: [...SITE_FLAGS, 'key'],
+    positionalArgs: ['key'],
+    notes: [
+      'Includes custom fields. --json adds each value as Jira returns it in rawValue.',
+      'Jira lists only the fields this account can edit.'
+    ],
+    examples: ['orca jira field list ENG-123 --json']
+  },
+  {
     path: ['jira', 'comment', 'list'],
     summary: 'List comments on a Jira issue',
     usage: 'orca jira comment list <key> [--site <id>] [--json]',

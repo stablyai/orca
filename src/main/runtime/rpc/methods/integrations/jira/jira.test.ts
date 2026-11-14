@@ -83,6 +83,23 @@ describe('jira RPC methods', () => {
     const payload = messages.map((message) => message.content ?? '').join('')
     expect(JSON.parse(payload)).toEqual({ key: 'ABC-3', description })
   })
+
+  it('reads raw edit-field values only when the caller asks for them', async () => {
+    const jiraGetIssueEditFields = vi.fn().mockResolvedValue([])
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only the runtime identity and edit-field read are invoked by these requests.
+    const runtime = {
+      getRuntimeId: () => 'host-a',
+      jiraGetIssueEditFields
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: JIRA_METHODS })
+    const request = { key: 'ABC-3', siteId: 'site-1', strict: true }
+    await dispatcher.dispatch(makeRequest('jira.getIssueEditFields', request))
+    expect(jiraGetIssueEditFields).toHaveBeenLastCalledWith('ABC-3', 'site-1', true, undefined)
+    await dispatcher.dispatch(
+      makeRequest('jira.getIssueEditFields', { ...request, includeRaw: true })
+    )
+    expect(jiraGetIssueEditFields).toHaveBeenLastCalledWith('ABC-3', 'site-1', true, true)
+  })
 })
 
 describe('Jira title generation RPC', () => {

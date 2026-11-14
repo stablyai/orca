@@ -1,6 +1,8 @@
 import type {
   JiraComment,
   JiraCreateIssueResult,
+  JiraEditField,
+  JiraEditFieldValue,
   JiraIssue,
   JiraPriority,
   JiraProject,
@@ -86,6 +88,37 @@ export function formatJiraUserList(users: JiraUser[]): string {
     return 'No assignable users.'
   }
   return users.map((user) => `${user.accountId}\t${user.displayName}`).join('\n')
+}
+
+function editFieldValueText(value: JiraEditFieldValue): string {
+  switch (value.kind) {
+    case 'empty':
+      return '-'
+    case 'text': {
+      const [first, ...rest] = value.text.trim().split('\n')
+      return rest.length > 0 ? `${first}…` : first
+    }
+    case 'options':
+      return value.options.map((option) => option.name ?? option.value ?? option.id).join(', ')
+    case 'users':
+      return value.users.map((user) => user.displayName).join(', ')
+    case 'strings':
+      return value.values.join(', ')
+    case 'unsupported':
+      return value.display
+  }
+}
+
+export function formatJiraEditFieldList(fields: JiraEditField[]): string {
+  if (fields.length === 0) {
+    return 'No edit fields. Jira lists only the fields this account can edit.'
+  }
+  return fields
+    .map(
+      (field) =>
+        `${field.key}\t${field.name}\t${editFieldValueText(field.value)}${field.writable ? '' : '\t(read-only)'}`
+    )
+    .join('\n')
 }
 
 export function formatJiraCommentList(comments: JiraComment[]): string {

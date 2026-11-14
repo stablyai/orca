@@ -104,6 +104,8 @@ export const jiraApi = {
 
   listTransitions: (args: { key: string; siteId?: string; strict?: boolean }) =>
     ipcRenderer.invoke('jira:listTransitions', args),
+  getIssueEditFields: (args: { key: string; siteId?: string; strict?: boolean }) =>
+    ipcRenderer.invoke('jira:getIssueEditFields', args),
   getProjectStatusOrder: (args: {
     projectKey: string
     siteId?: string

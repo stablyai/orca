@@ -89,5 +89,25 @@ export function normalizeJiraIssueUpdate(value: unknown): JiraIssueUpdate | null
     }
     update.transitionComment = value.transitionComment
   }
+  if (value.fields !== undefined) {
+    if (!isRecord(value.fields)) {
+      return null
+    }
+    update.fields = value.fields
+  }
+  if (value.userFieldKeys !== undefined) {
+    const userFieldKeys = normalizeStringArray(value.userFieldKeys)
+    if (userFieldKeys === undefined) {
+      return null
+    }
+    update.userFieldKeys = userFieldKeys
+  }
+  if (value.richTextFieldKeys !== undefined) {
+    const richTextFieldKeys = normalizeStringArray(value.richTextFieldKeys)
+    if (richTextFieldKeys === undefined) {
+      return null
+    }
+    update.richTextFieldKeys = richTextFieldKeys
+  }
   return update
 }

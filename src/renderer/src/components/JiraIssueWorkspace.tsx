@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import * as VisuallyHidden from 'radix-ui/visually-hidden'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
@@ -8,7 +8,12 @@ import {
   jiraGetIssueForTarget,
   jiraUpdateIssueForTarget
 } from '@/runtime/jira/runtime-jira-detail-client'
-import type { JiraIssue, JiraMutationResult } from '../../../shared/jira/jira-types'
+import type {
+  JiraEditField,
+  JiraIssue,
+  JiraIssueUpdate,
+  JiraMutationResult
+} from '../../../shared/jira/jira-types'
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
@@ -28,6 +33,16 @@ import { enqueueJiraIssueMutation, jiraIssueRequestScope } from './jira-issue-mu
 import { useJiraIssueMutationState } from './use-jira-issue-mutation-state'
 import { useJiraIssueWorkspaceData } from './use-jira-issue-workspace-data'
 import { useJiraIssueCommentSubmission } from './use-jira-issue-comment-submission'
+import { useJiraIssueEditFields } from './use-jira-issue-edit-fields'
+import {
+  JiraIssueEditFieldsSection,
+  jiraEditFieldPendingId
+} from './jira-issue-edit-fields-section'
+import {
+  JiraIssueDescriptionAction,
+  JiraIssueDescriptionEditor
+} from './jira-issue-description-editing'
+import { buildJiraEditFieldUpdate } from './jira-issue-edit-field-drafts'
 type JiraIssueWorkspaceProps = {
   issue: JiraIssue | null
   onUse: (issue: JiraIssue) => void
@@ -97,6 +112,13 @@ export default function JiraIssueWorkspace({
     setCommentSubmitting,
     setComments
   })
+  const editFields = useJiraIssueEditFields({
+    issueKey: issue?.key,
+    siteId: issue?.siteId,
+    owner,
+    requestKey
+  })
+  const reloadEditFields = editFields.reload
   useJiraIssueMutationState({
     scope: requestKey,
     issue,
@@ -105,7 +127,13 @@ export default function JiraIssueWorkspace({
     setFullIssue,
     setTitleDraft,
     setLabelsDraft,
-    onStatusSettled: () => displayed && void loadTransitions(displayed, requestIdRef.current),
+    // A new status can bring a different edit screen.
+    onStatusSettled: () => {
+      if (displayed) {
+        void loadTransitions(displayed, requestIdRef.current)
+        void reloadEditFields()
+      }
+    },
     onCommentsChanged: () => displayed && void loadComments(displayed, requestIdRef.current)
   })
   const mutateIssue = useCallback(
@@ -184,6 +212,40 @@ export default function JiraIssueWorkspace({
     setTitleDraft,
     mutateIssue
   })
+  const saveEditField = useCallback(
+    async (field: JiraEditField, update: JiraIssueUpdate): Promise<boolean> => {
+      const result = await mutateIssue(jiraEditFieldPendingId(field), update)
+      if (result.ok) {
+        void reloadEditFields()
+      }
+      return result.ok
+    },
+    [mutateIssue, reloadEditFields]
+  )
+  // Scoped to the issue so switching issues leaves edit mode without an effect.
+  const [editingDescriptionKey, setEditingDescriptionKey] = useState<string | null>(null)
+  const descriptionField = editFields.fields?.find((field) => field.key === 'description')
+  const editingDescription =
+    descriptionField?.writable === true &&
+    editingDescriptionKey !== null &&
+    editingDescriptionKey === requestKey
+  const saveDescription = useCallback(
+    async (text: string): Promise<void> => {
+      const update = descriptionField ? buildJiraEditFieldUpdate(descriptionField, text) : null
+      if (!descriptionField || !update) {
+        toast.error(
+          translate('jira.editFields.required', '{{field}} is required.', {
+            field: descriptionField?.name ?? 'Description'
+          })
+        )
+        return
+      }
+      if (await saveEditField(descriptionField, update)) {
+        setEditingDescriptionKey(null)
+      }
+    },
+    [descriptionField, saveEditField]
+  )
 
   return (
     <Sheet open={issue !== null} onOpenChange={(open) => !open && onClose()}>
@@ -247,6 +309,35 @@ export default function JiraIssueWorkspace({
               retryComments={() => void loadComments(displayed, requestIdRef.current)}
               onUse={onUse}
               actionItems={actionItems}
+              editFieldsSection={
+                <JiraIssueEditFieldsSection
+                  state={editFields}
+                  pendingField={pendingField}
+                  owner={owner}
+                  siteId={siteId}
+                  onSave={saveEditField}
+                />
+              }
+              descriptionAction={
+                editingDescription ? null : (
+                  <JiraIssueDescriptionAction
+                    field={descriptionField}
+                    issueUrl={displayed.url}
+                    disabled={pendingField !== null}
+                    onEdit={() => setEditingDescriptionKey(requestKey)}
+                  />
+                )
+              }
+              descriptionEditor={
+                editingDescription && descriptionField ? (
+                  <JiraIssueDescriptionEditor
+                    field={descriptionField}
+                    pending={pendingField === jiraEditFieldPendingId(descriptionField)}
+                    onSave={(text) => void saveDescription(text)}
+                    onCancel={() => setEditingDescriptionKey(null)}
+                  />
+                ) : null
+              }
             />
 
             <JiraIssueCommentComposer
