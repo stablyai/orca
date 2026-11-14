@@ -31,10 +31,11 @@ import { runSessionOptionSurfaceCall } from './native-chat-session-option-surfac
 export function NativeChatPermissionModeName(props: {
   mode: AgentChatPermissionMode
   truncate?: boolean
+  label?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const Icon = NATIVE_CHAT_PERMISSION_MODE_ICONS[props.mode]
-  const label = nativeChatPermissionModeLabel(props.mode, t)
+  const label = props.label ?? nativeChatPermissionModeLabel(props.mode, t)
   const body = (
     <>
       <Icon className="size-3.5 shrink-0" aria-hidden />
@@ -129,7 +130,7 @@ function NativeChatPermissionModePickerInner({
               className="max-w-40 min-w-0 shrink"
             >
               {isAgentChatPermissionMode(current) ? (
-                <NativeChatPermissionModeName mode={current} truncate />
+                <NativeChatPermissionModeName mode={current} label={currentLabel} truncate />
               ) : (
                 <>
                   <Settings2 className="size-3.5 shrink-0" aria-hidden />
@@ -189,7 +190,7 @@ export function NativeChatComposerPermissionPicker({
     <NativeChatPermissionModePicker
       current={current}
       modes={modes}
-      currentLabel={descriptor.description}
+      currentLabel={descriptor.valueSource === 'dispatched' ? descriptor.description : undefined}
       agent={agent ?? null}
       disabled={!descriptor.settable}
       onSelect={(mode) => {

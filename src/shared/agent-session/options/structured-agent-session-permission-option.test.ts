@@ -99,4 +99,46 @@ describe('the permission mode picker', () => {
       )
     ).toBe(true)
   })
+
+  it('labels only a saved choice that differs from the fenced child launch choice as deferred', () => {
+    const state = { ...live('claude', { permissionMode: 'ask' }), permissionOwnSupported: true }
+    expect(
+      permission({ ...state, permissionMode: 'full-access', launchPermissionMode: 'ask' })
+    ).toMatchObject({
+      description: 'Full access — Applies to your next message',
+      valueSource: 'dispatched'
+    })
+    expect(
+      permission({ ...state, permissionMode: 'own', launchPermissionMode: 'own' })
+    ).toMatchObject({
+      description: "Agent's own settings",
+      valueSource: 'applied'
+    })
+    expect(
+      permission({ ...state, permissionMode: 'ask', launchPermissionMode: 'full-access' })
+    ).toMatchObject({
+      description: 'Ask for approval — Applies to your next message',
+      valueSource: 'dispatched'
+    })
+    expect(permission({ ...state, permissionMode: 'full-access' })).toMatchObject({
+      description: 'Full access',
+      valueSource: 'applied'
+    })
+    expect(
+      permission({
+        ...state,
+        permissionMode: 'full-access',
+        launchPermissionMode: 'ask',
+        reportedPermissionMode: 'plan'
+      })
+    ).toMatchObject({ valueSource: 'dispatched' })
+    expect(
+      permission({
+        ...state,
+        permissionMode: 'full-access',
+        launchPermissionMode: 'ask',
+        reportedPermissionMode: 'unknown-mode'
+      })
+    ).toMatchObject({ valueSource: 'dispatched' })
+  })
 })

@@ -55,6 +55,7 @@ export function structuredAgentSessionPermissionDescriptor(state: {
   record: StructuredAgentSessionOptionRecord
   permissionMode: string | null
   permissionOwnSupported?: boolean | null
+  launchPermissionMode?: string
   reportedPermissionMode?: string | null
 }): SessionOptionDescriptor | null {
   const support = agentChatPermissionModes(state.record.agent)
@@ -73,8 +74,10 @@ export function structuredAgentSessionPermissionDescriptor(state: {
         : current === 'read-only'
           ? 'Read only'
           : (current ?? 'Permissions')
+  const deferred =
+    state.launchPermissionMode !== undefined && state.launchPermissionMode !== current
   return {
-    description: label,
+    description: deferred ? `${label} — Applies to your next message` : label,
     id: AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
     label: 'Permissions',
     category: 'mode',
@@ -87,7 +90,7 @@ export function structuredAgentSessionPermissionDescriptor(state: {
         description: agentDescriptions(state.record.agent)[value] ?? MODE_COPY[value].description
       }))
     },
-    valueSource: 'applied',
+    valueSource: deferred ? 'dispatched' : 'applied',
     transport: 'agent-session',
     settable: state.permissionOwnSupported !== null
   }
