@@ -41,7 +41,7 @@ export function AgentWorkingSpinner({ className }: { className?: string }): Reac
       data-agent-spinner=""
       className={cn(
         // Fill the top under reduced motion so the frozen ring looks intentional (#9515).
-        'agent-working-spinner block rounded-full border-2 border-agent-working border-t-transparent motion-reduce:border-t-agent-working',
+        'agent-working-spinner block rounded-full border-[1.5px] border-agent-working border-t-transparent motion-reduce:border-t-agent-working',
         className
       )}
     />
