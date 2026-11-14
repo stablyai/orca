@@ -36,7 +36,7 @@ export type LineageRowFrame = {
 /** Tree connector x-offsets (row-relative px) that tie a nested workspace to its parent. */
 export type LineageRowGuides = {
   // Ancestors whose later children sit below this row, so their line passes straight through.
-  rails: number[]
+  rails: readonly number[]
   // The elbow from the immediate parent's line into this row's card.
   branch: { x: number; to: number; last: boolean } | null
   // This row's own line down to its first visible child.
@@ -171,26 +171,29 @@ export function buildLineageRowProjection(
   })
   const guideOffset = statusLane ? NEW_STYLE_GUIDE_OFFSET : LEGACY_GUIDE_OFFSET
   const guideX = (index: number) => frames[index].left - guideOffset
+  const noRails: readonly number[] = []
   frames.forEach((frame, index) => {
     const hasChildren = frame.end > index && frames[index + 1]?.parent === index
     if (frame.parent === null && !hasChildren) {
       return
     }
-    const rails: number[] = []
+    let rails = noRails
     let branch: LineageRowGuides['branch'] = null
-    if (frame.parent !== null) {
+    const parent = frame.parent
+    if (parent !== null) {
       branch = {
         x: guideX(index),
         to: frame.left + BRANCH_END_INSET,
-        last: frame.end === frames[frame.parent].end
+        last: frame.end === frames[parent].end
       }
-      for (let child = frame.parent; frames[child].parent !== null;) {
-        const ancestor = frames[child].parent!
-        if (frames[child].end < frames[ancestor].end) {
-          rails.push(guideX(child))
-        }
-        child = ancestor
-      }
+      // Why: parents project before children, so extend the parent's rails instead of walking
+      // every ancestor; chains without branching share one array and stay linear.
+      const parentRails = frames[parent].guides!.rails
+      const grandparent = frames[parent].parent
+      rails =
+        grandparent !== null && frames[parent].end < frames[grandparent].end
+          ? [guideX(parent), ...parentRails]
+          : parentRails
     }
     frame.guides = { rails, branch, stem: hasChildren ? guideX(index + 1) : null }
   })
