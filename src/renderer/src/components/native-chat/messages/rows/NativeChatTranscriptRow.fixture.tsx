@@ -1,3 +1,7 @@
+import anteImage from '../../../../../../shared/agent-icons/ante.png?url'
+import grokImage from '../../../../../../shared/agent-icons/grok.png?url'
+import hermesImage from '../../../../../../shared/agent-icons/hermes.png?url'
+import qoderImage from '../../../../../../shared/agent-icons/qoder.png?url'
 import { defineFixture } from '../../../../component-fixtures/component-fixture'
 import { NativeChatMessageList } from '../../NativeChatMessageList'
 import type { NativeChatLiveSession } from '../../session/terminal/read/native-chat-live-session-contract'
@@ -66,4 +70,44 @@ export const responseActionsGap = defineFixture({
       <NativeChatMessageList session={session} isWorking={false} expandSignal={false} />
     </div>
   )
+})
+
+const galleryImages = [anteImage, grokImage, hermesImage, qoderImage]
+export const imageGalleryResponseScope = defineFixture({
+  width: 720,
+  render: () => {
+    const images = galleryImages.map((image) => new URL(image, window.location.href).href)
+    const galleryMessages: NativeChatMessage[] = [
+      text('gallery-ask', 'user', 'Show the four result images.'),
+      ...Array.from({ length: 7 }, (_, index): NativeChatMessage => ({
+        id: `gallery-tool-${index}`,
+        role: 'assistant',
+        source: 'transcript',
+        timestamp: at(),
+        blocks: [
+          { type: 'text', text: 'Viewed image' },
+          { type: 'image-ref', url: `${images[0]}?preview=${index}` }
+        ]
+      })),
+      text(
+        'gallery-response',
+        'assistant',
+        images.map((src, index) => `![Response ${index + 1}](${src})`).join('\n\n')
+      )
+    ]
+    return (
+      <div className="native-chat-appearance flex h-[700px] flex-col">
+        <NativeChatMessageList
+          session={{ ...session, sessionId: 'gallery-scope-fixture', messages: galleryMessages }}
+          isWorking={false}
+          expandSignal={false}
+        />
+      </div>
+    )
+  }
+})
+
+export const imageGalleryResponseScopePhone = defineFixture({
+  ...imageGalleryResponseScope,
+  width: 390
 })

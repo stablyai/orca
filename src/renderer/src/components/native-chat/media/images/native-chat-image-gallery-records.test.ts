@@ -1,57 +1,62 @@
 import { expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatTurnRows } from '../../conversation/slots/use-native-chat-turn-membership'
-import { nativeChatGalleryRecords } from './native-chat-image-gallery-records'
-const messages: NativeChatMessage[] = [
-  {
-    id: 'u1',
-    role: 'user',
-    timestamp: null,
-    source: 'transcript',
-    blocks: [{ type: 'image-ref', path: '/repo/input.png' }]
-  },
-  {
-    id: 'a1',
-    role: 'assistant',
-    timestamp: null,
-    source: 'transcript',
-    blocks: [{ type: 'image-ref', path: '/repo/first.png' }]
-  },
-  {
-    id: 'a2',
-    role: 'assistant',
-    timestamp: null,
-    source: 'transcript',
-    blocks: [{ type: 'image-ref', path: '/repo/second.png' }]
-  },
-  {
-    id: 'u2',
-    role: 'user',
-    timestamp: null,
-    source: 'transcript',
-    blocks: [{ type: 'text', text: 'Next request' }]
-  },
-  {
-    id: 'a3',
-    role: 'assistant',
-    timestamp: null,
-    source: 'transcript',
-    blocks: [{ type: 'image-ref', path: '/repo/other-turn.png' }]
+import {
+  nativeChatGalleryGroup,
+  nativeChatGalleryRecords
+} from './native-chat-image-gallery-records'
+it('keeps four response images separate from seven tool previews in the same turn', () => {
+  const messages: NativeChatMessage[] = [
+    {
+      id: 'user',
+      role: 'user',
+      timestamp: null,
+      source: 'transcript',
+      blocks: [{ type: 'image-ref', path: '/repo/input.png' }]
+    },
+    ...Array.from({ length: 7 }, (_, index): NativeChatMessage => ({
+      id: `tool-preview-${index}`,
+      role: 'assistant',
+      timestamp: null,
+      source: 'transcript',
+      blocks: [
+        { type: 'text', text: 'Viewed image' },
+        { type: 'image-ref', path: `/repo/tool-${index}.png` }
+      ]
+    })),
+    {
+      id: 'response',
+      role: 'assistant',
+      timestamp: null,
+      source: 'transcript',
+      blocks: [
+        {
+          type: 'text',
+          text: '![One](/repo/one.png)\n\n![Two](/repo/two.png)\n\n![Three](/repo/three.png)\n\n![Four](/repo/four.png)'
+        }
+      ]
+    }
+  ]
+  const rows: NativeChatTurnRows = {
+    messages,
+    turnKeys: messages.map(() => 'same-turn'),
+    liveTurnKey: undefined
   }
-]
-const rows: NativeChatTurnRows = {
-  messages,
-  turnKeys: ['turn-1', 'turn-1', 'turn-1', 'turn-2', 'turn-2'],
-  liveTurnKey: 'turn-2'
-}
-it('groups a response in source order and separates its user images and the next response', () => {
-  expect(nativeChatGalleryRecords(rows, 'turn-1', false).map((record) => record.source)).toEqual([
-    '/repo/first.png',
-    '/repo/second.png'
-  ])
-  expect(nativeChatGalleryRecords(rows, 'user:u1', false).map((record) => record.source)).toEqual([
-    '/repo/input.png'
-  ])
+  expect(
+    nativeChatGalleryRecords(rows, nativeChatGalleryGroup(rows, 8), false).map(
+      (record) => record.source
+    )
+  ).toEqual(['/repo/one.png', '/repo/two.png', '/repo/three.png', '/repo/four.png'])
+  expect(
+    nativeChatGalleryRecords(rows, nativeChatGalleryGroup(rows, 1), false).map(
+      (record) => record.source
+    )
+  ).toEqual(['/repo/tool-0.png'])
+  expect(
+    nativeChatGalleryRecords(rows, nativeChatGalleryGroup(rows, 0), false).map(
+      (record) => record.source
+    )
+  ).toEqual(['/repo/input.png'])
 })
 it('discovers reference-style markdown images in rows that have no mounted image component', () => {
   const row: NativeChatMessage = {
@@ -69,6 +74,8 @@ it('discovers reference-style markdown images in rows that have no mounted image
     liveTurnKey: undefined
   }
   expect(
-    nativeChatGalleryRecords(offscreen, 'turn-3', false).map((record) => record.source)
+    nativeChatGalleryRecords(offscreen, nativeChatGalleryGroup(offscreen, 0), false).map(
+      (record) => record.source
+    )
   ).toEqual(['/repo/one.png', '/repo/two.png'])
 })

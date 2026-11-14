@@ -19,10 +19,7 @@ export type NativeChatGalleryRecord = {
   block?: NativeChatImageRefBlock
 }
 export function nativeChatGalleryGroup(rows: NativeChatTurnRows, index: number): string {
-  const message = rows.messages[index]
-  return message.role === 'user'
-    ? `user:${message.id}`
-    : (rows.turnKeys[index] ?? message.turnId ?? message.id)
+  return rows.messages[index].id
 }
 function rowImages(message: NativeChatMessage, visuals: boolean): NativeChatGalleryRecord[] {
   const refs = deriveNativeChatRowContent(message.blocks).prose.filter(
