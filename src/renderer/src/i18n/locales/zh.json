@@ -23711,8 +23711,7 @@
   },
   "agentSendTargets": {
     "disabledReason": {
-      "needsPermission": "智能体需要授权",
-      "statusStale": "智能体状态信息已过期"
+      "needsPermission": "智能体需要授权"
     }
   },
   "wslDistroHold": {

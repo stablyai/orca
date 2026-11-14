@@ -23371,8 +23371,7 @@
   },
   "agentSendTargets": {
     "disabledReason": {
-      "needsPermission": "Agent に許可が必要です",
-      "statusStale": "Agent のステータスが古くなっています"
+      "needsPermission": "Agent に許可が必要です"
     }
   },
   "wslDistroHold": {

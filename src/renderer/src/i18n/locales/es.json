@@ -24051,8 +24051,7 @@
   },
   "agentSendTargets": {
     "disabledReason": {
-      "needsPermission": "El agente necesita permiso",
-      "statusStale": "El estado del agente está desactualizado"
+      "needsPermission": "El agente necesita permiso"
     }
   },
   "wslDistroHold": {

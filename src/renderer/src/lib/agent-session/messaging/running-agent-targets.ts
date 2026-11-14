@@ -108,37 +108,27 @@ function deriveTerminalAgentSendTargets(
 
     const layoutPtyId =
       state.terminalLayoutsByTabId?.[parsed.tabId]?.ptyIdsByLeafId?.[parsed.leafId] ?? null
-    const tabPtyIds = state.ptyIdsByTabId?.[parsed.tabId]
     const ptyId =
-      layoutPtyId && (tabPtyIds === undefined || tabPtyIds.includes(layoutPtyId))
-        ? layoutPtyId
-        : null
+      layoutPtyId && state.ptyIdsByTabId?.[parsed.tabId]?.includes(layoutPtyId) ? layoutPtyId : null
     let disabledReason: string | undefined
 
-    // Shared hookState applies freshness; keep live-title detection local because its strict idle-send gate differs from raw resolver titleStatus.
+    // Idle agents emit no hooks, so row age never disables a live pane; the host's process/screen check gates the send.
     const decision = resolvePaneAgentActivity({
       explicitEntry: entry,
       liveTitle: null,
       hasLivePty: ptyId !== null,
       now
     })
-    // Stale hooks can outlive live agents; current PTY titles still prove targetability.
     const liveTitleStatus = ptyId
       ? detectLiveAgentPaneStatus(state, parsed.tabId, parsed.leafId, tab.title)
       : null
-    if (entry.restoredUnconfirmed) {
-      disabledReason = 'Agent status is stale'
-    } else if (decision.hookState === null) {
-      if (liveTitleStatus === 'permission') {
-        disabledReason = 'Agent needs permission'
-      } else if (liveTitleStatus === null) {
-        disabledReason = 'Agent status is stale'
-      }
-    } else if (!ptyId) {
+    // An unanswered prompt sends no further hooks; only a fresh row or a live title can show it was answered.
+    const rowNeedsPermission = entry.state === 'blocked' || entry.state === 'waiting'
+    const titleClearsPermission =
+      decision.hookState === null && liveTitleStatus !== null && liveTitleStatus !== 'permission'
+    if (!ptyId) {
       disabledReason = 'Terminal is no longer available'
-    } else if (decision.hookState === 'blocked' || decision.hookState === 'waiting') {
-      disabledReason = 'Agent needs permission'
-    } else if (liveTitleStatus === 'permission') {
+    } else if ((rowNeedsPermission && !titleClearsPermission) || liveTitleStatus === 'permission') {
       disabledReason = 'Agent needs permission'
     }
 

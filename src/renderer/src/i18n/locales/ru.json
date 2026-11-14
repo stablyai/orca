@@ -24329,8 +24329,7 @@
   },
   "agentSendTargets": {
     "disabledReason": {
-      "needsPermission": "Агенту требуется разрешение",
-      "statusStale": "Статус агента устарел"
+      "needsPermission": "Агенту требуется разрешение"
     }
   },
   "wslDistroHold": {

@@ -23363,8 +23363,7 @@
   },
   "agentSendTargets": {
     "disabledReason": {
-      "needsPermission": "에이전트에 권한이 필요합니다",
-      "statusStale": "에이전트 상태 정보가 오래되었습니다"
+      "needsPermission": "에이전트에 권한이 필요합니다"
     }
   },
   "wslDistroHold": {

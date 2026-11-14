@@ -24074,8 +24074,7 @@
   },
   "agentSendTargets": {
     "disabledReason": {
-      "needsPermission": "L’agent a besoin d’une autorisation",
-      "statusStale": "Le statut de l’agent est obsolète"
+      "needsPermission": "L’agent a besoin d’une autorisation"
     }
   },
   "wslDistroHold": {
