@@ -1,5 +1,5 @@
 import { getAgentSessionOptionCatalog } from '../../agent-session/options/agent-session-option-catalog'
-import type { CatalogModel } from '../../agent-session/options/agent-session-option-catalog-types'
+import type { CatalogModel } from '../../agent-session/options/catalog-providers/agent-session-option-catalog-types'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type {
   SessionOptionDescriptor,

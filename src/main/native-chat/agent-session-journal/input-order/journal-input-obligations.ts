@@ -9,7 +9,7 @@ import type {
   AgentJournalStatusItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { readCodexErrorWillRetry } from '../../../codex/app-server/codex-structured-thread-facts'
 import type { JournalInputSource } from './journal-input-source-schema'
 import {

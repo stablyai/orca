@@ -1,13 +1,13 @@
 import type { StructuredAgentResolutionOperation } from '../agent-launch/structured-agent-command-resolution'
 import { resolveHiddenProbeCwd } from '../../lib/hidden-probe-cwd'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { isNativeLocalLocation } from '../../../shared/execution-host'
 import type {
   AgentModelCatalogService,
   AgentModelCatalogServiceDeps
 } from './agent-model-catalog-service-contract'
 import { agentModelCatalogScopeFingerprint } from './agent-model-catalog-fingerprint'
-import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
+import { independentAgentModelCatalog } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import type {
   AgentModelCatalogLookup,
   AgentModelCatalogResolvedProbe

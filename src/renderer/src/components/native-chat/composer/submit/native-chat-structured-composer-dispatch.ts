@@ -1,4 +1,4 @@
-import { agentSessionInteractionCommand } from '../../../../../../shared/agent-session/options/agent-session-interaction-mode'
+import { agentSessionInteractionCommand } from '../../../../../../shared/agent-session/options/permissions/agent-session-interaction-mode'
 import type { AgentJournalSkillRef } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { structuredAgentSessionBlocksTooLarge } from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-message-params'
 import { structuredAgentSessionSendBody } from '../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'

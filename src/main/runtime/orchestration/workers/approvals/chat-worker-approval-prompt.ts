@@ -1,7 +1,7 @@
 /** A chat worker's permission prompt is its own journal item: Orca reads it there and answers it
  *  through the chat's ordinary prompt response, so the worker's chat and Orca share one record. */
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { structuredAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { structuredAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import type { AgentJournalApprovalItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { mintAgentSessionOperationId } from '../../mailbox/structured-pointer/structured-pointer-operation-id'
 import { workerApprovalDecisionOf, workerApprovalOption } from './worker-approval'

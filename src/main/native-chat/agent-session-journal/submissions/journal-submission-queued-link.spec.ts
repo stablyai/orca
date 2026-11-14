@@ -10,7 +10,7 @@ import { agentSessionSendBodyFingerprint } from '../../../../shared/agent-sessio
 
 import type { AgentSessionJournal } from '../journal-store'
 import { createTrackedJournalOpener } from '../store-lifecycle/journal-host-database-test-support'
-import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 export function registerJournalSubmissionQueuedLinkTests(): void {
   const IDENTITY: AgentSessionJournalIdentity = {

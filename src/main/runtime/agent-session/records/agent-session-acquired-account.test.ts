@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   acquiredAgentSessionAccount,
   withAcquiredAgentSessionAccount
-} from '../../../../shared/agent-session/lifecycle/agent-session-acquired-account'
-import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+} from '../../../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+} from '../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import { createRestTestRig } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
 import {
   openTestAgentSessionRecordStore,

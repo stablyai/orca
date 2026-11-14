@@ -1,4 +1,4 @@
-import { agentSessionInteractionCommand } from '../../../../../src/shared/agent-session/options/agent-session-interaction-mode'
+import { agentSessionInteractionCommand } from '../../../../../src/shared/agent-session/options/permissions/agent-session-interaction-mode'
 import { selectAgentSessionCurrentRequests } from '../../../../../src/shared/agent-session/requests/agent-session-current-requests'
 import { useCallback } from 'react'
 import { runningStructuredAgentSessionTurnId } from '../../../../../src/shared/agent-session/view/structured-agent-session-live-turn'

@@ -6,7 +6,7 @@ import {
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnOutcome } from '../../../../shared/agent-status/lifecycle/agent-turn-outcome'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { agentJournalTurnBody as codexTurnLifecycleBody } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { agentJournalTurnBody as codexTurnLifecycleBody } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { CODEX_USER_MESSAGE_ORDINAL } from './codex-turn-ordinals'
 import { resolveAgentJournalTurnRowWrite } from '../../../native-chat/agent-session-timeline/agent-journal-turn-row-revision'
 import type {

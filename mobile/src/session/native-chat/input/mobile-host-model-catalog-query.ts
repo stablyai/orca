@@ -6,7 +6,7 @@ import {
   selectHostModelCatalogSnapshot,
   withHostModelCatalogAnswer,
   type HostModelCatalogSnapshot
-} from '../../../../../src/shared/agent-session/options/host-model-catalog-snapshot-rules'
+} from '../../../../../src/shared/agent-session/options/model-catalog/host-model-catalog-snapshot-rules'
 import { defineHostQuery, useHostQuery } from '../../../query/host-query'
 import { hostQueryKey } from '../../../query/host-query-key'
 import { useWorkspaceExecutionHost } from '../../../navigation/workspace-execution-host'

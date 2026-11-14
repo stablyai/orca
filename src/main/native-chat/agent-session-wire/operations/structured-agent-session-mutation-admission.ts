@@ -1,4 +1,4 @@
-import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 // Validate fingerprints centrally. Prepare ledger replays without admitting writes; first runs
 // prepare ownership before lease admission, while command-receipt plans use their own admission.
 
@@ -7,11 +7,11 @@ import {
   agentSessionFingerprintConflict,
   agentSessionLedgerRefusal,
   computeAgentSessionPayloadFingerprint
-} from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import type {
   AgentSessionOperationDecision,
   AgentSessionOperationRow
-} from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult

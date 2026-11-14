@@ -1,5 +1,5 @@
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../src/shared/native-chat/input/native-chat-picker-items'
-import type { AgentSessionRewindSurface } from '../../../../src/shared/agent-session/lifecycle/agent-session-rewind-request'
+import type { AgentSessionRewindSurface } from '../../../../src/shared/agent-session/lifecycle/rewind/agent-session-rewind-request'
 import type { NativeChatSendFollowUp } from '../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
 import type { StructuredMobileSendAttachment } from './composer/use-mobile-structured-send-with-outcome'
 import type { MobileSessionView } from '../../storage/session-view-preferences'
@@ -15,7 +15,7 @@ import type {
   NativeChatLiveTurnIndicator,
   NativeChatSettledTurns
 } from '../../../../src/shared/native-chat/transcript/native-chat-turn-status'
-import type { AgentSessionOptionsResult } from '../../../../src/shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../../../src/shared/agent-session/options/protocol/agent-session-options-result'
 import type { NativeChatTurnJournal } from '../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
 import type { NativeChatAwaitingInput } from '../../../../src/shared/native-chat/native-chat-terminal-turn'
 import type { NativeChatResolvedPrompt } from '../../../../src/shared/native-chat/native-chat-resolution-receipt'

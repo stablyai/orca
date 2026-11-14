@@ -1,6 +1,6 @@
 import { agentSessionRecordPredecessorIds } from './agent-session-record-lineage'
 import { clearSuccessor } from './agent-session-sender-identity-revision'
-import * as usageLimitContinue from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
+import * as usageLimitContinue from '../../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
 import { createAgentSessionOwnerProof } from '../ownership/agent-session-owner-proof'
 import { backfillAgentSessionPermissionModes } from '../ownership/agent-session-permission-backfill'
 import { createAgentSessionConversationReceipts } from '../agent-session-conversation-receipts'
@@ -9,7 +9,7 @@ import {
   agentSessionOperationKey,
   type AgentSessionOperationDecision,
   type AgentSessionOperationRow
-} from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
 import {
   admitAgentSessionGlobalOperationInto,
   admitAgentSessionMutationOperation,
@@ -26,13 +26,13 @@ import {
   isAgentSessionClaimKeyVerifiable,
   retireAgentSessionClaimKey
 } from '../ownership/agent-session-claim-key-retention'
-import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import {
   agentSessionScopeKey,
   type AgentSessionExecutionLocation,
   type AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session/options/agent-session-options-replacement'
+import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session/options/protocol/agent-session-options-replacement'
 import {
   commitAgentSessionProcessIdentity,
   evictAgentSessionOwner,

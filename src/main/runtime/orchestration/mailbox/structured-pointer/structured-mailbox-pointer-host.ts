@@ -6,7 +6,7 @@ import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-ses
 import type { StructuredMailboxPointerHost } from './structured-mailbox-pointer-host-contract'
 import type { StructuredSendAnswer as StructuredMailSendState } from '../../../../native-chat/agent-session-wire/delivery/structured-agent-session-queued-send-answer'
 import type { AgentJournalSnapshot } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { structuredAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { structuredAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { mintAgentSessionOperationId } from './structured-pointer-operation-id'
 import {
   structuredSessionGateFacts,

@@ -23,7 +23,7 @@ import type {
   JournalTombstoneRow
 } from '../../../../agent-session-journal/durable-rows/journal-row-schema'
 import type { AgentSessionJournal } from '../../../../agent-session-journal/journal-store'
-import { codexProviderHandle } from '../../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 export const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',

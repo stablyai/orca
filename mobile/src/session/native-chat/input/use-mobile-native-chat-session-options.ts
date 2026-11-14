@@ -12,7 +12,7 @@ import { getAgentSessionOptionCatalog } from '../../../../../src/shared/agent-se
 import type {
   CatalogCommandDelivery,
   CatalogModel
-} from '../../../../../src/shared/agent-session/options/agent-session-option-catalog-types'
+} from '../../../../../src/shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
 import type {
   NativeChatSessionOptionSettingsMutation,
   SessionOptionsSurface,

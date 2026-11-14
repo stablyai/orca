@@ -9,7 +9,7 @@ import {
   type MobileNativeChatSendIntent,
   type MobileNativeChatSendOutcome
 } from '../composer/mobile-native-chat-send'
-import type { CatalogCommandDelivery } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog-types'
+import type { CatalogCommandDelivery } from '../../../../../src/shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
 import { isSlashCommandDraft } from '../../../../../src/shared/native-chat/input/native-chat-slash-commands'
 import { healMobileNativeChatStaleInput } from '../composer/mobile-native-chat-stale-input'
 import { classifyMobileNativeChatSend } from '../composer/mobile-native-chat-send-classification'

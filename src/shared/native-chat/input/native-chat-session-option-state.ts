@@ -2,7 +2,7 @@ import type { AgentType } from '../../agent-status/contracts/agent-status-types'
 import type {
   CatalogMidSessionApply,
   AgentSessionOptionCatalog
-} from '../../agent-session/options/agent-session-option-catalog-types'
+} from '../../agent-session/options/catalog-providers/agent-session-option-catalog-types'
 import type { SessionOptionValue, SessionOptionValueSource } from './native-chat-session-options'
 
 export type TrackedNativeChatSessionOption = {

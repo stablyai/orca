@@ -18,7 +18,7 @@ import {
   AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_PI_MODEL_RUNTIME_CAPABILITY
 } from '../../shared/agent-launch/contracts/agent-launch-runtime-capability'
-import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { parseAgentSessionOperationTimestamp } from '../../shared/agent-session/agent-session-host-authority'
 import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
 import type { TuiAgent } from '../../shared/agent-launch/catalog/tui-agent'

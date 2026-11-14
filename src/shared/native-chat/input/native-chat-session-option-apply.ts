@@ -7,7 +7,7 @@ import type {
   CatalogMidSessionApply,
   CatalogModel,
   CatalogOptionApply
-} from '../../agent-session/options/agent-session-option-catalog-types'
+} from '../../agent-session/options/catalog-providers/agent-session-option-catalog-types'
 import type {
   SessionOptionDescriptor,
   SessionOptionSetResult,

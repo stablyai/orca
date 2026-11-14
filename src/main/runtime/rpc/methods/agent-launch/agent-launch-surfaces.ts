@@ -5,7 +5,7 @@ import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-
 import { callerLaunchSource } from '../../../../agent-launch/agent-started-telemetry'
 import { randomUUID } from 'node:crypto'
 import { narrowStructuredLaunchSeedOptions } from '../../../../../shared/native-chat/input/native-chat-session-option-defaults'
-import { createStructuredAgentSessionOperationId } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { createStructuredAgentSessionOperationId } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { structuredAgentSessionTabId } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   AgentLaunchStructuredSessionRefusedError,

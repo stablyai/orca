@@ -3,7 +3,7 @@ import { codexLaunchedAccountHome } from '../launch/codex-structured-launch-reso
 import {
   CODEX_STRUCTURED_HANDLE_NAMESPACE,
   isAgentSessionProviderHandleInNamespace
-} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+} from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type {
   AgentSessionAcquisition,
   StructuredAgentSessionAcquireInput

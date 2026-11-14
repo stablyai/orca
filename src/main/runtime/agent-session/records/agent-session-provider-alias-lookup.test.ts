@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentSessionStoreState } from './agent-session-store-state'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import type { AgentSessionStoreTransactions } from './agent-session-store-transactions'

@@ -1,6 +1,6 @@
 import { expect, it, onTestFinished, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { agentSessionRecordFixture } from '../testing/agent-session-record-test-fixture'
 import { createAgentModelCatalogService } from './agent-model-catalog-service'
 import { AgentModelCatalogStore } from './agent-model-catalog-store'

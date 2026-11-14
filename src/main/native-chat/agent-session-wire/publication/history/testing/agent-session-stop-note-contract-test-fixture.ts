@@ -10,7 +10,7 @@ import {
   type AgentJournalItemBody,
   type AgentJournalTurnLifecycle
 } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { codexProviderHandle } from '../../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { createTrackedJournalOpener } from '../../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../../../agent-session-journal/journal-store'
 import { structuredAgentSessionStopNoteIdentity } from '../../../operations/structured-agent-session-command-turn'
