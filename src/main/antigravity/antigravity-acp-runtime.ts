@@ -8,9 +8,9 @@ import { probeAntigravityAcpServer } from './antigravity-acp-runtime-probe'
 // workspace when a session starts; check a newer release in an empty folder before moving this pin.
 const VERSION = '1.4.1'
 const RELEASES = 'https://dl.google.com/agy-extensions/releases'
-const COMMAND = 'agy_acp_server.par'
+const COMMAND = process.platform === 'win32' ? 'agy_acp_server.exe' : 'agy_acp_server.par'
 // The server finds its harness beside itself.
-const HARNESS = 'localharness_external'
+const HARNESS = process.platform === 'win32' ? 'localharness_external.exe' : 'localharness_external'
 
 type Pinned = {
   path: string
@@ -57,6 +57,24 @@ const PINNED: Record<string, Pinned> = {
     serverBytes: 933416796,
     harness: '18bcd9a2ab80b66d90f61add7a52a37f53d3113bb0429a0b92709ed09f32a6e1',
     harnessBytes: 124895000
+  },
+  'win32-x64': {
+    path: 'windows/agy-acp-server-1.4.1-windows-x86_64.zip',
+    archive: '5f5b7d0328df17c128b2be338d4567b0d24e56ace8196e88794fec37d1372554',
+    archiveBytes: 129599308,
+    server: '1af0d1b274535698e1167475393309b8de51375db696363442ed4e147416f085',
+    serverBytes: 86098784,
+    harness: 'fbf623b33e4731f300b2e3a72ba82a1a5a582d7ae14d073e4f14cc80a898c45f',
+    harnessBytes: 146036888
+  },
+  'win32-arm64': {
+    path: 'windows/agy-acp-server-1.4.1-windows-arm64.zip',
+    archive: '24c52bbc12aae20f55eb53d373669412d95a9c44fd59be4ea4e355918b91fbf7',
+    archiveBytes: 132507344,
+    server: 'dad798541dda1bc5deb5e08a04fad44aa69ca75444b3b04dd1f784d6946016b8',
+    serverBytes: 93197744,
+    harness: 'e9c0195bdcd4302a273892c8d4e8789226e56f04b53ab07161b2ebbcda4e803c',
+    harnessBytes: 136970904
   }
 }
 
