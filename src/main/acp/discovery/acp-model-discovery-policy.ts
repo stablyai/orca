@@ -14,6 +14,8 @@ export type AcpModelDiscovery =
         home: string | null
       ): Promise<AgentSessionModelOption[]>
       listingNamesConfiguredModel: boolean
+      /** Catalog inputs under the pinned home, named relative to it; stamped so edits expire cached lists. */
+      homeConfigFiles?: readonly string[]
     }
   | {
       kind: 'command'

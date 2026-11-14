@@ -89,6 +89,11 @@ export function createAcpModelCatalogProbe(
       }
     )
     assertStructuredAgentResolutionCurrent(operation)
+    const home = agentSessionAccountHomePath(accountHome)
+    const homeConfigFiles =
+      discovery.kind === 'initialize' && home && discovery.homeConfigFiles
+        ? discovery.homeConfigFiles.map((name) => join(home, name))
+        : undefined
     return {
       identity: { command, prefixArgs, cwd, workspace },
       inputStamp: JSON.stringify(
@@ -96,7 +101,13 @@ export function createAcpModelCatalogProbe(
           [
             ...new Set([cwd, ...(discovery.kind === 'command' && workspace ? [workspace] : [])])
           ].map((directory) =>
-            agentModelCatalogInputStamp({ command, prefixArgs, cwd: directory, env })
+            agentModelCatalogInputStamp({
+              command,
+              prefixArgs,
+              cwd: directory,
+              env,
+              configFiles: homeConfigFiles
+            })
           )
         )
       ),

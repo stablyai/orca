@@ -49,7 +49,8 @@ export const MCODE_LAUNCH_SPEC = {
   modelDiscovery: {
     kind: 'initialize',
     read: readMcodeModelCatalog,
-    listingNamesConfiguredModel: true
+    listingNamesConfiguredModel: true,
+    homeConfigFiles: ['config.yaml']
   },
   transcriptImport: null,
   sessionHistory: MCODE_SESSION_HISTORY,
