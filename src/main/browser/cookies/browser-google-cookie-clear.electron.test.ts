@@ -141,6 +141,7 @@ it('clears Google paths/partitions and preserves other sites across a graceful E
               ![
                 '../../cookies/staging/browser-session-cookie-staging',
                 './browser-session-meta-store',
+                './browser-session-profile-identity',
                 './browser-session-persisted-profile-validation',
                 '../../identity/mode/browser-retired-profile-identity-inspection'
               ].includes(path) &&
