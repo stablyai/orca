@@ -1,4 +1,4 @@
-import { normalizeGhAccountBinding } from '../../../../shared/github/account-binding'
+import { normalizeGhAccountBinding } from '../../../../shared/github/accounts/account-binding'
 import type { GhExecOptions } from './gh-exec-file'
 import { collectGhArgvHostSignals } from './gh-host-args'
 import type { ResolvedCommand } from '../host-routing/wsl-command-resolution'
@@ -38,7 +38,7 @@ export async function resolveBoundGhExecEnv(
     createGhBoundAccountHostMismatchError,
     createGhBoundAccountUnavailableError,
     resolveGhAccountToken
-  } = await import('../../../github/gh-account-token')
+  } = await import('../../../github/accounts/gh-account-token')
   const normalized = normalizeGhAccountBinding(binding)
   if (!normalized) {
     throw createGhBoundAccountUnavailableError(binding)

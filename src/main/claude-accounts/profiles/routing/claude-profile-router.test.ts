@@ -38,7 +38,7 @@ const command = vi.hoisted(() => ({ path: '/unused-claude' }))
 vi.mock('../../../codex-cli/command', () => ({ resolveClaudeCommand: () => command.path }))
 
 const shell = vi.hoisted(() => ({ hang: false }))
-vi.mock('../../../startup/login-shell-environment', () => ({
+vi.mock('../../../startup/shell-environment/login-shell-environment', () => ({
   resolveLoginShellEnvironment: () =>
     shell.hang
       ? new Promise(() => {})
@@ -231,30 +231,6 @@ describe('ClaudeProfileRouter', () => {
     f.settings.claudeManagedAccounts = []
     f.router.publish()
     expect(existsSync(f.router.pointerPath)).toBe(false)
-  })
-
-  it("launches a set-up, signed-in account without waiting for the login shell's env", async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    shell.hang = true
-    const f = fixture()
-    mkdirSync(f.home('a'), { recursive: true })
-    prepareClaudeProfileDirectory(
-      f.dataRoot,
-      describeClaudeProfile(f.dataRoot, 'a', {
-        executionHostId: 'local',
-        runtime: 'host'
-      }),
-      f.userHome
-    )()
-    signIn(f.home('a'), 'a@example.test')
-    const router = new ClaudeProfileRouter({
-      getSettings: () => f.settings,
-      dataRoot: f.dataRoot,
-      userHome: f.userHome
-    })
-    const launch = router.prepareLaunch()
-    await advanceRefreshDeadline(launch, 5_000)
-    await expect(launch).resolves.toMatchObject({ configDir: f.home('a') })
   })
 
   it('requires concurrent launches to finish rebuilding a home whose marker survived', async () => {

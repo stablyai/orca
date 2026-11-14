@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { AgentSessionRestartActivity } from '../../../../../shared/agent-session/lifecycle/agent-session-restart-activity'
+import type { AgentSessionRestartActivity } from '../../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-activity'
 
 export type ResumeActivityLabel = {
   /** One line naming what the chat was doing, in the sidebar's own vocabulary. */

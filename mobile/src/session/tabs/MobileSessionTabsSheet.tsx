@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState } from 'react'
+import { Fragment, useMemo, useRef, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { Plus, X } from 'lucide-react-native'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
@@ -13,7 +13,12 @@ import { formatTimeAgo } from '../../worktree/agent-row-display'
 import { colors, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import type { MobileSessionTabGroup, MobileSessionTabRow } from './mobile-session-tab-rows'
+import {
+  buildMobileSessionTabRow,
+  type MobileSessionTabGroup,
+  type MobileSessionTabRow,
+  type MobileSessionTabSummary
+} from './mobile-session-tab-rows'
 import { MobileSessionTabMark } from './MobileSessionTabMark'
 import type { MobileSessionController } from '../use-mobile-session-controller'
 
@@ -24,14 +29,51 @@ const GROUP_ORDER: readonly MobileSessionTabGroup[] = ['needs-you', 'working', '
 /** Every tab in the workspace, what needs you first; tap one to go there, swipe one to close it. */
 export function MobileSessionTabsSheet({
   controller,
-  rows,
+  tabs,
   visible,
   onClose
 }: {
   controller: MobileSessionController
-  rows: readonly MobileSessionTabRow[]
+  tabs: readonly MobileSessionTabSummary[]
   visible: boolean
   onClose: () => void
+}) {
+  const afterCloseRef = useRef<(() => void) | null>(null)
+  // Why: the drawer draws its content only while shown, so a closed sheet runs no clock and builds no rows (STA-15103).
+  return (
+    <BottomDrawer
+      visible={visible}
+      onClose={onClose}
+      onAfterClose={() => {
+        const afterClose = afterCloseRef.current
+        afterCloseRef.current = null
+        afterClose?.()
+      }}
+    >
+      <MobileSessionTabsSheetContent
+        controller={controller}
+        tabs={tabs}
+        onClose={onClose}
+        onOpenNewTab={() => {
+          // The new-tab sheet is its own drawer; open it once this one is gone.
+          afterCloseRef.current = controller.handleOpenNewTab
+          onClose()
+        }}
+      />
+    </BottomDrawer>
+  )
+}
+
+function MobileSessionTabsSheetContent({
+  controller,
+  tabs,
+  onClose,
+  onOpenNewTab
+}: {
+  controller: MobileSessionController
+  tabs: readonly MobileSessionTabSummary[]
+  onClose: () => void
+  onOpenNewTab: () => void
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -41,19 +83,17 @@ export function MobileSessionTabsSheet({
     worktreeName,
     switchSessionTab,
     handleCloseSessionTab,
-    handleOpenNewTab,
     createTabBusy,
     connState
   } = controller
-  // Sections hold still while the sheet is open, so a row never moves under a finger.
-  const [frozenGroups, setFrozenGroups] = useState<ReadonlyMap<string, MobileSessionTabGroup>>()
-  if (visible && frozenGroups === undefined) {
-    setFrozenGroups(new Map(rows.map((row) => [row.tab.id, row.group])))
-  }
-  const afterCloseRef = useRef<(() => void) | null>(null)
+  // Sections hold still while the sheet is shown (closing included), so a row never moves under a finger.
+  const [frozenGroups] = useState<ReadonlyMap<string, MobileSessionTabGroup>>(
+    () => new Map(tabs.map((tab) => [tab.tab.id, tab.group]))
+  )
+  const rows = useMemo(() => tabs.map((tab) => buildMobileSessionTabRow(tab)), [tabs])
   const sections = GROUP_ORDER.map((group) => ({
     group,
-    rows: rows.filter((row) => (frozenGroups?.get(row.tab.id) ?? row.group) === group)
+    rows: rows.filter((row) => (frozenGroups.get(row.tab.id) ?? row.group) === group)
   })).filter((section) => section.rows.length > 0)
   const sectionTitles: Record<MobileSessionTabGroup, string> = {
     'needs-you': t('session.tabsSheet.needsYou', 'Needs you'),
@@ -131,16 +171,7 @@ export function MobileSessionTabsSheet({
   }
 
   return (
-    <BottomDrawer
-      visible={visible}
-      onClose={onClose}
-      onAfterClose={() => {
-        setFrozenGroups(undefined)
-        const afterClose = afterCloseRef.current
-        afterCloseRef.current = null
-        afterClose?.()
-      }}
-    >
+    <>
       <View>
         <SheetHeader title={title} subtitle={worktreeName || undefined} />
         <View style={styles.newTab}>
@@ -148,11 +179,7 @@ export function MobileSessionTabsSheet({
             icon={Plus}
             disabled={createTabBusy || connState !== 'connected'}
             accessibilityLabel={t('session.tabStrip.newTab', 'New tab')}
-            onPress={() => {
-              // The new-tab sheet is its own drawer; open it once this one is gone.
-              afterCloseRef.current = handleOpenNewTab
-              onClose()
-            }}
+            onPress={onOpenNewTab}
           />
         </View>
       </View>
@@ -168,7 +195,7 @@ export function MobileSessionTabsSheet({
           </Fragment>
         ))}
       </View>
-    </BottomDrawer>
+    </>
   )
 }
 

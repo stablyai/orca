@@ -1,3 +1,7 @@
+import { journalInputAttemptEndedFromFacts } from './journal-input-attempt-ended'
+import { memoryJournalMap } from '../journal-memory-collections'
+import type { JournalInputIndexStorage } from '../journal-index-storage'
+import { memoryJournalInputIndexStorage } from '../journal-memory-input-index-storage'
 import { journalInputOrder } from './journal-input-order'
 import {
   agentJournalSubmissionKey,
@@ -8,8 +12,7 @@ import type {
   AgentJournalSubmission,
   AgentJournalStatusItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { readCodexErrorWillRetry } from '../../../codex/app-server/codex-structured-thread-facts'
 import type { JournalInputSource } from './journal-input-source-schema'
 import {
@@ -40,16 +43,22 @@ export type JournalInputEnd =
   | { kind: 'item'; turnId: string | null }
   | { kind: 'stop'; event: NonNullable<JournalTombstoneRow['stopEvent']> }
 
-export function createJournalInputObligations() {
+export function createJournalInputObligations(
+  storage: JournalInputIndexStorage = memoryJournalInputIndexStorage
+) {
   return {
-    sources: new Map<string, JournalInputSource>(),
-    rejections: new Map<string, JournalDispatchRow | AgentJournalSubmission>(),
-    presentations: new Map<string, JournalDispatchRow | JournalQueueRow | QueuedMessageRow>(),
-    handovers: new Map<string, JournalDispatchRow>(),
-    echoes: new Set<string>(),
-    candidates: new Map<string, AgentJournalSubmission>(),
-    ends: new Map<string, JournalInputEnd>(),
-    ended: new Set<string>(),
+    sources: storage.map<string, JournalInputSource>('inputs.sources'),
+    rejections: storage.map<string, JournalDispatchRow | AgentJournalSubmission>(
+      'inputs.rejections'
+    ),
+    presentations: storage.map<string, JournalDispatchRow | JournalQueueRow | QueuedMessageRow>(
+      'inputs.presentations'
+    ),
+    handovers: storage.map<string, JournalDispatchRow>('inputs.handovers'),
+    echoes: storage.set<string>('inputs.echoes'),
+    candidates: storage.map<string, AgentJournalSubmission>('inputs.candidates'),
+    ends: storage.map<string, JournalInputEnd>('inputs.ends'),
+    ended: storage.set<string>('inputs.ended'),
     revision: 0
   }
 }
@@ -136,11 +145,9 @@ export function foldJournalInputObligations(
       providerAttemptEnded(frame)
     ) {
       input.ends.set(item.itemId, { kind: 'item', turnId: turn?.turnId ?? null })
-      const candidates = [...input.candidates.values()].filter(
-        (send) =>
-          (input.handovers.get(send.clientMessageId)?.fence ??
-            input.sources.get(send.clientMessageId)?.fence ??
-            send.fence) === (item.executionOwner ?? item.ownerFence ?? item.fence)
+      const candidates = state.queries.candidatesForFence(
+        state,
+        item.executionOwner ?? item.ownerFence ?? item.fence
       )
       const latest = candidates.reduce(
         (last, send) =>
@@ -181,7 +188,7 @@ export function foldJournalInputObligations(
       return
     }
     input.ends.set(row.itemId, { kind: 'stop', event: row.stopEvent })
-    for (const send of input.candidates.values()) {
+    for (const send of state.queries.candidatesForHandoverFence(state, row.fence)) {
       const handover = input.handovers.get(send.clientMessageId)
       const scope = handover?.turnScope
       const end = scope?.kind === 'turn' ? input.ends.get(scope.turnItemId) : undefined
@@ -227,23 +234,13 @@ export function journalInputAttemptEnded(
   send: AgentJournalSubmission,
   work: JournalInputWork | null
 ): boolean {
-  if (isQueuedAgentJournalSubmission(send)) {
-    return false
-  }
-  const original = {
-    ...send,
+  return journalInputAttemptEndedFromFacts(send, work, {
     fence:
       state.inputs.handovers.get(send.clientMessageId)?.fence ??
       state.inputs.sources.get(send.clientMessageId)?.fence ??
-      send.fence
-  }
-  if (!work?.allowsObservation() || work.owesSend(original)) {
-    return false
-  }
-  if (work.generationEnded(original) || (send.dispatchState === 'unknown' && send.recovered)) {
-    return true
-  }
-  return state.inputs.ended.has(send.clientMessageId)
+      send.fence,
+    ended: state.inputs.ended.has(send.clientMessageId)
+  })
 }
 
 export function refreshJournalInputCandidate(state: JournalReducerState, id: string): void {
@@ -281,9 +278,9 @@ export function visitJournalInputItems(
   state: JournalReducerState,
   visit: JournalItemLinkageVisitor
 ): void {
-  for (const item of state.items.values()) {
+  for (const item of memoryJournalMap(state.items).values()) {
     if (journalInputPresentationMember(state, item.itemId)) {
-      visit(item.itemId, item.sequence, item.body, item)
+      visit(item.itemId, item.sequence, item.body, item, item)
     }
   }
 }

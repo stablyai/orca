@@ -1,8 +1,8 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import type { RpcCompatibleReader } from '../../transport/rpc/rpc-operation-contract'
 import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
-import type { MobileGitBranchCompareResult } from '../mobile-branch-compare'
-import { gitStatusProjectionReader } from '../mobile-git-read-operations'
+import type { MobileGitBranchCompareReply as MobileGitBranchCompareResult } from '../branches/git-compare-reply-schema'
+import { gitStatusProjectionReader } from '../git/mobile-git-read-operations'
 import {
   branchCompareProjectionSchema,
   reviewGitDiffSchema,

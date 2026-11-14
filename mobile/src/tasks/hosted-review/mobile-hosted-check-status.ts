@@ -1,9 +1,9 @@
 import type {
   PRMergeableState,
   ProviderCheckSummary
-} from '../../../../src/shared/github/pull-request-types'
+} from '../../../../src/shared/github/pull-requests/pull-request-types'
 import { translate } from '../../i18n/mobile-i18n'
-import { resolveGitHubPRMergeState } from '../../../../src/shared/github/pull-request-merge-state'
+import { resolveGitHubPRMergeState } from '../../../../src/shared/github/pull-requests/merge/pull-request-merge-state'
 import {
   getProviderChecksLabel,
   getProviderChecksOutcome

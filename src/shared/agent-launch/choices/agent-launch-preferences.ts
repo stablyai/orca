@@ -9,7 +9,7 @@ import { isTuiAgent } from '../catalog/tui-agent-config'
 import {
   composeAgentLaunchModel,
   hasIndependentAgentLaunchOptions
-} from '../../agent-session/options/agent-session-option-launch'
+} from '../../agent-session/options/launch/agent-session-option-launch'
 
 /** Compose model/effort for this terminal; send permission mode only where the agent has a flag. */
 export function toAgentLaunchPreferences(

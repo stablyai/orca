@@ -181,7 +181,6 @@ export function buildDefaultSettings(args: {
     agentSkillSharingEnabled: false,
     nestedWorkerMaxDepth: NESTED_WORKER_MAX_DEPTH_DEFAULT,
     nestedWorkerMaxDepthDefaultedToFour: true,
-    orchestrationWorkerRoles: {},
     orchestrationWorkerAutoReleaseEnabled: true,
     orchestrationCoordinatorApprovalsEnabled: false,
     showArtifactsButton: false,
@@ -250,6 +249,7 @@ export function buildDefaultSettings(args: {
     minimaxEndpoint: 'overseas',
     zcodePlanSite: 'zai',
     geminiCliOAuthEnabled: false,
+    claudeOAuthUsageEnabled: true,
     agentCmdOverrides: {},
     // Arguments hold only the user's own text; the permission flag comes from the choice below.
     agentDefaultArgs: {},

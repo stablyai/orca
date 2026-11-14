@@ -8,7 +8,7 @@ import { DeviceRegistry } from '../../main/runtime/rpc/server/pairing/device-reg
 import {
   acquireOrcadInstanceLock,
   ORCAD_LOCK_FILE_NAME
-} from '../../main/orcad/orcad-instance-lock'
+} from '../../main/orcad/instance-lock/orcad-instance-lock'
 import {
   ensureHostInstanceIdentity,
   hostInstanceIdFromEnv

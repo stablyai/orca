@@ -13,10 +13,7 @@ import type { StructuredPointerDeliveryDependencies } from './structured-mailbox
 import { structuredMailMessage } from '../structured-mail/structured-mail-source'
 import type { StructuredMailSendRow } from '../../db/messages/structured-mail-send-store'
 import type { QueuedMessageOwed } from '../../../../native-chat/agent-session-journal/queued-messages/queued-message-consume-error'
-import {
-  orchestrationMailNotice,
-  type AgentMessageSource
-} from '../../../../../shared/agent-session/agent-session-message-source'
+import type { AgentMessageSource } from '../../../../../shared/agent-session/agent-session-message-source'
 import { StructuredMailboxParking } from '../structured-mail/structured-mailbox-parking'
 import { StructuredMailSettledState } from '../structured-mail/structured-mail-settled-state'
 import * as mailCustody from '../structured-mail/structured-mail-custody'
@@ -116,33 +113,10 @@ export class OrchestrationStructuredMailboxPointerDelivery<
   owedNow(
     sessionId: string,
     from: AgentMessageSource,
-    db: OrchestrationDb | null
+    db: OrchestrationDb | null,
+    claimedDeliveryId?: string
   ): QueuedMessageOwed {
-    return this.authority.owedNow(sessionId, from, db)
-  }
-
-  /** The queue asks this as it hands an agent's card over. A stale mail card is dropped without a
-   *  turn, so its record is settled here: the deletion is never read later as the person's, and
-   *  mail still in this mailbox goes to its new owner. */
-  owedAtHandover(
-    sessionId: string,
-    from: AgentMessageSource,
-    db: OrchestrationDb | null
-  ): QueuedMessageOwed {
-    const owed = this.owedNow(sessionId, from, db)
-    const mail = orchestrationMailNotice(from)
-    if (owed === 'stale' && mail && db) {
-      for (const { messageId } of mail.messages) {
-        const row = db.getStructuredMailSend(mail.mailbox, messageId)
-        if (row?.session_id === sessionId) {
-          db.releaseStructuredMailSend(row)
-        }
-      }
-      // After the queue's write lane unwinds, through whichever lane owns the mailbox now.
-      this.settledState.invalidate(mail.mailbox)
-      queueMicrotask(() => this.redeliver(mail.mailbox))
-    }
-    return owed
+    return this.authority.owedNow(sessionId, from, db, claimedDeliveryId)
   }
 
   private async deliver(mailboxHandle: string, reservedTypes?: ReadonlySet<string>): Promise<void> {
@@ -277,7 +251,7 @@ export class OrchestrationStructuredMailboxPointerDelivery<
     if (fence === null) {
       return 'park'
     }
-    const { body, whole } = structuredMailMessage({
+    const { body } = structuredMailMessage({
       db,
       mailboxHandle,
       dispatchId: target.dispatchId,
@@ -333,7 +307,10 @@ export class OrchestrationStructuredMailboxPointerDelivery<
       case 'sent':
         // In doubt, including a resend the host answered from an earlier admission: never again.
         if (outcome.state === 'accepted' || outcome.state === 'unknown') {
-          db.retireStructuredMailSend(attempt, outcome.state === 'accepted' && whole)
+          const observed = await mailCustody.observeStructuredMailAttempt(this.deps.host, attempt)
+          mailCustody.settleStructuredMailAttempt(db, attempt, observed, () =>
+            this.authority.owedTo(sessionId, mailboxHandle, [message.id])
+          )
         }
         // Pending or rejected: the record decides on a later pass.
         return 'next'

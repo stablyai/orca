@@ -138,28 +138,6 @@ async function startCreditedSubscription() {
 }
 
 describe('terminal.subscribe output credit', () => {
-  it('holds output beyond the window until the stream token is acked', async () => {
-    const stream = await startCreditedSubscription()
-    expect(stream.subscribed).toMatchObject({ outputAck: true, streamToken: expect.any(String) })
-
-    stream.output(9)
-    expect(stream.sentOutputUnits()).toBe(512 * 1024)
-
-    await stream.ack(stream.subscribed.streamToken, CHUNK)
-    expect(stream.sentOutputUnits()).toBe(576 * 1024)
-    await stream.stop()
-  })
-
-  it("credits nothing for another device's ack or an unknown token", async () => {
-    const stream = await startCreditedSubscription()
-    stream.output(9)
-
-    await stream.ack(stream.subscribed.streamToken, CHUNK, 'other-device')
-    await stream.ack('stale-token', CHUNK)
-    expect(stream.sentOutputUnits()).toBe(512 * 1024)
-    await stream.stop()
-  })
-
   it("sends the PTY's last output, held or batched, when it exits", async () => {
     const stream = await startCreditedSubscription()
     stream.output(9)

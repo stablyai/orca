@@ -7,12 +7,12 @@ import {
 import { orchestrationMigrationData } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import type { WorkerStartInput } from '../worker/worker-start-schema'
+import type { WorkerStartInput } from '../worker/start/worker-start-input'
 import {
   assertWorkerLaunchPreferencesRuntimeSupported,
   parseWorkerLaunchPreflight,
   type OrchestrationWorkerLaunchReceipt
-} from '../worker/worker-launch-preferences'
+} from '../worker/start/launch/worker-launch-preferences'
 
 export async function preflightFederatedWorkerLaunch(args: {
   params: WorkerStartInput

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
-import { resolveWorkerLaunchPreferences } from './worker-launch-preferences'
+import { resolveWorkerLaunchPreferences } from './start/launch/worker-launch-preferences'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,

@@ -4,12 +4,12 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import { resolveDispatchCallerWorktreeId } from '../orchestration-caller-workspace'
 import { resolveWorkerStartModeOnHost } from '../structured-workers/orchestration-worker-start-mode'
 import type { AgentLaunchModeReceipt as WorkerStartModeReceipt } from '../../../../../../shared/agent-launch/contracts/agent-launch-intent'
-import type { WorkerStartInput } from './worker-start-schema'
-import { resolveWorkerConfiguredAgentParams } from './worker-configured-agent-preflight'
-import { probeWorkerOpenCodeModelLaunchSupport } from './worker-opencode-model-preflight'
+import type { WorkerStartInput } from './start/worker-start-input'
+import { resolveWorkerConfiguredAgentParams } from './start/launch/worker-configured-agent-preflight'
+import { probeWorkerOpenCodeModelLaunchSupport } from './start/launch/worker-opencode-model-preflight'
 import { preflightStructuredWorkerFast } from './worker-structured-fast-preflight'
-import { prepareLocalWorkerStart } from './worker-start-validation'
-import type { WorkerWorktreeCreationTarget } from './worker-worktree-creation'
+import { prepareLocalWorkerStart } from './start/launch/worker-start-validation'
+import type { WorkerWorktreeCreationTarget } from './start/placement/worker-worktree-creation'
 
 export async function preflightLocalWorkerStartLaunch(args: {
   params: WorkerStartInput

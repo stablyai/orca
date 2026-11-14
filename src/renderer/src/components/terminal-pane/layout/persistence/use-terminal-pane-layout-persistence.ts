@@ -22,6 +22,7 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
     clearedScrollbackLeafIdsRef,
     chatLeafId,
     containerRef,
+    initialLayoutRef,
     isChatViewMode,
     expandedPaneIdRef,
     managerRef,
@@ -144,6 +145,7 @@ export function useTerminalPaneLayoutPersistence(controller: TerminalPaneStartup
   }, [chatLeafId, isChatViewMode, persistLayoutSnapshot])
 
   const { clearPaneScrollback } = usePaneScrollbackClear({
+    initialLayoutRef,
     clearedScrollbackLeafIdsRef,
     paneTransportsRef,
     persistLayoutSnapshot

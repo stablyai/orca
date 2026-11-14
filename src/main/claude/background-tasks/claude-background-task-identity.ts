@@ -1,8 +1,13 @@
+import {
+  agentJournalItemKey,
+  parseAgentJournalItemKey
+} from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
-import type { AgentJournalProducerLinkage } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type {
+  AgentJournalRenderItem,
+  AgentJournalProducerLinkage
+} from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { isBackgroundTaskBlock } from '../../../shared/native-chat/native-chat-types'
-import type { StructuredAgentSessionLifecycleJournal } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 
 export type ClaudeBackgroundTaskDescriptor = {
   identity: AgentJournalItemIdentity
@@ -17,16 +22,38 @@ export type ClaudeBackgroundTaskIndex = {
   aliases: Map<string, ClaudeBackgroundTaskDescriptor>
 }
 
+/** Generation suffixes preserve restarted runs; generation 1 retains the legacy journal key. */
 export function claudeBackgroundTaskIdentity(
   taskId: string,
   generation = 1
 ): AgentJournalItemIdentity {
-  return {
-    provider: 'orca',
-    clientMessageId: `claude-background-task:${taskId}${generation > 1 ? `#${generation}` : ''}`
-  }
+  const key =
+    generation > 1
+      ? `claude-background-task:${taskId}#${generation}`
+      : `claude-background-task:${taskId}`
+  return { provider: 'orca', clientMessageId: key }
 }
 
+/** Choose among the task's saved incarnations, which all share its key prefix. */
+export function resolveClaudeBackgroundTaskIdentity(
+  withKeyPrefix: (prefix: string) => Iterable<AgentJournalRenderItem>,
+  id: string,
+  toolUseId: string | undefined
+): AgentJournalItemIdentity {
+  const index: ClaudeBackgroundTaskIndex = { aliases: new Map() }
+  for (const { itemId, body, ...linkage } of withKeyPrefix(
+    agentJournalItemKey(claudeBackgroundTaskIdentity(id))
+  )) {
+    const block = body.kind === 'message' ? body.blocks.find(isBackgroundTaskBlock) : undefined
+    if (block?.taskId === id) {
+      indexClaudeBackgroundTask(index, itemId, id, block.parentToolUseId, linkage)
+    }
+  }
+  return (
+    selectClaudeBackgroundTask(index, toolUseId)?.identity ??
+    claudeBackgroundTaskIdentity(id, (index.latest?.generation ?? 0) + 1)
+  )
+}
 export function indexClaudeBackgroundTask(
   index: ClaudeBackgroundTaskIndex,
   itemId: string,
@@ -71,37 +98,4 @@ export function selectClaudeBackgroundTask(
   return toolUseId === undefined
     ? index?.latest
     : (index?.aliases.get(toolUseId) ?? index?.unresolved)
-}
-
-export function resolveClaudeBackgroundTaskDescriptor(
-  journal: StructuredAgentSessionLifecycleJournal,
-  id: string,
-  toolUseId?: string
-): ClaudeBackgroundTaskDescriptor {
-  const index: ClaudeBackgroundTaskIndex = { aliases: new Map() }
-  journal.visitItems((itemId, _sequence, body) => {
-    if (body.kind !== 'message') {
-      return
-    }
-    const block = body.blocks.find(isBackgroundTaskBlock)
-    if (block?.taskId === id) {
-      indexClaudeBackgroundTask(index, itemId, id, block.parentToolUseId, {})
-    }
-  })
-  return (
-    selectClaudeBackgroundTask(index, toolUseId) ?? {
-      identity: claudeBackgroundTaskIdentity(id, (index.latest?.generation ?? 0) + 1),
-      generation: (index.latest?.generation ?? 0) + 1,
-      toolUseId,
-      linkage: {}
-    }
-  )
-}
-
-export function resolveClaudeBackgroundTaskIdentity(
-  journal: StructuredAgentSessionLifecycleJournal,
-  id: string,
-  toolUseId: string | undefined
-): AgentJournalItemIdentity {
-  return resolveClaudeBackgroundTaskDescriptor(journal, id, toolUseId).identity
 }

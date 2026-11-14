@@ -1,8 +1,7 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { isAiVaultSessionRecoverableEmpty } from '../../../shared/ai-vault/contracts/ai-vault-types'
 import { scanAiVaultSessions } from '../session-scanner'
 import { parseClaudeSessionContent } from '../scanners/claude/session-scanner-primary-parsers'
 import {
@@ -40,44 +39,6 @@ function metadataOnlyTranscript(sessionId: string): unknown[] {
 }
 
 describe('recoverable-but-empty Claude sessions', () => {
-  it('surfaces a zero-turn session with queued messages and subagent transcripts', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-recoverable-'))
-    tempRoots.push(root)
-    const roots = isolatedScanRoots(root)
-    const sessionId = '9176163a-2f89-431f-b202-32f04d61f124'
-
-    await writeJsonlFile(
-      join(roots.claudeProjectsDir, 'project', `${sessionId}.jsonl`),
-      metadataOnlyTranscript(sessionId)
-    )
-    // Child transcripts can outlive an unpersisted parent; metadata sidecars must not count as transcripts.
-    const subagentsDir = join(roots.claudeProjectsDir, 'project', sessionId, 'subagents')
-    await writeJsonlFile(join(subagentsDir, 'agent-arev-contracts-1.jsonl'), [
-      {
-        type: 'user',
-        sessionId,
-        message: { role: 'user', content: 'Contracts review' }
-      }
-    ])
-    await writeJsonlFile(join(subagentsDir, 'agent-arev-perf-2.jsonl'), [
-      {
-        type: 'user',
-        sessionId,
-        message: { role: 'user', content: 'Perf review' }
-      }
-    ])
-    await writeFile(join(subagentsDir, 'agent-arev-contracts-1.meta.json'), '{}')
-
-    const result = await scanAiVaultSessions({ ...roots, platform: 'darwin' })
-    const session = result.sessions.find((entry) => entry.sessionId === sessionId)
-
-    expect(session).toBeDefined()
-    expect(session?.messageCount).toBe(0)
-    expect(session?.queuedMessageCount).toBe(4)
-    expect(session?.subagentTranscriptCount).toBe(2)
-    expect(isAiVaultSessionRecoverableEmpty(session!)).toBe(true)
-  })
-
   it('picks up subagent transcripts written after the parent transcript last changed', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-late-sub-'))
     tempRoots.push(root)

@@ -1,8 +1,8 @@
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import type {
-  PluginHostListEntry,
   PluginMarketplaceHostListing,
   PluginMarketplaceHostSourceState
-} from '../../../../../preload/api-types'
+} from '../../../../../preload/api/plugins/plugin-host-api'
 import { satisfiesOrcaEngineRange } from '../../../../../shared/plugins/manifest/plugin-manifest'
 import {
   pluginCatalogReleaseTypes,

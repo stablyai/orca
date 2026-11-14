@@ -1,4 +1,4 @@
-import type { GitHubOwnerRepo } from '../../../../src/shared/github/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../src/shared/github/repositories/repository-identity'
 import type { SendRequestOptions } from '../../transport/rpc/unvalidated-rpc-request-port'
 import {
   SHOW_MOBILE_DETAIL_METADATA_EDITORS,

@@ -45,8 +45,13 @@ vi.mock('../../../wsl/execution/wsl-runner', () => ({
     if (guest.failure) {
       return { ...guest.failure, stderr: '', timedOut: false }
     }
+    // Real wsl.exe --exec refuses an empty argument before the guest runs.
+    if (spec.args?.some((arg) => arg === '')) {
+      return { code: 1, stdout: '', stderr: 'Wsl/Service/E_INVALIDARG', timedOut: false }
+    }
     const result = spawnSync('/bin/sh', ['-c', spec.script ?? '', 'sh', ...(spec.args ?? [])], {
-      encoding: 'utf8'
+      encoding: 'utf8',
+      input: spec.input
     })
     return { code: result.status, stdout: result.stdout, stderr: result.stderr, timedOut: false }
   }
@@ -139,6 +144,17 @@ describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
     release()
     await launch
     expect(readFileSync(f.pointer, 'utf8')).toBe(homeB)
+  })
+
+  it('launches on System default while a managed WSL account still exists', async () => {
+    const f = fixture()
+    mkdirSync(join(f.pointer, '..'), { recursive: true })
+    writeFileSync(f.pointer, f.profileHome)
+    f.wsl.Ubuntu = null
+    await expect(f.router.prepareLaunch('Ubuntu')).resolves.toMatchObject({
+      provenance: 'wsl:Ubuntu:system'
+    })
+    expect(readFileSync(f.pointer, 'utf8')).toBe('')
   })
 
   it("runs an account with no login of its own on the guest's ~/.claude while that is signed in to it", async () => {

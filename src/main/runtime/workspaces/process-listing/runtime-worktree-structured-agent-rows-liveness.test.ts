@@ -11,7 +11,7 @@ import type { RuntimeWorktreePsSummary } from '../../../../shared/runtime-worktr
 import { AgentHookServer, _internals } from '../../../agent-hooks/server/agent-hook-server'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 vi.mock('../../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../../telemetry/cohort-classifier', () => ({

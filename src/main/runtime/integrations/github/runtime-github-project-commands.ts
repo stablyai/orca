@@ -37,7 +37,7 @@ import type {
   UpdateIssueTypeBySlugArgs,
   UpdateProjectItemFieldArgs,
   UpdatePullRequestBySlugArgs
-} from '../../../../shared/github/project-request-types'
+} from '../../../../shared/github/projects/project-request-types'
 
 export class RuntimeGitHubProjectCommands {
   listGitHubProjects(args?: ListAccessibleProjectsArgs) {

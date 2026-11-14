@@ -9,7 +9,7 @@ import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type { WorkerRoleProfile } from '../../../../shared/orchestration-worker-roles'
 import { useWorkerRoleModelCatalog } from './use-worker-role-model-catalog'
-import { nativeChatSessionChoiceLabel } from '../../../../shared/native-chat/input/native-chat-session-option-labels'
+import { nativeChatSessionChoiceLabel } from '../../../../shared/native-chat/input/session-options/native-chat-session-option-labels'
 import { sayAgentSessionFailureTranslated } from '../native-chat/messages/notices/agent-session-failure-words-text'
 import { notSignedInSentence } from '../../../../shared/agent-session/agent-session-availability-sentences'
 import { Button } from '../ui/button'

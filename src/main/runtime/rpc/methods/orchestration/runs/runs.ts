@@ -14,7 +14,7 @@ import {
   RunListParams,
   RunShowParams,
   RunUseParams
-} from '../../../../../../shared/rpc-contract/orchestration-runs-params'
+} from '../../../../../../shared/rpc-contract/orchestration/orchestration-runs-params'
 
 function cancelBoundDispatchWaiters(
   runtime: OrcaRuntimeService,

@@ -30,7 +30,7 @@ export function buildRecoveryCrashProcess(directory: string): {
         export { restoreProfileStateDatabaseBackup } from './src/main/persistence/profile-state/recovery/profile-state-database-recovery'
         export { openProfileStateDatabase } from './src/main/persistence/profile-state/database/profile-state-database'
         export { importProfileStateJson } from './src/main/persistence/profile-state/documents/profile-state-documents'
-        export { invalidateHttp1CompatibilityMarker, writeHttp1CompatibilityMarker } from './src/main/startup/http1-compatibility-marker'
+        export { invalidateHttp1CompatibilityMarker, writeHttp1CompatibilityMarker } from './src/main/startup/network-compatibility/http1-compatibility-marker'
       `,
       loader: 'ts',
       resolveDir: process.cwd()

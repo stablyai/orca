@@ -12,7 +12,7 @@ import { spec, WORKER_ONLY } from './plugin-host-method-spec'
 
 /** Provisional release floor for host API 1.7, for plugins that require it in `engines.orca`
  *  instead of checking `host.has`; not a stock-release claim. */
-export const PLUGIN_HOST_API_1_7_SINCE = '1.4.258'
+export const PLUGIN_HOST_API_1_7_SINCE = '1.4.259'
 
 export const PLUGIN_WORKSPACE_LIST_LIMIT = 500
 export const PLUGIN_PROJECT_LIST_LIMIT = 500
@@ -106,7 +106,10 @@ const projectListResult = z.object({
         /** Always named: `local` for this machine, `ssh:<connection>` or `runtime:<environment>`. */
         hostId: pluginHostIdSchema,
         /** The path on the host that owns it, which may be WSL or an SSH machine. */
-        path: z.string().max(ID_MAX)
+        path: z.string().max(ID_MAX),
+        /** Hidden from Orca's sidebar on this host (`project.setHidden`); its workspaces still
+         *  run. Absent before host API 1.9. */
+        hidden: z.boolean().optional()
       })
     )
     .max(PLUGIN_PROJECT_LIST_LIMIT),

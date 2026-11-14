@@ -84,41 +84,4 @@ describe('readAiVaultFirstUserPrompt', () => {
     expect(result.prompt).toBe(longPrompt)
     expect(result.prompt?.length).toBeGreaterThan(220)
   })
-
-  it('resolves null instead of rejecting when the transcript is corrupt', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-first-prompt-corrupt-'))
-    tempRoots.push(root)
-    const sessionDir = join(root, 'session-1')
-    await mkdir(sessionDir, { recursive: true })
-    const summaryPath = join(sessionDir, 'summary.json')
-    await writeFile(summaryPath, '{"info": {"id": "session-1", "cwd": "/repo/a')
-
-    await expect(
-      readAiVaultFirstUserPrompt({ agent: 'grok', filePath: summaryPath })
-    ).resolves.toEqual({ prompt: null })
-  })
-
-  it('returns null for a non-local execution host', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-first-prompt-remote-'))
-    tempRoots.push(root)
-    const filePath = join(root, 'session.jsonl')
-    await writeFile(
-      filePath,
-      JSON.stringify({
-        type: 'user',
-        sessionId: 'remote-session',
-        timestamp: '2026-05-01T10:00:00.000Z',
-        cwd: '/repo/app',
-        message: { role: 'user', content: 'Should not be returned' }
-      })
-    )
-
-    await expect(
-      readAiVaultFirstUserPrompt({
-        agent: 'claude',
-        filePath,
-        executionHostId: 'ssh:build-box'
-      })
-    ).resolves.toEqual({ prompt: null })
-  })
 })

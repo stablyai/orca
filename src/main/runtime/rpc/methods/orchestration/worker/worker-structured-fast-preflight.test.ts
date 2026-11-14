@@ -4,8 +4,8 @@ import { CODEX_STRUCTURED_AGENT } from '../../../../../codex/structured/launch/c
 import { CLAUDE_STRUCTURED_AGENT } from '../../../../../claude/structured/claude-structured-agent-definition'
 import type { AgentSessionModelCatalogResult } from '../../../../../../shared/agent-session/agent-session-wire'
 import { preflightStructuredWorkerFast } from './worker-structured-fast-preflight'
-import { resolveWorkerLaunchPreferences } from './worker-launch-preferences'
-import { narrowStructuredLaunchSeedOptions } from '../../../../../../shared/native-chat/input/native-chat-session-option-defaults'
+import { resolveWorkerLaunchPreferences } from './start/launch/worker-launch-preferences'
+import { narrowStructuredLaunchSeedOptions } from '../../../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 
 afterEach(() => setStructuredAgentSessionHost(null))
 

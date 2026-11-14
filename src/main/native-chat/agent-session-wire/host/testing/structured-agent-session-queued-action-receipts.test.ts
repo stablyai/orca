@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   createQueuedMessageTestRig,
   QUEUED_RIG_CALLER as CALLER,
   type QueuedMessageTestRig
 } from './structured-agent-session-queued-message-rig.test-fixture'
-import { HOST_TEST_NOW as NOW } from './structured-agent-session-host-test-data'
+import { HOST_TEST_NOW as NOW } from './structured-agent-session-host-test-data.test-fixture'
 
 const CALLER_SCOPE = { kind: 'caller', callerKey: CALLER.callerKey } as const
 
@@ -31,11 +31,13 @@ function ledgerRow(id: string) {
   return rig.store.listOperationRows().find((row) => row.operationId === id)
 }
 
-function failReceiptWrites(): () => void {
-  const db = openTestJournalHostDatabase(rig.root).db
-  db.exec(`CREATE TRIGGER fail_queued_receipt BEFORE INSERT ON agent_session_command_receipts
+async function failReceiptWrites(): Promise<() => Promise<void>> {
+  await withTestAgentSessionDatabase(rig.root, (db) =>
+    db.exec(`CREATE TRIGGER fail_queued_receipt BEFORE INSERT ON agent_session_command_receipts
     BEGIN SELECT RAISE(ABORT, 'receipt unavailable'); END`)
-  return () => db.exec('DROP TRIGGER fail_queued_receipt')
+  )
+  return () =>
+    withTestAgentSessionDatabase(rig.root, (db) => db.exec('DROP TRIGGER fail_queued_receipt'))
 }
 
 const UNKNOWN = { ok: false, refusal: { code: 'agent_session_operation_unknown' } }
@@ -43,10 +45,10 @@ const UNKNOWN = { ok: false, refusal: { code: 'agent_session_operation_unknown' 
 describe('Resume', () => {
   it('answers unknown, never success, when a no-op cannot be recorded, and records nothing', async () => {
     const id = opId()
-    const restore = failReceiptWrites()
+    const restore = await failReceiptWrites()
     expect(await rig.resume(id)).toMatchObject(UNKNOWN)
-    restore()
-    expect(receipt(id)).toEqual({ verdict: 'absent' })
+    await restore()
+    expect(await receipt(id)).toEqual({ verdict: 'absent' })
     expect(ledgerRow(id)).toBeUndefined()
   })
 })

@@ -7,13 +7,13 @@ import type { AgentJournalTurnScope } from '../../../../shared/agent-session/jou
 import { structuredAgentSessionStopNoteIdentity } from '../operations/structured-agent-session-command-turn'
 import { structuredAgentSessionNamedTurnScope } from './structured-agent-session-turn-stop-notes'
 import type { AgentSessionTurnContext } from '../operations/structured-agent-session-turns'
-import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
+import { readContextStructuredAgentSessionTurn } from '../observations/structured-agent-session-read-work'
 
 type StopNoteContext = Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'logger' | 'sessionId'>
 
 /** Replace the Stop’s note by turn/operation key; log failed writes. */
 export async function noteStructuredAgentSessionStopUnconfirmed(
-  ctx: StopNoteContext & Pick<AgentSessionTurnContext, 'currentWork'>,
+  ctx: StopNoteContext & Pick<AgentSessionTurnContext, 'currentWork' | 'readWork'>,
   stop: { turnId: string | null; operationId: string },
   error: unknown,
   turnScope?: AgentJournalTurnScope
@@ -32,9 +32,9 @@ export async function noteStructuredAgentSessionStopUnconfirmed(
     { kind: 'status', ...note },
     turnScope ??
       (stop.turnId !== null
-        ? structuredAgentSessionNamedTurnScope(ctx.journal, stop.turnId)
+        ? await structuredAgentSessionNamedTurnScope(ctx.journal, stop.turnId)
         : null) ??
-      contextStructuredAgentSessionCurrentWork(ctx).turnScope()
+      (await readContextStructuredAgentSessionTurn(ctx)).turnScope
   )
 }
 

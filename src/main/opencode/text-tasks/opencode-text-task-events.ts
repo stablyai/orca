@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { SearchSubprocessLineAccumulator } from '../../../shared/search-subprocess-lines'
-import { MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES } from '../../text-generation/source-control-generation-limits'
+import { MAX_SOURCE_CONTROL_AGENT_OUTPUT_BYTES } from '../../text-generation/execution/source-control-generation-limits'
 import type { createOpenCodeTextTaskHttp } from './opencode-text-task-http'
 import { openCodeTextTaskUrl } from './opencode-text-task-http'
 

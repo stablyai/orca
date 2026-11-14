@@ -12,7 +12,7 @@ import {
   requestStructuredAgentSessionMutation,
   type StructuredAgentSessionMutationCallResult
 } from './mobile-structured-agent-session-rpc'
-import { actionableStructuredPrompts } from '../input/mobile-structured-actionable-prompt'
+import { actionableStructuredPrompts } from '../input/prompts/mobile-structured-actionable-prompt'
 
 type PromptIdentity = { itemId: string; expectedRevision: number }
 

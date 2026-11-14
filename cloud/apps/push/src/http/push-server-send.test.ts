@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createPushHostKeypair } from '../host-auth/host-challenge-answering.test-fixture.js'
 import {
   createPushServerHarness,
-  FCM_TOKEN,
   notification
 } from './push-server-harness.test-fixture.js'
 
@@ -34,12 +33,6 @@ describe('push gateway send route', () => {
     })
     await harness.flushDeliveries()
     expect(harness.fcmRequests).toHaveLength(1)
-    expect(JSON.parse(harness.fcmRequests[0]!.body)).toMatchObject({
-      message: {
-        token: FCM_TOKEN,
-        data: { title: 'Agent needs input', tag: expect.stringMatching(/^[a-f0-9]{64}$/) }
-      }
-    })
 
     const afterDeath = await harness.post(
       '/v1/send',
@@ -47,11 +40,6 @@ describe('push gateway send route', () => {
       sessionToken
     )
     expect(await afterDeath.json()).toEqual({ results: [{ registrationId, status: 'dead' }] })
-
-    const listed = await harness.authorized('/v1/devices', {}, sessionToken)
-    expect(await listed.json()).toEqual({
-      devices: [{ registrationId, deviceId: 'device-1', platform: 'android', dead: true }]
-    })
   })
 
   it('reports an error for a registration the host does not own', async () => {

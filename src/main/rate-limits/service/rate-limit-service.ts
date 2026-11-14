@@ -19,6 +19,7 @@ import type {
   OpenCodeGoRateLimitConfig,
   MiniMaxRateLimitConfig,
   AntigravityUsageEnabledResolver,
+  ClaudeOAuthUsageEnabledResolver,
   MuseUsageEnabledResolver,
   ZcodePlanRateLimitConfig,
   GeminiCliOAuthEnabledResolver,
@@ -71,6 +72,27 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
 
   setGeminiCliOAuthEnabledResolver(resolver: GeminiCliOAuthEnabledResolver): void {
     this.geminiCliOAuthEnabledResolver = resolver
+  }
+
+  setClaudeOAuthUsageEnabledResolver(resolver: ClaudeOAuthUsageEnabledResolver): void {
+    this.claudeOAuthUsageEnabledResolver = resolver
+  }
+
+  // Retain only readings actually received from the terminal feed.
+  discardClaudeOAuthUsage(): void {
+    this.claudeUsageAbortController.abort()
+    this.claudeUsageAbortController = new AbortController()
+    this.claudeFetchGeneration += 1
+    this.inactiveClaudeAccountsGeneration += 1
+    this.inactiveClaudeCache.clear()
+    this.inactiveClaudeFetching.clear()
+    this.lastInactiveClaudeFetchAt = 0
+    this.lastClaudeCheckCompletedAt = null
+    this.activeFailureStreakByProvider.claude = 0
+    this.updateState({ ...this.state, claude: this.claudeUsageWithoutOAuth() })
+    if (!this.lastClaudeAuthSnapshot) {
+      void this.fetchClaudeOnly({ force: true })
+    }
   }
 
   setAntigravityUsageEnabledResolver(resolver: AntigravityUsageEnabledResolver): void {
@@ -162,6 +184,10 @@ export class RateLimitService extends RateLimitServiceAccountRefresh {
       void this.fetchAll()
     } else {
       this.scheduleDeferredStartupRefresh()
+      // Passive terminal usage needs account attribution even without a usage viewer.
+      if (!this.isClaudeOAuthUsageEnabled()) {
+        void this.fetchClaudeOnly({ force: true })
+      }
     }
     this.startTimer()
   }
