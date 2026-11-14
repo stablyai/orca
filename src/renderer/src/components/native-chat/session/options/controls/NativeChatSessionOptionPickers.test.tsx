@@ -55,7 +55,7 @@ it('lets a queued switch be turned back before the reply finishes, leaving nothi
   const fast: SessionOptionDescriptor = {
     id: 'fast',
     label: 'Fast',
-    category: 'speed',
+    category: 'model_config',
     transport: 'catalog',
     settable: true,
     valueSource: 'applied',
