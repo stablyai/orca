@@ -88,11 +88,28 @@ export function withoutOpenCodeStandaloneServer(command: string, shell: AgentSta
   if (!OPENCODE_EXECUTABLE.test(getCommandTokenPathBasename(tokens[executable] ?? ''))) {
     return command
   }
+  // A flag after a command separator belongs to the next command, not OpenCode.
+  const separator = tokens.findIndex((token, index) => index > executable && /[|&;<>]/.test(token))
+  const commandTokens = separator === -1 ? tokens : tokens.slice(0, separator)
   const found: number[] = []
-  let option = findOptionOccurrence(tokens, ['--standalone'], true, [], executable + 1, false)
+  let option = findOptionOccurrence(
+    commandTokens,
+    ['--standalone'],
+    true,
+    [],
+    executable + 1,
+    false
+  )
   while (option) {
     found.push(option.index)
-    option = findOptionOccurrence(tokens, ['--standalone'], true, [], option.index + 1, false)
+    option = findOptionOccurrence(
+      commandTokens,
+      ['--standalone'],
+      true,
+      [],
+      option.index + 1,
+      false
+    )
   }
   if (found.some((index) => spans[index].divergesFromShell)) {
     return command
