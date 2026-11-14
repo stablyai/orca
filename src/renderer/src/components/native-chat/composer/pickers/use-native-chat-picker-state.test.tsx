@@ -11,6 +11,7 @@ vi.mock('./use-native-chat-skills', () => ({
   useNativeChatSkills: () => ({
     status: 'ready',
     skills: skillMock.skills,
+    commands: [],
     error: null,
     retry: () => {}
   })

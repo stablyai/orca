@@ -35,6 +35,7 @@ import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/
 import { nativeChatPickerCommands } from '../../../../../../shared/native-chat/input/native-chat-skill-visibility'
 import { useNativeChatSkills } from './use-native-chat-skills'
 import { useNativeChatPreferredSuggestion } from './use-native-chat-preferred-suggestion'
+import { useNativeChatDiscoveredCommands } from './use-native-chat-discovered-commands'
 import {
   emitNativeChatPickerItemAccepted,
   emitNativeChatPickerOpened,
@@ -115,9 +116,14 @@ export function useNativeChatPickerState(args: {
     skillPickerTriggered,
     launchWorktreeId
   )
+  const { commands, sendCommands } = useNativeChatDiscoveredCommands(
+    agentCommands,
+    sessionSkills === undefined ? discovery.commands : undefined,
+    `${terminalTabId}\0${launchWorktreeId ?? ''}\0${agent}`
+  )
   const pickerCommands = useMemo(
-    () => nativeChatPickerCommands(agent, agentCommands, discovery.skills),
-    [agent, agentCommands, discovery.skills]
+    () => nativeChatPickerCommands(agent, commands, discovery.skills),
+    [agent, commands, discovery.skills]
   )
   const listboxId = `native-chat-picker-${useId().replaceAll(':', '')}`
   const dismissalContext = `${draftScopeKey}:${agent}`
@@ -287,14 +293,14 @@ export function useNativeChatPickerState(args: {
     (value: string) => {
       const outcome = classifyNativeChatSend(
         value,
-        agentCommands,
+        sendCommands(),
         skillOriginRef.current,
         profile?.skillPrefix ?? null
       )
       emitNativeChatSendClassified({ agent, outcome })
       return outcome
     },
-    [agent, agentCommands, profile]
+    [agent, profile, sendCommands]
   )
   const clearSkillOrigin = useCallback(() => {
     skillOriginRef.current = null

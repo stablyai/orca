@@ -14,6 +14,7 @@ import type { SkillProviderRootOverrides } from '../providers/skill-provider-des
 import { SKILL_STAGING_GLOB } from '../filesystem/skill-transaction-staging-names'
 import { skillFileMaxDepth } from '../../../shared/skill-discovery-depth'
 import { bundledSkillNames } from '../../../shared/bundled-skill-names'
+import { discoverCustomSlashCommandsInWsl } from './custom-slash-command-discovery-wsl'
 
 const MAX_MARKDOWN_BYTES = 256 * 1024
 const WSL_SCAN_TIMEOUT_MS = 10_000
@@ -201,9 +202,16 @@ export async function discoverSkillObservationInWsl(
     ...pluginRoots
   ].filter((root) => rootMayContainSourceKind(root, args.sourceKinds))
   // Keep enumeration, metadata and path identity in the distro; UNC applies Windows casing/symlink rules.
-  const output = await executeWslSkillDiscovery(
-    args.distro,
-    buildWslSkillDiscoveryCommand(roots, args.names)
-  )
-  return readWslSkillDiscoveryObservation(output, roots)
+  const [output, commands] = await Promise.all([
+    executeWslSkillDiscovery(args.distro, buildWslSkillDiscoveryCommand(roots, args.names)),
+    // Named lookups verify installs; only the picker's unnamed scan needs commands.
+    args.cwd && !args.names?.length
+      ? discoverCustomSlashCommandsInWsl({
+          distro: args.distro,
+          homeDir: args.homeDir,
+          cwd: args.cwd
+        })
+      : Promise.resolve([])
+  ])
+  return { ...readWslSkillDiscoveryObservation(output, roots), commands }
 }
