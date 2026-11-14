@@ -41,7 +41,7 @@ export function useChecksDetailTimer({
   const lastIdentityRef = useRef<string | null>(null)
   const lastAttemptAtRef = useRef(-Infinity)
   const nextAttemptAtRef = useRef(-Infinity)
-  const inFlightRef = useRef<{ identity: string; token: symbol } | null>(null)
+  const inFlightRef = useRef<{ identity: string; token: symbol; background: boolean } | null>(null)
   // The first read after the panel opens (or its review changes) is the user looking; later polls are background (E9).
   const wakeNextReadRef = useRef(true)
   useEffect(() => {
@@ -97,7 +97,11 @@ export function useChecksDetailTimer({
         const nextAttemptAt = nextAttemptAtRef.current
         if (
           now - lastAttemptAtRef.current < REVIEW_REFRESH_COOLDOWN_MS ||
-          (!(trigger === 'visibility' && returnReadDue(now)) &&
+          (!(
+            wakeNextReadRef.current ||
+            forceNextFetchRef.current ||
+            (trigger === 'visibility' && returnReadDue(now))
+          ) &&
             (Number.isFinite(nextAttemptAt)
               ? now < nextAttemptAt
               : nextAttemptAt === Infinity &&
@@ -107,16 +111,19 @@ export function useChecksDetailTimer({
           return
         }
         const token = Symbol()
-        inFlightRef.current = { identity: requestIdentity, token }
         const shown = wakeNextReadRef.current
+        const force =
+          forceNextFetchRef.current ||
+          trigger === 'visibility' ||
+          (shown && Number.isFinite(lastAttemptAtRef.current))
         wakeNextReadRef.current = false
         lastAttemptAtRef.current = now
         nextAttemptAtRef.current = Infinity
-        const force = forceNextFetchRef.current
         forceNextFetchRef.current = false
         // Only the timer's own tick is a background read the host may pace; the window coming
         // back, the panel opening and a changed aggregate state must read fresh.
         const background = trigger === 'timer' && !shown && !force
+        inFlightRef.current = { identity: requestIdentity, token, background }
         try {
           await (isGitLabReview
             ? fetchGitLabDetails(shown ? {} : { background: true })
@@ -129,6 +136,9 @@ export function useChecksDetailTimer({
           if (inFlightRef.current?.token === token) {
             inFlightRef.current = null
             if (lastIdentityRef.current === requestIdentity) {
+              if (!background && modelRef.current.isPanelVisible) {
+                wakeNextReadRef.current = false
+              }
               const delay = policyDelay()
               nextAttemptAtRef.current = delay === null ? Infinity : Date.now() + delay
               refreshRef.current?.()
@@ -141,10 +151,11 @@ export function useChecksDetailTimer({
         if (inFlightRef.current?.identity === requestIdentity) {
           return delay
         }
+        if (wakeNextReadRef.current || forceNextFetchRef.current) {
+          return Math.max(0, lastAttemptAtRef.current + REVIEW_REFRESH_COOLDOWN_MS - Date.now())
+        }
         if (delay === null) {
-          return forceNextFetchRef.current
-            ? Math.max(0, lastAttemptAtRef.current + REVIEW_REFRESH_COOLDOWN_MS - Date.now())
-            : null
+          return null
         }
         return Number.isFinite(nextAttemptAtRef.current)
           ? Math.max(0, nextAttemptAtRef.current - Date.now())
@@ -152,7 +163,16 @@ export function useChecksDetailTimer({
       },
       // Returning to the window is a promised foreground read in every mode: when only the owning
       // host's cadence (not settled checks) stopped the timer, focus still reads once.
-      refreshOnFocusWhileStopped: stoppedByCadence
+      refreshOnFocusWhileStopped: stoppedByCadence,
+      replayVisibilityWhileInFlight: () => {
+        const current = inFlightRef.current
+        const qualified =
+          current?.identity === requestIdentity && current.background && returnReadDue(Date.now())
+        if (qualified) {
+          forceNextFetchRef.current = true
+        }
+        return qualified
+      }
     })
     refreshRef.current = cleanup.refresh
     // A cadence change (this app's or the owning host's) re-plans a mounted panel at once: a timer

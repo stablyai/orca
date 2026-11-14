@@ -95,7 +95,6 @@ function scopeInputs(
     repoPath,
     connectionId ?? null,
     local.wslDistro ?? null,
-    local.admissionTier ?? null,
     local.ghAccount ?? null
   ])
 }

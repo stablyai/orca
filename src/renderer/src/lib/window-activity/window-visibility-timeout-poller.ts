@@ -12,6 +12,8 @@ export function installWindowVisibilityTimeoutPoller(args: {
    *  the timer was stopped by a setting (PR auto-refresh off) rather than by the data being settled.
    *  Default: focus only matters while a timer is wanted. */
   refreshOnFocusWhileStopped?: () => boolean
+  /** Keep one eligible return while a request runs; the caller decides whether its completion can satisfy it. */
+  replayVisibilityWhileInFlight?: () => boolean
   cooldownMs?: number
   setTimeoutFn?: (callback: () => void, delayMs: number) => WindowVisibilityTimeoutPollerTimer
   clearTimeoutFn?: (handle: WindowVisibilityTimeoutPollerTimer) => void
@@ -26,6 +28,7 @@ export function installWindowVisibilityTimeoutPoller(args: {
   let timeoutId: WindowVisibilityTimeoutPollerTimer | null = null
   let disposed = false
   let inFlight = false
+  let visibilityPending = false
   let lastRunAt = -Infinity
 
   const clearScheduledPoll = (): void => {
@@ -52,7 +55,13 @@ export function installWindowVisibilityTimeoutPoller(args: {
   }
 
   function runAndSchedule(trigger: WindowVisibilityPollerTrigger): void {
-    if (disposed || !isWindowVisible() || inFlight) {
+    if (disposed || !isWindowVisible()) {
+      return
+    }
+    if (inFlight) {
+      if (trigger === 'visibility' && args.replayVisibilityWhileInFlight?.()) {
+        visibilityPending = true
+      }
       return
     }
     const explicitRefresh = trigger === 'refresh'
@@ -73,7 +82,12 @@ export function installWindowVisibilityTimeoutPoller(args: {
     inFlight = true
     const finish = (): void => {
       inFlight = false
-      schedulePoll()
+      if (visibilityPending) {
+        visibilityPending = false
+        runAndSchedule('visibility')
+      } else {
+        schedulePoll()
+      }
     }
     try {
       void Promise.resolve(args.run({ trigger })).then(finish, finish)
@@ -116,6 +130,7 @@ export function installWindowVisibilityTimeoutPoller(args: {
 
   const cleanup = (): void => {
     disposed = true
+    visibilityPending = false
     clearScheduledPoll()
     if (typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
       window.removeEventListener('focus', reconcileFocus)
