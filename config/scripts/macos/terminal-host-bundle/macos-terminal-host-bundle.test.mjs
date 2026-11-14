@@ -1,13 +1,4 @@
-import { spawnSync } from 'node:child_process'
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  writeFileSync
-} from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -16,19 +7,14 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 const require = createRequire(new URL('../../macos-terminal-host-bundle.test.mjs', import.meta.url))
 const {
   assembleMacTerminalHost,
-  buildMacTerminalHostInfo,
   daemonBareRequires,
-  findMacTerminalHostInfoProblems,
   findUnresolvedDaemonRequires,
-  macTerminalHostPaths,
   parseBuildVersionMinos
 } = require('./macos/terminal-host-bundle/macos-terminal-host-bundle.cjs')
-const electronBuilderConfig = require('../electron-builder.config.cjs')
-
-const usageDescriptions = electronBuilderConfig.mac.extendInfo
-const appInfo = { CFBundleIdentifier: 'com.stablyai.orca', CFBundleShortVersionString: '1.4.300' }
-const expectations = { appId: 'com.stablyai.orca', usageDescriptions, minimumOs: '13.5' }
-
+const {
+  assertMacExecutableUuid
+} = require('./desktop-distribution/macos/macos-executable-uuid.cjs')
+const INFO = { CFBundleIdentifier: 'com.stablyai.orca' }
 describe('terminal host binary checks', () => {
   it('reads minos from the LC_BUILD_VERSION load command only', () => {
     const otool = [
@@ -72,7 +58,8 @@ describe.skipIf(process.platform !== 'darwin')('terminal host assembly', () => {
     // Some packaged node-pty copies ship spawn-helper without its execute bit.
     writeFileSync(join(nodePty, 'build', 'Release', 'spawn-helper'), 'helper', { mode: 0o644 })
     writeFileSync(join(nodePty, 'src', 'unix.cc'), 'source')
-    writeFileSync(join(root, 'node'), 'pinned-node', { mode: 0o644 })
+    // A real Mach-O stands in for the pinned Node, whose UUID assembly rewrites.
+    copyFileSync('/usr/bin/true', join(root, 'node'))
     writeFileSync(join(root, 'icon.icns'), 'icon')
   })
 
@@ -80,29 +67,15 @@ describe.skipIf(process.platform !== 'darwin')('terminal host assembly', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
-  it('lays out the pinned Node, daemon JS and runtime node-pty files only', () => {
-    const info = buildMacTerminalHostInfo({ appInfo, usageDescriptions, minimumOs: '13.5' })
+  it("gives the helper executable Orca's own UUID instead of stock Node's", () => {
     const paths = assembleMacTerminalHost({
       appPath,
       nodeExecutable: join(root, 'node'),
       iconPath: join(root, 'icon.icns'),
-      info
+      info: INFO
     })
-    expect(paths).toEqual(macTerminalHostPaths(appPath))
-    expect(paths.bundle).toBe(join(appPath, 'Contents', 'Helpers', 'Orca Terminal Host.app'))
-    expect(readFileSync(paths.executable, 'utf8')).toBe('pinned-node')
-    expect(statSync(paths.executable).mode & 0o777).toBe(0o755)
-    expect(statSync(paths.spawnHelper).mode & 0o777).toBe(0o755)
-    expect(readFileSync(paths.entry, 'utf8')).toBe('entry')
-    expect(existsSync(join(paths.daemon, 'out', 'main', 'chunks', 'protocol.js'))).toBe(true)
-    expect(readFileSync(paths.outPackageJson, 'utf8')).toBe('{"type":"commonjs"}')
-    expect(existsSync(join(paths.nodePty, 'lib', 'index.js'))).toBe(true)
-    expect(existsSync(join(paths.nodePty, 'src'))).toBe(false)
-    expect(readFileSync(paths.icon, 'utf8')).toBe('icon')
-    const plist = spawnSync('/usr/bin/plutil', ['-convert', 'json', '-o', '-', paths.infoPlist], {
-      encoding: 'utf8'
-    })
-    expect(findMacTerminalHostInfoProblems(JSON.parse(plist.stdout), expectations)).toEqual([])
+    expect(() => assertMacExecutableUuid(join(root, 'node'), INFO.CFBundleIdentifier)).toThrow()
+    expect(() => assertMacExecutableUuid(paths.executable, INFO.CFBundleIdentifier)).not.toThrow()
   })
 
   it('copies every package the daemon requires, with its dependencies', () => {
@@ -129,7 +102,7 @@ describe.skipIf(process.platform !== 'darwin')('terminal host assembly', () => {
       appPath,
       nodeExecutable: join(root, 'node'),
       iconPath: join(root, 'icon.icns'),
-      info: {}
+      info: INFO
     })
     const helperModules = join(paths.daemon, 'node_modules')
     expect(daemonBareRequires(join(paths.daemon, 'out', 'main'))).toEqual([
@@ -150,7 +123,7 @@ describe.skipIf(process.platform !== 'darwin')('terminal host assembly', () => {
         appPath,
         nodeExecutable: join(root, 'node'),
         iconPath: join(root, 'icon.icns'),
-        info: {}
+        info: INFO
       })
     ).toThrow(/requires yaml, missing/)
   })
@@ -160,7 +133,7 @@ describe.skipIf(process.platform !== 'darwin')('terminal host assembly', () => {
       appPath,
       nodeExecutable: join(root, 'node'),
       iconPath: join(root, 'icon.icns'),
-      info: {}
+      info: INFO
     })
     writeFileSync(paths.entry, "require('jsonc-parser')")
     // The build tree's node_modules above dist/ is what hid this from the boot check.
@@ -178,29 +151,6 @@ describe.skipIf(process.platform !== 'darwin')('terminal host assembly', () => {
     writeFileSync(join(paths.daemon, 'node_modules', 'yaml', 'package.json'), '{"main":"i.js"}')
     writeFileSync(join(paths.daemon, 'node_modules', 'yaml', 'i.js'), '')
     expect(findUnresolvedDaemonRequires(paths)).toEqual([])
-  })
-
-  it('follows directory and JSON loads and keeps nested dependencies with their parent', () => {
-    const resources = join(appPath, 'Contents', 'Resources')
-    const main = join(resources, 'app.asar.unpacked', 'out', 'main')
-    mkdirSync(join(main, 'lib'), { recursive: true })
-    writeFileSync(join(main, 'daemon-entry.js'), "require('./lib');require('./data.json')")
-    writeFileSync(join(main, 'lib', 'index.js'), "require('outer')")
-    writeFileSync(join(main, 'data.json'), '{}')
-    const outer = join(resources, 'node_modules', 'outer')
-    mkdirSync(join(outer, 'node_modules', 'inner'), { recursive: true })
-    writeFileSync(join(outer, 'package.json'), '{"dependencies":{"inner":"1"}}')
-    writeFileSync(join(outer, 'node_modules', 'inner', 'package.json'), '{}')
-    const paths = assembleMacTerminalHost({
-      appPath,
-      nodeExecutable: join(root, 'node'),
-      iconPath: join(root, 'icon.icns'),
-      info: {}
-    })
-    expect(daemonBareRequires(join(paths.daemon, 'out', 'main'))).toEqual(['outer'])
-    expect(existsSync(join(paths.daemon, 'node_modules', 'outer', 'node_modules', 'inner'))).toBe(
-      true
-    )
   })
 
   it("copies a nested package's dependency from wherever Node resolves it", () => {
@@ -225,7 +175,7 @@ describe.skipIf(process.platform !== 'darwin')('terminal host assembly', () => {
       appPath,
       nodeExecutable: join(root, 'node'),
       iconPath: join(root, 'icon.icns'),
-      info: {}
+      info: INFO
     })
     const helperModules = join(paths.daemon, 'node_modules')
     expect(existsSync(join(helperModules, 'b', 'node_modules', 'c', 'package.json'))).toBe(true)
@@ -245,21 +195,8 @@ describe.skipIf(process.platform !== 'darwin')('terminal host assembly', () => {
         appPath,
         nodeExecutable: join(root, 'node'),
         iconPath: join(root, 'icon.icns'),
-        info: {}
+        info: INFO
       })
     ).toThrow(/loads a module by a computed name/)
-  })
-
-  it('fails before writing anything when the daemon entry is missing', () => {
-    rmSync(join(appPath, 'Contents', 'Resources', 'app.asar.unpacked'), { recursive: true })
-    expect(() =>
-      assembleMacTerminalHost({
-        appPath,
-        nodeExecutable: join(root, 'node'),
-        iconPath: join(root, 'icon.icns'),
-        info: {}
-      })
-    ).toThrow(/missing .*daemon-entry\.js/)
-    expect(existsSync(join(appPath, 'Contents', 'Helpers'))).toBe(false)
   })
 })

@@ -12,7 +12,7 @@ import {
   normalizeTuiAgentEnvRecord
 } from '../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { expandLeadingHomePath } from '../../filesystem/home-path-expansion'
-import { normalizeWorkspaceDirInput } from '../../../shared/worktree/workspace-dir-input'
+import { normalizeWorkspaceDirInput } from '../../../shared/worktree/paths/workspace-dir-input'
 
 /** A raw ~ or padded absolute path resolves inside each repo (#34944, STA-14308); normalize at the store boundary. */
 export function normalizeWorkspaceDirSetting(

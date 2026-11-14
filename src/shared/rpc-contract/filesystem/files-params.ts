@@ -48,7 +48,7 @@ export const ResolveTerminalPath = WorktreeSelector.extend({
     .optional()
 })
 
-// Why: absent `navigation` (phones, older CLIs) keeps the original host switch; 'caller'/'clients' open without moving it.
+// Why: only 'host'/'all' move the desktop; absent `navigation` (phones, older CLIs) opens like 'caller' (#33052).
 const FileOpenTarget = FileOpen.extend({
   navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional()
 })

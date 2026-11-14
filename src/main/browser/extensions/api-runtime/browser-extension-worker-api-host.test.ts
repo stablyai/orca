@@ -81,7 +81,8 @@ function makeSession(ids: string[]) {
         handle: (_scheme: string, handler: ProtocolHandler) => {
           handlers.push(handler)
         },
-        unhandle: vi.fn()
+        unhandle: vi.fn(),
+        isProtocolHandled: () => true
       }
     }
   }

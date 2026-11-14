@@ -6,7 +6,10 @@ import {
   type CodexRateLimitWindowsSnapshot
 } from './codex-rate-limit-window-classification'
 import { mapCodexCredits } from './codex-credit-balance'
-import { mapCodexRateLimitWindow } from './codex-rate-limit-window-mapper'
+import {
+  mapCodexIndividualLimitWindow,
+  mapCodexRateLimitWindow
+} from './codex-rate-limit-window-mapper'
 import {
   mapRpcRateLimitResetCredits,
   type RpcRateLimitResetCredits
@@ -21,10 +24,16 @@ export function mapCodexRpcRateLimits(wrapper: RpcRateLimitsResponse): ProviderR
   const classified = classifyCodexRateLimitWindows(wrapper?.rateLimits)
   const credits = mapRpcRateLimitResetCredits(wrapper?.rateLimitResetCredits)
   const extraUsage = mapCodexCredits(wrapper?.rateLimits?.credits)
+  const session = mapCodexRateLimitWindow(classified.session, CODEX_SESSION_WINDOW_MINUTES)
+  const weekly = mapCodexRateLimitWindow(classified.weekly, CODEX_WEEKLY_WINDOW_MINUTES)
+  // Why: workspace seats can report only a spend cap; like Claude's spend limit, show it only when no 5h/7d window exists.
+  const monthly =
+    session || weekly ? null : mapCodexIndividualLimitWindow(wrapper?.rateLimits?.individualLimit)
   return {
     provider: 'codex',
-    session: mapCodexRateLimitWindow(classified.session, CODEX_SESSION_WINDOW_MINUTES),
-    weekly: mapCodexRateLimitWindow(classified.weekly, CODEX_WEEKLY_WINDOW_MINUTES),
+    session,
+    weekly,
+    monthly,
     ...(credits !== undefined ? { rateLimitResetCredits: credits } : {}),
     ...(extraUsage ? { extraUsage } : {}),
     updatedAt: Date.now(),

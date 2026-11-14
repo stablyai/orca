@@ -75,7 +75,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
   async getWorktreePs(
     limit = DEFAULT_WORKTREE_PS_LIMIT,
     sourceDefaultsSupported = true,
-    includeAgentWait = false
+    includeAgentWait = false,
+    worktreeId?: string
   ): Promise<RuntimeWorktreePsResult> {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw new Error('invalid_limit')
@@ -85,13 +86,12 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       sourceDefaultsSupported
     )
     const freshPtyLiveness = await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
-    const repoById = new Map((this.store?.getRepos() ?? []).map((repo) => [repo.id, repo]))
     const summaries = buildRuntimeWorktreePsSummaries({
       store: this.store,
       resolvedWorktrees,
-      platformByRepoId
+      platformByRepoId,
+      worktreeId
     })
-
     const getSummary = createRuntimeWorktreePsSummaryLookup(
       summaries,
       buildRuntimeWorktreeSummaryPathIndex(summaries, platformByRepoId)
@@ -121,7 +121,7 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       applyRuntimeWorktreePsSessionActivity({
         store: this.store,
         summaries,
-        repoById,
+        repoById: new Map((this.store?.getRepos() ?? []).map((repo) => [repo.id, repo])),
         ptysById: this.ptysById,
         tabs: this.tabs,
         paneOf: (pty) => this.paneOfPty(pty),
@@ -144,10 +144,9 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends RuntimeChatWorkerEven
       agentList: this.readAgentListPublication()
     })
 
-    const sorted = [...summaries.values()].sort(compareWorktreePs)
     // Apply per-host pagination so hosts sorting last cannot disappear behind a global cap (#18104).
     const page = buildWorktreeListingPage(
-      sorted,
+      [...summaries.values()].sort(compareWorktreePs),
       limit,
       withoutHiddenHosts(this.listKnownExecutionHostIds(), runtimeHiddenHostIds(this.store))
     )

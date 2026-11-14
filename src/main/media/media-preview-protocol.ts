@@ -33,7 +33,7 @@ import {
   statRemotePreviewFile,
   type RemotePreviewFileSnapshot
 } from './remote-file-preview-reader'
-import { readRegisteredPairingRevision } from '../ipc/runtime-environments/runtime-environment-registry-root'
+import { readRegisteredPairingRevision } from '../ipc/runtime-environments/catalog/runtime-environment-registry-root'
 import {
   grants,
   mintPreviewUrl,

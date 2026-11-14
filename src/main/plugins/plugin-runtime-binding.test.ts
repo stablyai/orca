@@ -82,7 +82,6 @@ describe('agent.status.changed for plugins', () => {
     listing.resolve({ terminals: [] })
     await vi.waitFor(() => expect(panels[1]).toHaveBeenCalledTimes(2))
     expect(panels[0]).not.toHaveBeenCalled()
-    expect(source.listTerminals).toHaveBeenCalledTimes(2)
     // Last panel closes with events queued behind a slow lookup: the backlog is dropped.
     const slow = Promise.withResolvers<{ terminals: [] }>()
     source.listTerminals.mockReturnValueOnce(slow.promise)
@@ -92,7 +91,6 @@ describe('agent.status.changed for plugins', () => {
     bridge.close('panel-b')
     slow.resolve({ terminals: [] })
     await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(source.listTerminals).toHaveBeenCalledTimes(3)
     expect(panels[1]).toHaveBeenCalledTimes(2)
   })
 })

@@ -113,6 +113,7 @@ export const SettingsUpdate = z
       .enum(['issues', 'my-issues', 'prs', 'my-prs', 'review', 'all'])
       .optional(),
     experimentalNewWorktreeCardStyle: z.boolean().optional(),
+    worktreeCardDetailsRow: z.boolean().optional(),
     /** No UI: the host-side switch for connectors, so a headless server can be turned on. */
     experimentalConnectors: z.boolean().optional(),
     agentStatusHooksEnabled: z.boolean().optional(),

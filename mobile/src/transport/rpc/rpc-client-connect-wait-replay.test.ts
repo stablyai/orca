@@ -127,7 +127,3 @@ describe('mobile rpc-client connect-wait replay', () => {
     }
   })
 })
-
-// Exercise the hosted page's JSON boundary and the installed shell's real direct sender together.
-
-// The fake is provider/network I/O only; page, JSON parser, host, logical scope and direct wait are production.

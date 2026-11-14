@@ -189,6 +189,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  computer capabilities     Show computer-use provider capabilities',
   '  computer permissions      Show or open computer-use permission setup',
   '  computer list-apps        List running apps available to computer-use',
+  '  computer launch-app       Start a closed app without taking the foreground',
   '  computer list-windows     List visible windows for a target app',
   '  computer get-app-state    Capture a compact accessibility snapshot of an app',
   '  computer wait             Wait until an app shows text, enables a control, or opens a window',

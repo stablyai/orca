@@ -93,7 +93,7 @@ export async function performPreparedWorktreeFinalization(
             '--hard',
             targetHead
           ],
-          gitExecOptions(preparedPath, finalizeGitOptions)
+          { ...gitExecOptions(preparedPath, finalizeGitOptions), admissionClass: 'checkout' }
         )
       }
 

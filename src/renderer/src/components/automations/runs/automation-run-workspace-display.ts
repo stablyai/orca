@@ -15,8 +15,8 @@ export function getAutomationRunWorkspaceDisplay(
     run,
     worktree
   }: {
-    run: AutomationRun
-    worktree: Worktree | null
+    run: Pick<AutomationRun, 'workspaceId' | 'workspaceDisplayName'>
+    worktree: Pick<Worktree, 'displayName'> | null
   },
   t: Translate = translate
 ): AutomationRunWorkspaceDisplay {
@@ -36,30 +36,17 @@ export function getAutomationRunWorkspaceDisplay(
     }
   }
 
+  // Why: one short word in the column; the title keeps which workspace it was.
+  const removed = t('auto.components.automations.runWorkspaceDisplay.removed', 'Removed')
   const previousName = run.workspaceDisplayName?.trim()
-  if (previousName) {
-    const deletedLabel = t(
-      'auto.components.automations.runWorkspaceDisplay.namedWorkspaceGone',
-      '{{name}} (no longer available)',
-      { name: previousName }
-    )
-    return {
-      rowLabel: previousName,
-      detailLabel: deletedLabel,
-      muted: true,
-      title: deletedLabel
-    }
-  }
-
   return {
-    rowLabel: t(
-      'auto.components.automations.runViewState.workspaceGone',
-      'Workspace no longer available'
-    ),
-    detailLabel: t(
-      'auto.components.automations.runViewState.workspaceGone',
-      'Workspace no longer available'
-    ),
-    muted: true
+    rowLabel: removed,
+    detailLabel: removed,
+    muted: true,
+    title: previousName
+      ? t('auto.components.automations.runWorkspaceDisplay.namedRemoved', '{{name}} was removed', {
+          name: previousName
+        })
+      : undefined
   }
 }
