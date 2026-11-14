@@ -348,6 +348,9 @@ export default function AiVaultPanel({
             keyboardRef={keyboardRows ? listKeyboardRef : undefined}
             query={query}
             resumeHere={resumeHere}
+            onCloseOriginalPane={(session) => {
+              paneActions.closeOriginalPane(session)
+            }}
             onJumpToWorktree={paneActions.jumpToWorktree}
             onResume={launchActions.handleResume}
             getSessionResumeInChat={getSessionResumeInChat}
