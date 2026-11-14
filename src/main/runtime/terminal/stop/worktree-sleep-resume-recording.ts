@@ -97,7 +97,17 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
           [...ptyIds].map((ptyId) => [ptyId, this.collectAgentStatusPaneKeysForPty(ptyId)])
         ),
         launchByPtyId: new Map([...ptyIds].map((ptyId) => [ptyId, this.ptysById.get(ptyId)])),
+        agentByPtyId: new Map(
+          [...ptyIds].map((ptyId) => [ptyId, this.getPaneTerminalAgent(ptyId)])
+        ),
         readRows: () => this.getAgentProviderSessionSnapshotFn?.() ?? [],
+        readSavedRecord: (paneKey) => {
+          // Why try: an unresolvable workspace has no saved record, and must not fail the sleep.
+          const hostId = this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
+          return hostId
+            ? this.store?.getWorkspaceSession?.(hostId)?.sleepingAgentSessionsByPaneKey?.[paneKey]
+            : undefined
+        },
         checkAgentPresence: this.checkHookAgentPresenceFn,
         capturedAt: Date.now()
       }),
