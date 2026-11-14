@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Text, View } from 'react-native'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { BottomDrawer } from '../../components/bottom-drawer/BottomDrawer'
+import { BottomDrawerModalHost } from '../../components/bottom-drawer/bottom-drawer-modal-host'
 import {
   LIST_LEADING_INSET,
   ListGroup,
@@ -110,8 +111,9 @@ export function MobileChatForkSheet(props: {
           agent: TUI_AGENT_DISPLAY_NAMES[agent]
         })
       : null
+  // iOS can't present a picker's Modal while the sheet's is closing; both share one host instead.
   return (
-    <>
+    <BottomDrawerModalHost>
       <BottomDrawer
         visible={props.visible && view === null}
         // A copy to another workspace can't be stopped; the sheet shows its progress until it ends.
@@ -202,6 +204,6 @@ export function MobileChatForkSheet(props: {
         onPick={pick}
         onClose={() => setView(null)}
       />
-    </>
+    </BottomDrawerModalHost>
   )
 }
