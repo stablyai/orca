@@ -4,6 +4,7 @@ import type {
   AgentSessionExecutionEvidence
 } from '../../../../shared/agent-session/agent-session-execution-evidence'
 import { CodexAppliedSettings } from '../catalog/codex-structured-applied-settings'
+import { CodexCumulativeUsageMeter } from '../journal/codex-cumulative-usage-meter'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import '../prompts/codex-structured-prompt-replies'
 import { CodexPromptRegistry } from '../prompts/codex-prompt-registry'
@@ -64,6 +65,7 @@ export class CodexAcquisitionWindow {
   }
   nativeExecutionSettings?: Record<string, unknown>
   authRevision = 0
+  readonly usageMeter = new CodexCumulativeUsageMeter()
   readonly appliedSettings = new CodexAppliedSettings()
   readonly prompts = new CodexPromptRegistry()
   /** Null until the spawn resolves; the handshake can already emit events. */

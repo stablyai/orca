@@ -128,6 +128,12 @@ export async function openCodexStructuredSession(
   start.setPrimaryThreadId(opened.threadId)
   attempt.window.appliedSettings.observe(opened)
   const returnedTurns = Array.isArray(opened.thread?.turns) ? opened.thread.turns : []
+  attempt.window.usageMeter.open(
+    opened.threadId,
+    (launch.resumeThreadId === null || !!opened.supersededThreadId) && returnedTurns.length === 0,
+    { ...opened, modelProvider: opened.modelProvider ?? opened.thread?.modelProvider },
+    deps.now?.() ?? Date.now()
+  )
   if (
     translator &&
     input.events &&
@@ -178,6 +184,7 @@ export async function openCodexStructuredSession(
     sandboxPolicy: opened.sandbox
   }
   const session: CodexSession = {
+    usageMeter: attempt.window.usageMeter,
     ...(attempt.window.execution ? { execution: attempt.window.execution } : {}),
     get nativeExecutionSettings() {
       return attempt.window.nativeExecutionSettings

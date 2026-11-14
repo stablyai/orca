@@ -3,6 +3,18 @@ import { CLI_GLOBAL_FLAGS as GLOBAL_FLAGS } from '../../shared/cli-argument-boun
 
 export const CHAT_COMMAND_SPECS: CommandSpec[] = [
   {
+    path: ['chat', 'usage'],
+    summary: 'Read a held chat’s cumulative primary-thread tokens',
+    usage: 'orca chat usage [--session <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'session'],
+    notes: [
+      'Defaults to the current local chat. With --environment, an explicit target-host session id is required.',
+      'Reads the held provider connection without starting a chat or sending input. Active, changed or unsupported meters return unknown.',
+      'Primary-thread counters exclude auxiliary requests and do not prove billing or route qualification. Account identifiers are hashed.'
+    ],
+    examples: ['orca chat usage --session <sessionId> --json']
+  },
+  {
     path: ['chat', 'rename'],
     summary: 'Rename a chat tab',
     usage: 'orca chat rename [--session <id>] --name <text> [--json]',

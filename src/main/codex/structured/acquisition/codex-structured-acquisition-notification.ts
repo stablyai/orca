@@ -4,11 +4,19 @@ import type { CodexAppServerConnectionHandlers } from '../../app-server/codex-ap
 import type { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
 import type { CodexDispatchEchoes } from '../turns/codex-structured-dispatch-echo'
 import type { CodexStructuredNotificationRetry } from '../session-lifecycle/codex-structured-notification-retry'
-import { CODEX_RECEIPT_TIMED_METHODS } from '../session-lifecycle/codex-structured-session-state'
 import {
   codexThreadIsActive,
+  codexThreadStoppedRunning,
   readCodexThreadId
 } from '../../app-server/codex-structured-thread-facts'
+
+/** Boundaries retain host receipt time through buffering and retries. */
+const CODEX_RECEIPT_TIMED_METHODS: ReadonlySet<string> = new Set([
+  'turn/started',
+  'turn/completed',
+  'item/started',
+  'item/completed'
+])
 
 /** Stamp provider receipt before pre-publication buffering or retry. */
 export function codexAcquisitionNotificationHandler(input: {
@@ -28,6 +36,7 @@ export function codexAcquisitionNotificationHandler(input: {
   return (method, params) => {
     if (method === 'account/updated') {
       input.acquisition.authRevision += 1
+      input.acquisition.usageMeter.invalidate()
       if (input.acquisition.execution?.inputAdmitted) {
         input.acquisition.execution.invalidated = true
         input.acquisition.execution.controls.stop()
@@ -40,6 +49,17 @@ export function codexAcquisitionNotificationHandler(input: {
     // Stamp status on receipt so buffering cannot reorder it relative to replies.
     const threadId = readCodexThreadId(params)
     const execution = input.acquisition.execution
+    if (threadId && threadId === input.primaryThreadId()) {
+      if (method === 'thread/tokenUsage/updated') {
+        input.acquisition.usageMeter.observe(params, threadId, input.now())
+      } else if (method === 'turn/started') {
+        input.acquisition.usageMeter.started()
+      } else if (method === 'turn/completed') {
+        input.acquisition.usageMeter.activity(true)
+      } else if (method === 'thread/status/changed') {
+        input.acquisition.usageMeter.activity(codexThreadStoppedRunning(params))
+      }
+    }
     if (
       execution?.inputAdmitted &&
       !execution.usageUnverifiable &&
@@ -89,6 +109,7 @@ export function codexAcquisitionNotificationHandler(input: {
         execution.checkpoint?.()
       }
       input.acquisition.nativeExecutionSettings = settings
+      input.acquisition.usageMeter.settings(settings)
       if (
         typeof settings.model === 'string' &&
         (typeof settings.effort === 'string' || settings.effort === null)

@@ -1,6 +1,7 @@
 import { copyCodexConversation } from '../../codex-conversation-copy'
 import { readCodexSessionAccountUsage } from './codex-session-account-usage'
-import { readCodexSessionExecutionEvidence } from './codex-session-execution-evidence'
+import { readCodexSessionExecutionEvidence as readEvidence } from './codex-session-execution-evidence'
+import { readCodexSessionUsageMeter } from './codex-session-usage-meter'
 import { readCodexExecutionQualification } from './codex-execution-qualification'
 import { supportsCodexExecutionPolicy } from '../launch/codex-execution-controls'
 import * as permission from '../turns/codex-structured-turn-permission'
@@ -88,11 +89,9 @@ export class CodexStructuredSessionAdapter implements SessionAdapter {
   copyConversation: NonNullable<SessionAdapter['copyConversation']> = (input) =>
     copyCodexConversation(input, this.deps.providerInvocation)
   readAccountUsage = readCodexSessionAccountUsage(this.sessions, () => this.deps.providerInvocation)
+  readUsageMeter = readCodexSessionUsageMeter(this.sessions, () => this.deps.now?.() ?? Date.now())
   readExecutionQualification = readCodexExecutionQualification(() => this.deps.providerInvocation)
-  readExecutionEvidence = readCodexSessionExecutionEvidence(
-    this.sessions,
-    () => this.deps.now?.() ?? Date.now()
-  )
+  readExecutionEvidence = readEvidence(this.sessions, () => this.deps.now?.() ?? Date.now())
 
   supportsLocation = supportsCodexStructuredLocation
   supportsExecutionPolicy = supportsCodexExecutionPolicy(() => this.deps)

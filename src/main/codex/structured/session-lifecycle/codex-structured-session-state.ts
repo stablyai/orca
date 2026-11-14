@@ -63,14 +63,6 @@ export type CodexStructuredLaunch = {
   visuals?: NativeChatVisualsLaunch
 }
 
-/** Boundaries retain host receipt time through buffering and retries. */
-export const CODEX_RECEIPT_TIMED_METHODS: ReadonlySet<string> = new Set([
-  'turn/started',
-  'turn/completed',
-  'item/started',
-  'item/completed'
-])
-
 export type CodexStructuredSessionEvent =
   | {
       type: 'notification'
@@ -78,7 +70,7 @@ export type CodexStructuredSessionEvent =
       threadId: string
       method: string
       params: unknown
-      /** Original host receipt time for CODEX_RECEIPT_TIMED_METHODS boundaries. */
+      /** Original host receipt time for turn and item boundaries. */
       observedAt?: number
       /** Highest dispatch sequence armed when this turn-start was first received. */
       dispatchSequenceAtReceipt?: number
@@ -139,6 +131,7 @@ export type CodexStructuredSessionAdapterDeps = CodexExecutionAdapterDeps & {
 }
 
 export type CodexSession = {
+  usageMeter?: CodexAcquisitionWindow['usageMeter']
   execution?: CodexAcquisitionWindow['execution']
   readonly nativeExecutionSettings?: Record<string, unknown>
   modelProvider?: string
