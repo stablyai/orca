@@ -16,6 +16,31 @@ export function hasPathSeparator(text: string): boolean {
   return text.includes('/') || text.includes('\\')
 }
 
+export function readParenthesizedTerminalPathRange(
+  lineText: string,
+  startIndex: number,
+  endIndex: number
+): DetectedTerminalFileLinkRange | null {
+  if (
+    lineText[startIndex - 1] !== '(' ||
+    (startIndex > 1 && !/\s/.test(lineText[startIndex - 2]))
+  ) {
+    return null
+  }
+  let depth = 0
+  for (let index = startIndex; index < endIndex; index++) {
+    if (lineText[index] === '(') {
+      depth++
+    } else if (lineText[index] === ')') {
+      if (depth === 0) {
+        return { text: lineText.slice(startIndex, index), startIndex, endIndex: index }
+      }
+      depth--
+    }
+  }
+  return null
+}
+
 export function trimTerminalPathBoundaryPunctuation(
   value: string,
   startIndex: number
