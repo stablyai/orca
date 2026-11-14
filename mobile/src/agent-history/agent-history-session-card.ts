@@ -5,7 +5,7 @@ import {
   type AiVaultSession
 } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 
-import { formatTimeAgo } from '../worktree/agent-row-display'
+import { formatTimeAgo } from '../worktree/agent-lineage/agent-row-display'
 import { translate } from '../i18n/mobile-i18n'
 
 export type MobileAgentHistoryCard = {

@@ -2,9 +2,9 @@ import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { hookMount, performHookAction } from '../hook-mount'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
-import type { PrSidebarState } from '../../../source-control/review/mobile-pr-sidebar-state'
-import type { useMobilePrSidebarController as UseMobilePrSidebarController } from '../../../source-control/review/use-mobile-pr-sidebar-controller'
-import type { useMobilePrCommentActions as UseMobilePrCommentActions } from '../../../source-control/review/use-mobile-pr-comment-actions'
+import type { PrSidebarState } from '../../../source-control/review/pull-request/mobile-pr-sidebar-state'
+import type { useMobilePrSidebarController as UseMobilePrSidebarController } from '../../../source-control/review/pull-request/use-mobile-pr-sidebar-controller'
+import type { useMobilePrCommentActions as UseMobilePrCommentActions } from '../../../source-control/review/pull-request/comments/use-mobile-pr-comment-actions'
 import { legacyShellStatusFixture } from '../legacy-shell-status-fixture'
 
 const HOST = 'host-1'
@@ -47,12 +47,12 @@ export function prSidebarMountAdapters(
       const useController = modules.load<{
         useMobilePrSidebarController: typeof UseMobilePrSidebarController
       }>(
-        'mobile/src/source-control/review/use-mobile-pr-sidebar-controller.ts'
+        'mobile/src/source-control/review/pull-request/use-mobile-pr-sidebar-controller.ts'
       ).useMobilePrSidebarController
       const useCommentActions = modules.load<{
         useMobilePrCommentActions: typeof UseMobilePrCommentActions
       }>(
-        'mobile/src/source-control/review/use-mobile-pr-comment-actions.ts'
+        'mobile/src/source-control/review/pull-request/comments/use-mobile-pr-comment-actions.ts'
       ).useMobilePrCommentActions
       let controller: ReturnType<typeof useController> | undefined
       let comments: ReturnType<typeof useCommentActions> | undefined

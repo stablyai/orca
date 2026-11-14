@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import BrowserSettingsScreen from './browser-settings-screen'
-import { PickerModal } from '../components/PickerModal'
+import { PickerModal } from '../components/sheets/PickerModal'
 import {
   loadTerminalLinkOpenMode,
   saveTerminalLinkOpenMode,
@@ -29,7 +29,7 @@ vi.mock('react-native-safe-area-context', () => ({
 }))
 vi.mock('expo-router', () => ({ useRouter: () => ({ back() {} }) }))
 vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', ChevronRight: 'Icon', Globe: 'Icon' }))
-vi.mock('../components/PickerModal', () => ({ PickerModal: () => null }))
+vi.mock('../components/sheets/PickerModal', () => ({ PickerModal: () => null }))
 vi.mock('../storage/preferences', () => ({
   loadTerminalLinkOpenMode: vi.fn(),
   saveTerminalLinkOpenMode: vi.fn()

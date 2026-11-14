@@ -1,7 +1,7 @@
-import type * as MobileDiffReviewLoadersModule from '../../../source-control/review/mobile-diff-review-loaders'
+import type * as MobileDiffReviewLoadersModule from '../../../source-control/review/diff-loading/mobile-diff-review-loaders'
 import type { MountAdapter } from '../recording-scenario'
-import type * as CommitLoader from '../../../source-control/review/mobile-diff-review-commit-loader'
-import type * as SnapshotLoader from '../../../source-control/review/mobile-diff-review-snapshot-loader'
+import type * as CommitLoader from '../../../source-control/review/diff-loading/mobile-diff-review-commit-loader'
+import type * as SnapshotLoader from '../../../source-control/review/diff-loading/mobile-diff-review-snapshot-loader'
 import type * as GitStatusQuery from '../../../source-control/changes/mobile-git-status-query'
 import type { operationModuleLoader } from '../operation-module-loader'
 
@@ -30,7 +30,7 @@ export function diffReviewMountAdapters(
   return {
     'session.diff-review-load': ({ client }) => {
       const loaders = modules.load<typeof MobileDiffReviewLoadersModule>(
-        'mobile/src/source-control/review/mobile-diff-review-loaders.ts'
+        'mobile/src/source-control/review/diff-loading/mobile-diff-review-loaders.ts'
       )
       let snapshot: unknown = 'unloaded'
       let branchCompare: unknown = 'unloaded'
@@ -68,7 +68,7 @@ export function diffReviewMountAdapters(
             ).gitStatusQuery
             return modules
               .load<typeof SnapshotLoader>(
-                'mobile/src/source-control/review/mobile-diff-review-snapshot-loader.ts'
+                'mobile/src/source-control/review/diff-loading/mobile-diff-review-snapshot-loader.ts'
               )
               .loadMobileDiffReviewSnapshot(client, WORKTREE, {
                 status: statusQuery.fetch(
@@ -88,7 +88,7 @@ export function diffReviewMountAdapters(
           if (name === 'commit-snapshot') {
             return modules
               .load<typeof CommitLoader>(
-                'mobile/src/source-control/review/mobile-diff-review-commit-loader.ts'
+                'mobile/src/source-control/review/diff-loading/mobile-diff-review-commit-loader.ts'
               )
               .loadMobileDiffReviewCommitSnapshot(client, WORKTREE, COMMIT_OID)
               .then((value) => {

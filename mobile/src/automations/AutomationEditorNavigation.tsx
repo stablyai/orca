@@ -1,6 +1,6 @@
 import { useEffect, useState, type RefObject } from 'react'
 import { Text, View } from 'react-native'
-import { ConfirmModal } from '../components/ConfirmModal'
+import { ConfirmModal } from '../components/sheets/ConfirmModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { AutomationButton } from './AutomationControls'
