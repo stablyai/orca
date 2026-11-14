@@ -31,16 +31,16 @@ vi.mock('../../../window/activation/foreground-activation-policy', () => ({
   isBackgroundLaunch: () => mocks.background
 }))
 vi.mock('../api-runtime/browser-extension-api-host', () => ({ emitBrowserExtensionEvent: vi.fn() }))
-vi.mock('../permissions/browser-extension-user-gesture', () => ({
-  noteBrowserExtensionUserGesture: vi.fn()
+vi.mock('./browser-extension-notification-interactions', () => ({
+  dispatchBrowserExtensionNotificationInteraction: vi.fn(async () => {})
 }))
 
 const { registerNotificationsNamespace } = await import('./notifications')
 const { getBrowserExtensionNamespace } =
   await import('../api-runtime/browser-extension-namespace-registry')
 const { emitBrowserExtensionEvent } = await import('../api-runtime/browser-extension-api-host')
-const { noteBrowserExtensionUserGesture } =
-  await import('../permissions/browser-extension-user-gesture')
+const { dispatchBrowserExtensionNotificationInteraction } =
+  await import('./browser-extension-notification-interactions')
 registerNotificationsNamespace()
 
 const extension = { id: 'a'.repeat(32), path: join('/ext', 'root') }
@@ -95,15 +95,11 @@ describe('notification extension ownership', () => {
 
     clicked.emit('click')
 
-    expect(emitBrowserExtensionEvent).toHaveBeenCalledExactlyOnceWith(
-      { session: caller.session, extensionId: caller.extension.id },
-      'notifications',
+    expect(dispatchBrowserExtensionNotificationInteraction).toHaveBeenCalledExactlyOnceWith(
+      caller.session,
+      caller.extension.id,
       'onClicked',
       ['clicked']
-    )
-    expect(noteBrowserExtensionUserGesture).toHaveBeenCalledExactlyOnceWith(
-      caller.session,
-      caller.extension.id
     )
     expect(invoke(caller, 'getAll')).toEqual({})
     expect(invoke(caller, 'clear', ['clicked'])).toBe(false)
@@ -115,7 +111,7 @@ describe('notification extension ownership', () => {
     clicked.emit('click')
     clicked.emit('close', {})
     expect(invoke(caller, 'getAll')).toEqual({ clicked: true })
-    expect(emitBrowserExtensionEvent).toHaveBeenCalledTimes(1)
+    expect(dispatchBrowserExtensionNotificationInteraction).toHaveBeenCalledTimes(1)
   })
 
   it('closes and forgets unloaded notifications while preserving sibling extensions and profiles', () => {
@@ -135,12 +131,14 @@ describe('notification extension ownership', () => {
     expect(siblingNotification.close).not.toHaveBeenCalled()
     expect(otherNotification.close).not.toHaveBeenCalled()
     expect(retired.eventNames()).toEqual([])
+    expect(dispatchBrowserExtensionNotificationInteraction).not.toHaveBeenCalled()
     expect(emitBrowserExtensionEvent).not.toHaveBeenCalled()
     invoke(caller, 'create', ['same-id', options])
     expect(extensions.listenerCount('extension-unloaded')).toBe(1)
     retired.emit('close', { reason: 'timedOut' })
     retired.emit('click')
     expect(invoke(caller, 'getAll')).toEqual({ 'same-id': true })
+    expect(dispatchBrowserExtensionNotificationInteraction).not.toHaveBeenCalled()
     expect(emitBrowserExtensionEvent).not.toHaveBeenCalled()
   })
 })

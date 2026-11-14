@@ -124,9 +124,6 @@ function install(context: BrowserExtensionStorageContext) {
       call(chrome, 'storage.local.onChanged.addListener', (changes: unknown) =>
         perArea.push(['local', changes])
       )
-      call(chrome, 'storage.session.onChanged.addListener', (changes: unknown) =>
-        perArea.push(['session', changes])
-      )
     }
   }
 }
@@ -205,8 +202,8 @@ describe('installBrowserExtensionStorageRelay in a worker', () => {
     const worker = install('worker')
     expect(worker.chrome.storage.onChanged).not.toEqual({ native: true })
     worker.listen()
-    worker.emit([{ token: { newValue: 'abc' } }, 'session'])
-    expect(worker.all).toEqual([['session', { token: { newValue: 'abc' } }]])
-    expect(worker.perArea).toEqual([['session', { token: { newValue: 'abc' } }]])
+    worker.emit([{ token: { newValue: 'abc' } }, 'local'])
+    expect(worker.all).toEqual([['local', { token: { newValue: 'abc' } }]])
+    expect(worker.perArea).toEqual([['local', { token: { newValue: 'abc' } }]])
   })
 })
