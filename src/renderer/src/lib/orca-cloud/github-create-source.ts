@@ -3,8 +3,11 @@ export type GitHubCreateSource = {
   repoUrl: string
   /** `owner/repo`. */
   fullName: string
-  /** The composer's text: the workspace's title and the agent's first prompt. */
-  prompt: string
+  /**
+   * The composer's name field: the workspace's title (NAME-DROPPED), never the agent's prompt
+   * (CLOUD-ONLY-NAME-AS-PROMPT).
+   */
+  name: string
   /** The project the composer had selected, for Back to draft. */
   composerRepoId: string
 }

@@ -5,7 +5,7 @@ type ReturnSource = Pick<PendingWorktreeCreation, 'heldChatMessage' | 'request'>
 
 /** What the user typed for the agent: a prompt queued during the build, else the composer's. */
 export function typedComposerPrompt(entry: ReturnSource): string {
-  return entry.heldChatMessage ?? entry.request.githubSource?.prompt ?? entry.request.note
+  return entry.heldChatMessage ?? entry.request.githubSource?.name ?? entry.request.note
 }
 
 /**
@@ -34,7 +34,7 @@ export function composerDataFromRefusedCreate(
               ? { openCloudRepoPicker: true }
               : { initialCloudGitHubRepo: github.fullName })
           }),
-      prefilledName: entry.heldChatMessage ?? github.prompt,
+      prefilledName: entry.heldChatMessage ?? github.name,
       recovery: { note: '', agent: request.agent },
       telemetrySource: request.telemetrySource ?? 'unknown'
     }

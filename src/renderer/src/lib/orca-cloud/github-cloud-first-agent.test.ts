@@ -55,16 +55,13 @@ vi.mock('./orca-cloud-environment-id', () => ({
 vi.mock('@/components/agent-tab-launch-context', () => ({
   captureAgentTabLaunchContext: () => ({})
 }))
-vi.mock('@/lib/agent-session/launch/shortcuts/agent-tab-shortcuts', () => ({
-  resolveDefaultAgentForWorktree: async () => 'claude'
-}))
 
 const { launchFirstCloudAgent } = await import('./github-cloud-first-agent')
 
-const startCloudWorkspaceFromGitHub = (r: { prompt: string; agent: string | null }) =>
+const startCloudWorkspaceFromGitHub = (r: { agent: string | null }) =>
   launchFirstCloudAgent({ fullName: 'acme/web', ...r, ...mocks.opened })
 
-const request = (prompt: string, agent: string | null = 'claude') => ({ prompt, agent })
+const request = (agent: string | null = 'claude') => ({ agent })
 
 beforeEach(() => {
   mocks.opened = { ok: true, worktreeId: 'wt-1' }
@@ -78,25 +75,18 @@ afterEach(() => vi.useRealTimers())
 
 describe('launchFirstCloudAgent', () => {
   it('starts the chosen agent with no prompt, once', async () => {
-    await startCloudWorkspaceFromGitHub(request(''))
+    await startCloudWorkspaceFromGitHub(request())
     expect(mocks.launches).toEqual([{ agent: 'claude', prompt: undefined, worktreeId: 'wt-1' }])
   })
 
-  it('sends a typed prompt with it', async () => {
-    await startCloudWorkspaceFromGitHub(request('fix the flaky test'))
-    expect(mocks.launches).toEqual([
-      { agent: 'claude', prompt: 'fix the flaky test', worktreeId: 'wt-1' }
-    ])
-  })
-
-  it('no agent chosen and no prompt: starts nothing', async () => {
-    await startCloudWorkspaceFromGitHub(request('', null))
+  it('CLOUD-ONLY-NAME-AS-PROMPT: Blank terminal starts nothing, not the default agent', async () => {
+    await startCloudWorkspaceFromGitHub(request(null))
     expect(mocks.launches).toEqual([])
   })
 
   it('a repo still cloning is waited for, then the agent starts', async () => {
     mocks.opened = { ok: true, worktreeId: null, hostId: 'runtime:env-1' }
-    const started = startCloudWorkspaceFromGitHub(request(''))
+    const started = startCloudWorkspaceFromGitHub(request())
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(mocks.launches).toEqual([])
     mocks.worktree = 'wt-late'
@@ -109,7 +99,7 @@ describe('launchFirstCloudAgent', () => {
     vi.useFakeTimers()
     mocks.opened = { ok: true, worktreeId: null, hostId: 'runtime:env-1' }
     const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
-    const started = startCloudWorkspaceFromGitHub(request(''))
+    const started = startCloudWorkspaceFromGitHub(request())
     await vi.advanceTimersByTimeAsync(90_000)
     await started
     expect(mocks.launches).toEqual([])
@@ -125,7 +115,7 @@ describe('launchFirstCloudAgent', () => {
     mocks.opened = { ok: true, worktreeId: 'wt-1', hostId: 'runtime:env-1' }
     mocks.cloud = false
     const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
-    const started = startCloudWorkspaceFromGitHub(request(''))
+    const started = startCloudWorkspaceFromGitHub(request())
     await vi.advanceTimersByTimeAsync(5_000)
     expect(mocks.launches).toEqual([])
     mocks.cloud = true
@@ -134,7 +124,7 @@ describe('launchFirstCloudAgent', () => {
     expect(mocks.launches).toEqual([{ agent: 'claude', prompt: undefined, worktreeId: 'wt-1' }])
     mocks.launches = []
     mocks.cloud = false
-    const never = startCloudWorkspaceFromGitHub(request(''))
+    const never = startCloudWorkspaceFromGitHub(request())
     await vi.advanceTimersByTimeAsync(91_000)
     await never
     expect(mocks.launches).toEqual([])
@@ -148,7 +138,7 @@ describe('launchFirstCloudAgent', () => {
     vi.useFakeTimers()
     mocks.opened = { ok: true, worktreeId: null, hostId: 'runtime:env-1' }
     const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
-    const started = startCloudWorkspaceFromGitHub(request(''))
+    const started = startCloudWorkspaceFromGitHub(request())
     await vi.advanceTimersByTimeAsync(90_000)
     await started
     mocks.worktree = 'wt-late'

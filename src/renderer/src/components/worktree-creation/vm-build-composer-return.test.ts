@@ -56,7 +56,7 @@ describe('Back to draft from a GitHub-only create (GH-CREATE-SHEET)', () => {
     githubSource: {
       repoUrl: 'https://github.com/acme/web',
       fullName: 'acme/web',
-      prompt: 'Fix login',
+      name: 'Fix login',
       composerRepoId: 'repo-1'
     }
   }

@@ -1,6 +1,7 @@
 // "Start in Orca Cloud" for a repository with no clone here (cloud-start D4): the sandbox clones it
-// from GitHub, this computer pairs to it like any cloud workspace, and the composer's prompt goes
-// to the chosen agent there. Nothing is written to this computer's disk.
+// from GitHub, this computer pairs to it like any cloud workspace, and the chosen agent starts there
+// with no prompt (the composer's name field only names the workspace, CLOUD-ONLY-NAME-AS-PROMPT).
+// Nothing is written to this computer's disk.
 //
 // GH-CREATE-SHEET: it shows the same build sheet as an Orca Cloud create from a local clone: Start
 // sandbox, Clone repository (git's progress), Open workspace, with the same failure cards, billing
@@ -27,7 +28,9 @@ import {
 export type StartFromGitHubRequest = {
   repoUrl: string
   fullName: string
-  prompt: string
+  /** The composer's name field: the workspace's name only, never sent to the agent. */
+  name: string
+  /** The composer's agent pick; null is Blank terminal (no agent is started). */
   agent: string | null
   /** The project the composer had selected, for Back to draft. */
   composerRepoId?: string
@@ -41,20 +44,21 @@ const startedSandboxes = new Map<string, string>()
 
 /** The pending creation's request: the sheet's title, Orca Cloud copy, Retry and Back to draft. */
 export function githubCreateRequest(request: StartFromGitHubRequest): WorktreeCreationRequest {
-  const prompt = request.prompt.trim()
+  const name = request.name.trim()
   const repoName = request.fullName.split('/').pop() ?? request.fullName
   return {
     repoId: '',
     // The composer's name field is the workspace's name (NAME-DROPPED); the repository's otherwise.
-    name: prompt.slice(0, 120) || repoName,
-    displayName: prompt.slice(0, 120) || repoName,
-    displayNameKind: prompt ? 'user' : 'generated',
+    name: name.slice(0, 120) || repoName,
+    displayName: name.slice(0, 120) || repoName,
+    displayNameKind: name ? 'user' : 'generated',
     setupDecision: 'inherit',
     agent: isTuiAgent(request.agent) ? request.agent : null,
     pendingFirstAgentMessageRename: false,
     note: '',
     startupPlan: null,
-    quickPrompt: request.prompt,
+    // CLOUD-ONLY-NAME-AS-PROMPT: the name is not a prompt; this create has none.
+    quickPrompt: '',
     quickTelemetry: null,
     telemetrySource: 'unknown',
     ephemeralVmRecipe: {
@@ -66,7 +70,7 @@ export function githubCreateRequest(request: StartFromGitHubRequest): WorktreeCr
     githubSource: {
       repoUrl: request.repoUrl,
       fullName: request.fullName,
-      prompt: request.prompt,
+      name: request.name,
       composerRepoId: request.composerRepoId ?? ''
     }
   }
@@ -149,7 +153,7 @@ async function startSandbox(creationId: string): Promise<string | null> {
       appendProvisioningLog(creationId, event.chunk)
     }
   })
-  const title = source.prompt.trim().slice(0, 120)
+  const title = source.name.trim().slice(0, 120)
   const created = await trackOrcaCloudCreateStep(
     creationId,
     window.api.orcaCloudWorkspace
@@ -240,9 +244,9 @@ async function runGitHubCloudCreate(creationId: string): Promise<boolean> {
   useAppStore.getState().removePendingWorktreeCreation(creationId, { cleanupVm: false })
   // PAIRED-HELD-STRIPS (#568): the chosen agent starts even with no prompt, once the workspace
   // lists its first worktree and is confirmed Orca Cloud (so its launch holds when it can't run).
+  // CLOUD-ONLY-NAME-AS-PROMPT: no prompt; Blank terminal (no agent) starts nothing.
   void launchFirstCloudAgent({
     fullName: source.fullName,
-    prompt: source.prompt,
     agent: request.agent,
     worktreeId: opened.worktreeId,
     hostId: opened.hostId

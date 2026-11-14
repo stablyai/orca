@@ -14,14 +14,18 @@ const mocks = vi.hoisted(() => ({
       ok: true,
       worktreeId: null
     })
-  )
+  ),
+  launch: vi.fn()
 }))
 
 vi.mock('@/components/cloud-workspaces/open-cloud-workspace', () => ({
   openCloudWorkspace: mocks.open
 }))
 vi.mock('@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab', () => ({
-  launchAgentInNewTabWithOutcome: vi.fn()
+  launchAgentInNewTabWithOutcome: mocks.launch
+}))
+vi.mock('@/components/agent-tab-launch-context', () => ({
+  captureAgentTabLaunchContext: () => ({})
 }))
 
 import {
@@ -66,7 +70,7 @@ afterEach(() => {
 const REQUEST = {
   repoUrl: 'https://github.com/acme/web',
   fullName: 'acme/web',
-  prompt: 'Fix login',
+  name: 'Fix login',
   agent: null,
   composerRepoId: 'repo-1'
 }
@@ -158,5 +162,40 @@ describe('GitHub-only create on the build sheet', () => {
     await vi.waitFor(() => expect(useAppStore.getState().pendingWorktreeCreations).toEqual({}))
     expect(createFromGitHub).toHaveBeenCalledTimes(1)
     expect(mocks.open).toHaveBeenCalledTimes(2)
+  })
+})
+
+// CLOUD-ONLY-NAME-AS-PROMPT (n64): the composer's name field names the workspace and is never the
+// agent's first message; Blank terminal starts no agent at all.
+describe('the name field is only the workspace name', () => {
+  beforeEach(() => {
+    createFromGitHub.mockResolvedValue({ ok: true, value: { sandboxId: 'sbx_1' } })
+    mocks.open.mockResolvedValue({ ok: true, worktreeId: 'wt-1' })
+  })
+
+  it('Blank terminal + a name: titled by the name, no agent and no prompt', async () => {
+    const started = startCloudWorkspaceFromGitHub({ ...REQUEST, name: 'endpass-c64', agent: null })
+    const entry = onlyCreation()
+    expect(entry.request).toMatchObject({ displayName: 'endpass-c64', quickPrompt: '' })
+    expect(await started).toBe(true)
+    expect(createFromGitHub).toHaveBeenCalledWith(expect.objectContaining({ title: 'endpass-c64' }))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(mocks.launch).not.toHaveBeenCalled()
+  })
+
+  it('Claude + a name: Claude starts with no prompt, titled by the name', async () => {
+    const started = startCloudWorkspaceFromGitHub({
+      ...REQUEST,
+      name: 'endpass-c64',
+      agent: 'claude'
+    })
+    expect(onlyCreation().request).toMatchObject({ displayName: 'endpass-c64', quickPrompt: '' })
+    expect(await started).toBe(true)
+    expect(createFromGitHub).toHaveBeenCalledWith(expect.objectContaining({ title: 'endpass-c64' }))
+    await vi.waitFor(() => expect(mocks.launch).toHaveBeenCalledTimes(1))
+    const args = mocks.launch.mock.calls[0]![0] as Record<string, unknown>
+    expect(args).toMatchObject({ agent: 'claude', worktreeId: 'wt-1' })
+    expect(args).not.toHaveProperty('prompt')
+    expect(args).not.toHaveProperty('promptDelivery')
   })
 })

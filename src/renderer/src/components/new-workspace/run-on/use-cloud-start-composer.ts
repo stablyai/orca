@@ -42,7 +42,7 @@ export function useCloudStartComposer({
   repoId,
   initialGitHubRepo = null,
   openRepoPicker = false,
-  prompt,
+  name,
   agent,
   initialTargetFixed,
   autoStartIntent = null,
@@ -61,7 +61,8 @@ export function useCloudStartComposer({
   initialGitHubRepo?: string | null
   /** Open the Project picker once, after the dialog opens ("Choose another repository"). */
   openRepoPicker?: boolean
-  prompt: string
+  /** The composer's name field (the setup page keeps it as its draft text). */
+  name: string
   agent: string | null
   /** The composer was opened on an explicit target (Landing card, a recovery). */
   initialTargetFixed: boolean
@@ -121,7 +122,7 @@ export function useCloudStartComposer({
   const onCreate = useCloudOnlyCreate({
     cloudOnly,
     createWorkspace,
-    prompt,
+    name,
     agent,
     profileId,
     onClose
@@ -149,7 +150,7 @@ export function useCloudStartComposer({
   const openSetup = useCallback(
     (intentId: string) => {
       saveCloudStartDraft(profileId, {
-        prompt,
+        prompt: name,
         repoId,
         agent,
         target: 'orca-cloud',
@@ -157,7 +158,7 @@ export function useCloudStartComposer({
         createdAt: Date.now()
       })
       openCloudSetupPage({
-        prompt,
+        prompt: name,
         repoId,
         agent,
         availability,
@@ -167,7 +168,7 @@ export function useCloudStartComposer({
       })
       onClose?.()
     },
-    [agent, availability, cloudOnly.picked, composerSnapshot, onClose, profileId, prompt, repoId]
+    [agent, availability, cloudOnly.picked, composerSnapshot, name, onClose, profileId, repoId]
   )
 
   // Reopened by the setup page: submit once the account and form are ready. Anything still open
