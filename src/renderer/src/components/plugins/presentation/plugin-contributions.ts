@@ -13,7 +13,7 @@ import { customEditorTakeover } from './plugin-custom-editor-takeover'
 import { fileList } from './plugin-contribution-file-list'
 import {
   fontContributionRows,
-  statusBarContributionRows,
+  chromeContributionRows,
   statusBarItemTitles,
   withMode
 } from './plugin-contribution-row-labels'
@@ -61,6 +61,7 @@ export type PluginContributionSource = {
   vmRecipes: readonly string[]
   newFiles: readonly { title: string; extension: string }[]
   statusBarItems: readonly string[]
+  worktreeBadges: readonly string[]
 }
 
 export const EMPTY_CONTRIBUTION_SOURCE: PluginContributionSource = {
@@ -74,7 +75,8 @@ export const EMPTY_CONTRIBUTION_SOURCE: PluginContributionSource = {
   customEditors: [],
   vmRecipes: [],
   newFiles: [],
-  statusBarItems: []
+  statusBarItems: [],
+  worktreeBadges: []
 }
 
 /** "recipes/ubuntu-dev.json" → "Ubuntu dev"; manifests name these files by path only. */
@@ -109,7 +111,8 @@ export function manifestContributionSource(manifest: PluginManifest): PluginCont
     })),
     vmRecipes: contributes.vmRecipes.map((recipe) => nameFromContributionPath(recipe.path)),
     newFiles: contributes.newFiles,
-    statusBarItems: statusBarItemTitles(contributes.statusBarItems)
+    statusBarItems: statusBarItemTitles(contributes.statusBarItems),
+    worktreeBadges: contributes.worktreeBadges.map((badge) => badge.title)
   }
 }
 
@@ -149,7 +152,8 @@ export function summaryContributionSource(
     })),
     vmRecipes: of('vmRecipes').map((item) => nameFromContributionPath(item.name)),
     newFiles: of('newFiles').map((item) => ({ title: item.name, extension: item.detail ?? '' })),
-    statusBarItems: of('statusBarItems').map((item) => item.name)
+    statusBarItems: of('statusBarItems').map((item) => item.name),
+    worktreeBadges: of('worktreeBadges').map((item) => item.name)
   }
 }
 
@@ -291,7 +295,7 @@ export function describePluginContributions(
       tone: 'default'
     })
   }
-  rows.push(...statusBarContributionRows(source.statusBarItems, t))
+  rows.push(...chromeContributionRows(source, t))
   for (const [index, title] of source.vmRecipes.entries()) {
     rows.push({
       key: `vmRecipes:${index}`,

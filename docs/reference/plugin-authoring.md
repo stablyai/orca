@@ -303,6 +303,60 @@ export async function setup() {
 }
 ```
 
+### Workspace badges
+
+A `contributes.worktreeBadges` entry puts a small icon beside the name of each workspace whose
+folder holds a marker path, such as a game engine's project file. The icon opens a menu of the
+plugin's workspace commands, and the workspace's context menu lists the same commands. Orca checks
+the paths itself, so the plugin learns nothing about a workspace until the person runs one of its
+commands on it.
+
+```json
+"commands": [{ "id": "unity.open", "title": "Open in Unity", "when": "workspace" }],
+"worktreeBadges": [
+  {
+    "id": "unity-project",
+    "title": "Unity project",
+    "icon": "icons/unity.svg",
+    "when": {
+      "pathExists": ["ProjectSettings/ProjectVersion.txt"],
+      "searchDepth": 2,
+      "host": "local"
+    },
+    "commands": ["unity.open"]
+  }
+],
+"capabilities": [{ "kind": "workspace:read" }]
+```
+
+`icon` is a panel icon name or a monochrome `.svg` in the plugin, which Orca draws in the text
+color. Badges need `workspace:read` and `engines.orca` `>=1.4.256`, and each command must be a
+worker command with `"when": "workspace"`.
+
+`searchDepth` (0 to 3, default 0) also looks for the marker in subfolders that many levels down,
+for a workspace that holds several projects. The menu then lists each matching folder, relative to
+the workspace, and runs the command on the one picked. Orca skips hidden folders, `node_modules`
+and symbolic links, does not look inside a folder that already matched, and stops after 256
+folders.
+
+Run from a badge, the context menu, the palette or a shortcut, the command's handler gets the
+workspace it ran on, and `folder` when it was picked from a badge's list. A handler that returns
+`{ message }` shows it as a toast:
+
+```js
+orca.commands.register('unity.open', async ({ worktree, folder }) => {
+  // worktree: { path, displayName, branch, host: 'local' | 'ssh' }; branch is '' for folders.
+  // folder: { path, relativePath } with '/' separators, or undefined for the workspace folder.
+  await openProject(folder?.path ?? worktree.path)
+  return { message: `Opening ${folder?.relativePath ?? worktree.displayName}` }
+})
+```
+
+Badges show on workspaces this computer serves, including folder workspaces. Workspaces Orca
+reaches through a server, such as a paired Orca server, get none, since the command runs on this
+computer; run there from the palette or a shortcut, the command gets no arguments. `"host": "local"` also leaves out workspaces on SSH hosts, such as for a command that
+starts a desktop app.
+
 ### Custom editors
 
 A custom editor opens files that end in one of its `extensions` (with the dot, such as

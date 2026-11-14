@@ -13,6 +13,7 @@ import {
   PenTool,
   Server,
   SquareTerminal,
+  Tag,
   Type
 } from 'lucide-react'
 import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
@@ -96,7 +97,8 @@ const CONTRIBUTION_ICON: Record<PluginContributionKind, React.ReactNode> = {
   customEditors: <PenTool />,
   vmRecipes: <Server />,
   newFiles: <FilePlus />,
-  statusBarItems: <PanelBottom />
+  statusBarItems: <PanelBottom />,
+  worktreeBadges: <Tag />
 }
 
 type AddsCommand = {
@@ -248,6 +250,7 @@ function useContributionRowActions(
       case 'customEditors':
       case 'vmRecipes':
       case 'statusBarItems':
+      case 'worktreeBadges':
         // Themes have "Use now" above; fonts are picked in Settings; the rest has nothing to try here.
         return null
     }
