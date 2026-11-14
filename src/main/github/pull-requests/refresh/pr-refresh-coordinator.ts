@@ -194,8 +194,7 @@ export function retimePRRefreshesForCadence(): void {
   const timed = getPRAutoRefreshCadence() !== 'off'
   for (const [windowId, reported] of timed ? visibility.reported() : []) {
     const key = refreshKey(reported)
-    // Work already queued for the row (its retry, a return or an action) keeps its own reason.
-    if (validateCandidate(reported) || queue.get(key)) {
+    if (validateCandidate(reported)) {
       continue
     }
     const alias = aliasFromCandidate(reported)
@@ -212,6 +211,10 @@ export function retimePRRefreshesForCadence(): void {
     const failed = failureRetries.get(key)
     const retryAt =
       failed !== undefined && retry.failureMatches(key, candidate) ? failed : undefined
+    // Release an obsolete failure even when a queued action already owns the next read.
+    if (queue.get(key)) {
+      continue
+    }
     if (retryAt === undefined) {
       drainer.scheduler.restoreFollowUp(key, candidate, 40, aliases, windowId)
     } else {
