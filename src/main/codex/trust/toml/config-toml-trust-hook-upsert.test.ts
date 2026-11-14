@@ -191,3 +191,53 @@ describe('upsertHookTrustEntries with array-of-tables boundaries', () => {
     expect(written).toContain('name = "thing"')
   })
 })
+
+describe('upsertHookTrustEntries batch order', () => {
+  const entry = (eventLabel: 'pre_tool_use' | 'stop', trustedHash: string): CodexTrustEntry => ({
+    sourcePath: '/x/hooks.json',
+    eventLabel,
+    groupIndex: 0,
+    handlerIndex: 0,
+    command: 'echo',
+    trustedHash
+  })
+
+  it('appends a missing entry before replacing the block that ended the file', () => {
+    writeFileSync(
+      configPath,
+      '[hooks.state."/x/hooks.json:pre_tool_use:0:0"]\nenabled = true\ntrusted_hash = "OLD"\n',
+      'utf-8'
+    )
+
+    upsertHookTrustEntries(configPath, [entry('stop', 'B'), entry('pre_tool_use', 'A')])
+
+    expect(readFileSync(configPath, 'utf-8')).toBe(
+      [
+        '[hooks.state."/x/hooks.json:pre_tool_use:0:0"]',
+        'enabled = true',
+        'trusted_hash = "A"',
+        '[hooks.state."/x/hooks.json:stop:0:0"]',
+        'enabled = true',
+        'trusted_hash = "B"',
+        ''
+      ].join('\n')
+    )
+  })
+
+  it('keeps text appended inside an unterminated multiline value owned by the open block', () => {
+    writeFileSync(
+      configPath,
+      '[hooks.state."/x/hooks.json:pre_tool_use:0:0"]\nnote = """\n',
+      'utf-8'
+    )
+
+    upsertHookTrustEntries(configPath, [
+      { ...entry('stop', 'B'), enabled: false },
+      entry('pre_tool_use', 'A')
+    ])
+
+    expect(readFileSync(configPath, 'utf-8')).toBe(
+      '[hooks.state."/x/hooks.json:pre_tool_use:0:0"]\nenabled = false\ntrusted_hash = "A"\n'
+    )
+  })
+})

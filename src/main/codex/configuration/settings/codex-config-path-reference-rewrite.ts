@@ -1,6 +1,10 @@
 import { realpathSync } from 'node:fs'
 import { join, posix as pathPosix, resolve, win32 as pathWin32 } from 'node:path'
 import {
+  observeResolvedFilePath,
+  observeResolvedFilePathError
+} from '../../../filesystem/file-content-observation'
+import {
   CODEX_BUNDLED_MARKETPLACE_NAMES,
   CODEX_BUNDLED_MARKETPLACES_ENTRY
 } from '../homes/codex-home-paths'
@@ -62,9 +66,10 @@ export function rebaseBundledMarketplaceSources(
 
 function resolveRealPath(path: string): string {
   try {
-    return realpathSync.native(path)
-  } catch {
-    return path
+    return observeResolvedFilePath('marketplace-home', path, realpathSync.native(path))
+  } catch (error) {
+    observeResolvedFilePathError('marketplace-home', path, error)
+    return observeResolvedFilePath('marketplace-home', path, path)
   }
 }
 

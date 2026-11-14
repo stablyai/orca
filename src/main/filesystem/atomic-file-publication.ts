@@ -1,10 +1,12 @@
+import { observedExistsSync as existsSync } from './file-content-observation'
 import { randomUUID } from 'node:crypto'
-import { existsSync, linkSync, rmSync, writeFileSync } from 'node:fs'
+import { linkSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { grantDirAcl } from '../windows/windows-directory-acl'
 import { isPermissionError } from './permission-errors'
 import { nodeFileContentsEqualSync } from '../../shared/file-content/node-file-content-equality'
 import { renameFileWithWindowsRetry } from '../../shared/windows-retry-file-operations'
+import { invalidateFileObservation, observeFilePublication } from './file-content-observation'
 
 export function writeFileAtomically(
   targetPath: string,
@@ -15,6 +17,7 @@ export function writeFileAtomically(
   try {
     writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
     renameFileWithWindowsRetry(tmpPath, targetPath)
+    observeFilePublication(targetPath, contents)
   } catch (error) {
     rmSync(tmpPath, { force: true })
     // Chromium can reset inherited userData ACLs after startup; repair the parent and retry once.
@@ -25,6 +28,7 @@ export function writeFileAtomically(
         try {
           writeFileSync(retryTmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
           renameFileWithWindowsRetry(retryTmpPath, targetPath)
+          observeFilePublication(targetPath, contents)
           return
         } catch {
           rmSync(retryTmpPath, { force: true })
@@ -43,6 +47,8 @@ export function writeFileAtomicallyIfUnchanged(
   contents: string,
   options?: { mode?: number }
 ): boolean {
+  // Guarded recovery moves files through a held name; keep those passes eligible for retry.
+  invalidateFileObservation(targetPath)
   try {
     return attemptGuardedAtomicWrite(targetPath, expectedContents, contents, options)
   } catch (error) {
@@ -58,6 +64,7 @@ export function removeFileAtomicallyIfUnchanged(
   targetPath: string,
   expectedContents: string
 ): boolean {
+  invalidateFileObservation(targetPath)
   const heldPath = getGuardedOperationHeldPath(targetPath)
   recoverInterruptedGuardedOperation(heldPath, targetPath)
   try {
@@ -101,7 +108,7 @@ function restoreMovedFileWithoutOverwrite(sourcePath: string, targetPath: string
   rmSync(sourcePath, { force: true })
 }
 
-function getGuardedOperationHeldPath(targetPath: string): string {
+export function getGuardedOperationHeldPath(targetPath: string): string {
   return `${targetPath}.orca-guarded`
 }
 

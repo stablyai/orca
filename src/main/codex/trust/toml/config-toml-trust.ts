@@ -1,4 +1,8 @@
-import { existsSync, readFileSync } from 'node:fs'
+import {
+  readObservedFileSync as readFileSync,
+  observedExistsSync as existsSync
+} from '../../../filesystem/file-content-observation'
+
 import { parse as parseToml } from 'smol-toml'
 import { normalizeCodexTrustProjectPath } from '../identity/codex-trust-identity'
 import { writeTomlConfigAtomically as writeConfigAtomically } from '../../configuration/toml/config-toml-atomic-write'

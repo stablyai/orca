@@ -1,34 +1,19 @@
 import { win32 as pathWin32 } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
 import type { AgentHookInstallStatus } from '../../../../shared/agent-hook-listener/configuration/agent-hook-types'
-import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { dedupeInFlightRun } from '../../../runtime/concurrency/in-flight-run-dedupe'
 import { refreshManagedScriptIfPresent } from '../../../agent-hooks/installation/scripts/managed-hook-script-refresh'
 import { writeManagedScript } from '../../../agent-hooks/installation/scripts/managed-hook-script-write'
 import { getOrcaManagedCodexHomePath } from '../../configuration/homes/codex-home-paths'
 import { getManagedScriptPath } from '../definitions/codex-hook-definition'
-import { buildCodexHookCommand as getManagedCommand } from '../definitions/codex-hook-command-form'
-import { installCodexHooksExclusively } from './codex-hook-local-install'
-import {
-  getManagedCodexHookHome,
-  readStopgapOrcaHashes
-} from '../../trust/hooks/codex-hook-orca-approvals'
 import {
   refreshCodexRuntimeUserHooksExclusively,
   removeCodexHooksExclusively
 } from './codex-hook-local-maintenance'
 import { installCodexHooksRemote } from './codex-hook-remote-install'
 import { getManagedScript } from '../definitions/codex-hook-script'
-import {
-  readCodexHookHomeStatus,
-  readCurrentCodexHookStatus
-} from '../reconciliation/codex-hook-status'
-import {
-  CODEX_ANSWER_AWAITED,
-  CODEX_HOOK_LAUNCH_WAIT_MS,
-  readEveryKnownCodexHookHashes,
-  resolveCodexHookAnswerForLaunch
-} from '../../trust/hooks/codex-hook-hash-lookup'
+import { readCurrentCodexHookStatus } from '../reconciliation/codex-hook-status'
+import { readEveryKnownCodexHookHashes } from '../../trust/hooks/codex-hook-hash-lookup'
 import { reconcileCodexHooks } from '../reconciliation/codex-hook-reconcile'
 import { cleanupLegacyManagedHookRepresentations } from '../reconciliation/codex-hook-legacy-cleanup'
 import { removeStaleWslRuntimeManagedHookTrustEntries } from '../../trust/hooks/codex-hook-trust-cleanup'
@@ -47,23 +32,17 @@ import {
   type CodexWslRuntimeHookTarget,
   type WslCanonicalPathSettlement
 } from './codex-wsl-hook-install-plan'
-
-// Separate hooks-on/off and Codex/terminal runs: their trust outcomes and wait budgets differ.
-function launchPrepKey(
-  lane: 'install' | 'codex-launch' | 'refresh',
-  runtimeHomePath: string
-): string {
-  return `${lane}\0${normalizeRuntimePathForComparison(runtimeHomePath)}`
-}
+import { CodexHookLaunchPreparation } from './codex-hook-launch-preparation'
 
 export class CodexHookService {
   async refreshManagedScripts(): Promise<void> {
+    this.localLaunchPreparation.clear()
     await refreshManagedScriptIfPresent(getManagedScriptPath(), getManagedScript())
   }
 
   private readonly wslReconciliationGeneration = new Map<string, number>()
   private readonly wslInstallsInFlight = new Map<string, Promise<AgentHookInstallStatus | null>>()
-  private readonly launchPrepInFlight = new Map<string, Promise<AgentHookInstallStatus>>()
+  private readonly localLaunchPreparation = new CodexHookLaunchPreparation()
 
   private supersedeWslReconciliation(runtimeHomePath: string | null | undefined): number {
     if (!runtimeHomePath) {
@@ -223,6 +202,7 @@ export class CodexHookService {
 
   /** App start and explicit enablement may convert older builds' real-home entries. */
   async reconcileHooks(): Promise<AgentHookInstallStatus> {
+    this.localLaunchPreparation.clear()
     try {
       writeManagedScript(getManagedScriptPath(), getManagedScript())
     } catch (error) {
@@ -239,48 +219,26 @@ export class CodexHookService {
     launchesCodex = true,
     isHooksEnabled: () => boolean = () => true
   ): Promise<AgentHookInstallStatus> {
-    const answer =
-      (await resolveCodexHookAnswerForLaunch(launchesCodex ? CODEX_HOOK_LAUNCH_WAIT_MS : 0)) ??
-      CODEX_ANSWER_AWAITED
-    return runExclusivelyForRuntimeAndSystemTrustConfig(runtimeHomePath, () => {
-      // Recheck in the queue so an Off that landed during hash lookup wins.
-      if (!isHooksEnabled() || answer.kind === 'refused') {
-        return refreshCodexRuntimeUserHooksExclusively(runtimeHomePath, (homePath) =>
-          readCodexHookHomeStatus(homePath, answer)
-        )
-      }
-      // Keep known/local approvals usable while Codex's answer is pending.
-      const hashes =
-        answer.kind === 'hashes'
-          ? answer.hashes
-          : readStopgapOrcaHashes(
-              getManagedCodexHookHome(runtimeHomePath),
-              getManagedCommand(getManagedScriptPath())
-            )
-      return installCodexHooksExclusively(runtimeHomePath, hashes, (homePath) =>
-        readCodexHookHomeStatus(homePath, answer)
-      )
-    })
+    this.localLaunchPreparation.clear()
+    return this.localLaunchPreparation.install(runtimeHomePath, launchesCodex, isHooksEnabled)
   }
 
-  // Share concurrent preparation per home; a time cache would miss settings, approvals or script changes.
+  // Reuse only a complete pass whose actual observations and fresh inputs still agree.
   installForLaunchPrep(
     runtimeHomePath: string | undefined,
     launchesCodex: boolean,
     isHooksEnabled: () => boolean
   ): Promise<AgentHookInstallStatus> {
-    const homePath = runtimeHomePath ?? getOrcaManagedCodexHomePath()
-    return dedupeInFlightRun(
-      this.launchPrepInFlight,
-      launchPrepKey(launchesCodex ? 'codex-launch' : 'install', homePath),
-      () => this.install(homePath, launchesCodex, isHooksEnabled)
+    return this.localLaunchPreparation.installForLaunchPrep(
+      runtimeHomePath ?? getOrcaManagedCodexHomePath(),
+      launchesCodex,
+      isHooksEnabled
     )
   }
-
   refreshRuntimeUserHooksForLaunchPrep(runtimeHomePath?: string): Promise<AgentHookInstallStatus> {
-    const homePath = runtimeHomePath ?? getOrcaManagedCodexHomePath()
-    return dedupeInFlightRun(this.launchPrepInFlight, launchPrepKey('refresh', homePath), () =>
-      this.refreshRuntimeUserHooks(homePath)
+    return this.localLaunchPreparation.refreshRuntimeUserHooksForLaunchPrep(
+      runtimeHomePath ?? getOrcaManagedCodexHomePath(),
+      (home) => this.getStatus(home)
     )
   }
 
@@ -295,6 +253,7 @@ export class CodexHookService {
   refreshRuntimeUserHooks(
     runtimeHomePath: string = getOrcaManagedCodexHomePath()
   ): Promise<AgentHookInstallStatus> {
+    this.localLaunchPreparation.clear()
     return runExclusivelyForRuntimeAndSystemTrustConfig(runtimeHomePath, () =>
       this.refreshRuntimeUserHooksExclusively(runtimeHomePath)
     )
@@ -309,6 +268,7 @@ export class CodexHookService {
   }
 
   remove(): Promise<AgentHookInstallStatus> {
+    this.localLaunchPreparation.clear()
     return runExclusivelyForRuntimeAndSystemTrustConfig(getOrcaManagedCodexHomePath(), () =>
       this.removeExclusively()
     )

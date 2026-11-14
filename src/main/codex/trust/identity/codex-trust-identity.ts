@@ -3,6 +3,7 @@ import { realpathSync } from 'node:fs'
 import { basename, dirname, join, posix as pathPosix, win32 as pathWin32 } from 'node:path'
 import { foldWslUncPathCaseInsensitiveParts } from '../../../../shared/wsl-paths'
 import type { CodexEventLabel, CodexTrustEntry } from '../toml/config-toml-trust'
+import { observeResolvedFilePath } from '../../../filesystem/file-content-observation'
 
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -78,11 +79,19 @@ export function computeCodexTrustKey(entry: CodexTrustEntry): string {
 
 export function getExplicitHomeCodexHookSourcePath(sourcePath: string): string {
   if (process.platform !== 'win32' && isUnambiguousWindowsPath(sourcePath)) {
-    return normalizeCodexTrustSourcePath(sourcePath)
+    return observeResolvedFilePath(
+      'trust-source',
+      sourcePath,
+      normalizeCodexTrustSourcePath(sourcePath)
+    )
   }
   // Match discovery: resolve the home while keeping the hooks.json leaf logical.
-  return normalizeCodexTrustSourcePath(
-    join(resolveThroughExistingAncestor(dirname(sourcePath)), basename(sourcePath))
+  return observeResolvedFilePath(
+    'trust-source',
+    sourcePath,
+    normalizeCodexTrustSourcePath(
+      join(resolveThroughExistingAncestor(dirname(sourcePath)), basename(sourcePath))
+    )
   )
 }
 

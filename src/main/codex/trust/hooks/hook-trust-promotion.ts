@@ -1,4 +1,8 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  readObservedFileSync as readFileSync,
+  observedExistsSync as existsSync
+} from '../../../filesystem/file-content-observation'
+import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../../shared/definitive-filesystem-absence'
 import { createManagedCommandMatcher } from '../../../agent-hooks/installation/commands/managed-hook-command-matching'
@@ -26,6 +30,7 @@ import {
   getCodexHookTrustSignature,
   getCodexManagedScriptFileName
 } from '../../hooks/definitions/codex-hook-identity'
+import { observeFilePublication } from '../../../filesystem/file-content-observation'
 
 // Promote runtime approvals before mirroring so users do not have to approve them on every launch.
 
@@ -39,7 +44,7 @@ type HookTrustProvenanceFile = {
   entries: Record<string, HookTrustProvenanceEntry>
 }
 
-function getProvenancePath(runtimeHomePath: string): string {
+export function getProvenancePath(runtimeHomePath: string): string {
   return join(runtimeHomePath, '.orca-hook-trust-provenance.json')
 }
 
@@ -91,9 +96,9 @@ function provenanceIsUnreadable(provenancePath: string): boolean {
 /** Snapshot after all trust writes to distinguish Orca changes from later user approvals. */
 export function snapshotCodexRuntimeHookTrustProvenance(
   runtimeHomePath: string = getOrcaManagedCodexHomePath()
-): void {
+): boolean {
   if (provenanceIsUnreadable(getProvenancePath(runtimeHomePath))) {
-    return
+    return false
   }
   try {
     const runtimeHooksPath = join(runtimeHomePath, 'hooks.json')
@@ -110,24 +115,30 @@ export function snapshotCodexRuntimeHookTrustProvenance(
       }
     }
     const file: HookTrustProvenanceFile = { version: 1, entries }
-    writeFileSync(getProvenancePath(runtimeHomePath), `${JSON.stringify(file, null, 2)}\n`, {
+    const serialized = `${JSON.stringify(file, null, 2)}\n`
+    writeFileSync(getProvenancePath(runtimeHomePath), serialized, {
       encoding: 'utf-8',
       mode: 0o600
     })
+    observeFilePublication(getProvenancePath(runtimeHomePath), serialized)
+    return true
   } catch (error) {
     console.warn('[codex-hook-promotion] failed to snapshot hook trust provenance', error)
+    return false
   }
 }
 
 /** Promote user approvals into canonical config before the mirror replaces runtime trust. */
 export function promoteCodexRuntimeHookApprovalsToSystem(
   runtimeHomePath: string = getOrcaManagedCodexHomePath()
-): void {
+): boolean {
   try {
     promoteCodexRuntimeHookApprovalsToSystemUnsafe(runtimeHomePath)
+    return true
   } catch (error) {
     // Promotion failures must not block hook installation or Codex launch.
     console.warn('[codex-hook-promotion] failed to promote runtime hook approvals', error)
+    return false
   }
 }
 

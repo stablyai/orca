@@ -1,4 +1,8 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync, unlinkSync } from 'node:fs'
+import {
+  readObservedFileSync as readFileSync,
+  observedExistsSync as existsSync
+} from '../../../filesystem/file-content-observation'
+import { mkdirSync, writeFileSync, chmodSync, unlinkSync } from 'node:fs'
 
 import { dirname, join } from 'node:path'
 
@@ -6,6 +10,7 @@ import { randomUUID } from 'node:crypto'
 import { grantDirAcl } from '../../../windows/windows-directory-acl'
 import { isPermissionError } from '../../../filesystem/permission-errors'
 import { renameOverLockedTarget } from './locked-executable-rename'
+import { observeFilePublication } from '../../../filesystem/file-content-observation'
 
 // Atomic replacement protects scripts being read by in-flight hooks.
 export function writeManagedScript(
@@ -37,6 +42,7 @@ export function writeManagedScript(
       chmodSync(tmpPath, 0o755)
     }
     renameOverLockedTarget(tmpPath, scriptPath, options.moveLockedTargetAside === true)
+    observeFilePublication(scriptPath, content)
   } finally {
     if (existsSync(tmpPath)) {
       try {

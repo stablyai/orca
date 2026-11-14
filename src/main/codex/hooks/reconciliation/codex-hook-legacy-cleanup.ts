@@ -1,4 +1,8 @@
-import { existsSync, readFileSync, unlinkSync } from 'node:fs'
+import {
+  readObservedFileSync as readFileSync,
+  observedExistsSync as existsSync
+} from '../../../filesystem/file-content-observation'
+import { unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import {
   hookDefinitionHasManagedCommand,
@@ -24,12 +28,13 @@ import {
 import { runExclusivelyForCodexTrustConfig } from '../../trust/toml/codex-trust-config-mutation-queue'
 import { getRealHomeHookKeySourcePaths } from './codex-real-home-hooks-json'
 import { mutateRealHomeHooksPreservingUserTrust } from '../../trust/hooks/codex-user-hook-trust-moves'
+import { observeFilePublication } from '../../../filesystem/file-content-observation'
 
 const LEGACY_ORCA_PROFILE_NAME = 'orca-agent-status'
 const LEGACY_ORCA_PROFILE_BLOCK_START = '# BEGIN ORCA AGENT STATUS HOOKS'
 const LEGACY_ORCA_PROFILE_BLOCK_END = '# END ORCA AGENT STATUS HOOKS'
 
-function getLegacyCodexProfileTomlPath(): string {
+export function getLegacyCodexProfileTomlPath(): string {
   return join(getSystemCodexHomePath(), `${LEGACY_ORCA_PROFILE_NAME}.config.toml`)
 }
 
@@ -149,16 +154,19 @@ function cleanupLegacyCodexProfileHooks(): void {
   }
   if (next.trim().length === 0) {
     unlinkSync(profilePath)
+    observeFilePublication(profilePath, null)
   } else {
     writeConfigAtomically(profilePath, next)
   }
 }
 
-export async function cleanupLegacyManagedHookRepresentations(): Promise<void> {
+export async function cleanupLegacyManagedHookRepresentations(): Promise<boolean> {
   try {
     await cleanupLegacySystemManagedHooks()
     cleanupLegacyCodexProfileHooks()
+    return true
   } catch (error) {
     console.warn('[codex-hook-service] failed to clean legacy Codex hooks', error)
+    return false
   }
 }
