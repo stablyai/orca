@@ -222,6 +222,12 @@ export function handleTerminalWorkspaceKeyDown(
     handleCloseAllFiles()
     return
   }
+  if (!event.repeat && matchShortcut('tab.togglePin')) {
+    event.preventDefault()
+    notifyTerminalCapture('tab.togglePin')
+    dispatchWorkspaceTabCommand({ type: 'toggle-pin' })
+    return
+  }
   if (
     matchesRecentTabSwitcherChord(event, shortcutPlatform, keybindings, {
       context,

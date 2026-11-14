@@ -24,6 +24,9 @@ import {
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '../../../components/floating-terminal/floating-terminal'
 import { closeWorkspaceBrowserTab } from '../../browser/workspace/workspace-browser-tab-close'
 import { resolveBrowserWorkspaceOwner } from '../../browser/workspace/browser-workspace-source-resolution'
+import { withLayoutOwnerTabProps } from '@/components/tab-bar/tab-bar-layout-owner-props'
+import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 
 export type WorkspaceTabTarget =
   | { kind: 'tab'; worktreeId: string; tabId: string }
@@ -45,6 +48,7 @@ export type WorkspaceTabCommand =
       floatingPanelOwned?: boolean
     }
   | { type: 'previous-recent'; floatingPanelOwned?: boolean }
+  | { type: 'toggle-pin' }
 
 type TabState = ReturnType<typeof useAppStore.getState>
 
@@ -111,6 +115,37 @@ function resolveCloseTarget(
     return resolveCloseTarget(state, { kind: 'browser-source', sourceId: state.activeBrowserTabId })
   }
   return null
+}
+
+function togglePinActiveTab(state: TabState): boolean {
+  const worktreeId = state.activeWorktreeId
+  const tab = worktreeId ? resolveActiveTab(state, worktreeId) : null
+  if (!worktreeId || !tab) {
+    return false
+  }
+  const item = {
+    unifiedTabId: tab.id,
+    isPinned: tab.isPinned === true,
+    type: isEditorTabContentType(tab.contentType) ? 'editor' : tab.contentType,
+    data: { id: tab.entityId }
+  }
+  const localActions = {
+    togglePinned: (target: typeof item) => {
+      if (target.isPinned) {
+        state.unpinTab(target.unifiedTabId)
+      } else if (target.type === 'editor') {
+        state.pinFile(target.data.id, target.unifiedTabId)
+      } else {
+        state.pinTab(target.unifiedTabId)
+      }
+    },
+    makePreviewFilePermanent: state.makePreviewFilePermanent
+  }
+  const actions = ORCA_LAYOUT_OWNER_IS_MAIN
+    ? withLayoutOwnerTabProps(localActions, () => worktreeId)
+    : localActions
+  actions.togglePinned(item)
+  return true
 }
 
 // A split landing has no tab to close, so Close collapses the pane.
@@ -200,6 +235,9 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
       })
     }
     return true
+  }
+  if (command.type === 'toggle-pin') {
+    return togglePinActiveTab(state)
   }
   if (command.type === 'previous-recent') {
     if (command.floatingPanelOwned || isFloatingWorkspacePanelFocused()) {

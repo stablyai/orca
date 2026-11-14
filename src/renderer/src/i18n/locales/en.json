@@ -1343,6 +1343,18 @@
       "about": {
         "title": "About",
         "version": "Orca {{version}}"
+      },
+      "closeUnpinnedEditorTabs": {
+        "title": "Close unpinned editor tabs on focus loss",
+        "description": "Closes clean unpinned file tabs when focus leaves the tab bar or editor. Tabs with unsaved changes stay open.",
+        "keyword": {
+          "unpinned": "unpinned",
+          "pinned": "pinned",
+          "focus": "focus",
+          "close": "close",
+          "tabs": "tabs",
+          "blur": "blur"
+        }
       }
     },
     "openInApp": {
@@ -18269,10 +18281,14 @@
                 "newQuickCommand": "new quick command",
                 "browserRight": "browser right",
                 "splitBrowser": "split browser",
-                "browserSplit": "browser split"
+                "browserSplit": "browser split",
+                "saveAll": "save all",
+                "closeUnpinned": "close unpinned",
+                "saveAndClose": "save and close"
               },
               "newBrowserTabSplitRight": "New Browser Tab in Right Split",
-              "newBrowserTabSplitRightDescription": "Open a browser tab in a new split to the right."
+              "newBrowserTabSplitRightDescription": "Open a browser tab in a new split to the right.",
+              "saveAndCloseUnpinnedDescription": "Save dirty file tabs and close the unpinned editor tabs in the active workspace."
             }
           },
           "palette": {
@@ -21611,7 +21627,8 @@
           "unmuteTab": "Unmute Tab"
         },
         "EditorFileTabContextMenu": {
-          "closeOthers": "Close Others"
+          "closeOthers": "Close Others",
+          "saveAndCloseUnpinned": "Save and Close Unpinned Tabs"
         },
         "CopyTabIdMenuItem": {
           "copied": "Tab ID copied",
@@ -24740,7 +24757,8 @@
       "128cce6e6d": "Set title…",
       "e9da9f872a": "Send review notes to agent",
       "1524825c2c": "Toggle workspace board",
-      "d286d1ab85": "Clear pane title"
+      "d286d1ab85": "Clear pane title",
+      "tabTogglePin": "Pin or unpin active tab"
     },
     "group": {
       "global": "Global",
@@ -25742,6 +25760,11 @@
       "summary": "Orca stopped responding",
       "title": "Report a freeze",
       "uncheckAttachments": "Uncheck \"Attach saved freeze report and diagnostic logs\" and try again, or copy the details."
+    }
+  },
+  "tabs": {
+    "saveAndCloseUnpinned": {
+      "failed": "Couldn't save {{files}}. Their tabs stayed open."
     }
   }
 }

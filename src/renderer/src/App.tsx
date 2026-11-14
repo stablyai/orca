@@ -33,6 +33,7 @@ import { runWslDriveUncRendererStoreRewrites } from './lib/workspace/persistence
 import { useDocumentAppearance } from './app-shell/use-document-appearance'
 import { useFloatingWorkspacePanel } from './app-shell/use-floating-workspace-panel'
 import { useGlobalKeybindings } from './app-shell/use-global-keybindings'
+import { useCloseUnpinnedEditorTabsOnFocusLoss } from './app-shell/use-close-unpinned-editor-tabs-on-focus-loss'
 import { useOnboardingAndFeatureTips } from './app-shell/use-onboarding-and-feature-tips'
 import { usePersistedUIWriter } from './app-shell/use-persisted-ui-writer'
 import { useRuntimeGraphSync } from './app-shell/use-runtime-graph-sync'
@@ -63,6 +64,7 @@ function App(): React.JSX.Element {
   useDocumentAppearance()
   useWindowVisibilityEffects()
   useGlobalKeybindings({ layout, floatingWorkspace })
+  useCloseUnpinnedEditorTabsOnFocusLoss()
   // App owns active-selection removal; the Space window only mirrors selection.
   useEffect(() => installActiveWorktreeRemovalSuccessor(), [])
 

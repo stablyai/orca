@@ -15,9 +15,9 @@ Add a setting that closes unpinned editor file tabs when focus leaves the tab ba
 | Which tabs close                   | Editor file tabs only. Terminals, browser tabs, simulator and agent sessions are never auto-closed. |
 | Unpinned tabs with unsaved changes | Stay open.                                                                                          |
 | Way to clear dirty tabs            | A separate "save all and close unpinned tabs" action.                                               |
-| Pin toggle shortcut                | `Mod+Alt+K`. Checked: no existing binding and no hard-coded handler.                                |
+| Pin toggle shortcut                | `Mod+Alt+Shift+P`. Checked: no default binding on any platform.                                     |
 
-Rejected: `Mod+Alt+P`. It is bound on macOS to **Collapse / Expand All Projects** (`src/shared/keybindings/definitions-core-4.ts`). My earlier recommendation was wrong because I had not checked it.
+Rejected: `Mod+Alt+P`. It is bound on macOS to **Collapse / Expand All Projects** (`src/shared/keybindings/definitions-core-4.ts`). Rejected also: `Mod+Alt+K`. It has no default binding, but the keybinding conflict tests use it as the "free" sample chord for `terminal.toggleNativeChat` overrides, so it would fail them.
 
 ## What the codebase already does
 
@@ -38,7 +38,7 @@ Add `closeUnpinnedEditorTabsOnFocusLoss: boolean`, default `false`. Opt-in, so e
 
 ### 2. Pin keybinding
 
-Add `tab.togglePin` to the `tab.*` definitions with `platformBindings(['Mod+Alt+K'])`, add it to the action union, and add a title entry. Dispatch it from `terminal-workspace-keydown.ts`, and from `use-global-keybindings.ts` if the chord must also work outside terminal and editor focus. Check the existing `tab.closeAll` handling in both files and copy it.
+Add `tab.togglePin` to the `tab.*` definitions with `platformBindings(['Mod+Alt+Shift+P'])`, add it to the action union, and add a title entry. Dispatch it from `terminal-workspace-keydown.ts`, and from `use-global-keybindings.ts` if the chord must also work outside terminal and editor focus. Check the existing `tab.closeAll` handling in both files and copy it.
 
 ### 3. Toggle-pin command
 
@@ -83,15 +83,21 @@ If a save fails (stale disk, not UTF-8, permission error), leave that tab open a
 
 Place the action in the editor file tab context menu (`EditorFileTabContextMenu.tsx`) as "Save and Close Unpinned Tabs". Confirm this placement tomorrow.
 
-## Open questions for tomorrow
+## Resolved decisions
 
-1. **Does a terminal click count as leaving the editor?** Under the literal wording, clicking into a terminal would close unpinned editor tabs. Confirm this is intended before building it.
-2. **Clicking empty chrome.** Focus moves to `body` with `relatedTarget: null`. Decide whether that counts as leaving. I lean yes.
-3. **Window switch.** Switching to another app also gives `relatedTarget: null`. Decide whether that should close tabs. I lean yes, since the user asked for "focus lost".
-4. **Where save-all lives.** Context menu item, command palette entry, or both.
-5. **Active-tab handling.** Which tab becomes active after tabs close. Probably the nearest pinned or remaining tab. Check what `closeUnifiedTab` already does.
-6. **Layout owner.** How pin and close behave when the layout owner is the main process (`ORCA_LAYOUT_OWNER_IS_MAIN` in `recently-closed-editor-tabs.ts`). Pin changes must go through the owner.
-7. **Remote and folder workspaces.** Per `AGENTS.md`, features must work on remote hosts and for folder workspaces, not only git worktrees. The save path differs for remote files. Verify.
+Answers from review. These replace the earlier open questions.
+
+1. **Terminal focus.** Focus moving into a terminal (or any non-editor surface) closes unpinned editor tabs. Literal reading of the goal.
+2. **Empty chrome.** A focus move to `body` (`relatedTarget: null`) closes tabs, with one refinement: if the pointer went down inside the tab bar or editor, the null focus move is still inside the same surface and does not close. This stops clicks in Monaco's gutter or the empty part of the editor from closing tabs.
+3. **Window switch.** Ignored. Window blur does not close tabs (`document.hasFocus()` is false during blur). This matches the decisions table.
+4. **Save-all placement.** Editor tab context menu ("Save and Close Unpinned Tabs") and the Cmd+J quick actions list. Orca has no generic command palette; Cmd+J is its palette.
+5. **Preview tabs.** Close like any other unpinned editor tab.
+6. **Save path.** Save-all uses a store-level handle to the save queue, not the mounted editor. `attachEditorAutosaveController` registers its `queueSave` path, and save-all calls it per dirty tab, awaiting each `EditorSaveResult`. This works without the editor mounted and covers remote and folder files because it goes through the same queue as Ctrl+S.
+7. **Close path.** Unpinned editor tabs close through `dispatchWorkspaceTabCommand({ type: 'close', bulk: true })`. `closeItem` already waits for custom-editor frame flushes and routes any dirty prompt through the central guard.
+8. **Pin path.** The toggle reuses `withLayoutOwnerTabProps` when the layout owner is main, and falls back to `pinFile`/`pinTab`/`unpinTab` locally. Editor pins go through `pinFile` so preview tabs are made permanent.
+9. **Focus zones.** Stable selectors are `data-tab-focus-zone="tab-bar"` on `TabBarSurface` and `data-tab-focus-zone="editor"` on `EditorPanelShell`.
+10. **Overlays.** `relatedTarget` inside `[role=menu|listbox|dialog|alertdialog]` or a Radix popper wrapper is ignored.
+11. **Detached targets.** A `focusout` whose target has been removed from the DOM is ignored, so closing a tab does not cascade into closing the rest.
 
 ## Risks
 
@@ -113,11 +119,12 @@ From `AGENTS.md`:
 
 ## Steps for tomorrow
 
-- [ ] Resolve open questions 1–3 with the user.
-- [ ] Identify DOM selectors for the tab bar and editor panel.
-- [ ] Read `closeUnifiedTab` and `editorTabNeedsSavePrompt` to confirm active-tab behavior.
-- [ ] Read the layout-owner helper (`sendLayoutCommandToOwner`) and confirm it can be used outside React.
-- [ ] Read the save-result path to confirm how save-all can wait for a save.
+- [x] Resolve open questions with the user (see Resolved decisions).
+- [x] Identify DOM selectors for the tab bar and editor panel (`data-tab-focus-zone`).
+- [x] Read `closeUnifiedTab` and `editorTabNeedsSavePrompt` to confirm active-tab behavior.
+- [x] Read the layout-owner helper (`sendLayoutCommandToOwner`); it reads the store directly, so it works outside React.
+- [x] Read the save-result path; the controller's `queueSave` returns `EditorSaveResult`.
 - [ ] Implement in this order: keybinding and command, setting, close action, focus trigger, save-all.
 - [ ] Run `pnpm tc`, lint and format on changed files, then `pnpm check:changed`.
 - [ ] Verify manually in the app, including remote and folder workspaces.
+- [ ] Push to `fork` once everything above is done (not before).
