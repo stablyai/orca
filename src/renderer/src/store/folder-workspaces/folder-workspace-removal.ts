@@ -14,6 +14,7 @@ import {
   worktreeRemovalReplyTimeoutMs,
   isArchiveHookRemovalError
 } from '../../../../shared/worktree/removal/archive-hook-removal-gate'
+import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
 import { resolveFolderSetupSupported } from '@/lib/workspace/creation/setup/folder-setup-support'
 import { ensureHooksConfirmed } from '@/runtime/repo-hooks/ensure-hooks-confirmed'
 import {
@@ -110,7 +111,7 @@ export function createFolderWorkspaceDeleteAction(
       return true
     } catch (err) {
       console.error('Failed to delete folder workspace:', err)
-      const error = err instanceof Error ? err.message : String(err)
+      const error = readIpcErrorDetail(err) ?? (err instanceof Error ? err.message : String(err))
       if (isArchiveHookRemovalError(error)) {
         const { showDeleteWorktreeFailureToast } =
           await import('@/components/sidebar/workspace-actions/deletion/delete-worktree-failure-toast')

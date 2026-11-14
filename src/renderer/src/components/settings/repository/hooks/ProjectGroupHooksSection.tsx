@@ -18,11 +18,45 @@ import { useShallow } from 'zustand/react/shallow'
 import { getFolderWorkspaceAgentLaunchFact } from '@/components/sidebar/workspace-creation/folder/folder-workspace-agent-startup'
 import { RepositoryHooksSection } from './RepositoryHooksSection'
 import { groupHookYamlPresentation } from './repository-hook-settings-draft'
+import type {
+  ProjectGroupHookSupport,
+  ProjectGroupSettingsEntry
+} from '@/hooks/use-supported-group-hook-settings'
 
 export function ProjectGroupHooksSection({
   group
 }: {
+  group: ProjectGroupSettingsEntry
+}): React.JSX.Element | null {
+  return group.hookSupport ? (
+    <GroupHooksEditor group={group} support={group.hookSupport} />
+  ) : (
+    <ObservedGroupHooksSection group={group} />
+  )
+}
+
+function ObservedGroupHooksSection({ group }: { group: ProjectGroup }): React.JSX.Element | null {
+  const owner = projectGroupHookOwner(group)
+  const setup = useFolderSetupSupport(owner, PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY)
+  const archive = useFolderSetupSupport(owner, PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY)
+  return (
+    <GroupHooksEditor
+      group={group}
+      support={{
+        setup: setup === 'supported',
+        archive: archive === 'supported',
+        pending: setup === 'pending' || archive === 'pending'
+      }}
+    />
+  )
+}
+
+function GroupHooksEditor({
+  group,
+  support
+}: {
   group: ProjectGroup
+  support: ProjectGroupHookSupport
 }): React.JSX.Element | null {
   const t = useTranslate()
   const [inspection, setInspection] = useState<GroupHookCheckResult | null>(null)
@@ -32,11 +66,6 @@ export function ProjectGroupHooksSection({
   const fieldset = useRef<HTMLFieldSetElement>(null)
   const owner = projectGroupHookOwner(
     inspection ? { ...group, hookSettings: inspection.hookSettings } : group
-  )
-  const support = useFolderSetupSupport(owner, PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY)
-  const archiveSupport = useFolderSetupSupport(
-    owner,
-    PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY
   )
   const [repos, groups, platform] = useAppStore(
     useShallow((state) => {
@@ -49,8 +78,9 @@ export function ProjectGroupHooksSection({
     })
   )
   const hostId = getRepoExecutionHostId(group)
+  const canInspect = support.setup && (!support.pending || inspection !== null)
   useEffect(() => {
-    if (support !== 'supported') {
+    if (!canInspect) {
       return
     }
     let cancelled = false
@@ -65,8 +95,8 @@ export function ProjectGroupHooksSection({
     return () => {
       cancelled = true
     }
-  }, [hostId, group.id, support])
-  if (!owner || support !== 'supported') {
+  }, [hostId, group.id, canInspect])
+  if (!owner || !support.setup) {
     return null
   }
   const example = platform
@@ -130,11 +160,15 @@ export function ProjectGroupHooksSection({
       }
     })
   }
-  const yamlPresentation = groupHookYamlPresentation(archiveSupport === 'supported')
+  const yamlPresentation = groupHookYamlPresentation(support.archive)
   const inspectionReady =
     inspection !== null && !inspection.unavailable && inspection.status !== 'error'
   return (
-    <fieldset ref={fieldset} disabled={!inspectionReady || saving} className="min-w-0">
+    <fieldset
+      ref={fieldset}
+      disabled={support.pending || !inspectionReady || saving}
+      className="min-w-0"
+    >
       <RepositoryHooksSection
         repo={owner}
         showArchive={yamlPresentation.archive}

@@ -183,13 +183,19 @@ it('rechecks unsaved editor text before the Archive failure toast waives removal
   })
   vi.mocked(showDeleteWorktreeFailureToast).mockClear()
   folderWorkspacesDelete
-    .mockRejectedValueOnce(new Error('Archive hook failed for worktree: /workspace/platform'))
+    .mockRejectedValueOnce(
+      new Error(
+        "Error invoking remote method 'folderWorkspaces:delete': WorktreeArchiveHookFailedError: Archive hook failed for worktree: /workspace/platform"
+      )
+    )
     .mockResolvedValueOnce(true)
   await expect(
     deleteFolderWorkspaceUnlessUnsaved(store.getState, folder.id, 'local')
   ).resolves.toBe(false)
   expect(showDeleteWorktreeFailureToast).toHaveBeenCalledTimes(1)
-  const retry = vi.mocked(showDeleteWorktreeFailureToast).mock.calls[0][0].onDeleteAnyway
+  const failure = vi.mocked(showDeleteWorktreeFailureToast).mock.calls[0][0]
+  expect(failure.error).toBe('Archive hook failed for worktree: /workspace/platform')
+  const retry = failure.onDeleteAnyway
   expect(retry).toBeTypeOf('function')
   store.setState({
     openFiles: [
