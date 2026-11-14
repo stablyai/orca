@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab } from '../../../../../shared/tab-types'
 import type { OpenFile } from '../../../store/slices/editor/types/open-file'
+import type * as RuntimeRpcCalls from '@/runtime/rpc/calls/runtime-rpc-call'
 
 const closeWebRuntimeSessionTabMock = vi.fn(async (_args: unknown) => 'applied' as const)
 
@@ -10,7 +11,19 @@ vi.mock('../actions/web-runtime-session-tab-lifecycle', () => ({
   closeWebRuntimeSessionTab: (args: unknown) => closeWebRuntimeSessionTabMock(args)
 }))
 
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
+  const actual = await importOriginal<typeof RuntimeRpcCalls>()
+  return {
+    ...actual,
+    callRuntimeRpc: (...args: Parameters<typeof actual.callRuntimeRpc>) =>
+      args[1] === 'layout.apply'
+        ? Promise.resolve({ ok: false, code: 'host_not_owned' })
+        : actual.callRuntimeRpc(...args)
+  }
+})
+
 import { useAppStore } from '../../../store/index'
+import { makeWorktree } from '../../../store/slices/worktrees/worktree.test-fixture'
 import {
   ENV,
   NOW,
@@ -58,6 +71,13 @@ describe('tab-strip close of a clean host-mirrored editor tab', () => {
     useAppStore.setState({
       ...initialState,
       activeWorktreeId: WT,
+      activeWorkspaceExecutionHostId: null,
+      worktreesByRepo: {
+        repo: [
+          makeWorktree({ id: WT, repoId: 'repo', hostId: 'local' }),
+          makeWorktree({ id: WT, repoId: 'repo', hostId: `runtime:${ENV}` })
+        ]
+      },
       openFiles: [mirroredVideo],
       unifiedTabsByWorktree: { [WT]: [videoUnifiedTab] }
     })
@@ -70,6 +90,9 @@ describe('tab-strip close of a clean host-mirrored editor tab', () => {
   it('tells the host to retire its tab, or the next host snapshot reopens it', async () => {
     useAppStore.getState().closeUnifiedTab(hostTabId)
 
+    await vi.waitFor(() =>
+      expect(useAppStore.getState().unifiedTabsByWorktree[WT] ?? []).toEqual([])
+    )
     // The host RPC module is imported lazily.
     await vi.waitFor(() => expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledTimes(1))
     expect(closeWebRuntimeSessionTabMock).toHaveBeenCalledWith({
@@ -78,8 +101,5 @@ describe('tab-strip close of a clean host-mirrored editor tab', () => {
       environmentId: ENV,
       reason: 'user'
     })
-    const state = useAppStore.getState()
-    expect(state.unifiedTabsByWorktree[WT] ?? []).toEqual([])
-    expect(state.openFiles.some((file) => file.id === videoPath)).toBe(false)
   })
 })

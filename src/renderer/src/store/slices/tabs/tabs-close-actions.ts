@@ -211,6 +211,9 @@ export function createTabsCloseActions(
         closeContentTabThroughLayoutOwner(get, tab, {
           nextActiveTabId,
           closeHere: () => {
+            if (isEditorTabContentType(tab.contentType)) {
+              notifyHostOfMirroredEditorClose(state, worktreeId, tab.entityId, [tab])
+            }
             closeHere()
             retireEditor()
           },
