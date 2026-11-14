@@ -17,6 +17,7 @@ import {
 } from '../orchestration/workers/transcripts/worker-transcript-read'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import type { TerminalAgentTranscriptSource } from '../../agent-hooks/server/server-agent-identities'
+import { sameProviderKey } from '../../agent-hooks/identity/agent-provider-key'
 import { tuiAgentDisplayName } from '../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { needsWslHostTranslation } from '../../native-chat/transcript-discovery/host-readable-transcript-path'
 import {
@@ -79,10 +80,15 @@ async function readTerminalTranscript(
   orcaSessionId: string,
   limit: number
 ): Promise<AgentReadResult> {
-  const source: TerminalAgentTranscriptSource | ReverseLookupUnavailable | null | undefined =
-    await agentHookServer.terminalAgentTranscriptSource(orcaSessionId, () =>
-      ctx.runtime.readLocalSleepingAgentSessions()
+  const locate = (
+    known?: TerminalAgentTranscriptSource
+  ): Promise<TerminalAgentTranscriptSource | ReverseLookupUnavailable | null | undefined> =>
+    agentHookServer.terminalAgentTranscriptSource(
+      orcaSessionId,
+      () => ctx.runtime.readLocalSleepingAgentSessions(),
+      known
     )
+  const source = await locate()
   if (source === undefined) {
     throw new AgentConversationRefusal(
       CODES.unavailable,
@@ -127,6 +133,20 @@ async function readTerminalTranscript(
     throw new AgentConversationRefusal(
       CODES.noTranscript,
       `Orca couldn't read agent ${orcaSessionId}'s transcript (${transcript.reason.replaceAll('_', ' ')}).`
+    )
+  }
+  // What vouched for the file may have ended, or the conversation moved to another file, meanwhile.
+  const after = await locate(source)
+  if (
+    isReverseLookupUnavailable(after) ||
+    !after ||
+    !sameProviderKey(after.key, key) ||
+    after.providerSession.id !== providerSession.id ||
+    after.providerSession.transcriptPath !== providerSession.transcriptPath
+  ) {
+    throw new AgentConversationRefusal(
+      CODES.unavailable,
+      `Agent ${orcaSessionId}'s transcript changed while Orca was reading it. Read it again.`
     )
   }
   return {
