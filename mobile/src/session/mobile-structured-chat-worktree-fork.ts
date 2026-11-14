@@ -3,7 +3,7 @@ import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../src/sh
 import { formatOrcaSessionAddress, isOrcaSessionId } from '../../../src/shared/orca-session-address'
 import { agentReferenceNote } from '../../../src/shared/orchestration/mailbox/orchestration-agent-reference'
 import { translate } from '../i18n/mobile-i18n'
-import { triggerError } from '../platform/haptics'
+import { triggerError } from '../platform/haptics/haptics'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type { StructuredAgentSessionForkSource } from '../../../src/shared/agent-session/structured-agent-session-create'
