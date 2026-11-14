@@ -1,10 +1,11 @@
 import { createServer, type Socket } from 'node:net'
 import { setSpawnObserver } from '@orca/process-host/spawn-observer'
+import { spawnProcess } from '@orca/process-host'
 import { runLocalSourceControlPlan } from '../text-generation/execution/source-control-local-process'
 import { runCodexProcessWithHomeLock } from '../text-generation/execution/source-control-local-generation'
 import { stopSupervisedChildProcess } from './supervised-child-process-stop'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtemp, realpath, rm, rename, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, rename, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { once } from 'node:events'
@@ -151,7 +152,9 @@ describe.skipIf(process.platform === 'win32')('hosted provider production transp
       process.platform
     )
     const fallback = vi.fn(() =>
-      spawn(spec.program, spec.args, {
+      spawnProcess({
+        program: spec.program,
+        args: spec.args,
         cwd: spec.cwd,
         env: spec.env,
         detached: spec.detached,
@@ -672,7 +675,19 @@ describe.skipIf(process.platform === 'win32')('hosted provider production transp
   })
 
   it('preserves missing-folder error classification when the host cannot spawn', async () => {
-    const child = launch('throw 1', 'one-shot', join(directory, 'missing'))
+    const cwd = join(directory, 'removed-after-probe')
+    await mkdir(cwd)
+    const request = client.request.bind(client)
+    vi.spyOn(client, 'request').mockImplementation(async function <T>(
+      ...args: Parameters<typeof request>
+    ): Promise<T> {
+      const result = await request<T>(...args)
+      if (args[0] === 'probeProviderCwd') {
+        await rm(cwd, { recursive: true })
+      }
+      return result
+    })
+    const child = launch('throw 1', 'one-shot', cwd)
     const error = new Promise<Error>((resolve) => child.once('error', resolve))
     const closed = new Promise<void>((resolve) => child.once('close', () => resolve()))
     await expect(error).resolves.toHaveProperty('code', 'ENOENT')
