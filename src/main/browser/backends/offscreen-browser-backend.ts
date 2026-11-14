@@ -47,12 +47,19 @@ export class OffscreenBrowserBackend implements BrowserBackend {
       : browserSessionRegistry.getDefaultProfile()
     const partition = profile?.partition ?? ORCA_BROWSER_PARTITION
 
+    // Keep the output-scale change opt-in until broader host/client coverage is verified.
+    const rasterScaleFactor = Number(process.env.ORCA_EXPERIMENTAL_BROWSER_RASTER_SCALE)
+    const useOffscreenRaster = rasterScaleFactor >= 1 && rasterScaleFactor <= 3
     const win = new BrowserWindow({
       show: false,
+      frame: !useOffscreenRaster,
       width: DEFAULT_VIEWPORT_WIDTH,
       height: DEFAULT_VIEWPORT_HEIGHT,
       webPreferences: {
         ...ORCA_BROWSER_GUEST_WEB_PREFERENCES,
+        ...(useOffscreenRaster
+          ? { offscreen: { useSharedTexture: false, deviceScaleFactor: rasterScaleFactor } }
+          : {}),
         partition,
         sandbox: true,
         contextIsolation: true,

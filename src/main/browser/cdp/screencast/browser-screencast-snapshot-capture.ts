@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer'
-import type { Debugger, WebContents } from 'electron'
+import { nativeImage, type Debugger, type NativeImage, type WebContents } from 'electron'
 import { readBrowserScreencastImageSize } from './browser-screencast-image-size'
 import { runDebuggerCommandWithTimeout } from './browser-screencast-debugger-command'
 import {
@@ -42,6 +42,10 @@ export function createBrowserScreencastSnapshotCapture(
 ): BrowserScreencastSnapshotCapture {
   const { webContents, dbg, options, isClosed, isStopping, stopSignal, getSeq, queueFrame } = deps
   const { applyDeviceMetricsOverride } = deps
+  const encodeSnapshot = (image: NativeImage): Buffer => {
+    const capture = scaleSnapshotToFit(image, options)
+    return options.format === 'png' ? capture.toPNG() : capture.toJPEG(options.quality)
+  }
   const { holdPaint } = options
 
   let snapshotGeneration = 0
@@ -107,9 +111,7 @@ export function createBrowserScreencastSnapshotCapture(
             return
           }
           if (nativeImage) {
-            const capture = scaleSnapshotToFit(nativeImage, options)
-            const buffer =
-              options.format === 'png' ? capture.toPNG() : capture.toJPEG(options.quality)
+            const buffer = encodeSnapshot(nativeImage)
             if (buffer.byteLength > 0) {
               image = new Uint8Array(buffer)
             }
@@ -151,7 +153,13 @@ export function createBrowserScreencastSnapshotCapture(
         if (!data) {
           return
         }
-        image = new Uint8Array(Buffer.from(data, 'base64'))
+        const bytes = Buffer.from(data, 'base64')
+        const size = readBrowserScreencastImageSize(bytes, options.format)
+        image = new Uint8Array(
+          size && (size.width > options.maxWidth || size.height > options.maxHeight)
+            ? encodeSnapshot(nativeImage.createFromBuffer(bytes))
+            : bytes
+        )
       }
       if (isSnapshotStale(initialOnly, generation)) {
         return

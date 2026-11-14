@@ -172,16 +172,26 @@ export async function startBrowserScreencast(
   const handleDetach = (): void => {
     // Close before notifying owners that may call stop in response.
     finish()
+    void deviceMetrics.clear()
     options.onError?.('Browser debugger detached while streaming.')
   }
 
   dbg.on('message', handleMessage as never)
   dbg.on('detach', handleDetach as never)
 
+  const assertStartingStreamIsOpen = (): void => {
+    if (closed) {
+      throw new Error('Browser debugger detached while starting screencast.')
+    }
+  }
+
   try {
     await sendDebuggerCommand(dbg, 'Page.enable')
+    assertStartingStreamIsOpen()
     await deviceMetrics.apply()
+    assertStartingStreamIsOpen()
     await startScreencast()
+    assertStartingStreamIsOpen()
     pendingUpdate = snapshotCapture.emitSnapshotFrame(true)
     // Hidden embedders may stop compositing without producing a frame.
     const noFrameTimer = setTimeout(() => {
