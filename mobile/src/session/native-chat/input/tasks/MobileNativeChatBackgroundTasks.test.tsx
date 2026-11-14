@@ -26,7 +26,7 @@ vi.mock('lucide-react-native', () => ({
   SquareTerminal: 'SquareTerminal',
   Workflow: 'Workflow'
 }))
-vi.mock('../../../../components/AgentStateDot', () => ({
+vi.mock('../../../../agents/presentation/AgentStateDot', () => ({
   AGENT_WORKING_COLOR: '#eab308',
   AgentStateDot: 'AgentStateDot'
 }))

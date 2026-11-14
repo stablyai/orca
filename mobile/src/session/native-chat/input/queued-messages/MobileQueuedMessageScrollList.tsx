@@ -7,7 +7,7 @@ import Animated, {
   type SharedValue
 } from 'react-native-reanimated'
 import { spacing } from '../../../../theme/mobile-theme'
-import { MobileEdgeFade } from '../../../../components/MobileEdgeFade'
+import { MobileEdgeFade } from '../../../../components/list/MobileEdgeFade'
 import { useMobileNativeChatLowerRegion } from '../../lower-region/mobile-native-chat-lower-region-context'
 import { QUEUED_ROW_NARROW_WIDTH } from './mobile-native-chat-queued-message-styles'
 

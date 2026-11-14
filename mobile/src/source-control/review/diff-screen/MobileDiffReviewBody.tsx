@@ -4,7 +4,7 @@ import {
   MobileLoadErrorState,
   MobileOfflineState,
   MobileStateView
-} from '../../../components/MobileStateView'
+} from '../../../components/feedback/MobileStateView'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { MobileDiffReviewLines, type LineRange } from './MobileDiffReviewLines'

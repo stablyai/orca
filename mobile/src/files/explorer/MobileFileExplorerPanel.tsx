@@ -43,7 +43,7 @@ import {
   MobileNoMatchState,
   MobileOfflineState,
   MobileStateView
-} from '../../components/MobileStateView'
+} from '../../components/feedback/MobileStateView'
 import { BottomSearchBar } from '../../components/nav-bar/BottomSearchBar'
 import { NavBar } from '../../components/nav-bar/NavBar'
 import { NavBarButton } from '../../components/nav-bar/NavBarButton'

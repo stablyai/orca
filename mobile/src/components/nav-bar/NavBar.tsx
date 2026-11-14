@@ -13,7 +13,7 @@ import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduce
 import { colors, pressedStyle, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { useWorkingSweep } from '../use-working-motion'
+import { useWorkingSweep } from '../motion/use-working-motion'
 
 export const NAV_BAR_HEIGHT = 52
 

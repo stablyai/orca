@@ -2,7 +2,7 @@ import { ChevronRight, Laptop, Monitor, Server, type LucideIcon } from 'lucide-r
 import { Pressable, Text, View } from 'react-native'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { statusDotColor } from '../components/StatusDot'
+import { statusDotColor } from '../components/feedback/StatusDot'
 import type { ConnectionVerdict } from '../transport/connection/connection-health'
 import { verdictDisplayLabel } from '../transport/connection/connection-health'
 import { mobileConnectionPathAccessibilityLabel } from '../transport/connection/mobile-connection-path-label'

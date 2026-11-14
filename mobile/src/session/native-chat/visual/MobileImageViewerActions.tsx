@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import { Pressable } from 'react-native'
 import { Copy, Download, Share, type LucideIcon } from 'lucide-react-native'
-import { ActionSheetModal } from '../../../components/ActionSheetModal'
-import { TransientToast, useTransientToast } from '../../../components/TransientToast'
+import { ActionSheetModal } from '../../../components/sheets/ActionSheetModal'
+import { TransientToast, useTransientToast } from '../../../components/feedback/TransientToast'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import {

@@ -8,7 +8,7 @@ import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { NavBar } from '../../../components/nav-bar/NavBar'
 import { NavBarButton } from '../../../components/nav-bar/NavBarButton'
-import { MobileLoadErrorState, MobileStateView } from '../../../components/MobileStateView'
+import { MobileLoadErrorState, MobileStateView } from '../../../components/feedback/MobileStateView'
 import type { MobilePrTab } from './use-mobile-pr-tab'
 
 export type ScreenProps = {

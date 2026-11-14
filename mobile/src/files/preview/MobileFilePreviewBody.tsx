@@ -17,7 +17,7 @@ import {
   MobileLoadErrorState,
   MobileOfflineState,
   MobileStateView
-} from '../../components/MobileStateView'
+} from '../../components/feedback/MobileStateView'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 type Props = {

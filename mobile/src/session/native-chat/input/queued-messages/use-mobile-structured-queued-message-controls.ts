@@ -1,4 +1,4 @@
-import type { DragReorderMove } from '../../../../components/drag-reorder-positions'
+import type { DragReorderMove } from '../../../../components/reorder/drag-reorder-positions'
 import { useMobileQueuedMessageComposerActions } from './use-mobile-queued-message-composer-actions'
 import { useCallback, useMemo } from 'react'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'

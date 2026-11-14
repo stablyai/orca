@@ -7,7 +7,7 @@ import {
   shouldShowSessionHeaderChecksAction,
   panelRouteDescriptor
 } from './session-panel-host'
-import type { ActionSheetAction } from '../components/ActionSheetModal'
+import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   useWorkspaceExecutionHost,

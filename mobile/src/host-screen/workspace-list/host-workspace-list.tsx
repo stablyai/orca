@@ -9,14 +9,17 @@ import {
   View
 } from 'react-native'
 import { ChevronRight, FolderTree, Pin } from 'lucide-react-native'
-import { AuthFailedBanner } from '../../components/AuthFailedBanner'
-import { Presence } from '../../components/AutoHeight'
-import { DisclosureChevron } from '../../components/DisclosureChevron'
-import { HostDiagnosticsLink } from '../../components/HostDiagnosticsLink'
-import { HostOfflineBanner, useHostOfflineBanner } from '../../components/HostOfflineBanner'
+import { AuthFailedBanner } from '../../components/host-connection/AuthFailedBanner'
+import { Presence } from '../../components/motion/AutoHeight'
+import { DisclosureChevron } from '../../components/list/DisclosureChevron'
+import { HostDiagnosticsLink } from '../../components/host-connection/HostDiagnosticsLink'
+import {
+  HostOfflineBanner,
+  useHostOfflineBanner
+} from '../../components/host-connection/HostOfflineBanner'
 import { isConnectionOutage } from '../../transport/connection/connection-health'
-import { HostRouteNoticeBanner } from '../../components/HostRouteNoticeBanner'
-import { MobileRepoIcon } from '../../components/MobileRepoIcon'
+import { HostRouteNoticeBanner } from '../../components/host-connection/HostRouteNoticeBanner'
+import { MobileRepoIcon } from '../../components/icons/MobileRepoIcon'
 import type { CollapsingTitle } from '../../components/nav-bar/PageTitle'
 import { WorktreeListRow } from '../../worktree/row-presentation/WorktreeListRow'
 import { WORKTREE_ROW_LAYOUT } from '../../worktree/row-presentation/worktree-list-row-layout'

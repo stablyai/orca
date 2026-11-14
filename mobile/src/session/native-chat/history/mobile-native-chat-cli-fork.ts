@@ -1,5 +1,5 @@
 import { SquareTerminal } from 'lucide-react-native'
-import type { ActionSheetAction } from '../../../components/ActionSheetModal'
+import type { ActionSheetAction } from '../../../components/sheets/ActionSheetModal'
 import { translate } from '../../../i18n/mobile-i18n'
 import type { MobileSessionController } from '../../use-mobile-session-controller'
 import { agentForksConversations } from '../../../../../src/shared/agent-launch/startup/agent-resume-argv'

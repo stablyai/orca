@@ -7,9 +7,9 @@ import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { triggerError, triggerSuccess } from '../../../../platform/haptics/haptics'
 import { SheetHeader } from '../../../../components/nav-bar/SheetHeader'
-import { SheetPrimaryButton } from '../../../../components/SheetPrimaryButton'
+import { SheetPrimaryButton } from '../../../../components/sheets/SheetPrimaryButton'
 import { ListGroup, ListRow } from '../../../../components/list/ListGroup'
-import { MobileSwitch } from '../../../../components/MobileSwitch'
+import { MobileSwitch } from '../../../../components/controls/MobileSwitch'
 import { normalizeHostedReviewHeadRef } from '../../../../../../src/shared/source-control/hosted-review/hosted-review-refs'
 import {
   hostedReviewCopy,

@@ -1,6 +1,6 @@
 import { CaseSensitive, GitBranch, Sparkles } from 'lucide-react-native'
 import type { SmartModeIcon } from '../mobile-smart-source-modes'
-import { TaskProviderLogo } from '../../../components/TaskProviderLogo'
+import { TaskProviderLogo } from '../../../components/icons/TaskProviderLogo'
 
 // Provider modes use brand SVGs; neutral modes use lucide glyphs.
 export function SmartSourceModeIcon({ icon, color }: { icon: SmartModeIcon; color: string }) {

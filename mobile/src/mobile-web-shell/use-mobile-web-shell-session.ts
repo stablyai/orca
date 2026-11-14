@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useHostProtocolGates } from '../components/host-protocol-gates-context'
+import { useHostProtocolGates } from '../components/host-connection/host-protocol-gates-context'
 import { useHostClient } from '../transport/connection/host-client-hooks'
 import {
   createDownloadProgressFeed,

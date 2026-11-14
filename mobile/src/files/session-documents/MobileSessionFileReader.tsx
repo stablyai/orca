@@ -34,7 +34,7 @@ import type {
 import type { FileDocState, FileSyntaxState } from './session-document-state'
 import { DiffLineRow } from '../../source-control/review/review-notes/MobileSessionDiffLineRow'
 import { sendableMobileDiffComments } from '../../source-control/review/review-notes/mobile-diff-comments'
-import { MobileLoadErrorState, MobileStateView } from '../../components/MobileStateView'
+import { MobileLoadErrorState, MobileStateView } from '../../components/feedback/MobileStateView'
 import { useDurableDraftField } from '../../drafts/durable-draft-fields'
 
 type FileReaderProps = {

@@ -11,17 +11,17 @@ import type { PRCheckDetail } from '../../../../../../src/shared/github/checks/c
 import { isBrokenCheck } from '../../../../../../src/shared/source-control/checks/pr-checks-fix-prompt'
 import { sortChecksBySeverity } from '../../../../../../src/shared/source-control/checks/pr-check-severity-order'
 import { buildPrFixChecksPrompt } from '../../agent-launch/pr-ai-triage-prompt'
-import { DisclosureChevron } from '../../../../components/DisclosureChevron'
+import { DisclosureChevron } from '../../../../components/list/DisclosureChevron'
 import {
   ListGroup,
   ListRow,
   SectionHeader,
   LIST_LEADING_INSET
 } from '../../../../components/list/ListGroup'
-import { AgentLaunchNotice } from '../../../../components/AgentLaunchNotice'
+import { AgentLaunchNotice } from '../../../../agents/presentation/AgentLaunchNotice'
 import { checkOutcome, prCheckKey } from './pr-checks-presentation'
 import { NotReady, ScreenFrame, type ScreenProps } from '../pr-tab-screen-frame'
-import { useHostProtocolGates } from '../../../../components/host-protocol-gates-context'
+import { useHostProtocolGates } from '../../../../components/host-connection/host-protocol-gates-context'
 import { useMobileLaunchAgentLabel } from '../../../../session/agent-launch/use-mobile-launch-agent-label'
 import { readyPrData } from '../use-mobile-pr-tab'
 import { PrCheckFailureRow } from './PrCheckFailureRow'

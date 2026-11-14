@@ -6,7 +6,7 @@ import {
   OrcaMobileWebShellView,
   parseMobileWebShellLoadState
 } from '../../modules/orca-mobile-web-shell/src'
-import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
+import { HostRouteNoticeBanner } from '../components/host-connection/HostRouteNoticeBanner'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileUiLocale } from '../i18n/use-mobile-translation'

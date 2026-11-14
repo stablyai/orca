@@ -5,8 +5,8 @@ import { colors, radii, spacing } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { agentDotState } from '../agent-row-display'
-import { AgentStateDot } from '../../../components/AgentStateDot'
-import { MobileAgentIcon } from '../../../components/MobileAgentIcon'
+import { AgentStateDot } from '../../../agents/presentation/AgentStateDot'
+import { MobileAgentIcon } from '../../../components/icons/MobileAgentIcon'
 
 const MAX_VISIBLE_AGENTS = 3
 

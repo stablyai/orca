@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable } from 'react-native'
 import { Plus } from 'lucide-react-native'
 import { colors } from '../../../../theme/mobile-theme'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
-import { ActionSheetModal } from '../../../../components/ActionSheetModal'
+import { ActionSheetModal } from '../../../../components/sheets/ActionSheetModal'
 import { mobileNativeChatAttachActions } from './mobile-native-chat-attach-actions'
 import {
   COMPOSER_CONTROL_HIT_SLOP,

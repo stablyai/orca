@@ -7,7 +7,7 @@ import { usePdfOpener } from '../../platform/pdf-viewing/pdf-opener'
 import { PdfOpenRefusedError } from '../../platform/pdf-viewing/pdf-opener-contract'
 import type { MobileFileMedia } from './mobile-file-media'
 import { filePreviewStyles as styles } from '../preview/mobile-file-preview-styles'
-import { MobileLoadErrorState, MobileStateButton } from '../../components/MobileStateView'
+import { MobileLoadErrorState, MobileStateButton } from '../../components/feedback/MobileStateView'
 import { translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 

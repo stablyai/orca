@@ -17,7 +17,7 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { openExternalLink } from '../../platform/external-links/external-link'
 import { MobileRichMarkdownToolbar } from './MobileRichMarkdownToolbar'
-import { TextInputModal } from '../TextInputModal'
+import { TextInputModal } from '../sheets/TextInputModal'
 import {
   ensureDocumentStyle,
   mountRichMarkdownWebDocument,

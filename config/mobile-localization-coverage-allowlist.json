@@ -112,21 +112,21 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/CustomKeyModal.tsx",
+    "filePath": "mobile/src/terminal/shortcuts/settings/CustomKeyModal.tsx",
     "kind": "object-property:label",
     "text": "Alt",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/CustomKeyModal.tsx",
+    "filePath": "mobile/src/terminal/shortcuts/settings/CustomKeyModal.tsx",
     "kind": "object-property:label",
     "text": "Ctrl",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/CustomKeyModal.tsx",
+    "filePath": "mobile/src/terminal/shortcuts/settings/CustomKeyModal.tsx",
     "kind": "object-property:label",
     "text": "Shift",
     "dynamic": false,

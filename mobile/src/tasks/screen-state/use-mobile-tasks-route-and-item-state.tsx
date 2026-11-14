@@ -22,7 +22,7 @@ import {
   normalizeVisibleTaskProviders
 } from '../../../../src/shared/work-items/task-providers'
 import { newTabRepoListRead } from '../../session/agent-launch/mobile-runtime-repo-operations'
-import { useHostProtocolGates } from '../../components/host-protocol-gates-context'
+import { useHostProtocolGates } from '../../components/host-connection/host-protocol-gates-context'
 import { useTaskHostRepos } from '../repositories/use-task-host-repos'
 import { DEFAULT_LINEAR_DISPLAY_PROPERTIES } from '../task-list/mobile-tasks-options'
 import type {

@@ -1,5 +1,5 @@
 import { GitBranch } from 'lucide-react-native'
-import type { ActionSheetAction } from '../components/ActionSheetModal'
+import type { ActionSheetAction } from '../components/sheets/ActionSheetModal'
 import { colors } from '../theme/mobile-theme'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import { workspaceRouteHref } from '../navigation/workspace-execution-host'

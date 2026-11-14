@@ -9,7 +9,7 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { styles } from '../../session/mobile-session-styles'
 import type { MarkdownDocState } from './session-document-state'
-import { MobileLoadErrorState, MobileStateView } from '../../components/MobileStateView'
+import { MobileLoadErrorState, MobileStateView } from '../../components/feedback/MobileStateView'
 import { useDocumentEditDraft } from '../../drafts/use-document-edit-draft'
 import { DocumentEditDraftOfferBar } from '../../drafts/DocumentEditDraftOfferBar'
 

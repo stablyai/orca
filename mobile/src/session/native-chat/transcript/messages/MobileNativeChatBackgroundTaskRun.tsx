@@ -1,7 +1,7 @@
 import { Text, View } from 'react-native'
 import type { NativeChatBackgroundTaskBlock } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { nativeChatBackgroundTaskRun } from '../../../../../../src/shared/native-chat/transcript/turns/native-chat-background-task-run'
-import { AGENT_STATE_DOT_SIZE, AgentStateDot } from '../../../../components/AgentStateDot'
+import { AGENT_STATE_DOT_SIZE, AgentStateDot } from '../../../../agents/presentation/AgentStateDot'
 import { INLINE_TEXT_SELECTION } from '../../../../platform/text-selection/inline-text-selection'
 import { colors, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'

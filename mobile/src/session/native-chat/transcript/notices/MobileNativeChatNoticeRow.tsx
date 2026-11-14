@@ -43,7 +43,7 @@ import { MobileNativeChatOwnedScrollView } from '../viewport/MobileNativeChatOwn
 import { toolStyles } from '../tool-results/mobile-native-chat-tool-styles'
 import { MobileNativeChatUsageLimitStatus } from './MobileNativeChatUsageLimitStatus'
 import { MobileNativeChatNoticeDisclosure } from './MobileNativeChatNoticeDisclosure'
-import { sheetPrimaryButtonStyles } from '../../../../components/SheetPrimaryButton'
+import { sheetPrimaryButtonStyles } from '../../../../components/sheets/SheetPrimaryButton'
 
 function toneColor(tone: NativeChatNoticeTone): string {
   return { warning: colors.statusAmber, error: colors.statusRed, notice: colors.textMuted }[tone]

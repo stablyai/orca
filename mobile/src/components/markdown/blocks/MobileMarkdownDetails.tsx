@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { Pressable, Text, View, type StyleProp, type TextStyle } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
-import { DisclosureChevron } from '../../DisclosureChevron'
+import { DisclosureChevron } from '../../list/DisclosureChevron'
 import { styles } from '../mobile-markdown-styles'
 import { colors, pressedStyle } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
