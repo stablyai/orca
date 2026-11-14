@@ -442,7 +442,11 @@ for (const format of ['raw', 'outcomes'] as const) {
         }
         await journal.close()
         const database = openTestJournalHostDatabase(fixture.root)
-        vi.spyOn(database.history!, 'sourceIdentity').mockReturnValue(null)
+        const observe = database.history!.observe.bind(database.history)
+        vi.spyOn(database.history!, 'observe').mockImplementation((...args) => ({
+          ...observe(...args),
+          identity: null
+        }))
         const restored = await fixture.open()
         if (history === 'transient') {
           const prepare = database.db.prepare.bind(database.db)

@@ -72,11 +72,15 @@ it('preserves an unopened newer journal offer without authorizing recovery', asy
 it('continues running work on its first demand without optional request metadata', async () => {
   const { host, root, dispatch } = await interruptedRestart()
   const database = openTestJournalHostDatabase(root)
-  vi.spyOn(database.history!, 'sourceIdentity').mockReturnValue(null)
+  const observe = database.history!.observe.bind(database.history)
+  vi.spyOn(database.history!, 'observe').mockImplementation((...args) => ({
+    ...observe(...args),
+    identity: null
+  }))
   await host.journalSnapshot(SESSION)
-  expect((await host.restartResume.continueAfterRestart([SESSION], 'modal')).continued).toEqual([
-    SESSION
-  ])
+  expect(
+    (await host.restartResume.continueAfterRestart([SESSION], 'modal')).continued
+  ).toMatchObject([{ sessionId: SESSION, outcome: 'continued' }])
   expect(dispatch).toHaveBeenCalledOnce()
 })
 
