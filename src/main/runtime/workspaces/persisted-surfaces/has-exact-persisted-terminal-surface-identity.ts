@@ -6,7 +6,7 @@ import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { RuntimeArtifactOperations } from '../../artifacts/runtime-artifact-operations'
 
 export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity extends RuntimeArtifactOperations {
-  protected abstract getOwnWorkspaceSessionForWorktree(
+  protected abstract borrowOwnWorkspaceSessionForWorktree(
     worktreeId: string
   ): WorkspaceSessionState | null
 
@@ -33,7 +33,7 @@ export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity ex
     const layout = this.getPersistedSessionListingTerminalTab(
       worktreeId,
       tabId,
-      this.getOwnWorkspaceSessionForWorktree(worktreeId)
+      this.borrowOwnWorkspaceSessionForWorktree(worktreeId)
     )?.terminalLayoutsByTabId[tabId]
     return Boolean(layout && layoutContainsLeafId(layout.root, leafId))
   }

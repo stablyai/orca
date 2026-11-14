@@ -57,8 +57,8 @@ export abstract class OrcaRuntimeWithGetRuntimeId extends TerminalListHostScope 
     }
   }
 
-  protected getOwnWorkspaceSessionForWorktree(worktreeId: string): WorkspaceSessionState | null {
-    return this.workspaceSessions.getOwnPartition(worktreeId)
+  protected borrowOwnWorkspaceSessionForWorktree(worktreeId: string): WorkspaceSessionState | null {
+    return this.workspaceSessions.borrowOwnPartition(worktreeId)
   }
 
   setWorkspaceSessionForWorktree(worktreeId: string, session: WorkspaceSessionState): void {

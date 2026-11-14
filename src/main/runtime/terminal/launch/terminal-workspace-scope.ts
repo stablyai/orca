@@ -268,7 +268,7 @@ export abstract class OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktr
     // Why: clients normalize Windows paths, but tab maps retain the host's original spelling.
     const knownIds = new Set([
       ...this.mobileSessionTabsByWorktree.keys(),
-      ...Object.keys(this.getOwnWorkspaceSessionForWorktree(worktreeId)?.tabsByWorktree ?? {})
+      ...Object.keys(this.borrowOwnWorkspaceSessionForWorktree(worktreeId)?.tabsByWorktree ?? {})
     ])
     // Why: live PTYs keep their registered spelling, so an exact PTY key must never be rewritten.
     for (const pty of this.ptysById.values()) {

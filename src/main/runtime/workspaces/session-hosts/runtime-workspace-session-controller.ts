@@ -177,6 +177,14 @@ export class RuntimeWorkspaceSessionController {
       : null
   }
 
+  borrowOwnPartition(worktreeId: string): WorkspaceSessionState | null {
+    const store = this.deps.getStore()
+    const hostId = store ? this.getPreferredHostId(worktreeId, store) : null
+    return hostId && hostId === this.tryGetHostId(worktreeId)
+      ? (borrowWorkspaceSession(store, hostId) ?? null)
+      : null
+  }
+
   /** Internal scalar/projecting readers; raw get remains the mutable public API. */
   borrow(worktreeId: string): WorkspaceSessionState | null {
     const hostId = this.tryGetHostId(worktreeId)
