@@ -106,6 +106,11 @@ describe('conditional Codex account restart at the IPC boundary', () => {
         launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} }
       })
     ).resolves.toMatchObject({ id: 'pty-new', launchToken: 'account-attempt' })
+    expect(h.providerSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        env: expect.objectContaining({ ORCA_AGENT_LAUNCH_TOKEN: 'account-attempt' })
+      })
+    )
     expect(h.runtime.registerPty.mock.lastCall?.[3]).toMatchObject({
       agentLaunchAuthority: { launchToken: 'account-attempt' }
     })
