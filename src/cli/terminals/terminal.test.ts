@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeClient } from '../runtime/client'
 import type { CliStatusResult } from '../../shared/runtime-session-contracts'
 import '../../shared/protocol-version'
-import { TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY } from '../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
+import {
+  TERMINAL_SPLIT_DIRECTION_RUNTIME_CAPABILITY,
+  TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY,
+  TERMINAL_PROMPT_DELIVERY_RUNTIME_CAPABILITY
+} from '../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { TERMINAL_HANDLERS } from './terminal'
 
 const ORIGINAL_EXIT_CODE = process.exitCode
@@ -82,5 +86,88 @@ describe('terminal send CLI', () => {
       }
     })
     expect(log).not.toHaveBeenCalled()
+  })
+})
+
+describe('terminal split CLI', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it.each(['up', 'left'])('refuses %s on an older host before splitting', async (direction) => {
+    const call = vi.fn()
+    const client = terminalClient(call, {
+      state: 'ready',
+      reachable: true,
+      runtimeId: 'runtime-1',
+      capabilities: []
+    })
+    await expect(
+      TERMINAL_HANDLERS['terminal split']({
+        flags: new Map([
+          ['terminal', 'term-1'],
+          ['direction', direction]
+        ]),
+        client,
+        cwd: '/tmp/worktree',
+        json: true
+      })
+    ).rejects.toMatchObject({ code: 'incompatible_runtime' })
+    expect(call).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['right', 'vertical'],
+    ['down', 'horizontal'],
+    ['up', 'up'],
+    ['left', 'left']
+  ])('sends %s to the execution host as %s', async (direction, wireDirection) => {
+    const call = vi.fn().mockResolvedValue({ result: { split: { handle: 'term-2' } } })
+    const client = terminalClient(call, {
+      state: 'ready',
+      reachable: true,
+      runtimeId: 'runtime-1',
+      capabilities: [TERMINAL_SPLIT_DIRECTION_RUNTIME_CAPABILITY]
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await TERMINAL_HANDLERS['terminal split']({
+      flags: new Map([
+        ['terminal', 'term-1'],
+        ['direction', direction]
+      ]),
+      client,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+    expect(call).toHaveBeenCalledWith('terminal.split', {
+      terminal: 'term-1',
+      direction: wireDirection,
+      command: undefined
+    })
+  })
+
+  it('retries the named split without requesting new placement or requiring directional support', async () => {
+    const call = vi.fn().mockResolvedValue({ result: { split: { handle: 'term-2' } } })
+    const client = terminalClient(call, {
+      state: 'ready',
+      reachable: true,
+      runtimeId: 'runtime-1',
+      capabilities: [TERMINAL_SPLIT_RETRY_RUNTIME_CAPABILITY]
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    await TERMINAL_HANDLERS['terminal split']({
+      flags: new Map([
+        ['terminal', 'term-1'],
+        ['direction', 'up'],
+        ['retry-split', 'split-1']
+      ]),
+      client,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+    expect(call).toHaveBeenCalledWith('terminal.split', {
+      terminal: 'term-1',
+      direction: undefined,
+      command: undefined,
+      retrySplit: 'split-1'
+    })
   })
 })

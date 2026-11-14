@@ -1,3 +1,4 @@
+import { terminalSplitSide } from '../../../../shared/workspace-layout/terminal-topology/terminal-split-side'
 import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 import {
@@ -26,7 +27,7 @@ export function placedSplitRoot(
     cloneLayoutNode(root),
     parentLeafId,
     leafId,
-    direction === 'vertical' ? 'right' : 'bottom',
+    terminalSplitSide(direction, placement.insertBefore),
     ratio
   )
 }

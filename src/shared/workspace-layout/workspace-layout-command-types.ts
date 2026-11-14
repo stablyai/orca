@@ -55,6 +55,7 @@ export type LayoutCommand =
       tabId: string
       leafId: string
       direction: TerminalPaneSplitDirection
+      insertBefore?: boolean
       ratio?: number
       /** The new pane's id, when the runtime minted it before applying. */
       newLeafId?: string

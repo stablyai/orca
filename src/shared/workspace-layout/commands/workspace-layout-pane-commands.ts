@@ -1,3 +1,4 @@
+import { terminalSplitSide } from '../terminal-topology/terminal-split-side'
 // Pane IDs and their keyed data/scrollback survive moves.
 
 import { getNextTerminalOrdinal } from '../terminal-topology/terminal-tab-ordinal'
@@ -48,7 +49,7 @@ export function splitPane(
     return refuse('pane_not_found')
   }
   const leafId = command.newLeafId ?? context.mintLeafId()
-  const side = command.direction === 'vertical' ? 'right' : 'bottom'
+  const side = terminalSplitSide(command.direction, command.insertBefore)
   const root = insertLeafBeside(tab.panes.root!, command.leafId, leafId, side, command.ratio)
   const next = updateTab(model, command.workspace, { ...tab, panes: { ...tab.panes, root } })
   if (!next.ok) {

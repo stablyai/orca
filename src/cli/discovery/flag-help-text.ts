@@ -13,7 +13,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
   'allow-system-shortcut':
     '--allow-system-shortcut Send a quit, log out or lock shortcut that is refused by default',
   direction:
-    '--direction <dir>      Direction: up|down|left|right for scroll, horizontal|vertical for split',
+    '--direction <dir>      Direction: up|down|left|right (split also accepts horizontal|vertical)',
   'display-name': '--display-name <name>  Override the Orca display name',
   environment:
     "--environment <selector> Run against a saved paired Orca server (id or name), or `local` for this machine's own Orca over ORCA_ENVIRONMENT/ORCA_PAIRING_CODE; terminal handles belong to the server that issued them",

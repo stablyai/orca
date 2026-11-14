@@ -35,6 +35,7 @@ export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopEx
     handle: string,
     opts: {
       direction?: 'horizontal' | 'vertical'
+      insertBefore?: boolean
       command?: string
       env?: Record<string, string>
       envToDelete?: string[]
@@ -74,6 +75,7 @@ export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopEx
         { worktreeId: leaf.worktreeId, tabId: leaf.tabId, leafId: leaf.leafId },
         {
           direction,
+          insertBefore: opts.insertBefore,
           ...(cwd ? { cwd } : {}),
           command: opts.command,
           env: opts.env,
@@ -97,6 +99,7 @@ export abstract class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopEx
     this.rendererSplits.record(newLeafId, split)
     this.notifier?.splitTerminal(leaf.tabId, leaf.paneRuntimeId, {
       direction,
+      insertBefore: opts.insertBefore,
       command: opts.command,
       worktreeId: leaf.worktreeId,
       sourceLeafId: leaf.leafId,

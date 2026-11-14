@@ -26,7 +26,8 @@ export function newTabIn(opts: {
 
 export function runtimeSplitPlacement(
   parentLeafId: string,
-  direction: TerminalPaneSplitDirection
+  direction: TerminalPaneSplitDirection,
+  insertBefore?: boolean
 ): TerminalPanePlacement {
-  return { kind: 'split', parentLeafId, direction }
+  return { kind: 'split', parentLeafId, direction, ...(insertBefore ? { insertBefore } : {}) }
 }

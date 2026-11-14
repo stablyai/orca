@@ -57,6 +57,7 @@ export function splitManagedPane(args: SplitManagedPaneArgs): ManagedPane | null
   if (!existing) {
     return null
   }
+  const newPaneFirst = args.newPaneFirst ?? args.opts?.insertBefore
   const existingContainer = args.sourceContainer ?? existing.container
   const parent = existingContainer.parentElement
   if (!parent) {
@@ -72,7 +73,7 @@ export function splitManagedPane(args: SplitManagedPaneArgs): ManagedPane | null
 
   wrapInSplit(existingContainer, newPane.container, isVertical, divider, {
     ratio: args.opts?.ratio,
-    newPaneFirst: args.newPaneFirst
+    newPaneFirst
   })
   if (activate) {
     args.setActivePaneId(newPane.id)
@@ -84,7 +85,7 @@ export function splitManagedPane(args: SplitManagedPaneArgs): ManagedPane | null
     // Reparenting the source pane drops its focus; give the user's keyboard back.
     focusedBefore.focus({ preventScroll: true })
   }
-  openSplitPane(args, newPane, existing.leafId, activate)
+  openSplitPane(args, newPane, existing.leafId, activate, newPaneFirst)
 
   for (const movedPaneState of movedPaneStates) {
     scheduleSplitScrollRestore(
@@ -155,9 +156,11 @@ function openSplitPane(
   args: SplitManagedPaneArgs,
   newPane: ManagedPaneInternal,
   parentLeafId: string,
-  activate: boolean
+  activate: boolean,
+  newPaneFirst?: boolean
 ): void {
   const cwd = args.opts?.cwd
+  const ratio = args.opts?.ratio
   openTerminal(newPane, {
     ligatures: args.managerOptions.terminalLigaturesEnabled?.(),
     inlineImages: args.managerOptions.terminalInlineImagesEnabled?.()
@@ -181,7 +184,8 @@ function openSplitPane(
       kind: 'split',
       parentLeafId,
       direction: args.direction,
-      ...(args.opts?.ratio !== undefined ? { ratio: args.opts.ratio } : {})
+      ...(newPaneFirst ? { insertBefore: true } : {}),
+      ...(ratio !== undefined ? { ratio: newPaneFirst ? 1 - ratio : ratio } : {})
     }
   })
   args.managerOptions.onLayoutChanged?.()

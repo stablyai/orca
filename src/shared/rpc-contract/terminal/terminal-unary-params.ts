@@ -300,11 +300,7 @@ export const TerminalSplit = z
     // Required unless `pane` names the source; the refinement keeps the handle's message.
     terminal: OptionalString,
     expectedIncarnationId: TerminalHandle.shape.expectedIncarnationId,
-    direction: z
-      .unknown()
-      .transform((v) => (v === 'vertical' || v === 'horizontal' ? v : undefined))
-      .pipe(z.union([z.enum(['vertical', 'horizontal']), z.undefined()]))
-      .optional(),
+    direction: z.enum(['horizontal', 'vertical', 'up', 'down', 'left', 'right']).optional(),
     command: OptionalString,
     env: z.record(z.string(), z.string()).optional(),
     telemetrySource: z.enum(TERMINAL_PANE_SPLIT_SOURCES).optional(),
