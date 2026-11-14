@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
-import { commitTerminalShutdownState } from '@/store/terminals/terminal-shutdown-state'
+import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
+import { commitTerminalShutdownState } from '@/store/terminals/sleep/terminal-shutdown-state'
 import {
   bindPanePtyExit,
   initializePanePtyExit
