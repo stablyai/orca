@@ -33,6 +33,8 @@ export function mobileSubagentForkAvailable(
 
 // The prompt's input kind, not shown text.
 const PLAIN_TEXT_PROMPT = 'plain-text'
+// Spans a reconnect too: the branch prompt waits on this read.
+const SOURCE_RECORD_READ_TIMEOUT_MS = 15_000
 
 /** Asks for the subagent's task; null when cancelled or empty. */
 function askMobileSubagentTask(): Promise<string | null> {
@@ -141,7 +143,11 @@ export async function forkMobileStructuredChatIntoWorktree(input: {
   }
   // Only names and the branch come from it; an unread record leaves the main-branch fork.
   const source = await sessionWorktreeRecordRead
-    .request(client, { worktree: `id:${input.sourceWorktreeId}` })
+    .request(
+      client,
+      { worktree: `id:${input.sourceWorktreeId}` },
+      { timeoutMs: SOURCE_RECORD_READ_TIMEOUT_MS }
+    )
     .then((response) => {
       const record = sessionWorktreeRecordRead.interpret(response)
       return record.accepted ? record.value : undefined
