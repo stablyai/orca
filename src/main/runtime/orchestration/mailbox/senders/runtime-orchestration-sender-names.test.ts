@@ -236,8 +236,8 @@ it('names an exposed selected row without reading dormant tab getters', () => {
     name({
       tabId: 'tab_selected',
       worktreeId: WORKTREE,
-      ptyId: null,
-      paneKey: null,
+      ptyId: undefined,
+      paneKey: 'tab_selected:leaf',
       agentType: 'codex',
       providerSessionId: undefined
     })

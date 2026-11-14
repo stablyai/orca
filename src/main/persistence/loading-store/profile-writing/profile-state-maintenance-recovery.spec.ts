@@ -11,12 +11,14 @@ export function registerProfileStateMaintenanceRecoveryTests(): void {
       vi.spyOn(console, 'error').mockImplementation(() => {})
       const started = maintenanceBarrier()
       const release = maintenanceBarrier()
-      const write = authority.writePreparedState.bind(authority)
-      vi.spyOn(authority, 'writePreparedState').mockImplementationOnce(async (domains) => {
-        started.resolve()
-        await release.promise
-        await write(domains)
-      })
+      const write = authority.writeCompleteSerializedDomains.bind(authority)
+      vi.spyOn(authority, 'writeCompleteSerializedDomains').mockImplementationOnce(
+        async (domains) => {
+          started.resolve()
+          await release.promise
+          await write(domains)
+        }
+      )
       const abort = vi.spyOn(authority, 'abort')
       const controller = new AbortController()
       store.updateSettings({ theme: 'dark' })
@@ -42,7 +44,7 @@ export function registerProfileStateMaintenanceRecoveryTests(): void {
       const { store, authority, peer, readState } = await createWorkerMaintenanceFixture()
       vi.spyOn(console, 'error').mockImplementation(() => {})
       store.updateSettings({ theme: 'dark' })
-      vi.spyOn(authority, 'writePreparedState').mockImplementationOnce(async () => {
+      vi.spyOn(authority, 'writeCompleteSerializedDomains').mockImplementationOnce(async () => {
         const writer = peer()
         writer.writeSerializedDomains([{ domain: 'peer', payload: '{"preserved":true}' }])
         writer.close()

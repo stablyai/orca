@@ -51,7 +51,10 @@ function failNextProfileWrite(): void {
   const fail = (): never => {
     throw new Error('disk_full')
   }
-  vi.spyOn(ProfileStateSqliteAuthority.prototype, 'writePreparedState').mockImplementationOnce(fail)
+  vi.spyOn(
+    ProfileStateSqliteAuthority.prototype,
+    'writeCompleteSerializedDomains'
+  ).mockImplementationOnce(fail)
 }
 
 function adoptWithFailingFlush(store: Store, revision: number): Promise<unknown> {

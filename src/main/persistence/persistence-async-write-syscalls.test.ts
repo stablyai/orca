@@ -64,8 +64,10 @@ describe('worker persistence avoids synchronous profile filesystem calls', () =>
               `w${index}`,
               [
                 {
-                  id: `file${index}`,
-                  path: `/synthetic/${index}`,
+                  filePath: `/synthetic/${index}`,
+                  relativePath: String(index),
+                  worktreeId: `w${index}`,
+                  language: 'plaintext',
                   dirtyDraftContent: 'unrelated'.repeat(100)
                 }
               ]
@@ -133,6 +135,29 @@ describe('worker persistence avoids synchronous profile filesystem calls', () =>
       'replacement'
     )
     expect(saved.activeTabId).toBe('listener')
+  })
+
+  it('keeps an in-place binding when a failed field save is retried', async () => {
+    const { store, authority, readState } = await createWorkerMaintenanceFixture()
+    const input = makeSessionWithTerminalBuffers()
+    admitDetachedWorkspaceSessionInput(store, input)
+    setDetachedWorkspaceSession(store, input)
+    await store.flushPendingOrThrowAsync()
+    vi.spyOn(authority, 'writePreparedState').mockRejectedValueOnce(new Error('known failure'))
+    patchDetachedWorkspaceSession(store, { activeTabId: 'retry' })
+    await expect(store.flushPendingOrThrowAsync()).rejects.toThrow('known failure')
+    await store.persistPtyBinding({
+      worktreeId: 'local-repo::/local',
+      tabId: 'local-tab',
+      leafId: TEST_LEAF_1,
+      ptyId: 'after-failure',
+      incarnationId: 'after-failure-incarnation'
+    })
+    const saved = readState().workspaceSession
+    expect(saved.activeTabId).toBe('retry')
+    expect(saved.terminalLayoutsByTabId['local-tab'].ptyIdsByLeafId[TEST_LEAF_1]).toBe(
+      'after-failure'
+    )
   })
 
   it('persists an alias retained by a refused layout admission before a detached patch', async () => {

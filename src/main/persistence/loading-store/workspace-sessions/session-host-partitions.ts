@@ -1,5 +1,5 @@
-import { sessionDomain } from '../../workspace-session-domains'
-export { sessionDomain } from '../../workspace-session-domains'
+import { resolveHostId, sessionDomain } from '../../workspace-session-domains'
+export { resolveHostId, sessionDomain } from '../../workspace-session-domains'
 import { withRequiredWorkspaceSessionMaps } from './workspace-session-partitions'
 export { withRequiredWorkspaceSessionMaps } from './workspace-session-partitions'
 import { orderTerminalRowsByTabGroups } from '../../../../shared/workspace-layout/terminal-topology/terminal-row-order'
@@ -137,10 +137,6 @@ export class SessionHostPartitionOperations {
       removeWorkspaceSessionOwnerInPartition(this, target.id, resolved, options)
     }
   }
-}
-
-export function resolveHostId(hostId?: string | null): ExecutionHostId {
-  return normalizeExecutionHostId(hostId) ?? LOCAL_EXECUTION_HOST_ID
 }
 
 export function hasPersistedWorkspaceSession(
@@ -283,11 +279,14 @@ function ownsSessionContext(owner: SessionReader): owner is SessionHostPartition
   return sessionHostPartitionOperationsContext in owner
 }
 
-/** Only audited internal readers may borrow; all unknown implementations retain their public contract. */
 export function borrowWorkspaceSession(
   owner: FullSessionReader,
   hostId?: string | null
 ): WorkspaceSessionState
+export function borrowWorkspaceSession(
+  owner: { getWorkspaceSession(hostId: ExecutionHostId): WorkspaceSessionState | undefined },
+  hostId: ExecutionHostId
+): WorkspaceSessionState | undefined
 export function borrowWorkspaceSession(
   owner: Partial<FullSessionReader> | null | undefined,
   hostId?: string | null
@@ -300,11 +299,8 @@ export function borrowWorkspaceSession(
   owner: SessionReader | null | undefined,
   hostId?: string | null
 ): Partial<WorkspaceSessionState> | undefined {
-  if (!owner) {
-    return undefined
-  }
-  if (!ownsSessionContext(owner)) {
-    return owner.getWorkspaceSession?.(hostId)
+  if (!owner || !ownsSessionContext(owner)) {
+    return owner?.getWorkspaceSession?.(hostId)
   }
   const resolved = resolveHostId(hostId)
   const { state } = owner[sessionHostPartitionOperationsContext].runtime

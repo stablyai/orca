@@ -54,7 +54,9 @@ export function registerProfileStateWriteBatchingTests(): void {
         store.flushPendingOrThrowAsync({ drainToStableGeneration: false }),
         store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
       ].map((waiter) => expect(waiter).rejects.toThrow('disk refused'))
-      vi.spyOn(authority, 'writePreparedState').mockRejectedValueOnce(new Error('disk refused'))
+      vi.spyOn(authority, 'writeCompleteSerializedDomains').mockRejectedValueOnce(
+        new Error('disk refused')
+      )
       gate.finish.resolve()
       await Promise.all([first, ...failed])
       await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })

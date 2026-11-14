@@ -28,7 +28,7 @@ function ownValue(object: JsonContainer, key: string): unknown {
   return descriptor.value
 }
 
-function admitToJson(value: JsonContainer): void {
+function admitToJson(value: object): void {
   const descriptor = Object.getOwnPropertyDescriptor(value, 'toJSON')
   if (
     descriptor &&

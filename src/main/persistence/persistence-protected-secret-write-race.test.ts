@@ -106,6 +106,8 @@ describe('protected-secret async write retention', () => {
           ? await createWorkerMaintenanceFixture()
           : createSqliteMaintenanceFixture()
       const { store } = fixture
+      store.updateSettings({ opencodeSessionCookie: '' })
+      await store.flushPendingOrThrowAsync({ fullCheckpoint: true })
       const readSettings = () =>
         'readState' in fixture
           ? fixture.readState().settings
