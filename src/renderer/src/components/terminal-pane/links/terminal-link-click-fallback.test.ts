@@ -180,6 +180,42 @@ describe('createFilePathLinkProvider range bounds', () => {
     expect(element.removeEventListener).toHaveBeenCalledWith('mouseup', mouseUp, { capture: true })
   })
 
+  const columns = 80
+  const urlFillingFirstRow = `${'http://localhost:6017/?args='.padEnd(columns - '&path='.length, 'x')}&path=`
+  const wrappedUrlTail = '/story/foo--bar'.padEnd(columns)
+
+  it.each([
+    {
+      name: 'a path after the port',
+      rows: [makeBufferLine('http://localhost:5173/settings/profile')],
+      position: { x: 24, y: 1 }
+    },
+    {
+      name: 'a soft-wrapped row',
+      rows: [
+        makeBufferLine(urlFillingFirstRow),
+        makeBufferLine(wrappedUrlTail, { isWrapped: true })
+      ],
+      position: { x: 4, y: 2 }
+    },
+    {
+      name: 'a hard-wrapped row',
+      rows: [makeBufferLine(urlFillingFirstRow), makeBufferLine(wrappedUrlTail)],
+      position: { x: 4, y: 2 }
+    }
+  ])('leaves a URL cell to the URL: $name', ({ rows, position }) => {
+    setPlatform('Macintosh')
+
+    const opened = openFilePathLinkAtBufferPosition(makeBuffer(rows), position, columns, {
+      startupCwd: '/tmp',
+      worktreeId: 'wt-1',
+      worktreePath: '/tmp',
+      runtimeEnvironmentId: null
+    })
+
+    expect(opened).toBe(false)
+  })
+
   it('opens a deeply wrapped absolute path from its final short continuation row', async () => {
     setPlatform('Macintosh')
     const rows = [
