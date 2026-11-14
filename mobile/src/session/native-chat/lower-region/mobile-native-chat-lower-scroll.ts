@@ -1,5 +1,5 @@
-import { createMobileNativeChatReadingHold } from '../transcript/mobile-native-chat-reading-hold'
-import { connectMobileNativeChatScrollGesture } from '../transcript/mobile-native-chat-scroll-gesture'
+import { createMobileNativeChatReadingHold } from '../transcript/viewport/mobile-native-chat-reading-hold'
+import { connectMobileNativeChatScrollGesture } from '../transcript/viewport/mobile-native-chat-scroll-gesture'
 import {
   externalAllowance,
   composerGroupOf as groupOf,

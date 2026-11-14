@@ -16,7 +16,7 @@ import type { MobileQueuedMessageInlineEditor } from './mobile-queued-message-ed
 import { MobileQueuedMessageComposer } from './MobileQueuedMessageComposer'
 import { MobileQueuedCardText } from './MobileQueuedCardText'
 import type { MobileQueuedHeadLight } from './mobile-queued-head-light'
-import { MobileAgentMessageSenders } from '../../transcript/MobileAgentMessageSenders'
+import { MobileAgentMessageSenders } from '../../transcript/agent-messages/MobileAgentMessageSenders'
 import {
   QUEUED_ROW_NARROW_WIDTH,
   queuedMessageStyles as styles

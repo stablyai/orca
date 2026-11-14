@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 
-import { mobileNativeChatTranscriptCache } from '../transcript/mobile-native-chat-transcript-cache'
+import { mobileNativeChatTranscriptCache } from '../transcript/persistence/mobile-native-chat-transcript-cache'
 
 import { useMobileNativeChatSession } from './use-mobile-native-chat-session'
 

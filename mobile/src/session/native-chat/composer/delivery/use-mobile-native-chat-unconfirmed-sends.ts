@@ -13,7 +13,7 @@ import {
   settleMobileNativeChatInFlightSend,
   useMobileNativeChatSavedInFlightVersion
 } from './mobile-native-chat-in-flight-sends'
-import type { MobileNativeChatSendOrigin } from '../../transcript/mobile-native-chat-pending-echo'
+import type { MobileNativeChatSendOrigin } from '../../transcript/sending/mobile-native-chat-pending-echo'
 import { createUnconfirmedSendDeadlines } from './unconfirmed-send-deadlines'
 
 export const UNCONFIRMED_SEND_MESSAGE = 'Delivery unconfirmed — check chat before retrying'

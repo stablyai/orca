@@ -79,7 +79,7 @@ vi.mock(
     })
   })
 )
-vi.mock('./native-chat/transcript/use-mobile-native-chat-readability', () => ({
+vi.mock('./native-chat/transcript/viewport/use-mobile-native-chat-readability', () => ({
   useMobileNativeChatReadability: () => false
 }))
 vi.mock('./native-chat/composer/field/use-mobile-native-chat-input-lease', () => ({

@@ -11,7 +11,7 @@ import { TerminalPaneView } from '../terminal/session/pane-layout/TerminalPaneVi
 import { MountedTerminalPanes } from '../terminal/session/pane-layout/mounted-terminal-lru'
 import { MobileNativeChatOverlay } from './native-chat/MobileNativeChatOverlay'
 import { mobileSessionNativeChatHostOutage } from './native-chat/status/mobile-native-chat-host-outage'
-import { MobileAgentMessageProvider } from './native-chat/transcript/MobileAgentMessageProvider'
+import { MobileAgentMessageProvider } from './native-chat/transcript/agent-messages/MobileAgentMessageProvider'
 import { MobileNativeChatForkProvider } from './MobileNativeChatForkProvider'
 import { useMobileAgentMessageNavigation } from './use-mobile-agent-message-navigation'
 import { MobileNativeChatDictationPreviewContext } from './native-chat/composer/dictation/mobile-native-chat-dictation-preview-context'
