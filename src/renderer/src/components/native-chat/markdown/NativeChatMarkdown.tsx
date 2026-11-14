@@ -19,10 +19,8 @@ import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../../shar
 import { NativeChatMarkdownRowKeyContext } from './native-chat-markdown-row-identity'
 import { useNativeChatVisualMarkdownExtension } from '../media/visuals/native-chat-visual-markdown-extension'
 import { useNativeChatFileLinkExists } from '../links/actions/use-native-chat-file-link-existence'
-import {
-  NativeChatMarkdownImage,
-  NativeChatMarkdownImageLinkContext
-} from '../media/images/NativeChatMarkdownImage'
+import { NativeChatMarkdownImageLinkContext } from '../media/images/NativeChatMarkdownImage'
+import { NativeChatDeferredMarkdownImage } from '../media/images/NativeChatDeferredMarkdownImage'
 import { remarkNativeChatFileDestinations } from './native-chat-markdown-file-destinations'
 import { NativeChatLinkPeek } from '../links/previews/NativeChatLinkPeek'
 import { NativeChatLinkPeekContext } from '../links/previews/native-chat-link-peek-context'
@@ -90,7 +88,7 @@ function createNativeChatImageExtension(
     ...base,
     components: {
       ...base.components,
-      img: ({ src, alt }) => <NativeChatMarkdownImage src={src} alt={alt} />,
+      img: ({ src, alt }) => <NativeChatDeferredMarkdownImage src={src} alt={alt} />,
       a: (props) => {
         const renderAnchor = (children: ReactNode): ReactNode => (
           <NativeChatLinkPeek href={props.href}>
