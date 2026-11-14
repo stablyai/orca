@@ -312,7 +312,6 @@ describe('mobile session tabs: accepted completion identity through Sleep', () =
           providerSession: PROVIDER_SESSION,
           turnEndedAt: T0,
           turnEndDisposition: 'identified',
-          evidenceObservedAt: T0,
           payload: { state: 'done', agentType: 'claude', prompt: 'Finished work' }
         },
         'ssh-test'
