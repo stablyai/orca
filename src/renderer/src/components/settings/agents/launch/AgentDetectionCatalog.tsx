@@ -51,12 +51,12 @@ export function AgentDetectionCatalog({
     ])
   )
   const sections = [
-    { agents: detectedAgents, installed: true, body: installedBody },
-    { agents: undetectedAgents, installed: false, body: availableBody }
+    { agents: detectedAgents, installed: true },
+    { agents: undetectedAgents, installed: false }
   ]
   useLayoutEffect(() => {
-    for (const { agents, body } of sections) {
-      const parent = body.current
+    for (const { agents, installed } of sections) {
+      const parent = (installed ? installedBody : availableBody).current
       if (!parent) {
         continue
       }
@@ -90,10 +90,10 @@ export function AgentDetectionCatalog({
         tabIndex={-1}
         className="space-y-8 scroll-mt-8 outline-none"
       >
-        {sections.map(({ agents, installed, body }) => (
+        {sections.map(({ agents, installed }) => (
           <SettingsGroup
             key={installed ? 'installed' : 'available'}
-            bodyRef={body}
+            bodyRef={installed ? installedBody : availableBody}
             className="has-[[data-settings-group-body]:empty]:hidden"
             scrollLabel={
               installed
