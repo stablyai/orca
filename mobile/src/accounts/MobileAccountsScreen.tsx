@@ -14,6 +14,7 @@ import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-accounts-screen-styles'
+import { DeepSeekAccountUsageSection } from './DeepSeekAccountUsageSection'
 import { useNow } from '../hooks/use-now'
 import { ClaudeIcon, OpenAIIcon } from '../components/AgentIcons'
 import './usage/UsageBar'
@@ -347,6 +348,7 @@ export function MobileAccountsScreen() {
             ) : null}
             {renderProviderSection('claude')}
             {renderProviderSection('codex')}
+            <DeepSeekAccountUsageSection snapshot={snapshot} />
             {renderOtherProviders()}
             <View style={styles.footerHint}>
               <User size={14} color={colors.textMuted} />
