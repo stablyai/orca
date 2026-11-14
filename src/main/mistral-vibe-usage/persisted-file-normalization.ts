@@ -4,17 +4,10 @@ import type { MistralVibeUsagePersistedFile } from './types'
 export function normalizeMistralVibeUsagePersistedFiles(
   files: MistralVibeUsagePersistedFile[] | undefined
 ): MistralVibeUsagePersistedFile[] {
-  const normalized: MistralVibeUsagePersistedFile[] = []
-  for (const file of files ?? []) {
-    // The sidecar validates only that `sources` is an array, so drop unreadable entries here.
-    if (typeof file !== 'object' || file === null) {
-      continue
-    }
-    // A record missing a projection would be reused as empty; discard it so the scanner rebuilds.
-    if (!Array.isArray(file.sessions) || !Array.isArray(file.dailyAggregates)) {
-      continue
-    }
-    normalized.push({ ...file, pricingMtimeMs: file.pricingMtimeMs ?? null })
-  }
-  return normalized
+  // A record missing a projection would be reused as zero usage; drop it so the scanner rereads the file.
+  return (files ?? []).flatMap((file) =>
+    Array.isArray(file.sessions) && Array.isArray(file.dailyAggregates)
+      ? [{ ...file, pricingMtimeMs: file.pricingMtimeMs ?? null }]
+      : []
+  )
 }
