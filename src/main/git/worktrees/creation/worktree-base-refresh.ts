@@ -112,7 +112,7 @@ export async function getLocalBaseRefUpdateSuggestionForWorktreeCreate(
     admissionTier
   ])
   const inspection = await localBaseBranchInspectionOwner.run(key, () =>
-    inspectLocalBaseBranch(localBaseBranchGit(routedOptions), {
+    inspectLocalBaseBranch(localBaseBranchGit({ ...options, admissionTier }), {
       repoPath,
       fullRef: parsed.fullRef,
       remoteTrackingRef
