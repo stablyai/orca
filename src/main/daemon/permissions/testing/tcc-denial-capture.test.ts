@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { trackMock, logVerdictMock } = vi.hoisted(() => ({
+const { trackMock, telemetryEnabledMock, logVerdictMock } = vi.hoisted(() => ({
   trackMock: vi.fn(),
+  telemetryEnabledMock: vi.fn(),
   logVerdictMock: vi.fn()
 }))
-vi.mock('../../../telemetry/client', () => ({ track: trackMock }))
+vi.mock('../../../telemetry/client', () => ({
+  track: trackMock,
+  isTelemetryEnabled: telemetryEnabledMock
+}))
 vi.mock('../tcc-denial-log-verdict', () => ({ readTccLogVerdict: logVerdictMock }))
 vi.mock('../tcc-denial-signature-checks', () => ({
   checkHelperSignatures: async () => ({ live: 'pass', diskCopy: 'fail' })
@@ -31,6 +35,7 @@ const FOLDER = async () => ({ dataless: 'yes', icloud: 'yes', volumeType: 'apfs'
 beforeEach(() => {
   resetTccDenialCaptureForTests()
   trackMock.mockReset()
+  telemetryEnabledMock.mockReset().mockReturnValue(true)
   logVerdictMock.mockReset().mockResolvedValue({
     logAccess: 'ok',
     tccdAsked: 'no',
@@ -43,6 +48,21 @@ beforeEach(() => {
 })
 
 describe('tcc denial capture', () => {
+  it('runs no probe or log read for a user who opted out of telemetry', async () => {
+    telemetryEnabledMock.mockReturnValue(false)
+    const readFolder = vi.fn(FOLDER)
+    expect(await prepareTccDenialCapture(HELPER, 'documents', 5_000, readFolder)).toBeNull()
+    expect(readFolder).not.toHaveBeenCalled()
+
+    // Opting out while the app-side read waits stops the capture before the log is read.
+    telemetryEnabledMock.mockReturnValue(true)
+    const start = (await prepareTccDenialCapture(HELPER, 'documents', 5_000, FOLDER))!
+    telemetryEnabledMock.mockReturnValue(false)
+    await runTccDenialCapture(start)
+    expect(logVerdictMock).not.toHaveBeenCalled()
+    expect(trackMock).not.toHaveBeenCalled()
+  })
+
   it('captures once per helper incarnation and folder class', async () => {
     const start = await prepareTccDenialCapture(HELPER, 'documents', 5_000, FOLDER)
     expect(start).not.toBeNull()

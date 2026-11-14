@@ -13,7 +13,7 @@ import {
 import { LOCAL_BUILD_COMPATIBILITY_CONTRACT } from '../../../shared/local-build-compatibility-contract'
 import type { EventProps } from '../../../shared/telemetry-events'
 import { msSinceWakeSignal } from '../../power/wake-signal-clock'
-import { track } from '../../telemetry/client'
+import { isTelemetryEnabled, track } from '../../telemetry/client'
 import { inspectMacProcessCodeIdentity } from '../executable-host/macos/daemon-mac-code-identity'
 import { getLastMacDaemonForkReason } from '../executable-host/macos/macos-daemon-fork-reason'
 import type { DaemonEndpointIdentity } from '../protocol/daemon-hello-protocol'
@@ -92,7 +92,8 @@ export async function prepareTccDenialCapture(
   denialAtMs: number,
   readFolderState: typeof readTccFolderState = readTccFolderState
 ): Promise<TccDenialCaptureStart | null> {
-  if (!identity) {
+  // Opted-out users never have their log read or these checks run.
+  if (!identity || !isTelemetryEnabled()) {
     return null
   }
   const key = captureKey(identity, cwdClass)
@@ -147,6 +148,11 @@ function helperOriginOf(identity: DaemonEndpointIdentity): HelperOrigin {
 /** Never throws, never blocks a spawn; at most one capture per helper incarnation and folder class. */
 export async function runTccDenialCapture(start: TccDenialCaptureStart): Promise<void> {
   if (claimedKeys.get(start.key) === 'captured') {
+    return
+  }
+  // Consent can be withdrawn while the app-side read waits on a prompt.
+  if (!isTelemetryEnabled()) {
+    releaseTccDenialCapture(start)
     return
   }
   remember(claimedKeys, start.key, 'captured')
