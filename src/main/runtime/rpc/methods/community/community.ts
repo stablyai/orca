@@ -15,6 +15,12 @@ import {
 
 export const COMMUNITY_METHODS = [
   defineMethod({
+    name: 'community.installed',
+    permission: 'workspace',
+    params: null,
+    handler: () => getCommunityHostService().installed()
+  }),
+  defineMethod({
     name: 'community.stageArtifact',
     permission: 'workspace',
     params: CommunityCandidateIdParams,

@@ -15,6 +15,16 @@ const schema = z.object({
       z.object({
         id: z.string().min(1).max(256),
         title: z.string().min(1).max(1024),
+        description: z.string().max(4000).optional(),
+        imageUrls: z
+          .array(
+            z
+              .string()
+              .url()
+              .refine((value) => value.startsWith('https://'))
+          )
+          .max(24)
+          .optional(),
         pullRequest: z
           .object({
             number: z.number().int().positive(),

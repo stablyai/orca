@@ -6,6 +6,12 @@ export const useCommunityNavigation = create<{
   section: CommunitySection
   query: CommunityQuery
   number: number | null
+  installedQuery: string
+  installedImagesOnly: boolean
+  installedChangeId: string | null
+  setInstalledQuery: (installedQuery: string) => void
+  setInstalledImagesOnly: (installedImagesOnly: boolean) => void
+  openInstalled: (installedChangeId: string | null) => void
   setSection: (section: CommunitySection) => void
   setQuery: (query: CommunityQuery) => void
   open: (number: number | null) => void
@@ -13,6 +19,12 @@ export const useCommunityNavigation = create<{
   section: 'proposals',
   query: { view: 'explore', limit: 12 },
   number: null,
+  installedQuery: '',
+  installedImagesOnly: false,
+  installedChangeId: null,
+  setInstalledQuery: (installedQuery) => set({ installedQuery }),
+  setInstalledImagesOnly: (installedImagesOnly) => set({ installedImagesOnly }),
+  openInstalled: (installedChangeId) => set({ installedChangeId }),
   setSection: (section) => set({ section, number: null }),
   setQuery: (query) => set({ query: { ...query, offset: 0 } }),
   open: (number) => set({ number })

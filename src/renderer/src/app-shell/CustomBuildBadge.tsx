@@ -70,9 +70,11 @@ export function CustomBuildBadge(): React.JSX.Element | null {
         </div>
         <DropdownMenuSeparator />
         {changes.map((change) => {
-          const preview = change.pullRequest
-            ? resource.value?.features[change.pullRequest.number]?.source?.imageUrls[0]
-            : null
+          const preview =
+            change.imageUrls?.[0] ??
+            (change.pullRequest
+              ? resource.value?.features[change.pullRequest.number]?.source?.imageUrls[0]
+              : null)
           return (
             <DropdownMenuItem
               key={change.id}

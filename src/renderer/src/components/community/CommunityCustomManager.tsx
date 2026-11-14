@@ -2,8 +2,8 @@ import { communityRequestResult } from './community-request-result'
 import { CommunityCustomProgress } from './CommunityCustomProgress'
 import { CommunityCandidateHistory } from './CommunityCandidateHistory'
 import { communityClient } from './community-client'
-import { useState } from 'react'
-import { Check, ExternalLink, FlaskConical, Package } from 'lucide-react'
+import { useCallback, useState } from 'react'
+import { ExternalLink, FlaskConical, Package } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -13,6 +13,8 @@ import type { CommunityFeaturesSnapshot } from '../../../../shared/community-fea
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { getCustomBuildInfo } from '../../../../shared/custom-build'
 import { CommunityCandidate } from './CommunityCandidate'
+import { CommunityInstalledChanges } from './CommunityInstalledChanges'
+import { useCommunityResource } from './use-community-resource'
 export function CommunityCustomManager({
   personal,
   target,
@@ -30,7 +32,15 @@ export function CommunityCustomManager({
   const [proofBusy, setProofBusy] = useState<number | null>(null)
   const [proofs, setProofs] = useState<Record<number, string>>({})
   const [error, setError] = useState<string | null>(null)
-  const build = getCustomBuildInfo()
+  const installed = useCommunityResource(
+    useCallback(() => communityClient(target).installed(), [target])
+  )
+  const snapshot = installed.value ?? {
+    build: target.kind === 'local' ? getCustomBuildInfo() : null,
+    sources: [],
+    unavailable: []
+  }
+  const build = snapshot.build
   const features = Object.values(personal.features)
   const selected = features.filter((row) => row.selectedAt)
   const tracked = features.filter(
@@ -80,71 +90,80 @@ export function CommunityCustomManager({
         </Button>
       </header>
       <Tabs value={section} onValueChange={setSection}>
-        <TabsList variant="line" className="w-full justify-start">
-          <TabsTrigger className="flex-none" value="included">
-            {t('community.included', 'Included changes')}
-          </TabsTrigger>
-          <TabsTrigger className="flex-none" value="progress">
-            {t('community.officialProgress', 'Official progress')}
-          </TabsTrigger>
-          <TabsTrigger className="flex-none" value="history">
-            {t('community.featureHistory', 'Feature history')}
-          </TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto pb-2 scrollbar-sleek">
+          <TabsList variant="line" className="justify-start">
+            <TabsTrigger className="flex-none" value="included">
+              {t('community.included', 'Included changes')}
+            </TabsTrigger>
+            <TabsTrigger className="flex-none" value="progress">
+              {t('community.officialProgress', 'Official progress')}
+            </TabsTrigger>
+            <TabsTrigger className="flex-none" value="history">
+              {t('community.featureHistory', 'Feature history')}
+            </TabsTrigger>
+          </TabsList>
+        </div>
       </Tabs>
       {section === 'included' && (
         <>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid grid-cols-3 gap-3 md:gap-4">
             {[
               {
                 name: t('community.inThisBuild', 'In this build'),
+                compact: t('community.installed', 'Installed'),
                 count: build?.changes.length ?? 0
               },
               {
                 name: t('community.selectedAdditions', 'Selected additions'),
+                compact: t('community.selectedCountLabel', 'Selected'),
                 count: selected.length
               },
-              { name: t('community.mergedSelections', 'Selected PRs merged'), count: merged.length }
+              {
+                name: t('community.mergedSelections', 'Selected PRs merged'),
+                compact: t('community.mergedCountLabel', 'Merged'),
+                count: merged.length
+              }
             ].map((item) => (
               <Card key={item.name} size="sm">
                 <CardContent>
                   <div className="space-y-2">
-                    <p className="text-xs text-muted-foreground">{item.name}</p>
-                    <p className="text-3xl font-semibold">{item.count}</p>
+                    <p className="break-words text-xs text-muted-foreground sm:min-h-6">
+                      <span className="sm:hidden">{item.compact}</span>
+                      <span className="hidden sm:inline">{item.name}</span>
+                    </p>
+                    <p className="text-2xl font-semibold sm:text-3xl">{item.count}</p>
                   </div>
                 </CardContent>
               </Card>
             ))}
           </div>
-          {build && (
-            <section className="rounded-xl border border-border p-5">
-              <h3 className="mb-3 text-sm font-semibold">
-                {t('community.runningChanges', 'Changes in the running build')}
-              </h3>
-              <ul className="divide-y divide-border">
-                {build.changes.map((change) => (
-                  <li className="flex items-start gap-3 py-3 text-sm" key={change.id}>
-                    <Check className="mt-0.5 size-4 shrink-0" />
-                    <div>
-                      <p>{change.title}</p>
-                      {change.pullRequest && (
-                        <Button
-                          variant="link"
-                          size="inline"
-                          onClick={() => onOpen(change.pullRequest!.number)}
-                        >
-                          #{change.pullRequest.number} ·{' '}
-                          {t('community.openEvidenceShort', 'Open evidence')}
-                        </Button>
-                      )}
-                      <p className="mt-1 font-mono text-2xs text-muted-foreground">{change.id}</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-3 break-all font-mono text-2xs text-muted-foreground">{build.id}</p>
-            </section>
+          {installed.error && (
+            <div role="alert" className="space-y-2 text-sm">
+              <p>{installed.error}</p>
+              <Button variant="outline" size="sm" onClick={installed.retry}>
+                {t('community.retry', 'Retry')}
+              </Button>
+            </div>
           )}
+          {snapshot.unavailable.length > 0 && (
+            <div role="status" className="space-y-2 text-xs text-muted-foreground">
+              <p>
+                {t(
+                  'community.installedSourceUnavailable',
+                  'Some PR previews could not be loaded. Installed changes and build source remain available.'
+                )}
+              </p>
+              <Button variant="outline" size="sm" onClick={installed.retry}>
+                {t('community.retry', 'Retry')}
+              </Button>
+            </div>
+          )}
+          {!installed.value && !installed.error && (
+            <p role="status" className="text-sm text-muted-foreground">
+              {t('community.loadingInstalled', 'Loading installed feature details…')}
+            </p>
+          )}
+          <CommunityInstalledChanges snapshot={snapshot} onOpen={onOpen} />
           <section>
             <h3 className="mb-3 text-base font-semibold">
               {t('community.nextAdditions', 'Selected for the next candidate')}

@@ -1,3 +1,5 @@
+import { communityQueryNumber } from '../../shared/community-pr-query'
+export { communityQueryNumber } from '../../shared/community-pr-query'
 import { classifyCommunityPullRequest } from './community-pr-classification'
 import type {
   CommunityCatalog,
@@ -44,13 +46,6 @@ export function communitySummary(catalog: CommunityCatalog | null): CommunitySum
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, count]) => ({ date, count }))
   }
-}
-export function communityQueryNumber(text: string | undefined): number | null {
-  const match = text
-    ?.trim()
-    .match(/^(?:#|https:\/\/github\.com\/stablyai\/orca\/pull\/)?([1-9]\d{0,9})\/?$/i)
-  const number = match ? Number(match[1]) : 0
-  return number > 0 && number <= 2_147_483_647 ? number : null
 }
 export function queryCommunityCatalog(
   catalog: CommunityCatalog | null,

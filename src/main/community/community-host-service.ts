@@ -22,6 +22,7 @@ import { communityGitHubDetail } from './community-github-detail'
 import { CommunityPublishedData } from './community-published-data'
 import { CommunityCandidateService } from './community-candidate-service'
 import { writeCommunityJson } from './community-json-file'
+import type { CommunityInstalledSnapshot } from '../../shared/community-installed-changes'
 
 const settingsSchema = z.object({ version: z.literal(1), user: z.string().nullable() })
 export class CommunityHostService {
@@ -93,6 +94,33 @@ export class CommunityHostService {
     }
     await writeCommunityJson(join(this.root, 'account.json'), { version: 1, user }, true)
     this.user = user
+  }
+  async installed(): Promise<CommunityInstalledSnapshot> {
+    await this.initialize()
+    const build = getCustomBuildInfo()
+    const numbers = [
+      ...new Set(
+        build?.changes.flatMap((change) =>
+          change.pullRequest ? [change.pullRequest.number] : []
+        ) ?? []
+      )
+    ]
+    const sources: CommunityPullRequest[] = []
+    const unavailable: number[] = []
+    for (let index = 0; index < numbers.length; index += 2) {
+      await Promise.all(
+        numbers.slice(index, index + 2).map(async (number) => {
+          try {
+            sources.push(
+              (await this.catalog.captured(number)) ?? (await this.catalog.detail(number))
+            )
+          } catch {
+            unavailable.push(number)
+          }
+        })
+      )
+    }
+    return { build, sources, unavailable }
   }
   async list(query: CommunityQuery) {
     await this.initialize()
@@ -194,6 +222,7 @@ export class CommunityHostService {
       )
       return {
         pr,
+        runningBuild: getCustomBuildInfo(),
         ...details,
         observedAt: pr.observedAt ?? new Date().toISOString(),
         feature: (await this.features.read()).features[number] ?? null,

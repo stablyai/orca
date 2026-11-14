@@ -8,6 +8,7 @@ import type {
   CommunityFeatureHistoryPage,
   CommunityFeaturesSnapshot
 } from './community-features'
+import type { CustomBuildInfo } from './custom-build'
 
 export type CommunityQuery = {
   query?: string
@@ -63,6 +64,7 @@ export type CommunitySourceDiff = {
   complete: boolean
 }
 export type CommunityDetail = {
+  runningBuild?: CustomBuildInfo | null
   diff: CommunitySourceDiff | null
   pr: CommunityPullRequest
   body: string

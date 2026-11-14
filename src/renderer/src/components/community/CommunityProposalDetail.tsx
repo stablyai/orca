@@ -21,11 +21,13 @@ export function CommunityProposalDetail({
   number,
   target,
   onBack,
+  backLabel,
   mutate
 }: {
   number: number
   target: RuntimeClientTarget
   onBack: () => void
+  backLabel?: string
   mutate: (action: CommunityFeatureAction) => Promise<CommunityFeaturesSnapshot>
 }): React.JSX.Element {
   const t = useTranslate()
@@ -34,7 +36,11 @@ export function CommunityProposalDetail({
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState('preview')
   const [revision, setRevision] = useState(0)
-  const installed = getCustomBuildInfo()?.changes.find(
+  const build =
+    detail?.runningBuild === undefined && target.kind === 'local'
+      ? getCustomBuildInfo()
+      : detail?.runningBuild
+  const installed = build?.changes.find(
     (change) => change.pullRequest?.number === number
   )?.pullRequest
   const included = !!installed && installed.headSha === detail?.pr.headSha
@@ -84,7 +90,7 @@ export function CommunityProposalDetail({
     <div className="space-y-6">
       <Button variant="ghost" size="sm" onClick={onBack}>
         <ArrowLeft className="size-4" />
-        {t('community.back', 'Back to proposals')}
+        {backLabel ?? t('community.back', 'Back to proposals')}
       </Button>
       {error && (
         <div role="alert" className="space-y-2 rounded-lg border border-border p-4 text-sm">
@@ -102,6 +108,20 @@ export function CommunityProposalDetail({
             </p>
           ))}
           <header>
+            {installed && (
+              <p role="status" className="mb-4 rounded-lg border border-border p-3 text-xs">
+                {t('community.installedPrCommit', 'Installed PR commit')}:{' '}
+                <code className="break-all">{installed.headSha}</code>
+                {!included && (
+                  <span className="mt-2 block">
+                    {t(
+                      'community.currentPrDifferent',
+                      'This PR now has a different source version. The previews, checks, and conversation below refer to the current PR.'
+                    )}
+                  </span>
+                )}
+              </p>
+            )}
             <div className="mb-3 flex flex-wrap items-center gap-2">
               <Badge variant="outline">
                 <GitPullRequest className="size-3" />#{number}

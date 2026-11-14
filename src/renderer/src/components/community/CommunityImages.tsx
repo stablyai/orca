@@ -5,10 +5,14 @@ import { PanZoomImageDialog } from '@/components/editor/PanZoomImageDialog'
 import { useTranslate } from '@/i18n/use-translate'
 export function CommunityImages({
   images,
-  title
+  title,
+  sourceNote,
+  emptyNote
 }: {
   images: string[]
   title: string
+  sourceNote?: string
+  emptyNote?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const [selected, setSelected] = useState(0)
@@ -36,7 +40,7 @@ export function CommunityImages({
           <div className="flex flex-col items-center gap-3 text-muted-foreground">
             <ImageIcon className="size-8" />
             <p className="text-sm">
-              {t('community.noImages', 'The author has not linked an image.')}
+              {emptyNote ?? t('community.noImages', 'The author has not linked an image.')}
             </p>
           </div>
         )}
@@ -97,10 +101,11 @@ export function CommunityImages({
         </div>
       )}
       <p className="text-2xs text-muted-foreground">
-        {t(
-          'community.imageSource',
-          'Images are linked by the PR author. They do not prove that a build passed checks.'
-        )}
+        {sourceNote ??
+          t(
+            'community.imageSource',
+            'Images are linked by the PR author. They do not prove that a build passed checks.'
+          )}
       </p>
       <PanZoomImageDialog
         open={expanded}

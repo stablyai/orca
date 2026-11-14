@@ -1,13 +1,17 @@
+export type CustomBuildChange = {
+  id: string
+  title: string
+  description?: string
+  imageUrls?: readonly string[]
+  pullRequest?: { number: number; headSha: string; url: string }
+}
+
 export type CustomBuildInfo = {
   id: string
   baseVersion: string
   source?: { repository: string; commit: string }
   profileMode: 'isolated-preview' | 'interactive-preview' | 'shared-profile'
-  changes: readonly {
-    id: string
-    title: string
-    pullRequest?: { number: number; headSha: string; url: string }
-  }[]
+  changes: readonly CustomBuildChange[]
 }
 
 declare const ORCA_CUSTOM_BUILD_INFO: CustomBuildInfo | null

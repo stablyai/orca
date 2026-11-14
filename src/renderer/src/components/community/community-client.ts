@@ -7,6 +7,7 @@ import type {
 } from '../../../../shared/community-candidates'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { CommunityInstalledSnapshot } from '../../../../shared/community-installed-changes'
 import type {
   CommunityReleaseProof,
   CommunityFeatureAction,
@@ -36,6 +37,7 @@ export function communityClient(target: RuntimeClientTarget) {
       call<CommunityCandidateRun>('dispatchCandidate', { id, repository, ref }),
     candidateStatus: (id: string) => call<CommunityCandidateRun>('candidateStatus', { id }),
     list: (query: CommunityQuery) => call<CommunityPage>('list', query),
+    installed: () => call<CommunityInstalledSnapshot>('installed'),
     detail: (number: number, force = false) => call<CommunityDetail>('detail', { number, force }),
     mutate: (action: CommunityFeatureAction) => call<CommunityFeaturesSnapshot>('mutate', action),
     history: (number: number, before?: number) =>

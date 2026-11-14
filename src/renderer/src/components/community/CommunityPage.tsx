@@ -22,6 +22,7 @@ import { CommunityProposalDetail } from './CommunityProposalDetail'
 import { CommunityActivity } from './CommunityActivity'
 import { CommunityChangelog } from './CommunityChangelog'
 import { CommunityCustomManager } from './CommunityCustomManager'
+const CUSTOM_QUERY = { limit: 1 } as const
 export default function CommunityPage(): React.JSX.Element {
   const t = useTranslate()
   const locale = useIntlLocale()
@@ -40,7 +41,7 @@ export default function CommunityPage(): React.JSX.Element {
         : { kind: 'environment', environmentId: host },
     [host, section]
   )
-  const catalog = useCommunityCatalog(target, query)
+  const catalog = useCommunityCatalog(target, section === 'custom' ? CUSTOM_QUERY : query)
   const [accounts, setAccounts] = useState<{ selected: string | null; users: string[] } | null>(
     null
   )
@@ -262,6 +263,11 @@ export default function CommunityPage(): React.JSX.Element {
             target={target}
             onBack={() => open(null)}
             mutate={catalog.mutate}
+            backLabel={
+              section === 'custom'
+                ? t('community.backIncluded', 'Back to included change')
+                : undefined
+            }
           />
         ) : section === 'changelog' ? (
           <CommunityChangelog target={target} />

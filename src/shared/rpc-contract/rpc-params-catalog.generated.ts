@@ -1037,6 +1037,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'community.evidence': CommunityEvidenceParams,
   'community.features': null,
   'community.history': CommunityHistoryParams,
+  'community.installed': null,
   'community.list': CommunityQueryParams,
   'community.mutate': CommunityFeatureActionParams,
   'community.prepareCandidate': null,

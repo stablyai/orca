@@ -6,6 +6,7 @@ export type MobileRpcMethodRoute = 'execution-host' | 'paired-desktop'
 
 export const EXECUTION_HOST_METHODS = [
   'community.list',
+  'community.installed',
   'community.detail',
   'community.features',
   'community.mutate',
