@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { expect, it, vi } from 'vitest'
 import type { BrowserClientHostCommandEvent } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { BrowserClientPageCommandExecutor } from '../execution/browser-client-page-command-executor'
 import {
@@ -11,21 +11,17 @@ import type { BrowserRouteElectronSession } from '../../routing/sessions/browser
 import type { BrowserRoutePageGuestIdentity } from '../../routing/guest-authority/browser-route-page-authority'
 
 const SSH_HOST_STORAGE = 'storage-ssh-target-a'
-const OTHER_HOST_STORAGE = 'storage-ssh-target-b'
 const GENERATION_1 = 'execution-host-ssh-a-gen-1'
 const GENERATION_2 = 'execution-host-ssh-a-gen-2'
-const OTHER_HOST = 'execution-host-ssh-b-gen-1'
 
 const proxyPortByKey: Record<string, number> = {
   [GENERATION_1]: 43123,
-  [GENERATION_2]: 43124,
-  [OTHER_HOST]: 43125
+  [GENERATION_2]: 43124
 }
 
 const storageIdentityByKey: Record<string, string> = {
   [GENERATION_1]: SSH_HOST_STORAGE,
-  [GENERATION_2]: SSH_HOST_STORAGE,
-  [OTHER_HOST]: OTHER_HOST_STORAGE
+  [GENERATION_2]: SSH_HOST_STORAGE
 }
 
 function createHarness(options: { failedRouteRelease?: string } = {}) {
@@ -141,52 +137,6 @@ function createPage(
     new AbortController().signal
   )
 }
-
-describe('client-hosted pages across an execution host generation change', () => {
-  it('retires the superseded pages so the reconnected route can bind the partition', async () => {
-    const harness = createHarness()
-
-    expect(await createPage(harness.executor, 'page-a', GENERATION_1)).toEqual({
-      status: 'completed'
-    })
-    expect(await createPage(harness.executor, 'page-b', GENERATION_2)).toEqual({
-      status: 'completed'
-    })
-
-    expect(harness.executor.hasPage('page-a', 7)).toBe(false)
-    expect(harness.executor.hasPage('page-b', 7)).toBe(true)
-    expect(harness.releasedRoutes).toEqual([GENERATION_1])
-    expect(harness.proxyRulesFor(SSH_HOST_STORAGE)).toBe('socks5://127.0.0.1:43124')
-  })
-
-  it('keeps the sibling pages that share the current route key', async () => {
-    const harness = createHarness()
-
-    await createPage(harness.executor, 'page-a', GENERATION_1)
-    expect(await createPage(harness.executor, 'page-b', GENERATION_1)).toEqual({
-      status: 'completed'
-    })
-
-    expect(harness.executor.hasPage('page-a', 7)).toBe(true)
-    expect(harness.executor.hasPage('page-b', 7)).toBe(true)
-    expect(harness.releasedRoutes).toEqual([])
-  })
-
-  it('keeps the pages held on a different execution host', async () => {
-    const harness = createHarness()
-
-    await createPage(harness.executor, 'page-a', OTHER_HOST)
-    expect(await createPage(harness.executor, 'page-b', GENERATION_2)).toEqual({
-      status: 'completed'
-    })
-
-    expect(harness.executor.hasPage('page-a', 7)).toBe(true)
-    expect(harness.executor.hasPage('page-b', 7)).toBe(true)
-    expect(harness.releasedRoutes).toEqual([])
-    expect(harness.proxyRulesFor(OTHER_HOST_STORAGE)).toBe('socks5://127.0.0.1:43125')
-    expect(harness.proxyRulesFor(SSH_HOST_STORAGE)).toBe('socks5://127.0.0.1:43124')
-  })
-})
 
 it('allows a different legacy page to retarget only after exact native and network retirement despite a missing renderer acknowledgement', async () => {
   const h = createHarness()

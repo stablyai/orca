@@ -121,6 +121,9 @@ export class ProjectGroupPersistenceOperations {
     if (updates.color !== undefined) {
       group.color = typeof updates.color === 'string' ? updates.color : null
     }
+    if (updates.hookSettings !== undefined) {
+      group.hookSettings = updates.hookSettings
+    }
     group.updatedAt = Date.now()
   }
 

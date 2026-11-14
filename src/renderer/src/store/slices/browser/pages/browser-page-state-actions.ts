@@ -1,5 +1,10 @@
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from '../browser-slice-contract'
 import type { AppState } from '../../../types'
+import {
+  assignBrowserPageLoadingOwner,
+  preserveBrowserPageLoadingOwner,
+  revokeBrowserPageLoadingOwner
+} from '@/lib/browser/browser-page-loading-ownership'
 import '../../../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../../shared/browser/browser-blank-page'
 import {
@@ -12,6 +17,10 @@ import {
 } from './browser-page-records'
 import { normalizeBrowserHistoryUrl } from '../../../../../../shared/workspace-session/workspace-session-browser-history'
 import { replaceTabBuckets } from '../../../keyed-record-transitions'
+import {
+  browserCertificateFailureEqual,
+  browserPageEqual
+} from '@/runtime/web-session-tabs-sync/state-equality-tabs'
 
 export function createBrowserPageStateActions(
   set: BrowserSliceSet,
@@ -25,9 +34,10 @@ export function createBrowserPageStateActions(
   | 'setBrowserPageUrl'
 > {
   return {
-    updateBrowserTabPageState: (pageId, updates) => get().updateBrowserPageState(pageId, updates),
+    updateBrowserTabPageState: (pageId, updates, loadingOwner) =>
+      get().updateBrowserPageState(pageId, updates, loadingOwner),
 
-    updateBrowserPageState: (pageId, updates) => {
+    updateBrowserPageState: (pageId, updates, loadingOwner) => {
       set((s) => {
         const page = findPage(s.browserPagesByWorkspace, pageId)
         if (!page) {
@@ -58,13 +68,12 @@ export function createBrowserPageStateActions(
             : -1
         const unifiedLabelNeedsRepair =
           unifiedIndex !== -1 && unifiedTabs[unifiedIndex]?.label !== nextPage.title
-        const pageStateUnchanged =
-          nextPage.title === page.title &&
-          nextPage.loading === page.loading &&
-          nextPage.faviconUrl === page.faviconUrl &&
-          nextPage.canGoBack === page.canGoBack &&
-          nextPage.canGoForward === page.canGoForward &&
-          nextPage.loadError === page.loadError
+        const pageStateUnchanged = browserPageEqual(nextPage, page)
+        if (updates.loading === undefined) {
+          preserveBrowserPageLoadingOwner(page, pageStateUnchanged ? page : nextPage)
+        } else {
+          assignBrowserPageLoadingOwner(page, pageStateUnchanged ? page : nextPage, loadingOwner)
+        }
         const currentPages = s.browserPagesByWorkspace[workspace.id] ?? []
         const mirroredWorkspace = pageStateUnchanged
           ? mirrorWorkspaceFromActivePage(workspace, currentPages)
@@ -158,7 +167,10 @@ export function createBrowserPageStateActions(
           delete nextFailures[pageId]
           return { browserCertificateFailuresByPageId: nextFailures }
         }
-        if (!findPage(s.browserPagesByWorkspace, pageId) || current === failure) {
+        if (
+          !findPage(s.browserPagesByWorkspace, pageId) ||
+          browserCertificateFailureEqual(current, failure)
+        ) {
           return s
         }
         return {
@@ -191,6 +203,7 @@ export function createBrowserPageStateActions(
         }
         // Keep document URL blank at navigation sink too; committing grants here leaks to persistence, publication and address bar.
         const nextPageUrl = page.docLocation ? ORCA_BROWSER_BLANK_URL : nextUrl
+        revokeBrowserPageLoadingOwner(page)
         const nextPages = (s.browserPagesByWorkspace[workspace.id] ?? []).map((entry) =>
           entry.id === pageId
             ? {
@@ -217,7 +230,9 @@ export function createBrowserPageStateActions(
           }
         }
       })
-      get().setBrowserPageCertificateFailure(pageId, null)
+      if (!options?.preserveLoadError) {
+        get().setBrowserPageCertificateFailure(pageId, null)
+      }
     }
   }
 }

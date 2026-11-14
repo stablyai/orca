@@ -69,6 +69,7 @@ export abstract class RuntimeWorkspaceChangeEvents extends NativeChatLaunchDraft
 
   /** The cleanup runner finished a run on this host; clients may toast. */
   notifyWorkspaceCleanupRunFinished(run: WorkspaceCleanupRunFinishedEvent['run']): void {
+    this.notifier?.workspaceCleanupRunFinished?.(run)
     this.emitClientEvent({ type: 'workspaceCleanupRunFinished', run })
   }
 }

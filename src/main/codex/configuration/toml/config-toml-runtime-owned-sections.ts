@@ -5,13 +5,9 @@ import {
   isTomlStructuralLine,
   updateTomlLineScanState
 } from './config-toml-line-scan'
-import { parseTomlTableHeaderPath } from './config-toml-key-path'
+import { parseTomlTableHeaderPath, type ParsedTomlTableHeaderPath } from './config-toml-key-path'
 import { findProjectTrustLevelEntries } from '../../trust/toml/config-toml-project-trust-level'
-import {
-  CODEX_HOOK_TRUST_KEY,
-  parseHookStateTomlHeaderKey,
-  parseProjectTomlHeaderPath as parseCodexProjectHeaderPath
-} from './config-toml-syntax'
+import { CODEX_HOOK_TRUST_KEY } from './config-toml-syntax'
 import '../../trust/toml/config-toml-trust'
 import {
   codexTrustSourcePathsEqual as codexHookSourcePathsEqual,
@@ -24,6 +20,7 @@ export type TomlSection = {
   header: string
   block: string
   start: number
+  table: ParsedTomlTableHeaderPath | null
 }
 
 export type SharedHookTrustCarry = {
@@ -48,14 +45,14 @@ export function stripRuntimeOwnedTomlSections(
     ...sections
       .filter(
         (section) =>
-          !isRuntimeHookTrustTomlSection(section.header) ||
+          !isRuntimeHookTrustTomlSection(section) ||
           (sharedHookTrust !== undefined &&
-            claimSharedHookTrustSection(section.header, sharedHookTrust, carriedHookTrustKeys))
+            claimSharedHookTrustSection(section, sharedHookTrust, carriedHookTrustKeys))
       )
       .filter(
         (section) =>
-          !isRuntimeProjectTomlSection(section.header) ||
-          !runtimeProjectHeaders.has(getTomlSectionHeaderKey(section.header)) ||
+          !isRuntimeProjectTomlSection(section) ||
+          !runtimeProjectHeaders.has(getTomlSectionHeaderKey(section)) ||
           getProjectTrustLevel(section.block) === 'untrusted'
       )
       .map((section) => section.block)
@@ -80,7 +77,8 @@ export function getTomlSections(config: string): TomlSection[] {
       sections.push({
         header: sectionHeader ?? '',
         block: lines.slice(sectionStart, index).join('\n'),
-        start: sectionStart
+        start: sectionStart,
+        table: parseTomlTableHeaderPath(sectionHeader ?? '')
       })
     }
     sectionStart = index
@@ -92,18 +90,19 @@ export function getTomlSections(config: string): TomlSection[] {
     sections.push({
       header: sectionHeader ?? '',
       block: lines.slice(sectionStart).join('\n'),
-      start: sectionStart
+      start: sectionStart,
+      table: parseTomlTableHeaderPath(sectionHeader ?? '')
     })
   }
   return sections
 }
 
-export function isRuntimePreservedTomlSection(header: string): boolean {
-  return isRuntimeHookTrustTomlSection(header) || isRuntimeProjectTomlSection(header)
+export function isRuntimePreservedTomlSection(section: TomlSection): boolean {
+  return isRuntimeHookTrustTomlSection(section) || isRuntimeProjectTomlSection(section)
 }
 
-export function isRuntimeHookTrustTomlSection(header: string): boolean {
-  const table = parseTomlTableHeaderPath(header)
+export function isRuntimeHookTrustTomlSection(section: TomlSection): boolean {
+  const table = section.table
   // Preserve the hooks.state parent Codex materializes on Windows, including quoted spellings.
   return !!table && !table.isArray && table.segments[0] === 'hooks' && table.segments[1] === 'state'
 }
@@ -128,7 +127,7 @@ export function classifyHookTrustKey(key: string, homeDir: string): 'home-scoped
 export function getHookTrustTomlSectionKeys(sections: readonly TomlSection[]): Set<string> {
   const keys = new Set<string>()
   for (const section of sections) {
-    const key = parseHookStateTomlHeaderKey(section.header)
+    const key = sectionLeafKey(section, ['hooks', 'state'])
     if (key !== null) {
       keys.add(key)
     }
@@ -138,11 +137,11 @@ export function getHookTrustTomlSectionKeys(sections: readonly TomlSection[]): S
 
 // Runtime trust wins; compare exact keys to retain required Windows separator variants.
 function claimSharedHookTrustSection(
-  header: string,
+  section: TomlSection,
   { systemHomeDir }: SharedHookTrustCarry,
   claimedKeys: Set<string>
 ): boolean {
-  const key = parseHookStateTomlHeaderKey(header)
+  const key = sectionLeafKey(section, ['hooks', 'state'])
   if (key === null || classifyHookTrustKey(key, systemHomeDir) === 'home-scoped') {
     return false
   }
@@ -153,32 +152,45 @@ function claimSharedHookTrustSection(
   return true
 }
 
-export function isRuntimeProjectTomlSection(header: string): boolean {
-  return parseCodexProjectHeaderPath(header) !== null
+function sectionLeafKey(section: TomlSection, parent: readonly string[]): string | null {
+  const table = section.table
+  if (
+    !table ||
+    table.isArray ||
+    table.segments.length !== parent.length + 1 ||
+    parent.some((segment, index) => table.segments[index] !== segment)
+  ) {
+    return null
+  }
+  return table.segments.at(-1) ?? null
+}
+
+export function isRuntimeProjectTomlSection(section: TomlSection): boolean {
+  return sectionLeafKey(section, ['projects']) !== null
 }
 
 const CODEX_MCP_SERVER_TABLE_ROOT = 'mcp_servers'
 
-export function getMcpServerTomlSectionName(header: string): string | null {
-  const table = parseTomlTableHeaderPath(header)
+export function getMcpServerTomlSectionName(section: TomlSection): string | null {
+  const table = section.table
   if (!table || table.isArray || table.segments[0] !== CODEX_MCP_SERVER_TABLE_ROOT) {
     return null
   }
   return table.segments[1] ?? null
 }
 
-export function getTomlSectionHeaderKey(header: string): string {
-  const projectPath = parseCodexProjectHeaderPath(header)
+export function getTomlSectionHeaderKey(section: TomlSection): string {
+  const projectPath = sectionLeafKey(section, ['projects'])
   return projectPath === null
-    ? header.trim()
+    ? section.header.trim()
     : `project:${normalizeCodexProjectPathForLookup(projectPath)}`
 }
 
 // Match legacy WSL revocations loosely so case drift cannot restore trust.
-export function getRevocationTomlSectionHeaderKey(header: string): string {
-  const projectPath = parseCodexProjectHeaderPath(header)
+export function getRevocationTomlSectionHeaderKey(section: TomlSection): string {
+  const projectPath = sectionLeafKey(section, ['projects'])
   return projectPath === null
-    ? header.trim()
+    ? section.header.trim()
     : `project:${normalizeCodexProjectPathForRevocationLookup(projectPath)}`
 }
 
@@ -187,11 +199,11 @@ export function deduplicateProjectTomlSections(sections: TomlSection[]): TomlSec
   const deduplicated: TomlSection[] = []
   const projectIndexes = new Map<string, number>()
   for (const section of sections) {
-    if (!isRuntimeProjectTomlSection(section.header)) {
+    if (!isRuntimeProjectTomlSection(section)) {
       deduplicated.push(section)
       continue
     }
-    const key = getTomlSectionHeaderKey(section.header)
+    const key = getTomlSectionHeaderKey(section)
     const existingIndex = projectIndexes.get(key)
     if (existingIndex === undefined) {
       projectIndexes.set(key, deduplicated.length)
@@ -225,8 +237,8 @@ export function extractOrdinaryCodexSettings(config: string): string {
   const sections = deduplicateProjectTomlSections(getTomlSections(config))
   const projectHeaders = new Set(
     sections
-      .filter((section) => isRuntimeProjectTomlSection(section.header))
-      .map((section) => getTomlSectionHeaderKey(section.header))
+      .filter((section) => isRuntimeProjectTomlSection(section))
+      .map((section) => getTomlSectionHeaderKey(section))
   )
   // The daemon override belongs to the managed home and must not be promoted.
   return stripCodexDaemonOverride(stripRuntimeOwnedTomlSections(config, projectHeaders)).trimEnd()

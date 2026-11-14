@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { resolveHookCommandSourcePolicy } from '../../shared/hook-command-source-policy'
 import { getSetupTrustContent } from '../../shared/orca-hook-setup-config'
 import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
-import type { Repo } from '../../shared/repo-types'
+import type { WorkspaceHookOwner } from '../../shared/workspace-hook-owner'
 import type { SetupDecision, SetupTrustMismatch } from '../../shared/worktree/create-types'
 import type { ApprovedSetupHashes } from '../../shared/worktree/creation/approved-setup-hashes'
 import type { WorktreeDefaultTabsLaunch } from '../../shared/worktree/creation/launch-types'
@@ -18,7 +18,7 @@ export function hashOrcaHookTrustContent(content: string): string {
  * Undefined means run as decided: no approval was sent (older client), nothing shared would run, or it matches.
  */
 export function checkCreatedWorktreeSetupTrust(
-  repo: Repo,
+  repo: WorkspaceHookOwner,
   createdYamlHooks: OrcaHooks | null,
   decision: SetupDecision | undefined,
   approved: ApprovedSetupHashes
@@ -44,7 +44,7 @@ export function checkCreatedWorktreeSetupTrust(
  * existed, so it needs an approval or an explicit run rather than starting unseen.
  */
 export function folderSharedSetupLacksApproval(
-  repo: Repo,
+  repo: WorkspaceHookOwner,
   createdYamlHooks: OrcaHooks | null,
   decision: SetupDecision | undefined,
   approved: ApprovedSetupHashes
@@ -61,7 +61,7 @@ export function folderSharedSetupLacksApproval(
   return policy !== 'local-only' && Boolean(getSetupTrustContent(createdYamlHooks))
 }
 
-function wouldRunSetup(repo: Repo, decision: SetupDecision | undefined): boolean {
+function wouldRunSetup(repo: WorkspaceHookOwner, decision: SetupDecision | undefined): boolean {
   try {
     return shouldRunSetupForCreate(repo, decision)
   } catch {

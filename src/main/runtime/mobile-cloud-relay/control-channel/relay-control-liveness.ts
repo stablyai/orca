@@ -20,6 +20,10 @@ const PROBE_INTERVAL_MS = 8_000
 // so middleboxes dropping control frames cannot alone force reconnect loops.
 const PROBE_MISS_LIMIT = 3
 
+// The keepalive is answered at once (the edge auto-acks it). A reply 10s overdue only starts the
+// probe above, so one lost frame still cannot tear the control down; it cuts stall detection ~17s.
+const KEEPALIVE_ACK_OVERDUE_MS = 10_000
+
 type TeardownReason = 'probe-unanswered' | 'silence-limit'
 
 export type RelayControlLivenessOptions = {
@@ -36,6 +40,7 @@ export class RelayControlLiveness {
   private probe: { timer: ReturnType<typeof setInterval>; misses: number } | null = null
   private silenceTimer: ReturnType<typeof setInterval> | null = null
   private keepaliveTimer: ReturnType<typeof setInterval> | null = null
+  private keepaliveAckTimer: ReturnType<typeof setTimeout> | null = null
   private keepaliveSentAt = 0
   private openedAt = 0
   private lastInboundAt = 0
@@ -99,9 +104,27 @@ export class RelayControlLiveness {
 
   private sendKeepalive(): void {
     if (this.options.isLive()) {
-      this.keepaliveSentAt = Date.now()
+      const sentAt = Date.now()
+      this.keepaliveSentAt = sentAt
       this.options.send?.(RELAY_CLIENT_KEEPALIVE_FRAME)
+      this.watchKeepaliveAck(sentAt)
     }
+  }
+
+  private watchKeepaliveAck(sentAt: number): void {
+    if (this.keepaliveAckTimer) {
+      return
+    }
+    this.keepaliveAckTimer = setTimeout(() => {
+      this.keepaliveAckTimer = null
+      if (this.lastInboundAt < sentAt && this.options.isLive()) {
+        const sinceInboundMs = Date.now() - this.lastInboundAt
+        console.warn(
+          `[relay] control keepalive overdue cell=${this.options.cellUrl} sinceInboundMs=${sinceInboundMs} ${this.armProbe()}`
+        )
+      }
+    }, KEEPALIVE_ACK_OVERDUE_MS)
+    this.keepaliveAckTimer.unref?.()
   }
 
   stop(): void {
@@ -112,6 +135,10 @@ export class RelayControlLiveness {
     if (this.keepaliveTimer) {
       clearInterval(this.keepaliveTimer)
       this.keepaliveTimer = null
+    }
+    if (this.keepaliveAckTimer) {
+      clearTimeout(this.keepaliveAckTimer)
+      this.keepaliveAckTimer = null
     }
     this.clearProbe()
   }

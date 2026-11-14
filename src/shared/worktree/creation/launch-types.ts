@@ -6,6 +6,7 @@ import type { OrcaDefaultTabTemplate } from '../../orca-yaml-hook-types'
 import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 
 export type WorktreeSetupLaunch = {
+  cwd?: string
   runnerScriptPath: string
   envVars: Record<string, string>
   shell?: SetupRunnerShell

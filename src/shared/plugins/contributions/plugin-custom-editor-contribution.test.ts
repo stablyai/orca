@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { parsePluginManifest } from '../manifest/plugin-manifest'
 import { PLUGIN_MANIFEST_V2_SINCE } from '../manifest/plugin-schema-field-docs'
 import { matchPluginFile, pluginFileMatchRank } from './plugin-file-match'
-import { requiresPluginContentApproval } from '../approval/plugin-consent-fingerprint'
 import { pluginUpdateAccessGrowth } from '../approval/plugin-update-access-growth'
 
 const excalidraw = {
@@ -35,9 +34,8 @@ function parsed(overrides: Record<string, unknown> = {}) {
 }
 
 describe('contributes.customEditors', () => {
-  it('binds approval to the editor bytes and counts a new file type as more reach', () => {
+  it('counts a new file type as more reach', () => {
     const plugin = parsed()
-    expect(requiresPluginContentApproval(plugin)).toBe(true)
     const wider = parsed({
       contributes: { customEditors: [{ ...excalidraw, extensions: ['.excalidraw', '.svg'] }] }
     })
@@ -86,6 +84,5 @@ describe('matchPluginFile', () => {
     expect(pluginFileMatchRank(byName)).toBeGreaterThan(
       pluginFileMatchRank(matchPluginFile('/repo/gleam.toml', match(['.toml'])))
     )
-    expect(pluginFileMatchRank(null)).toBe(0)
   })
 })

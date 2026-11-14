@@ -1,6 +1,6 @@
 import { pickApprovedSetupHashes } from '../../../../../../shared/worktree/creation/approved-setup-hashes'
 import { agentLaunchRecoveryMessage } from '@/lib/agent-session/launch/failure/agent-launch-failure'
-import { prepareDirectWorkItemSetup } from './direct-work-item-setup'
+import { confirmDirectWorkItemSetup, prepareDirectWorkItemSetup } from './direct-work-item-setup'
 import type { DirectWorkItemLaunchResult } from './direct-work-item-setup'
 import { useAppStore } from '@/store/index'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
@@ -11,7 +11,7 @@ import {
   unavailableAgentErrorMessage,
   workspaceActivationErrorMessage
 } from '@/lib/workspace/creation/work-item/launch-work-item-direct-messages'
-import type { GitPushTarget } from '../../../../../../shared/worktree/types'
+import type { GitHubPrStartPoint } from '../../../../../../shared/worktree/types'
 import { buildDirectWorkItemStartupOpts } from '@/lib/workspace/creation/work-item/launch-work-item-direct-agent'
 import {
   getDirectWorkItemIdentity,
@@ -60,35 +60,25 @@ export async function launchWorkItemDirect(
     const { repo } = context
     const promptDelivery = args.promptDelivery ?? 'draft'
     const { itemType, itemNumber } = getDirectWorkItemIdentity(item)
-    const confirmedSetup = await prepareDirectWorkItemSetup(
+    const setupDecision = await prepareDirectWorkItemSetup(
       repo,
       context.executionHostId,
       args.signal,
       args.onSetupRequired
     )
-    if (confirmedSetup === 'review-request') {
-      return false
-    }
-    if (confirmedSetup === 'cancelled') {
-      return 'cancelled'
+    if (setupDecision === 'review-request' || setupDecision === 'cancelled') {
+      return setupDecision === 'cancelled' ? 'cancelled' : false
     }
     const { workspaceIntentName, workspaceName } = getDirectWorkItemWorkspaceNames(
       item,
       itemType,
       itemNumber
     )
-    let resolvedBaseBranch = baseBranch
-    let resolvedPushTarget: GitPushTarget | undefined
-    let resolvedBranchNameOverride: string | undefined
-    let resolvedCompareBaseRef: string | undefined
-    if (!resolvedBaseBranch && itemType === 'pr' && itemNumber) {
+    let prStart: GitHubPrStartPoint | undefined
+    if (!baseBranch && itemType === 'pr' && itemNumber) {
       try {
         // Direct Use PR bypasses the picker but still needs its resolved head before git worktree add.
-        const result = await resolveDirectPrStartPoint(repoId, itemNumber, context.target, item)
-        resolvedBaseBranch = result.baseBranch
-        resolvedPushTarget = result.pushTarget
-        resolvedBranchNameOverride = result.branchNameOverride
-        resolvedCompareBaseRef = result.compareBaseRef
+        prStart = await resolveDirectPrStartPoint(repoId, itemNumber, context.target, item)
       } catch {
         if (args.signal?.aborted) {
           return 'cancelled'
@@ -97,6 +87,18 @@ export async function launchWorkItemDirect(
         openModalFallback()
         return false
       }
+    }
+    const resolvedBaseBranch = prStart?.baseBranch ?? baseBranch
+    // Approve the orca.yaml at the start point the create checks out, so a PR's own setup is what's reviewed.
+    const confirmedSetup = await confirmDirectWorkItemSetup(
+      repo,
+      context.executionHostId,
+      setupDecision,
+      { kind: 'base', baseBranch: resolvedBaseBranch },
+      args.signal
+    )
+    if (confirmedSetup === 'cancelled') {
+      return 'cancelled'
     }
 
     const projectPreflight = await context.projectContextPromise
@@ -171,10 +173,10 @@ export async function launchWorkItemDirect(
       workspaceIntentName?.displayName ?? item.title,
       itemType === 'issue' && itemNumber ? itemNumber : undefined,
       itemType === 'pr' && itemNumber ? itemNumber : undefined,
-      resolvedPushTarget,
+      prStart?.pushTarget,
       undefined,
       item.linearIdentifier,
-      resolvedBranchNameOverride,
+      prStart?.branchNameOverride,
       undefined,
       itemType === 'mr' && itemNumber ? itemNumber : undefined,
       gitLabIssueNumber({ ...item, type: itemType, number: itemNumber }),
@@ -186,7 +188,7 @@ export async function launchWorkItemDirect(
       undefined,
       undefined,
       undefined,
-      resolvedCompareBaseRef,
+      prStart?.compareBaseRef,
       {
         executionHostId: context.executionHostId,
         ...pickApprovedSetupHashes(confirmedSetup)

@@ -28,6 +28,7 @@ const MAIN_OWNED_TELEMETRY_EVENTS = new Set<EventName>([
   'daemon_audit_eligibility',
   'daemon_pty_cwd_denied',
   'daemon_pty_cwd_readable',
+  'daemon_pty_cwd_denial_capture',
   'star_nag_outcome',
   'feature_interaction_usage_bucket_reached',
   'first_agent_interaction',

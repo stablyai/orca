@@ -9,7 +9,7 @@ import {
   buildOrphanTerminalCleanupPatch,
   getOrphanTerminalIds,
   terminalTabHasReconnectablePty
-} from '../../terminals/terminal-orphan-cleanup'
+} from '../../terminals/retirement/terminal-orphan-cleanup'
 import {
   createReconciliationDrafts,
   finishReconciliationDrafts,

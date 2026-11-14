@@ -37,9 +37,10 @@ export function persistPassiveWorktreeMetaForOwner(
   get: WorktreeSliceGet,
   worktreeId: string,
   updates: Partial<WorktreeMeta>,
-  errorLabel: string
+  errorLabel: string,
+  executionHostId?: ExecutionHostId
 ): void {
-  const ownerTarget = tryRuntimeTargetForWorktreeOwner(get(), worktreeId)
+  const ownerTarget = tryRuntimeTargetForWorktreeOwner(get(), worktreeId, executionHostId)
   if (!ownerTarget) {
     warnAmbiguousOwnerOnce(worktreeId, errorLabel)
     return

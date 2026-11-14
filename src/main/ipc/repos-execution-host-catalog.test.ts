@@ -57,6 +57,7 @@ vi.mock('../workspaces/creation/worktree-root-preparation', () =>
   moduleMocks.worktreeRootPreparationModuleMock(reposMocks)
 )
 
+import { ipcMain } from 'electron'
 import { registerRepoHandlers } from './repos'
 import { clearGitCapabilityStateForTests } from '../git/command-runner/host-routing/git-capability-state'
 import { resetSshProviderAuthorities } from '../ssh/connection/authority/ssh-provider-authority'
@@ -89,6 +90,33 @@ describe('projectGroups IPC validation', () => {
     resetProjectGroupMocks(reposMocks, { isGitRepo, getGitRepoRoot })
 
     registerRepoHandlers(mockWindow as never, mockStore as never, {} as never)
+  })
+
+  it('re-registers group hook inspection and subsequent handlers when a window reopens', () => {
+    const registered = new Map<string, (...args: unknown[]) => unknown>()
+    handleMock.mockImplementation((channel: string, handler: (...args: unknown[]) => unknown) => {
+      if (registered.has(channel)) {
+        throw new Error(`Handler already registered: ${channel}`)
+      }
+      registered.set(channel, handler)
+    })
+    vi.mocked(ipcMain.removeHandler).mockImplementation((channel) => {
+      registered.delete(channel)
+    })
+    const runtime = { checkProjectGroupHooks: vi.fn(() => ({ status: 'ok' })) }
+    try {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the registration harness supplies only the window, store and runtime ports invoked by these handlers.
+      registerRepoHandlers(mockWindow as never, mockStore as never, runtime as never)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the registration harness supplies only the window, store and runtime ports invoked by these handlers.
+      registerRepoHandlers(mockWindow as never, mockStore as never, runtime as never)
+      expect(registered.get('projectGroups:checkHooks')?.(null, { groupId: 'group-1' })).toEqual({
+        status: 'ok'
+      })
+      expect(registered.get('projectGroups:list')?.()).toEqual([])
+      expect(registered.has('folderWorkspaces:create')).toBe(true)
+    } finally {
+      vi.mocked(ipcMain.removeHandler).mockReset()
+    }
   })
 
   describe('while a WSL move fences the local repo-1', () => {

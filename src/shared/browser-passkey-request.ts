@@ -2,7 +2,6 @@
 export const BROWSER_PASSKEY_REQUEST_PENDING_CHANNEL = 'browser:passkeyRequestPending'
 /** Main → guest frame: cancel its pending passkey requests. */
 export const BROWSER_PASSKEY_REQUEST_CANCEL_CHANNEL = 'browser:passkeyRequestCancel'
-export const BROWSER_PASSKEY_REQUEST_PRELOAD_FILE = 'browser-passkey-request-preload.js'
 
 /** What an agent should do about a page's pending passkey request. */
 export function formatBrowserPasskeyRequest(origin: string, dismissCommand: string): string {

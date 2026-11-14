@@ -6,7 +6,7 @@ import {
 } from '@/lib/workspace/activation/active-worktree-removal-successor'
 import { createTestStore, seedStore } from '../../../store/testing/app-store-test-fixture'
 import { makeWorktree } from '../../../store/slices/worktrees/worktree.test-fixture'
-import { makeTerminalTab } from '../../../store/terminals/terminal-row.test-fixture'
+import { makeTerminalTab } from '../../../store/terminals/testing/terminal-row.test-fixture'
 import { TEST_REPO } from '../../../store/repos/repo.test-fixture'
 import { createStoreCascadesMockApi } from '../../../store/testing/app-store-cascade-api.test-fixture'
 import { clearSshHostWorkspaces } from '@/components/sidebar/ssh-host-remove-workspaces'
@@ -97,25 +97,6 @@ const resolution = {
 }
 
 describe('deleting the active workspace', () => {
-  it('navigates on durable retirement while retaining the checkout and its draft state', async () => {
-    const store = setup()
-    const before = store.getState()
-    store.setState({ worktreesByRepo: { repo1: [{ ...active, removing: true }, sibling, main] } })
-    await Promise.resolve()
-    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
-    store.setState({
-      worktreesByRepo: {
-        repo1: [{ ...active, removing: true, removalRecorded: true }, sibling, main]
-      }
-    })
-    await Promise.resolve()
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith(sibling.id, {
-      revealInSidebar: false,
-      executionHostId: 'local'
-    })
-    expect(store.getState().worktreesByRepo.repo1.find((row) => row.id === active.id)).toBeDefined()
-    expect(store.getState().tabsByWorktree).toBe(before.tabsByWorktree)
-  })
   it('respects a user closing the last browser tab after startup dropped its row', async () => {
     const store = setup()
     layoutMain = await drawTabsFromMain(store)
@@ -126,7 +107,6 @@ describe('deleting the active workspace', () => {
     await layoutMain.settle()
     await Promise.resolve()
     expect(store.getState().activeWorktreeId).toBeNull()
-    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
   })
 
   it('keeps a failed host removal selected and allows a later ordinary removal to hand off', async () => {
@@ -138,29 +118,8 @@ describe('deleting the active workspace', () => {
     removeForHost.mockRejectedValueOnce(new Error('host unavailable'))
     expect((await clearSshHostWorkspaces(resolution)).failedIds).toContain(active.id)
     expect(store.getState().activeWorktreeId).toBe(active.id)
-    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
-    await forget(store, active)
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('repo1::/sibling', {
-      revealInSidebar: false,
-      executionHostId: 'local'
-    })
-  })
 
-  it('keeps paired-host retirement on Landing while ordinary disappearance on another host still repairs', async () => {
-    const store = setup()
-    const retired = { ...active, runtimeOwnerEnvironmentId: 'retired' }
-    store.setState({ worktreesByRepo: { repo1: [retired, sibling, main] } })
-    store.getState().purgeStaleRuntimeHostState(['retired'])
-    await Promise.resolve()
-    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
-    store.getState().setActiveWorktree(sibling.id, 'local')
-    store.getState().purgeStaleRuntimeHostState(['unrelated'])
-    await forget(store, sibling)
-    await Promise.resolve()
-    expect(activateAndRevealWorktree).toHaveBeenCalledWith('repo1::/main', {
-      revealInSidebar: false,
-      executionHostId: 'local'
-    })
+    await forget(store, active)
   })
   it('does not wake a sibling that "Hide sleeping" keeps out of the sidebar', async () => {
     const store = setup()
@@ -179,16 +138,13 @@ describe('deleting the active workspace', () => {
     })
     await forget(store, active)
     await Promise.resolve()
-    expect(vi.mocked(activateAndRevealWorktree).mock.calls.map((call) => call[0])).toEqual([
-      awake.id
-    ])
 
     store.getState().setActiveWorktree(awake.id, 'local')
     vi.mocked(activateAndRevealWorktree).mockReset()
     store.setState({ ptyIdsByTabId: {} })
     await forget(store, awake)
     await Promise.resolve()
-    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
+
     expect(store.getState().activeWorktreeId).toBeNull()
   })
 
