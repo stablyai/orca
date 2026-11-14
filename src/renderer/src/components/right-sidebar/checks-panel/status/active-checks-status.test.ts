@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it } from 'vitest'
-import { clearActiveChecksStatusCacheForTests, getActiveChecksStatus } from './active-checks-status'
+import { describe, expect, it } from 'vitest'
+import { getActiveChecksStatus } from './active-checks-status'
 import type { AppState } from '../../../../store/types'
 import type { PRInfo } from '../../../../../../shared/github/pull-requests/pull-request-types'
 
@@ -16,10 +16,6 @@ function makePR(status: PRInfo['checksStatus']): PRInfo {
 }
 
 describe('getActiveChecksStatus', () => {
-  beforeEach(() => {
-    clearActiveChecksStatusCacheForTests()
-  })
-
   it('prefers repo-id scoped status over stale path-scoped status for the active worktree', () => {
     const state = {
       activeWorktreeId: 'wt-1',
