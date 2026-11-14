@@ -1,7 +1,7 @@
 import type { ExecutionHostId } from './execution-host'
 
 export const SERVER_SSH_PROJECT_ADD_UNAVAILABLE_MESSAGE =
-  "This Orca server can't add projects on its SSH hosts. Add the SSH host on your computer to open its projects."
+  "This Orca server can't open projects from its SSH hosts. Select that host's managed Orca server from Host, or open a folder on this server."
 
 /** Projects on an SSH host live in its Orca server, which only connecting the host sets up. */
 export function sshHostWithoutServerMessage(hostLabel: string): string {
