@@ -52,15 +52,23 @@ export function findLaunchRepo(
   return repoId && state.repos ? getIndexedRepoMap(state.repos).get(repoId) : undefined
 }
 
+type ClaudeLaunchAccountTarget = {
+  agent: TuiAgent
+  worktreeId: string
+  trustWorktreeId?: string
+  claudeAccountId?: string
+}
+
 /** The account a GUI launch runs on: Claude's gets the pick, the sentinel or the saved account. */
 export function claudeLaunchAccountId(
   state: Parameters<typeof claudeAccountPinningUnsupportedReasonInState>[0],
-  launch: { agent: TuiAgent; worktreeId: string; claudeAccountId?: string }
+  launch: ClaudeLaunchAccountTarget
 ): string | undefined {
   if (launch.agent !== 'claude') {
     return undefined
   }
-  const repo = findLaunchRepo(state, { worktreeId: launch.worktreeId })
+  // Why: an in-place section launch is placed in a folder; its project is the section's worktree.
+  const repo = findLaunchRepo(state, { worktreeId: launch.trustWorktreeId ?? launch.worktreeId })
   // Why: main never pins a saved default on SSH or WSL, so recording one would mislabel the tab.
   if (
     !launch.claudeAccountId &&
@@ -74,7 +82,7 @@ export function claudeLaunchAccountId(
 
 export function stampClaudeLaunchAccount(
   state: Parameters<typeof claudeAccountPinningUnsupportedReasonInState>[0],
-  launch: { agent: TuiAgent; worktreeId: string; claudeAccountId?: string },
+  launch: ClaudeLaunchAccountTarget,
   config: SleepingAgentLaunchConfig
 ): SleepingAgentLaunchConfig {
   return withClaudeLaunchAccount(config, claudeLaunchAccountId(state, launch))

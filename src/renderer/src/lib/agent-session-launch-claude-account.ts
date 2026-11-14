@@ -14,6 +14,8 @@ import { findLaunchRepo, resolveLaunchClaudeAccountId } from '@/lib/claude-launc
 export type ClaudeAccountRouteArgs = AgentLaunchRouteArgs & {
   /** A one-time account choice; the project's saved account applies when omitted. */
   claudeAccountId?: string
+  /** An in-place section launch's own worktree, whose project owns the saved account. */
+  trustWorktreeId?: string
 }
 
 // Why: a structured session has no account-pinning path, so a pinned Claude launch runs in a terminal.
@@ -24,7 +26,10 @@ export function launchPinsClaudeAccount(
   if (request.agent !== 'claude') {
     return false
   }
-  const repo = findLaunchRepo(store, request.workspace)
+  const repo = findLaunchRepo(
+    store,
+    request.trustWorktreeId ? { worktreeId: request.trustWorktreeId } : request.workspace
+  )
   return isPinnableClaudeAccountId(resolveLaunchClaudeAccountId(repo, request.claudeAccountId))
 }
 

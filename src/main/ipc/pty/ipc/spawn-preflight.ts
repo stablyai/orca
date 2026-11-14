@@ -122,7 +122,8 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
       : resolveProjectClaudeAccount({
           // Why optional: as in the push-target hook, a partial Store must not fail every spawn.
           getRepo: (repoId) => ctx.deps.store?.getRepo?.(repoId),
-          worktreeId: args.worktreeId,
+          // Why: an in-place section launch is placed in a folder; its project is the section's.
+          worktreeId: args.trustWorktreeId ?? args.worktreeId,
           // Why unchecked: launchConfig is untrusted IPC JSON; the resolver validates the id itself.
           launchConfigAccountId: args.launchConfig?.claudeAccountId,
           target: ctx.codexSelectionTarget

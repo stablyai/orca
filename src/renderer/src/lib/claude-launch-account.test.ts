@@ -72,4 +72,14 @@ describe('stampClaudeLaunchAccount', () => {
       )
     ).toEqual({ ...base, claudeAccountId: 'acct-2' })
   })
+
+  it("reads a folder-placed section launch's account from the section's worktree", () => {
+    expect(
+      stampClaudeLaunchAccount(
+        stateWith({}),
+        { agent: 'claude', worktreeId: 'folder:fw-1', trustWorktreeId: worktreeId },
+        base
+      )
+    ).toEqual({ ...base, claudeAccountId: 'acct-1' })
+  })
 })

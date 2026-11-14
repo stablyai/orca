@@ -40,7 +40,8 @@ export function resolveRuntimeSpawnClaudeAccount(ctx: RuntimePtySpawnState): str
   }
   return resolveProjectClaudeAccount({
     getRepo: (repoId) => ctx.deps.store?.getRepo?.(repoId),
-    worktreeId: ctx.args.worktreeId,
+    // Why: an in-place section launch is placed in a folder; its project is the section's.
+    worktreeId: ctx.args.trustWorktreeId ?? ctx.args.worktreeId,
     launchConfigAccountId: ctx.args.launchConfigClaudeAccountId,
     target: ctx.codexSelectionTarget
   })

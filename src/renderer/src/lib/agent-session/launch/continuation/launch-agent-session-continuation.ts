@@ -16,9 +16,14 @@ import type { LaunchSource } from '../../../../../../shared/telemetry-property-s
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import {
   adoptAgentSessionLaunchVerdict,
-  planAgentSessionLaunch
+  planAgentSessionLaunch,
+  resolveAgentSessionLaunchRoute
 } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
-import type { AgentLaunchChoice } from '@/lib/agent-session/launch/routing/agent-menu-selection'
+import {
+  launchChoiceSurface,
+  type AgentLaunchChoice
+} from '@/lib/agent-session/launch/routing/agent-menu-selection'
+import type { AgentLaunchRouteArgs } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import type { AgentLaunchRoute } from '@/lib/agent-session/launch/routing/agent-launch-routing'
 import { translate } from '@/i18n/i18n'
 import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
@@ -97,6 +102,18 @@ async function ensureAgentAvailable(
   return false
 }
 
+/** The menu's pick stands, except that a project's pinned Claude account still needs a terminal. */
+function pinnedLaunchChoice(
+  request: AgentLaunchRouteArgs,
+  choice: AgentLaunchChoice
+): AgentLaunchChoice {
+  const route = resolveAgentSessionLaunchRoute(useAppStore.getState(), {
+    ...request,
+    requestedSurface: launchChoiceSurface(choice)
+  })
+  return route === choice.route ? choice : { ...choice, route, requestedSurface: 'terminal' }
+}
+
 export async function launchAgentSessionContinuation({
   agent,
   prompt,
@@ -162,7 +179,11 @@ export async function launchAgentSessionContinuation({
   }
   // Capture preference routes before detection awaits; only deliberate picks demand a surface.
   const plan = launchChoice
-    ? adoptAgentSessionLaunchVerdict({ ...request, ...launchChoice, worktreeId })
+    ? adoptAgentSessionLaunchVerdict({
+        ...request,
+        ...pinnedLaunchChoice(request, launchChoice),
+        worktreeId
+      })
     : planAgentSessionLaunch(useAppStore.getState(), request)
   // A dialog closed while detection ran must not start the session the user just left.
   if (!(await ensureAgentAvailable(agent, worktreeId, plan.route, signal)) || signal?.aborted) {

@@ -95,6 +95,7 @@ function openAgentInNewTab(
     preferredSurface: args.preferredSurface,
     selectedExecutionHostId: args.selectedExecutionHostId,
     workspace: { kind: workspaceKindForWorktreeId(worktreeId), worktreeId },
+    ...(trustWorktreeId ? { trustWorktreeId } : {}),
     prompt: trimmedPrompt,
     promptDelivery: routePromptDelivery,
     tuiCustomization: { cwd: initialCwd },

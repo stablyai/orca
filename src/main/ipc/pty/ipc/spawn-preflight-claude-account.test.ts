@@ -62,6 +62,23 @@ describe('renderer pty spawn preflight: project Claude account', () => {
     expect(ctx.claudeAuth?.pinnedAccountId).toBe('acct-1')
   })
 
+  it("pins a folder-placed section launch to its section's project account", async () => {
+    const prepareClaudeAuth = vi.fn(async () => PINNED_PREPARATION)
+    const ctx = buildPreflightCtx({
+      args: {
+        command: 'claude',
+        launchAgent: 'claude',
+        worktreeId: 'folder:fw-1',
+        trustWorktreeId: WORKTREE_ID
+      },
+      prepareClaudeAuth
+    })
+
+    await preparePtyIpcSpawnPreflight(ctx)
+
+    expect(prepareClaudeAuth).toHaveBeenCalledWith(expect.anything(), { accountId: 'acct-1' })
+  })
+
   it('leaves a non-Claude spawn unpinned', async () => {
     const prepareClaudeAuth = vi.fn(async () => PINNED_PREPARATION)
     const ctx = buildPreflightCtx({ args: { command: 'zsh' }, prepareClaudeAuth })
