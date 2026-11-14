@@ -66,6 +66,11 @@ on:
         description: JSON array of specs to run; empty runs the full suite
         required: false
         type: string
+      background_launch:
+        description: Keep targeted Electron launches hidden for automation
+        required: false
+        type: boolean
+        default: false
       managed_ssh_shards:
         description: Managed SSH shard assignments (use one for small selections)
         required: false
@@ -354,6 +359,8 @@ jobs:
 
   changed-e2e:
     name: changed e2e specs (${{ matrix.shard }})
+    env:
+      ORCA_BACKGROUND_LAUNCH: ${{ inputs.background_launch && '1' || '' }}
     needs: [build]
     if: inputs.test_files != '' && (github.event_name != 'pull_request' || inputs.run_changed_e2e)
     runs-on: ${{ inputs.fast_runners && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-24.04' }}

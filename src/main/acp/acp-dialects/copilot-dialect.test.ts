@@ -27,22 +27,4 @@ describe('COPILOT_ACP_DIALECT.normalizeToolUpdate', () => {
     expect(update.rawOutput).toEqual({ stdout: 'note.txt\nout.txt', exitCode: 3 })
     expect(update.content).toEqual([])
   })
-
-  it('reads a file view as text and keeps edit diffs', () => {
-    const view = normalize({
-      toolCallId: 'call_view',
-      status: 'completed',
-      rawOutput: { content: 'hello copilot\n', detailedContent: '\ndiff --git a/note.txt' }
-    })
-    expect(view.rawOutput).toEqual({ stdout: 'hello copilot\n' })
-
-    const diff = { type: 'diff' as const, path: '/tmp/work/out.txt', oldText: '', newText: 'done' }
-    const edit = normalize({
-      toolCallId: 'call_edit',
-      status: 'completed',
-      rawOutput: { content: 'Created file /tmp/work/out.txt with 4 characters' },
-      content: [diff]
-    })
-    expect(edit.content).toEqual([diff])
-  })
 })

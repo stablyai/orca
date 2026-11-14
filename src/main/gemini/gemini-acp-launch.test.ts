@@ -1,19 +1,19 @@
 import { providerStartupFailureFact } from '../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import { AgentSessionPreSpawnError } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
-import { StructuredAgentArgumentsError } from '../native-chat/structured-agent-arguments-error'
+import { StructuredAgentArgumentsError } from '../native-chat/agent-launch/structured-agent-arguments-error'
 import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import { decideAgentLaunchMode } from '../agent-launch/agent-launch-mode'
 import { acpLaunchSpecFor } from '../acp/launch/acp-launch-registry'
 import { createAcpModelCatalogProbe } from '../acp/discovery/acp-model-catalog-probe'
 import { createAcpStructuredLaunchResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import { structuredAgentRuntimeRegistration } from '../runtime/agent-session/installation/structured-agent-runtime-registrations'
 import { agentChatPermissionModes } from '../../shared/agent-launch/permissions/agent-chat-permission-support'
-import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/agent-session-setup-commands'
+import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import { readGeminiAcpSignInLine } from './gemini-acp-dialect'
 
 const GEMINI = acpLaunchSpecFor('gemini')!
@@ -41,7 +41,7 @@ function resolver(
   }
   return createAcpStructuredLaunchResolver(GEMINI, {
     store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
-    readJournal: () => null,
+    savedSession: { hasProviderTurn: async () => false },
     resolveWorkspacePath: async () => '/workspace/folder',
     resolveEnvironment: async () => ({ PATH: '/usr/bin', HOME: '/host' }),
     resolveLaunchEnv: () => options.launchEnv ?? {},

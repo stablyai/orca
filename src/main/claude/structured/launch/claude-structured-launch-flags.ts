@@ -1,7 +1,7 @@
 import type {
   NativeChatVisualsLaunch,
   PrepareNativeChatVisuals
-} from '../../../native-chat/native-chat-visuals-delivery'
+} from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import {
   CLAUDE_CACHED_FLAG_CHECK_BUDGET_MS,
   CLAUDE_CLI_FLAG_PROBE_KILL_AFTER_MS,
@@ -11,7 +11,7 @@ import {
   type ClaudeCliFlagFact,
   type ClaudeCliFlagSupport,
   type ClaudeCliLaunch
-} from '../../claude-cli-flag-support'
+} from '../../cli-capabilities/claude-cli-flag-support'
 
 const THINKING_DISPLAY_ARGS: Readonly<Record<string, string>> = { 'thinking-display': 'summarized' }
 

@@ -12,7 +12,7 @@ import {
   parseOpenCodeModelListing
 } from '../../opencode/model-launch/opencode-model-catalog-listing'
 
-import { agentSessionSetupFor } from '../../../shared/agent-session/lifecycle/agent-session-setup-commands'
+import { agentSessionSetupFor } from '../../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import {
   loadGrokVisualsSkill,
   loadOmpVisualsSkill,
@@ -28,6 +28,7 @@ import { OMP_SESSION_HISTORY } from '../../omp/omp-session-history'
 import { OMP_TRANSCRIPT_IMPORT } from '../../omp/omp-transcript-import'
 import { ANTIGRAVITY_LAUNCH_SPEC } from '../../antigravity/antigravity-acp-launch-spec'
 import { COPILOT_LAUNCH_SPEC } from '../../copilot/copilot-acp-launch-spec'
+import { KIMI_LAUNCH_SPEC } from '../../kimi/kimi-acp-launch-spec'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 import { GEMINI_ACP_LAUNCH_SPEC } from '../../gemini/gemini-acp-launch-spec'
 
@@ -158,7 +159,8 @@ export const ACP_LAUNCH_SPECS: readonly AcpLaunchSpec[] = [
   OMP_LAUNCH_SPEC,
   GEMINI_ACP_LAUNCH_SPEC,
   ANTIGRAVITY_LAUNCH_SPEC,
-  COPILOT_LAUNCH_SPEC
+  COPILOT_LAUNCH_SPEC,
+  KIMI_LAUNCH_SPEC
 ]
 
 export function acpLaunchSpecFor(agent: string): AcpLaunchSpec | null {

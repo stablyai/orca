@@ -1,14 +1,14 @@
 import { ipcMain } from 'electron'
 import { appStarSourceSchema } from '../../../shared/gh-star-source'
-import { resolveGhAccountRequiredHost } from '../../github/account-binding-required-host'
-import { diagnoseGhAuth } from '../../github/auth-diagnose'
+import { resolveGhAccountRequiredHost } from '../../github/accounts/account-binding-required-host'
+import { diagnoseGhAuth } from '../../github/accounts/auth-diagnose'
 import { checkOrcaStarred, starOrca } from '../../github/client/fetch/orca-star'
 import { getAuthenticatedViewer } from '../../github/client/fetch/authenticated-viewer'
 import {
   listGhAccountBindingInventory,
   validateGhAccountBinding
-} from '../../github/gh-account-binding-inventory'
-import { getRateLimit } from '../../github/rate-limit'
+} from '../../github/accounts/gh-account-binding-inventory'
+import { getRateLimit } from '../../github/api/rate-limit'
 import type { Store } from '../../persistence/loading-store/store'
 import { getCohortAtEmit } from '../../telemetry/cohort-classifier'
 import { track } from '../../telemetry/client'

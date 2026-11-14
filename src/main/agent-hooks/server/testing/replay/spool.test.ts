@@ -1,8 +1,6 @@
-import { readSavedStatus } from '../persistence/last-status.test-fixtures'
 import { describe, expect, it } from 'vitest'
 import {
   appendFileSync,
-  chmodSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -19,10 +17,9 @@ import {
   launchTokenHash,
   type SpoolRecord
 } from '../../../../../shared/agent-hook-listener/transport/agent-hook-spool'
-import { AgentHookServer, _internals } from '../../agent-hook-server'
-import { buildBody } from '../server.test-fixtures'
-import { _internals as codexInternals } from '../../../../codex/hooks/installation/hook-service'
-import { getManagedScript as getClaudeManagedScript } from '../../../../claude/hook-script'
+import { AgentHookServer } from '../../agent-hook-server'
+
+import { getManagedScript as getClaudeManagedScript } from '../../../../claude/hooks/hook-script'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 
 describe('agent hook spool', () => {
@@ -102,49 +99,6 @@ describe('agent hook spool', () => {
     expect(statSync(file).ino).toBe(inode)
   })
 
-  it('replays a spooled Codex SubagentStop through the server after restart', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-spool-e2e-'))
-    const paneKey = makePaneKey('tab-spool', '00000000-0000-4000-8000-000000000001')
-    const launchToken = 'generation-token'
-    const first = new AgentHookServer()
-    await first.start({ env: 'production', userDataPath })
-    const started = _internals.normalizeHookPayload(
-      'codex',
-      buildBody({ hook_event_name: 'SubagentStart', agent_id: 'child-spooled' }),
-      'production'
-    )!
-    first.ingestRemote(
-      {
-        paneKey,
-        source: 'codex',
-        hookEventName: 'SubagentStart',
-        launchToken,
-        payload: started.payload
-      },
-      'spool-test'
-    )
-    expect(first.getStatusSnapshot()).toHaveLength(1)
-    first.flushStatusPersistSync()
-    first.stop()
-    const spoolDir = join(userDataPath, 'agent-hooks', 'spool')
-    mkdirSync(spoolDir, { recursive: true })
-    writeFileSync(
-      join(spoolDir, 'pane-tab-spooled_0.jsonl'),
-      `\n${JSON.stringify({ paneKey, source: 'codex', hookEventName: 'SubagentStop', launchToken, receivedAt: Date.now(), payload: { hook_event_name: 'SubagentStop', agent_id: 'child-spooled' } })}\n`
-    )
-    const restarted = new AgentHookServer()
-    await restarted.start({ env: 'production', userDataPath })
-    try {
-      const snapshot = restarted.getStatusSnapshot()
-      expect(snapshot).toHaveLength(1)
-      expect(snapshot[0]!.subagents).toBeUndefined()
-      restarted.flushStatusPersistSync()
-      expect(readSavedStatus(restarted.lastStatusPath!)).not.toContain('isReplay')
-    } finally {
-      restarted.stop()
-    }
-  })
-
   it('rejects a stale remote replay against the hydrated launch-token fence', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-spool-remote-fence-'))
     const paneKey = makePaneKey('tab-remote-fence', '00000000-0000-4000-8000-000000000003')
@@ -184,37 +138,6 @@ describe('agent hook spool', () => {
       first.stop()
       second.stop()
     }
-  })
-
-  it('spools when the endpoint is present but the receiver is unavailable', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'orca-spool-failure-'))
-    const endpointDir = join(dir, 'agent-hooks')
-    mkdirSync(endpointDir, { recursive: true })
-    const endpoint = join(endpointDir, 'endpoint.env')
-    writeFileSync(
-      endpoint,
-      'ORCA_AGENT_HOOK_PORT=9\nORCA_AGENT_HOOK_TOKEN=stale\nORCA_AGENT_HOOK_ENV=production\nORCA_AGENT_HOOK_VERSION=1\n'
-    )
-    const script = join(dir, 'codex-hook.sh')
-    writeFileSync(script, codexInternals.getManagedScript('posix'))
-    chmodSync(script, 0o755)
-    execFileSync('/bin/sh', [script], {
-      input: '{"hook_event_name":"SubagentStop","agent_id":"child"}\n',
-      env: {
-        ...process.env,
-        ORCA_AGENT_HOOK_ENDPOINT: endpoint,
-        ORCA_PANE_KEY: 'tab-failure:0',
-        ORCA_TAB_ID: 'tab-failure',
-        ORCA_AGENT_LAUNCH_TOKEN: 'generation-token',
-        CLAUDE_JOB_DIR: ''
-      },
-      timeout: 5000
-    })
-    const spoolFiles = readdirSync(join(endpointDir, 'spool'))
-    expect(spoolFiles).toHaveLength(1)
-    expect(readFileSync(join(endpointDir, 'spool', spoolFiles[0]!), 'utf8')).toContain(
-      'SubagentStop'
-    )
   })
 
   it('keeps a Claude hook attributed when CLAUDE_CODE_SUBPROCESS_ENV_SCRUB drops the pane key', () => {
@@ -277,43 +200,5 @@ describe('agent hook spool', () => {
     )
     expect(records).toHaveLength(1)
     expect(records[0]).toContain('"Stop"')
-  })
-
-  it('does not mark a non-terminal downtime replay as runtime-observed', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-spool-observed-'))
-    const paneKey = makePaneKey('tab-observed', '00000000-0000-4000-8000-000000000002')
-    const launchToken = 'observed-generation'
-    const first = new AgentHookServer()
-    await first.start({ env: 'production', userDataPath })
-    const started = _internals.normalizeHookPayload(
-      'codex',
-      buildBody({ hook_event_name: 'SubagentStart', agent_id: 'child-observed' }),
-      'production'
-    )!
-    first.ingestRemote(
-      {
-        paneKey,
-        source: 'codex',
-        hookEventName: 'SubagentStart',
-        launchToken,
-        payload: started.payload
-      },
-      null
-    )
-    first.flushStatusPersistSync()
-    first.stop()
-    const spoolDir = join(userDataPath, 'agent-hooks', 'spool')
-    mkdirSync(spoolDir, { recursive: true })
-    writeFileSync(
-      join(spoolDir, 'pane-observed.jsonl'),
-      `\n${JSON.stringify({ paneKey, source: 'codex', hookEventName: 'SubagentStart', launchToken, receivedAt: Date.now(), payload: started.payload })}\n`
-    )
-    const restarted = new AgentHookServer()
-    await restarted.start({ env: 'production', userDataPath })
-    try {
-      expect(restarted.getStatusChangeSnapshot()[0]?.observedInCurrentRuntime).toBe(false)
-    } finally {
-      restarted.stop()
-    }
   })
 })

@@ -63,7 +63,8 @@ import {
   mockBrowserManager,
   mockWebContents,
   overrideBridgeWebContentsLookup,
-  resetAgentBrowserBridgeMocks
+  resetAgentBrowserBridgeMocks,
+  succeedRecordingAgentBrowserSpawns
 } from '../testing/agent-browser-bridge-test-harness'
 
 overrideBridgeWebContentsLookup(AgentBrowserBridge.prototype, webContentsFromIdMock)
@@ -104,6 +105,28 @@ describe('AgentBrowserBridge', () => {
     expect(wc.debugger.sendCommand).not.toHaveBeenCalledWith(
       'Runtime.evaluate',
       expect.objectContaining({ expression: 'sideEffect()' })
+    )
+  })
+
+  it('deletes the named cookie through the guest debugger instead of clearing the profile', async () => {
+    const spawns = succeedRecordingAgentBrowserSpawns(execFileMock, stdinWrites, { cleared: true })
+    const wc = mockWebContents(100, 'https://www.example.com/app')
+    wc.debugger.sendCommand.mockImplementation(async (method) =>
+      method === 'Network.getAllCookies'
+        ? { cookies: [{ name: 'sid', domain: '.example.com', path: '/' }] }
+        : {}
+    )
+    webContentsFromIdMock.mockReturnValue(wc)
+
+    await expect(bridge.cookieDelete('sid')).resolves.toEqual({ deleted: true })
+
+    expect(wc.debugger.sendCommand).toHaveBeenCalledWith('Network.deleteCookies', {
+      name: 'sid',
+      domain: '.example.com',
+      path: '/'
+    })
+    expect(spawns.map(({ command }) => command)).not.toContainEqual(
+      expect.arrayContaining(['cookies', 'clear'])
     )
   })
 })

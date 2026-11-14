@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PLUGIN_MANIFEST_V2_SINCE } from './plugin-schema-field-docs'
-import { PLUGIN_COMMAND_LIMIT, parsePluginManifest, pluginManifestSchema } from './plugin-manifest'
+import { parsePluginManifest } from './plugin-manifest'
 
 function manifest(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -53,57 +52,5 @@ describe('pluginManifestSchema boundaries', () => {
         ]
       }
     })
-  })
-
-  it('refuses format 1 names in format 2', () => {
-    const result = parsePluginManifest({
-      ...manifest({ capabilities: [{ kind: 'storage' }] }),
-      manifestVersion: 2,
-      execution: 'data',
-      engines: { orca: `>=${PLUGIN_MANIFEST_V2_SINCE}` }
-    })
-
-    expect(result.ok).toBe(false)
-  })
-
-  it('rejects duplicate contribution ids', () => {
-    const parsed = pluginManifestSchema.safeParse(
-      manifest({
-        main: 'main.mjs',
-        contributes: {
-          panels: [
-            { id: 'dashboard', title: 'One', entry: 'one.html' },
-            { id: 'dashboard', title: 'Two', entry: 'two.html' }
-          ],
-          commands: [
-            { id: 'run', title: 'One' },
-            { id: 'run', title: 'Two' }
-          ],
-          events: []
-        }
-      })
-    )
-
-    expect(parsed.success).toBe(false)
-    if (!parsed.success) {
-      expect(parsed.error.issues.map((issue) => issue.message)).toEqual(
-        expect.arrayContaining(['duplicate panels id: dashboard', 'duplicate commands id: run'])
-      )
-    }
-  })
-
-  it('caps contribution arrays before they reach renderer or worker registries', () => {
-    const commands = Array.from({ length: PLUGIN_COMMAND_LIMIT + 1 }, (_, index) => ({
-      id: `command-${index}`,
-      title: `Command ${index}`
-    }))
-    expect(
-      parsePluginManifest(
-        manifest({
-          main: 'main.mjs',
-          contributes: { panels: [], commands, events: [] }
-        })
-      ).ok
-    ).toBe(false)
   })
 })

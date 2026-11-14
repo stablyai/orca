@@ -1,5 +1,5 @@
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
-import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
+import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
 import {
   navigationTargetsClients,

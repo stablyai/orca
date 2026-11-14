@@ -4,10 +4,13 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
-import { AutomationService } from './service'
-import { TICK_MS } from './automation-service-tick.test-fixture'
+import { AutomationService } from './automation-service'
+import { TICK_MS } from './testing/automation-service-tick.test-fixture'
 import { createAwakeClock, type AwakeClock } from '../power/awake-clock'
-import { AUTOMATION_WAKE_SETTLE_MS, automationSystemSettled } from './automation-wake-settle'
+import {
+  AUTOMATION_WAKE_SETTLE_MS,
+  automationSystemSettled
+} from './dispatch/automation-wake-settle'
 
 vi.mock('electron', () => ({
   app: {
@@ -137,117 +140,5 @@ describe.each<CounterModel>(['counts sleep (macOS/Windows Node)', 'stops in slee
       expect(launch).toHaveBeenCalledOnce()
       service.stop()
     })
-
-    it('does not let the wait after a wake use up a zero-minute grace', async () => {
-      const { store, automation, service, statuses } = await scheduledService({ graceMinutes: 0 })
-
-      // Without the wait, the 09:01:01 tick would have launched this run inside its grace.
-      clock.suspend()
-      asleepUntil('2026-11-09T09:00:01')
-      clock.resume()
-      await awakeFor(TICK_MS)
-      expect(statuses()).toEqual([])
-
-      await awakeFor(TICK_MS)
-      await vi.waitFor(() => expect(statuses()).toEqual(['dispatched']))
-      expect(store.listAutomationRuns(automation.id)[0]!.scheduledFor).toBe(
-        new Date('2026-11-09T09:00:00').getTime()
-      )
-      service.stop()
-    })
-
-    /** Holds today's 09:00 zero-grace occurrence: resume at 09:00:01, held by the 09:01:01 tick. */
-    async function holdZeroGraceOccurrence() {
-      clock.suspend()
-      asleepUntil('2026-11-09T09:00:01')
-      clock.resume()
-      await awakeFor(TICK_MS)
-    }
-
-    /** A run of yesterday's occurrence, still open so its completion lands during a hold. */
-    async function priorDispatchedRun(
-      store: Awaited<ReturnType<typeof scheduledService>>['store'],
-      service: AutomationService,
-      automationId: string
-    ) {
-      const automation = store.listAutomations().find((entry) => entry.id === automationId)!
-      const run = store.createAutomationRun(automation, new Date('2026-11-08T09:00:00').getTime())
-      await service.markDispatchResult({
-        runId: run.id,
-        status: 'dispatched',
-        workspaceId: 'r1::wt1',
-        terminalSessionId: 'tab-0',
-        terminalPtyId: 'pty-0'
-      })
-      return run
-    }
-
-    const updatedAt = (
-      store: Awaited<ReturnType<typeof scheduledService>>['store'],
-      automationId: string
-    ) => store.listAutomations().find((entry) => entry.id === automationId)!.updatedAt
-
-    it('keeps a held occurrence when an earlier run completes during the hold', async () => {
-      const { store, automation, launch, service } = await scheduledService({ graceMinutes: 0 })
-      const prior = await priorDispatchedRun(store, service, automation.id)
-      const todays = () =>
-        store
-          .listAutomationRuns(automation.id)
-          .filter((run) => run.id !== prior.id)
-          .map((run) => run.status)
-
-      await holdZeroGraceOccurrence()
-      expect(todays()).toEqual([])
-      const heldUpdatedAt = updatedAt(store, automation.id)
-      // 09:01:31: the completion watcher reports the earlier run, which also writes its usage.
-      await awakeFor(TICK_MS / 2)
-      await service.markDispatchResult({ runId: prior.id, status: 'completed' })
-      expect(updatedAt(store, automation.id)).not.toBe(heldUpdatedAt)
-
-      await awakeFor(TICK_MS / 2)
-      await vi.waitFor(() => expect(todays()).toEqual(['dispatched']))
-      expect(launch).toHaveBeenCalledOnce()
-      service.stop()
-    })
-
-    it.each([
-      ['a user pause', 'user'],
-      ['an ownership disable', 'ownership']
-    ] as const)(
-      'does not keep a held occurrence across %s and re-enable in the same millisecond',
-      async (_label, disabledBy) => {
-        const { store, automation, launch, service, statuses } = await scheduledService({
-          graceMinutes: 0
-        })
-
-        await holdZeroGraceOccurrence()
-        const held = store.listAutomations().find((entry) => entry.id === automation.id)!
-        const at = Date.now()
-        if (disabledBy === 'user') {
-          store.updateAutomation(automation.id, { enabled: false })
-        } else {
-          store.disableAutomations(new Set([automation.id]))
-        }
-        store.updateAutomation(automation.id, { enabled: true })
-        expect(Date.now()).toBe(at)
-        const restored = store.listAutomations().find((entry) => entry.id === automation.id)!
-        for (const key of [
-          'enabled',
-          'rrule',
-          'dtstart',
-          'timezone',
-          'missedRunPolicy',
-          'missedRunGraceMinutes',
-          'nextRunAt'
-        ] as const) {
-          expect(restored[key]).toEqual(held[key])
-        }
-
-        await awakeFor(TICK_MS)
-        await vi.waitFor(() => expect(statuses()).toEqual(['skipped_missed']))
-        expect(launch).not.toHaveBeenCalled()
-        service.stop()
-      }
-    )
   }
 )

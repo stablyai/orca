@@ -7,7 +7,7 @@ import {
   type StructuredAgentCommand,
   type StructuredAgentCommandSettings,
   type StructuredAgentResolutionOperation
-} from '../../native-chat/structured-agent-command-resolution'
+} from '../../native-chat/agent-launch/structured-agent-command-resolution'
 // Launch from durable record values for the working directory, pinned account and resume session.
 
 import {
@@ -16,24 +16,25 @@ import {
 } from '../../../shared/antigravity-chat-auth-config'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { assertAntigravityChatAuthPublished } from '../../antigravity/antigravity-chat-auth-publication'
-import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { agentSessionProviderHandleKey } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { prepareAntigravityAcpProxyEnvironment } from '../../antigravity/antigravity-acp-proxy-environment'
+import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import { agentSessionProviderHandleKey } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { resolveCliCommand } from '../../../shared/node-cli-command-resolution'
 import type { AgentCliVersionReader } from '../../agent-launch/preflight/agent-cli-version-probe'
-import { AgentCliInstallationError } from '../../native-chat/agent-cli-installation-error'
-import type { JournalLoad } from '../../native-chat/agent-session-journal/replay/journal-open'
+import { AgentCliInstallationError } from '../../native-chat/agent-launch/agent-cli-installation-error'
 import type { StructuredAgentLaunchPartResolver } from '../../runtime/agent-session/launch/structured-agent-launch-composition'
-import { STRUCTURED_CHILD_ENV_TO_DELETE } from '../../runtime/agent-session/environment/structured-session-child-env'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV,
   withNativeChatVisualsEnv
-} from '../../native-chat/native-chat-visuals-delivery'
+} from '../../native-chat/conversation-files/native-chat-visuals-delivery'
 import type { AcpLaunchSpec } from './acp-launch-contract'
 import { acpLaunchSpecForAccount, resolveAcpLaunchCommand } from './acp-launch-command'
-import { nothingExchangedOn } from '../session/acp-structured-resume-history'
-import { acpUnannouncedLosses } from '../session/start/acp-session-reopen-failure'
+import {
+  nothingExchangedOn,
+  type AcpSavedSessionReads
+} from '../session/acp-structured-resume-history'
 import { AgentSessionPreSpawnError } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import { loadAcpVisualsSkill, type AcpLaunchVisualsDeps } from './acp-structured-launch-visuals'
 
@@ -52,15 +53,14 @@ export type AcpStructuredLaunch = StructuredAgentCommand & {
     sessionId: string
     key: string
     /** A chat-created session with no exchanged turn may never have been saved. */
-    mayBeUnsaved: () => boolean
-    /** Lost conversations whose warning rows are missing; read after startup succeeds. */
-    unannouncedLosses: () => string[]
+    mayBeUnsaved: () => Promise<boolean>
+    /** The writer decides which lost conversations still need warning rows. */
+    lossKeys: readonly string[]
   } | null
 }
 
 export type AcpStructuredLaunchPartDeps = {
-  /** Reads without opening the journal. */
-  readJournal: (sessionId: string) => JournalLoad | null
+  savedSession: AcpSavedSessionReads
   resolveCommand?: typeof resolveCliCommand
   homePath?: string
   inheritedEnv?: NodeJS.ProcessEnv
@@ -123,6 +123,10 @@ async function readAcpLaunchInvocation(
     overlayEnvironmentVariables(base, deps.resolveLaunchEnv?.(spec.agent), process.platform)
   )
   const envToDelete = spec.scrubEnvironment?.(env, deps.inheritedEnv ?? process.env) ?? []
+  if (spec.agent === 'antigravity' && spec.managedRuntime) {
+    await prepareAntigravityAcpProxyEnvironment(env, deps.inheritedEnv ?? process.env)
+    assertStructuredAgentResolutionCurrent(deps.operation)
+  }
   Object.assign(env, spec.env)
   const commandSettings = deps.resolveCommandSettings?.()
   // Orca's account-type setting selects only the managed server's sign-in.
@@ -150,13 +154,13 @@ export function acpStructuredLaunchPart(
   return async (basis, identity) => {
     const { record } = basis
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
-    const mayBeUnsaved = (): boolean =>
+    const mayBeUnsaved = async (): Promise<boolean> =>
       head?.origin === 'created' &&
-      nothingExchangedOn(deps.readJournal, identity.sessionId, head.handle.nativeId)
+      (await nothingExchangedOn(deps.savedSession, identity.sessionId, head.handle.nativeId))
     if (
       head &&
       acpLaunchSpecForAccount(agentSpec, record.accountHome).resumeUnavailable &&
-      !mayBeUnsaved()
+      !(await mayBeUnsaved())
     ) {
       throw new AgentSessionPreSpawnError(`${agentSpec.agent} cannot safely reopen this chat`, {
         reason: 'providerResumeUnavailable'
@@ -215,18 +219,14 @@ export function acpStructuredLaunchPart(
               sessionId: head.handle.nativeId,
               key: agentSessionProviderHandleKey(head.handle),
               mayBeUnsaved,
-              unannouncedLosses: () =>
-                acpUnannouncedLosses(
-                  deps.readJournal,
-                  identity.sessionId,
-                  record.providerHandleChain
-                )
+              lossKeys: record.providerHandleChain.flatMap((link) =>
+                link.replaces?.reason === 'restore-failed' ? [link.replaces.key] : []
+              )
             }
           : null
       },
       env: withNativeChatVisualsEnv({ ...env, ...skill?.env }, skill ? visuals : null),
       inheritedEnvToDelete: [
-        ...STRUCTURED_CHILD_ENV_TO_DELETE,
         ...envToDelete,
         // An inherited scratch directory belongs to a different chat.
         ...(skill ? [] : [NATIVE_CHAT_SCRATCH_DIR_ENV]),

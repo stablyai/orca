@@ -7,9 +7,9 @@ import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeLineage } from '../../../../../../shared/worktree/lineage-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
-import { getHostSectionCollapseKey } from '../../../../../../shared/sidebar-list/host-section-collapse'
+import { getHostSectionCollapseKey } from '../../../../../../shared/sidebar-list/hosts/host-section-collapse'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import { getWorktreeLineageGroupKey } from '../../../../../../shared/sidebar-list/group-keys'
+import { getWorktreeLineageGroupKey } from '../../../../../../shared/sidebar-list/sections/group-keys'
 import type { ProjectGroupingModel } from '../../../../../../shared/project-section-grouping'
 import type { WorktreeOccurrencePlan } from '../../../../../../shared/worktree-occurrence-plan'
 import type {
@@ -17,7 +17,7 @@ import type {
   WorktreeGroupBy
 } from '../../../../../../shared/sidebar-list/row-types'
 import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-row-plan'
-import type { SidebarLineageParentIdentities } from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
+import type { SidebarLineageParentIdentities } from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
 import { createSidebarPRGroupReader } from '../grouping/pr-group-key'
 
 export function getWorktreeRevealCollapsedGroupKeys(args: {

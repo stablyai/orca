@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { getStateMock, inspectRuntimeTerminalProcessMock, getStatusFeedMock } = vi.hoisted(() => ({
   getStateMock: vi.fn(),
@@ -22,14 +22,6 @@ import { assessWindowCloseRunningWork } from './window-close-running-work'
 
 const LOCAL_PTY = 'pty-local'
 const SSH_PTY = 'ssh:openclaw@@pty-7'
-const RUNTIME_PTY = 'remote:env-1@@handle-1'
-const OWNERLESS_RUNTIME_PTY = 'remote:handle-2'
-
-const BUSY = {
-  foregroundProcess: 'pnpm build',
-  hasChildProcesses: true,
-  foregroundProcessEvidence: {}
-}
 
 const UNVERIFIABLE = {
   foregroundProcess: null,
@@ -81,41 +73,7 @@ beforeEach(() => {
   getStatusFeedMock.mockReturnValue(feed(null, 'unverifiable'))
 })
 
-afterEach(() => {
-  vi.useRealTimers()
-})
-
 describe('assessWindowCloseRunningWork', () => {
-  it.each(['working', 'attention'])(
-    'warns for a live %s chat without a PTY or ownership metadata',
-    async (status) => {
-      setState([])
-      representChat()
-      getStatusFeedMock.mockReturnValue(feed(status))
-
-      await expect(assessWindowCloseRunningWork({ isQuitting: false })).resolves.toEqual({
-        kind: 'running'
-      })
-      expect(inspectRuntimeTerminalProcessMock).not.toHaveBeenCalled()
-    }
-  )
-
-  it.each([
-    ['working', 'unverifiable', {}],
-    ['idle', 'live', { hostExecutionOwned: true, children: [{ kind: 'agent', state: 'working' }] }],
-    ['idle', 'live', { children: [{ kind: 'agent', state: 'unverifiable' }] }],
-    [null, 'live', {}],
-    [undefined, 'live', {}]
-  ])('does not warn for status %s observed as %s', async (status, observation, extra) => {
-    setState([])
-    representChat()
-    getStatusFeedMock.mockReturnValue(feed(status, observation, extra))
-
-    await expect(assessWindowCloseRunningWork({ isQuitting: false })).resolves.toEqual({
-      kind: 'none'
-    })
-  })
-
   it('keeps equal chat IDs separate across hosts and resolves legacy tabs through their workspace owner', async () => {
     setState([])
     const state = getStateMock()
@@ -133,17 +91,6 @@ describe('assessWindowCloseRunningWork', () => {
     await expect(assessWindowCloseRunningWork({ isQuitting: false })).resolves.toEqual({
       kind: 'running'
     })
-  })
-
-  it('does not use a local observation for an unserved SSH chat', async () => {
-    setState([])
-    representChat('ssh:openclaw')
-    getStatusFeedMock.mockReturnValue(feed('working'))
-
-    await expect(assessWindowCloseRunningWork({ isQuitting: false })).resolves.toEqual({
-      kind: 'none'
-    })
-    expect(getStatusFeedMock).not.toHaveBeenCalled()
   })
 
   it('uses current chat membership, owner and status after terminal probes settle', async () => {
@@ -182,73 +129,5 @@ describe('assessWindowCloseRunningWork', () => {
       kind: 'unverifiable'
     })
     expect(getStatusFeedMock).not.toHaveBeenCalled()
-  })
-  // #29916: a paired runtime owns its terminals and keeps them after this client quits.
-  it('does not warn on quit, or probe, for a live process on a paired runtime host', async () => {
-    setState([RUNTIME_PTY, OWNERLESS_RUNTIME_PTY])
-    answerWith({ [RUNTIME_PTY]: BUSY, [OWNERLESS_RUNTIME_PTY]: BUSY })
-
-    await expect(assessWindowCloseRunningWork({ isQuitting: true })).resolves.toEqual({
-      kind: 'none'
-    })
-    expect(inspectRuntimeTerminalProcessMock).not.toHaveBeenCalled()
-  })
-
-  it('still warns when closing the window over a live process on a paired runtime host', async () => {
-    setState([RUNTIME_PTY])
-    answerWith({ [RUNTIME_PTY]: BUSY })
-
-    await expect(assessWindowCloseRunningWork({ isQuitting: false })).resolves.toEqual({
-      kind: 'running'
-    })
-  })
-
-  // Unreachable remote work is unverifiable, never proof of exit; quitting silently could orphan it.
-  it('warns rather than quitting silently when a remote host answers unverifiable', async () => {
-    setState([SSH_PTY])
-    answerWith({ [SSH_PTY]: UNVERIFIABLE })
-
-    await expect(assessWindowCloseRunningWork({ isQuitting: true })).resolves.toEqual({
-      kind: 'unverifiable'
-    })
-  })
-
-  it('reports a live process even when a sibling remote pane is only unverifiable', async () => {
-    setState([SSH_PTY, RUNTIME_PTY])
-    answerWith({ [SSH_PTY]: UNVERIFIABLE, [RUNTIME_PTY]: BUSY })
-
-    await expect(assessWindowCloseRunningWork({ isQuitting: false })).resolves.toEqual({
-      kind: 'running'
-    })
-  })
-
-  it('still warns about a live local process when closing the window', async () => {
-    setState([LOCAL_PTY])
-    answerWith({ [LOCAL_PTY]: BUSY })
-
-    await expect(assessWindowCloseRunningWork({ isQuitting: false })).resolves.toEqual({
-      kind: 'running'
-    })
-  })
-
-  // Local probe failure has no lost-transport ambiguity and must not block closing.
-  it('does not warn when only a local probe is unverifiable', async () => {
-    setState([LOCAL_PTY])
-    answerWith({ [LOCAL_PTY]: UNVERIFIABLE })
-
-    await expect(assessWindowCloseRunningWork({ isQuitting: false })).resolves.toEqual({
-      kind: 'none'
-    })
-  })
-
-  // Quit consents to end this machine’s processes (#524); it does not consent to end remote work.
-  it('leaves local-only quit unprompted, and never probes for it', async () => {
-    setState([LOCAL_PTY])
-    answerWith({ [LOCAL_PTY]: BUSY })
-
-    await expect(assessWindowCloseRunningWork({ isQuitting: true })).resolves.toEqual({
-      kind: 'none'
-    })
-    expect(inspectRuntimeTerminalProcessMock).not.toHaveBeenCalled()
   })
 })

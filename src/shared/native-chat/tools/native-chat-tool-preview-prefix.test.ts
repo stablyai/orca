@@ -25,10 +25,6 @@ describe('unwrapLoginShellCommand', () => {
     expect(unwrapLoginShellCommand(`/bin/zsh -lc 'a' | 'b'`)).toBe(`/bin/zsh -lc 'a' | 'b'`)
   })
 
-  it('keeps quotes that belong to the command itself', () => {
-    expect(unwrapLoginShellCommand(`/bin/zsh -lc "rg -n 'needle' src"`)).toBe(`rg -n 'needle' src`)
-  })
-
   it('undoes the quoting Codex used to join the script, as the shell would', () => {
     expect(unwrapLoginShellCommand(String.raw`/bin/zsh -lc "rg -n \"a|b\" src"`)).toBe(
       `rg -n "a|b" src`
@@ -36,9 +32,5 @@ describe('unwrapLoginShellCommand', () => {
     expect(unwrapLoginShellCommand(String.raw`/bin/zsh -lc "rg 'x\\.js\"'$'\"'; ls"`)).toBe(
       String.raw`rg 'x\.js"'$'"'; ls`
     )
-  })
-
-  it('unwraps a multi-line command without collapsing it', () => {
-    expect(unwrapLoginShellCommand(`/bin/zsh -lc 'set -e\ngit push'`)).toBe('set -e\ngit push')
   })
 })

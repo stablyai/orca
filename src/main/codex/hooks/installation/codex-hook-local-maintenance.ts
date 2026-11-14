@@ -35,11 +35,12 @@ import {
 
 export async function refreshCodexRuntimeUserHooksExclusively(
   runtimeHomePath: string,
-  getStatus: (runtimeHomePath: string) => AgentHookInstallStatus
+  getStatus: (runtimeHomePath: string) => AgentHookInstallStatus,
+  onComplete?: () => void
 ): Promise<AgentHookInstallStatus> {
   const configPath = getConfigPath(runtimeHomePath)
   // Save in-Orca approvals before rewriting the runtime positions they are keyed against.
-  promoteCodexRuntimeHookApprovalsToSystem(runtimeHomePath)
+  let complete = promoteCodexRuntimeHookApprovalsToSystem(runtimeHomePath)
   const config = readHooksJson(configPath)
   if (!config) {
     // Malformed runtime hooks must not prevent legacy cleanup during disabled launch prep.
@@ -70,10 +71,11 @@ export async function refreshCodexRuntimeUserHooksExclusively(
   try {
     const tomlPath = getCodexConfigTomlPath(runtimeHomePath)
     const trustEntries = hookPlan.trustEntries.map(({ entry }) => entry)
-    syncSystemConfigIntoManagedCodexHome({
+    const mirrored = syncSystemConfigIntoManagedCodexHome({
       runtimeHomePath,
       systemHomePath: getSystemCodexHomePath()
     })
+    complete = mirrored && complete
     // Write current user hashes before stale cleanup removes managed trust with status hooks unavailable.
     upsertHookTrustEntries(tomlPath, trustEntries)
     removeStaleRuntimeHookTrustEntries(tomlPath, configPath, trustEntries)
@@ -87,10 +89,14 @@ export async function refreshCodexRuntimeUserHooksExclusively(
       detail: `User hooks refreshed but trust entries could not be written: ${error instanceof Error ? error.message : String(error)}. Run /hooks in Codex to approve.`
     }
   }
-  snapshotCodexRuntimeHookTrustProvenance(runtimeHomePath)
+  const snapshotted = snapshotCodexRuntimeHookTrustProvenance(runtimeHomePath)
 
-  await cleanupLegacyManagedHookRepresentations()
-  return getStatus(runtimeHomePath)
+  const cleaned = await cleanupLegacyManagedHookRepresentations()
+  const status = getStatus(runtimeHomePath)
+  if (complete && snapshotted && cleaned && status.state !== 'error') {
+    onComplete?.()
+  }
+  return status
 }
 
 export async function removeCodexHooksExclusively(

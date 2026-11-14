@@ -4,7 +4,7 @@ import {
   type ShellSpawnParams,
   type ShellSpawnResult
 } from './local-pty-executable-spawn'
-import { reportNodePtyLoadFailure } from '../node-pty-load-failure'
+import { reportNodePtyLoadFailure } from '../pty/node-pty-load-failure'
 
 type LocalPtySpawn = (
   params: Omit<ShellSpawnParams, 'ptySpawn'> & { signal?: AbortSignal }

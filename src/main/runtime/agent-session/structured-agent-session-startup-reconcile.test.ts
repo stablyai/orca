@@ -1,23 +1,27 @@
 // Newer records reconcile read-only in memory.
 
-import { readFile, mkdtemp, rm } from 'node:fs/promises'
+import { readFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
-import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { journalDatabasePath } from '../../native-chat/agent-session-journal/database/journal-host-database'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { agentSessionRecordFixture } from '../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
+import { journalDomainDatabasePath } from '../../native-chat/agent-session-journal/database/journal-domain-database'
+import { JournalSqlDatabase } from '../../native-chat/agent-session-journal/database/journal-sql-database'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
+  ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost,
+  openTestAgentSessionRecordStoreSlot,
   seedTestAgentSessionRecordStore,
   seedTestAgentSessionStoreFromNewerBuild
 } from './records/agent-session-record-store-test-harness'
 import { closeTestJournalHostDatabases } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { OrcaRuntimeService } from '../orca-runtime'
+import { stopStructuredAgentSessionRuntime } from './structured-agent-session-runtime'
 import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
-import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+  recordStructuredAgentSessionHostInstallRefusal,
+  structuredAgentSessionHostRefusal
+} from './structured-agent-session-host-refusal'
+import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 
 let root: string
 
@@ -26,6 +30,8 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  vi.restoreAllMocks()
+  recordStructuredAgentSessionHostInstallRefusal(null)
   await stopStructuredAgentSessionRuntime().catch(() => undefined)
   await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
@@ -39,7 +45,7 @@ async function seedChat(options: { newer?: boolean } = {}) {
     await seedTestAgentSessionStoreFromNewerBuild(root)
   }
   await closeTestJournalHostDatabases()
-  return { path: journalDatabasePath(root), sessionId: record.sessionId }
+  return { path: journalDomainDatabasePath(root), sessionId: record.sessionId }
 }
 
 function startupRuntime(log = recordingStructuredAgentSessionLogger()) {
@@ -81,4 +87,27 @@ it('finishes startup over records a newer Orca wrote, reads them, and writes not
   expect(host?.deps.store.getRecord(sessionId)?.lease.unreconciled).toBe(false)
   await stopStructuredAgentSessionRuntime()
   expect(await readFile(path)).toEqual(bytes)
+})
+
+it('does not open the journal again before RPC after this startup refused it', async () => {
+  await writeFile(journalDomainDatabasePath(root), 'not a database')
+  const open = vi.spyOn(JournalSqlDatabase, 'open')
+  const opened = openTestAgentSessionRecordStoreSlot({
+    stateDirectory: root,
+    legacySessionTabIds: [],
+    hostId: 'local',
+    logger: recordingStructuredAgentSessionLogger().logger
+  })
+  opened.catch(() => {})
+  const runtime = startupRuntime()
+  runtime.beginStructuredAgentSessionStartupOpen(Promise.resolve(), {
+    legacySessionTabIds: [],
+    persisted: true,
+    opened
+  })
+
+  await expect(runtime.prepareStructuredAgentSessionStartupRestoration()).resolves.toBeUndefined()
+
+  expect(structuredAgentSessionHostRefusal()).not.toBeNull()
+  expect(open).toHaveBeenCalledTimes(1)
 })

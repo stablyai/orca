@@ -1,5 +1,5 @@
 import { isFolderRepo } from '../../shared/repo-kind'
-import type { ProjectLaunchContext } from '../../shared/rpc-contract/preflight-params'
+import type { ProjectLaunchContext } from '../../shared/rpc-contract/preflight/preflight-params'
 import { isTuiAgent } from '../../shared/agent-launch/catalog/tui-agent-config'
 import { WORKSPACE_ON_OTHER_RUNTIME } from '../../shared/protocol-version'
 import { refreshAtRestCommandContext } from '../native-chat/agent-session-wire/options/at-rest-command-context'
@@ -157,7 +157,8 @@ export async function assertAgentDetectionHostRunning(host: AgentDetectionHost):
 
 export async function refreshAgentsOnHost(
   host: AgentDetectionHost,
-  options?: InstalledAgentDetectionOptions
+  options?: InstalledAgentDetectionOptions,
+  userInitiated = false
 ): Promise<RefreshAgentsResult> {
   if (host.kind === 'ssh') {
     throw new SshHostNotServedError(host.connectionId)
@@ -169,7 +170,7 @@ export async function refreshAgentsOnHost(
         ? refreshShellPathAndDetectAgents(host.context, options)
         : refreshShellPathAndDetectAgents(host.context)
     const result = wsl ? await detect() : await captureHostShellEnvironment(detect)
-    notifyAgentsRefreshedOnHost()
+    notifyAgentsRefreshedOnHost(userInitiated && !wsl)
     return result
   }
   return wsl ? refresh() : refreshAtRestCommandContext(refresh)

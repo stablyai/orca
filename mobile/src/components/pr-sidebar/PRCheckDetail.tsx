@@ -1,7 +1,7 @@
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import type { PRCheckRunDetails } from '../../../../src/shared/github/check-types'
+import type { PRCheckRunDetails } from '../../../../src/shared/github/checks/check-types'
 import { presentCheckDetail, type CheckDetailJob } from './pr-check-detail-content'
 import { mobilePrSidebarStyles as styles } from './mobile-pr-sidebar-styles'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'

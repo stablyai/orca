@@ -1,5 +1,5 @@
 import { getDefaultVoiceSettings } from '../../../shared/constants'
-import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../shared/rpc-contract/speech-params'
+import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../shared/rpc-contract/speech/speech-params'
 import { speechModelNotReadyError } from '../../../shared/speech-model-retirement'
 import { getSpeechModelManager, getSpeechSttService } from '../../speech/speech-runtime-service'
 import { getCatalogModel, isLocalSpeechModel } from '../../speech/model-catalog'
@@ -13,6 +13,10 @@ import {
 } from './mobile-dictation-chunk-order'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { hostDictationTerms } from './runtime-dictation-terms'
+import { dictationTextSettingsFor } from '../../../shared/dictation-cleanup'
+import type { DictationTerm } from '../../../shared/dictation-dictionary'
+import { cleanUpDictatedText } from '../../speech/dictation-cleanup-service'
+import type { CommitMessageAgentEnvironmentResolvers } from '../../text-generation/execution/commit-message-agent-environment'
 import {
   DictationTranscript,
   type DictationTranscriptSnapshot
@@ -22,6 +26,8 @@ type MobileDictationSession = {
   id: string
   owner: string
   clientId: string
+  /** The dictionary it was transcribed with, which cleanup spells by too. */
+  terms: DictationTerm[]
   state: 'starting' | 'active' | 'closing'
   transcript: DictationTranscript
   errors: string[]
@@ -74,10 +80,12 @@ export class RuntimeMobileDictationController {
     }
 
     const owner = `mobile:${clientId}:${params.dictationId}`
+    const terms = hostDictationTerms(store, params.worktreeId)
     const session: MobileDictationSession = {
       id: params.dictationId,
       owner,
       clientId,
+      terms,
       state: 'starting',
       transcript: new DictationTranscript(),
       errors: [],
@@ -91,9 +99,9 @@ export class RuntimeMobileDictationController {
       await getSpeechSttService(store).startDictation(
         modelId,
         (event) => acceptEvent(session, event),
-        hostDictationTerms(store, params.worktreeId),
+        terms,
         owner,
-        voice
+        dictationTextSettingsFor({ ...store.getSettings(), voice })
       )
       if (this.sessions.get(clientId) !== session) {
         throw new Error('dictation_canceled')
@@ -149,10 +157,11 @@ export class RuntimeMobileDictationController {
     return { ...reply, ...session.transcript.snapshot() }
   }
 
-  async finish(params: {
-    dictationId: string
-    clientId?: string
-  }): Promise<{ dictationId: string; text: string }> {
+  /** `agentEnv`: what AI cleanup runs the user's agent with, when it's on. */
+  async finish(
+    params: { dictationId: string; clientId?: string },
+    agentEnv?: CommitMessageAgentEnvironmentResolvers
+  ): Promise<{ dictationId: string; text: string }> {
     const session = this.requireOwnedSession(params)
     for (const chunk of session.chunkOrder.drain()) {
       this.feedChunk(session, chunk)
@@ -161,7 +170,17 @@ export class RuntimeMobileDictationController {
     if (session.errors.length > 0) {
       throw new Error(session.errors[0])
     }
-    return { dictationId: params.dictationId, text: session.transcript.snapshot().text }
+    const heard = session.transcript.snapshot().text
+    // The phone waits out cleanup inside its finish deadline; on any failure it gets the words as heard.
+    const store = this.requireStore()
+    const cleaned = await cleanUpDictatedText(
+      { text: heard, terms: session.terms },
+      { getSettings: () => store.getSettings(), getAgentEnvResolvers: () => agentEnv }
+    )
+    return {
+      dictationId: params.dictationId,
+      text: cleaned.status === 'cleaned' ? cleaned.text : heard
+    }
   }
 
   async cancel(params: {

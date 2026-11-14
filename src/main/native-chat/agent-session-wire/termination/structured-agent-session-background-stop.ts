@@ -31,7 +31,7 @@ export async function stopStructuredAgentSessionBackgroundWork(
     unlisted?: { stop: () => Promise<void> }
     unreadable?: true
   },
-  atRest: () => boolean
+  atRest: () => Promise<boolean>
 ): Promise<{ cancelled: boolean; stillRunning?: true }> {
   const { targetCurrent } = input
   const targets = targetCurrent
@@ -61,7 +61,7 @@ export async function stopStructuredAgentSessionBackgroundWork(
     return background
   }
   // Later work must not expand this Stop’s captured targets.
-  if (input.unlisted && atRest()) {
+  if (input.unlisted && (await atRest())) {
     await input.unlisted.stop()
     return { cancelled: true }
   }

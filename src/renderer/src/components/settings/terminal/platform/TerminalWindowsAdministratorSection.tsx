@@ -236,10 +236,9 @@ export function TerminalWindowsAdministratorSection(): React.JSX.Element {
                 variant="link"
                 size="sm"
                 onClick={(event) =>
-                  openAppHttpLink(
-                    'https://www.onorca.dev/docs/terminal#windows-administrator-mode',
-                    { event }
-                  )
+                  openAppHttpLink('https://orca.dev/docs/terminal#windows-administrator-mode', {
+                    event
+                  })
                 }
               >
                 {t('settings.terminal.windows.administratorDocumentation', 'Read the guide')}

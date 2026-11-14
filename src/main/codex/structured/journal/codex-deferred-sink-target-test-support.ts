@@ -1,35 +1,26 @@
-import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { JournalLifecycleMutationInput } from '../../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import type { TrackedJournalOpener } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { StructuredAgentSessionEventTarget } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import { withJournalQueueMembers } from '../../../native-chat/agent-session-wire/journal-ingress/testing/structured-agent-session-journal-double-test-support'
 
-export function deferredTarget(
-  log: AgentJournalItemBody[],
+/** A deferred sink target over a real SQL journal for one Codex thread. */
+export async function journalTarget(
+  journals: TrackedJournalOpener,
+  stateDirectory: string,
   publishes: string[] = []
-): StructuredAgentSessionEventTarget {
+): Promise<StructuredAgentSessionEventTarget> {
+  const journal = await journals.open({
+    identity: {
+      sessionId: 'session-1',
+      workspaceId: 'workspace-1',
+      hostId: 'local',
+      agent: 'codex',
+      providerHandle: codexProviderHandle('thread-abc')
+    },
+    stateDirectory
+  })
   return {
     fence: 7,
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a double for the journal members this path calls; the helper adds the in-order ones.
-    journal: withJournalQueueMembers({
-      appendItem: async (_identity: AgentJournalItemIdentity, body: AgentJournalItemBody) => {
-        log.push(body)
-        return { cursor: { epoch: 'e', sequence: log.length } }
-      },
-      appendTombstone: async () => ({ epoch: 'e', sequence: log.length }),
-      // Holds no rows to read back, so a turn row's revision is its lifecycle.
-      itemBody: () => null,
-      appendLifecycleBatch: async (input: {
-        mutations: readonly JournalLifecycleMutationInput[]
-      }) => {
-        for (const mutation of input.mutations) {
-          if (mutation.kind === 'item') {
-            log.push(mutation.body)
-          }
-        }
-        return { epoch: 'e', sequence: log.length }
-      }
-    }) as unknown as StructuredAgentSessionEventTarget['journal'],
+    journal,
     publish: () => {
       publishes.push('publish')
     }

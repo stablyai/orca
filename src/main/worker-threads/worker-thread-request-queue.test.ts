@@ -63,7 +63,10 @@ const MAX_CONSECUTIVE_DEATHS = 3
 
 function makeQueue(
   workers: FakeWorker[],
-  options: { awaitRetirement?: boolean; makeWorker?: () => FakeWorker } = {}
+  options: {
+    awaitRetirement?: boolean
+    makeWorker?: () => FakeWorker
+  } = {}
 ): WorkerThreadRequestQueue<Request, Response> {
   return new WorkerThreadRequestQueue<Request, Response>({
     awaitRetirement: options.awaitRetirement,
@@ -434,6 +437,7 @@ describe('WorkerThreadRequestQueue', () => {
       await vi.advanceTimersByTimeAsync(TIMEOUT_MS)
       expect(await first).toMatchObject({ message: `timed out after ${TIMEOUT_MS}ms` })
 
+      await expect(queue.retired()).resolves.toBeUndefined()
       const next = send(queue, 'next')
       expect(workers).toHaveLength(2)
       workers[1].respond()

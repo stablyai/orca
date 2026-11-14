@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
-import { agentSessionProviderHandleKey } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentSessionProviderHandleKey } from '../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { agentSessionRefusalNotice } from '../../shared/agent-session/failures/agent-session-refusal-notice'
 import {
   closeProviderTimelineRigs,
@@ -28,8 +28,8 @@ const GEMINI = acpLaunchSpecFor('gemini')!
 const resume = {
   sessionId: PROVIDER_SESSION,
   key: 'gemini-saved-link',
-  mayBeUnsaved: () => false,
-  unannouncedLosses: () => []
+  mayBeUnsaved: async () => false,
+  lossKeys: []
 }
 
 function geminiRecord(origin: 'created' | 'resumed'): AgentSessionRecord {
@@ -52,10 +52,10 @@ function geminiRecord(origin: 'created' | 'resumed'): AgentSessionRecord {
 describe('Gemini native reopen safety', () => {
   it('recovers a missing created handle with no exchanged turn and delivers the next prompt', async () => {
     const record = geminiRecord('created')
-    const readJournal = vi.fn(() => null)
+    const hasProviderTurn = vi.fn(async () => false)
     const resolveLaunch = createAcpStructuredLaunchResolver(GEMINI, {
       store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
-      readJournal,
+      savedSession: { hasProviderTurn },
       resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
       resolveCommand: () => '/installed/gemini',
       probeVersion: async () => ({ version: '0.65.0' })
@@ -98,12 +98,12 @@ describe('Gemini native reopen safety', () => {
 
   it('refuses before any process or account lookup, preserves journal history, and offers an honest next step', async () => {
     const record = geminiRecord('resumed')
-    const readJournal = vi.fn(() => null)
+    const hasProviderTurn = vi.fn(async () => false)
     const resolveEnvironment = vi.fn(async () => ({}))
     const probeVersion = vi.fn(async () => ({ version: '0.65.0' }))
     const resolveLaunch = createAcpStructuredLaunchResolver(GEMINI, {
       store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
-      readJournal,
+      savedSession: { hasProviderTurn },
       resolveEnvironment,
       probeVersion
     })
@@ -160,7 +160,7 @@ describe('Gemini native reopen safety', () => {
     )
     expect(rig.spawned).toEqual([])
     expect(resolveEnvironment).not.toHaveBeenCalled()
-    expect(readJournal).not.toHaveBeenCalled()
+    expect(hasProviderTurn).not.toHaveBeenCalled()
     expect(probeVersion).not.toHaveBeenCalled()
     expect(await rig.rig.rows()).toEqual(before)
   })

@@ -2,10 +2,10 @@ import { useGitHubOperationScope } from './useGitHubOperationScope'
 import { useMemo } from 'react'
 import { gitHubSlugApiForTarget } from '@/runtime/repository-github/github-slug-owner-api'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
+import type { GitHubAssignableUser } from '../../../shared/github/pull-requests/pull-request-types'
 import { clearMetadataRequestStore, createMetadataRequestStore } from './metadata-request-cache'
-import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
-import { githubProjectHost } from '../../../shared/github/project-identity'
+import { githubRepoIdentityKey } from '../../../shared/github/repositories/repository-identity-key'
+import { githubProjectHost } from '../../../shared/github/projects/project-identity'
 import { useMetadataListRequest, type MetadataListState } from './useMetadataListRequest'
 
 const slugLabelStore = createMetadataRequestStore<string[]>()

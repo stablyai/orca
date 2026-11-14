@@ -24,8 +24,10 @@ export type TerminalWorkerTurnStopsDeps = WorkerTurnStopReportDeps & {
   getHandle: (paneKey: string) => string | null
   getProcessIncarnation: (handle: string) => string | null
   readScreen: (handle: string) => Promise<RuntimeTerminalRead>
-  /** The pane's open approval Orca can answer; taking it marks it reported. */
-  takeOpenApproval: (paneKey: string, dispatchId: string) => WorkerApprovalPayload | null
+  /** The pane's open approval Orca can answer. */
+  takeOpenApproval: (paneKey: string, dispatchId: string) => Promise<WorkerApprovalPayload | null>
+  /** Called only once the approval's escalation went out. */
+  markApprovalReported: (approvalId: string) => void
 }
 
 /** Report a terminal worker whose turn ended (or stopped at a prompt) while its Dispatch is open. */
@@ -71,17 +73,18 @@ export class TerminalWorkerTurnStops {
         .readScreen(stopped.handle)
         .then((view) => redactWorkerTerminalView(view).tail.join('\n'))
         .catch(() => undefined))
-    // The read awaited: the worker may have resumed, reported, or been handed a new Dispatch since.
+    const before = this.stillStopped(stop)
+    // One report per approval; the screen shows Claude's own reason for asking.
+    const approval =
+      reason === 'needs-input' && before?.target.kind === 'local'
+        ? await this.deps.takeOpenApproval(stop.paneKey, before.target.dispatch.id)
+        : null
+    // Both reads awaited: the worker may have resumed, reported, or been handed a new Dispatch since.
     const resolved = this.stillStopped(stop)
     if (!resolved) {
       return
     }
-    // One report per approval; the screen shows Claude's own reason for asking.
-    const approval =
-      reason === 'needs-input' && resolved.target.kind === 'local'
-        ? this.deps.takeOpenApproval(stop.paneKey, resolved.target.dispatch.id)
-        : null
-    reportWorkerTurnStop(
+    const sent = reportWorkerTurnStop(
       resolved.db,
       resolved.target,
       {
@@ -94,6 +97,9 @@ export class TerminalWorkerTurnStops {
       },
       this.deps
     )
+    if (approval && sent) {
+      this.deps.markApprovalReported(approval.approvalId)
+    }
   }
 
   private stillStopped(stop: PreparedStop) {

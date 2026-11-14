@@ -13,6 +13,25 @@ import { getAutomationRunRepoId } from '../../../../../shared/automations/histor
 import type { SetupDecision, SetupTrustMismatch } from '../../../../../shared/worktree/create-types'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 
+/** Runs create from the automation's base, so approve the orca.yaml there, not the project checkout's. */
+export function approveAutomationSetup(
+  repoId: string,
+  hostId: ExecutionHostId | undefined,
+  baseBranch: string | null | undefined
+): Promise<HookTrustApproval> {
+  const createSource = { kind: 'base' as const, baseBranch: baseBranch?.trim() || undefined }
+  return ensureHooksApproved(
+    useAppStore.getState(),
+    repoId,
+    'setup',
+    hostId,
+    undefined,
+    undefined,
+    undefined,
+    createSource
+  )
+}
+
 /** A skipped setup still waiting for approval; null once the automation approves that content. */
 export type PendingAutomationSetupReview = { content: SetupTrustMismatch | null }
 
@@ -71,15 +90,48 @@ export async function reviewAutomationSkippedSetup(
 }
 
 /**
- * Saving an automation whose last run skipped changed setup re-confirms that setup: the skipped
- * content when the host recorded it, else the repo's current one. Returns the hash to store.
+ * A save's setup approval: prompt when the target or setup choice changed, else re-review a skipped run.
+ * The hash is stored with `run` so later runs execute only this content.
  */
-export async function reconfirmSkippedSetup(
+export async function confirmAutomationSaveSetup(
+  context: Pick<AutomationSaveContext, 'local' | 'list'>,
+  args: {
+    prompt: boolean
+    repoId: string
+    hostId: ExecutionHostId | undefined
+    /** The base this save persists, which an edit may have just changed. */
+    baseBranch: string | null | undefined
+    setupDecision: SetupDecision | undefined
+    automation: Automation | null
+  }
+): Promise<{ trust: HookTrustApproval | null; setupTrustHash: string | undefined }> {
+  const trust = args.prompt
+    ? await approveAutomationSetup(args.repoId, args.hostId, args.baseBranch)
+    : null
+  const setupTrustHash =
+    trust?.approvedContentHash ??
+    (await reconfirmSkippedSetup(
+      context,
+      trust,
+      args.setupDecision,
+      args.automation,
+      args.hostId,
+      args.baseBranch
+    ))
+  return { trust, setupTrustHash }
+}
+
+/**
+ * Saving an automation whose last run skipped changed setup re-confirms that setup: the skipped
+ * content when the host recorded it, else the content at the automation's base. Returns the hash to store.
+ */
+async function reconfirmSkippedSetup(
   context: Pick<AutomationSaveContext, 'local' | 'list'>,
   trust: HookTrustApproval | null,
   setupDecision: SetupDecision | undefined,
   automation: Automation | null,
-  hostId: ExecutionHostId | undefined
+  hostId: ExecutionHostId | undefined,
+  baseBranch: string | null | undefined
 ): Promise<string | undefined> {
   // A changed target or setup choice was just confirmed by the regular save prompt.
   if (trust || context.local.targetEdited || setupDecision !== 'run' || !automation) {
@@ -100,7 +152,7 @@ export async function reconfirmSkippedSetup(
         hostId,
         'automation'
       )
-    : await ensureHooksApproved(useAppStore.getState(), repoId, 'setup', hostId)
+    : await approveAutomationSetup(repoId, hostId, baseBranch)
   return approval.decision === 'run' && approval.approvedContentHash !== automation.setupTrustHash
     ? approval.approvedContentHash
     : undefined

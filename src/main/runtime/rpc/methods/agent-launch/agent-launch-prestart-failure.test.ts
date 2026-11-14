@@ -15,7 +15,7 @@ import '../../../workspaces/lineage/runtime-worktree-lineage-resolution'
 import '../../../../agent-launch/agent-launch-not-started'
 import './agent-launch-failure-code'
 import { RpcDispatcher } from '../../dispatcher'
-import type { RpcDispatchStreamingOptions } from '../../dispatcher-stream-options'
+import type { RpcDispatchStreamingOptions } from '../../dispatch/dispatcher-stream-options'
 import {
   methodNamed,
   runtimeStub,

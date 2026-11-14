@@ -10,7 +10,7 @@ import type {
 } from '../../../../codex/app-server/codex-app-server-connection-types'
 import type { openCodexAppServerConnection } from '../../../../codex/app-server/codex-app-server-connection'
 import { refuseUnroutedSteer } from '../../../../codex/structured/turns/codex-structured-dispatch-test-support'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import {
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
@@ -21,10 +21,8 @@ import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { RpcRequest, RpcResponse } from '../../core'
 import { RpcDispatcher } from '../../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
-import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from '../../../agent-session/structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from '../../../agent-session/structured-agent-session-runtime'
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from '../../../agent-session/records/agent-session-record-store-test-harness'
 import { createStructuredAgentSessionLogger } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { scriptedCodexTransport } from '../../../orca-runtime-tests/scripted-codex-transport.test-fixture'
 
@@ -53,12 +51,15 @@ export type FakeCodex = {
   connections: FakeCodexConnection[]
   openConnection: typeof openCodexAppServerConnection
   live: () => FakeCodexConnection
+  /** Resolves with the child that next receives `method`. */
+  nextRequest: (method: string) => Promise<FakeCodexConnection>
   notify: (method: string, params: unknown) => void
   ask: (id: number, method: string, params: unknown) => void
 }
 
 function fakeCodex(): FakeCodex {
   const connections: FakeCodexConnection[] = []
+  const requestWaiters = new Map<string, ((connection: FakeCodexConnection) => void)[]>()
   const openConnection: typeof openCodexAppServerConnection = async (launch, handlers = {}) => {
     const connection: FakeCodexConnection = {
       launch,
@@ -70,6 +71,10 @@ function fakeCodex(): FakeCodex {
       closed: false,
       request: async (method, params) => {
         connection.calls.push({ method, params })
+        requestWaiters
+          .get(method)
+          ?.splice(0)
+          .forEach((resolve) => resolve(connection))
         if (method === 'thread/start') {
           return { thread: { id: THREAD, path: '/rollouts/integration.jsonl' } }
         }
@@ -125,6 +130,10 @@ function fakeCodex(): FakeCodex {
     connections,
     openConnection,
     live,
+    nextRequest: (method) =>
+      new Promise((resolve) => {
+        requestWaiters.set(method, [...(requestWaiters.get(method) ?? []), resolve])
+      }),
     notify: (method, params) => live().handlers.onNotification?.(method, params),
     ask: (id, method, params) => live().handlers.onServerRequest?.({ id, method, params })
   }
@@ -181,13 +190,11 @@ export type StructuredCodexRpcHarness = {
 export async function openStructuredCodexRpcHarness(
   clientCapabilities: readonly RuntimeCapability[] = DEFAULT_CLIENT_CAPABILITIES,
   /** What the transport stamps, as a paired device's authenticated socket does. */
-  transport: { clientId?: string; pairedDeviceId?: string } = {},
-  /** The local CLI names no client kind; an older host lacks newer methods. */
-  options: { localCli?: boolean; omitMethods?: readonly string[] } = {}
+  transport: { clientId?: string; pairedDeviceId?: string } = {}
 ): Promise<StructuredCodexRpcHarness> {
   const client = {
     clientId: 'device-a',
-    ...(options.localCli ? {} : { clientKind: 'runtime' as const }),
+    clientKind: 'runtime' as const,
     clientCapabilities,
     ...transport
   }
@@ -249,9 +256,7 @@ export async function openStructuredCodexRpcHarness(
   }
   const dispatcher = new RpcDispatcher({
     runtime: runtime as unknown as OrcaRuntimeService,
-    methods: STRUCTURED_AGENT_SESSION_METHODS.filter(
-      (method) => !options.omitMethods?.includes(method.name)
-    )
+    methods: STRUCTURED_AGENT_SESSION_METHODS
   })
   const call: StructuredCodexRpcHarness['call'] = async (method, params) => {
     const replies: RpcResponse[] = []

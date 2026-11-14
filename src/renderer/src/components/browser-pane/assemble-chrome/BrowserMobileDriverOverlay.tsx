@@ -59,7 +59,7 @@ export function BrowserMobileDriverOverlay({ driver, onTakeBack }: Props): React
       aria-labelledby={OVERLAY_TITLE_ID}
       aria-live="assertive"
       className={cn(
-        'pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-background/80 p-6 backdrop-blur-sm',
+        'pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-background/80 p-6',
         'mobile-browser-driver-banner'
       )}
     >

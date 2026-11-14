@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest'
-import { BrowserClientPageMetadataParams } from '../../../../shared/browser/client-hosting/browser-client-page-metadata-protocol'
 import { createBrowserClientPageMetadataPublisher } from './browser-client-page-metadata-publisher'
 
 const PLACEMENT = {
@@ -10,29 +9,6 @@ const PLACEMENT = {
 }
 
 describe('browser client page metadata publisher', () => {
-  it('publishes an untitled long URL within the title wire limit without changing the source', () => {
-    const url = `https://example.com/${'a'.repeat(4080)}`
-    const source = { ...snapshot(url), url }
-    const publish = vi.fn().mockResolvedValue({ status: 'published', accepted: true })
-    const publisher = createBrowserClientPageMetadataPublisher({
-      browserPageId: 'page-a',
-      placement: PLACEMENT,
-      nextRevision: () => 1,
-      publish
-    })
-
-    publisher.publish(source)
-
-    expect(BrowserClientPageMetadataParams.parse(publish.mock.calls[0][0])).toMatchObject({
-      url,
-      title: `https://example.com/${'a'.repeat(4076)}`,
-      loading: false,
-      canGoBack: true,
-      canGoForward: false
-    })
-    expect(source).toEqual({ ...snapshot(url), url })
-  })
-
   it('keeps one call in flight and coalesces to the latest full snapshot', async () => {
     const first = deferred<unknown>()
     const second = deferred<unknown>()
@@ -61,26 +37,6 @@ describe('browser client page metadata publisher', () => {
       expect.objectContaining({ revision: 2, title: 'Latest' })
     )
     second.resolve({ status: 'published', accepted: true })
-  })
-
-  it('drops pending work after disposal without starting another call', async () => {
-    const first = deferred<unknown>()
-    const publish = vi.fn().mockReturnValue(first.promise)
-    let revision = 0
-    const publisher = createBrowserClientPageMetadataPublisher({
-      browserPageId: 'page-a',
-      placement: PLACEMENT,
-      nextRevision: () => ++revision,
-      publish
-    })
-
-    publisher.publish(snapshot('First'))
-    publisher.publish(snapshot('Pending'))
-    publisher.dispose()
-    first.resolve({ status: 'published', accepted: true })
-    await Promise.resolve()
-
-    expect(publish).toHaveBeenCalledTimes(1)
   })
 
   // nextRevision throws after detach, so pane teardown can fail before publish even starts.

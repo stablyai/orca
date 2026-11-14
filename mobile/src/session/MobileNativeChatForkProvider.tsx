@@ -2,13 +2,13 @@ import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type { StructuredAgentSessionForkSource } from '../../../src/shared/agent-session/structured-agent-session-create'
-import { MobileNativeChatForkedFromContext } from './native-chat/transcript/mobile-native-chat-notice-context'
+import { MobileNativeChatForkedFromContext } from './native-chat/transcript/notices/mobile-native-chat-notice-context'
 import { forkMobileStructuredChat } from './mobile-structured-chat-fork'
 import {
   MobileNativeChatForkContext,
   useMobileNativeChatFork
-} from './native-chat/use-mobile-native-chat-fork'
-import { resolveMobileNativeChatSessionId } from './native-chat/mobile-native-chat-eligibility'
+} from './native-chat/history/use-mobile-native-chat-fork'
+import { resolveMobileNativeChatSessionId } from './native-chat/conversation/mobile-native-chat-eligibility'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
 /** The chat's "Fork from this response" and the chat a "Forked from" divider opens. */

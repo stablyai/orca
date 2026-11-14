@@ -1,6 +1,7 @@
+import { readTestJournalItems } from '../native-chat/agent-session-journal/journal-observation.test-support'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import {
   closeProviderTimelineRigs,
   messageText,
@@ -128,9 +129,9 @@ describe('original Gemini ACP native session', () => {
     ])
     await rig.adapter.closeSession(SESSION)
     const reopened = await rig.rig.reopenJournal()
-    expect(reopened.snapshot().items.filter((row) => row.body.kind === 'message')).toEqual(
-      rows.filter((row) => row.body.kind === 'message')
-    )
+    expect(
+      (await readTestJournalItems(reopened)).filter((row) => row.body.kind === 'message')
+    ).toEqual(rows.filter((row) => row.body.kind === 'message'))
   })
 
   it('refuses image delivery when a future runtime no longer advertises it', async () => {

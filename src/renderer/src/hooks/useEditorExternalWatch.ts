@@ -78,22 +78,21 @@ export function useEditorExternalWatch(): void {
     targetsRef.current = nextTargets
     // Why: acquire before release so a root shared by an added and a removed target is never dropped in between.
     for (const target of added) {
-      // After reacquiring trimmed background watches, overflow-resync missed changes through the normal pipeline.
-      const resync = previousUnwatchedKeys.has(getEditorExternalWatchTargetKey(target))
-        ? () =>
-            fsChangedHandlerRef.current?.(
-              markWorktreeCatchUpPayload({
-                worktreePath: target.worktreePath,
-                events: [{ kind: 'overflow', absolutePath: target.worktreePath }],
-                connectionId: target.connectionId,
-                resync: true
-              }),
-              target.runtimeEnvironmentId,
-              target
-            )
-        : undefined
+      // Overflow-resync missed changes through the normal pipeline, scoped to this target.
+      const resync = (): void => {
+        fsChangedHandlerRef.current?.(
+          markWorktreeCatchUpPayload({
+            worktreePath: target.worktreePath,
+            events: [{ kind: 'overflow', absolutePath: target.worktreePath }],
+            connectionId: target.connectionId,
+            resync: true
+          }),
+          target.runtimeEnvironmentId,
+          target
+        )
+      }
       if (target.runtimeEnvironmentId) {
-        // Why: the host's ready event means its watcher is installed, so nothing after the resync is lost.
+        // Why: the remote watch decides when to resync (each host watcher install and each recovery).
         subscribeRuntimeTarget(target, remoteWatchUnsubsRef.current, fsChangedHandlerRef, resync)
         continue
       }
@@ -101,7 +100,8 @@ export function useEditorExternalWatch(): void {
         // Provider disappearance must report watch failure without uncaught renderer rejection.
         warnExternalWatchFailure(target, err)
       })
-      if (resync) {
+      // After reacquiring trimmed background watches, catch up on changes made while unwatched.
+      if (previousUnwatchedKeys.has(getEditorExternalWatchTargetKey(target))) {
         void installed.then(resync)
       }
     }
@@ -168,7 +168,7 @@ function subscribeRuntimeTarget(
   target: EditorExternalWatchTarget,
   remoteWatchUnsubs: Map<string, () => void>,
   fsChangedHandlerRef: { current: FsChangedHandler | null },
-  onFirstReady: (() => void) | undefined
+  onCatchUp: () => void
 ): void {
   const runtimeEnvironmentId = target.runtimeEnvironmentId
   if (!runtimeEnvironmentId) {
@@ -181,7 +181,7 @@ function subscribeRuntimeTarget(
       { ...target, runtimeEnvironmentId },
       (payload) => fsChangedHandlerRef.current?.(payload, runtimeEnvironmentId),
       (error) => warnExternalWatchFailure(target, error),
-      onFirstReady
+      onCatchUp
     )
   )
 }

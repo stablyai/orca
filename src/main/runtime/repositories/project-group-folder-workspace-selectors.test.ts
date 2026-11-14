@@ -49,6 +49,7 @@ function createRuntime(
       { id: 'group-1', name: 'Home', parentPath: FOLDER_PATH, connectionId: null }
     ],
     getFolderWorkspaces: () => [folder],
+    getFolderWorkspace: (id: string) => (id === folder.id ? folder : undefined),
     getAllWorktreeMeta: () => ({}),
     getWorktreeMeta: () => undefined,
     setWorktreeMeta,

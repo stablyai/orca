@@ -22,7 +22,7 @@ import {
 // child `<iframe srcdoc>` (or `javascript:` src) the panel adds is a fresh realm: srcdoc commits
 // without will-frame-navigate, so the frame guard never sees it, and Electron 43 has no CSP
 // `webrtc` directive or per-frame switch. That frame can open TURN-over-TCP to any host, which
-// `disable_non_proxied_udp` allows (plugin-panel-webrtc.electron.test.ts). Direct child-window
+// `disable_non_proxied_udp` allows. Direct child-window
 // access is already refused as a sandbox violation.
 export const PLUGIN_PANEL_CSP =
   "default-src 'none'; connect-src 'none'; script-src 'unsafe-inline'; " +

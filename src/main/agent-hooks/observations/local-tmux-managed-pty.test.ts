@@ -3,7 +3,7 @@ import {
   createLocalPtyInventoryReader,
   createLocalTmuxManagedPtyResolver
 } from './local-tmux-managed-pty'
-import type { PtyProcessInfo } from '../../providers/pty-provider-contract'
+import type { PtyProcessInfo } from '../../providers/pty/process-info'
 
 const row: PtyProcessInfo = {
   id: 'pty',

@@ -21,8 +21,8 @@ const CROSS_HOST_PREFIXES = [
   'src/main/ssh/',
   'src/main/managed-server/',
   'src/main/node-runtime/',
-  'src/main/orcad/orcad-artifact-materializer.ts',
-  'src/main/orcad/orcad-host-unavailable.ts',
+  'src/main/orcad/artifact-slots/orcad-artifact-materializer.ts',
+  'src/main/orcad/diagnostics/orcad-host-unavailable.ts',
   'src/main/providers/',
   'src/wsl-guest/'
 ]

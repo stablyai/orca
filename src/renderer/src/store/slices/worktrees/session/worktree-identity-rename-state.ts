@@ -10,7 +10,7 @@ import { getWorktreeIdFromVisitKey } from '@/lib/workspace/activation/worktree-v
 import {
   remapClosedTerminalTabSnapshotCwds,
   type ClosedTerminalTabSnapshot
-} from '../../../terminals/recently-closed-terminal-tabs'
+} from '../../../terminals/tabs/recently-closed-terminal-tabs'
 import '../../tabs/worktree-layout-lifecycle'
 import { renameWorktreeLayoutKeys } from '../../tabs/rename-worktree-layout'
 import { replaceRecordEntries } from '../../../keyed-record-transitions'

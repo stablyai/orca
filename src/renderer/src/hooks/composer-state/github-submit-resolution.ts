@@ -48,9 +48,12 @@ import {
   lookupGitHubWorkItemForSource,
   lookupGitHubWorkItemByOwnerRepoForSource
 } from '@/lib/work-items/github/github-work-item-source-lookup'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
-import { getGitHubLinkedWorkItemIdentity } from './source-selection-decisions'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
+import {
+  type PendingSmartGitHubSubmitResolution,
+  getGitHubLinkedWorkItemIdentity
+} from './source-selection-decisions'
+
 import { getUnresolvedSmartGitHubSubmitMessage } from './github-submit-unresolved-message'
 
 export function useGitHubSubmitResolution(input: GitHubSubmitResolutionInput) {

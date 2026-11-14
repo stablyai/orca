@@ -1,6 +1,6 @@
 import type { TaskPageSearchActionsModel } from './use-task-page-search-actions'
 import { useCallback } from 'react'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import { useAppStore } from '@/store'

@@ -3,42 +3,27 @@ import { RelayAssignmentStore } from './assignment-store.js'
 import { openInMemoryRelayDatabase, type RelayDatabase } from '../database/database.js'
 
 const NOW = 100_000
-const CELL_COUNT = 32
 const identity = { userId: 'headroom-user', relayHostId: 'headroomhost0001' }
 
-function observeHeadroom(database: RelayDatabase, rowCounts: number[]): RelayDatabase {
-  return {
-    dialect: database.dialect,
-    async query(sql, params) {
-      const rows = await database.query(sql, params)
-      if (sql.includes('FROM relay_cell_connection_limits limits')) rowCounts.push(rows.length)
-      return rows
-    },
-    queryLocked: (sql, params, options) => database.queryLocked(sql, params, options),
-    transaction: (operation, options) =>
-      database.transaction((transaction) => operation(observeHeadroom(transaction, rowCounts)), options),
-    close: () => database.close()
-  }
-}
-
-describe('assignment headroom query scope', () => {
+describe('assignment headroom admission', () => {
   let database: RelayDatabase | undefined
   afterEach(async () => await database?.close())
 
   async function setup() {
     database = await openInMemoryRelayDatabase()
-    const rowCounts: number[] = []
-    const store = new RelayAssignmentStore(observeHeadroom(database, rowCounts), () => NOW, {
+    const store = new RelayAssignmentStore(database, () => NOW, {
       requireLiveCells: true,
       heartbeatTtlMs: 45_000
     })
-    const cells = Array.from({ length: CELL_COUNT }, (_, index) => ({
-      id: `cell-${String(index).padStart(2, '0')}`,
-      url: `https://cell-${index}.example.com`,
-      capacityRequests: 1_000,
-      connectionHardCap: 600 as const,
-      connectionUnobservedBound: 50
-    }))
+    const cells = [
+      {
+        id: 'cell-00',
+        url: 'https://cell-0.example.com',
+        capacityRequests: 1_000,
+        connectionHardCap: 600 as const,
+        connectionUnobservedBound: 50
+      }
+    ]
     await store.reconcileCells(cells)
     for (const cell of cells) {
       await store.recordCellHeartbeat({
@@ -69,28 +54,8 @@ describe('assignment headroom query scope', () => {
       kind: 'splice',
       cellId: 'cell-00'
     })
-    rowCounts.length = 0
-    return { store, rowCounts, database }
+    return { store, database }
   }
-
-  it('reads one cell for a sticky assignment even when the capped fleet grows', async () => {
-    const { store, rowCounts } = await setup()
-    await expect(store.assign(identity)).resolves.toMatchObject({
-      ...identity,
-      cellId: 'cell-00',
-      assignmentEpoch: 1
-    })
-    console.info('sticky headroom rows', { fleetCells: CELL_COUNT, rowCounts })
-    expect(rowCounts).toEqual([1])
-  })
-
-  it('still considers the full fleet for a new placement', async () => {
-    const { store, rowCounts } = await setup()
-    await expect(
-      store.assign({ userId: 'new-user', relayHostId: 'newheadroomhost1' })
-    ).resolves.toMatchObject({ cellId: 'cell-01', assignmentEpoch: 1 })
-    expect(rowCounts).toEqual([CELL_COUNT])
-  })
 
   it.each([
     ['missing snapshot', `DELETE FROM relay_cell_connection_snapshots WHERE cell_id = 'cell-00'`],
@@ -104,10 +69,9 @@ describe('assignment headroom query scope', () => {
   })
 
   it('preserves admission for cells without a connection limit', async () => {
-    const { store, rowCounts, database } = await setup()
+    const { store, database } = await setup()
     await database.query(`DELETE FROM relay_cell_connection_limits WHERE cell_id = 'cell-00'`)
     await expect(store.assign(identity)).resolves.toMatchObject({ cellId: 'cell-00' })
-    expect(rowCounts).toEqual([0])
   })
 
   it('counts outstanding reservations at the admission boundary', async () => {

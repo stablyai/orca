@@ -14,13 +14,13 @@ import { sanitizeRepoIcon } from '../../../shared/repo-icon'
 import {
   normalizeGhAccountBinding,
   type GhAccountBinding
-} from '../../../shared/github/account-binding'
+} from '../../../shared/github/accounts/account-binding'
 
 import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
-} from '../../../shared/worktree/visibility-sources'
+} from '../../../shared/worktree/visibility/visibility-sources'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
 import { commitProvenRepoKindChange } from '../../workspaces/catalog/folder-repo-git-conversion'
 import { normalizeDictationTerms } from '../../../shared/dictation-dictionary'
@@ -68,9 +68,11 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
           externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
           agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
           sourceControlAi?: Repo['sourceControlAi'] | null
+          workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
           externalWorktreeDiscoverySuppressedAt?:
             | Repo['externalWorktreeDiscoverySuppressedAt']
             | null
+          hiddenAt?: Repo['hiddenAt'] | null
           ghAccount?: GhAccountBinding | null
         }
       }
@@ -210,6 +212,15 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
           !Number.isFinite(updates.externalWorktreeDiscoverySuppressedAt))
       ) {
         delete updates.externalWorktreeDiscoverySuppressedAt
+      }
+      if ('hiddenAt' in updates && updates.hiddenAt === null) {
+        updates.hiddenAt = undefined
+      } else if (
+        'hiddenAt' in updates &&
+        updates.hiddenAt !== undefined &&
+        (typeof updates.hiddenAt !== 'number' || !Number.isFinite(updates.hiddenAt))
+      ) {
+        delete updates.hiddenAt
       }
       if (
         'externalWorktreeInboxBaselinePaths' in updates &&

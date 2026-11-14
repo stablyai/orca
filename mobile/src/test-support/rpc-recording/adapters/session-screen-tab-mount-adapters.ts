@@ -2,7 +2,7 @@ import type * as UseMobileSessionContentCreateActionsModule from '../../../sessi
 import type * as UseMobileSessionCloseActionsModule from '../../../session/tabs/use-mobile-session-close-actions'
 import { hookMount, performHookAction } from '../hook-mount'
 import type { MobileSessionTab } from '../../../session/tabs/mobile-session-tabs'
-import type { TerminalRecord } from '../../../terminal/session/mobile-terminal-records'
+import type { TerminalRecord } from '../../../terminal/session/inventory/mobile-terminal-records'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -134,6 +134,7 @@ export function sessionScreenTabMountAdapters(
             pendingSelectionRef: { current: null },
             pendingBrowserFocusPageIdRef: { current: null },
             unsubscribeTerminal: (handle: string) => effect('unsubscribe-terminal', { handle }),
+            showToast: (message: string) => effect('toast', { message }),
             subscribeToTerminal: (handle: string) => {
               effect('subscribe-terminal', { handle })
               return true

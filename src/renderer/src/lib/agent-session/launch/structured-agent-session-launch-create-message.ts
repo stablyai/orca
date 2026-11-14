@@ -2,8 +2,8 @@ import { StructuredAgentSessionCreateUnknownOutcomeError } from './structured-ag
 import {
   structuredLaunchCompatibleOptions,
   structuredLaunchRequestedOptions
-} from '../../../../../shared/native-chat/input/native-chat-session-option-defaults'
-import { structuredAgentSessionCreateFingerprint } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+} from '../../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
+import { structuredAgentSessionCreateFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import type { StructuredAgentSessionCreateParams } from '../../../../../shared/agent-session/structured-agent-session-create'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
@@ -21,7 +21,7 @@ import {
   structuredAgentSessionMessageSelection,
   structuredAgentSessionOptionView,
   structuredAgentSessionSendSelection
-} from '../../../../../shared/agent-session/options/structured-agent-session-option-view'
+} from '../../../../../shared/agent-session/options/view/structured-agent-session-option-view'
 import { firstFrameOptionState } from '@/components/native-chat/session/options/structured/structured-agent-session-option-first-frame'
 import {
   applyStructuredLaunchHeldOptions,
@@ -30,8 +30,8 @@ import {
   structuredLaunchOptionOverlay,
   settleStructuredLaunchCreateOptions
 } from './structured-agent-session-launch-options'
-import { structuredAgentSessionDrawnValues } from '../../../../../shared/agent-session/options/structured-agent-session-option-snapshot'
-import { encodeStructuredAgentSessionOptionValue } from '../../../../../shared/agent-session/options/structured-agent-session-option-codec'
+import { structuredAgentSessionDrawnValues } from '../../../../../shared/agent-session/options/view/structured-agent-session-option-snapshot'
+import { encodeStructuredAgentSessionOptionValue } from '../../../../../shared/agent-session/options/selection/structured-agent-session-option-codec'
 
 /** Freeze what create carries once; later evidence must join this exact input.
  *  `hostTakesExplicitOptions`: the host advertises the create options-mode capability. */

@@ -1,17 +1,20 @@
-import { useEffect, useRef, useState } from 'react'
-import { useNavigationContainerRef, useRouter } from 'expo-router'
-// Expo Router's own stack router, the one Navigator falls back to; not re-exported from the package root.
-import { StackRouter } from 'expo-router/build/layouts/StackClient'
-// The store router.push resolves hrefs through; reading it keeps one resolver for both open paths.
-import { store } from 'expo-router/build/global-state/router-store'
+import { use, useEffect, useLayoutEffect, useState } from 'react'
+import { Navigator, useNavigationContainerRef, useRouter } from 'expo-router'
+// The resolver and linking config router.push goes through; reading them keeps one resolver for both open paths.
+import { getStateForHref } from 'expo-router/build/link/getStateForHref'
+import { RouterConfigContext } from 'expo-router/build/global-state/routerConfigContext'
+import { getRouteInfoFromState } from 'expo-router/build/global-state/getRouteInfoFromState'
+import type { ExpoLinkingOptions } from 'expo-router/build/getLinkingConfig'
 import type { BridgeRpcClient } from '../mobile-web-shell/bridge/bridge-rpc-client'
 import type { BridgeInitRoute } from '../mobile-web-shell/bridge/bridge-init-route'
 import { BRIDGE_OPEN_ROUTE_PARAM } from '../mobile-web-shell/bridge/bridge-route-update'
 import { usePageBridgeClient } from '../transport/connection/client-context.web'
 import { createRefusalReporter, handOffRoute, servedHere } from './route-handoff.web'
+import { isStandaloneSessionHref } from './host-stack-navigation'
 
-type StackRouterFactory = typeof StackRouter
+type StackState = ReturnType<typeof Navigator.useContext>['state']
 type StackRoute = { name: string; params?: object }
+type OpenSplice = { target: string; state: object }
 
 function openTargetOf(route: BridgeInitRoute | null | undefined): string {
   return route?.params?.[BRIDGE_OPEN_ROUTE_PARAM] ?? ''
@@ -29,10 +32,15 @@ function opensInDocument(client: BridgeRpcClient, target: string): boolean {
 
 // Resolve through Expo's own linking, as router.push would, and take the route at this stack's level.
 // A target Expo cannot read (a malformed escape) opens nothing rather than throwing inside the navigator's render.
-function stackRouteForHref(href: string, routeNames: readonly string[]): StackRoute | null {
+function stackRouteForHref(
+  href: string,
+  linking: ExpoLinkingOptions | undefined,
+  routeNames: readonly string[]
+): StackRoute | null {
   let state
   try {
-    state = store.getStateForHref(href)
+    // Open targets are absolute, so no current segments are needed to resolve them.
+    state = getStateForHref(href, { segments: [] }, linking)
   } catch {
     return null
   }
@@ -49,42 +57,27 @@ function stackRouteForHref(href: string, routeNames: readonly string[]): StackRo
   return null
 }
 
-// Open the first init's target as part of the stack's initial state, so its chunk loads with the document like a fresh one and the cover drops on its paint.
-// Reads the target the URL was built from, and is pure so React can discard a suspended first render and hydrate again the same way.
-function shellOpenStackRouter(
-  opensHere: (target: string) => boolean,
-  onSpliced: (target: string) => void
-): StackRouterFactory {
-  return (options) => {
-    const router = StackRouter(options)
-    return {
-      ...router,
-      getRehydratedState: (partial, config) => {
-        const [only, ...others] = partial.routes
-        const params: Record<string, unknown> = { ...only?.params }
-        const target = params[BRIDGE_OPEN_ROUTE_PARAM]
-        if (
-          only === undefined ||
-          others.length > 0 ||
-          partial.stale === false ||
-          typeof target !== 'string' ||
-          !opensHere(target)
-        ) {
-          return router.getRehydratedState(partial, config)
-        }
-        const opened = stackRouteForHref(target, config.routeNames)
-        if (opened === null) {
-          return router.getRehydratedState(partial, config)
-        }
-        onSpliced(target)
-        delete params[BRIDGE_OPEN_ROUTE_PARAM]
-        return router.getRehydratedState(
-          { stale: true, index: 1, routes: [{ name: only.name, params }, opened] },
-          config
-        )
-      }
-    }
+// Open the first init's target as part of the stack's first state, so its chunk loads with the document like a fresh one and the cover drops on its paint.
+// Reads the target the URL was built from, and is pure so React can discard a suspended first render and plan again the same way.
+function planOpenSplice(
+  state: StackState,
+  linking: ExpoLinkingOptions | undefined,
+  opensHere: (target: string) => boolean
+): OpenSplice | null {
+  const [only, ...others] = state.routes
+  const params: Record<string, unknown> = { ...only?.params }
+  const target = params[BRIDGE_OPEN_ROUTE_PARAM]
+  if (only === undefined || others.length > 0 || typeof target !== 'string' || !opensHere(target)) {
+    return null
   }
+  const opened = stackRouteForHref(target, linking, state.routeNames)
+  if (opened === null) {
+    return null
+  }
+  delete params[BRIDGE_OPEN_ROUTE_PARAM]
+  // A standalone session takes the list's place, leaving no in-page Back to the list.
+  const routes = isStandaloneSessionHref(target) ? [opened] : [{ ...only, params }, opened]
+  return { target, state: { ...state, index: routes.length - 1, routes } }
 }
 
 function decodedPathnameOf(href: string): string {
@@ -100,53 +93,44 @@ function searchParamsOf(href: string): Record<string, string> {
 }
 
 // The shell names a target to open inside this document (Jump back in, notification taps) instead of pushing a second one.
-// Returns the stack router that opens the first init's target; later inits push theirs in-page.
-export function useShellOpenTarget(): StackRouterFactory {
+// Call inside the stack navigator; true while the first init's target is still being spliced in, so the stack draws nothing yet.
+export function useShellOpenTarget(): boolean {
   const client = usePageBridgeClient()
   const router = useRouter()
-  const navigation = useNavigationContainerRef()
-  // What the router put in the stack, so a later init only opens a different target.
-  const spliced = useRef<string | null>(null)
-  const [stackRouter] = useState(() =>
-    shellOpenStackRouter(
-      (target) => opensInDocument(client, target),
-      (target) => {
-        spliced.current = target
-      }
-    )
+  const container = useNavigationContainerRef()
+  const { state, navigation } = Navigator.useContext()
+  const linking = use(RouterConfigContext)?.linking
+  const [splice] = useState(() =>
+    planOpenSplice(state, linking, (target) => opensInDocument(client, target))
   )
+  const [opening, setOpening] = useState(splice !== null)
+
+  // Seeded navigation state can no longer be rewritten by the router, so splice before the first paint.
+  useLayoutEffect(() => {
+    if (opening && splice !== null) {
+      navigation.dispatchSync({ type: 'RESET', payload: splice.state })
+      setOpening(false)
+    }
+  }, [navigation, opening, splice])
 
   useEffect(() => {
     const report = createRefusalReporter()
-    let applied = spliced.current
-    // A route update can land before the root navigator is ready; Expo Router refuses to route until then.
-    let waiting: string | null = null
+    let applied = splice?.target ?? null
     const place = (target: string): void => {
-      if (!navigation.isReady()) {
-        waiting = target
-        return
-      }
       // Already on top: a second copy would only stack the same screen under itself, so hand it the target's params (a notification's pane) instead.
-      if (decodedPathnameOf(target) === store.getRouteInfo().pathname) {
+      if (decodedPathnameOf(target) === getRouteInfoFromState(container.getRootState()).pathname) {
         const params = searchParamsOf(target)
         if (Object.keys(params).length > 0) {
           router.setParams(params)
         }
         return
       }
-      router.push(target)
+      if (isStandaloneSessionHref(target)) {
+        router.replace(target)
+      } else {
+        router.push(target)
+      }
     }
-    const stopWaiting = navigation.addListener('ready', () => {
-      // A preloaded boot mounts the spliced stack with the container, so linking keeps the host list's URL until the state next changes.
-      if (spliced.current !== null) {
-        router.setParams({})
-      }
-      if (waiting !== null) {
-        const target = waiting
-        waiting = null
-        place(target)
-      }
-    })
     const open = (target: string): void => {
       if (!isThisHost(client, target)) {
         console.warn('[page-bridge] open-target-refused', { target })
@@ -172,12 +156,8 @@ export function useShellOpenTarget(): StackRouterFactory {
       }
     }
     receive(client.getShellSession()?.route ?? null)
-    const unsubscribe = client.onRouteUpdate(receive)
-    return () => {
-      unsubscribe()
-      stopWaiting()
-    }
-  }, [client, navigation, router])
+    return client.onRouteUpdate(receive)
+  }, [client, container, router, splice])
 
-  return stackRouter
+  return opening
 }

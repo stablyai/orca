@@ -55,6 +55,7 @@ function createRuntime(folders: FolderWorkspace[], repos: Repo[] = [], groups = 
     getRepo: (id: string) => repos.find((repo) => repo.id === id),
     getProjectGroups: () => groups,
     getFolderWorkspaces: () => folders,
+    getFolderWorkspace: (id: string) => folders.find((folder) => folder.id === id),
     getAllWorktreeMeta: () => ({}),
     getWorktreeMeta: () => undefined,
     setWorktreeMeta: () => ({}),

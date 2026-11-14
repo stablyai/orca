@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionStatusEvent } from '../../../../../shared/agent-session/agent-session-wire'
@@ -17,13 +17,13 @@ import {
   envelope,
   hostTestState,
   replaceHostTestState
-} from './structured-agent-session-host-test-harness'
+} from './structured-agent-session-host.test-fixture'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
   hostTestAttachParams,
   hostTestMessage
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 it.each(['selected-plan', 'absent'] as const)(
   'carries %s plan answers through native fresh sends and a host restart',
@@ -136,9 +136,10 @@ it.each(['selected-plan', 'absent'] as const)(
       await dispatch.mock.results[before]!.value
       claudeFrame(connection, { ...connection.sent.at(-1)!, parent_tool_use_id: null })
       const id = dispatch.mock.calls[before]![0].clientMessageId
-      await vi.waitFor(() =>
+      await vi.waitFor(async () =>
         expect(
-          host.collaboratorsForTests().sessions.get(SESSION)!.journal.submission(id)?.dispatchState
+          (await host.collaboratorsForTests().sessions.get(SESSION)!.journal.reads.submission(id))
+            ?.dispatchState
         ).toBe('accepted')
       )
       await host.collaboratorsForTests().conversationDelivery.loop.wake(SESSION)

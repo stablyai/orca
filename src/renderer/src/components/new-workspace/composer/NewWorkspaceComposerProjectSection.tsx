@@ -1,0 +1,275 @@
+import React, { useMemo } from 'react'
+import { FolderPlus, LoaderCircle, PlugZap } from 'lucide-react'
+import type { AddRemoteHostMode } from '@/components/sidebar/host-admission/ssh/AddRemoteHostDialog'
+import type { AddRepoDialogEntryRequest } from '@/components/sidebar/project-admission/dialog/add-repo-dialog-types'
+import { AddProjectMenu } from '@/components/sidebar/project-admission/menu/AddProjectMenu'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import ProjectCombobox from '@/components/new-workspace/project-selection/ProjectCombobox'
+import type { ProjectComboboxAddProjectMenu } from '../project-selection/ProjectComboboxAddProjectOption'
+import RunTargetCombobox from '@/components/new-workspace/run-target/RunTargetCombobox'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
+import { getSelectedNewWorkspaceProjectOptionId } from '@/lib/workspace/creation/new-workspace-project-options'
+import { resolveComposerAddProjectDefaultHostId } from '../project-selection/composer-add-project-default-host'
+import type { EphemeralVmRecipeOption } from '../run-target/run-target-options'
+import type { NeedsSetupProjectHostOption } from '../../../lib/workspace/creation/project-host-setup-options'
+import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
+import { EMPTY_PROJECT_OPTIONS } from './new-workspace-composer-card-props'
+
+type NewWorkspaceComposerProjectSectionProps = Pick<
+  NewWorkspaceComposerCardProps,
+  | 'projectOptions'
+  | 'selectedProjectId'
+  | 'onProjectChange'
+  | 'projectError'
+  | 'showAddProjectButton'
+  | 'projectLabel'
+  | 'projectPlaceholder'
+  | 'emptyProjectMessage'
+  | 'selectedRepoConnectionId'
+  | 'selectedRepoRequiresConnection'
+  | 'selectedRepoConnectInProgress'
+  | 'onConnectSelectedRepo'
+  | 'selectedProjectHostSetupId'
+  | 'selectedRepoExecutionHostId'
+  | 'onEphemeralVmRecipeChange'
+  | 'selectedEphemeralVmRecipeId'
+  | 'ephemeralVmRecipeError'
+> & {
+  disabled?: boolean
+  projectDescriptionId: string
+  onAddProject: () => void
+  onAddProjectEntryRequest?: (request: AddRepoDialogEntryRequest) => void
+  handleOpenRemoteHostDialog?: (mode: AddRemoteHostMode) => void
+  focusNameInput: () => void
+  shouldShowRunTargetPicker: boolean
+  projectHostSetupOptions: NewWorkspaceComposerCardProps['projectHostSetupOptions']
+  ephemeralVmRecipes: EphemeralVmRecipeOption[]
+  handleProjectHostSetupChange: (setupId: string) => void
+  handleAddSshHost: () => void
+  handleAddRemoteServer: () => void
+  handleConnectRunTargetHost: (option: NeedsSetupProjectHostOption) => Promise<void>
+  handleSetLocation: (option: NeedsSetupProjectHostOption) => void
+  sshStatusLabel: string
+  connectButtonLabel: string
+  selectedProjectName: string
+}
+
+export function NewWorkspaceComposerProjectSection({
+  disabled = false,
+  projectOptions = EMPTY_PROJECT_OPTIONS,
+  selectedProjectId = null,
+  onProjectChange,
+  projectError,
+  showAddProjectButton = true,
+  projectLabel,
+  projectPlaceholder,
+  emptyProjectMessage,
+  projectDescriptionId,
+  onAddProject,
+  onAddProjectEntryRequest,
+  handleOpenRemoteHostDialog,
+  focusNameInput,
+  shouldShowRunTargetPicker,
+  projectHostSetupOptions,
+  selectedProjectHostSetupId,
+  selectedRepoExecutionHostId,
+  handleProjectHostSetupChange,
+  ephemeralVmRecipes,
+  selectedEphemeralVmRecipeId = null,
+  onEphemeralVmRecipeChange,
+  handleAddSshHost,
+  handleAddRemoteServer,
+  handleConnectRunTargetHost,
+  handleSetLocation,
+  ephemeralVmRecipeError,
+  selectedRepoRequiresConnection,
+  selectedRepoConnectionId,
+  selectedRepoConnectInProgress,
+  onConnectSelectedRepo,
+  sshStatusLabel,
+  connectButtonLabel,
+  selectedProjectName
+}: NewWorkspaceComposerProjectSectionProps): React.JSX.Element {
+  const t = useTranslate()
+  const addProjectLabel = t('auto.components.NewWorkspaceComposerCard.d6b0a96f32', 'Add project')
+  const defaultAddProjectHostId = useMemo(
+    () =>
+      resolveComposerAddProjectDefaultHostId({
+        projectHostSetupOptions,
+        selectedProjectHostSetupId,
+        selectedRepoExecutionHostId,
+        selectedEphemeralVmRecipeId
+      }),
+    [
+      projectHostSetupOptions,
+      selectedEphemeralVmRecipeId,
+      selectedProjectHostSetupId,
+      selectedRepoExecutionHostId
+    ]
+  )
+  // Why: the combobox cascade lives inside a popover that closes before a remote-host dialog
+  // could open, so it needs the caller-owned dialog; otherwise fall back to the plain row.
+  const comboboxAddProjectMenu = useMemo<ProjectComboboxAddProjectMenu | undefined>(
+    () =>
+      onAddProjectEntryRequest && handleOpenRemoteHostDialog
+        ? {
+            defaultHostId: defaultAddProjectHostId,
+            onOpenEntryRequest: onAddProjectEntryRequest,
+            onOpenRemoteHostDialog: handleOpenRemoteHostDialog
+          }
+        : undefined,
+    [defaultAddProjectHostId, handleOpenRemoteHostDialog, onAddProjectEntryRequest]
+  )
+  return (
+    <fieldset disabled={disabled} className="space-y-1">
+      <div className={cn('grid gap-3', shouldShowRunTargetPicker && 'grid-cols-2')}>
+        <div className="min-w-0 space-y-1">
+          <div className="flex h-5 items-center justify-between gap-2">
+            <label className="text-xs font-medium text-muted-foreground">
+              {projectLabel ?? t('auto.components.NewWorkspaceComposerCard.969a8bff66', 'Project')}
+            </label>
+            {showAddProjectButton ? (
+              onAddProjectEntryRequest ? (
+                <AddProjectMenu
+                  side="bottom"
+                  align="end"
+                  tooltipLabel={addProjectLabel}
+                  tooltipSide="top"
+                  defaultHostId={defaultAddProjectHostId}
+                  onOpenEntryRequest={onAddProjectEntryRequest}
+                  onOpenRemoteHostDialog={handleOpenRemoteHostDialog}
+                >
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-xs"
+                    className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
+                    aria-label={addProjectLabel}
+                  >
+                    <FolderPlus className="size-3" />
+                  </Button>
+                </AddProjectMenu>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={onAddProject}
+                      className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
+                      aria-label={addProjectLabel}
+                    >
+                      <FolderPlus className="size-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top" sideOffset={6}>
+                    {addProjectLabel}
+                  </TooltipContent>
+                </Tooltip>
+              )
+            ) : null}
+          </div>
+          <div className="space-y-1" data-contextual-tour-target="workspace-creation-project">
+            <ProjectCombobox
+              options={projectOptions}
+              value={getSelectedNewWorkspaceProjectOptionId(
+                projectOptions,
+                selectedProjectId,
+                selectedProjectHostSetupId,
+                selectedRepoExecutionHostId
+              )}
+              onValueChange={onProjectChange}
+              onValueSelected={focusNameInput}
+              onAddProject={comboboxAddProjectMenu ? undefined : onAddProject}
+              addProjectMenu={comboboxAddProjectMenu}
+              placeholder={
+                projectPlaceholder ??
+                t('auto.components.NewWorkspaceComposerCard.dccd26d4e4', 'Choose project')
+              }
+              triggerClassName="h-9 w-full border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
+              invalid={Boolean(projectError)}
+              describedBy={projectDescriptionId}
+            />
+            {projectError ? (
+              <p id={projectDescriptionId} className="text-[11px] text-destructive">
+                {projectError}
+              </p>
+            ) : projectOptions.length === 0 ? (
+              <p id={projectDescriptionId} className="text-[11px] text-muted-foreground">
+                {emptyProjectMessage ??
+                  t(
+                    'auto.components.NewWorkspaceComposerCard.addProjectBeforeWorkspace',
+                    'Add a project before creating a workspace.'
+                  )}
+              </p>
+            ) : null}
+          </div>
+        </div>
+        {shouldShowRunTargetPicker ? (
+          <div className="min-w-0 space-y-1">
+            <label className="flex h-5 min-w-0 items-center truncate text-xs font-medium text-muted-foreground">
+              {t('auto.components.NewWorkspaceComposerCard.runOn', 'Run on')}
+            </label>
+            <RunTargetCombobox
+              hostOptions={projectHostSetupOptions ?? []}
+              hostValue={selectedProjectHostSetupId ?? null}
+              hostExecutionHostId={selectedRepoExecutionHostId}
+              onHostChange={handleProjectHostSetupChange}
+              recipes={ephemeralVmRecipes}
+              recipeValue={selectedEphemeralVmRecipeId}
+              onRecipeChange={onEphemeralVmRecipeChange}
+              onAddSshHost={handleAddSshHost}
+              onAddRemoteServer={handleAddRemoteServer}
+              onConnectHost={handleConnectRunTargetHost}
+              onSetLocation={handleSetLocation}
+            />
+            {ephemeralVmRecipeError ? (
+              <p className="whitespace-pre-line text-[11px] text-destructive">
+                {ephemeralVmRecipeError}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+      {!shouldShowRunTargetPicker && ephemeralVmRecipeError ? (
+        <p className="whitespace-pre-line text-2xs text-destructive">{ephemeralVmRecipeError}</p>
+      ) : null}
+      {selectedRepoRequiresConnection && selectedRepoConnectionId ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="flex items-center justify-between gap-3 rounded-md border border-border/70 bg-muted/35 px-3 py-2"
+        >
+          <div className="min-w-0">
+            <div className="truncate text-xs font-medium text-foreground">
+              {t('auto.components.NewWorkspaceComposerCard.connectProject', 'Connect {{name}}', {
+                name: selectedProjectName
+              })}
+            </div>
+            <div className="mt-0.5 text-[11px] text-muted-foreground">{sshStatusLabel}</div>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="xs"
+            onClick={() => void onConnectSelectedRepo()}
+            disabled={selectedRepoConnectInProgress}
+            className="shrink-0"
+          >
+            {selectedRepoConnectInProgress ? (
+              <LoaderCircle className="size-3.5 animate-spin" />
+            ) : (
+              <PlugZap className="size-3.5" />
+            )}
+            {selectedRepoConnectInProgress
+              ? t('auto.components.NewWorkspaceComposerCard.f660aa1454', 'Connecting')
+              : connectButtonLabel}
+          </Button>
+        </div>
+      ) : null}
+    </fieldset>
+  )
+}
