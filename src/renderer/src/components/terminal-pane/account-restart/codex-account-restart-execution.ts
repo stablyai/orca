@@ -47,7 +47,10 @@ export function continueCodexAccountRestart(
     return false
   }
   if (result) {
-    state.updateCodexAccountRestart(token, { resultPtyId: result.id })
+    state.updateCodexAccountRestart(token, {
+      resultPtyId: result.id,
+      ...(result.incarnationId ? { resultIncarnationId: result.incarnationId } : {})
+    })
   }
   return true
 }
@@ -160,7 +163,12 @@ async function retryCodexAccountRestartIdentity(
   }
   state.updateCodexAccountRestart(token, { phase: 'claimed' })
   try {
-    await prepareCodexAccountRestartOwner(request)
+    const condition = await prepareCodexAccountRestartOwner(request)
+    const latest = currentCodexAccountRestart(useAppStore.getState(), token)
+    if (condition && request.resultPtyId && latest?.phase === 'dispatched') {
+      // Requeue the verified result so a new view can attach it.
+      useAppStore.getState().updateCodexAccountRestart(token, { phase: 'accepted' })
+    }
   } catch (error) {
     const latest = currentCodexAccountRestart(useAppStore.getState(), token)
     if (latest && (latest.phase === 'claimed' || latest.phase === 'dispatched')) {

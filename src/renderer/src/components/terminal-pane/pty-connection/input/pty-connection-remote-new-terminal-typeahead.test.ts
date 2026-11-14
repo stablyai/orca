@@ -1,3 +1,9 @@
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
+import {
+  retryCodexAccountRestarts,
+  prepareCodexAccountRestart
+} from '../../account-restart/codex-account-restart-execution'
+import { selectCodexRestartStatus } from '@/components/status-bar/codex-restart-status-summary'
 import type * as React from 'react'
 import type * as AppStoreModule from '@/store'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -114,6 +120,7 @@ const {
 
 type CreatedTerminal = {
   handle: string
+  incarnationId?: string
   isReattach?: true
   coldRestore?: { scrollback: string; cwd: string }
 }
@@ -194,7 +201,10 @@ async function completeAttach(): Promise<void> {
   emitSnapshot(streamId, 'prompt$ ')
 }
 
-async function connectAccountRestart(adoptCommitted = false) {
+async function connectAccountRestart({
+  adoptCommitted = false,
+  complete = true
+}: { adoptCommitted?: boolean; complete?: boolean } = {}) {
   const useAppStore = restartStore
   const initial = useAppStore.getInitialState()
   const request: CodexAccountRestart = {
@@ -272,12 +282,15 @@ async function connectAccountRestart(adoptCommitted = false) {
     },
     adoptCommitted ? 'terminal.resolvePane' : 'terminal.create'
   )
-  pane.created.resolve({ handle: 'terminal-new' })
-  await completeAttach()
-  await vi.waitFor(() => expect(useAppStore.getState().paneAccountRestarts).toEqual({}))
+  if (complete) {
+    pane.created.resolve({ handle: 'terminal-new' })
+    await completeAttach()
+    await vi.waitFor(() => expect(useAppStore.getState().paneAccountRestarts).toEqual({}))
+  }
   return {
     ...pane,
     store: useAppStore,
+    request,
     unsubscribe: () => {
       useAppStore.setState(initial, true)
       unsubscribe()
@@ -320,8 +333,92 @@ describe('a brand-new remote pane through connectPanePty', () => {
     await restoreTerminalTestGlobals()
   })
 
+  it('reattaches the same committed restart after its first view disposes before binding', async () => {
+    const first = await connectAccountRestart({ complete: false })
+    const key = `tab-1:${leafIdForPane(1)}`
+    let disposed = false
+    const stopOnResult = first.store.subscribe((state) => {
+      const request = state.paneAccountRestarts[key]
+      if (!disposed && typeof request === 'object' && request.resultPtyId) {
+        disposed = true
+        first.binding.dispose()
+      }
+    })
+    let remounted: Awaited<ReturnType<typeof connectNewRemotePane>> | undefined
+    try {
+      first.created.resolve({ handle: 'terminal-new', incarnationId: 'inc-committed' })
+      await vi.waitFor(() =>
+        expect(selectCodexRestartStatus(first.store.getState()).failures).toHaveLength(1)
+      )
+      first.disposeTransport()
+      runtimeCall.mockImplementation(async (args: { method: string }) => {
+        if (args.method === 'status.get') {
+          return createCompatibleRuntimeStatusResponse()
+        }
+        if (args.method === 'terminal.create') {
+          throw new Error('a committed process must be attached without another create')
+        }
+        return {
+          ok: true,
+          result: {
+            terminal: {
+              handle: 'terminal-new',
+              ptyId: 'physical-committed',
+              incarnationId: 'inc-committed',
+              connected: true,
+              worktreeId: 'wt-1',
+              tabId: 'tab-1',
+              leafId: leafIdForPane(1),
+              launchToken: first.request.attemptId,
+              accountRestart: {
+                hostEpoch: 'host-epoch',
+                tabCreatedAt: 1,
+                bindingGeneration: 2,
+                owner: { ptyId: 'physical-committed', incarnationId: 'inc-committed' }
+              }
+            }
+          }
+        }
+      })
+      await retryCodexAccountRestarts(selectCodexRestartStatus(first.store.getState()).failures)
+      const request = first.store.getState().claimCodexAccountRestart(key)
+      expect(request).not.toBeNull()
+      if (!request) {
+        return
+      }
+      await prepareCodexAccountRestart(request)
+      remounted = await connectNewRemotePane(
+        {
+          startup: request.startup,
+          accountRestart: request.condition,
+          accountRestartToken: codexAccountRestartToken(request),
+          invalidateRetainedInlineScrollback: vi.fn(),
+          updateTabPtyId: first.store.getState().updateTabPtyId
+        },
+        'terminal.resolvePane'
+      )
+      await completeAttach()
+      await vi.waitFor(() =>
+        expect(first.store.getState().tabsByWorktree['wt-1'][0].ptyId).toBe(
+          'remote:env-1@@terminal-new'
+        )
+      )
+      remounted.type('resumed after refused attachment\r')
+      await vi.waitFor(() =>
+        expect(inputFrameTexts().join('')).toBe('resumed after refused attachment\r')
+      )
+    } finally {
+      stopOnResult()
+      remounted?.disposeTransport()
+      remounted?.binding.dispose()
+      first.disposeTransport()
+      first.binding.dispose()
+      first.unsubscribe()
+    }
+  })
+
   it('attaches a reconciled account result without creating or replacing the host process', async () => {
-    const pane = await connectAccountRestart(true)
+    const pane = await connectAccountRestart({ adoptCommitted: true })
     try {
       expect(runtimeCall.mock.calls.filter(([args]) => args.method === 'terminal.create')).toEqual(
         []
