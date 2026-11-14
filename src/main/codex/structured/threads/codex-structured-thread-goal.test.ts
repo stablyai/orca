@@ -105,12 +105,9 @@ describe('direct goal settings application', () => {
       waitsForCodexTurnOptions(
         { provider: 'codex', sessionId: 'session-1' },
         {
-          newestTurn: () => ({ turnId: 'goal-turn', state: 'running' }),
-          itemBody: () => ({
-            kind: 'message',
-            role: 'user',
-            blocks: [{ type: 'text', text: 'Continue' }]
-          })
+          reads: {
+            messageOptions: async () => ({ ordinaryMessage: true, runningTurn: true })
+          }
         },
         {
           clientMessageId: 'follow-up',
@@ -156,7 +153,7 @@ describe('direct goal settings application', () => {
     const held = (options = choices) => heldOptions(options)
     try {
       expect(await dispatch()).toMatchObject({ state: 'admitted' })
-      expect(held()).toBe(false)
+      expect(await held()).toBe(false)
       codex.routes['thread/settings/update'] = (params) => {
         apply(String(params?.model), String(params?.effort))
         return {}
@@ -171,17 +168,17 @@ describe('direct goal settings application', () => {
         }
       ])
       const goalChoices = { model: 'unlisted-model-b', effort: 'low' }
-      expect(held(goalChoices)).toBe(false)
-      expect(held()).toBe(true)
+      expect(await held(goalChoices)).toBe(false)
+      expect(await held()).toBe(true)
       apply('observation-only', 'medium')
-      expect(held(goalChoices)).toBe(false)
-      expect(held()).toBe(true)
+      expect(await held(goalChoices)).toBe(false)
+      expect(await held()).toBe(true)
       codex.routes['thread/settings/update'] = () => {
         throw new CodexAppServerRequestError('thread/settings/update', -32602, 'invalid model')
       }
       expect(await goal('refused-model', 'high')).toMatchObject({ ok: false })
-      expect(held(goalChoices)).toBe(false)
-      expect(held()).toBe(true)
+      expect(await held(goalChoices)).toBe(false)
+      expect(await held()).toBe(true)
       expect(
         codex.connections[0].calls.filter((call) => call.method === 'thread/goal/set')
       ).toHaveLength(1)
@@ -190,9 +187,9 @@ describe('direct goal settings application', () => {
         (call) => call.method === 'thread/settings/update'
       ).length
       expect(await goal('observation-only-c', 'medium')).toEqual({ ok: true })
-      expect(held()).toBe(true)
-      expect(held(goalChoices)).toBe(false)
-      expect(held({ model: 'observation-only-c', effort: 'medium' })).toBe(true)
+      expect(await held()).toBe(true)
+      expect(await held(goalChoices)).toBe(false)
+      expect(await held({ model: 'observation-only-c', effort: 'medium' })).toBe(true)
       expect(
         codex.connections[0].calls.filter((call) => call.method === 'thread/settings/update')
       ).toHaveLength(callsBeforeEquivalent)
@@ -200,25 +197,25 @@ describe('direct goal settings application', () => {
         throw new Error('reply lost after settings enqueue')
       }
       expect(await goal('uncertain-model', 'low')).toMatchObject({ ok: false })
-      expect(held()).toBe(true)
+      expect(await held()).toBe(true)
       expect(await dispatch()).toMatchObject({ state: 'admitted' })
-      expect(held()).toBe(false)
+      expect(await held()).toBe(false)
       codex.routes['thread/settings/update'] = () => {
         throw new CodexAppServerRequestError('thread/settings/update', -32601, 'method not found')
       }
       expect(await goal('unlisted-model-b', 'low')).toEqual({ ok: true })
-      expect(held()).toBe(false)
+      expect(await held()).toBe(false)
       const callsBeforeCached = codex.connections[0].calls.filter(
         (call) => call.method === 'thread/settings/update'
       ).length
       expect(await goal('unlisted-model-b', 'low')).toEqual({ ok: true })
-      expect(held()).toBe(false)
-      expect(held(goalChoices)).toBe(true)
+      expect(await held()).toBe(false)
+      expect(await held(goalChoices)).toBe(true)
       expect(
         codex.connections[0].calls.filter((call) => call.method === 'thread/settings/update')
       ).toHaveLength(callsBeforeCached)
       expect(await dispatch()).toMatchObject({ state: 'admitted' })
-      expect(held()).toBe(false)
+      expect(await held()).toBe(false)
     } finally {
       await adapter.closeAll()
     }
@@ -264,13 +261,12 @@ describe('direct goal settings application', () => {
           })
           generation = replacement.acquisitionGeneration
           expect(
-            adapter.readAppliedInputOptions({
+            adapter.captureMessageSteeringInputs({
               sessionId: 'session-1',
               fence: 7,
-              acquisitionGeneration: acquisition.acquisitionGeneration,
-              next: {}
+              acquisitionGeneration: acquisition.acquisitionGeneration
             })
-          ).toBeNull()
+          ).toEqual({ kind: 'codex-unavailable' })
         }
         expect(await dispatch('model-c')).toMatchObject({ state: 'admitted' })
         if (outcome === 'success') {
@@ -331,8 +327,8 @@ describe('direct goal settings application', () => {
           )
         }
         await Promise.allSettled([rpc])
-        expect(held({ model: 'model-b', effort: 'high' })).toBe(outcome !== 'success')
-        expect(held({ model: 'model-a', effort: 'high' })).toBe(outcome === 'success')
+        expect(await held({ model: 'model-b', effort: 'high' })).toBe(outcome !== 'success')
+        expect(await held({ model: 'model-a', effort: 'high' })).toBe(outcome === 'success')
         expect(
           codex.connections
             .flatMap((connection) => connection.calls)

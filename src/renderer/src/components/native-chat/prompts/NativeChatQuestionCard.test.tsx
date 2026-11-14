@@ -6,7 +6,7 @@ import { getByRole, queryByRole } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
 
-import type { AskPrompt } from '../../../../../shared/native-chat/input/native-chat-ask-types'
+import type { AskPrompt } from '../../../../../shared/native-chat/input/questions/native-chat-ask-types'
 
 // Answers must use option indices; labels can be duplicated and a non-first choice must retain its position.
 

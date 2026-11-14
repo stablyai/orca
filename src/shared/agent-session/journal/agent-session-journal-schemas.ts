@@ -180,6 +180,7 @@ const MessageBody = z.object({
   state: z.string().min(1).optional(),
   completedAt: z.number().finite().optional()
 })
+const MessageMetadata = MessageBody.omit({ blocks: true })
 
 /** A turn's lifecycle, as the turn item and the legacy status row both carry it. */
 const TurnLifecycleFields = {
@@ -259,7 +260,13 @@ const KnownItemBody = z.discriminatedUnion('kind', [
     threadGoal: AgentJournalThreadGoalStateSchema.optional(),
     failure: AgentSessionFailureFactSchema.optional(),
     orcaStop: z.object({ cause: z.string().min(1) }).optional(),
-    forkedFrom: z.object({ sessionId: z.string().min(1) }).optional()
+    forkedFrom: z
+      .object({
+        sessionId: z.string().min(1),
+        sourceForked: z.literal(true).optional(),
+        sourceMissing: z.literal(true).optional()
+      })
+      .optional()
   }),
   z.object({
     kind: z.literal('turn'),
@@ -324,6 +331,11 @@ export function isAdmissibleAgentJournalMessageBody(
   value: unknown
 ): value is AgentJournalMessageItem {
   return MessageBody.safeParse(value).success
+}
+
+/** Plain text snapshots validate their unchanged block shape before entering the narrow writer. */
+export function isAdmissibleAgentJournalMessageMetadata(value: unknown): boolean {
+  return MessageMetadata.safeParse(value).success
 }
 
 export function isAdmissibleAgentJournalRenderItem(

@@ -7,13 +7,7 @@ import {
   type AgentSessionPromptResponse
 } from '../../../../shared/agent-session/agent-session-question-answer'
 import type { ProviderTimelineEvent } from '../../../native-chat/agent-session-timeline/provider-timeline-event'
-import {
-  AGENT,
-  SESSION,
-  openProviderTimelineRig
-} from '../../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import { createLegacyProviderTimelineIdentityScheme } from '../../../native-chat/agent-session-timeline/provider-timeline-identity'
-import { createAcpOwnershipReader } from '../../journal/acp-ownership-reader'
+import { openProviderTimelineRig } from '../../../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { GROK_ACP_DIALECT } from '../../acp-dialects/grok-dialect'
 import type { AcpDialect, AcpRequestPresentation } from '../../acp-dialects/acp-dialect'
 import { AcpTimelineTranslator } from '../acp-timeline-translator'
@@ -75,7 +69,7 @@ function fixtureAnswer(
   }
 }
 
-/** `journalOwnership` reads row placement back from the journal, as production lanes do. */
+/** SQL admission resolves saved row placement on every lane, including after restart. */
 export async function openAcpFixtureRig(
   dialect: AcpDialect = GROK_ACP_DIALECT,
   { journalOwnership = false }: { journalOwnership?: boolean } = {}
@@ -85,18 +79,10 @@ export async function openAcpFixtureRig(
   const rig = await openProviderTimelineRig(
     journalOwnership ? { namespace: providerSessionId } : {}
   )
-  const scheme = createLegacyProviderTimelineIdentityScheme({ agent: AGENT, sessionId: SESSION })
   const translator = () =>
     new AcpTimelineTranslator({
       sessionId: providerSessionId,
-      dialect,
-      ...(journalOwnership
-        ? {
-            ownership: createAcpOwnershipReader(scheme, providerSessionId, () =>
-              rig.sink.journalItems()
-            )
-          }
-        : {})
+      dialect
     })
   let lane = translator()
   const records = acpSubagentRecords()

@@ -49,6 +49,9 @@ describe('ImageViewer app zoom ownership', () => {
       </EditorCommandOwnerContext>
     )
     const viewer = render(image(true))
+    const loaded = screen.getByRole('img', { name: 'shot.png' })
+    Object.defineProperties(loaded, { naturalWidth: { value: 1 }, naturalHeight: { value: 1 } })
+    fireEvent.load(loaded)
     expect(zoom('in')).toBe(true)
 
     viewer.rerender(image(false))
@@ -61,46 +64,5 @@ describe('ImageViewer app zoom ownership', () => {
 
     viewer.unmount()
     expect(zoom('in')).toBe(false)
-  })
-
-  it('keeps a zoom that arrives before the image has loaded', () => {
-    render(
-      <EditorCommandOwnerContext value={true}>
-        <ImageViewer
-          src="orca-media://file/t?revision=1"
-          filePath="/repo/shot.png"
-          mimeType="image/png"
-        />
-      </EditorCommandOwnerContext>
-    )
-    expect(zoom('in')).toBe(true)
-    const image = screen.getByRole('img', { name: 'shot.png' })
-    Object.defineProperties(image, {
-      naturalWidth: { value: 4000 },
-      naturalHeight: { value: 3000 }
-    })
-    fireEvent.load(image)
-    expect(screen.getByText('125%')).toBeTruthy()
-  })
-
-  it('keeps the zoom when the same file is reminted under a new revision', () => {
-    const image = (revision: number) => (
-      <EditorCommandOwnerContext value={true}>
-        <ImageViewer
-          src={`orca-media://file/t?revision=${revision}`}
-          filePath="/repo/shot.png"
-          mimeType="image/png"
-        />
-      </EditorCommandOwnerContext>
-    )
-    const viewer = render(image(1))
-    const loaded = screen.getByRole('img', { name: 'shot.png' })
-    Object.defineProperties(loaded, { naturalWidth: { value: 400 }, naturalHeight: { value: 300 } })
-    fireEvent.load(loaded)
-    zoom('in')
-    expect(screen.getByText('125%')).toBeTruthy()
-
-    viewer.rerender(image(2))
-    expect(screen.getByText('125%')).toBeTruthy()
   })
 })

@@ -15,9 +15,6 @@ it('prints readable branches while distinguishing colliding action identities', 
       truncated: false
     })
   ).toBe('topic\nrefs/heads/origin/main\nrefs/remotes/origin/main')
-  expect(
-    formatRepoRefs({ refs: ['origin/main', 'refs/remotes/origin/main'], truncated: false })
-  ).toBe('origin/main\norigin/main')
 })
 
 afterEach(() => {

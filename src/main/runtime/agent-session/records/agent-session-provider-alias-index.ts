@@ -1,10 +1,9 @@
-import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import {
   getAgentSessionConversation,
   listAgentSessionConversations,
   type AgentSessionStoreState
 } from './agent-session-store-state'
-import { AgentSessionDraftRecords } from './agent-session-store-draft'
 
 /** Provider-native session ids of the loaded chats, mapped to the chats whose handle chains name
  *  them: built once per store authority, then kept by committed record writes, so a recipient's
@@ -35,11 +34,8 @@ export class AgentSessionProviderAliasIndex {
     draft: AgentSessionStoreState,
     records: { upsert: readonly (readonly [string, string])[]; remove: readonly string[] }
   ): void {
-    // Keys the draft appended take the end, in its order; every other key keeps its place.
-    const appended =
-      draft.records instanceof AgentSessionDraftRecords
-        ? draft.records.appended
-        : records.upsert.map(([id]) => id).filter((id) => !this.readableOrder.has(id))
+    // SQL acknowledgements append new records and retain existing records' listing order.
+    const appended = records.upsert.map(([id]) => id).filter((id) => !this.readableOrder.has(id))
     for (const sessionId of appended) {
       this.readableOrder.delete(sessionId)
       if (draft.records.has(sessionId)) {

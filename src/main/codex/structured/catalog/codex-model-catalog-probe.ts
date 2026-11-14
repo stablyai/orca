@@ -26,7 +26,7 @@ import {
   resolveCodexStructuredInvocation,
   type CodexStructuredInvocationDeps
 } from '../launch/codex-structured-launch-resolution'
-import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type {
   AgentModelCatalogProgress,
   AgentModelCatalogProbe,

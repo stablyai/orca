@@ -4,22 +4,23 @@ import {
   terminalPaneDirection,
   terminalPaneKeyboardLayout
 } from '../terminal/session/pane-layout/mobile-terminal-pane-layout'
-import { Animated, View, Text, Pressable, ActivityIndicator } from 'react-native'
+import { View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
 import { TerminalPaneView } from '../terminal/session/pane-layout/TerminalPaneView'
 import { MountedTerminalPanes } from '../terminal/session/pane-layout/mounted-terminal-lru'
 import { MobileNativeChatOverlay } from './native-chat/MobileNativeChatOverlay'
-import { mobileSessionNativeChatHostOutage } from './native-chat/mobile-native-chat-host-outage'
-import { MobileAgentMessageProvider } from './native-chat/transcript/MobileAgentMessageProvider'
+import { mobileSessionNativeChatHostOutage } from './native-chat/status/mobile-native-chat-host-outage'
+import { MobileAgentMessageProvider } from './native-chat/transcript/agent-messages/MobileAgentMessageProvider'
 import { MobileNativeChatForkProvider } from './MobileNativeChatForkProvider'
 import { useMobileAgentMessageNavigation } from './use-mobile-agent-message-navigation'
-import { MobileNativeChatDictationPreviewContext } from './native-chat/composer/mobile-native-chat-dictation-preview-context'
-import { resolveMobileNativeChatSessionId } from './native-chat/mobile-native-chat-eligibility'
+import { MobileNativeChatDictationPreviewContext } from './native-chat/composer/dictation/mobile-native-chat-dictation-preview-context'
+import { resolveMobileNativeChatSessionId } from './native-chat/conversation/mobile-native-chat-eligibility'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
+import { renderAnimatedToast } from '../components/feedback/TransientToast'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useMobileSessionContentKeyboardLift } from '../terminal/session/input-controls/use-mobile-session-keyboard-lift'
 import { useOpenUrlInOrca } from '../browser/tab-navigation/use-open-url-in-orca'
@@ -147,11 +148,7 @@ export function MobileSessionActiveContent({
   // Review notes are for working-tree diffs only.
   const fileTabTakesNotes =
     activeFileTab?.diffSource === 'staged' || activeFileTab?.diffSource === 'unstaged'
-  const toast = toastMessage ? (
-    <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
-      <Text style={styles.toastText}>{toastMessage}</Text>
-    </Animated.View>
-  ) : null
+  const toast = renderAnimatedToast(toastMessage, toastAnimatedStyle)
   const content =
     showLoadingState || showEmptyState || showOfflineState ? (
       <MobileSessionContentState

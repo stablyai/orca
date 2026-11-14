@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
-import { SwipeRowActions } from '../../components/SwipeRowActions'
+import { SwipeRowActions } from '../../components/list/SwipeRowActions'
 import { Minus, Plus, Undo2 } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import { STATUS_LABELS } from '../../../../src/shared/git/status/git-status-labels'
@@ -11,7 +11,7 @@ import type {
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { MobileDiffLineStats } from '../../components/MobileDiffReviewFileSummary'
+import { MobileDiffLineStats } from '../review/diff-screen/MobileDiffReviewFileSummary'
 import type {
   MobileBranchEntryView,
   MobileGitStatusEntryView

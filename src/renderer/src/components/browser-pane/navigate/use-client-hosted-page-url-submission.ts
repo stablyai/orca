@@ -1,5 +1,5 @@
 import type { BrowserPageInitializationAction } from '../../../../../shared/browser/client-hosting/browser-page-initialization-action'
-import { issueBrowserGuestNavigation } from '../host-guest/browser-guest-metadata-cache'
+import { issueBrowserGuestNavigation } from '../host-guest/metadata/browser-guest-metadata-cache'
 import { useCallback } from 'react'
 import type { MutableRefObject, RefObject } from 'react'
 import { redactKagiSessionToken } from '../../../../../shared/browser-url'

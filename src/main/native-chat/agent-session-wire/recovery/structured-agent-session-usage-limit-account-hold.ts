@@ -13,7 +13,7 @@ import {
   agentSessionAccountHomesEqual,
   isLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
-} from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+} from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { usageLimitContinueIdentity as identity } from './structured-agent-session-usage-limit-chain'
 

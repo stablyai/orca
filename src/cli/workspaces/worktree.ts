@@ -17,7 +17,7 @@ import {
   annotateOmittedHostScope,
   type WithAnnotatedHostScope
 } from '../hosts/omitted-host-scope-selectors'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,

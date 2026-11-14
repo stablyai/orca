@@ -52,7 +52,7 @@ export function clampPdfViewPosition(
   return pageNumber === position.pageNumber ? position : { ...position, pageNumber }
 }
 
-export const PDF_POSITION_FLUSH_MS = 150
+const PDF_POSITION_FLUSH_MS = 150
 
 type TimerHandle = ReturnType<typeof setTimeout>
 

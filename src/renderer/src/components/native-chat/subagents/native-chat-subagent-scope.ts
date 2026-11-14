@@ -8,7 +8,7 @@ import {
   type NativeChatSubagentEntry
 } from '../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatSubagentRow } from '../../../../../shared/native-chat/transcript/native-chat-transcript-projection'
-import { compareNativeChatDisplayMessages as compareMessages } from '../../../../../shared/native-chat/transcript/native-chat-message-order'
+import { compareNativeChatDisplayMessages as compareMessages } from '../../../../../shared/native-chat/transcript/messages/native-chat-message-order'
 
 const NO_HEADS: readonly NativeChatSubagentHead[] = []
 
