@@ -105,23 +105,21 @@ describe('the permission mode picker', () => {
     expect(
       permission({ ...state, permissionMode: 'full-access', launchPermissionMode: 'ask' })
     ).toMatchObject({
-      description: 'Full access — Applies to your next message',
-      valueSource: 'dispatched'
+      valueSource: 'dispatched',
+      activeValue: 'ask'
     })
     expect(
       permission({ ...state, permissionMode: 'own', launchPermissionMode: 'own' })
     ).toMatchObject({
-      description: "Agent's own settings",
       valueSource: 'applied'
     })
     expect(
       permission({ ...state, permissionMode: 'ask', launchPermissionMode: 'full-access' })
     ).toMatchObject({
-      description: 'Ask for approval — Applies to your next message',
-      valueSource: 'dispatched'
+      valueSource: 'dispatched',
+      activeValue: 'full-access'
     })
     expect(permission({ ...state, permissionMode: 'full-access' })).toMatchObject({
-      description: 'Full access',
       valueSource: 'applied'
     })
     expect(
@@ -132,6 +130,13 @@ describe('the permission mode picker', () => {
         reportedPermissionMode: 'plan'
       })
     ).toMatchObject({ valueSource: 'dispatched' })
+    expect(
+      permission({
+        ...live('codex', { permissionMode: 'ask' }),
+        permissionMode: 'full-access',
+        launchPermissionMode: 'ask'
+      })
+    ).toMatchObject({ valueSource: 'applied' })
     expect(
       permission({
         ...state,

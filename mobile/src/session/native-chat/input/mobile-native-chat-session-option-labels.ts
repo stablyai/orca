@@ -31,6 +31,26 @@ export function mobileSessionOptionSummaryValue(descriptor: SessionOptionDescrip
     return translate('chat.sessionOptionCopy.notSet', 'Not set')
   }
   if (descriptor.id === 'permissionMode' && descriptor.description) {
+    if (descriptor.valueSource === 'dispatched' && typeof descriptor.activeValue === 'string') {
+      const active = descriptor.kind.choices.find(
+        (choice) => choice.value === descriptor.activeValue
+      )
+      const activeLabel = active
+        ? nativeChatSessionChoiceLabel(active, say, descriptor.id)
+        : descriptor.activeValue === 'own'
+          ? translate('settings.agents.permissionOwnAll', "Agents' own settings")
+          : null
+      return activeLabel
+        ? translate(
+            'chat.sessionOptionCopy.permissionAppliesNextMessage',
+            '{{saved}} applies to your next message; running {{active}}',
+            {
+              saved: nativeChatSessionChoiceLabel(choice, say, descriptor.id),
+              active: activeLabel
+            }
+          )
+        : descriptor.description
+    }
     return descriptor.description
   }
   return nativeChatSessionChoiceLabel(choice, say, descriptor.id)

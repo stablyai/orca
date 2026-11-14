@@ -3110,7 +3110,8 @@
       "chooseInAgentPicker": "Choose in agent picker…",
       "setWhenSessionStarts": "Set when the session starts.",
       "availableAfterSessionStarts": "Available after the session starts.",
-      "sessionOptions": "Session options"
+      "sessionOptions": "Session options",
+      "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}"
     },
     "streamFrame": {
       "streamFailed": "Transcript stream failed",

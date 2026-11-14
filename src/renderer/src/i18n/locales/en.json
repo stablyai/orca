@@ -20750,7 +20750,8 @@
           "medium": "Med",
           "xhigh": "XHigh"
         },
-        "imageUnavailable": "Preview unavailable"
+        "imageUnavailable": "Preview unavailable",
+        "permissionAppliesNextMessage": "{{saved}} applies to your next message; running {{active}}"
       },
       "tool": {
         "exitCode": "exit {{value0}}",
