@@ -56,6 +56,8 @@ export type CommitMessagePlan = {
   /** Task-owned UTF-8 policy artifacts, materialized on the execution host. */
   taskFiles?: { name: string; content: string; argIndex?: number; interpolateDirectory?: boolean }[]
   policyProbeArgs?: string[]
+  /** Leading args owned by a command override wrapper, before this agent's own argument segment. */
+  commandPrefixArgCount?: number
   /** Human-readable label used in error prefixes (e.g. "Claude failed: ..."). */
   label: string
   /** Leading command assignments, applied on the execution host. */
@@ -89,7 +91,12 @@ function insertAdditionalAgentArgs(args: {
   const promptPlaceholderIndex = args.baseArgs.lastIndexOf('{prompt}')
   if (promptPlaceholderIndex !== -1) {
     const merged = [...args.baseArgs]
-    merged.splice(promptPlaceholderIndex, 0, ...args.agentArgs)
+    // Options after a `--` terminator become prompt text, so insert before it.
+    const insertIndex =
+      merged[promptPlaceholderIndex - 1] === '--'
+        ? promptPlaceholderIndex - 1
+        : promptPlaceholderIndex
+    merged.splice(insertIndex, 0, ...args.agentArgs)
     return merged
   }
   if (
@@ -97,7 +104,13 @@ function insertAdditionalAgentArgs(args: {
     args.prompt.length > 0 &&
     args.baseArgs.at(-1) === args.prompt
   ) {
-    return [...args.baseArgs.slice(0, -1), ...args.agentArgs, args.prompt]
+    const promptIndex = args.baseArgs.length - 1
+    const insertIndex = args.baseArgs[promptIndex - 1] === '--' ? promptIndex - 1 : promptIndex
+    return [
+      ...args.baseArgs.slice(0, insertIndex),
+      ...args.agentArgs,
+      ...args.baseArgs.slice(insertIndex)
+    ]
   }
   return [...args.baseArgs, ...args.agentArgs]
 }
@@ -267,6 +280,7 @@ export function planCommitMessageGeneration(
           }
         : {}),
       ...(input.agentId === 'antigravity' ? { policyProbeArgs: merged.prefixArgs } : {}),
+      ...(input.agentId === 'muse' ? { commandPrefixArgCount: merged.prefixArgs.length } : {}),
       ...(input.agentId === 'opencode' || input.agentId === 'opencode2'
         ? {
             openCodeTask: {
