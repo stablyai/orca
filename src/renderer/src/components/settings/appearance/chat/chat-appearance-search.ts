@@ -81,7 +81,7 @@ const getChatAppearanceCatalog = createLocalizedCatalog(
         title: translate('settings.appearance.chat.width', 'Width'),
         description: translate(
           'settings.appearance.chat.widthDescription',
-          'How wide messages and the message box can grow in a wide pane.'
+          'How wide chats and Settings pages can grow.'
         ),
         keywords: [
           translate('settings.appearance.chat.title', 'Chat UI'),
