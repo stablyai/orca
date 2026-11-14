@@ -85,7 +85,7 @@ export function splitManagedPane(args: SplitManagedPaneArgs): ManagedPane | null
     // Reparenting the source pane drops its focus; give the user's keyboard back.
     focusedBefore.focus({ preventScroll: true })
   }
-  openSplitPane(args, newPane, existing.leafId, activate)
+  openSplitPane(args, newPane, existing.leafId, activate, newPaneFirst)
 
   for (const movedPaneState of movedPaneStates) {
     scheduleSplitScrollRestore(
@@ -156,7 +156,8 @@ function openSplitPane(
   args: SplitManagedPaneArgs,
   newPane: ManagedPaneInternal,
   parentLeafId: string,
-  activate: boolean
+  activate: boolean,
+  newPaneFirst?: boolean
 ): void {
   const cwd = args.opts?.cwd
   openTerminal(newPane, {
