@@ -22,12 +22,14 @@ import type { HostScreenState } from '../use-host-screen-state'
 import { relaysToServers } from '../../worktree/execution-host-scoped-rpc-client'
 import { NO_SERVER_WORKSPACES } from '../../worktree/server-workspaces'
 import { useRelayHosts } from '../../worktree/relay-hosts-feed'
-import { WorktreeCatalogReadError } from '../../worktree/worktree-catalog-snapshot-client'
+import {
+  WorktreeCatalogReadError,
+  type WorktreeCatalogSnapshot
+} from '../../worktree/worktree-catalog-snapshot-client'
 import { useHostQuery } from '../../query/host-query'
 import { hostReadClient } from '../../query/host-read-client'
 import { hostScopeKey } from '../../query/host-query-key'
 import { isHostNotConnectedError } from '../../query/host-query-errors'
-import { refetchHostQueryAfterInFlight } from '../../query/host-event-router'
 import {
   isHostListQuery,
   HOST_LIST_BACKSTOP_POLL_MS,
@@ -230,22 +232,44 @@ export function useHostWorktreeCatalog(args: {
     }
   }, [relays, relaysRuledOut, servers.data])
 
+  // Why the return: the Add project handoff awaits the refreshed rows to land on the added
+  // repo's default checkout; every other caller discards them.
   const fetchWorktrees = useCallback(
-    async (options: { allowDuringModal?: boolean } = {}) => {
-      if (!hostId) {
-        return
+    async (options: { allowDuringModal?: boolean } = {}): Promise<Worktree[] | undefined> => {
+      // An offline host cannot answer; the caller then stays put, same as a failed read below.
+      if (!hostId || !client || connState !== 'connected') {
+        return undefined
       }
-      const query = queryClient
-        .getQueryCache()
-        .find({ queryKey: hostWorktreeCatalogKey(hostId), exact: true })
+      const key = hostWorktreeCatalogKey(hostId)
+      const query = queryClient.getQueryCache().find({ queryKey: key, exact: true })
       if (!query) {
-        return
+        return undefined
       }
       applyDuringModalRef.current ||= options.allowDuringModal === true
-      // After any read in flight: it may predate the change this read is for.
-      refetchHostQueryAfterInFlight(queryClient, query)
+      // After any read in flight: it may predate the change this read is for. TanStack joins
+      // the read already out (cancelRefetch: false), and a second read then guarantees the
+      // returned rows cannot predate this call — the same in-flight-then-refetch ordering
+      // refetchHostQueryAfterInFlight gives its fire-and-forget callers, awaited.
+      const joiningInFlight = query.state.fetchStatus === 'fetching'
+      await queryClient.refetchQueries(
+        { queryKey: key, exact: true, type: 'active' },
+        { cancelRefetch: false }
+      )
+      if (joiningInFlight) {
+        await queryClient.refetchQueries(
+          { queryKey: key, exact: true, type: 'active' },
+          { cancelRefetch: false }
+        )
+      }
+      // A failed read must not answer with the last good rows: they can predate the change this
+      // read was for, and the list still shows them anyway.
+      if (query.state.status === 'error') {
+        return undefined
+      }
+      const snapshot = queryClient.getQueryData<WorktreeCatalogSnapshot>(key)
+      return snapshot ? [...snapshot.worktrees] : undefined
     },
-    [hostId, queryClient]
+    [client, connState, hostId, queryClient]
   )
 
   const startWorktreeRefresh = useCallback(() => {

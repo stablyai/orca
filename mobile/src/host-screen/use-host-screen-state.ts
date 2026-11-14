@@ -66,6 +66,10 @@ export function useHostScreenState(
   const [confirmRemoveHost, setConfirmRemoveHost] = useState(false)
   const [showNewWorktree, setShowNewWorktree] = useState(false)
   const setNewWorktreeVisible = useCallback((visible: boolean) => setShowNewWorktree(visible), [])
+  // The + button's two-choice sheet (New workspace / Add project), and the Add project
+  // sheet it opens — both plain drawer state, no route action behind them in v1.
+  const [showPlusActionSheet, setShowPlusActionSheet] = useState(false)
+  const [showAddProject, setShowAddProject] = useState(false)
   const [sleptIds, setSleptIds] = useState<Set<string>>(new Set())
   const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set())
   const [showPinnedInGroups, setShowPinnedInGroups] = useState(false)
@@ -116,12 +120,16 @@ export function useHostScreenState(
     setSearch,
     setServerNotice,
     setServerWorkspaces,
+    setShowAddProject,
+    setShowPlusActionSheet,
     setShowWorkspaceOptions,
     setShowPinnedInGroups,
     setSleptIds,
     setWorktrees,
     setWorktreesLoaded,
+    showAddProject,
     showNewWorktree,
+    showPlusActionSheet,
     showWorkspaceOptions,
     showPinnedInGroups,
     setView,
