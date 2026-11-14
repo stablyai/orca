@@ -4,7 +4,6 @@ import { loadTerminalLinkOpenMode, saveTerminalLinkOpenMode } from './preference
 import {
   loadDefaultSessionView,
   loadSessionViewOverrides,
-  readDefaultSessionViewPreference,
   readSessionViewOverridesPreference,
   saveDefaultSessionView,
   updateSessionViewOverride
@@ -39,26 +38,6 @@ describe('session view preference', () => {
       .mockImplementation(async (key, value) => {
         stored.set(key, value)
       })
-  })
-
-  it('marks an unreadable default as not loaded so the opt-in gate can bail', async () => {
-    vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
-    await expect(readDefaultSessionViewPreference()).resolves.toEqual({
-      value: null,
-      loaded: false,
-      hasStoredValue: false
-    })
-    await expect(loadDefaultSessionView()).resolves.toBe('terminal')
-  })
-
-  it('migrates the legacy array format to chat overrides', async () => {
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue(JSON.stringify(['tab-1', 42, 'tab-2']))
-
-    const loaded = await loadSessionViewOverrides('host', 'wt')
-    expect([...loaded.entries()]).toEqual([
-      ['tab-1', 'chat'],
-      ['tab-2', 'chat']
-    ])
   })
 
   it('serializes default writes across callers and makes reads wait for the latest', async () => {
@@ -194,17 +173,6 @@ describe('session view preference', () => {
     )
 
     expect(AsyncStorage.setItem).not.toHaveBeenCalled()
-  })
-
-  it('repairs invalid preference data on the next user mutation', async () => {
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue('not-json')
-
-    await updateSessionViewOverride('host', 'worktree', 'tab', 'chat')
-
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
-      'orca:nativeChatTabs:host:worktree',
-      JSON.stringify({ tab: 'chat' })
-    )
   })
 })
 

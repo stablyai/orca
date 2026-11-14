@@ -1,23 +1,23 @@
+import { readTestHostJournal } from '../../../../../native-chat/agent-session-journal/journal-observation.test-support'
+import '../../../dispatch/testing/unused-default-rpc-methods.test-fixture'
 vi.mock('node:fs/promises', { spy: true })
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import { activeStructuredAgentSessionTurnId } from '../../../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import {
   hostTestOperationId,
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as REST_TEST_THREAD
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
-import '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import {
   foundRestTestChat,
   REST_TEST_CALLER as CALLER,
   restTestSend
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
 
 import { closeStructuredAgentSessionChild } from '../../../../agent-session/structured-agent-session-close'
 import { discardStructuredWorkerSession } from '../../orchestration/structured-workers/orchestration-structured-worker-session'
-import '../../../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
 
 import { fixture, call, restingChat } from './structured-agent-session-rest-contract-test-fixture'
 
@@ -94,7 +94,7 @@ it('whose settlement write failed is settled by the next send, which is delivere
   await fixture.rig.host.waitForSendSettlement(SESSION, sent.value.clientMessageId)
   expect(fixture.rig.adapter.dispatch).toHaveBeenCalledTimes(2)
   expect(
-    activeStructuredAgentSessionTurnId((await fixture.rig.host.journalSnapshot(SESSION)).items)
+    activeStructuredAgentSessionTurnId((await readTestHostJournal(fixture.rig.host, SESSION)).items)
   ).not.toBe('working')
 })
 

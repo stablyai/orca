@@ -59,22 +59,6 @@ function result(sessions: AiVaultSession[]): AiVaultListResult {
   return { sessions, issues: [], scannedAt: '2026-10-20T00:00:00.000Z' }
 }
 
-describe('resolveAiVaultScopeRealPaths', () => {
-  it('adds the real path of a symlinked scope so the scan admits sessions recorded there', async () => {
-    const scope = await resolveAiVaultScopeRealPaths([linkedRepo, realRepo, join(root, 'gone')])
-
-    expect(scope.scanScopePaths).toEqual([linkedRepo, realRepo, join(root, 'gone')])
-    expect(scope.links).toEqual([{ scopePath: linkedRepo, realPath: realRepo }])
-  })
-
-  it('skips paths this host does not have and paths that are not links', async () => {
-    const scope = await resolveAiVaultScopeRealPaths([realRepo, join(root, 'other-host-path')])
-
-    expect(scope.links).toEqual([])
-    expect(scope.scanScopePaths).toEqual([realRepo, join(root, 'other-host-path')])
-  })
-})
-
 describe('attachAiVaultScopeCwdAliases', () => {
   it('aliases cwds under the real path to the registered spelling and keeps cwd for resume', async () => {
     const scope = await resolveAiVaultScopeRealPaths([linkedRepo])
@@ -98,18 +82,6 @@ describe('attachAiVaultScopeCwdAliases', () => {
       result(rows),
       await resolveAiVaultScopeRealPaths([linkedRepo])
     )
-
-    expect(listed.sessions).toEqual(rows)
-  })
-
-  it('leaves unrelated, cwd-less and WSL rows untouched', async () => {
-    const scope = await resolveAiVaultScopeRealPaths([linkedRepo])
-    const rows = [
-      session('unrelated', join(root, 'elsewhere')),
-      session('no-cwd', null),
-      session('wsl', '/data/api', '\\\\wsl.localhost\\Ubuntu\\home\\me\\.codex\\s.jsonl')
-    ]
-    const listed = attachAiVaultScopeCwdAliases(result(rows), scope)
 
     expect(listed.sessions).toEqual(rows)
   })

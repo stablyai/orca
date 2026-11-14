@@ -8,6 +8,7 @@ import { FEATURE_TIP_IDS } from '../../../src/shared/feature-tips'
 const SEEN_FIRST_RUN_CONTEXTUAL_TOUR_IDS = [
   'workspace-board',
   'browser',
+  'browser-extensions',
   'tasks',
   'automations',
   'workspace-creation'

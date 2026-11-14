@@ -24,7 +24,7 @@ import { orcadSlotDir, type OrcadSlotOptions } from '../activation/orcad-recover
 import { joinRemotePath } from '../../ssh/remote-host/ssh-remote-platform'
 import { isSshCommandExitError } from '../../ssh/remote-exec/remote-exec-command'
 import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
-import { ORCAD_LOCK_FILE_NAME } from '../../orcad/orcad-instance-lock'
+import { ORCAD_LOCK_FILE_NAME } from '../../orcad/instance-lock/orcad-instance-lock'
 import { errorMessage } from '../../../shared/error-message'
 
 const ReclaimStatusSchema = z.enum(['none', 'eligible', 'refused', 'reclaimed'])

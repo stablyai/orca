@@ -8,7 +8,7 @@ import type { RuntimeWorktreeListResult } from '../../shared/runtime-worktree-co
 import { folderWorkspaceKey } from '../../shared/workspace-scope'
 import type { CatalogRow } from './workspace-catalog-row'
 import type { RuntimeClient } from '../runtime/client'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 /** An older Orca without the folder catalog keeps its repo-backed rows; any other failure is real. */
 async function readOptional<TResult>(read: Promise<TResult>): Promise<TResult | undefined> {

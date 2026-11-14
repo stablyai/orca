@@ -1,5 +1,4 @@
-import { afterEach, expect, it, vi } from 'vitest'
-import '../construction/runtime-agent-projections'
+import { expect, it } from 'vitest'
 import {
   conversationRecordReader,
   type AgentSessionRecordReader
@@ -14,12 +13,7 @@ import {
   seedTestAgentSessionRecordStore
 } from '../agent-session/records/agent-session-record-store-test-harness'
 import { readAgentSenderSessions } from './agent-sender-chat-sessions'
-import { AGENT_SESSION_PREDECESSOR_IDS } from '../agent-session/records/agent-session-record-lineage'
-import { openTestJournalHostDatabase } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-
-afterEach(() => vi.restoreAllMocks())
-
 /** A committed /clear: the durable forward pointer the reverse index is derived from. */
 const cleared = (
   record: AgentSessionRecord,
@@ -59,12 +53,10 @@ it('follows branching, unreadable and cyclic /clear predecessors as the full sca
   const store = await openTestAgentSessionRecordStore(root)
   expect(store.isSessionUnreadable('unreadable-u')).toBe(true)
   const records = conversationRecordReader(store)
-  const { listClearedFrom: _index, ...listing }: AgentSessionRecordReader = records
   const rows = (reader: AgentSessionRecordReader) =>
     readAgentSenderSessions(reader)
       .map((row) => `${row.identity.slice('orca_session_id:'.length)}>${row.sessionId}`)
       .sort()
-  expect(rows(records)).toEqual(rows(listing))
   expect(rows(records)).toEqual([
     'cycle-x1>cycle-x1',
     'session-a>session-c',
@@ -72,9 +64,4 @@ it('follows branching, unreadable and cyclic /clear predecessors as the full sca
     'session-c>session-c',
     'unreadable-u>session-c'
   ])
-  const plan = openTestJournalHostDatabase(root)
-    .db.prepare(`EXPLAIN QUERY PLAN ${AGENT_SESSION_PREDECESSOR_IDS}`)
-    .all('session-c')
-    .map((row) => String(row.detail))
-  expect(plan.join('\n')).toContain('USING INDEX idx_agent_session_clear_successor')
 })

@@ -13,17 +13,17 @@ import {
 } from '../workers/archives/worker-output-archive'
 import type { WorkerTerminalReleaseRuntime } from '../terminal-authority/release/worker-terminal-release-runtime'
 import { readRemoteAttachmentOutputIfAvailable } from './remote-attachment-archive-read'
-import { WorkerTerminalReleaseSingleFlight } from '../../rpc/methods/orchestration/worker/worker-terminal-release-single-flight'
+import { WorkerTerminalReleaseSingleFlight } from '../../rpc/methods/orchestration/worker/release/worker-terminal-release-single-flight'
 import { yieldAutoReleaseToWorkingAgent } from '../terminal-authority/release/worker-terminal-auto-release-working-yield'
-import { archiveSummary } from '../../rpc/methods/orchestration/worker/worker-terminal-resource-presentation'
-import type { WorkerReleaseReceipt } from '../../rpc/methods/orchestration/worker/worker-release-completion'
-import { releaseUnknownRecovery } from '../../rpc/methods/orchestration/worker/worker-release-unknown-recovery'
-import { orchestrationTimestampToMs } from '../../rpc/methods/orchestration/worker/worker-output'
+import { archiveSummary } from '../../rpc/methods/orchestration/worker/release/worker-terminal-resource-presentation'
+import type { WorkerReleaseReceipt } from '../../rpc/methods/orchestration/worker/release/worker-release-completion'
+import { releaseUnknownRecovery } from '../../rpc/methods/orchestration/worker/release/worker-release-unknown-recovery'
+import { orchestrationTimestampToMs } from '../../rpc/methods/orchestration/worker/output/worker-output'
 import type { inspectRemoteAttachment } from './federation-attachment-observation'
 import {
   classifyWorkerTerminalCloseError,
   TRANSIENT_WORKER_RELEASE_RECOVERY
-} from '../../rpc/methods/orchestration/worker/worker-release-close-error'
+} from '../../rpc/methods/orchestration/worker/release/worker-release-close-error'
 
 type RemoteAttachmentReleaseArgs = {
   runtime: WorkerTerminalReleaseRuntime

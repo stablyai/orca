@@ -3,7 +3,7 @@ import { JIRA_FILTER_LABELS } from '../providers/jira/mobile-jira-issue-filters'
 import { jiraSiteLabel } from '../providers/jira/jira-mobile-connection'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { PickerOption } from '../../components/PickerModal'
-import { githubProjectIdentityKey as githubProjectKey } from '../../../../src/shared/github/project-identity'
+import { githubProjectIdentityKey as githubProjectKey } from '../../../../src/shared/github/projects/project-identity'
 import { useCallback, useMemo } from 'react'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import {

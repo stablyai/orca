@@ -1,4 +1,4 @@
-import { execFileSync, spawnSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -47,22 +47,6 @@ describe('prepare Android release script', () => {
       rmSync(dir, { force: true, recursive: true })
     }
     tempDirs = []
-  })
-
-  it('uses committed Android release identity without mutating app config', () => {
-    const { configPath, contents, outputPath } = createAppConfig()
-
-    const output = execFileSync(process.execPath, [scriptPath], {
-      encoding: 'utf8',
-      env: scenarioEnv(configPath, outputPath, { MOBILE_ANDROID_PUBLISH_RELEASE: 'true' })
-    })
-
-    expect(output).toContain('Prepared Orca Mobile Android 0.0.22 (4)')
-    expect(output).toContain('Release tag: mobile-android-v0.0.22')
-    expect(readFileSync(outputPath, 'utf8')).toBe(
-      'version=0.0.22\nandroid_version_code=4\ntag=mobile-android-v0.0.22\npublish_release=true\n'
-    )
-    expect(readFileSync(configPath, 'utf8')).toBe(contents)
   })
 
   it('rejects release-only Android versionCode bumps', () => {

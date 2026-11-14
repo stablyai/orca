@@ -1,5 +1,6 @@
 export const CODEX_SESSION_WINDOW_MINUTES = 300
 export const CODEX_WEEKLY_WINDOW_MINUTES = 10080
+export const CODEX_MONTHLY_WINDOW_MINUTES = 43_200
 
 // Older Codex bucket lengths drift by one minute; tolerate that without absorbing other durations.
 const CODEX_WINDOW_DURATION_TOLERANCE_MINUTES = 1
@@ -13,6 +14,11 @@ export type CodexRateWindowSnapshot = {
 export type CodexRateLimitWindowsSnapshot = {
   primary?: CodexRateWindowSnapshot | null
   secondary?: CodexRateWindowSnapshot | null
+  /** Per-seat monthly spend cap on workspace plans. */
+  individualLimit?: {
+    remainingPercent?: unknown
+    resetsAt?: unknown
+  } | null
   /** Pay-as-you-go credit balance, when the app-server reports one. */
   credits?: {
     hasCredits?: boolean

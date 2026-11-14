@@ -10,7 +10,7 @@ import {
   ConnectorSend,
   ConnectorStart,
   ConnectorWatch
-} from '../../../../../shared/rpc-contract/connector-params'
+} from '../../../../../shared/rpc-contract/connectors/connector-params'
 import type {
   ConversationEvent,
   ConversationSnapshot

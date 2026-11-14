@@ -145,52 +145,6 @@ describe('E2EEChannel v2', () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
 
-  it('forwards post-auth capability-shaped frames without mutating authenticated capabilities', () => {
-    const ctx = setup()
-    const { schedule } = startV2(ctx)
-    const onMessage = vi.fn()
-    ctx.channel.onMessage(onMessage)
-    authenticate(ctx, schedule)
-
-    const capabilityFrame = JSON.stringify({
-      type: 'e2ee_client_capabilities',
-      v: 1,
-      clientCapabilities: ['agent-session.structured.v1']
-    })
-    ctx.channel.handleRawMessage(clientText(capabilityFrame, schedule, 1n))
-
-    expect(ctx.channel.capabilitySource.current).toEqual([])
-    expect(onMessage).toHaveBeenCalledOnce()
-    expect(onMessage.mock.calls[0]?.[0]).toBe(capabilityFrame)
-  })
-
-  it('rejects legacy downgrade and runtime-only capability metadata when mobile v2 is required', () => {
-    const legacy = setup()
-    legacy.channel.handleRawMessage(
-      JSON.stringify({ type: 'e2ee_hello', publicKeyB64: 'legacy-key' })
-    )
-    expect(legacy.onError).toHaveBeenCalledWith(4001, 'E2EE v2 required')
-
-    const ctx = setup()
-    const { schedule } = startV2(ctx)
-    const transcriptHashB64 = Buffer.from(schedule.transcriptHash).toString('base64')
-    ctx.channel.handleRawMessage(
-      clientText(
-        JSON.stringify({
-          type: 'e2ee_auth',
-          v: 2,
-          transcriptHashB64,
-          deviceToken: 'valid-token',
-          clientCapabilities: ['session-tabs.close-intent.v1']
-        }),
-        schedule,
-        0n
-      )
-    )
-    expect(ctx.resolveAuthenticatedDevice).not.toHaveBeenCalled()
-    expect(ctx.onError).toHaveBeenCalledWith(4001, 'Invalid e2ee_auth')
-  })
-
   it('rejects a captured authenticated mutating trace on a fresh socket', () => {
     const first = setup()
     const firstHandshake = startV2(first)

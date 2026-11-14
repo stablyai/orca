@@ -1,5 +1,5 @@
 import { getProviderChecksOutcome } from '../../../src/shared/source-control/checks/provider-check-summary'
-import type { CheckStatus } from '../../../src/shared/github/pull-request-types'
+import type { CheckStatus } from '../../../src/shared/github/pull-requests/pull-request-types'
 import {
   getWorkspaceAttachmentKey,
   getWorkspaceAttachmentUrlScope

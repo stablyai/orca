@@ -42,7 +42,8 @@ afterEach(async () => {
 })
 
 it('orcad resolves no roots while disabled and discovers late roots when enabled', async () => {
-  const { installOrcadSessionSearchService } = await import('../orcad/orcad-session-search')
+  const { installOrcadSessionSearchService } =
+    await import('../orcad/host-runtime/orcad-session-search')
   installed = await installOrcadSessionSearchService({
     userDataPath: harness.root,
     getSettings: () => ({ aiVaultSearch: { enabled: false, historyDays: null } })

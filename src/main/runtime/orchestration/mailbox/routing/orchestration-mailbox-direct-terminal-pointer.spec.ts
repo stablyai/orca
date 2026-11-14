@@ -1,3 +1,4 @@
+import { CheckMailReconciliation } from '../../../rpc/methods/orchestration/messaging/check-mail-reconciliation'
 import { rmSync } from 'node:fs'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { checkDirectMailbox } from '../../../rpc/methods/orchestration/messaging/check-direct'
@@ -73,7 +74,9 @@ describe('orchestration direct terminal mailbox pointer', () => {
         db,
         handle: TERMINAL_HANDLE,
         typeFilter: undefined,
-        signal: undefined
+        signal: undefined,
+        reconciliation: new CheckMailReconciliation(harness.runtime, db),
+        revalidateConsumer: () => {}
       })
     ).resolves.toMatchObject({ count: 2 })
     expect(db.getMessageById(runOwned.id)?.read).toBe(0)

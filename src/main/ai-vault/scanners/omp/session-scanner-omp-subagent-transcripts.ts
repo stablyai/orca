@@ -2,7 +2,7 @@ import {
   throwIfAiVaultScanCancelled,
   waitForAiVaultScan
 } from '../../scan-lifecycle/ai-vault-scan-cancellation'
-import { wslGatedReaddir } from '../../../native-chat/wsl-transcript-fs-access'
+import { wslGatedReaddir } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { basename, dirname, extname, join } from 'node:path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { SubagentTranscriptPartition } from '../claude/session-scanner-subagent-transcripts'

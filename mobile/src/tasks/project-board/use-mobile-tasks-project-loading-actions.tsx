@@ -11,7 +11,7 @@ import {
   githubProjectHost,
   githubProjectIdentityKey as githubProjectKey,
   toGitHubProjectIdentity
-} from '../../../../src/shared/github/project-identity'
+} from '../../../../src/shared/github/projects/project-identity'
 import { useCallback, useRef } from 'react'
 import type { GitHubProjectTable } from '../mobile-tasks-view-state-types'
 import {

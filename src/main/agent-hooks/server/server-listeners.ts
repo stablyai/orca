@@ -15,14 +15,14 @@ import type {
   StatusDropListener
 } from './server-types'
 import { toAgentStatusIpcPayload } from './server-status-identity'
-import { AgentHookServerState } from './server-state'
 import { combinedAgentStatusEntries } from './combined-agent-status-entries'
 import { PaneTimers } from './program-status/pane-timers'
 import { ProgramStatusFacetStore } from './program-status/facet-store'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { AgentHookServerAgentIdentities } from './server-agent-identities'
+import { publishedOrcaSessionId } from '../identity/pane-agent-identities'
 
-export abstract class AgentHookServerListeners extends AgentHookServerState {
-  protected providerRowsByTab: Map<string, AgentStatusIpcPayload[]> | null = null
+export abstract class AgentHookServerListeners extends AgentHookServerAgentIdentities {
   protected statusChangeNotificationVersion = 0
   protected cliWriterExecutionMatches: CliWriterExecutionMatches | null = null
 
@@ -65,14 +65,22 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
 
   protected override resetCanonicalStatus(): void {
     super.resetCanonicalStatus()
+    this.agentIdentities.dropCanonical()
     this.providerRowsByTab = null
   }
 
-  private combinedStatusEntries(paneKey?: string): EnrichedAgentHookEventPayload[] {
+  /** `withAgentIds` false: an internal notification that outputs no ID does no ID work. */
+  private combinedStatusEntries(
+    paneKey?: string,
+    withAgentIds = true
+  ): EnrichedAgentHookEventPayload[] {
     return combinedAgentStatusEntries(
       {
         state: this.state,
         programStatusFacets: this.programStatusFacets,
+        ...(withAgentIds
+          ? { canonicalIdentity: (key: string) => this.agentIdentities.canonicalIdentity(key) }
+          : {}),
         canonicalStatusStore: this.canonicalStatusStore,
         canonicalSubjectsByPane: this.canonicalSubjectsByPane,
         canonicalListingOrder: this.canonicalListingOrder
@@ -244,10 +252,14 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
       return [toAgentStatusIpcPayload(this.programStatusFacets.stitch(row))]
     }
     const rows: AgentStatusIpcPayload[] = []
-    for (const subject of this.canonicalSubjectsByPane.get(paneKey)?.values() ?? []) {
+    for (const [subjectKey, subject] of this.canonicalSubjectsByPane.get(paneKey) ?? []) {
       const status = this.canonicalStatusStore.getParent(subject)?.status
+      const identity = status?.structuredHost
+        ? undefined
+        : this.agentIdentities.canonicalIdentity(subjectKey)
       if (status) {
-        rows.push(status)
+        const orcaSessionId = publishedOrcaSessionId(identity)
+        rows.push(orcaSessionId !== undefined ? { ...status, orcaSessionId } : status)
       }
     }
     return rows
@@ -278,7 +290,7 @@ export abstract class AgentHookServerListeners extends AgentHookServerState {
   } {
     const statuses: AgentHookStatusChangeEntry[] = []
     const providerSessions: AgentHookProviderSessionIdentity[] = []
-    for (const enriched of this.combinedStatusEntries()) {
+    for (const enriched of this.combinedStatusEntries(undefined, false)) {
       const paneKey = enriched.paneKey
       if (enriched.providerSession) {
         providerSessions.push({

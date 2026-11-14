@@ -38,6 +38,8 @@ const repoSchema = z.object({
   // Older desktops omit both; the project then lists ungrouped, as it did.
   projectGroupId: salvagedOptional('projectGroupId', z.string().nullable()),
   projectGroupOrder: salvagedOptional('projectGroupOrder', z.number()),
+  // Older desktops omit it; the project then stays listed, as it did.
+  hiddenAt: salvagedOptional('hiddenAt', z.number()),
   // Decoded where drawn (readMobileRepoIcon), so an arm this build lacks still keeps the row.
   repoIcon: z.unknown().optional()
 })

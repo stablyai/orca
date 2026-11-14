@@ -35,6 +35,7 @@ import {
 } from '../../../../../../shared/workspace-view/workspace-view-options'
 import { useTranslate } from '@/i18n/use-translate'
 import { SidebarGroupByToggle } from './SidebarGroupByToggle'
+import { withoutHiddenRepos } from '../../../../../../shared/hidden-projects'
 
 export function useWorkspaceOptionsFilterBadge(): {
   hasAnyFilter: boolean
@@ -46,7 +47,8 @@ export function useWorkspaceOptionsFilterBadge(): {
     () =>
       countActiveWorkspaceFilters(
         sidebarWorkspaceRowFilters(filterState),
-        repos.map((repo) => repo.id)
+        // A filter id with no listed copy filters nothing, so it does not count.
+        withoutHiddenRepos(repos).map((repo) => repo.id)
       ),
     [filterState, repos]
   )
@@ -59,6 +61,48 @@ export function useWorkspaceOptionsFilterBadge(): {
 type OptionItemProps = {
   preserveWorkspaceBoardOpen: boolean
   hostOptions: SidebarHostOption[]
+}
+
+function CardStyleOption({ preserveWorkspaceBoardOpen }: OptionItemProps): JSX.Element {
+  const t = useTranslate()
+  const experimental = useAppStore((s) => s.settings?.experimentalNewWorktreeCardStyle === true)
+  const updateSettings = useAppStore((s) => s.updateSettings)
+  const classicLabel = t(
+    'auto.components.settings.ExperimentalPane.worktreeCardStyle.classic',
+    'Classic'
+  )
+  const experimentalLabel = t(
+    'auto.components.settings.ExperimentalPane.worktreeCardStyle.experimental',
+    'Experimental'
+  )
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger>
+        <span className="flex flex-1 items-center justify-between gap-3">
+          <span>
+            {t('auto.components.settings.ExperimentalPane.worktreeCardStyle.title', 'Card style')}
+          </span>
+          <span className="text-2xs font-medium text-muted-foreground">
+            {experimental ? experimentalLabel : classicLabel}
+          </span>
+        </span>
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent
+        className="w-44"
+        data-workspace-board-preserve-open={preserveWorkspaceBoardOpen ? '' : undefined}
+      >
+        <DropdownMenuRadioGroup
+          value={experimental ? 'experimental' : 'classic'}
+          onValueChange={(value) =>
+            void updateSettings({ experimentalNewWorktreeCardStyle: value === 'experimental' })
+          }
+        >
+          <DropdownMenuRadioItem value="classic">{classicLabel}</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="experimental">{experimentalLabel}</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  )
 }
 
 function HostsOptionItem({
@@ -295,11 +339,18 @@ export function WorkspaceOptionsMenuItems({
           {options.map((option) => {
             const OptionItem = OPTION_ITEMS[option.key]
             return (
-              <OptionItem
-                key={option.key}
-                preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
-                hostOptions={hostOptions}
-              />
+              <Fragment key={option.key}>
+                {(option.key === 'cardLayout' || option.key === 'cardDisplay') && (
+                  <CardStyleOption
+                    preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
+                    hostOptions={hostOptions}
+                  />
+                )}
+                <OptionItem
+                  preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
+                  hostOptions={hostOptions}
+                />
+              </Fragment>
             )
           })}
         </Fragment>

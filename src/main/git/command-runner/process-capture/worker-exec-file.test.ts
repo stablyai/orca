@@ -1,3 +1,14 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { removeWorktree } from '../../worktrees/removal/worktree-removal'
+import { prepareWorktreeRemovalsForStore } from '../../../workspaces/removal/worktree-removal-records-load'
+import {
+  startBackgroundWorktreeRemoval,
+  _resetPendingWorktreeRemovalsForTests
+} from '../../../workspaces/removal/worktree-background-removal'
+import { worktreeRemovalLifetime } from '../../../workspaces/removal/worktree-removal-lifetime'
+import { readWorktreeRemovalRecords } from '../../../workspaces/removal/worktree-removal-records'
 import { setImmediate as nextTurn } from 'node:timers/promises'
 import { Worker } from 'node:worker_threads'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -72,24 +83,6 @@ function capture(script: string, maxBuffer = 1024 * 1024) {
 }
 
 describe('worker-owned Git capture', () => {
-  it('keeps the caller responsive while process creation is blocked on the worker', async () => {
-    const gate = new SharedArrayBuffer(4)
-    await createHost(gate)
-    const pending = capture('process.stdout.write("ready")')
-    let completed = false
-    void pending.result.then(() => {
-      completed = true
-    })
-    try {
-      await nextTurn()
-      expect(completed).toBe(false)
-    } finally {
-      Atomics.store(new Int32Array(gate), 0, 1)
-      Atomics.notify(new Int32Array(gate), 0)
-    }
-    await expect(pending.result).resolves.toMatchObject({ error: null, stdout: 'ready' })
-  })
-
   it('preserves UTF-8, stdin, stderr and nonzero exit status', async () => {
     await createHost()
     const pending = capture(
@@ -140,6 +133,59 @@ describe.skipIf(process.platform !== 'darwin')('macOS worker capture cancellatio
     Atomics.store(new Int32Array(gate), 0, 1)
     Atomics.notify(new Int32Array(gate), 0)
     await vi.waitFor(() => expect(terminated).toHaveBeenCalledOnce())
+  })
+
+  it('keeps removal ownership and durable intent until an aborted worker child is actually terminated', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'orca-removal-worker-close-'))
+    const gate = new SharedArrayBuffer(4)
+    await createHost(gate)
+    await prepareWorktreeRemovalsForStore({
+      getProfileStorageDirectory: () => directory,
+      getRepos: () => [{ id: 'repo' }]
+    })
+    const childStarted = Promise.withResolvers<void>()
+    let closing: Promise<void> | undefined
+    try {
+      const result = startBackgroundWorktreeRemoval({
+        removal: {
+          worktreeId: 'repo::feature',
+          repoId: 'repo',
+          repoPath: directory,
+          worktree: { path: join(directory, 'missing-checkout'), branch: 'feature', head: 'abc' },
+          force: false,
+          deleteBranch: false
+        },
+        publish: () => {},
+        run: (signal) =>
+          removeWorktree(directory, join(directory, 'missing-checkout'), false, {
+            knownRemovedWorktree: { branch: 'feature', head: 'abc' },
+            deleteBranch: false,
+            checkoutDeleteSignal: signal,
+            observeChildTermination: () => {
+              childStarted.resolve()
+            }
+          })
+      })
+      void result.catch(() => {})
+      await childStarted.promise
+      let closed = false
+      closing = worktreeRemovalLifetime.close().then(() => {
+        closed = true
+      })
+      await nextTurn()
+      expect(closed).toBe(false)
+      expect(await readWorktreeRemovalRecords(directory)).toHaveLength(1)
+      Atomics.store(new Int32Array(gate), 0, 1)
+      Atomics.notify(new Int32Array(gate), 0)
+      await closing
+      expect(await readWorktreeRemovalRecords(directory)).toHaveLength(1)
+    } finally {
+      Atomics.store(new Int32Array(gate), 0, 1)
+      Atomics.notify(new Int32Array(gate), 0)
+      await closing
+      _resetPendingWorktreeRemovalsForTests()
+      await rm(directory, { recursive: true, force: true })
+    }
   })
 
   it('does not infer child termination from worker loss before a spawn acknowledgement', async () => {

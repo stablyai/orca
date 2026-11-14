@@ -3,7 +3,7 @@ import type {
   GitHubProjectFieldMutationValue,
   GitHubProjectRow,
   GitHubProjectTable
-} from '../../../../../shared/github/project-types'
+} from '../../../../../shared/github/projects/project-types'
 
 // Patch field optimistically for immediate render; next authoritative refresh replaces it.
 export function optimisticFieldValueFromMutation(

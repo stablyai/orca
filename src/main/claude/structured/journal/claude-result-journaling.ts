@@ -1,4 +1,8 @@
 import { writeClaudeTerminalFailure } from './claude-terminal-failure'
+import { claudeResultOutcome } from '../turns/claude-result-outcome'
+import { writeClaudeStopReadings } from '../../claude-stop-readings'
+import { journalClaudeGoal } from '../../claude-goal-journaling'
+import { estimateStructuredAgentSessionItemBytes } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'
 import type { ClaudeContextFacts } from '../../context-usage/claude-context-facts'
 import { claudeCommandEnd } from '../turns/claude-command-turn'
 import type { ClaudeMessageJournalContext } from './claude-message-journaling'
@@ -70,7 +74,11 @@ export function journalClaudeResult(
   const usageEvidence = turn.usageLimitEvidence
   const endedTurnStartedAt = turn.startedAt
   const turnId = settlesTurn ? turn.id : null
-  const leftToStop = turnId !== null && sink.journalStopDecidesTurn?.(turnId, observedAt) === true
+  // A Stop changes only an unaborted error's reading; the writer decides it at its position.
+  const stopCheck =
+    turnId !== null && claudeResultOutcome(message) !== claudeResultOutcome(message, true)
+      ? { turnId, endedAt: observedAt }
+      : null
   // Retry owed prompt cancellations before a command result can return.
   if (settlesTurn) {
     prompts.retryPendingCancellations()
@@ -80,12 +88,11 @@ export function journalClaudeResult(
   if (command && !commandResult) {
     return
   }
-  const failure = claudeResultFailure(message, leftToStop)
+  const failure = claudeResultFailure(message)
   // A command's quota cause needs its own failed verdict, not only a failed envelope.
   const compactionFailure =
     command &&
     commandResult?.end.outcome === 'failure' &&
-    !leftToStop &&
     (command.failed !== null || failure !== null)
       ? { ...command.failed, rejections: command.rejections }
       : undefined
@@ -98,9 +105,24 @@ export function journalClaudeResult(
   const terminalFailure = notice || usageLimit
   if (command && commandResult?.row && !terminalFailure) {
     sink.appendItem(command.resultIdentity, commandResult.row, { turnScope: endedTurnScope })
+  } else if (command && commandResult?.row && stopCheck) {
+    // Stopped, the command's own result row stands in for the failure.
+    const { resultIdentity: identity } = command
+    const body = commandResult.row
+    writeClaudeStopReadings(
+      sink,
+      stopCheck,
+      {
+        ran: null,
+        stopped: { kind: 'literal', identity, body },
+        reservedBytes: estimateStructuredAgentSessionItemBytes(identity, body)
+      },
+      { turnScope: endedTurnScope },
+      { publish: false }
+    )
   }
   if (terminalFailure && endedTurnIdentity) {
-    writeClaudeTerminalFailure(sink, endedTurnIdentity, terminalFailure)
+    writeClaudeTerminalFailure(sink, endedTurnIdentity, terminalFailure, stopCheck)
   }
   if (settlesTurn) {
     turn.suppressReopenOnFailure(message.is_error === true)
@@ -108,7 +130,10 @@ export function journalClaudeResult(
     streamedText.finish({ completedAt: observedAt })
     context.settle(
       message,
-      commandResult?.end ?? claudeTurnEndForResult(message, observedAt, leftToStop)
+      commandResult?.end ?? claudeTurnEndForResult(message, observedAt),
+      stopCheck && !commandResult
+        ? { check: stopCheck, end: claudeTurnEndForResult(message, observedAt, true) }
+        : undefined
     )
     streamedBlocks.clear()
     streamedText.settle()
@@ -117,17 +142,17 @@ export function journalClaudeResult(
     message,
     {
       backgroundWork: goalBackgroundWork(),
-      stoppedByPerson: leftToStop,
+      stoppable: turnId !== null,
       turnStartedAt: endedTurnStartedAt
     },
     observedAt
   )
   if (goal) {
-    sink.appendItem(goal.identity, goal.body, { turnScope: endedTurnScope })
-    sink.publish()
+    journalClaudeGoal(sink, goal, turnId, observedAt, endedTurnScope)
   }
   const kind = claudeProviderFrameKind(message)
-  if (terminalFailure && endedTurnIdentity) {
+  const terminalShown = terminalFailure !== null && endedTurnIdentity !== null
+  if (terminalShown && (!stopCheck || isSettledClaudeResultKind(kind))) {
     return
   }
   const alreadyShown = assistantFailures.resultAlreadyShown(message)
@@ -152,7 +177,15 @@ export function journalClaudeResult(
       { reportsFailure: failure !== null },
       settlesTurn
         ? () => ({ turnScope: endedTurnScope })
-        : corrections.stampFor(claudeFrameParentRef(message))
+        : corrections.stampFor(claudeFrameParentRef(message)),
+      // Stopped, a known result kind needs no row; an unknown one keeps its plain disclosure.
+      stopCheck && failure
+        ? {
+            check: stopCheck,
+            ...(terminalShown ? { ran: null } : {}),
+            stopped: isSettledClaudeResultKind(kind) ? null : { options: { reportsFailure: false } }
+          }
+        : undefined
     )
   }
 }

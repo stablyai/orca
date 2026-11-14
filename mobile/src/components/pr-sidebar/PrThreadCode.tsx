@@ -1,5 +1,5 @@
 import { Text, View } from 'react-native'
-import type { DiffHunkLine } from '../../../../src/shared/github/pr-comment-diff-hunk'
+import type { DiffHunkLine } from '../../../../src/shared/github/comments/pr-comment-diff-hunk'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'

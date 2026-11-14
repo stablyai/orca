@@ -36,6 +36,7 @@ export function UIZoomControl(): React.JSX.Element {
         size="icon-sm"
         onClick={() => applyZoom(zoomLevel - ZOOM_STEP)}
         disabled={zoomLevel <= ZOOM_MIN}
+        aria-label={t('settings.appearance.uiZoom.zoomOut', 'Zoom out')}
       >
         <Minus className="size-3" />
       </Button>
@@ -45,6 +46,7 @@ export function UIZoomControl(): React.JSX.Element {
         size="icon-sm"
         onClick={() => applyZoom(zoomLevel + ZOOM_STEP)}
         disabled={zoomLevel >= ZOOM_MAX}
+        aria-label={t('settings.appearance.uiZoom.zoomIn', 'Zoom in')}
       >
         <Plus className="size-3" />
       </Button>

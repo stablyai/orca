@@ -1,19 +1,20 @@
-import { cancelAgentSessionUsageLimitContinue } from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+  composeJournalOperationReceipts,
+  onJournalReceiptCommitted
+} from '../../../native-chat/agent-session-journal/writing/journal-row-writer'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
 import {
+  closeTestAgentSessionRecordStores,
+  openTestAgentSessionDatabase,
   openTestAgentSessionRecordStore,
-  readPersistedTestAgentSessionStore
+  withTestAgentSessionDatabase
 } from './agent-session-record-store-test-harness'
-import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 
@@ -25,7 +26,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await closeTestJournalHostDatabases()
+  await closeTestAgentSessionRecordStores()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -82,24 +83,6 @@ async function liveChat(
   })
 }
 
-describe('writing a transaction', () => {
-  // Defer BEGIN beyond the caller's frame to avoid nesting its open journal transaction.
-  it('runs a store call made inside an open journal transaction after that transaction', async () => {
-    const store = await openTestAgentSessionRecordStore(root)
-    await liveChat(store, 'chat-a-0001')
-    let pending: Promise<unknown> | null = null
-
-    openTestJournalHostDatabase(root).transaction(() => {
-      pending = store.setConversationName('chat-a-0001', 'renamed')
-    })
-
-    await expect(pending).resolves.toMatchObject({ conversationName: 'renamed' })
-    expect((await readPersistedTestAgentSessionStore(root)).records['chat-a-0001']).toMatchObject({
-      conversationName: 'renamed'
-    })
-  })
-})
-
 describe('a receipt', () => {
   const operationId = `${NOW}-${'7'.repeat(32)}`
   const outcome = { status: 'succeeded' as const, sessionId: 'chat-a-0001' }
@@ -108,9 +91,15 @@ describe('a receipt', () => {
     turnItemId: `orca:${'long-supported-identity'.repeat(220)}`,
     resetsAt: NOW + 60_000
   }
-  const change = {
-    sessionId: 'chat-a-0001',
-    update: (record: AgentSessionRecord) => cancelAgentSessionUsageLimitContinue(record, cancel)
+  function cancellationReceipt(
+    store: AgentSessionRecordStore,
+    args: Parameters<AgentSessionRecordStore['operationOutcomeReceipt']>[0],
+    cut = cancel
+  ) {
+    const cancelReceipt = store.usageLimitContinueCancelReceipt('chat-a-0001', cut)
+    return cancelReceipt
+      ? composeJournalOperationReceipts(store.operationOutcomeReceipt(args), cancelReceipt)
+      : store.operationOutcomeReceipt(args)
   }
   async function pendingOperation(insert = false): Promise<AgentSessionRecordStore> {
     const store = await openTestAgentSessionRecordStore(root)
@@ -127,26 +116,26 @@ describe('a receipt', () => {
   }
 
   async function persistedStatus(): Promise<string | undefined> {
-    const reopened = await openTestAgentSessionRecordStore(root)
+    const reopened = await openTestAgentSessionRecordStore(root, { mode: 'observe' })
     return reopened.getOperationRow('client-1', operationId)?.outcome.status
   }
 
   it.each([false, true])('rolls record and operation back together (insert=%s)', async (insert) => {
     const store = await pendingOperation(insert)
-    const receipt = store.operationOutcomeReceipt({
+    const receipt = cancellationReceipt(store, {
       callerKey: 'client-1',
       operationId,
       outcome,
-      record: change,
       ...(insert ? { fingerprint: 'fp', now: NOW } : {})
     })
 
-    expect(() =>
-      openTestJournalHostDatabase(root).transaction((db) => {
-        receipt.write(db)
-        throw new Error('the journal row was refused')
-      })
-    ).toThrow('the journal row was refused')
+    await withTestAgentSessionDatabase(root, (db) =>
+      db.exec(
+        "CREATE TRIGGER refuse_record BEFORE UPDATE ON agent_session_records BEGIN SELECT RAISE(ABORT, 'the write was refused'); END"
+      )
+    )
+    await expect(store.commitOperationReceipt(receipt)).rejects.toThrow('the write was refused')
+    await withTestAgentSessionDatabase(root, (db) => db.exec('DROP TRIGGER refuse_record'))
 
     expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe(
       insert ? undefined : 'pending'
@@ -154,7 +143,7 @@ describe('a receipt', () => {
     expect(await persistedStatus()).toBe(insert ? undefined : 'pending')
     expect(store.getRecord('chat-a-0001')?.usageLimitContinueCancel).toBeUndefined()
     expect(
-      (await openTestAgentSessionRecordStore(root)).getRecord('chat-a-0001')
+      (await openTestAgentSessionRecordStore(root, { mode: 'observe' })).getRecord('chat-a-0001')
         ?.usageLimitContinueCancel
     ).toBeUndefined()
     // A discarded draft must not become the next diff baseline.
@@ -168,16 +157,15 @@ describe('a receipt', () => {
       operationId,
       fingerprint: 'fp',
       now: NOW,
-      outcome,
-      record: change
+      outcome
     }
-    await store.commitOperationReceipt(store.operationOutcomeReceipt(args))
+    await store.commitOperationReceipt(cancellationReceipt(store, args))
     expect(await persistedStatus()).toBe('pending')
     expect(store.getRecord('chat-a-0001')?.usageLimitContinueCancel).toEqual(cancel)
     await expect(
-      store.commitOperationReceipt(store.operationOutcomeReceipt({ ...args, fingerprint: 'other' }))
+      store.commitOperationReceipt(cancellationReceipt(store, { ...args, fingerprint: 'other' }))
     ).rejects.toThrow()
-    const stale = await openTestAgentSessionRecordStore(root)
+    const stale = await openTestAgentSessionRecordStore(root, { mode: 'observe' })
     const otherId = `${NOW}-${'8'.repeat(32)}`
     await store.admitOperation({
       callerKey: 'client-1',
@@ -187,16 +175,131 @@ describe('a receipt', () => {
     })
     await expect(
       stale.commitOperationReceipt(
-        stale.operationOutcomeReceipt({
-          ...args,
-          operationId: otherId,
-          record: { ...change, update: (r) => ({ ...r, conversationName: 'lost' }) }
-        })
+        cancellationReceipt(
+          stale,
+          { ...args, operationId: otherId },
+          { ...cancel, resetsAt: NOW + 90_000 }
+        )
       )
     ).rejects.toThrow()
-    expect(stale.getRecord('chat-a-0001')?.conversationName).not.toBe('lost')
+    expect(stale.getRecord('chat-a-0001')?.usageLimitContinueCancel).toEqual(cancel)
     expect(
-      (await openTestAgentSessionRecordStore(root)).getRecord('chat-a-0001')?.conversationName
-    ).not.toBe('lost')
+      (await openTestAgentSessionRecordStore(root, { mode: 'observe' })).getRecord('chat-a-0001')
+        ?.usageLimitContinueCancel
+    ).toEqual(cancel)
+  })
+  it('applies a staged receipt to the current SQL rows and ignores a discarded receipt', async () => {
+    const store = await pendingOperation()
+    const args = { callerKey: 'client-1', operationId, outcome }
+    const rolledBack = await cancellationReceipt(store, args).stage!({ savedAt: NOW })
+    await store.setConversationName('chat-a-0001', 'after')
+    rolledBack.settle(undefined)
+    expect(store.getRecord('chat-a-0001')?.usageLimitContinueCancel).toBeUndefined()
+    expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe('pending')
+
+    const committed = await cancellationReceipt(store, args).stage!({ savedAt: NOW })
+    const database = await openTestAgentSessionDatabase(root)
+    committed.settle(await database.effects(committed.effects))
+    expect(store.getRecord('chat-a-0001')).toMatchObject({
+      conversationName: 'after',
+      usageLimitContinueCancel: cancel
+    })
+    expect(store.getOperationRow('client-1', operationId)?.outcome.status).toBe('succeeded')
+  })
+  it('composes receipts against the rows written earlier in the same transaction', async () => {
+    const store = await pendingOperation()
+    const forkedFrom = {
+      sessionId: 'chat-parent',
+      itemId: 'turn-1',
+      childBoundary: { kind: 'start' as const }
+    }
+    const composed = composeJournalOperationReceipts(
+      cancellationReceipt(store, {
+        callerKey: 'client-1',
+        operationId,
+        outcome
+      }),
+      store.conversationReceipts.forkBoundary('chat-a-0001', forkedFrom)
+    )
+    const staged = await composed.stage!({ savedAt: NOW })
+    const database = await openTestAgentSessionDatabase(root)
+    staged.settle(await database.effects(staged.effects))
+    const both = { usageLimitContinueCancel: cancel, forkedFrom }
+    expect(store.getRecord('chat-a-0001')).toMatchObject(both)
+    expect(
+      (await openTestAgentSessionRecordStore(root, { mode: 'observe' })).getRecord('chat-a-0001')
+    ).toMatchObject(both)
+    expect(await persistedStatus()).toBe('succeeded')
+  })
+  it('publishes actual writer rows before co-staged callbacks and the next store transaction', async () => {
+    const store = await pendingOperation()
+    const forkedFrom = {
+      sessionId: 'chat-parent',
+      itemId: 'turn-1',
+      childBoundary: { kind: 'start' as const }
+    }
+    const actual = {
+      usageLimitContinueCancel: cancel,
+      forkedFrom,
+      options: { interactionMode: 'plan' }
+    }
+    const composed = composeJournalOperationReceipts(
+      onJournalReceiptCommitted(
+        cancellationReceipt(store, {
+          callerKey: 'client-1',
+          operationId,
+          outcome
+        }),
+        () => {
+          expect(store.getRecord('chat-a-0001')).toMatchObject(actual)
+          expect(store.getRecord('chat-a-0001')?.lease.unreconciled).toBe(false)
+        }
+      ),
+      store.conversationReceipts.forkBoundary('chat-a-0001', forkedFrom)
+    )
+    const staged = await composed.stage!({ savedAt: NOW })
+    const other = await openTestAgentSessionRecordStore(root, { mode: 'observe' })
+    await other.replaceSessionOptions({
+      sessionId: 'chat-a-0001',
+      fence: 1,
+      options: { interactionMode: 'plan' },
+      now: NOW
+    })
+    expect(store.getRecord('chat-a-0001')?.options?.interactionMode).toBeUndefined()
+    const database = await openTestAgentSessionDatabase(root)
+    const results = await database.effects(staged.effects)
+    staged.settle(results)
+    await store.setConversationName('chat-a-0001', 'after')
+    expect(store.getRecord('chat-a-0001')).toMatchObject({ ...actual, conversationName: 'after' })
+    expect(
+      (await openTestAgentSessionRecordStore(root, { mode: 'observe' })).getRecord('chat-a-0001')
+    ).toMatchObject({
+      ...actual,
+      conversationName: 'after'
+    })
+  })
+  it('fences later writes when a committed store acknowledgement has no resolved rows', async () => {
+    const store = await pendingOperation()
+    const staged = await cancellationReceipt(store, {
+      callerKey: 'client-1',
+      operationId,
+      outcome
+    }).stage!({ savedAt: NOW })
+    const database = await openTestAgentSessionDatabase(root)
+    await database.effects(staged.effects)
+    expect(() => staged.settle([])).toThrow('missing store results')
+    expect(store.getRecord('chat-a-0001')?.usageLimitContinueCancel).toBeUndefined()
+    await expect(store.setConversationName('chat-a-0001', 'stale')).rejects.toThrow(
+      'missing store results'
+    )
+    await withTestAgentSessionDatabase(root, (db) => {
+      const row = db
+        .prepare('SELECT record_json FROM agent_session_records WHERE session_id=?')
+        .get('chat-a-0001')!
+      expect(JSON.parse(String(row.record_json))).toMatchObject({
+        usageLimitContinueCancel: cancel
+      })
+      expect(JSON.parse(String(row.record_json)).conversationName).not.toBe('stale')
+    })
   })
 })

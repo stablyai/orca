@@ -1,6 +1,7 @@
-import type { PRComment } from '../../../../src/shared/github/comment-types'
-import { isMutablePRConversationComment } from '../../../../src/shared/github/pr-comment-mutability'
-import type { GitHubOwnerRepo, PRState } from '../../../../src/shared/github/pull-request-types'
+import type { PRComment } from '../../../../src/shared/github/comments/comment-types'
+import { isMutablePRConversationComment } from '../../../../src/shared/github/comments/pr-comment-mutability'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../src/shared/github/repositories/repository-identity'
+import type { PRState } from '../../../../src/shared/github/pull-requests/pull-request-types'
 
 // Only inline review threads have resolvable node ids; conversation comments cannot resolve.
 export function isResolvableComment(comment: Pick<PRComment, 'threadId'>): boolean {

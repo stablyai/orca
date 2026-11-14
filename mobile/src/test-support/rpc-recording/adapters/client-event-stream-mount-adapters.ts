@@ -1,6 +1,6 @@
 import type * as UseLiveWorktreeNameModule from '../../../worktree/use-live-worktree-name'
 import type * as HostWorktreeRefreshModule from '../../../worktree/host-worktree-refresh'
-import type * as HostListQueries from '../../../host-screen/host-list-queries'
+import type * as HostListQueries from '../../../host-screen/catalog/host-list-queries'
 import type * as HostQueryModule from '../../../query/host-query'
 import { hookMount } from '../hook-mount'
 import { hookScreenMount } from '../mounted-screen-tree'
@@ -53,7 +53,7 @@ export function clientEventStreamMountAdapters(
         'mobile/src/query/host-query.ts'
       )
       const queries = modules.load<typeof HostListQueries>(
-        'mobile/src/host-screen/host-list-queries.ts'
+        'mobile/src/host-screen/catalog/host-list-queries.ts'
       )
       let status: string | null = null
       const hook = hookMount(() => {

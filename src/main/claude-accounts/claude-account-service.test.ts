@@ -11,6 +11,12 @@ import type { ClaudeCommandConfig, ClaudeCommandOptions } from './sign-in/claude
 import type { ClaudeAccountSelectionTarget } from './selection/runtime-selection'
 import { ClaudeAccountService } from './service'
 
+// Selection checks must never reach the real Keychain.
+vi.mock('../macos-keychain/generic-password', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  readKeychainPassword: async () => null
+}))
+
 const roots: string[] = []
 afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })))
 
@@ -189,5 +195,20 @@ describe('ClaudeAccountService', () => {
     await expect(f.service.reauthenticateAccount('b')).rejects.toThrow('cancelled')
     expect(f.runtimeAuth.removeAccountFolder).not.toHaveBeenCalled()
     expect(f.settings().claudeManagedAccounts.map((entry) => entry.id)).toEqual(['a', 'b'])
+  })
+
+  it('refuses to select an account that has its identity but no login to start Claude with', async () => {
+    const f = fixture()
+    f.signIn('b', 'b@example.test')
+    await expect(f.service.selectAccount('b')).rejects.toThrow(
+      'Sign in to this Claude account again before selecting it.'
+    )
+    expect(f.settings().activeClaudeManagedAccountId).toBe('a')
+
+    writeFileSync(
+      join(f.home('b'), '.credentials.json'),
+      JSON.stringify({ claudeAiOauth: { refreshToken: 'refresh' } })
+    )
+    await expect(f.service.selectAccount('b')).resolves.toMatchObject({ activeAccountId: 'b' })
   })
 })

@@ -61,10 +61,16 @@ const DEFAULT_RESULTS: Record<string, unknown> = {
   'files.saveAs': { status: 'saved' },
   'agents.list': { agents: [] },
   'project.list': { projects: [], truncated: false },
+  // Echoes the request, as a host that changed the copy does.
+  'project.setHidden': (params: { hostId?: string; hidden: boolean }) => ({
+    hostId: params.hostId ?? 'local',
+    hidden: params.hidden
+  }),
   'terminal.list': { terminals: [], truncated: false },
   'terminal.focus': { focused: true },
   'terminal.close': { closed: true },
   'automation.list': { automations: [], truncated: false },
+  'agent.listSessions': { sessions: [], truncated: false },
   // Orca's default size: the editor follows a 14 px terminal font, unzoomed (the family is platform-specific).
   'editor.readTypography': resolvePluginEditorTypography({ terminalFontSize: 14 }, 0)
 }

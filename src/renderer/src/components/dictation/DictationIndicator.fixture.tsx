@@ -6,17 +6,22 @@ import type { DictationFailureKind } from './dictation-toasts'
 import type { SpeechModelUpdateTarget } from './speech-model-update-target'
 import type { SpeechModelManifest, SpeechModelState } from '../../../../shared/speech-types'
 import type { DictationQueuedSendKind } from './use-dictation-queued-send'
+import type { DictationCleanupNotice } from './use-dictation-cleanup'
 
 function PaneWithPill({
   captureLive = true,
   failure = null,
   queued = null,
-  setup = null
+  setup = null,
+  cleaning = false,
+  notice = null
 }: {
   captureLive?: boolean
   failure?: DictationFailureKind | null
   queued?: DictationQueuedSendKind | null
   setup?: SpeechModelUpdateTarget | null
+  cleaning?: boolean
+  notice?: DictationCleanupNotice['kind'] | null
 }) {
   const [pane, setPane] = useState<HTMLElement | null>(null)
   const anchor = useMemo(
@@ -31,6 +36,11 @@ function PaneWithPill({
           anchor={anchor}
           failure={failure}
           queued={queued}
+          cleanup={{
+            cleaning,
+            notice: notice ? { kind: notice, anchor } : null,
+            dismissNotice: () => {}
+          }}
           setup={setup}
           onSetupClose={() => {}}
         />
@@ -129,6 +139,32 @@ export const modelFailed = defineFixture({
   width: 520,
   store: { dictationState: 'error' },
   render: () => <PaneWithPill failure="settings" />
+})
+
+export const cleaningUp = defineFixture({
+  width: 520,
+  store: {
+    dictationState: 'stopping',
+    liveText: {
+      committed: 'move the retry into the worker at four scratch that at five',
+      tentative: '',
+      speechPending: false
+    }
+  },
+  setup: resetDictationMeter,
+  render: () => <PaneWithPill cleaning />
+})
+
+export const cleanupFailed = defineFixture({
+  width: 520,
+  store: { dictationState: 'idle' },
+  render: () => <PaneWithPill notice="failed" />
+})
+
+export const cleanupTimedOut = defineFixture({
+  width: 520,
+  store: { dictationState: 'idle' },
+  render: () => <PaneWithPill notice="timed-out" />
 })
 
 export const queuedChatSend = defineFixture({

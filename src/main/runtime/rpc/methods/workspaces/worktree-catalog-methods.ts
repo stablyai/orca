@@ -12,7 +12,7 @@ import {
   WorktreeDetectedListParams,
   WorktreeListParams,
   WorktreePsParams
-} from '../../../../../shared/rpc-contract/worktree-params'
+} from '../../../../../shared/rpc-contract/workspaces/worktree-params'
 
 export const WORKTREE_CATALOG_METHODS = [
   defineMethod({

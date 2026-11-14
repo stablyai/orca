@@ -1,5 +1,8 @@
+import {
+  readTestHostJournal,
+  readTestJournalItems
+} from '../../../agent-session-journal/journal-observation.test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../../journal-ingress/structured-agent-session-event-sink'
-import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -11,7 +14,10 @@ import {
   identityFor,
   fakeCodex
 } from '../../../../codex/structured/session-lifecycle/codex-structured-session-adapter-fixture'
-import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase
+} from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { CodexStructuredSessionAdapter } from '../../../../codex/structured/session-lifecycle/codex-structured-session-adapter'
 import { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import {
@@ -20,12 +26,12 @@ import {
   hostTestAttachParams,
   hostTestMessage,
   resetHostTestOperationIds
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import {
   recordingStructuredAgentSessionLogger,
   testEventSinkLogging
-} from './structured-agent-session-logger-test-support'
-import { claudeAndCodexDeclared } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
+} from './structured-agent-session-logger.test-fixture'
+import { claudeAndCodexDeclared } from '../../providers/testing/structured-agent-session-adapter-router.test-fixture'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -57,7 +63,7 @@ beforeEach(async () => {
     logger: recordingStructuredAgentSessionLogger().logger,
     store,
     adapter: Object.assign(adapter, { supportsCreate: () => true }),
-    journalDatabase: openTestJournalHostDatabase(root),
+    journalDatabase: await openTestAgentSessionDatabase(root),
     claimKeyId: 'key-1',
     mintSpawnToken: () => 'spawn-1',
     now: () => NOW
@@ -85,10 +91,13 @@ it('isolates legacy acquired history from live matching and saves exact proof be
     })
     await journal().resolveDispatch({ clientMessageId: id, state: 'unknown', fence: 1 })
   }
-  await journal().replaceEpochItems('handle_forked', store.getRecord(SESSION)!.lease.runtimeFence, [
-    { identity: { provider: 'orca', clientMessageId: 'U' }, body, ownerFence: 1 }
-  ])
-  expect(journal().item('orca:U')?.revision).toBeGreaterThan(1)
+  await journal().write({
+    kind: 'epoch-replace',
+    reason: 'handle_forked',
+    fence: store.getRecord(SESSION)!.lease.runtimeFence,
+    items: [{ identity: { provider: 'orca', clientMessageId: 'U' }, body, ownerFence: 1 }]
+  })
+  expect((await journal().reads.item('orca:U'))?.revision).toBeGreaterThan(1)
   const user = (id: string | null) => ({
     type: 'userMessage',
     id: 'old-user',
@@ -104,7 +113,7 @@ it('isolates legacy acquired history from live matching and saves exact proof be
     await host.close(SESSION, 'evict')
     launch.resumeThreadId = THREAD
     codex.routes['thread/resume'] = () => ({ thread: { id: THREAD, turns: returned } })
-    await host.journalSnapshot(SESSION)
+    await readTestHostJournal(host, SESSION)
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     deferred.bind({
       journal: journal(),
@@ -130,26 +139,27 @@ it('isolates legacy acquired history from live matching and saves exact proof be
   await reopen([
     oldTurn([user(null), { type: 'agentMessage', id: 'old-answer', text: 'historical answer' }])
   ])
-  expect(journal().submission('U')?.dispatchState).toBe('unknown')
-  expect(journal().receiptFor('U')).toBeNull()
+  expect((await journal().reads.submission('U'))?.dispatchState).toBe('unknown')
+  expect(await journal().reads.receiptFor('U')).toBeNull()
   const before = journal().cursor()
   await reopen([
     oldTurn([user(null), { type: 'agentMessage', id: 'old-answer', text: 'historical answer' }])
   ])
   expect(journal().cursor()).toEqual(before)
-  await journal().replaceEpochItems(
-    'handle_forked',
-    store.getRecord(SESSION)!.lease.runtimeFence,
-    []
-  )
+  await journal().write({
+    kind: 'epoch-replace',
+    reason: 'handle_forked',
+    fence: store.getRecord(SESSION)!.lease.runtimeFence,
+    items: []
+  })
   await reopen([
     oldTurn([
       user('U'),
       { type: 'agentMessage', id: 'previously-unseen', text: 'must stay hidden' }
     ])
   ])
-  expect(journal().submission('U')?.dispatchState).toBe('accepted')
-  expect(journal().snapshot().items).toEqual([])
+  expect((await journal().reads.submission('U'))?.dispatchState).toBe('accepted')
+  expect(await readTestJournalItems(journal())).toEqual([])
   await reopen([
     {
       id: 'huge',
@@ -164,11 +174,11 @@ it('isolates legacy acquired history from live matching and saves exact proof be
       ]
     }
   ])
-  expect(journal().submission('K')?.dispatchState).toBe('accepted')
-  expect(journal().snapshot().items).toEqual([])
-  expect(journal().submission('V')?.dispatchState).toBe('unknown')
+  expect((await journal().reads.submission('K'))?.dispatchState).toBe('accepted')
+  expect(await readTestJournalItems(journal())).toEqual([])
+  expect((await journal().reads.submission('V'))?.dispatchState).toBe('unknown')
   expect(pages).not.toHaveBeenCalled()
   await reopen([])
-  expect(journal().receiptFor('K')).not.toBeNull()
-  expect(journal().submission('V')?.dispatchState).toBe('unknown')
+  expect(await journal().reads.receiptFor('K')).not.toBeNull()
+  expect((await journal().reads.submission('V'))?.dispatchState).toBe('unknown')
 })

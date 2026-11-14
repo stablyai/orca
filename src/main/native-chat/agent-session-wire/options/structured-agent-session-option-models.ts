@@ -4,7 +4,7 @@ import type {
   AgentSessionModelCatalogResult,
   AgentSessionModelOption
 } from '../../../../shared/agent-session/agent-session-wire'
-import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
 import { labelFromModelId } from '../../../../shared/model-id-label'
 import type { AgentModelCatalogLiveListing } from '../../agent-model-catalog/agent-model-catalog-entry'
 

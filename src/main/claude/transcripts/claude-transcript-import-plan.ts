@@ -1,4 +1,4 @@
-import { isDeepStrictEqual } from 'node:util'
+import { createClaudeTranscriptRowProjection } from '../claude-transcript-row-projection'
 import {
   agentJournalItemKey,
   parseAgentJournalItemKey
@@ -26,7 +26,6 @@ import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionItemAppendOptions
 } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import type { StructuredAgentSessionTransitionJournal } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-transition'
 import { claudeSourceBlockId } from '../structured/journal/claude-streamed-block-identity'
 import {
   claudeMessageIdentity,
@@ -39,10 +38,7 @@ import {
   readClaudeMessageEnvelope
 } from '../structured/journal/claude-structured-item-translation'
 import { createClaudeJournalTranslator } from '../structured/journal/claude-structured-journal-translation'
-import {
-  createClaudeTranscriptItemReader,
-  claudeRestoredItemBody
-} from './claude-transcript-item-reader'
+import type { ClaudeTranscriptItemReader } from './claude-transcript-item-reader'
 import { idleClaudeJournalTurn } from '../structured/turns/claude-session-state-turn-over'
 import { claudeMessageWithoutSyntheticText } from '../structured/journal/claude-internal-message-content'
 import { claudeTranscriptPrompt } from './claude-transcript-prompt'
@@ -50,14 +46,14 @@ import { claudeTranscriptPrompt } from './claude-transcript-prompt'
 export function createClaudeTranscriptImportPlan(input: {
   sessionId: string
   providerSessionId: string
-  journal: StructuredAgentSessionTransitionJournal
+  epoch: string
+  items: ClaudeTranscriptItemReader
   /** Whether the divider reads as rewound; null when the chat holds nothing for one to follow. */
   rewound: boolean | null
   check: () => void
 }) {
   const mutations = new Map<string, ReturnType<typeof journalLifecycleItemMutation>>()
-  const { saved, localPrompt, scopeOf, promptScope, dependencies } =
-    createClaudeTranscriptItemReader(input.journal, input.sessionId)
+  const { saved, localPrompt, scopeOf, promptScope, dependencies, load } = input.items
   const aliases = new Map<string, AgentJournalItemIdentity>()
   let historicalScope: AgentJournalTurnScope | null = null
   let sourceObservedAt: number | undefined
@@ -83,48 +79,41 @@ export function createClaudeTranscriptImportPlan(input: {
       historicalScope = scope.kind === 'unknown' ? null : scope
     }
   }
+  const apply = createClaudeTranscriptRowProjection({
+    mutations,
+    saved,
+    scopeOf,
+    check: input.check
+  })
+  const pending: Parameters<typeof apply>[] = []
   const append = (
     rawIdentity: AgentJournalItemIdentity,
-    projected: AgentJournalItemBody,
+    body: AgentJournalItemBody,
     options: StructuredAgentSessionItemAppendOptions
   ) => {
-    input.check()
-    const identity = aliases.get(agentJournalItemKey(rawIdentity)) ?? rawIdentity
-    const key = agentJournalItemKey(identity)
-    const existing = saved(key)
-    // A turn this import opened is history too: it must also take its end, never stay running.
-    if (projected.kind === 'turn' && (existing || (historicalScope && !mutations.has(key)))) {
-      return { accepted: true } as const
-    }
-    let body = projected
-    // Idle housekeeping may use the host clock; an unknown historical endpoint cannot.
-    if (body.kind === 'turn' && body.state === 'completed' && workAt === undefined) {
-      const { completedAt: _completedAt, durationMs: _durationMs, ...untimed } = body
-      body = untimed
-    }
-    let turnScope =
-      projected.kind === 'turn' || (projected.kind === 'message' && projected.role === 'user')
-        ? options.turnScope
-        : (historicalScope ?? options.turnScope)
-    if (existing) {
-      if (body.kind === 'message' && body.role === 'user') {
-        return { accepted: true } as const
-      }
-      turnScope = scopeOf(existing)
-      body = claudeRestoredItemBody(body, existing.body)
-      if (isDeepStrictEqual(existing.body, body)) {
-        return { accepted: true } as const
-      }
-    }
-    const observedAt = mutations.has(key) ? mutations.get(key)?.observedAt : sourceObservedAt
-    mutations.set(key, {
-      ...journalLifecycleItemMutation({ ...options, turnScope, observedAt }, identity, body),
-      ...(body.kind === 'message' && body.role === 'user' ? { echoOf: null } : {})
-    })
-    if (mutations.size > HISTORY_CATCH_UP_MAX_OPERATIONS) {
+    pending.push([
+      aliases.get(agentJournalItemKey(rawIdentity)) ?? rawIdentity,
+      body,
+      options,
+      historicalScope,
+      sourceObservedAt,
+      workAt
+    ])
+    if (pending.length > HISTORY_CATCH_UP_MAX_OPERATIONS) {
       throw new Error('too-large')
     }
     return { accepted: true } as const
+  }
+  const flushAppends = async () => {
+    if (!pending.length) {
+      return
+    }
+    await load(pending.map(([identity]) => agentJournalItemKey(identity)))
+    input.check()
+    for (const args of pending) {
+      apply(...args)
+    }
+    pending.length = 0
   }
   const sink: StructuredAgentSessionEventSink = {
     appendItem: append,
@@ -147,115 +136,120 @@ export function createClaudeTranscriptImportPlan(input: {
   }
   const uuids: string[] = []
   return {
-    restore: (row: Record<string, unknown>) => {
-      input.check()
-      const frame = claudeMessageWithoutSyntheticText({
-        ...row,
-        session_id: row.sessionId,
-        parent_tool_use_id: null
-      })
-      if (!frame) {
-        return
-      }
-      const envelope = readClaudeMessageEnvelope(frame)
-      const queued = row.type === 'attachment'
-      // The tail reader keeps only rows that carry one.
-      const uuid = String(row.uuid)
-      const parsedAt = typeof row.timestamp === 'string' ? Date.parse(row.timestamp) : Number.NaN
-      sourceObservedAt = Number.isFinite(parsedAt) && parsedAt > 0 ? parsedAt : undefined
-      if (!envelope && !queued) {
-        if (row.type === 'system' && row.subtype === 'turn_duration') {
-          idle(sourceObservedAt)
+    restore: async (row: Record<string, unknown>) => {
+      try {
+        input.check()
+        const frame = claudeMessageWithoutSyntheticText({
+          ...row,
+          session_id: row.sessionId,
+          parent_tool_use_id: null
+        })
+        if (!frame) {
+          return
         }
-        return
-      }
-      if (envelope?.role === 'assistant') {
-        const source =
-          envelope.messageId && typeof row.apiBlockIndex === 'number'
-            ? {
-                provider: 'claude' as const,
-                sessionId: envelope.sessionId,
-                uuid: claudeSourceBlockId(envelope.messageId, row.apiBlockIndex)
-              }
-            : null
-        const thinking = envelope.content.some((part) => claudeRecord(part)?.type === 'thinking')
-        const frameIdentity = thinking
-          ? claudeThinkingIdentity(envelope.sessionId, envelope.uuid)
-          : claudeMessageIdentity(envelope)
-        matchSource(source ? [source, frameIdentity] : [frameIdentity])
-      }
-      if (envelope) {
-        for (const tool of claudeToolUses(envelope)) {
-          matchSource([claudeToolIdentity(envelope.sessionId, tool.id)])
+        const envelope = readClaudeMessageEnvelope(frame)
+        const queued = row.type === 'attachment'
+        // The tail reader keeps only rows that carry one.
+        const uuid = String(row.uuid)
+        const parsedAt = typeof row.timestamp === 'string' ? Date.parse(row.timestamp) : Number.NaN
+        sourceObservedAt = Number.isFinite(parsedAt) && parsedAt > 0 ? parsedAt : undefined
+        if (!envelope && !queued) {
+          if (row.type === 'system' && row.subtype === 'turn_duration') {
+            idle(sourceObservedAt)
+          }
+          return
         }
-        for (const result of claudeToolResults(envelope)) {
-          matchSource([claudeToolIdentity(envelope.sessionId, result.toolUseId)])
+        if (envelope?.role === 'assistant') {
+          const source =
+            envelope.messageId && typeof row.apiBlockIndex === 'number'
+              ? {
+                  provider: 'claude' as const,
+                  sessionId: envelope.sessionId,
+                  uuid: claudeSourceBlockId(envelope.messageId, row.apiBlockIndex)
+                }
+              : null
+          const thinking = envelope.content.some((part) => claudeRecord(part)?.type === 'thinking')
+          const frameIdentity = thinking
+            ? claudeThinkingIdentity(envelope.sessionId, envelope.uuid)
+            : claudeMessageIdentity(envelope)
+          matchSource(source ? [source, frameIdentity] : [frameIdentity])
         }
-      }
-      const { decoded, ignored, internalTurnStart, hasWork } = claudeTranscriptPrompt(
-        row,
-        envelope,
-        input.providerSessionId
-      )
-      if (ignored) {
-        return
-      }
-      uuids.push(uuid)
-      if (!decoded) {
-        if (hasWork && sourceObservedAt !== undefined) {
-          workAt = Math.max(workAt ?? sourceObservedAt, sourceObservedAt)
+        if (envelope) {
+          for (const tool of claudeToolUses(envelope)) {
+            matchSource([claudeToolIdentity(envelope.sessionId, tool.id)])
+          }
+          for (const result of claudeToolResults(envelope)) {
+            matchSource([claudeToolIdentity(envelope.sessionId, result.toolUseId)])
+          }
         }
-        if (hasWork || envelope?.role === 'assistant') {
+        const { decoded, ignored, internalTurnStart, hasWork } = claudeTranscriptPrompt(
+          row,
+          envelope,
+          input.providerSessionId
+        )
+        if (ignored) {
+          return
+        }
+        uuids.push(uuid)
+        if (!decoded) {
+          if (hasWork && sourceObservedAt !== undefined) {
+            workAt = Math.max(workAt ?? sourceObservedAt, sourceObservedAt)
+          }
+          if (hasWork || envelope?.role === 'assistant') {
+            translator.handle({
+              type: 'message',
+              sessionId: input.sessionId,
+              message: frame,
+              ...(sourceObservedAt === undefined ? {} : { observedAt: sourceObservedAt })
+            })
+          }
+          // A hidden physical prompt still separates turns; caller-owned results settle first.
+          if (internalTurnStart) {
+            idle()
+          }
+          return
+        }
+        // Folded input stays in the ongoing turn; a physical opener also settles its predecessor.
+        if (!queued) {
+          idle()
+        }
+        const sourceUuid = queued ? claudeText(claudeRecord(row.attachment)?.source_uuid) : null
+        const identity: AgentJournalItemIdentity = {
+          provider: 'claude',
+          sessionId: input.providerSessionId,
+          uuid: sourceUuid ?? decoded.id
+        }
+        const existing = saved(agentJournalItemKey(identity)) ?? localPrompt(identity.uuid)
+        if (existing) {
+          historicalScope = promptScope(existing, queued) ?? historicalScope
+          return
+        }
+        const scope = historicalScope ?? translator.currentTurnScope()
+        append(identity, legacyItemBody(decoded, LEGACY_IMPORT_BLOCK_LIMITS), {
+          turnScope: queued
+            ? scope.kind === 'turn'
+              ? scope
+              : { kind: 'unknown' }
+            : AGENT_JOURNAL_THREAD_SCOPE
+        })
+        if (envelope && decoded.role === 'user') {
           translator.handle({
             type: 'message',
             sessionId: input.sessionId,
             message: frame,
+            startsTurn: true,
             ...(sourceObservedAt === undefined ? {} : { observedAt: sourceObservedAt })
           })
         }
-        // A hidden physical prompt still separates turns; caller-owned results settle first.
-        if (internalTurnStart) {
-          idle()
-        }
-        return
-      }
-      // Folded input stays in the ongoing turn; a physical opener also settles its predecessor.
-      if (!queued) {
-        idle()
-      }
-      const sourceUuid = queued ? claudeText(claudeRecord(row.attachment)?.source_uuid) : null
-      const identity: AgentJournalItemIdentity = {
-        provider: 'claude',
-        sessionId: input.providerSessionId,
-        uuid: sourceUuid ?? decoded.id
-      }
-      const existing = saved(agentJournalItemKey(identity)) ?? localPrompt(identity.uuid)
-      if (existing) {
-        historicalScope = promptScope(existing, queued) ?? historicalScope
-        return
-      }
-      const scope = historicalScope ?? translator.currentTurnScope()
-      append(identity, legacyItemBody(decoded, LEGACY_IMPORT_BLOCK_LIMITS), {
-        turnScope: queued
-          ? scope.kind === 'turn'
-            ? scope
-            : { kind: 'unknown' }
-          : AGENT_JOURNAL_THREAD_SCOPE
-      })
-      if (envelope && decoded.role === 'user') {
-        translator.handle({
-          type: 'message',
-          sessionId: input.sessionId,
-          message: frame,
-          startsTurn: true,
-          ...(sourceObservedAt === undefined ? {} : { observedAt: sourceObservedAt })
-        })
+      } finally {
+        await flushAppends()
       }
     },
-    finish: (): HistoryCatchUpPlan | null => {
+    finish: async (): Promise<HistoryCatchUpPlan | null> => {
       input.check()
       idle()
       translator.flush()
+      await flushAppends()
       // A row that renders nothing adds no divider either.
       const rows = [...mutations.values()]
       const batch = createHistoryCatchUpBatch()
@@ -296,7 +290,7 @@ export function createClaudeTranscriptImportPlan(input: {
         }
       }
       return batch.finish('claude-history-import', [
-        input.journal.epoch,
+        input.epoch,
         input.providerSessionId,
         uuids,
         rows

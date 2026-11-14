@@ -9,7 +9,7 @@ import { asRecord } from '../../../ai-vault/parsing/session-record-fields'
 
 import { readOpenCodeTranscriptSignalViaWorker } from '../../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn'
 import { samePiDirectory } from '../../../pi/rpc/launch/rpc-launch-resolution'
-import { admitTranscriptPath } from '../../transcript-path-admission'
+import { admitTranscriptPath } from '../../transcript-discovery/transcript-path-admission'
 import { adoptedDirectoryProbes } from './adopted-directory-probe'
 
 export type AdoptedTranscriptSource = {

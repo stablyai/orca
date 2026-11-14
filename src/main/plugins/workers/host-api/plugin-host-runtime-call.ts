@@ -28,6 +28,7 @@ const RUNTIME_FAILURES: ReadonlyMap<string, Failure> = new Map([
     'selector_ambiguous',
     ['action_failed', 'two hosts have a workspace with this id; use the id workspace.list gives']
   ],
+  ['repo_not_found', ['action_failed', 'no project has this id']],
   ['terminal_not_found', NO_LIVE_TERMINAL],
   ['terminal_handle_stale', NO_LIVE_TERMINAL],
   ['terminal_exited', NO_LIVE_TERMINAL],

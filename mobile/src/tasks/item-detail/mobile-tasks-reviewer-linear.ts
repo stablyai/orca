@@ -1,4 +1,4 @@
-import type { GitHubOwnerRepo } from '../../../../src/shared/github/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../src/shared/github/repositories/repository-identity'
 import { colors } from '../../theme/mobile-theme'
 import {
   getLinearPriorityLabel,

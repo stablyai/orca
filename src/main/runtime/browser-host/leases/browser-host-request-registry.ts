@@ -32,6 +32,8 @@ export class BrowserHostUnresponsiveError extends Error {
 export class BrowserHostRequestRegistry {
   private readonly volunteers: Volunteer[] = []
   private readonly pending = new Map<string, PendingAnswer>()
+  /** Desktops that let an ask time out; asking again before they answer anything would only wait again. */
+  private readonly unanswered = new Set<string>()
   private inFlight: Promise<RequestedBrowserHost> | null = null
 
   constructor(
@@ -42,6 +44,17 @@ export class BrowserHostRequestRegistry {
   register(input: Volunteer): () => void {
     const volunteer = { ...input }
     this.volunteers.push(volunteer)
+    // A new subscription means the desktop is running again; hand it any ask its old socket may have swallowed.
+    this.unanswered.delete(volunteer.pairedDeviceId)
+    for (const [requestId, answer] of this.pending) {
+      if (answer.pairedDeviceId === volunteer.pairedDeviceId) {
+        try {
+          volunteer.emit({ type: 'browserHostRequested', requestId })
+        } catch {
+          // That socket is gone too; its cleanup unregisters it.
+        }
+      }
+    }
     return () => {
       const index = this.volunteers.indexOf(volunteer)
       if (index === -1) {
@@ -51,6 +64,7 @@ export class BrowserHostRequestRegistry {
       if (this.volunteers.some((entry) => entry.pairedDeviceId === volunteer.pairedDeviceId)) {
         return
       }
+      this.unanswered.delete(volunteer.pairedDeviceId)
       for (const answer of this.pending.values()) {
         if (answer.pairedDeviceId === volunteer.pairedDeviceId) {
           // It may still finish hosting over another socket, so do not ask a second desktop.
@@ -76,6 +90,8 @@ export class BrowserHostRequestRegistry {
     caller: { pairedDeviceId: string },
     result: BrowserClientHostRequestResultParams
   ): boolean {
+    // Even an answer that arrives after the deadline shows the desktop answers again.
+    this.unanswered.delete(caller.pairedDeviceId)
     const answer = this.pending.get(result.requestId)
     if (!answer || answer.pairedDeviceId !== caller.pairedDeviceId) {
       return false
@@ -99,12 +115,18 @@ export class BrowserHostRequestRegistry {
       if (!pairedDeviceId || remainingMs <= 0) {
         throw new Error('browser_host_unavailable')
       }
+      if (this.unanswered.has(pairedDeviceId)) {
+        throw new BrowserHostUnresponsiveError(pairedDeviceId)
+      }
       asked.add(pairedDeviceId)
       const answer = await this.ask(
         pairedDeviceId,
         Math.min(remainingMs, this.options.desktopTimeoutMs ?? DESKTOP_TIMEOUT_MS)
       )
       if (answer === 'silent') {
+        if (this.volunteers.some((entry) => entry.pairedDeviceId === pairedDeviceId)) {
+          this.unanswered.add(pairedDeviceId)
+        }
         throw new BrowserHostUnresponsiveError(pairedDeviceId)
       }
       if (answer !== 'declined') {
