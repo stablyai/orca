@@ -20,6 +20,7 @@ import type { PiAgentKind } from '../../../shared/pi-agent-kind'
 const PI_AGENT_SUBDIR = 'agent'
 const ORCA_MANAGED_EXTENSION_MARKER = '@orca-managed-pi-extension'
 const OMP_MANAGED_STATUS_EXTENSION_DIR = 'omp-managed-status-extension'
+const GENTLE_SHELL_MANAGED_STATUS_EXTENSION_DIR = 'gentle-shell-managed-status-extension'
 
 type ManagedExtensionWriteResult = 'written' | 'skipped-user-owned' | 'failed'
 
@@ -29,7 +30,9 @@ type PiManagedExtensionEnv = {
   statusExtensionPath?: string
 }
 
-type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent'>
+// gentle-shell owns its home; Orca never installs into it, so it has no managed-home kind.
+type ManagedHomeAgentKind = Exclude<PiAgentKind, 'gentle-shell'>
+type LegacyOverlayAgentKind = Exclude<ManagedHomeAgentKind, 'prime-agent'>
 
 // Retain old per-kind roots for upgrade cleanup.
 const OVERLAY_ROOT_DIR_NAME: Record<LegacyOverlayAgentKind, string> = {
@@ -38,13 +41,16 @@ const OVERLAY_ROOT_DIR_NAME: Record<LegacyOverlayAgentKind, string> = {
 }
 
 // Resolve by launched kind; disk-presence fallback would shadow the other agent's extensions.
-const AGENT_HOME_DIR_NAME: Record<PiAgentKind, string> = {
+const AGENT_HOME_DIR_NAME: Record<ManagedHomeAgentKind, string> = {
   pi: '.pi',
   omp: '.omp',
   'prime-agent': '.prime'
 }
 
-function getDefaultPiAgentDir(kind: PiAgentKind, configDirName: string | undefined): string {
+function getDefaultPiAgentDir(
+  kind: ManagedHomeAgentKind,
+  configDirName: string | undefined
+): string {
   const root = kind === 'omp' ? configDirName || AGENT_HOME_DIR_NAME.omp : AGENT_HOME_DIR_NAME[kind]
   return join(homedir(), root, PI_AGENT_SUBDIR)
 }
@@ -105,10 +111,11 @@ export class PiTitlebarExtensionService {
   }
 
   private writeOmpFallbackStatusExtension(source: string): string | undefined {
-    const fallbackDir = join(
-      getAppEnvironment().getPath('userData'),
-      OMP_MANAGED_STATUS_EXTENSION_DIR
-    )
+    return this.writeUserDataStatusExtension(OMP_MANAGED_STATUS_EXTENSION_DIR, source)
+  }
+
+  private writeUserDataStatusExtension(dirName: string, source: string): string | undefined {
+    const fallbackDir = join(getAppEnvironment().getPath('userData'), dirName)
     try {
       mkdirSync(fallbackDir, { recursive: true })
     } catch {
@@ -121,7 +128,7 @@ export class PiTitlebarExtensionService {
 
   private installManagedExtensions(
     sourceAgentDir: string,
-    kind: PiAgentKind
+    kind: ManagedHomeAgentKind
   ): PiManagedExtensionEnv {
     const extensionsDir = join(sourceAgentDir, 'extensions')
     try {
@@ -156,6 +163,15 @@ export class PiTitlebarExtensionService {
     }
   }
 
+  // gentle-shell loads this via -e; its home stays untouched, so the file lives in userData.
+  buildGentleShellEnv(): Record<string, string> {
+    const statusExtensionPath = this.writeUserDataStatusExtension(
+      GENTLE_SHELL_MANAGED_STATUS_EXTENSION_DIR,
+      withOrcaManagedExtensionMarker(getPiAgentStatusExtensionSource('gentle-shell'))
+    )
+    return statusExtensionPath ? { ORCA_GENTLE_SHELL_STATUS_EXTENSION: statusExtensionPath } : {}
+  }
+
   buildFreshOmpEnv(): Record<string, string> {
     return {
       ORCA_OMP_FRESH_CONFIG: materializeOmpFreshConfig(
@@ -167,7 +183,7 @@ export class PiTitlebarExtensionService {
   buildPtyEnv(
     ptyId: string,
     existingAgentDir: string | undefined,
-    kind: PiAgentKind,
+    kind: ManagedHomeAgentKind,
     options?: { materializeDefaultHome?: boolean; configDirName?: string }
   ): Record<string, string> {
     const freshConfigEnv = kind === 'omp' ? this.buildFreshOmpEnv() : {}

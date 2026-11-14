@@ -144,6 +144,7 @@ export function normalizeProviderEvent(input: {
     case 'pi':
     case 'omp':
     case 'prime-agent':
+    case 'gentle-shell':
       payload = normalizePiCompatibleEvent(
         state,
         source,

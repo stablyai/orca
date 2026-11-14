@@ -3,7 +3,7 @@ import type { PiAgentKind } from '../../../shared/pi-agent-kind'
 export const ORCA_PI_PREFILL_EXTENSION_FILE = 'orca-prefill.ts'
 
 // Keep draft variables agent-specific so Pi and OMP cannot consume each other's prefill.
-type PrefillAgentKind = Exclude<PiAgentKind, 'prime-agent'>
+type PrefillAgentKind = Exclude<PiAgentKind, 'prime-agent' | 'gentle-shell'>
 
 const PREFILL_ENV_VAR_BY_KIND: Record<PrefillAgentKind, string> = {
   pi: 'ORCA_PI_PREFILL',

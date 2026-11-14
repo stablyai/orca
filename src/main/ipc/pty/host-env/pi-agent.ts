@@ -3,6 +3,7 @@ import {
   SOURCE_AGENT_DIR_ENV_BY_KIND,
   type PiAgentKind
 } from '../../../../shared/pi-agent-kind'
+import { piTitlebarExtensionService } from '../../../pi/managed-extensions/titlebar-extension-service'
 import { readSessionShellStartupEnvVar } from '../../../pty/shell-startup/shell-startup-env'
 import { getAgentLaunchExecutableName } from '../../../../shared/agent-launch/startup/agent-command-line-intent'
 import { AGENT_HOOK_RUNTIME_ENV_KEYS, ORCA_AGENT_SESSION_CALLER_ENV_KEYS } from './spawn-env-keys'
@@ -67,6 +68,10 @@ export function clearPiAgentShadowEnv(baseEnv: Record<string, string>, kind: PiA
     delete baseEnv.ORCA_PRIME_AGENT_STATUS_EXTENSION
     return
   }
+  if (kind === 'gentle-shell') {
+    delete baseEnv.ORCA_GENTLE_SHELL_STATUS_EXTENSION
+    return
+  }
   delete baseEnv.ORCA_PI_CODING_AGENT_DIR
   delete baseEnv.ORCA_PI_SOURCE_AGENT_DIR
 }
@@ -103,6 +108,22 @@ export function exposePiManagedExtensionEnv(
     baseEnv.ORCA_PI_SOURCE_AGENT_DIR = managedEnv.ORCA_PI_SOURCE_AGENT_DIR
   } else {
     delete baseEnv.ORCA_PI_SOURCE_AGENT_DIR
+  }
+}
+
+/** Bare shells expose it too, so a later `gentle-shell` typed in the pane still reports. */
+export function exposeGentleShellStatusExtension(
+  baseEnv: Record<string, string>,
+  kind: PiAgentKind,
+  hasLaunchCommand: boolean
+): void {
+  if (kind !== 'gentle-shell' && hasLaunchCommand) {
+    return
+  }
+  const { ORCA_GENTLE_SHELL_STATUS_EXTENSION: path } =
+    piTitlebarExtensionService.buildGentleShellEnv()
+  if (path) {
+    baseEnv.ORCA_GENTLE_SHELL_STATUS_EXTENSION = path
   }
 }
 

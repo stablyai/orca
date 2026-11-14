@@ -1,4 +1,5 @@
 import type { ToolSnapshot } from '../../listener-event'
+import type { PiAgentKind } from '../../../pi-agent-kind'
 import { isAskUserQuestionTool } from '../../../agent-status/lifecycle/agent-question-answered-intent'
 import {
   deriveToolInputPreview,
@@ -29,23 +30,20 @@ function serializePlanReviewPrompt(hookPayload: Record<string, unknown>): string
     : undefined
 }
 
-function isPiCompatibleAskTool(
-  agentKind: 'pi' | 'omp' | 'prime-agent',
-  toolName: string | undefined
-): boolean {
+function isPiCompatibleAskTool(agentKind: PiAgentKind, toolName: string | undefined): boolean {
   return agentKind === 'omp'
     ? toolName === 'ask'
-    : agentKind === 'pi' && isAskUserQuestionTool(toolName)
+    : (agentKind === 'pi' || agentKind === 'gentle-shell') && isAskUserQuestionTool(toolName)
 }
 
 export function extractPiToolFields(
   eventName: unknown,
   hookPayload: Record<string, unknown>,
-  agentKind: 'pi' | 'omp' | 'prime-agent'
+  agentKind: PiAgentKind
 ): ToolSnapshot {
   // Custom modals carry neither approvals nor structured questions.
   if (
-    agentKind === 'pi' &&
+    (agentKind === 'pi' || agentKind === 'gentle-shell') &&
     (hookPayload.ui_prompt_active === true ||
       eventName === 'ui_prompt_start' ||
       eventName === 'ui_prompt_end')

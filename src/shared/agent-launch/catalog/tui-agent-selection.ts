@@ -23,6 +23,7 @@ export const TUI_AGENT_AUTO_PICK_ORDER = [
   'pi',
   'omp',
   'prime-agent',
+  'gentle-shell',
   'gemini',
   'antigravity',
   'aider',
