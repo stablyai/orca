@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { ipcMain } from 'electron'
+import { tmpdir } from 'node:os'
 import { registerSessionHandlers } from './session'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { requireSwitchedOn } from '../runtime/construction/require-sidebar-inputs-enabled'
@@ -7,6 +7,20 @@ import { readRuntimeDesktopSidebarFacts } from '../runtime/sidebar-inputs/sideba
 import { TERMINAL_QUERY_METHODS } from '../runtime/rpc/methods/terminal/terminal-query-methods'
 import { createWorkerMaintenanceFixture } from '../persistence/loading-store/profile-writing/profile-state-maintenance-fixture'
 
+const { handlers } = vi.hoisted(() => ({
+  handlers: new Map<string, (event: unknown, ...args: unknown[]) => unknown>()
+}))
+vi.mock('electron', () => ({
+  app: { getPath: () => tmpdir(), getName: () => 'orca', getVersion: () => '0.0.0' },
+  BrowserWindow: { fromId: () => null, getAllWindows: () => [] },
+  webContents: { fromId: () => null },
+  safeStorage: { isEncryptionAvailable: () => false },
+  ipcMain: {
+    handle: (channel: string, handler: (event: unknown, ...args: unknown[]) => unknown) => {
+      handlers.set(channel, handler)
+    }
+  }
+}))
 vi.mock('../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 vi.mock('../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: false }))
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
@@ -18,10 +32,6 @@ vi.mock('../ssh/config/ssh-config-parser', () => ({
 
 it('keeps renderer field saves after runtime startup, sidebar, crew and agent identity reads', async () => {
   const { store, authority, readState } = await createWorkerMaintenanceFixture()
-  const handlers = new Map<string, (event: unknown, ...args: unknown[]) => unknown>()
-  vi.spyOn(ipcMain, 'handle').mockImplementation((channel, handler) => {
-    handlers.set(channel, handler)
-  })
   const runtime = new OrcaRuntimeService(store)
   const feed = requireSwitchedOn(runtime.sidebarInputsFeed)
   feed.acquire('field-save-test')
