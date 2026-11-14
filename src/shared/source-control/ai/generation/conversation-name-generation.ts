@@ -66,7 +66,7 @@ export function sanitizeGeneratedConversationName(raw: string): string | null {
 
   let name = firstLine
     .trim()
-    .replace(/^#{1,6}\s*/u, '')
+    .replace(/^#{1,6}(?:\s+|$)/u, '')
     .trim()
   for (;;) {
     const unwrapped = name
