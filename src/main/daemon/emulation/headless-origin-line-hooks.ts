@@ -58,6 +58,58 @@ export const ORIGIN_LINE_HOOKS: OriginLineMethods = {
 }
 export const { set: _optionalSetHook, ...REQUIRED_ORIGIN_LINE_HOOKS } = ORIGIN_LINE_HOOKS
 
+const hookPrototypes = new WeakMap<
+  object,
+  { prototype: object; originals: Readonly<OriginLineMethods> }
+>()
+
+export function prepareOriginLineHookPrototype(
+  line: OriginBufferLine,
+  originals: OriginLineMethods
+): object | undefined {
+  const nativePrototype = Object.getPrototypeOf(line)
+  if (!nativePrototype) {
+    return undefined
+  }
+  const cached = hookPrototypes.get(nativePrototype)
+  for (const name of LINE_METHOD_NAMES) {
+    if (Object.hasOwn(line, name)) {
+      return undefined
+    }
+    const descriptor = Object.getOwnPropertyDescriptor(nativePrototype, name)
+    if (name === 'set' && !originals.set && !(name in nativePrototype)) {
+      if (cached?.originals.set) {
+        return undefined
+      }
+      continue
+    }
+    if (
+      !descriptor ||
+      !('value' in descriptor) ||
+      typeof descriptor.value !== 'function' ||
+      descriptor.value !== originals[name] ||
+      (cached && cached.originals[name] !== originals[name])
+    ) {
+      return undefined
+    }
+  }
+  if (cached) {
+    return cached.prototype
+  }
+  const prototype = Object.create(nativePrototype)
+  for (const name of LINE_METHOD_NAMES) {
+    if (name !== 'set' || originals.set) {
+      Object.defineProperty(prototype, name, {
+        value: ORIGIN_LINE_HOOKS[name],
+        writable: true,
+        configurable: true
+      })
+    }
+  }
+  hookPrototypes.set(nativePrototype, { prototype, originals: Object.freeze({ ...originals }) })
+  return prototype
+}
+
 export function captureOriginLineMethods(
   line: OriginBufferLine,
   shared?: OriginLineMethods

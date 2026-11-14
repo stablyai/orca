@@ -3,6 +3,7 @@ import { HeadlessOriginCellSnapshots } from './headless-origin-cell-snapshots'
 import { HeadlessOriginBuffers } from './headless-origin-buffers'
 import {
   captureOriginLineMethods,
+  prepareOriginLineHookPrototype,
   ORIGIN_LINE_HOOKS,
   REQUIRED_ORIGIN_LINE_HOOKS
 } from './headless-origin-line-hooks'
@@ -279,6 +280,7 @@ export class HeadlessContentOrigins {
       return line
     }
     const originals = captureOriginLineMethods(line, this.sharedOriginals)
+    const hookPrototype = prepareOriginLineHookPrototype(line, originals)
     this.sharedOriginals ??= originals
     attachOriginLineState(line, {
       owner: this,
@@ -288,7 +290,11 @@ export class HeadlessContentOrigins {
       recordSets: true
     })
     line.mutationObserver = this
-    Object.assign(line, originals.set ? ORIGIN_LINE_HOOKS : REQUIRED_ORIGIN_LINE_HOOKS)
+    if (hookPrototype) {
+      Object.setPrototypeOf(line, hookPrototype)
+    } else {
+      Object.assign(line, originals.set ? ORIGIN_LINE_HOOKS : REQUIRED_ORIGIN_LINE_HOOKS)
+    }
     return line
   }
 }

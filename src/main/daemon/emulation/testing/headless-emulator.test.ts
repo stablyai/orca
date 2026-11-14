@@ -418,6 +418,11 @@ it.each([100, 1000])(
 
 it('keeps loaded-cell snapshots and copied mixed glyphs independent of later source edits', async () => {
   const terminal = new Terminal({ cols: 12, rows: 2, allowProposedApi: true })
+  const line = originTerminalCore(terminal)!.buffers.active.lines.get(0)!
+  const originalSetCell = line.setCell
+  line.setCell = function (index, cell) {
+    originalSetCell.call(this, index, cell)
+  }
   const origins = new HeadlessContentOrigins(terminal)
   const owner = {}
   const old = { owner, epoch: 1 }
@@ -431,11 +436,12 @@ it('keeps loaded-cell snapshots and copied mixed glyphs independent of later sou
     terminalScreenSupport(origins.read(current), current)?.(0, start, end) ?? true
   try {
     await write('eX')
-    const line = originTerminalCore(terminal)!.buffers.active.lines.get(0)!
     const cell = terminal.buffer.active.getLine(0)!.getCell(1)!
     line.loadCell(1, cell)
     await write('\r\x1b[CZ', current)
+    origins.begin(current)
     line.setCell(4, cell)
+    origins.end()
     expect(terminal.buffer.active.getLine(0)!.translateToString(true)).toBe('eZ  X')
     expect(eligible(4, 5)).toBe(false)
     await write('\r\x1b[C\u0301', current)
@@ -451,6 +457,10 @@ it('keeps loaded-cell snapshots and copied mixed glyphs independent of later sou
     line.copyCellsFrom(line, 0, 1, 2, false)
     origins.end()
     expect(eligible(1, 3)).toBe(false)
+    expect(copy.translateToString(true)).toBe('QZ  X')
+    line.copyFrom(copy)
+    expect(eligible(0, 1)).toBe(true)
+    expect(eligible(4, 5)).toBe(false)
   } finally {
     terminal.dispose()
   }
