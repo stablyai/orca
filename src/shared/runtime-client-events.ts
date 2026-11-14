@@ -1,4 +1,7 @@
-import type { NotificationAttentionAcknowledgement } from './notification-settings-types'
+import type {
+  NotificationAttentionAcknowledgement,
+  RetainedAgentAttention
+} from './notification-settings-types'
 import type { CreateWorktreeResult } from './worktree/create-types'
 import type {
   WorktreeDefaultTabsLaunch,
@@ -16,6 +19,7 @@ import type { BrowserClientHostRequestEvent } from './browser/client-hosting/bro
 import type { WorkspaceCleanupRunFinishedEvent } from './workspace-cleanup/workspace-cleanup-run'
 
 export type RuntimeClientEvent =
+  | { type: 'agentAttentionChanged'; notificationId: string; notice: RetainedAgentAttention | null }
   | {
       type: 'notificationAttentionAcknowledged'
       acknowledgement: NotificationAttentionAcknowledgement
@@ -94,6 +98,7 @@ export type RuntimeClientEventStreamMessage =
         nativeChatQueueFollowUps?: boolean
         nativeChatCiResultLines?: boolean
         repos?: unknown[]
+        agentAttention?: RetainedAgentAttention[]
         sshStates?: { targetId: string; state: SshConnectionState }[]
       }
     })

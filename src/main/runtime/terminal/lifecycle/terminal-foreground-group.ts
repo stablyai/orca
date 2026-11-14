@@ -12,7 +12,7 @@ function isShellCommand(command: string): boolean {
 export function judgeTerminalForeground(
   rows: readonly ProcessTableRow[],
   rootPid: number,
-  agent: TuiAgent
+  agent: TuiAgent | undefined
 ): 'agent' | 'shell' | 'unknown' {
   const root = rows.find((row) => row.pid === rootPid)
   const foregroundGroup = root?.tpgid
@@ -31,7 +31,7 @@ export function judgeTerminalForeground(
   }
   return front.some(
     (row) =>
-      recognizeAgentProcessFromCommandLine(row.command)?.agent === agent ||
+      (agent !== undefined && recognizeAgentProcessFromCommandLine(row.command)?.agent === agent) ||
       !isShellCommand(row.command)
   )
     ? 'agent'

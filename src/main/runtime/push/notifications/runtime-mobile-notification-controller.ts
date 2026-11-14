@@ -3,7 +3,10 @@ import {
   NotificationAttentionReadFrontiers,
   notificationWasAcknowledged
 } from '../../../../shared/notification-attention-acknowledgement'
-import type { NotificationAttentionAcknowledgement } from '../../../../shared/notification-settings-types'
+import type {
+  NotificationAttentionAcknowledgement,
+  RetainedAgentAttention
+} from '../../../../shared/notification-settings-types'
 import { reserveNotificationCooldown } from '../../../../shared/notification-burst-cooldown'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { AgentStatusState } from '../../../../shared/agent-status/contracts/agent-status-types'
@@ -75,6 +78,26 @@ export class RuntimeMobileNotificationController {
   private pushRegistrar: MobilePushRegistrar | null = null
   private dismissalStore: MobileNotificationDismissalStore | null = null
   private readonly desktopClients = new DesktopClientPresenceTracker()
+
+  constructor(
+    private readonly attentionChanged?: (id: string, notice: RetainedAgentAttention | null) => void
+  ) {}
+
+  getRetainedAgentAttention(): RetainedAgentAttention[] {
+    return this.replay.retainedNotifications().flatMap((event) =>
+      event.type === 'notification' && event.notificationId
+        ? [
+            {
+              notificationId: event.notificationId,
+              title: event.title,
+              body: event.body,
+              worktreeId: event.worktreeId,
+              paneKey: event.paneKey
+            }
+          ]
+        : []
+    )
+  }
 
   configureDismissalStore(userDataPath: string): void {
     this.dismissalStore = new MobileNotificationDismissalStore(userDataPath)
@@ -200,6 +223,9 @@ export class RuntimeMobileNotificationController {
   }
 
   dismiss(notificationId: string): void {
+    if (this.replay.retainedNotification(notificationId)) {
+      return
+    }
     // Reads rebuild ids for alerts that never went out (chat panes, silenced workers); each would cost a silent push.
     if (this.dismissalStore && !this.dismissalStore.hasLiveDelivery(notificationId)) {
       return
@@ -251,6 +277,32 @@ export class RuntimeMobileNotificationController {
         this.retireDelivery(delivery)
       }
     }
+  }
+
+  reconcileMailboxAttention(id: string, event: MobileNotificationDispatchEvent | null): void {
+    const previous = this.replay.retainedNotification(id)
+    if (!event) {
+      if (previous) {
+        this.dispatch({ type: 'dismiss', notificationId: id })
+        this.attentionChanged?.(id, null)
+      }
+      return
+    }
+    if (
+      previous?.type === 'notification' &&
+      previous.title === event.title &&
+      previous.body === event.body
+    ) {
+      return
+    }
+    this.dispatch({ ...event, notificationId: id })
+    this.attentionChanged?.(id, {
+      notificationId: id,
+      title: event.title,
+      body: event.body,
+      worktreeId: event.worktreeId,
+      paneKey: event.paneKey
+    })
   }
 
   async dispatchPlugin(input: {

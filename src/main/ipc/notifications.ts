@@ -18,7 +18,10 @@ import { isMainWindowVisible } from '../window/visibility/main-window-visibility
 import { activeNotificationsById } from './native-notification-lifecycle'
 import { deliverNativeNotification } from './native-notification-delivery'
 import { removeReadMacosNotifications } from './macos-notification-center'
-import { createNotificationDeliveryService } from '../notifications/notification-delivery-service'
+import {
+  createNotificationDeliveryService,
+  createRetainedAgentAttentionReceiver
+} from '../notifications/notification-delivery-service'
 import {
   createAnnouncedNotificationRegistry,
   type AnnouncedNotification
@@ -157,15 +160,6 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     }
     return { dismissed: retireAnnouncements(retired) }
   }
-  stopRuntimeAttentionEvents?.()
-  stopRuntimeAttentionEvents = runtime?.onClientEvent?.(
-    (event) => {
-      if (event.type === 'notificationAttentionAcknowledged') {
-        acknowledge(event.acknowledgement)
-      }
-    },
-    { consumesTerminalSideEffects: false }
-  )
 
   ipcMain.removeHandler('notifications:acknowledgeAttention')
   ipcMain.handle(
@@ -273,6 +267,26 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       }
     }
   })
+
+  const receiveAttention = createRetainedAgentAttentionReceiver({
+    dispatch: deliveryService.dispatch,
+    dismiss: (id) => retireAnnouncements([{ id }]),
+    readWorkspaceSession: () => store.getWorkspaceSession()
+  })
+  stopRuntimeAttentionEvents?.()
+  stopRuntimeAttentionEvents = runtime?.onClientEvent?.(
+    (event) => {
+      if (event.type === 'notificationAttentionAcknowledged') {
+        acknowledge(event.acknowledgement)
+      } else if (event.type === 'agentAttentionChanged') {
+        receiveAttention(event.notificationId, event.notice)
+      }
+    },
+    { consumesTerminalSideEffects: false }
+  )
+  for (const notice of runtime?.getRetainedAgentAttention?.() ?? []) {
+    receiveAttention(notice.notificationId, notice)
+  }
 
   // A cleared remote prompt must also retire alerts forwarded to this desktop's phones.
   ipcMain.removeHandler('notifications:settleStructuredPrompts')

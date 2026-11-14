@@ -243,12 +243,19 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     deliveryTarget: this.orchestrationMailboxDeliveryTarget,
     getDb: () => this._orchestrationDb,
     getTerminal: (ptyId) => this.getOrchestrationMailboxTerminal(ptyId),
-    isAgentSettledForDelivery: (ptyId) => this.checkDeliverySettledAndArmRecheck(ptyId),
+    readForeground: (ptyId, agent) => this.readMailboxForeground(ptyId, agent),
+    readComposerText: (ptyId, agent) => this.readMailboxComposerText(ptyId, agent),
+    isForegroundCandidate: (terminal) => this.isMailboxForegroundCandidate(terminal),
+    needsForegroundEvaluation: (ptyId) => this.needsMailboxForegroundEvaluation(ptyId),
+    onDeliveryDecision: (ptyId, decision) => this.armDeliveryRecheck(ptyId, decision),
+    isAgentSettledForDelivery: this.isAgentSettledForDelivery.bind(this),
     isPtyAwaitingUserInput: (ptyId) => this.isPtyAwaitingUserInput(ptyId),
     getMessageWaiters: (mailboxHandle) => this.messageWaiters.get(mailboxHandle),
     getCliCommand: (terminalHandle) => this.getTerminalOrchestrationCliCommand(terminalHandle),
-    resolveSubmitTarget: (ptyId) => this.resolveOrchestrationPointerSubmitTarget(ptyId),
+    resolveSubmitTarget: (ptyId, foreground, stagedText, agent) =>
+      this.resolveOrchestrationPointerSubmitTarget(ptyId, foreground, stagedText, agent),
     isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId),
+    redriveTerminal: (ptyId) => this.deliverPendingMessagesForPty(ptyId),
     redriveMailbox: (mailboxHandle, reservedTypes) =>
       this.deliverPendingMessagesForHandle(mailboxHandle, reservedTypes),
     writePty: (ptyId, data) => this.writeOrchestrationPointerPty(ptyId, data)

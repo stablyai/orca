@@ -25,7 +25,7 @@ describe('PTY mailbox reservation cleanup', () => {
       db.db.exec('COMMIT')
       db.releasePendingMailboxPointerForPty('target')
       const read = (id: string) => db.db.prepare('SELECT * FROM messages WHERE id = ?').get(id)
-      for (const id of ['reserved', 'written', 'entered', 'read']) {
+      for (const id of ['reserved', 'read']) {
         expect(read(id)).toMatchObject({
           pointer_enter_pending: 0,
           pointer_pty_id: null,
@@ -33,8 +33,18 @@ describe('PTY mailbox reservation cleanup', () => {
         })
       }
       expect(read('reserved')).toMatchObject({ delivered_at: null, read: 0 })
-      expect(read('written')).toMatchObject({ delivered_at: expect.any(String), read: 0 })
-      expect(read('entered')).toMatchObject({ delivered_at: expect.any(String), read: 0 })
+      for (const [id, phase] of [
+        ['written', 2],
+        ['entered', 3]
+      ] as const) {
+        expect(read(id)).toMatchObject({
+          read: 0,
+          delivered_at: null,
+          pointer_enter_pending: phase,
+          pointer_pty_id: 'target',
+          pointer_process_incarnation: 'incarnation'
+        })
+      }
       expect(read('read')).toMatchObject({ delivered_at: '2026-01-01 00:00:00', read: 1 })
       expect(read('other')).toMatchObject({ pointer_enter_pending: 1, pointer_pty_id: 'other-pty' })
       expect(read('history-0')).toMatchObject({ read: 1, delivered_at: null })

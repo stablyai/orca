@@ -1,3 +1,4 @@
+import type { OrchestrationMailboxForegroundObservation } from '../../orchestration/mailbox/terminal-pointer/mailbox-pointer-state'
 import { OrcaRuntimeWithScheduleWaitBlockedCheck } from '../wait/terminal-wait-blocked-checks'
 import type { PtyTransientFact } from '../../../providers/pty/events'
 import type {
@@ -75,7 +76,17 @@ export abstract class OrcaRuntimeWithEmitDaemonPtyTransientFact extends OrcaRunt
 
   /** Record one derived side-effect fact: batched per chunk while applying
    *  bytes, emitted immediately for between-chunk facts (stale-title timer). */
-  protected recordTerminalSideEffectFact(ptyId: string, fact: TerminalSideEffectFact): void {
+  protected recordTerminalSideEffectFact(
+    ptyId: string,
+    fact: TerminalSideEffectFact,
+    foregroundObservation?: OrchestrationMailboxForegroundObservation
+  ): void {
+    if (
+      fact.kind === 'agent-exited' &&
+      this.orchestrationMailboxPointerDelivery.applyForeground(ptyId, foregroundObservation)
+    ) {
+      this.armDeliveryRecheck(ptyId)
+    }
     if (!this.terminalSideEffectConsumerAvailable) {
       return
     }

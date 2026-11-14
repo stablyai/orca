@@ -1,3 +1,4 @@
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { OrcaRuntimeWithBindPtyIncarnationHandle } from '../identity/terminal-handle-bindings'
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import {
@@ -8,20 +9,28 @@ import {
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
-import { evaluateTuiIdle } from './tui-idle-evidence'
-import { settlesForMidTurnInput, terminalDeliveryRefusal } from './terminal-delivery-refusal'
+import { evaluateTuiIdle, type TuiIdleVerdict } from './tui-idle-evidence'
+import {
+  settlesForMidTurnInput,
+  mailboxDeliveryRefusal,
+  mailboxComposerHoldsDraft,
+  terminalComposerTextOwnsPointer
+} from './terminal-delivery-refusal'
 import { ptyTuiIdleEvidence } from './tui-idle-evidence-source'
-import { TUI_IDLE_QUIESCENCE_MS } from './terminal-idle-policy'
 import { USER_INPUT_HOLD_CAP_MS } from './claude-open-dialog-hold'
 import {
-  readTerminalComposerTypedText,
-  type TerminalCursorContext
-} from '../../../../shared/terminal/input/terminal-composer-draft'
-import { openCodeComposerHoldsDraft } from '../../../../shared/terminal/input/opencode-composer'
-import { isMailboxTerminalTakingInput } from '../../orchestration/mailbox/routing/mailbox-owner'
+  MailboxDeliveryRecheck,
+  mailboxReadinessRecheckDelay,
+  type MailboxDeliveryDecision
+} from '../../orchestration/mailbox/notifications/mailbox-delivery-recheck'
+import type { MailboxForeground } from './launched-agent-foreground'
+import {
+  isMailboxTerminalTakingInput,
+  type OrchestrationMailboxTerminal
+} from '../../orchestration/mailbox/routing/mailbox-owner'
+import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
+import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { MailboxDeliveryHold } from '../../orchestration/mailbox/delivery-hold/mailbox-delivery-hold'
-
-const DIALOG_HOLD_RECHECK_MS = 2000
 
 export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyIncarnationHandle {
   protected resolvePtyExitWaiters(pty: RuntimePtyWorktreeRecord, ptyId: string): void {
@@ -44,10 +53,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       return
     }
     // Re-rank titles: weak readiness cannot see tail-truncated dialogs and must wait for a rendered-screen poll.
-    const evidence = ptyTuiIdleEvidence(this.tuiIdleEvidenceSource, pty, () =>
-      buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
-    )
-    const verdict = evaluateTuiIdle(evidence)
+    const verdict = this.evaluateTuiIdleForPty(pty)
     for (const waiter of waiters) {
       if (verdict.kind === 'blocked') {
         this.terminalWaiters.resolve(
@@ -67,113 +73,207 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     }
   }
 
-  /** Point a terminal at its mail once it takes input and is settled; refusal re-arms the recheck. */
+  private readonly deliveryRechecks = new MailboxDeliveryRecheck(
+    this.deliveryRecheckTimersByPtyId,
+    {
+      terminal: (ptyId) => this.getOrchestrationMailboxTerminal(ptyId),
+      inFlight: (ptyId) => this.orchestrationMailboxPointerDelivery.isDeliveryInFlight(ptyId),
+      recovering: (ptyId) => this.orchestrationMailboxPointerDelivery.requiresCurrentScreen(ptyId),
+      held: (ptyId) => this.orchestrationMailboxPointerDelivery.isForegroundHeld(ptyId),
+      hasMail: (terminal) => this.orchestrationMailboxNotifications.hasDeliverableMail(terminal),
+      settle: (ptyId) =>
+        this.orchestrationMailboxNotifications.settleDelivery(
+          this.getOrchestrationMailboxTerminal(ptyId)
+        ),
+      readinessDelay: (terminal) =>
+        mailboxReadinessRecheckDelay(terminal, {
+          recovering: this.orchestrationMailboxPointerDelivery.requiresCurrentScreen(
+            terminal.ptyId
+          ),
+          stagedPointerText: this.orchestrationMailboxPointerDelivery.stagedPointerText(
+            terminal.ptyId
+          ),
+          outputAt: () => this.readOutputClockAt(terminal.ptyId),
+          held: () => this.ptyDeliveryHold(terminal.ptyId) !== null
+        }),
+      deliver: (ptyId) => this.deliverPendingMessagesForPty(ptyId)
+    }
+  )
+
   protected deliverPendingMessagesForPty(ptyId: string): void {
     const terminal = this.getOrchestrationMailboxTerminal(ptyId)
     if (
       terminal &&
-      isMailboxTerminalTakingInput(terminal) &&
-      this.checkDeliverySettledAndArmRecheck(ptyId)
+      !this.orchestrationMailboxPointerDelivery.resumeDeferredEnter(terminal) &&
+      ((isMailboxTerminalTakingInput(terminal) && this.isAgentSettledForDelivery(ptyId)) ||
+        this.deliveryRechecks.needsForegroundEvaluation(ptyId) ||
+        this.isMailboxForegroundCandidate(terminal))
     ) {
       this.orchestrationMailboxNotifications.deliverForTerminal(terminal)
     }
-  }
-
-  /** Edge-driven delivery needs a one-shot recheck when quiet evidence may later settle; otherwise hookless agents can strand queued mail without another title/graph/message edge. */
-  protected checkDeliverySettledAndArmRecheck(ptyId: string): boolean {
-    if (this.isAgentSettledForDelivery(ptyId)) {
-      this.clearDeliveryRecheck(ptyId)
-      return true
-    }
     this.armDeliveryRecheck(ptyId)
-    return false
   }
 
   protected clearDeliveryRecheck(ptyId: string): void {
-    const timer = this.deliveryRecheckTimersByPtyId.get(ptyId)
-    if (timer) {
-      clearTimeout(timer)
-      this.deliveryRecheckTimersByPtyId.delete(ptyId)
-    }
+    this.deliveryRechecks.retire(ptyId)
   }
 
-  private armDeliveryRecheck(ptyId: string): void {
-    if (this.deliveryRecheckTimersByPtyId.has(ptyId)) {
-      return
+  protected needsMailboxForegroundEvaluation(ptyId: string): boolean {
+    return this.deliveryRechecks.needsForegroundEvaluation(ptyId)
+  }
+
+  protected armDeliveryRecheck(ptyId: string, decision?: MailboxDeliveryDecision): void {
+    if (decision?.uncertainMailboxes) {
+      this.publishUncertainTerminalMail(ptyId, decision.uncertainMailboxes)
     }
-    // Refusal can lift without another edge (hook deadlines, foreground recognition), but only waiting work needs the retry.
-    const terminal = this.getOrchestrationMailboxTerminal(ptyId)
-    if (!terminal || !this.orchestrationMailboxNotifications.hasDeliverableMail(terminal)) {
-      return
-    }
-    // Schedule just beyond the quiet window and re-arm from fresher output if still streaming.
-    const outputAt = this.readOutputClockAt(ptyId)
-    const quietRemainingMs =
-      outputAt === null ? 0 : TUI_IDLE_QUIESCENCE_MS - (Date.now() - outputAt)
-    // A dialog or draft lifts only when the user acts, so poll it slowly rather than at 20 Hz.
-    const delay =
-      this.ptyDeliveryHold(ptyId) !== null || quietRemainingMs <= 0
-        ? DIALOG_HOLD_RECHECK_MS
-        : quietRemainingMs + 50
-    const timer = setTimeout(() => {
-      this.deliveryRecheckTimersByPtyId.delete(ptyId)
-      // Delivery rechecks settlement first; the agent may have become busy again.
-      this.deliverPendingMessagesForPty(ptyId)
-    }, delay)
-    timer.unref?.()
-    this.deliveryRecheckTimersByPtyId.set(ptyId, timer)
+    this.deliveryRechecks.request(ptyId, decision)
+  }
+
+  protected isMailboxForegroundCandidate(terminal: OrchestrationMailboxTerminal): boolean {
+    return terminal.lastAgentStatus === null && terminal.lastAgentStatusObservedLive
+  }
+
+  protected mailboxTerminalAdmission(
+    terminal: OrchestrationMailboxTerminal,
+    foreground?: MailboxForeground,
+    stagedText?: string,
+    candidate?: TuiAgent
+  ): OrchestrationMailboxTerminal {
+    return foreground === 'agent' &&
+      terminal.lastAgentStatusObservedLive &&
+      (terminal.lastAgentStatus === null ||
+        this.orchestrationMailboxPointerDelivery.requiresCurrentScreen(terminal.ptyId)) &&
+      this.deliveryRefusal(terminal.ptyId, foreground, stagedText, candidate) === null
+      ? { ...terminal, lastAgentStatus: 'idle' }
+      : terminal
   }
 
   /** Pointer plus Enter takes the waits' readiness ranking, plus a working verdict: agents queue or
    *  steer text sent mid-turn, so only dialogs, drafts and unsettled terminals hold mail. Callers
    *  separately require live status evidence. */
-  protected isAgentSettledForDelivery(ptyId: string): boolean {
-    return this.deliveryRefusal(ptyId) === null
+  protected isAgentSettledForDelivery(
+    ptyId: string,
+    foreground?: MailboxForeground,
+    stagedText?: string,
+    candidate?: TuiAgent
+  ): boolean {
+    return this.deliveryRefusal(ptyId, foreground, stagedText, candidate) === null
   }
 
   /** Why delivery would hold mail for this worker terminal now, for a send receipt: the gate's own reason. */
-  readTerminalMailHold(terminalHandle: string): MailboxDeliveryHold | null {
-    const ptyId = this.getOrchestrationMailboxTerminalForHandle(terminalHandle)?.ptyId
-    const refusal = ptyId ? this.deliveryRefusal(ptyId) : null
-    return refusal === 'no-terminal' ? null : refusal
+  async readTerminalMailHold(
+    terminalHandle: string,
+    followup = false
+  ): Promise<MailboxDeliveryHold | null> {
+    const terminal = this.orchestrationMailboxDeliveryTarget.resolveTerminal(terminalHandle)
+    const ptyId = terminal?.ptyId
+    if (!ptyId) {
+      return null
+    }
+    const processIncarnation = this.getTerminalProcessIncarnation(terminal.handle)
+    const foreground = processIncarnation
+      ? await this.orchestrationMailboxPointerDelivery.probeForeground(ptyId, processIncarnation)
+      : null
+    if (
+      this.getTerminalProcessIncarnation(terminal.handle) !== processIncarnation ||
+      this.orchestrationMailboxDeliveryTarget.resolveTerminal(terminalHandle)?.ptyId !== ptyId
+    ) {
+      return null
+    }
+    const agentName =
+      tuiAgentDisplayName(this.mailDeliveryAgent(ptyId) ?? foreground?.agent ?? '') ?? 'The agent'
+    const refusal = this.deliveryRefusal(
+      ptyId,
+      foreground?.foreground,
+      undefined,
+      foreground?.agent
+    )
+    if (
+      foreground &&
+      !this.orchestrationMailboxPointerDelivery.applyForeground(
+        ptyId,
+        foreground,
+        foreground.foreground,
+        refusal === null
+      )
+    ) {
+      if (!followup) {
+        return this.readTerminalMailHold(terminalHandle, true)
+      }
+      this.armDeliveryRecheck(ptyId, { foreground: true })
+      return { kind: 'not-live', agentName }
+    }
+    this.armDeliveryRecheck(
+      ptyId,
+      foreground?.foreground === 'shell' ? { foreground: true } : undefined
+    )
+    if (refusal === 'no-terminal') {
+      return null
+    }
+    if (refusal && ['prompt', 'draft', 'restoring'].includes(refusal.kind)) {
+      return refusal
+    }
+    if (foreground?.foreground === 'shell') {
+      return { kind: 'not-foreground', agentName }
+    }
+    if (this.orchestrationMailboxPointerDelivery.isForegroundHeld(ptyId)) {
+      return { kind: 'not-live', agentName }
+    }
+    return !terminal.lastAgentStatusObservedLive ? { kind: 'not-live', agentName } : refusal
   }
 
-  private deliveryRefusal(ptyId: string): MailboxDeliveryHold | 'no-terminal' | null {
+  private deliveryRefusal(
+    ptyId: string,
+    foreground?: MailboxForeground,
+    stagedText?: string,
+    candidate?: TuiAgent
+  ): MailboxDeliveryHold | 'no-terminal' | null {
     const pty = this.ptysById.get(ptyId)
     if (!pty) {
       return 'no-terminal'
     }
-    const hold = this.ptyDeliveryHold(ptyId)
+    const pointerText = this.orchestrationMailboxPointerDelivery.stagedPointerText(ptyId)
+    stagedText ??= pointerText
+    const agent = this.mailDeliveryAgent(ptyId) ?? candidate
+    if (candidate && agent !== candidate) {
+      return { kind: 'not-live', agentName: tuiAgentDisplayName(agent ?? '') ?? 'The agent' }
+    }
+    const hold = this.ptyDeliveryHold(ptyId, stagedText, candidate)
     if (hold) {
       return { kind: hold }
     }
-    const { verdict, readScreenInputVeto } = this.deliveryTuiVerdict(pty)
-    return terminalDeliveryRefusal({
-      verdict,
-      recognizedAgent: !!this.getPaneTerminalAgent(ptyId),
-      readScreenInputVeto
-    })
-  }
-
-  private deliveryTuiVerdict(pty: RuntimePtyWorktreeRecord) {
-    const evidence = ptyTuiIdleEvidence(this.tuiIdleEvidenceSource, pty, () =>
-      buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+    return mailboxDeliveryRefusal(
+      { ...this.tuiIdleEvidenceSource, getPaneAgent: () => (isTuiAgent(agent) ? agent : null) },
+      pty,
+      () => buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview),
+      this.orchestrationMailboxPointerDelivery.requiresCurrentScreen(ptyId) ||
+        (pty.lastAgentStatus === null && (foreground === 'agent' || pointerText !== undefined)),
+      () => this.readMailboxComposerText(pty.ptyId, candidate),
+      !!agent,
+      stagedText
     )
-    // Why no blocked reader: a refusal here re-arms a recheck that a lingering tail prompt
-    // would spin, so delivery keeps its own, blocked-blind, reading of the same ranking.
-    const verdict = evaluateTuiIdle({ ...evidence, readTailBlockedReason: () => null })
-    return { verdict, readScreenInputVeto: evidence.readScreenInputVeto }
   }
 
   /** An unsent draft would be submitted with the injected text; the cap bounds an abandoned or misread one.
    *  Typed text only: an agent's dim prompt suggestion is not the user's draft (#38015). */
-  private ptyDeliveryHold(ptyId: string): 'prompt' | 'draft' | 'restoring' | null {
+  private ptyDeliveryHold(
+    ptyId: string,
+    stagedText = this.orchestrationMailboxPointerDelivery.stagedPointerText(ptyId),
+    candidate?: TuiAgent
+  ): 'prompt' | 'draft' | 'restoring' | null {
     if (this.isPtyAwaitingUserInput(ptyId)) {
       return 'prompt'
     }
     const facts = this.terminalRunFacts
     const state = this.readWholeScreenModel(ptyId)
-    const draft = !!state && this.hasComposerDraft(ptyId, state.emulator.getCursorLineContext())
+    const context = state?.emulator.getCursorLineContext()
+    const draft =
+      !!context &&
+      !terminalComposerTextOwnsPointer(
+        this.readMailboxComposerText(ptyId, candidate),
+        stagedText
+      ) &&
+      mailboxComposerHoldsDraft(this.mailDeliveryAgent(ptyId) ?? candidate ?? null, context)
     const drivingInputAt = facts.readLastDrivingInputAt(ptyId)
     const unattributed = drivingInputAt === null && facts.readProcessStartedAt(ptyId) === null
     // Why: main saw every input to a process it started, so with no typing there the draft is Orca's
@@ -192,12 +292,12 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
     return holding ? (draft ? 'draft' : 'restoring') : null
   }
 
-  // Why: OpenCode's composer has no prompt glyph, so only its own pane is read with its box layout.
-  private hasComposerDraft(ptyId: string, context: TerminalCursorContext | null): boolean {
-    const agent = this.getPaneTerminalAgent(ptyId)
-    return (agent === 'opencode' || agent === 'opencode2') && context
-      ? openCodeComposerHoldsDraft(context)
-      : !!readTerminalComposerTypedText(context)
+  protected evaluateTuiIdleForPty(pty: RuntimePtyWorktreeRecord): TuiIdleVerdict {
+    return evaluateTuiIdle(
+      ptyTuiIdleEvidence(this.tuiIdleEvidenceSource, pty, () =>
+        buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+      )
+    )
   }
 
   protected getAdoptedPtyExplicitIdleStatus(pty: RuntimePtyWorktreeRecord): AgentStatus | null {

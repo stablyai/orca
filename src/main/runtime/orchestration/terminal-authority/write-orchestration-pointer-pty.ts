@@ -1,3 +1,9 @@
+import { selectExplicitAgentIdentityRow } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
+import { readAgentTerminalComposerTypedText } from '../../terminal/wait/terminal-delivery-refusal'
+import type {
+  MailboxForeground,
+  MailboxForegroundInspection
+} from '../../terminal/wait/launched-agent-foreground'
 import type { TerminalIdentityReadContext } from '../../terminal/query/terminal-identity-read-context'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness } from '../../terminal/lifecycle/floating-session-liveness'
@@ -22,6 +28,41 @@ import { startedMainTerminalSurfaces } from '../../terminal/surface/main-termina
 import { mainPaneVerdict } from '../../terminal/surface/main-pane-verdict'
 
 export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness {
+  protected mailDeliveryAgent(ptyId: string) {
+    const agent = this.getPaneTerminalAgent(ptyId)
+    if (agent) {
+      return agent
+    }
+    const join = this.readHookRowJoinForPty(ptyId)
+    const row = join ? selectExplicitAgentIdentityRow(join) : null
+    const floor = this.agentPromptExplicitStatusFloorByPtyId.get(ptyId)
+    return row && (floor === undefined || row.receivedAt > floor) ? row.agentType : null
+  }
+
+  protected async readMailboxForeground(
+    ptyId: string,
+    expected?: TuiAgent
+  ): Promise<MailboxForegroundInspection> {
+    const terminal = this.getOrchestrationMailboxTerminal(ptyId)
+    if (!terminal || !this.orchestrationMailboxNotifications.hasDeliverableMail(terminal)) {
+      return { foreground: 'unknown' }
+    }
+    const known = this.mailDeliveryAgent(ptyId)
+    const result = await this.inspectMailboxForeground(ptyId, isTuiAgent(known) ? known : expected)
+    const current = this.mailDeliveryAgent(ptyId)
+    return (expected && result.agent && result.agent !== expected) ||
+      (current && result.agent && current !== result.agent)
+      ? { foreground: 'unknown' }
+      : result
+  }
+
+  protected readMailboxComposerText(ptyId: string, agent?: TuiAgent): string | null {
+    return readAgentTerminalComposerTypedText(
+      this.mailDeliveryAgent(ptyId) ?? agent ?? null,
+      this.readWholeScreenModel(ptyId)?.emulator.getCursorLineContext()
+    )
+  }
+
   protected abstract issueHandle(
     leaf: RuntimeLeafRecord,
     context?: TerminalIdentityReadContext
@@ -40,11 +81,21 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
 
   /** The terminal a staged pointer's Enter goes to, re-read so a replaced process gets none. */
   protected resolveOrchestrationPointerSubmitTarget(
-    ptyId: string
+    ptyId: string,
+    foreground?: MailboxForeground,
+    stagedText?: string,
+    agent?: TuiAgent
   ): OrchestrationMailboxPointerSubmitTarget | null {
     const terminal = this.getOrchestrationMailboxTerminal(ptyId)
     const processIncarnation = terminal && this.getTerminalProcessIncarnation(terminal.handle)
-    return processIncarnation ? { terminal, processIncarnation } : null
+    const knownAgent = this.mailDeliveryAgent(ptyId)
+    return processIncarnation && (!agent || !knownAgent || knownAgent === agent)
+      ? {
+          terminal: this.mailboxTerminalAdmission(terminal, foreground, stagedText, agent),
+          processIncarnation,
+          agent
+        }
+      : null
   }
 
   protected getPrimaryLeafForPty(ptyId: string): RuntimeLeafRecord | null {

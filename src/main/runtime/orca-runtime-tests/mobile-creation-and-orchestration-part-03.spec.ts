@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest'
-
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { store } from './orca-runtime-test-fixtures.spec'

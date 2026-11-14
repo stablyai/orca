@@ -1,12 +1,16 @@
 import {
   isExpectedAgentProcess,
   isNodeInterpreterOfAgent,
-  recognizeAgentProcess
+  recognizeAgentProcess,
+  recognizeAgentProcessFromCommandLine
 } from '../../../../shared/agent-status/process/agent-process-recognition'
 import { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS } from '../../../../shared/process-table-snapshot'
 import { isShellProcess } from '../../../../shared/agent-status/process/shell-process-detection'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { TUI_AGENT_CONFIG } from '../../../../shared/agent-launch/catalog/tui-agent-config'
+import {
+  isTuiAgent,
+  TUI_AGENT_CONFIG
+} from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
 import { judgeTerminalForeground } from '../lifecycle/terminal-foreground-group'
 import { readTerminalProcessRows } from '../../../pty/process-retirement/terminal-process-rows'
@@ -15,6 +19,8 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 /** agent permits writing; shell drops readiness; unknown proves neither. */
 export type LaunchedAgentForeground = 'agent' | 'shell' | 'unknown'
+export type MailboxForeground = LaunchedAgentForeground | 'non-shell'
+export type MailboxForegroundInspection = { foreground: MailboxForeground; agent?: TuiAgent }
 
 export type LaunchedAgentHost = {
   remote: boolean
@@ -69,23 +75,40 @@ function isLaunchedAgent(processName: string, agent: TuiAgent): boolean {
 /** Local POSIX uses a fresh terminal-scoped process group, avoiding slow global scans and stale icon names.
  * SSH accepts agent-positive group evidence then the relay's fresh name; group evidence never proves shell.
  * Windows cannot prove agent from shell/node.exe names or shared jobs, only shell-alone via confirmShellForeground. */
-export async function readLaunchedAgentForeground(
-  controller: Pick<
-    RuntimePtyController,
-    | 'supportsForegroundObservation'
-    | 'getForegroundProcess'
-    | 'confirmForegroundProcess'
-    | 'confirmShellForeground'
-    | 'inspectProcess'
-    | 'listProcesses'
-  > | null,
+type ForegroundController = Pick<
+  RuntimePtyController,
+  | 'supportsForegroundObservation'
+  | 'getForegroundProcess'
+  | 'confirmForegroundProcess'
+  | 'confirmShellForeground'
+  | 'inspectProcess'
+  | 'listProcesses'
+> | null
+
+async function inspectLaunchedAgentForeground(
+  controller: ForegroundController,
   host: { remote: boolean; windows: boolean },
   ptyId: string,
-  agent: TuiAgent,
-  expectedIncarnationId?: string
-): Promise<LaunchedAgentForeground> {
+  agent?: TuiAgent,
+  expectedIncarnationId?: string,
+  mailboxEvidence = false,
+  onAgent?: (agent: TuiAgent) => void
+): Promise<MailboxForeground> {
   if (!controller) {
     return 'unknown'
+  }
+  const recognizeForeground = (processName: string | null): TuiAgent | undefined => {
+    const recognized = recognizeAgentProcessFromCommandLine(processName)?.agent
+    const candidate = agent ?? recognized
+    if (
+      isTuiAgent(candidate) &&
+      processName &&
+      (recognized === candidate || (agent && isLaunchedAgent(processName, agent)))
+    ) {
+      onAgent?.(candidate)
+      return candidate
+    }
+    return undefined
   }
   try {
     if (host.windows) {
@@ -107,11 +130,27 @@ export async function readLaunchedAgentForeground(
         ) {
           return 'unknown'
         }
-        // Local policy has always admitted any non-shell, including user wrappers.
-        if (!host.remote) {
-          return observation.foregroundKind === 'shell' ? 'shell' : 'agent'
+        if (mailboxEvidence) {
+          if (observation.foregroundKind === 'shell') {
+            return 'shell'
+          }
+          if (recognizeForeground(observation.processName)) {
+            return 'agent'
+          }
+          // Native version names and interpreter wrappers need the host's fresh executable read.
+          return recognizeForeground((await controller.confirmForegroundProcess?.(ptyId)) ?? null)
+            ? 'agent'
+            : 'non-shell'
         }
-        return judgeFreshForeground(observation.processName, agent)
+        // Local launch policy admits non-shell user wrappers independently of mail's identity proof.
+        if (!host.remote) {
+          return observation.foregroundKind === 'shell' ? 'shell' : agent ? 'agent' : 'unknown'
+        }
+        return agent
+          ? judgeFreshForeground(observation.processName, agent)
+          : observation.processName && isLaunchShell(observation.processName)
+            ? 'shell'
+            : 'unknown'
       }
     }
     if (!host.remote) {
@@ -130,7 +169,22 @@ export async function readLaunchedAgentForeground(
       }
       const rootPid = target?.rootProcessId
       const rows = rootPid ? await readTerminalProcessRows(rootPid) : null
-      return rows && rootPid ? judgeTerminalForeground(rows, rootPid, agent) : 'unknown'
+      const verdict = rows && rootPid ? judgeTerminalForeground(rows, rootPid, agent) : 'unknown'
+      if (mailboxEvidence && verdict !== 'unknown') {
+        const group = rows?.find((row) => row.pid === rootPid)?.tpgid
+        const candidates = rows
+          ?.filter((row) => row.pgid === group)
+          .map((row) => recognizeAgentProcessFromCommandLine(row.command)?.agent)
+        const found = candidates?.find(
+          (candidate) => isTuiAgent(candidate) && (!agent || candidate === agent)
+        )
+        if (isTuiAgent(found)) {
+          onAgent?.(agent ?? found)
+          return 'agent'
+        }
+        return verdict === 'agent' ? 'non-shell' : verdict
+      }
+      return !agent && verdict === 'agent' ? 'unknown' : verdict
     }
     const askedAt = Date.now()
     const evidence = (await controller.inspectProcess?.(ptyId))?.foregroundProcessEvidence
@@ -138,7 +192,9 @@ export async function readLaunchedAgentForeground(
       evidence?.verdict === 'live' &&
       evidence.fence.platform === 'posix' &&
       evidence.processName &&
-      isLaunchedAgent(evidence.processName, agent)
+      (mailboxEvidence
+        ? recognizeForeground(evidence.processName)
+        : agent && isLaunchedAgent(evidence.processName, agent))
     ) {
       // Begun no more than one TTL before the read was asked (so any age within one TTL), however long ps took.
       if (
@@ -149,7 +205,16 @@ export async function readLaunchedAgentForeground(
       }
       // Up to two TTLs the agent may have exited since: a foreground read now decides.
       if (evidence.capturedAgeMs <= EVIDENCE_MAX_AGE_MS && controller.confirmForegroundProcess) {
-        return judgeFreshForeground(await controller.confirmForegroundProcess(ptyId), agent)
+        const processName = await controller.confirmForegroundProcess(ptyId)
+        return mailboxEvidence
+          ? recognizeForeground(processName)
+            ? 'agent'
+            : processName && isLaunchShell(processName)
+              ? 'shell'
+              : 'unknown'
+          : agent
+            ? judgeFreshForeground(processName, agent)
+            : 'unknown'
       }
     }
     // Only evidence that saw an agent row it could not fence alone lets a name complete it.
@@ -167,24 +232,55 @@ export async function readLaunchedAgentForeground(
     }
     if (
       isLaunchShell(foreground) &&
-      !isExpectedAgentProcess(foreground, TUI_AGENT_CONFIG[agent].expectedProcess)
+      (!agent || !isExpectedAgentProcess(foreground, TUI_AGENT_CONFIG[agent].expectedProcess))
     ) {
       return 'shell'
     }
+    if (!agent && !(mailboxEvidence && completable && recognizeForeground(foreground))) {
+      return 'unknown'
+    }
     // Legacy: relays that send no evidence (older versions) keep the possibly cached name.
     if (!evidence) {
-      return 'agent'
+      return mailboxEvidence ? 'unknown' : 'agent'
     }
     if (!completable) {
       return 'unknown'
     }
     // Relays before same-agent dedupe call npm Codex's two rows ambiguous and name its `node` wrapper.
-    return isLaunchedAgent(foreground, agent) ||
+    return (mailboxEvidence
+      ? recognizeForeground(foreground)
+      : agent && isLaunchedAgent(foreground, agent)) ||
       (evidence.reason === 'ambiguous_foreground_group' &&
+        agent &&
         isNodeInterpreterOfAgent(foreground, agent))
       ? 'agent'
       : 'unknown'
   } catch {
     return 'unknown'
   }
+}
+
+type ForegroundReadArgs = [
+  controller: ForegroundController,
+  host: { remote: boolean; windows: boolean },
+  ptyId: string,
+  agent?: TuiAgent,
+  expectedIncarnationId?: string
+]
+
+export async function readLaunchedAgentForeground(
+  ...args: ForegroundReadArgs
+): Promise<LaunchedAgentForeground> {
+  const result = await inspectLaunchedAgentForeground(...args)
+  return result === 'non-shell' ? 'unknown' : result
+}
+
+export async function readMailboxForeground(
+  ...args: ForegroundReadArgs
+): Promise<MailboxForegroundInspection> {
+  let agent: TuiAgent | undefined
+  const foreground = await inspectLaunchedAgentForeground(...args, true, (value) => {
+    agent = value
+  })
+  return { foreground, ...(foreground === 'agent' ? { agent: agent ?? args[3] } : {}) }
 }

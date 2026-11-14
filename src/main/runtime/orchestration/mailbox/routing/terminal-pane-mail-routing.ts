@@ -238,6 +238,27 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     this.orchestrationStructuredMailboxPointerDelivery.withdrawStale(mailboxes)
   }
 
+  settleConsumedTerminalMail(
+    mailboxes: readonly string[],
+    reservationPtys: readonly string[] = []
+  ): void {
+    try {
+      const ptys = new Set(reservationPtys)
+      for (const mailbox of mailboxes) {
+        const terminal = this.orchestrationMailboxDeliveryTarget.resolveTerminal(mailbox)
+        if (terminal) {
+          ptys.add(terminal.ptyId)
+        }
+      }
+      for (const ptyId of ptys) {
+        this.orchestrationMailboxPointerDelivery.reconcileUncertainMail(ptyId)
+        this.armDeliveryRecheck(ptyId, { settled: true })
+      }
+    } catch {
+      // A consuming check must not fail because terminal cleanup is unavailable.
+    }
+  }
+
   /** Asked as a chat's queue hands over an agent's card, or, with `peek`, as it chooses its next card;
    *  opening the database lets a restart's first handover decide. */
   structuredChatMailOwed(
@@ -308,6 +329,14 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
 
   protected repointPendingMessagesForHandle(handle: string): void {
     try {
+      const terminal = this.orchestrationMailboxDeliveryTarget.resolveTerminal(handle)
+      if (terminal) {
+        this.orchestrationMailboxPointerDelivery.restoreUncertainMail(terminal.ptyId)
+      }
+      if (terminal && this.orchestrationMailboxPointerDelivery.isForegroundHeld(terminal.ptyId)) {
+        this.armDeliveryRecheck(terminal.ptyId)
+        return
+      }
       this.deliverPendingMessagesForHandle(handle)
     } catch {
       // The unref'd repair can outlive a test/runtime-owned database during shutdown.

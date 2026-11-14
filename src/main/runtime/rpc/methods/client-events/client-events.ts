@@ -93,6 +93,7 @@ export const CLIENT_EVENT_METHODS = [
           subscriptionId,
           snapshot: {
             sshStates,
+            agentAttention: runtime.getRetainedAgentAttention?.() ?? [],
             nativeChatQueueFollowUps: settings.nativeChatQueueFollowUps,
             nativeChatCiResultLines: settings.nativeChatCiResultLines
           }

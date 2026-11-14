@@ -1,3 +1,5 @@
+import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/pty-transport/output/terminal-side-effect-facts-handler'
+import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { emitAutomationsChangedWindowEvent } from '@/components/automations/events/automations-changed-window-event'
 import { emitWorkspaceCleanupRunFinishedWindowEvent } from '@/components/workspace-cleanup/events/workspace-cleanup-run-finished-window-event'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
@@ -7,6 +9,13 @@ export function emitRuntimeClientWindowEvent(
   environmentId: string,
   event: RuntimeClientEvent
 ): boolean {
+  if (event.type === 'terminalSideEffects') {
+    dispatchTerminalSideEffectBatch({
+      ...event.batch,
+      ptyId: toRemoteRuntimePtyId(event.batch.ptyId, environmentId)
+    })
+    return true
+  }
   if (event.type === 'automationsChanged') {
     // Why: without the environment the subscriber cannot attribute the changed authority.
     emitAutomationsChangedWindowEvent({

@@ -12,6 +12,10 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
   ): void
 
   protected abstract scheduleRestoredMessageRepoints(): void
+  abstract settleConsumedTerminalMail(
+    mailboxes: readonly string[],
+    reservationPtys?: readonly string[]
+  ): void
 
   /** Mail a worker left unread when it reported before a restart still continues it. */
   protected abstract continueRestoredWorkerMail(db: OrchestrationDb): void
@@ -53,6 +57,13 @@ export abstract class RuntimeOrchestrationDatabaseAccess extends OrcaRuntimeWith
   }
 
   private bindMailHandBack(db: OrchestrationDb): void {
+    db.mailReadListener = ({ mailboxes, ptyIds }) => {
+      queueMicrotask(() => {
+        if (this._orchestrationDb === db) {
+          this.settleConsumedTerminalMail(mailboxes, ptyIds)
+        }
+      })
+    }
     db.mailHandBackListener = (handBack) => this.offerHandedBackMail(db, handBack)
   }
 
