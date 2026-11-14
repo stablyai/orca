@@ -20,10 +20,11 @@ export function structuredAgentSessionStatusStartedAt(
   items: readonly AgentJournalRenderItem[],
   submissions: readonly AgentJournalSubmission[],
   currentFence: number | null | undefined,
-  latestRequest: Pick<StructuredAgentSessionLatestRequest, 'settledAt'> | null
+  latestRequest: Pick<StructuredAgentSessionLatestRequest, 'settledAt'> | null,
+  pendingPrompts: readonly AgentJournalRenderItem[]
 ): number | undefined {
   if (status === 'attention') {
-    return oldestPendingPromptAt(items)
+    return oldestPendingPromptAt(pendingPrompts)
   }
   if (status === 'idle') {
     // The session went idle when the request it reports settled, not when its newest turn did.
@@ -62,12 +63,6 @@ function oldestPendingPromptAt(items: readonly AgentJournalRenderItem[]): number
   let own: number | undefined
   let subagent: number | undefined
   for (const item of items) {
-    if (
-      (item.body.kind !== 'approval' && item.body.kind !== 'question') ||
-      item.body.resolution.state !== 'pending'
-    ) {
-      continue
-    }
     if (isRootAgentJournalItem(item)) {
       own = Math.min(own ?? item.observedAt, item.observedAt)
     } else {

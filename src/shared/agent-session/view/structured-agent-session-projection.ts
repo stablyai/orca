@@ -42,6 +42,7 @@ import {
   agentSessionCurrentContextBody,
   agentSessionCurrentContextRows
 } from '../agent-session-context-clear'
+import { pendingStructuredAgentSessionPrompts } from './structured-agent-session-pending-prompts'
 import { nativeChatStatusTurnOutcome } from '../../native-chat/native-chat-orca-stop-cut'
 
 /** Only transport-clipped output has a fetchable remainder; older saved truncations have none. */
@@ -207,16 +208,6 @@ export function structuredAgentSessionTabId(sessionId: string): string {
   return `structured-agent-session-${sessionId}`
 }
 
-/** Ignore prompts from ended generations when the host scope proves no child can answer them. */
-function pendingStructuredAgentSessionPrompt(
-  scope?: StructuredAgentSessionWorkScope
-): (item: AgentJournalRenderItem) => boolean {
-  return (item) =>
-    (item.body.kind === 'approval' || item.body.kind === 'question') &&
-    item.body.resolution.state === 'pending' &&
-    (!scope || scope.isCurrentItem(item.itemId))
-}
-
 /** Host scope excludes ended-generation work from Working/attention. */
 export function projectStructuredAgentSessionStatus(
   items: readonly AgentJournalRenderItem[],
@@ -225,7 +216,7 @@ export function projectStructuredAgentSessionStatus(
   scope?: StructuredAgentSessionWorkScope
 ): StructuredAgentSessionProjectedStatus {
   ;({ items, submissions } = agentSessionCurrentContextRows(items, submissions))
-  if (items.some(pendingStructuredAgentSessionPrompt(scope))) {
+  if (pendingStructuredAgentSessionPrompts(items, submissions, scope).length > 0) {
     return 'attention'
   }
   return owesStructuredAgentSessionWork(items, submissions, currentFence, scope)
@@ -285,7 +276,9 @@ export function projectStructuredAgentSessionStatusState(
   const context = agentSessionCurrentContextRows(items, submissions)
   ;({ items, submissions } = context)
   const bodyOf = itemOf && agentSessionCurrentContextBody(itemOf, context.sequence)
-  const status = projectStructuredAgentSessionStatus(items, submissions, currentFence, scope)
+  const pendingPrompts = pendingStructuredAgentSessionPrompts(items, submissions, scope)
+  const owesWork = owesStructuredAgentSessionWork(items, submissions, currentFence, scope)
+  const status = pendingPrompts.length > 0 ? 'attention' : owesWork ? 'working' : 'idle'
   const statusToolCall = status === 'working' ? statusStructuredAgentSessionToolCall(items) : null
   const toolName = statusToolCall
     ? normalizeOptionalField(statusToolCall.name, AGENT_STATUS_TOOL_NAME_MAX_LENGTH)
@@ -309,16 +302,13 @@ export function projectStructuredAgentSessionStatusState(
     items,
     submissions,
     currentFence,
-    request
+    request,
+    pendingPrompts
   )
   return {
     latestRequest,
-    owesWork:
-      status !== 'idle' && owesStructuredAgentSessionWork(items, submissions, currentFence, scope),
-    pendingPromptIds:
-      status === 'attention'
-        ? items.filter(pendingStructuredAgentSessionPrompt(scope)).map((item) => item.itemId)
-        : [],
+    owesWork,
+    pendingPromptIds: pendingPrompts.map((item) => item.itemId),
     summary: {
       status,
       latestPrompt: normalizePromptField(latestPrompt),

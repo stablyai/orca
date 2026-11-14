@@ -1,3 +1,4 @@
+import { addressAsyncQuestions, remainingAsyncQuestions } from './native-chat-async-question-reply'
 import { nativeChatAskScanOrder } from './native-chat-ask-order'
 import { askOptionPreview } from './native-chat-ask-option-preview'
 import type {
@@ -195,13 +196,16 @@ export function aggregateAsyncQuestions(
     if (id !== undefined && hiddenIds?.has(id)) {
       continue
     }
-    if (contributor.questions.some((question) => quotedByQueuedAnswer(question, queuedTexts))) {
+    const remaining = contributor.questions.filter(
+      (question) => !quotedByQueuedAnswer(question, queuedTexts)
+    )
+    if (remaining.length === 0) {
       continue
     }
     if (id !== undefined) {
       occurrenceIds.push(id)
     }
-    for (const question of contributor.questions) {
+    for (const question of remaining) {
       questions.push(question)
     }
   }
@@ -253,8 +257,12 @@ export function createPendingAskScanner(): {
   const append = (message: NativeChatMessage): readonly AsyncQuestionContributor[] => {
     const accepted: AsyncQuestionContributor[] = []
     // Delivered human turns/interrupts abandon the uncorrelated FIFO, or orphan calls strand later asks (#11761).
-    if (isDeliveredNativeChatUserMessage(message) || isInterruptedStatusMessage(message)) {
+    if (isInterruptedStatusMessage(message)) {
       interrupt()
+    } else if (isDeliveredNativeChatUserMessage(message)) {
+      resetBlocking()
+      answerPending = false
+      contributors = remainingAsyncQuestions(contributors, message)
     }
     if (isPendingNativeChatUserMessage(message)) {
       contributors = withoutPendingQueuedAnswers(contributors, message)
@@ -274,15 +282,15 @@ export function createPendingAskScanner(): {
               sourceRowId: message.id,
               callSlot,
               timestamp: message.timestamp,
-              questions: parsed.questions,
+              questions: addressAsyncQuestions(parsed.questions, block.name, block.callId),
               responseMode: 'message'
+            }
+            if (block.callId !== undefined) {
+              asyncCallIds.add(block.callId)
             }
             contributors.push(contributor)
             answerPending = false
             accepted.push(contributor)
-          }
-          if (block.callId !== undefined) {
-            asyncCallIds.add(block.callId)
           }
         } else if (parsed) {
           pending = parsed

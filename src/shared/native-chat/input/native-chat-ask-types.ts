@@ -1,6 +1,7 @@
 export type AskOption = { label: string; description?: string; preview?: string }
 export type AskQuestion = {
   question: string
+  questionItemId?: string
   header?: string
   multiSelect: boolean
   options: AskOption[]

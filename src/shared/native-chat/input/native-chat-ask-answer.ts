@@ -1,5 +1,6 @@
 // Deliver answers as pasted messages or Claude/Codex selector keystrokes.
 
+import { readCodexAsyncQuestionReply } from '../../codex-async-question-input'
 import type { AgentJournalSubmission } from '../../agent-session/journal/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../agent-session/journal/agent-session-journal-item-key'
 import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../../agent-session/requests/structured-agent-session-send-evidence'
@@ -38,7 +39,15 @@ export function quotedByQueuedAnswer(
   queuedTexts: readonly string[]
 ): boolean {
   const quote = askAnswerQuote(question)
-  return queuedTexts.some((text) => text.startsWith(quote) || text.includes(`\n\n${quote}`))
+  return queuedTexts.some((text) => {
+    const replies = readCodexAsyncQuestionReply(text)
+    return replies !== null
+      ? replies.some(
+          ([callId, index]) =>
+            question.questionItemId === JSON.stringify(['request_user_input_async', callId, index])
+        )
+      : text.startsWith(quote) || text.includes(`\n\n${quote}`)
+  })
 }
 
 /** A handed-off queue answer keeps its questions held until delivery settles. */
@@ -52,14 +61,20 @@ export function withoutPendingQueuedAnswers(
   const text = message.blocks
     .flatMap((block) => (block.type === 'text' ? [block.text] : []))
     .join('')
-  if (!text.startsWith('> ') && !text.includes('\n\n> ')) {
+  if (
+    readCodexAsyncQuestionReply(text) === null &&
+    !text.startsWith('> ') &&
+    !text.includes('\n\n> ')
+  ) {
     return contributors
   }
   const texts = [text]
-  return contributors.filter(
-    (contributor) =>
-      !contributor.questions.some((question) => quotedByQueuedAnswer(question, texts))
-  )
+  return contributors.flatMap((contributor) => {
+    const questions = contributor.questions.filter(
+      (question) => !quotedByQueuedAnswer(question, texts)
+    )
+    return questions.length ? [{ ...contributor, questions }] : []
+  })
 }
 
 /** Option indices in display order plus free text; selectors address stable numbers rather than labels. */
@@ -85,14 +100,23 @@ export function askAnswerQuote(question: AskQuestion): string {
   return `> ${question.question.replaceAll(/[\r\n]+/g, ' ')}\n\n`
 }
 
-/** One answer line per question, including unanswered empty lines. Message replies quote answered questions as > question\n\nanswer, matching Codex clients. */
+/** Address async replies by call and question index; older transcripts fall back to quoted questions. */
 export function formatAskAnswer(prompt: AskPrompt, selections: AskAnswerSelection[]): string {
   if (prompt.replyAsMessage) {
-    return prompt.questions
-      .flatMap((q, i) => {
-        const answer = answerLabels(q, selections[i]).join(', ')
-        return answer ? [`${askAnswerQuote(q)}${answer}`] : []
-      })
+    const answered = prompt.questions.flatMap((question, index) => {
+      const answer = answerLabels(question, selections[index]).join(', ')
+      return answer ? [{ question, answer }] : []
+    })
+    if (answered.every(({ question }) => question.questionItemId !== undefined)) {
+      const replies = answered.map(({ question, answer }) => ({
+        questionItemId: question.questionItemId,
+        question: question.question,
+        answer
+      }))
+      return `<send_user_message_question_reply>${JSON.stringify(replies)}</send_user_message_question_reply>`
+    }
+    return answered
+      .map(({ question, answer }) => `${askAnswerQuote(question)}${answer}`)
       .join('\n\n')
   }
   return prompt.questions.map((q, i) => answerLabels(q, selections[i]).join(', ')).join('\n')
