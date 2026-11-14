@@ -5969,7 +5969,6 @@
       "src/shared/agent-session/agent-session-context-clear.test.ts": 222,
       "src/shared/agent-session/agent-session-conversation-name.test.ts": 71,
       "src/shared/agent-session/agent-session-message-source.test.ts": 166,
-      "src/shared/agent-session/agent-session-provider-context.test.ts": 151,
       "src/shared/agent-session/agent-session-question-answer.test.ts": 53,
       "src/shared/agent-session/agent-session-question-free-text.test.ts": 48,
       "src/shared/agent-session/agent-session-registered-agents.test.ts": 100,
