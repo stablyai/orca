@@ -76,6 +76,21 @@ describe('orca computer wait', () => {
     expect(process.exitCode).toBeUndefined()
   })
 
+  it('reads disabled state from the host, not from a label holding "(disabled)"', async () => {
+    const tree = '0 window Form\n\t1 push button Continue (disabled)'
+    queueFixtures(
+      callMock,
+      okFixture('req_caps', capabilities(true)),
+      okFixture('req_1', snapshot(tree, [1])),
+      okFixture('req_2', snapshot(tree, []))
+    )
+
+    await run('--enabled', 'Continue', '--timeout', '1000')
+
+    expect(callMock).toHaveBeenCalledTimes(3)
+    expect(process.exitCode).toBeUndefined()
+  })
+
   it('refuses --enabled on a provider that does not mark disabled elements', async () => {
     queueFixtures(callMock, okFixture('req_caps', capabilities(undefined)))
 
@@ -132,7 +147,7 @@ function errorOutput(): string {
     .join('\n')
 }
 
-function snapshot(treeText: string) {
+function snapshot(treeText: string, disabledElementIndexes?: number[]) {
   return {
     snapshot: {
       id: 'snap',
@@ -141,7 +156,8 @@ function snapshot(treeText: string) {
       coordinateSpace: 'window',
       treeText: `App=com.apple.TextEdit (pid 7)\nWindow: "Editor"\n\n${treeText}`,
       elementCount: 3,
-      focusedElementId: null
+      focusedElementId: null,
+      disabledElementIndexes
     },
     screenshot: null,
     screenshotStatus: { state: 'skipped', reason: 'no_screenshot_flag' }

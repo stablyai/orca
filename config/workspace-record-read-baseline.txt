@@ -56,7 +56,7 @@
 5 src/renderer/src/store/repos/repo-catalog-merge.ts # store writer
 5 src/renderer/src/store/repos/repo-removal.ts # store writer
 6 src/renderer/src/store/slices/diff-comments/diff-comment-persistence.ts # store writer
-12 src/renderer/src/store/slices/workspace-attention/workspace-unread-flag.ts # store writer
+10 src/renderer/src/store/slices/workspace-attention/workspace-unread-flag.ts # store writer
 2 src/renderer/src/store/slices/worktrees/create/created-worktree-state-merge.ts # store writer
 1 src/renderer/src/store/slices/worktrees/listing/detected-worktree-meta.ts # P5b-2 must clear: feeds an existing row-type cast
 3 src/renderer/src/store/slices/worktrees/listing/fetch-detected-worktrees.ts # store writer

@@ -3,7 +3,10 @@ import type { ChildProcess } from 'node:child_process'
 import { BrowserError } from '../../browser-error'
 import type { BrowserManager } from '../../guest-lifecycle/manager/browser-manager'
 import type { BrowserPopupPage } from '../../guest-lifecycle/popups/browser-popup-ownership'
-import { createAgentBrowserProcessEnvironment } from '../helper-process/agent-browser-process-environment'
+import {
+  createAgentBrowserProcessEnvironment,
+  pointAtEmptyAgentBrowserConfig
+} from '../helper-process/agent-browser-process-environment'
 import { resolveAgentBrowserBinary } from '../helper-process/agent-browser-binary'
 import type { QueuedCommand } from '../command-queue/agent-browser-queued-command'
 import type { SessionState } from '../session-lifecycle/agent-browser-session-state'
@@ -22,6 +25,8 @@ export abstract class AgentBrowserBridgeState {
   protected readonly processingQueues = new Set<string>()
   protected readonly agentBrowserBin: string
   protected readonly agentBrowserEnv: NodeJS.ProcessEnv
+  // Startup spawns await it; agent commands come long after it lands.
+  protected readonly agentBrowserConfigReady: Promise<void>
   protected readonly ownsAgentBrowserSocketDirectory: boolean
   // Null disables idle-replacement detection when daemon lifetime is unbounded.
   protected readonly agentBrowserIdleTimeoutMs: number | null
@@ -38,12 +43,18 @@ export abstract class AgentBrowserBridgeState {
     protected readonly options: AgentBrowserBridgeOptions = {}
   ) {
     this.agentBrowserBin = resolveAgentBrowserBinary()
+    const userDataPath = app.getPath('userData')
     const processEnvironment = createAgentBrowserProcessEnvironment({
       inheritedEnv: process.env,
       platform: process.platform,
-      userDataPath: app.getPath('userData')
+      userDataPath
     })
     this.agentBrowserEnv = processEnvironment.env
+    // A failed write keeps agent-browser's own lookup; a missing file would fail every command.
+    this.agentBrowserConfigReady = pointAtEmptyAgentBrowserConfig(
+      this.agentBrowserEnv,
+      userDataPath
+    ).catch(() => {})
     this.ownsAgentBrowserSocketDirectory = processEnvironment.ownsSocketDirectory
     const idleTimeoutMs = Number(this.agentBrowserEnv.AGENT_BROWSER_IDLE_TIMEOUT_MS)
     this.agentBrowserIdleTimeoutMs = idleTimeoutMs > 0 ? idleTimeoutMs : null

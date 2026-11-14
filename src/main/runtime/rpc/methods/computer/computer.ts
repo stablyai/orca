@@ -1,6 +1,7 @@
 import {
   callComputerSidecarAction,
   callComputerSidecarCapabilities,
+  callComputerSidecarLaunchApp,
   callComputerSidecarListApps,
   callComputerSidecarListWindows,
   callComputerSidecarSnapshot,
@@ -13,6 +14,7 @@ import {
   ComputerPermissions,
   Drag,
   Hotkey,
+  LaunchApp,
   ListApps,
   ListWindows,
   PasteText,
@@ -66,6 +68,14 @@ export const COMPUTER_METHODS = [
       const { computerUsePermissionStatusGate } =
         await import('../../../../computer/macos-permissions/macos-computer-use-permission-status-gate')
       return computerUsePermissionStatusGate.read()
+    }
+  }),
+  defineMethod({
+    name: 'computer.launchApp',
+    permission: 'desktop-control',
+    params: LaunchApp,
+    handler: async (params) => {
+      return await callComputerSidecarLaunchApp(params)
     }
   }),
   defineMethod({

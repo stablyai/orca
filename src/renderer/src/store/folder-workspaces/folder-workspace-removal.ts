@@ -1,4 +1,5 @@
 import { selectFolderWorkspaces } from '../workspaces/catalog/workspace-record-fields'
+import { removeWorkspaceUnreadState } from '../slices/workspace-attention/workspace-unread-removal'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { RepoSlice } from '../repos/repo-state'
@@ -84,6 +85,7 @@ export function createFolderWorkspaceDeleteAction(
         return false
       }
       set((s) => ({
+        ...removeWorkspaceUnreadState(s, [{ id: workspaceKey, hostId: ownerHostId }]),
         folderWorkspaces: selectFolderWorkspaces(s).filter(
           (workspace) =>
             workspace.id !== folderWorkspaceId ||

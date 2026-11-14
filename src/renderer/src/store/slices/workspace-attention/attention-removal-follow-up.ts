@@ -139,7 +139,7 @@ export function settleAttentionRemovedBy(
   }
   if (options?.settleFlags !== false) {
     for (const workspaceId of removed.workspaceIds) {
-      settleWorkspaceUnreadFlag(set, get, workspaceId)
+      settleWorkspaceUnreadFlag(set, get, workspaceId, 'markers')
     }
   }
   dismissReadNotifications(removed.paneKeys)
