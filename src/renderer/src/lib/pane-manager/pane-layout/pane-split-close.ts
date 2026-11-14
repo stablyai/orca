@@ -160,6 +160,7 @@ function openSplitPane(
   newPaneFirst?: boolean
 ): void {
   const cwd = args.opts?.cwd
+  const ratio = args.opts?.ratio
   openTerminal(newPane, {
     ligatures: args.managerOptions.terminalLigaturesEnabled?.(),
     inlineImages: args.managerOptions.terminalInlineImagesEnabled?.()
@@ -184,7 +185,7 @@ function openSplitPane(
       parentLeafId,
       direction: args.direction,
       ...(newPaneFirst ? { insertBefore: true } : {}),
-      ...(args.opts?.ratio !== undefined ? { ratio: args.opts.ratio } : {})
+      ...(ratio !== undefined ? { ratio: newPaneFirst ? 1 - ratio : ratio } : {})
     }
   })
   args.managerOptions.onLayoutChanged?.()

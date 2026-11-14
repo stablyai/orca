@@ -148,7 +148,8 @@ function createHarness(
           (_args: { worktreeId?: string; tabId?: string; leafId?: string }) =>
             new Promise<{ id: string; incarnationId?: string }>((resolve) => {
               resolveSpawn = resolve
-            })
+            }),
+          ownerHostId
         )
       )
     : vi.fn(
@@ -156,7 +157,8 @@ function createHarness(
           runtime,
           async (_args: { worktreeId?: string; tabId?: string; leafId?: string }) => ({
             id: SPLIT_PTY_ID
-          })
+          }),
+          ownerHostId
         )
       )
   Object.assign(runtime, {
