@@ -115,6 +115,8 @@ export function createWebRuntimeCredentialSource(args: {
       }
     }
     if (tokenForgotten) {
+      // Why: the placeholder cannot authenticate and no key remains; only a new pairing recovers.
+      args.forgetPairing()
       return legacy()
     }
     const record = await getOrCreatePendingWebDeviceKey(

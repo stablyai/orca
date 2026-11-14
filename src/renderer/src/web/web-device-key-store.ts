@@ -26,7 +26,10 @@ export function webDeviceKeyId(hostPublicKeyB64: string, environmentId: string):
   return `${hostPublicKeyB64}|${environmentId}`
 }
 
-export function createIndexedDbWebDeviceKeyStore(factory: IDBFactory): WebDeviceKeyStore {
+export function createIndexedDbWebDeviceKeyStore(
+  factory: Pick<IDBFactory, 'open'>
+): WebDeviceKeyStore {
+  requestPersistentWebStorage()
   let opened: Promise<IDBDatabase> | null = null
   const database = (): Promise<IDBDatabase> => {
     opened ??= new Promise((resolve, reject) => {
@@ -80,6 +83,18 @@ export function createIndexedDbWebDeviceKeyStore(factory: IDBFactory): WebDevice
       await run('readwrite', (store) => store.delete(id))
     }
   }
+}
+
+// Why: IndexedDB is best-effort storage; without persistence the browser may evict the key and strand the pairing.
+function requestPersistentWebStorage(): void {
+  const storage = typeof navigator === 'undefined' ? undefined : navigator.storage
+  if (!storage?.persist) {
+    return
+  }
+  void storage.persist().then(
+    (persisted) => console.info(`[web] Storage persistence ${persisted ? 'granted' : 'denied'}.`),
+    (error: unknown) => console.warn('[web] Storage persistence request failed.', error)
+  )
 }
 
 /** Same contract in memory: unit tests, and a browser whose IndexedDB is unavailable. */

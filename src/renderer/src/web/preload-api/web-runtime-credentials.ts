@@ -40,10 +40,11 @@ export function webRuntimeCredentialFor(
       tryV2Token: support === 'token-insecure-origin'
     })
   }
+  // Why persistent-only: session keys live in memory, so IndexedDB and its persist() prompt would guard nothing.
   keyStore ??=
-    typeof indexedDB === 'undefined'
-      ? createMemoryWebDeviceKeyStore()
-      : createIndexedDbWebDeviceKeyStore(indexedDB)
+    support === 'persistent' && typeof indexedDB !== 'undefined'
+      ? createIndexedDbWebDeviceKeyStore(indexedDB)
+      : createMemoryWebDeviceKeyStore()
   const source = createWebRuntimeCredentialSource({
     environment: {
       environmentId: environment.id,
