@@ -11,6 +11,7 @@ import {
 } from '../../pty-transport/shutdown/pty-shutdown-exit-deferral'
 import { POST_REPLAY_MODE_RESET } from '../../../../../../shared/terminal/protocol/input-modes/terminal-mode-reset-profiles'
 import { isProvenProcessExit } from '../../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
+import { exitedOnSetupSuccess } from '../../../../../../shared/agent-launch/startup/setup-runner-command'
 import '@/lib/agent-session/resume/sleeping-agent-pane-ownership'
 import { noteArmsHibernatedPaneWake } from './hibernated-pane-wake'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
@@ -188,16 +189,19 @@ export function bindPanePtyExit(session: ConnectPanePtySession): void {
       })
       return
     }
+    // A setup that exited its shell on success asked to close, so the newborn guards below do not apply.
+    const setupExitedOnSuccess = exitedOnSetupSuccess(processExitState.startup?.command, exitCode)
     const panes = session.manager.getPanes()
     if (panes.length <= 1) {
       // Keep sole fresh, never-typed shell failures visible for diagnostics instead of closing the tab and deactivating the workspace; explicit exit and dead reattach still close.
-      if (keepsUntouchedFreshPane(session, ptyId)) {
+      if (keepsUntouchedFreshPane(session, ptyId) && !setupExitedOnSuccess) {
         return
       }
       session.deps.onPtyExitRef.current(ptyId, exitCode)
       return
     }
     if (
+      !setupExitedOnSuccess &&
       session.deps.isVisibleRef.current &&
       session.hadExistingPaneTransportAtConnect &&
       !session.restoredPtyIdForTransport &&

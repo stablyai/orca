@@ -10,6 +10,7 @@ import { registerPtyConnectionRestartReplacementDisposeTests } from '../spawn/pt
 import { registerPtyConnectionHibernationActivityTests } from '../input/pty-connection-hibernation-activity.spec'
 import { registerPtyConnectionHiddenSleepingResumeTests } from '../lifecycle/pty-connection-hidden-sleeping-resume.spec'
 import { registerPtyConnectionSessionLivenessTests } from '../lifecycle/pty-connection-session-liveness.spec'
+import { registerPtyConnectionSetupAutoCloseTests } from '../lifecycle/pty-connection-setup-auto-close.spec'
 import { registerPtyConnectionOwnerErrorRetryTests } from '../reattach/pty-connection-owner-error-retry.spec'
 import { registerPtyConnectionSleepingResumeBannerTests } from '../spawn/pty-connection-sleeping-resume-banner.spec'
 
@@ -42,4 +43,5 @@ describe('pty-connection-session-liveness', () => {
   registerPtyConnectionSessionLivenessTests()
   registerPtyConnectionOwnerErrorRetryTests()
 })
+describe('pty-connection-setup-auto-close', registerPtyConnectionSetupAutoCloseTests)
 describe('pty-connection-sleeping-resume-banner', registerPtyConnectionSleepingResumeBannerTests)
