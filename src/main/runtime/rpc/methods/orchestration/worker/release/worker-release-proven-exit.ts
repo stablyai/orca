@@ -25,18 +25,17 @@ export async function settleProvenExitedWorkerTerminal(args: {
   ) {
     return null
   }
-  const { kind, content, archiveSource, archiveStatus } = releaseCommitFieldsForCapturedArchive(
-    deriveWorkerOutputReferenceFromSavedState({
-      resource,
-      structuredWorker: resolveStructuredWorkerForDispatch(db, resource.owner_dispatch_id)
-    })
-  )
+  const structuredWorker = resolveStructuredWorkerForDispatch(db, resource.owner_dispatch_id)
   const settled = db.settleDeadWorkerTerminalRelease({
     requestingDispatchId: dispatchId,
     resourceId: resource.id,
     processIncarnation,
     expected: resource,
-    output: { kind, content, archiveSource, archiveStatus }
+    // The saved session may have moved during the proof; read it from the row being settled.
+    output: (current) =>
+      releaseCommitFieldsForCapturedArchive(
+        deriveWorkerOutputReferenceFromSavedState({ resource: current, structuredWorker })
+      )
   })
   if (settled.disposition !== 'released') {
     return null

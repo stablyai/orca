@@ -12,14 +12,14 @@ import type { WorkerTerminalReleaseRuntime } from '../../terminal-authority/rele
 import type {
   WorkerTerminalArchiveKind,
   WorkerTerminalArchiveRow,
-  WorkerTerminalArchiveStatus
+  WorkerTerminalArchiveStatus,
+  WorkerTerminalResourceRow
 } from '../../terminal-authority/release/worker-terminal-ownership'
 import {
   requireRunningStructuredWorker,
   structuredWorkerAgent
 } from '../../terminal-authority/structured-sessions/structured-worker-authority'
 import type { StructuredWorkerIdentity } from '../../terminal-authority/structured-sessions/structured-worker-identity'
-import type { WorkerTerminalResourceRow } from '../../terminal-authority/release/worker-terminal-ownership'
 import { readWorkerResumeSession } from '../../db/dispatch-context/worker-follow-up-lineage'
 import { parseWorkerTerminalHostScope } from '../../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
