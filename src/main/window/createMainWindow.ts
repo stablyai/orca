@@ -46,6 +46,7 @@ import { installMainWindowWebviewSecurity } from './security/main-window-webview
 import { rectHasVisibleAreaOnAnyDisplay } from './presentation/window-bounds-validation'
 import { installWindowsPathRegistryChangeListener } from '../pty/environment/windows-path-registry-change'
 import { recordAgentSessionRuntimeEnd } from '../runtime/agent-session/records/agent-session-runtime-end-record'
+import { installNativeUnloadCoordinator } from './renderer-relays/native-unload-coordinator'
 
 export function loadMainWindow(mainWindow: BrowserWindow, observer?: MainWindowLoadObserver): void {
   installRendererHangStackPolicy(
@@ -215,6 +216,7 @@ export function createMainWindow(
     store
   })
   installMainWindowWebviewSecurity(mainWindow)
+  installNativeUnloadCoordinator(mainWindow, opts?.onBeforeReload)
   const activity = installMainWindowActivityRelay(mainWindow)
   if (pumpHiddenFrames) {
     stopHiddenWindowFramePumpOnShow(mainWindow)

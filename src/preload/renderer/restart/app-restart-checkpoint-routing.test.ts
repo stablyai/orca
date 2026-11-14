@@ -93,4 +93,37 @@ describe('native preload destructive app actions', () => {
     await expect(switching).resolves.toBe(result)
     expect(invoke).toHaveBeenLastCalledWith('orcaProfiles:switch', { profileId: 'target' })
   })
+
+  it.each([
+    { durable: { ok: true }, reply: true },
+    { durable: { ok: false }, reply: false }
+  ])(
+    'answers a main-initiated reload only with the durable save verdict',
+    async ({ durable, reply }) => {
+      await loadApi()
+      const prepare = on.mock.calls.find(
+        ([channel]) => channel === 'app:prepare-native-unload'
+      )?.[1]
+      let finishCheckpoint = (_result: { ok: boolean }): void => {}
+      invoke.mockImplementation(
+        () =>
+          new Promise((resolve) => {
+            finishCheckpoint = resolve
+          })
+      )
+
+      prepare({}, 'reload-1')
+      await vi.waitFor(() =>
+        expect(invoke).toHaveBeenCalledWith('app:await-before-unload-checkpoint')
+      )
+      expect(send).not.toHaveBeenCalledWith('app:native-unload-prepared', expect.anything())
+      finishCheckpoint(durable)
+      await vi.waitFor(() =>
+        expect(send).toHaveBeenCalledWith('app:native-unload-prepared', {
+          requestId: 'reload-1',
+          ok: reply
+        })
+      )
+    }
+  )
 })

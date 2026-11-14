@@ -1,6 +1,7 @@
 /** App owns the close subscription even without Terminal mounted (#5144); run unsaved-work guards, then rich confirmation or the landing-page fallback. */
 
 import { showShutdownCheckpointFailureToast } from '@/app-shell/shutdown/shutdown-checkpoint-failure-toast'
+import { ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT } from '../../../shared/renderer-shutdown-events'
 
 export type WindowCloseRequestHandler = (data: { isQuitting: boolean }) => void
 
@@ -14,14 +15,28 @@ export function isWindowCloseCheckpointInProgress(): boolean {
   return windowCloseCheckpointInProgress
 }
 
-export function runWithWindowCloseCheckpointScope<T>(fn: () => T): T {
+/** Close proceeds only after the checkpoint it staged is durable; a failed write cancels the close. */
+export async function prepareWindowCloseCheckpoint(): Promise<boolean> {
   windowCloseCheckpointInProgress = true
+  let accepted: boolean
   try {
-    return fn()
+    accepted = window.dispatchEvent(new Event('beforeunload', { cancelable: true }))
   } finally {
     windowCloseCheckpointInProgress = false
   }
+  if (!accepted) {
+    return false
+  }
+  try {
+    await window.api.app.awaitBeforeUnloadCheckpoint()
+    return true
+  } catch {
+    // Re-stage on the next close attempt instead of trusting the failed checkpoint.
+    window.dispatchEvent(new Event(ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT))
+    return false
+  }
 }
+
 const closeGuards = new Set<WindowCloseGuard>()
 // Ignore repeated close requests while a guard’s dialog is pending.
 let closeInFlight = false
@@ -62,20 +77,17 @@ export async function dispatchWindowCloseRequest(data: { isQuitting: boolean }):
       window.api.ui.cancelWindowClose()
       return
     }
+    if (activeHandler) {
+      activeHandler(data)
+      return
+    }
+    if (await prepareWindowCloseCheckpoint()) {
+      window.api.ui.confirmWindowClose()
+      return
+    }
+    showShutdownCheckpointFailureToast()
+    window.api.ui.cancelWindowClose()
   } finally {
     closeInFlight = false
   }
-  if (activeHandler) {
-    activeHandler(data)
-    return
-  }
-  const accepted = runWithWindowCloseCheckpointScope(() =>
-    window.dispatchEvent(new Event('beforeunload', { cancelable: true }))
-  )
-  if (accepted) {
-    window.api.ui.confirmWindowClose()
-    return
-  }
-  showShutdownCheckpointFailureToast()
-  window.api.ui.cancelWindowClose()
 }

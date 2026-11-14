@@ -1,0 +1,94 @@
+import { EventEmitter } from 'node:events'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ipcMain, type BrowserWindow, type WebContents } from 'electron'
+
+vi.mock('electron', async () => {
+  const { EventEmitter: Emitter } = await import('node:events')
+  return { ipcMain: new Emitter() }
+})
+import {
+  installNativeUnloadCoordinator,
+  reloadWithRendererCheckpoint
+} from './native-unload-coordinator'
+
+function fixture() {
+  const frame = { send: vi.fn() }
+  const contents = Object.assign(new EventEmitter(), {
+    id: 1,
+    mainFrame: frame,
+    isDestroyed: () => false,
+    isCrashed: () => false,
+    reload: vi.fn(),
+    reloadIgnoringCache: vi.fn()
+  })
+  const window = Object.assign(new EventEmitter(), { webContents: contents })
+  installNativeUnloadCoordinator(window as unknown as BrowserWindow)
+  const reply = (ok: boolean, senderFrame: unknown = frame): void => {
+    const requestId = frame.send.mock.calls.find(
+      ([channel]) => channel === 'app:prepare-native-unload'
+    )?.[1]
+    ipcMain.emit('app:native-unload-prepared', { sender: contents, senderFrame }, { requestId, ok })
+  }
+  return {
+    contents,
+    frame,
+    reply,
+    reload: (ignoreCache = false) =>
+      reloadWithRendererCheckpoint(contents as unknown as WebContents, ignoreCache)
+  }
+}
+
+beforeEach(() => ipcMain.removeAllListeners())
+afterEach(() => vi.useRealTimers())
+
+describe('native reload checkpoint', () => {
+  it('reloads once, only after the owning document reports its durable save', async () => {
+    const { contents, reply, reload } = fixture()
+    const first = reload()
+    const second = reload()
+    reply(true, {})
+    expect(contents.reload).not.toHaveBeenCalled()
+    reply(true)
+    await Promise.all([first, second])
+    expect(contents.reload).toHaveBeenCalledOnce()
+  })
+
+  it('upgrades a waiting reload to Force Reload', async () => {
+    const { contents, reply, reload } = fixture()
+    const ordinary = reload()
+    const forced = reload(true)
+    reply(true)
+    await Promise.all([ordinary, forced])
+    expect(contents.reload).not.toHaveBeenCalled()
+    expect(contents.reloadIgnoringCache).toHaveBeenCalledOnce()
+  })
+
+  it('keeps the document when its save fails', async () => {
+    const { contents, reply, reload } = fixture()
+    const result = reload()
+    reply(false)
+    await expect(result).rejects.toThrow('could not be saved')
+    expect(contents.reload).not.toHaveBeenCalled()
+  })
+
+  it('reloads anyway when a live renderer never answers', async () => {
+    vi.useFakeTimers()
+    const { contents, frame, reload } = fixture()
+    const result = reload(true)
+    await vi.advanceTimersByTimeAsync(29_999)
+    expect(contents.reloadIgnoringCache).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1)
+    await result
+    expect(frame.send).toHaveBeenCalledWith('app:native-unload-expired', expect.any(String))
+    expect(contents.reloadIgnoringCache).toHaveBeenCalledOnce()
+  })
+
+  it('does not reload a document that replaced the one asked to save', async () => {
+    const { contents, reply, reload } = fixture()
+    const result = reload()
+    contents.emit('did-frame-navigate', {}, 'file:///replacement.html', 200, 'OK', true)
+    reply(true)
+    await result
+    expect(contents.reload).not.toHaveBeenCalled()
+  })
+})
