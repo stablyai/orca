@@ -6,6 +6,15 @@ import {
 } from './structured-agent-session-dispatch-rejection'
 
 describe('classifyDispatchRejection', () => {
+  it('classifies a blocked provider resume as a start failure', () => {
+    expect(
+      classifyDispatchRejection({
+        reason: 'The provider cannot resume this conversation.',
+        rejection: { kind: 'providerResumeUnavailable' }
+      })
+    ).toEqual({ category: 'startFailed', verdict: 'failure', kind: 'providerResumeUnavailable' })
+  })
+
   it('reads the typed fact over the sentence beside it', () => {
     expect(
       classifyDispatchRejection({

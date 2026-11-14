@@ -46,6 +46,7 @@ const TYPED_START_REFUSALS = [
   'claudeAccountSetupFailed',
   'agentCommandNotRunnable',
   'runtimeNotInstalled',
+  'providerResumeUnavailable',
   'fullAccessAsRoot',
   'launchPreparationFailed',
   'conversationOpenInTerminal',
@@ -132,7 +133,11 @@ export function providerStartupFailureFact(cause?: unknown): SubmissionRejection
     })
   }
   const typed = typedStartRefusal(
-    cause instanceof AgentSessionAcquisitionRefusal ? cause.reason : undefined
+    cause instanceof AgentSessionAcquisitionRefusal
+      ? cause.reason
+      : isAgentSessionPreSpawnError(cause) && cause.reason === 'providerResumeUnavailable'
+        ? cause.reason
+        : undefined
   )
   if (typed) {
     return agentSessionFailureFact(typed, {

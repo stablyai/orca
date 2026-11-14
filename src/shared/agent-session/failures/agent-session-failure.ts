@@ -3,6 +3,10 @@ import {
   readAttachmentProblem,
   type AgentSessionAttachmentProblem
 } from './agent-session-failure-details'
+import {
+  AGENT_SESSION_FAILURE_KINDS,
+  type AgentSessionFailureKind
+} from './agent-session-failure-kinds'
 import type { AgentSessionAccountKind } from '../agent-session-availability'
 import {
   readAgentSessionArgumentProblem,
@@ -23,80 +27,10 @@ import {
 } from './agent-session-wire-refusals'
 // Write typed facts with legacy text/reason sentences that released clients print directly. Set provider detail only at composition; later strings cannot prove authorship.
 
-/** One per situation with its own honest next step; a new one needs copy before it compiles. */
-export const AGENT_SESSION_FAILURE_KINDS = [
-  /** Only an observed exit: the provider stopped while starting. */
-  'providerStartFailed',
-  'savedConversationMissing',
-  /** A start that did not land, with no one to blame: Orca's fault, a failed spawn, a close. */
-  'startFailed',
-  'notSignedIn',
-  /** The agent's CLI is not installed where the chat runs: its spawn found no such file. */
-  'cliMissing',
-  'historyTooLarge',
-  'managedAccountEnvOverride',
-  'accountSwitchInProgress',
-  'managedAccountUnsupported',
-  'launchFolderMissing',
-  'historyInOtherAccount',
-  'claudeAccountFolderMissing',
-  'claudeAccountSetupFailed',
-  'agentCommandNotRunnable',
-  'runtimeNotInstalled',
-  /** The agent refuses Full access while it runs as root. */
-  'fullAccessAsRoot',
-  /** Orca's own launch preparation on the host failed before any agent process was spawned. */
-  'launchPreparationFailed',
-  'conversationOpenInTerminal',
-  'conversationOpenElsewhere',
-  'providerExited',
-  'restartFailed',
-  'providerRejected',
-  'providerUnavailable',
-  'providerSafetyStopped',
-  'providerResponseFailed',
-  'pluginInputRequired',
-  'modelUnavailable',
-  /** The agent had no model when the message reached it; why (selection, sign-in) is unknown. */
-  'modelNotSelected',
-  'claudeEffortInvalid',
-  'attachmentInvalid',
-  'attachmentUnreadable',
-  'emptyMessage',
-  /** One of the agent's own commands that its chats do not run, sent as a whole message. */
-  'commandUnavailable',
-  'queueFull',
-  'writeFailed',
-  'cancelled',
-  'chatClosed',
-  'hostRestarted',
-  'notDelivered',
-  'unconfirmed',
-  /** A conversation command the chat's state refused when its turn to run came. */
-  'commandRefused',
-  'compactionFailed',
-  'compactionUnconfirmed',
-  'cancelUnconfirmed',
-  /** A Stop naming no turn reached the agent, which ended nothing while the chat read working. */
-  'stopRefused',
-  /** A Stop Orca could not save: only a refusal says it. */
-  'stopFailed',
-  /** A background-task Stop the agent answered with the task still running. */
-  'backgroundTaskNotStopped',
-  'answerUnconfirmed',
-  'hostFault',
-  /** Orca stopped an agent whose start never finished. */
-  'hostStopped',
-  /** The provider is retrying a request its API refused; not a failure yet. */
-  'providerRetrying',
-  /** The account hit one of the agent's usage limits, which ended the turn until it resets. */
-  'usageLimitReached',
-  /** A child a Stop could not prove gone: its exit is unverifiable. Kept for rows hosts wrote. */
-  'previousExitUnverifiable',
-  /** The agent could not reopen the chat's saved session, so a fresh one without its memory continues it. */
-  'sessionNotRestored'
-] as const
-export type AgentSessionFailureKind = (typeof AGENT_SESSION_FAILURE_KINDS)[number]
+export {
+  AGENT_SESSION_FAILURE_KINDS,
+  type AgentSessionFailureKind
+} from './agent-session-failure-kinds'
 
 export function isAgentSessionFailureKind(value: unknown): value is AgentSessionFailureKind {
   return typeof value === 'string' && AGENT_SESSION_FAILURE_KINDS.some((kind) => kind === value)

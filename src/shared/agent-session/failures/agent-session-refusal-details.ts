@@ -68,6 +68,7 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     'goalsUnsupported',
     'providerRejected',
     'providerStartFailed',
+    'providerResumeUnavailable',
     'savedConversationMissing',
     'notSignedIn',
     /** The agent's CLI is not installed on the host that would run it. */
