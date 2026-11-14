@@ -50,7 +50,9 @@ test.describe('Worktree Delete Shortcut', () => {
       .catch(() => undefined)
   })
 
-  test('deletes the active worktree while another row is hovered', async ({ orcaPage }) => {
+  test('deletes the selected worktree on a second press while another row is hovered', async ({
+    orcaPage
+  }) => {
     createdWorktreeId = await createIsolatedWorktree(orcaPage)
     const worktreeId = createdWorktreeId
     const row = worktreeRow(orcaPage, worktreeId)
@@ -69,9 +71,10 @@ test.describe('Worktree Delete Shortcut', () => {
     await worktreeRow(orcaPage, previousActiveId).hover()
     await pressShortcut(orcaPage, 'Backspace', { shift: true })
 
-    const dialog = orcaPage.getByRole('dialog')
-    await expect(dialog).toBeVisible()
-    await dialog.getByRole('button', { name: 'Delete', exact: true }).click()
+    // First press only shows the press-again prompt on the row.
+    await expect(row.locator('[data-workspace-delete-confirm]')).toBeVisible()
+    expect(await getAllWorktreeIds(orcaPage)).toContain(worktreeId)
+    await pressShortcut(orcaPage, 'Backspace', { shift: true })
 
     await expect
       .poll(async () => getAllWorktreeIds(orcaPage), {

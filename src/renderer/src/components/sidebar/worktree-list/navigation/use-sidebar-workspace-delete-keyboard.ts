@@ -10,6 +10,12 @@ import {
 } from '../../../../../../shared/modifier-double-tap-detector'
 import { textInputOwnsComposition } from '../../../../../../shared/text-input-shortcut-policy'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
+import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import {
+  armWorkspaceDeleteConfirmation,
+  confirmWorkspaceDeleteConfirmation
+} from '../../workspace-actions/deletion/workspace-delete-confirmation'
 import {
   runWorktreeContextMenuDeleteIntent,
   type WorktreeContextMenuDeleteIntent
@@ -66,7 +72,7 @@ export function useSidebarWorkspaceDeleteKeyboard({
         e.preventDefault()
         e.stopPropagation()
         dropPreview()
-        runWorktreeContextMenuDeleteIntent(intent)
+        requestSidebarWorkspaceDelete(intent)
       }
       return true
     },
@@ -83,4 +89,32 @@ export function useSidebarWorkspaceDeleteKeyboard({
     [process, resetDeleteGesture]
   )
   return { handleDeleteKeyDown, handleContainerKeyUp, resetDeleteGesture }
+}
+
+/** Batches keep their dialog; a single row deletes on a second press while its prompt shows. */
+export function requestSidebarWorkspaceDelete(intent: WorktreeContextMenuDeleteIntent): void {
+  if (intent.kind === 'batch') {
+    runWorktreeContextMenuDeleteIntent(intent)
+    return
+  }
+  const identity =
+    intent.kind === 'worktree'
+      ? getWorktreeHostIdentity(intent.worktree)
+      : getWorktreeHostIdentity({
+          id: folderWorkspaceKey(intent.folderWorkspaceId),
+          hostId: intent.executionHostId
+        })
+  if (isDeleteConfirmationOnScreen(identity) && confirmWorkspaceDeleteConfirmation(identity)) {
+    runWorktreeContextMenuDeleteIntent(intent, { confirmed: true })
+    return
+  }
+  armWorkspaceDeleteConfirmation(identity)
+}
+
+// Why: a filtered-out row never draws the prompt, and a modal hides it; never delete unseen.
+function isDeleteConfirmationOnScreen(identity: string): boolean {
+  return Array.from(document.querySelectorAll<HTMLElement>('[data-workspace-delete-confirm]')).some(
+    (notice) =>
+      notice.dataset.workspaceDeleteConfirm === identity && !notice.closest('[aria-hidden="true"]')
+  )
 }
