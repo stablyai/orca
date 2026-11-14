@@ -7,6 +7,9 @@ import { notify } from '../host-bridge/host-notify'
 import { attachSurfaceMouseClickDragHandler } from './mouse-click-drag'
 import { routeScrollLines, shouldRouteScrollToTerminalInput } from './mouse-input-encoding'
 import {
+  COAST_FRICTION,
+  COAST_MIN_VEL,
+  RELEASE_VELOCITY_MAX_AGE_MS,
   applyNormalBufferScrollDelta,
   enqueueNormalBufferScrollDelta,
   resetSmoothScrollOffset
@@ -22,8 +25,6 @@ import { updateTransform } from '../viewport/viewport-transform'
 import { viewportPoint } from '../viewport/viewport-cell'
 import { attachSurfaceWheelHandler } from './wheel-scroll'
 import { stopSurfaceTouchGestures } from './surface-touch-gesture-stop'
-
-const RELEASE_VELOCITY_MAX_AGE_MS = 100
 
 type TerminalGestureSurface = HTMLElement & { __orcaSurfaceHandlersAttached?: boolean }
 
@@ -253,14 +254,12 @@ export function attachSurfaceEventHandlers(
         // A finger resting after its last move has no remaining momentum to launch.
         const rested = Date.now() - scope.touchGesture.lastTime > RELEASE_VELOCITY_MAX_AGE_MS
         let vel = rested ? 0 : scope.touchGesture.velY
-        const FRICTION = 0.972
-        const MIN_VEL = 0.012
         let lastMomentumTime = performance.now()
         function momentumStep(frameTime: number) {
           const elapsed = Math.max(1, Math.min(50, frameTime - lastMomentumTime))
           lastMomentumTime = frameTime
-          vel *= FRICTION ** (elapsed / 16)
-          if (Math.abs(vel) < MIN_VEL) {
+          vel *= COAST_FRICTION ** (elapsed / 16)
+          if (Math.abs(vel) < COAST_MIN_VEL) {
             scope.touchGesture.momentumId = null
             return
           }
@@ -282,7 +281,7 @@ export function attachSurfaceEventHandlers(
           }
           scope.touchGesture.momentumId = scheduleDocumentFrame(scope, momentumStep)
         }
-        if (Math.abs(vel) > MIN_VEL) {
+        if (Math.abs(vel) > COAST_MIN_VEL) {
           scope.touchGesture.momentumId = scheduleDocumentFrame(scope, momentumStep)
         }
       }
