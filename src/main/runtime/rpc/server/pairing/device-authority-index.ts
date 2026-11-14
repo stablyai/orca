@@ -33,7 +33,7 @@ export class DeviceAuthorityIndex {
   private tokens = new Map<string, AuthorizedDevice>()
   private nextExpiry = Number.POSITIVE_INFINITY
 
-  publish(devices: readonly DeviceEntry[], now = Date.now()): void {
+  publish(devices: readonly DeviceEntry[], now = Date.now(), retireCaptured = false): void {
     const rows = new Map(devices.map((device) => [device.deviceId, device]))
     const next = new Map<string, AuthorizedDevice>()
     const children = new Map<string, string[]>()
@@ -70,6 +70,7 @@ export class DeviceAuthorityIndex {
       const previous = this.authorized.get(device.deviceId)
       // Proposing a replacement keeps current sockets valid until the replacement first signs in.
       const reusable =
+        !retireCaptured &&
         previous?.signature === signature &&
         (!previous.device.exchangeToken || previous.device.exchangeToken === device.exchangeToken)
       const controller = reusable ? previous.controller : new AbortController()

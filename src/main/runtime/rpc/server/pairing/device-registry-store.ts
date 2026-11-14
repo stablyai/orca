@@ -94,6 +94,11 @@ export class DeviceRegistryStore {
     this.authorityIndex.expire(this.devices)
   }
 
+  /** A stopped observer cannot continue authorizing its captured sockets or queued work. */
+  retireCapturedAuthority(): void {
+    this.authorityIndex.publish(this.devices, Date.now(), true)
+  }
+
   private load(): void {
     const read = this.writer.read()
     this.registryUnreadable = read.unreadable

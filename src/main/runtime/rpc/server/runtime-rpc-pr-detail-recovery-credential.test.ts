@@ -219,6 +219,14 @@ it('resumes the retained ticket after normal encrypted socket reconnection', asy
   }
   const first = await authenticateMobileWsSession(offer.pairingUrl)
   const reader = createEncryptedWsResponseReader(first)
+  const registry = server.getDeviceRegistry()!
+  const device = registry.getDevice(offer.deviceId)!
+  const authority = registry.captureAuthority({
+    deviceId: device.deviceId,
+    credentialRevision: device.credentialRevision ?? 0,
+    deviceToken: device.token
+  })!
+
   let second: Awaited<ReturnType<typeof authenticateMobileWsSession>> | null = null
   try {
     sendEncryptedWsRequest(first, {
@@ -257,6 +265,7 @@ it('resumes the retained ticket after normal encrypted socket reconnection', asy
     second?.ws.close()
     resolver.mockRestore()
     await server.stop()
+    expect(authority.signal.aborted).toBe(true)
     rmSync(directory, { recursive: true, force: true })
   }
 })

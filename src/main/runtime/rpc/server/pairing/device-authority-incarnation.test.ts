@@ -78,3 +78,17 @@ it('preserves a captured authority through timestamp-only sightings and invalida
   expect(unused.signal.aborted).toBe(true)
   expect(authority.signal.aborted).toBe(false)
 })
+
+it('retires captured authority when its observer stops and permits a fresh incarnation', () => {
+  const registry = new DeviceRegistry(directory)
+  const device = registry.addDevice('Saved desktop', 'runtime')
+  const principal = { deviceId: device.deviceId, credentialRevision: 0, deviceToken: device.token }
+  const before = registry.captureAuthority(principal)!
+  registry.retireCapturedAuthority()
+  expect(before.signal.aborted).toBe(true)
+  expect(registry.resolveAuthenticatedPrincipal(principal, before)).toBeNull()
+  const after = registry.captureAuthority(principal)!
+  expect(after.signal.aborted).toBe(false)
+  expect(after.id).not.toBe(before.id)
+  expect(registry.validateToken(device.token)?.deviceId).toBe(device.deviceId)
+})
