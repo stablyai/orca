@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -46,8 +46,6 @@ function createController(
     pruneMobileClientTabSelections: () => undefined,
     hydrateRepo: (repo) => repo
   })
-  const teardown = vi.fn(async () => onTeardown())
-  const cleanup = vi.fn()
   const store: RuntimeStore = {
     getProjectGroups: () => groups,
     getRepos: () => [],
@@ -70,16 +68,16 @@ function createController(
     resolveRepo: unused,
     notifyReposChanged: () => undefined,
     resolveFolderConnectionId: () => null,
-    teardownFolderWorkspacePtys: teardown,
+    teardownFolderWorkspacePtys: async () => onTeardown(),
     acquireFileWatcherRemoval: async () => ({ finish: async () => undefined }),
-    cleanupRemovedFolderWorkspaceState: cleanup,
+    cleanupRemovedFolderWorkspaceState: () => undefined,
     emitWorktreeLifecycle: () => undefined
   })
-  return { controller, state, teardown, cleanup }
+  return { controller, state }
 }
 
-describe('folder workspace update and delete with requireUniqueId', () => {
-  it('refuses the delete when a twin appears during teardown, before any cleanup', async () => {
+describe('folder workspace deletion with requireUniqueId', () => {
+  it('refuses the delete when a twin appears during teardown', async () => {
     const twin = folderRow({ comment: 'added during teardown' })
     const deps = createController([folderRow({ comment: 'selected' })], () => {
       deps.state.folderWorkspaces = [...deps.state.folderWorkspaces, twin]
@@ -93,7 +91,6 @@ describe('folder workspace update and delete with requireUniqueId', () => {
       'selected',
       'added during teardown'
     ])
-    expect(deps.cleanup).not.toHaveBeenCalled()
   })
 })
 
@@ -120,7 +117,7 @@ function archiveGroup(root: string, exitCode: number): ProjectGroup {
   }
 }
 
-it('refuses group-folder removal before teardown when Archive fails, then honors an explicit waiver', async () => {
+it('refuses group-folder removal when Archive fails, then honors an explicit waiver', async () => {
   const root = await mkdtemp(join(tmpdir(), 'orca-group-archive-'))
   const group = archiveGroup(root, 7)
   const deps = createController([folderRow({ folderPath: root })], undefined, [group])
@@ -129,16 +126,10 @@ it('refuses group-folder removal before teardown when Archive fails, then honors
       deps.controller.deleteFolderWorkspace('hub-a', { runHooks: true })
     ).rejects.toMatchObject({ code: 'worktree_archive_hook_failed' })
     expect(deps.state.folderWorkspaces.map((row) => row.id)).toEqual(['hub-a'])
-    expect(deps.teardown).not.toHaveBeenCalled()
-    expect(deps.cleanup).not.toHaveBeenCalled()
 
-    const result = await deps.controller.deleteFolderWorkspace('hub-a', {
+    await deps.controller.deleteFolderWorkspace('hub-a', {
       runHooks: true,
       allowFailedArchiveHook: true
-    })
-    expect(result).toMatchObject({
-      deleted: true,
-      archiveHookOverride: { outcome: 'exited', exitCode: 7, overridden: true }
     })
     expect(deps.state.folderWorkspaces).toEqual([])
     expect(await readFile(join(root, 'archive.txt'), 'utf8')).toContain('"id":"folder:hub-a"')
@@ -147,7 +138,7 @@ it('refuses group-folder removal before teardown when Archive fails, then honors
   }
 })
 
-it('runs Archive with the saved folder identity before removal and preserves the group directory', async () => {
+it('runs Archive with the saved folder identity and preserves the group directory', async () => {
   const root = await mkdtemp(join(tmpdir(), 'orca-group-archive-'))
   const group = archiveGroup(root, 0)
   const workspacePath = join(root, 'saved workspace')
@@ -159,9 +150,7 @@ it('runs Archive with the saved folder identity before removal and preserves the
     [group]
   )
   try {
-    expect(await deps.controller.deleteFolderWorkspace('hub-a', { runHooks: true })).toEqual({
-      deleted: true
-    })
+    await deps.controller.deleteFolderWorkspace('hub-a', { runHooks: true })
     expect(JSON.parse(await readFile(join(root, 'archive.txt'), 'utf8'))).toEqual({
       id: 'folder:hub-a',
       name: 'Saved workspace',

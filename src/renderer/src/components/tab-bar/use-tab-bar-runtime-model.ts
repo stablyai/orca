@@ -15,7 +15,7 @@ import {
   useWindowsTerminalCapabilities
 } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
 import type { WindowsTerminalCapabilities } from '@/runtime/hosts/capabilities/windows-terminal-capabilities'
-import { shouldShowMobileEmulatorTabIntro } from '../emulator-pane/mobile-emulator-tab-intro-visibility'
+import { shouldShowMobileEmulatorTabIntro } from '../emulator-pane/tab-intro/mobile-emulator-tab-intro-visibility'
 import { selectTabBarAgentProjections } from './tab-agent-types-by-tab-id'
 import type { TabBarAgentProjections } from './tab-agent-types-by-tab-id'
 import { shouldShowWindowsShellMenu } from './windows-shell-menu-visibility'

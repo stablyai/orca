@@ -804,6 +804,8 @@
       }
     },
     "agents": {
+      "installedRegion": "Installierte Agenten",
+      "availableRegion": "Zur Installation verfügbare Agenten",
       "permissionsTitle": "Berechtigungen",
       "permissionsChoiceExplanation": "Legt fest, was alle Agenten ohne Rückfrage tun dürfen. Einzelne Agenten können unten abweichend eingestellt werden.",
       "permissionEachOwn": "Eigene Einstellungen je Agent",

@@ -196,8 +196,10 @@ export async function detachBrowserExtensionsFromProfileSession(
   } finally {
     forgetBrowserExtensionActionProfile(profile.id)
     getBrowserExtensionProfileStateStore().forgetProfile(profile.id)
-    getBrowserExtensionSyncStorageStore().forgetProfile(profile.id)
-    getBrowserExtensionDnrStore().forgetProfile(profile.id)
+    await Promise.all([
+      getBrowserExtensionSyncStorageStore().forgetProfile(profile.id),
+      getBrowserExtensionDnrStore().forgetProfile(profile.id)
+    ])
   }
 }
 

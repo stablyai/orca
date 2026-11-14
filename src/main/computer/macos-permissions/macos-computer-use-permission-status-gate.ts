@@ -16,7 +16,7 @@ export type PermissionStatusGate = {
 }
 
 // probe calls markSpawned when its helper actually starts; the floor counts from the later of claim and spawn.
-export function createPermissionStatusGate(
+function createPermissionStatusGate(
   probe: (markSpawned: () => void) => Promise<StatusResult>
 ): PermissionStatusGate {
   let inFlight: { promise: Promise<StatusResult>; joinable: boolean } | null = null

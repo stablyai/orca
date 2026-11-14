@@ -24,7 +24,7 @@ export const PR_EDITOR_PREVIEW_E2E_SOURCE_ROUTES = [
       isProductSource(file) &&
       (file.startsWith('src/renderer/src/components/editor/model-lifetime/identity/') ||
         [
-          'src/renderer/src/components/editor/useEditorPanelFileContentLoader.ts',
+          'src/renderer/src/components/editor/loading/useEditorPanelFileContentLoader.ts',
           'src/renderer/src/lib/editor/file-operations/editor-file-operation-owner.ts',
           'src/renderer/src/lib/editor/file-operations/editor-file-operation-provenance.ts'
         ].includes(file))
@@ -46,7 +46,7 @@ export const PR_EDITOR_PREVIEW_E2E_SOURCE_ROUTES = [
         /^src\/renderer\/src\/components\/editor\/(?:document-images\/ImageViewer|pdf\/(?:PdfViewer|pdf-document-loader|pdf-js-document-options|pdf-orca-media-range-transport))\.tsx?$/.test(
           file
         ) ||
-        /^src\/renderer\/src\/components\/editor\/(?:EditorEditFileSurface|EditorConflictReviewSurface)\.tsx$/.test(
+        /^src\/renderer\/src\/components\/editor\/(?:panel\/EditorEditFileSurface|conflict-review\/EditorConflictReviewSurface)\.tsx$/.test(
           file
         ) ||
         [

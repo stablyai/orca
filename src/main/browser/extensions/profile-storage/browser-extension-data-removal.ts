@@ -232,11 +232,14 @@ async function removeUninstalledData(
   const storagePath = sess.getStoragePath()
   const folder = storagePath ? join(storagePath, EXTENSION_SETTINGS_FOLDER) : null
   const removed = new Set(stale)
+  const documentDeletes: Promise<void>[] = []
   if ('extensionId' in scope) {
     if (stale.has(scope.extensionId)) {
       states.forgetProfileExtension(profileId, scope.extensionId)
-      getBrowserExtensionSyncStorageStore().forgetProfileExtension(profileId, scope.extensionId)
-      getBrowserExtensionDnrStore().forgetProfileExtension(profileId, scope.extensionId)
+      documentDeletes.push(
+        getBrowserExtensionSyncStorageStore().forgetProfileExtension(profileId, scope.extensionId),
+        getBrowserExtensionDnrStore().forgetProfileExtension(profileId, scope.extensionId)
+      )
     }
   } else {
     const previousIds = Object.keys(states.readProfile(profileId)).filter(isChromeExtensionId)
@@ -245,8 +248,10 @@ async function removeUninstalledData(
       profileId,
       new Set([...retained, ...[...removals.keys()].filter((id) => !stale.has(id))])
     )
-    getBrowserExtensionSyncStorageStore().forgetExtensionsExcept(profileId, retained)
-    getBrowserExtensionDnrStore().forgetExtensionsExcept(profileId, retained)
+    documentDeletes.push(
+      getBrowserExtensionSyncStorageStore().forgetExtensionsExcept(profileId, retained),
+      getBrowserExtensionDnrStore().forgetExtensionsExcept(profileId, retained)
+    )
     const entries = folder ? await readdir(folder).catch(() => []) : []
     for (const id of [
       ...previousIds.filter((id) => !scope.installedIds.has(id) && !removals.has(id)),
@@ -270,6 +275,8 @@ async function removeUninstalledData(
       }
     })
   )
+  // Why before the markers: a marker saved ahead of the deletes would skip them after a crash.
+  await Promise.all(documentDeletes)
   if ('installedIds' in scope) {
     scope.onUninstalled?.(stale)
   }

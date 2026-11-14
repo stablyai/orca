@@ -9,7 +9,7 @@ import { fileTypeOfPath } from '../../../../../shared/plugins/contributions/plug
 import { formatBytes } from '../../../../../shared/format-bytes'
 import { Button } from '../../ui/button'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import type { FileContent } from '../editor-panel-content-types'
+import type { FileContent } from '../loading/editor-panel-content-types'
 import PluginCustomEditorFrame from './PluginCustomEditorFrame'
 import { ExternalFileChangeBanner } from '../external-changes/ExternalFileChangeBanner'
 import {
