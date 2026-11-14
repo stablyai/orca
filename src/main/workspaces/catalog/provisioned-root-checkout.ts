@@ -1,3 +1,4 @@
+import { shouldAutoRenameWorkspaceTitle } from '../../../shared/workspace-title-language'
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
@@ -101,7 +102,8 @@ export function verifyProvisionedRootCheckout(args: {
 
 export type ProvisionedRootMetaStore = {
   getProjectHostSetups?: Store['getProjectHostSetups']
-  getSettings(): Parameters<typeof getWorktreeCreationLayout>[1]
+  getSettings(): Parameters<typeof getWorktreeCreationLayout>[1] &
+    Parameters<typeof shouldAutoRenameWorkspaceTitle>[0]
 }
 
 export function buildProvisionedRootMeta(
@@ -152,7 +154,8 @@ export function buildProvisionedRootMeta(
     ...(args.pushTarget ? { pushTarget: args.pushTarget } : {}),
     ...(args.comment ? { comment: args.comment } : {}),
     ...(isTuiAgent(args.createdWithAgent) ? { createdWithAgent: args.createdWithAgent } : {}),
-    ...(args.pendingFirstAgentMessageRename === true && isTuiAgent(args.createdWithAgent)
+    ...(shouldAutoRenameWorkspaceTitle(store.getSettings()) ||
+    (args.pendingFirstAgentMessageRename === true && isTuiAgent(args.createdWithAgent))
       ? { pendingFirstAgentMessageRename: true }
       : {}),
     ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),

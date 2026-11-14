@@ -8,6 +8,7 @@ import type { SourceControlAiActionDefaults } from '../../../../shared/source-co
 
 export type RuntimeClientSettings = Pick<
   GlobalSettings,
+  | 'workspaceTitleLanguage'
   | 'defaultTuiAgent'
   | 'newWorkspaceSetupOnly'
   | 'disabledTuiAgents'
@@ -62,6 +63,7 @@ export type RuntimeHostDisplayLabelOverrides = Partial<
 
 export type RuntimeClientSettingsUpdate = Pick<
   Partial<GlobalSettings>,
+  | 'workspaceTitleLanguage'
   | 'agentStatusHooksEnabled'
   | 'claudeSubagentNavigationEnabled'
   | 'experimentalConnectors'
