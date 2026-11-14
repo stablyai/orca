@@ -268,4 +268,17 @@ describe('computer-use setup cancellation', () => {
     await permissions.openComputerUsePermissions('screenshots', { skipGranted: true })
     expect(setupLaunches()).toEqual([['--permission', 'screenshots']])
   })
+
+  it('refuses setup behind the lock screen without opening System Settings', async () => {
+    mocks.peek.mockResolvedValue({ ...denied, sessionLocked: true })
+    const { permissions } = await loadModules()
+    await expect(
+      permissions.openComputerUsePermissions('accessibility', { skipGranted: true })
+    ).rejects.toMatchObject({ code: 'screen_locked' })
+    await expect(permissions.openComputerUsePermissions()).rejects.toMatchObject({
+      code: 'screen_locked'
+    })
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(setupLaunches()).toEqual([])
+  })
 })

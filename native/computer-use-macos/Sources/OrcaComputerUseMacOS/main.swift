@@ -75,6 +75,8 @@ enum ProviderError: Error {
             return message
         }
     }
+
+    static let screenLocked = ProviderError.coded("screen_locked", SessionLockProbe.lockedMessage)
 }
 
 struct AppDescriptor {
@@ -920,6 +922,10 @@ final class Provider {
         previousSnapshot: (CGWindowID) -> Snapshot?
     ) throws -> Snapshot {
         guard accessibilityTrustedSettled() else {
+            // Why: the lock can start mid-request, and macOS reports Accessibility as untrusted behind it.
+            if SessionLockProbe.isLocked() {
+                throw ProviderError.screenLocked
+            }
             // Why: agents retry failed observations. Only the explicit setup flow
             // should open macOS privacy prompts/settings; runtime calls stay quiet.
             throw ProviderError.coded(
@@ -1640,6 +1646,9 @@ private func focusedWindow(appElement: AXUIElement, app: AppDescriptor, inventor
         }
         if let window = settledWindow, outcome.settled {
             return window
+        }
+        if SessionLockProbe.isLocked() {
+            throw ProviderError.screenLocked
         }
         var windows: CFTypeRef?
         if AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windows) == .apiDisabled {
@@ -5140,18 +5149,21 @@ private func runPermissionCheck(
     app.run()
 }
 
-private func printPermissionStatus() {
+private func permissionStatusJSON() -> String {
     let snapshot = permissionStatusSnapshotSettled()
     let accessibility = snapshot.accessibilityGranted ? "granted" : "not-granted"
     let screenshots = snapshot.screenshotsGranted ? "granted" : "not-granted"
-    print(#"{"accessibility":"\#(accessibility)","screenshots":"\#(screenshots)"}"#)
+    // Why: behind the lock screen macOS reports Accessibility as untrusted even when it is granted.
+    let sessionLocked = SessionLockProbe.isLocked()
+    return #"{"accessibility":"\#(accessibility)","screenshots":"\#(screenshots)","sessionLocked":\#(sessionLocked)}"#
+}
+
+private func printPermissionStatus() {
+    print(permissionStatusJSON())
 }
 
 private func writePermissionStatus(to path: String) {
-    let snapshot = permissionStatusSnapshotSettled()
-    let accessibility = snapshot.accessibilityGranted ? "granted" : "not-granted"
-    let screenshots = snapshot.screenshotsGranted ? "granted" : "not-granted"
-    let text = #"{"accessibility":"\#(accessibility)","screenshots":"\#(screenshots)"}"#
+    let text = permissionStatusJSON()
     do {
         try text.write(toFile: path, atomically: true, encoding: .utf8)
     } catch {
@@ -5183,6 +5195,10 @@ private func handleRequest(
             NSApp.terminate(nil)
         }
         return ["id": request.id, "ok": true, "result": ["ok": true]]
+    }
+    if request.method != "handshake" && request.method != "listApps" && SessionLockProbe.isLocked() {
+        let error = ProviderError.screenLocked
+        return ["id": request.id, "ok": false, "error": ["code": error.code, "message": error.message]]
     }
 
     do {

@@ -17,6 +17,10 @@ import { stopMacOSPermissionStatusHelper } from './macos-computer-use-permission
 
 const PERMISSION_STATUS_HELPER_LAUNCH_TIMEOUT_MS = 5_000
 
+type HelperPermissionStatus = Partial<
+  Record<ComputerUsePermissionId, ComputerUsePermissionStatus> & { sessionLocked: boolean }
+>
+
 // onHelperSpawn fires when `open` actually starts, so launch budgets measure real spawns.
 export function getComputerUsePermissionStatus(
   onHelperSpawn: () => void = () => {}
@@ -57,7 +61,8 @@ async function getComputerUsePermissionStatusAsync(
     permissions: [
       { id: 'accessibility', status: raw.accessibility ?? 'not-granted' },
       { id: 'screenshots', status: raw.screenshots ?? 'not-granted' }
-    ]
+    ],
+    sessionLocked: raw.sessionLocked === true
   }
 }
 
@@ -91,7 +96,7 @@ function createUnavailablePermissionStatus(
 async function readPermissionStatusFromHelperApp(
   helperAppPath: string,
   onHelperSpawn: () => void
-): Promise<Partial<Record<ComputerUsePermissionId, ComputerUsePermissionStatus>>> {
+): Promise<HelperPermissionStatus> {
   const tempDir = await mkdtemp(join(tmpdir(), 'orca-computer-use-permissions-'))
   const statusPath = join(tempDir, 'status.json')
   try {
@@ -101,9 +106,8 @@ async function readPermissionStatusFromHelperApp(
     for (let attempt = 0; attempt < 50; attempt++) {
       if (await fileExists(statusPath)) {
         const output = await readFile(statusPath, 'utf8')
-        return JSON.parse(output) as Partial<
-          Record<ComputerUsePermissionId, ComputerUsePermissionStatus>
-        >
+        const status: HelperPermissionStatus = JSON.parse(output)
+        return status
       }
       await delay(100)
     }

@@ -71,7 +71,8 @@ export function createPermissionStatusGate(
         (result) => {
           if (entry.joinable) {
             granted = isCacheable(result) ? result : null
-            lastDenied = granted ? null : result
+            // A denial read behind the lock screen says nothing about the grant, so it is never replayed.
+            lastDenied = granted || result.sessionLocked ? null : result
             cachedUntil = floorExpiresAt()
           }
         },
