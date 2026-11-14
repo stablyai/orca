@@ -1,18 +1,4 @@
-// Share high-churn exclusions across desktop and runtime watchers, following VS Code's recursive-watch defaults.
-export const WATCHER_IGNORE_DIRS: string[] = [
-  '.git',
-  'node_modules',
-  'dist',
-  'build',
-  '.next',
-  '.cache',
-  'target',
-  '.venv',
-  '__pycache__',
-  '.dart_tool',
-  '.gradle',
-  '.turbo'
-]
+export { WATCHER_IGNORE_DIRS } from '../../../../shared/file-watch/filesystem-watch-exclusions'
 
 // FSEvents rejects all exclusions above eight paths; regex filtering covers the remaining names at every depth.
 export const MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT = 8
