@@ -1,4 +1,4 @@
-import '../../shared/remote-runtime/host-store/environment-store-worker.test-support'
+import '../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 // #36923: a remote open can wake an SSH-connected recipe VM. If the user disconnects its host while
 // the recipe resumes, the wake must not reconnect it: the VM is up, and the host stays held.
 import { afterEach, describe, expect, it, vi } from 'vitest'

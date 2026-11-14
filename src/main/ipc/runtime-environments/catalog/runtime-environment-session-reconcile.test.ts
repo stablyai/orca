@@ -1,4 +1,4 @@
-import '../../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
+import '../../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import * as fs from 'node:fs'
 import { tmpdir } from 'node:os'

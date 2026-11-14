@@ -1,4 +1,4 @@
-import '../../shared/remote-runtime/host-store/environment-store-worker.test-support'
+import '../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { encodePairingOffer } from '../../shared/remote-runtime/pairing/pairing'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime/remote-runtime-client-error'

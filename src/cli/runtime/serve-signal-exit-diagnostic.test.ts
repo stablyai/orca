@@ -1,4 +1,4 @@
-import '../../shared/remote-runtime/host-store/environment-store-worker.test-support'
+import '../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { MacServeStartupAbortError, serveSignalExitError } from './serve-signal-exit-diagnostic'
 import { EventEmitter } from 'node:events'
 import { mkdtemp, rm } from 'node:fs/promises'

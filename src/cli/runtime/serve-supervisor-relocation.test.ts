@@ -1,4 +1,4 @@
-import '../../shared/remote-runtime/host-store/environment-store-worker.test-support'
+import '../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import {
   chmod,
   lstat,

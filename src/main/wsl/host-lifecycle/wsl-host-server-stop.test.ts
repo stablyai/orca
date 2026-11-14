@@ -1,4 +1,4 @@
-import '../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
+import '../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcadDecommissionResult } from '../../../shared/orcad-decommission'
 import type { OrcadTerminalCensus } from '../../../shared/orcad-terminal-census'

@@ -1,4 +1,4 @@
-import '../../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
+import '../../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { resetRuntimeEnvironmentStatusOwners } from '../connections/runtime-environment-request-connections'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'

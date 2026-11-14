@@ -1,4 +1,4 @@
-import './environment-store-worker.test-support'
+import './environment-store-worker-test-fixture'
 import {
   closeEnvironmentStore,
   environmentStoreWriteCount

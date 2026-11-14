@@ -1,4 +1,4 @@
-import '../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
+import '../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'

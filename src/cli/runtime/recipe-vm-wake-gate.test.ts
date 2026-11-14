@@ -1,4 +1,4 @@
-import '../../shared/remote-runtime/host-store/environment-store-worker.test-support'
+import '../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 // #36923: the CLI reaches a recipe VM's server directly, so it asks the desktop that owns the
 // VM to wake it, and only for a command that opens the workspace.
 import { mkdtempSync, rmSync } from 'node:fs'

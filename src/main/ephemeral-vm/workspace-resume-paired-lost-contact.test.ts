@@ -1,4 +1,4 @@
-import '../../shared/remote-runtime/host-store/environment-store-worker.test-support'
+import '../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 // #34089 for VMs reached as paired Orca servers: a VM its provider stopped or reclaimed stays
 // recorded as running. Once Orca's own probes have failed for minutes, opening the workspace runs
 // the recipe's resume and keeps the device pairing unless the server came back with a new host key.

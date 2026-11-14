@@ -1,4 +1,4 @@
-import '../../shared/remote-runtime/host-store/environment-store-worker.test-support'
+import '../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { spawn } from 'node:child_process'
 import { chmodSync, mkdirSync, mkdtempSync } from 'node:fs'
 import { createServer, type Server, type Socket } from 'node:net'

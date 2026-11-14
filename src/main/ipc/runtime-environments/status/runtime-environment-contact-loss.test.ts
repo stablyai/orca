@@ -1,4 +1,4 @@
-import '../../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
+import '../../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 // #34089: whether a paired server's host may be gone comes only from dials Orca already makes:
 // its health probes and its control socket's reconnects.
 import { afterEach, describe, expect, it, vi } from 'vitest'

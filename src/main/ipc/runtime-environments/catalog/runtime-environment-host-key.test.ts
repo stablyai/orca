@@ -1,4 +1,4 @@
-import '../../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
+import '../../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { describe, expect, it } from 'vitest'
 import type { KnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { publicRuntimeEnvironmentWithHostKey } from './runtime-environment-host-key'

@@ -1,4 +1,4 @@
-import '../../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
+import '../../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { resetRuntimeEnvironmentStatusOwners } from '../connections/runtime-environment-request-connections'
 vi.mock('electron', () => ({ BrowserWindow: { getAllWindows: () => [] } }))
 import { mkdtempSync, rmSync } from 'node:fs'

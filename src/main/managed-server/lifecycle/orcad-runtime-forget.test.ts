@@ -1,4 +1,4 @@
-import '../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
+import '../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { rmSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'

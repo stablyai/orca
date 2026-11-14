@@ -1,4 +1,4 @@
-import '../../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
+import '../../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import * as environmentStore from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import * as setup from './runtime-environment-subscription-setup'
 import { resetRuntimeEnvironmentStatusOwners } from '../connections/runtime-environment-request-connections'

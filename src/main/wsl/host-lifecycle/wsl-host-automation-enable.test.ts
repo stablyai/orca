@@ -1,4 +1,4 @@
-import '../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
+import '../../../shared/remote-runtime/host-store/environment-store-worker-test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const hostRows = vi.hoisted(() => new Map<string, { enabled: boolean; updatedAt: number }>())
