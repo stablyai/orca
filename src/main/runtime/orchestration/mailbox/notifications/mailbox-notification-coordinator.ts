@@ -88,9 +88,6 @@ export class OrchestrationMailboxNotificationCoordinator<
   }
 
   settleDelivery(terminal: OrchestrationMailboxTerminal | null): boolean {
-    if (terminal) {
-      this.deps.pointerDelivery.reconcileUncertainMail(terminal.ptyId)
-    }
     if (!terminal || !this.deps.pointerDelivery.requiresCurrentScreen(terminal.ptyId)) {
       return false
     }

@@ -31,6 +31,7 @@ class OrchestrationDbCore {
   // Restart recovery reads durable re-armed rows; only the post-transaction notification queue is in memory.
   pendingMailHandBacks: MailHandBack[] = []
   /** The runtime's wake for mail a settlement handed to a Run, called once the transaction ends. */
+  mailReadListener: ((owners: { mailboxes: string[]; ptyIds: string[] }) => void) | undefined
   mailHandBackListener: ((handBack: MailHandBack) => void) | undefined
   /** The runtime's auto-release timer, re-armed whenever a deadline moves. */
   workerTerminalAutoReleaseListener: (() => void) | undefined

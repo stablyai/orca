@@ -58,7 +58,6 @@ export const ORCHESTRATION_CHECK_METHODS = [
         if (consumingCheck) {
           const mailboxes = checkedMailboxes(result)
           runtime.withdrawStaleChatMail(mailboxes)
-          runtime.settleConsumedTerminalMail(mailboxes)
         }
         return withReportFollowUps(db, result)
       }

@@ -208,15 +208,7 @@ export function staleDelivery(db: OrchestrationDb, deliveryId: string): Orchestr
 function markDeliveryAcknowledged(db: OrchestrationDb, delivery: DeliveryRow): DeliveryRow {
   const messageIds = JSON.parse(delivery.message_ids) as string[]
   if (messageIds.length > 0) {
-    const placeholders = messageIds.map(() => '?').join(',')
-    db.db
-      .prepare(
-        `UPDATE messages
-         SET read = 1, pointer_enter_pending = 0, pointer_pty_id = NULL,
-             pointer_process_incarnation = NULL
-         WHERE id IN (${placeholders})`
-      )
-      .run(...messageIds)
+    db.markAsRead(messageIds)
   }
   db.db
     .prepare(

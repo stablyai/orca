@@ -3,7 +3,10 @@ import {
   NotificationAttentionReadFrontiers,
   notificationWasAcknowledged
 } from '../../../../shared/notification-attention-acknowledgement'
-import type { NotificationAttentionAcknowledgement } from '../../../../shared/notification-settings-types'
+import type {
+  NotificationAttentionAcknowledgement,
+  RetainedAgentAttention
+} from '../../../../shared/notification-settings-types'
 import { reserveNotificationCooldown } from '../../../../shared/notification-burst-cooldown'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { AgentStatusState } from '../../../../shared/agent-status/contracts/agent-status-types'
@@ -29,7 +32,7 @@ export type MobileNotificationDispatchEvent = {
   desktopAllowed?: boolean
   desktopAway?: boolean
   emittedAt?: number
-  source: 'agent-task-complete' | 'terminal-bell' | 'test' | 'plugin' | 'orchestration-uncertainty'
+  source: 'agent-task-complete' | 'terminal-bell' | 'test' | 'plugin'
   title: string
   body: string
   worktreeId?: string
@@ -75,6 +78,26 @@ export class RuntimeMobileNotificationController {
   private pushRegistrar: MobilePushRegistrar | null = null
   private dismissalStore: MobileNotificationDismissalStore | null = null
   private readonly desktopClients = new DesktopClientPresenceTracker()
+
+  constructor(
+    private readonly attentionChanged?: (id: string, notice: RetainedAgentAttention | null) => void
+  ) {}
+
+  getRetainedAgentAttention(): RetainedAgentAttention[] {
+    return this.replay.retainedNotifications().flatMap((event) =>
+      event.type === 'notification' && event.notificationId
+        ? [
+            {
+              notificationId: event.notificationId,
+              title: event.title,
+              body: event.body,
+              worktreeId: event.worktreeId,
+              paneKey: event.paneKey
+            }
+          ]
+        : []
+    )
+  }
 
   configureDismissalStore(userDataPath: string): void {
     this.dismissalStore = new MobileNotificationDismissalStore(userDataPath)
@@ -261,7 +284,7 @@ export class RuntimeMobileNotificationController {
     if (!event) {
       if (previous) {
         this.dispatch({ type: 'dismiss', notificationId: id })
-        getRuntimeDesktopSurface().dismissNotification?.(id)
+        this.attentionChanged?.(id, null)
       }
       return
     }
@@ -273,15 +296,13 @@ export class RuntimeMobileNotificationController {
       return
     }
     this.dispatch({ ...event, notificationId: id })
-    try {
-      getRuntimeDesktopSurface().showNotification({
-        title: event.title,
-        body: event.body,
-        notificationId: id
-      })
-    } catch {
-      // Headless runtimes retain the explanation for reconnecting clients.
-    }
+    this.attentionChanged?.(id, {
+      notificationId: id,
+      title: event.title,
+      body: event.body,
+      worktreeId: event.worktreeId,
+      paneKey: event.paneKey
+    })
   }
 
   async dispatchPlugin(input: {

@@ -4,7 +4,7 @@ import { subscribeRuntimeEnvironmentFromPreload } from '../../../../preload/runt
 import { tagRuntimeSubscriptionReplayResponse } from '../../../../shared/runtime-subscription-replay'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { registerRuntimeClientIpcBridge } from './runtime-client-ipc-bridge'
-import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import type { RuntimeClientEventStreamMessage } from '../../../../shared/runtime-client-events'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import {
   beginWorktreeLineageRefresh,
@@ -46,6 +46,8 @@ function createHarness() {
   const getIssue = vi.fn(() => issueRead.promise)
   const refreshStatus = vi.fn(async () => true)
   const fetchRuntimeEnvironmentRepos = vi.fn(async () => [])
+  const dispatchAttention = vi.fn(async () => ({ delivered: false, reason: 'disabled' as const }))
+  const dismissAttention = vi.fn(async () => ({ dismissed: 1 }))
   const acknowledgeAttention = vi.fn(async () => ({ dismissed: 0 }))
   let nextId = 0
   vi.stubGlobal('window', {
@@ -55,7 +57,11 @@ function createHarness() {
           subscribeRuntimeEnvironmentFromPreload(ipc, args, callbacks, () => `sub-${nextId++}`),
         call: vi.fn(async () => ({ id: 'r', ok: true, result: [] }))
       },
-      notifications: { acknowledgeAttention },
+      notifications: {
+        acknowledgeAttention,
+        dispatch: dispatchAttention,
+        dismiss: dismissAttention
+      },
       browser: { sessionClientRouteImportSources: async () => ({}) },
       linear: { getIssue }
     }
@@ -115,12 +121,14 @@ function createHarness() {
     ipc,
     activateNotifiedWorktree,
     acknowledgeAttention,
+    dispatchAttention,
+    dismissAttention,
     enqueue,
     emit: (
       index: number,
       replay = false,
       event?:
-        | RuntimeClientEvent
+        | RuntimeClientEventStreamMessage
         | { type: 'worktreesChanged'; repoId: string; sortOrderOnly: unknown; sortOrders?: unknown }
     ) => {
       const response = {
@@ -243,4 +251,59 @@ it('accepts a fresh bridge early frame while rejecting the previous bridge frame
     await h.finish()
   }
   expect(h.ipc.removeListener).toHaveBeenCalledOnce()
+})
+
+it('routes retained remote agent attention through notification policy once and withdraws consumed offline news', async () => {
+  const h = createHarness()
+  useAppStore.setState({
+    activeWorktreeId: 'remote-workspace',
+    activeWorkspaceExecutionHostId: 'local'
+  })
+  const notice = {
+    notificationId: 'orchestration-mail:remote-pty',
+    title: 'Claude in Review may have missed mail',
+    body: 'Ask Claude to run orca orchestration check --run run_review.',
+    worktreeId: 'remote-workspace'
+  }
+  try {
+    h.start()
+    h.emit(0, false, {
+      type: 'agentAttentionChanged',
+      notificationId: notice.notificationId,
+      notice
+    })
+    expect(h.dispatchAttention).toHaveBeenCalledOnce()
+    expect(h.dispatchAttention).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: 'agent-task-complete',
+        agentState: 'waiting',
+        content: {
+          title: 'Claude in Review may have missed mail',
+          body: 'Ask Claude to run orca orchestration check --run run_review.'
+        },
+        executionHost: 'runtime:host-a',
+        notificationSourceId: 'runtime:host-a',
+        isActiveWorktree: false,
+        mobileDeliveredByHost: true
+      })
+    )
+    h.emit(0, true, {
+      type: 'ready',
+      subscriptionId: 'sub-0',
+      snapshot: { agentAttention: [notice] }
+    })
+    h.emit(1, false, {
+      type: 'ready',
+      subscriptionId: 'sub-1',
+      snapshot: { agentAttention: [notice] }
+    })
+    expect(h.dispatchAttention).toHaveBeenCalledOnce()
+    h.emit(1, true, { type: 'ready', subscriptionId: 'sub-1', snapshot: { agentAttention: [] } })
+    h.emit(2, false, { type: 'ready', subscriptionId: 'sub-2', snapshot: { agentAttention: [] } })
+    expect(h.dismissAttention).toHaveBeenCalledWith([
+      '["runtime:host-a","orchestration-mail:remote-pty"]'
+    ])
+  } finally {
+    await h.finish()
+  }
 })

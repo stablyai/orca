@@ -3,6 +3,11 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
+import { PushSendRequestSchema } from '../../../../../../cloud/packages/push-contract/src/send-messages'
+import {
+  createHarness as createPushHarness,
+  registration
+} from '../../../push/push-dispatcher.test-fixture'
 import {
   createBoundRun,
   createDatabase,
@@ -73,7 +78,13 @@ async function reconnect(runtime: OrcaRuntimeService) {
   expect(id).toEqual(expect.any(String))
   runtime.cleanupSubscription(id!)
   await pending
-  return received.filter((event) => event.source === 'orchestration-uncertainty')
+  expect(received.filter((event) => event.type === 'notification')).toEqual([])
+  return runtime
+    .getMissedNotificationsSince(0, 'new-client')
+    .filter(
+      (event) =>
+        event.notificationId?.startsWith('orchestration-mail:') && event.type === 'notification'
+    )
 }
 
 function inspectedForeground(process: string) {
@@ -123,6 +134,10 @@ it.each([2, 20])(
       return row
     })
     const { runtime, write } = createRuntime(db)
+    const push = createPushHarness({
+      devices: [{ deviceId: 'phone', pushRegistration: registration() }]
+    })
+    runtime.onNotificationDispatched((event) => push.dispatcher.enqueue(event))
     vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
     const noticeDirectory = mkdtempSync(join(tmpdir(), 'orca-uncertain-attention-'))
     temporaryDirectories.push(noticeDirectory)
@@ -154,11 +169,23 @@ it.each([2, 20])(
       db.markAsReadAndDelivered([actionable.id])
       await driveToLiveIdle(runtime)
       await vi.advanceTimersByTimeAsync(65000)
-      const notices = notifications.filter((event) => event.source === 'orchestration-uncertainty')
+      const notices = notifications.filter((event) =>
+        event.notificationId?.startsWith('orchestration-mail:')
+      )
       expect.soft(notices).toHaveLength(1)
       expect.soft(notices[0]?.body).toContain(`orca orchestration check --run ${runs[0].id}`)
       expect.soft(notices[0]?.body).toContain(`orca orchestration check --run ${runs[n - 1].id}`)
       expect.soft(notices[0]?.body).toContain('Codex')
+      expect.soft(push.sends).toHaveLength(1)
+      expect.soft(PushSendRequestSchema.safeParse({ v: 1, ...push.sends[0] }).success).toBe(true)
+      expect.soft(push.sends[0].notification).toMatchObject({
+        source: 'agent-task-complete',
+        agentState: 'needs-input'
+      })
+      expect
+        .soft(push.sends[0].notification.body)
+        .toContain(`orca orchestration check --run ${runs.map((run) => run.id).sort()[0]}.`)
+      expect.soft(push.sends[0].notification.body.length).toBeLessThanOrEqual(180)
       expect(write).not.toHaveBeenCalled()
       for (let i = 0; i < n; i++) {
         expect.soft(db.getMessageById(rows[i].id)).toMatchObject({
@@ -185,7 +212,7 @@ it.each([2, 20])(
         await vi.advanceTimersByTimeAsync(1000)
       }
       expect(
-        notifications.filter((event) => event.source === 'orchestration-uncertainty')
+        notifications.filter((event) => event.notificationId?.startsWith('orchestration-mail:'))
       ).toHaveLength(1)
       expect(db.getMessageById(rows[0].id)).toMatchObject({
         read: 0,
@@ -207,13 +234,6 @@ it.each([2, 20])(
           workspaceKind: 'git-worktree'
         }
       })
-      expect(await reconnect(runtime)).toHaveLength(1)
-      const missed = runtime.getMissedNotificationsSince(100000, 'offline-client-epoch')
-      expect(
-        missed.filter(
-          (event) => event.type === 'notification' && event.source === 'orchestration-uncertainty'
-        )
-      ).toHaveLength(1)
       process = 'codex'
       runtime.onPtyData(
         PTY_ID,
@@ -235,6 +255,42 @@ it.each([2, 20])(
           return { outcome: 'accepted' }
         }
       })
+      const readClaims = db.getPendingMailboxPointerMessagesForPty.bind(db)
+      const retainedReads = vi.spyOn(db, 'getPendingMailboxPointerMessagesForPty')
+      const materialized: string[] = []
+      retainedReads.mockImplementation((ptyId) => {
+        const claims = readClaims(ptyId)
+        materialized.push(...claims.map((claim) => claim.id))
+        return claims
+      })
+      for (let i = 0; i < 2; i++) {
+        runtime.onPtyData(PTY_ID, `\x1b[37;3H\x1b[K`, Date.now())
+        const run = createBoundRun(db, `Ordinary delivery ${i}`)
+        const row = insertDirectRunMessage(db, run.id, `Ordinary ${i}`)
+        runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+        await vi.advanceTimersByTimeAsync(10000)
+        expect(db.getMessageById(row.id)).toMatchObject({
+          delivered_at: expect.any(String),
+          pointer_enter_pending: 0
+        })
+      }
+      // Unchanged retained history is not materialized by unrelated flight settlement.
+      expect(retainedReads).not.toHaveBeenCalled()
+      expect(materialized).toEqual([])
+      retainedReads.mockRestore()
+      expect(await reconnect(runtime)).toHaveLength(1)
+      expect(
+        runtime.getMissedNotificationsSince(100000, runtime.getMobileNotificationEpoch())
+      ).toEqual([])
+      const missed = runtime.getMissedNotificationsSince(100000, 'offline-client-epoch')
+      expect(
+        missed.filter(
+          (event) =>
+            event.type === 'notification' && event.notificationId?.startsWith('orchestration-mail:')
+        )
+      ).toHaveLength(1)
+      write.mockClear()
+      runtime.onPtyData(PTY_ID, `\x1b[37;3H\x1b[K`, Date.now())
       const newMail = insertDirectRunMessage(db, runs[0].id, 'New eligible mail')
       runtime.notifyMessageArrived(`run:${runs[0].id}`, 'status')
       await vi.advanceTimersByTimeAsync(10000)
@@ -265,7 +321,9 @@ it.each([2, 20])(
         runtime
           .getMissedNotificationsSince(100000, 'offline-client-epoch')
           .filter(
-            (event) => event.type === 'notification' && event.source === 'orchestration-uncertainty'
+            (event) =>
+              event.type === 'notification' &&
+              event.notificationId?.startsWith('orchestration-mail:')
           )
       ).toEqual([])
       expect(
@@ -319,7 +377,7 @@ it.each(['missing pointer', 'unverifiable Enter'])(
           : { outcome: 'accepted' }
       }
     })
-    const events: { type: string; source?: string }[] = []
+    const events: { type: string; source?: string; notificationId?: string }[] = []
     runtime.onNotificationDispatched((event) => events.push(event))
     try {
       await runtime.listTerminals()
@@ -338,7 +396,7 @@ it.each(['missing pointer', 'unverifiable Enter'])(
         pointer_enter_pending: loss === 'missing pointer' ? 2 : 3
       })
       expect
-        .soft(events.filter((event) => event.source === 'orchestration-uncertainty'))
+        .soft(events.filter((event) => event.notificationId?.startsWith('orchestration-mail:')))
         .toHaveLength(1)
       const attempts = vi.spyOn(runtime, 'deliverPendingMessagesForPty')
       const work = countForegroundSqlWork(db)
@@ -371,7 +429,8 @@ it.each(['missing pointer', 'unverifiable Enter'])(
             .getMissedNotificationsSince(100000, 'offline-client-epoch')
             .filter(
               (event) =>
-                event.type === 'notification' && event.source === 'orchestration-uncertainty'
+                event.type === 'notification' &&
+                event.notificationId?.startsWith('orchestration-mail:')
             )
         ).toEqual([])
         expect(db.getMessageById(old.id)).toMatchObject({

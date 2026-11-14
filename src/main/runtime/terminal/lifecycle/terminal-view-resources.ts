@@ -1,3 +1,4 @@
+import { isNotificationSourceEnabled } from '../../../../shared/notification-source-gate'
 import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import type {
   TerminalIdentityRawInputs,
@@ -53,6 +54,12 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
   ): TerminalIdentityReadContext
 
   abstract getNestedWorkerMaxDepth(): number
+  protected abstract getSavedPaneTitle(
+    worktreeId: string,
+    tabId: string,
+    leafId: string
+  ): string | null
+  abstract isWorkspaceNotificationMuted(workspaceId: string): boolean
 
   protected crewRuntimeReaders(): CrewRuntimeReaders {
     return {
@@ -88,32 +95,53 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
 
   protected readonly subscriptions = new RuntimeSubscriptionRegistry()
 
-  protected readonly mobileNotifications = new RuntimeMobileNotificationController()
+  protected readonly mobileNotifications = new RuntimeMobileNotificationController(
+    (notificationId, notice) =>
+      this.emitClientEvent({ type: 'agentAttentionChanged', notificationId, notice })
+  )
 
   protected publishUncertainTerminalMail(ptyId: string, mailboxes: readonly string[]): void {
+    const notificationId = `orchestration-mail:${ptyId}`
+    if (mailboxes.length === 0) {
+      this.mobileNotifications.reconcileMailboxAttention(notificationId, null)
+      return
+    }
     const pty = this.ptysById.get(ptyId)
     const terminal = this.getOrchestrationMailboxTerminal(ptyId)
+    const leaf = this.getLeavesForPty(ptyId)[0]
+    const terminalName = leaf
+      ? this.getSavedPaneTitle(leaf.worktreeId, leaf.tabId, leaf.leafId) ||
+        this.tabs.get(leaf.tabId)?.title
+      : pty?.tabId
+        ? this.tabs.get(pty.tabId)?.title
+        : null
+    const settings = this.store?.getSettings().notifications
+    const desktopAllowed =
+      !settings || isNotificationSourceEnabled(settings, 'agent-task-complete', 'waiting')
     const agent = tuiAgentDisplayName(this.mailDeliveryAgent(ptyId) ?? '') ?? 'The agent'
     const cli = terminal ? this.getTerminalOrchestrationCliCommand(terminal.handle) : 'orca'
     const commands = mailboxes.map((mailbox) => {
       const run = mailbox.startsWith('run:') ? mailbox.slice(4) : undefined
       return `${cli} orchestration check${run ? ` --run ${run}` : ''}`
     })
-    this.mobileNotifications.reconcileMailboxAttention(
-      `orchestration-mail:${ptyId}`,
-      mailboxes.length
-        ? {
-            type: 'notification',
-            source: 'orchestration-uncertainty',
-            title: `${agent} has unread mail`,
-            body: `${agent}’s mail notification may not have been submitted. In that terminal, run: ${commands.join('; ')}.`,
-            worktreeId: pty?.worktreeId,
-            // Viewing a workspace cannot acknowledge unread terminal mail.
-            workspaceExecutionHostId: null,
-            paneKey: terminal?.paneKeys[0]
-          }
-        : null
-    )
+    this.mobileNotifications.reconcileMailboxAttention(notificationId, {
+      type: 'notification',
+      source: 'agent-task-complete',
+      agentState: 'waiting',
+      attentionKey: JSON.stringify([ptyId, mailboxes]),
+      emittedAt: Date.now(),
+      ...(!desktopAllowed || (pty && this.isWorkspaceNotificationMuted(pty.worktreeId))
+        ? { desktopAllowed: false }
+        : {}),
+      title: `${agent} in ${terminalName || 'the terminal'} may have missed mail`,
+      body: commands
+        .map((command) => `Ask ${agent === 'The agent' ? 'the agent' : agent} to run ${command}.`)
+        .join('\n'),
+      worktreeId: pty?.worktreeId,
+      // Viewing a workspace cannot acknowledge unread terminal mail.
+      workspaceExecutionHostId: null,
+      paneKey: terminal?.paneKeys[0]
+    })
   }
 
   protected readonly pairedRendererSessionOwnedPtyIds = new Set<string>()

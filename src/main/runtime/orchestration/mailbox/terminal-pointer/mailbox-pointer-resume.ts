@@ -1,3 +1,4 @@
+import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
 import type { OrchestrationMailboxPointerState } from './mailbox-pointer-state'
 import type {
@@ -74,12 +75,12 @@ export function reconcileUncertainMailboxPointers<T extends OrchestrationMessage
   deps: PointerDeliveryDependencies<T>,
   state: OrchestrationMailboxPointerState,
   ptyId: string
-): void {
+): boolean {
   try {
     const db = deps.getDb()
     const target = deps.resolveSubmitTarget(ptyId)
     if (!db || !target) {
-      return
+      return false
     }
     const owned = new Set(state.flightForPty(ptyId)?.stagedMessageIds)
     const mailboxes = new Set(
@@ -94,8 +95,10 @@ export function reconcileUncertainMailboxPointers<T extends OrchestrationMessage
         .map((row) => row.to_handle)
     )
     deps.onDeliveryDecision(ptyId, { uncertainMailboxes: [...mailboxes].sort() })
+    return true
   } catch {
     // Unavailable reservation evidence cannot withdraw an unread-mail explanation.
+    return false
   }
 }
 
@@ -118,4 +121,52 @@ export function reconcilePendingOrchestrationMailboxPointer<
     args.redrive()
   }
   return retained
+}
+
+/** Reconstruct once per incarnation, then only when the uncertainty set can change. */
+export class UncertainMailboxReconciliation<T extends OrchestrationMessageWaiter> {
+  private readonly initialized = new Map<
+    string,
+    { incarnation: string; db: OrchestrationDb | null }
+  >()
+  private readonly pending = new Set<string>()
+
+  constructor(
+    private readonly deps: PointerDeliveryDependencies<T>,
+    private readonly state: OrchestrationMailboxPointerState
+  ) {}
+
+  ensure(
+    ptyId: string,
+    incarnation = this.deps.resolveSubmitTarget(ptyId)?.processIncarnation
+  ): void {
+    const previous = this.initialized.get(ptyId)
+    if (
+      incarnation &&
+      (previous?.incarnation !== incarnation || previous.db !== this.deps.getDb())
+    ) {
+      this.reconcile(ptyId)
+    }
+  }
+
+  reconcile(ptyId: string): void {
+    if (this.pending.has(ptyId)) {
+      return
+    }
+    this.pending.add(ptyId)
+    queueMicrotask(() => {
+      if (!this.pending.delete(ptyId)) {
+        return
+      }
+      const incarnation = this.deps.resolveSubmitTarget(ptyId)?.processIncarnation
+      if (incarnation && reconcileUncertainMailboxPointers(this.deps, this.state, ptyId)) {
+        this.initialized.set(ptyId, { incarnation, db: this.deps.getDb() })
+      }
+    })
+  }
+
+  retire(ptyId: string): void {
+    this.pending.delete(ptyId)
+    this.initialized.delete(ptyId)
+  }
 }

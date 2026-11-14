@@ -24,7 +24,7 @@ import {
 } from '../../db/messages/mailbox-pointer-enter-state'
 import {
   reconcilePendingOrchestrationMailboxPointer,
-  reconcileUncertainMailboxPointers
+  UncertainMailboxReconciliation
 } from './mailbox-pointer-resume'
 import { stageOrchestrationMailboxPointer, pointerEnterDelayMs } from './mailbox-pointer-stage'
 
@@ -35,7 +35,10 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
   })
   private readonly foregroundDelivery = new MailboxForegroundDelivery()
   private readonly coldParkedPtys = new Set<string>()
-  constructor(private readonly deps: PointerDeliveryDependencies<TWaiter>) {}
+  private readonly uncertainty: UncertainMailboxReconciliation<TWaiter>
+  constructor(private readonly deps: PointerDeliveryDependencies<TWaiter>) {
+    this.uncertainty = new UncertainMailboxReconciliation(deps, this.state)
+  }
 
   deliverForHandle(handle: string, reservedTypes?: ReadonlySet<string>): void {
     this.foregroundDelivery.deliverForHandle(this.deps, this, handle, reservedTypes)
@@ -66,7 +69,9 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       }
       const foregroundHeld =
         options.foreground === undefined &&
-        (this.needsForegroundEvaluation(ptyId) || this.deps.isForegroundCandidate?.(terminal))
+        (this.isForegroundHeld(ptyId) ||
+          this.deps.needsForegroundEvaluation?.(ptyId) ||
+          this.deps.isForegroundCandidate?.(terminal))
       if (
         (!foregroundHeld &&
           (!isMailboxTerminalTakingInput(terminal) ||
@@ -94,7 +99,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         terminal,
         messages: pending,
         hasEligibleMail: unread.length > 0,
-        reconcile: () => this.reconcileUncertainMail(ptyId),
+        reconcile: () => this.uncertainty.ensure(ptyId, target.processIncarnation),
         redrive: () => this.redrive(mailboxHandle, true)
       })
       const newestSequence = unread.at(-1)?.sequence ?? pending.at(-1)?.sequence
@@ -153,10 +158,6 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     }
   }
 
-  private needsForegroundEvaluation(ptyId: string): boolean {
-    return this.isForegroundHeld(ptyId) || this.deps.needsForegroundEvaluation?.(ptyId) === true
-  }
-
   readonly probeForeground = (ptyId: string, processIncarnation: string) => {
     const probe = this.state.foreground.probeForeground(ptyId, processIncarnation, () =>
       this.deps.readForeground(ptyId)
@@ -179,13 +180,11 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     )
   }
 
-  reconcileUncertainMail(ptyId: string): void {
-    reconcileUncertainMailboxPointers(this.deps, this.state, ptyId)
-  }
+  readonly restoreUncertainMail = (ptyId: string): void => this.uncertainty.ensure(ptyId)
 
-  completeRecovery(ptyId: string): void {
-    this.state.completeRecovery(ptyId)
-  }
+  readonly reconcileUncertainMail = (ptyId: string): void => this.uncertainty.reconcile(ptyId)
+
+  readonly completeRecovery = this.state.completeRecovery.bind(this.state)
 
   readonly hasPendingFlightMail = (terminal: OrchestrationMailboxTerminal): boolean =>
     this.state.hasRecoveryFlight(terminal.ptyId) ||
@@ -239,6 +238,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     this.coldParkedPtys.delete(ptyId)
     const { flight, releasedMailboxes } = this.state.retirePty(ptyId, preserveForeground)
     if (!preserveForeground) {
+      this.uncertainty.retire(ptyId)
       this.deps.onDeliveryDecision(ptyId, { foreground: false, uncertainMailboxes: [] })
     }
     if (flight?.enterTimer != null) {

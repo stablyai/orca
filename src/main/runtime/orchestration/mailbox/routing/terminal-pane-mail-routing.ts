@@ -238,9 +238,12 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     this.orchestrationStructuredMailboxPointerDelivery.withdrawStale(mailboxes)
   }
 
-  settleConsumedTerminalMail(mailboxes: readonly string[]): void {
+  settleConsumedTerminalMail(
+    mailboxes: readonly string[],
+    reservationPtys: readonly string[] = []
+  ): void {
     try {
-      const ptys = new Set<string>()
+      const ptys = new Set(reservationPtys)
       for (const mailbox of mailboxes) {
         const terminal = this.orchestrationMailboxDeliveryTarget.resolveTerminal(mailbox)
         if (terminal) {
@@ -248,6 +251,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
         }
       }
       for (const ptyId of ptys) {
+        this.orchestrationMailboxPointerDelivery.reconcileUncertainMail(ptyId)
         this.armDeliveryRecheck(ptyId, { settled: true })
       }
     } catch {
@@ -327,7 +331,7 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     try {
       const terminal = this.orchestrationMailboxDeliveryTarget.resolveTerminal(handle)
       if (terminal) {
-        this.orchestrationMailboxPointerDelivery.reconcileUncertainMail(terminal.ptyId)
+        this.orchestrationMailboxPointerDelivery.restoreUncertainMail(terminal.ptyId)
       }
       if (terminal && this.orchestrationMailboxPointerDelivery.isForegroundHeld(terminal.ptyId)) {
         this.armDeliveryRecheck(terminal.ptyId)

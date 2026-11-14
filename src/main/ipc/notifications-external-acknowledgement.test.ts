@@ -5,6 +5,11 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { StructuredAttentionOrigin } from '../../shared/agent-session/agent-session-attention'
 import type { NotificationDispatchRequest } from '../../shared/notification-settings-types'
 import {
+  getAllWindowsMock,
+  notificationCtorMock,
+  notificationShowMock,
+  notificationCloseMock,
+  readAuthorizationStatusMock,
   getDispatchHandler,
   getDismissHandler,
   handleMock,
@@ -40,10 +45,16 @@ let directory: string
 let controller: RuntimeMobileNotificationController
 let events: RuntimeClientEventBus
 let dismissedMobile: string[]
+let needsInput = true
+let suppressFocused = false
+let mutedSources: string[] = []
 
 beforeEach(() => {
   vi.useFakeTimers()
   resetNotificationDispatchMocks()
+  needsInput = true
+  suppressFocused = false
+  mutedSources = ['runtime:muted-host']
   directory = mkdtempSync(join(tmpdir(), 'orca-external-ack-'))
   controller = new RuntimeMobileNotificationController()
   controller.configureDismissalStore(directory)
@@ -65,14 +76,15 @@ function installHandlers(): void {
   registerNotificationHandlers(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: notification handlers read only these settings on this path.
     {
+      getWorkspaceSession: () => ({ activeWorktreeId: location.workspaceId }),
       getSettings: () => ({
         notifications: {
           enabled: true,
           agentTaskComplete: true,
-          agentNeedsInput: true,
+          agentNeedsInput: needsInput,
           terminalBell: true,
-          suppressWhenFocused: false,
-          mutedNotificationSourceIds: ['runtime:muted-host']
+          suppressWhenFocused: suppressFocused,
+          mutedNotificationSourceIds: mutedSources
         }
       })
     } as never,
@@ -191,4 +203,88 @@ it('retires a persisted pane read after restart without a new host event, preser
       structuredOrigin: origin(4)
     })
   ).toEqual({ delivered: false, reason: 'already-read' })
+})
+
+it('uses agent input policy and focused-workspace suppression for retained host attention', async () => {
+  const notice = {
+    notificationId: 'orchestration-mail:terminal',
+    title: 'Claude in Review may have missed mail',
+    body: 'Ask Claude to run orca orchestration check --run run_review.',
+    worktreeId: location.workspaceId,
+    paneKey: 'review-pane'
+  }
+  const publish = () =>
+    events.emit({
+      type: 'agentAttentionChanged',
+      notificationId: notice.notificationId,
+      notice
+    })
+  needsInput = false
+  publish()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(notificationShowMock).not.toHaveBeenCalled()
+  needsInput = true
+  mutedSources = ['local']
+  events.emit({
+    type: 'agentAttentionChanged',
+    notificationId: notice.notificationId,
+    notice: null
+  })
+  publish()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(notificationShowMock).not.toHaveBeenCalled()
+  mutedSources = []
+  suppressFocused = true
+  getAllWindowsMock.mockReturnValue([
+    { isDestroyed: () => false, isFocused: () => true, isVisible: () => true }
+  ])
+  events.emit({
+    type: 'agentAttentionChanged',
+    notificationId: notice.notificationId,
+    notice: null
+  })
+  publish()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(notificationShowMock).not.toHaveBeenCalled()
+  suppressFocused = false
+  readAuthorizationStatusMock.mockResolvedValue('authorized')
+  events.emit({
+    type: 'agentAttentionChanged',
+    notificationId: notice.notificationId,
+    notice: null
+  })
+  publish()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(notificationShowMock).toHaveBeenCalledOnce()
+  expect(notificationCtorMock).toHaveBeenCalledWith(
+    expect.objectContaining({
+      title: 'Claude in Review may have missed mail',
+      body: 'Ask Claude to run orca orchestration check --run run_review.'
+    })
+  )
+  publish()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(notificationShowMock).toHaveBeenCalledOnce()
+  const replacement = {
+    ...notice,
+    body: 'Ask Claude to run orca orchestration check --run run_review.\nAsk Claude to run orca orchestration check --run run_added.'
+  }
+  events.emit({
+    type: 'agentAttentionChanged',
+    notificationId: notice.notificationId,
+    notice: replacement
+  })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(notificationShowMock).toHaveBeenCalledTimes(2)
+  expect(notificationCtorMock).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      body: 'Ask Claude to run orca orchestration check --run run_review.\nAsk Claude to run orca orchestration check --run run_added.'
+    })
+  )
+  events.emit({
+    type: 'agentAttentionChanged',
+    notificationId: notice.notificationId,
+    notice: null
+  })
+  expect(notificationCloseMock).toHaveBeenCalledTimes(2)
 })

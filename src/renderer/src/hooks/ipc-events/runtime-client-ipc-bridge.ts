@@ -1,8 +1,8 @@
+import { createRetainedAgentAttentionReceiver } from '@/attention/retained-agent-attention'
 import {
   registerLinearLinkedIssueRefresh,
   refreshDefaultLinkedLinearIssue
 } from './linear-linked-issue-refresh'
-import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/pty-transport/output/terminal-side-effect-facts-handler'
 import { emitRuntimeClientWindowEvent } from './runtime-client-window-events'
 import { applyHostWorkspaceRowEvent } from './worktree-metadata-set-events'
 import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat/launch-drafts/native-chat-launch-draft-runtime-resolution'
@@ -18,7 +18,6 @@ import {
 } from '@/runtime/hosts/ssh/runtime-environment-ssh-state'
 import { subscribeRuntimeClientEvents } from '@/runtime/rpc/subscriptions/runtime-client-events'
 import { hostsBrowserPagesFor } from '@/runtime/browser/client-hosting/browser-client-host-request-answer'
-import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getEnvironmentSshStateGeneration } from '@/store/slices/ssh/runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { getRepoExecutionHostId, toRuntimeExecutionHostId } from '../../../../shared/execution-host'
@@ -101,11 +100,16 @@ export function registerRuntimeClientIpcBridge(
     runtimeProjectRefreshScheduler.request(environmentId)
   }
 
+  const receiveRetainedAttention = createRetainedAgentAttentionReceiver()
   const handleRuntimeClientEvent = (
     environmentId: string,
     event: RuntimeClientEvent,
     generation = getEnvironmentSshStateGeneration(environmentId)
   ): void => {
+    if (event.type === 'agentAttentionChanged') {
+      receiveRetainedAttention.receive(environmentId, event)
+      return
+    }
     if (event.type === 'notificationAttentionAcknowledged') {
       void window.api.notifications
         .acknowledgeAttention(event.acknowledgement, toRuntimeExecutionHostId(environmentId))
@@ -115,13 +119,6 @@ export function registerRuntimeClientIpcBridge(
       return
     }
     if (applyHostWorkspaceRowEvent(environmentId, event)) {
-      return
-    }
-    if (event.type === 'terminalSideEffects') {
-      dispatchTerminalSideEffectBatch({
-        ...event.batch,
-        ptyId: toRemoteRuntimePtyId(event.batch.ptyId, environmentId)
-      })
       return
     }
     if (event.type === 'nativeChatLaunchDraftResolved') {
@@ -234,15 +231,16 @@ export function registerRuntimeClientIpcBridge(
       const sshGeneration = getEnvironmentSshStateGeneration(environmentId)
       const runtimeGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
       const runtimeRevision = getRuntimeEnvironmentRevision(environmentId)
+      const accepts = () =>
+        isCurrent() &&
+        sshGeneration === getEnvironmentSshStateGeneration(environmentId) &&
+        runtimeGeneration === getRuntimeEnvironmentConnectionGeneration(environmentId) &&
+        runtimeRevision === getRuntimeEnvironmentRevision(environmentId)
       void useAppStore.getState().fetchHostWorkspaceStatuses(environmentId)
       const subscription = subscribeRuntimeClientEvents(
         environmentId,
         (event) => {
-          if (
-            sshGeneration === getEnvironmentSshStateGeneration(environmentId) &&
-            runtimeGeneration === getRuntimeEnvironmentConnectionGeneration(environmentId) &&
-            runtimeRevision === getRuntimeEnvironmentRevision(environmentId)
-          ) {
+          if (accepts()) {
             onEvent(event)
           }
         },
@@ -268,7 +266,15 @@ export function registerRuntimeClientIpcBridge(
             sync: () => runtimeClientEventsSync.sync([environmentId])
           })
         },
-        { hostsBrowserPages: hostsBrowserPagesFor(environmentId), onClose }
+        {
+          hostsBrowserPages: hostsBrowserPagesFor(environmentId),
+          onClose,
+          onAgentAttentionSnapshot: (notices) => {
+            if (accepts()) {
+              receiveRetainedAttention.reconcile(environmentId, notices)
+            }
+          }
+        }
       )
       return subscription
     },
