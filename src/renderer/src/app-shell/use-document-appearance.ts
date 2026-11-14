@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { buildAppFontFamily } from '@/app-shell/appearance/app-font-family'
 import { applyCodeFontSmoothing } from '@/lib/editor/appearance/code-font-smoothing'
 import { applyMarkdownCodeFontFamily } from '@/lib/editor/appearance/markdown-code-font'
 import { useSplitDividerSetting } from '@/hooks/use-split-divider-setting'
 import { rebuildAllTerminalWebglRenderers } from '@/lib/pane-manager/pane-manager-registry'
-import { applyDocumentTheme, applyPluginAppTheme } from './appearance/document-theme'
 import { applyThemeBackground } from './appearance/theme-background'
 import { syncThemeBackgroundVideo } from './appearance/theme-background-video'
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion'
@@ -22,73 +21,33 @@ import {
   tintedSidebarHostPillOutlineMix
 } from './appearance/left-sidebar-appearance'
 import { useCodeEditorThemeStore } from '../store/appearance/code-editor-theme'
-import { synthesizeTerminalAppTheme, type TerminalAppTheme } from './appearance/terminal-app-theme'
-import { MATCH_TERMINAL_APP_THEME } from '../../../shared/plugin-theme-settings'
+import { useAppThemePaint } from './appearance/use-app-theme-paint'
 import {
   usePluginAppThemeSync,
-  usePluginTerminalPaletteRefresh,
-  usePluginThemeStore,
-  usePluginThemes
+  usePluginTerminalPaletteRefresh
 } from '../store/plugins/appearance/plugin-themes'
 import { usePluginIconThemeActivation } from '../store/plugins/appearance/plugin-icon-themes'
 import { usePluginFontRegistration } from '../store/plugins/appearance/plugin-fonts'
 import { scheduleRuntimeGraphSync } from '../runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useAppStore } from '../store'
-import { useDocumentDarkTheme, useSettingsDarkTheme } from '@/hooks/use-document-dark-theme'
 import { useReduceVisualEffects } from '@/hooks/use-reduce-visual-effects'
-import { useSystemPrefersDark } from '@/hooks/theme/use-system-prefers-dark'
-
-/** The Match Terminal app theme while the requested mode's slot selects it, else null. */
-function useTerminalAppTheme(selected: boolean): TerminalAppTheme | null {
-  const systemPrefersDark = useSystemPrefersDark()
-  // Why only these fields: unrelated settings writes must not re-derive and repaint the theme.
-  const inputs = useAppStore(
-    useShallow((s) =>
-      selected && s.settings
-        ? {
-            theme: s.settings.theme,
-            terminalThemeDark: s.settings.terminalThemeDark,
-            terminalThemeLight: s.settings.terminalThemeLight,
-            terminalUseSeparateLightTheme: s.settings.terminalUseSeparateLightTheme,
-            terminalCustomThemes: s.settings.terminalCustomThemes,
-            terminalPluginPalettes: s.settings.terminalPluginPalettes,
-            pluginSystemEnabled: s.settings.pluginSystemEnabled,
-            disabledPlugins: s.settings.disabledPlugins,
-            terminalColorOverrides: s.settings.terminalColorOverrides,
-            terminalColorOverridesLight: s.settings.terminalColorOverridesLight
-          }
-        : null
-    )
-  )
-  return useMemo(
-    () =>
-      inputs ? synthesizeTerminalAppTheme(inputs, systemPrefersDark, browserColorProbe) : null,
-    [inputs, systemPrefersDark]
-  )
-}
 
 export function useDocumentAppearance(): void {
-  const theme = useAppStore((s) => s.settings?.theme)
-  const requestedDark = useSettingsDarkTheme()
-  const dark = useDocumentDarkTheme()
-  const selected = useAppStore((s) =>
-    requestedDark ? s.settings?.pluginAppThemeDark : s.settings?.pluginAppThemeLight
-  )
-  const pluginThemes = usePluginThemes()
-  const matchTerminal = selected === MATCH_TERMINAL_APP_THEME
-  const terminalTheme = useTerminalAppTheme(matchTerminal)
-  // Why find by id: a disabled or removed plugin drops out of the list, which restores built-in colors.
-  const pluginTheme =
-    pluginThemes.find((entry) => entry.id === selected && (entry.base === 'dark') === dark) ?? null
-  const appTheme = matchTerminal ? terminalTheme : pluginTheme
+  const {
+    theme,
+    dark,
+    requestedDark,
+    appTheme,
+    pluginTheme,
+    pluginThemes,
+    pluginThemesLoaded,
+    ready,
+    appPainted
+  } = useAppThemePaint()
   const editorTheme = findCodeEditorTheme(
     useAppStore((s) => (dark ? s.settings?.editorThemeDark : s.settings?.editorThemeLight)),
     pluginThemes
   )
-  // Why Match Terminal needn't wait: it derives from settings alone, not the plugin list.
-  const pluginThemesLoaded = usePluginThemeStore((s) => s.loaded)
-  const appPainted = useRef<Readonly<Record<string, string>>>({})
-  const ready = matchTerminal || pluginThemesLoaded
   usePluginTerminalPaletteRefresh()
   usePluginAppThemeSync()
   useSplitDividerSetting()
@@ -113,26 +72,13 @@ export function useDocumentAppearance(): void {
     [registeredBackground]
   )
 
-  // Why `dark` too: a system theme repaints when the OS flips, before the slot paint below.
   useEffect(() => {
-    if (theme) {
-      // Why the painted mode: Match Terminal may show a terminal theme of the other mode.
-      applyDocumentTheme(dark ? 'dark' : 'light')
-    }
     if (theme === 'system') {
       // System theme changes don't mutate the store, so mobile terminal colors need an explicit graph republish.
       scheduleRuntimeGraphSync()
     }
     // Why requestedDark: an OS flip can change the terminal palette without changing `dark`.
   }, [theme, dark, requestedDark])
-
-  useEffect(() => {
-    // Why wait for the list: until it loads, the startup cache is still the right paint.
-    // Why theme too: contrast is checked against the built-ins of the current mode.
-    if (ready && theme) {
-      appPainted.current = applyPluginAppTheme(appTheme)
-    }
-  }, [appTheme, ready, theme, dark])
 
   const sidebarTint = useAppStore(
     useShallow((s) =>
@@ -145,7 +91,7 @@ export function useDocumentAppearance(): void {
         : null
     )
   )
-  // Why after the paint above: the tinted sidebar is the app's text and background as just painted
+  // Why after useAppThemePaint: the tinted sidebar is the app's text and background as just painted
   // (ready too, since loading the list can replace the startup cache's colors).
   useEffect(() => {
     if (!theme) {
@@ -189,7 +135,7 @@ export function useDocumentAppearance(): void {
     }
   }, [pluginThemesLoaded, video, windowActive])
 
-  // Why after the paint above: a followed editor reads the colors it just painted. Built-in
+  // Why after useAppThemePaint: a followed editor reads the colors it just painted. Built-in
   // choices resolve before the plugin list loads; a plugin choice follows the app until then.
   useEffect(() => {
     if (!theme) {
@@ -206,7 +152,7 @@ export function useDocumentAppearance(): void {
     })
     paintCodeEditorColors(codeEditorTheme.override)
     useCodeEditorThemeStore.setState(codeEditorTheme)
-  }, [appTheme, editorTheme, pluginThemesLoaded, theme, dark])
+  }, [appTheme, appPainted, editorTheme, pluginThemesLoaded, theme, dark])
 
   useEffect(() => {
     document.documentElement.style.setProperty(
