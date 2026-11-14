@@ -162,10 +162,29 @@ export function startPullRequestLookup(args: {
         return get().prCache[cacheKey]?.data ?? null
       }
       return applyPullRequestLookupOutcome({
-        set, get, outcome, transportFailed, cacheKey, cached, generation, options,
-        isRuntime: runtimeRepo !== null, repo, repoId, repoPath, branch, requestSettings,
-        executionHostId, checkContract, clearScope, requestHeadOid, linkedPRNumber,
-        fallbackPRNumber, fallbackPRSource, requestStartedAt, requestStartedHostedReviewEntry
+        set,
+        get,
+        outcome,
+        transportFailed,
+        cacheKey,
+        cached,
+        generation,
+        options,
+        isRuntime: runtimeRepo !== null,
+        repo,
+        repoId,
+        repoPath,
+        branch,
+        requestSettings,
+        executionHostId,
+        checkContract,
+        clearScope,
+        requestHeadOid,
+        linkedPRNumber,
+        fallbackPRNumber,
+        fallbackPRSource,
+        requestStartedAt,
+        requestStartedHostedReviewEntry
       })
     } catch (err) {
       console.error('Failed to fetch PR:', err)

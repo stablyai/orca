@@ -1,7 +1,10 @@
 import { PR_DETAIL_RECOVERY_SETTLE_BUDGET_MS } from '../../../../shared/github/pull-requests/refresh/pr-detail-recovery-contract'
 import type { PRRefreshOutcome } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import { githubPRTransportFailureOutcome } from '../../../../shared/github/pull-requests/refresh/pull-request-for-branch-outcome'
-import { getPRForBranchOutcome } from '../../client/lookup/pr-for-branch-outcome'
+import {
+  preparePRBranchRead,
+  type PreparedPRBranchRead
+} from '../../client/lookup/pr-for-branch-outcome'
 import { hostedReviewOptionArgs } from './pr-refresh-candidate-policy'
 import type { PRRefreshEventPublisher } from './pr-refresh-event-publisher'
 import type { PRRefreshPacing } from './pr-refresh-pacing'
@@ -49,20 +52,13 @@ function absorbEquivalentQueued(
   return queued
 }
 
-async function readOutcome(ticket: PRDetailRecoveryTicket): Promise<PRRefreshOutcome> {
-  const candidate = ticket.candidate
+async function readOutcome(prepared: PreparedPRBranchRead): Promise<PRRefreshOutcome> {
   try {
-    return await getPRForBranchOutcome(
-      candidate.repoPath,
-      candidate.branch,
-      candidate.linkedPRNumber ?? null,
-      candidate.connectionId ?? null,
-      candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
-      ...hostedReviewOptionArgs(candidate, 'active')
-    )
+    return await prepared.read()
   } catch {
-    // A throw is a classified transport failure; it never caches null.
     return githubPRTransportFailureOutcome()
+  } finally {
+    prepared.release()
   }
 }
 
@@ -103,7 +99,7 @@ export async function runPRDetailRecoveryEntry(
     return
   }
   const until = await gateUntil(deps, ticket)
-  // No await may separate this authority check from provider admission.
+  // Check before preparing; provider admission checks again after its asynchronous context lookup.
   if (ticket.caller.authority?.signal.aborted) {
     deps.tickets.cancelCaller(ticket.caller.callerKey)
     return
@@ -117,6 +113,30 @@ export async function runPRDetailRecoveryEntry(
   }
   if (!recovery.committed) {
     deps.tickets.prepare(ticket)
+    return
+  }
+  const prepared = await preparePRBranchRead(
+    candidate.repoPath,
+    candidate.branch,
+    candidate.linkedPRNumber ?? null,
+    candidate.connectionId ?? null,
+    candidate.linkedPRNumber == null ? (candidate.fallbackPRNumber ?? null) : null,
+    ...hostedReviewOptionArgs(candidate, 'active')
+  ).catch(() => null)
+  if (!prepared) {
+    deps.tickets.close(ticket, { kind: 'not-admitted', reason: 'validation' })
+    return
+  }
+  // Preparation may await host/account context; admission rechecks authority after that last await.
+  if (
+    ticket.caller.authority?.signal.aborted ||
+    ticket.terminal ||
+    deps.queue.get(entry.key) !== entry
+  ) {
+    prepared.release()
+    if (ticket.caller.authority?.signal.aborted) {
+      deps.tickets.cancelCaller(ticket.caller.callerKey)
+    }
     return
   }
   deps.queue.delete(entry.key)
@@ -143,7 +163,7 @@ export async function runPRDetailRecoveryEntry(
   })
   let outcome: PRRefreshOutcome
   try {
-    outcome = await readOutcome(ticket)
+    outcome = await readOutcome(prepared)
   } finally {
     deps.requests.settle(requestId)
   }

@@ -1,3 +1,4 @@
+import { PRRefreshRecoveryLifecycle } from './pr-refresh-recovery-lifecycle'
 import type { GitHubPRRefreshCandidate } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import {
   preparePRBranchRead,
@@ -15,11 +16,7 @@ import type { PRRefreshEventPublisher } from './pr-refresh-event-publisher'
 import type { PRRefreshPacing } from './pr-refresh-pacing'
 import type { PRRefreshQueue } from './pr-refresh-queue'
 import { PRWatchJobRunner } from './pr-refresh-watch-jobs'
-import {
-  prRefreshRequestDigest,
-  PRRefreshRequestRegistry,
-  queuedRequestId
-} from './pr-refresh-request-registry'
+import { prRefreshRequestDigest, queuedRequestId } from './pr-refresh-request-registry'
 import { prRefreshRateLimitPausedUntil } from './pr-refresh-rate-limit-gate'
 import {
   blockedWslDistroForPath,
@@ -34,17 +31,8 @@ import { PRRefreshAdmission } from './pr-refresh-admission'
 
 export type PRRefreshRegistrationCheck = (candidate: GitHubPRRefreshCandidate) => boolean
 
-/** Detail-recovery tickets run their entries and expire deadlines on this drainer's one timer. */
-export type PRRefreshRecoveryHooks = {
-  run: (entry: PRRefreshQueueEntry) => Promise<void>
-  tick: () => number | null
-}
-
-export class PRRefreshQueueDrainer {
+export class PRRefreshQueueDrainer extends PRRefreshRecoveryLifecycle {
   private draining = false
-  private recovery: PRRefreshRecoveryHooks | null = null
-  private recoveryDeadline: number | null = null
-  readonly requests = new PRRefreshRequestRegistry()
   registrationCheck: PRRefreshRegistrationCheck | null = null
   readonly watchJobs: PRWatchJobRunner
   readonly hostedJobs: HostedPRReadJobs
@@ -58,6 +46,7 @@ export class PRRefreshQueueDrainer {
     private readonly retry: PRRefreshRetryState,
     private readonly events: PRRefreshEventPublisher
   ) {
+    super()
     this.watchJobs = new PRWatchJobRunner(queue, retry, this)
     this.scheduler = new PRRefreshQueueScheduler(
       queue,
@@ -67,12 +56,7 @@ export class PRRefreshQueueDrainer {
       events,
       this.watchJobs,
       () => {
-        if (this.recovery) {
-          this.recoveryDeadline = this.recovery.tick()
-          if (this.recoveryDeadline !== null) {
-            this.schedule(Infinity)
-          }
-        }
+        this.tickRecovery((delay) => this.schedule(delay))
         return this.drain()
       }
     )
@@ -82,21 +66,22 @@ export class PRRefreshQueueDrainer {
       pacing,
       retry,
       () => this.schedule(),
-      (candidate, outcome) => events.observe(candidate, outcome)
+      (candidate, outcome) => events.observe(candidate, outcome),
+      (entry) => {
+        const requestId = queuedRequestId(entry)
+        this.requests.start({
+          requestId,
+          slotKey: refreshKey(entry.candidate),
+          registrationOrder: entry.queuedAt,
+          identityDigest: prRefreshRequestDigest(entry.candidate)
+        })
+        return () => this.requests.settle(requestId)
+      }
     )
   }
 
-  getRegistrationCheck(): PRRefreshRegistrationCheck | null {
-    return this.registrationCheck
-  }
-
-  setRecoveryHooks(hooks: PRRefreshRecoveryHooks | null): void {
-    this.recovery = hooks
-  }
-
   schedule(delay = 0): void {
-    const recoveryDelay = this.recoveryDeadline === null ? Infinity : Math.max(0, this.recoveryDeadline - Date.now())
-    this.scheduler.schedule(Math.min(delay, recoveryDelay))
+    this.scheduler.schedule(this.recoveryWait(delay))
   }
 
   private async drain(): Promise<void> {

@@ -161,7 +161,8 @@ export async function runHostedPRSnapshot(
       : result.outcome
     return drainer.hostedJobs.complete(prepared, candidate, outcome, acceptRevalidationOnly)
   }
-  return drainer.hostedJobs.readCold(candidate, prepared, acceptRevalidationOnly)
+  const settle = registerPRRefreshRequest(candidate, 'h', false)
+  return drainer.hostedJobs.readCold(candidate, prepared, acceptRevalidationOnly).finally(settle)
 }
 
 export function clearVisiblePRRefreshWindow(windowId: number): void {
