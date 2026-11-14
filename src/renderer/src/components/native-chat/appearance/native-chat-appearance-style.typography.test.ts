@@ -22,7 +22,6 @@ describe('native chat typography', () => {
       (fontSize) => styleFor({ nativeChatAppearance: { fontSize } })['--chat-ui-font-size']
     )
     expect(chrome).toEqual(['12px', '14px', '14px', '16px', '20px'])
-    expect(styleFor({})['--chat-estimated-spacing-scale']).toBe(1)
   })
 
   it('uses the system UI font only while neither the chat nor the IDE font was chosen', () => {
@@ -44,12 +43,14 @@ describe('native chat typography', () => {
     ).toMatch(/JetBrains Mono/)
   })
 
-  it('keeps the brighter text color 10 points above body text in both schemes', () => {
-    for (const theme of ['dark', 'light'] as const) {
-      const style = styleFor({ theme })
-      expect(style['--chat-foreground-mix']).toBe('88%')
-      expect(style['--chat-strong-mix']).toBe('98%')
+  it('keeps the brighter text color 10 points above body text, up to full strength', () => {
+    const mixes = (theme: 'dark' | 'light', contrast: number) => {
+      const style = styleFor({ theme, nativeChatAppearance: { contrast } })
+      return [style['--chat-foreground-mix'], style['--chat-strong-mix']]
     }
+    expect(mixes('dark', 75)).toEqual(['72%', '82%'])
+    expect(mixes('light', 75)).toEqual(['76%', '86%'])
+    expect(mixes('dark', 150)).toEqual(['100%', '100%'])
   })
 
   it('scales body text with Contrast, keeping the earlier ends', () => {

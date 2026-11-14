@@ -11,7 +11,7 @@
   --text-3xs: max(9px, calc(var(--chat-ui-size) * 10 / 14));
   --text-chat-code: var(--chat-code-font-size, 0.75rem);
   --ring: var(--chat-focus-ring);
-  /* Icons, gaps and row heights follow the text: 4px at the default 14px. */
+  /* Icons, gaps and row heights follow the UI size: 4px at the 13px default (UI size 14px). */
   --spacing: calc(var(--chat-ui-size) / 3.5);
   font-family: var(--chat-font-family, var(--font-sans));
   letter-spacing: 0;

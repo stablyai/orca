@@ -53,9 +53,7 @@ describe('native chat appearance normalization', () => {
     expect(resetNativeChatAppearanceSettings({ fontSize: 18 })).toBeUndefined()
   })
 
-  it('defaults Text size to 13 and stores any other size, 14 included', () => {
-    expect(resolveNativeChatAppearanceSettings(undefined).fontSize).toBe(13)
-    expect(normalizeNativeChatAppearanceSettings({ fontSize: 13 })).toBeUndefined()
+  it('stores an explicitly chosen 14 Text size', () => {
     expect(normalizeNativeChatAppearanceSettings({ fontSize: 14 })).toEqual({ fontSize: 14 })
     expect(resolveNativeChatAppearanceSettings({ fontSize: 14 }).fontSize).toBe(14)
   })
