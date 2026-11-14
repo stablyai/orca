@@ -284,23 +284,40 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
     })
 
     // A restored Codex can fail in startup (e.g. its account lookup times out) and drop back to the shell.
-    async function resumeCodexThenReturnToShell(reportBeforeExit: boolean): Promise<string> {
+    async function resumeCodexThenReturnToShell(
+      report: 'never' | 'after-connect' | 'during-connect'
+    ): Promise<string> {
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
       const { connectPanePty } = await import('../connect-pane-pty')
       const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
         '@/lib/agent-status/aggregation/worktree-agent-status'
       )
       vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('bash')
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      const reportIn = (): void => {
+        mockStoreState.agentStatusByPaneKey[paneKey] = {
+          paneKey,
+          agentType: 'codex',
+          state: 'done',
+          prompt: '',
+          stateStartedAt: Date.now(),
+          updatedAt: Date.now()
+        }
+      }
       const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
       const transport = createMockTransport('fresh-pty')
       transport.connect.mockImplementation(
         async ({ callbacks }: { callbacks: { onData?: (data: string) => void } }) => {
           dataCallbackRef.current = callbacks.onData ?? null
+          if (report === 'during-connect') {
+            // The agent's first hook can land before the spawn settles.
+            reportIn()
+            await new Promise((resolve) => setTimeout(resolve, 5))
+          }
           return { id: 'fresh-pty', coldRestore: { scrollback: 'cold-payload', cwd: '/tmp/wt-1' } }
         }
       )
       transportFactoryQueue.push(transport)
-      const paneKey = makePaneKey('tab-1', LEAF_1)
       mockStoreState.tabsByWorktree = { 'wt-1': [{ id: 'tab-1', ptyId: 'lost-pty' }] }
       mockStoreState.settings = { ...mockStoreState.settings, agentCmdOverrides: {} }
       mockStoreState.agentStatusByPaneKey = {}
@@ -343,16 +360,9 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
         launchConfig: { agentArgs: '', agentEnv: {} },
         identity: { agentType: 'codex' }
       }
-      if (reportBeforeExit) {
+      if (report === 'after-connect') {
         await vi.advanceTimersByTimeAsync(10)
-        mockStoreState.agentStatusByPaneKey[paneKey] = {
-          paneKey,
-          agentType: 'codex',
-          state: 'done',
-          prompt: '',
-          stateStartedAt: Date.now(),
-          updatedAt: Date.now()
-        }
+        reportIn()
       }
       dataCallbackRef.current?.('\x1b]133;D;0\x07')
       await vi.advanceTimersByTimeAsync(350)
@@ -364,7 +374,7 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         return
       }
-      const paneKey = await resumeCodexThenReturnToShell(false)
+      const paneKey = await resumeCodexThenReturnToShell('never')
 
       expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
       expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toMatchObject({
@@ -376,7 +386,17 @@ export function registerPtyConnectionColdRestoreAgentResumeTests(): void {
       if (ORCA_LAYOUT_OWNER_IS_MAIN) {
         return
       }
-      const paneKey = await resumeCodexThenReturnToShell(true)
+      const paneKey = await resumeCodexThenReturnToShell('after-connect')
+
+      expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+      expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+    })
+
+    it('counts a report that lands before the resume spawn settles as proof', async () => {
+      if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+        return
+      }
+      const paneKey = await resumeCodexThenReturnToShell('during-connect')
 
       expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
       expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()

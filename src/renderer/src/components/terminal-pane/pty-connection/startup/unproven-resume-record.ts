@@ -13,7 +13,12 @@ export type UnprovenResumeRecord = {
 export function markUnprovenResumeRecord(session: ConnectPanePtySession): void {
   const kept = session.getSleepingRecordForPane(useAppStore.getState())
   session.unprovenResumeRecord = kept
-    ? { record: kept.record, ptyId: session.transport.getPtyId(), spawnedAt: Date.now() }
+    ? {
+        record: kept.record,
+        ptyId: session.transport.getPtyId(),
+        // An agent can report before connect resolves; count from the connect start, not this mark.
+        spawnedAt: session.lastTransportConnectAt ?? Date.now()
+      }
     : null
 }
 
