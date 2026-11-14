@@ -182,11 +182,14 @@ export async function withRemoteWorkerRows<Page extends WorkerListPage>(
   if (params.cursor) {
     return { ...page, page: { ...page.page, total: page.page.total + total } }
   }
-  const names = new Map<string, string>()
-  const name = async (id: string, recorded: string | null): Promise<string> => {
+  const names = new Map<string, Promise<string>>()
+  const name = (id: string, recorded: string | null): Promise<string> => {
     const key = `${id}\n${recorded ?? ''}`
-    const known = names.get(key) ?? (await remoteServerName(runtime, id, recorded))
-    names.set(key, known)
+    let known = names.get(key)
+    if (!known) {
+      known = remoteServerName(runtime, id, recorded)
+      names.set(key, known)
+    }
     return known
   }
   const rows = await Promise.all(

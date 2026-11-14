@@ -6,11 +6,11 @@ import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../shared/github/work-
 import { randomUUID } from 'node:crypto'
 import type { RpcRequest } from '../rpc/core'
 import type { DelegatedMobileDeviceSyncParams } from '../../../shared/delegated-mobile-device-contract'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import {
   failure,
   linkKey,
   RelayLink,
+  relayError,
   unavailable,
   type OpenedRelayLink,
   type RelayedPhone
@@ -80,8 +80,15 @@ export class MobileDesktopRelay {
       )
       return
     }
-    const link = await this.linkFor(phone, environmentId, request.method)
-    if (!this.isCurrent(link)) {
+    let link: RelayLink
+    try {
+      link = await this.linkFor(phone, environmentId, request.method)
+      if (!this.isCurrent(link)) {
+        throw unavailable('The server connection was reset.')
+      }
+    } catch (error) {
+      const refusal = relayError(error, 'The server connection was reset.')
+      phone.reply(failure(request.id, refusal.code, refusal.message))
       return
     }
     link.replies.noteForwarded(request.id, {
@@ -256,12 +263,7 @@ export class MobileDesktopRelay {
     const link = new RelayLink(environmentId, phone, this.options.allocateStreamId, (opening) =>
       this.open(opening, method)
     )
-    link.opened.catch((error: unknown) => {
-      this.endLink(
-        link,
-        error instanceof RemoteRuntimeClientError ? error : unavailable(String(error))
-      )
-    })
+    link.opened.catch((error: unknown) => this.endLink(link, relayError(error, String(error))))
     this.links.set(linkKey(phone.connectionId, environmentId), link)
     return link
   }

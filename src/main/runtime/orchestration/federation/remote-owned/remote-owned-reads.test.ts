@@ -94,6 +94,24 @@ describe('reads of workers a paired server runs, from this Orca’s records', ()
     } as never)) as ListedWorkers
   }
 
+  it.each([100, 1000])('resolves a shared server once per listing of %i workers', async (count) => {
+    for (let index = 0; index < count; index++) {
+      remoteWorker(`task_${index}`, `ctx_${index}`)
+    }
+    const resolve = vi.mocked(runtime.resolveOrchestrationWorkerServer)
+    resolve.mockClear()
+    const listed = await listWorkers({ run: run.id })
+    expect(listed.workers).toHaveLength(count)
+    expect(listed.workers[0]?.server).toMatchObject({ name: 'devB' })
+    expect(resolve).toHaveBeenCalledTimes(1)
+
+    resolve.mockResolvedValueOnce({ ...SERVER, name: 'Renamed server' })
+    const refreshed = await listWorkers({ run: run.id })
+    expect(refreshed.workers).toHaveLength(count)
+    expect(refreshed.workers[0]?.server).toMatchObject({ name: 'Renamed server' })
+    expect(resolve).toHaveBeenCalledTimes(2)
+  })
+
   it('lists a worker on a server removed since under the name the server had', async () => {
     const record = remoteWorker('task_1', 'ctx_w1', 'env_gone')
     closeRemoteRunLink(

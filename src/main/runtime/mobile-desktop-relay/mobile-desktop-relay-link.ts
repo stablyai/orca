@@ -128,6 +128,10 @@ export function unavailable(message: string): RemoteRuntimeClientError {
   return new RemoteRuntimeClientError('remote_runtime_unavailable', message)
 }
 
+export function relayError(error: unknown, fallback: string): RemoteRuntimeClientError {
+  return error instanceof RemoteRuntimeClientError ? error : unavailable(fallback)
+}
+
 /** A phone's refusal reply for a relayed request. */
 export function failure(id: string, code: string, message: string): string {
   return JSON.stringify({ id, ok: false, error: { code, message }, _meta: { runtimeId: null } })
