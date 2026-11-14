@@ -40,8 +40,14 @@ export function nativeChatReceiptDevice(
 }
 
 export type NativeChatResolvedPrompt = AgentJournalApprovalItem | AgentJournalQuestionItem
+export type NativeChatReceiptOption = { label: string; description?: string; selected: boolean }
 /** `answer` is '' for an explicitly empty text answer and null when the answer cannot be read. */
-export type NativeChatReceiptAnswer = { question: string | null; answer: string | null }
+export type NativeChatReceiptAnswer = {
+  question: string | null
+  answer: string | null
+  /** Everything that was offered, so a settled prompt can still show the choices it had. */
+  options: NativeChatReceiptOption[]
+}
 
 export function nativeChatReceiptAnswers(
   body: NativeChatResolvedPrompt
@@ -64,6 +70,11 @@ export function nativeChatReceiptAnswers(
       const parts = [...(labels ?? []), ...(answer?.other?.trim() ? [answer.other] : [])]
       return {
         question: body.questions ? question.question : null,
+        options: question.options.map((option) => ({
+          label: option.label,
+          ...(option.description ? { description: option.description } : {}),
+          selected: answer?.optionIds.includes(option.id) ?? false
+        })),
         answer: !valid
           ? null
           : parts.length > 0
@@ -75,7 +86,7 @@ export function nativeChatReceiptAnswers(
     })
   }
   const option = body.options.find((option) => option.id === selected)
-  return [{ question: null, answer: option?.label ?? null }]
+  return [{ question: null, answer: option?.label ?? null, options: [] }]
 }
 
 /** Null for an approval, which shows its title instead. */

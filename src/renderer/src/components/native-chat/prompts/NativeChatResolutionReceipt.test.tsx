@@ -90,5 +90,31 @@ describe('resolution receipts', () => {
         'false'
       )
     })
+
+    it('reveals every option on answer click, marking the selected one', () => {
+      const question: AgentJournalQuestionItem = {
+        kind: 'question',
+        question: 'Which architecture?',
+        options: [
+          { id: 'opt-1', label: 'x86_64' },
+          { id: 'opt-2', label: 'arm64', description: 'Apple Silicon or Graviton' }
+        ],
+        resolution: {
+          state: 'resolved',
+          selectedOptionId: 'opt-2',
+          resolvedBy: null,
+          resolvedAt: 1000
+        }
+      }
+      render(<Harness body={question} />)
+      expect(screen.getByText('arm64')).toBeInTheDocument()
+      expect(screen.queryByText('x86_64')).toBeNull()
+      fireEvent.click(screen.getByRole('button', { name: 'arm64' }))
+      expect(screen.getByText('x86_64')).toBeInTheDocument()
+      const armTexts = screen.getAllByText('arm64')
+      expect(armTexts).toHaveLength(2)
+      expect(armTexts[1]).toHaveClass('font-medium')
+      expect(screen.getByText('Apple Silicon or Graviton')).toBeInTheDocument()
+    })
   })
 })
