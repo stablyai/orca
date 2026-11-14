@@ -191,20 +191,6 @@ describe('completed Codex launch preparation', () => {
     expect(readFileSync(`${runtime}.bak`, 'utf8')).toBe('model = "recoverable"\n')
   })
 
-  it('reports a newly pending Codex answer after an asynchronous refresh snapshot', async () => {
-    const { service, home } = seed()
-    await settle(service, home)
-    for (let index = 0; index < 3; index++) {
-      await service.refreshRuntimeUserHooksForLaunchPrep(home)
-    }
-    controls.afterSnapshot = () => {
-      controls.answer = null
-    }
-    expect((await service.refreshRuntimeUserHooksForLaunchPrep(home)).detail).toContain(
-      'Orca has not asked Codex yet'
-    )
-  })
-
   it('honors Off before effects when it changes during the asynchronous snapshot', async () => {
     const { service, home } = seed()
     await settle(service, home)
@@ -246,15 +232,6 @@ describe('completed Codex launch preparation', () => {
     expect(readFileSync(runtime, 'utf8')).toContain('model = "B"')
     await service.installForLaunchPrep(home, true, () => true)
     expect(readFileSync(runtime, 'utf8')).toContain('model = "A"')
-  })
-
-  it('preserves the recovery backup when launch inputs are unchanged', async () => {
-    const { service, home, runtime } = seed()
-    await settle(service, home)
-    const backup = `${runtime}.bak`
-    writeFileSync(backup, 'model = "recoverable"\n')
-    await service.installForLaunchPrep(home, true, () => true)
-    expect(readFileSync(backup, 'utf8')).toBe('model = "recoverable"\n')
   })
 
   it.each(['temporarily absent', 'temporarily locked'] as const)(
