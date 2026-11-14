@@ -1,4 +1,5 @@
 import { expect, it, vi } from 'vitest'
+import { openCodexThread } from '../threads/codex-structured-thread-open'
 import { agentSessionRecordFixture } from '../../../native-chat/testing/agent-session-record-test-fixture'
 import { createCodexStructuredLaunchResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import {
@@ -85,7 +86,13 @@ it('refuses an expired bounded launch before acquiring a native child', async ()
 
 it('opens a bounded thread with its named profile, one root and no provider fallback', async () => {
   const codex = fakeCodex({
-    'config/read': () => ({ config: {}, layers: [] }),
+    'config/read': () => ({
+      config: {
+        features: { memories: false, memory_tool: false },
+        memories: { generate_memories: false, use_memories: false }
+      },
+      layers: []
+    }),
     'mcpServerStatus/list': () => ({ data: [], nextCursor: null })
   })
   const adapter = adapterFor(codex, await resolve())
@@ -110,6 +117,35 @@ it('opens a bounded thread with its named profile, one root and no provider fall
   } finally {
     await adapter.closeAll()
   }
+})
+
+it.each([
+  {},
+  { features: { memories: true, memory_tool: false } },
+  { features: { memories: false, memory_tool: true } },
+  {
+    features: { memories: false, memory_tool: false },
+    memories: { generate_memories: true, use_memories: false }
+  },
+  {
+    features: { memories: false, memory_tool: false },
+    memories: { generate_memories: false, use_memories: true }
+  }
+])('refuses a bounded thread with unproven memory isolation: %j', async (config) => {
+  await expect(
+    openCodexThread(
+      {
+        request: async (method) => {
+          if (method === 'config/read') {
+            return { config, layers: [] }
+          }
+          throw new Error('Unisolated thread was opened.')
+        }
+      },
+      { cwd: '/work/repo', resumeThreadId: null, execution: { profileId: 'bounded-profile' } },
+      2_000
+    )
+  ).rejects.toThrow('Bounded Codex memory isolation unavailable.')
 })
 
 it('ends an owned child at the deadline even before the thread opens', async () => {

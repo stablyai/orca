@@ -32,7 +32,13 @@ async function bounded(account: unknown, initialAccountUpdate = false) {
       data: [{ model: 'gpt-live', supportedReasoningEfforts: [{ reasoningEffort: 'low' }] }],
       nextCursor: null
     }),
-    'config/read': () => ({ config: {}, layers: [] }),
+    'config/read': () => ({
+      config: {
+        features: { memories: false, memory_tool: false },
+        memories: { generate_memories: false, use_memories: false }
+      },
+      layers: []
+    }),
     'mcpServerStatus/list': () => ({ data: [], nextCursor: null }),
     'account/read': () => {
       if (initialAccountUpdate) {

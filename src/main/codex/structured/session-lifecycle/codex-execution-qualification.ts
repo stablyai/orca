@@ -8,6 +8,10 @@ import { readCodexExecutionExecutable } from '../launch/codex-execution-executab
 import type { CodexProviderInvocationDeps } from './codex-provider-session-rename'
 import { codexProviderProbeCwd } from './codex-provider-session-rename'
 import type { AgentSessionExecutionQualification } from '../../../../shared/agent-session/agent-session-execution-qualification'
+import {
+  assertCodexExecutionMemoryDisabled,
+  CODEX_EXECUTION_MEMORY_CONFIG
+} from '../launch/codex-execution-thread-controls'
 
 export function readCodexExecutionQualification(
   readInvocation: () => CodexProviderInvocationDeps | undefined
@@ -40,6 +44,10 @@ export function readCodexExecutionQualification(
         cliPath: executable.path,
         cwd,
         args: [
+          ...Object.entries(CODEX_EXECUTION_MEMORY_CONFIG).flatMap(([key, value]) => [
+            '-c',
+            `${key}=${value}`
+          ]),
           '-c',
           'forced_login_method="chatgpt"',
           '-c',
@@ -62,6 +70,9 @@ export function readCodexExecutionQualification(
         treeKillOnFinish: true
       },
       async (rpc) => {
+        assertCodexExecutionMemoryDisabled(
+          readRecord(await rpc.request('config/read', { cwd }, { timeoutMs: 2_000 })).config
+        )
         const account = readRecord(
           readRecord(await rpc.request('account/read', { refreshToken: false })).account
         )

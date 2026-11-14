@@ -63,7 +63,7 @@ it.skipIf(!process.env.ORCA_CODEX_CONTRACT_BINARY || process.platform === 'win32
       await writeFile(join(cwd, 'inside.txt'), 'ADMITTED-CANARY')
       await writeFile(join(root, 'outside.txt'), 'PRIVATE-CANARY')
       const marker = join(root, 'mcp-was-started')
-      const initialConfig = `sandbox_mode = "danger-full-access"\n[features]\nmulti_agent = true\n[mcp_servers.synthetic_canary]\ncommand = "/usr/bin/touch"\nargs = ["${escapeTomlBasicString(marker)}"]\n`
+      const initialConfig = `sandbox_mode = "danger-full-access"\n[features]\nmulti_agent = true\nmemories = true\nmemory_tool = true\n[memories]\ngenerate_memories = true\nuse_memories = true\n[mcp_servers.synthetic_canary]\ncommand = "/usr/bin/touch"\nargs = ["${escapeTomlBasicString(marker)}"]\n`
       await writeFile(join(home, 'config.toml'), initialConfig)
       const auth = '{"OPENAI_API_KEY":"synthetic-api-key"}'
       await writeFile(join(home, 'auth.json'), auth)
@@ -95,6 +95,10 @@ it.skipIf(!process.env.ORCA_CODEX_CONTRACT_BINARY || process.platform === 'win32
         await connection.request('config/read', { cwd }, { timeoutMs: 2_000 })
       )
       expect(readRecord(readRecord(config.config).features).multi_agent).toBe(false)
+      expect(config.config).toMatchObject({
+        features: { memories: false, memory_tool: false },
+        memories: { generate_memories: false, use_memories: false }
+      })
       // The user shell API bypasses the sandbox; command/exec exercises the sandboxed executor.
       const result = await connection.request(
         'command/exec',

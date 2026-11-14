@@ -60,7 +60,7 @@ function positiveCount(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
 }
 
-// last.totalTokens measures context, including after compaction; total is cumulative thread spend.
+// last.totalTokens measures context; cumulative totals are provider counters, not billing proof.
 export function readCodexContextUsage(
   params: unknown,
   capturedAt: number

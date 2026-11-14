@@ -3,6 +3,7 @@ import type { AgentSessionExecutionPolicy } from '../../../../shared/agent-sessi
 import { escapeTomlBasicString } from '../../configuration/toml/config-toml-syntax'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import { isNativeLocalLocation } from '../../../../shared/execution-host'
+import { CODEX_EXECUTION_MEMORY_CONFIG } from './codex-execution-thread-controls'
 
 export function supportsCodexExecutionPolicy(
   read: () => { onExecutionReceipt?: unknown; prepareExecutionReporter?: unknown }
@@ -72,6 +73,10 @@ export function codexExecutionLaunch(record: AgentSessionRecord) {
     profileId,
     args: [
       ...codexExecutionProfileArgs(profileId, policy.access),
+      ...Object.entries(CODEX_EXECUTION_MEMORY_CONFIG).flatMap(([key, value]) => [
+        '-c',
+        `${key}=${value}`
+      ]),
       ...settings.flatMap((setting) => ['-c', setting])
     ]
   }
