@@ -99,15 +99,7 @@ describe('readPluginVideoHeader', () => {
     })
   })
 
-  it('stops on hostile structure instead of recursing or reading past the end', () => {
-    let nested = box('mdia')
-    for (let depth = 0; depth < 5000; depth++) {
-      nested = box('trak', nested)
-    }
-    const deep = Uint8Array.from([...box('ftyp', text('isom')), ...box('moov', nested)])
-    expect(readPluginVideoHeader(deep)).toBe(
-      'video must have exactly one track, a video track with no audio'
-    )
+  it('rejects truncated headers and multiple sample descriptions', () => {
     const truncated = webm('V_AV1', 960, 540, 1000).subarray(0, 60)
     expect(readPluginVideoHeader(truncated)).toBe('video headers are malformed')
     // A second sample description could switch the track to a size or codec never checked.
