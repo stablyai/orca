@@ -3,7 +3,7 @@ import type { OrcaMobileWebShellViewHandle } from '../../modules/orca-mobile-web
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { createNativeVisualDocumentServer } from './native-visual-documents'
 import { BRIDGE_VISUAL_DOCUMENT_VERB } from '../mobile-web-shell/bridge/bridge-visual-verbs'
-import type { BridgeNativeVerb } from '../mobile-web-shell/bridge/bridge-native-verbs'
+import type { BridgeNativeVerb } from '../mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
 
 export function useNativeVisualDocuments(
   sessionId: string | null,

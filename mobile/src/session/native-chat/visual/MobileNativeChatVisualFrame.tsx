@@ -13,7 +13,7 @@ import type { MobileNativeChatVisualHostMode } from './mobile-native-chat-visual
 import { MOBILE_NATIVE_CHAT_VISUAL_THEME } from './mobile-native-chat-visual-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { colors } from '../../../theme/mobile-theme'
-import { useNativeVerbs } from '../../../mobile-web-shell/bridge/use-native-verbs'
+import { useNativeVerbs } from '../../../mobile-web-shell/bridge/native-capabilities/use-native-verbs'
 import { useWorkspaceExecutionHost } from '../../../navigation/workspace-execution-host'
 import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
 import {

@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { mobileStructuredSessionStatusFeed } from '../session/native-chat/agent-session/mobile-structured-session-status-feed'
 import type { AgentSessionConversationNames } from '../../../src/shared/agent-session/agent-session-conversation-names'
 import { useForceReconnect } from '../transport/connection/host-client-hooks'
-import { useWorkspaceClient } from '../worktree/use-workspace-client'
+import { useWorkspaceClient } from '../worktree/execution-hosts/use-workspace-client'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { connectionRetryAction } from '../transport/connection/connection-retry-action'
 import type {
@@ -11,7 +11,7 @@ import type {
   AiVaultScope,
   AiVaultSession
 } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
-import type { Worktree } from '../worktree/workspace-list-types'
+import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { defineHostQuery, readHostQueryLive, useHostQuery } from '../query/host-query'
 import { hostScreenState } from '../query/host-query-screen-state'

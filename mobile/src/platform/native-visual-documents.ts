@@ -4,7 +4,7 @@ import { visualDocumentParamsSchema } from '../mobile-web-shell/bridge/bridge-vi
 import { readMobileNativeChatVisual } from '../session/native-chat/visual/mobile-native-chat-visual-read'
 import { MOBILE_NATIVE_CHAT_VISUAL_THEME } from '../session/native-chat/visual/mobile-native-chat-visual-theme'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { scopeRpcClientToExecutionHost } from '../worktree/execution-host-scoped-rpc-client'
+import { scopeRpcClientToExecutionHost } from '../worktree/execution-hosts/execution-host-scoped-rpc-client'
 import { randomV4Uuid } from './random-v4-uuid'
 
 export function createNativeVisualDocumentServer(deps: {

@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaMobileWebShellViewHandle } from '../../modules/orca-mobile-web-shell/src'
-import { createFakeRpcClient, rpcSuccess } from '../mobile-web-shell/bridge-host-test-fakes'
+import {
+  createFakeRpcClient,
+  rpcSuccess
+} from '../mobile-web-shell/test-support/bridge-host-test-fakes'
 import { createNativeVisualDocumentServer } from './native-visual-documents'
 
 const url =

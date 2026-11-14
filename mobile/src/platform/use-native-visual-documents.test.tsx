@@ -1,7 +1,10 @@
 import { StrictMode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
-import { createFakeRpcClient, rpcSuccess } from '../mobile-web-shell/bridge-host-test-fakes'
+import {
+  createFakeRpcClient,
+  rpcSuccess
+} from '../mobile-web-shell/test-support/bridge-host-test-fakes'
 import { useNativeVisualDocuments } from './use-native-visual-documents'
 
 it('serves after Strict Mode effect replay and revokes documents when its page unmounts', async () => {
