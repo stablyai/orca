@@ -26,7 +26,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
       )
   }
 }))
-vi.mock('../transport/hosts/host-store', () => ({
+vi.mock('../host-catalog/host-store', () => ({
   loadHosts: async () => [{ id: 'host-a', name: 'Host', endpoint: 'ws://h', lastConnected: 1 }]
 }))
 
@@ -35,17 +35,9 @@ import './bridge/bridge-port-pair-test-harness'
 import './bridge/bridge-native-verbs'
 import './bridge/page-async-storage'
 import './page-route-policy'
-import {
-  hydrateMirroredStorage,
-  readMirroredKeyOrStore,
-  readMirroredStorage
-} from '../storage/mirrored-storage-keys'
+import { readMirroredKeyOrStore, readMirroredStorage } from '../storage/mirrored-storage-keys'
 
 const CHAT_TABS = 'orca:nativeChatTabs:host-a:wt-1'
-const LIVE_INPUT = 'orca:terminalLiveInputDisabled:host-a:wt-1'
-const NEVER_STORED = 'orca:nativeChatTabs:host-a:wt-2'
-const OTHER_HOST = 'orca:nativeChatTabs:host-b:wt-1'
-const FRESH = 'orca:terminalLiveInputDisabled:host-a:wt-2'
 
 function persisted(): void {
   for (const land of queued.splice(0)) {
@@ -79,13 +71,10 @@ async function snapshotFor(routePathname: string, hostArea: boolean) {
   return held.view
 }
 
-beforeEach(async () => {
+beforeEach(() => {
   queued.length = 0
   store.clear()
   store.set(CHAT_TABS, '["tab-1"]')
-  store.set(LIVE_INPUT, '["handle-1"]')
-  store.set(OTHER_HOST, '["tab-9"]')
-  await hydrateMirroredStorage([CHAT_TABS, LIVE_INPUT, NEVER_STORED, FRESH, OTHER_HOST])
 })
 
 describe('the per-workspace keys of a host-area page', () => {

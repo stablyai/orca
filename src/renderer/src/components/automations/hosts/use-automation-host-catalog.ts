@@ -2,7 +2,8 @@ import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } fro
 import { useAppStore } from '@/store/index'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { getHostDisplayLabelOverrides } from '../../../../../shared/host-setting-overrides'
-import { getLocalExecutionHostLabel } from '../../../../../shared/execution-host'
+import { translateLocalExecutionHostLabel } from '@/components/sidebar/execution-host-label'
+import { useTranslate } from '@/i18n/use-translate'
 import type { AutomationHostFilter } from '../../../../../shared/automations/ownership/automation-host-filter'
 import type { StableAutomationAuthorityRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
 import { buildAutomationHostCatalog } from './automation-host-catalog'
@@ -74,6 +75,7 @@ export type AutomationHostCatalogOptions = {
 export function useAutomationHostCatalog(
   options: AutomationHostCatalogOptions = {}
 ): AutomationHostCatalogView {
+  const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
   const repos = useAppStore((s) => s.repos)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
@@ -84,8 +86,10 @@ export function useAutomationHostCatalog(
   const desktopSshGenerations = useAutomationDesktopSshRegistrations()
 
   const desktopLabel = useMemo(
-    () => getHostDisplayLabelOverrides(settings).get('local') ?? getLocalExecutionHostLabel(),
-    [settings]
+    () =>
+      getHostDisplayLabelOverrides(settings).get('local') ??
+      translateLocalExecutionHostLabel(undefined, t),
+    [settings, t]
   )
   // The controller outlives renders; its partition callback needs current authority repo tables.
   const repoTables = useMemo(() => groupReposByAutomationAuthority(repos), [repos])

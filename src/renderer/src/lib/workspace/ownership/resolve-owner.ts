@@ -43,7 +43,7 @@ import {
   getNestedSshTargetIdForFolderWorkspace
 } from './folder-workspace-runtime-owner'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
-import { warnAmbiguousOwnerOnce } from '../../ambiguous-owner-warning'
+import { warnAmbiguousOwnerOnce } from './ambiguous-owner-warning'
 import { hostRouteForAuthority } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 

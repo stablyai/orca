@@ -13,12 +13,14 @@ import type { RpcRequest } from '../rpc/core'
 
 import { RpcDispatcher } from '../rpc/dispatcher'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from './structured-agent-session-runtime'
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from './records/agent-session-record-store-test-harness'
 import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { openAgentSessionRecordStoreOnce } from './records/agent-session-record-store-slot'
+import {
+  journalSqlReaderPath,
+  journalSqlWorkerPath
+} from '../../native-chat/agent-session-journal/journal-sql-worker-bundle.test-fixture'
 
 vi.mock('../../ai-vault/scan-service/session-scanner-service-spawn', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -58,7 +60,10 @@ const runtime = {
         legacySessionTabIds: [],
         stateDirectory,
         hostId: 'local',
-        logger: createStructuredAgentSessionLogger()
+        logger: createStructuredAgentSessionLogger(),
+        writerPath: journalSqlWorkerPath(),
+        readerPath: journalSqlReaderPath(),
+        onMaintenanceTick: () => {}
       })
     ).store,
   listAiVaultSessions: async () => ({

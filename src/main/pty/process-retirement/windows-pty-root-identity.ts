@@ -1,4 +1,4 @@
-import { queryWindowsProcessLinksFresh } from '../../providers/windows-foreground-process-rows'
+import { queryWindowsProcessLinksFresh } from '../../providers/foreground/windows/process-rows'
 import { readOrcaChromiumProcessPids } from './orca-chromium-process-pids'
 
 /** `own` proves ancestry, not PTY identity: a recycled PID under another Orca child still qualifies. */

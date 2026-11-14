@@ -1,15 +1,16 @@
 import React from 'react'
 import { FolderKanban, MessageSquare } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   getPRCommentAudienceEmptyLabel,
   getPrCommentAudienceFilters
 } from '@/lib/source-control/review/comments/pr-comment-audience-labels'
 import type { PRCommentAudienceFilter } from '../../../../../shared/source-control/review-comments/pr-comment-audience'
 import type { PRCommentGroup } from '../../../../../shared/source-control/review-comments/pr-comment-groups'
-import type { PRComment } from '../../../../../shared/github/comment-types'
-import type { GitHubOwnerRepo, GitHubPRFile } from '../../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import type { GitHubPRFile } from '../../../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { useTranslate } from '@/i18n/use-translate'
 import type { IssueConversationEntry } from './issue-conversation-entries'

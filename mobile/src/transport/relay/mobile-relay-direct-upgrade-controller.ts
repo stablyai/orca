@@ -1,6 +1,6 @@
 import type { MobileRelayDirectUpgradeResult } from './mobile-relay-direct-upgrade'
 import type { StableLogicalRpcClient } from '../connection/stable-logical-rpc-client'
-import type { HostProfile } from '../hosts/host-profile'
+import type { HostProfile } from '../../host-catalog/host-profile'
 
 type Dependencies = {
   upgrade: (

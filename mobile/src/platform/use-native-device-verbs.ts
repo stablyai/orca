@@ -2,14 +2,17 @@ import { useEffect, useMemo } from 'react'
 import type { BridgeNativeVerb } from '../mobile-web-shell/bridge/bridge-native-verbs'
 import type { BRIDGE_STORE_VERB } from '../mobile-web-shell/bridge/bridge-store-verb'
 import { useMediaHandleRegistry } from '../mobile-web-shell/use-media-handle-registry'
-import { createNativeAudioCapture } from './native-audio'
-import { NATIVE_AUDIO_DEVICE_SAMPLE_RATE, nativeAudioDeviceEngine } from './native-audio-device'
-import { createNativeSpeechServer } from './native-speech'
-import { nativeSpeechDeviceEngine } from './native-speech-device'
-import { serveNativeClipboardVerb } from './native-clipboard'
-import { serveNativeAnnounceVerb } from './native-accessibility-announce'
-import { createNativeMediaVerbServer } from './native-media'
-import { discardStagedMedia, nativeMediaDeviceDeps } from './native-media-device'
+import { createNativeAudioCapture } from './audio-capture/native-audio'
+import {
+  NATIVE_AUDIO_DEVICE_SAMPLE_RATE,
+  nativeAudioDeviceEngine
+} from './audio-capture/native-audio-device'
+import { createNativeSpeechServer } from './speech/native-speech'
+import { nativeSpeechDeviceEngine } from './speech/native-speech-device'
+import { serveNativeClipboardVerb } from './clipboard/native-clipboard'
+import { serveNativeAnnounceVerb } from './accessibility/native-accessibility-announce'
+import { createNativeMediaVerbServer } from './media-picking/native-media'
+import { discardStagedMedia, nativeMediaDeviceDeps } from './media-picking/native-media-device'
 
 export type NativeDeviceVerb = Exclude<
   BridgeNativeVerb,

@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
+import { listCredentialLikeEnvNames } from '../../shared/ephemeral-vm-recipe-env'
 import {
   listEphemeralVmRuntimes,
   updateEphemeralVmRuntimeStatus
@@ -112,8 +113,14 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
   ipcMain.removeHandler('ephemeralVm:stopCleanup')
   ipcMain.removeHandler('ephemeralVm:forgetRuntime')
   ipcMain.removeHandler('ephemeralVm:getCleanupCommand')
+  ipcMain.removeHandler('ephemeralVm:listCredentialEnvNames')
   stopRuntimesChangedBroadcast?.()
   stopRuntimesChangedBroadcast = onEphemeralVmRuntimesChanged(broadcastEphemeralVmRuntimesChanged)
+
+  // Names only: the recipe list warns which credentials scripts inherit, never their values.
+  ipcMain.handle('ephemeralVm:listCredentialEnvNames', () =>
+    listCredentialLikeEnvNames(process.env)
+  )
 
   ipcMain.handle('ephemeralVm:listRuntimes', (): EphemeralVmRuntimeRecord[] => {
     return listEphemeralVmRuntimes(app.getPath('userData'))

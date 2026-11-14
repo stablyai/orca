@@ -49,7 +49,7 @@ import {
 } from '../../../wsl-move/wsl-move-orchestrator-status'
 import { openWslMoveDialogFor } from '../../../wsl-move/wsl-move-entry'
 import { WslMoveUnfinishedNotice } from '../../../wsl-move/WslMoveUnfinishedNotice'
-import { readIpcErrorDetail } from '@/lib/ipc-error'
+import { readIpcErrorDetail } from '@/runtime/errors/ipc-error'
 
 function getWslHostRowStatus(
   status: WslHostStatus | undefined,

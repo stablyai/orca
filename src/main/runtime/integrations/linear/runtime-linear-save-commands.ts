@@ -1,7 +1,7 @@
 import { LINEAR_WRITE_BODY_CAP } from '../../../../shared/linear/agent-access'
-import { updateIssueForAgent as updateLinearIssueForAgent } from '../../../linear/linear-issue-mutations'
-import { LinearWriteFailure } from '../../../linear/linear-issue-write-support'
-import { linearError } from '../../../linear/issue-context/errors'
+import { updateIssueForAgent as updateLinearIssueForAgent } from '../../../linear/issues/linear-issue-mutations'
+import { LinearWriteFailure } from '../../../linear/issues/linear-issue-write-support'
+import { linearError } from '../../../linear/issues/context/linear-access-errors'
 import type {
   LinearIssueTaskUpdateRequest,
   LinearSaveIssueRequest

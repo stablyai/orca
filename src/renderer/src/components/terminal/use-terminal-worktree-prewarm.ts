@@ -3,7 +3,8 @@ import { invalidateTerminalParkingInputs } from '../terminal-pane/parking/termin
 import { useAppStore } from '@/store'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { hasRegisteredRuntimeTerminalTab } from '../../runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
-import { canWatcherCoverParkedTerminalTab } from '../terminal-pane/parking/output-watchers/terminal-parked-tab-watchers'
+import '../terminal-pane/parking/output-watchers/terminal-parked-tab-watchers'
+import { canWatcherCoverParkedTerminalTab } from '../terminal-pane/parking/output-watchers/parked-terminal-tab-coverage'
 import { canAdmitTerminalTabsForStartup } from './background-terminal-worktree-mount'
 import {
   type TerminalPrewarmStage,

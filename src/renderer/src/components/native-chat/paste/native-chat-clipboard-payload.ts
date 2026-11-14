@@ -2,7 +2,7 @@ import { isMacPlatform } from '../pane/routing/native-chat-shortcut'
 import {
   clipboardEventPromptText,
   textOnlyLabelsCopiedFiles
-} from '../../../../../shared/native-chat/input/native-chat-clipboard-event'
+} from '../../../../../shared/native-chat/input/composer/native-chat-clipboard-event'
 import { withPastedLinks } from './native-chat-pasted-links'
 
 /** Accept native pane clipboard events and React synthetic events. */

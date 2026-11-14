@@ -3,11 +3,12 @@ import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
 import { resolveDefaultAgentForWorktree } from '@/lib/agent-session/launch/shortcuts/agent-tab-shortcuts'
 import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+
+import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
 import { captureAgentTabLaunchContext } from '@/components/agent-tab-launch-context'
 import { activateAndRevealWorktreeWithOutcome } from '@/lib/workspace/activation/worktree-activation'
 import { reportAgentWorkspaceActivation } from '@/lib/workspace/activation/worktree-activation-outcome'
-import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
 import { isGitRepoKind } from '../../../../../shared/repo-kind'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
@@ -77,7 +78,7 @@ export async function launchEnvironmentSetupAgent(args: {
     return false
   }
   const outcome = launchAgentInNewTabWithOutcome({
-    requestId: newAgentLaunchRequestId(),
+    requestId: createNonSecureContextUuid(),
     ...captureAgentTabLaunchContext(worktreeId),
     agent,
     worktreeId,

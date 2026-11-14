@@ -1,13 +1,12 @@
-import { useAppStore } from '@/store'
-import { getSystemPrefersDark } from '@/lib/terminal-theme'
+import { useAppStore } from '@/store/index'
+import { getSystemPrefersDark } from '@/lib/terminal/appearance/terminal-theme'
 import {
   resolveTerminalColorSchemeMode,
   scanMode2031ReplyDecision,
   INITIAL_MODE_2031_REPLY_SCAN_STATE
 } from '../../../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
-import type { ConnectPanePtySession } from '../connect-pane-pty-session'
-
 import { maybePushMode2031Flip } from '../../emulation/terminal-mode-2031-replies'
+import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 export function bindLivePaneMode2031Observation(session: ConnectPanePtySession): void {
   // DECSET 2031 subscribes silently; late replies paint junk after fish withdraws it (#9993). Scan raw chunks because xterm batching hides per-chunk subscription state.

@@ -6,12 +6,12 @@ import type {
   LayoutApplyReply,
   LayoutCommand
 } from '../../../../../../shared/workspace-layout/workspace-layout-command-types'
-import { workspaceLayoutModelFromPublished } from '../../../../../../shared/workspace-layout/workspace-layout-from-published'
+import { workspaceLayoutModelFromPublished } from '../../../../../../shared/workspace-layout/published-layout/workspace-layout-from-published'
 import type { WorkspaceLayoutModel } from '../../../../../../shared/workspace-layout/workspace-layout-model'
 import {
   publishWorkspaceLayout,
   type PublishedWorkspaceLayout
-} from '../../../../../../shared/workspace-layout/workspace-layout-published'
+} from '../../../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import { mainLayoutFrameSender } from '../../testing/main-loaded-layout-frames.test-fixture'
 import type { FakeLayoutStream, createFakeLayoutStreams } from './server-layout-frames.test-fixture'
 import { senderSnapshot } from './server-layout-frames.test-fixture'

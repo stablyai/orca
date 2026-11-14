@@ -1,5 +1,5 @@
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
-import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
+import { captureDirectSshMutationExpectation } from '@/runtime/hosts/ssh/ssh-mutation-expectation'
 import { useAppStore } from '@/store/index'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'
 

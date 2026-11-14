@@ -1,5 +1,5 @@
-import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-record-index'
-import { getFirstTerminalTabOwnerWorktreeId } from '@/store/terminals/terminal-tab-owner-index'
+import { sleepingAgentRecordIndex } from '@/store/terminals/sleep/sleeping-agent-record-index'
+import { getFirstTerminalTabOwnerWorktreeId } from '@/store/terminals/ownership/terminal-tab-owner-index'
 import type { useAppStore } from '@/store/index'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentTurnEndedUncleanly } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
@@ -17,7 +17,10 @@ import { getProviderSessionClaimKey } from '../../../../../shared/sleeping-recor
 import { isWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { isWorkspaceSleepRecord } from '../../../../../shared/workspace-sleep'
-import { isPaneResumingInPlace, isPaneSpawnDeferred } from '../../pane-spawn-deferral-registry'
+import {
+  isPaneResumingInPlace,
+  isPaneSpawnDeferred
+} from '../../../components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-registry'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 

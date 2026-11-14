@@ -1,6 +1,6 @@
 import { releaseSessionsForInstaller } from './updater-installer-session-release'
 import { withUpdaterSpan } from '../../observability/instrumentation'
-import { runWithLaunchPath } from '../../startup/hydrate-shell-path'
+import { runWithLaunchPath } from '../../startup/shell-environment/hydrate-shell-path'
 import {
   markMacQuitAndInstallInFlight,
   isMacInstallerReady,

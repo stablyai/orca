@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import { spawnProcess } from '@orca/process-host'
 import { readDaemonPidRecord } from '../../endpoint/identity/daemon-endpoint-incarnation'
 import { getDaemonPidPath } from '../daemon-spawner'
-import { killChildAndWait } from '../../../orcad/orcad-daemon-teardown-fixture'
+import { killChildAndWait } from '../../../orcad/testing/daemon-processes/orcad-daemon-teardown-fixture'
 
 export type DaemonLauncherDriverResult = { adopted: boolean; mode: string | null }
 

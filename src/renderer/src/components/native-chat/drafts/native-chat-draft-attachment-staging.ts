@@ -5,7 +5,7 @@ import {
 import { formatNativeChatFileReference } from '../../../../../shared/agent-image-paste'
 import { nativeChatTextAttachmentParts } from '../../../../../shared/native-chat-text-attachment-references'
 import type { NativeChatComposerDraft } from './native-chat-composer-draft-storage'
-import { releaseBrowserAttachmentFiles } from '@/lib/browser-attachment-files'
+import { releaseBrowserAttachmentFiles } from '@/lib/files/drop/browser-attachment-files'
 
 export type NativeChatStagedInput = {
   text: string

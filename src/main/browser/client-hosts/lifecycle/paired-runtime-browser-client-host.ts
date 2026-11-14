@@ -3,7 +3,12 @@ import type {
   BrowserClientHostCommandEvent,
   BrowserClientHostLeaseAuthority
 } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
-import type { BrowserClientAutomationResult as BrowserClientHostCommandResult } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
+import {
+  BROWSER_CLIENT_HOST_COMMAND_RESULT_CHUNK_METHOD,
+  type BrowserClientAutomationResult as BrowserClientHostCommandResult
+} from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
+import { BROWSER_CLIENT_PAGE_METADATA_METHOD } from '../../../../shared/browser/client-hosting/browser-client-page-metadata-protocol'
+import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
 import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import type { RemoteRuntimeSubscriptionOptions } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
@@ -14,6 +19,7 @@ import type {
   DispatcherOptions
 } from '../commands/browser-client-host-command-state'
 import { PairedRuntimeBrowserHostLease } from '../leases/paired-runtime-browser-host-lease'
+import { stageBrowserHostCommandResult } from '../commands/browser-host-command-result-staging'
 
 type DispatcherLimits = Omit<DispatcherOptions, 'authority' | 'handler'>
 
@@ -23,6 +29,7 @@ export type PairedRuntimeBrowserClientHostOptions = {
   browserHostClientId: string
   hostCapabilities: readonly string[]
   handler: CommandHandler
+  acquireInitialization?: DispatcherOptions['acquireInitialization']
   getPageInventory?: () => readonly BrowserClientHostedPageInventory[]
   pageReconciliationProtocolVersion?: 1
   fileChannelProtocolVersion?: 1
@@ -124,7 +131,7 @@ export class PairedRuntimeBrowserClientHost {
     params: unknown,
     timeoutMs: number
   ): Promise<RuntimeRpcResponse<unknown>> {
-    return this.lease.sendPageMetadataRequest(params, timeoutMs)
+    return this.lease.sendHostRequest(BROWSER_CLIENT_PAGE_METADATA_METHOD, params, timeoutMs)
   }
 
   refreshPageInventory(): Promise<void> {
@@ -150,9 +157,27 @@ export class PairedRuntimeBrowserClientHost {
     this.options.onAuthority?.(authority)
     this.dispatcher = new BrowserClientHostCommandDispatcher({
       authority,
-      handler: this.options.handler,
+      handler: async (command, signal, closeInitialization) =>
+        stageBrowserHostCommandResult(
+          command,
+          await this.options.handler(command, signal, closeInitialization),
+          (params) => this.sendCommandResultChunk(params),
+          signal
+        ),
+      acquireInitialization: this.options.acquireInitialization,
       ...this.options.dispatcher
     })
+  }
+
+  private async sendCommandResultChunk(params: unknown): Promise<void> {
+    const response = await this.lease.sendHostRequest(
+      BROWSER_CLIENT_HOST_COMMAND_RESULT_CHUNK_METHOD,
+      params,
+      this.options.timeoutMs ?? 15_000
+    )
+    if (!response.ok) {
+      throw new RemoteRuntimeClientError(response.error.code, response.error.message)
+    }
   }
 
   private dispatch(

@@ -1,12 +1,12 @@
 import type { DeviceScope } from '../../../../../shared/runtime-session-contracts'
-import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/relay-revoke-outbox'
+import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/pairing/relay-revoke-outbox'
 import type { DeviceEntry } from './device-entry'
 import { parseMobilePushRegistration } from '../../../../../shared/mobile-push-contract'
 import { isDevicePublicKeyB64 } from '../../../../../shared/remote-runtime/pairing/device-key-proof'
 import { isExchangeDeviceToken } from '../../../../../shared/remote-runtime/pairing/ticket-exchange-contract'
-import { RUNTIME_DEVICE_GRANTS, type RuntimeDeviceGrant } from '../../rpc-method-permission'
+import { RUNTIME_DEVICE_GRANTS, type RuntimeDeviceGrant } from '../../callers/rpc-method-permission'
 import { isRecord } from '../../../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
-import { NETWORK_SOURCE_CLASSES } from '../../network-source-class'
+import { NETWORK_SOURCE_CLASSES } from '../../transports/websocket/source-admission/network-source-class'
 
 const GRANTABLE: ReadonlySet<string> = new Set(RUNTIME_DEVICE_GRANTS)
 

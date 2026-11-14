@@ -1,4 +1,7 @@
-import type { CheckStatus, ProviderCheckSummary } from '../../github/pull-request-types'
+import type {
+  CheckStatus,
+  ProviderCheckSummary
+} from '../../github/pull-requests/pull-request-types'
 
 export type CheckOutcome = 'passed' | 'failed' | 'pending' | 'neutral'
 

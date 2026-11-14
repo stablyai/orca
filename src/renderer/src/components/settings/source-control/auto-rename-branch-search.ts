@@ -62,8 +62,11 @@ export const getAutoRenameBranchParentSearchEntry = createLocalizedCatalog(
   })
 )
 
+export const AUTO_RENAME_BRANCH_TEMPLATE_SETTING_ID = 'git-auto-rename-branch-template'
+
 export const getAutoRenameBranchAdvancedSearchEntries = createLocalizedCatalog(() => [
   {
+    targetSectionId: AUTO_RENAME_BRANCH_TEMPLATE_SETTING_ID,
     title: translate(
       'auto.components.settings.auto.rename.branch.search.722551c5b3',
       'Branch name command template'

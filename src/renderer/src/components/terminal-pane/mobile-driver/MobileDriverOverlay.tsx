@@ -3,7 +3,7 @@ import { useCallback, useEffect, useId, useRef, useState, type ReactElement } fr
 import { Minimize2, Smartphone } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 import { shouldFocusMobileDriverAction } from './mobile-driver-overlay-focus'
 import {

@@ -1121,7 +1121,9 @@ jobs:
             eb_cache_path: |
               ~\AppData\Local\electron\Cache
               ~\AppData\Local\electron-builder\Cache
-          - os: ubuntu-latest
+          # Why: ubuntu-latest moved to the amd64v3 Ubuntu 26.04 image, whose GCC
+          # defaults to -march=x86-64-v3 and ships AVX in node-pty (#41637).
+          - os: ubuntu-24.04
             platform: linux-x64
             release_command: node "$(if [ -f config/scripts/native-build/node-addons/ensure-native-runtime.mjs ]; then printf %s config/scripts/native-build/node-addons/ensure-native-runtime.mjs; else printf %s config/scripts/ensure-native-runtime.mjs; fi)" --runtime=electron && pnpm exec electron-builder --config config/electron-builder.config.cjs --linux AppImage deb rpm --x64 --publish always -c.publish.releaseType=draft
             unpacked_dir: dist/linux-unpacked
@@ -1321,7 +1323,7 @@ jobs:
           ORCA_BUILD_IDENTITY: ${{ steps.tag-classify.outputs.identity }}
           SHARED_JAVASCRIPT: ${{ needs.release-javascript.outputs.supported }}
           ORCA_RELEASE_JAVASCRIPT_SOURCE_SHA: ${{ needs.release-javascript.outputs.source_sha }}
-          ORCA_DIAGNOSTICS_TOKEN_URL: https://www.onorca.dev/diagnostics/token
+          ORCA_DIAGNOSTICS_TOKEN_URL: https://orca.dev/diagnostics/token
           ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
 
       # After the app build so nothing that cleans out/ can drop it; electron-builder ships it.
@@ -2357,7 +2359,7 @@ jobs:
     needs:
       - cut
       - publish-release
-    # Why stable-only: onorca.dev's mirror link tracks GitHub's latest release, which skips RCs.
+    # Why stable-only: orca.dev's mirror link tracks GitHub's latest release, which skips RCs.
     if: ${{ !cancelled() && needs.publish-release.result == 'success' && needs.cut.outputs.tag != '' && !contains(needs.cut.outputs.tag, '-rc.') && startsWith(needs.cut.outputs.tag, 'v') }}
     uses: ./.github/workflows/release-mirror-r2.yml
     with:

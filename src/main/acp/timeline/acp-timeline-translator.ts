@@ -1,4 +1,3 @@
-import type { AcpOwnershipReader } from '../journal/acp-ownership-reader'
 import { BoundedMap } from '../../../shared/bounded-map'
 import type { ProviderTimelineEvent } from '../../native-chat/agent-session-timeline/provider-timeline-event'
 import {
@@ -31,7 +30,6 @@ export type AcpTimelineTranslatorOptions = {
   sessionId: string
   dialect?: AcpDialect
   agentName?: string
-  ownership?: AcpOwnershipReader
   onTextDropped?: (drop: AcpTextDrop) => void
 }
 
@@ -53,7 +51,7 @@ export class AcpTimelineTranslator {
   protected activeTurn?: string
 
   constructor(private readonly options: AcpTimelineTranslatorOptions) {
-    this.ownership = new AcpTimelineOwnership(options.ownership)
+    this.ownership = new AcpTimelineOwnership()
     this.dialect = options.dialect ?? GENERIC_ACP_DIALECT
     this.providerSessionId = options.sessionId
     this.injectsPromptIdentity = this.dialect.injectedPromptIdentity === true
@@ -213,8 +211,7 @@ export class AcpTimelineTranslator {
     this.ownership.messages.observe(owner.turn, update)
     const join = {
       thread: this.options.sessionId,
-      ...(turn === undefined ? {} : { turn }),
-      ...(owner.scope ? { scope: owner.scope } : {})
+      ...(turn === undefined ? {} : { turn })
     }
     if (extension?.backgroundTasks) {
       const tasks = extension.backgroundTasks.filter((task) => !this.subagents.has(task.taskId))
@@ -256,8 +253,7 @@ export class AcpTimelineTranslator {
           dialect: this.dialect,
           backgroundTasks: this.backgroundTasks,
           subagents: this.subagents,
-          messageKey,
-          scope: owner.scope
+          messageKey
         })
       ]
     }

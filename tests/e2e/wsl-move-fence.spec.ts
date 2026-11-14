@@ -17,7 +17,7 @@ import { wslMoveCutoverFixture } from '../../src/main/persistence/__fixtures__/w
 import {
   listWslMoveCutovers,
   writeWslMoveCutover
-} from '../../src/main/persistence/moving-wsl-projects/wsl-move-cutover-journal'
+} from '../../src/main/persistence/moving-wsl-projects/cutover-recovery/wsl-move-cutover-journal'
 import {
   WSL_MOVE_CUTOVER_PHASES,
   type WslMoveCutoverPhase
@@ -45,7 +45,7 @@ async function createFolders(page: Page, folders: { name: string; folderPath: st
       if (!workspace) {
         throw new Error(`Could not create folder workspace ${entry.name}`)
       }
-      ids.push(workspace.id)
+      ids.push(workspace.folderWorkspace.id)
     }
     return ids
   }, folders)

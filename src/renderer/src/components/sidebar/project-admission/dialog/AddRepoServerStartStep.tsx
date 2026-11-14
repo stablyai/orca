@@ -15,6 +15,7 @@ type AddRepoServerPathStartStepProps = {
   hostSelector?: ReactNode
   notice?: ReactNode
   initialBrowsing?: boolean
+  directEntry?: boolean
   onServerPathChange: (path: string) => void
   onAddServerPath: (kind: 'git' | 'folder') => void
   onOpenCloneStep: () => void
@@ -29,6 +30,7 @@ export function AddRepoServerPathStartStep({
   hostSelector,
   notice,
   initialBrowsing = false,
+  directEntry = false,
   onServerPathChange,
   onAddServerPath,
   onOpenCloneStep,
@@ -244,14 +246,16 @@ export function AddRepoServerPathStartStep({
             <span>{addProjectBusyLabel}</span>
           </div>
         ) : null}
-        <button
-          type="button"
-          onClick={() => setPathEntryOpen(false)}
-          disabled={isAddingServerPath}
-          className="mx-auto block rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default disabled:opacity-40"
-        >
-          {t('auto.components.sidebar.AddRepoServerStartStep.ae990c86a0', 'Back to add options')}
-        </button>
+        {!directEntry ? (
+          <button
+            type="button"
+            onClick={() => setPathEntryOpen(false)}
+            disabled={isAddingServerPath}
+            className="mx-auto block rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-default disabled:opacity-40"
+          >
+            {t('auto.components.sidebar.AddRepoServerStartStep.ae990c86a0', 'Back to add options')}
+          </button>
+        ) : null}
       </div>
     </>
   )

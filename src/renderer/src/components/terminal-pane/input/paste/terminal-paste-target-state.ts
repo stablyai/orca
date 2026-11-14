@@ -12,6 +12,7 @@ type TerminalPastePaneManager = {
 type TerminalPasteTransport = {
   getPtyId: () => string | null
   isConnected: () => boolean
+  isHoldingInput?: () => boolean
 }
 
 export type TerminalPasteTargetState = {
@@ -31,12 +32,18 @@ export function isTerminalPanePasteTargetCurrent({
   transport,
   ptyId
 }: TerminalPasteTargetState): boolean {
-  return Boolean(
-    manager?.getPanes().some((pane) => pane.id === paneId && pane.leafId === leafId) &&
-    transport &&
-    paneTransports.get(paneId) === transport &&
-    transport.isConnected() &&
-    transport.getPtyId() === ptyId
+  if (
+    !manager?.getPanes().some((pane) => pane.id === paneId && pane.leafId === leafId) ||
+    !transport ||
+    paneTransports.get(paneId) !== transport
+  ) {
+    return false
+  }
+  // A paste made before the first bind (ptyId null) may follow this transport onto the PTY it binds.
+  const livePtyId = transport.getPtyId()
+  return (
+    (livePtyId === ptyId || ptyId === null) &&
+    (transport.isConnected() || transport.isHoldingInput?.() === true)
   )
 }
 

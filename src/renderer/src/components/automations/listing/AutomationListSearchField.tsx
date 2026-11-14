@@ -3,7 +3,7 @@ import { Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   isAutomationListArrowKey,
   shouldHandleAutomationListSearchArrowKey,
@@ -46,7 +46,8 @@ export function AutomationListSearchField({
       <Input
         ref={inputRef}
         type="text"
-        autoFocus
+        // Why: the page focuses this on user navigation; a restored page must not move focus.
+        data-automations-page-search=""
         value={query}
         aria-label={t(
           'auto.components.automations.AutomationListSearchField.label',

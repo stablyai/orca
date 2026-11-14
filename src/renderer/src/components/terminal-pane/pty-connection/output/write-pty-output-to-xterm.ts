@@ -1,9 +1,9 @@
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { streamDeliveryOf } from '../../pty-transport/delivery/terminal-stream-position'
-import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-delivery-credit'
-import { nativeWindowsRewriteNeedsFollowupRenderRefresh } from '@/lib/pane-manager/terminal-complex-script'
-import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
-import { forceFullViewportPresent } from '@/lib/pane-manager/terminal-render-pause-release'
+import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-output/terminal-delivery-credit'
+import { nativeWindowsRewriteNeedsFollowupRenderRefresh } from '@/lib/pane-manager/terminal-rendering/terminal-complex-script'
+import { writeTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
+import { forceFullViewportPresent } from '@/lib/pane-manager/terminal-rendering/terminal-render-pause-release'
 import { CLIENT_PLATFORM } from '@/lib/workspace/creation/new-workspace'
 
 import { FOREGROUND_SYNCHRONIZED_FRAME_INTERACTIVE_WINDOW_MS } from './foreground-output-budgets'

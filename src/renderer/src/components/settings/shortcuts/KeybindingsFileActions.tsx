@@ -4,7 +4,7 @@ import { ChevronDown, Code2, ExternalLink, FileText, FolderOpen, RefreshCw } fro
 import { toast } from 'sonner'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { useAppStore } from '../../../store/index'
-import { revealFloatingWorkspacePanel } from '../../../lib/floating-workspace-panel-reveal'
+import { revealFloatingWorkspacePanel } from '../../floating-terminal/floating-workspace-panel-reveal'
 import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
 import { Button } from '../../ui/button'
 import {
@@ -15,7 +15,7 @@ import {
   DropdownMenuTrigger
 } from '../../ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
-import { floatingWorkspaceUnavailableReason } from '@/lib/floating-workspace-availability'
+import { floatingWorkspaceUnavailableReason } from '@/components/floating-terminal/floating-workspace-availability'
 
 function openFailureMessage(reason: string): string {
   switch (reason) {

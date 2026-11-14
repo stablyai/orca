@@ -1,8 +1,19 @@
+import { projectGroupHookOwner } from '../../../../shared/workspace-hook-owner'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/worktree-runtime-capabilities'
+import { resolveFolderSetupSupported } from '@/lib/workspace/creation/setup/folder-setup-support'
+import { checkRuntimeGroupHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
+import { deriveWorkspaceSetupState } from '@/lib/workspace/creation/setup/workspace-setup-preparation'
+import { getSetupConfig } from '../../../../shared/orca-hook-setup-config'
+import { confirmWorkspaceSetupDecision } from '@/lib/workspace/creation/setup/workspace-setup-trust'
+import { useAppStore } from '@/store'
 import type { QuickSubmitOptions } from './quick-creation-request'
 import type { ComposerModel } from './composer-model'
 
 type FolderSubmitOrchestrationInput = Pick<
   ComposerModel,
+  | 'groupSetup'
+  | 'revealSetupChoice'
   | 'clearNewWorkspaceDraft'
   | 'createFolderWorkspace'
   | 'decisions'
@@ -41,6 +52,8 @@ import { toast } from 'sonner'
 
 export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInput) {
   const {
+    groupSetup,
+    revealSetupChoice,
     clearNewWorkspaceDraft,
     createFolderWorkspace,
     decisions,
@@ -97,8 +110,58 @@ export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInp
         if (isSubmissionCancelled()) {
           return
         }
+        const policySettlement = await settleComposerSubmit(
+          groupSetup.waitForStartupPolicySave(),
+          isSubmissionCancelled
+        )
+        if (policySettlement.status === 'cancelled' || !policySettlement.value) {
+          return
+        }
+        const owner = projectGroupHookOwner(selectedProjectGroup)
+        const setupSupported = await resolveFolderSetupSupported(
+          owner,
+          PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY
+        )
+        let setupApproval = {}
+        if (owner && setupSupported) {
+          const inspected = await checkRuntimeGroupHooks(
+            getRepoExecutionHostId(selectedProjectGroup),
+            selectedProjectGroup.id
+          )
+          if (isSubmissionCancelled()) {
+            return
+          }
+          groupSetup.commitHooks(inspected)
+          const inspectedGroup = { ...selectedProjectGroup, hookSettings: inspected.hookSettings }
+          const setup = deriveWorkspaceSetupState(
+            inspectedGroup,
+            getSetupConfig({ ...owner, hookSettings: inspected.hookSettings }, inspected.hooks),
+            groupSetup.decision
+          )
+          if (setup.requiresExplicitSetupChoice && !groupSetup.decision) {
+            revealSetupChoice()
+            return
+          }
+          const confirmed = await confirmWorkspaceSetupDecision(
+            useAppStore.getState,
+            owner.id,
+            setup.resolvedSetupDecision ?? 'inherit',
+            getRepoExecutionHostId(selectedProjectGroup),
+            isSubmissionCancelled
+          )
+          if (confirmed === 'cancelled') {
+            return
+          }
+          setupApproval = confirmed
+        }
+        if (isSubmissionCancelled()) {
+          return
+        }
         const folderWorkspaceCreated = await submitFolderWorkspaceCreate({
           projectGroup: selectedProjectGroup,
+          setupSupported,
+          setupApproval,
+          isCancelled: isSubmissionCancelled,
           name: smartGitHubMetadata?.workspaceName ?? name,
           lastAutoName: lastAutoNameRef.current,
           linkedWorkItem: submitLinkedWorkItem,
@@ -152,6 +215,8 @@ export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInp
       }
     },
     [
+      groupSetup,
+      revealSetupChoice,
       clearNewWorkspaceDraft,
       createFolderWorkspace,
       canResolveFolderSmartGitHubSubmit,

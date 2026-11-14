@@ -1,4 +1,3 @@
-import type { FileOpenFailure } from './terminal-file-open-failure'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { isMissingRuntimePathError } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { useAppStore } from '@/store/index'
@@ -20,28 +19,25 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   getConnectionExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { statUserOpenedPath } from '@/lib/user-opened-local-path'
+import { statUserOpenedPath } from '@/lib/files/access/user-opened-local-path'
 import {
   CLIENT_LOCAL_FILE_TARGET,
   hostGrantedEditorFields,
-  resolveHostWorkspaceFile,
-  revealHostWorkspaceRoot,
-  type HostWorkspaceFile
+  resolveHostWorkspaceFile
 } from '../../host-files/terminal-host-workspace-file'
+import type { HostWorkspaceFile } from '../../host-files/terminal-host-workspace-file'
 import { captureEditorOpenLinkIntent } from '@/store/slices/editor/tabs/editor-open-target-group'
-import { beginLinkOpenRequest as reserveDetectedFilePathOpenTurn } from '@/lib/link-open-request'
+import { beginLinkOpenRequest as reserveDetectedFilePathOpenTurn } from '@/lib/links/link-open-request'
 import { openTerminalHtmlFileInBrowser } from './terminal-file-link-browser-open'
-
 import { refuseOpenInGroupRequest } from './terminal-file-open-in-group-toast'
 import { isExplicitEditorScopeKept, openLinkedFileInEditor } from './terminal-file-link-editor-open'
 import { resolveLinkedFileEditorTarget } from '../../host-files/terminal-file-editor-target'
-
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
-import {
-  httpLinkDirectClickDestination,
-  type HttpLinkDestination
-} from '@/lib/browser/navigation/http-link-destinations'
+import { httpLinkDirectClickDestination } from '@/lib/browser/navigation/http-link-destinations'
+import type { HttpLinkDestination } from '@/lib/browser/navigation/http-link-destinations'
 import { isHtmlFilePath, localHtmlFileDestinations } from './local-html-file-destinations'
+import type { FileOpenFailure } from './terminal-file-open-failure'
+import { openDetectedFolder } from './terminal-folder-open'
 
 type TerminalFileOpenDeps = {
   worktreeId: string
@@ -195,13 +191,10 @@ export function openDetectedFilePath(
     const opensWithSystemDefault = pageDestination
       ? pageDestination === 'system'
       : openWithSystemDefault
-    if (opensWithSystemDefault && canOpenWithSystemDefault) {
+    // Why folders skip this: the folder branch opens them with the OS too, and reports a failed open.
+    if (opensWithSystemDefault && canOpenWithSystemDefault && !statResult.isDirectory) {
       // Shift+Cmd/Ctrl follows URL-link behavior and OS file associations without new editor settings.
-      const openedWithSystemDefault = await window.api.shell.openFilePath(
-        mappedFilePath,
-        LOCAL_EXECUTION_HOST_ID
-      )
-      if (openedWithSystemDefault || statResult.isDirectory) {
+      if (await window.api.shell.openFilePath(mappedFilePath, LOCAL_EXECUTION_HOST_ID)) {
         return
       }
     }
@@ -210,11 +203,20 @@ export function openDetectedFilePath(
       if (refuseExplicitNonEditorRoute()) {
         return
       }
-      if (canOpenWithSystemDefault) {
-        await window.api.shell.openFilePath(mappedFilePath, LOCAL_EXECUTION_HOST_ID)
-      } else if (hostWorkspaceFile) {
-        revealHostWorkspaceRoot(hostWorkspaceFile)
-      }
+      await openDetectedFolder({
+        folderPath: mappedFilePath,
+        worktreeId,
+        worktreePath,
+        hostWorkspaceFile,
+        sourceHostId: sourceFileHostId,
+        openWithSystemDefault: canOpenWithSystemDefault,
+        onFailure: (failure) => {
+          // Why: the OS open is awaited, so a newer click may own the toast by now.
+          if (isCurrentRequest()) {
+            deps.onOpenFailure?.(failure)
+          }
+        }
+      })
       return
     }
 

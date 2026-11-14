@@ -10,7 +10,7 @@ import type { ReplayingPanesRef } from '../snapshots/replay-guard'
 import type { RestoredViewportBlankingPanesRef } from '../viewport/terminal-restored-viewport'
 import type { AgentCompletionStatusSnapshot } from '../agent-completion/agent-completion-coordinator-types'
 import type { TerminalColorSchemeMode } from '../../../../../shared/terminal/protocol/queries/terminal-color-scheme-protocol'
-import type { TerminalPanePlacement } from '../../../../../shared/workspace-layout/terminal-pane-placement'
+import type { TerminalPanePlacement } from '../../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import type { TerminalKittyKeyboardModeTracker } from '../../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-mode-tracker'
 import type { PtyPreconnectInputEntry } from '../pty-transport/input/pty-preconnect-input-buffer'
 import type { PtyPaneStartup } from './startup/pty-pane-startup'
@@ -40,6 +40,7 @@ export type PtyConnectionDeps = {
   restoredPtyIdByLeafId?: Record<string, string>
   /** Render-time park intent survives watcher disposal and is consumed once after layout replay. */
   mountFollowsTerminalPark: boolean
+  invalidateRetainedInlineScrollback: (leafId: string) => void
   paneTransportsRef: React.RefObject<Map<number, PtyTransport>>
   paneMode2031Ref: React.RefObject<Map<number, boolean>>
   /** Mirror xterm’s negotiated Kitty flags for keyboard policy. */

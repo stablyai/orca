@@ -1,5 +1,5 @@
 import React from 'react'
-import { cn } from '../../../lib/utils'
+import { cn } from '../../../lib/class-names'
 
 export function PiIcon({
   size = 14,

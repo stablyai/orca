@@ -1,10 +1,7 @@
+import type { BrowserInitializationPresentation } from './browser-initialization-presentation'
 import type { AppState } from '../../store/types'
-import type { RetiredTerminalTabSweepState } from '../../store/terminals/retired-terminal-tab-state-sweep'
-import type {
-  RuntimeMobileSessionTabGroup,
-  RuntimeMobileSessionTabsRemovedResult,
-  RuntimeMobileSessionTabsResult
-} from '../../../../shared/runtime-types'
+import type { RetiredTerminalTabSweepState } from '../../store/terminals/retirement/retired-terminal-tab-state-sweep'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionFileTab,
@@ -68,6 +65,10 @@ export type WebSessionTabsSnapshotApplyOptions = {
   contentScope?: 'all' | 'agent-session'
   preserveLocalLayout?: boolean
   terminalPtyMode?: 'local' | 'remote'
+  reconcileBrowserPage?: {
+    page: BrowserPage
+    handle: WebSessionTabsSyncState['remoteBrowserPageHandlesByPageId'][string]
+  }
 }
 
 export type TrackedWebSessionTabsWorktree = {
@@ -189,10 +190,13 @@ export type MirroredTerminalTab = {
 export type MirroredBrowserTab = {
   workspace: BrowserWorkspace
   page: BrowserPage
+  previousPage?: BrowserPage
+  preservesLoading: boolean
   certificateFailure: BrowserCertificateFailure | null
   remotePageId: string
   browserProfileId?: string
   placement?: RuntimeBrowserPlacement
+  initializationPresentation?: BrowserInitializationPresentation
   unifiedTab: Tab
   hostTabId: string
   clientGroupId?: string
@@ -282,6 +286,3 @@ export type WebSessionTabsBatchContext = {
   changedRecords: Set<WebSessionTabsBatchRecordKey>
   openFilesIndex: WebSessionOpenFilesIndex | null
 }
-
-export type TabGroupSnapshot = RuntimeMobileSessionTabGroup
-export type RemovedTabsResult = RuntimeMobileSessionTabsRemovedResult

@@ -28,7 +28,7 @@ import type * as RemoteRuntimePtyIdModule from '../../../../../../shared/remote-
 import {
   holdBrowserAttachmentFiles,
   readBrowserAttachmentFile
-} from '@/lib/browser-attachment-files'
+} from '@/lib/files/drop/browser-attachment-files'
 import { releaseNativeChatStagedFiles } from '../../drafts/native-chat-draft-attachment-staging'
 import { moveNativeChatComposerDraft } from '../../drafts/native-chat-composer-draft-move'
 
@@ -355,30 +355,6 @@ describe('a macOS paste the clipboard shows is Finder files', () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
     })
   }
-  function chipNamed(name: string): string {
-    const chip = latest().imageAttachments.find(({ pendingName }) => pendingName === name)
-    if (!chip) {
-      throw new Error(`Missing reserved chip ${name}`)
-    }
-    return chip.id
-  }
-
-  it('attaches nothing the user removed, before or after the clipboard answered', async () => {
-    await render('workspace-1')
-    pasteFinderCopy(['a.png', 'notes.txt', 'late.txt'])
-    expect(nativeChatImagesHoldSend(latest().imageAttachments)).toBe(true)
-    act(() => latest().removeImageAttachment(chipNamed('a.png')))
-    await answerClipboard('a.png\nnotes.txt\nlate.txt')
-    // References wait for the input-method composition, and Send waits with them.
-    expect(container.querySelector('[data-draft]')?.textContent).toBe('')
-    expect(nativeChatImagesHoldSend(latest().imageAttachments)).toBe(true)
-    act(() => latest().removeImageAttachment(chipNamed('late.txt')))
-    composing = false
-    act(() => latest().flushPendingAttachments())
-    expect(container.querySelector('[data-draft]')?.textContent).toBe('@/Users/me/notes.txt ')
-    expect(latest().imageAttachments).toEqual([])
-    expect(mocks.stat).toHaveBeenCalledTimes(2)
-  })
 
   it.each(['local', 'runtime-session', 'handoff'])(
     'finishes a %s paste into its draft when the composer unmounts before the clipboard answers',

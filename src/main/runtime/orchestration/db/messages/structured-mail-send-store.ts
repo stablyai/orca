@@ -50,6 +50,27 @@ export function getStructuredMailSend(
   return row && readStructuredMailSendRow(row)
 }
 
+export function getStructuredMailSendsForMessages(
+  this: OrchestrationDb,
+  messageIds: readonly string[]
+): StructuredMailSendRow[] {
+  const result: StructuredMailSendRow[] = []
+  for (let offset = 0; offset < messageIds.length; offset += 256) {
+    const page = messageIds.slice(offset, offset + 256)
+    result.push(
+      ...this.db
+        .prepare(
+          `SELECT ${SEND_COLUMNS} FROM structured_mail_sends
+           WHERE message_id IN (${page.map(() => '?').join(',')})
+           ORDER BY message_id,mailbox_handle,session_id,operation_id`
+        )
+        .all(...page)
+        .flatMap((row) => readStructuredMailSendRow(row) ?? [])
+    )
+  }
+  return result
+}
+
 /** Whether a chat still holds any of this mailbox's mail: one row, never all of them. */
 export function hasStructuredMailSend(this: OrchestrationDb, mailboxHandle: string): boolean {
   return (
@@ -175,6 +196,7 @@ export function retireStructuredMailSend(
 }
 
 export type StructuredMailSendStoreMethods = {
+  getStructuredMailSendsForMessages: typeof getStructuredMailSendsForMessages
   getStructuredMailSends: typeof getStructuredMailSends
   getStructuredMailSend: typeof getStructuredMailSend
   getStructuredMailSendMailboxes: typeof getStructuredMailSendMailboxes
@@ -187,6 +209,7 @@ export type StructuredMailSendStoreMethods = {
 
 export function attachStructuredMailSendStore(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
+    getStructuredMailSendsForMessages,
     getStructuredMailSends,
     getStructuredMailSend,
     getStructuredMailSendMailboxes,

@@ -1,3 +1,10 @@
-// Name | Schedule | Project | Host | Next run | Last run | Status | Agent | Actions
-export const AUTOMATIONS_TABLE_GRID_CLASS =
-  'grid grid-cols-[minmax(11rem,1.8fr)_minmax(6.5rem,9.5rem)_minmax(4.5rem,7.5rem)_minmax(4.5rem,7rem)_minmax(7.5rem,9.5rem)_minmax(7rem,9.5rem)_minmax(4.5rem,5.5rem)_2.5rem_2.5rem]'
+// Name (+ schedule) | Project | [Host] | Next run | Last run | Actions
+const AUTOMATIONS_TABLE_GRID_CLASS =
+  'grid grid-cols-[minmax(14rem,1fr)_minmax(6rem,9rem)_minmax(7.5rem,10rem)_minmax(7.5rem,10rem)_2.5rem]'
+const AUTOMATIONS_TABLE_GRID_WITH_HOST_CLASS =
+  'grid grid-cols-[minmax(14rem,1fr)_minmax(6rem,9rem)_minmax(5rem,8rem)_minmax(7.5rem,10rem)_minmax(7.5rem,10rem)_2.5rem]'
+
+/** The Host column appears only when the list spans more than one host. */
+export function automationsTableGridClass(showHost: boolean): string {
+  return showHost ? AUTOMATIONS_TABLE_GRID_WITH_HOST_CLASS : AUTOMATIONS_TABLE_GRID_CLASS
+}

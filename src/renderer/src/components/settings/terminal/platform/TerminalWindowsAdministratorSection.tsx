@@ -17,7 +17,7 @@ import { getTerminalWindowsAdministratorSearchEntry } from './terminal-windows-s
 import { MANAGE_SESSIONS_SECTION_ID } from '../session-management/open-terminal-manage-sessions'
 import { useAppStore } from '../../../../store/index'
 import { useTranslate } from '@/i18n/use-translate'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 export function TerminalWindowsAdministratorSection(): React.JSX.Element {
@@ -236,10 +236,9 @@ export function TerminalWindowsAdministratorSection(): React.JSX.Element {
                 variant="link"
                 size="sm"
                 onClick={(event) =>
-                  openAppHttpLink(
-                    'https://www.onorca.dev/docs/terminal#windows-administrator-mode',
-                    { event }
-                  )
+                  openAppHttpLink('https://orca.dev/docs/terminal#windows-administrator-mode', {
+                    event
+                  })
                 }
               >
                 {t('settings.terminal.windows.administratorDocumentation', 'Read the guide')}

@@ -4,7 +4,7 @@ import {
   evaluateRuntimeCompat,
   type RuntimeCompatVerdict
 } from '../../../../../../shared/protocol-compat'
-import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
+import { describeRuntimeCompatBlock } from '@/runtime/hosts/display/runtime-host-copy'
 import {
   MIN_COMPATIBLE_RUNTIME_SERVER_VERSION,
   RUNTIME_PROTOCOL_VERSION

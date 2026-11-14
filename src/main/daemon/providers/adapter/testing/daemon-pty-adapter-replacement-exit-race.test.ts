@@ -1,4 +1,4 @@
-import { fixture } from '../../../../persistence/loading-store/profile-state-delayed-authority-fixture'
+import { fixture } from '../../../../persistence/loading-store/profile-writing/profile-state-delayed-authority-fixture'
 import { OrcaRuntimeService } from '../../../../runtime/orca-runtime'
 import { adoptStablePane } from '../../../../ipc/pty/pane/adopt-stable'
 import { setLocalPtyProvider } from '../../../../ipc/pty/provider/registry'

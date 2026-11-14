@@ -37,6 +37,7 @@ export {
   edgeCohortBucket,
   inEdgeCohort,
   mapEpochFloor,
+  mayBeOnEdge,
   type EdgeRelayConfig
 } from './edge-relay-cohort.js'
 

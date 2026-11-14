@@ -1,10 +1,12 @@
+import { readTestHostJournal } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
+import '../../dispatch/testing/unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import {
   createRestTestRig,
   type RestTestRig
-} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
-import { HOST_TEST_NOW } from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
+import { HOST_TEST_NOW } from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { RpcContext } from '../../core'
 import '../../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
@@ -152,7 +154,7 @@ it('the opening prompt owns retry with explicit model and permission for a legac
     outcome: 'journaled',
     messageId: expect.any(String)
   })
-  expect((await rig.host.journalSnapshot(SESSION)).submissions).toMatchObject([
+  expect((await readTestHostJournal(rig.host, SESSION)).submissions).toMatchObject([
     {
       clientMessageId: result.prompt?.outcome === 'journaled' ? result.prompt.messageId : undefined,
       source: { kind: 'user' },
@@ -166,7 +168,7 @@ it('the opening prompt owns retry with explicit model and permission for a legac
   expect(rig.adapter.dispatch.mock.calls[0]?.[0].clientMessageId).toBe(
     result.prompt?.outcome === 'journaled' ? result.prompt.messageId : undefined
   )
-  const snapshot = await rig.host.journalSnapshot(SESSION)
+  const snapshot = await readTestHostJournal(rig.host, SESSION)
   expect(snapshot.submissions).toMatchObject([{ dispatchState: 'accepted' }])
   expect(snapshot.items.filter((item) => item.body.kind === 'status')).toEqual([])
   expect(rig.store.getRecord(SESSION)).toMatchObject({
@@ -184,7 +186,7 @@ it('rejects one requester with one failure row when all five children exit', asy
     await endChild()
   }
   await vi.waitFor(async () =>
-    expect((await rig.host.journalSnapshot(SESSION)).submissions).toMatchObject([
+    expect((await readTestHostJournal(rig.host, SESSION)).submissions).toMatchObject([
       {
         clientMessageId:
           result.prompt?.outcome === 'journaled' ? result.prompt.messageId : undefined,
@@ -192,7 +194,7 @@ it('rejects one requester with one failure row when all five children exit', asy
       }
     ])
   )
-  const snapshot = await rig.host.journalSnapshot(SESSION)
+  const snapshot = await readTestHostJournal(rig.host, SESSION)
   expect(snapshot.submissions).toHaveLength(1)
   expect(
     snapshot.items.filter((item) => item.body.kind === 'status' && item.body.tone === 'error')
@@ -223,7 +225,7 @@ it.each(['spawn', 'open'] as const)(
     expect(result.prompt?.outcome).toBe('journaled')
     if (stage === 'spawn') {
       await vi.waitFor(async () =>
-        expect((await rig.host.journalSnapshot(SESSION)).submissions).toMatchObject([
+        expect((await readTestHostJournal(rig.host, SESSION)).submissions).toMatchObject([
           { dispatchState: 'rejected' }
         ])
       )
@@ -233,7 +235,7 @@ it.each(['spawn', 'open'] as const)(
       await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledOnce())
       expect(rig.adapter.acquire).toHaveBeenCalledTimes(2)
     }
-    expect((await rig.host.journalSnapshot(SESSION)).submissions).toHaveLength(1)
+    expect((await readTestHostJournal(rig.host, SESSION)).submissions).toHaveLength(1)
   }
 )
 
@@ -269,7 +271,7 @@ it('replays a lost reply for a prompted folder launch without another message or
     effort: 'high',
     serviceTier: 'fast'
   })
-  expect((await rig.host.journalSnapshot(SESSION)).submissions).toHaveLength(1)
+  expect((await readTestHostJournal(rig.host, SESSION)).submissions).toHaveLength(1)
 })
 
 it.each(['before', 'after'] as const)(
@@ -312,7 +314,7 @@ it.each(['before', 'after'] as const)(
     await child()
     await rig.host.close(SESSION, 'user-close')
     await rig.host.revealSession(SESSION)
-    const snapshot = await rig.host.journalSnapshot(SESSION)
+    const snapshot = await readTestHostJournal(rig.host, SESSION)
     expect(snapshot.submissions).toMatchObject([
       {
         source: { kind: 'user' },
@@ -321,7 +323,7 @@ it.each(['before', 'after'] as const)(
       }
     ])
     expect(
-      rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal.queuedMessages.list()
+      await rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal.queuedMessages.list()
     ).toHaveLength(1)
     expect(rig.adapter.dispatch).not.toHaveBeenCalled()
   }
@@ -343,7 +345,7 @@ it('a tab publication failure after commit never calls the prompt undelivered', 
       rpcContext(runtime, CLI)
     )
   ).rejects.toThrow()
-  expect((await rig.host.journalSnapshot(SESSION)).submissions).toMatchObject([
+  expect((await readTestHostJournal(rig.host, SESSION)).submissions).toMatchObject([
     { source: { kind: 'user' }, dispatchState: 'pending' }
   ])
   expect(rig.adapter.acquire).not.toHaveBeenCalled()

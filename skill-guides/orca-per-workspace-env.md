@@ -301,6 +301,17 @@ timeoutSeconds:
   destroy: 120
 ```
 
+Recipe scripts inherit Orca's whole environment by default, including any API keys and tokens in
+it. Set `passEnv` to pass only the variables the scripts need, as exact names or a prefix ending in
+`*`; `PATH`, `HOME`, `USER`, `SHELL`, `LANG`, `TMPDIR` and similar basics are always kept, and the
+`ORCA_*` recipe variables are always set. Recipes that use an SSH agent also need `SSH_AUTH_SOCK`,
+and provider CLIs need their own credential or config variables. A malformed `passEnv` is reported
+and limits the scripts to the basic variables until it is fixed.
+
+```yaml
+passEnv: [GH_TOKEN, GITHUB_TOKEN, 'CLOUDSDK_*']
+```
+
 A timed-out `create` may still have started a VM, so make `create` idempotent per
 `ORCA_VM_INSTANCE_ID` or have it record the resource before slow work starts.
 

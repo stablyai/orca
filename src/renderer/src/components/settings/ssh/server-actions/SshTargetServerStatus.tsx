@@ -1,6 +1,6 @@
 import type { SshConnectionState, SshTarget } from '../../../../../../shared/ssh-types'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { DropdownMenuItem, DropdownMenuSeparator } from '../../../ui/dropdown-menu'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../../ui/dialog'
 import { sshHostServerStatusLine } from '@/ssh/ssh-host-server-status-copy'

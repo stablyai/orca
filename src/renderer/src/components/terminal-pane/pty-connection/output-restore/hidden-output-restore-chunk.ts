@@ -9,8 +9,8 @@ import {
   scanTerminalReplyQuerySequences
 } from '../../../../../../shared/terminal/protocol/queries/terminal-reply-query-scan'
 import { isPrimaryDeviceAttributesQuerySequence } from '../../../../../../shared/terminal/protocol/queries/terminal-reply-query-extraction'
-import { flushTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
-import { writeXtermParseBarrier } from '@/lib/pane-manager/xterm-parse-barrier'
+import { flushTerminalOutput } from '@/lib/pane-manager/terminal-output/pane-terminal-output-scheduler'
+import { writeXtermParseBarrier } from '@/lib/pane-manager/terminal-output/xterm-parse-barrier'
 
 export function bindHiddenOutputRestoreChunk(session: ConnectPanePtySession): void {
   let coveredQueryScan = EMPTY_TERMINAL_REPLY_QUERY_SCAN_STATE

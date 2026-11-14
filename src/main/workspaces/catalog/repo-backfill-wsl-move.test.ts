@@ -11,7 +11,7 @@ import { seedWslMoveCutover } from '../../persistence/__fixtures__/wsl-mover/wsl
 import {
   loadWslMoveFence,
   resetWslMoveFenceForTests
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { probeGitRemoteIdentity } from './repo-git-remote-identity'
 import {
   enrichMissingRepoGitRemoteIdentities,
@@ -26,7 +26,7 @@ vi.mock('electron', () => ({
 }))
 vi.mock('./repo-git-remote-identity', () => ({ probeGitRemoteIdentity: vi.fn() }))
 vi.mock('../../github/client/fetch/repo-slug-upstream', () => ({
-  getRepoUpstream: vi.fn(async () => ({ owner: 'acme', repo: 'app' }))
+  probeRepoUpstream: vi.fn(async () => ({ upstream: { owner: 'acme', repo: 'app' }, origin: null }))
 }))
 vi.mock('../../repository-icons/repo-icon-autodetect', () => ({
   detectGitHubAvatarIcon: vi.fn(async () => null)

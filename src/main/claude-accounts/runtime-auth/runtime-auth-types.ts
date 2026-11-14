@@ -1,4 +1,4 @@
-import type { ClaudeEnvPatch } from '../environment'
+import type { ClaudeEnvPatch } from './environment'
 
 export type ClaudeRuntimeAuthPreparation = {
   configDir: string

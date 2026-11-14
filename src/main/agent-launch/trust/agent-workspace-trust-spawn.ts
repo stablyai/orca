@@ -43,8 +43,6 @@ export function agentWorkspaceTrustDecisionForWorkspace(
 export function applyAgentWorkspaceTrustToSpawn(
   args: {
     launchAgent: unknown
-    /** The user chose "let agents ask" for this launch; it wins even if saving that answer failed. */
-    skipForThisLaunch?: boolean
     /** Placement workspace id; its root may differ from the agent’s starting folder. */
     worktreeId: string | undefined
     /** Section root to pre-trust for this launch; never part of the terminal identity. */
@@ -64,7 +62,6 @@ export function applyAgentWorkspaceTrustToSpawn(
   const trustWorkspaceId = resolveAgentWorkspaceTrustOwner(args)
   if (
     !args.isFreshLaunch ||
-    args.skipForThisLaunch === true ||
     !shouldPreTrustAgentWorkspace(
       args.settings?.agentWorkspaceTrustEnabled,
       agentWorkspaceTrustDecisionForWorkspace(trustWorkspaceId, args.store)

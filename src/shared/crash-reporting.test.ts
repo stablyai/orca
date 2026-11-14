@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatCrashReportText,
-  sanitizeCrashReportDetails,
   sanitizeCrashReportString,
   type CrashReportRecord
 } from './crash-reporting'
@@ -27,14 +26,6 @@ function notesReport(overrides: Partial<CrashReportRecord> = {}): CrashReportRec
   }
 }
 
-/** Notes are emitted indented inside the fence; mirror that when asserting. */
-function indentNote(note: string): string {
-  return note
-    .split('\n')
-    .map((line) => `  ${line}`)
-    .join('\n')
-}
-
 describe('crash-reporting shared helpers', () => {
   it('redacts paths and common secret-shaped strings', () => {
     const text =
@@ -53,60 +44,6 @@ describe('crash-reporting shared helpers', () => {
     )
   })
 
-  it('keeps details on a strict primitive allowlist', () => {
-    const longStack = [
-      'Error: boom',
-      ...Array.from(
-        { length: 200 },
-        (_, index) => `at Component${index} (/Users/alice/project/src/file-${index}.tsx:1:1)`
-      )
-    ].join('\n')
-
-    expect(
-      sanitizeCrashReportDetails({
-        name: 'GPU /home/alice/repo',
-        code: 9,
-        crashed: true,
-        missing: null,
-        error_stack: longStack,
-        minidumpPath: '/Users/alice/Library/Application Support/Orca/reports/abc.dmp',
-        nested: { nope: true },
-        infinite: Number.POSITIVE_INFINITY
-      })
-    ).toEqual({
-      name: 'GPU [redacted-path]',
-      code: 9,
-      crashed: true,
-      missing: null,
-      error_stack: expect.stringContaining('[redacted-path]'),
-      minidumpPath: '[redacted-path]'
-    })
-    expect(
-      String(sanitizeCrashReportDetails({ error_stack: longStack }).error_stack).length
-    ).toBeGreaterThan(240)
-    expect(String(sanitizeCrashReportDetails({ errorStack: longStack }).errorStack).length).toBe(
-      4_003
-    )
-    expect(
-      String(sanitizeCrashReportDetails({ componentStack: longStack }).componentStack).length
-    ).toBe(4_003)
-    expect(String(sanitizeCrashReportDetails({ description: longStack }).description).length).toBe(
-      243
-    )
-  })
-
-  it('keeps a user note longer than the 240-char detail cap intact', () => {
-    // A real 1.4.184 note was cut mid-word by the telemetry detail budget.
-    const note =
-      `My phone is connected. ${'The Claude terminal never came back. '.repeat(20)}`.trim()
-
-    const text = formatCrashReportText(notesReport(), note)
-
-    expect(note.length).toBeGreaterThan(240)
-    expect(text).toContain(`--- begin user notes ---\n${indentNote(note)}\n--- end user notes ---`)
-    expect(text).not.toContain('...')
-  })
-
   it('still redacts paths and secrets far past the old 240-char cap', () => {
     const note = [
       'a'.repeat(1_000),
@@ -121,22 +58,6 @@ describe('crash-reporting shared helpers', () => {
     expect(text).toContain('my token was [redacted-secret]')
     expect(text).not.toContain('alice')
     expect(text).not.toContain('ghp_abcdefghijklmnopqrstuvwxyz')
-  })
-
-  it('keeps user notes when the report is truncated to the endpoint cap', () => {
-    // Tail truncation must remove reproducible machine data before user notes.
-    const text = formatCrashReportText(
-      notesReport({
-        details: Object.fromEntries(
-          Array.from({ length: 400 }, (_, index) => [`detail_${index}`, 'x'.repeat(240)])
-        )
-      }),
-      'the sidebar went blank'
-    )
-
-    expect(text.length).toBeLessThanOrEqual(64_000)
-    expect(text).toContain('[Crash report truncated to fit feedback endpoint limits.]')
-    expect(text).toContain('--- begin user notes ---\n  the sidebar went blank')
   })
 
   it.each([

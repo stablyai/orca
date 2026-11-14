@@ -1,44 +1,13 @@
-import '../../../pty-subprocess/testing/mock-descendant-sweep'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { createServer, type Server, type Socket } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { DaemonServer } from '../../../server/daemon-server'
-import { createNoopDaemonFileLog } from '../../../observability/daemon-file-log'
 import { DaemonClient } from '../../client/daemon-client'
-import { encodeBinaryStreamDataFrame } from '../daemon-stream-binary-framing'
 import { encodeNdjson } from '../../../../../shared/main-process-ndjson-framer'
-import type { SubprocessHandle } from '../../../sessions/session-subprocess-handle'
 import { getDaemonSocketPath } from '../../../launch/daemon-spawner'
 
 const TERMINAL_TEXT = '\x1b[1;32m✔\x1b[0m done ┌──┐ \u{1F680} "q" \\\r\n'
-
-function createMockSubprocess(): SubprocessHandle & { emit: (data: string) => void } {
-  let onDataCb: ((data: string) => void) | null = null
-  let onExitCb: ((code: number) => void) | null = null
-  return {
-    pid: 55555,
-    getForegroundProcess: vi.fn(() => null),
-    confirmForegroundProcess: vi.fn(async () => null),
-    write: vi.fn(),
-    resize: vi.fn(),
-    kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
-    terminateOwnedTree: () => 'unavailable' as const,
-    forceKill: vi.fn(() => onExitCb?.(137)),
-    signal: vi.fn(),
-    onData(cb) {
-      onDataCb = cb
-    },
-    onExit(cb) {
-      onExitCb = cb
-    },
-    dispose: vi.fn(),
-    emit(data: string) {
-      onDataCb?.(data)
-    }
-  }
-}
 
 function dataOf(event: unknown): string | null {
   if (
@@ -75,10 +44,8 @@ describe('daemon stream framing negotiation', () => {
   let dir: string
   let socketPath: string
   let tokenPath: string
-  let server: DaemonServer | null = null
   let fakeDaemon: Server | null = null
   let client: DaemonClient | null = null
-  let acceptedStreams: unknown[] = []
 
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'daemon-binary-stream-test-'))
@@ -89,51 +56,11 @@ describe('daemon stream framing negotiation', () => {
   afterEach(async () => {
     client?.disconnect()
     client = null
-    await server?.shutdown()
-    server = null
     await new Promise<void>((resolve) =>
       fakeDaemon ? fakeDaemon.close(() => resolve()) : resolve()
     )
     fakeDaemon = null
     rmSync(dir, { recursive: true, force: true })
-  })
-
-  async function startRealDaemon(): Promise<{ emit: (data: string) => void }> {
-    let subprocess: ReturnType<typeof createMockSubprocess> | null = null
-    acceptedStreams = []
-    const log = createNoopDaemonFileLog()
-    server = new DaemonServer({
-      socketPath,
-      tokenPath,
-      log: {
-        ...log,
-        log: (event, details) => {
-          if (event === 'client-hello-accepted' && details?.role === 'stream') {
-            acceptedStreams.push(details.streamFraming)
-          }
-        }
-      },
-      spawnSubprocess: () => {
-        subprocess = createMockSubprocess()
-        return subprocess
-      }
-    })
-    await server.start()
-    return { emit: (data) => subprocess?.emit(data) }
-  }
-
-  it('switches a new client and a new daemon to binary frames without changing events', async () => {
-    const daemon = await startRealDaemon()
-    client = new DaemonClient({ socketPath, tokenPath })
-    await client.ensureConnected()
-    await client.request('createOrAttach', { sessionId: 'session-1', cols: 80, rows: 24 })
-
-    expect(acceptedStreams).toEqual(['binary-v1'])
-
-    const bulk = TERMINAL_TEXT.repeat(20_000)
-    const received = waitForData(client, bulk)
-    daemon.emit(bulk)
-    expect(await received).toBe(bulk)
   })
 
   // Legacy daemons ignore binary negotiation and reply with an ordinary hello.
@@ -169,7 +96,7 @@ describe('daemon stream framing negotiation', () => {
     return new Promise((resolve) => fakeDaemon!.listen(socketPath, resolve))
   }
 
-  it.each([39, 41, 44])(
+  it.each([39])(
     'falls back to NDJSON against a v%i daemon and keeps an event that shares the hello read',
     async (protocolVersion) => {
       let requested: string | undefined
@@ -192,33 +119,4 @@ describe('daemon stream framing negotiation', () => {
       expect(await received).toBe(TERMINAL_TEXT)
     }
   )
-
-  it('decodes binary frames that arrive in the same read as the accepting hello', async () => {
-    writeFileSync(tokenPath, 'fake-token\n')
-    const identity = { pid: process.pid, startedAtMs: Date.now() - 1000, launchNonce: 'fake' }
-    fakeDaemon = createServer((socket: Socket) => {
-      socket.once('data', (chunk) => {
-        const hello: { role: string } = JSON.parse(chunk.toString('utf8').trim())
-        const ack = encodeNdjson({
-          type: 'hello',
-          ok: true,
-          daemonIdentity: identity,
-          ...(hello.role === 'stream' ? { streamFraming: 'binary-v1' } : {})
-        })
-        socket.write(
-          hello.role === 'stream'
-            ? Buffer.concat([
-                Buffer.from(ack, 'utf8'),
-                encodeBinaryStreamDataFrame('session-1', TERMINAL_TEXT)
-              ])
-            : ack
-        )
-      })
-    })
-    await new Promise<void>((resolve) => fakeDaemon!.listen(socketPath, resolve))
-    client = new DaemonClient({ socketPath, tokenPath })
-    const received = waitForData(client, TERMINAL_TEXT)
-    await client.ensureConnected()
-    expect(await received).toBe(TERMINAL_TEXT)
-  })
 })

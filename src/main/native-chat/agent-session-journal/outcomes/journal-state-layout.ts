@@ -1,7 +1,9 @@
+import { memoryJournalMap } from '../journal-memory-collections'
 import type { JournalReducerState } from '../projection/journal-reducer'
 
 // Every reducer field has a storage home; queue splits its revision from its keyed cards.
 export const journalStateLayout = {
+  queries: 'prepared',
   sessionId: 'scalar',
   epoch: 'scalar',
   lastSequence: 'scalar',
@@ -77,7 +79,7 @@ export function journalStateCollections(state: JournalReducerState): Collection[
       return [{ path, entries: value.entries() }]
     }
     if (path === 'queue') {
-      return [{ path: 'queue.cards', entries: state.queue.cards }]
+      return [{ path: 'queue.cards', entries: memoryJournalMap(state.queue.cards) }]
     }
     return []
   })

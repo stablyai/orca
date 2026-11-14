@@ -5,11 +5,11 @@ import type {
   AgentSessionResumeFailureInput,
   AgentSessionResumeFailureRecord
 } from '../../../runtime/agent-session/records/agent-session-recovery-capsule-entries'
-import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type {
   AgentSessionResumeFailureOutcome,
   AgentSessionResumeMarker
-} from '../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+} from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import {
   normalizeOptionalField,
   AGENT_MODEL_MAX_LENGTH
@@ -69,7 +69,7 @@ export function continuationFailureOutcome(
 export function createStructuredAgentSessionRestartFailureLedger(deps: {
   capsule?: FailureCapsule
   getRecord: (sessionId: string) => AgentSessionConversationView | null
-  retryable: (marker: AgentSessionResumeMarker) => boolean
+  retryable: (marker: AgentSessionResumeMarker) => boolean | Promise<boolean>
   /** Preserve newer-chat failures for compatible builds, hidden here. */
   savedByNewerOrca: (sessionId: string) => boolean
   logger: StructuredAgentSessionLogger
@@ -89,9 +89,9 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
     }
   }
 
-  const toRow = (
+  const toRow = async (
     failure: AgentSessionResumeFailureRecord
-  ): StructuredAgentSessionResumeFailure[] => {
+  ): Promise<StructuredAgentSessionResumeFailure[]> => {
     const record = deps.getRecord(failure.marker.sessionId)
     if (!record || deps.savedByNewerOrca(failure.marker.sessionId)) {
       return []
@@ -113,14 +113,18 @@ export function createStructuredAgentSessionRestartFailureLedger(deps: {
         outcome: failure.outcome,
         reason: failure.reason,
         ...(failure.details ? { details: failure.details } : {}),
-        retryable: deps.retryable(failure.marker)
+        retryable: await deps.retryable(failure.marker)
       }
     ]
   }
 
   const list = async (): Promise<StructuredAgentSessionResumeFailure[]> => {
     const failures = await read()
-    return failures.flatMap(toRow)
+    const rows: StructuredAgentSessionResumeFailure[] = []
+    for (const failure of failures) {
+      rows.push(...(await toRow(failure)))
+    }
+    return rows
   }
 
   const settle: StructuredAgentSessionRestartFailureLedger['settle'] = async (

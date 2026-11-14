@@ -1,6 +1,6 @@
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { SendRequestOptions } from '../transport/rpc/unvalidated-rpc-request-port'
-import type { BrowserScreencastFrame } from '../browser/browser-screencast-protocol'
+import type { BrowserScreencastFrame } from '../browser/screencast/browser-screencast-protocol'
 import type { RpcEnvelopeFields } from '../transport/rpc/rpc-envelope-fields'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import type { RpcResponse } from '../transport/rpc/rpc-wire-types'

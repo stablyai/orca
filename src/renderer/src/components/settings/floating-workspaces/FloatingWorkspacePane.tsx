@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { FolderOpen } from 'lucide-react'
-import { floatingWorkspaceUnavailableReason } from '@/lib/floating-workspace-availability'
+import { floatingWorkspaceUnavailableReason } from '@/components/floating-terminal/floating-workspace-availability'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { FloatingTerminalTriggerLocation } from '../../../../../shared/ui-chrome-types'
 import { Button } from '../../ui/button'
@@ -12,7 +12,8 @@ import { getFloatingWorkspaceSearchEntries } from './floating-workspace-search'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '../../../store/index'
 import { useTranslate } from '@/i18n/use-translate'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { SettingsGroup } from '../section-layout/SettingsGroup'
 
 type FloatingWorkspacePaneProps = {
   settings: GlobalSettings
@@ -84,7 +85,7 @@ export function FloatingWorkspacePane({
   }
 
   return (
-    <section className="space-y-4">
+    <SettingsGroup>
       <SearchableSetting
         title={t('auto.components.settings.FloatingWorkspacePane.2374e81dd8', 'Floating workspace')}
         description={t(
@@ -102,7 +103,7 @@ export function FloatingWorkspacePane({
           'quick panel',
           'launch directory'
         ]}
-        className="divide-y divide-border/40"
+        className="divide-y divide-border"
       >
         <SettingsSwitchRow
           label={t(
@@ -197,6 +198,6 @@ export function FloatingWorkspacePane({
           }
         />
       </SearchableSetting>
-    </section>
+    </SettingsGroup>
   )
 }

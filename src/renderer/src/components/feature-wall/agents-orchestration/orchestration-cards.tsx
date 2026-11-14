@@ -1,7 +1,7 @@
 import type { JSX } from 'react'
 import { CircleCheck } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { AgentKey, AgentRowState } from './orchestration-types'
 
 export function WorkspaceCard(props: {

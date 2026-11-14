@@ -1,3 +1,4 @@
+import { isWorktreeRetiredByRemoval } from '../../../../shared/worktree/removal/removal-visibility'
 import {
   getRepoDisplayLabelKey,
   getRepoDisplayLabelsByPath
@@ -10,10 +11,12 @@ import {
 } from '../../../../shared/execution-host'
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
+import { withoutHiddenRepos } from '../../../../shared/hidden-projects'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getProjectHeaderRevealTarget } from '../../../../shared/project-section-grouping'
 import type { ProjectGroupingModel } from '../../../../shared/project-section-grouping'
 import type { SidebarHostOption } from '../sidebar/worktree-list/controls/sidebar-host-options'
+import { translateHostDisplayLabel } from '../sidebar/execution-host-label'
 import {
   expandEquivalentExecutionHostIds,
   pickerExecutionHosts
@@ -33,19 +36,24 @@ function toFilterOption({
   id,
   label,
   detail,
-  count
+  count,
+  searchText
 }: {
   id: string
   label: string
   detail: string
   count: number
+  searchText?: string
 }): PaletteFilterOption {
   return {
     id,
     label,
     detail,
     count,
-    searchText: buildPaletteFilterOptionSearchText(label, detail)
+    searchText: buildPaletteFilterOptionSearchText(
+      label,
+      searchText ? `${detail} ${searchText}` : detail
+    )
   }
 }
 
@@ -133,7 +141,7 @@ export function buildPaletteFilterModel({
   const worktreeCountByHostId = new Map<string, number>()
   const worktreeCountByRepoId = new Map<string, number>()
   for (const worktree of worktrees) {
-    if (worktree.isArchived) {
+    if (worktree.isArchived || isWorktreeRetiredByRemoval(worktree)) {
       continue
     }
     const hostId = resolveWorktreeFilterHostId(worktree, repoById, defaultHostId)
@@ -149,7 +157,8 @@ export function buildPaletteFilterModel({
   const hosts = hostRows.map((host) =>
     toFilterOption({
       id: host.id,
-      label: host.label,
+      label: translateHostDisplayLabel(host),
+      searchText: host.label,
       detail: host.detail,
       count: [host.id, ...(host.aliasHostIds ?? [])].reduce(
         (count, hostId) => count + (worktreeCountByHostId.get(hostId) ?? 0),
@@ -166,7 +175,9 @@ export function buildPaletteFilterModel({
 
   // Keep repository IDs aligned with the sidebar; project grouping remains a row concern.
   const repositoryLabels = getRepoDisplayLabelsByPath([...repoById.values()])
+  const listedRepoIds = new Set(withoutHiddenRepos(repos).map((repo) => repo.id))
   const repositories = [...repoById.values()]
+    .filter((repo) => listedRepoIds.has(repo.id))
     .map((repo) =>
       toFilterOption({
         id: repo.id,

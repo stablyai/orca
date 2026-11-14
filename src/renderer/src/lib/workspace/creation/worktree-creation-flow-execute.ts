@@ -30,7 +30,7 @@ import {
 import { completeWorktreeCreation } from '@/lib/workspace/creation/worktree-creation-completion'
 import { showWorktreeCreationReadyToast } from '@/lib/workspace/creation/worktree-creation-ready-toast'
 import { mountCreatedWorktreeStartupTabsInBackground } from '@/lib/workspace/creation/worktree-creation-background-mount'
-import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
+import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/runtime/hosted-terminals/restoration/web-runtime-worktree-terminal-after-wake'
 import {
   isCreatedWorkspaceInView,
   showWorktreeCreationError

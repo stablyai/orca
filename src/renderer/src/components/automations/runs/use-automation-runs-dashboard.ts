@@ -185,5 +185,23 @@ export function useAutomationRunsDashboard({
     }
   }, [enabled, loadMore, loadMoreToken, queryKey, reloadToken])
 
-  return enabled ? { ...state, loadMore } : { ...EMPTY_STATE, loadMore }
+  const currentEntries = useMemo(() => {
+    const runsByRowKey = new Map<string, AutomationRunsDashboardRun[]>()
+    for (const entry of state.entries) {
+      const runs = runsByRowKey.get(entry.row.key) ?? []
+      runs.push(entry.run)
+      runsByRowKey.set(entry.row.key, runs)
+    }
+    return buildAutomationRunsDashboardEntries(rows, runsByRowKey)
+  }, [rows, state.entries])
+  const currentFailures = useMemo(() => {
+    const rowsByKey = new Map(rows.map((row) => [row.key, row]))
+    return state.failures.map((failure) => ({
+      ...failure,
+      row: rowsByKey.get(failure.row.key) ?? failure.row
+    }))
+  }, [rows, state.failures])
+  return enabled
+    ? { ...state, entries: currentEntries, failures: currentFailures, loadMore }
+    : { ...EMPTY_STATE, loadMore }
 }

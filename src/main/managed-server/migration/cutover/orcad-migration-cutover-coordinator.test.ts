@@ -20,9 +20,9 @@ import { ORCAD_MIGRATION_DESTINATION_UNSUPPORTED } from '../catalog/orcad-migrat
 import {
   listOrcadMigrationSourceCutovers,
   writeOrcadMigrationSourceCutover
-} from '../../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
+} from '../../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
 import { assertOrcadMigrationRequestFits } from '../catalog/orcad-migration-request-budget'
-import { createOrcadMigrationManifest } from '../../../persistence/migrating-orcad-catalog/orcad-migration-manifest-export'
+import { createOrcadMigrationManifest } from '../../../persistence/migrating-orcad-catalog/source/catalog/orcad-migration-manifest-export'
 import { MAX_ORCAD_MIGRATION_MANIFEST_BYTES } from '../../../../shared/orcad-migration/orcad-migration-manifest-validation'
 import { fenceOrcadMigrationSource } from '../../../ssh/migration-source/orcad-migration-source-fence'
 import { SshTargetOrcadClaims } from '../../../ssh/targets/ssh-target-orcad-claims'

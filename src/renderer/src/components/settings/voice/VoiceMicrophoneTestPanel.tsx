@@ -8,6 +8,7 @@ import {
   type VoiceMicrophoneTestHeard,
   type VoiceMicrophoneTestPhase
 } from './use-voice-microphone-test'
+import { VoiceCleanupTry } from './VoiceCleanupTry'
 
 const clock = (seconds: number): string => {
   const whole = Math.floor(seconds)
@@ -127,6 +128,7 @@ export function VoiceMicrophoneTestPanel({
   }
 
   let heardLine: React.ReactNode = null
+  let cleanupLine: React.ReactNode = null
   if (heard?.kind === 'listening') {
     heardLine = (
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -146,6 +148,7 @@ export function VoiceMicrophoneTestPanel({
         </p>
       </div>
     )
+    cleanupLine = <VoiceCleanupTry key={heard.text} text={heard.text} />
   } else if (heard?.kind === 'failed') {
     heardLine = (
       <p className="text-xs text-muted-foreground">
@@ -162,6 +165,7 @@ export function VoiceMicrophoneTestPanel({
     <div className="space-y-2 rounded-md border border-border px-3 py-2.5">
       {top}
       {phase.kind === 'playing' || phase.kind === 'done' ? heardLine : null}
+      {phase.kind === 'done' ? cleanupLine : null}
     </div>
   )
 }

@@ -7,8 +7,8 @@ import {
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }))
 vi.mock('node:child_process', async (original) => ({ ...(await original()), spawn: spawnMock }))
 import { snapshotCheckJobLogExecution } from './check-job-log-execution'
-import { ghExecFileAsync } from '../../../git/command-runner/gh-exec-file'
-import { createGhLogicalLifetime } from '../../../git/command-runner/gh-capture-lifetime'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { createGhLogicalLifetime } from '../../../git/command-runner/hosted-cli/gh-capture-lifetime'
 
 const repo = { owner: 'acme', repo: 'widgets' }
 const platform = process.platform

@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
+import type { GitHubAssignableUser } from '../../../shared/github/pull-requests/pull-request-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { clearGitHubSlugMetadataCache, useRepoAssigneesBySlug } from './useGitHubSlugMetadata'
