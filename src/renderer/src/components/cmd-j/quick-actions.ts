@@ -6,6 +6,7 @@ import {
   Globe,
   PanelRightClose,
   Play,
+  Save,
   SquareTerminal,
   Trash2
 } from 'lucide-react'
@@ -19,6 +20,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getNativeChatSplitQuickActions } from './native-chat-split-quick-actions'
+import { saveAndCloseUnpinnedEditorTabs } from '@/lib/workspace/tabs/unpinned-editor-tabs'
 
 export type CmdJQuickActionRunResult =
   | { status: 'ok' }
@@ -175,6 +177,33 @@ export const getCmdJQuickActions = createLocalizedCatalog((): CmdJQuickAction[] 
     ],
     isAvailable: workspaceActionAvailability,
     run: (ctx) => runWorkspaceAction(ctx, ctx.openNewTerminalTab)
+  },
+  {
+    id: 'save-and-close-unpinned-editor-tabs',
+    kind: 'action',
+    title: translate(
+      'components.tab.bar.EditorFileTabContextMenu.saveAndCloseUnpinned',
+      'Save and Close Unpinned Tabs'
+    ),
+    description: translate(
+      'auto.components.cmd.j.quick.actions.saveAndCloseUnpinnedDescription',
+      'Save dirty file tabs and close the unpinned editor tabs in the active workspace.'
+    ),
+    icon: Save,
+    verbKeywords: [
+      translate('auto.components.cmd.j.quick.actions.verbs.saveAll', 'save all'),
+      translate('auto.components.cmd.j.quick.actions.verbs.closeUnpinned', 'close unpinned'),
+      translate('auto.components.cmd.j.quick.actions.verbs.saveAndClose', 'save and close')
+    ],
+    isAvailable: workspaceActionAvailability,
+    run: async (ctx) => {
+      const availability = workspaceActionAvailability(ctx)
+      if (!availability.available || !ctx.activeWorktreeId) {
+        return { status: 'unavailable', reason: 'no-active-workspace' }
+      }
+      await saveAndCloseUnpinnedEditorTabs(ctx.activeWorktreeId)
+      return { status: 'ok' }
+    }
   },
   ...getNativeChatSplitQuickActions(),
   {

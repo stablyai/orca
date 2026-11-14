@@ -75,6 +75,7 @@ const STATIC_TITLE_COPY = {
   'tab.openMarkdown': () => translate('keybindings.title.tabOpenMarkdown', 'Open markdown tab'),
   'tab.close': () => translate('keybindings.title.tabClose', 'Close active tab'),
   'tab.closeAll': () => translate('keybindings.title.tabCloseAll', 'Close all editor tabs'),
+  'tab.togglePin': () => translate('keybindings.title.tabTogglePin', 'Pin or unpin active tab'),
   'tab.rename': () => translate('keybindings.title.tabRename', 'Rename active tab'),
   'tab.reopenClosed': () => translate('keybindings.title.tabReopenClosed', 'Reopen closed tab'),
   'tab.nextSameType': () => translate('keybindings.title.tabNextSameType', 'Next tab (same type)'),

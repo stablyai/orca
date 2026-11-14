@@ -18,8 +18,10 @@ import { createEditorSaveQueue } from '../save/queue/editor-save-queue'
 import type { AppStoreApi } from '../save/queue/editor-save-queue-contract'
 import {
   EDITOR_NOT_UTF8_SAVE_MESSAGE,
-  EDITOR_STALE_SAVE_MESSAGE
+  EDITOR_STALE_SAVE_MESSAGE,
+  type EditorSaveResult
 } from '../save/queue/editor-save-disk-precondition'
+import { registerEditorSaveNow } from './editor-save-now'
 import { createEditorRestartSaveHandlers } from './editor-restart-save-handlers'
 import { createEditorExternalChangeTabReset } from '../external-changes/editor-external-change-tab-reset'
 import { hasEditorBytesDraft } from '../save/bytes/editor-bytes-documents'
@@ -41,6 +43,16 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
   })
 
   const handleExternalFileChange = createEditorExternalChangeTabReset(store)
+
+  const unregisterSaveNow = registerEditorSaveNow(async (file): Promise<EditorSaveResult> => {
+    const current = store.getState().openFiles.find((openFile) => openFile.id === file.id) ?? file
+    flushPendingEditorBuffer(store.getState(), current.id)
+    const draft = store.getState().editorDrafts[current.id]
+    if (draft === undefined && !hasEditorBytesDraft(current.id)) {
+      return current.isDirty ? 'failed' : 'written'
+    }
+    return queueSave(current, draft ?? '')
+  })
 
   const handleSaveAndClose = async (event: Event): Promise<void> => {
     if (!(event instanceof CustomEvent)) {
@@ -181,6 +193,7 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
 
   return () => {
     unsubscribe()
+    unregisterSaveNow()
     window.removeEventListener(
       ORCA_EDITOR_SAVE_DIRTY_FILES_EVENT,
       handleSaveDirtyFiles as EventListener

@@ -118,7 +118,11 @@ export function renderTabBarSurface(
 
   const hasTabs = orderedItems.length + clientHostedBrowserRows.length > 0
   return (
-    <div ref={surfaceRef} className="flex items-stretch h-full overflow-hidden flex-1 min-w-0">
+    <div
+      ref={surfaceRef}
+      data-tab-focus-zone="tab-bar"
+      className="flex items-stretch h-full overflow-hidden flex-1 min-w-0"
+    >
       {tabStripOverflowState.hasOverflow ? (
         <Tooltip>
           <TooltipTrigger asChild>

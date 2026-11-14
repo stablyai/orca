@@ -134,6 +134,30 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.italic', 'italic'),
       ...translateSearchKeyword('auto.components.settings.general.search.browsing', 'browsing')
     ]
+  },
+  {
+    title: translate(
+      'settings.general.closeUnpinnedEditorTabs.title',
+      'Close unpinned editor tabs on focus loss'
+    ),
+    description: translate(
+      'settings.general.closeUnpinnedEditorTabs.description',
+      'Closes clean unpinned file tabs when focus leaves the tab bar or editor. Tabs with unsaved changes stay open.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'settings.general.closeUnpinnedEditorTabs.keyword.unpinned',
+        'unpinned'
+      ),
+      ...translateSearchKeyword(
+        'settings.general.closeUnpinnedEditorTabs.keyword.pinned',
+        'pinned'
+      ),
+      ...translateSearchKeyword('settings.general.closeUnpinnedEditorTabs.keyword.focus', 'focus'),
+      ...translateSearchKeyword('settings.general.closeUnpinnedEditorTabs.keyword.close', 'close'),
+      ...translateSearchKeyword('settings.general.closeUnpinnedEditorTabs.keyword.tabs', 'tabs'),
+      ...translateSearchKeyword('settings.general.closeUnpinnedEditorTabs.keyword.blur', 'blur')
+    ]
   }
 ])
 

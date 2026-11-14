@@ -208,6 +208,45 @@ function GeneralRootSettings({
               }
             />
           </SearchableSetting>
+          <SearchableSetting
+            title={t(
+              'settings.general.closeUnpinnedEditorTabs.title',
+              'Close unpinned editor tabs on focus loss'
+            )}
+            description={t(
+              'settings.general.closeUnpinnedEditorTabs.description',
+              'Closes clean unpinned file tabs when focus leaves the tab bar or editor. Tabs with unsaved changes stay open.'
+            )}
+            keywords={[
+              'unpinned',
+              'pinned',
+              'focus',
+              'close',
+              'tabs',
+              'editor',
+              'blur',
+              'auto close'
+            ]}
+          >
+            <SettingsSwitchRow
+              label={t(
+                'settings.general.closeUnpinnedEditorTabs.title',
+                'Close unpinned editor tabs on focus loss'
+              )}
+              description={t(
+                'settings.general.closeUnpinnedEditorTabs.description',
+                'Closes clean unpinned file tabs when focus leaves the tab bar or editor. Tabs with unsaved changes stay open.'
+              )}
+              checked={settings.closeUnpinnedEditorTabsOnFocusLoss ?? false}
+              onChange={() =>
+                updateSettings({
+                  closeUnpinnedEditorTabsOnFocusLoss: !(
+                    settings.closeUnpinnedEditorTabsOnFocusLoss ?? false
+                  )
+                })
+              }
+            />
+          </SearchableSetting>
         </SettingsGroup>
       ) : null}
       {showNavigation || showRuntime ? (

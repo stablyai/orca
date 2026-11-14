@@ -21,6 +21,7 @@ import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
 import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
+import { saveAndCloseUnpinnedEditorTabs } from '@/lib/workspace/tabs/unpinned-editor-tabs'
 
 type EditorFileTabContextMenuProps = {
   file: OpenFile & { tabId?: string }
@@ -140,6 +141,12 @@ export function EditorFileTabContextMenu({
       <ContextMenuItem inset onSelect={onCloseAll}>
         {t('auto.components.tab.bar.EditorFileTabContextMenu.ba1369dd24', 'Close All Editor Tabs')}
         {closeAllShortcut ? <ContextMenuShortcut>{closeAllShortcut}</ContextMenuShortcut> : null}
+      </ContextMenuItem>
+      <ContextMenuItem inset onSelect={() => void saveAndCloseUnpinnedEditorTabs(file.worktreeId)}>
+        {t(
+          'components.tab.bar.EditorFileTabContextMenu.saveAndCloseUnpinned',
+          'Save and Close Unpinned Tabs'
+        )}
       </ContextMenuItem>
       <CloseSplitPaneMenuItem menuKind="context" onCloseSplitPane={onCloseSplitPane} />
       {isVirtualEditorFile(file) ? null : <ContextMenuSeparator />}
