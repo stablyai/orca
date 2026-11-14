@@ -1,27 +1,7 @@
-import { antigravitySessionOrigin } from '../../../shared/antigravity-session-origin'
+import { sessionAliasKey } from '../../../shared/ai-vault-session-alias'
 import type { AiVaultSession } from '../../../shared/ai-vault/contracts/ai-vault-types'
-import {
-  codexSessionAliasKey,
-  codexSessionAliasBeats
-} from '../scanners/codex/codex-session-root-dedup'
+import { codexSessionAliasBeats } from '../scanners/codex/codex-session-root-dedup'
 import { sessionSortTime } from './session-scanner-accumulator'
-
-function sessionAliasKey(session: AiVaultSession): string | null {
-  if (session.agent === 'antigravity') {
-    const root = session.filePath
-      .split(/[\\/]+/)
-      .slice(0, -4)
-      .join('/')
-    return `antigravity\0${session.executionHostId}\0${antigravitySessionOrigin(session.filePath) ?? 'cli'}\0${root}\0${session.sessionId}`
-  }
-  if (session.agent !== 'devin') {
-    const codexKey = codexSessionAliasKey(session)
-    return codexKey ? `codex\0${codexKey}` : null
-  }
-  // Sibling exports share an index; different installs and WSL distros do not.
-  const cliDir = session.filePath.split(/[\\/]/).slice(0, -2).join('/')
-  return `devin\0${session.executionHostId}\0${cliDir}\0${session.sessionId}`
-}
 
 function sessionAliasBeats(candidate: AiVaultSession, best: AiVaultSession): boolean {
   if (candidate.agent === 'antigravity') {
@@ -95,13 +75,14 @@ export class ScannedSessionCollection {
     return this.sessions.values()
   }
 
-  add(session: AiVaultSession): void {
+  add(session: AiVaultSession): boolean {
     const key = sessionAliasKey(session)
     const index = this.nextIndex++
     if (key && !this.admit(session, key, index)) {
-      return
+      return false
     }
     this.sessions.set(index, session)
+    return true
   }
 
   private admit(session: AiVaultSession, key: string, index: number): boolean {

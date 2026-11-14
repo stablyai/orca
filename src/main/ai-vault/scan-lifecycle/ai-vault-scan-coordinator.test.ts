@@ -1,234 +1,142 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { AiVaultSession } from '../../shared/ai-vault-types'
-import type { AiVaultRowDelta, AiVaultScanRows } from '../../shared/ai-vault-scan-rows'
 import { AiVaultScanCoordinator } from './ai-vault-scan-coordinator'
-import {
-  localAiVaultScanProgress,
-  onLocalAiVaultScanProgress,
-  resetLocalAiVaultScanProgressForTests,
-  startLocalAiVaultScanProgress,
-  type LocalAiVaultScanProgressHandle
-} from './ai-vault-local-scan-progress'
+import { scanRecoveryInterest, nextScanObservationOrder } from './ai-vault-scan-recovery'
 
-const EMPTY_RESULT = { sessions: [], issues: [], scannedAt: '2026-07-27T00:00:00.000Z' }
-
-describe('AiVaultScanCoordinator', () => {
-  it('keeps the replacement finding while the old scan aborts before root preparation ends', async () => {
-    const coordinator = new AiVaultScanCoordinator()
-    const stages: (string | null)[] = []
-    onLocalAiVaultScanProgress(({ progress }) => stages.push(progress?.stage ?? null))
-    try {
-      const earlier = startLocalAiVaultScanProgress('scope', 'earlier', () => 500)
-      earlier.finish(null)
-      let old: LocalAiVaultScanProgressHandle | null = null
-      const first = coordinator.run({
-        key: 'scope',
-        onCreate: (id) => {
-          old = startLocalAiVaultScanProgress('scope', id, () => 1_000)
-        },
-        onError: () => old?.fail(),
-        start: (signal) =>
-          new Promise<typeof EMPTY_RESULT>((_resolve, reject) => {
-            signal.addEventListener('abort', () => reject(new Error('cancelled')), { once: true })
-          })
-      })
-      await Promise.resolve()
-      let finishPreparation: ((result: typeof EMPTY_RESULT) => void) | undefined
-      const replacement = coordinator.run({
-        key: 'scope',
-        force: true,
-        onCreate: (id) => {
-          startLocalAiVaultScanProgress('scope', id, () => 2_000)
-        },
-        start: () =>
-          new Promise<typeof EMPTY_RESULT>((resolve) => {
-            finishPreparation = resolve
-          })
-      })
-      await Promise.resolve()
-      expect(localAiVaultScanProgress('scope')).toMatchObject({
-        stage: 'finding',
-        startedAt: 2_000
-      })
-      expect(stages).not.toContain(null)
-      finishPreparation?.(EMPTY_RESULT)
-      await expect(Promise.all([first, replacement])).resolves.toEqual([EMPTY_RESULT, EMPTY_RESULT])
-    } finally {
-      resetLocalAiVaultScanProgressForTests()
-    }
+const EMPTY = { sessions: [], issues: [], scannedAt: '2026-11-13' }
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((done) => {
+    resolve = done
   })
+  return { promise, resolve }
+}
 
-  it('keeps a shared scan alive when only one caller cancels', async () => {
-    const coordinator = new AiVaultScanCoordinator()
-    let resolveScan: ((result: typeof EMPTY_RESULT) => void) | undefined
-    let sharedSignal: AbortSignal | undefined
-    const start = vi.fn(
-      (signal: AbortSignal) =>
-        new Promise<typeof EMPTY_RESULT>((resolve) => {
-          sharedSignal = signal
-          resolveScan = resolve
-        })
-    )
-    const controller = new AbortController()
-    const first = coordinator.run({ key: 'scope', signal: controller.signal, start })
-    const second = coordinator.run({ key: 'scope', start })
-    await Promise.resolve()
-
-    controller.abort()
-
-    await expect(first).rejects.toMatchObject({ name: 'AbortError' })
-    expect(sharedSignal?.aborted).toBe(false)
-    resolveScan?.(EMPTY_RESULT)
-    await expect(second).resolves.toEqual(EMPTY_RESULT)
-    expect(start).toHaveBeenCalledTimes(1)
-  })
-
-  it('preempts a non-forced scan and re-joins its caller onto the forced scan', async () => {
-    const coordinator = new AiVaultScanCoordinator()
-    const signals: AbortSignal[] = []
-    let resolveForced: ((result: typeof EMPTY_RESULT) => void) | undefined
-    const start = vi.fn((signal: AbortSignal) => {
-      signals.push(signal)
-      return new Promise<typeof EMPTY_RESULT>((resolve) => {
-        if (signals.length === 1) {
-          signal.addEventListener('abort', () => resolve(EMPTY_RESULT), { once: true })
-        } else {
-          resolveForced = resolve
-        }
-      })
-    })
-    const first = coordinator.run({ key: 'scope', start })
-    await Promise.resolve()
-
-    const forced = coordinator.run({ key: 'scope', force: true, start })
-    const joined = coordinator.run({ key: 'scope', force: true, start })
-    await Promise.resolve()
-
-    expect(signals[0]?.aborted).toBe(true)
-    expect(start).toHaveBeenCalledTimes(2)
-    resolveForced?.(EMPTY_RESULT)
-    await expect(Promise.all([first, forced, joined])).resolves.toEqual([
-      EMPTY_RESULT,
-      EMPTY_RESULT,
-      EMPTY_RESULT
-    ])
-  })
-
-  it('lets a forced refresh preempt a forced scan that hung past the coalescing window', async () => {
+describe('Session History scan ownership', () => {
+  it('lets a progressing leading scan finish and coalesces 200 forces into one fresh successor', async () => {
     vi.useFakeTimers()
     try {
       const coordinator = new AiVaultScanCoordinator()
-      const signals: AbortSignal[] = []
-      let resolveSecond: ((result: typeof EMPTY_RESULT) => void) | undefined
-      const start = vi.fn((signal: AbortSignal) => {
-        signals.push(signal)
-        return new Promise<typeof EMPTY_RESULT>((resolve) => {
-          if (signals.length > 1) {
-            resolveSecond = resolve
-          }
-        })
+      const leading = deferred<typeof EMPTY>()
+      const fresh = { ...EMPTY, scannedAt: 'fresh' }
+      let signal!: AbortSignal
+      const start = vi.fn((scanSignal: AbortSignal) => {
+        signal = scanSignal
+        return leading.promise
       })
-      const stuck = coordinator.run({ key: 'scope', force: true, start })
+      const first = coordinator.run({ key: 'scope', start })
       await Promise.resolve()
-
-      vi.advanceTimersByTime(5_000)
-      const retry = coordinator.run({ key: 'scope', force: true, start })
+      await vi.advanceTimersByTimeAsync(13000)
+      const successor = vi.fn(async () => fresh)
+      const forced = Array.from({ length: 200 }, () =>
+        coordinator.run({ key: 'scope', force: true, start: successor })
+      )
       await Promise.resolve()
-
-      expect(signals[0]?.aborted).toBe(true)
-      expect(start).toHaveBeenCalledTimes(2)
-      resolveSecond?.(EMPTY_RESULT)
-      await expect(Promise.all([stuck, retry])).resolves.toEqual([EMPTY_RESULT, EMPTY_RESULT])
+      expect(signal.aborted).toBe(false)
+      expect(successor).not.toHaveBeenCalled()
+      expect(scanRecoveryInterest(signal)?.inherited).toBe(200)
+      leading.resolve(EMPTY)
+      await expect(first).resolves.toBe(EMPTY)
+      await expect(Promise.all(forced)).resolves.toEqual(Array.from({ length: 200 }, () => fresh))
+      expect(successor).toHaveBeenCalledTimes(1)
     } finally {
       vi.useRealTimers()
     }
   })
 
-  it('starts a fresh scan after every waiter cancels', async () => {
+  it('keeps leading work alive for a trailing owner and cancels it when every owner detaches', async () => {
     const coordinator = new AiVaultScanCoordinator()
-    const signals: AbortSignal[] = []
-    const start = vi.fn((signal: AbortSignal) => {
-      signals.push(signal)
-      if (signals.length > 1) {
-        return Promise.resolve(EMPTY_RESULT)
-      }
-      return new Promise<typeof EMPTY_RESULT>((resolve) => {
-        signal.addEventListener('abort', () => resolve(EMPTY_RESULT), { once: true })
-      })
+    const normal = new AbortController()
+    const forced = new AbortController()
+    let signal!: AbortSignal
+    const start = vi.fn((scanSignal: AbortSignal) => {
+      signal = scanSignal
+      return new Promise<typeof EMPTY>((resolve) =>
+        scanSignal.addEventListener('abort', () => resolve(EMPTY))
+      )
     })
-    const controller = new AbortController()
-    const first = coordinator.run({ key: 'scope', signal: controller.signal, start })
+    const first = coordinator.run({ key: 'scope', signal: normal.signal, start })
     await Promise.resolve()
-    controller.abort()
+    const next = coordinator.run({ key: 'scope', force: true, signal: forced.signal, start })
+    normal.abort()
     await expect(first).rejects.toMatchObject({ name: 'AbortError' })
+    expect(signal.aborted).toBe(false)
+    forced.abort()
+    await expect(next).rejects.toMatchObject({ name: 'AbortError' })
+    expect(signal.aborted).toBe(true)
+    await Promise.resolve()
+    expect(start).toHaveBeenCalledTimes(1)
+  })
 
-    const second = coordinator.run({ key: 'scope', start })
-
-    await expect(second).resolves.toEqual(EMPTY_RESULT)
-    expect(start).toHaveBeenCalledTimes(2)
-    expect(signals[0]?.aborted).toBe(true)
+  it('uses a recovered leading result for the forced obligation without a duplicate fresh pass', async () => {
+    const coordinator = new AiVaultScanCoordinator()
+    const scan = deferred<typeof EMPTY>()
+    let signal!: AbortSignal
+    const first = coordinator.run({
+      key: 'scope',
+      start: (value) => {
+        signal = value
+        return scan.promise
+      }
+    })
+    await Promise.resolve()
+    const start = vi.fn(async () => EMPTY)
+    const forced = coordinator.run({ key: 'scope', force: true, start })
+    const interest = scanRecoveryInterest(signal)
+    if (interest) {
+      interest.observation = nextScanObservationOrder()
+    }
+    scan.resolve(EMPTY)
+    await expect(Promise.all([first, forced])).resolves.toEqual([EMPTY, EMPTY])
+    expect(start).not.toHaveBeenCalled()
   })
 })
 
-it('attaches a coherent current snapshot and rejects publications from retired generations', async () => {
+it('keeps a shared observer subscribed until its final owner detaches', async () => {
   const coordinator = new AiVaultScanCoordinator()
-  const views: AiVaultScanRows[] = []
-  const publishers: ((delta: AiVaultRowDelta) => void)[] = []
-  const finishers: (() => void)[] = []
-  const start = (_signal: AbortSignal, publish: (delta: AiVaultRowDelta) => void) => {
-    publishers.push(publish)
-    return new Promise<typeof EMPTY_RESULT>((resolve) => {
-      finishers.push(() => resolve(EMPTY_RESULT))
-    })
-  }
-  const row: AiVaultSession = {
-    id: 'local:codex:one:/one.jsonl',
-    executionHostId: 'local',
-    agent: 'codex',
-    sessionId: 'one',
-    title: 'One',
-    filePath: '/one.jsonl',
-    codexHome: null,
-    cwd: '/repo',
-    branch: null,
-    model: null,
-    createdAt: null,
-    updatedAt: null,
-    modifiedAt: '2026-01-01',
-    messageCount: 1,
-    totalTokens: 0,
-    previewMessages: [],
-    queuedMessageCount: 0,
-    subagentTranscriptCount: 0,
-    resumeCommand: 'codex resume one',
-    subagent: null
-  }
-  const first = coordinator.run({ key: 'scope', start, onRows: (view) => views.push(view) })
+  const scan = deferred<typeof EMPTY>()
+  let publish!: Parameters<Parameters<typeof coordinator.run>[0]['start']>[2]
+  const start = vi.fn((_signal, _id, emit) => {
+    publish = emit
+    return scan.promise
+  })
+  const observer = vi.fn()
+  const owner = new AbortController()
+  const first = coordinator.run({ key: 'same', start, observeRows: observer, signal: owner.signal })
+  const second = coordinator.run({ key: 'same', start, observeRows: observer })
   await Promise.resolve()
-  publishers[0]!({ upserts: [row], removed: [] })
-  const late: AiVaultScanRows[] = []
-  const second = coordinator.run({ key: 'scope', start, onRows: (view) => late.push(view) })
-  expect(late[0]).toMatchObject({ kind: 'snapshot', revision: views.at(-1)?.revision })
-  const snapshot = late[0]
-  expect(snapshot?.kind === 'snapshot' ? snapshot.sessions : []).toEqual([row])
-  publishers[0]!({ upserts: [{ ...row, title: 'Updated' }], removed: [] })
-  const update = late.at(-1)
-  expect(update?.kind === 'delta' ? update.delta.upserts[0]?.title : null).toBe('Updated')
-  const forced = coordinator.run({ key: 'scope', force: true, start })
+  owner.abort()
+  await expect(first).rejects.toMatchObject({ name: 'AbortError' })
+  publish({ upserts: [], removed: ['gone'] })
+  expect(observer).toHaveBeenCalledTimes(1)
+  scan.resolve(EMPTY)
+  await second
+})
+
+it('runs a fresh pass for a force that arrives after a recovered successor began observing', async () => {
+  const coordinator = new AiVaultScanCoordinator()
+  const leading = deferred<typeof EMPTY>()
+  let signal!: AbortSignal
+  const first = coordinator.run({
+    key: 'scope',
+    start: (value) => {
+      signal = value
+      return leading.promise
+    }
+  })
   await Promise.resolve()
-  const revision = views.at(-1)
-  publishers[0]!({ upserts: [], removed: ['stale'] })
-  expect(views.at(-1)).toBe(revision)
-  coordinator.retirePublications()
-  const count = views.length
-  publishers[1]!({ upserts: [], removed: [] })
-  expect(views).toHaveLength(count)
-  for (const finish of finishers) {
-    finish()
+  const fresh = { ...EMPTY, scannedAt: 'after-late-force' }
+  const start = vi.fn(async () => fresh)
+  const forceBeforeRecovery = coordinator.run({ key: 'scope', force: true, start })
+  const interest = scanRecoveryInterest(signal)
+  if (interest) {
+    interest.observation = nextScanObservationOrder()
   }
-  await expect(Promise.all([first, second, forced])).resolves.toEqual([
-    EMPTY_RESULT,
-    EMPTY_RESULT,
-    EMPTY_RESULT
+  const forceAfterRecovery = coordinator.run({ key: 'scope', force: true, start })
+  leading.resolve(EMPTY)
+  await expect(first).resolves.toBe(EMPTY)
+  await expect(Promise.all([forceBeforeRecovery, forceAfterRecovery])).resolves.toEqual([
+    fresh,
+    fresh
   ])
+  expect(start).toHaveBeenCalledOnce()
 })

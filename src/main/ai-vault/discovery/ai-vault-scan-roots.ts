@@ -1,3 +1,4 @@
+import { throwIfAiVaultScanCancelled } from '../scan-lifecycle/ai-vault-scan-cancellation'
 import { join } from 'node:path'
 import { isWslUncPath } from '../../../shared/wsl-paths'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
@@ -47,7 +48,10 @@ export async function localAiVaultScanRoots(): Promise<LocalAiVaultScanRoots> {
 }
 
 /** `wslConfirmed` is false when no confirmed running list was read: WSL rows are then unknown, not gone. */
-export async function resolveLocalAiVaultScanRoots(): Promise<{
+export async function resolveLocalAiVaultScanRoots(
+  activity?: () => void,
+  signal?: AbortSignal
+): Promise<{
   roots: LocalAiVaultScanRoots
   wslConfirmed: boolean
 }> {
@@ -58,6 +62,11 @@ export async function resolveLocalAiVaultScanRoots(): Promise<{
     }).catch(() => configuredAdditionalCodexHomePaths().filter((home) => !isWslUncPath(home))),
     scanWslHomeDirs()
   ])
+  activity?.()
+  throwIfAiVaultScanCancelled(signal)
+  const wslOpenCodeReaders = await prepareOpenCodeWslReaders(wsl.homes)
+  activity?.()
+  throwIfAiVaultScanCancelled(signal)
   return {
     wslConfirmed: wsl.confirmed,
     roots: {
@@ -70,7 +79,7 @@ export async function resolveLocalAiVaultScanRoots(): Promise<{
       opencodeAccountDataDirs: managedOpenCodeAccountDataDirs(),
       // The chat host's state root, as structured-session-account-home resolves it.
       antigravityChatBrainDir: antigravityChatBrainDir(getProfileUserDataPath()),
-      wslOpenCodeReaders: await prepareOpenCodeWslReaders(wsl.homes),
+      wslOpenCodeReaders,
       // Runtime-addressed callers restamp host-local results at the RPC edge instead of rescanning.
       executionHostId: LOCAL_EXECUTION_HOST_ID
     }

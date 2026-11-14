@@ -1,3 +1,4 @@
+import type { AiVaultRowsEvent } from '../../../shared/ai-vault-scan-rows'
 import { createSessionSearchClient } from '../../../shared/ai-vault/search/ai-vault-search-client'
 import type {
   AiVaultSearchRequest,
@@ -38,6 +39,20 @@ function searchClient(
 }
 
 export const aiVaultApi = {
+  onScanRows: (callback: (event: AiVaultRowsEvent) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, event: AiVaultRowsEvent) => {
+      try {
+        callback(event)
+      } finally {
+        ipcRenderer.send('aiVault:rowsAck', {
+          requestToken: event.requestToken,
+          sequence: event.sequence
+        })
+      }
+    }
+    ipcRenderer.on('aiVault:rows', listener)
+    return () => ipcRenderer.removeListener('aiVault:rows', listener)
+  },
   searchSessions: (request: AiVaultSearchRequest, executionHostScope?: ExecutionHostScope) =>
     searchClient(executionHostScope).searchSessions(request),
   searchStatus: (executionHostScope?: ExecutionHostId) =>

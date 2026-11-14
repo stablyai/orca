@@ -83,6 +83,7 @@ export async function completeAntigravityTranscriptPairs(
           sizeBytes: observed.size,
           dev: observed.dev,
           ino: observed.ino,
+          birthtimeMs: observed.birthtimeMs,
           nlink: observed.nlink
         })
       }

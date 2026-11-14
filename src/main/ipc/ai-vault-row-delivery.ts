@@ -1,11 +1,12 @@
 import type { IpcMainEvent, WebContents } from 'electron'
 import type { AiVaultRowsEvent, AiVaultScanRows } from '../../shared/ai-vault-scan-rows'
-import { aiVaultSessionListGeneration } from '../ai-vault/cached-session-list'
+import { aiVaultSessionListCacheGeneration } from '../ai-vault/listing/cached-session-list'
 import { SessionRowPublisher } from '../ai-vault/session-row-publisher'
+import { setRowInterest } from '../ai-vault/scan-lifecycle/ai-vault-row-interest'
 import {
   OPENS_EVERY_STRUCTURED_CHAT,
-  projectStructuredAiVaultRows
-} from '../ai-vault/structured-session-ownership'
+  projectStructuredAiVaultSessions
+} from '../ai-vault/structured-sessions/structured-session-ownership'
 
 const deliveries = new Map<WebContents, Map<string, AiVaultRowDelivery>>()
 
@@ -16,6 +17,7 @@ export class AiVaultRowDelivery {
   private sequence = 0
   private acknowledge: (() => void) | null = null
   private closed = false
+  private readonly interestListeners = new Set<() => void>()
   private readonly generation: number | undefined
 
   constructor(
@@ -24,7 +26,14 @@ export class AiVaultRowDelivery {
     private readonly signal?: AbortSignal,
     includesLocal = true
   ) {
-    this.generation = includesLocal ? aiVaultSessionListGeneration() : undefined
+    this.generation = includesLocal ? aiVaultSessionListCacheGeneration() : undefined
+    setRowInterest(this.observe, {
+      observed: () => !this.closed,
+      subscribe: (changed) => {
+        this.interestListeners.add(changed)
+        return () => this.interestListeners.delete(changed)
+      }
+    })
     const requests = deliveries.get(sender) ?? new Map<string, AiVaultRowDelivery>()
     requests.get(requestToken)?.dispose()
     requests.set(requestToken, this)
@@ -69,7 +78,11 @@ export class AiVaultRowDelivery {
             this.sender.send('aiVault:rows', event)
           })
         },
-        (rows) => projectStructuredAiVaultRows(rows, OPENS_EVERY_STRUCTURED_CHAT)
+        (rows) =>
+          projectStructuredAiVaultSessions(
+            { sessions: rows, issues: [], scannedAt: '' },
+            OPENS_EVERY_STRUCTURED_CHAT
+          ).sessions
       )
     }
     this.publisher?.observe(
@@ -88,6 +101,10 @@ export class AiVaultRowDelivery {
       return
     }
     this.closed = true
+    for (const changed of this.interestListeners) {
+      changed()
+    }
+    this.interestListeners.clear()
     this.acknowledge?.()
     void this.publisher?.finish()
     this.signal?.removeEventListener('abort', this.dispose)
@@ -108,7 +125,7 @@ export class AiVaultRowDelivery {
     if (
       this.sender.isDestroyed() ||
       this.signal?.aborted ||
-      (this.generation !== undefined && this.generation !== aiVaultSessionListGeneration())
+      (this.generation !== undefined && this.generation !== aiVaultSessionListCacheGeneration())
     ) {
       this.dispose()
       return false

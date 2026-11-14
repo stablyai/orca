@@ -1,8 +1,4 @@
-import {
-  throwIfAiVaultScanCancelled,
-  waitForAiVaultScan
-} from '../../scan-lifecycle/ai-vault-scan-cancellation'
-import { wslGatedReaddir } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { countSessionSubagentDirectory } from '../session-subagent-directory-count'
 import { basename, dirname, extname, join } from 'node:path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { SubagentTranscriptPartition } from '../claude/session-scanner-subagent-transcripts'
@@ -39,18 +35,11 @@ export async function countOmpSubagentTranscripts(
   transcriptFilePath: string,
   signal?: AbortSignal
 ): Promise<number> {
-  let entries
-  try {
-    entries = await waitForAiVaultScan(
-      wslGatedReaddir(ompArtifactDirFor(transcriptFilePath), 'scan', signal),
-      signal
-    )
-  } catch {
-    throwIfAiVaultScanCancelled(signal)
-    return 0
-  }
-  return entries.filter((entry) => isOmpSubagentTranscriptFileName(entry.name, entry.isFile()))
-    .length
+  return countSessionSubagentDirectory(
+    ompArtifactDirFor(transcriptFilePath),
+    (entry) => isOmpSubagentTranscriptFileName(entry.name, entry.isFile()),
+    signal
+  )
 }
 
 /** Partition the remote walk to count task transcripts without extra SSH directory reads. */

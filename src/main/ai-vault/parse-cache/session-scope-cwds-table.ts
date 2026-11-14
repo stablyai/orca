@@ -1,3 +1,6 @@
+import { parseSessionCacheIdentity } from './session-cache-evidence'
+import { sessionFileIdentity } from './session-file-version'
+import type { SqliteBindings } from '../../sqlite/sqlite-statement'
 import type SyncDatabase from '../../sqlite/sync-database'
 import { parsePersistedSidecar } from './session-sidecar-stat'
 import type { SessionScopeCwdLookup, SessionScopeCwdStamp } from './session-parse-cache-store'
@@ -39,7 +42,7 @@ export function readScopeCwdRows(
       }
       const rows = db
         .prepare(
-          `SELECT path, mtime_ms, size_bytes, platform, sidecar, ${cwdColumn} AS cwd FROM ${table} WHERE path IN (${marks}) ${key === 'parsed' ? `AND (${VALID_SESSION})` : ''}`
+          `SELECT path, mtime_ms, size_bytes, platform, identity, sidecar, ${cwdColumn} AS cwd FROM ${table} WHERE path IN (${marks}) ${key === 'parsed' ? `AND (${VALID_SESSION})` : ''}`
         )
         .all(...chunk)
       for (const row of rows) {
@@ -58,21 +61,33 @@ export function writeScopeCwdRows(
   rows: Iterable<[string, SessionScopeCwdStamp]>,
   seenAt: number
 ): void {
-  const insert = db.prepare(
-    'INSERT OR REPLACE INTO scope_cwds(path, mtime_ms, size_bytes, platform, sidecar, cwd, seen_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  writeSessionCacheTable(
+    db,
+    'INSERT OR REPLACE INTO scope_cwds(path, mtime_ms, size_bytes, platform, identity, sidecar, cwd, seen_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    Array.from(rows, ([path, stamp]) => [
+      path,
+      stamp.mtimeMs,
+      stamp.sizeBytes,
+      stamp.platform,
+      JSON.stringify(sessionFileIdentity(stamp)),
+      stamp.sidecar === undefined ? null : JSON.stringify(stamp.sidecar),
+      stamp.cwd,
+      seenAt
+    ])
   )
+}
+
+/** All derived cache tables commit one bounded write chunk atomically. */
+export function writeSessionCacheTable(
+  db: SyncDatabase,
+  sql: string,
+  rows: Iterable<SqliteBindings>
+): void {
+  const insert = db.prepare(sql)
   db.exec('BEGIN IMMEDIATE')
   try {
-    for (const [path, stamp] of rows) {
-      insert.run(
-        path,
-        stamp.mtimeMs,
-        stamp.sizeBytes,
-        stamp.platform,
-        stamp.sidecar === undefined ? null : JSON.stringify(stamp.sidecar),
-        stamp.cwd,
-        seenAt
-      )
+    for (const row of rows) {
+      insert.run(...row)
     }
     db.exec('COMMIT')
   } catch (error) {
@@ -112,6 +127,7 @@ function parseScopeCwdStamp(row: Record<string, unknown>): SessionScopeCwdStamp 
     return null
   }
   return {
+    ...parseSessionCacheIdentity(row.identity),
     mtimeMs,
     sizeBytes,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only ever compared for equality with process.platform, so an unknown value is a miss, not a misuse.

@@ -1,3 +1,4 @@
+import { setSessionCopyProofStore, type SessionCopyProof } from './session-copy-proof'
 // Scanner-owned SQLite rows back the hot cache; failures fall back to transcript parsing (#9210).
 import { stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -37,6 +38,7 @@ let owner = false
 // Undefined is unopened; null disables persistence for this process.
 let database: SessionParseCacheDatabase | null | undefined
 const pendingWrites = new Map<string, PersistedSessionParseCacheEntry>()
+const pendingCopyProofs = new Map<string, SessionCopyProof>()
 const pendingScopeCwds = new Map<string, SessionScopeCwdStamp>()
 let writeTimer: NodeJS.Timeout | null = null
 let pendingSince: number | null = null
@@ -52,6 +54,13 @@ export function configureSessionParseCachePersistence(
 export function initSessionParseCachePersistence(next: SessionParseCachePersistenceOptions): void {
   configureSessionParseCachePersistence(next)
   owner = true
+  setSessionCopyProofStore({
+    read: (path) => pendingCopyProofs.get(path) ?? openedDatabase()?.readCopyProof(path),
+    write: (path, proof) => {
+      pendingCopyProofs.set(path, proof)
+      scheduleFlush()
+    }
+  })
   setSessionParseCacheColdTier({
     read: readRow,
     stored: queueWrite,
@@ -69,6 +78,8 @@ export function resetSessionParseCachePersistenceForTests(): void {
   clearWriteTimer()
   pendingWrites.clear()
   pendingScopeCwds.clear()
+  pendingCopyProofs.clear()
+  setSessionCopyProofStore(null)
   database?.close()
   database = undefined
   options = null
@@ -83,6 +94,12 @@ export async function flushSessionParseCachePersist(): Promise<void> {
     const chunk = takeWriteChunk(pendingWrites)
     openedDatabase()?.write(chunk, Date.now())
     if (pendingWrites.size > 0) {
+      await yieldToEventLoop()
+    }
+  }
+  while (pendingCopyProofs.size > 0) {
+    openedDatabase()?.writeCopyProofs(takeWriteChunk(pendingCopyProofs), Date.now())
+    if (pendingCopyProofs.size > 0) {
       await yieldToEventLoop()
     }
   }
@@ -214,6 +231,7 @@ function scheduleFlush(): void {
 function deleteRow(path: string): void {
   pendingWrites.delete(path)
   pendingScopeCwds.delete(path)
+  pendingCopyProofs.delete(path)
   openedDatabase()?.delete(path)
 }
 

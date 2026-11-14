@@ -1,3 +1,11 @@
+import { runAiVaultLocalScanAttempt } from '../scan-lifecycle/ai-vault-local-scan-attempt'
+import type { AiVaultScanRows } from '../../../shared/ai-vault-scan-rows'
+import {
+  recordScanOutcome,
+  scanForceOrder,
+  scanRecoveryInterest,
+  type ScanOutcome
+} from '../scan-lifecycle/ai-vault-scan-recovery'
 import {
   clearAiVaultBackgroundRestartCircuit,
   resetAiVaultScannerBackgroundForTests,
@@ -54,6 +62,7 @@ type CachedAiVaultList = {
   key: string
   depth: AiVaultSessionDepth
   result: AiVaultListResult
+  outcome: ScanOutcome
   expiresAt: number
 }
 
@@ -67,20 +76,25 @@ let forcedRefreshEpoch = 0
 
 export async function listAiVaultSessions(
   args?: AiVaultListArgs,
-  options: { signal?: AbortSignal } = {}
+  options: { signal?: AbortSignal; observeRows?: (rows: AiVaultScanRows) => void } = {}
 ): Promise<AiVaultListResult> {
   const key = aiVaultLocalScanScopeKey(args)
   const depth = requestedAiVaultSessionDepth(args)
   const scanKey = aiVaultLocalScanKey(args)
   const now = Date.now()
+  const requiredOrder = scanForceOrder(args?.force, options.signal)
   if (args?.force === true) {
     clearAiVaultBackgroundRestartCircuit()
   }
   // A full list for the same paths holds every row a scope-only one would, so All -> Project needs no rescan.
   const fullKey = args?.scopeOnly ? aiVaultLocalScanScopeKey({ ...args, scopeOnly: false }) : key
-  const cachedList =
-    args?.force === true ? undefined : servingCachedList([key, fullKey], depth, args, now)
+  const cachedList = servingCachedList([key, fullKey], depth, args, now, requiredOrder)
   if (cachedList) {
+    recordScanOutcome(
+      options.signal,
+      JSON.stringify({ scanKey, generation: cacheGeneration }),
+      cachedList.outcome
+    )
     return truncateAiVaultListResult(cachedList.result, depth, args?.scopePaths)
   }
   // Capture before the coordinator's start microtask so intervening invalidation still rejects the result.
@@ -91,6 +105,8 @@ export async function listAiVaultSessions(
     // Isolate invalidated scans without changing the key used by progress readers.
     key: JSON.stringify({ scanKey, generation: startGeneration }),
     force: args?.force,
+    requiredOrder,
+    observeRows: options.observeRows,
     signal: options.signal,
     onCreate: (scanId) => {
       progress = startLocalAiVaultScanProgress(scanKey, scanId)
@@ -98,24 +114,35 @@ export async function listAiVaultSessions(
     onError: () => progress?.fail(),
     onReject: (error, scanId) =>
       isAiVaultScanCancelledError(error) ? error : new AiVaultLocalScanError(scanId, error),
-    start: async (scanSignal, scanId) => {
+    start: async (scanSignal, scanId, publish) => {
       const scanProgress = progress
       if (!scanProgress) {
         throw new Error('Local scan progress was not created.')
       }
-      const scope = await resolveAiVaultScopeRealPaths(args?.scopePaths ?? [])
-      const { roots, wslConfirmed } = await resolveLocalAiVaultScanRoots()
-      const scanned = await scanAiVaultSessionsInBackground(
-        {
-          includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions,
-          limit: args?.limit,
-          unlimited: args?.unlimited,
-          scopePaths: args?.scopePaths ? scope.scanScopePaths : undefined,
-          scopeOnly: args?.scopeOnly,
-          ...roots
-        },
+      const { scope, wslConfirmed, scanned } = await runAiVaultLocalScanAttempt(
         scanSignal,
-        scanProgress
+        async (attemptSignal, prepare) => {
+          const scope = await prepare((activity) =>
+            resolveAiVaultScopeRealPaths(args?.scopePaths ?? [], activity, attemptSignal)
+          )
+          const { roots, wslConfirmed } = await prepare((activity) =>
+            resolveLocalAiVaultScanRoots(activity, attemptSignal)
+          )
+          const scanned = await scanAiVaultSessionsInBackground(
+            {
+              includeAntigravityIdeSessions: args?.includeAntigravityIdeSessions,
+              limit: args?.limit,
+              unlimited: args?.unlimited,
+              scopePaths: args?.scopePaths ? scope.scanScopePaths : undefined,
+              scopeOnly: args?.scopeOnly,
+              ...roots
+            },
+            attemptSignal,
+            scanProgress,
+            publish
+          )
+          return { scope, wslConfirmed, scanned }
+        }
       )
       const result = carryOverUnconfirmedWslSessions(
         key,
@@ -145,6 +172,11 @@ export async function listAiVaultSessions(
             key,
             depth,
             result,
+            outcome: {
+              ok: true,
+              result,
+              order: scanRecoveryInterest(scanSignal)?.observation ?? 0
+            },
             expiresAt: Date.now() + AI_VAULT_CACHE_TTL_MS
           })
         }
@@ -159,13 +191,15 @@ function servingCachedList(
   keys: readonly string[],
   depth: AiVaultSessionDepth,
   args: AiVaultListArgs | undefined,
-  now: number
+  now: number,
+  requiredOrder: number
 ): CachedAiVaultList | undefined {
   for (const key of keys) {
     const entry = cachedLists.get(key)
     if (
       entry &&
       entry.expiresAt > now &&
+      (!requiredOrder || entry.outcome.order > requiredOrder) &&
       aiVaultCachedDepthServes(entry.depth, depth, args?.scopePaths)
     ) {
       cachedLists.delete(key)

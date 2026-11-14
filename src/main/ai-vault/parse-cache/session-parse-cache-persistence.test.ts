@@ -11,7 +11,10 @@ import {
   initSessionParseCachePersistence,
   resetSessionParseCachePersistenceForTests
 } from './session-parse-cache-persistence'
-import { SESSION_PARSE_CACHE_SCHEMA_VERSION } from './session-parse-cache-database'
+import {
+  SESSION_PARSE_CACHE_SCHEMA_VERSION,
+  SessionParseCacheDatabase
+} from './session-parse-cache-database'
 import {
   createSessionParseStats,
   parseAgentSessionFileCached,
@@ -126,6 +129,43 @@ function simulateRestart(cacheFile: string): void {
 }
 
 describe('session parse cache persistence', () => {
+  it('adds physical evidence to an existing schema 9 cache without dropping rows or independent tables', async () => {
+    const root = await makeTempDir()
+    const path = join(root, 'cache.sqlite')
+    const initial = new SessionParseCacheDatabase(path)
+    const entry = { mtimeMs: 1, sizeBytes: 2, platform: process.platform, session: null }
+    initial.write([['/old/transcript', entry]], 123)
+    initial.writeScopeCwds([['/old/scope', { ...entry, cwd: '/repo' }]], 123)
+    initial.close()
+    const old = new SyncDatabase(path)
+    old.exec(`ALTER TABLE rows DROP COLUMN identity;
+      ALTER TABLE scope_cwds DROP COLUMN identity;
+      CREATE TABLE independent_checkpoint(value TEXT);
+      INSERT INTO independent_checkpoint VALUES ('retained');`)
+    old.close()
+    const upgraded = new SessionParseCacheDatabase(path)
+    expect(upgraded.read('/old/transcript')).toMatchObject(entry)
+    expect(upgraded.readScopeCwds(['/old/scope']).found.get('/old/scope')?.read?.cwd).toBe('/repo')
+    upgraded.close()
+    const inspect = new SyncDatabase(path)
+    try {
+      expect(inspect.prepare('SELECT value FROM independent_checkpoint').get()?.value).toBe(
+        'retained'
+      )
+      expect(
+        inspect
+          .prepare('PRAGMA table_info(rows)')
+          .all()
+          .some((column) => column.name === 'identity')
+      ).toBe(true)
+      expect(
+        inspect.prepare("SELECT value FROM meta WHERE key = 'schema_version'").get()?.value
+      ).toBe('9')
+    } finally {
+      inspect.close()
+    }
+  })
+
   it('reconstructs unreadable diagnostics from a version 8 row before reusing it', async () => {
     const root = await makeTempDir()
     const cacheFile = join(root, 'session-parse-cache.json')

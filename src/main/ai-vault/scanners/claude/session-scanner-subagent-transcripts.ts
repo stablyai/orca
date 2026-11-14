@@ -1,8 +1,4 @@
-import {
-  throwIfAiVaultScanCancelled,
-  waitForAiVaultScan
-} from '../../scan-lifecycle/ai-vault-scan-cancellation'
-import { wslGatedReaddir } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { countSessionSubagentDirectory } from '../session-subagent-directory-count'
 import { basename, dirname, extname, join } from 'node:path'
 
 export const SUBAGENT_DIR_NAME = 'subagents'
@@ -28,17 +24,11 @@ export async function countSubagentTranscripts(
   transcriptFilePath: string,
   signal?: AbortSignal
 ): Promise<number> {
-  let entries
-  try {
-    entries = await waitForAiVaultScan(
-      wslGatedReaddir(subagentTranscriptsDirFor(transcriptFilePath), 'scan', signal),
-      signal
-    )
-  } catch {
-    throwIfAiVaultScanCancelled(signal)
-    return 0
-  }
-  return entries.filter((entry) => isSubagentTranscriptFileName(entry.name, entry.isFile())).length
+  return countSessionSubagentDirectory(
+    subagentTranscriptsDirFor(transcriptFilePath),
+    (entry) => isSubagentTranscriptFileName(entry.name, entry.isFile()),
+    signal
+  )
 }
 
 export type SubagentTranscriptPartition = {

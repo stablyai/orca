@@ -5,6 +5,7 @@ import {
   type AgentSessionStoreState
 } from './agent-session-store-state'
 import { AgentSessionDraftRecords } from './agent-session-store-draft'
+import { structuredAgentRuntimeMetadata } from '../installation/structured-agent-runtime-metadata'
 
 /** Provider-native session ids of the loaded chats, mapped to the chats whose handle chains name
  *  them: built once per store authority, then kept by committed record writes, so a recipient's
@@ -61,12 +62,19 @@ export class AgentSessionProviderAliasIndex {
   /** The chat naming `nativeId`; with several, the first in listing order, as a full scan picks. */
   owner(nativeId: string): string | null {
     let first: string | null = null
-    for (const sessionId of this.owners.get(nativeId) ?? []) {
+    for (const sessionId of this.owners.get(`native\0${nativeId}`) ?? []) {
       if (first === null || this.precedes(sessionId, first)) {
         first = sessionId
       }
     }
     return first
+  }
+
+  /** Only matching chats, in the same order as listConversations. */
+  matchingHistoryOwners(rowSessionId: string): string[] {
+    return [...(this.owners.get(`history\0${rowSessionId}`) ?? [])].sort((a, b) =>
+      a === b ? 0 : this.precedes(a, b) ? -1 : 1
+    )
   }
 
   private precedes(a: string, b: string): boolean {
@@ -79,7 +87,11 @@ export class AgentSessionProviderAliasIndex {
   }
 
   private add(view: AgentSessionConversationView): void {
-    const aliases = view.providerHandleChain.map(({ handle }) => handle.nativeId)
+    const history = structuredAgentRuntimeMetadata(view.provider)?.sessionHistory
+    const aliases = view.providerHandleChain.flatMap((link) => [
+      `native\0${link.handle.nativeId}`,
+      ...(history ? [`history\0${history.rowSessionId(link)}`] : [])
+    ])
     this.aliasesBySession.set(view.sessionId, aliases)
     for (const alias of aliases) {
       const owners = this.owners.get(alias) ?? new Set<string>()

@@ -53,6 +53,10 @@ export class AiVaultSessionPublicationGate {
     )
   }
 
+  publishProvisional(apply: () => void): void {
+    this.publish({ sessions: [], issues: [], scannedAt: '' }, apply)
+  }
+
   cancel(): void {
     this.generation += 1
     this.cancelPending?.()

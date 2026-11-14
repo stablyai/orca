@@ -1,3 +1,5 @@
+import type { AiVaultRowObserver } from '../../../shared/ai-vault-scan-rows'
+import { sessionFileIdentity, sessionFileVersionMatches } from '../parse-cache/session-file-version'
 import { SCAN_ISSUE_LIMIT } from '../parsing/session-scan-issues'
 import {
   aiVaultSessionInScope,
@@ -51,6 +53,7 @@ import { sidecarUnchanged } from '../parse-cache/session-sidecar-stat'
 import { prioritizeAntigravityTranscriptCandidates } from '../scanners/antigravity/antigravity-transcript-candidates'
 
 type ScopeScanArgs = {
+  observeRows?: AiVaultRowObserver
   inventory: CwdBucketInventory[]
   discoveries: readonly SessionFileDiscovery[]
   options: AiVaultScanOptions
@@ -109,6 +112,7 @@ export async function scanInScopeSessions(args: ScopeScanArgs): Promise<AiVaultS
   }
   const bucketed = await parseSessionCandidates({
     candidates,
+    observeRows: args.observeRows,
     limit: candidates.length,
     platform: args.platform,
     executionHostId: args.executionHostId,
@@ -133,6 +137,7 @@ async function walkInScopeSessions(
   await lookupScopeCwds(candidates, signal)
   const sessions = await parseSessionCandidates({
     candidates,
+    observeRows: args.observeRows,
     limit: args.limit,
     platform: args.platform,
     executionHostId: args.executionHostId,
@@ -288,6 +293,7 @@ async function mayBeInScope(
     throwIfAiVaultScanCancelled(signal)
     if (read !== null) {
       storeSessionScopeCwd(file.path, {
+        ...sessionFileIdentity(file),
         mtimeMs: file.mtimeMs,
         sizeBytes: file.sizeBytes ?? null,
         platform,
@@ -307,10 +313,7 @@ function stampMatchesFile(
 ): boolean {
   return (
     stamp.platform === platform &&
-    stamp.mtimeMs === file.mtimeMs &&
-    (stamp.sizeBytes === null ||
-      file.sizeBytes === undefined ||
-      stamp.sizeBytes === file.sizeBytes) &&
+    sessionFileVersionMatches(stamp, file) &&
     sidecarUnchanged(stamp.sidecar, file.sidecar)
   )
 }

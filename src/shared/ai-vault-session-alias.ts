@@ -1,6 +1,6 @@
-import type { AiVaultSession } from './ai-vault-types'
+import type { AiVaultSession } from './ai-vault/contracts/ai-vault-types'
 import { antigravitySessionOrigin } from './antigravity-session-origin'
-import { parseWslUncPath } from './wsl-paths'
+import { sessionFileExecutionNamespace } from './ai-vault/scanning/ai-vault-scope-cwd-match'
 
 export function sessionAliasKey(session: AiVaultSession): string | null {
   if (session.agent === 'antigravity') {
@@ -23,14 +23,10 @@ export function codexSessionAliasKey(session: AiVaultSession): string | null {
   if (session.agent !== 'codex') {
     return null
   }
-  const fileName = session.filePath.split(/[\\/]/).at(-1) ?? ''
+  const physicalName = session.filePath.split(/[\\/]/).at(-1) ?? ''
+  const fileName = physicalName.endsWith('.zst') ? physicalName.slice(0, -4) : physicalName
   if (!/^rollout-.+\.jsonl$/.test(fileName)) {
     return null
   }
-  return `${session.executionHostId}\0${codexPathExecutionNamespace(session.filePath)}\0${session.sessionId}\0${fileName}`
-}
-
-function codexPathExecutionNamespace(filePath: string): string {
-  const wslPath = parseWslUncPath(filePath)
-  return wslPath ? `wsl:${wslPath.distro.toLowerCase()}` : 'native'
+  return `${session.executionHostId}\0${sessionFileExecutionNamespace(session.filePath)}\0${session.sessionId}\0${fileName}`
 }

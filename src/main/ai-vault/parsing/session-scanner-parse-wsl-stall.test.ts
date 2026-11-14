@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Stats } from 'node:fs'
 import type * as NodeFsPromisesModule from 'node:fs/promises'
 import type { SessionFileCandidate } from '../session-scanner-types'
 
@@ -114,6 +115,9 @@ describe('AI Vault session parse with a stalled WSL transcript body read', () =>
     const finalizing = new Promise<void>((resolve) => {
       entered = resolve
     })
+    vi.spyOn(transcriptFs, 'wslGatedStat').mockResolvedValue(
+      Object.assign(new Stats(), { dev: 1, ino: 1, birthtimeMs: 1, mtimeMs: 1, ctimeMs: 1 })
+    )
     const readdir = vi.spyOn(transcriptFs, 'wslGatedReaddir').mockImplementationOnce(() => {
       entered()
       return new Promise(() => {})

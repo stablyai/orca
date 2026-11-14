@@ -1,3 +1,5 @@
+import type { AiVaultServicePendingCall } from './session-scanner-pending-call'
+export type { AiVaultServicePendingCall } from './session-scanner-pending-call'
 import { recordRelayedSpan } from '../../observability/tracer'
 import type { SessionSearchScanRoots } from '../../ai-vault-search/discovery/session-search-scan-roots'
 import type { ChildProcess } from 'node:child_process'
@@ -253,6 +255,10 @@ export function aiVaultServiceErrorText(error: unknown): string {
 }
 
 export function clearAiVaultServiceCall(call: AiVaultServicePendingCall): void {
+  call.stopRowsInterest?.()
+  call.stopRowsInterest = undefined
+  call.scanInactivity?.dispose()
+  call.scanInactivity = undefined
   if (call.timer) {
     clearTimeout(call.timer)
     call.timer = null
@@ -268,20 +274,6 @@ export function rejectAiVaultServiceCall(call: AiVaultServicePendingCall, error:
   if (!call.cancelled) {
     call.reject(error)
   }
-}
-
-export type AiVaultServicePendingCall = {
-  request: AiVaultServiceRequest
-  lane: AiVaultServiceLane
-  signal?: AbortSignal
-  resolve: (value: unknown) => void
-  reject: (error: Error) => void
-  timer: NodeJS.Timeout | null
-  onAbort: (() => void) | null
-  cancelled: boolean
-  sent: boolean
-  startRetried: boolean
-  scanListener?: AiVaultServiceScanListener
 }
 
 export type AiVaultServiceReadyWaiter = {

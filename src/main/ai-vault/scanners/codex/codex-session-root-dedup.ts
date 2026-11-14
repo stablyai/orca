@@ -222,16 +222,7 @@ export async function dedupeCodexRolloutCopyAliases<T>(
   return candidates.filter((candidate) => !aliasesToDrop.has(candidate))
 }
 
-export function codexSessionAliasKey(session: AiVaultSession): string | null {
-  if (session.agent !== 'codex') {
-    return null
-  }
-  const fileName = lastPathSegment(session.filePath)
-  if (!CODEX_ROLLOUT_FILE_NAME_PATTERN.test(fileName)) {
-    return null
-  }
-  return `${session.executionHostId}\0${sessionFileExecutionNamespace(session.filePath)}\0${session.sessionId}\0${codexRolloutAliasName(fileName)}`
-}
+export { codexSessionAliasKey } from '../../../../shared/ai-vault-session-alias'
 
 export function codexSessionAliasBeats(candidate: AiVaultSession, best: AiVaultSession): boolean {
   const candidateRank = codexSessionRootRank(candidate.codexHome)

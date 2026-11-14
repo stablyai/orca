@@ -240,6 +240,8 @@ export type AiVaultListArgs = {
   /** Return only scopePaths sessions, without the global recency pass. Older hosts ignore it; clients still filter. */
   scopeOnly?: boolean
   executionHostScope?: ExecutionHostScope
+  /** Same-build desktop preview opt-in; unary results remain authoritative. */
+  streamRows?: boolean
   requestToken?: string
 }
 

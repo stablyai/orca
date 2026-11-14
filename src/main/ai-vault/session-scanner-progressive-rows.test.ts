@@ -1,18 +1,12 @@
-import { AiVaultScannerServiceClient } from './session-scanner-service-client'
-import {
-  AiVaultServiceTestChild,
-  readyAiVaultServiceChild,
-  aiVaultServiceRequestId
-} from './session-scanner-service-test-child'
 import { mkdtemp, mkdir, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { scanAiVaultSessions } from './session-scanner'
-import * as parseCache from './session-scanner-parse-cache'
-import { isolatedScanRoots, jsonLines } from './session-scanner-test-fixtures'
+import * as parseCache from './parse-cache/session-scanner-parse-cache'
+import { isolatedScanRoots, jsonLines } from './scanner-fixtures/session-scanner-test-fixtures'
 import type { AiVaultRowObserver } from '../../shared/ai-vault-scan-rows'
-import type { AiVaultSession } from '../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../shared/ai-vault/contracts/ai-vault-types'
 
 it('delivers a completed row before its held sibling and preserves final aliases and scoped rows', async () => {
   const root = await mkdtemp(join(tmpdir(), 'orca-progressive-rows-'))
@@ -27,14 +21,13 @@ it('delivers a completed row before its held sibling and preserves final aliases
     releaseSend = resolve
   })
   const rows = new Map<string, AiVaultSession>()
-  const child = new AiVaultServiceTestChild()
-  const client = new AiVaultScannerServiceClient({
-    processFactory: () => child.asChildProcess(),
-    init: () => ({ sessionParseCache: null, sessionSearch: null })
-  })
-  let requestId = 0
   const onRows: AiVaultRowObserver = async (delta) => {
-    child.emit('message', { type: 'rows', id: requestId, delta })
+    for (const id of delta.removed) {
+      rows.delete(id)
+    }
+    for (const row of delta.upserts) {
+      rows.set(row.id, row)
+    }
     await heldSend
   }
   let scan: ReturnType<typeof scanAiVaultSessions> | undefined
@@ -81,9 +74,9 @@ it('delivers a completed row before its held sibling and preserves final aliases
       ])
     )
     await utimes(old, new Date('2026-01-01'), new Date('2026-01-01'))
-    const original = parseCache.parseAgentSessionFileCached
+    const original = parseCache.parseListedSessionFile
     const spy = vi
-      .spyOn(parseCache, 'parseAgentSessionFileCached')
+      .spyOn(parseCache, 'parseListedSessionFile')
       .mockImplementation(async (...args) => {
         if (args[0].file.path.endsWith('rollout-held.jsonl')) {
           await held
@@ -96,22 +89,6 @@ it('delivers a completed row before its held sibling and preserves final aliases
       limit: 2,
       scopePaths: ['/repo/old']
     }
-    const response = client.request<{ result: Awaited<ReturnType<typeof scanAiVaultSessions>> }>(
-      { type: 'request', operation: 'scan', options },
-      undefined,
-      (delta) => {
-        for (const id of delta.removed) {
-          rows.delete(id)
-        }
-        for (const row of delta.upserts) {
-          rows.set(row.id, row)
-        }
-      }
-    )
-    void response.catch(() => undefined)
-    readyAiVaultServiceChild(child)
-    await Promise.resolve()
-    requestId = aiVaultServiceRequestId(child, 'scan')
     scan = scanAiVaultSessions(options, onRows)
     await vi.waitFor(() =>
       expect([...rows.values()].map((row) => row.sessionId)).toContain('ready')
@@ -119,13 +96,6 @@ it('delivers a completed row before its held sibling and preserves final aliases
     expect([...rows.values()].map((row) => row.sessionId)).not.toContain('held')
     release()
     const streamed = await scan
-    child.emit('message', {
-      type: 'result',
-      operation: 'scan',
-      id: requestId,
-      value: { result: streamed, durationMs: 1 }
-    })
-    expect((await response).result).toBe(streamed)
     spy.mockRestore()
     const ordinary = await scanAiVaultSessions(options)
     expect(streamed.sessions).toEqual(ordinary.sessions)
@@ -135,7 +105,6 @@ it('delivers a completed row before its held sibling and preserves final aliases
     release()
     releaseSend()
     await scan?.catch(() => undefined)
-    client.dispose()
     vi.restoreAllMocks()
     await rm(root, { recursive: true, force: true })
   }

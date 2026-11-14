@@ -1,8 +1,11 @@
-import type { AiVaultSessionPublicationGate } from './ai-vault-session-publication-gate'
+import type { AiVaultSessionPublicationGate } from './ai-vault/scanning/ai-vault-session-publication-gate'
 import type { AiVaultRowsEvent } from '../../../../shared/ai-vault-scan-rows'
-import type { AiVaultListResult, AiVaultSession } from '../../../../shared/ai-vault-types'
+import type {
+  AiVaultListResult,
+  AiVaultSession
+} from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { sessionAliasKey } from '../../../../shared/ai-vault-session-alias'
-import { reuseEqualCatalogRows } from '@/store/slices/worktree-catalog-reconciliation'
+import { reuseEqualCatalogRows } from '@/lib/catalog-reconciliation/catalog-row-reconciliation'
 
 /** Consumes every delta before the lossy input-quiet publication gate. */
 export class AiVaultProvisionalRows {
@@ -13,7 +16,8 @@ export class AiVaultProvisionalRows {
 
   constructor(
     private readonly baseline: readonly AiVaultSession[],
-    private readonly deleted: ReadonlySet<string> = new Set()
+    private readonly deleted: ReadonlySet<string> = new Set(),
+    private readonly limit = Infinity
   ) {}
 
   accept(event: AiVaultRowsEvent): boolean {
@@ -63,7 +67,7 @@ export class AiVaultProvisionalRows {
     const rows = [...merged.values()].sort(
       (a, b) => Date.parse(b.updatedAt ?? b.modifiedAt) - Date.parse(a.updatedAt ?? a.modifiedAt)
     )
-    return reuseEqualCatalogRows(previous, rows)
+    return reuseEqualCatalogRows(previous, this.baseline.length ? rows : rows.slice(0, this.limit))
   }
 
   retire(): void {
@@ -92,13 +96,14 @@ export function retainAiVaultFailedHostRows(
 
 export function observeAiVaultProvisionalRows(args: {
   requestToken: string
+  limit?: number
   baseline: readonly AiVaultSession[]
   deleted: ReadonlySet<string>
   gate: AiVaultSessionPublicationGate
   isCurrent: () => boolean
   apply: (rows: readonly AiVaultSession[]) => void
 }): () => void {
-  const preview = new AiVaultProvisionalRows(args.baseline, args.deleted)
+  const preview = new AiVaultProvisionalRows(args.baseline, args.deleted, args.limit)
   let observing = true
   let rows: readonly AiVaultSession[] = args.baseline
   const unsubscribe = window.api.aiVault.onScanRows?.((event) => {

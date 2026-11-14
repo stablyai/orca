@@ -1,3 +1,14 @@
+import {
+  forwardRowInterest,
+  rowsAreObserved,
+  watchRowInterest
+} from './scan-lifecycle/ai-vault-row-interest'
+import { SessionRowPublisher } from './session-row-publisher'
+import type { AiVaultRowObserver } from '../../shared/ai-vault-scan-rows'
+import { sessionAliasKey } from '../../shared/ai-vault-session-alias'
+import { ScannedSessionCollection, dedupeScannedSessions } from './parsing/session-root-dedup'
+import { withTranscriptFsObservation } from '../native-chat/transcript-filesystem/transcript-fs-observation'
+import { withCodexSessionIndexTitles } from './scanners/codex/session-scanner-codex-title-index'
 import type {
   AiVaultListResult,
   AiVaultScanIssue,
@@ -6,7 +17,6 @@ import type {
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { withSpan } from '../observability/tracer'
 import { sessionSortTime } from './parsing/session-scanner-accumulator'
-import { dedupeScannedSessions } from './parsing/session-root-dedup'
 import {
   createAntigravityWorkspaceResolver,
   readLocalAntigravityHistory
@@ -43,12 +53,73 @@ const SESSION_PARSE_CANDIDATE_MULTIPLIER = 2
 
 /** Return recency-capped sessions plus recovered in-scope sessions (only those for scopeOnly), deduplicated and sorted. */
 export async function scanAiVaultSessions(
-  options: AiVaultScanOptions = {}
+  options: AiVaultScanOptions = {},
+  observeRows?: AiVaultRowObserver,
+  activity?: (allowanceMs: number) => void
 ): Promise<AiVaultListResult> {
-  return withOpenCodeSqliteScanScope(() => scanAiVaultSessionStores(options))
+  let publisher: SessionRowPublisher | null = null
+  const finishPublisher = () => publisher?.finish()
+  let winners: ScannedSessionCollection | null = null
+  let byKey: Map<string, AiVaultSession> | null = null
+  const inScope = scopeOnlyScan(options)
+    ? createAiVaultScopeCwdMatcher(options.scopePaths ?? [])
+    : null
+  const publish: AiVaultRowObserver | undefined = observeRows
+    ? (delta) => {
+        if (!rowsAreObserved(observeRows)) {
+          return
+        }
+        publisher ??= new SessionRowPublisher(observeRows)
+        winners ??= new ScannedSessionCollection()
+        byKey ??= new Map()
+        for (const row of delta.upserts) {
+          if (inScope && !aiVaultSessionInScope(inScope, row)) {
+            continue
+          }
+          const key = sessionAliasKey(row) ?? row.id
+          const previous = byKey.get(key)
+          const change = winners.add(row)
+          if (change) {
+            byKey.set(key, row)
+            publisher.observe({
+              upserts: [row],
+              removed: previous && previous.id !== row.id ? [previous.id] : []
+            })
+          }
+        }
+      }
+    : undefined
+  if (publish && observeRows) {
+    forwardRowInterest(publish, observeRows)
+  }
+  const stopInterest = observeRows
+    ? watchRowInterest(observeRows, () => {
+        if (!rowsAreObserved(observeRows)) {
+          publisher?.finish()
+          publisher = null
+          winners = null
+          byKey = null
+        }
+      })
+    : () => undefined
+  try {
+    return await withTranscriptFsObservation(
+      () =>
+        withCodexSessionIndexTitles(() =>
+          withOpenCodeSqliteScanScope(() => scanAiVaultSessionStores(options, publish))
+        ),
+      activity
+    )
+  } finally {
+    stopInterest()
+    finishPublisher()
+  }
 }
 
-async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<AiVaultListResult> {
+async function scanAiVaultSessionStores(
+  options: AiVaultScanOptions,
+  observeRows?: AiVaultRowObserver
+): Promise<AiVaultListResult> {
   // Keep Cursor metadata scoped across discovery and parsing to read the chats tree only once.
   return withSpan('aiVault.scan', (span) =>
     withDevinSessionsDbScan(() =>
@@ -91,6 +162,7 @@ async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<Ai
         const scopeOnly = scopeOnlyScan(options)
         const parsedSessions = await parseSessionCandidates({
           candidates: parseCandidates,
+          observeRows,
           // Scope-only parses the whole window: its in-scope rows must not depend on bucket agents' rows.
           limit: scopeOnly ? Number.POSITIVE_INFINITY : limit,
           platform,
@@ -113,6 +185,7 @@ async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<Ai
 
         const scopeSessions = await scanInScopeSessions({
           inventory,
+          observeRows,
           discoveries,
           options,
           limit,

@@ -1,7 +1,10 @@
-import { createReadStream, type Dirent, type Stats } from 'node:fs'
+import {
+  beginTranscriptWholeRead,
+  noteTranscriptFsActivity,
+  observeTranscriptStat
+} from './transcript-fs-observation'
+import type { Dirent, Stats } from 'node:fs'
 import { access, lstat, open, readdir, readFile, stat, type FileHandle } from 'node:fs/promises'
-import { Readable } from 'node:stream'
-import { StringDecoder } from 'node:string_decoder'
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import { isWslUncPath } from '../../../shared/wsl-paths'
 import { runWslTranscriptFsTask, type WslTranscriptFsTaskPriority } from './wsl-transcript-fs-gate'
@@ -29,7 +32,8 @@ import { parseSshTranscriptPath } from './ssh-transcript-path'
 export const WSL_TRANSCRIPT_READ_CHUNK_BYTES = 1024 * 1024
 
 export type TranscriptFileHandle = FileHandle | WslTranscriptFsProcessHandle | SshTranscriptHandle
-export type TranscriptFileStats = Pick<Stats, 'size' | 'mtimeMs' | 'ctimeMs' | 'dev' | 'ino'>
+export type TranscriptFileStats = Pick<Stats, 'size' | 'mtimeMs' | 'ctimeMs' | 'dev' | 'ino'> &
+  Partial<Pick<Stats, 'birthtimeMs'>>
 
 function isSshTranscriptHandle(handle: TranscriptFileHandle): handle is SshTranscriptHandle {
   return 'sshTranscript' in handle
@@ -59,7 +63,7 @@ function runReusableFsOperation<T>(
         )
       )
     : localTask()
-  return waitForPromiseWithSignal(pending, signal)
+  return waitForPromiseWithSignal(pending, signal).finally(noteTranscriptFsActivity)
 }
 
 export function wslGatedAccess(
@@ -78,7 +82,9 @@ export function wslGatedStat(
   priority: WslTranscriptFsTaskPriority,
   signal?: AbortSignal
 ): Promise<Stats> {
-  return runReusableFsOperation({ operation: 'stat', path }, priority, signal, () => stat(path))
+  return observeTranscriptStat(path, () =>
+    runReusableFsOperation({ operation: 'stat', path }, priority, signal, () => stat(path))
+  )
 }
 
 export function transcriptFileStat(
@@ -116,9 +122,10 @@ export function wslGatedReadFile(
   priority: WslTranscriptFsTaskPriority,
   signal?: AbortSignal
 ): Promise<string> {
+  const done = beginTranscriptWholeRead(path)
   return runReusableFsOperation({ operation: 'readfile', path, encoding }, priority, signal, () =>
-    readFile(path, encoding)
-  )
+    readFile(path, { encoding, signal })
+  ).finally(done)
 }
 
 // Do not coalesce opens: joiners would share one handle and both close it.
@@ -182,14 +189,16 @@ export function readTranscriptFile(
   signal?: AbortSignal
 ): Promise<{ bytesRead: number; buffer: Buffer }> {
   if (isSshTranscriptHandle(handle)) {
-    return waitForPromiseWithSignal(readSshTranscript(handle), signal)
+    return waitForPromiseWithSignal(readSshTranscript(handle), signal).finally(
+      noteTranscriptFsActivity
+    )
   }
   // Process handle identity overrides path spelling; never route it into native FileHandle reads.
   if (!isWslUncPath(path) && !isWslTranscriptFsProcessHandle(handle)) {
     return waitForPromiseWithSignal(
       (handle as FileHandle).read(buffer, offset, length, position),
       signal
-    )
+    ).finally(noteTranscriptFsActivity)
   }
   return runWslTranscriptFsTask(
     { operation: 'read', path, priority, signal, dedupe: false },
@@ -203,11 +212,11 @@ export function readTranscriptFile(
       buffer.set(body, offset)
       return { bytesRead: body.byteLength, buffer }
     }
-  )
+  ).finally(noteTranscriptFsActivity)
 }
 
 /** An aborted close wait must not replace the read's own outcome or fail stream teardown. */
-function closeTranscriptHandleWithSignal(
+export function closeTranscriptHandleWithSignal(
   handle: TranscriptFileHandle,
   path: string,
   signal?: AbortSignal
@@ -261,76 +270,7 @@ export async function readTranscriptSlice(
   }
 }
 
-export type TranscriptReadStreamOptions = {
-  start?: number
-  end?: number
-  /** Without encoding, decode Buffer chunks incrementally; boundaries may split multibyte codepoints. */
-  encoding?: BufferEncoding
-}
-
-async function* gatedChunks(
-  path: string,
-  options: TranscriptReadStreamOptions,
-  priority: WslTranscriptFsTaskPriority,
-  signal?: AbortSignal
-): AsyncGenerator<Buffer | string> {
-  const handle = await openTranscriptFile(path, priority, signal)
-  // Decode across chunk boundaries to avoid replacement characters on split codepoints.
-  const decoder = options.encoding ? new StringDecoder(options.encoding) : null
-  try {
-    let position = options.start ?? 0
-    for (;;) {
-      const length =
-        options.end === undefined
-          ? WSL_TRANSCRIPT_READ_CHUNK_BYTES
-          : Math.min(WSL_TRANSCRIPT_READ_CHUNK_BYTES, options.end - position + 1)
-      if (length <= 0) {
-        break
-      }
-      const buffer = Buffer.allocUnsafe(length)
-      const { bytesRead } = await readTranscriptFile(
-        handle,
-        path,
-        buffer,
-        0,
-        length,
-        position,
-        priority,
-        signal
-      )
-      if (bytesRead <= 0) {
-        break
-      }
-      position += bytesRead
-      const chunk = buffer.subarray(0, bytesRead)
-      if (!decoder) {
-        yield chunk
-        continue
-      }
-      const decoded = decoder.write(chunk)
-      if (decoded) {
-        yield decoded
-      }
-    }
-    const trailing = decoder?.end()
-    if (trailing) {
-      yield trailing
-    }
-  } finally {
-    // Readable.destroy calls generator return, closing handles even after aborted head reads.
-    await closeTranscriptHandleWithSignal(handle, path, signal)
-  }
-}
-
-/** Deadline each UNC chunk separately; gate refusal reaches consumers as a stream error. */
-export function openTranscriptReadStream(
-  path: string,
-  options: TranscriptReadStreamOptions,
-  priority: WslTranscriptFsTaskPriority,
-  signal?: AbortSignal
-): Readable {
-  if (!isWslUncPath(path) && !parseSshTranscriptPath(path)) {
-    return createReadStream(path, { ...options, signal })
-  }
-  return Readable.from(gatedChunks(path, options, priority, signal))
-}
+export {
+  openTranscriptReadStream,
+  type TranscriptReadStreamOptions
+} from './transcript-read-stream'

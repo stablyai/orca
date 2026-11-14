@@ -1,5 +1,5 @@
 import type { AiVaultRowDelta, AiVaultRowObserver } from '../../shared/ai-vault-scan-rows'
-import type { AiVaultSession } from '../../shared/ai-vault-types'
+import type { AiVaultSession } from '../../shared/ai-vault/contracts/ai-vault-types'
 
 const ROW_BATCH_BYTES = 128 * 1024
 const ROW_BATCH_INTERVAL_MS = 250
@@ -7,11 +7,9 @@ const ROW_BATCH_INTERVAL_MS = 250
 /** One in-flight frame; each physical ID retains only its latest pending change. */
 export class SessionRowPublisher {
   private pending = new Map<string, AiVaultSession | null>()
-  private prepare: (() => AiVaultRowDelta) | null = null
   private timer: ReturnType<typeof setTimeout> | null = null
   private flight: Promise<void> | null = null
   private retired = false
-  private started = false
 
   constructor(
     private readonly send: AiVaultRowObserver,
@@ -28,18 +26,9 @@ export class SessionRowPublisher {
     }
   }
 
-  selectFinite(prepare: () => AiVaultRowDelta): void {
-    if (this.retired) {
-      return
-    }
-    this.prepare = prepare
-    this.schedule()
-  }
-
   finish(): void {
     this.retired = true
     this.pending.clear()
-    this.prepare = null
     if (this.timer) {
       clearTimeout(this.timer)
     }
@@ -59,10 +48,6 @@ export class SessionRowPublisher {
     if (this.timer || this.flight) {
       return
     }
-    if (!this.started) {
-      void this.flush()
-      return
-    }
     this.timer = setTimeout(() => {
       this.timer = null
       void this.flush()
@@ -77,18 +62,6 @@ export class SessionRowPublisher {
       .then(async () => {
         if (this.retired) {
           return
-        }
-        const prepare = this.prepare
-        this.prepare = null
-        const next = this.pending
-        this.pending = new Map()
-        if (prepare) {
-          this.accumulate(prepare())
-          for (const [id, row] of next) {
-            this.pending.set(id, row)
-          }
-        } else {
-          this.pending = next
         }
         const batch = this.pending
         this.pending = new Map()
@@ -109,7 +82,7 @@ export class SessionRowPublisher {
       })
       .finally(() => {
         this.flight = null
-        if (!this.retired && (this.prepare || this.pending.size)) {
+        if (!this.retired && this.pending.size) {
           this.schedule()
         }
       })
@@ -121,7 +94,6 @@ export class SessionRowPublisher {
     let bytes = 0
     const flush = async (): Promise<void> => {
       if (!this.retired && (delta.upserts.length || delta.removed.length)) {
-        this.started = true
         await this.send(delta)
       }
       delta = { upserts: [], removed: [] }

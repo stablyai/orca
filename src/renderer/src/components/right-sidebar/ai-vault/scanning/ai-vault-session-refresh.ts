@@ -1,3 +1,4 @@
+import { observeAiVaultProvisionalRows } from '../../ai-vault-provisional-rows'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import { aiVaultScanErrorText } from './ai-vault-scan-issue-copy'
@@ -64,8 +65,9 @@ export function useAiVaultSessionRefresh(
   const [loading, setLoading] = useState(false)
   const [failure, setFailure] = useState<{ scopeKey: string; cause: string } | null>(null)
   const [terminalScopeKey, setTerminalScopeKey] = useState<string | null>(null)
-  const requestTokenRef = useRef<string>(undefined!)
-  requestTokenRef.current ??= createBrowserUuid()
+  const requestTokensRef = useRef(new Set<string>())
+  const appliedScanRef = useRef(scan)
+  appliedScanRef.current = scan
   const refreshIdRef = useRef(0)
   const refreshInFlightRef = useRef(false)
   const pendingRefreshRef = useRef(false)
@@ -156,18 +158,15 @@ export function useAiVaultSessionRefresh(
         )
       }
       // Queue scope changes during an in-flight scan so the new view still refreshes.
-      if (refreshInFlightRef.current) {
+      if (refreshInFlightRef.current && !(args.force === true && args.background !== true)) {
         pendingRefreshRef.current = true
         pendingForceRef.current ||= args.force === true
         pendingBackgroundRef.current &&= args.background === true || cachedResult !== null
-        if (args.force === true && args.background !== true) {
-          void window.api.aiVault
-            .cancelListSessions({ requestToken: requestTokenRef.current })
-            .catch((error: unknown) => console.warn('Could not cancel Session History scan', error))
-        }
         return
       }
 
+      const requestToken = createBrowserUuid()
+      requestTokensRef.current.add(requestToken)
       refreshInFlightRef.current = true
       const refreshId = refreshIdRef.current + 1
       refreshIdRef.current = refreshId
@@ -185,11 +184,30 @@ export function useAiVaultSessionRefresh(
         refreshIdRef.current === refreshId &&
         scanKey === currentScanScopeKey() &&
         associationCurrent()
+      const stopRows = observeAiVaultProvisionalRows({
+        requestToken,
+        baseline:
+          appliedScanRef.current?.scopeKey === scanKey
+            ? appliedScanRef.current.result.sessions
+            : [],
+        deleted: new Set(),
+        gate: publicationGateRef.current,
+        isCurrent: requestCurrent,
+        limit: selectedLimit === 'unlimited' ? Infinity : selectedLimit,
+        apply: (sessions) =>
+          applyScan({
+            result: { sessions: [...sessions], issues: [], scannedAt: new Date().toISOString() },
+            limit: selectedLimit,
+            scopeKey: scanKey,
+            scopeOnly,
+            stale: true
+          })
+      })
       try {
         const previous = conditionalSnapshotRef.current
         const result = await refreshAiVaultSessionList(
           request,
-          { force: args.force, requestToken: requestTokenRef.current },
+          { force: args.force, requestToken },
           previous?.scopeKey === scanKey ? previous : undefined
         )
         // Reject superseded or old-scope replies before they can repaint History.
@@ -219,11 +237,13 @@ export function useAiVaultSessionRefresh(
           }
         }
       } finally {
-        refreshInFlightRef.current = false
+        stopRows()
+        requestTokensRef.current.delete(requestToken)
+        refreshInFlightRef.current = requestTokensRef.current.size > 0
         if (mountedRef.current && refreshIdRef.current === refreshId) {
           setLoading(false)
         }
-        if (pendingRefreshRef.current && mountedRef.current) {
+        if (pendingRefreshRef.current && mountedRef.current && !refreshInFlightRef.current) {
           pendingRefreshRef.current = false
           const force = pendingForceRef.current
           // The queued refresh is background-only if every queued caller was.
@@ -240,7 +260,7 @@ export function useAiVaultSessionRefresh(
 
   useEffect(() => {
     mountedRef.current = true
-    const requestToken = requestTokenRef.current
+    const requestTokens = requestTokensRef.current
     const publicationGate = publicationGateRef.current
     return () => {
       mountedRef.current = false
@@ -250,9 +270,10 @@ export function useAiVaultSessionRefresh(
       pendingBackgroundRef.current = true
       refreshIdRef.current += 1
       refreshInFlightRef.current = false
-      void window.api.aiVault.cancelListSessions({
-        requestToken
-      })
+      for (const requestToken of requestTokens) {
+        void window.api.aiVault.cancelListSessions({ requestToken })
+      }
+      requestTokens.clear()
     }
   }, [])
 
@@ -263,9 +284,9 @@ export function useAiVaultSessionRefresh(
     pendingForceRef.current = false
     pendingBackgroundRef.current = true
     if (refreshInFlightRef.current) {
-      void window.api.aiVault.cancelListSessions({
-        requestToken: requestTokenRef.current
-      })
+      for (const requestToken of requestTokensRef.current) {
+        void window.api.aiVault.cancelListSessions({ requestToken })
+      }
     }
     void refresh({ force: false, reuseLoadedDepth: true })
   }, [associations, executionHostScope, refresh, scanScopeKey])

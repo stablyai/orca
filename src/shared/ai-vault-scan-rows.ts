@@ -1,4 +1,4 @@
-import type { AiVaultSession } from './ai-vault-types'
+import type { AiVaultSession } from './ai-vault/contracts/ai-vault-types'
 
 /** Current membership only; never a completed list or a freshness validator. */
 export type AiVaultScanRows = {

@@ -1,3 +1,4 @@
+import type { AiVaultRowObserver } from '../../../shared/ai-vault-scan-rows'
 import type {
   AiVaultListResult,
   AiVaultSubagentListResult,
@@ -33,9 +34,10 @@ export function clearAiVaultBackgroundRestartCircuit(): void {
 export function scanAiVaultSessionsInBackground(
   options: AiVaultServiceScanOptions,
   signal?: AbortSignal,
-  progress?: LocalAiVaultScanProgressHandle
+  progress?: LocalAiVaultScanProgressHandle,
+  rows?: AiVaultRowObserver
 ): Promise<AiVaultListResult> {
-  return scanAiVaultSessionsInService(options, signal, progress)
+  return scanAiVaultSessionsInService(options, signal, progress, rows)
 }
 
 export function resolveAiVaultSessionTitlesInBackground(

@@ -1,4 +1,4 @@
-import type { AiVaultRowsEvent } from '../../shared/ai-vault-scan-rows'
+import type { AiVaultRowsEvent } from '../../../shared/ai-vault-scan-rows'
 import type {
   AiVaultSearchRequest,
   AiVaultSearchResponse,

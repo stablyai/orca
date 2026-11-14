@@ -1,7 +1,7 @@
 import type { Dirent } from 'node:fs'
 import { extname, join } from 'node:path'
 import { mapWithConcurrency } from '../../../shared/map-with-concurrency'
-import { PrioritySemaphore } from '../../../shared/priority-semaphore'
+import { withNativeDiscoverySlot } from './session-native-discovery-slot'
 import { isWslUncPath } from '../../../shared/wsl-paths'
 import { SessionNewestFiles } from './session-newest-files'
 import type { SessionSidecarObservation } from '../parse-cache/session-sidecar-stat'
@@ -32,20 +32,10 @@ import { isMissingTranscriptPathError } from './session-path-absence'
 
 const NATIVE_DISCOVERY_CONCURRENCY = 4
 const NATIVE_DISCOVERY_BATCH_SIZE = 16
-const nativeDiscoverySlots = new PrioritySemaphore(8)
 
 type SessionFileObservation =
   | { file: Omit<FileWithMtime, 'modifiedAt'>; sidecarPath?: string }
   | { issue: Omit<AiVaultScanIssue, 'agent' | 'kind' | 'executionHostId'> }
-
-async function withNativeDiscoverySlot<T>(read: () => Promise<T>): Promise<T> {
-  const release = await nativeDiscoverySlots.acquire(0)
-  try {
-    return await read()
-  } finally {
-    release()
-  }
-}
 
 export async function discoverFiles(args: {
   rootDir: string
@@ -54,7 +44,10 @@ export async function discoverFiles(args: {
   issues: AiVaultScanIssue[]
   extensions: string[]
   filePredicate?: (path: string) => boolean
-  contentDependencyPath?: (path: string) => string | undefined | Promise<string | undefined>
+  contentDependencyPath?: (
+    path: string,
+    signal?: AbortSignal
+  ) => string | undefined | Promise<string | undefined>
   directoryPredicate?: (name: string, depth: number) => boolean
   // Sees each listing the walk already made, so callers can read layout without another readdir.
   onDirectoryEntries?: (dirPath: string, entries: readonly Dirent[]) => void
@@ -151,14 +144,14 @@ export async function discoverFiles(args: {
           files.push(await observeSessionFile(path, args.contentDependencyPath, args.signal))
         }
         return files
-      })
+      }, args.signal)
     )
     return observations.flat()
   }
 
   async function readDirectory(path: string): Promise<Dirent[]> {
     const entries = native
-      ? await withNativeDiscoverySlot(() => wslGatedReaddir(path, 'scan', args.signal))
+      ? await withNativeDiscoverySlot(() => wslGatedReaddir(path, 'scan', args.signal), args.signal)
       : await wslGatedReaddir(path, 'scan', args.signal)
     // Report a source only after its root directory can be listed.
     if (path === args.rootDir) {
@@ -213,12 +206,17 @@ export async function discoverFiles(args: {
 
 async function observeSessionFile(
   path: string,
-  contentDependencyPath?: (path: string) => string | undefined | Promise<string | undefined>,
+  contentDependencyPath?: (
+    path: string,
+    signal?: AbortSignal
+  ) => string | undefined | Promise<string | undefined>,
   signal?: AbortSignal
 ): Promise<SessionFileObservation> {
   try {
     const fileStat = await wslGatedStat(path, 'scan', signal)
-    const sidecarPath = contentDependencyPath ? await contentDependencyPath(path) : undefined
+    const sidecarPath = contentDependencyPath
+      ? await contentDependencyPath(path, signal)
+      : undefined
     const sidecar = sidecarPath ? await observeSessionSidecar(sidecarPath, signal) : 'none'
     return {
       file: {
@@ -228,6 +226,7 @@ async function observeSessionFile(
         sidecar,
         dev: fileStat.dev,
         ino: fileStat.ino,
+        birthtimeMs: fileStat.birthtimeMs,
         nlink: fileStat.nlink
       },
       sidecarPath

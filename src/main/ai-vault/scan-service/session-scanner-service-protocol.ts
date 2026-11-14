@@ -1,3 +1,4 @@
+import type { AiVaultRowDelta } from '../../../shared/ai-vault-scan-rows'
 import type {
   AiVaultListResult,
   AiVaultSubagentListResult
@@ -22,7 +23,9 @@ import type { AiVaultScanWork } from '../../../shared/ai-vault/scanning/ai-vault
 
 export const AI_VAULT_SERVICE_PROTOCOL_VERSION = 1
 
-export type AiVaultServiceScanOptions = Omit<AiVaultScanOptions, 'signal'>
+export type AiVaultServiceScanOptions = Omit<AiVaultScanOptions, 'signal'> & {
+  streamRows?: boolean
+}
 
 export type AiVaultServiceLane = 'cache' | 'interactive'
 export type AiVaultServiceOperation =
@@ -99,6 +102,7 @@ export type AiVaultServiceParentMessage =
   | AiVaultServiceInit
   | AiVaultServiceRequest
   | { type: 'cancel'; id: number }
+  | { type: 'rowsInterest'; id: number; observed: boolean }
   | { type: 'invalidate'; generation: number; paths: string[] }
   // Fire-and-forget settings update; root changes replace the search instance.
   | { type: 'sessionSearch'; init: AiVaultSessionSearchInit }
@@ -141,6 +145,8 @@ export type AiVaultServiceChildMessage =
   | { type: 'error'; id: number; message: string; retryable: boolean }
   | { type: 'invalidated'; generation: number }
   | { type: 'progress'; id: number; work: AiVaultScanWork }
+  | { type: 'rows'; id: number; delta: AiVaultRowDelta }
+  | { type: 'activity'; id: number; allowanceMs: number; started: boolean }
 
 /** Keep interactive requests from queueing behind scans and title reads. */
 export function aiVaultServiceLane(operation: AiVaultServiceOperation): AiVaultServiceLane {
@@ -178,6 +184,26 @@ export function isAiVaultServiceChildMessage(value: unknown): value is AiVaultSe
   }
   if (message.type === 'invalidated') {
     return Number.isSafeInteger(message.generation)
+  }
+  if (message.type === 'activity') {
+    return (
+      Number.isSafeInteger(message.id) &&
+      typeof message.started === 'boolean' &&
+      typeof message.allowanceMs === 'number' &&
+      Number.isFinite(message.allowanceMs) &&
+      message.allowanceMs >= 0
+    )
+  }
+  if (message.type === 'rows') {
+    return (
+      Number.isSafeInteger(message.id) &&
+      typeof message.delta === 'object' &&
+      message.delta !== null &&
+      'upserts' in message.delta &&
+      Array.isArray(message.delta.upserts) &&
+      'removed' in message.delta &&
+      Array.isArray(message.delta.removed)
+    )
   }
   if (message.type === 'progress') {
     return (

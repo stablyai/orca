@@ -85,8 +85,8 @@ import {
 
 /** Single-writer records/operation ledger in the host chat-journal database. */
 
-export const AGENT_SESSION_LEASE_TTL_MS = 30_000,
-  AGENT_SESSION_LEASE_RENEW_INTERVAL_MS = 10_000
+export const AGENT_SESSION_LEASE_TTL_MS = 30_000
+export const AGENT_SESSION_LEASE_RENEW_INTERVAL_MS = 10_000
 
 export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   readonly conversationReceipts: ReturnType<typeof createAgentSessionConversationReceipts>
@@ -145,8 +145,8 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     )
   lineageRevision = (): object => this.transactions.lineageRevision()
   providerAliasOwner = (nativeId: string) => this.transactions.providerAliasOwner(nativeId)
-  selectWritableRecord = (sessionId: string) =>
-    selectWritableAgentSessionRecord(this.state, sessionId)
+  historyRowOwners = (rowSessionId: string) => this.transactions.historyRowOwners(rowSessionId)
+  selectWritableRecord = (id: string) => selectWritableAgentSessionRecord(this.state, id)
   requireWritableRecord = (sessionId: string) =>
     requireWritableAgentSessionRecord(this.state, sessionId)
 
