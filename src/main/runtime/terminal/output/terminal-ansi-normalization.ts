@@ -6,6 +6,7 @@ import {
 import { ownRetainedString } from '../../../../shared/own-retained-string'
 import {
   sliceTerminalOrigins,
+  terminalOriginSpan,
   writeTerminalOrigins,
   type TerminalOriginRuns
 } from '../../../../shared/terminal/output/terminal-content-origin'
@@ -190,7 +191,12 @@ class NormalizedTerminalText {
 
   constructor(
     private readonly value: string,
-    private readonly sourceOrigins?: TerminalOriginRuns
+    private readonly sourceOrigins?: TerminalOriginRuns,
+    private readonly uniformOrigin = sourceOrigins?.length === 1 &&
+    sourceOrigins[0]!.start === 0 &&
+    sourceOrigins[0]!.end >= value.length
+      ? sourceOrigins[0]!.origin
+      : undefined
   ) {}
 
   appendSpan(start: number, end: number): void {
@@ -212,7 +218,7 @@ class NormalizedTerminalText {
   }
 
   private appendOrigins(start: number, end: number): void {
-    if (this.sourceOrigins) {
+    if (this.sourceOrigins?.length && !this.uniformOrigin) {
       this.origins = writeTerminalOrigins(
         this.origins,
         this.length,
@@ -239,7 +245,9 @@ class NormalizedTerminalText {
       pendingAnsi: this.carriageReturnPending ? `\r${pendingTail}` : pendingTail,
       ...(this.sourceOrigins
         ? {
-            origins: this.origins,
+            origins: this.uniformOrigin
+              ? terminalOriginSpan(this.length, this.uniformOrigin)
+              : this.origins,
             pendingOrigins: this.carriageReturnPending
               ? writeTerminalOrigins(
                   sliceTerminalOrigins(

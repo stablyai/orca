@@ -110,7 +110,7 @@ export function readOriginScreenLines(
         for (const run of component) {
           append(at + run.start, Math.min(end, at + run.end), run.origin)
         }
-      } else if (line?.getString(column)) {
+      } else {
         while (state?.runs[sourceIndex] && state.runs[sourceIndex]!.end <= column) {
           sourceIndex++
         }
