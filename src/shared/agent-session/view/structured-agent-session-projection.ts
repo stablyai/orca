@@ -214,7 +214,7 @@ function pendingStructuredAgentSessionPrompt(
   return (item) =>
     (item.body.kind === 'approval' || item.body.kind === 'question') &&
     item.body.resolution.state === 'pending' &&
-    (!scope || scope.isCurrentItem(item.itemId))
+    (!scope || (scope.isAttentionItem ?? scope.isCurrentItem)(item.itemId))
 }
 
 /** Host scope excludes ended-generation work from Working/attention. */

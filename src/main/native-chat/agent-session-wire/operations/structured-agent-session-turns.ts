@@ -40,6 +40,7 @@ import './structured-agent-session-turns-cancel'
 
 export type AgentSessionTurnContext = {
   sessionId: string
+  operationId?: string
   journal: AgentSessionJournal
   fence: number
   /** Read fresh: child exit may change current work mid-operation. */
@@ -69,6 +70,10 @@ export type AgentSessionOperationReceipt = JournalOperationReceipt & {
 export type TurnOutcome<TValue> =
   | { ok: true; value: TValue }
   | { ok: false; refusal: AgentSessionWireRefusal }
+
+export type StructuredAgentSessionSendAcceptance = (
+  apply: () => Promise<TurnOutcome<AgentSessionSendResult>>
+) => Promise<TurnOutcome<AgentSessionSendResult>>
 
 function invalid(
   reason: AgentSessionRefusalReason<'agent_session_operation_invalid'>,

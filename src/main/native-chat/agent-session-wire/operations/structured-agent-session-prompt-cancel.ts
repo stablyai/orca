@@ -135,7 +135,11 @@ async function dismissPrompt(
         }
       },
       // Revision must preserve the prompt’s original turn.
-      { fence: ctx.fence, turnScope: contextStructuredAgentSessionCurrentWork(ctx).turnScope() },
+      {
+        ...item,
+        fence: ctx.fence,
+        turnScope: item.turnScope ?? contextStructuredAgentSessionCurrentWork(ctx).turnScope()
+      },
       receipt
     )
     committed = true

@@ -1,3 +1,4 @@
+import type { JournalOperationReceipt } from '../../../native-chat/agent-session-journal/writing/journal-row-writer'
 import type { AgentSessionStoreState } from './agent-session-store-state'
 import type { AgentSessionStoreTransactions } from './agent-session-store-transactions'
 
@@ -19,6 +20,25 @@ export abstract class AgentSessionRecordPublication {
     this.firstRecordListeners.add(listener)
     return () => this.firstRecordListeners.delete(listener)
   }
+
+  onAcceptedSend = (listener: (sessionId: string) => void): (() => void) => {
+    this.transactions.acceptedSendListeners.add(listener)
+    return () => {
+      this.transactions.acceptedSendListeners.delete(listener)
+    }
+  }
+
+  admittedSendCount = (sessionId: string) => this.transactions.admittedSendCount(sessionId)
+
+  commitOperationReceipt = (receipt: JournalOperationReceipt) =>
+    this.transactions.commitReceipt(receipt)
+
+  readCommandReceipt = (...args: Parameters<AgentSessionStoreTransactions['readCommandReceipt']>) =>
+    this.transactions.readCommandReceipt(...args)
+
+  discoverTaggedSendReceipts: AgentSessionStoreTransactions['discoverTaggedSendReceipts'] = (
+    targets
+  ) => this.transactions.discoverTaggedSendReceipts(targets)
 
   /** Serialize draft mutations; publish to readers only after row commit. */
   protected transact = async <T>(

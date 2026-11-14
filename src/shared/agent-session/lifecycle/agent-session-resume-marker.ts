@@ -50,6 +50,20 @@ export type AgentSessionResumeMarker = {
   activity?: AgentSessionRestartActivity
 }
 
+export function agentSessionResumeWitnessKey(marker: AgentSessionResumeMarker): string {
+  return JSON.stringify([
+    marker.sessionId,
+    marker.teardownId,
+    marker.recordedAt,
+    marker.work.kind,
+    marker.work.id,
+    marker.providerHandleRoot,
+    marker.contextClearOperationId ?? null,
+    marker.journalCursor?.epoch ?? null,
+    marker.journalCursor?.sequence ?? null
+  ])
+}
+
 const MAX_FIELD_LENGTH = 512
 
 /** Bounded because a marker is read back from a file this process did not necessarily write. */

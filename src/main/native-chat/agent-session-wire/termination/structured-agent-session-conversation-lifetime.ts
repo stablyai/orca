@@ -1,6 +1,7 @@
 import {
   createStructuredAgentSessionStopStartingChild,
   cutClosingStructuredAgentSession,
+  closeDormantStructuredAttention,
   type StructuredAgentSessionConversationLifetimeHost
 } from './structured-agent-session-conversation-lifetime-host'
 import type { AgentSessionStartFailure } from '../startup/structured-agent-session-start-failure'
@@ -316,6 +317,9 @@ export function createStructuredAgentSessionConversationLifetime(
         readRefusals.forget(sessionId)
         if (deps().store.selectWritableRecord(sessionId).kind !== 'unreadable') {
           host.context().runtimeState.acquireAborts.abort(sessionId, 'closed while starting')
+        }
+        if (cause === 'user-close') {
+          await closeDormantStructuredAttention(host, sessionId)
         }
         await holdStopClose(sessionId, () => stopAgent(sessionId, { cause }))
       })

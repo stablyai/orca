@@ -1,3 +1,8 @@
+import {
+  emptyJournalPersonalStops,
+  rememberJournalPersonalStop,
+  type JournalPersonalStopFrontier
+} from '../context-epochs/journal-personal-stop-frontier'
 import { journalContextCursor } from '../context-epochs/journal-context-epoch'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
 import {
@@ -88,6 +93,10 @@ export type JournalReducerState = {
   derivedTurnScope: JournalDerivedTurnScope
   /** Acceptance survives visible-message rewind; zero means none in this epoch. */
   latestAcceptedTurnSequence: number
+  /** Captured intentional resource close; never saved as personal cancellation. */
+  quietTurnEnd?: { at: number; settling: boolean; turnId?: string }
+  /** Derived from committed Stop history, never encoded as an outcome field. */
+  personalStops: JournalPersonalStopFrontier
   queuePauseMarks: JournalQueuePauseMarks
   stoppedHistoryCarried: Map<string, readonly string[]>
   queuedHandOffPlaces: Map<
@@ -130,6 +139,7 @@ export function createJournalReducerState(
     appliedSettlementIds: new Set(),
     derivedTurnScope: new JournalDerivedTurnScope(),
     latestAcceptedTurnSequence: 0,
+    personalStops: emptyJournalPersonalStops(),
     queuePauseMarks: createJournalQueuePauseMarks(),
     stoppedHistoryCarried: new Map(),
     queuedHandOffPlaces: new Map(),
@@ -187,6 +197,8 @@ function applyJournalRowFacts(
   state.highestFence = Math.max(state.highestFence, row.fence)
   if (row.kind === 'epoch') {
     if (!marker5) {
+      state.quietTurnEnd = undefined
+      state.personalStops = emptyJournalPersonalStops(row.seq)
       state.contextBoundary = row.seq
       state.derivedTurnScope = new JournalDerivedTurnScope()
     }
@@ -224,6 +236,9 @@ function applyJournalRowFacts(
     return
   }
   if (isJournalStopOrResumeRow(row)) {
+    if (row.stopEvent) {
+      rememberJournalPersonalStop(state.personalStops, row.seq, row.stopEvent)
+    }
     foldJournalQueuePauseMark(state.queuePauseMarks, row)
     return
   }

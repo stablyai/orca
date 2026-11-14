@@ -37,13 +37,16 @@ export function endedUnseenMessageBody(body: AgentJournalItemBody): AgentJournal
 /** Settle abandoned calls/prompts; null end leaves calls to their provider, and turn rows to their writer. */
 export function terminalAgentJournalBody(
   body: AgentJournalItemBody,
-  end: AgentJournalRunningCallEnd | null
+  end: AgentJournalRunningCallEnd | null,
+  preservePrompts = false
 ): AgentJournalItemBody | null {
   if (body.kind === 'tool-call') {
     return body.state === 'running' && end ? endedRunningAgentJournalToolCall(body, end) : null
   }
   if (body.kind === 'approval' || body.kind === 'question') {
-    return body.resolution.state === 'pending' ? cancelledJournalPromptBody(body) : null
+    return !preservePrompts && body.resolution.state === 'pending'
+      ? cancelledJournalPromptBody(body)
+      : null
   }
   return null
 }

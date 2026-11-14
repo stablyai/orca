@@ -30,7 +30,7 @@ export function stopIsAPersons(reason: JournalStopEvent['reason']): boolean {
 
 type TurnEndState = Pick<
   JournalReducerState,
-  'items' | 'queuePauseMarks' | 'submissions' | 'aliases'
+  'items' | 'queuePauseMarks' | 'submissions' | 'aliases' | 'quietTurnEnd'
 >
 
 /** Accepted openers may precede their turn row; steers/folds into running turns open none. */
@@ -116,6 +116,20 @@ export function beginJournalStopSettle(
   return stop.settle
 }
 
+/** Intentional resource sleep is quiet without granting personal Stop authority over saved requests. */
+export function quietCloseDecidesTurn(
+  state: Pick<JournalReducerState, 'quietTurnEnd'>,
+  turnId: string,
+  endedAt?: number
+): boolean {
+  const quiet = state.quietTurnEnd
+  return (
+    !!quiet &&
+    (quiet.settling || quiet.turnId === turnId) &&
+    (endedAt === undefined || endedAt >= quiet.at)
+  )
+}
+
 /** Preserve provider verdicts and already-ended turns; otherwise apply the latest matching personal Stop. */
 export function turnEndAfterStop(
   state: TurnEndState,
@@ -130,7 +144,8 @@ export function turnEndAfterStop(
   if (previous && previous.state !== 'running' && previous.state !== 'unverifiable') {
     return body
   }
-  return stopEndsTurnAsCancellation(state, body.turnId, body.completedAt)
+  return stopEndsTurnAsCancellation(state, body.turnId, body.completedAt) ||
+    quietCloseDecidesTurn(state, body.turnId, body.completedAt)
     ? { ...body, outcome: 'cancellation' }
     : body
 }

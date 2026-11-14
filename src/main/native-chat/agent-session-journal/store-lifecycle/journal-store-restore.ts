@@ -1,3 +1,4 @@
+import type { JournalRestoreEvidence } from '../replay/journal-restore-evidence'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { JournalEpochController } from '../context-epochs/journal-epoch-controller'
 import { restoreJournal } from '../replay/journal-open'
@@ -9,7 +10,7 @@ import { AgentSessionJournalError } from '../writing/journal-write-guards'
 export async function restoreJournalStore(
   host: JournalStoreHost,
   collaborators: { epochController: JournalEpochController }
-): Promise<void> {
+): Promise<JournalRestoreEvidence | undefined> {
   const database = host.database()
   if (database.readOnly) {
     throw journalOpenRefusalError(
@@ -20,8 +21,8 @@ export async function restoreJournalStore(
     )
   }
   // Unpaced and charged to no maintenance budget: background work alone pays its duty cycle.
-  const loaded = restoreJournal(database.db, host.identity.sessionId)
-  return openJournalStoreState({
+  const loaded = restoreJournal(database.db, host.identity.sessionId, true)
+  await openJournalStoreState({
     sessionId: host.identity.sessionId,
     replay: () => loaded,
     start: () =>
@@ -36,4 +37,5 @@ export async function restoreJournalStore(
       }),
     highestFence: () => host.state().highestFence
   })
+  return loaded?.recovery
 }

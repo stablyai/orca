@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process'
-import { appendFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { createInterface } from 'node:readline'
 import { setTimeout as delay } from 'node:timers/promises'
 
@@ -31,7 +31,8 @@ const report = {
 }
 const writeReport = () => {
   if (reportPath) {
-    writeFileSync(reportPath, JSON.stringify(report))
+    writeFileSync(`${reportPath}.${process.pid}.tmp`, JSON.stringify(report))
+    renameSync(`${reportPath}.${process.pid}.tmp`, reportPath)
   }
   if (reportLogPath) {
     appendFileSync(reportLogPath, `${JSON.stringify(report)}\n`)
@@ -148,6 +149,12 @@ setTimeout(
 for (const step of scenario.steps) {
   if (step.emit) {
     emit(step.emit)
+  } else if (step.stdoutChunks) {
+    for (const chunk of step.stdoutChunks) {
+      await new Promise((resolve, reject) =>
+        process.stdout.write(Buffer.from(chunk), (error) => (error ? reject(error) : resolve()))
+      )
+    }
   } else if (step.emitTogether) {
     // One write, so the reader receives these frames in a single chunk.
     process.stdout.write(step.emitTogether.map((frame) => `${JSON.stringify(frame)}\n`).join(''))

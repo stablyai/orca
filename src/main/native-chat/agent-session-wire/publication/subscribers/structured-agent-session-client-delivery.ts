@@ -3,7 +3,10 @@ import { StructuredAgentSessionJournalObservers } from '../../observations/struc
 import type { StructuredAgentSessionConversations } from '../../host/structured-agent-session-conversations'
 import { StructuredAgentSessionSavedStatus } from '../../observations/structured-agent-session-saved-status'
 import { createStructuredAgentSessionHostRequestFailures } from '../../observations/structured-agent-session-host-request-failures'
-import { AT_REST_COMMANDS_READ_BUDGET_MS } from '../../options/at-rest-command-catalog'
+import {
+  readStructuredAgentSessionCommands,
+  readStructuredAgentSessionCommandsSettled
+} from '../../options/structured-agent-session-command-reading'
 import type { AgentSessionStatusSummary } from '../../../../../shared/agent-session/agent-session-wire'
 import { AgentSessionRefusalError } from '../../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentChildWorkEvidence } from '../../../../../shared/agent-status/child-work/agent-status-child-work-evidence'
@@ -128,49 +131,11 @@ export class StructuredAgentSessionClientDelivery {
       ) ?? (() => undefined)
   }
 
-  readCommands(sessionId: string, commandsOnRequest = false) {
-    const { adapter, store } = this.deps()
-    const live = adapter.readCommands?.(sessionId)
-    if (live !== undefined) {
-      return live
-    }
-    const record = store.getRecord(sessionId)
-    return record
-      ? commandsOnRequest
-        ? adapter.atRestCommands?.snapshot?.(record).commands
-        : adapter.atRestCommands?.read(record)
-      : undefined
-  }
+  readCommands = (sessionId: string, commandsOnRequest = false) =>
+    readStructuredAgentSessionCommands(this.deps(), sessionId, commandsOnRequest)
 
-  /** Wait briefly for scans because one-shot menu readers do not receive later updates. */
-  async readCommandsSettled(sessionId: string, commandsOnRequest = false) {
-    const { adapter, store } = this.deps()
-    const live = adapter.readCommands?.(sessionId)
-    const record = store.getRecord(sessionId)
-    if (live !== undefined || !record) {
-      return { commands: live, ...(commandsOnRequest ? { commandsPending: false } : {}) }
-    }
-    const commands = adapter.atRestCommands?.settled
-      ? await adapter.atRestCommands.settled(
-          record,
-          AT_REST_COMMANDS_READ_BUDGET_MS,
-          commandsOnRequest
-        )
-      : adapter.atRestCommands?.read(record)
-    const current = adapter.readCommands?.(sessionId)
-    const snapshot = commandsOnRequest ? adapter.atRestCommands?.snapshot?.(record) : undefined
-    if (current === undefined && snapshot?.retryableFailure) {
-      throw new Error('Command discovery unavailable')
-    }
-    return {
-      commands: current ?? (snapshot ? snapshot.commands : commands),
-      ...(commandsOnRequest
-        ? {
-            commandsPending: current === undefined && (snapshot?.commandsPending ?? false)
-          }
-        : {})
-    }
-  }
+  readCommandsSettled = (sessionId: string, commandsOnRequest = false) =>
+    readStructuredAgentSessionCommandsSettled(this.deps(), sessionId, commandsOnRequest)
 
   readUsageLimitCut = (id: string) => this.statusFeed.journalProjection(id)?.usageLimitCut ?? null
 
@@ -206,6 +171,8 @@ export class StructuredAgentSessionClientDelivery {
     this.statusFeed.readChildWork(sessionId)
 
   childWorkOpen = (sessionId: string): boolean => this.statusFeed.childWorkOpen(sessionId)
+  childWorkAutonomous = (sessionId: string): boolean =>
+    this.statusFeed.childWorkAutonomous(sessionId)
 
   captureChildWorkStops = (
     sessionId: string,

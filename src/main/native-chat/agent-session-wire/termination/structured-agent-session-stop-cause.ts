@@ -6,6 +6,7 @@ export type StructuredAgentSessionChildEndCause =
   | 'host-stop'
   | 'exit'
   | 'attach-failed'
+  | 'workspace-sleep'
   | 'evict'
 
 /** Persisted JournalStopEvent reasons; never rename arms. */

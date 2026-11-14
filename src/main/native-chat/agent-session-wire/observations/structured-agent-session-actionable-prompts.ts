@@ -1,3 +1,4 @@
+import { isAgentSessionContextClear } from '../../../../shared/agent-session/agent-session-context-clear'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type {
@@ -12,6 +13,8 @@ export type PromptProjection = {
   fence: number | null
   items: AgentJournalRenderItem[]
   dependencies: Set<string>
+  attentionKey?: string
+  personalStopEvidence?: object
 }
 
 export function reusePromptProjection(
@@ -34,13 +37,17 @@ export function reusePromptProjection(
     ): boolean =>
       prior.dependencies.has(change.itemId) ||
       (change.kind === 'item' &&
-        (change.body.kind === 'approval' || change.body.kind === 'question'))
+        (change.body.kind === 'approval' ||
+          change.body.kind === 'question' ||
+          isAgentSessionContextClear(change.body)))
     const outcomeTouches = (itemId: string): boolean => {
       if (!journal.item || prior.dependencies.has(itemId)) {
         return true
       }
       const body = journal.item(itemId)?.body
-      return body?.kind === 'approval' || body?.kind === 'question'
+      return (
+        body?.kind === 'approval' || body?.kind === 'question' || isAgentSessionContextClear(body)
+      )
     }
     if (
       delta.ok &&

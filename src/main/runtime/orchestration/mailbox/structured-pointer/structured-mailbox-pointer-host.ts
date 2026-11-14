@@ -65,7 +65,7 @@ export async function readStructuredMailAdmitFacts(
     fenced: (host.deps.store.getConversation(sessionId)?.currentFence ?? null) !== null,
     refusal: block ? block.refusal.message : null,
     // Agent mail queues behind a prompt the person must answer first (shouldQueueStructuredAgentSessionSend).
-    behindPrompt: host.currentWork(sessionId)?.hasActionablePrompt() === true
+    behindPrompt: (host.currentWork(sessionId)?.attentionPrompts().length ?? 0) > 0
   }
 }
 

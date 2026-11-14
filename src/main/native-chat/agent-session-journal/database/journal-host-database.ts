@@ -11,6 +11,7 @@ import {
 import { journalOpenRefusalError } from '../replay/journal-open-failure'
 import { JournalCheckpointOwner } from './journal-checkpoint-owner'
 import { AgentSessionJournalError } from '../writing/journal-write-guards'
+import { JournalHistoryAccess } from './journal-history-access'
 
 const JOURNAL_DATABASE_FILE = 'agent-session-journal.db'
 
@@ -24,6 +25,7 @@ export class JournalHostDatabase {
   private stranded = false
   private readonly checkpoint: JournalCheckpointOwner | undefined
   private closing: Promise<void> | undefined
+  readonly history: JournalHistoryAccess | undefined
   /** Identifies the open transaction; drafts staged in a rolled-back one must not be built on. */
   transactionNumber = 0
 
@@ -34,6 +36,7 @@ export class JournalHostDatabase {
     this.connection = opened.db
     this.readOnly = opened.readOnly
     if (!this.readOnly) {
+      this.history = new JournalHistoryAccess(this, journalDatabasePath(stateDirectory))
       this.checkpoint = new JournalCheckpointOwner(opened.db, journalDatabasePath(stateDirectory))
     }
   }
@@ -114,6 +117,7 @@ export class JournalHostDatabase {
   }
 
   private async finishClose(): Promise<void> {
+    await this.history?.close()
     await this.checkpoint?.close()
     this.connection?.close()
     this.connection = null

@@ -1,3 +1,4 @@
+import * as stopEvidence from './context-epochs/journal-personal-stop'
 import { recoverJournalQueue } from './queued-messages/journal-unsent-send-hold'
 import { journalInputSourceBody } from './input-order/journal-input-source'
 import { journalInputOrder } from './input-order/journal-input-order'
@@ -30,16 +31,7 @@ import { resolveJournalItemId } from './projection/journal-item-echo'
 
 import { journalTombstoneRowBuilder } from './writing/journal-row-builders'
 import type * as contracts from './journal-store-contracts'
-import {
-  journalQueueResumeRowBuilder,
-  journalQueueReopenRowBuilder,
-  journalStopEventRowBuilder
-} from './context-epochs/journal-stop-and-resume-rows'
-import type {
-  AgentJournalEpochReason,
-  JournalStopEvent,
-  JournalRow
-} from './durable-rows/journal-row-schema'
+import type { AgentJournalEpochReason, JournalRow } from './durable-rows/journal-row-schema'
 import type { JournalOperationReceipt } from './writing/journal-row-writer'
 import { JournalWriteQueue } from './writing/journal-write-queue'
 import {
@@ -59,7 +51,6 @@ import * as journalContext from './context-epochs/journal-context-cursor'
 type JournalCollaborators = ReturnType<typeof createJournalStoreCollaborators>
 
 export class AgentSessionJournal {
-  private readonly goalAttachments: JournalCollaborators['goalAttachments']
   private readonly identity: AgentSessionJournalIdentity
   private readonly database: JournalHostDatabase
 
@@ -69,13 +60,11 @@ export class AgentSessionJournal {
   private reopenUnmarked: AgentJournalCursor | null = null
   private onCommitted: Parameters<AgentSessionJournal['observeCommits']>[0] | null = null
   private readonly queue: JournalWriteQueue
-  private readonly rowWriter: JournalCollaborators['rowWriter']
   private readonly epochController: JournalCollaborators['epochController']
   private readonly itemAppender: JournalCollaborators['itemAppender']
   private readonly lifecycleBatchAppender: JournalCollaborators['lifecycleBatchAppender']
   private readonly submissionWriter: JournalCollaborators['submissionWriter']
-  private readonly stepWriter: JournalCollaborators['stepWriter']
-  private readonly restore: () => Promise<void>
+  private readonly restoration: JournalCollaborators
   private openingQueueConversion = true
   private readonly projection: JournalWriteProjection
   /** Queued cards never count as owed work. */
@@ -122,19 +111,16 @@ export class AgentSessionJournal {
       },
       notifyCommitted: () => this.onCommitted?.([]),
       journal: () => this,
-      enqueue: (build, receipt) => this.rowWriter.enqueue(build, receipt)
+      enqueue: (build, receipt) => this.restoration.rowWriter.enqueue(build, receipt)
     })
-    this.rowWriter = collaborators.rowWriter
     this.epochController = collaborators.epochController
-    this.goalAttachments = collaborators.goalAttachments
     this.itemAppender = collaborators.itemAppender
     this.lifecycleBatchAppender = collaborators.lifecycleBatchAppender
     this.submissionWriter = collaborators.submissionWriter
-    this.stepWriter = collaborators.stepWriter
     this.queuedMessages = collaborators.queuedMessages
     this.stopMarks = collaborators.stopMarks
     this.stops = collaborators.stops
-    this.restore = collaborators.restore
+    this.restoration = collaborators
     this.context = collaborators.context
   }
 
@@ -161,15 +147,19 @@ export class AgentSessionJournal {
   }
 
   async open(): Promise<void> {
-    await this.restore()
+    await this.restoration.restore()
     this.openedThrough = { epoch: this.state.epoch, sequence: this.state.lastSequence }
     journalInputOrder(this.state).markOpeningRecovery()
     await recoverJournalQueue(this, this.database.db)
     this.openingQueueConversion = false
   }
 
+  restartEvidenceReady = (signal?: AbortSignal): Promise<boolean> =>
+    this.restoration.recoveryReady(signal)
+
   /** Refuse future writes and drain admitted ones; the host retains database ownership. */
   close(): Promise<void> {
+    this.restoration.cancelRecovery()
     this.queuedMessages.editLeases.dispose()
     this.queue.markClosed()
     return this.queue.drain()
@@ -307,7 +297,7 @@ export class AgentSessionJournal {
     receipt?: JournalOperationReceipt
   ): Promise<AgentJournalCursor> {
     const itemId = agentJournalItemKey(identity)
-    return this.rowWriter.append(
+    return this.restoration.rowWriter.append(
       journalTombstoneRowBuilder(() => this.state, itemId, fence),
       receipt
     )
@@ -320,26 +310,31 @@ export class AgentSessionJournal {
     return this.appendTombstone(
       identity,
       options,
-      this.goalAttachments.withdraw(agentJournalItemKey(identity))
+      this.restoration.goalAttachments.withdraw(agentJournalItemKey(identity))
     )
   }
 
   keepGoalAttachments(identity: AgentJournalItemIdentity): Promise<void> {
-    return this.queue.serialize(() => this.goalAttachments.keep(agentJournalItemKey(identity)))
+    return this.queue.serialize(() =>
+      this.restoration.goalAttachments.keep(agentJournalItemKey(identity))
+    )
   }
 
-  appendStopEvent(event: Omit<JournalStopEvent, 'at'>, fence: number): Promise<AgentJournalCursor> {
-    return this.rowWriter.append(journalStopEventRowBuilder(() => this.state, event, fence))
+  get personalStopEvidence(): object {
+    return this.state.personalStops
   }
 
-  appendQueueResume(fence: number, receipt?: JournalOperationReceipt): Promise<AgentJournalCursor> {
-    const build = journalQueueResumeRowBuilder(() => this.state, fence)
-    return this.rowWriter.append(build, receipt)
-  }
+  recoveryPersonalStopAfter = (
+    after: Parameters<typeof stopEvidence.journalPersonalStopEvidenceAfter>[2]
+  ) => stopEvidence.loadedJournalPersonalStopEvidenceAfter(this.database.db, this.state, after)
 
-  appendQueueReopen(fence: number, since?: number): Promise<AgentJournalCursor> {
-    return this.rowWriter.append(journalQueueReopenRowBuilder(() => this.state, fence, since))
-  }
+  personalStopAfter = (
+    after: Parameters<typeof stopEvidence.journalPersonalStopEvidenceAfter>[2]
+  ) => stopEvidence.memoryJournalPersonalStopEvidenceAfter(this.state, after)
+
+  appendStopEvent: typeof this.stops.appendEvent = (...args) => this.stops.appendEvent(...args)
+  appendQueueResume: typeof this.stops.appendResume = (...args) => this.stops.appendResume(...args)
+  appendQueueReopen: typeof this.stops.appendReopen = (...args) => this.stops.appendReopen(...args)
 
   /** Mark preexisting cards; failed writes retain a conservative reopenFloor and throw. */
   async markQueueReopen(fence: number, since?: number): Promise<void> {
@@ -357,11 +352,11 @@ export class AgentSessionJournal {
   appendPlannedLifecycleBatch = (input: contracts.JournalPlannedLifecycleBatchInput) =>
     this.lifecycleBatchAppender.appendPlanned(input)
 
-  appendSteps: typeof this.stepWriter.append = (steps) => this.stepWriter.append(steps)
+  appendSteps: typeof this.restoration.stepWriter.append = (steps) =>
+    this.restoration.stepWriter.append(steps)
 
-  appendSubmission(...args: Parameters<typeof this.submissionWriter.append>) {
-    return this.submissionWriter.append(...args)
-  }
+  appendSubmission = (...args: Parameters<typeof this.submissionWriter.append>) =>
+    this.submissionWriter.append(...args)
 
   resolveDispatch(...args: Parameters<typeof this.submissionWriter.resolveDispatch>) {
     return this.submissionWriter.resolveDispatch(...args)

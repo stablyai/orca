@@ -332,21 +332,6 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
   submissionReceipt = (sessionId: string) =>
     this.transactions.receipt(() => {}, { submissionSessionId: sessionId })
 
-  onAcceptedSend = (listener: (sessionId: string) => void): (() => void) => {
-    this.transactions.acceptedSendListeners.add(listener)
-    return () => {
-      this.transactions.acceptedSendListeners.delete(listener)
-    }
-  }
-
-  admittedSendCount = (sessionId: string) => this.transactions.admittedSendCount(sessionId)
-
-  commitOperationReceipt = (receipt: JournalOperationReceipt) =>
-    this.transactions.commitReceipt(receipt)
-
-  readCommandReceipt = (...args: Parameters<AgentSessionStoreTransactions['readCommandReceipt']>) =>
-    this.transactions.readCommandReceipt(...args)
-
   replaceSessionOptions = (args: AgentSessionOptionsReplacement): Promise<AgentSessionRecord> =>
     this.mutate(args.sessionId, (record) => replaceAgentSessionRecordOptions(record, args))
 

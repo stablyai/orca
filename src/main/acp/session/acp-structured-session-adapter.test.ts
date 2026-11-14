@@ -198,6 +198,88 @@ describe('ACP structured session adapter: requests a Stop cancels', () => {
 })
 
 describe('ACP structured session adapter: close and exit', () => {
+  it.each(['disposal', 'withdrawal'] as const)(
+    'keeps failed answer commits distinct from %s',
+    async (ending) => {
+      const rig = await openAcpAdapterRig()
+      await rig.acquire()
+      const { agent } = rig.child()
+      const permission = agent.request(8, 'session/request_permission', {
+        sessionId: PROVIDER_SESSION,
+        toolCall: { toolCallId: 'call-8', title: 'Write file' },
+        options: [{ optionId: 'allow-once', name: 'Allow', kind: 'allow_once' }]
+      })
+      void permission.catch(() => {})
+      const row = await waitFor(async () => {
+        const found = (await rig.rig.rows()).find((item) => item.body.kind === 'approval')
+        expect(found).toBeDefined()
+        return found!
+      })
+      await expect(
+        rig.adapter.answerPrompt({
+          sessionId: SESSION,
+          itemId: row.itemId,
+          kind: 'approval',
+          response: { kind: 'option', optionId: 'allow-once' },
+          fence: 1,
+          commit: async () => {
+            if (ending === 'disposal') {
+              await rig.adapter.closeSession(SESSION)
+            } else {
+              agent.notify('$/cancel_request', { requestId: 8 })
+              expect(await permission).toMatchObject({
+                result: { outcome: { outcome: 'cancelled' } }
+              })
+            }
+            throw new Error('answer could not be saved')
+          }
+        })
+      ).rejects.toThrow('answer could not be saved')
+      await rig.settle()
+      expect((await rig.rig.rows()).find((item) => item.itemId === row.itemId)?.body).toMatchObject(
+        {
+          resolution: { state: ending === 'disposal' ? 'pending' : 'cancelled' }
+        }
+      )
+    }
+  )
+
+  it('retains a pending permission when closing its provider instead of cancelling the turn', async () => {
+    const rig = await openAcpAdapterRig()
+    await rig.acquire()
+    await send(rig, 'send-1')
+    await rig.frame('session/prompt')
+    void rig
+      .child()
+      .agent.request(7, 'session/request_permission', {
+        sessionId: PROVIDER_SESSION,
+        toolCall: { toolCallId: 'call-1', title: 'Write file' },
+        options: [{ optionId: 'allow-once', name: 'Allow', kind: 'allow_once' }]
+      })
+      .catch(() => {})
+    await waitFor(async () =>
+      expect(await rig.rig.rows()).toContainEqual(
+        expect.objectContaining({
+          body: expect.objectContaining({
+            kind: 'approval',
+            resolution: expect.objectContaining({ state: 'pending' })
+          })
+        })
+      )
+    )
+    expect(await rig.adapter.closeSession(SESSION)).toBe(true)
+    await rig.settle()
+    expect(await rig.rig.rows()).toContainEqual(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          kind: 'approval',
+          resolution: expect.objectContaining({ state: 'pending' })
+        })
+      })
+    )
+    expect(rig.sent('session/cancel')).toEqual([])
+  })
+
   it('ends the session on an unexpected exit: held sends rejected, the running one unknown', async () => {
     const rig = await openAcpAdapterRig()
     await rig.acquire()

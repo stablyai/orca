@@ -1,3 +1,4 @@
+import type { SqliteRow } from '../../../sqlite/sqlite-statement'
 import type Database from '../../../sqlite/sync-database'
 import { journalPragmaNumber } from '../database/journal-database'
 import { JOURNAL_DB_SCHEMA_VERSION } from '../database/journal-database-schema'
@@ -15,6 +16,65 @@ export type CommandReceiptRead =
   | { verdict: 'unreadable'; scope: CommandReceiptScope; operationId: string }
 
 export type ExistingCommandReceipt = Exclude<CommandReceiptRead, { verdict: 'absent' }>
+
+export type CommandReceiptDiscovery =
+  | { verdict: 'readable'; attempts: ExistingCommandReceipt[] }
+  | { verdict: 'unreadable' }
+
+/** Scope legacy discovery in SQL before decoding any saved result. */
+export function discoverTaggedSendReceipts(
+  db: Database.Database,
+  targets: readonly { sessionId: string; tag: string }[]
+): Map<string, CommandReceiptDiscovery> {
+  const found = new Map<string, CommandReceiptDiscovery>()
+  const unreadable = (): Map<string, CommandReceiptDiscovery> =>
+    new Map(targets.map((target) => [target.sessionId, { verdict: 'unreadable' }]))
+  let matching: ReturnType<Database.Database['prepare']>
+  let competing: ReturnType<Database.Database['prepare']>
+  try {
+    if (
+      !db
+        .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?")
+        .get('agent_session_command_receipts')
+    ) {
+      return unreadable()
+    }
+    matching = db.prepare(`SELECT DISTINCT operation_id FROM agent_session_command_receipts
+      WHERE session_id = ? AND method = 'agentSession.send'
+        AND operation_id >= ? AND operation_id < ? AND substr(operation_id, 15, 16) = ?
+      ORDER BY operation_id`)
+    competing = db.prepare(`${SELECT_RECEIPT} WHERE operation_id = ? ORDER BY rowid`)
+  } catch (error) {
+    if (unreadableReceiptError(error)) {
+      return unreadable()
+    }
+    throw error
+  }
+  for (const target of targets) {
+    try {
+      const rows = matching.all(target.sessionId, '0000000000000-', '9999999999999.', target.tag)
+      const attempts: ExistingCommandReceipt[] = []
+      for (const row of rows) {
+        const operationId = String(row.operation_id)
+        const scope = { kind: 'global' } as const
+        const candidates = decodeCommandReceiptRows(competing.all(operationId), scope, operationId)
+        if (candidates.verdict === 'unreadable') {
+          attempts.push(candidates)
+        } else if (candidates.receipts[0]) {
+          attempts.push({ verdict: 'readable', receipt: candidates.receipts[0] })
+        }
+      }
+      found.set(target.sessionId, { verdict: 'readable', attempts })
+    } catch (error) {
+      if (unreadableReceiptError(error)) {
+        found.set(target.sessionId, { verdict: 'unreadable' })
+      } else {
+        throw error
+      }
+    }
+  }
+  return found
+}
 
 export type CommandReceiptInsert =
   | { inserted: true }
@@ -65,6 +125,33 @@ function readCommandReceiptCandidates(
             .prepare(`${SELECT_RECEIPT} WHERE caller_key = ? AND operation_id = ?`)
             .all(scope.callerKey, operationId)
         : db.prepare(`${SELECT_RECEIPT} WHERE operation_id = ? ORDER BY rowid`).all(operationId)
+    return decodeCommandReceiptRows(rows, scope, operationId)
+  } catch (error) {
+    if (unreadableReceiptError(error)) {
+      return unreadable
+    }
+    throw error
+  }
+}
+
+function unreadableReceiptError(error: unknown): boolean {
+  return (
+    error instanceof RangeError ||
+    error instanceof SyntaxError ||
+    (error instanceof Error &&
+      'code' in error &&
+      error.code === 'ERR_SQLITE_ERROR' &&
+      /^no such (?:column|table):/.test(error.message))
+  )
+}
+
+function decodeCommandReceiptRows(
+  rows: readonly SqliteRow[],
+  scope: CommandReceiptScope,
+  operationId: string
+): CommandReceiptCandidates {
+  const unreadable = { verdict: 'unreadable', scope, operationId } as const
+  try {
     const receipts: CommandReceipt[] = []
     for (const row of rows) {
       if (
@@ -92,14 +179,7 @@ function readCommandReceiptCandidates(
     }
     return { verdict: 'readable', receipts }
   } catch (error) {
-    if (
-      error instanceof RangeError ||
-      error instanceof SyntaxError ||
-      (error instanceof Error &&
-        'code' in error &&
-        error.code === 'ERR_SQLITE_ERROR' &&
-        /^no such (?:column|table):/.test(error.message))
-    ) {
+    if (unreadableReceiptError(error)) {
       return unreadable
     }
     throw error

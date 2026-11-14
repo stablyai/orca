@@ -137,23 +137,43 @@ function hasUnreconciledLease(store: AgentSessionRecordStore, sessionId?: string
 
 /** Keep lost-transport cleanup independent of history; reader bookkeeping never grants ownership. */
 export function createStartupRecovery(
-  deps: { store: Pick<AgentSessionRecordStore, 'getRecord'>; logger: StructuredAgentSessionLogger },
+  deps: {
+    store: Pick<AgentSessionRecordStore, 'getRecord' | 'listConversations'>
+    logger: StructuredAgentSessionLogger
+  },
   reconcileLeases: (sessionId?: string) => Promise<AgentSessionWireRefusal | null>,
-  runtime: { resolveRecovery: (sessionId: string) => Promise<unknown> }
+  runtime: { resolveRecovery: (sessionId: string) => Promise<unknown> },
+  openConversation: (sessionId: string) => Promise<unknown>
 ): {
   reconcileRestartLeases: () => Promise<void>
   recover: (ids: readonly string[]) => Promise<void>
 } {
   const failures = reportEachFailureOnce(deps.logger)
   const reconcile = createReaderReconcile(reconcileLeases, failures)
+  const openSavedAttention = async (ids?: readonly string[]) => {
+    const selected = ids ? new Set(ids) : null
+    for (const record of deps.store.listConversations()) {
+      if (record.lastTurn?.state === 'open' && (!selected || selected.has(record.sessionId))) {
+        await openConversation(record.sessionId).catch((error: unknown) =>
+          deps.logger.warn('opening saved chat attention failed', {
+            scope: 'saved-attention-open',
+            sessionId: record.sessionId,
+            error
+          })
+        )
+      }
+    }
+  }
   return {
     reconcileRestartLeases: async () => {
       await reconcile()
+      await openSavedAttention()
     },
     recover: async (ids) => {
       if (!ids.length || !(await reconcile())) {
         return
       }
+      await openSavedAttention(ids)
       let settled = true
       await mapWithConcurrency(ids, 4, async (id) => {
         if (!settled || deps.store.getRecord(id)?.lease.handoffStage !== 'recovering') {

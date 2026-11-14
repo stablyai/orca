@@ -1,9 +1,9 @@
-import { isPlanApprovalSubject } from '../../../../shared/agent-session/agent-session-approval-subject'
 import type { AgentSessionPromptResult } from '../../../../shared/agent-session/agent-session-wire'
 import { refusingNewerOrcaJournal } from '../../agent-session-journal/replay/journal-open-failure'
 import type { MutationPlan } from './structured-agent-session-mutation-plans'
 import {
   performPrompt,
+  promptAnswerInteractionMode,
   acceptedPromptAnswer,
   promptAnswerReceipt,
   promptRowAnswer,
@@ -22,22 +22,14 @@ export function promptPlan(
       optionId: params.optionId,
       answers: params.answers
     },
+    conversationWrite: true,
     // Retain the resolved or previously recorded prompt answer in the receipt.
     commandReceipt: {
       result: (row) => {
         const body = row?.kind === 'item' ? row.body : undefined
-        const choice =
-          body?.kind === 'approval' &&
-          body.resolution.state === 'resolved' &&
-          isPlanApprovalSubject(body.subject)
-            ? body.resolution.selectedOptionId
-            : undefined
-        planChoice =
-          choice === 'allow' || choice === 'allowForSession'
-            ? 'default'
-            : choice === 'deny'
-              ? 'plan'
-              : undefined
+        planChoice = promptAnswerInteractionMode(
+          body?.kind === 'question' || body?.kind === 'approval' ? body : undefined
+        )
         return promptAnswerReceipt(promptRowAnswer(row))
       },
       unwritten: (value) => promptAnswerReceipt(value)
@@ -53,7 +45,9 @@ export function promptPlan(
       }
       return { ...record, options: { ...record.options, interactionMode: planChoice } }
     },
-    run: (ctx) => refusingNewerOrcaJournal(performPrompt(ctx, params)),
+    run: (ctx) => {
+      return refusingNewerOrcaJournal(performPrompt(ctx, params))
+    },
     replay: (_ctx, _outcome, receipt) => acceptedPromptAnswer(receipt)
   }
 }

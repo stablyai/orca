@@ -7,7 +7,7 @@ import { holdClosedStructuredAgentSessionSends } from '../termination/structured
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import {
   openStructuredAgentSessionConversation,
-  resettleOpenStructuredAgentSessionConversation,
+  observeOpenStructuredAgentSessionDeath,
   type OpenedStructuredAgentSessionConversation,
   type StructuredAgentSessionConversationOpenOptions
 } from '../host/structured-agent-session-conversation-open'
@@ -168,7 +168,9 @@ export function createStructuredAgentSessionConversationDelivery(input: {
     closeWhatTheUserClosed: async (sessionId) => {
       const session = sessions.get(sessionId)
       const ended = session?.lastEndedChild
-      return !session || session.child || ended?.cause !== 'user-close'
+      return !session ||
+        session.child ||
+        (ended?.cause !== 'user-close' && ended?.cause !== 'workspace-sleep')
         ? true
         : holdClosedStructuredAgentSessionSends(deps, sessionId, session.journal, {
             mark: 'settled',
@@ -273,25 +275,11 @@ export function createStructuredAgentSessionConversationDelivery(input: {
         })
       })
   }
-  // Queue death-proof revisions without awaiting: the writer may already hold session serialization.
-  const stopResettling = deps.store.onDeathEvidence((sessionId) => {
-    const session = sessions.get(sessionId)
-    // User-close retires its handle; the next open can derive proof.
-    if (session && session.child?.close?.cause !== 'user-close') {
-      void input
-        .trackStart(
-          input.serialize(sessionId, () =>
-            resettleOpenStructuredAgentSessionConversation(deps, sessionId, sessions.get(sessionId))
-          )
-        )
-        .catch((error: unknown) =>
-          deps.logger.warn('resettling an open chat after its owner died failed', {
-            scope: 'death-evidence-resettle',
-            sessionId,
-            error
-          })
-        )
-    }
+  const stopResettling = observeOpenStructuredAgentSessionDeath({
+    deps,
+    sessions,
+    trackStart: input.trackStart,
+    serialize: input.serialize
   })
   return {
     loop,

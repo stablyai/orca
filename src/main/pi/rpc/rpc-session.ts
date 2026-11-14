@@ -216,7 +216,7 @@ export class PiRpcSession {
 
   async close(requested = true): ReturnType<PiRpcConnection['close']> {
     this.requestedClose ||= requested
-    this.dialogs.cancelAll()
+    this.dialogs.close()
     const result = await this.connection.close()
     if (result.killDelivered && result.root !== 'exited') {
       await this.exit(new Error('Pi writer killed'))

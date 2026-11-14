@@ -28,7 +28,8 @@ export class PiRpcDialogCallbacks {
 
   /** The child exited: its dialogs and any probe awaiting an answer can never be answered. */
   close(): void {
-    this.cancelAll()
+    this.pending.clear()
+    this.pendingBytes = 0
     this.backgroundWork.end()
   }
 

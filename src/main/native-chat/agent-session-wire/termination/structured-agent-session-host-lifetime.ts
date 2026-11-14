@@ -45,6 +45,7 @@ export type StructuredAgentSessionLifetimeContext = {
   runtimeState: StructuredAgentSessionHostRuntimeState
   sessions: Map<string, StructuredAgentSessionHostSession>
   now: () => number
+  hasUnacceptedRecovery?: (sessionId: string) => boolean
   publishStatus?: (sessionId: string) => void
   generationEnded?: (sessionId: string) => void
   wakeDelivery?: (sessionId: string) => void
@@ -145,7 +146,11 @@ export async function stopStructuredAgentSessionAgentUnderSerialize(
     // Repeated same-cause closes include newer queued work and rebind what shutdown cuts.
     child.close.requestedAt = session.journal.cursor()
     child.close.recorded = child.close.recorded.then((settle) =>
-      settle ? session.journal.stopMarks.beginSettle() : null
+      settle
+        ? cause === 'workspace-sleep'
+          ? session.journal.stopMarks.beginQuietClose(context.now(), settle.turnId ?? null)
+          : session.journal.stopMarks.beginSettle()
+        : null
     )
   }
   const { close } = child

@@ -17,6 +17,7 @@ export function mutationTurnContext<TValue>(
   const persistedOptions = request.store.getRecord(sessionId)?.options
   return {
     sessionId,
+    operationId: request.envelope.clientOperationId,
     journal,
     fence,
     ...(request.currentWork ? { currentWork: request.currentWork } : {}),

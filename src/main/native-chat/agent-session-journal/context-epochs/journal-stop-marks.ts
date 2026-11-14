@@ -3,6 +3,7 @@ import {
   beginJournalStopSettle,
   latestAcceptedSendUnopened,
   personStopDecidesTurn,
+  quietCloseDecidesTurn,
   type JournalLatestStop
 } from './journal-stop-turn-end'
 import type {
@@ -42,6 +43,17 @@ export class JournalStopMarks {
 
   personStopDecides(turnId: string | null, endedAt?: number): boolean {
     return personStopDecidesTurn(this.deps.state(), turnId, endedAt)
+  }
+
+  quietCloseDecides(turnId: string, endedAt?: number): boolean {
+    return quietCloseDecidesTurn(this.deps.state(), turnId, endedAt)
+  }
+
+  beginQuietClose(at: number, turnId: string | null): JournalStopSettle {
+    const quiet = { at, settling: true, ...(turnId ? { turnId } : {}) }
+    this.deps.state().quietTurnEnd = quiet
+    this.edge()
+    return quiet
   }
 
   /** Until settled, session-ending Stops own every turn ending during settlement. */

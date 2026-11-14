@@ -37,7 +37,10 @@ export function encodeJournalState(state: JournalReducerState): {
     queue: { revision: state.queue.revision, cards: [...state.queue.cards] },
     historyOrigin: state.historyOrigin
   } satisfies Record<
-    Exclude<keyof JournalReducerState, 'items' | 'inputs' | 'contextBoundary'>,
+    Exclude<
+      keyof JournalReducerState,
+      'items' | 'inputs' | 'contextBoundary' | 'personalStops' | 'quietTurnEnd'
+    >,
     unknown
   > & { contextBoundary?: number }
   return {

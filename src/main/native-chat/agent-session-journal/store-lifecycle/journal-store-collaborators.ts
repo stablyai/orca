@@ -19,7 +19,9 @@ import type { JournalReducerState } from '../projection/journal-reducer'
 import { JournalRowWriter, type JournalOperationReceipt } from '../writing/journal-row-writer'
 import { JournalStepWriter } from '../writing/journal-step-writer'
 import { restoreJournalStore } from './journal-store-restore'
+import { JournalLostRequestRecovery } from './journal-lost-request-readiness'
 import { JournalSubmissionWriter } from '../submissions/journal-submission-writer'
+import { validateJournalDormantAnswer } from '../submissions/journal-dormant-answer'
 import type { JournalRow } from '../durable-rows/journal-row-schema'
 import type { AgentSessionJournal } from '../journal-store'
 import type { JournalWriteBody } from '../writing/journal-write-queue'
@@ -66,6 +68,8 @@ export type JournalStoreCollaborators = {
   stops: JournalStopAcceptor
   goalAttachments: JournalGoalAttachmentInverse
   restore: () => Promise<void>
+  recoveryReady: (signal?: AbortSignal) => Promise<boolean>
+  cancelRecovery: () => void
 }
 
 export function createJournalStoreCollaborators(host: JournalStoreHost): JournalStoreCollaborators {
@@ -95,6 +99,7 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     streamedTextRevision: (row) => isJournalStreamedTextRevision(host.state(), row),
     outputRevision: (row) => isJournalOutputRevision(host.state(), row)
   })
+  const recovery = new JournalLostRequestRecovery(host, rowWriter)
   const inputReceipt = (rows: readonly JournalRow[], receipt?: JournalOperationReceipt) =>
     journalInputClaimsReceipt(claimAttachments, (id) => goalAttachments.isLive(id), rows, receipt)
   const queuedMessages = new JournalQueuedMessages({
@@ -152,8 +157,13 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     }),
     stops: new JournalStopAcceptor({ writer: rowWriter, state: host.state }),
     // Import legacy cards once per open without failing the open.
-    restore: () =>
-      restoreJournalStore(host, { epochController }).then(() => queuedMessages.importAtOpen()),
+    restore: async () => {
+      const evidence = await restoreJournalStore(host, { epochController })
+      await recovery.restore(evidence)
+      await queuedMessages.importAtOpen()
+    },
+    recoveryReady: (signal) => recovery.ready(signal),
+    cancelRecovery: () => recovery.close(),
     rowWriter,
     submissionWriter: new JournalSubmissionWriter({
       state: host.state,
@@ -161,7 +171,9 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
       identity: host.identity,
       rowWriter,
       queuedMessages,
-      claimAttachments
+      claimAttachments,
+      validateDormantAnswer: (db, answer) =>
+        validateJournalDormantAnswer(db, host.state(), answer, host.notifyCommitted)
     }),
     itemAppender: new JournalItemAppender({
       inputReceipt,

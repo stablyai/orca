@@ -1,19 +1,18 @@
-import { rm } from 'node:fs/promises'
+import {
+  AgentSessionResumeSelections,
+  type AgentSessionResumeSelection
+} from './agent-session-resume-selections'
+export type {
+  AgentSessionResumeSelection,
+  AgentSessionResumeDisposition
+} from './agent-session-resume-selections'
 import { join } from 'node:path'
 import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
-import { readNodeFileWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
-import { stringifyJsonWithinByteLimit } from '../../../../shared/json-stream/node-bounded-json-stringify'
-import {
-  durableWriteTempPath,
-  removeStaleDurableWriteTempFiles,
-  renameDurable,
-  writeTempFileDurable
-} from '../../../filesystem/durable-file-write'
+import { readRecoveryCapsule, publishRecoveryCapsule } from './agent-session-recovery-capsule-file'
 import { withFileTransactionLock } from '../../../filesystem/file-transaction-lock'
 import {
   MAX_FAILURE_FIELD_LENGTH,
   normalizeState,
-  parseState,
   shouldReplaceMarker,
   splitDismissedAll,
   type AgentSessionResumeFailureInput,
@@ -24,12 +23,10 @@ import {
 } from './agent-session-recovery-capsule-entries'
 
 export const AGENT_SESSION_RECOVERY_CAPSULE_FILE = 'agent-session-recovery.json'
-const MAX_CAPSULE_BYTES = 4 * 1024 * 1024
-
-/** Crash-leftover temp files only; offers themselves have no expiry. */
-const STALE_WRITE_TEMP_FILE_AGE_MS = 24 * 60 * 60 * 1000
 
 type StoredRecords = Pick<RecoveryCapsuleState, 'entries' | 'failed'>
+
+const capsuleTransactions = new Map<string, Promise<unknown>>()
 
 /** Durable, per-session restart offers. Listing never spends an offer. */
 export class AgentSessionRecoveryCapsule {
@@ -39,24 +36,47 @@ export class AgentSessionRecoveryCapsule {
     this.filePath = join(stateDirectory, AGENT_SESSION_RECOVERY_CAPSULE_FILE)
   }
 
+  private readonly selections = new AgentSessionResumeSelections({
+    withLock: (apply) => this.withLock(apply),
+    readState: () => this.readState(),
+    publish: (records, now, dismissedAt) => this.publish(records, now, dismissedAt)
+  })
+  selectResume(...args: Parameters<AgentSessionResumeSelections['selectResume']>) {
+    return this.selections.selectResume(...args)
+  }
+  withSelectedResume<T>(
+    selection: AgentSessionResumeSelection,
+    now: number,
+    accept: () => Promise<T>
+  ) {
+    return this.selections.withSelectedResume(selection, now, accept)
+  }
+  settleResume(...args: Parameters<AgentSessionResumeSelections['settleResume']>) {
+    return this.selections.settleResume(...args)
+  }
+  forgetWitnesses(...args: Parameters<AgentSessionResumeSelections['forgetWitnesses']>) {
+    return this.selections.forgetWitnesses(...args)
+  }
+
   list(now: number): Promise<AgentSessionResumeMarker[]> {
-    return withFileTransactionLock(this.filePath, async () => {
+    return this.withLock(async () => {
       const { entries } = normalizeState(await this.readState(), now)
       return entries.filter((entry) => entry.state === 'pending').map((entry) => entry.marker)
     })
   }
 
+  inventory(...args: Parameters<AgentSessionResumeSelections['inventory']>) {
+    return this.selections.inventory(...args)
+  }
+
   /** Read settled failed actions without consuming their records. */
   listFailed(now: number): Promise<AgentSessionResumeFailureRecord[]> {
-    return withFileTransactionLock(
-      this.filePath,
-      async () => normalizeState(await this.readState(), now).failed
-    )
+    return this.withLock(async () => normalizeState(await this.readState(), now).failed)
   }
 
   /** Adds fresh teardown witnesses while preserving an action already in progress. */
   record(markers: readonly AgentSessionResumeMarker[], now: number): Promise<void> {
-    return withFileTransactionLock(this.filePath, async () => {
+    return this.withLock(async () => {
       const state = await this.readState()
       const { entries, failed } = normalizeState(state, now)
       const bySession = new Map(entries.map((entry) => [entry.marker.sessionId, entry]))
@@ -99,7 +119,7 @@ export class AgentSessionRecoveryCapsule {
     operationId: string,
     now: number
   ): Promise<AgentSessionResumeMarker[]> {
-    return withFileTransactionLock(this.filePath, async () => {
+    return this.withLock(async () => {
       const state = await this.readState()
       const { entries, failed } = normalizeState(state, now)
       const requested = sessionIds === undefined ? null : new Set(sessionIds)
@@ -125,7 +145,7 @@ export class AgentSessionRecoveryCapsule {
   }
 
   completeResume(operationId: string, sessionIds: readonly string[], now: number): Promise<void> {
-    return withFileTransactionLock(this.filePath, async () => {
+    return this.withLock(async () => {
       const selected = new Set(sessionIds)
       const state = await this.readState()
       const { entries, failed } = normalizeState(state, now)
@@ -154,7 +174,7 @@ export class AgentSessionRecoveryCapsule {
     failures: readonly AgentSessionResumeFailureInput[],
     now: number
   ): Promise<void> {
-    return withFileTransactionLock(this.filePath, async () => {
+    return this.withLock(async () => {
       const bySession = new Map(failures.map((failure) => [failure.sessionId, failure]))
       const state = await this.readState()
       const { entries, failed } = normalizeState(state, now)
@@ -197,7 +217,7 @@ export class AgentSessionRecoveryCapsule {
     /** Evaluate preserved records under the lock against their stored markers. */
     keep: (marker: AgentSessionResumeMarker) => boolean = () => false
   ): Promise<number> {
-    return withFileTransactionLock(this.filePath, async () => {
+    return this.withLock(async () => {
       const named = sessionIds === 'all' ? null : new Set(sessionIds)
       const state = await this.readState()
       const { entries, failed } = normalizeState(state, now)
@@ -225,7 +245,7 @@ export class AgentSessionRecoveryCapsule {
     superseded: readonly { sessionId: string; recordedAt: number; failedAt?: number }[],
     now: number
   ): Promise<void> {
-    return withFileTransactionLock(this.filePath, async () => {
+    return this.withLock(async () => {
       const state = await this.readState()
       const { entries, failed } = normalizeState(state, now)
       const keptEntries = entries.filter(
@@ -252,7 +272,7 @@ export class AgentSessionRecoveryCapsule {
   }
 
   rollbackResume(operationId: string, now: number): Promise<void> {
-    return withFileTransactionLock(this.filePath, async () => {
+    return this.withLock(async () => {
       const state = await this.readState()
       const { entries, failed } = normalizeState(state, now)
       const next = entries.map((entry): RecoveryEntry =>
@@ -267,7 +287,7 @@ export class AgentSessionRecoveryCapsule {
 
   /** Preserve records unreadable to this host for a compatible Orca. */
   clearAll(now: number, keep: KeepRecord = () => false): Promise<number> {
-    return withFileTransactionLock(this.filePath, async () => {
+    return this.withLock(async () => {
       let state: Pick<RecoveryCapsuleState, 'entries' | 'failed'>
       try {
         state = normalizeState(await this.readState(), now)
@@ -283,49 +303,26 @@ export class AgentSessionRecoveryCapsule {
     })
   }
 
+  private async withLock<T>(apply: () => Promise<T>): Promise<T> {
+    const previous = capsuleTransactions.get(this.filePath) ?? Promise.resolve()
+    const transaction = previous
+      .catch(() => {})
+      .then(() => withFileTransactionLock(this.filePath, apply))
+    capsuleTransactions.set(this.filePath, transaction)
+    try {
+      return await transaction
+    } finally {
+      if (capsuleTransactions.get(this.filePath) === transaction) {
+        capsuleTransactions.delete(this.filePath)
+      }
+    }
+  }
+
   private owns(entry: RecoveryEntry, operationId: string): boolean {
     return entry.state === 'in-progress' && entry.operationId === operationId
   }
 
-  private async readState(): Promise<RecoveryCapsuleState> {
-    let raw: string
-    try {
-      raw = (await readNodeFileWithinLimit(this.filePath, MAX_CAPSULE_BYTES)).buffer.toString(
-        'utf8'
-      )
-    } catch (error) {
-      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-        return { entries: [], failed: [] }
-      }
-      throw error
-    }
-    return parseState(raw)
-  }
-
-  private async publish(
-    records: StoredRecords,
-    now: number,
-    dismissedAt: number | undefined
-  ): Promise<void> {
-    const { entries, failed } = normalizeState(records, now)
-    const { serialized } = stringifyJsonWithinByteLimit(
-      {
-        version: 2,
-        entries,
-        ...(dismissedAt === undefined ? {} : { dismissedAt }),
-        ...(failed.length === 0 ? {} : { failed })
-      },
-      MAX_CAPSULE_BYTES
-    )
-    await removeStaleDurableWriteTempFiles(this.filePath, {
-      minimumAgeMs: STALE_WRITE_TEMP_FILE_AGE_MS
-    })
-    const tempPath = durableWriteTempPath(this.filePath)
-    try {
-      await writeTempFileDurable(tempPath, serialized, 0o600)
-      await renameDurable(tempPath, this.filePath)
-    } finally {
-      await rm(tempPath, { force: true }).catch(() => {})
-    }
-  }
+  private readState = () => readRecoveryCapsule(this.filePath)
+  private publish = (records: StoredRecords, now: number, dismissedAt: number | undefined) =>
+    publishRecoveryCapsule(this.filePath, records, now, dismissedAt)
 }

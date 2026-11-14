@@ -128,5 +128,7 @@ CREATE TABLE IF NOT EXISTS agent_session_command_receipts (
 );
 CREATE INDEX IF NOT EXISTS agent_session_command_receipts_session
   ON agent_session_command_receipts (session_id);
+CREATE INDEX IF NOT EXISTS agent_session_restart_receipts
+  ON agent_session_command_receipts (session_id, method, substr(operation_id, 15, 16), operation_id);
 `)
 }

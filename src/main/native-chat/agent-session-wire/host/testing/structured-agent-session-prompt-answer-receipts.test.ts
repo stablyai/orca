@@ -71,9 +71,14 @@ function promptBody(itemId: string): AgentJournalItemBody {
   return body
 }
 
-it.each(['allow', 'deny'])(
-  'commits Claude plan intent with %s and rolls back or replays without overwriting newer picks',
-  async (choice) => {
+it.each([
+  ['allow', false],
+  ['deny', false],
+  ['allow', true],
+  ['deny', true]
+] as const)(
+  'commits Claude plan intent with %s (dormant=%s), rolling back and replaying without overwriting newer picks',
+  async (choice, dormant) => {
     const originalAcquire = acquire.getMockImplementation()!
     acquire.mockImplementation(async (input) => {
       const result = await originalAcquire(input)
@@ -125,6 +130,9 @@ it.each(['allow', 'deny'])(
     const page = await host.history({ sessionId: SESSION, direction: 'tail' })
     const prompt = page.ok ? page.page.items.find((item) => item.itemId === itemId)! : null
     expect(prompt).not.toBeNull()
+    if (dormant) {
+      await host.close(SESSION, 'evict')
+    }
     const params = answer(prompt!, opId(), choice)
     const db = openTestJournalHostDatabase(root).db
     db.exec(`CREATE TRIGGER fail_plan_record AFTER UPDATE ON agent_session_records
@@ -140,7 +148,16 @@ it.each(['allow', 'deny'])(
     })
     expect(await host.respondToPrompt(CALLER, params)).toMatchObject({ ok: true })
     expect(store.getRecord(SESSION)?.options).toEqual({ model: 'opus[1m]', interactionMode: after })
-    if (choice === 'deny') {
+    if (dormant) {
+      await vi.waitFor(() =>
+        expect(hostTestState().dispatch).toHaveBeenCalledWith(
+          expect.objectContaining({
+            executionOptions: { model: 'opus[1m]', fastMode: 'false', interactionMode: after }
+          })
+        )
+      )
+      expect(answerPrompt).not.toHaveBeenCalled()
+    } else if (choice === 'deny') {
       const body = hostTestMessage('Continue planning')
       expect(
         await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })

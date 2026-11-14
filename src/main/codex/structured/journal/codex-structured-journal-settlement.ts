@@ -61,12 +61,6 @@ export function settleCodexJournalSession(input: {
       mutations.push(settledRow(input.attributionFor, active, body))
     }
   }
-  for (const prompt of input.pendingPrompts.values()) {
-    const body = cancelledJournalPromptBody(prompt.body)
-    if (body) {
-      mutations.push(settledRow(input.attributionFor, prompt, body))
-    }
-  }
   for (const [threadId, turnIds] of input.currentTurnIds) {
     if (input.primaryThreadId !== threadId) {
       continue

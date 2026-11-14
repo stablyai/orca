@@ -16,6 +16,7 @@ export type ClaudePermissionCallbackDeps = {
   emit: (event: ClaudeStructuredSessionEvent) => void
   /** Read once per request: whether this process's Full access applied where the request arrived. */
   fullAccessAt: (requestId: string) => boolean
+  wasProviderWithdrawal: (requestId: string) => boolean
 }
 
 /** Questions and plan approval need the user's answer, not a permission; Full access never answers them. */
@@ -76,11 +77,13 @@ export function buildClaudePermissionCallbacks(deps: ClaudePermissionCallbackDep
       }
       cancel = (): void => {
         if (deps.prompts.forgetIfPending(prompt)) {
-          deps.emit({
-            type: 'prompt-cancelled',
-            sessionId: deps.sessionId,
-            promptKey: prompt.promptKey
-          })
+          if (deps.wasProviderWithdrawal(options.requestId)) {
+            deps.emit({
+              type: 'prompt-cancelled',
+              sessionId: deps.sessionId,
+              promptKey: prompt.promptKey
+            })
+          }
           // Null tells the SDK to write no response to the cancelled request.
           settle(null)
         }
@@ -105,10 +108,13 @@ type ClaudeExitHandler = NonNullable<ClaudeStreamJsonConnectionHandlers['onExit'
 /** One process's permission handlers. Only Orca's Full access launch grants auto-allow; Own settings
  *  never does, whatever Claude reports, and no other process's launch or reports carry over. */
 export function claudeLaunchPermissions(
-  deps: Omit<ClaudePermissionCallbackDeps, 'fullAccessAt'>,
+  deps: Omit<ClaudePermissionCallbackDeps, 'fullAccessAt' | 'wasProviderWithdrawal'>,
   launch: Pick<ClaudeStructuredLaunch, 'options' | 'providerSessionId'>
 ): {
-  handlers: Pick<ClaudeStreamJsonConnectionHandlers, 'canUseTool' | 'onUserDialog' | 'onStdout'>
+  handlers: Pick<
+    ClaudeStreamJsonConnectionHandlers,
+    'canUseTool' | 'onUserDialog' | 'onStdout' | 'bindPermissionCancellation'
+  >
   /** Claude's mode in wire order; null without Full access, whose launches read no stdout. */
   orderedMode: (() => string | null | undefined) | null
   /** Wraps the connection's exit handler: this process's permission state ends first. */
@@ -117,12 +123,20 @@ export function claudeLaunchPermissions(
   const policy = claudeLaunchSkipsPermissions(launch.options)
     ? createClaudeFullAccessPolicy(launch.providerSessionId)
     : null
+  let wasProviderWithdrawal = (_requestId: string): boolean => false
   const callbacks = buildClaudePermissionCallbacks({
     ...deps,
-    fullAccessAt: (requestId) => policy?.allows(requestId) ?? false
+    fullAccessAt: (requestId) => policy?.allows(requestId) ?? false,
+    wasProviderWithdrawal: (requestId) => wasProviderWithdrawal(requestId)
   })
   return {
-    handlers: { ...callbacks, ...(policy ? { onStdout: policy.observe } : {}) },
+    handlers: {
+      ...callbacks,
+      bindPermissionCancellation: (source) => {
+        wasProviderWithdrawal = source.wasWithdrawn
+      },
+      ...(policy ? { onStdout: policy.observe } : {})
+    },
     orderedMode: policy ? policy.mode : null,
     closeThen: (onExit) => (error, exit) => {
       policy?.close()

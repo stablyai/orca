@@ -185,13 +185,18 @@ export function mutateWithChatStop<TValue>(
     if (turnId === undefined) {
       withdrawnCut = latestUsageLimitContinueIdentity(ctx.journal.statusRead())
     }
+    const attention =
+      turnId === undefined &&
+      contextStructuredAgentSessionCurrentWork(ctx).attentionPrompts().length > 0
+    const recovery = turnId === undefined && context.hasUnacceptedRecovery?.(sessionId) === true
     const operations = context.acquireAborts.captureOperations(sessionId)
     const flight = context.startFlights.get(sessionId)
     const target = captureChatStopTarget(ctx, {
       child: context.sessions.get(ctx.sessionId)?.child ?? null,
       ...named,
       endsSession: true,
-      stoppedPrePrompt: reached || operations.length > 0 || flight !== undefined,
+      stoppedPrePrompt:
+        reached || recovery || attention || operations.length > 0 || flight !== undefined,
       stoppedSend: params.stoppedSend,
       withdrawsContinue: withdrawnCut !== undefined
     })
@@ -206,7 +211,7 @@ export function mutateWithChatStop<TValue>(
       ctx,
       target,
       caller.callerKey,
-      params.stoppedSend === true || withdrawnCut !== undefined
+      params.stoppedSend === true || withdrawnCut !== undefined || recovery || attention
     )
     if (!accepted.ok) {
       return accepted

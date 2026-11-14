@@ -1,6 +1,9 @@
 // Track provider-reported work even when display admission rejects its records.
 
-import type { AgentChildWorkEvidence } from '../../../../shared/agent-status/child-work/agent-status-child-work-evidence'
+import type {
+  AgentChildWorkLiveObservation,
+  AgentChildWorkEvidence
+} from '../../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import { isLiveChildWork } from '../../../../shared/agent-status/child-work/agent-status-child-work-liveness'
 
 export type ChildWorkLifetimeToken = { readonly childWorkLifetime: true }
@@ -11,6 +14,7 @@ type ChildLifetime = {
   previous: Set<string>
   token: ChildWorkLifetimeToken
   closed: 'idle' | 'terminal' | 'stopped' | null
+  state: AgentChildWorkLiveObservation['state'] | undefined
 }
 
 type SessionWork = {
@@ -31,7 +35,7 @@ export class StructuredAgentSessionOpenChildWork {
           edge.child.handle.id,
           edge.child.handle.runId,
           edge.restart === true,
-          isLiveChildWork(edge.child)
+          edge.child
         )
       } else if (edge.type === 'ended' || edge.type === 'removed') {
         this.end(sessionId, edge.handle.id, edge.handle.runId)
@@ -71,6 +75,11 @@ export class StructuredAgentSessionOpenChildWork {
     return (this.sessions.get(sessionId)?.open.size ?? 0) > 0
   }
 
+  hasAutonomous(sessionId: string): boolean {
+    const session = this.sessions.get(sessionId)
+    return [...(session?.open ?? [])].some((id) => session?.history.get(id)?.state !== 'waiting')
+  }
+
   handles(sessionId: string): Iterable<string> | undefined {
     const open = this.sessions.get(sessionId)?.open
     return open && open.size > 0 ? open.keys() : undefined
@@ -81,8 +90,10 @@ export class StructuredAgentSessionOpenChildWork {
     handleId: string,
     run: string | undefined,
     restart: boolean,
-    active: boolean
+    observation: Pick<AgentChildWorkLiveObservation, 'kind' | 'state'>
   ): void {
+    const { state } = observation
+    const active = isLiveChildWork(observation)
     const session = this.sessions.get(sessionId) ?? {
       history: new Map<string, ChildLifetime>(),
       open: new Set<string>()
@@ -90,7 +101,7 @@ export class StructuredAgentSessionOpenChildWork {
     this.sessions.set(sessionId, session)
     let child = session.history.get(handleId)
     if (!child) {
-      child = { run, previous: new Set(), token: newToken(), closed: null }
+      child = { run, previous: new Set(), token: newToken(), closed: null, state }
       session.history.set(handleId, child)
     } else {
       if (run !== undefined && child.previous.has(run)) {
@@ -116,6 +127,7 @@ export class StructuredAgentSessionOpenChildWork {
         child.token = newToken()
       }
     }
+    child.state = state
     child.closed = active ? null : 'idle'
     if (active) {
       session.open.add(handleId)

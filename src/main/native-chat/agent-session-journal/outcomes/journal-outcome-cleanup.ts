@@ -3,10 +3,12 @@
 
 import type { JournalHostDatabase } from '../database/journal-host-database'
 import type Database from '../../../sqlite/sync-database'
+import { sweepJournalHistoryPage } from '../database/journal-history-cleanup'
 
 const FIRST_PASS_MS = 60_000
 const PASS_INTERVAL_MS = 6 * 60 * 60_000
 const sweepPositions = new WeakMap<Database.Database, number>()
+const historySweeps = new WeakSet<Database.Database>()
 type SweptDatabase = Pick<JournalHostDatabase, 'transaction' | 'isClosed' | 'readOnly'>
 
 /** A retired epoch's records go with it, as main deletes a retired epoch's rows: every generation
@@ -15,6 +17,13 @@ export function sweepJournalOutcomePage(
   database: Pick<JournalHostDatabase, 'transaction'>
 ): boolean {
   return database.transaction((db) => {
+    if (historySweeps.has(db)) {
+      const more = sweepJournalHistoryPage(db)
+      if (!more) {
+        historySweeps.delete(db)
+      }
+      return more
+    }
     const after = sweepPositions.get(db) ?? 0
     const candidates = db
       .prepare(`SELECT a.generation FROM journal_outcome_generations a LEFT JOIN journal_outcome_epochs e
@@ -43,7 +52,11 @@ export function sweepJournalOutcomePage(
       return true
     }
     sweepPositions.delete(db)
-    return false
+    const more = sweepJournalHistoryPage(db)
+    if (more) {
+      historySweeps.add(db)
+    }
+    return more
   })
 }
 

@@ -1,3 +1,4 @@
+import type { StructuredAgentSessionSendAcceptance } from './structured-agent-session-turns'
 // Share mutation admission/planning/publication. Conversation writes need no child lease;
 // provider-only effects start their child before admission, sends start through delivery.
 
@@ -11,7 +12,6 @@ import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult,
-  AgentSessionOptionResult,
   AgentSessionPromptResult,
   AgentSessionSendResult
 } from '../../../../shared/agent-session/agent-session-wire'
@@ -35,12 +35,7 @@ import {
   sendPreparation,
   structuredAgentSessionSendBlock
 } from './structured-agent-session-send-preparation'
-import {
-  cancelPlan,
-  sendPlan,
-  setOptionPlan,
-  type MutationPlan
-} from './structured-agent-session-mutation-plans'
+import { cancelPlan, sendPlan, type MutationPlan } from './structured-agent-session-mutation-plans'
 import { promptPlan } from './structured-agent-session-prompt-plan'
 import { agentSessionMutationAdmitsNow } from './structured-agent-session-mutation-admits-now'
 import { runQueueableStructuredAgentSessionSend } from '../delivery/structured-agent-session-queued-send'
@@ -55,8 +50,7 @@ import { openWithReadyStructuredAgentSessionChild } from './structured-agent-ses
 
 import type { StructuredAgentSessionCaller } from '../host/structured-agent-session-host-types'
 import '../options/structured-agent-session-options-read'
-import { recordStructuredAgentSessionOptionIntent } from '../options/structured-agent-session-option-intent'
-import { confirmIdleStructuredAgentSessionOption } from '../options/structured-agent-session-idle-option'
+export { setStructuredAgentSessionOption } from './structured-agent-session-option-mutations'
 
 export function sendStructuredAgentSessionTurn(
   context: StructuredAgentSessionMutationContext,
@@ -75,10 +69,13 @@ export function sendStructuredAgentSessionTurn(
     /** Host-origin personal text, including launch prompts; other agents carry from instead. */
     personsMessage?: true
     beforeRun?: () => void
+    /** Host-local guard around the journal acceptance only; provider waits finish before it. */
+    accept?: StructuredAgentSessionSendAcceptance
   },
   arrival?: Parameters<typeof sendPreparation>[2]
 ): Promise<AgentSessionMutationResult<AgentSessionSendResult>> {
   const plan = sendPlan(params)
+  let accepted = false
   return runAfterRewindStart(context, caller.callerKey, params.envelope, plan, (selection) =>
     runStructuredAgentSessionMutation(
       context,
@@ -124,9 +121,14 @@ export function sendStructuredAgentSessionTurn(
             )
           }
           try {
-            const sent = await runQueueableStructuredAgentSessionSend(context, ctx, params, () =>
-              plan.run(ctx)
-            )
+            const apply = () =>
+              runQueueableStructuredAgentSessionSend(context, ctx, params, () => plan.run(ctx))
+            const sent = await (params.accept
+              ? params.accept(() => {
+                  accepted = true
+                  return apply()
+                })
+              : apply())
             if (!sent.ok) {
               forgetNativeChatPrompt(ctx.journal, params.envelope.clientOperationId)
             }
@@ -142,7 +144,16 @@ export function sendStructuredAgentSessionTurn(
       },
       sendPreparation(context, params.envelope, arrival, selection)
     )
-  )
+  ).then(async (result) => {
+    if (!result.ok && params.accept && !accepted) {
+      // Preparation may refuse before the run hook; revalidate that refusal without holding provider waits.
+      return context.serialize(params.envelope.sessionId, async () => {
+        await params.accept!(() => Promise.resolve(result))
+        return result
+      })
+    }
+    return result
+  })
 }
 
 export function cancelStructuredAgentSessionTurn(
@@ -241,44 +252,6 @@ export function respondToStructuredAgentSessionPrompt(
     caller,
     params.envelope,
     promptPlan(params),
-    openForProviderWrite(context, params.envelope)
-  )
-}
-
-export async function setStructuredAgentSessionOption(
-  context: StructuredAgentSessionMutationContext,
-  caller: StructuredAgentSessionCaller,
-  params: { envelope: AgentSessionMutationEnvelope; key: string; value: string }
-): Promise<AgentSessionMutationResult<AgentSessionOptionResult>> {
-  const plan = setOptionPlan(params)
-  const noChoice =
-    caller.readsOptionsWithoutModel === false && params.key === 'model' && params.value === ''
-  return mutateStructuredAgentSession(
-    context,
-    caller,
-    params.envelope,
-    {
-      ...plan,
-      conversationWrite: true,
-      run: async (ctx) => {
-        const picked = await recordStructuredAgentSessionOptionIntent(context.deps, ctx, params, {
-          readsWithoutModel: caller.readsOptionsWithoutModel !== false
-        })
-        if (picked.ok) {
-          confirmIdleStructuredAgentSessionOption(context, ctx, params)
-        }
-        return picked
-      },
-      ...(noChoice
-        ? {
-            settledOutcome: (value: AgentSessionOptionResult) => ({
-              status: 'succeeded' as const,
-              sessionId: params.envelope.sessionId,
-              optionResult: { version: 1, ...value }
-            })
-          }
-        : {})
-    },
     openForWrite(context, params.envelope)
   )
 }

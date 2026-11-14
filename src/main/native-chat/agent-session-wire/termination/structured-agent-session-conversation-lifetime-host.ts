@@ -1,5 +1,9 @@
+import { hostStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-host-current-work'
 import { stopStructuredAgentSessionAgentUnderSerialize } from './structured-agent-session-host-lifetime'
-import { sameProviderChild } from '../host/structured-agent-session-provider-child'
+import {
+  sameProviderChild,
+  structuredAgentSessionConversationFence
+} from '../host/structured-agent-session-provider-child'
 import { closeStructuredAgentSessionHandovers } from '../delivery/structured-agent-session-handing-over'
 import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
 import type { StructuredAgentSessionConversations } from '../host/structured-agent-session-conversations'
@@ -67,5 +71,32 @@ export function cutClosingStructuredAgentSession(
   const { deps, runtimeState } = host.context()
   if (deps.store.selectWritableRecord(sessionId).kind !== 'unreadable') {
     runtimeState.acquireAborts.abort(sessionId, 'closed while starting')
+  }
+}
+
+/** Caller owns the session lane; a dormant question is a personal close target without a child. */
+export async function closeDormantStructuredAttention(
+  host: StructuredAgentSessionConversationLifetimeHost,
+  sessionId: string
+): Promise<void> {
+  const { deps } = host.context()
+  const session =
+    host.sessions.get(sessionId) ??
+    (deps.store.getConversation(sessionId)?.lastTurn?.state === 'open'
+      ? await host.open(sessionId)
+      : null)
+  if (
+    session &&
+    !session.child &&
+    (host.context().hasUnacceptedRecovery?.(sessionId) ||
+      hostStructuredAgentSessionCurrentWork(
+        { store: deps.store, sessions: host.sessions },
+        sessionId
+      )?.attentionPrompts().length)
+  ) {
+    await session.journal.appendStopEvent(
+      { reason: 'user-close' },
+      structuredAgentSessionConversationFence(deps.store, sessionId)
+    )
   }
 }

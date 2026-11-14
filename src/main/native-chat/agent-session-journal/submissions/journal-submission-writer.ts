@@ -10,16 +10,19 @@ import type {
 } from '../queued-messages/journal-queued-messages'
 import { QueuedMessageNotOwedError } from '../queued-messages/queued-message-consume-error'
 import type { JournalAttachmentClaim } from './journal-submission-hook'
+import type Database from '../../../sqlite/sync-database'
 import type { JournalReducerState } from '../projection/journal-reducer'
 import {
   journalDispatchRowBuilder,
-  journalSubmissionRowBuilder
+  journalSubmissionRowBuilder,
+  journalItemRowBuilder
 } from '../writing/journal-row-builders'
-import type { JournalRow } from '../durable-rows/journal-row-schema'
+import type { JournalRow, JournalSubmissionRow } from '../durable-rows/journal-row-schema'
 import type { JournalOperationReceipt, JournalRowWriter } from '../writing/journal-row-writer'
 import type {
   JournalSubmissionConsume,
   JournalSubmissionInput,
+  JournalItemAppendInput,
   ResolveDispatchInput
 } from '../journal-store-contracts'
 
@@ -30,6 +33,10 @@ export type JournalSubmissionWriterDeps = {
   rowWriter: JournalRowWriter
   queuedMessages: JournalQueuedMessages
   claimAttachments: JournalAttachmentClaim
+  validateDormantAnswer: (
+    db: Database.Database,
+    answer: { itemId: string; expectedRevision: number; contextEpoch: string }
+  ) => void
 }
 
 export class JournalSubmissionWriter {
@@ -41,10 +48,17 @@ export class JournalSubmissionWriter {
     /** Validate the linked card on the write lane: one handoff, one delivery. */
     consume?: JournalSubmissionConsume,
     /** Commit the send's ledger answer with the row. */
-    receipt?: JournalOperationReceipt
+    receipt?: JournalOperationReceipt,
+    answer?: JournalItemAppendInput & {
+      itemId: string
+      expectedRevision: number
+      contextEpoch: string
+    }
   ): Promise<AgentJournalCursor> {
     const { claimAttachments, identity, queuedMessages, rowWriter, state } = this.deps
-    const submission = journalSubmissionRowBuilder(state, identity, input, consume)
+    const buildSubmission = journalSubmissionRowBuilder(state, identity, input, consume)
+    let submitted: JournalSubmissionRow | undefined
+    const submission = (seq: number, ts: number) => (submitted = buildSubmission(seq, ts))
     let claimsCommitted: (() => void) | void
     let card: JournalQueuePlan | undefined
     return rowWriter
@@ -55,8 +69,24 @@ export class JournalSubmissionWriter {
             floor?.epoch === state().epoch
               ? [journalQueueReopenRowBuilder(state, input.fence, floor.sequence)]
               : []
+          if (answer) {
+            const prompt = state().items.get(answer.itemId)
+            if (
+              prompt?.revision !== answer.expectedRevision ||
+              (prompt.body.kind !== 'approval' && prompt.body.kind !== 'question') ||
+              prompt.body.resolution.state !== 'pending'
+            ) {
+              throw new Error('the saved question changed before its answer was saved')
+            }
+          }
+          const rows = answer
+            ? [
+                submission,
+                journalItemRowBuilder(state, answer.identity, answer.body, answer.options)
+              ]
+            : [submission]
           if (!consume) {
-            return [...reopen, submission]
+            return [...reopen, ...rows]
           }
           queuedMessages.assertConsumable({
             ...consume,
@@ -70,9 +100,15 @@ export class JournalSubmissionWriter {
           }
           // Adopt legacy cards in the handoff transaction.
           card = queuedMessages.plan([{ messageId: consume.messageId }])
-          return [...reopen, ...card.rows, submission]
+          return [...reopen, ...card.rows, ...rows]
         },
         {
+          validate: (db) => {
+            if (answer) {
+              this.deps.validateDormantAnswer(db, answer)
+            }
+            receipt?.validate?.(db)
+          },
           write: (db, row) => {
             card?.receipt.write(db)
             // New client sends require stored uploads; queued cards already claimed theirs.
@@ -81,7 +117,7 @@ export class JournalSubmissionWriter {
               input.body,
               input.origin === 'client' && !consume
             )
-            receipt?.write(db, row)
+            receipt?.write(db, row, submitted)
           },
           committed: () => {
             claimsCommitted?.()

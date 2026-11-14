@@ -5,6 +5,8 @@ import { hasUnansweredStructuredAgentSessionDispatch } from '../requests/structu
 export type StructuredAgentSessionWorkScope = {
   /** Whether the live generation's execution produced this item. */
   isCurrentItem: (itemId: string) => boolean
+  /** A saved human request can outlive its provider callback. */
+  isAttentionItem?: (itemId: string) => boolean
   /** Owed by the live generation, or accepted but not yet handed over. */
   owesSend: (submission: AgentJournalSubmission) => boolean
 }

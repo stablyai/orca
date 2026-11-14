@@ -43,6 +43,7 @@ type Inputs = {
     StructuredAgentSessionMutationContext['trackProviderOperation']
   >
   now: () => number
+  hasUnacceptedRecovery?: (sessionId: string) => boolean
 }
 
 export function createStructuredAgentSessionHostMutationContext(
@@ -78,6 +79,7 @@ export function createStructuredAgentSessionHostMutationContext(
     joinChildClose: (sessionId) =>
       joinClosingStructuredAgentSessionChild(input.attachContext(), sessionId),
     readStopping: input.clientDelivery.readStopping,
+    hasUnacceptedRecovery: input.hasUnacceptedRecovery,
     wakeDelivery: (sessionId) => input.conversationDelivery.loop.wake(sessionId),
     stopAgent: (sessionId, ending) => input.lifetime.stopAgent(sessionId, ending),
     wakeQueuedDrain: (sessionId) => input.queued.drain.schedule(sessionId),

@@ -19,8 +19,24 @@ export class TrackedTestRecoveryCapsule extends AgentSessionRecoveryCapsule {
     return this.track(super.list(...args))
   }
 
+  override inventory(...args: Parameters<Capsule['inventory']>) {
+    return this.track(super.inventory(...args))
+  }
+
   override listFailed(...args: Parameters<Capsule['listFailed']>) {
     return this.track(super.listFailed(...args))
+  }
+
+  override selectResume(...args: Parameters<Capsule['selectResume']>) {
+    return this.track(super.selectResume(...args))
+  }
+
+  override settleResume(...args: Parameters<Capsule['settleResume']>) {
+    return this.track(super.settleResume(...args))
+  }
+
+  override forgetWitnesses(...args: Parameters<Capsule['forgetWitnesses']>) {
+    return this.track(super.forgetWitnesses(...args))
   }
 
   override record(...args: Parameters<Capsule['record']>) {

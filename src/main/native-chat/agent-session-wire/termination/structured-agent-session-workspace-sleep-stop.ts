@@ -30,7 +30,7 @@ export async function stopWorkspaceSleepChat(input: {
   try {
     deps.store.requireWritableRecord(sessionId)
     if (child) {
-      await input.stopAgent(sessionId, { cause: 'user-close' })
+      await input.stopAgent(sessionId, { cause: 'workspace-sleep' })
     } else if (input.owned) {
       const stopped = await stopAgentSessionProviderRoot(
         () => deps.adapter.releaseAcquisition?.({ sessionId }) ?? Promise.resolve(false)

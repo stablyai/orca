@@ -223,3 +223,36 @@ export function attachParamsForRecord(
     }
   }
 }
+
+/** Queue death-proof revisions without awaiting the session lane the writer may already own. */
+export function observeOpenStructuredAgentSessionDeath(input: {
+  deps: StructuredAgentSessionHostDeps
+  sessions: ReadonlyMap<string, StructuredAgentSessionHostSession>
+  trackStart: <T>(start: Promise<T>) => Promise<T>
+  serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
+}): () => void {
+  const { deps, sessions } = input
+  return deps.store.onDeathEvidence((sessionId) => {
+    const session = sessions.get(sessionId)
+    // User-close retires its handle; the next open can derive proof.
+    if (
+      session &&
+      session.child?.close?.cause !== 'user-close' &&
+      session.child?.close?.cause !== 'workspace-sleep'
+    ) {
+      void input
+        .trackStart(
+          input.serialize(sessionId, () =>
+            resettleOpenStructuredAgentSessionConversation(deps, sessionId, sessions.get(sessionId))
+          )
+        )
+        .catch((error: unknown) =>
+          deps.logger.warn('resettling an open chat after its owner died failed', {
+            scope: 'death-evidence-resettle',
+            sessionId,
+            error
+          })
+        )
+    }
+  })
+}

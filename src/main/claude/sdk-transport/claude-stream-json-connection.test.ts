@@ -11,6 +11,8 @@ import {
   type ClaudeStreamJsonConnection,
   type ClaudeStreamJsonLaunch
 } from '../claude-stream-json-connection'
+import { claudeLaunchPermissions } from '../structured/claude-structured-inbound-control'
+import { ClaudePromptRegistry } from '../structured/permissions/claude-prompt-registry'
 import { CLAUDE_STRUCTURED_BASE_OPTIONS } from '../structured/launch/claude-structured-launch-resolution'
 
 // Exercise the real SDK against a scripted child CLI.
@@ -94,6 +96,103 @@ async function open(
 }
 
 describe('Claude stream-json connection', () => {
+  it.each([
+    'eof',
+    'cancel',
+    'cancel-before-eof',
+    'cancel-unterminated',
+    'oversized-cancel',
+    'malformed-eof'
+  ] as const)(
+    'keeps a saved question on %s unless the exact provider request was withdrawn',
+    async (ending) => {
+      const question = {
+        type: 'control_request',
+        request_id: 'question-1',
+        request: {
+          subtype: 'can_use_tool',
+          tool_name: 'AskUserQuestion',
+          tool_use_id: 'tool-1',
+          input: {
+            questions: [{ question: 'Which branch?', options: [] }],
+            ...(ending === 'oversized-cancel' ? { detail: 'x'.repeat(17 * 1024 * 1024) } : {})
+          }
+        }
+      }
+      const scenario = scriptScenario([])
+      const acknowledged = join(scenario.cwd, 'question-seen')
+      writeFileSync(
+        scenario.env.ORCA_SDK_CONTRACT_SCENARIO_PATH,
+        JSON.stringify({
+          steps: [
+            { awaitControlRequest: 'initialize' },
+            { emit: question },
+            { awaitFile: { path: acknowledged, timeoutMs: 10_000 } },
+            ...(ending === 'eof'
+              ? []
+              : ending === 'cancel-unterminated' || ending === 'malformed-eof'
+                ? [
+                    {
+                      stdoutChunks:
+                        ending === 'malformed-eof'
+                          ? ['{"type":"control_cancel_request","request_id":']
+                          : [
+                              '{"type":"control_cancel_\\u0072equest","request_id":"question-',
+                              '1"}'
+                            ]
+                    }
+                  ]
+                : [
+                    {
+                      emit: {
+                        type: 'control_cancel_request',
+                        request_id: 'question-1'
+                      }
+                    }
+                  ]),
+            ending === 'cancel' ? HOLD_OPEN : { exit: 1 }
+          ]
+        })
+      )
+      const prompts = new ClaudePromptRegistry()
+      const seen = Promise.withResolvers<void>()
+      const settled = Promise.withResolvers<unknown>()
+      const events: string[] = []
+      const launch = launchFor(scenario)
+      const permissions = claudeLaunchPermissions(
+        {
+          sessionId: SESSION_ID,
+          prompts,
+          emit: (event) => {
+            events.push(event.type)
+            if (event.type === 'prompt') {
+              seen.resolve()
+            }
+          }
+        },
+        { options: launch.options, providerSessionId: SESSION_ID }
+      )
+      await open(launch, {
+        ...permissions.handlers,
+        canUseTool: async (...args) => {
+          const response = await permissions.handlers.canUseTool!(...args)
+          settled.resolve(response)
+          return response
+        }
+      })
+      await seen.promise
+      writeFileSync(acknowledged, 'seen')
+      await expect(settled.promise).resolves.toBeNull()
+      expect(events).toEqual(
+        ending === 'eof' || ending === 'malformed-eof' ? ['prompt'] : ['prompt', 'prompt-cancelled']
+      )
+      expect(prompts.find('question-1')).toBeNull()
+      expect(scenario.readReport().controlResponses).not.toContainEqual(
+        expect.objectContaining({ response: expect.objectContaining({ request_id: 'question-1' }) })
+      )
+    }
+  )
+
   it('completes task Stop through the real SDK while semantic reading is paused', async () => {
     const scenario = scriptScenario([HOLD_OPEN])
     const connection = await open(launchFor(scenario))

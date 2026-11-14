@@ -12,6 +12,10 @@ export const STRUCTURED_AGENT_SESSION_RESUME_CONCURRENCY = Math.max(1, available
 export const STRUCTURED_AGENT_SESSION_RESUME_IN_PROGRESS =
   'agent_session_resume_already_in_progress'
 
+export const STRUCTURED_AGENT_SESSION_RESUME_UNKNOWN = 'agent_session_resume_unknown'
+
+export const STRUCTURED_AGENT_SESSION_RESUME_DEFERRED = 'agent_session_resume_deferred'
+
 export const STRUCTURED_AGENT_SESSION_RESUME_NOT_ELIGIBLE = 'agent_session_resume_not_eligible'
 
 export type StructuredAgentSessionResumeOutcome = {
@@ -52,7 +56,8 @@ export class StructuredAgentSessionResumeAdmission {
     sessionId: string,
     owner: string,
     task: () => Promise<T>,
-    onPhase?: (phase: 'queued' | 'starting') => void
+    onPhase?: (phase: 'queued' | 'starting') => void,
+    prepare?: () => Promise<void>
   ): Promise<T> {
     const live = this.owners.get(sessionId)
     if (live !== undefined) {
@@ -62,6 +67,7 @@ export class StructuredAgentSessionResumeAdmission {
     this.owners.set(sessionId, owner)
     try {
       onPhase?.('queued')
+      await prepare?.()
       const release = await this.starts.acquire(0)
       try {
         onPhase?.('starting')
@@ -79,6 +85,8 @@ export type StructuredAgentSessionResumeRunnerDeps = {
   admission: StructuredAgentSessionResumeAdmission
   onPhase?: (sessionId: string, phase: 'queued' | 'starting') => void
   onRefused?: (sessionId: string) => void
+  onFinished?: (sessionId: string) => void
+  prepare?: (sessionId: string) => Promise<void>
   consumeMarker: (sessionId: string) => Promise<boolean>
   /** Resolve at handover/start failure, before the provider’s final answer. */
   resume: (sessionId: string) => Promise<void>
@@ -91,7 +99,9 @@ export async function resumeStructuredAgentSessionsFromRestart(
 ): Promise<StructuredAgentSessionResumeOutcome[]> {
   return Promise.all(
     candidates.map(async (candidate) => {
-      const outcome = await resumeOne(deps, candidate.sessionId, owner)
+      const outcome = await resumeOne(deps, candidate.sessionId, owner).finally(() =>
+        deps.onFinished?.(candidate.sessionId)
+      )
       if (outcome.outcome === 'refused') {
         deps.onRefused?.(candidate.sessionId)
       }
@@ -121,7 +131,8 @@ async function resumeOne(
         await deps.resume(sessionId)
         return { sessionId, outcome: 'resumed' as const }
       },
-      (phase) => deps.onPhase?.(sessionId, phase)
+      (phase) => deps.onPhase?.(sessionId, phase),
+      () => deps.prepare?.(sessionId) ?? Promise.resolve()
     )
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)

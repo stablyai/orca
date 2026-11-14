@@ -37,6 +37,8 @@ export type StructuredAgentSessionRestartResume = {
     sessionIds?: readonly string[],
     audience?: StructuredAgentSessionRestartAudience
   ) => Promise<number>
+  /** A selected recovery waiting for ordinary send acceptance, including a queued startup slot. */
+  hasUnaccepted: (sessionId: string) => boolean
   onAgentStarted: (sessionId: string) => void
   /** Continue a cut reply with or without an offer. */
   continueInterrupted: ReturnType<typeof createInterruptedContinuation>

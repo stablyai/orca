@@ -46,7 +46,7 @@ export function selectableStructuredSubmission(
   if (!journal.inputOrder.firstQueued() && currentInput === undefined) {
     return undefined
   }
-  const unanswerable = work !== null && pendingPromptsAllUnanswerableHere(work.actionablePrompts())
+  const unanswerable = work !== null && pendingPromptsAllUnanswerableHere(work.attentionPrompts())
   const selected = selectStructuredAgentSessionInput(journal, currentInput, unanswerable)
   if (selected.kind !== 'submission') {
     return undefined
@@ -58,7 +58,8 @@ export function selectableStructuredSubmission(
     submission.origin === 'host' &&
     body?.kind === 'message' &&
     orchestrationMailNotice(body.from) &&
-    work?.hasActionablePrompt()
+    work &&
+    work.attentionPrompts().length > 0
   ) {
     return undefined
   }

@@ -1,6 +1,11 @@
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 import type { StructuredAgentSessionContinuationOutcome } from './structured-agent-session-restart-continuation'
-import type { StructuredAgentSessionResumeOutcome } from './structured-agent-session-restart-resume-runner'
+import {
+  STRUCTURED_AGENT_SESSION_RESUME_DEFERRED,
+  STRUCTURED_AGENT_SESSION_RESUME_NOT_ELIGIBLE,
+  type StructuredAgentSessionResumeOutcome
+} from './structured-agent-session-restart-resume-runner'
+import { RESTART_CONTINUATION_SUPERSEDED } from './structured-agent-session-restart-continuation'
 import type {
   StructuredAgentSessionResumeCandidate,
   StructuredAgentSessionResumeFailure
@@ -14,6 +19,15 @@ export function unstartedRestartRefusals(
   for (const outcome of resumed) {
     const reported = (entry: StructuredAgentSessionContinuationOutcome) =>
       entry.sessionId === outcome.sessionId
+    if (
+      [
+        STRUCTURED_AGENT_SESSION_RESUME_DEFERRED,
+        STRUCTURED_AGENT_SESSION_RESUME_NOT_ELIGIBLE,
+        RESTART_CONTINUATION_SUPERSEDED
+      ].includes(outcome.reason ?? '')
+    ) {
+      continue
+    }
     if (outcome.outcome !== 'resumed' && !continued.some(reported) && !refused.some(reported)) {
       refused.push({
         sessionId: outcome.sessionId,

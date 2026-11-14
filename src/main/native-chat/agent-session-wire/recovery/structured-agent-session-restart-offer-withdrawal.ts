@@ -19,12 +19,21 @@ export type StructuredAgentSessionRestartOfferSession = Pick<
 
 export function createStructuredAgentSessionRestartOfferWithdrawal(deps: {
   sessions: ReadonlyMap<string, StructuredAgentSessionRestartOfferSession>
+  personallyCancelled?: (marker: AgentSessionResumeMarker) => boolean | 'unknown'
+  ownAttempt?: (sessionId: string, startedFor: string) => boolean
   capsule?: Pick<AgentSessionRecoveryCapsule, 'dismiss'>
   logger: StructuredAgentSessionLogger
   now: () => number
   enqueue: <T>(operation: () => Promise<T>) => Promise<T>
 }) {
-  const movedOn = (marker: AgentSessionResumeMarker): boolean => {
+  const movedOnWithPersonalStop = (
+    marker: AgentSessionResumeMarker,
+    cancelled: boolean | 'unknown' | undefined,
+    ownAttemptId?: string
+  ): boolean | 'unknown' => {
+    if (cancelled) {
+      return cancelled
+    }
     const session = deps.sessions.get(marker.sessionId)
     if (!session) {
       return false
@@ -36,6 +45,7 @@ export function createStructuredAgentSessionRestartOfferWithdrawal(deps: {
       (session.journal.cursor().epoch !== taken.epoch ||
         session.journal.inputOrder.acceptedInputsAfter(taken.sequence).some(
           (submission) =>
+            submission.clientMessageId !== ownAttemptId &&
             (submission.acceptedSequence ?? 0) > taken.sequence &&
             // Own queued/rejected continuations allow retry; handover may have delivered despite no answer.
             !(
@@ -59,7 +69,9 @@ export function createStructuredAgentSessionRestartOfferWithdrawal(deps: {
   }
 
   return {
-    movedOn,
+    movedOn: (marker: AgentSessionResumeMarker, ownAttemptId?: string) =>
+      movedOnWithPersonalStop(marker, deps.personallyCancelled?.(marker), ownAttemptId),
+    movedOnWithPersonalStop,
     /** Retire offer/failure after independent proven startup; failures log without blocking. */
     onAgentStarted: (sessionId: string): void => {
       const session = deps.sessions.get(sessionId)
@@ -68,6 +80,9 @@ export function createStructuredAgentSessionRestartOfferWithdrawal(deps: {
         return
       }
       const startedFor = session.child?.startedFor
+      if (startedFor !== undefined && deps.ownAttempt?.(sessionId, startedFor)) {
+        return
+      }
       void deps
         .enqueue(() =>
           capsule.dismiss([sessionId], deps.now(), (marker) =>

@@ -89,7 +89,7 @@ export type StructuredAgentSessionProviderChildIdentity = {
 /** Bound to the exact child: once closing, input stays stopped and later operations join. */
 export type StructuredAgentSessionChildClose = {
   /** Retain the first Stop cause through all joined requests. */
-  readonly cause: StructuredAgentSessionStopCause
+  readonly cause: StructuredAgentSessionStopCause | 'workspace-sleep'
   /** Quit leftovers recover as crash state on next open. */
   readonly quit?: true
   readonly reason: string | null

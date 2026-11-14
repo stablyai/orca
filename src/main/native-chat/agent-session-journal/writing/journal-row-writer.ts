@@ -2,15 +2,16 @@ import type { JournalReducerState } from '../projection/journal-reducer'
 import { insertJournalRow } from '../durable-rows/journal-row-table'
 import type { JournalHostDatabase } from '../database/journal-host-database'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { JournalRow } from '../durable-rows/journal-row-schema'
+import type { JournalRow, JournalSubmissionRow } from '../durable-rows/journal-row-schema'
 import { assertJournalFence, assertJournalWritable } from './journal-write-guards'
 import type { JournalWriteBody } from './journal-write-queue'
 import type Database from '../../../sqlite/sync-database'
 
 /** Write receipts in the row transaction; notify synchronously after COMMIT, never rollback. */
 export type JournalOperationReceipt = {
+  validate?: (db: Database.Database) => void
   fold?: (draft: JournalReducerState) => void
-  write: (db: Database.Database, row?: JournalRow) => void
+  write: (db: Database.Database, row?: JournalRow, submission?: JournalSubmissionRow) => void
   committed: () => void
 }
 
@@ -22,8 +23,10 @@ export function composeJournalOperationReceipts(
   ...receipts: JournalOperationReceipt[]
 ): JournalOperationReceipt {
   return {
+    validate: (db) => receipts.forEach((receipt) => receipt.validate?.(db)),
     fold: (draft) => receipts.forEach((receipt) => receipt.fold?.(draft)),
-    write: (db, row) => receipts.forEach((receipt) => receipt.write(db, row)),
+    write: (db, row, submission) =>
+      receipts.forEach((receipt) => receipt.write(db, row, submission)),
     committed: () => receipts.forEach((receipt) => receipt.committed())
   }
 }
@@ -80,6 +83,7 @@ export class JournalRowWriter {
       const inputChanged = Boolean(receipt) || !this.outputOnly([row])
       this.deps.database().transaction(
         (db) => {
+          receipt?.validate?.(db)
           if (!this.deps.prepare) {
             insertJournalRow(db, this.deps.sessionId, row, savedAt)
           }
@@ -126,6 +130,7 @@ export class JournalRowWriter {
     const inputChanged = Boolean(receipt) || !this.outputOnly(rows)
     this.deps.database().transaction(
       (db) => {
+        receipt?.validate?.(db)
         if (!this.deps.prepare) {
           for (const row of rows) {
             insertJournalRow(db, this.deps.sessionId, row, ts)
