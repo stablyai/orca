@@ -39,7 +39,7 @@ export const antigravityBrowserHelperPreflightPassed = (result: {
   readonly code: number | null
   readonly stdout: string
   readonly stderr: string
-  readonly outputTruncated: boolean
+  readonly outputTruncated?: boolean
 }): boolean =>
   result.code === 0 &&
   result.stdout === '' &&
