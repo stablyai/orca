@@ -4,15 +4,13 @@ import {
   authorityEpochBytes,
   inventoryPhysicalColumns,
   inventoryPhysicalReserve,
-  inventoryValueBytes
-} from './session-search-inventory-footprint'
-import type { SessionSearchPhysicalTable } from './session-search-inventory-page'
-
-import {
+  inventoryValueBytes,
   inventoryMutationBytes,
   inventoryMutationFields,
   type SessionSearchAuthorityPhase
 } from './session-search-inventory-footprint'
+import type { SessionSearchPhysicalTable } from './session-search-inventory-page'
+
 export type { SessionSearchAuthorityPhase } from './session-search-inventory-footprint'
 export const authorityFallbackSuffixes = (phase: SessionSearchAuthorityPhase) =>
   phase === 'prepare'
