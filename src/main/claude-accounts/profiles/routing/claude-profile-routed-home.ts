@@ -7,15 +7,15 @@ import {
 } from '../../sign-in/claude-account-folder'
 import { claudeProfileMissing } from './claude-profile-launch-errors'
 
-/** `routedHome` without blocking main: chat reads run once per options read and send. */
+/** `routedHome` without blocking main: chat reads run once per options read and send. `profile` defaults to the selection. */
 export async function claudeRoutedHomeAsync(
   router: Pick<
     ClaudeProfileRouter,
     'selectedProfile' | 'savedAccount' | 'userConfigDir' | 'userHome'
   >,
-  availability: 'checked' | 'identity' = 'checked'
+  availability: 'checked' | 'identity' = 'checked',
+  profile = router.selectedProfile()
 ): Promise<string | null> {
-  const profile = router.selectedProfile()
   if (!profile) {
     return null
   }

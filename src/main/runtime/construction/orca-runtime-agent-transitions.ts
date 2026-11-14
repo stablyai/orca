@@ -1,3 +1,4 @@
+import { attachTerminalUsageLimitPauses } from '../terminal/usage-limit/terminal-usage-limit-pauses'
 import { watchMovedWorkerResumeSessions } from '../rpc/methods/orchestration/worker/follow-up/worker-resume-session-capture'
 import { AgentTransitionDetector } from '../../agent-hooks/observations/agent-transition-detector'
 import type { ConnectorCloud } from '../../connector-cloud/connector-cloud'
@@ -182,11 +183,19 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     const detachTitles = subscribe
       ? subscribeHookStatusTitles({ subscribeEnrichedStatus: subscribe }, this)
       : () => {}
+    const detachPauses = attachTerminalUsageLimitPauses(store, {
+      getTerminalHandleForPaneKey: (paneKey) => this.getTerminalHandleForPaneKey(paneKey),
+      sendTerminalAgentPrompt: (handle, prompt, options) =>
+        this.sendTerminalAgentPrompt(handle, prompt, options),
+      readSettings: () => this.requireStore().getSettings(),
+      usageRateLimits: () => this.accounts.usageRateLimits()
+    })
     return () => {
       detachCrew()
       detachRows()
       this.crewChanges.notify(new Set(['status', 'names']))
       detachTitles()
+      detachPauses()
       detachTransitions()
     }
   }

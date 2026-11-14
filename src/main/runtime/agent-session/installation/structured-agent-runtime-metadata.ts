@@ -173,6 +173,7 @@ export const STRUCTURED_AGENT_RUNTIME_CATALOG: readonly StructuredAgentRuntimeCa
           await resolveStructuredClaudeAccountHomePath({
             launchEnv,
             wslDistro: location?.wslDistro ?? null,
+            ...(location ? { worktreeId: location.workspaceId } : {}),
             ...(purpose !== 'read' ? { purpose: 'identity' } : {}),
             getClaudeConfigDirectory: services.getClaudeConfigDirectory
           })

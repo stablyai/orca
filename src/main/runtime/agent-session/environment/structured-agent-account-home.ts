@@ -3,6 +3,7 @@ import type { GlobalSettings } from '../../../../shared/settings/global-settings
 import { normalizeRuntimePathForComparison } from '../../../../shared/file-access/cross-platform-path'
 import { getClaudeProfileRouter } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { claudeRoutedHomeAsync } from '../../../claude-accounts/profiles/routing/claude-profile-routed-home'
+import { pinnedClaudeProfile } from '../../../claude-accounts/profiles/routing/claude-worktree-account-pin'
 import { normalizeCodexRuntimeSelection } from '../../../codex-accounts/account-management/runtime-selection'
 import {
   resolveOrcaManagedCodexHomePath,
@@ -19,6 +20,8 @@ export type StructuredClaudeAccountHomeDeps = {
   wslDistro: string | null
   /** `identity` names the selected account before its folder exists; the default checks availability. */
   purpose?: 'identity'
+  /** A worktree pinned to an account resolves that account instead of the selection (#9496). */
+  worktreeId?: string
   getClaudeConfigDirectory: (
     target: { runtime: 'host' } | { runtime: 'wsl'; wslDistro: string }
   ) => string | null | undefined
@@ -30,7 +33,11 @@ export async function resolveStructuredClaudeAccountHomePath(
   // Why only an account: System default keeps the launch-env and configured homes below.
   const router = deps.wslDistro ? undefined : getClaudeProfileRouter()
   const accountHome = router
-    ? await claudeRoutedHomeAsync(router, deps.purpose === 'identity' ? 'identity' : 'checked')
+    ? await claudeRoutedHomeAsync(
+        router,
+        deps.purpose === 'identity' ? 'identity' : 'checked',
+        pinnedClaudeProfile(router, deps.worktreeId) ?? router.selectedProfile()
+      )
     : null
   if (accountHome) {
     return accountHome

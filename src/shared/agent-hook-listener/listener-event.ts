@@ -48,6 +48,8 @@ export type AgentHookEventPayload = {
   claudeSettledRequests?: readonly ClaudeSettledRequest[]
   /** Claude agent/subagent identifier when the hook source exposes one. */
   toolAgentId?: string
+  /** Claude StopFailure's error type (`rate_limit` at a usage limit); in-process only. */
+  claudeStopFailure?: string
   /** Claude teammate name carried by TeammateIdle. */
   teammateName?: string
   /** Agent/subagent type from the source hook payload, when present. */

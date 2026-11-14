@@ -14,15 +14,15 @@ export async function prepareClaudeLaunchAccount(
   if (!router) {
     return { route: 'system', home: recordHome, configDir: env.CLAUDE_CONFIG_DIR ?? null }
   }
-  const preparation = await router.prepareLaunch(
-    // Why: pins cover host accounts only; WSL launches keep following the selection.
-    location && location.wslDistro === null ? location.workspaceId : undefined
-  )
+  // Why: pins cover host accounts only; WSL launches keep following the selection.
+  const worktreeId = location?.wslDistro === null ? location.workspaceId : undefined
+  const preparation = await router.prepareLaunch(worktreeId)
   const home =
     preparation.provenance === 'system'
       ? await resolveStructuredClaudeAccountHomePath({
           launchEnv: env,
           wslDistro: null,
+          ...(worktreeId ? { worktreeId } : {}),
           getClaudeConfigDirectory: () => router.systemDefaultHome()
         })
       : preparation.configDir

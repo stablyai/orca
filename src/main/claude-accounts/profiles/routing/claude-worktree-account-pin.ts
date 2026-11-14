@@ -12,7 +12,7 @@ import type { ClaudeRuntimeAuthPreparation } from '../../runtime-auth/runtime-au
 import { isDirectory } from '../claude-profile-homes'
 import { claudeProfileMissing } from './claude-profile-launch-errors'
 import { prepareClaudeProfileForLaunch } from './claude-profile-launch-preparation'
-import type { ClaudeProfileRouter, ClaudeProfileRouterSettings } from './claude-profile-router'
+import type { ClaudeProfileRouter } from './claude-profile-router'
 
 type PinRouter = Pick<
   ClaudeProfileRouter,
@@ -24,34 +24,36 @@ type PinRouter = Pick<
   | 'savedAccount'
   | 'coveredBySystemDefault'
   | 'systemDefaultHome'
+  | 'args'
 >
 
-type PinArgs = { getSettings: () => ClaudeProfileRouterSettings; refreshWaitMs?: number }
-
 /** A worktree pinned to a saved account keeps it whatever the selection becomes (#9496). */
-function pinnedProfile(
-  router: PinRouter,
-  settings: ClaudeProfileRouterSettings,
+export function pinnedClaudeProfile(
+  router: Pick<ClaudeProfileRouter, 'args' | 'savedAccount' | 'describe'>,
   worktreeId: string | undefined
 ): ClaudeProfileDescriptor | null {
-  const accountId = worktreeId ? settings.claudeAccountPinsByWorktree?.[worktreeId] : undefined
+  const pins = router.args.getSettings().claudeAccountPinsByWorktree
+  const accountId = worktreeId ? pins?.[worktreeId] : undefined
   return accountId && router.savedAccount(accountId) ? router.describe(accountId) : null
 }
 
 /** A pinned worktree's launch, or null to follow the selection: its own folder, or System default when that login covers it. */
 export async function preparePinnedClaudeLaunch(
   router: PinRouter,
-  args: PinArgs,
   worktreeId: string | undefined
 ): Promise<ClaudeRuntimeAuthPreparation | null> {
-  const pinned = pinnedProfile(router, args.getSettings(), worktreeId)
+  const pinned = pinnedClaudeProfile(router, worktreeId)
   if (!pinned) {
     return null
   }
   await router.envReady
   const own = router.coveredBySystemDefault(pinned.accountId) ? null : pinned
   if (own) {
-    await prepareClaudeProfileForLaunch(own, (value) => router.setUp(value), args.refreshWaitMs)
+    await prepareClaudeProfileForLaunch(
+      own,
+      (value) => router.setUp(value),
+      router.args.refreshWaitMs
+    )
     if (!isDirectory(own.home)) {
       throw claudeProfileMissing()
     }
@@ -71,11 +73,10 @@ export async function preparePinnedClaudeLaunch(
 /** Each pinned worktree reads its own pointer (empty is System default), so moving the selection pointer never reaches it. */
 export function pinnedClaudeTerminalEnv(
   router: PinRouter,
-  settings: ClaudeProfileRouterSettings,
   base: ClaudeEnvPatch,
   worktreeId: string | undefined
 ): ClaudeEnvPatch | null {
-  const pinned = pinnedProfile(router, settings, worktreeId)
+  const pinned = pinnedClaudeProfile(router, worktreeId)
   if (!pinned || !worktreeId) {
     return null
   }

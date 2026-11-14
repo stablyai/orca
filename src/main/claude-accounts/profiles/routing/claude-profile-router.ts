@@ -64,7 +64,7 @@ export class ClaudeProfileRouter {
   readonly envReady: Promise<unknown>
   private envResolved: boolean
   constructor(
-    private readonly args: {
+    readonly args: {
       getSettings: () => ClaudeProfileRouterSettings
       dataRoot: string
       userHome?: string
@@ -175,7 +175,7 @@ export class ClaudeProfileRouter {
 
   /** Initial setup must succeed; later refreshes may time out without blocking launch. */
   async prepareLaunch(worktreeId?: string): Promise<ClaudeRuntimeAuthPreparation> {
-    const pinned = await preparePinnedClaudeLaunch(this, this.args, worktreeId)
+    const pinned = await preparePinnedClaudeLaunch(this, worktreeId)
     if (pinned) {
       return pinned
     }
@@ -286,7 +286,7 @@ export class ClaudeProfileRouter {
       [CLAUDE_PROFILE_POINTER_ENV]: this.pointerPath,
       ...(userConfigDir ? { [CLAUDE_USER_CONFIG_DIR_ENV]: userConfigDir } : {})
     }
-    const pinned = pinnedClaudeTerminalEnv(this, this.args.getSettings(), base, worktreeId)
+    const pinned = pinnedClaudeTerminalEnv(this, base, worktreeId)
     if (pinned) {
       return pinned
     }

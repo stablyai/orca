@@ -1,3 +1,4 @@
+import { isClaudeWorkspacePinned } from '../../../../shared/worktree-account-pin-settings'
 import { ensureStructuredAgentModelCatalogOwner } from '../model-catalog/structured-agent-model-catalog-wiring'
 import type { StructuredAgentModelCatalogDeps } from './structured-agent-runtime-registration-types'
 import { resolveStructuredCodexAccountKind } from '../environment/structured-agent-account-home'
@@ -76,8 +77,13 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
   /** Read the setting live so turning it off stops every pending automatic continuation. */
   protected usageLimitAutoContinueHostDeps(): StructuredAgentSessionHostDeps['usageLimitAutoContinue'] {
     return {
-      isEnabled: () =>
-        this.requireStore().getSettings().nativeChatAutoContinueAfterUsageLimit === true,
+      // Why: a workspace pinned to its account is a worker that waits for that account's reset.
+      isEnabled: (record) => {
+        const settings = this.requireStore().getSettings()
+        const pinned =
+          record?.provider === 'claude' && isClaudeWorkspacePinned(settings, record.location)
+        return settings.nativeChatAutoContinueAfterUsageLimit === true || pinned
+      },
       subscribe: (changed) => this.requireStore().onSettingsChanged?.(changed) ?? (() => {}),
       isWorkspaceAsleep: (workspaceId) => this.isWorktreeTerminalSleepHeld(workspaceId),
       ...usageLimitAccountSources({
