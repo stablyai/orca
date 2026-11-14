@@ -8,7 +8,7 @@ import { MANAGED_DATA_ACCOUNT_RESUME_ENV } from '../../shared/managed-data-accou
 export function applyManagedDataAccountEnvironment(
   environment: Record<string, string>,
   options: { launchAgent?: TuiAgent; launchCommand?: string; isWsl?: boolean }
-): void {
+): void | Promise<void> {
   const requestedAccountId = environment[MANAGED_DATA_ACCOUNT_RESUME_ENV]
   delete environment[MANAGED_DATA_ACCOUNT_RESUME_ENV]
   const service = getManagedDataAccountService()
@@ -31,19 +31,26 @@ export function applyManagedDataAccountEnvironment(
     return
   }
   const selected = managedAccountLaunchEnvironment(service, provider, requestedAccountId)
-  if (!selected.XDG_DATA_HOME) {
-    return
+  const applySelectedEnvironment = () => {
+    if (!selected.XDG_DATA_HOME) {
+      return
+    }
+    service.captureOriginalEnvironment(environment, selected)
+    Object.assign(environment, selected)
+    environment.ORCA_DATA_ACCOUNT_DATA_HOME = selected.XDG_DATA_HOME
+    environment.ORCA_DATA_ACCOUNT_STATE_HOME = selected.XDG_STATE_HOME
+    environment.ORCA_DATA_ACCOUNT_PROVIDER = provider
+    if (provider === 'opencode') {
+      // Clear overrides that could bypass the selected profile's credentials.
+      environment.OPENCODE_AUTH_CONTENT = ''
+      environment.OPENCODE_DB = 'opencode.db'
+    }
   }
-  service.captureOriginalEnvironment(environment, selected)
-  Object.assign(environment, selected)
-  environment.ORCA_DATA_ACCOUNT_DATA_HOME = selected.XDG_DATA_HOME
-  environment.ORCA_DATA_ACCOUNT_STATE_HOME = selected.XDG_STATE_HOME
-  environment.ORCA_DATA_ACCOUNT_PROVIDER = provider
-  if (provider === 'opencode') {
-    // Clear overrides that could bypass the selected profile's credentials.
-    environment.OPENCODE_AUTH_CONTENT = ''
-    environment.OPENCODE_DB = 'opencode.db'
+
+  if (provider === 'devin' && process.platform === 'win32') {
+    return service.syncLaunchCredentials(provider, selected).then(applySelectedEnvironment)
   }
+  applySelectedEnvironment()
 }
 
 /** A resumed session's owning account wins; a removed owner falls back to the active account. */
