@@ -7,8 +7,8 @@ import {
   GitPullRequest,
   X
 } from 'lucide-react-native'
-import type { SmartNameSelection } from '../tasks/mobile-composer-source-types'
-import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
+import type { SmartNameSelection } from '../new-workspace/source-selection/mobile-composer-source-types'
+import type { MobileComposerSource } from '../new-workspace/source-selection/use-mobile-composer-source'
 import { colors, spacing, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'

@@ -72,9 +72,6 @@ export function searchAgentPickerSetups(
       continue
     }
     for (const model of agentPickerModels(entry)) {
-      if (model.isLegacy || model.hidden) {
-        continue
-      }
       const modelWords = tokens([model.id, model.label].join(' '))
       if (!words.some((word) => !score(word, agentWords) && score(word, modelWords))) {
         continue

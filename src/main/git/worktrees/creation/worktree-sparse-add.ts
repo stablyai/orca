@@ -38,14 +38,14 @@ export async function addSparseWorktree(
       checkoutWorkersGitArgs(worktreePath, options),
       gitExecFileAsync(['sparse-checkout', 'init', '--cone'], gitExecOptions(worktreePath, options))
     ])
-    await gitExecFileAsync(
-      [...longPathArgs, 'sparse-checkout', 'set', '--', ...directories],
-      gitExecOptions(worktreePath, options)
-    )
-    await gitExecFileAsync(
-      [...checkoutWorkersArgs, ...longPathArgs, 'checkout', branch],
-      gitExecOptions(worktreePath, options)
-    )
+    await gitExecFileAsync([...longPathArgs, 'sparse-checkout', 'set', '--', ...directories], {
+      ...gitExecOptions(worktreePath, options),
+      admissionClass: 'checkout'
+    })
+    await gitExecFileAsync([...checkoutWorkersArgs, ...longPathArgs, 'checkout', branch], {
+      ...gitExecOptions(worktreePath, options),
+      admissionClass: 'checkout'
+    })
     return addResult
   } catch (error) {
     const wrapped: SparseWorktreeCreateError =

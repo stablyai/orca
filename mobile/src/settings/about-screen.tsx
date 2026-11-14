@@ -58,10 +58,10 @@ export default function AboutScreen({
       <SettingsSection first separatorInset={LIST_LEADING_INSET}>
         <ListRow
           key="website"
-          title="onOrca.dev"
+          title="orca.dev"
           leading={<Globe size={18} color={colors.textSecondary} />}
           accessibilityLabel={t('settings.aboutScreen.website', 'Orca website')}
-          onPress={() => openLink('https://onOrca.dev')}
+          onPress={() => openLink('https://orca.dev')}
         />
         <ListRow
           key="source"

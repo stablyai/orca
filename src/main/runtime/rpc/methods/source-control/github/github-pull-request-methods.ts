@@ -9,14 +9,14 @@ import {
   PullRequestFileViewed,
   RerunPullRequestChecks,
   ReviewThread
-} from '../../../../../../shared/rpc-contract/github-pull-request-params'
+} from '../../../../../../shared/rpc-contract/github/github-pull-request-params'
 
 export const GITHUB_PULL_REQUEST_METHODS = [
   defineMethod({
     name: 'github.prForBranch',
     permission: 'workspace',
     params: PrForBranch,
-    handler: async (params, { runtime, clientKind }) =>
+    handler: async (params, { runtime, clientKind, signal }) =>
       runtime.getRepoPRForBranch(
         params.repo,
         params.branch,
@@ -26,7 +26,10 @@ export const GITHUB_PULL_REQUEST_METHODS = [
         params.currentHeadOid,
         params.reason,
         params.userRefresh,
-        clientKind
+        clientKind,
+        signal,
+        params.acceptRevalidationOnly,
+        params.selected
       )
   }),
   defineMethod({

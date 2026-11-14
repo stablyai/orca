@@ -29,19 +29,22 @@ export async function deleteWithPermanentFallback({
     }
   }
   const confirmed = await confirm({
-    title: isWindows
-      ? translate(
-          'fileExplorer.trashFailed.titleRecycleBin',
-          "Couldn't move '{{name}}' to the Recycle Bin. Delete it permanently?",
-          { name }
-        )
-      : translate(
-          'fileExplorer.trashFailed.titleTrash',
-          "Couldn't move '{{name}}' to the Trash. Delete it permanently?",
-          { name }
-        ),
-    description: translate('fileExplorer.trashFailed.description', 'This cannot be undone.'),
-    confirmLabel: translate('fileExplorer.trashFailed.confirm', 'Delete Permanently'),
+    title: translate('common.delete', 'Delete'),
+    description: [
+      isWindows
+        ? translate(
+            'fileExplorer.trashFailed.titleRecycleBin',
+            "Couldn't move '{{name}}' to the Recycle Bin. Delete it permanently?",
+            { name }
+          )
+        : translate(
+            'fileExplorer.trashFailed.titleTrash',
+            "Couldn't move '{{name}}' to the Trash. Delete it permanently?",
+            { name }
+          ),
+      translate('fileExplorer.trashFailed.description', 'This cannot be undone.')
+    ].join('\n'),
+    confirmLabel: translate('common.delete', 'Delete'),
     confirmVariant: 'destructive',
     cancelVariant: 'ghost',
     surface: 'security'

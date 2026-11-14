@@ -28,6 +28,11 @@ export function speechModelDescription(
         'components.settings.voice.models.about.parakeetV2',
         'Fast. English only, and the most accurate at it.'
       )
+    case 'parakeet-unified-en-0.6b':
+      return t(
+        'components.settings.voice.models.about.parakeetUnifiedEn',
+        'English only. Words appear as you speak.'
+      )
     case 'whisper-tiny':
       return t(
         'components.settings.voice.models.about.whisperTiny',

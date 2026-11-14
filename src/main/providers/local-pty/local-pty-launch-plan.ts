@@ -17,11 +17,11 @@ import {
   resolveEffectiveWindowsPowerShell,
   shouldProbeWindowsPowerShellAvailability,
   type WindowsPowerShellShellFamily
-} from '../windows-powershell'
-import { buildWindowsPowerShellSpawnAttempts } from '../windows-shell-fallback-chain'
-import { resolveWindowsShellLaunchArgs } from '../windows-shell-args'
-import { assertSafeAgentStartupCwd } from '../pty-default-cwd'
-import type { PtySpawnOptions } from '../pty-provider-contract'
+} from '../shell-launch/windows/powershell'
+import { buildWindowsPowerShellSpawnAttempts } from '../shell-launch/windows/shell-fallback-chain'
+import { resolveWindowsShellLaunchArgs } from '../shell-launch/windows/shell-args'
+import { assertSafeAgentStartupCwd } from '../working-directory/default-cwd'
+import type { PtySpawnOptions } from '../pty/provider-contract'
 
 type WslLaunchContext = { distro: string; treatPosixCwdAsWsl: true }
 type LocalPtyLaunchSeed = {

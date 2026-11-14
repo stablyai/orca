@@ -8,8 +8,11 @@ import {
   CALLER,
   envelope,
   hostTestState
-} from './structured-agent-session-host-test-harness'
-import { HOST_TEST_SESSION, HOST_TEST_THREAD } from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host.test-fixture'
+import {
+  HOST_TEST_SESSION,
+  HOST_TEST_THREAD
+} from './structured-agent-session-host-test-data.test-fixture'
 
 let store: AgentSessionRecordStore
 let host: StructuredAgentSessionHost

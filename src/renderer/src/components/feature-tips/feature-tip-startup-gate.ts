@@ -54,7 +54,11 @@ export function getPendingFeatureTips(args: {
       cliInstalled: args.cliInstalled,
       voiceDictationEnabled: args.settings?.voice?.enabled === true,
       sessionSearchTipCompleted: isSessionSearchFeatureTipCompleted(args.settings, args.webClient),
-      chatUiLaunchTipCompleted: args.webClient || args.chatUiLaunchTipVariant === 'none',
+      chatUiLaunchTipCompleted:
+        args.webClient ||
+        args.chatUiLaunchTipVariant === 'none' ||
+        // Why: recorded on Chat UI at the launch snapshot, so either still on it or switched back on purpose.
+        args.chatUiLaunchTipVariant === 'chat-ui-on',
       featureInteractions: args.featureInteractions
     })
   })

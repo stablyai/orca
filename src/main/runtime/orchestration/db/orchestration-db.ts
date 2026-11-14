@@ -42,6 +42,8 @@ class OrchestrationDbCore {
     this.db.pragma('journal_mode = WAL')
     this.db.pragma('synchronous = NORMAL')
     this.db.pragma('busy_timeout = 5000')
+    // Truncate the WAL back to 8 MiB after a checkpoint, as the other app databases do; otherwise it stays at its high-water size.
+    this.db.pragma('journal_size_limit = 8388608')
     // Savepoint journals otherwise need a temp file; a full or unwritable temp dir then aborts the whole transaction (#38123).
     this.db.pragma('temp_store = MEMORY')
     createTables.call(this as unknown as OrchestrationDb)

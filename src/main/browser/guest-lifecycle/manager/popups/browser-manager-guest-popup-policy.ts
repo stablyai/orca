@@ -3,11 +3,15 @@ import {
   normalizeExternalBrowserUrl,
   redactKagiSessionToken
 } from '../../../../../shared/browser-url'
-import { trackBrowserGuestInputGesture } from '../../input/browser-guest-input-gesture'
+import {
+  trackBrowserGuestInputGesture,
+  type ObservedBrowserGuestGesture
+} from '../../input/browser-guest-input-gesture'
 import {
   isNewBrowserTabPopupIntent,
   isBrowserTabPopupRequest,
-  normalizeBrowserPopupUrl
+  normalizeBrowserPopupUrl,
+  type NewBrowserTabPopupRequest
 } from '../../popups/browser-popup-new-tab-intent'
 import { SAFE_POPUP_WINDOW_OPTIONS } from '../../popups/presentation/browser-popup-window-policy'
 import { safeOrigin } from '../../browser-event-origin'
@@ -25,59 +29,34 @@ import { requestBrowserExternalAppLaunch } from '../../prompts/browser-external-
 export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavigation {
   protected installGuestPopupPolicy(guest: Electron.WebContents): () => void {
     const gesture = trackBrowserGuestInputGesture(guest, {
-      onActivatingInput: () => this.creditPageInput(guest.id)
+      onActivatingInput: (byAgent) => {
+        this.creditPageInput(guest.id)
+        if (!byAgent) {
+          this.releaseAgentLead(guest.id)
+        }
+      }
     })
     const handleDidCreateWindow = (window: Electron.BrowserWindow): void => {
       // Popups inherit ownership without replacing the primary guest registration.
       if (!isBrowserRouteGuestPopup(window.webContents.id)) {
         this.attachGuestPolicies(window.webContents, this.resolvePopupOwnerContext(guest.id))
+        this.inheritAgentLead(guest.id, window.webContents.id)
       }
     }
     guest.on('did-create-window', handleDidCreateWindow)
     guest.setWindowOpenHandler(({ url, frameName, disposition, postBody, features, referrer }) => {
       // Spend activation even on popups so it cannot fund a later tab.
       const observed = gesture.consume()
+      if (this.openNewTabPopup(guest, { url, frameName, disposition, postBody }, observed)) {
+        return { action: 'deny' }
+      }
       const clicked = observed !== null
       // Only the desktop user's own click may bring a popup forward; agents and late opens wait.
       const showWhenAppActive = observed?.byAgent !== false
-      const ownerContext = this.resolvePopupOwnerContext(guest.id)
-      const browserTabId = ownerContext?.browserTabId ?? null
+      const activateTab = disposition !== 'background-tab'
+      const agentOpened = observed?.byAgent !== false && this.isAgentLeadingGuest(guest.id)
+      const browserTabId = this.resolvePopupOwnerContext(guest.id)?.browserTabId ?? null
       const externalUrl = normalizeExternalBrowserUrl(url)
-      const newTabUrl = externalUrl ?? (isLocalFileLinkFromLocalPage(guest, url) ? url : null)
-      // Opener-dependent requests retain a child window instead of becoming tabs.
-      if (
-        ownerContext &&
-        newTabUrl &&
-        isNewBrowserTabPopupIntent({ url, frameName, disposition, postBody })
-      ) {
-        // Scripted opens persist as tabs, so opens without observed input consume a budget.
-        if (!clicked && !this.tryConsumePageInitiatedTab(ownerContext.rootGuestWebContentsId)) {
-          this.forwardOrQueuePopupEvent(guest.id, {
-            origin: safeOrigin(newTabUrl),
-            action: 'blocked'
-          })
-          return { action: 'deny' }
-        }
-        // A new tab's download would miss the agent's `download` claim, so save the link here.
-        if (this.isAwaitingDownloadFrom(guest.id, ownerContext.rootGuestWebContentsId)) {
-          guest.downloadURL(newTabUrl)
-          return { action: 'deny' }
-        }
-        if (
-          this.openLinkInOrcaTab(
-            ownerContext.browserTabId,
-            newTabUrl,
-            disposition !== 'background-tab'
-          )
-        ) {
-          this.forwardOrQueuePopupEvent(guest.id, {
-            origin: safeOrigin(newTabUrl),
-            action: 'opened-in-orca'
-          })
-        }
-        // A vanished renderer must not turn new-tab intent into a native popup.
-        return { action: 'deny' }
-      }
 
       // Native popups must not target local files.
       const canOpenAsChild = normalizeBrowserPopupUrl(url) !== null
@@ -93,7 +72,8 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
           tabUrl && !(options.nativeWindow?.webContents ?? options.webContents)?.opener
             ? this.openPopupAsBrowserTab(guest, tabUrl, options, {
                 clicked,
-                activate: disposition !== 'background-tab'
+                activate: activateTab,
+                agentOpened
               })
             : null
         if (isNativeBrowserPopupRequest({ disposition, features, frameName })) {
@@ -122,8 +102,8 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
               webPreferences: { ...options.webPreferences, session: guest.session }
             })
         }
-      } else if (externalUrl && !postBody) {
-        // Redact the Kagi bearer token before opening the OS browser.
+      } else if (externalUrl && !postBody && observed?.byAgent === false) {
+        // The OS browser takes the foreground, so only the desktop user's own click opens it. Redact Kagi's bearer token first.
         void shell.openExternal(redactKagiSessionToken(externalUrl))
         this.forwardOrQueuePopupEvent(guest.id, {
           origin: safeOrigin(externalUrl),
@@ -149,6 +129,47 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
     }
   }
 
+  /** Answers a new-tab request as an Orca tab; false leaves opener-dependent requests to a child window. */
+  openNewTabPopup(
+    guest: Electron.WebContents,
+    request: NewBrowserTabPopupRequest,
+    observed: ObservedBrowserGuestGesture | null
+  ): boolean {
+    const ownerContext = this.resolvePopupOwnerContext(guest.id)
+    const newTabUrl =
+      normalizeExternalBrowserUrl(request.url) ??
+      (isLocalFileLinkFromLocalPage(guest, request.url) ? request.url : null)
+    if (!ownerContext || !newTabUrl || !isNewBrowserTabPopupIntent(request)) {
+      return false
+    }
+    // Scripted opens persist as tabs, so opens without observed input consume a budget.
+    if (!observed && !this.tryConsumePageInitiatedTab(ownerContext.rootGuestWebContentsId)) {
+      this.forwardOrQueuePopupEvent(guest.id, { origin: safeOrigin(newTabUrl), action: 'blocked' })
+      return true
+    }
+    // A new tab's download would miss the agent's `download` claim, so save the link here.
+    if (this.isAwaitingDownloadFrom(guest.id, ownerContext.rootGuestWebContentsId)) {
+      guest.downloadURL(newTabUrl)
+      return true
+    }
+    const agentOpened = observed?.byAgent !== false && this.isAgentLeadingGuest(guest.id)
+    if (
+      this.openLinkInOrcaTab(
+        ownerContext.browserTabId,
+        newTabUrl,
+        request.disposition !== 'background-tab',
+        agentOpened
+      )
+    ) {
+      this.forwardOrQueuePopupEvent(guest.id, {
+        origin: safeOrigin(newTabUrl),
+        action: 'opened-in-orca'
+      })
+    }
+    // A vanished renderer must not turn new-tab intent into a native popup.
+    return true
+  }
+
   requestExternalAppLaunch(
     guest: Electron.WebContents,
     rawUrl: string | undefined,
@@ -168,13 +189,13 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
     opener: Electron.WebContents,
     url: string,
     options: PopupChildWindowOptions,
-    tab: { clicked: boolean; activate: boolean }
+    tab: { clicked: boolean; activate: boolean; agentOpened: boolean }
   ): Electron.WebContents {
     const owner = this.resolvePopupOwnerContext(opener.id)
     const opened =
       owner !== null &&
       (tab.clicked || this.tryConsumePageInitiatedTab(owner.rootGuestWebContentsId)) &&
-      this.openLinkInOrcaTab(owner.browserTabId, url, tab.activate)
+      this.openLinkInOrcaTab(owner.browserTabId, url, tab.activate, tab.agentOpened)
     this.forwardOrQueuePopupEvent(opener.id, {
       origin: safeOrigin(url),
       action: opened ? 'opened-in-orca' : 'blocked'
@@ -208,6 +229,7 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
         return false
       }
       this.attachGuestPolicies(contents, owner)
+      this.inheritAgentLead(openerGuest.id, contents.id)
       return true
     })
     const opened = Boolean(options.webContents || options.nativeWindow)

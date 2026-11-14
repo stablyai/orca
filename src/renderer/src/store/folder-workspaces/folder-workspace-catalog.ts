@@ -127,6 +127,17 @@ function mergeFetchedFolderWorkspacesForHost({
   )
 }
 
+export function mergeCreatedFolderWorkspace(
+  created: FolderWorkspace,
+  current: readonly FolderWorkspace[],
+  projectGroups: readonly ProjectGroup[]
+): readonly FolderWorkspace[] {
+  const resolveHostId = createFolderWorkspaceHostResolver(projectGroups)
+  return mergeByIdentity([created], current, (workspace) =>
+    getFolderWorkspaceHostIdentity(workspace, resolveHostId)
+  )
+}
+
 export function getFolderWorkspaceCatalogReplacementIdentities(
   catalog: FetchedFolderWorkspaceCatalog,
   currentFolderWorkspaces: readonly FolderWorkspace[],

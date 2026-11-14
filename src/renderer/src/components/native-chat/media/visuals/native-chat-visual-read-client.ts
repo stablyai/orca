@@ -6,7 +6,7 @@ import {
   AGENT_SESSION_VISUAL_READ_ERRORS,
   type AgentSessionReadVisualResult,
   type AgentSessionVisualReadError
-} from '../../../../../../shared/rpc-contract/agent-session-visual-params'
+} from '../../../../../../shared/rpc-contract/structured-agent-session/agent-session-visual-params'
 
 export type NativeChatVisualIdentity = {
   target: RuntimeClientTarget

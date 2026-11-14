@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PluginMarketplaceHostListing } from '../../../../../../preload/api/plugin-host-api'
+import type { PluginMarketplaceHostListing } from '../../../../../../preload/api/plugins/plugin-host-api'
 import { catalogAppThemes } from './use-catalog-app-themes'
 
 function themeListing(

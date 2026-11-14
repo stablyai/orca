@@ -9,8 +9,8 @@ import {
   BRIDGE_IMAGE_OPERATIONS,
   type BridgeImageOperation
 } from '../../../mobile-web-shell/bridge/bridge-image-verbs'
-import { useImageActions } from '../../../platform/image-actions'
-import { ImageActionRefusedError } from '../../../platform/image-actions-contract'
+import { useImageActions } from '../../../platform/image-actions/image-actions'
+import { ImageActionRefusedError } from '../../../platform/image-actions/image-actions-contract'
 import { colors, feedback } from '../../../theme/mobile-theme'
 import type { ImageViewerActionsProps } from './MobileNativeChatImageViewer'
 

@@ -1,4 +1,5 @@
 import { getCommitMessageAgentSpec } from '../generation/commit-message-agent-spec'
+import { isGlobalAiTextAction } from '../recipes/source-control-ai-actions'
 import { LOCAL_COMMIT_MESSAGE_HOST_KEY } from '../generation/commit-message-host-key'
 import { removeSourceControlAiArgumentFlag } from '../recipes/source-control-ai-argument-flags'
 import { normalizeSourceControlAiSettings } from './source-control-ai-settings'
@@ -101,7 +102,7 @@ export function sourceControlAiModelChoiceHostKeys(
   const choice =
     input.target.type === 'global'
       ? source.modelOverridesByOperation?.[input.actionId]
-      : input.actionId === 'conversationName'
+      : isGlobalAiTextAction(input.actionId)
         ? undefined
         : input.repo?.sourceControlAi?.modelOverridesByOperation?.[input.actionId]
   const hostKeys = new Set([
@@ -127,14 +128,14 @@ export function saveSourceControlAiActionModelChoice(
   const choice =
     input.target.type === 'global'
       ? source.modelOverridesByOperation?.[input.actionId]
-      : input.actionId === 'conversationName'
+      : isGlobalAiTextAction(input.actionId)
         ? undefined
         : repo?.modelOverridesByOperation?.[input.actionId]
   const remoteHostKeys = sourceControlAiModelChoiceHostKeys(input)
   const recipe =
     input.target.type === 'global'
       ? source.actions?.[input.actionId]
-      : input.actionId === 'conversationName'
+      : isGlobalAiTextAction(input.actionId)
         ? undefined
         : repo?.actionOverrides?.[input.actionId]
   const spec = getCommitMessageAgentSpec(input.agentId)
@@ -175,8 +176,8 @@ export function saveSourceControlAiActionModelChoice(
     }
   }
   const actionId = input.actionId
-  if (actionId === 'conversationName') {
-    throw new Error('Chat name model choices are global only')
+  if (isGlobalAiTextAction(actionId)) {
+    throw new Error('Chat name and dictation cleanup model choices are global only')
   }
   return {
     target: input.target,

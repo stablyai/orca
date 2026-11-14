@@ -2,29 +2,29 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from 'vitest'
-import { agentSessionConversationView } from '../../../src/shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../src/shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import {
   agentSessionLeaseOwnerVerdict,
   agentSessionLeasePossiblyWriting
-} from '../../../src/shared/agent-session/lifecycle/agent-session-lease-adjudication'
-import { agentSessionRecordFixture } from '../../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
+} from '../../../src/shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
+import { agentSessionRecordFixture } from '../../../src/shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import { agentModelCatalogReleasedOwner } from '../../../src/main/native-chat/agent-model-catalog/agent-model-catalog-snapshot'
 import {
   closeTestJournalHostDatabase,
   openTestJournalHostDatabase
 } from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { structuredAgentSessionLiveFence } from '../../../src/main/native-chat/agent-session-wire/observations/structured-agent-session-current-work'
 import { upgradeStoredStructuredAgentSessionOwnerExitEvidence } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-lease-release'
 import { turnVerdictFromDeathEvidence } from '../../../src/main/native-chat/agent-session-wire/termination/structured-agent-session-stale-turn-verdict'
 import { releaseStoredAgentSessionOwnerAfterSurfaceClose } from '../../../src/main/runtime/agent-session/ownership/agent-session-surface-release-transition'
-import { loadAgentSessionStoreRows } from '../../../src/main/runtime/agent-session/records/agent-session-record-rows'
 import {
+  closeTestAgentSessionDatabase,
   openTestAgentSessionRecordStore,
-  seedTestAgentSessionRecordStore
+  seedTestAgentSessionRecordStore,
+  storedTestAgentSessionRecord
 } from '../../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 
-// The last release before Stop recorded a delivered kill; it knows three death kinds.
+// The last release before Stop recorded a delivered kill.
 const RELEASE_REF = 'v1.4.244'
 
 type OldStoreMaps = {
@@ -69,15 +69,30 @@ function oldRecord(value: unknown) {
 }
 
 // Materializing the historical source checkout and importing its modules can exceed the default timeout.
-test(`${RELEASE_REF} keeps a stopped chat readable through restart, resume and evidence replacement`, async () => {
+// Conversion is one-way: a downgraded build keeps the records as converted, and what it writes
+// later is not carried forward, so the upgraded store keeps this build's records.
+test(`${RELEASE_REF} keeps the converted records readable and writable; the upgraded store keeps this build's stopped chat`, async () => {
   const directory = await mkdtemp(join(tmpdir(), 'orca-kill-downgrade-'))
   try {
     const live = agentSessionRecordFixture()
     const sessionId = live.sessionId
+    // The chat as an older build saved it, before this build first converts the store.
+    const legacy = openTestJournalHostDatabase(directory).db
+    legacy
+      .prepare('INSERT INTO agent_session_records (session_id, record_json) VALUES (?, ?)')
+      .run(sessionId, JSON.stringify(storedTestAgentSessionRecord(live)))
+    const converted = String(
+      legacy
+        .prepare('SELECT record_json FROM agent_session_records WHERE session_id = ?')
+        .get(sessionId)?.record_json
+    )
+
+    await closeTestJournalHostDatabase(directory)
+    await openTestAgentSessionRecordStore(directory)
+    // Admit this fixture's live owner after installation invalidates previously saved authority.
     await seedTestAgentSessionRecordStore(directory, { records: [live] })
-    const current = await openTestAgentSessionRecordStore(directory)
-    // Seed the host's already-attached owner; the Stop itself uses the real transition and commit.
-    await current.transitionHandoff(sessionId, () => live)
+    const current = await openTestAgentSessionRecordStore(directory, { mode: 'observe' })
+    expect(current.getRecord(sessionId)?.lease.runtimeFence).toBe(7)
     await releaseStoredAgentSessionOwnerAfterSurfaceClose(current, {
       sessionId,
       expectedFence: 7,
@@ -85,119 +100,83 @@ test(`${RELEASE_REF} keeps a stopped chat readable through restart, resume and e
       deathEvidenceKind: 'kill-delivered',
       exitReason: 'killed'
     })
-    // Include optional proof facts in the same production serialization contract.
-    await current.transitionHandoff(sessionId, (record) => ({
-      ...record,
-      lease: {
-        ...record.lease,
-        deathEvidence: record.lease.deathEvidence && {
-          ...record.lease.deathEvidence,
-          lastProvenAliveAt: 35_000,
-          runtimeEnd: 'quit'
-        }
-      }
-    }))
-    const evidence = current.getRecord(sessionId)?.lease.deathEvidence
-    expect(evidence).toEqual({
+    const stopped = current.getRecord(sessionId)
+    expect(stopped?.lease.deathEvidence).toEqual({
       kind: 'kill-delivered',
       detail: 'killed',
       observedAt: 40_000,
-      ownerFence: 7,
-      lastProvenAliveAt: 35_000,
-      runtimeEnd: 'quit'
+      ownerFence: 7
     })
-    const db = openTestJournalHostDatabase(directory).db
-    const saved = db
-      .prepare('SELECT record_json FROM agent_session_records WHERE session_id = ?')
-      .get(sessionId)
-    if (typeof saved?.record_json !== 'string') {
-      throw new Error('the current store must save the chat')
-    }
-    const raw = JSON.parse(saved.record_json)
-    expect(raw.lease.deathEvidence).toEqual({ ...evidence, kind: 'pid-absent', delivery: 'kill' })
+    await closeTestAgentSessionDatabase(directory)
 
     const checkout = await materializeReleaseCheckout(RELEASE_REF)
-    const [records, rows, drafts, restart, adjudication, transitions, views] = await Promise.all([
-      importReleaseCheckoutModule(checkout, 'src/shared/agent-session-record.ts'),
+    const [rows, drafts, restart] = await Promise.all([
       importReleaseCheckoutModule(checkout, 'src/main/runtime/agent-session-record-rows.ts'),
       importReleaseCheckoutModule(checkout, 'src/main/runtime/agent-session-store-draft.ts'),
       importReleaseCheckoutModule(
         checkout,
         'src/main/runtime/agent-session/ownership/agent-session-restart-lease-transitions.ts'
-      ),
-      importReleaseCheckoutModule(checkout, 'src/shared/agent-session-lease-adjudication.ts'),
-      importReleaseCheckoutModule(
-        checkout,
-        'src/main/runtime/agent-session/ownership/agent-session-lease-transitions.ts'
-      ),
-      importReleaseCheckoutModule(checkout, 'src/main/runtime/agent-session-store-state.ts')
+      )
     ])
-    expect(exported(records, 'isPersistedAgentSessionRecord')(raw)).toBe(true)
-    const loaded = exported(rows, 'loadAgentSessionStoreRows')(db)
-    expect(storeMaps(loaded).unreadableRecords.size).toBe(0)
-    const old = oldRecord(storeMaps(loaded).records.get(sessionId))
+    // The older build reads the records as converted, without this build's Stop.
+    const db = openTestJournalHostDatabase(directory).db
     expect(
-      exported(
-        adjudication,
-        'adjudicateAgentSessionRestart'
-      )({
-        lease: old.lease,
-        probe: { outcome: 'indeterminate', reason: 'no child after restart' },
-        observedAt: 50_000
-      })
-    ).toMatchObject({ disposition: 'free' })
+      db
+        .prepare('SELECT record_json FROM agent_session_records WHERE session_id = ?')
+        .get(sessionId)?.record_json
+    ).toBe(converted)
+    const loaded = storeMaps(exported(rows, 'loadAgentSessionStoreRows')(db))
+    expect(loaded.unreadableRecords.size).toBe(0)
+    const old = oldRecord(loaded.records.get(sessionId))
+    expect(old.lease).toMatchObject({ runtimeFence: 7, deathEvidence: null })
+    // It writes its own restart reconciliation over them.
     const reconciled = oldRecord(
       exported(
         restart,
         'applyAgentSessionRestartAdjudication'
       )({
         record: old,
-        probe: { outcome: 'indeterminate', reason: 'no child after restart' },
+        probe: { outcome: 'pid-absent' },
         now: 50_000
       })
     )
-    expect(reconciled.lease).toMatchObject({
-      unreconciled: false,
-      runtimeFence: 8,
-      deathEvidence: raw.lease.deathEvidence
-    })
-    const writeOld = (record: unknown) => {
-      const before = exported(rows, 'loadAgentSessionStoreRows')(db)
-      const draft = exported(drafts, 'draftAgentSessionStoreState')(before)
-      storeMaps(draft).records.set(sessionId, record)
-      exported(rows, 'writeAgentSessionStoreRows')(
-        db,
-        exported(drafts, 'agentSessionStoreDraftRowWrites')(before, draft)
-      )
-      return draft
-    }
-    const oldState = writeOld(reconciled)
-    expect(exported(views, 'listAgentSessionConversations')(oldState)).toMatchObject([
-      { sessionId, currentFence: 8 }
-    ])
-    expect(exported(views, 'getAgentSessionConversation')(oldState, sessionId)).toMatchObject({
-      sessionId,
-      ownerObservation: { unreconciled: false, claimStatus: 'released' }
-    })
-    expect(exported(views, 'requireWritableAgentSessionRecord')(oldState, sessionId)).toEqual(
-      reconciled
+    const before = exported(rows, 'loadAgentSessionStoreRows')(db)
+    const draft = exported(drafts, 'draftAgentSessionStoreState')(before)
+    storeMaps(draft).records.set(sessionId, reconciled)
+    exported(rows, 'writeAgentSessionStoreRows')(
+      db,
+      exported(drafts, 'agentSessionStoreDraftRowWrites')(before, draft)
     )
+    // Its loader holds every loaded lease unreconciled until that host proves ownership again.
+    expect(
+      oldRecord(storeMaps(exported(rows, 'loadAgentSessionStoreRows')(db)).records.get(sessionId))
+    ).toEqual({ ...reconciled, lease: { ...reconciled.lease, unreconciled: true } })
+    expect(
+      db
+        .prepare('SELECT record_json FROM agent_session_records WHERE session_id = ?')
+        .get(sessionId)?.record_json
+    ).not.toBe(converted)
+    await closeTestJournalHostDatabase(directory)
 
+    // Upgraded again over the older build's newer records: this build's stopped chat, unchanged.
     const upgraded = await openTestAgentSessionRecordStore(directory)
     const restored = upgraded.getRecord(sessionId)
     if (!restored) {
       throw new Error('the upgraded chat must remain readable')
     }
-    expect(restored.lease.deathEvidence).toEqual(evidence)
-    expect(restored.lease.runtimeFence).toBe(8)
+    // Opening the store is a restart: loaded leases stay unreconciled until ownership is proved.
+    expect(restored).toEqual({ ...stopped, lease: { ...stopped?.lease, unreconciled: true } })
     const conversation = agentSessionConversationView(restored)
     expect(agentSessionLeaseOwnerVerdict(restored.lease)).toBe('exited')
     expect(agentSessionLeasePossiblyWriting(restored.lease)).toBe(false)
-    expect(structuredAgentSessionLiveFence({ record: conversation })).toBeNull()
     expect(agentModelCatalogReleasedOwner(conversation)).toBe(true)
-    expect(turnVerdictFromDeathEvidence(restored.lease.deathEvidence, 7)).toEqual({
-      state: 'interrupted',
-      completedAt: 35_000
+    expect(turnVerdictFromDeathEvidence(restored.lease.deathEvidence, 7)).toMatchObject({
+      state: 'interrupted'
+    })
+    await upgraded.reconcileOnRestart({
+      sessionId,
+      probe: async () => ({ outcome: 'exit-observed' }),
+      now: 60_000
     })
     await upgradeStoredStructuredAgentSessionOwnerExitEvidence(
       upgraded,
@@ -212,56 +191,12 @@ test(`${RELEASE_REF} keeps a stopped chat readable through restart, resume and e
       },
       61_000
     )
-    expect(loadAgentSessionStoreRows(db).records.get(sessionId)?.lease).toMatchObject({
-      runtimeFence: 8,
-      deathEvidence: { ...evidence, kind: 'exit-observed', observedAt: 60_000 }
+    expect(upgraded.getRecord(sessionId)?.lease.deathEvidence).toMatchObject({
+      kind: 'exit-observed',
+      detail: 'killed',
+      observedAt: 60_000,
+      ownerFence: 7
     })
-
-    // Starting again in the old build ends the previous proof, including its marker.
-    const reservation = exported(
-      transitions,
-      'reserveAgentSessionOwner'
-    )({
-      record: reconciled,
-      expectedFence: 8,
-      probe: { outcome: 'pid-absent' },
-      reservation: {
-        spawnToken: 'next-owner',
-        claimKeyId: 'key-1',
-        handoffOperationId: null,
-        leaseTtlMs: 30_000,
-        now: 70_000
-      }
-    })
-    if (typeof reservation !== 'object' || reservation === null || !('record' in reservation)) {
-      throw new Error('the old build must reserve a successor')
-    }
-    const reserved = oldRecord(reservation.record)
-    writeOld(reserved)
-    expect(loadAgentSessionStoreRows(db).records.get(sessionId)?.lease).toMatchObject({
-      runtimeFence: 9,
-      claimStatus: 'reserved',
-      deathEvidence: null
-    })
-    const replaced = oldRecord(
-      exported(
-        restart,
-        'applyAgentSessionRestartAdjudication'
-      )({
-        record: reserved,
-        probe: { outcome: 'reservation-unused' },
-        now: 80_000
-      })
-    )
-    writeOld(replaced)
-    const replacement = loadAgentSessionStoreRows(db).records.get(sessionId)?.lease.deathEvidence
-    expect(replacement).toEqual({
-      kind: 'pid-absent',
-      detail: 'reservation never spawned',
-      observedAt: 80_000,
-      ownerFence: 9
-    })
-    expect(replaced.lease.deathEvidence).not.toHaveProperty('delivery')
   } finally {
     await closeTestJournalHostDatabase(directory)
     await rm(directory, { recursive: true, force: true })

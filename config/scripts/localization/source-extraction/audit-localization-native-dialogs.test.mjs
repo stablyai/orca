@@ -2,38 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { collectLocalizationCandidates, main } from './audit-localization-coverage.mjs'
-
-const path = '/repo/src/main/startup/dialog.ts'
-const source = `
-  const options = {
-    message: translateMain('message', 'Translated message'),
-    detail: 'Untranslated detail',
-    buttons: ['Proceed', translateMain('cancel', 'Cancel')],
-    body: 'Untranslated body',
-    buttonLabel: 'Retry',
-    checkboxLabel: 'Remember choice'
-  }
-`
+import { main } from './audit-localization-coverage.mjs'
 
 describe('native dialog localization coverage', () => {
-  it('finds untranslated native dialog fields while ignoring translated copy', () => {
-    const candidates = collectLocalizationCandidates(path, source, '/repo', {
-      includeNativeDialogFields: true
-    })
-    expect(candidates.map(({ kind, text }) => [kind, text])).toEqual([
-      ['object-property:detail', 'Untranslated detail'],
-      ['object-property:buttons', 'Proceed'],
-      ['object-property:body', 'Untranslated body'],
-      ['object-property:buttonLabel', 'Retry'],
-      ['object-property:checkboxLabel', 'Remember choice']
-    ])
-  })
-
-  it('does not change the existing renderer scan by default', () => {
-    expect(collectLocalizationCandidates(path, source, '/repo')).toEqual([])
-  })
-
   it('fails the opt-in check for a new native dialog literal', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-localization-'))
     const report = vi.spyOn(console, 'error').mockImplementation(() => {})

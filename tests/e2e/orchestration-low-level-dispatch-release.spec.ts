@@ -1,5 +1,5 @@
 import { test, expect } from './helpers/orca-app'
-import { RuntimeClient } from '../../src/cli/runtime-client'
+import { RuntimeClient } from '../../src/cli/runtime/client'
 import type { RuntimeTerminalListResult } from '../../src/shared/runtime-types'
 import { waitForSessionReady, ensureTerminalVisible } from './helpers/store'
 import {

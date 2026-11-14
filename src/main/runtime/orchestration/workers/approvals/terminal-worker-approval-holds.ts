@@ -19,18 +19,18 @@ import {
   type ClaudeToolRecord
 } from './claude-tool-result-close'
 import { firstWithin } from './first-within'
-import type {
-  TerminalWorkerApprovalAnswer,
-  TerminalWorkerApprovalCloseHow,
-  TerminalWorkerApprovalHold,
-  TerminalWorkerApprovalHoldsDeps
+import {
+  droppedAllowRefusal,
+  holdPayload,
+  type TerminalWorkerApprovalAnswer,
+  type TerminalWorkerApprovalCloseHow,
+  type TerminalWorkerApprovalHold,
+  type TerminalWorkerApprovalHoldsDeps
 } from './terminal-worker-approval-hold'
 import { reportWorkerApprovalClosed } from '../turn-stops/worker-turn-stop-report'
-import {
-  closedApproval,
-  type WorkerApprovalDecision,
-  type WorkerApprovalOutcome,
-  type WorkerApprovalPayload
+import type {
+  WorkerApprovalDecision,
+  WorkerApprovalPayload
 } from '../../../../../shared/orchestration/approvals/worker-approval-payload'
 import { TERMINAL_APPROVAL_ID_PREFIX } from './worker-approval-report'
 
@@ -137,17 +137,22 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
   }
 
   /** The open approval this pane's worker waits on, for its one escalation. */
+  /** Its escalation went out, so its close owes the coordinator one closing line. */
+  markReported(approvalId: string): void {
+    const hold = this.byApprovalId.get(approvalId)
+    if (hold) {
+      hold.reported = true
+    }
+  }
+
   /** Whether Orca still holds this prompt's hook, answering or not. */
   isHeld(approvalId: string): boolean {
     return this.byApprovalId.has(approvalId)
   }
 
-  /** `reporting`: whether the caller still sends its report, read last, so a close owes a closing
-   *  line only to an approval whose escalation went out. */
   async takeOpenApproval(
     paneKey: string,
-    dispatchId: string,
-    reporting: () => boolean = () => true
+    dispatchId: string
   ): Promise<WorkerApprovalPayload | null> {
     const hold = this.openByPane.get(paneKey)
     if (hold?.state !== 'open' || hold.dispatch.id !== dispatchId) {
@@ -158,12 +163,11 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
       const screen = this.deps.readScreen(paneKey)
       return screen && showsClaudeDialog(screen) ? screen : null
     })
-    if (hold.state !== 'open' || this.openByPane.get(paneKey) !== hold || !reporting()) {
+    if (hold.state !== 'open' || this.openByPane.get(paneKey) !== hold) {
       return null
     }
-    hold.reported = true
     this.readDialog(hold, lines)
-    return this.payload(hold)
+    return holdPayload(hold)
   }
 
   /** Writes a decision only to a dialog still on a caught-up screen, and claims it only once this
@@ -188,6 +192,12 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
     if (hold.state !== 'open' || !before || !showsClaudeDialog(before)) {
       return notOpen
     }
+    // The escalation can go out before Claude paints its warning: read it from this screen too.
+    this.readDialog(hold, before)
+    const personOnly = droppedAllowRefusal(hold, input)
+    if (personOnly) {
+      return personOnly
+    }
     hold.state = 'answering'
     hold.timer?.cancel()
     const written = await hold.channel.answer(
@@ -203,11 +213,11 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
         hold.state = 'open'
         await this.settle(hold, record)
       }
-      return notOpen
+      return droppedAllowRefusal(hold, input) ?? notOpen
     }
     hold.state = 'answered'
     this.release(hold)
-    return { ok: true, approval: this.payload(hold) }
+    return { ok: true, approval: holdPayload(hold) }
   }
 
   private watchDialog(hold: Hold): void {
@@ -285,6 +295,7 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
       return
     }
     hold.state = 'closed'
+    hold.closedAs = how
     this.release(hold)
     this.closingByToolUseId.delete(hold.toolUseId)
     void hold.channel.answer(null)
@@ -299,7 +310,7 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
       hold.dispatch,
       {
         from: hold.handle,
-        approval: this.payload(hold, {
+        approval: holdPayload(hold, {
           by: how?.by ?? 'unknown',
           decision: how?.decision ?? null,
           reason: null,
@@ -332,18 +343,5 @@ export class TerminalWorkerApprovalHolds implements ClaudePermissionHolds {
 
   private toolRecord(hold: Hold): Promise<ClaudeToolRecord | null> {
     return firstWithin(this.deps.setTimer, () => this.deps.readToolRecord(hold))
-  }
-
-  private payload(hold: Hold, outcome?: WorkerApprovalOutcome): WorkerApprovalPayload {
-    const open: WorkerApprovalPayload = {
-      v: 1,
-      approvalId: hold.approvalId,
-      state: 'open',
-      worker: { handle: hold.handle, dispatchId: hold.dispatch.id, taskId: hold.dispatch.task_id },
-      summary: hold.summary,
-      allowedActions: ['allow', 'deny'],
-      ...(hold.expiresAt ? { expiresAt: hold.expiresAt } : {})
-    }
-    return outcome ? closedApproval(open, outcome) : open
   }
 }

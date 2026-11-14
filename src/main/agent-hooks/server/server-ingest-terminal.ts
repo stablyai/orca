@@ -7,7 +7,7 @@ import {
 } from '../../../shared/workspace-layout/stable-pane-id'
 import { terminalStatusPayloadMatchesHook } from '../../../shared/agent-status/lifecycle/agent-terminal-status-equivalence'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
-import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import { agentSubagentsEqual } from '../../../shared/agent-status/contracts/agent-status-subagent-snapshot'

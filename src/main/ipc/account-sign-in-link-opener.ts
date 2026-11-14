@@ -1,6 +1,6 @@
 import { shell } from 'electron'
 import { isClaudeLocalSignInLink } from '../claude-accounts/sign-in/claude-sign-in-browser'
-import { isCodexLoginAuthUrl } from '../codex-accounts/codex-login-auth-url'
+import { isCodexLoginAuthUrl } from '../codex-accounts/login/codex-login-auth-url'
 
 export type AccountSignInProvider = 'claude' | 'codex'
 

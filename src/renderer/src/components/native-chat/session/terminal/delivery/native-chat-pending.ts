@@ -3,14 +3,14 @@ import { setBoundedScopeCacheEntry } from '../../../../../../../shared/native-ch
 import {
   NATIVE_CHAT_PENDING_SEND_LIMIT,
   type NativeChatPendingSend
-} from '../../../../../../../shared/native-chat/transcript/native-chat-pending-sends'
+} from '../../../../../../../shared/native-chat/transcript/pending-sends/native-chat-pending-sends'
 import type { NativeChatLaunchPrompt } from '@/components/native-chat/drafts/native-chat-launch-prompt'
 import {
   advancedNativeChatUserContentCounts,
   assignNativeChatPendingOccurrence,
   matchingNativeChatUserContentCounts,
   nativeChatPendingContentKey
-} from '../../../../../../../shared/native-chat/transcript/native-chat-pending-occurrence'
+} from '../../../../../../../shared/native-chat/transcript/pending-sends/native-chat-pending-occurrence'
 
 export type NativeChatPendingSendScope = {
   paneKey: string

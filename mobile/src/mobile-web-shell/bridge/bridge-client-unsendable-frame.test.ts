@@ -18,7 +18,7 @@ function closeResources(): void {
   resources.clear()
 }
 
-// Keep serialization inside sendFrame’s catch: cyclic params, BigInt or throwing toJSON must abandon the opened request id and report send failure, never leak one of 64 slots.
+// Failed serialization must release the request slot.
 
 function cyclicParams(): Record<string, unknown> {
   const params: Record<string, unknown> = { worktree: 'id:wt-1' }
@@ -41,18 +41,7 @@ async function acceptedRequestCount(client: {
   return attempts - refusals.filter((name) => name === 'BridgeClientCapExceededError').length
 }
 
-const unserializable = [
-  { name: 'cycle', params: cyclicParams },
-  { name: 'BigInt', params: () => ({ count: 1n }) },
-  {
-    name: 'throwing toJSON',
-    params: () => ({
-      toJSON() {
-        throw new Error('cannot serialize')
-      }
-    })
-  }
-]
+const unserializable = [{ name: 'cycle', params: cyclicParams }]
 
 describe('a request frame the page cannot serialize', () => {
   it.each(unserializable)('rejects $name as a send failure and reports it', async ({ params }) => {

@@ -4,7 +4,7 @@ import {
   nativeChatHistoryTurnFold,
   nativeChatTurnFoldRow,
   type NativeChatTurnFoldHistory
-} from '../../../../../../shared/native-chat/transcript/native-chat-turn-fold'
+} from '../../../../../../shared/native-chat/transcript/folding/native-chat-turn-fold'
 import { NativeChatVisualOwnerContext } from '../../media/visuals/native-chat-visual-owner'
 import {
   nativeChatMarkdownImageSources,
@@ -13,8 +13,8 @@ import {
 import {
   nativeChatLiveLine,
   type NativeChatLiveLine
-} from '../../../../../../shared/native-chat/transcript/native-chat-live-line'
-import { isNativeChatRowInLiveWorkingTurn } from '../../../../../../shared/native-chat/transcript/native-chat-live-turn-membership'
+} from '../../../../../../shared/native-chat/transcript/row-content/native-chat-live-line'
+import { isNativeChatRowInLiveWorkingTurn } from '../../../../../../shared/native-chat/transcript/turns/native-chat-live-turn-membership'
 import {
   buildNativeChatTranscript,
   type NativeChatTranscriptSlot
@@ -63,8 +63,7 @@ export function useNativeChatTranscriptSlots({
     openedPullRequests,
     isWorking,
     lifecycleWorking,
-    subagentSections,
-    subagentChoices,
+    subagentHeads,
     forkOffer
   } = input
   const [expandedTurnKeys, setExpandedTurnKeys] = useState<ReadonlySet<string>>(new Set())
@@ -128,8 +127,6 @@ export function useNativeChatTranscriptSlots({
     ]
   )
   const liveReasoningId = liveLine?.reasoning?.message.id ?? null
-  // A boolean, so the line's changing words never rebuild the slots.
-  const tailRowBelow = liveLine !== null || tailRow === 'awaiting-input'
   const { slots, forkPoint } = useMemo(
     () =>
       buildNativeChatTranscript({
@@ -147,10 +144,8 @@ export function useNativeChatTranscriptSlots({
         turnFold: historyFold,
         isWorking,
         lifecycleWorking,
-        subagentSections,
-        subagentChoices,
+        subagentHeads,
         liveReasoningId,
-        tailRowBelow,
         forkOffer
       }),
     [
@@ -164,9 +159,7 @@ export function useNativeChatTranscriptSlots({
       messages,
       openedPullRequests,
       receipts,
-      subagentChoices,
-      subagentSections,
-      tailRowBelow,
+      subagentHeads,
       turnDiffs,
       turnKeys,
       turnStatuses,

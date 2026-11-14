@@ -1,34 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { VadPauseSegmenter, type VadStream } from './stt-vad-pause-segmenter'
+import { VadPauseSegmenter } from './stt-vad-pause-segmenter'
+import { fakeVadSession } from './transcribe-cpp-fake.test-fixture'
 
 // 100 Hz audio in 10-sample (0.1 s) frames; each sample holds its frame's speech probability, so outputs show which frames survived.
 const RATE = 100
 const FRAME = 10
 
-function fakeVad(): VadStream {
-  let pending: number[] = []
-  let frames = 0
-  const score = (flush: boolean) => {
-    const probs: number[] = []
-    while (pending.length >= FRAME || (flush && pending.length > 0)) {
-      probs.push(pending[0])
-      pending = pending.slice(FRAME)
-    }
-    const firstFrame = frames
-    frames = flush ? 0 : frames + probs.length
-    return { probs, firstFrame, segments: [] }
-  }
-  return {
-    streamFeed: async (pcm) => {
-      if (!(pcm instanceof Float32Array)) {
-        throw new Error('the segmenter feeds Float32Array')
-      }
-      pending.push(...pcm)
-      return score(false)
-    },
-    streamFlush: async () => score(true)
-  }
-}
+const fakeVad = () => fakeVadSession(FRAME, (frame) => frame[0])
 
 function audio(frames: number[]): Float32Array {
   return Float32Array.from(frames.flatMap((probability) => Array(FRAME).fill(probability)))

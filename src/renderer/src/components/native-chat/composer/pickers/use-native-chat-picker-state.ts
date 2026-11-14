@@ -23,16 +23,16 @@ import {
   editReplacesTriggerToken,
   isSkillPickerTriggered,
   type ComposerAutocomplete
-} from '../../../../../../shared/native-chat/input/native-chat-composer-autocomplete'
-import { applyPickerSuggestion } from '../../../../../../shared/native-chat/input/native-chat-picker-triggers'
+} from '../../../../../../shared/native-chat/input/composer/native-chat-composer-autocomplete'
+import { applyPickerSuggestion } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-triggers'
 import {
   classifyNativeChatSend,
   type NativeChatSendClassification,
   type NativeChatSessionSkill,
   type SlashCommandSuggestion
-} from '../../../../../../shared/native-chat/input/native-chat-slash-commands'
-import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/native-chat-picker-items'
-import { nativeChatPickerCommands } from '../../../../../../shared/native-chat/input/native-chat-skill-visibility'
+} from '../../../../../../shared/native-chat/input/commands/native-chat-slash-commands'
+import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
+import { nativeChatPickerCommands } from '../../../../../../shared/native-chat/input/commands/native-chat-skill-visibility'
 import { useNativeChatSkills } from './use-native-chat-skills'
 import { useNativeChatPreferredSuggestion } from './use-native-chat-preferred-suggestion'
 import {

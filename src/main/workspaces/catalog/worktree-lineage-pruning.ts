@@ -92,7 +92,11 @@ export function pruneLineageForMissingRepoWorktrees(
     )
   )
   const isLive = (worktreeId: string): boolean => {
-    if (liveIds.has(worktreeId) || preservedMetadataCandidateIds?.has(worktreeId)) {
+    if (
+      liveIds.has(worktreeId) ||
+      preservedMetadataCandidateIds?.has(worktreeId) ||
+      store.getWorktreeMeta(worktreeId)?.archivedCheckout
+    ) {
       return true
     }
     const worktreePath = splitWorktreeId(worktreeId)?.worktreePath

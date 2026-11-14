@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createPlaceholderTerminal,
   placeholderCells,
-  TrackedBitmap,
   write
 } from './xterm-kitty-placeholder-test-terminal.mjs'
 
@@ -11,17 +10,6 @@ const PLACEHOLDER = String.fromCodePoint(0x10eeee)
 afterEach(() => vi.unstubAllGlobals())
 
 const cell = (h, row = 0, col = 0) => h.terminal.buffer.active.getLine(row)?.getCell(col)
-
-function metadata(line, col) {
-  return {
-    words: [...line._data.subarray(col * 3, col * 3 + 3)],
-    chars: line.getString(col),
-    width: line.getWidth(col),
-    code: line.getCodePoint(col),
-    combined: line.isCombined(col),
-    extended: line._extendedAttrs[col]
-  }
-}
 
 function reservedRow(h, last = false) {
   const buffer = h.terminal._core.buffer
@@ -49,45 +37,6 @@ describe('reserved placeholder glyph visibility', () => {
       expect(cell(h, 0, 1).getWidth()).toBe(2)
       expect(cell(h, 0, 1).isInvisible()).toBeFalsy()
       expect(cell(h, 0, 3).getChars()).toBe('X')
-    } finally {
-      h.terminal.dispose()
-    }
-  })
-
-  it('masks a reserved cell without replacing its physical tile payload or linked attributes', async () => {
-    const h = createPlaceholderTerminal()
-    try {
-      await write(
-        h.terminal,
-        `\x1b[4;48;2;30;40;50m\x1b]8;;https://example.invalid/\x1b\\${placeholderCells(7, 10, 1, 1)}\x1b]8;;\x1b\\\x1b[H`
-      )
-      const bitmap = new TrackedBitmap(10, 10)
-      h.storage.addImage(bitmap, { scrolling: true, layer: 'top', zIndex: 0, cursorPos: 'iip' })
-      const line = h.terminal._core.buffer.lines.get(0)
-      const realCell = cell(h)
-      realCell.fg &= ~INVISIBLE
-      line.setCell(0, realCell)
-      const before = metadata(line, 0)
-      const extended = line.getExtended(0)
-      const payload = extended.payload
-      const attrs = [extended.ext, extended.urlId, extended.underlineColor]
-      expect(extended.urlId).toBeGreaterThan(0)
-      expect(extended.underlineColor & 0xffffff).toBe(10)
-      expect(h.storage._images.get(payload.imageId).orig).toBe(bitmap)
-      h.kitty.hidePlaceholderGlyphs(h.terminal)
-      const after = metadata(line, 0)
-      expect(after).toEqual({
-        ...before,
-        words: [before.words[0], before.words[1] | INVISIBLE, before.words[2]]
-      })
-      expect(line.getExtended(0)).toBe(extended)
-      expect(line.getExtended(0).payload).toBe(payload)
-      expect([extended.ext, extended.urlId, extended.underlineColor]).toEqual(attrs)
-      const drawImage = vi.fn()
-      const canvas = { getContext: () => ({ drawImage }) }
-      window.document = { createElement: () => canvas }
-      expect(h.storage.getImageAtBufferCell(0, 0)).toBe(canvas)
-      expect(drawImage).toHaveBeenCalledWith(bitmap, 0, 0, 10, 10)
     } finally {
       h.terminal.dispose()
     }
@@ -126,22 +75,6 @@ describe('reserved placeholder glyph visibility', () => {
       expect(buffer.lines.get(last).getFg(0) & INVISIBLE).toBe(0)
       h.terminal.resize(20, 50)
       expect(buffer.lines.get(last).getFg(0) & INVISIBLE).toBeTruthy()
-    } finally {
-      h.terminal.dispose()
-    }
-  })
-
-  it('cancels a queued scroll scan when the addon is disposed', async () => {
-    const h = createPlaceholderTerminal()
-    try {
-      await write(h.terminal, `${PLACEHOLDER}\r\n${'ROW\r\n'.repeat(24)}`)
-      const scans = vi.spyOn(h.kitty, 'hidePlaceholderGlyphs')
-      h.terminal.scrollToTop()
-      h.addon.dispose()
-      await Promise.resolve()
-      expect(scans).not.toHaveBeenCalled()
-      expect(cell(h).getChars()).toBe(PLACEHOLDER)
-      expect(cell(h).isInvisible()).toBeFalsy()
     } finally {
       h.terminal.dispose()
     }

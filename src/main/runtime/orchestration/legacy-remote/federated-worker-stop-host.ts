@@ -1,6 +1,6 @@
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { WorkerStopReceipt } from '../../../../shared/orchestration/workers/orchestration-worker-stop-receipt'
-import { archiveWorkerOutputBeforeStop } from '../../rpc/methods/orchestration/worker/worker-stop-archive'
+import { archiveWorkerOutputBeforeStop } from '../../rpc/methods/orchestration/worker/stop/worker-stop-archive'
 import { describeUnconfirmedAgentStop } from '../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { inspectRemoteAttachment } from './federation-attachment-observation'
 
@@ -33,7 +33,7 @@ export async function stopRemoteAttachment(
       lastError: attachment.last_error
     }
   }
-  await archiveWorkerOutputBeforeStop({
+  archiveWorkerOutputBeforeStop({
     runtime,
     db,
     dispatchId: params.dispatchId,

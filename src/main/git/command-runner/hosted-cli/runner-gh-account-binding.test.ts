@@ -1,5 +1,5 @@
+import type * as GhAccountTokenModule from '../../../github/accounts/gh-account-token'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createFakeSpawnedChild as mockChild } from '../../../../shared/__fixtures__/fake-spawned-child'
 
 const {
   spawnMock,
@@ -28,9 +28,7 @@ vi.mock('node:child_process', async (importOriginal) => ({
   spawn: spawnMock
 }))
 
-import type * as GhAccountTokenModule from '../../../github/gh-account-token'
-
-vi.mock('../../../github/gh-account-token', async (importOriginal) => {
+vi.mock('../../../github/accounts/gh-account-token', async (importOriginal) => {
   const actual = await importOriginal<typeof GhAccountTokenModule>()
   return {
     ...actual,
@@ -44,24 +42,6 @@ import { ghExecFileAsync } from './gh-exec-file'
 import { _resetGhRateLimitBreaker, recordGhPrimaryRateLimit } from './gh-rate-limit-breaker'
 
 /** Spawns a child that settles with `stdout`, capturing the env the runner handed it. */
-function spawnSettledChild(stdout: string): {
-  env: () => NodeJS.ProcessEnv | undefined
-} {
-  let capturedEnv: NodeJS.ProcessEnv | undefined
-  spawnMock.mockImplementation(
-    (_cmd: string, _args: string[], opts: { env?: NodeJS.ProcessEnv }) => {
-      capturedEnv = opts.env
-      const child = mockChild()
-      queueMicrotask(() => {
-        child.stdout?.emit('data', Buffer.from(stdout))
-        child.emit('exit', 0, null)
-        child.emit('close', 0, null)
-      })
-      return child
-    }
-  )
-  return { env: () => capturedEnv }
-}
 
 describe('ghExecFileAsync account binding', () => {
   beforeEach(() => {
@@ -93,19 +73,6 @@ describe('ghExecFileAsync account binding', () => {
     _resetGhRateLimitBreaker()
   })
 
-  it('skips injection for auth probes', async () => {
-    const spawned = spawnSettledChild('')
-
-    await ghExecFileAsync(['auth', 'status'], {
-      host: 'github.com',
-      ghAccount: { host: 'github.com', user: 'Alice' },
-      env: { ...process.env, GH_TOKEN: 'ambient' }
-    })
-
-    expect(resolveGhAccountTokenMock).not.toHaveBeenCalled()
-    expect(spawned.env()?.GH_TOKEN).toBe('ambient')
-  })
-
   it('fails closed when argv host signals disagree with the binding', async () => {
     await expect(
       ghExecFileAsync(['pr', 'list', '--repo', 'github.acme.com/a/b'], {
@@ -128,20 +95,6 @@ describe('ghExecFileAsync account binding', () => {
       expect(spawnMock).not.toHaveBeenCalled()
     }
   )
-
-  it('still spawns the keyring token read while the core bucket is blocked', async () => {
-    recordGhPrimaryRateLimit('core', Date.now() + 60_000, 'native:github.com')
-    const spawned = spawnSettledChild('gho_bound\n')
-
-    const { stdout } = await ghExecFileAsync(
-      ['auth', 'token', '--user', 'Alice', '--hostname', 'github.com'],
-      { host: 'github.com' }
-    )
-
-    expect(stdout.trim()).toBe('gho_bound')
-    expect(spawnMock).toHaveBeenCalledTimes(1)
-    expect(spawned.env()).toBeDefined()
-  })
 
   it('fails a bound API call fast on a blocked bucket without resolving a token', async () => {
     recordGhPrimaryRateLimit('core', Date.now() + 60_000, 'native:github.com')

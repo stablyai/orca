@@ -18,6 +18,8 @@ export type PluginWorkerSpawnSpec = {
   /** Dev tree hash; reviewed content is null for dev trees, so code edits need their own revision. */
   devRevision?: string | null
   grantedCapabilities: readonly PluginCapabilityKind[]
+  /** A development plugin: `host.has` also answers for proposed methods. */
+  allowProposed?: true
   /** Not reaped when idle: Orca waits on it (hooks), so a cold start must not be on that path. */
   keepWarm?: true
 }
@@ -35,6 +37,7 @@ export type PluginWorkerFactory = (options: {
   mainEntry: string
   entryPath: string
   grantedCapabilities: readonly PluginCapabilityKind[]
+  allowProposed?: boolean
   executeHostCall: PluginWorkerHostCallExecutor
   onPanelPost?: (post: PluginWorkerPanelPost) => void
   log: PluginWorkerLogSink
@@ -79,6 +82,7 @@ export async function startPluginWorkerAttempt(options: {
       mainEntry: options.spec.mainEntry,
       entryPath: options.entryPath,
       grantedCapabilities: options.spec.grantedCapabilities,
+      allowProposed: options.spec.allowProposed === true,
       executeHostCall: options.executeHostCall,
       onPanelPost: options.onPanelPost,
       log: options.log,

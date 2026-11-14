@@ -53,8 +53,8 @@ describe('Pi pending prompt delivery bounds and ownership', () => {
 
   it('bounds retained retry payload bytes before journal dispatch admission', async () => {
     const h = rig()
-    const frame = { type: 'prompt', message: 'x'.repeat(8 * 1024 * 1024 - 128) }
-    for (let i = 0; i < 4; i++) {
+    const frame = { type: 'prompt', message: 'x'.repeat(32 * 1024 * 1024 - 128) }
+    for (let i = 0; i < 3; i++) {
       await h.delivery.submit(`large:${i}`, i, frame)
     }
     const before = vi.fn(async () => {})

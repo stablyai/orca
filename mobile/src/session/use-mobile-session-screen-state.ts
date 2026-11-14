@@ -1,17 +1,17 @@
 import { useState, useRef, useMemo } from 'react'
-import { useTerminalSplitLayout } from '../terminal/session/use-terminal-split-layout'
-import { createLiveInputCapture } from '../terminal/session/live-input-capture'
-import { Animated, type ScrollViewInstance } from 'react-native'
+import { useTerminalSplitLayout } from '../terminal/session/pane-layout/use-terminal-split-layout'
+import { createLiveInputCapture } from '../terminal/session/input-controls/live-input-capture'
+import { Animated } from 'react-native'
 import type { MobileAnimatedValue } from '../platform/animated-handles'
 import type { MobileTerminalLinkOpenMode } from '../storage/preferences'
-import type { TerminalKeyboardAvoidanceMetrics } from '../terminal/terminal-webview-contract'
+import type { TerminalKeyboardAvoidanceMetrics } from '../terminal/webview/terminal-webview-contract'
 import {
   getDefaultTerminalAccessoryBuiltInIds,
   getVisibleTerminalAccessoryKeys
-} from '../terminal/terminal-accessory-layout'
-import type { CustomKey } from '../terminal/terminal-custom-keys'
+} from '../terminal/key-input/terminal-accessory-layout'
+import type { CustomKey } from '../terminal/key-input/terminal-custom-keys'
 import type { AppliedSnapshotMarker } from './tabs/session-tab-snapshot-gate'
-import { useWorktreeSessionTabsLoaded } from '../terminal/session/use-initial-session-terminal-autocreate'
+import { useWorktreeSessionTabsLoaded } from '../terminal/session/creation/use-initial-session-terminal-autocreate'
 import { createMobileSessionCreateWarningState } from './tabs/mobile-session-create-warning-state'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import type { DiffNotesDelivery } from '../source-control/review/mobile-review-comment-state'
@@ -20,7 +20,8 @@ import type {
   FileDocState,
   MarkdownDocState
 } from '../files/session-documents/session-document-state'
-import type { MobileDisplayMode, Terminal } from '../terminal/session/mobile-terminal-model'
+import type { MobileDisplayMode } from '../terminal/session/mobile-terminal-model'
+import type { TerminalRecord as Terminal } from '../terminal/session/inventory/mobile-terminal-records'
 import type { MobileSessionTab } from './tabs/mobile-session-tabs'
 import { useMobileSessionTabActionTargets } from './tabs/use-mobile-session-tab-action-targets'
 import type { MobileSessionFoundationModel } from './use-mobile-session-foundation'
@@ -47,11 +48,6 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const activeSessionTabIdRef = useRef<string | null>(null)
   // Preserve an explicit phone tab pick while a host snapshot is transiently incomplete.
   const selectedSessionTabIdRef = useRef<string | null>(null)
-  const tabStripRef = useRef<ScrollViewInstance>(null)
-  const tabStripOffsetRef = useRef(0)
-  const tabStripViewportWidthRef = useRef(0)
-  const tabStripContentWidthRef = useRef(0)
-  const tabLayoutsRef = useRef<Map<string, { x: number; width: number }>>(new Map())
   const [markdownDocs, setMarkdownDocs] = useState<Map<string, MarkdownDocState>>(new Map())
   const markdownDocsRef = useRef<Map<string, MarkdownDocState>>(new Map())
   const [fileDocs, setFileDocs] = useState<Map<string, FileDocState>>(new Map())
@@ -135,11 +131,6 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setActiveSessionTabId,
     activeSessionTabIdRef,
     selectedSessionTabIdRef,
-    tabStripRef,
-    tabStripOffsetRef,
-    tabStripViewportWidthRef,
-    tabStripContentWidthRef,
-    tabLayoutsRef,
     markdownDocs,
     setMarkdownDocs,
     markdownDocsRef,

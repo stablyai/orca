@@ -1,4 +1,4 @@
-import { watchMovedWorkerResumeSessions } from '../rpc/methods/orchestration/worker/worker-resume-session-capture'
+import { watchMovedWorkerResumeSessions } from '../rpc/methods/orchestration/worker/follow-up/worker-resume-session-capture'
 import { AgentTransitionDetector } from '../../agent-hooks/observations/agent-transition-detector'
 import type { ConnectorCloud } from '../../connector-cloud/connector-cloud'
 import type { ExternalConversationSeam } from '../../external-conversations/external-conversation-seam'
@@ -7,9 +7,9 @@ import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-cont
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { OrcaRuntimeWithWindowlessTerminalActivity } from '../sidebar-inputs/orca-runtime-windowless-terminal-activity'
+import { OrcaRuntimeWithWindowlessTerminalActivity } from '../sidebar-inputs/temporal/orca-runtime-windowless-terminal-activity'
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
-import type { AgentStatusStoreView } from '../sidebar-inputs/workspace-activity-facts-producer'
+import type { AgentStatusStoreView } from '../sidebar-inputs/workspace-facts/workspace-activity-facts-producer'
 import { subscribeHookStatusTitles } from '../terminal/layout/hook-status-title-subscription'
 import {
   resolveTerminalWorkerDispatch,
@@ -99,8 +99,9 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     readHookRow: (paneKey) => this.agentTransitions.latestRow(paneKey),
     setTimer: unrefTimer,
     readScreen: (handle) => this.readTerminal(handle, { screen: true, limit: 15 }),
-    takeOpenApproval: (paneKey, dispatchId, reporting) =>
-      this.terminalWorkerApprovals.takeOpenApproval(paneKey, dispatchId, reporting)
+    takeOpenApproval: (paneKey, dispatchId) =>
+      this.terminalWorkerApprovals.takeOpenApproval(paneKey, dispatchId),
+    markApprovalReported: (approvalId) => this.terminalWorkerApprovals.markReported(approvalId)
   })
 
   private readonly externalConversations = installExternalConversations(this.store, this)

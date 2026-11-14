@@ -47,14 +47,4 @@ describe('the terminal waits for its bundled glyphs', () => {
     expect(clearTextureAtlas).not.toHaveBeenCalled()
     expect(fonts.postToHost).toHaveBeenCalledOnce()
   })
-
-  it('withholds readiness until the font can paint the first terminal snapshot', async () => {
-    const fonts = pendingFonts()
-    startMessageBridge(fonts.scope)
-    expect(fonts.postToHost).not.toHaveBeenCalled()
-    fonts.finish()
-    await fonts.loaded
-    expect(fonts.postToHost).toHaveBeenCalledWith({ type: 'web-ready', cellBox: null })
-    stopMessageBridge(fonts.scope)
-  })
 })

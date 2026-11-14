@@ -21,6 +21,7 @@ import {
 import { requireCallerTab } from '../tabs-and-windows/browser-extension-tab-model'
 import { getPinnedBrowserExtensionIds } from '../actions/browser-extension-toolbar-pins'
 import { requestBrowserExtensionPopup } from '../actions/browser-extension-toolbar'
+import { findBrowserExtensionCallerAgentPage } from '../tabs-and-windows/browser-extension-agent-caller'
 
 const tabIdSchema = z.number().int().nonnegative()
 const tabDetailsSchema = z.object({ tabId: tabIdSchema.optional() }).loose()
@@ -200,7 +201,15 @@ function createActionNamespace(): BrowserExtensionNamespace {
       })),
       openPopup: defineBrowserExtensionMethod(
         z.tuple([z.object({ windowId: z.number().int() }).loose().optional()]),
-        (caller) => requestBrowserExtensionPopup(caller.session, caller.extension.id)
+        (caller) => {
+          // Why: the popup opens focused on the user's own tab, and an agent's call never takes it over.
+          if (findBrowserExtensionCallerAgentPage(caller)) {
+            throw new BrowserExtensionApiError(
+              'An agent is using this browser profile, so the popup was not opened'
+            )
+          }
+          return requestBrowserExtensionPopup(caller.session, caller.extension.id)
+        }
       )
     },
     events: ['onClicked', 'onUserSettingsChanged']

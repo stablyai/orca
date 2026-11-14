@@ -4,7 +4,7 @@ import {
   GitBranchDiff,
   GitCommitDiff,
   GitDiff
-} from '../../../../../../shared/rpc-contract/git-params'
+} from '../../../../../../shared/rpc-contract/source-control/git-params'
 
 // Only WebSocket callers set clientKind; local/in-process diffs retain uncapped fidelity.
 function remoteDiffContentBudget(

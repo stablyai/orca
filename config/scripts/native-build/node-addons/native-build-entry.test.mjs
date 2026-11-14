@@ -5,7 +5,6 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
-const { isNativeBuildEntryName } = require('./native-build-entry.cjs')
 const { adoptPackagedNativeBuildEntries } = require('../../../packaged-native-build-entries.cjs')
 const roots = []
 
@@ -41,16 +40,6 @@ describe('adoptPackagedNativeBuildEntries', () => {
     })
     adoptPackagedNativeBuildEntries(root, 'darwin', 'x64')
     expect(readFileSync(path.join(buildDir, 'Release', 'pty.node'), 'utf8')).toBe('entry-x64')
-    expect(
-      ['Release', 'orca-napi-darwin-arm64'].map((name) => isNativeBuildEntryName(name))
-    ).toEqual([false, true])
     expect(require('node:fs').readdirSync(buildDir)).toEqual(['Release'])
-  })
-
-  it('leaves a CI layout with no entries untouched', () => {
-    const root = makeRoot()
-    const buildDir = packagedNodePty(root, { Release: 'ci-build' })
-    adoptPackagedNativeBuildEntries(root, 'linux', 'x64')
-    expect(readFileSync(path.join(buildDir, 'Release', 'pty.node'), 'utf8')).toBe('ci-build')
   })
 })

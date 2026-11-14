@@ -13,7 +13,7 @@ import {
   normalizeSetupHookTrust,
   readRepoHooksSetupCommand,
   wasSetupHookPreviouslyApproved
-} from '../tasks/setup-hook-trust'
+} from '../new-workspace/creation/setup-hook-trust'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { AutomationDraft } from './automation-draft'
 import { AutomationDraftValidationError } from './automation-error'

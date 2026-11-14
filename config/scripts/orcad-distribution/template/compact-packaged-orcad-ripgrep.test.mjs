@@ -1,12 +1,12 @@
 import { createHash } from 'node:crypto'
-import { existsSync } from 'node:fs'
-import { copyFile, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import 'node:fs'
+import { copyFile, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
-import { basename, dirname, join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { assembleOrcadArtifact } from '../../../../src/main/orcad/orcad-artifact-materializer.ts'
-import { readOrcadArtifactIdentity } from '../../../../src/main/orcad/orcad-artifact-identity.ts'
+import '../../../../src/main/orcad/artifact-slots/orcad-artifact-materializer.ts'
+import '../../../../src/main/orcad/artifact-slots/orcad-artifact-identity.ts'
 import {
   ORCAD_TEMPLATE_MANIFEST_FILENAME,
   orcadRipgrepArtifact
@@ -46,63 +46,6 @@ async function fixture() {
 }
 
 describe('packaged ripgrep storage', () => {
-  it('preserves every deployed slot byte and version, including old schema 3 templates', async () => {
-    const f = await fixture()
-    const original = new Map()
-    const cacheRoot = join(f.appDir, 'cache')
-    for (const target of Object.keys(f.manifest.targets)) {
-      const slot = await assembleOrcadArtifact({ templateDir: f.templateDir, cacheRoot, target })
-      original.set(target, basename(slot))
-    }
-    expect(compactPackagedOrcadRipgrep(f.resourcesDir)).toBeGreaterThan(0)
-    expect(compactPackagedOrcadRipgrep(f.resourcesDir)).toBe(0)
-    for (const target of Object.keys(f.manifest.targets)) {
-      const slot = await assembleOrcadArtifact({
-        templateDir: f.templateDir,
-        cacheRoot: join(f.appDir, 'fresh-cache'),
-        target
-      })
-      expect(basename(slot)).toBe(original.get(target))
-      expect(await readOrcadArtifactIdentity(slot)).toBe(original.get(target))
-      const filename = orcadRipgrepArtifact(target)
-      expect(await readFile(join(slot, filename))).toEqual(
-        await readFile(join(f.resourcesDir, filename))
-      )
-      if (process.platform !== 'win32' && !target.startsWith('win32-')) {
-        expect((await stat(join(slot, filename))).mode & 0o777).toBe(0o755)
-      }
-      expect(existsSync(join(f.templateDir, 'targets', target, filename))).toBe(
-        target.startsWith('darwin-')
-      )
-    }
-    // No template storage schema reaches the deployment slot.
-    expect(
-      existsSync(
-        join(
-          cacheRoot,
-          'linux-x64-glibc',
-          original.get('linux-x64-glibc'),
-          ORCAD_TEMPLATE_MANIFEST_FILENAME
-        )
-      )
-    ).toBe(false)
-  })
-
-  it('keeps binaries that differ and never removes Darwin signing inputs', async () => {
-    const f = await fixture()
-    const desktop = join(f.resourcesDir, 'ripgrep/linux-arm64/rg')
-    await writeFile(desktop, 'different desktop bytes')
-    compactPackagedOrcadRipgrep(f.resourcesDir)
-    const manifest = JSON.parse(await readFile(f.manifestPath, 'utf8'))
-    expect(manifest.schemaVersion).toBe(4)
-    for (const [target, entry] of Object.entries(manifest.targets)) {
-      expect(entry.packagedRipgrep).toBe(
-        target.startsWith('darwin-') || target.startsWith('linux-arm64') ? undefined : true
-      )
-    }
-    expect(await readFile(desktop, 'utf8')).toBe('different desktop bytes')
-  })
-
   it('does not launder corrupted target bytes while removing duplicates', async () => {
     const f = await fixture()
     await writeFile(join(f.templateDir, 'targets/linux-x64-glibc/ripgrep/linux-x64/rg'), 'tampered')

@@ -13,7 +13,7 @@ import {
   adoptEndpointRepo
 } from '../../../../shared/endpoint-catalog-adoption'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/sort-order-update'
+import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/metadata/sort-order-update'
 import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'
 
 export type FetchedRepo = { kind: 'repo'; row: Repo }

@@ -16,7 +16,7 @@ import {
 } from './markdown-doc-links'
 import { selectMarkdownDocumentWorktreePath } from './markdown-document-worktree-path-selector'
 import { requestSharedMarkdownDocumentList } from './markdown-document-list-request'
-import { findRestoredEditorWorkspaceRuntimeOwner } from '../../restored-editor-workspace-runtime-owner'
+import { findRestoredEditorWorkspaceRuntimeOwner } from '../../file-ownership/restored-editor-workspace-runtime-owner'
 import {
   getLatestMarkdownMembershipChangeAt,
   useMarkdownDocumentWatchRefresh

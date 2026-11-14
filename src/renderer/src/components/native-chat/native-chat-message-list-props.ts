@@ -1,10 +1,11 @@
 import type { NativeChatTimedRow } from './conversation/slots/native-chat-timed-rows'
 import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
-import type { NativeChatTurnActivity } from '../../../../shared/native-chat/transcript/native-chat-turn-activity'
+import type { NativeChatTurnActivity } from '../../../../shared/native-chat/transcript/turns/native-chat-turn-activity'
 import type { StructuredAgentSessionHostWork } from './session/structured/use-structured-agent-session-transport-state'
 import type { NativeChatDeliveryNotice } from './messages/rows/NativeChatMessageRow'
-import type { useNativeChatSubagentSections } from './subagents/use-native-chat-subagent-sections'
+import type { StructuredAgentSubagentRoster } from '../../../../shared/agent-session/view/structured-agent-session-subagent-roster'
+import type { NativeChatSubagentView } from './subagents/native-chat-open-subagent'
 import type { NativeChatRailOutlineEntry } from './viewport/rail/native-chat-message-rail-items'
 import type { useNativeChatMessageListHandle } from './messages/actions/use-native-chat-reveal-latest'
 import type {
@@ -12,7 +13,7 @@ import type {
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionLatestTurn } from '../../../../shared/agent-session/agent-session-wire'
-import type { NativeChatSettledTurns } from '../../../../shared/native-chat/transcript/native-chat-turn-status'
+import type { NativeChatSettledTurns } from '../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 import type { NativeChatAwaitingInput } from '../../../../shared/native-chat/native-chat-terminal-turn'
 
 export type NativeChatMessageListProps = {
@@ -27,7 +28,8 @@ export type NativeChatMessageListProps = {
   /** The host's prompts still waiting on the person and its working answer (an older host: none). */
   journalHostWork?: StructuredAgentSessionHostWork
   /** Every subagent the session's rosters named, whether or not its roster row is loaded. */
-  subagentRoster?: Parameters<typeof useNativeChatSubagentSections>[2]
+  subagentRoster?: StructuredAgentSubagentRoster
+  subagentView?: NativeChatSubagentView
   /** User messages older than the loaded window, from the host's outline. */
   railOutline?: readonly NativeChatRailOutlineEntry[] | null
   isVisible?: boolean

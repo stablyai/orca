@@ -8,9 +8,12 @@ import {
   type TextInputInstance
 } from 'react-native'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import type { SmartWorkspaceSourceRow as SourceRow } from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import type { JiraSite, JiraSiteSelection } from '../../../src/shared/jira/jira-types'
-import { isBlockingJiraUrlIntent } from '../../../src/shared/new-workspace/smart-workspace-source-results'
+import {
+  isBlockingJiraUrlIntent,
+  type SmartWorkspaceSourceRow as SourceRow,
+  type SmartNameMode
+} from '../../../src/shared/new-workspace/smart-workspace-source-results'
 import {
   MR_STATE_FILTER_OPTIONS,
   resolveAvailableSmartModes,
@@ -18,14 +21,14 @@ import {
   SMART_MODE_OPTIONS,
   type SmartModeAvailabilityInput,
   type SmartModeOption
-} from '../tasks/mobile-smart-source-modes'
-import type { MrStateFilter, SmartNameMode } from '../tasks/mobile-composer-source-types'
+} from '../new-workspace/source-selection/mobile-smart-source-modes'
+import type { MrStateFilter } from '../new-workspace/source-selection/mobile-composer-source-types'
 import {
   lookupGitHubItemByOwnerRepo,
   type PasteRepoCandidate
-} from '../tasks/smart-source-paste-intent'
-import { useSmartWorkspaceSource } from '../tasks/use-smart-workspace-source'
-import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
+} from '../new-workspace/source-selection/smart-source-paste-intent'
+import { useSmartWorkspaceSource } from '../new-workspace/source-selection/use-smart-workspace-source'
+import type { MobileComposerSource } from '../new-workspace/source-selection/use-mobile-composer-source'
 import { colors, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'

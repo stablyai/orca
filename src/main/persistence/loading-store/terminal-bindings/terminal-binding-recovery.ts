@@ -1,6 +1,5 @@
 import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { SshRemotePtyLease } from '../../../../shared/ssh-types'
-import '../../../providers/ssh-pty-id'
 import { toComparableRelaySshPtyId, toRelaySshPtyId } from '../../../../shared/ssh-pty-id'
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'

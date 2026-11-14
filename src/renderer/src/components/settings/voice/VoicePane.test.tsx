@@ -106,7 +106,13 @@ describe('VoicePane', () => {
     document.body.appendChild(container)
     const root = createRoot(container)
     await act(async () => {
-      root.render(<VoicePane settings={settingsWithKey(true)} updateSettings={updateSettings} />)
+      root.render(
+        <VoicePane
+          settings={settingsWithKey(true)}
+          updateSettings={updateSettings}
+          writeSourceControlAiSettings={async () => {}}
+        />
+      )
     })
 
     const cloudTab = Array.from(
@@ -126,7 +132,13 @@ describe('VoicePane', () => {
     })
 
     await act(async () => {
-      root.render(<VoicePane settings={settingsWithKey(false)} updateSettings={updateSettings} />)
+      root.render(
+        <VoicePane
+          settings={settingsWithKey(false)}
+          updateSettings={updateSettings}
+          writeSourceControlAiSettings={async () => {}}
+        />
+      )
     })
 
     await act(async () => {

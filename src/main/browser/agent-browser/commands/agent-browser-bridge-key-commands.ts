@@ -91,13 +91,9 @@ export abstract class AgentBrowserBridgeKeyCommands extends AgentBrowserBridgeCa
         if (typeof step === 'string') {
           // Text no key types (emoji, controls) goes in like a paste, between the keys around it.
           await flush()
-          const route = await routePageTextInsertion(wc, { text: step }, send, guardFocus)
-          try {
-            assertExpectedPageUrlForStep()
-            await route.deliver({ text: step })
-          } finally {
-            route.release()
-          }
+          const route = await routePageTextInsertion(wc, send)
+          assertExpectedPageUrlForStep()
+          await route.deliver({ text: step })
           continue
         }
         const event = {

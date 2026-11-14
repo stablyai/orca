@@ -5,7 +5,7 @@ import { isTuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agen
 import {
   isMobileTerminalTabRunningAgent,
   resolveMobileTerminalTabOwnedAgentId
-} from '../../terminal/session/mobile-terminal-tab-agent'
+} from '../../session/tabs/mobile-terminal-tab-agent'
 
 // Require addressable terminal rows; salvage/drop other tab kinds rather than inventing send targets.
 const reviewTerminalTabSchema = z

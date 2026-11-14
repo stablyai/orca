@@ -5,7 +5,7 @@ import type { HostedReviewProvider } from '../../../../shared/source-control/hos
 import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { isGitHubPRSuppressed } from '../../../../shared/worktree/github-pr-suppression'
+import { isGitHubPRSuppressed } from '../../../../shared/worktree/hosted-review/github-pr-suppression'
 import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import '../sidebar/workspace-card/activity/worktree-card-empty-inputs'
 import { branchDisplayName } from '../sidebar/workspace-card/identity/worktree-branch-display'

@@ -1,9 +1,9 @@
 import type { ReactElement, Ref } from 'react'
 import type { NativeScrollEvent, NativeSyntheticEvent, StyleProp, ViewStyle } from 'react-native'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
-import type { MobileNativeChatRowKeys } from './mobile-native-chat-row-keys'
-import type { MobileNativeChatListHandle } from './use-mobile-native-chat-tail-follow'
-import type { MobileNativeChatScrollRoots } from './mobile-native-chat-scroll-roots'
+import type { MobileNativeChatRowKeys } from './projection/mobile-native-chat-row-keys'
+import type { MobileNativeChatListHandle } from './viewport/use-mobile-native-chat-tail-follow'
+import type { MobileNativeChatScrollRoots } from './viewport/mobile-native-chat-scroll-roots'
 
 export type MobileNativeChatPageListProps = {
   roots?: MobileNativeChatScrollRoots

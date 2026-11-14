@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store/index'
-import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import type { AgentProviderSessionMetadata } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AppState } from '@/store/types'
 import type { RefusedPaneResume } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'

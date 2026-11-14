@@ -1,12 +1,12 @@
-import { hasClosedTerminalTabRecord } from '../../../../shared/workspace-layout/closed-terminal-tab-tombstones'
+import { hasClosedTerminalTabRecord } from '../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import { isTerminalLeafId } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import type { TerminalSessionPartition } from '../../../../shared/workspace-layout/terminal-owner-invariants'
+import type { TerminalSessionPartition } from '../../../../shared/workspace-layout/terminal-topology/terminal-owner-invariants'
 import '../../restoring-sessions/terminal-layout-normalization'
-import { layoutContainsLeafId } from '../../../../shared/workspace-layout/terminal-pane-tree'
+import { layoutContainsLeafId } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import type { PtyBindingSourceExpectation } from '../store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { isClosedPaneFenced } from '../../terminal-topology/closed-pane-binding-fence'
+import { isClosedPaneFenced } from '../../terminal-topology/pane-ownership/closed-pane-binding-fence'
 
 export type PtyBindingRefusalRequest = {
   tabId: string

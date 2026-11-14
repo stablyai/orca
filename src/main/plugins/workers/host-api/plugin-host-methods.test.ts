@@ -71,3 +71,61 @@ describe('workspace.readContext host reachability', () => {
     })
   })
 })
+
+describe('workspace.readContext workspace id', () => {
+  it('is the id workspace.list gives: identity form, folder key, else the raw id', async () => {
+    const contexts = [
+      { worktreeId: 'repo::/w', identityKey: 'wt2:local:i1' },
+      { worktreeId: 'folder:f1' },
+      // A remote workspace known only from stored rows has no identity.
+      { worktreeId: 'remote-repo::/home/user/repo' }
+    ]
+    const outcomes = await Promise.all(
+      contexts.map((context) => {
+        const services = createServices(vi.fn())
+        vi.mocked(services.resolveActiveWorktreeContext).mockResolvedValue({
+          ...context,
+          branch: '',
+          displayName: 'w'
+        })
+        return executePluginHostCall({
+          pluginId: 'samples.demo',
+          method: 'workspace.readContext',
+          params: {},
+          surface: 'worker',
+          grantedCapabilities: ['workspace:read'],
+          services
+        })
+      })
+    )
+    expect(outcomes).toMatchObject([
+      { ok: true, value: { workspaceId: 'identity:wt2:local:i1' } },
+      { ok: true, value: { workspaceId: 'folder:f1' } },
+      { ok: true, value: { workspaceId: 'remote-repo::/home/user/repo' } }
+    ])
+  })
+})
+
+describe('workspace.readContext in frames', () => {
+  it('gives panels only path-free ids', async () => {
+    const read = (worktreeId: string) => {
+      const services = createServices(vi.fn())
+      vi.mocked(services.resolveActiveWorktreeContext).mockResolvedValue({
+        worktreeId,
+        branch: '',
+        displayName: 'w'
+      })
+      return executePluginHostCall({
+        pluginId: 'samples.demo',
+        method: 'workspace.readContext',
+        params: {},
+        surface: 'panel',
+        grantedCapabilities: ['workspace:read'],
+        services
+      })
+    }
+    const [raw, folder] = await Promise.all([read('repo::/home/me/w'), read('folder:f1')])
+    expect(raw.ok && raw.value).not.toHaveProperty('workspaceId')
+    expect(folder).toMatchObject({ ok: true, value: { workspaceId: 'folder:f1' } })
+  })
+})

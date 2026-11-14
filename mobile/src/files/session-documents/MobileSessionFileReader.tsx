@@ -1,5 +1,5 @@
-import { MobileFileMediaPreview } from '../MobileFileMediaPreview'
-import type { MobileFilePreviewRpcSender } from '../mobile-file-preview-operations'
+import { MobileFileMediaPreview } from '../media/MobileFileMediaPreview'
+import type { MobileFilePreviewRpcSender } from '../preview/mobile-file-preview-operations'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   FlatList,

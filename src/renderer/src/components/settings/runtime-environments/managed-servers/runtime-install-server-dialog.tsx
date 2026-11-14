@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/managed-orcad-api'
+import type { ManagedOrcadPreloadApi } from '../../../../../../preload/api/runtime/managed-orcad-api'
 import type { SshTarget } from '../../../../../../shared/ssh-types'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useTranslate } from '@/i18n/use-translate'

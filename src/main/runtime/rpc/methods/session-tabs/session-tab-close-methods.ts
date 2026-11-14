@@ -5,7 +5,7 @@ import { defineMethod } from '../../core'
 import {
   CloseLifecycleTab,
   CloseTab
-} from '../../../../../shared/rpc-contract/session-tabs-schemas-params'
+} from '../../../../../shared/rpc-contract/session-tabs/session-tabs-schemas-params'
 import { assertProjectedSessionTabVisible } from './session-tab-browser-placement-projection'
 import { assertAgentSessionTabDestructiveMutationSupported } from './session-tab-agent-status-projection'
 import { projectSessionTabsForClient } from './session-tabs-inventory'

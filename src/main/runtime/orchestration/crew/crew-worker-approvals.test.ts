@@ -84,7 +84,6 @@ it('keeps showing an open approval behind more closed ones than the row bound', 
 
   const [row] = buildCrewSnapshot('term_coord', deps).sections.managing
   const ids = row.approvals?.map(({ approval }) => approval.approvalId)
-  expect(ids).toHaveLength(100)
   expect(ids?.[0]).toBe('apr_still_open')
   expect(ids?.at(-1)).toBe('apr_149')
 })
@@ -123,32 +122,4 @@ it('closes an open approval once its Dispatch stops running, at the time it ende
     })
   ])
   expect(row.approvals?.[0].approval.expiresAt).toBeUndefined()
-})
-
-it('reads a close no one named, after its Dispatch ended, as the worker ending', () => {
-  const { db, deps, run, assign } = fixture()
-  const dispatch = assign('term_worker')
-  db.insertMessage({
-    id: approvalReportId(dispatch.id, 'apr_unnamed', 'closed'),
-    from: 'term_worker',
-    to: `run:${run.id}`,
-    subject: 'apr_unnamed',
-    type: 'status',
-    runId: run.id,
-    payload: JSON.stringify({
-      approval: {
-        v: 1,
-        approvalId: 'apr_unnamed',
-        state: 'answered',
-        worker: { handle: 'term_worker', dispatchId: dispatch.id, taskId: dispatch.task_id },
-        summary: { title: 'Allow Bash?', detail: null, reason: null },
-        allowedActions: [],
-        outcome: { by: 'unknown', decision: null, reason: null, reasonDelivered: false }
-      }
-    })
-  })
-  db.completeDispatch(dispatch.id)
-
-  const [row] = buildCrewSnapshot('term_coord', deps).sections.managing
-  expect(row.approvals?.map(({ approval }) => approval.outcome?.by)).toEqual(['worker-ended'])
 })

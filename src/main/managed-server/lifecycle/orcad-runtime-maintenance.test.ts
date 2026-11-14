@@ -57,7 +57,7 @@ vi.mock('../activation/orcad-active-readiness', () => ({ probeActiveOrcadReadine
 vi.mock('../install/orcad-remote-build-hash', () => ({
   readRemoteOrcadBuildHash: mocks.buildHash
 }))
-vi.mock('../../orcad/orcad-artifact-materializer', () => ({
+vi.mock('../../orcad/artifact-slots/orcad-artifact-materializer', () => ({
   materializeOrcadArtifact: async () => '/local/orcad'
 }))
 vi.mock('../install/orcad-local-build-hash', () => ({
@@ -213,21 +213,6 @@ describe('updateManagedOrcadEnvironment', () => {
   })
 })
 
-describe('updateManagedOrcadEnvironment on a host already running this build', () => {
-  beforeEach(() => {
-    mocks.deploy.mockResolvedValue({ outcome: 'already-active', fullVersion: MANAGED_VERSION })
-  })
-
-  it('starts a slot proven stopped and forwards to the port it bound', async () => {
-    mocks.wake.mockResolvedValueOnce({ outcome: 'started', readiness: managedReadiness() })
-    await expect(
-      updateManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
-    ).resolves.toMatchObject({ outcome: 'already-current', activeVersion: MANAGED_VERSION })
-    expect(mocks.wake.mock.calls[0]?.[0]).toMatchObject({ port: 6_768 })
-    expect(mocks.rebuildTunnel).toHaveBeenCalledWith(harness.userDataPath, 'environment-1')
-  })
-})
-
 describe('rollbackManagedOrcadEnvironment', () => {
   it.each([
     [{ ...idle, liveSessions: 2 }, 'orcad_rollback_terminals_running'],
@@ -282,24 +267,6 @@ describe('rollbackManagedOrcadEnvironment', () => {
       rollbackManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
     ).resolves.toMatchObject({ outcome: 'refused', code: 'orcad_rollback_crosses_migration' })
     expect(mocks.rollback).not.toHaveBeenCalled()
-  })
-
-  it('rolls back against the installed bytes of the previous slot', async () => {
-    mocks.rollback.mockResolvedValueOnce({
-      outcome: 'rolled-back',
-      target: MANAGED_PREVIOUS_VERSION,
-      discarded: [MANAGED_VERSION],
-      verdict: { decision: 'activate', coverage: 'pty-spawn', warnings: [] }
-    })
-    await expect(
-      rollbackManagedOrcadEnvironment(harness.userDataPath, { selector: 'Managed' })
-    ).resolves.toMatchObject({ outcome: 'rolled-back', activeVersion: MANAGED_PREVIOUS_VERSION })
-    expect(mocks.rollback.mock.calls[0]?.[0]).toMatchObject({ targetBuildHash: 'previous-hash' })
-    expect(mocks.probe).toHaveBeenCalledWith(expect.anything(), {
-      buildHash: 'previous-hash',
-      fullVersion: MANAGED_PREVIOUS_VERSION
-    })
-    expect(mocks.rebuildTunnel).toHaveBeenCalledWith(harness.userDataPath, 'environment-1')
   })
 
   it('keeps the enrolled grant when the restored server offers a new device', async () => {

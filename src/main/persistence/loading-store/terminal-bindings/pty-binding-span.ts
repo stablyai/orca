@@ -3,13 +3,13 @@ import type { PtyBindingFastLaneMiss } from './pty-binding-fast-lane'
 import {
   terminalPanePlacementAgreement,
   type TerminalPanePlacementAgreement
-} from '../../terminal-topology/terminal-pane-placement-agreement'
+} from '../../terminal-topology/pane-admission/terminal-pane-placement-agreement'
 import {
   findTerminalBindingConflict,
   type TerminalOwnerConflictReason
-} from '../../../../shared/workspace-layout/terminal-owner-invariants'
+} from '../../../../shared/workspace-layout/terminal-topology/terminal-owner-invariants'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-pane-placement'
+import type { TerminalPanePlacement } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-placement'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
 export type PtyBindingPath = 'durable_match' | 'durability_only' | 'mutation'

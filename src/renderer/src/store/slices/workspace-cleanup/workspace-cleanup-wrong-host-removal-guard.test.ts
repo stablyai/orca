@@ -64,9 +64,7 @@ function makeHostCandidate(
     displayName: 'shared-workspace',
     branch: 'old-branch',
     path: workspacePath,
-    tier: 'ready',
-    selectedByDefault: true,
-    reasons: ['idle-clean'],
+    reasons: ['inactive'],
     blockers: force ? ['dirty-files'] : [],
     lastActivityAt: NOW - 30 * 24 * 60 * 60 * 1000,
     localContext: {

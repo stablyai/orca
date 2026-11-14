@@ -2,14 +2,14 @@ import { ipcMain } from 'electron'
 import { z } from 'zod'
 import type { Store } from '../persistence/loading-store/store'
 import type { PluginHostCallOutcome } from '../../shared/plugins/frames/plugin-protocol'
-import { getUserPluginsDir, getPluginsDataDir } from '../plugins/plugin-discovery'
+import { getUserPluginsDir, getPluginsDataDir } from '../plugins/discovery/plugin-discovery'
 import {
   installPluginFromGit,
   installPluginFromLocalPath
 } from '../plugins/installation/plugin-install'
 import { uninstallInstalledPlugin } from '../plugins/installation/plugin-uninstall'
-import { applyPluginConsent, applyPluginEnablement } from '../plugins/plugin-enablement'
-import { readApprovedPluginNewFileTemplate } from '../plugins/plugin-new-file-template'
+import { applyPluginConsent, applyPluginEnablement } from '../plugins/activation/plugin-enablement'
+import { readApprovedPluginNewFileTemplate } from '../plugins/contributions/plugin-new-file-template'
 import { handlePluginPanelStateRequest } from '../plugins/panels/panel-lifetime/plugin-panel-state'
 import type { PluginService } from '../plugins/plugin-service'
 import { registerPluginFrameEntryHandlers, rendererPanelOwner } from './plugin-frame-entry-ipc'
@@ -83,7 +83,10 @@ const removeArgsSchema = z.object({
 const logsArgsSchema = z.object({ pluginKey: z.string().min(1) })
 
 // Preserve import compatibility; runtime RPC uses the Electron-free client-list module.
-import { listPluginsForClients, readInstalledPluginManifest } from '../plugins/plugin-client-list'
+import {
+  listPluginsForClients,
+  readInstalledPluginManifest
+} from '../plugins/discovery/plugin-client-list'
 
 export function registerPluginHandlers(
   store: Store,

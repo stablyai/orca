@@ -108,6 +108,13 @@ describe('an agent click that opens a file picker', () => {
     expect(intercepting).toBe(false)
   })
 
+  it('catches the picker a raw exec click opens', async () => {
+    await expect(bridge.exec('click @e3')).rejects.toMatchObject({
+      code: 'browser_file_chooser_opened'
+    })
+    expect(intercepting).toBe(false)
+  })
+
   it("stops intercepting the desktop user's pickers when an SSH host loses the page mid-click", async () => {
     const revoked = new AbortController()
     onClick = () => revoked.abort()

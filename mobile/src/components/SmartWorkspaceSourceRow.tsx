@@ -1,3 +1,4 @@
+import { branchRefLabel } from '../../../src/shared/git/refs/branch-ref-label'
 import { Text, View } from 'react-native'
 import { GitBranch, Sparkles } from 'lucide-react-native'
 import type { SmartWorkspaceSourceRow as SourceRow } from '../../../src/shared/new-workspace/smart-workspace-source-results'
@@ -70,8 +71,9 @@ function resolveRowContent(row: SourceRow, t: Translate): RowContent {
     case 'branch':
       return {
         icon: <GitBranch size={18} color={colors.textSecondary} />,
-        title: row.localBranchName || row.refName,
-        subtitle: row.refName
+        title: row.label ?? branchRefLabel(row.refName),
+        subtitle:
+          row.localBranchName !== branchRefLabel(row.refName) ? row.localBranchName : undefined
       }
     case 'linear':
       return {

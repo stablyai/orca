@@ -1,4 +1,4 @@
-import type { CheckStatus, ProviderCheckSummary } from './github/pull-request-types'
+import type { CheckStatus, ProviderCheckSummary } from './github/pull-requests/pull-request-types'
 import type { HostedReviewState } from './source-control/hosted-review/hosted-review-contracts'
 import {
   resolveProviderCheckState,

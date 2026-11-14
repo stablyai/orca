@@ -94,10 +94,15 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
     // Why: capture before the resolver await so an account switch during it invalidates both the snapshot and the state apply.
     const claudeGeneration = this.claudeFetchGeneration
     const claudeAuthPreparation = await this.claudeAuthPreparationResolver?.(claudeTarget)
-    if (signal.aborted) {
+    if (signal.aborted || claudeGeneration !== this.claudeFetchGeneration) {
       return
     }
     this.rememberClaudeAuthSnapshot(claudeAuthPreparation, claudeGeneration, claudeTarget)
+    // After the snapshot: statusLine posts are dropped until one names the selected account.
+    if (!this.isClaudeOAuthUsageEnabled()) {
+      this.updateState({ ...this.state, claude: this.claudeUsageWithoutOAuth() })
+      return
+    }
     const claudeProvenance = claudeAuthPreparation?.provenance ?? 'system'
     const previousState = this.state
 
@@ -111,7 +116,7 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
       allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
       allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
       networkProxySettings: this.networkProxySettingsResolver?.(),
-      signal
+      signal: this.claudeUsageFetchSignal(signal)
     }).catch((err): ProviderRateLimits => ({
       provider: 'claude',
       session: null,

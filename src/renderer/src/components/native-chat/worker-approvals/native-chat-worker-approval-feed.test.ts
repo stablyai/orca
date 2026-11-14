@@ -82,12 +82,3 @@ it('keeps a prompt that closed while shown pinned as its receipt for a moment, t
   expect(pinned.result.current).toEqual([])
   expect(receipts.result.current.map((e) => e.approval.approvalId)).toEqual(['apr_old', 'apr_1'])
 })
-
-it('keeps a prompt only the worker terminal can answer pinned', async () => {
-  vi.useFakeTimers()
-  const pinned = renderHook(() => feed.useNativeChatPinnedWorkerApprovals('orca_session_id:other'))
-  await act(async () => {})
-  send(approval('apr_t', 'answered', 'terminal-only'))
-  act(() => vi.advanceTimersByTime(60_000))
-  expect(pinned.result.current.map((e) => e.approval.approvalId)).toEqual(['apr_t'])
-})

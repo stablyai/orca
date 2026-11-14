@@ -56,7 +56,6 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   { file: 'src/source-control/use-mobile-git-requests.ts', references: 1 },
 
   // Scanner references the literal sendRequest without sending requests.
-  { file: 'src/tasks/mobile-tasks-source-family.test-support.ts', references: 1 },
 
   // Wraps a PairingCandidateClient as its raw port; the one chosen method already uses hostStatusProbe.
   { file: 'src/transport/pairing-relay-candidate.ts', references: 4 },

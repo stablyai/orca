@@ -8,7 +8,7 @@ import type {
 import {
   createAiVaultScanCancelledError,
   abandonRemoteSessionScanOnCancel
-} from '../../ai-vault/ai-vault-scan-cancellation'
+} from '../../ai-vault/scan-lifecycle/ai-vault-scan-cancellation'
 import { EMPTY_CONTENT_HASH, foldContentHash } from '../storage/session-search-content-hash'
 import { searchMessageRows } from '../storage/session-search-message-rows'
 import type { SessionSearchFileWrite } from '../storage/session-search-index-writer'

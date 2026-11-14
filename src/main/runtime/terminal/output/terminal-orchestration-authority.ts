@@ -9,7 +9,7 @@ import {
   parseLegacyNumericPaneKey,
   parsePaneKey
 } from '../../../../shared/workspace-layout/stable-pane-id'
-import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-tab-id'
+import { isValidTerminalTabId } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-tab-id'
 import { RecentPtyOutputBuffer } from './recent-pty-output-buffer'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import { resolveLocalProjectRuntimeForWorktreeId } from '../../../workspaces/execution-host/local-project-runtime-resolution'

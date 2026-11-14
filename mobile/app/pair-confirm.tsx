@@ -27,7 +27,7 @@ import {
   PairingProgress,
   waitForBeat
 } from '../src/pairing/pairing-visuals'
-import { triggerSuccess } from '../src/platform/haptics'
+import { triggerSuccess } from '../src/platform/haptics/haptics'
 import { getPairingFailureMessage } from '../src/pairing/pairing-failure-message'
 
 type Status = 'awaiting-confirm' | 'connecting' | 'error'

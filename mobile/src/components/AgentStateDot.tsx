@@ -5,7 +5,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../platform/accessibility/use-reduced-motion'
 import { useWorkingRingRotation } from './use-working-motion'
 
 // Match desktop per-agent vocabulary: working yellow spinner, done emerald, attention red, interrupted muted, unconfirmed amber, idle neutral.

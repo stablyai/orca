@@ -7,7 +7,7 @@ import {
   MobileNativeChatDisclosureContext,
   MobileNativeChatMarkdownRowKeyContext,
   useMobileNativeChatDisclosure
-} from '../session/native-chat/transcript/mobile-native-chat-disclosure-store'
+} from '../session/native-chat/transcript/viewport/mobile-native-chat-disclosure-store'
 import { colors, pressedStyle } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileSyntaxSegments } from './MobileSyntaxSegments'

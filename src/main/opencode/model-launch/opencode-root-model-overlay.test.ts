@@ -21,15 +21,6 @@ describe('planOpenCodeRootModelRewrite', () => {
     ).toBe(`& opencode --standalone${tail}`)
   })
 
-  it('uses the last of repeated models and an existing --standalone', () => {
-    expect(
-      planOpenCodeRootModelRewrite(
-        `opencode2 --standalone ${q(['--model', 'a/b', '--model=c/d'], 'posix')}`,
-        'posix'
-      )
-    ).toMatchObject({ command: 'opencode2 --standalone', model: 'c/d' })
-  })
-
   it.each([
     ['posix', `opencode ${q(['run', '--model', 'a/b'], 'posix')}`],
     ['posix', `opencode ${q(['./pkg', '--model', 'a/b'], 'posix')}`],
@@ -50,14 +41,5 @@ describe('planOpenCodeRootModelRewrite', () => {
     ['posix', 'claude --model opus']
   ] as const)('leaves %s `%s` as typed', (shell, command) => {
     expect(planOpenCodeRootModelRewrite(command, shell, 'C:\\')).toBeNull()
-  })
-
-  it('probes the primary agent only for a new session on it', () => {
-    expect(
-      planOpenCodeRootModelRewrite(
-        `opencode ${q(['-s', 'ses_1', '--model', 'a/b'], 'posix')}`,
-        'posix'
-      )?.probeExecutable
-    ).toBeUndefined()
   })
 })

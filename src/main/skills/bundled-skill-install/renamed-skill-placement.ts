@@ -9,6 +9,7 @@ import {
 import { classifyBundledSkillPath } from './bundled-skill-classification'
 import type { BundledSkillPlanInput } from './bundled-skill-plan'
 import { recoverySiblings } from './bundled-skill-swap-recovery'
+import { isOtherBuildCopy } from './bundled-skill-written-digests'
 import { bundledSkillPathKey, type BundledSkillTargetRoot } from './bundled-skill-targets'
 
 export async function planFormerSkillPlacements(
@@ -80,9 +81,13 @@ export async function planFormerSkillPlacements(
           reason ??
           (observed.kind === 'unreadable'
             ? 'unreadable'
-            : classified.folderClass === 'edited'
-              ? 'edited'
-              : 'other')
+            : classified.folderClass !== 'edited'
+              ? 'other'
+              : // A build from before the rename recorded these bytes under the former name.
+                !cloud &&
+                  (await isOtherBuildCopy(filesystem, input.destination, { name }, observed))
+                ? 'other-build'
+                : 'edited')
       })
       continue
     }

@@ -9,7 +9,7 @@ import { getOrchestrationPeerCapabilityCache } from '../federation/orchestration
 import type { FederatedDispatchRow } from '../db/orchestration-records'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { readLegacyFederatedTerminal } from './worker-legacy-federated-read'
-import type { resolvePinnedFederatedServer } from '../../rpc/methods/orchestration/worker/pinned-federated-server'
+import type { resolvePinnedFederatedServer } from './pinned-federated-server'
 
 export async function readFederatedWorkerOutput(args: {
   runtime: OrcaRuntimeService

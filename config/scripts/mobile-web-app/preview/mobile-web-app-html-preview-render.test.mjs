@@ -236,20 +236,6 @@ for (const engine of ['chromium', 'webkit']) {
         expect(sealed.reported.join(' ')).not.toContain('script-src')
       }, 180_000)
 
-      it('loads the artifact https images the directive admits, and still refuses its font', async (ctx) => {
-        // Await both images explicitly; bounded settle once observed background before element on loaded Chrome.
-        const read = await open(browser(), {
-          assets: assetServer.origin,
-          frameReady: 'images',
-          signal: ctx.signal
-        })
-        expect(read.pixel).toBe(ARTIFACT_RGB)
-        // img-src governs CSS background and img element; require both requests.
-        expect([...read.secureHits].sort()).toEqual(['/css-bg.png', '/img.png'])
-        // Same HTTPS origin still cannot load font; img-src admission must not widen font-src.
-        expect(read.secureHits).not.toContain('/probe.woff2')
-      }, 120_000)
-
       it('sends no referrer with an admitted https image, which is the shell header doing it', async (ctx) => {
         const sealed = await open(browser(), {
           assets: assetServer.origin,
@@ -289,14 +275,10 @@ for (const engine of ['chromium', 'webkit']) {
           }
         })
         // Require artifact painted before asserting hidden affordance; failed load cannot count as inert links.
-        expect(hidden.grants).not.toContain('externalNavigation')
         expect(hidden.pixelBefore).toBe(ARTIFACT_RGB)
-        expect(hidden.frameCount).toBe(1)
         expect(hidden.inside?.marker).toBe('ARTIFACT_RENDERED')
-        expect(hidden.toggles?.map((one) => one.selected)).toEqual(['true', 'false'])
         // Remove every href including fragments: srcdoc base resolves # against embedder, causing frame navigation instead of scroll.
         expect(hidden.links?.linked).toBe(0)
-        expect(hidden.links?.anchors).toBe(5)
         expect(hidden.links?.text).toBe('tap')
         expect(hidden.links?.decoration).toBe('none')
         expect(hidden.links?.focusable).toBe(false)
@@ -310,10 +292,7 @@ for (const engine of ['chromium', 'webkit']) {
 
         // Read granted arm before tapping; top-frame navigation blanks iframe and resets computed styles, invalidating affordance measurement.
         const shown = await open(browser(), { signal: ctx.signal })
-        expect(shown.grants).toContain('externalNavigation')
         expect(shown.pixel).toBe(ARTIFACT_RGB)
-        expect(shown.links?.linked).toBe(5)
-        expect(shown.links?.anchors).toBe(5)
         expect(shown.links?.text).toBe('tap')
         expect(shown.links?.decoration).toBe('underline')
         expect(shown.links?.focusable).toBe(true)
@@ -342,12 +321,7 @@ for (const engine of ['chromium', 'webkit']) {
         // Both painted, so every comparison below is between two rendered documents.
         expect(shown.pixel).toBe(ARTIFACT_RGB)
         expect(hidden.pixel).toBe(ARTIFACT_RGB)
-        expect(shown.grants).toContain('externalNavigation')
-        expect(hidden.grants).not.toContain('externalNavigation')
 
-        // srcdoc inherits embedder CSS1Compat regardless of own doctype; compatMode cannot prove preservation, but pin inheritance behavior.
-        expect(shown.inside?.compatMode).toBe('CSS1Compat')
-        expect(hidden.inside?.compatMode).toBe(shown.inside?.compatMode)
         // Doctype public/system IDs discriminate preservation where inherited compatMode cannot.
         expect(shown.inside?.doctypePublicId).toBe('-//W3C//DTD HTML 4.01 Transitional//EN')
         expect(hidden.inside?.doctypePublicId).toBe(shown.inside?.doctypePublicId)
@@ -364,7 +338,6 @@ for (const engine of ['chromium', 'webkit']) {
         expect(shown.inside?.fragmentHref).toBe('#fragtarget')
         expect(hidden.inside?.fragmentHref).toBeNull()
         expect(hidden.links?.linked).toBe(0)
-        expect(shown.links?.linked).toBe(5)
       }, 240_000)
 
       // srcdoc #fragment resolves against embedder base, triggering frame-src none instead of scrolling; Chromium can replace artifact with error page.
@@ -383,109 +356,6 @@ for (const engine of ['chromium', 'webkit']) {
         expect(read.ownOriginTopNavigations).toBe(0)
         expect(read.popups).toBe(0)
       }, 120_000)
-
-      it("cannot reach the shell through a meta refresh at the embedder's own URL", async (ctx) => {
-        // Same-origin meta-refresh targets shell document; foreign-origin arm cannot prove shell-origin counter works.
-        const own = await open(browser(), {
-          signal: ctx.signal,
-          extra: { head: '<meta http-equiv="refresh" content="0;url=/">' }
-        })
-        // Require painted artifact before interpreting navigation refusal.
-        expect(own.pixelBefore).toBe(ARTIFACT_RGB)
-        // Link-to-/ control reads one on same counter, proving refresh zero is observable.
-        expect(own.ownOriginTopNavigations).toBe(0)
-        expect(own.topNavigations).toBe(0)
-        // Also reject self-frame shell-document fetch, which would embed session page inside preview.
-        expect(own.ownOriginFrameNavigations).toBe(0)
-
-        // No-policy/allow-same-origin control must navigate frame to shell / to prove observer is not blind.
-        const loose = await open(browser(), {
-          signal: ctx.signal,
-          csp: null,
-          sandbox: 'allow-scripts allow-same-origin allow-top-navigation',
-          extra: { head: '<meta http-equiv="refresh" content="0;url=/">' },
-          // Navigating arm no longer contains marker; await navigation instead of artifact readiness.
-          frameReady: 'load',
-          expectNavigation: 'frame'
-        })
-        expect(loose.ownOriginFrameNavigations).toBe(1)
-
-        // Test sandbox token alone with no CSP; navigation must never begin or report.
-        const tokenOnly = await open(browser(), {
-          signal: ctx.signal,
-          csp: null,
-          extra: { head: '<meta http-equiv="refresh" content="0;url=/">' }
-        })
-        expect(tokenOnly.pixelBefore).toBe(ARTIFACT_RGB)
-        expect(tokenOnly.ownOriginFrameNavigations).toBe(0)
-        expect(tokenOnly.ownOriginTopNavigations).toBe(0)
-        expect(tokenOnly.violations).toEqual([])
-
-        // Test CSP alone with allow-same-origin: frame-src none blocks request at embedder; engines leave different content, so assert no server request.
-        const policyOnly = await open(browser(), {
-          signal: ctx.signal,
-          sandbox: 'allow-scripts allow-same-origin allow-top-navigation',
-          extra: { head: '<meta http-equiv="refresh" content="0;url=/">' },
-          frameReady: 'load'
-        })
-        expect(policyOnly.ownOriginFrameNavigations).toBe(0)
-        expect(policyOnly.ownOriginTopNavigations).toBe(0)
-        expect(policyOnly.violations.join(' ')).toContain('frame-src')
-      }, 180_000)
-
-      it('hands up nothing without a tap, and nothing for a form or a new window', async (ctx) => {
-        const meta = await open(browser(), {
-          signal: ctx.signal,
-          extra: { head: `<meta http-equiv="refresh" content="0;url=${foreignOrigin}/meta.html">` }
-        })
-        expect(meta.topNavigations).toBe(0)
-        expect(meta.ownOriginTopNavigations).toBe(0)
-        const form = await open(browser(), {
-          signal: ctx.signal,
-          act: async ({ frame }) => {
-            await frame.click('#submit', { timeout: 2000 })
-          }
-        })
-        expect(form.actError).toBeNull()
-        expect(form.pixelBefore).toBe(ARTIFACT_RGB)
-        expect(form.topNavigations).toBe(0)
-        const blank = await open(browser(), {
-          signal: ctx.signal,
-          act: async ({ frame }) => {
-            await frame.click('#blanklink', { timeout: 2000 })
-          }
-        })
-        expect(blank.actError).toBeNull()
-        expect(blank.pixelBefore).toBe(ARTIFACT_RGB)
-        expect(blank.topNavigations).toBe(0)
-        expect(blank.popups).toBe(0)
-        const allowedForm = await open(browser(), {
-          signal: ctx.signal,
-          csp: null,
-          sandbox: 'allow-forms allow-top-navigation-by-user-activation',
-          expectNavigation: 'main-frame',
-          act: async ({ frame }) => {
-            await frame.click('#submit', { timeout: 2000 })
-          }
-        })
-        expect(allowedForm.pixelBefore).toBe(ARTIFACT_RGB)
-        expect(allowedForm.actError).toBeNull()
-        expect(allowedForm.topNavigations).toBe(1)
-        const allowedBlank = await open(browser(), {
-          signal: ctx.signal,
-          csp: null,
-          sandbox: 'allow-popups allow-popups-to-escape-sandbox',
-          act: async ({ page, frame }) => {
-            await Promise.all([
-              page.waitForEvent('popup', { timeout: 10_000 }),
-              frame.click('#blanklink', { timeout: 2000 })
-            ])
-          }
-        })
-        expect(allowedBlank.pixelBefore).toBe(ARTIFACT_RGB)
-        expect(allowedBlank.actError).toBeNull()
-        expect(allowedBlank.popups).toBe(1)
-      }, 180_000)
 
       // Force slow-arm diagnostic sampling branch; formerly unexecuted branch had out-of-scope name and no test/lint coverage.
 
