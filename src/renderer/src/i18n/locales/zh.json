@@ -330,6 +330,8 @@
       }
     },
     "agents": {
+      "installedRegion": "已安装的智能体",
+      "availableRegion": "可安装的智能体",
       "permissionsTitle": "权限",
       "permissionsChoiceExplanation": "每个智能体无需询问即可执行的操作。你可以在下方为单个智能体单独设置",
       "permissionEachOwn": "各智能体自己的设置",

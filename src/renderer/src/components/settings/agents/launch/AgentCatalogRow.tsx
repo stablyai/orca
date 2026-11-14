@@ -1,4 +1,3 @@
-import { useRef, useState } from 'react'
 import { ExternalLink, MoreHorizontal } from 'lucide-react'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
@@ -18,7 +17,6 @@ import {
   type AgentSessionSourceHomeControl,
   AgentSessionSourceHomeInput
 } from '../../../agent/launch-settings/codex-session-source-home-control'
-import { resolveTuiAgentPermissionMode } from '../../../../../../shared/agent-launch/permissions/tui-agent-permissions'
 import { stringifyAgentDefaultEnvDraft } from '../../../agent/launch-settings/agent-default-env-draft'
 import { liftAgentPermissionArgs } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-lift'
 import {
@@ -36,6 +34,7 @@ import { AgentPermissionMenu } from '../../../agent/launch-settings/AgentPermiss
 import type { AgentPermissionChoiceRow } from '../../../agent/launch-settings/agent-permission-choice-row'
 import { openAppHttpLinkFromAnchor } from '@/lib/browser/navigation/app-http-link-open'
 import type { AgentOpensAs } from '../../../../lib/agent-session/launch/native-chat-provider-choice'
+import { useAgentCatalogRowExpansion } from './agent-catalog-row-expansion'
 import { AgentOpensAsControl } from '../../../agent/launch-settings/AgentChatChoiceControls'
 
 const OPENS_AS_PLACEHOLDER: AgentOpensAs = { value: 'chat', cliMissing: false, onChange: () => {} }
@@ -80,6 +79,11 @@ export type AgentCatalogRowProps = {
   launchChoiceEditor?: (permissionControlRef: React.Ref<HTMLDivElement>) => React.ReactNode
 }
 
+export type AgentCatalogRowViewProps = AgentCatalogRowProps & {
+  expanded: boolean
+  onExpandedChange: (expanded: boolean) => void
+}
+
 export function AgentCatalogRow({
   agentId,
   label,
@@ -108,35 +112,20 @@ export function AgentCatalogRow({
   launchArgs = argsOverride,
   opensAs,
   reserveOpensAsSlot = false,
-  chatRuntime
-}: AgentCatalogRowProps): React.JSX.Element {
+  chatRuntime,
+  expanded: cmdOpen,
+  onExpandedChange: setCmdOpen
+}: AgentCatalogRowViewProps): React.JSX.Element {
   const t = useTranslate()
   const envSummary = environmentNames?.join(' ') ?? stringifyAgentDefaultEnvDraft(envOverride)
-  const defaultEnvSummary = stringifyAgentDefaultEnvDraft(defaultEnv)
-  const [cmdOpen, setCmdOpen] = useState(
-    Boolean(cmdOverride) ||
-      (argsOverride !== defaultArgs &&
-        resolveTuiAgentPermissionMode({
-          agent: agentId,
-          agentArgs: argsOverride,
-          agentEnv: envOverride
-        }) === 'mixed') ||
-      envSummary !== defaultEnvSummary
-  )
-  const permissionRef = useRef<HTMLDivElement>(null)
-  const openPermission = (): void => {
-    setCmdOpen(true)
-    requestAnimationFrame(() => {
-      const control = permissionRef.current
-      ;(
-        control?.querySelector<HTMLElement>('[aria-checked="true"]') ??
-        control?.querySelector<HTMLElement>('button')
-      )?.focus()
-    })
-  }
-  const toggleOpen = (): void => setCmdOpen((previous) => !previous)
+  const { rowRef, panelRef, permissionRef, openPermission, toggleOpen } =
+    useAgentCatalogRowExpansion(cmdOpen, setCmdOpen)
   return (
-    <div className={cn('py-3', !isDetected && !opensAs?.cliMissing && 'opacity-70')}>
+    <div
+      ref={rowRef}
+      data-agent-opens-as={opensAs ? '' : undefined}
+      className={cn('py-3', !isDetected && !opensAs?.cliMissing && 'opacity-70')}
+    >
       {/* Clicking the row's empty space expands it; its controls and the name button handle their own clicks. */}
       <div
         className="-mx-2 flex cursor-pointer flex-wrap items-center gap-3 rounded-md px-2 py-1 transition-colors hover:bg-accent"
@@ -285,7 +274,7 @@ export function AgentCatalogRow({
         </div>
       </div>
       {cmdOpen && (
-        <div className="mt-3 space-y-3 pl-10">
+        <div ref={panelRef} className="mt-3 space-y-3 pl-10">
           {chatRuntime}
           {!launchChoiceEditor && permissionChoice && (
             <div ref={permissionRef}>

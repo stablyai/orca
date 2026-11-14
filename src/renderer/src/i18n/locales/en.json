@@ -979,6 +979,8 @@
       }
     },
     "agents": {
+      "installedRegion": "Installed agents",
+      "availableRegion": "Agents available to install",
       "permissionsTitle": "Permissions",
       "permissionsChoiceExplanation": "What every agent may do without asking. You can set one agent differently below.",
       "permissionEachOwn": "Each agent's own settings",

@@ -1,3 +1,4 @@
+import { cancelSettingsListReveal } from '../../section-layout/settings-list-scroll'
 import { useEffect, useId, type JSX, type ReactNode } from 'react'
 import { Check, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
@@ -196,8 +197,13 @@ export function AgentDefaultSurfaceSection({
     })
   }
   const showInstalledList = (): void => {
+    cancelSettingsListReveal()
     const list = document.getElementById(AGENTS_INSTALLED_SECTION_ID)
     list?.scrollIntoView({ behavior: motionSafeScrollBehavior(), block: 'start' })
+    const row = list
+      ?.querySelector('[data-settings-scroll-list]')
+      ?.querySelector<HTMLElement>('[data-agent-opens-as]')
+    row?.scrollIntoView({ behavior: motionSafeScrollBehavior(), block: 'nearest' })
     list?.focus({ preventScroll: true })
   }
   if (presentation === 'switch') {
