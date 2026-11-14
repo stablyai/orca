@@ -37,7 +37,6 @@ export function activateWorktreeAgentPane(
     const owner = structuredAgentSessionOwnerForTab(state, nativeTab)
     if (
       !target ||
-      owner === 'foreign' ||
       (executionHostId &&
         owner &&
         !isExecutionHostForWorktree(state, worktreeId, executionHostId, owner))
