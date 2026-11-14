@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { DiscoveredSkill, SkillDiscoveryResult } from '../../skills'
-import { isNativeChatSkillForAgent } from './native-chat-skill-visibility'
+import { getNativeChatAgentProfile } from '../native-chat-agent-profiles'
+import {
+  deriveComposerAutocomplete,
+  isSkillPickerTriggered
+} from './native-chat-composer-autocomplete'
+import { isNativeChatSkillForAgent, nativeChatSessionSkills } from './native-chat-skill-visibility'
 
 function skill(overrides: Partial<DiscoveredSkill>): DiscoveredSkill {
   return {
@@ -79,5 +84,53 @@ describe('isNativeChatSkillForAgent', () => {
       rootPaths: ['/Users/test/.codex/skills']
     })
     expect(isNativeChatSkillForAgent('claude', codexOnly, result)).toBe(false)
+  })
+
+  it('lists Antigravity folder skills when ACP reports only built-in commands', () => {
+    const profile = getNativeChatAgentProfile('antigravity')
+    expect(isSkillPickerTriggered('/', profile)).toBe(true)
+    // ACP lists /model and /clear, not installed skills. A defined session list would hide the folder scan.
+    expect(
+      nativeChatSessionSkills('antigravity', [
+        { name: 'model', kind: 'command' },
+        { name: 'clear', kind: 'command' }
+      ])
+    ).toBeUndefined()
+
+    const ownRoot = '/Users/test/.gemini/config/skills'
+    const adr = skill({
+      name: 'adr',
+      rootPath: ownRoot,
+      directoryPath: `${ownRoot}/adr`,
+      skillFilePath: `${ownRoot}/adr/SKILL.md`
+    })
+    expect(isNativeChatSkillForAgent('antigravity', adr, discovery('antigravity', ownRoot))).toBe(
+      true
+    )
+    expect(isNativeChatSkillForAgent('antigravity', skill({}), discovery(null))).toBe(true)
+    expect(
+      isNativeChatSkillForAgent(
+        'antigravity',
+        skill({ rootPath: '/Users/test/.claude/skills' }),
+        discovery('claude', '/Users/test/.claude/skills')
+      )
+    ).toBe(false)
+    // Gemini CLI's ~/.gemini/skills is a different agent. Antigravity links config/skills only.
+    expect(
+      isNativeChatSkillForAgent(
+        'antigravity',
+        skill({ rootPath: '/Users/test/.gemini/skills' }),
+        discovery('gemini', '/Users/test/.gemini/skills')
+      )
+    ).toBe(false)
+
+    const menu = deriveComposerAutocomplete('/', 1, [{ name: 'clear' }], [adr], profile)
+    expect(menu.mode).toBe('slash')
+    if (menu.mode !== 'slash') {
+      return
+    }
+    expect(menu.items.filter((item) => item.kind === 'skill').map((item) => item.name)).toContain(
+      'adr'
+    )
   })
 })
