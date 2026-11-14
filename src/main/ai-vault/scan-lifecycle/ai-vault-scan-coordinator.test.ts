@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AiVaultScanCoordinator } from './ai-vault-scan-coordinator'
+import { createAiVaultScanCancelledError } from './ai-vault-scan-cancellation'
 import {
   scanRecoveryInterest,
   nextScanObservationOrder,
@@ -7,6 +8,36 @@ import {
 } from './ai-vault-scan-recovery'
 
 const EMPTY = { sessions: [], issues: [], scannedAt: '2026-11-13' }
+
+it.each(['resolve', 'reject'] as const)(
+  'waits for an aborted execution to %s before starting a new ordinary request',
+  async (settlement) => {
+    const coordinator = new AiVaultScanCoordinator()
+    const pending = Promise.withResolvers<typeof EMPTY>()
+    const controller = new AbortController()
+    const first = coordinator.run({
+      key: 'scope',
+      signal: controller.signal,
+      start: () => pending.promise
+    })
+    await Promise.resolve()
+    const cancelled = expect(first).rejects.toMatchObject({ name: 'AbortError' })
+    controller.abort()
+    await cancelled
+    const fresh = { ...EMPTY, scannedAt: 'new-request' }
+    const start = vi.fn(async () => fresh)
+    const next = coordinator.run({ key: 'scope', start })
+    await Promise.resolve()
+    expect(start).not.toHaveBeenCalled()
+    if (settlement === 'resolve') {
+      pending.resolve(EMPTY)
+    } else {
+      pending.reject(createAiVaultScanCancelledError())
+    }
+    await expect(next).resolves.toBe(fresh)
+    expect(start).toHaveBeenCalledOnce()
+  }
+)
 function deferred<T>() {
   let resolve!: (value: T) => void
   const promise = new Promise<T>((done) => {

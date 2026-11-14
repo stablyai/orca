@@ -392,6 +392,24 @@ describe('useAiVaultSessionRefresh after a restart', () => {
     expect(latest?.sessions.map((session) => session.id)).toEqual(['session-3'])
     expect(latest?.loading).toBe(false)
   })
+
+  it('shows delayed saved rows when a queued final result is superseded before publication', async () => {
+    vi.spyOn(performance, 'now').mockImplementation(() => Date.now())
+    const resolveScan = await restartWithScanPending()
+    const read = deferredList()
+    savedLists.read = () => read.promise
+    await renderHook(['/repo'], 'local', DEFAULT_AI_VAULT_SESSION_LIMIT, true)
+    markInputQuietSchedulerInput()
+    await act(async () => resolveScan({ ...EMPTY_RESULT, sessions: [makeVaultSession(3)] }))
+    expect(latest?.sessions).toEqual([])
+    listSessionsMock.mockRejectedValueOnce(new Error('Refresh failed'))
+    await act(async () => latest?.refresh({ force: true }))
+    await act(async () => vi.advanceTimersByTimeAsync(1000))
+    expect(latest?.sessions).toEqual([])
+    await act(async () => read.resolve({ ...EMPTY_RESULT, sessions: [makeVaultSession(1)] }))
+    await flushMicrotasks()
+    expect(latest?.sessions.map((row) => row.id)).toEqual(['session-1'])
+  })
 })
 
 // Plain HTTP hides crypto.randomUUID; fallback tokens must remain v4 UUIDs (#18096).

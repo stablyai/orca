@@ -149,7 +149,7 @@ export class AiVaultScanCoordinator {
           throw scanCancellationError()
         }
         const required = Math.max(0, ...entry.requirements.values())
-        if (outcome && outcome.order > required) {
+        if (!leading.controller.signal.aborted && outcome && outcome.order > required) {
           interest.observation = outcome.order
           acceptedLeading = outcome
           if (outcome.ok) {

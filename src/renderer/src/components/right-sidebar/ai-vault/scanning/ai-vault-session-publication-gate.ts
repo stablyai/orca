@@ -24,11 +24,12 @@ export class AiVaultSessionPublicationGate {
     })
   }
 
-  publish(result: AiVaultListResult, apply: (result: AiVaultListResult) => void): void {
-    this.enqueue(
-      () => apply(result),
-      () => true
-    )
+  publish(
+    result: AiVaultListResult,
+    apply: (result: AiVaultListResult) => void,
+    eligible: () => boolean = () => true
+  ): void {
+    this.enqueue(() => apply(result), eligible)
   }
 
   publishProvisional(apply: () => void, eligible: () => boolean): () => void {

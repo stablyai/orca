@@ -140,11 +140,11 @@ export function useAiVaultSessionRefresh(
       if (cachedResult) {
         setFailure(null)
         setTerminalScopeKey(null)
-        publicationGateRef.current.publish(cachedResult, (published) => {
-          if (mountedRef.current && scanKey === currentScanScopeKey() && associationCurrent()) {
-            applyListed(published)
-          }
-        })
+        publicationGateRef.current.publish(
+          cachedResult,
+          (published) => applyListed(published),
+          () => mountedRef.current && scanKey === currentScanScopeKey() && associationCurrent()
+        )
         setLoading(false)
       } else if (args.reuseLoadedDepth === true) {
         publicationGateRef.current.showUntilPublished(
@@ -220,11 +220,11 @@ export function useAiVaultSessionRefresh(
         }
         setFailure(null)
         cacheAiVaultSessionList(request, result, { replaceHostEntries: args.force === true })
-        publicationGateRef.current.publish(result, (published) => {
-          if (requestCurrent()) {
-            applyListed(published, true)
-          }
-        })
+        publicationGateRef.current.publish(
+          result,
+          (published) => applyListed(published, true),
+          requestCurrent
+        )
       } catch (err) {
         // Cancellation means another shared scan superseded this one; do not replace its incoming list with an error.
         if (requestCurrent()) {
