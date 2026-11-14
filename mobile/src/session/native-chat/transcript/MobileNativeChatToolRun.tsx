@@ -34,7 +34,7 @@ import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatToolGlyph } from './MobileNativeChatToolIcon'
 import { MobileNativeChatToolLine } from './MobileNativeChatToolLine'
 import { MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
-import { MobileNativeChatTaskList } from '../input/MobileNativeChatTaskList'
+import { MobileNativeChatTaskList } from '../input/tasks/MobileNativeChatTaskList'
 import { MobileNativeChatOpenedDetailContext } from '../visual/mobile-native-chat-opened-detail'
 import {
   MAX_DISCLOSURES,

@@ -5,16 +5,16 @@ import type { StructuredAgentSessionHostSupport } from './mobile-structured-agen
 import type {
   MobileNativeChatSendIntent,
   MobileNativeChatSendOutcome
-} from '../composer/mobile-native-chat-send'
+} from '../composer/delivery/mobile-native-chat-send'
 import type { MobileNativeChatVisualSource } from '../visual/mobile-native-chat-visual-read'
-import type { MobileChatPermission } from '../input/mobile-native-chat-permission'
-import type { MobileChatQuestion } from '../input/mobile-native-chat-question'
-import type { MobileNativeChatSession } from '../use-mobile-native-chat-session'
+import type { MobileChatPermission } from '../input/prompts/mobile-native-chat-permission'
+import type { MobileChatQuestion } from '../input/prompts/mobile-native-chat-question'
+import type { MobileNativeChatSession } from '../conversation/use-mobile-native-chat-session'
 import type { NativeChatLiveTurnIndicator } from '../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
-import type { useMobileStructuredAgentOptions } from '../input/use-mobile-structured-agent-options'
+import type { useMobileStructuredAgentOptions } from '../input/session-options/use-mobile-structured-agent-options'
 import type { useMobileStructuredAgentTurnTiming } from '../transcript/use-mobile-structured-agent-turn-timing'
-import type { StructuredMobileSendAttachment } from '../composer/use-mobile-structured-send-with-outcome'
+import type { StructuredMobileSendAttachment } from '../composer/delivery/use-mobile-structured-send-with-outcome'
 import type {
   AgentJournalSkillRef,
   AgentJournalSubmission
@@ -22,15 +22,15 @@ import type {
 import type {
   MobileNativeChatCommandRefusalCauses,
   MobileNativeChatSendErrorReporter
-} from '../composer/use-mobile-native-chat-send-error'
-import type { MobileStructuredQueuedMessageControls } from '../input/use-mobile-structured-queued-message-controls'
-import type { MobileStructuredBackgroundTasks } from '../input/use-mobile-structured-background-tasks'
+} from '../composer/delivery/use-mobile-native-chat-send-error'
+import type { MobileStructuredQueuedMessageControls } from '../input/queued-messages/use-mobile-structured-queued-message-controls'
+import type { MobileStructuredBackgroundTasks } from '../input/tasks/use-mobile-structured-background-tasks'
 import type { NativeChatContextUsageSummary } from '../../../../../src/shared/native-chat/native-chat-context-usage-summary'
-import type { MobileStructuredInterruptedContinue } from '../composer/use-mobile-structured-interrupted-continue'
-import type { MobileStructuredThreadGoal } from '../input/use-mobile-structured-thread-goal'
-import type { MobileStructuredSends } from '../composer/use-mobile-structured-sends'
+import type { MobileStructuredInterruptedContinue } from '../composer/delivery/use-mobile-structured-interrupted-continue'
+import type { MobileStructuredThreadGoal } from '../input/tasks/use-mobile-structured-thread-goal'
+import type { MobileStructuredSends } from '../composer/delivery/use-mobile-structured-sends'
 import type { AgentSessionRewindSurface } from '../../../../../src/shared/agent-session/lifecycle/rewind/agent-session-rewind-request'
-import type { MobileNativeChatUsageLimit } from '../use-mobile-native-chat-usage-limit'
+import type { MobileNativeChatUsageLimit } from '../status/use-mobile-native-chat-usage-limit'
 
 export type StructuredMobileSession = Omit<
   ReturnType<typeof useMobileStructuredAgentOptions>,

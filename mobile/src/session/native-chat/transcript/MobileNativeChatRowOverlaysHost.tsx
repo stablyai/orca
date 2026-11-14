@@ -14,7 +14,7 @@ import {
 import {
   useMobileNativeChatConversationState,
   type MobileNativeChatConversation
-} from '../use-mobile-native-chat-conversation-state'
+} from '../conversation/use-mobile-native-chat-conversation-state'
 import type { MobileNativeChatImageSource } from '../visual/mobile-native-chat-image-preview'
 import { MobileNativeChatRewindContext } from './mobile-native-chat-rewind-context'
 import { useMobileNativeChatRewindDialog } from './use-mobile-native-chat-rewind-dialog'

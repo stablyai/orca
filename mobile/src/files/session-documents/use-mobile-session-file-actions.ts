@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { openExternalLink } from '../../platform/external-links/external-link'
 import { useMobileFileTapHandlers } from './use-mobile-file-tap-handlers'
-import { resolveMobileNativeChatSessionId } from '../../session/native-chat/mobile-native-chat-eligibility'
+import { resolveMobileNativeChatSessionId } from '../../session/native-chat/conversation/mobile-native-chat-eligibility'
 import { useProvideSessionScreenHandlers } from '../../session/session-screen-handlers'
 import type { MobileSessionTab } from '../../session/tabs/mobile-session-tabs'
 import type { MobileSessionTerminalSendActionsModel } from '../../terminal/session/input-controls/use-mobile-session-terminal-send-actions'
