@@ -75,6 +75,8 @@ enum ProviderError: Error {
             return message
         }
     }
+
+    static let screenLocked = ProviderError.coded("screen_locked", SessionLockProbe.lockedMessage)
 }
 
 struct AppDescriptor {
@@ -920,6 +922,10 @@ final class Provider {
         previousSnapshot: (CGWindowID) -> Snapshot?
     ) throws -> Snapshot {
         guard accessibilityTrustedSettled() else {
+            // Why: the lock can start mid-request, and macOS reports Accessibility as untrusted behind it.
+            if SessionLockProbe.isLocked() {
+                throw ProviderError.screenLocked
+            }
             // Why: agents retry failed observations. Only the explicit setup flow
             // should open macOS privacy prompts/settings; runtime calls stay quiet.
             throw ProviderError.coded(
@@ -1640,6 +1646,9 @@ private func focusedWindow(appElement: AXUIElement, app: AppDescriptor, inventor
         }
         if let window = settledWindow, outcome.settled {
             return window
+        }
+        if SessionLockProbe.isLocked() {
+            throw ProviderError.screenLocked
         }
         var windows: CFTypeRef?
         if AXUIElementCopyAttributeValue(appElement, kAXWindowsAttribute as CFString, &windows) == .apiDisabled {
@@ -4114,6 +4123,10 @@ private enum PermissionKind: CaseIterable {
     }
 
     func requestAndOpenSettings() {
+        // Why: the screen can lock after the setup helper started.
+        guard !SessionLockProbe.isLocked() else {
+            return
+        }
         switch self {
         case .accessibility:
             openAccessibilitySettings()
@@ -5132,6 +5145,11 @@ private func runPermissionCheck(
     initialPermission: PermissionKind? = nil,
     copy: PermissionWindowCopy
 ) {
+    // Why: a queued or cached-denial launch can start after the screen locks; Settings would open for nothing.
+    if SessionLockProbe.isLocked() {
+        fputs("\(SessionLockProbe.lockedMessage)\n", stderr)
+        exit(0)
+    }
     let app = NSApplication.shared
     let delegate = PermissionRuntime(initialPermission: initialPermission, copy: copy)
     app.delegate = delegate
@@ -5140,18 +5158,23 @@ private func runPermissionCheck(
     app.run()
 }
 
-private func printPermissionStatus() {
+private func permissionStatusJSON() -> String {
+    // Why: behind the lock screen macOS reports Accessibility as untrusted even when it is granted, so a lock at
+    // either end of the probes marks the whole answer as read while locked.
+    let lockedBefore = SessionLockProbe.isLocked()
     let snapshot = permissionStatusSnapshotSettled()
     let accessibility = snapshot.accessibilityGranted ? "granted" : "not-granted"
     let screenshots = snapshot.screenshotsGranted ? "granted" : "not-granted"
-    print(#"{"accessibility":"\#(accessibility)","screenshots":"\#(screenshots)"}"#)
+    let sessionLocked = lockedBefore || SessionLockProbe.isLocked()
+    return #"{"accessibility":"\#(accessibility)","screenshots":"\#(screenshots)","sessionLocked":\#(sessionLocked)}"#
+}
+
+private func printPermissionStatus() {
+    print(permissionStatusJSON())
 }
 
 private func writePermissionStatus(to path: String) {
-    let snapshot = permissionStatusSnapshotSettled()
-    let accessibility = snapshot.accessibilityGranted ? "granted" : "not-granted"
-    let screenshots = snapshot.screenshotsGranted ? "granted" : "not-granted"
-    let text = #"{"accessibility":"\#(accessibility)","screenshots":"\#(screenshots)"}"#
+    let text = permissionStatusJSON()
     do {
         try text.write(toFile: path, atomically: true, encoding: .utf8)
     } catch {
@@ -5188,6 +5211,10 @@ private func handleRequest(
     do {
         lock.lock()
         defer { lock.unlock() }
+        // Checked after waiting for the lock, since the screen can lock while another request runs.
+        if request.method != "handshake" && request.method != "listApps" && SessionLockProbe.isLocked() {
+            throw ProviderError.screenLocked
+        }
         let result = try provider.handle(method: request.method, params: request.params ?? [:])
         return ["id": request.id, "ok": true, "result": result]
     } catch let error as ProviderError {

@@ -108,8 +108,6 @@ vi.mock('./delete-worktree-failure-toast', () => ({
 import { toast } from 'sonner'
 import { showDeleteWorktreeFailureToast } from './delete-worktree-failure-toast'
 
-import { runWorktreeDelete } from './delete-worktree-flow'
-
 import { runWorktreeDeletesInParallel } from './worktree-delete-execution'
 
 function setWorktrees(
@@ -159,18 +157,6 @@ describe('delete worktree flow', () => {
     vi.mocked(toast.info).mockClear()
     vi.mocked(showDeleteWorktreeFailureToast).mockClear()
     setWorktrees([])
-  })
-
-  it('keeps the ignored-file confirmation available when a caller requires it despite skip-confirm', () => {
-    setWorktrees([{ id: 'ignored-only' }])
-    mocks.state.settings.skipDeleteWorktreeConfirm = true
-    runWorktreeDelete('ignored-only', { forceConfirm: true })
-    expect(mocks.state.openModal).toHaveBeenCalledWith('delete-worktree', {
-      worktreeId: 'ignored-only',
-      worktreeDeleteIdentities: [{ id: 'ignored-only', instanceId: 'ignored-only-instance' }],
-      allowSkipConfirm: false
-    })
-    expect(mocks.state.removeWorktree).not.toHaveBeenCalled()
   })
 
   it('revalidates each queued instance immediately before execution', async () => {

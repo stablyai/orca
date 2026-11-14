@@ -330,6 +330,8 @@
       }
     },
     "agents": {
+      "installedRegion": "설치된 에이전트",
+      "availableRegion": "설치 가능한 에이전트",
       "codexTerminalServerIsolation": {
         "title": "자체 서버에서 각 Codex 터미널 실행",
         "description": "Orca의 상태 표시와 탭 닫기가 올바르게 동작하도록 합니다. Codex의 공유 서버와 에이전트 개요를 사용하려면 끄세요. 새 터미널에 적용됩니다."
@@ -16468,7 +16470,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Chrome 확장 프로그램",
+                        "title": "Chrome 확장 프로그램을 그대로 가져오세요",
+                        "everydayTitle": "매일 쓰는 브라우저 도구를 Orca에서",
                         "body": "Chrome 웹 스토어에서 설치하고 주소 표시줄 옆에 고정하세요.",
                         "action": "웹 스토어 열기",
                         "secondaryAction": "확인"

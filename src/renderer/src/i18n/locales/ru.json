@@ -850,6 +850,8 @@
       }
     },
     "agents": {
+      "installedRegion": "Установленные агенты",
+      "availableRegion": "Агенты, доступные для установки",
       "permissionsTitle": "Разрешения",
       "permissionsChoiceExplanation": "Что каждый агент может делать без запроса. Ниже можно изменить настройки отдельного агента.",
       "permissionEachOwn": "Собственные настройки каждого агента",
@@ -17667,7 +17669,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Расширения Chrome",
+                        "title": "Перенесите свои расширения Chrome",
+                        "everydayTitle": "Ваши привычные инструменты браузера — в Orca",
                         "body": "Установите расширения из Chrome Web Store и закрепите их рядом с адресной строкой.",
                         "action": "Открыть Chrome Web Store",
                         "secondaryAction": "Понятно"

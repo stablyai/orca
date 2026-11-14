@@ -330,6 +330,8 @@
       }
     },
     "agents": {
+      "installedRegion": "Agentes instalados",
+      "availableRegion": "Agentes disponibles para instalar",
       "codexTerminalServerIsolation": {
         "title": "Ejecutar cada terminal del Codex en su propio servidor",
         "description": "Mantiene el estado de Orca y las pestañas de cierre funcionando correctamente. Desactivar para utilizar el servidor compartido de Codex y la descripción general de sus agentes. Se aplica a terminales nuevos."
@@ -16875,7 +16877,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Extensiones de Chrome",
+                        "title": "Trae tus extensiones de Chrome",
+                        "everydayTitle": "Tus herramientas de navegador de cada día, en Orca",
                         "body": "Instala extensiones desde Chrome Web Store y fíjalas junto a la barra de direcciones.",
                         "action": "Abrir Web Store",
                         "secondaryAction": "Entendido"

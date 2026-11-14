@@ -77,7 +77,7 @@ function titleTimeTone(exceptions: readonly SlotException[]): 'unread' | 'workin
 type PillSignal = Extract<SlotSignal, { kind: 'needs' } | { kind: 'failed' }>
 
 /** The loud statuses get a labelled pill, so a card that needs you is hard to miss. */
-function WorktreeCardStatusPill({ signal }: { signal: PillSignal }): React.JSX.Element {
+export function WorktreeCardStatusPill({ signal }: { signal: PillSignal }): React.JSX.Element {
   const t = useTranslate()
   return (
     <span

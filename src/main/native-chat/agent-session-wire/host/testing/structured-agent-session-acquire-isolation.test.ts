@@ -1,4 +1,6 @@
 import { expect, it, vi } from 'vitest'
+import { agentSessionRefusalError } from '../../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import {
   openTestAgentSessionRecordStore,
   openTestAgentSessionDatabase
@@ -19,6 +21,7 @@ import {
   CALLER,
   attach,
   attachParams,
+  envelope,
   hostTestState,
   replaceHostTestState
 } from './structured-agent-session-host.test-fixture'
@@ -102,4 +105,49 @@ it('keeps a send a crash cut off as sent when its chat reattaches', async () => 
     }
   })
   expect(prior.dispatch).not.toHaveBeenCalled()
+})
+
+it('rejects reopened-chat sends while its conversation runs in a terminal and resumes after it exits', async () => {
+  await attach()
+  const { host, dispatch } = hostTestState()
+  await host.close(HOST_TEST_SESSION, 'evict')
+  let terminalWriting = true
+  host.deps.assertNoTerminalWriter = async () => {
+    if (terminalWriting) {
+      throw agentSessionRefusalError('agent_session_conflict', {
+        reason: 'conversationHeldElsewhere'
+      })
+    }
+  }
+  await host.revealSession(HOST_TEST_SESSION)
+  const send = async (text: string) => {
+    const body = hostTestMessage(text)
+    const request = envelope('agentSession.send', { body })
+    expect(await host.send(CALLER, { envelope: request, body })).toMatchObject({ ok: true })
+    return request.clientOperationId
+  }
+  const submission = async (clientMessageId: string) =>
+    (await readTestHostJournal(host, HOST_TEST_SESSION)).submissions.find(
+      (entry) => entry.clientMessageId === clientMessageId
+    )
+
+  for (const text of ['first', 'second']) {
+    const id = await send(text)
+    await vi.waitFor(
+      async () =>
+        expect(await submission(id)).toMatchObject({
+          dispatchState: 'rejected',
+          rejection: { kind: 'conversationOpenInTerminal' }
+        }),
+      { timeout: 10_000 }
+    )
+  }
+  expect(dispatch).not.toHaveBeenCalled()
+
+  terminalWriting = false
+  const id = await send('after the terminal exits')
+  await vi.waitFor(
+    async () => expect(await submission(id)).toMatchObject({ dispatchState: 'accepted' }),
+    { timeout: 10_000 }
+  )
 })

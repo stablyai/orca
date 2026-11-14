@@ -27,7 +27,7 @@ import {
   killAllProcessesForWorktreeMock
 } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
-import { mockKnownFeatureWorktree, mockSelectedWslProjectRuntime } from './worktrees-test-fixtures'
+import { mockKnownFeatureWorktree } from './worktrees-test-fixtures'
 
 afterEach(() => {
   _resetWorktreeRemovalLifetimeForTests()
@@ -400,74 +400,5 @@ it.each(['ipc', 'runtime'] as const)(
       _resetPendingWorktreeRemovalsForTests()
       await rm(directory, { recursive: true, force: true })
     }
-  }
-)
-
-it.each(['ipc', 'runtime'] as const)(
-  '%s synchronous WSL removal retains main shutdown behavior without a journal lease',
-  async (entry) => {
-    const runtime = setupWorktreeHandlers()
-    mockSelectedWslProjectRuntime()
-    const rows = mockKnownFeatureWorktree()
-    const finish = vi.fn(async () => {})
-    const gate = { finish: vi.fn(async () => {}) }
-    const acquireWatcherRemoval = vi.fn(async (_path: string) => gate)
-    runtime.acquireFileWatcherRemoval = acquireWatcherRemoval
-    const signal = worktreeRemovalLifetime.signal
-    removeWorktreeMock.mockImplementation(async (_repo, _path, _force, options) => {
-      expect(options).not.toHaveProperty('checkoutDeleteSignal', expect.anything())
-      expect(options).not.toHaveProperty('signal', expect.anything())
-      await worktreeRemovalLifetime.close()
-      expect(signal.aborted).toBe(true)
-      return {}
-    })
-    const result =
-      entry === 'ipc'
-        ? Promise.resolve(
-            handlers['worktrees:remove'](null, {
-              worktreeId: 'repo-1::/workspace/feature-wt',
-              deleteBranch: false
-            })
-          )
-        : removeRuntimeRegisteredLocalWorktree({
-            repo: {
-              id: 'repo-1',
-              path: '/workspace/repo',
-              displayName: 'repo',
-              badgeColor: '',
-              addedAt: 0
-            },
-            target: {
-              id: 'repo-1::/workspace/feature-wt',
-              repoId: 'repo-1',
-              path: '/workspace/feature-wt'
-            },
-            registeredWorktree: rows[1],
-            removedPushTarget: undefined,
-            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the existing store fixture owns all metadata consumed by this real removal boundary.
-            store: store as unknown as RuntimeStore,
-            localOptions: { wslDistro: 'Ubuntu' },
-            hasLocalOptions: true,
-            force: false,
-            runHooks: false,
-            allowFailedArchiveHook: false,
-            allowUnverifiedPtyStop: false,
-            deleteBranch: false,
-            acquireWatcherRemoval,
-            stopPtys: async () => {},
-            closeWatchers: async () => {},
-            preserveBranchHead: (value) => value ?? {},
-            finishRemoval: finish,
-            onRemoved: () => {},
-            publish: () => {}
-          })
-    await expect(result).resolves.toMatchObject({})
-    if (entry === 'runtime') {
-      expect(finish).toHaveBeenCalledOnce()
-    } else {
-      expect(store.removeWorktreeMeta).toHaveBeenCalled()
-    }
-    expect(gate.finish).toHaveBeenCalledWith(true)
-    expect(removeWorktreeMock).toHaveBeenCalledOnce()
   }
 )

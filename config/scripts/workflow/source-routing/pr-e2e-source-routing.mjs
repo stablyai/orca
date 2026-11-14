@@ -58,7 +58,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     specs: ['tests/e2e/ssh-orcad-markdown-conversion.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      /^src\/renderer\/src\/components\/editor\/(?:markdown\/documents\/useMarkdownDocuments|restored-editor-workspace-runtime-owner|migrate-restored-editor-file-owner)\.ts$/.test(
+      /^src\/renderer\/src\/components\/editor\/(?:markdown\/documents\/useMarkdownDocuments|file-ownership\/restored-editor-workspace-runtime-owner|file-ownership\/migrate-restored-editor-file-owner)\.ts$/.test(
         file
       )
   },

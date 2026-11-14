@@ -796,6 +796,8 @@
       }
     },
     "agents": {
+      "installedRegion": "Yüklü ajanlar",
+      "availableRegion": "Yüklenebilecek ajanlar",
       "permissionsTitle": "İzinler",
       "permissionsChoiceExplanation": "Her ajanın izin istemeden yapabilecekleri. Aşağıda bir ajan için farklı bir ayar seçebilirsiniz.",
       "permissionEachOwn": "Her ajanın kendi ayarları",
@@ -17151,7 +17153,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Chrome eklentileri",
+                        "title": "Chrome uzantılarınızı getirin",
+                        "everydayTitle": "Her gün kullandığınız tarayıcı araçları, Orca'da",
                         "body": "Eklentileri Chrome Web Store’dan yükleyin ve adres çubuğunun yanına sabitleyin.",
                         "action": "Chrome Web Store’u aç",
                         "secondaryAction": "Anladım"

@@ -804,6 +804,8 @@
       }
     },
     "agents": {
+      "installedRegion": "Installierte Agenten",
+      "availableRegion": "Zur Installation verfügbare Agenten",
       "permissionsTitle": "Berechtigungen",
       "permissionsChoiceExplanation": "Legt fest, was alle Agenten ohne Rückfrage tun dürfen. Einzelne Agenten können unten abweichend eingestellt werden.",
       "permissionEachOwn": "Eigene Einstellungen je Agent",
@@ -17174,7 +17176,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Chrome-Erweiterungen",
+                        "title": "Bring deine Chrome-Erweiterungen mit",
+                        "everydayTitle": "Deine täglichen Browser-Tools, in Orca",
                         "body": "Installiere Erweiterungen aus dem Chrome Web Store und hefte sie neben der Adressleiste an.",
                         "action": "Web Store öffnen",
                         "secondaryAction": "Verstanden"

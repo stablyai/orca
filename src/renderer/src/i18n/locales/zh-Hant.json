@@ -769,6 +769,8 @@
       }
     },
     "agents": {
+      "installedRegion": "已安裝的智慧體",
+      "availableRegion": "可安裝的智慧體",
       "permissionsTitle": "權限",
       "permissionsChoiceExplanation": "每個代理程式無須詢問即可執行的操作。可在下方為個別代理程式另行設定。",
       "permissionEachOwn": "各代理程式自身的設定",
@@ -16944,7 +16946,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Chrome 擴充功能",
+                        "title": "帶上你的 Chrome 擴充功能",
+                        "everydayTitle": "你常用的瀏覽器工具，盡在 Orca",
                         "body": "從 Chrome Web Store 安裝擴充功能，並將其釘選在網址列旁。",
                         "action": "開啟 Chrome Web Store",
                         "secondaryAction": "知道了"
