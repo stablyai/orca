@@ -1,3 +1,4 @@
+import type { useProjectGroupSetup } from './use-project-group-setup'
 import type { FolderSetupSupport } from '@/lib/workspace/creation/setup/folder-setup-support'
 import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { OrcaHooks, SetupRunPolicy } from '../../../../shared/orca-yaml-hook-types'
@@ -7,6 +8,7 @@ import type { GitHubLinkQuery } from '../../../../shared/new-workspace/github-li
 import type { SetupConfig } from '../../../../shared/orca-hook-setup-config'
 
 export type ComposerDerivedModel = {
+  groupSetup: ReturnType<typeof useProjectGroupSetup>
   sparsePresetsForRepo: SparsePreset[]
   sparsePresets: SparsePreset[]
   normalizedSparseDirectories: string[]

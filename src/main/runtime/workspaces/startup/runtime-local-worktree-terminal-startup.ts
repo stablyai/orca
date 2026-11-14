@@ -63,8 +63,8 @@ export type RuntimeLocalWorktreeTerminalStartupResult = {
 }
 
 export async function startRuntimeLocalWorktreeTerminals(args: {
-  request: RuntimeManagedWorktreeCreateArgs
-  repo: Repo
+  request: Omit<RuntimeManagedWorktreeCreateArgs, 'repoSelector' | 'name'>
+  repo: Pick<Repo, 'id'>
   worktree: Worktree
   setup?: CreateWorktreeResult['setup']
   defaultTabs?: CreateWorktreeResult['defaultTabs']

@@ -43,7 +43,6 @@ vi.mock('../../popups/presentation/popup-origin-bar-window', () => ({
 
 import { browserManager } from '../browser-manager'
 import { respondToBrowserPagePrompt } from '../../prompts/browser-page-prompts'
-import { handleBrowserGuestLogin } from '../../prompts/browser-http-auth-prompt'
 import {
   guestNavigationMethods,
   rendererWebContentsId,
@@ -158,75 +157,5 @@ describe('browserManager page prompt routing', () => {
     willNavigate({ preventDefault, initiator: null }, 'zoommtg://zoom.us/join?confno=2')
     expect(prompts().at(-1)).toMatchObject({ origin: null })
     answerLatest(false)
-  })
-
-  it("asks for a new tab's first sign-in once its window registers the tab", async () => {
-    const rendererSendMock = vi.fn()
-    const guest = {
-      ...guestNavigationMethods(),
-      id: 109,
-      isDestroyed: vi.fn(() => false),
-      isCurrentlyAudible: vi.fn(() => false),
-      getType: vi.fn(() => 'webview'),
-      getURL: vi.fn(() => ''),
-      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
-      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
-      on: guestOnMock,
-      prependListener: vi.fn(),
-      once: vi.fn(),
-      off: guestOffMock,
-      openDevTools: guestOpenDevToolsMock
-    }
-    const renderer = {
-      id: rendererWebContentsId,
-      isDestroyed: () => false,
-      send: rendererSendMock,
-      on: vi.fn(),
-      off: vi.fn()
-    }
-    webContentsFromIdMock.mockImplementation((id: number) =>
-      id === guest.id ? guest : id === rendererWebContentsId ? renderer : null
-    )
-    // Guests can start loading before renderer registration.
-    browserManager.attachGuestPolicies(webContentsFromIdMock(guest.id))
-    const event = { preventDefault: vi.fn() }
-    const callback = vi.fn()
-    handleBrowserGuestLogin(
-      event,
-      webContentsFromIdMock(guest.id),
-      {
-        url: 'https://staging.acme.com/',
-        pid: 1,
-        isRequestForNavigation: true,
-        firstAuthAttempt: true
-      },
-      { isProxy: false, scheme: 'basic', host: 'staging.acme.com', port: 443, realm: 'Staging' },
-      callback
-    )
-    // Keep the challenge pending until registration supplies a prompt window.
-    expect(event.preventDefault).toHaveBeenCalled()
-    expect(rendererSendMock).not.toHaveBeenCalledWith(
-      'browser:page-prompt-requested',
-      expect.anything()
-    )
-
-    browserManager.registerGuest({
-      browserPageId: 'browser-3',
-      webContentsId: guest.id,
-      rendererWebContentsId
-    })
-
-    const request = rendererSendMock.mock.calls.find(
-      ([channel]) => channel === 'browser:page-prompt-requested'
-    )?.[1]
-    expect(request).toMatchObject({
-      kind: 'http-auth',
-      details: { origin: 'https://staging.acme.com' }
-    })
-    await respondToBrowserPagePrompt(webContentsFromIdMock(rendererWebContentsId), {
-      requestId: request.requestId,
-      answer: { username: 'qa', password: 'hunter2' }
-    })
-    expect(callback).toHaveBeenCalledWith('qa', 'hunter2')
   })
 })

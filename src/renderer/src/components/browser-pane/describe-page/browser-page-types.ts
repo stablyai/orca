@@ -8,6 +8,7 @@ import type {
 } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import type { BrowserContextMenuRequestedEvent } from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
+import type { BrowserPageLoadingOwner } from '@/lib/browser/browser-page-loading-ownership'
 import type { GrabModeHook } from '../annotate/useGrabMode'
 import type { BrowserOverlayViewport } from './browser-annotation-geometry'
 
@@ -17,6 +18,12 @@ export type BrowserTabPageState = Partial<
     'title' | 'loading' | 'faviconUrl' | 'canGoBack' | 'canGoForward' | 'loadError'
   >
 >
+
+export type BrowserPageStateWriter = (
+  pageId: string,
+  updates: BrowserTabPageState,
+  loadingOwner?: BrowserPageLoadingOwner
+) => void
 
 export type BrowserPageUrlSetter = (
   tabId: string,

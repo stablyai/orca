@@ -15,6 +15,7 @@ export type SettingsNavInstallStatus =
 
 const SETTINGS_NAV_TARGETS = [
   'general',
+  'workspace-cleanup',
   'integrations',
   'accounts',
   'browser',

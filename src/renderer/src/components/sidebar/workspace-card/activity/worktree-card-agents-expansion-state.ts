@@ -1,4 +1,9 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useSyncExternalStore } from 'react'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import {
+  composeWorktreeHostIdentity,
+  type HostScopedWorktreeKey
+} from '../../../../../../shared/worktree/host-qualified-identity'
 
 export type WorktreeAgentExpansionState = {
   // Child lists start collapsed so spawning subagents cannot grow the card and shift the sidebar.
@@ -17,32 +22,84 @@ const DEFAULT_EXPANSION_STATE: WorktreeAgentExpansionState = {
 
 // Retain disclosures across virtualizer/lineage remounts in a bounded renderer-session cache; reload resets them.
 export const MAX_PERSISTED_WORKTREE_AGENT_EXPANSIONS = 512
-const expansionByWorktreeId = new Map<string, WorktreeAgentExpansionState>()
+const expansionByKey = new Map<HostScopedWorktreeKey, WorktreeAgentExpansionState>()
+
+/**
+ * Local and remote copies of a workspace share its id, so disclosure is keyed per host. Unstamped
+ * rows default to local, the same default the card's title status and slot targets use.
+ */
+function expansionKey(
+  worktreeId: string,
+  executionHostId: ExecutionHostId | undefined
+): HostScopedWorktreeKey {
+  return composeWorktreeHostIdentity(executionHostId ?? 'local', worktreeId)
+}
 
 function trimPersistedExpansions(): void {
-  while (expansionByWorktreeId.size > MAX_PERSISTED_WORKTREE_AGENT_EXPANSIONS) {
-    const oldest = expansionByWorktreeId.keys().next().value
+  while (expansionByKey.size > MAX_PERSISTED_WORKTREE_AGENT_EXPANSIONS) {
+    const oldest = expansionByKey.keys().next().value
     if (oldest === undefined) {
       break
     }
-    expansionByWorktreeId.delete(oldest)
+    expansionByKey.delete(oldest)
+    notifyExpansion(oldest)
   }
 }
 
-function readExpansionState(worktreeId: string): WorktreeAgentExpansionState {
-  return expansionByWorktreeId.get(worktreeId) ?? DEFAULT_EXPANSION_STATE
+function readExpansionState(key: HostScopedWorktreeKey): WorktreeAgentExpansionState {
+  return expansionByKey.get(key) ?? DEFAULT_EXPANSION_STATE
 }
 
-function persistExpansionState(worktreeId: string, state: WorktreeAgentExpansionState): void {
+function persistExpansionState(
+  key: HostScopedWorktreeKey,
+  state: WorktreeAgentExpansionState
+): void {
   // Refresh LRU order and retain only non-default disclosures.
-  expansionByWorktreeId.delete(worktreeId)
+  expansionByKey.delete(key)
   if (
     state.compactRootListExpanded ||
     state.expandedLineageParents.size > 0 ||
     state.expandedIdleChildGroups.size > 0
   ) {
-    expansionByWorktreeId.set(worktreeId, state)
+    expansionByKey.set(key, state)
     trimPersistedExpansions()
+  }
+}
+
+const expansionListeners = new Map<HostScopedWorktreeKey, Set<() => void>>()
+
+/** Unfold a card's agent list from outside the card, e.g. when a rolled-up slot opens one of its agents. */
+export function expandWorktreeAgentList(
+  worktreeId: string,
+  executionHostId: ExecutionHostId | undefined
+): void {
+  const key = expansionKey(worktreeId, executionHostId)
+  const base = readExpansionState(key)
+  if (base.compactRootListExpanded) {
+    return
+  }
+  persistExpansionState(key, { ...base, compactRootListExpanded: true })
+  notifyExpansion(key)
+}
+
+function notifyExpansion(key: HostScopedWorktreeKey): void {
+  for (const listener of expansionListeners.get(key) ?? []) {
+    listener()
+  }
+}
+
+function subscribeExpansion(key: HostScopedWorktreeKey, listener: () => void): () => void {
+  let listeners = expansionListeners.get(key)
+  if (!listeners) {
+    listeners = new Set()
+    expansionListeners.set(key, listeners)
+  }
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+    if (listeners.size === 0) {
+      expansionListeners.delete(key)
+    }
   }
 }
 
@@ -64,47 +121,46 @@ export type WorktreeAgentExpansionControls = {
 }
 
 /** Restore each worktree’s disclosures across virtualizer and sibling-lineage remounts. */
-export function useWorktreeAgentExpansionState(worktreeId: string): WorktreeAgentExpansionControls {
-  const [rendered, setRendered] = useState<{
-    worktreeId: string
-    state: WorktreeAgentExpansionState
-  }>(() => ({ worktreeId, state: readExpansionState(worktreeId) }))
-
-  // Memoized bodies can change worktree without remounting; avoid displaying the previous card’s disclosure.
-  const current =
-    rendered.worktreeId === worktreeId ? rendered.state : readExpansionState(worktreeId)
+export function useWorktreeAgentExpansionState(
+  worktreeId: string,
+  executionHostId: ExecutionHostId | undefined
+): WorktreeAgentExpansionControls {
+  const key = expansionKey(worktreeId, executionHostId)
+  const subscribe = useCallback((listener: () => void) => subscribeExpansion(key, listener), [key])
+  const getSnapshot = useCallback(() => readExpansionState(key), [key])
+  const current = useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
   const commit = useCallback(
     (next: WorktreeAgentExpansionState) => {
-      persistExpansionState(worktreeId, next)
-      setRendered({ worktreeId, state: next })
+      persistExpansionState(key, next)
+      notifyExpansion(key)
     },
-    [worktreeId]
+    [key]
   )
 
   const toggleLineageParent = useCallback(
     (paneKey: string) => {
-      const base = readExpansionState(worktreeId)
+      const base = readExpansionState(key)
       commit({ ...base, expandedLineageParents: toggleKey(base.expandedLineageParents, paneKey) })
     },
-    [commit, worktreeId]
+    [commit, key]
   )
 
   const toggleIdleChildGroup = useCallback(
     (parentPaneKey: string) => {
-      const base = readExpansionState(worktreeId)
+      const base = readExpansionState(key)
       commit({
         ...base,
         expandedIdleChildGroups: toggleKey(base.expandedIdleChildGroups, parentPaneKey)
       })
     },
-    [commit, worktreeId]
+    [commit, key]
   )
 
   const toggleCompactRootList = useCallback(() => {
-    const base = readExpansionState(worktreeId)
+    const base = readExpansionState(key)
     commit({ ...base, compactRootListExpanded: !base.compactRootListExpanded })
-  }, [commit, worktreeId])
+  }, [commit, key])
 
   return {
     expandedLineageParents: current.expandedLineageParents,
@@ -117,16 +173,13 @@ export function useWorktreeAgentExpansionState(worktreeId: string): WorktreeAgen
 }
 
 export function clearWorktreeAgentExpansionStateForTests(): void {
-  expansionByWorktreeId.clear()
-}
-
-export function getWorktreeAgentExpansionCountForTests(): number {
-  return expansionByWorktreeId.size
+  expansionByKey.clear()
 }
 
 export function seedWorktreeAgentExpansionStateForTests(
   worktreeId: string,
-  state: WorktreeAgentExpansionState
+  state: WorktreeAgentExpansionState,
+  executionHostId?: ExecutionHostId
 ): void {
-  persistExpansionState(worktreeId, state)
+  persistExpansionState(expansionKey(worktreeId, executionHostId), state)
 }

@@ -23,6 +23,7 @@ import { callRuntimeResult } from './web-runtime-calls'
 import { followHostVoiceSettings } from './web-speech-api'
 import { requireActiveEnvironmentOrNull, webRuntimeState } from './web-runtime-session'
 import { zcodePlanSiteOwner, settingsForZcodePlanSiteOwner } from './web-zcode-plan-site'
+import * as cardPreferences from './web-worktree-card-style-sync'
 import { SETTINGS_STORAGE_KEY, UI_STORAGE_KEY, readJson, writeJson } from './web-storage'
 
 export type WebSettingsApi = NonNullable<PreloadApi['settings']>
@@ -130,11 +131,14 @@ export async function getRuntimeBackedStoredSettings(): Promise<GlobalSettings> 
         : null
       webRuntimeState.worktreeVisibilityDefaultsRuntimeValue = visibilityDefaults ?? null
     }
-    for (const key of ['experimentalNewWorktreeCardStyle', 'compactWorktreeCards'] as const) {
-      if (typeof result.settings[key] === 'boolean') {
-        runtimeSettings[key] = result.settings[key]
-      }
-    }
+    Object.assign(
+      runtimeSettings,
+      cardPreferences.read(
+        result.settings,
+        requestedEnvironment.id,
+        currentEnvironment?.id === requestedEnvironment.id
+      )
+    )
     if (typeof result.settings.minimaxGroupId === 'string') {
       runtimeSettings.minimaxGroupId = result.settings.minimaxGroupId
     }
@@ -201,12 +205,7 @@ export async function syncRuntimeBackedSettings(
     if (visibilityDefaults) {
       runtimeUpdates.worktreeVisibilityDefaults = visibilityDefaults
     }
-    if (typeof updates.experimentalNewWorktreeCardStyle === 'boolean') {
-      runtimeUpdates.experimentalNewWorktreeCardStyle = updates.experimentalNewWorktreeCardStyle
-    }
-    if (typeof updates.compactWorktreeCards === 'boolean') {
-      runtimeUpdates.compactWorktreeCards = updates.compactWorktreeCards
-    }
+    Object.assign(runtimeUpdates, cardPreferences.updates(updates, requestedEnvironment.id))
     if (typeof updates.minimaxGroupId === 'string') {
       runtimeUpdates.minimaxGroupId = updates.minimaxGroupId
     }
@@ -224,9 +223,10 @@ export async function syncRuntimeBackedSettings(
     Object.assign(runtimeUpdates, await chatSettings.updates(updates, requestedEnvironment))
     if (Object.keys(runtimeUpdates).length > 0) {
       try {
-        // Consent is written only to the host it was chosen for; other settings keep the common path.
+        // Host-gated settings are written only to the host whose support was checked.
         const result =
-          typeof runtimeUpdates.nativeChatAutoContinueAfterUsageLimit === 'boolean'
+          typeof runtimeUpdates.nativeChatAutoContinueAfterUsageLimit === 'boolean' ||
+          typeof runtimeUpdates.worktreeCardDetailsRow === 'boolean'
             ? await chatSettings.call<SettingsResult>(
                 requestedEnvironment,
                 'settings.update',
@@ -252,6 +252,9 @@ export async function syncRuntimeBackedSettings(
         delete runtimeSettings.worktreeVisibilityDefaults
         // Host voice is read only through followHostVoiceSettings, which also checks this page can capture.
         delete runtimeSettings.voice
+        if (requireActiveEnvironmentOrNull()?.id !== requestedEnvironment.id) {
+          delete runtimeSettings.worktreeCardDetailsRow
+        }
         return settleRuntimeSettings(runtimeSettings)
       } catch (error) {
         if (

@@ -57,6 +57,7 @@ describe('folder workspace attachment desktop IPC', () => {
     })
     const workspace = store.createFolderWorkspace({ projectGroupId: group.id })
     registerFolderWorkspaceHandlers(new BrowserWindow(), store, {
+      createFolderWorkspace: vi.fn(),
       deleteFolderWorkspace: vi.fn(async () => ({ deleted: true }))
     })
     expect(

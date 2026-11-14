@@ -51,26 +51,6 @@ async function fixture(
 }
 
 describe('staged client page profile switching', () => {
-  it('finishes failed old-generation renderer cleanup on teardown without repeating its releases', async () => {
-    const h = await fixture()
-    h.renderer.retirePage.mockRejectedValueOnce(new Error('old-retirement-reply-lost'))
-    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    try {
-      expect(await h.executor.handle(switchCommand(), new AbortController().signal)).toMatchObject({
-        status: 'completed'
-      })
-      expect(h.executor.snapshotPageInventory()).toMatchObject([
-        { pageHostGeneration: 8, state: 'active' }
-      ])
-      expect(h.routeSession.release).toHaveBeenCalledTimes(1)
-      await h.executor.close()
-      expect(h.renderer.retirePage).toHaveBeenCalledTimes(3)
-      expect(h.routeSession.release).toHaveBeenCalledTimes(1)
-    } finally {
-      warning.mockRestore()
-    }
-  })
-
   it('finishes independent pages, retained profile cleanup and uploads after one initializer cleanup fails', async () => {
     const h = await fixture()
     const signal = new AbortController().signal

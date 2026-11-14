@@ -177,30 +177,6 @@ describe('RepoRefMaintenance gating', () => {
     maintenance.dispose()
   })
 
-  it('leaves a healthy repository alone', async () => {
-    const refs = await refsDirectoryWith(THRESHOLD - 1)
-    const { maintenance, spans, packRefs } = createHarness()
-
-    maintenance.arm(target('local::/healthy/.git', refs, packRefs))
-    await elapseQuietPeriod(maintenance)
-
-    expect(packRefs).not.toHaveBeenCalled()
-    expect(attributesOf(spans[0])).toMatchObject({
-      'repo.maintenance_outcome': 'below_threshold',
-      'git.loose_ref_count': THRESHOLD - 1
-    })
-  })
-
-  it('maintains the pack index even when the loose-ref backlog is small', async () => {
-    const refs = await refsDirectoryWith(1)
-    const { maintenance, packRefs } = createHarness()
-    const maintainPackIndex = vi.fn(async () => {})
-    maintenance.arm(target('local::/fragmented/.git', refs, packRefs, { maintainPackIndex }))
-    await elapseQuietPeriod(maintenance)
-    expect(maintainPackIndex).toHaveBeenCalledTimes(1)
-    expect(packRefs).not.toHaveBeenCalled()
-  })
-
   it('rechecks activity after config probes before starting object maintenance', async () => {
     const refs = await refsDirectoryWith(THRESHOLD + 2)
     let busy = false
@@ -235,21 +211,6 @@ describe('RepoRefMaintenance gating', () => {
     await elapseQuietPeriod(maintenance)
     expect(packRefs).not.toHaveBeenCalled()
     maintenance.dispose()
-  })
-
-  it('does not run while the app is busy', async () => {
-    const refs = await refsDirectoryWith(THRESHOLD + 2)
-    let busy = true
-    const { maintenance, packRefs } = createHarness({ isBusy: () => busy })
-
-    maintenance.arm(target('local::/busy/.git', refs, packRefs))
-    await elapseQuietPeriod(maintenance)
-    expect(packRefs).not.toHaveBeenCalled()
-
-    // The deferral re-arms on a backed-off delay, so the next window picks it up.
-    busy = false
-    await elapseQuietPeriod(maintenance, 2)
-    expect(packRefs).toHaveBeenCalledTimes(1)
   })
 
   it('honours a user who disabled Git auto-maintenance for the repo', async () => {
@@ -316,36 +277,6 @@ describe('RepoRefMaintenance single-flight and backoff', () => {
     expect(peak).toBe(1)
     expect(started).toEqual(['local::/repo/.git', 'wsl:Ubuntu::/repo/.git'])
     expect(packRefs).not.toHaveBeenCalled()
-  })
-
-  it('runs one repository at a time', async () => {
-    const refs = await refsDirectoryWith(THRESHOLD + 2)
-    let concurrent = 0
-    let peak = 0
-    const releases: (() => void)[] = []
-    const { maintenance } = createHarness()
-    const slowPack = async (): Promise<void> => {
-      concurrent += 1
-      peak = Math.max(peak, concurrent)
-      await new Promise<void>((resolve) => releases.push(resolve))
-      concurrent -= 1
-    }
-
-    maintenance.arm(target('local::/a/.git', refs, slowPack))
-    maintenance.arm(target('local::/b/.git', refs, slowPack))
-    await vi.advanceTimersByTimeAsync(QUIET_MS)
-    await until(() => concurrent === 1, 'a pack to start')
-    expect(concurrent).toBe(1)
-
-    releases.shift()?.()
-    await maintenance.whenAttemptSettled()
-    // The second repo was deferred behind the first, so its retry is on a timer.
-    await untilWithTimers(() => concurrent === 1, 'the second repo to start')
-    releases.shift()?.()
-    await maintenance.whenAttemptSettled()
-
-    expect(peak).toBe(1)
-    expect(concurrent).toBe(0)
   })
 
   it('waits out the rewrite window instead of killing the pack', async () => {

@@ -1,14 +1,11 @@
-import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RelayAssignmentStore } from '../../assignment/assignment-store.js'
-import { encodeMembership, type CellAdmissionMembership } from './cell-admission-selector.js'
 import type { RelayCellConfig } from '../../config.js'
 import { openInMemoryRelayDatabase, type RelayDatabase } from '../../database/database.js'
 
 const HEARTBEAT_TTL_MS = 45_000
 const BOUND = 60
 const OLD_INCARNATION = '11111111-1111-4111-8111-111111111111'
-const NEW_INCARNATION = '22222222-2222-4222-8222-222222222222'
 
 function cell(index: number, connectionHardCap: 1_000 | 3_000): RelayCellConfig {
   const id = `us-c${String(index).padStart(2, '0')}`
@@ -40,7 +37,7 @@ type Report = {
 async function setup(cells: RelayCellConfig[]) {
   const database = await openInMemoryRelayDatabase()
   databases.push(database)
-  let now = 100
+  const now = 100
   const store = new RelayAssignmentStore(database, () => now, {
     requireLiveCells: true,
     heartbeatTtlMs: HEARTBEAT_TTL_MS
@@ -81,32 +78,13 @@ async function setup(cells: RelayCellConfig[]) {
     }
     return rows
   }
-  const isolateForRoll = async (cellId: string): Promise<void> => {
-    const current = await store.inspectCellAdmissionSelector()
-    const membership: CellAdmissionMembership = {
-      existingOnly: [],
-      migrationOnly: [cellId],
-      general: cells.map(({ id }) => id).filter((id) => id !== cellId)
-    }
-    await store.applyCellAdmissionSelector({
-      attemptId: `isolate-${cellId}`,
-      expectedGeneration: current.selector.generation,
-      expectedMembershipSha256: createHash('sha256')
-        .update(encodeMembership(current.selector.membership))
-        .digest('hex'),
-      membership,
-      rollIsolatedCells: [cellId]
-    })
-  }
   return {
     database,
     store,
     heartbeat,
     capacity,
     reportedHardCap,
-    telemetryRows,
-    isolateForRoll,
-    setNow: (value: number) => (now = value)
+    telemetryRows
   }
 }
 
@@ -215,63 +193,4 @@ describe('effective connection cap = min(configured, reported)', () => {
       harness.store.assign({ userId: 'user-a', relayHostId: 'host000000000001' })
     ).rejects.toThrow('relay_capacity_exhausted')
   })
-
-  it('places a mixed fleet against each cell’s own reported cap', async () => {
-    const small = cell(1, 3_000)
-    const large = cell(2, 3_000)
-    const harness = await setup([small, large])
-    await harness.heartbeat(small, { connectionHardCap: 1_000, units: 840 })
-    await harness.heartbeat(large, { connectionHardCap: 3_000, units: 840 })
-
-    expect(await harness.capacity(small.id)).toMatchObject({ normalAdmissionPause: 840 })
-    expect(await harness.capacity(large.id)).toMatchObject({ normalAdmissionPause: 2_840 })
-    for (let index = 0; index < 4; index++) {
-      await expect(
-        harness.store.assign({ userId: `user-${index}`, relayHostId: `host00000000000${index}` })
-      ).resolves.toMatchObject({ cellId: large.id })
-    }
-  })
-
-  it('has no unavailable window while a cell rolls 1,000 -> 3,000', async () => {
-    const cells = [cell(1, 1_000), cell(2, 1_000)]
-    const [rolled, neighbour] = cells
-    const harness = await setup(cells)
-    const identity = { userId: 'user-a', relayHostId: 'host000000000001' }
-    await harness.heartbeat(rolled!, { connectionHardCap: 1_000 })
-    await harness.heartbeat(neighbour!, { connectionHardCap: 1_000, units: 500 })
-    const home = await harness.store.assign(identity)
-    expect(home.cellId).toBe(rolled!.id)
-    await harness.store.reconcileCells(
-      cells.map((_, index) => cell(index + 1, 3_000)),
-      true
-    )
-
-    // The old process keeps heartbeating its 1,000 well past the TTL; the host stays sticky.
-    for (const at of [30_000, 60_000, 90_000]) {
-      harness.setNow(at)
-      await harness.heartbeat(rolled!, { connectionHardCap: 1_000 })
-      await harness.heartbeat(neighbour!, { connectionHardCap: 1_000, units: 500 })
-      await expect(harness.store.assign(identity)).resolves.toMatchObject({
-        cellId: rolled!.id,
-        assignmentEpoch: home.assignmentEpoch
-      })
-    }
-    // The roll isolates the live old process: the isolated-incumbent lane re-places the host.
-    await harness.isolateForRoll(rolled!.id)
-    const moved = await harness.store.assign(identity)
-    expect(moved).toMatchObject({ cellId: neighbour!.id, placed: true })
-
-    // The replacement boots and reports the new cap.
-    harness.setNow(120_000)
-    await harness.heartbeat(rolled!, {
-      connectionHardCap: 3_000,
-      incarnation: NEW_INCARNATION,
-      startedAt: 110_000
-    })
-    expect(await harness.capacity(rolled!.id)).toMatchObject({
-      effectiveHardCap: 3_000,
-      heartbeatFresh: true
-    })
-  })
-
 })

@@ -48,6 +48,8 @@ export type BrowserActionEffects = {
   consoleErrors?: string[]
   /** Still pending when the page settled. */
   passkeyRequest?: BrowserPasskeyRequest
+  /** The page asked for the system print dialog, which Orca refused so it would not take the user's screen. */
+  blockedPrint?: { origin: string }
   /** Snapshot lines changed since the last reading; `full` is the whole new tree. Absent when unread. */
   page?: 'unchanged' | { lines: string[]; removedLines: number; full: boolean; truncated: boolean }
   /** False when the page was still changing at the settle cap. */
