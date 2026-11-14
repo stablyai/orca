@@ -8,8 +8,9 @@ export function getWindowsPowerShellExecutablePath(): string {
   return getWindowsSystem32Path('WindowsPowerShell/v1.0/powershell.exe')
 }
 
-/** AV blocks WindowStyle Hidden with EncodedCommand (#16003); omit it and use direct launchers where possible. */
-export const WINDOWS_POWERSHELL_HOOK_SWITCHES = '-NoProfile'
+// AV blocks WindowStyle Hidden with EncodedCommand (#16003); NonInteractive has not been measured on that host.
+// NonInteractive prevents PowerShell 5.1 from reading hook JSON as interactive input.
+export const WINDOWS_POWERSHELL_HOOK_SWITCHES = '-NoProfile -NonInteractive'
 
 // Suppress progress before Set-ExecutionPolicy autoloads modules or CLIXML can corrupt merged JSON output.
 const HOOK_PROGRESS_SILENCER = "$ProgressPreference='SilentlyContinue'; "
