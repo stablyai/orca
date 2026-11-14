@@ -254,6 +254,8 @@ export type PtyTransport = {
   hasUndeliveredInput?: () => boolean
   /** Input sent now is held and delivered to this pane's terminal once it connects. */
   isHoldingInput?: () => boolean
+  /** Input sent now goes straight to the bound terminal, though attachment may still be settling. */
+  acceptsInputNow?: () => boolean
   /** The user dismissed the error surface; the next occurrence of the same message must surface again. */
   notifyErrorSurfaceDismissed?: () => void
   getPtyId: () => string | null
