@@ -278,9 +278,6 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
       <NewWorktreeModalController
         visible={state.showNewWorktree}
         client={client}
-        // Pass the preselection only while a manual open is pending — a route-driven
-        // opening must keep the last-visited default rather than a stale handoff repo.
-        preselectedRepo={state.showNewWorktree ? state.newWorktreePreselectedRepo : null}
         hostCapabilities={hostCapabilities}
         hostId={hostId}
         hostLabelById={state.hostLabelById}

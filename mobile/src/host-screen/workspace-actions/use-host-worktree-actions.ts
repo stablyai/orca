@@ -4,7 +4,6 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../src/shared/sidebar-inpu
 import type { useRouter } from 'expo-router'
 import { useHostProjectAddedHandoff, usePlusActionSheet } from './host-project-admission-actions'
 import { REPO_ADD_PROJECT_MOBILE_RUNTIME_CAPABILITY } from '../../../../src/shared/mobile-runtime-capabilities'
-import type { MobileWorkspaceRepo } from '../../components/new-worktree-modal-types'
 import { floatingWorkspaceSessionPath } from '../../session/floating-workspace'
 import { holdSessionLeave } from '../../session/session-leave-guard'
 import { savePinnedIds } from '../../storage/preferences'
@@ -65,7 +64,6 @@ export function useHostWorktreeActions(args: {
     setOptimisticActiveWorktreeIdentity,
     setPinnedIds,
     serverWorkspaces,
-    setNewWorktreePreselectedRepo,
     setNewWorktreeVisible,
     setServerNotice,
     setServerWorkspaces,
@@ -90,13 +88,8 @@ export function useHostWorktreeActions(args: {
   }, [router])
 
   const openNewWorktreeModal = useCallback(
-    (preselectedRepo?: MobileWorkspaceRepo) => {
-      // Why: state, not the imperative ref — upstream's modal is now controlled by
-      // visible, so the preselection rides the same state that mounts it.
-      setNewWorktreePreselectedRepo(preselectedRepo ?? null)
-      setNewWorktreeVisible(true)
-    },
-    [setNewWorktreePreselectedRepo, setNewWorktreeVisible]
+    () => setNewWorktreeVisible(true),
+    [setNewWorktreeVisible]
   )
   const closeNewWorktreeModal = useCallback(
     () => setNewWorktreeVisible(false),
