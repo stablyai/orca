@@ -4,6 +4,7 @@ import path from 'node:path'
 import { runProcess } from '@orca/process-host'
 import { windowsPowerShellPath } from '@orca/process-host/windows-system-binary'
 import { test, expect } from './helpers/orca-app'
+import { openFileExplorer } from './helpers/file-explorer'
 
 test.use({ seedTestRepo: false })
 
@@ -44,9 +45,19 @@ test.describe('file explorer Copy on Windows', () => {
     await writeFile(path.join(source, FILE_NAME), 'copied through the clipboard\n')
 
     await page.evaluate(async (source) => {
-      await window.__store!.getState().addRepoPath(source, 'folder')
+      const store = window.__store!
+      const repo = await store.getState().addRepoPath(source, 'folder')
+      if (!repo) {
+        throw new Error('Copy fixture folder was not registered')
+      }
+      await store.getState().fetchWorktrees(repo.id)
+      const workspace = store.getState().worktreesByRepo[repo.id]?.[0]
+      if (!workspace) {
+        throw new Error('Copy fixture workspace was not loaded')
+      }
+      store.getState().setActiveWorktree(workspace.id)
     }, source)
-    await page.getByRole('option').filter({ hasText: 'workspace' }).click()
+    await openFileExplorer(page)
     await page
       .locator('[data-orca-explorer-shell]')
       .getByRole('button', { name: FILE_NAME, exact: true })

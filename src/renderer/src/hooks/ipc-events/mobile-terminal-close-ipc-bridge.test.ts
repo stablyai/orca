@@ -24,7 +24,7 @@ function testStore(): ReturnType<typeof createTestStore> {
 }
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
-vi.mock('../../store', () => ({
+vi.mock('../../store/index', () => ({
   useAppStore: {
     getState: () => testStore().getState(),
     subscribe: (...args: Parameters<ReturnType<typeof createTestStore>['subscribe']>) =>
@@ -120,6 +120,7 @@ async function setup(viewedSurface: 'editor' | 'terminal'): Promise<{
   const store = createTestStore()
   storeRef.current = store
   seedStore(store, {
+    sidebarBody: 'workspaces',
     worktreesByRepo: {
       repo1: [
         makeWorktree({ id: VIEWED, repoId: 'repo1', path: '/repo1/viewed' }),
@@ -227,20 +228,27 @@ describe('runtime file opens on the host desktop', () => {
     expect(store.getState().activeTabType).toBe('editor')
   })
 
-  it('switches the desktop for a phone open (no navigation field), as before', async () => {
-    const { openFile, store } = await setup('terminal')
+  it.each(['workspaces', 'conversations'] as const)(
+    'opens a phone-selected file while preserving the %s sidebar',
+    async (sidebarBody) => {
+      const { openFile, store } = await setup('terminal')
+      store.setState({ sidebarBody })
 
-    await openFile({ worktreeId: BACKGROUND, ...APP_TS })
+      await openFile({ worktreeId: BACKGROUND, ...APP_TS })
 
-    const state = store.getState()
-    expect(state.activeWorktreeId).toBe(BACKGROUND)
-    expect(state.activeView).toBe('terminal')
-    expect(state.activeFileId).toBe(APP_TS.filePath)
-    expect(state.activeTabType).toBe('editor')
-    expect(activeEditorEntityId(store, BACKGROUND)).toBe(APP_TS.filePath)
-    expect(state.pendingRevealWorktree?.worktreeId).toBe(BACKGROUND)
-    expect(state.lastVisitedAtByWorktreeId[BACKGROUND]).toBeDefined()
-  })
+      const state = store.getState()
+      expect(state.activeWorktreeId).toBe(BACKGROUND)
+      expect(state.activeView).toBe('terminal')
+      expect(state.activeFileId).toBe(APP_TS.filePath)
+      expect(state.activeTabType).toBe('editor')
+      expect(activeEditorEntityId(store, BACKGROUND)).toBe(APP_TS.filePath)
+      expect(state.sidebarBody).toBe(sidebarBody)
+      expect(state.pendingRevealWorktree?.worktreeId).toBe(
+        sidebarBody === 'workspaces' ? BACKGROUND : undefined
+      )
+      expect(state.lastVisitedAtByWorktreeId[BACKGROUND]).toBeDefined()
+    }
+  )
 
   describe('with another server focused', () => {
     const FRESH = 'repo9::/repo9/fresh'

@@ -27,12 +27,14 @@ const cachedSessionResults = new Map<string, CachedSessionResult>()
 export function aiVaultSessionResultCacheKey(
   executionHostScope: ExecutionHostScope,
   scopePaths: readonly string[],
-  scopeOnly = false
+  scopeOnly = false,
+  includeStructuredSessions = false
 ): string {
   // JSON keeps the parts unambiguous: a path may legally contain any separator.
   return JSON.stringify([
     executionHostScope,
     ...(scopeOnly ? [{ scopeOnly }] : []),
+    ...(includeStructuredSessions ? [{ includeStructuredSessions }] : []),
     ...[...new Set(scopePaths)].sort()
   ])
 }

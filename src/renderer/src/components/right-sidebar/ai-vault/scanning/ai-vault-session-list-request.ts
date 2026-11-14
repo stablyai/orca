@@ -20,6 +20,7 @@ export type AiVaultSessionListRequest = {
   scopePaths: readonly string[]
   /** Workspace and Project list only their own sessions; All and the tab move lookup leave it off. */
   scopeOnly?: boolean
+  includeStructuredSessions?: boolean
   executionHostScope: ExecutionHostScope
   sessionLimit: AiVaultSessionLimit
 }
@@ -30,6 +31,7 @@ export function aiVaultSessionListArgs(
 ): AiVaultListArgs {
   return {
     includeAntigravityIdeSessions: true,
+    ...(request.includeStructuredSessions ? { includeStructuredSessions: true } : {}),
     limit: request.sessionLimit === 'unlimited' ? undefined : request.sessionLimit,
     unlimited: request.sessionLimit === 'unlimited',
     scopePaths: request.scopePaths,
@@ -47,7 +49,8 @@ export function readCachedAiVaultSessionList(
     key: aiVaultSessionResultCacheKey(
       request.executionHostScope,
       request.scopePaths,
-      request.scopeOnly
+      request.scopeOnly,
+      request.includeStructuredSessions
     ),
     limit: request.sessionLimit,
     scopePaths: request.scopePaths
@@ -61,7 +64,8 @@ export function readLastAiVaultSessionList(
     key: aiVaultSessionResultCacheKey(
       request.executionHostScope,
       request.scopePaths,
-      request.scopeOnly
+      request.scopeOnly,
+      request.includeStructuredSessions
     ),
     limit: request.sessionLimit,
     scopePaths: request.scopePaths
@@ -77,7 +81,8 @@ export function cacheAiVaultSessionList(
     key: aiVaultSessionResultCacheKey(
       request.executionHostScope,
       request.scopePaths,
-      request.scopeOnly
+      request.scopeOnly,
+      request.includeStructuredSessions
     ),
     executionHostScope: request.executionHostScope,
     limit: request.sessionLimit,

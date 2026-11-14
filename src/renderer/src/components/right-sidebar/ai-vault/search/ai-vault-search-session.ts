@@ -120,6 +120,7 @@ export function useAiVaultPanelSearchSessions(
     : 'browse'
   return {
     listMode,
+    searchSessions,
     stale: waitingForHits && search.hits.length > 0,
     sessions: showHits ? searchSessions : history,
     // Project and worktree lookups scan sessions against every worktree. Keep them on history

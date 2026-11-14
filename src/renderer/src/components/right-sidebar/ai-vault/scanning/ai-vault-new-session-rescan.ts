@@ -5,7 +5,8 @@ import { claimAiVaultForcedRescan, aiVaultForcedRescanDelay } from './ai-vault-f
 
 /** In-app launches never blur; rescan on new provider session IDs, avoiding frequent state transitions. */
 export function useAiVaultNewSessionRescan(
-  refresh: (args: { background: true; force: true }) => Promise<void>
+  refresh: (args: { background: true; force: true }) => Promise<void>,
+  terminalOnly = false
 ): void {
   // The budget is shared across remounts so session creation cannot amplify full scans; a throttled
   // rescan waits for budget rather than leaving new sessions invisible.
@@ -37,7 +38,9 @@ export function useAiVaultNewSessionRescan(
     []
   )
 
-  const agentSessionIdsKey = useAppStore((s) => getAgentSessionIdsKey(s.agentStatusByPaneKey))
+  const agentSessionIdsKey = useAppStore((s) =>
+    getAgentSessionIdsKey(s.agentStatusByPaneKey, terminalOnly)
+  )
   const seenAgentSessionIdsRef = useRef<Set<string> | null>(null)
   useEffect(() => {
     const ids = agentSessionIdsKey === '' ? [] : agentSessionIdsKey.split('\n')

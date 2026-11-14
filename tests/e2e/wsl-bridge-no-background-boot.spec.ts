@@ -183,6 +183,7 @@ test.describe('E9: background work on a stopped real WSL distro', () => {
       workspace = await openWslWorkspace(electronApp, page)
       const { repoId } = workspace
       await activate(page, localWorktreeId)
+      await waitForWslLaunchesToSettle(SPAWN_LOG)
       await expectNothingStartsTheStoppedDistro(page, testInfo, workspace, async () => {
         for (let round = 0; round < 2; round += 1) {
           timeline(`round ${round}: focus and workspace switches`)

@@ -1,4 +1,5 @@
 import { normalizeGitGraphFilters } from '../../../shared/git/history/git-graph-filters'
+import { normalizeConversationPreferences } from '../../../shared/conversation-navigation-preferences'
 import { normalizeExplorerDisplayRootByWorktree } from '../../../shared/file-listing/file-explorer-display-root'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getDefaultUIState, normalizeAgentActivityDisplayMode } from '../../../shared/constants'
@@ -42,6 +43,7 @@ export function getPersistedUI(
     ...uiState,
     groupBy: normalizeGroupBy(state.ui?.groupBy),
     sortBy: normalizeSortBy(state.ui?.sortBy),
+    conversationPreferences: normalizeConversationPreferences(state.ui?.conversationPreferences),
     projectOrderBy: normalizeProjectOrderBy(state.ui?.projectOrderBy),
     rightSidebarTab: normalizeRightSidebarTab(state.ui?.rightSidebarTab),
     rightSidebarExplorerView: normalizeRightSidebarExplorerView(

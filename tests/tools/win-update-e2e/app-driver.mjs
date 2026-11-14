@@ -213,13 +213,22 @@ export async function ensureTerminal(page, { allowCreate = true, timeoutMs = 60_
     return
   }
   await createWorkspaceFromSeededRepo(page, timeoutMs)
-  await waitForTerminalReady(page, timeoutMs)
+  await createTerminalTab(page)
 }
 
 // Use seeded-project composer’s Blank Terminal path so probes reach a shell rather than an agent/native folder dialog.
 async function createWorkspaceFromSeededRepo(page, timeoutMs) {
   // Share one deadline across creation rather than reset each step’s budget.
   const deadline = Date.now() + timeoutMs
+  const sidebarTitle = page.locator('[data-sidebar-section-title]').first()
+  if ((await sidebarTitle.getAttribute('data-sidebar-section-title')) !== 'workspaces') {
+    if (!(await tryClickWithKnownOverlayRetry(page, sidebarTitle, deadline - Date.now()))) {
+      await sidebarTitle.click({ timeout: 1 })
+    }
+    await page.getByRole('menuitem', { name: 'Workspaces', exact: true }).click({
+      timeout: Math.max(1, deadline - Date.now())
+    })
+  }
   const newWorkspace = page
     .getByRole(NEW_WORKSPACE_BUTTON.role, { name: NEW_WORKSPACE_BUTTON.name })
     .first()

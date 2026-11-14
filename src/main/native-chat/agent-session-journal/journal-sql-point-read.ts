@@ -1,3 +1,4 @@
+import { readJournalDomainConversationPreview } from './journal-domain-conversation-preview'
 import { planJournalDomainRewindCut } from './journal-domain-rewind-cut'
 import { readJournalDomainMailObservation } from './journal-domain-mail-observation'
 import { readJournalDomainOutline } from './journal-domain-outline'
@@ -62,6 +63,11 @@ function read(
           operation.inheritedAnchor,
           operation.compareSubmissions
         )
+      }
+    case 'conversation-preview':
+      return {
+        kind: operation.kind,
+        preview: readJournalDomainConversationPreview(scope, operation.workspaceId)
       }
     case 'saved-content':
       return { kind: operation.kind, content: readJournalDomainSavedContent(scope) }

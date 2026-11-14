@@ -1,3 +1,4 @@
+import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { openDesktopStructuredSessionInteraction } from './open-existing-structured-session'
 import type { StructuredSessionOpenAdapterDeps } from './open-existing-structured-session'
 import { showAgentPaneUnavailable } from '@/components/terminal-pane/agent-status/stale-agent-row'
@@ -53,12 +54,21 @@ export const structuredSessionOpenFeedback: StructuredSessionOpenFeedback = {
 
 /** Read only structuredSession so history clicks and drag payloads follow the same reveal path. */
 export async function activateAiVaultStructuredSession(
-  session: Pick<AiVaultSession, 'structuredSession'> & { agent?: string },
+  session: Pick<AiVaultSession, 'structuredSession'> &
+    Partial<Pick<AiVaultSession, 'executionHostId'>> & { agent?: string },
   deps?: StructuredSessionActivationDeps,
   target?: RuntimeClientTarget
 ): Promise<boolean> {
   if (!session.structuredSession) {
     return false
+  }
+  if (!target && session.executionHostId) {
+    const owner = structuredAgentSessionTargetForHost(session.executionHostId)
+    if (!owner) {
+      ;(deps ?? structuredSessionOpenFeedback).hostCannotOpen()
+      return true
+    }
+    target = owner
   }
   await openDesktopStructuredSession(
     { kind: 'history', structuredSession: session.structuredSession, agent: session.agent },
