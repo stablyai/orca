@@ -64,8 +64,17 @@ export function clientModuleMock(mocks: PRRefreshCoordinatorMocks): ClientModule
   return {
     getPRForBranchOutcome: mocks.getPRForBranchOutcomeMock,
     preparePRBranchRead: async (...args) => {
+      const { prBranchReadKeys } = await import('../../client/lookup/pr-read-identity')
+      const key = prBranchReadKeys(
+        args[0],
+        args[1],
+        args[2] ?? null,
+        args[3] ?? null,
+        args[4] ?? null,
+        args[5] ?? {}
+      )[1]
       const prepared: PreparedPRBranchRead = {
-        key: '',
+        key,
         reprepare: async () => prepared,
         cached: () => null,
         isCurrent: () => true,
