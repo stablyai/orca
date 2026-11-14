@@ -1,4 +1,8 @@
-import { observedExistsSync as existsSync } from './file-content-observation'
+import {
+  observedExistsSync as existsSync,
+  invalidateFileObservation,
+  observeFilePublication
+} from './file-content-observation'
 import { randomUUID } from 'node:crypto'
 import { linkSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
@@ -6,7 +10,6 @@ import { grantDirAcl } from '../windows/windows-directory-acl'
 import { isPermissionError } from './permission-errors'
 import { nodeFileContentsEqualSync } from '../../shared/file-content/node-file-content-equality'
 import { renameFileWithWindowsRetry } from '../../shared/windows-retry-file-operations'
-import { invalidateFileObservation, observeFilePublication } from './file-content-observation'
 
 export function writeFileAtomically(
   targetPath: string,

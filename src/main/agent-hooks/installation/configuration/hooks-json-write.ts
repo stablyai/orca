@@ -1,6 +1,7 @@
 import {
   readObservedFileSync as readFileSync,
-  observedExistsSync as existsSync
+  observedExistsSync as existsSync,
+  observeFilePublication
 } from '../../../filesystem/file-content-observation'
 import { mkdirSync, statSync, writeFileSync, chmodSync, renameSync, unlinkSync } from 'node:fs'
 
@@ -9,7 +10,6 @@ import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { resolveHooksJsonWritePath } from './hook-config-write-path'
 import { writeRollingFileBackup } from '../../../filesystem/rolling-file-backup'
-import { observeFilePublication } from '../../../filesystem/file-content-observation'
 
 export function writeHooksJson(
   configPath: string,

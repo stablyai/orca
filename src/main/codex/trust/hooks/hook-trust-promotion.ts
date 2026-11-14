@@ -1,6 +1,7 @@
 import {
   readObservedFileSync as readFileSync,
-  observedExistsSync as existsSync
+  observedExistsSync as existsSync,
+  observeFilePublication
 } from '../../../filesystem/file-content-observation'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -30,7 +31,6 @@ import {
   getCodexHookTrustSignature,
   getCodexManagedScriptFileName
 } from '../../hooks/definitions/codex-hook-identity'
-import { observeFilePublication } from '../../../filesystem/file-content-observation'
 
 // Promote runtime approvals before mirroring so users do not have to approve them on every launch.
 

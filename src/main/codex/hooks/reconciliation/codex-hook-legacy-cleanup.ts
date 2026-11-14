@@ -1,6 +1,7 @@
 import {
   readObservedFileSync as readFileSync,
-  observedExistsSync as existsSync
+  observedExistsSync as existsSync,
+  observeFilePublication
 } from '../../../filesystem/file-content-observation'
 import { unlinkSync } from 'node:fs'
 import { join } from 'node:path'
@@ -28,7 +29,6 @@ import {
 import { runExclusivelyForCodexTrustConfig } from '../../trust/toml/codex-trust-config-mutation-queue'
 import { getRealHomeHookKeySourcePaths } from './codex-real-home-hooks-json'
 import { mutateRealHomeHooksPreservingUserTrust } from '../../trust/hooks/codex-user-hook-trust-moves'
-import { observeFilePublication } from '../../../filesystem/file-content-observation'
 
 const LEGACY_ORCA_PROFILE_NAME = 'orca-agent-status'
 const LEGACY_ORCA_PROFILE_BLOCK_START = '# BEGIN ORCA AGENT STATUS HOOKS'
