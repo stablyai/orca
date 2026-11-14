@@ -2,7 +2,7 @@ import { readNativeChatDraftDocument } from '../../drafts/native-chat-draft-view
 // @vitest-environment happy-dom
 import { createRef } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
@@ -179,4 +179,35 @@ it('replaces the selection with literal pasted text as one undoable edit', async
     editor.commands.undo()
   })
   expect(input.value).toBe('hello world')
+})
+
+it.each([
+  ['a', 4],
+  ['e', 7]
+])('moves Ctrl-%s on macOS to the edge of the hard-break line holding the caret', (key, offset) => {
+  const userAgent = vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Macintosh')
+  onTestFinished(() => userAgent.mockRestore())
+  const { input, editor } = setup()
+  act(() => {
+    editor.commands.setContent({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'text', text: 'abc' },
+            { type: 'hardBreak' },
+            { type: 'text', text: 'def' },
+            { type: 'hardBreak' },
+            { type: 'text', text: 'ghi' }
+          ]
+        }
+      ]
+    })
+  })
+  input.setSelectionRange(6, 6)
+  act(() => {
+    fireEvent.keyDown(editor.view.dom, { key, ctrlKey: true })
+  })
+  expect([input.selectionStart, input.selectionEnd]).toEqual([offset, offset])
 })
