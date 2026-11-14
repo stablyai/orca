@@ -8,7 +8,7 @@ import type {
   PRBranchReadProducer,
   PRBranchReadRequest
 } from '../../client/lookup/pr-branch-read-resources'
-import { prBranchReadKeys } from '../../client/lookup/pr-read-identity'
+import { exactRequestMatcher } from '../../client/lookup/pr-read-identity'
 import {
   aliasFromCandidate,
   automaticDueAt,
@@ -171,15 +171,23 @@ export class PRRefreshQueueScheduler {
     producer: PRBranchReadProducer
   ): PRRefreshOutcome {
     const key = refreshKey(request)
-    const shown = this.visibility.shown(key)
-    const pending = this.queue.get(key)
-    if (
-      !shown ||
-      !producer.current?.() ||
-      prBranchReadKeys(...candidateReadRequest(shown, 'visible'))[1] !== prepared.key
-    ) {
+    const representative = this.visibility.shown(key)
+    if (!representative || !producer.current?.()) {
       return outcome
     }
+    const matchesCurrentRequest = () => {
+      const sameRequest = exactRequestMatcher(
+        candidateReadRequest(representative, 'visible'),
+        prepared.key
+      )
+      return (shown: GitHubPRRefreshCandidate) =>
+        sameRequest(candidateReadRequest(shown, 'visible'))
+    }
+    const shown = this.visibility.shown(key, matchesCurrentRequest())
+    if (!shown) {
+      return outcome
+    }
+    const pending = this.queue.get(key)
     const candidate = this.visibility.candidate(key, shown)
     // The row's failure is settled whatever is queued for it, so the last check before any read
     // of the row (`admitPreparedRead`) finds it, even when the exact cache had no room for it.
@@ -192,11 +200,7 @@ export class PRRefreshQueueScheduler {
       producer,
       true,
       () => {
-        const current = this.visibility.shown(key)
-        return (
-          current !== undefined &&
-          prBranchReadKeys(...candidateReadRequest(current, 'visible'))[1] === prepared.key
-        )
+        return this.visibility.has(key) && this.visibility.hasDemand(key, matchesCurrentRequest())
       }
     )
     // A rate limit the read reported holds the row's retries, as a local read's would.

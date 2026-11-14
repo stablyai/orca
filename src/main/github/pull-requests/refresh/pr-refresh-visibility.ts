@@ -6,13 +6,19 @@ import {
 } from './pr-refresh-candidate-policy'
 import { prRefreshRenderers } from './pr-refresh-renderer-port'
 
+type VisiblePRAliases = {
+  rows: Map<string, GitHubPRRefreshCandidate>
+  latest: GitHubPRRefreshCandidate
+  selected: boolean
+}
+
 /** Which rows windows show. A key's demand ends when the last window stops showing it, whether a
  *  report drops it, the window clears or closes, or its workspace is removed; `demandEnded` hears
  *  it then, before that evidence is gone. */
 export class PRRefreshVisibility {
   private readonly visibleByWindow = new Map<
     number,
-    { generation: number; candidates: Map<string, GitHubPRRefreshCandidate> }
+    { generation: number; candidates: Map<string, VisiblePRAliases> }
   >()
 
   constructor(private readonly demandEnded: (key: string) => void = () => {}) {}
@@ -42,27 +48,41 @@ export class PRRefreshVisibility {
     }
     const exposed = new Set<string>()
     const changed = new Set<string>()
-    const reported = new Map<string, GitHubPRRefreshCandidate>()
+    const reported = new Map<string, VisiblePRAliases>()
     for (const candidate of candidates) {
       const key = refreshKey(candidate)
-      const shown = existing?.candidates.get(key) ?? this.shown(key)
-      if (!shown) {
+      const aliasKey = candidate.worktreeId
+        ? `worktree:${candidate.worktreeId}`
+        : `cache:${candidate.cacheKey}`
+      const prior = existing?.candidates.get(key)?.rows.get(aliasKey)
+      if (!this.has(key)) {
         exposed.add(key)
       } else if (
-        !sameAliasRequestIdentity(aliasFromCandidate(shown), aliasFromCandidate(candidate))
+        prior &&
+        !sameAliasRequestIdentity(aliasFromCandidate(prior), aliasFromCandidate(candidate))
       ) {
         changed.add(key)
       }
       const previous = this.candidate(key, candidate)
-      reported.set(key, {
+      let aliases = reported.get(key)
+      if (!aliases) {
+        aliases = { rows: new Map(), latest: candidate, selected: false }
+        reported.set(key, aliases)
+      }
+      const current = {
         ...previous,
         ...candidate,
         ...(previous.cachedFetchedAt != null &&
         previous.cachedFetchedAt > (candidate.cachedFetchedAt ?? 0)
           ? this.cachedFields(previous)
           : {}),
-        isSelected: candidate.isSelected === true || reported.get(key)?.isSelected === true
-      })
+        isSelected: candidate.isSelected === true
+      }
+      aliases.rows.set(aliasKey, current)
+      aliases.selected ||= current.isSelected
+      if ((current.cachedFetchedAt ?? 0) >= (aliases.latest.cachedFetchedAt ?? 0)) {
+        aliases.latest = current
+      }
     }
     this.visibleByWindow.set(windowId, { generation, candidates: reported })
     for (const key of existing?.candidates.keys() ?? []) {
@@ -77,10 +97,26 @@ export class PRRefreshVisibility {
   removeWorktree(worktreeId: string): void {
     const removed = new Set<string>()
     for (const window of this.visibleByWindow.values()) {
-      for (const [key, candidate] of window.candidates) {
-        if (candidate.worktreeId === worktreeId) {
+      for (const [key, aliases] of window.candidates) {
+        let changed = false
+        for (const [cacheKey, candidate] of aliases.rows) {
+          if (candidate.worktreeId === worktreeId) {
+            aliases.rows.delete(cacheKey)
+            changed = true
+            removed.add(key)
+          }
+        }
+        if (aliases.rows.size === 0) {
           window.candidates.delete(key)
-          removed.add(key)
+        } else if (changed) {
+          aliases.latest = aliases.rows.values().next().value!
+          aliases.selected = false
+          for (const candidate of aliases.rows.values()) {
+            aliases.selected ||= candidate.isSelected === true
+            if ((candidate.cachedFetchedAt ?? 0) > (aliases.latest.cachedFetchedAt ?? 0)) {
+              aliases.latest = candidate
+            }
+          }
         }
       }
     }
@@ -91,8 +127,10 @@ export class PRRefreshVisibility {
   *reported(): Generator<[number, GitHubPRRefreshCandidate]> {
     this.prune()
     for (const [windowId, window] of this.visibleByWindow) {
-      for (const candidate of window.candidates.values()) {
-        yield [windowId, candidate]
+      for (const aliases of window.candidates.values()) {
+        for (const candidate of aliases.rows.values()) {
+          yield [windowId, candidate]
+        }
       }
     }
   }
@@ -104,21 +142,19 @@ export class PRRefreshVisibility {
   /** Whether any window still shows a row of the key that `matches` (the same exact request, from
    *  whichever of its aliases). */
   hasDemand(key: string, matches: (shown: GitHubPRRefreshCandidate) => boolean): boolean {
-    for (const window of this.visibleByWindow.values()) {
-      const shown = window.candidates.get(key)
-      if (shown && matches(shown)) {
-        return true
-      }
-    }
-    return false
+    return this.shown(key, matches) !== undefined
   }
 
-  /** The row a window reports for the key. */
-  shown(key: string): GitHubPRRefreshCandidate | undefined {
+  /** A currently reported alias of the key, optionally matching an exact request. */
+  shown(
+    key: string,
+    matches: (shown: GitHubPRRefreshCandidate) => boolean = () => true
+  ): GitHubPRRefreshCandidate | undefined {
     for (const window of this.visibleByWindow.values()) {
-      const candidate = window.candidates.get(key)
-      if (candidate) {
-        return candidate
+      for (const candidate of window.candidates.get(key)?.rows.values() ?? []) {
+        if (matches(candidate)) {
+          return candidate
+        }
       }
     }
     return undefined
@@ -128,13 +164,13 @@ export class PRRefreshVisibility {
     let latest = fallback
     let selected = false
     for (const window of this.visibleByWindow.values()) {
-      const candidate = window.candidates.get(key)
-      if (!candidate) {
+      const aliases = window.candidates.get(key)
+      if (!aliases) {
         continue
       }
-      selected ||= candidate.isSelected === true
-      if ((candidate.cachedFetchedAt ?? 0) > (latest.cachedFetchedAt ?? 0)) {
-        latest = { ...fallback, ...this.cachedFields(candidate) }
+      selected ||= aliases.selected
+      if ((aliases.latest.cachedFetchedAt ?? 0) > (latest.cachedFetchedAt ?? 0)) {
+        latest = { ...fallback, ...this.cachedFields(aliases.latest) }
       }
     }
     return { ...latest, isSelected: selected }
@@ -143,9 +179,17 @@ export class PRRefreshVisibility {
   update(candidate: GitHubPRRefreshCandidate): void {
     const key = refreshKey(candidate)
     for (const window of this.visibleByWindow.values()) {
-      const current = window.candidates.get(key)
-      if (current && (current.cachedFetchedAt ?? 0) <= (candidate.cachedFetchedAt ?? 0)) {
-        window.candidates.set(key, { ...current, ...this.cachedFields(candidate) })
+      const aliases = window.candidates.get(key)
+      if (!aliases) {
+        continue
+      }
+      for (const [aliasKey, current] of aliases.rows) {
+        if ((current.cachedFetchedAt ?? 0) <= (candidate.cachedFetchedAt ?? 0)) {
+          aliases.rows.set(aliasKey, { ...current, ...this.cachedFields(candidate) })
+        }
+      }
+      if ((aliases.latest.cachedFetchedAt ?? 0) <= (candidate.cachedFetchedAt ?? 0)) {
+        aliases.latest = candidate
       }
     }
   }
