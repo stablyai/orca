@@ -42,8 +42,7 @@ export function isExpectedRuntimeBrowserRoute(
   )
 }
 
-// Why: a managed server reached over SSH has no browser of its own, so its links open on this
-// desktop, whose page the SSH-routed browser gate sends through that host (as new tabs do).
+// SSH deployments use this desktop's browser even when their network traffic stays on this device.
 export function isSshDeploymentClientBrowserRoute(
   state: AppState,
   availability: ClientCreationActionAvailability,
@@ -71,7 +70,7 @@ export function isSshDeploymentClientBrowserRoute(
     route.runtimeEnvironmentId?.trim() === expectedEnvironmentId &&
     host?.kind === 'runtime' &&
     host.environmentId === expectedEnvironmentId &&
-    eligibility?.eligible === true
+    eligibility !== null
   )
 }
 
@@ -105,8 +104,7 @@ export function isExpectedSshBrowserRoute(
   availability: ClientCreationActionAvailability,
   route: ReturnType<typeof resolveWorktreeOperationRoute>,
   workspaceId: string,
-  expectedSshConnectionId: string,
-  allowClientBrowserFallback = false
+  expectedSshConnectionId: string
 ): boolean {
   if (availability.state !== 'enabled' || workspaceId === FLOATING_TERMINAL_WORKTREE_ID || !route) {
     return false
@@ -121,8 +119,7 @@ export function isExpectedSshBrowserRoute(
     Boolean(expectedTargetId) &&
     route.runtimeEnvironmentId === null &&
     eligibility?.targetId === expectedTargetId &&
-    (eligibility.eligible ||
-      (allowClientBrowserFallback && availability.provider === 'local-client')) &&
+    (eligibility.eligible || availability.provider === 'local-client') &&
     host?.kind === 'ssh' &&
     host.targetId === expectedTargetId
   )
