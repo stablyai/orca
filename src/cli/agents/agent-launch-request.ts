@@ -29,7 +29,7 @@ import {
   getRequiredStringFlagAllowingEmpty,
   rejectValuelessFlag
 } from '../arguments/flags'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
 import { withCliAgentLaunchRecovery } from './agent-launch-recovery'

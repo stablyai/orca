@@ -1,5 +1,5 @@
 import { quotePosixShellDoubleQuotedApostrophe } from '../../../shared/shell/launch/shell-argument-quoting'
-import { RuntimeClientError, RuntimeRpcFailureError } from '../../runtime/types'
+import { RuntimeClientError, RuntimeRpcFailureError } from '../../runtime/connection/types'
 import {
   recoverableOrchestrationArgs,
   resolveOrchestrationCliExecutable

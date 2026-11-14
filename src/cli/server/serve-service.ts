@@ -1,25 +1,25 @@
-import { reenterPackagedElectron } from '../runtime/packaged-cli-interpreter'
+import { reenterPackagedElectron } from '../runtime/app-launch/packaged-cli-interpreter'
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname } from 'node:path'
 import { runProcess } from '@orca/process-host'
 import type { CommandHandler } from '../dispatch/dispatch'
-import { RuntimeClientError } from '../runtime/types'
-import { getOptionalServePort } from '../runtime/serve-port-flag'
-import { getOptionalServeBind, resolveServeBindValue } from '../runtime/serve-bind-flag'
+import { RuntimeClientError } from '../runtime/connection/types'
+import { getOptionalServePort } from '../runtime/commands/serve-port-flag'
+import { getOptionalServeBind, resolveServeBindValue } from '../runtime/commands/serve-bind-flag'
 import { formatServeServiceInstall, formatServeServiceStatus } from './serve-service-format'
-import { resolveLaunchUserDataPath } from '../runtime/launch-user-data-path'
-import { getPlatformUserDataPath } from '../runtime/metadata'
+import { resolveLaunchUserDataPath } from '../runtime/profile/launch-user-data-path'
+import { getPlatformUserDataPath } from '../runtime/profile/metadata'
 import {
   clearServeSupervisorBrake,
   readServeSupervisorBrake
-} from '../runtime/serve-supervisor-brake'
+} from '../runtime/serve/supervision/serve-supervisor-brake'
 import {
   renderServeService,
   resolveServeServiceManager,
   type ServeServiceSpec
-} from '../runtime/serve-service-unit'
-import { resolveServiceCommand, resolveServicePath } from '../runtime/serve-app-launcher'
+} from '../runtime/serve/supervision/serve-service-unit'
+import { resolveServiceCommand, resolveServicePath } from '../runtime/app-launch/serve-app-launcher'
 
 type Run = (program: string, args: string[]) => Promise<{ code: number | null; out: string }>
 

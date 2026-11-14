@@ -1,10 +1,10 @@
-import { reenterPackagedElectron } from '../runtime/packaged-cli-interpreter'
+import { reenterPackagedElectron } from '../runtime/app-launch/packaged-cli-interpreter'
 import { z } from 'zod'
 import type { CommandHandler } from '../dispatch/dispatch'
 import { printResult } from '../output/command-result-output'
 import { rejectRemoteSelectionFlags } from '../dispatch/remote-selection-flag-rejection'
-import { getDefaultUserDataPath } from '../runtime/metadata'
-import { RuntimeClientError } from '../runtime/types'
+import { getDefaultUserDataPath } from '../runtime/profile/metadata'
+import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
 import {
@@ -21,7 +21,7 @@ import {
 import {
   canLaunchProfileStateRecovery,
   launchProfileStateRecovery
-} from '../runtime/profile-state-recovery-launch'
+} from '../runtime/profile/profile-state-recovery-launch'
 
 function localSuccess<TResult>(result: TResult): RuntimeRpcSuccess<TResult> {
   return {

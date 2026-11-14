@@ -1,5 +1,5 @@
 import type { PluginHostListEntry } from '../../../shared/plugins/plugin-list-entry'
-import { RuntimeClientError, RuntimeRpcFailureError } from '../../runtime/types'
+import { RuntimeClientError, RuntimeRpcFailureError } from '../../runtime/connection/types'
 import type { PluginDevWatchEvent } from './plugin-dev-watch-events'
 
 /** One `--shot` PNG written after a load or reload. */

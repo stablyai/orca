@@ -1,7 +1,7 @@
 // Fence caller flags before dispatch: older hosts would let a session act as another caller.
 
 import type { CommandSpec, IdentityFlag } from '../../discovery/command-spec'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 import {
   injectedSessionAddress,
   readInjectedAgentSessionId

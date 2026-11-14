@@ -1,6 +1,6 @@
 import { getOptionalStringFlag, getPresentStringFlag } from '../../arguments/flags'
 import type { RuntimeClient } from '../../runtime/client'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 import { getTerminalHandle } from '../../terminals/terminal-selector'
 import { hasStructuredSessionMarker } from '../../../shared/structured-session-marker'
 import {

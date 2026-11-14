@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import type { HandlerContext } from '../../dispatch/dispatch'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 import type { PluginHostListEntry } from '../../../shared/plugins/plugin-list-entry'
 import { isQualifiedPluginKey } from '../../../shared/plugins/frames/plugin-tab-key'
 import {
