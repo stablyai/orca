@@ -45,9 +45,8 @@ it('joins all six exact predecessors before retargeting their partition, without
       workspaceId: WORKSPACE
     })
     expect(
-      h.hostRuntime
-        .snapshotForClient(WORKSPACE, 'device-a')
-        .tabs.filter((t) => t.type === 'browser')
+      (await h.hostRuntime.snapshotForClient(WORKSPACE, 'device-a')).tabs
+        .filter((t) => t.type === 'browser')
         .map((t) => t.initializationState)
     ).toEqual(['pending', 'pending', 'pending', 'pending', 'pending', 'pending'])
     // No replacement may be visible while one native predecessor has not joined.

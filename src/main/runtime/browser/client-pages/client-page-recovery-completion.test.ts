@@ -15,7 +15,7 @@ it.each([false, true])(
   'clears legacy held snapshots before its pending navigation, with modern peer=%s',
   async (withModern) => {
     const h = createRecoveryLoop(withModern ? [] : ['slow'])
-    publishRecoveryTabsGraph(h.hostRuntime)
+    await publishRecoveryTabsGraph(h.hostRuntime)
     const stream = openRecoveryTabsStream(h.hostRuntime, 'legacy-consumer')
     const peer = createRecoveryPeer(h.hostRuntime, 'modern-peer')
     try {

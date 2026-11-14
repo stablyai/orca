@@ -48,9 +48,9 @@ export function openRecoveryTabsStream(
   return { frames, errors, initial: initial.promise, completion, stop: () => stopped.abort() }
 }
 
-export function publishRecoveryTabsGraph(runtime: OrcaRuntimeService): void {
+export async function publishRecoveryTabsGraph(runtime: OrcaRuntimeService): Promise<void> {
   runtime.attachWindow(1)
-  runtime.syncWindowGraph(1, {
+  await runtime.syncWindowGraph(1, {
     tabs: [],
     leaves: [],
     mobileSessionTabs: [

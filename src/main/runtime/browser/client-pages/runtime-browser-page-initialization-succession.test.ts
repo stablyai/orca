@@ -343,7 +343,7 @@ it('unlinks a closed terminal page from the surviving scope before old authority
     await first.completion
     await vi.waitFor(() => expect(h.snapshots.some((s) => s.reconciled)).toBe(true))
     expect(
-      h.hostRuntime.snapshotForClient('repo-1::/tmp/worktree-a', 'device-a')
+      (await h.hostRuntime.snapshotForClient('repo-1::/tmp/worktree-a', 'device-a'))
         .clientHostedPagesUnreconciled
     ).toBeUndefined()
     retirement.release()

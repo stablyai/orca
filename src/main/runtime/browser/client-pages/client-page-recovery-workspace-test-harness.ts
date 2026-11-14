@@ -50,6 +50,6 @@ export class RecoveryWorkspaceRuntime extends OrcaRuntimeService {
 export type RecoveryRuntimeObservation = RecoveryWorkspaceRuntime & {
   projectedFrames: number
   sessionTabsSequence(): number
-  peekSnapshotForClient(worktree: string, clientId: string): RuntimeMobileSessionTabsResult
+  peekSnapshotForClient(worktree: string, clientId: string): Promise<RuntimeMobileSessionTabsResult>
   snapshotForClient(worktree: string, clientId: string): Promise<RuntimeMobileSessionTabsResult>
 }
