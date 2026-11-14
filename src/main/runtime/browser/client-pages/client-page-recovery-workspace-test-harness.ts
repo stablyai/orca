@@ -51,5 +51,5 @@ export type RecoveryRuntimeObservation = RecoveryWorkspaceRuntime & {
   projectedFrames: number
   sessionTabsSequence(): number
   peekSnapshotForClient(worktree: string, clientId: string): RuntimeMobileSessionTabsResult
-  snapshotForClient(worktree: string, clientId: string): RuntimeMobileSessionTabsResult
+  snapshotForClient(worktree: string, clientId: string): Promise<RuntimeMobileSessionTabsResult>
 }

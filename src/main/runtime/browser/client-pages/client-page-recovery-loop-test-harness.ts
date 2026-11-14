@@ -74,15 +74,15 @@ export function createRecoveryLoop(
         includeAgentSenders: false
       })
     }
-    snapshotForClient(worktree: string, clientId: string) {
-      const result = this.getMobileSessionTabsForWorktree(worktree, clientId, {
+    async snapshotForClient(worktree: string, clientId: string) {
+      const result = await this.getMobileSessionTabsForWorktree(worktree, clientId, {
         includeAgentSenders: false
       })
       this.observeClientHostedPageSnapshots([result], clientId)
       return result
     }
-    override markClientHostedPagesReconciled(id: string): void {
-      super.markClientHostedPagesReconciled(id)
+    override async markClientHostedPagesReconciled(id: string): Promise<void> {
+      await super.markClientHostedPagesReconciled(id)
       reconciled = true
       notify()
     }

@@ -235,6 +235,7 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   { filename: 'parcel-watcher-process-entry.js' },
   // Forked so PTYs outlive the runtime process; its absence makes every restart destructive.
   { filename: 'daemon-entry.js' },
+  { filename: 'runtime-environment-store-worker-entry.js' },
   { filename: 'profile-state-writer-worker-entry.js' },
   { filename: 'profile-state-backup-worker-entry.js' },
   { filename: 'command-path-directory-worker-entry.js' },

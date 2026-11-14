@@ -131,7 +131,14 @@ export async function createBrowserClientPage(
       }
     }
   })
-  await publication
+  try {
+    await publication
+  } catch (error) {
+    if (pages.retirePage(browserPageId, created.placement)) {
+      host.retireRuntimeOwnedBrowserSessionTab?.(worktree.id, browserPageId)
+    }
+    throw error
+  }
   if (url !== 'about:blank') {
     try {
       await navigateRuntimeBrowserClientPage(authority, {
