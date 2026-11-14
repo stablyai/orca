@@ -22,5 +22,11 @@
       "command": ["node", "config/scripts/typecheck/language-server/agent-typescript-lsp.mjs"],
       "extensions": [".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]
     }
+  },
+  "mcp": {
+    "orca-component-fixtures": {
+      "type": "local",
+      "command": ["node", "config/scripts/component-fixtures/fixtures-mcp-server.mjs"]
+    }
   }
 }
