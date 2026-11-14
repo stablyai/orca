@@ -11,7 +11,7 @@ import {
   getTaskPageGitHubDuplicateTargetErrorMessage,
   validateTaskPageGitHubDuplicateTarget,
   type TaskPageGitHubCloseAction
-} from '@/components/task-page/github/task-page-github-status-actions'
+} from '@/components/task-page/github/issue-status/task-page-github-status-actions'
 import { parseGitHubItemRepository as parseOwnerRepoFromItemUrl } from '../../../../../shared/github/work-items/work-item-target'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'

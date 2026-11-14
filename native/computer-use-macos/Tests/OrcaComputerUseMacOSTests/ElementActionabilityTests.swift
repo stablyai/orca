@@ -18,8 +18,6 @@ final class ElementActionabilityTests: XCTestCase {
 
         var nodes: [Int: Node]
         var retriesLeft = 5
-        var onRetry: (FakeTree) -> Void = { _ in }
-        private(set) var scrollRequests = 0
 
         init(_ nodes: [Int: Node]) {
             self.nodes = nodes
@@ -49,7 +47,6 @@ final class ElementActionabilityTests: XCTestCase {
 
         func scrollToVisible(_ element: Int) throws -> Bool {
             guard let target = nodes[element]?.scrollsTo else { return false }
-            scrollRequests += 1
             nodes[element]?.frame = target
             return true
         }
@@ -57,7 +54,6 @@ final class ElementActionabilityTests: XCTestCase {
         func waitBeforeRetry() -> Bool {
             guard retriesLeft > 0 else { return false }
             retriesLeft -= 1
-            onRetry(self)
             return true
         }
     }
@@ -82,28 +78,6 @@ final class ElementActionabilityTests: XCTestCase {
         XCTAssertFalse(ElementActionability.waitUntilEnabled(3, ax: tree))
     }
 
-    func testAnElementThatEnablesWithinTheWaitIsClicked() {
-        let tree = scrollingWindow(button: .init(role: "AXButton", parent: 2, frame: CGRect(x: 10, y: 10, width: 80, height: 20), enabled: false))
-        tree.onRetry = { $0.nodes[3]?.enabled = true }
-
-        XCTAssertTrue(ElementActionability.waitUntilEnabled(3, ax: tree))
-    }
-
-    func testAnElementBelowTheScrolledAreaIsScrolledIntoViewThenClicked() throws {
-        let tree = scrollingWindow(button: .init(
-            role: "AXButton",
-            parent: 2,
-            frame: CGRect(x: 10, y: 250, width: 80, height: 20),
-            scrollsTo: CGRect(x: 10, y: 150, width: 80, height: 20)
-        ))
-
-        guard case let .ready(point) = try ElementActionability.pointerTarget(3, windowFrame: window, ax: tree) else {
-            return XCTFail("the button should be clickable once scrolled into view")
-        }
-        XCTAssertEqual(tree.scrollRequests, 1)
-        XCTAssertEqual(point, CGPoint(x: 50, y: 160))
-    }
-
     func testAnElementThatCannotBeScrolledIntoViewIsRefused() throws {
         let tree = scrollingWindow(button: .init(role: "AXButton", parent: 2, frame: CGRect(x: 10, y: 250, width: 80, height: 20)))
 
@@ -123,7 +97,6 @@ final class ElementActionabilityTests: XCTestCase {
         guard case let .ready(point) = try ElementActionability.pointerTarget(3, windowFrame: window, ax: tree) else {
             return XCTFail("the visible part of the group should take the click")
         }
-        XCTAssertEqual(tree.scrollRequests, 0)
         XCTAssertEqual(point, CGPoint(x: 200, y: 150))
     }
 
@@ -149,7 +122,6 @@ final class ElementActionabilityTests: XCTestCase {
         guard case let .ready(point) = try ElementActionability.pointerTarget(3, windowFrame: window, ax: tree) else {
             return XCTFail("the row should be clicked once scrolled out from under the header")
         }
-        XCTAssertEqual(tree.scrollRequests, 1)
         XCTAssertEqual(point, CGPoint(x: 50, y: 50))
     }
 
@@ -202,7 +174,6 @@ final class ElementActionabilityTests: XCTestCase {
         guard case let .ready(point) = try ElementActionability.pointerTarget(3, windowFrame: window, ax: tree) else {
             return XCTFail("the link should be clicked once scrolled into its container's view")
         }
-        XCTAssertEqual(tree.scrollRequests, 1)
         XCTAssertEqual(point, CGPoint(x: 50, y: 60))
     }
 

@@ -12,7 +12,7 @@ import {
   MAX_SKILL_REFS,
   MAX_BLOCKS,
   MAX_PROMPT_BYTES
-} from './rpc-contract/structured-agent-session-message-params'
+} from './rpc-contract/structured-agent-session/structured-agent-session-message-params'
 import {
   imageReferenceInsertion,
   withoutImageReference

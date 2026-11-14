@@ -175,7 +175,7 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/files/mobile-file-preview-route.ts",
+    "filePath": "mobile/src/files/preview/mobile-file-preview-route.ts",
     "kind": "object-property:message",
     "text": "Unable to load preview",
     "dynamic": false,
@@ -308,21 +308,21 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/session/MobileSessionLatchKeys.tsx",
+    "filePath": "mobile/src/terminal/session/accessory-keys/MobileSessionLatchKeys.tsx",
     "kind": "object-property:label",
     "text": "Shift",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/session/MobileSessionLatchKeys.tsx",
+    "filePath": "mobile/src/terminal/session/accessory-keys/MobileSessionLatchKeys.tsx",
     "kind": "object-property:label",
     "text": "Ctrl",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/session/MobileSessionLatchKeys.tsx",
+    "filePath": "mobile/src/terminal/session/accessory-keys/MobileSessionLatchKeys.tsx",
     "kind": "object-property:label",
     "text": "Alt",
     "dynamic": false,
@@ -399,147 +399,147 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:accessibilityLabel",
     "text": "Backspace",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:accessibilityLabel",
     "text": "Enter",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:accessibilityLabel",
     "text": "Escape",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:accessibilityLabel",
     "text": "Shift Tab",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:accessibilityLabel",
     "text": "Space",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:accessibilityLabel",
     "text": "Tab",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Ctrl+A",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Ctrl+C",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Ctrl+D",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Ctrl+E",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Ctrl+L",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Ctrl+R",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Ctrl+U",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Ctrl+W",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Ctrl+Z",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Del",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Enter",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Esc",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Shift+Tab",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Space",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Tab",
     "dynamic": false,

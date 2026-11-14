@@ -58,8 +58,6 @@ export type JournalRowWriterDeps = {
     finishFold?: (draft: JournalReducerState) => void
   ) => () => void
   commit: (rows: readonly JournalRow[], savedAt: number, inputChanged?: boolean) => void
-  /** Streamed-text-only revisions may skip per-commit fsync; settlement makes them durable. */
-  streamedTextRevision?: (row: JournalRow) => boolean
   outputRevision?: (row: JournalRow) => boolean
 }
 
@@ -76,7 +74,6 @@ export class JournalRowWriter {
       const row = build(this.deps.nextSequence(), savedAt)
       assertJournalFence(row.fence, this.deps.highestFence())
       const receipt = typeof prepareReceipt === 'function' ? prepareReceipt([row]) : prepareReceipt
-      const streamed = !receipt && this.streamed([row])
       const inputChanged = Boolean(receipt) || !this.outputOnly([row])
       this.deps.database().transaction(
         (db) => {
@@ -87,7 +84,6 @@ export class JournalRowWriter {
           receipt?.write(db, this.project([row])[0])
           return adopt
         },
-        streamed,
         (adopt) => adopt?.()
       )
       receipt?.committed()
@@ -122,7 +118,6 @@ export class JournalRowWriter {
       assertJournalFence(row.fence, this.deps.highestFence())
     }
     const receipt = typeof prepareReceipt === 'function' ? prepareReceipt(rows) : prepareReceipt
-    const streamed = !receipt && this.streamed(rows)
     const inputChanged = Boolean(receipt) || !this.outputOnly(rows)
     this.deps.database().transaction(
       (db) => {
@@ -135,7 +130,6 @@ export class JournalRowWriter {
         receipt?.write(db, receiptRow?.(this.project(rows)))
         return adopt
       },
-      streamed,
       (adopt) => adopt?.()
     )
     receipt?.committed()
@@ -160,10 +154,5 @@ export class JournalRowWriter {
 
   private outputOnly(rows: readonly JournalRow[]): boolean {
     return this.deps.outputRevision !== undefined && rows.every(this.deps.outputRevision)
-  }
-
-  private streamed(rows: readonly JournalRow[]): boolean {
-    const { streamedTextRevision } = this.deps
-    return streamedTextRevision !== undefined && rows.every((row) => streamedTextRevision(row))
   }
 }

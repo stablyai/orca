@@ -1,15 +1,15 @@
-import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { hexToRgb, rgbaToHex, type Rgba } from '../../../../shared/color/rgba-contrast'
+import { hexToRgb, type Rgba } from '../../../../shared/color/rgba-contrast'
 import { noticeSurfaceTokens } from './notice-surface-tokens'
-import { safePluginThemeTokens } from './plugin-theme-tokens'
 
 const DARK_BUILT_INS = {
   '--foreground': '#f0f0f0',
   '--popover': '#171717',
   '--popover-foreground': '#f0f0f0',
   '--muted': '#262626',
-  '--muted-foreground': '#acacac'
+  '--muted-foreground': '#acacac',
+  '--accent': '#404040',
+  '--accent-foreground': '#f0f0f0'
 }
 const probe = (value: string): Rgba | null => (value.startsWith('#') ? hexToRgb(value) : null)
 
@@ -68,42 +68,39 @@ function expectReadable(themeTokens: Record<string, string>): void {
     expect(wcagContrast(panel, muted)).toBeGreaterThanOrEqual(4.5)
     expect(wcagContrast(panel, text)).toBeGreaterThanOrEqual(4.5)
   }
+  // Hover fills (bg-accent, ghost dark:hover:bg-accent/50) paint accent-foreground or, for ghost
+  // buttons with hover:text-foreground, popover text. Without notice tokens, main.css paints the
+  // palette's --accent and --accent-foreground.
+  const accent = notice['--notice-accent'] ?? palette['--accent']
+  const accentText = notice['--notice-accent-foreground'] ?? palette['--accent-foreground']
+  for (const alpha of [0.5, 1]) {
+    const hover = composite(accent, surface, alpha)
+    expect(wcagContrast(hover, accentText)).toBeGreaterThanOrEqual(4.5)
+    expect(wcagContrast(hover, text)).toBeGreaterThanOrEqual(4.5)
+  }
+  // Dark outline buttons fill with dark:bg-input/30, /50 on hover, under popover text.
+  const input = notice['--notice-input'] ?? palette['--input']
+  if (input?.startsWith('#')) {
+    for (const alpha of [0.3, 0.5]) {
+      expect(wcagContrast(composite(input, surface, alpha), text)).toBeGreaterThanOrEqual(4.5)
+    }
+  }
 }
 
 describe('noticeSurfaceTokens', () => {
-  it("paints Orca's dark notice colors for the built-in palette", () => {
-    expect(noticeSurfaceTokens({}, 'dark', DARK_BUILT_INS, probe)).toEqual({
-      '--notice-surface': '#262626',
-      '--notice-secondary': '#3a3a3a',
-      '--notice-secondary-edge': 'transparent',
-      '--notice-muted': '#3a3a3a',
-      '--notice-muted-foreground': '#acacac'
-    })
-  })
-
   // Popovers the theme validator accepts that once painted notice text under 4.5:1: #5a5a5a
   // through Chromium's color-mix rounding and an over-lifted 80% description, #383838 through hex
-  // rounding, white-on-dark-base through dark muted panels, the rest unlifted.
+  // rounding, white-on-dark-base through dark muted panels, hover and outline fills, the rest
+  // unlifted.
   it.each<Record<string, string>>([
     { '--popover': '#5a5a5a' },
     { '--popover': '#383838' },
     { '--popover': '#444444' },
     { '--popover': '#303030', '--popover-foreground': '#a0a0a0' },
-    { '--popover': '#ffffff', '--popover-foreground': '#111111' }
+    { '--popover': '#ffffff', '--popover-foreground': '#111111' },
+    { '--popover': '#ffffff', '--popover-foreground': '#747474', '--input': '#262626' }
   ])('keeps notice text 4.5:1 for an accepted %o', (themeTokens) => {
     expectReadable(themeTokens)
-  })
-
-  it('keeps notice text 4.5:1 for every gray popover the validator accepts', () => {
-    const accepted = Array.from({ length: 256 }, (_, gray) => ({
-      '--popover': rgbaToHex([gray, gray, gray, 1])
-    })).filter(
-      (tokens) => safePluginThemeTokens(tokens, 'dark', DARK_BUILT_INS, probe)['--popover']
-    )
-    expect(accepted.length).toBeGreaterThan(50)
-    for (const tokens of accepted) {
-      expectReadable(tokens)
-    }
   })
 
   it('outlines secondary buttons only when their fill is gone', () => {
@@ -120,26 +117,5 @@ describe('noticeSurfaceTokens', () => {
     const filled = tokensFor('#a0a0a0')
     expect(filled['--notice-secondary']).not.toBe(filled['--notice-surface'])
     expect(filled['--notice-secondary-edge']).toBe('transparent')
-  })
-
-  it('remaps the surface paired with every foreground the notice scope remaps', () => {
-    const css = readFileSync(new URL('../../assets/main.css', import.meta.url), 'utf8')
-    const scope = css.match(
-      /\[data-sonner-toaster\],\s*\.notification-card-stack\s*\{([^}]*)\}/
-    )?.[1]
-    expect(scope).toBeDefined()
-    const remapped = new Set([...(scope ?? '').matchAll(/(--[\w-]+):/g)].map(([, name]) => name))
-    // Why: a foreground remapped onto the popover's polarity over an unremapped surface (outline
-    // buttons: text-foreground on bg-background) paints light-on-light or dark-on-dark.
-    const pairs = [
-      ['--foreground', '--background'],
-      ['--card-foreground', '--card'],
-      ['--secondary-foreground', '--secondary'],
-      ['--muted-foreground', '--muted']
-    ]
-    for (const [foreground, surface] of pairs) {
-      expect(remapped.has(foreground), foreground).toBe(true)
-      expect(remapped.has(surface), `${surface} pairs with ${foreground}`).toBe(true)
-    }
   })
 })

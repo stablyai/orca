@@ -9,8 +9,8 @@ import {
 import { readFirstString } from './interactive-tool'
 import type { HookListenerState } from './listener-state'
 import type { AgentHookEventPayload } from './listener-event'
-import { isGrokSubagentEvent } from './providers/grok-tool-fields'
-import { isHermesRootSessionEvent, withHermesPaneSessionId } from './providers/hermes-events'
+import { isGrokSubagentEvent } from './providers/grok/grok-tool-fields'
+import { isHermesRootSessionEvent, withHermesPaneSessionId } from './providers/hermes/hermes-events'
 import { readString } from './tool-input-preview'
 import { readFirstTranscriptRecord } from './transcript-reader'
 

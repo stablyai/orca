@@ -9,7 +9,7 @@ import { detachedHeadAutoDerivedDisplayNames } from './detached-head-display-nam
 import {
   hostedReviewClearUpdates,
   type HostedReviewClearUpdates
-} from '../../../../../../shared/worktree/hosted-review-branch-ownership'
+} from '../../../../../../shared/worktree/hosted-review/hosted-review-branch-ownership'
 import { observeDetachedHostedReviewOwner } from './detached-hosted-review-owners'
 import {
   applyHostedReviewLinkClear,
@@ -23,7 +23,7 @@ import {
 import {
   canonicalHostedReviewBranchIdentity,
   CLEARED_HOSTED_REVIEW_LINK_UPDATES
-} from '../../../../../../shared/worktree/hosted-review-links'
+} from '../../../../../../shared/worktree/hosted-review/hosted-review-links'
 import {
   reviewClearTombstoneKey,
   worktreeCopyOwnerKey,

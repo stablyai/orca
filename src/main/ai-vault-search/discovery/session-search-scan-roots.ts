@@ -5,7 +5,7 @@ import { sessionCandidatesFromDiscoveries } from '../../ai-vault/discovery/sessi
 import { discoverAiVaultSessionSources } from '../../ai-vault/discovery/session-scanner-source-discovery'
 import type {
   AiVaultScanOptions,
-  SessionFileCandidate,
+  SessionFileChoice,
   SessionFileDiscovery
 } from '../../ai-vault/session-scanner-types'
 
@@ -19,7 +19,7 @@ export type SessionSearchScanRoots = Omit<
 
 export type SessionSearchDiscovery = {
   /** Newest first with Codex hardlink aliases collapsed, matching session-list discovery. */
-  candidates: SessionFileCandidate[]
+  candidates: SessionFileChoice[]
   discoveries: SessionFileDiscovery[]
   issues: AiVaultScanIssue[]
 }

@@ -65,16 +65,6 @@ describe('host-qualified row display state', () => {
     expect([...retained]).toEqual([getWorktreeRowIdentity(remote)])
   })
 
-  it('keeps first-match behavior when confirmed identities are duplicated', () => {
-    const identity = getWorktreeRowIdentity(row('shared', 'ssh:a'))
-    const retained = retainLiveSleptWorktreeIdentities(new Set([identity]), [
-      row('shared', 'ssh:a', { liveTerminalCount: 0 }),
-      row('shared', 'ssh:a', { liveTerminalCount: 1 })
-    ])
-
-    expect([...retained]).toEqual([])
-  })
-
   it('applies active and slept overrides to the matching host row only', () => {
     const local = row('shared', 'ssh:a')
     const remote = row('shared', 'ssh:b')

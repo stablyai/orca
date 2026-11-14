@@ -92,11 +92,10 @@ export function useAgentSettingsModelCatalog(
           if (stale) {
             return
           }
-          if (wait ? catalog.waitExpired : catalog.listingInProgress) {
-            read(true)
-            return
-          }
           setAnswer({ key, accountSettings, generation, catalog })
+          if (catalog.waitExpired || catalog.listingInProgress) {
+            read(true)
+          }
         })
         // Why not the snapshot: an unanswered read can't vouch for an older list.
         .catch(() => {

@@ -22,6 +22,7 @@ import {
   type BrowserExtensionWindowEntry
 } from '../tabs-and-windows/browser-extension-window-model'
 import { requireOpenableUrl } from '../tabs-and-windows/browser-extension-requested-navigation'
+import { findBrowserExtensionCallerAgentPage } from '../tabs-and-windows/browser-extension-agent-caller'
 
 const windowIdSchema = z.number().int()
 const queryOptionsSchema = z
@@ -85,23 +86,34 @@ function requireWindow(
   return entry
 }
 
+function applyWindowState(
+  window: Electron.BrowserWindow,
+  state: z.infer<typeof updateInfoSchema>['state']
+): void {
+  if (state === 'minimized') {
+    window.minimize()
+  } else if (state === 'maximized') {
+    window.maximize()
+  } else if (state === 'fullscreen') {
+    window.setFullScreen(true)
+  } else if (state === 'normal') {
+    window.setFullScreen(false)
+    window.unmaximize()
+    window.restore()
+  }
+}
+
 function applyWindowUpdate(
   entry: BrowserExtensionWindowEntry,
-  info: z.infer<typeof updateInfoSchema>
+  info: z.infer<typeof updateInfoSchema>,
+  byAgent: boolean
 ): void {
   const { window } = entry
   // Why: extensions may focus Orca's main window but never move, resize or minimize it.
   if (!entry.isMain) {
-    if (info.state === 'minimized') {
-      window.minimize()
-    } else if (info.state === 'maximized') {
-      window.maximize()
-    } else if (info.state === 'fullscreen') {
-      window.setFullScreen(true)
-    } else if (info.state === 'normal') {
-      window.setFullScreen(false)
-      window.unmaximize()
-      window.restore()
+    // Why not for an agent: restoring, maximizing or fullscreen can show or raise the window.
+    if (!byAgent || info.state === 'minimized') {
+      applyWindowState(window, info.state)
     }
     const bounds = window.getBounds()
     window.setBounds({
@@ -114,8 +126,8 @@ function applyWindowUpdate(
   if (info.drawAttention !== undefined) {
     window.flashFrame(info.drawAttention)
   }
-  if (info.focused) {
-    presentBrowserExtensionWindow(window, true)
+  if (info.focused && !byAgent) {
+    presentBrowserExtensionWindow(window, 'focused')
   }
 }
 
@@ -161,7 +173,11 @@ export function registerWindowsNamespace(): void {
             top: data?.top,
             width: data?.width,
             height: data?.height,
-            focused: data?.focused !== false,
+            presentation: findBrowserExtensionCallerAgentPage(caller)
+              ? 'whenAppActive'
+              : data?.focused === false
+                ? 'unfocused'
+                : 'focused',
             state: data?.state
           })
           return describe(caller, requireWindow(caller, window.id), { populate: true })
@@ -171,7 +187,7 @@ export function registerWindowsNamespace(): void {
         z.tuple([windowIdSchema, updateInfoSchema]),
         (caller, windowId, info) => {
           const entry = requireWindow(caller, windowId)
-          applyWindowUpdate(entry, info)
+          applyWindowUpdate(entry, info, findBrowserExtensionCallerAgentPage(caller) !== null)
           return describe(caller, entry, undefined)
         }
       ),

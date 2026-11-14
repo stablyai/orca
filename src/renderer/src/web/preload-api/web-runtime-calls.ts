@@ -43,12 +43,19 @@ export async function callRuntimeEnvelope<TResult = unknown>(
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)
   }
-  const response = await runtimeCallQueuePool.enqueue(environment.id, method, () => {
-    if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
-      return Promise.resolve(manuallyDisconnectedResponse(environment))
-    }
-    return getClientForEnvironment(environment).call(method, params, { timeoutMs })
-  })
+  const response = await runtimeCallQueuePool.enqueue(
+    environment.id,
+    method,
+    () => {
+      if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
+        return Promise.resolve(manuallyDisconnectedResponse(environment))
+      }
+      return getClientForEnvironment(environment).call(method, params, { timeoutMs })
+    },
+    0,
+    undefined,
+    params
+  )
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)
   }
@@ -137,19 +144,26 @@ export async function callEnvironmentEnvelope<TResult = unknown>(
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)
   }
-  const response = await runtimeCallQueuePool.enqueue(environment.id, method, () => {
-    assertPairing()
-    if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
-      return Promise.resolve(manuallyDisconnectedResponse(environment))
-    }
-    return callPinnedToRuntime(
-      getClientForEnvironment(environment),
-      method,
-      params,
-      timeoutMs,
-      expectedEnvironmentRuntimeId
-    )
-  })
+  const response = await runtimeCallQueuePool.enqueue(
+    environment.id,
+    method,
+    () => {
+      assertPairing()
+      if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
+        return Promise.resolve(manuallyDisconnectedResponse(environment))
+      }
+      return callPinnedToRuntime(
+        getClientForEnvironment(environment),
+        method,
+        params,
+        timeoutMs,
+        expectedEnvironmentRuntimeId
+      )
+    },
+    0,
+    undefined,
+    params
+  )
   if (manuallyDisconnectedEnvironmentIds.has(environment.id)) {
     return manuallyDisconnectedResponse(environment)
   }

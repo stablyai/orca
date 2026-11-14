@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Pressable, Text, View, type StyleProp, type TextStyle } from 'react-native'
-import { useClipboardWriter } from '../platform/clipboard'
+import { useClipboardWriter } from '../platform/clipboard/clipboard'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileAgentLaunchAvailability } from '../session/agent-launch/mobile-agent-launch-availability'
 import {

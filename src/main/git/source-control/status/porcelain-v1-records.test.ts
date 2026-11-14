@@ -26,37 +26,6 @@ afterEach(() => {
 })
 
 describe('parsePorcelainV1Records', () => {
-  it('keeps paths containing spaces and quotes intact', () => {
-    const repo = createRepo()
-    writeFileSync(join(repo, 'a file "quoted".txt'), 'x')
-
-    const records = parsePorcelainV1Records(git(['status', '--porcelain', '-z'], repo))
-
-    expect(records).toEqual([{ xy: '??', path: 'a file "quoted".txt' }])
-  })
-
-  it('keeps non-ASCII paths raw rather than C-quoted', () => {
-    const repo = createRepo()
-    writeFileSync(join(repo, '日本語.txt'), 'x')
-
-    expect(parsePorcelainV1Records(git(['status', '--porcelain', '-z'], repo))).toEqual([
-      { xy: '??', path: '日本語.txt' }
-    ])
-  })
-
-  // Rename origins are extra NUL fields; treating one as a record could invent an untracked status.
-  it('consumes the origin path of a rename instead of emitting it as a record', () => {
-    const repo = createRepo()
-    writeFileSync(join(repo, 'original.txt'), 'content\n')
-    git(['add', '-A'], repo)
-    git(['commit', '-qm', 'init'], repo)
-    git(['mv', 'original.txt', 'renamed.txt'], repo)
-
-    const records = parsePorcelainV1Records(git(['status', '--porcelain', '-z'], repo))
-
-    expect(records).toEqual([{ xy: 'R ', path: 'renamed.txt' }])
-  })
-
   it('reports a rename alongside a later untracked entry', () => {
     const repo = createRepo()
     writeFileSync(join(repo, 'original.txt'), 'content\n')

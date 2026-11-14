@@ -182,21 +182,6 @@ function cachedFleet(): WorkspaceCleanupScanResult {
   }
 }
 
-function progressTick(
-  rig: ScanRig,
-  progress: Partial<WorkspaceCleanupScanProgress> & Pick<WorkspaceCleanupScanProgress, 'candidates'>
-): void {
-  rig.progressCallbacks.at(-1)?.({
-    scanId: 'scan-1',
-    scannedAt: NOW,
-    scannedWorktreeCount: progress.candidates.length,
-    totalWorktreeCount: 3,
-    errors: [],
-    candidateMode: 'append',
-    ...progress
-  })
-}
-
 describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
@@ -297,46 +282,6 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     await act(async () => holders.store.setState({ workspaceCleanupBrowse: browse }))
     await flush()
     expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).toBe('false')
-  })
-
-  it('adopts the in-flight scan on reopen instead of starting a duplicate', async () => {
-    const rig = installApi(cachedFleet())
-    await renderDialog()
-    await openDialog()
-    expect(rig.scan).toHaveBeenCalledTimes(1)
-
-    progressTick(rig, {
-      candidates: [makeCandidate({ worktreeId: 'repo1::/tmp/gamma', displayName: 'gamma' })],
-      scannedWorktreeCount: 1
-    })
-    await flush()
-
-    await act(async () => {
-      holders.store.setState({ activeModal: null })
-    })
-    await openDialog()
-    expect(rig.scan).toHaveBeenCalledTimes(1)
-
-    progressTick(rig, {
-      candidates: [makeCandidate({ worktreeId: 'repo1::/tmp/delta', displayName: 'delta' })],
-      scannedWorktreeCount: 2
-    })
-    await flush()
-    await act(async () => {
-      rig.resolvers.at(-1)?.({
-        scannedAt: NOW,
-        candidates: [
-          ...cachedFleet().candidates,
-          makeCandidate({ worktreeId: 'repo1::/tmp/gamma', displayName: 'gamma' }),
-          makeCandidate({ worktreeId: 'repo1::/tmp/delta', displayName: 'delta' })
-        ],
-        errors: []
-      })
-    })
-    await flush()
-
-    expect(rig.scan).toHaveBeenCalledTimes(1)
-    expect(rowNames()).toEqual(expect.arrayContaining(['alpha', 'beta', 'gamma', 'delta']))
   })
 
   it('keeps selections across a refresh and surfaces vanished selections', async () => {

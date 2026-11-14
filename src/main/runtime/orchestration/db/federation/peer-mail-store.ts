@@ -75,17 +75,6 @@ export function listHomePeerMailEnvironments(this: OrchestrationDb): string[] {
   return rows.map((row) => row.environment_id)
 }
 
-/** One server's check, for its pull loop: a seek on that server's home rows, not every server's. */
-export function hasHomePeerMailEnvironment(this: OrchestrationDb, environmentId: string): boolean {
-  return (
-    this.db
-      .prepare(
-        `SELECT 1 FROM peer_mail_conversations WHERE role = 'home' AND environment_id = ? LIMIT 1`
-      )
-      .get(environmentId) !== undefined
-  )
-}
-
 /** Conversations a paired Orca opened here that hold replies it has not acknowledged yet. */
 export function listPeerConversationIdsWithPendingReplies(
   this: OrchestrationDb,
@@ -189,7 +178,6 @@ export type PeerMailStoreMethods = {
   openHomePeerMailConversation: typeof openHomePeerMailConversation
   getPeerMailConversation: typeof getPeerMailConversation
   listHomePeerMailEnvironments: typeof listHomePeerMailEnvironments
-  hasHomePeerMailEnvironment: typeof hasHomePeerMailEnvironment
   listPeerConversationIdsWithPendingReplies: typeof listPeerConversationIdsWithPendingReplies
   getPeerMailMessage: typeof getPeerMailMessage
   isPeerMailSenderLabel: typeof isPeerMailSenderLabel
@@ -201,7 +189,6 @@ export function attachPeerMailStore(ctor: { prototype: object }): void {
     openHomePeerMailConversation,
     getPeerMailConversation,
     listHomePeerMailEnvironments,
-    hasHomePeerMailEnvironment,
     listPeerConversationIdsWithPendingReplies,
     getPeerMailMessage,
     isPeerMailSenderLabel,

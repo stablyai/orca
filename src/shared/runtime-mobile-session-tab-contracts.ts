@@ -97,6 +97,8 @@ export type RuntimeMobileSessionBrowserTab = {
   executionHostKey?: string
   placement?: RuntimeBrowserPlacement
   url: string
+  /** Current runtime initialization disposition; never saved or echoed by a renderer. */
+  initializationState?: 'pending' | 'stopped'
   loading: boolean
   canGoBack: boolean
   canGoForward: boolean

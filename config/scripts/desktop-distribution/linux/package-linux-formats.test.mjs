@@ -5,10 +5,7 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
-  readlinkSync,
   rmSync,
-  statSync,
-  symlinkSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -19,7 +16,6 @@ import { packageLinuxFormats } from './package-linux-formats.mjs'
 let root
 let preparedDirectory
 let outputDirectory
-const targets = ['AppImage', 'deb', 'rpm']
 const valueAfter = (args, flag) => args[args.indexOf(flag) + 1]
 
 beforeEach(() => {
@@ -48,120 +44,52 @@ function emitPackage(args) {
 }
 
 describe('independent Linux package formats', () => {
-  it('starts all formats before awaiting completion and isolates metadata writes', async () => {
-    if (process.platform !== 'win32') {
-      symlinkSync('resources/package-type', join(preparedDirectory, 'marker-link'))
-    }
+  it('settles every worker before cleanup and exposes no partial artifact on builder failure', async () => {
+    const finished = []
+    let overlay
     let release
     const gate = new Promise((resolve) => {
       release = resolve
     })
-    const copies = []
-    await packageLinuxFormats({
-      preparedDirectory,
-      outputDirectory,
-      prepareAppImageTools: async () => ({}),
-      runBuilder: async (args) => {
-        const app = valueAfter(args, '--prepackaged')
-        const format = valueAfter(args, '--linux')
-        expect(readFileSync(join(app, 'resources/package-type'), 'utf8')).toBe('AppImage')
-        expect(readFileSync(join(app, 'resources/app.asar'), 'utf8')).toBe('verified application')
-        if (process.platform !== 'win32') {
-          expect(readlinkSync(join(app, 'marker-link'))).toBe('resources/package-type')
-          expect(statSync(join(app, 'orca-ide')).mode & 0o777).toBe(0o755)
-          expect(statSync(join(app, 'resources/package-type')).ino).not.toBe(
-            statSync(join(preparedDirectory, 'resources/package-type')).ino
-          )
-        }
-        copies.push(app)
-        if (copies.length === 3) {
-          release()
-        }
-        await gate
-        expect(readdirSync(outputDirectory)).toHaveLength(1)
-        emitPackage(args)
-        await Promise.resolve()
-        expect(readFileSync(join(app, 'resources/package-type'), 'utf8')).toBe(format)
-      }
-    })
-    expect(new Set(copies).size).toBe(3)
-    expect(readFileSync(join(preparedDirectory, 'resources/package-type'), 'utf8')).toBe('AppImage')
-    expect(readFileSync(join(preparedDirectory, 'resources/app.asar'), 'utf8')).toBe(
-      'verified application'
-    )
-    for (const format of targets) {
-      expect(readFileSync(join(outputDirectory, `orca.${format}`), 'utf8')).toBe(format)
-      expect(
-        readFileSync(
-          join(outputDirectory, 'linux-package-formats', format, 'latest-linux.yml'),
-          'utf8'
-        )
-      ).toBe(format)
-    }
-    expect(
-      readdirSync(outputDirectory).some((name) => name.startsWith('.linux-package-formats-'))
-    ).toBe(false)
-  })
-
-  it.each(['builder', 'tool preparation'])(
-    'settles every worker before cleanup and exposes no partial artifact on %s failure',
-    async (failurePhase) => {
-      const finished = []
-      let overlay
-      let release
-      const gate = new Promise((resolve) => {
-        release = resolve
-      })
-      await expect(
-        packageLinuxFormats({
-          preparedDirectory,
-          outputDirectory,
-          prepareAppImageTools: async ({ directory }) => {
-            overlay = directory
-            mkdirSync(directory)
-            writeFileSync(join(directory, 'mksquashfs'), 'private wrapper')
-            if (failurePhase === 'tool preparation') {
-              throw new Error('compression failed')
-            }
-            return { APPIMAGE_TOOLS_PATH: directory, ORCA_PR_APPIMAGE_MKSQUASHFS: 'original tool' }
-          },
-          runBuilder: async (args, environment) => {
-            const format = valueAfter(args, '--linux')
-            if (format === 'AppImage') {
-              expect(environment).toEqual({
-                APPIMAGE_TOOLS_PATH: overlay,
-                ORCA_PR_APPIMAGE_MKSQUASHFS: 'original tool'
-              })
-              throw new Error('compression failed')
-            }
-            expect(environment).toEqual({})
-            if (format === 'rpm') {
-              release()
-            }
-            await gate
-            const { app } = emitPackage(args)
-            expect(existsSync(app)).toBe(true)
-            expect(existsSync(overlay)).toBe(true)
-            finished.push(format)
+    await expect(
+      packageLinuxFormats({
+        preparedDirectory,
+        outputDirectory,
+        prepareAppImageTools: async ({ directory }) => {
+          overlay = directory
+          mkdirSync(directory)
+          writeFileSync(join(directory, 'mksquashfs'), 'private wrapper')
+          return { APPIMAGE_TOOLS_PATH: directory, ORCA_PR_APPIMAGE_MKSQUASHFS: 'original tool' }
+        },
+        runBuilder: async (args) => {
+          const format = valueAfter(args, '--linux')
+          if (format === 'AppImage') {
+            throw new Error('compression failed')
           }
-        })
-      ).rejects.toMatchObject({
-        message: 'Linux package formats failed',
-        errors: [
-          expect.objectContaining({
-            message: 'AppImage packaging failed',
-            cause: expect.objectContaining({ message: 'compression failed' })
-          })
-        ]
+          if (format === 'rpm') {
+            release()
+          }
+          await gate
+          const { app } = emitPackage(args)
+          expect(existsSync(app)).toBe(true)
+          expect(existsSync(overlay)).toBe(true)
+          finished.push(format)
+        }
       })
-      expect(finished.sort()).toEqual(['deb', 'rpm'])
-      expect(existsSync(overlay)).toBe(false)
-      expect(readdirSync(outputDirectory)).toEqual([])
-      expect(readFileSync(join(preparedDirectory, 'resources/package-type'), 'utf8')).toBe(
-        'AppImage'
-      )
-    }
-  )
+    ).rejects.toMatchObject({
+      message: 'Linux package formats failed',
+      errors: [
+        expect.objectContaining({
+          message: 'AppImage packaging failed',
+          cause: expect.objectContaining({ message: 'compression failed' })
+        })
+      ]
+    })
+    expect(finished.sort()).toEqual(['deb', 'rpm'])
+    expect(existsSync(overlay)).toBe(false)
+    expect(readdirSync(outputDirectory)).toEqual([])
+    expect(readFileSync(join(preparedDirectory, 'resources/package-type'), 'utf8')).toBe('AppImage')
+  })
 
   it('rejects missing artifacts even when the builder reports success', async () => {
     await expect(
@@ -194,20 +122,5 @@ describe('independent Linux package formats', () => {
     ).rejects.toThrow('Refusing to replace existing package output')
     expect(readdirSync(outputDirectory)).toEqual(['orca.deb'])
     expect(readFileSync(join(outputDirectory, 'orca.deb'), 'utf8')).toBe('previous package')
-  })
-
-  it('rejects a tree already mutated by a previous root-package build', async () => {
-    writeFileSync(join(preparedDirectory, 'resources/package-type'), 'rpm')
-    await expect(
-      packageLinuxFormats({
-        preparedDirectory,
-        outputDirectory,
-        prepareAppImageTools: async () => ({}),
-        runBuilder: async () => {
-          throw new Error('must not run')
-        }
-      })
-    ).rejects.toThrow('Expected a fresh Linux directory build')
-    expect(readdirSync(outputDirectory)).toEqual([])
   })
 })

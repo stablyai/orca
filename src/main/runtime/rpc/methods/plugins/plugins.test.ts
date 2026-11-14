@@ -3,7 +3,7 @@ import { eraseRpcMethods, type RpcContext, type RpcMethod } from '../../core'
 import type { PluginService } from '../../../../plugins/plugin-service'
 import { PLUGIN_METHODS, setPluginServiceForRpc } from './plugins'
 import { PluginLogBuffer } from '../../../../plugins/plugin-log-buffer'
-import '../../../../../shared/rpc-contract/plugins-params'
+import '../../../../../shared/rpc-contract/plugins/plugins-params'
 
 vi.mock('../../../../plugins/plugin-client-list', () => ({
   listPluginsForClients: vi.fn().mockResolvedValue([])

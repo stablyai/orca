@@ -6,11 +6,6 @@ export function runtimePreferenceUpdates(
   settings: Partial<GlobalSettings>
 ): Partial<GlobalSettings> {
   const updates: Partial<GlobalSettings> = {}
-  for (const key of ['experimentalNewWorktreeCardStyle', 'compactWorktreeCards'] as const) {
-    if (typeof settings[key] === 'boolean') {
-      updates[key] = settings[key]
-    }
-  }
   for (const key of ['minimaxGroupId', 'minimaxUsageModels'] as const) {
     if (typeof settings[key] === 'string') {
       updates[key] = settings[key]

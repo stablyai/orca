@@ -15,6 +15,20 @@ export type AutomationRunStatus =
 export type AutomationRunTrigger = 'scheduled' | 'manual'
 
 /** Statuses a run can never leave; only these are safe to evict from history. */
+/**
+ * The time a run is listed under everywhere (list, detail, rail, run tables): its scheduled
+ * slot. A folded run (repeated identical refusals) is listed under its latest occurrence.
+ */
+export function getAutomationRunListedAt(
+  run: Pick<AutomationRun, 'scheduledFor' | 'occurrenceCount' | 'lastOccurrenceAt'>
+): number {
+  return (run.occurrenceCount ?? 1) > 1 &&
+    run.lastOccurrenceAt !== undefined &&
+    run.lastOccurrenceAt > run.scheduledFor
+    ? run.lastOccurrenceAt
+    : run.scheduledFor
+}
+
 export function isFinalAutomationRunStatus(status: AutomationRunStatus): boolean {
   return (
     status === 'completed' ||
@@ -121,6 +135,14 @@ export type AutomationRun = {
   errorParams?: Record<string, string | number>
   startedAt: number | null
   dispatchedAt: number | null
+  /**
+   * The dispatch-start time (taken just before the dispatcher runs, the same instant as
+   * `dispatchedAt`), recorded only once the launch produced a terminal or chat session, even
+   * if the run failed afterwards (prompt delivery, a partial start). It is not a measured
+   * open time. Survives terminal retention clearing the pane key. Absent on older records
+   * and on runs that never launched.
+   */
+  launchedAt?: number
   createdAt: number
   /** Persist unique run numbers; retention makes retained count unsuitable. */
   runNumber?: number
@@ -160,6 +182,8 @@ export type AutomationDispatchResult = {
   errorParams?: Record<string, string | number> | null
   /** With `dispatched`: when the agent was handed the run, if not now. */
   dispatchedAt?: number
+  /** Dispatch-start time, set once the launch produced a terminal or session; kept once recorded. */
+  launchedAt?: number
   setupSkippedReason?: AutomationRunSetupSkippedReason
   setupSkippedContent?: SetupTrustMismatch
 }

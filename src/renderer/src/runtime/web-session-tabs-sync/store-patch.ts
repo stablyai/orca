@@ -1,4 +1,4 @@
-import { retireRemovedNativeChatDraftPositions } from '@/components/native-chat/drafts/native-chat-draft-position-retirement'
+import { retireRemovedNativeChatTabs } from '@/components/native-chat/session/native-chat-removed-tab-retirement'
 import {
   markStructuredAgentSessionLaunchesPublished,
   publishedStructuredSessions
@@ -199,7 +199,7 @@ export function applyWebSessionTabsStorePatch(
       }
     }
     for (const key of new Set(affectedWorkspaces)) {
-      retireRemovedNativeChatDraftPositions(
+      retireRemovedNativeChatTabs(
         state.unifiedTabsByWorktree[key] ?? [],
         (patch.unifiedTabsByWorktree ?? state.unifiedTabsByWorktree)[key] ?? []
       )

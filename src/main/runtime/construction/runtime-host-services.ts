@@ -44,9 +44,8 @@ import { teardownFolderWorkspacePtys } from '../workspaces/removal/folder-worksp
 import { countRepoTerminalsNotKnownExited } from '../workspaces/removal/project-removal-impact'
 
 export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTerminalDrivers {
-  declare acquireFileWatcherRemoval: ConstructorParameters<
-    typeof RuntimeProjectGroupController
-  >[0]['acquireFileWatcherRemoval']
+  protected abstract finishGroupFolderCreation: Calls.FinishGroupFolderCreation
+  declare acquireFileWatcherRemoval: Calls.AcquireFileWatcherRemoval
   protected abstract tryGetWorkspaceSessionHostIdForWorktree(
     worktreeId: string
   ): ExecutionHostId | null
@@ -290,6 +289,7 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
   })
 
   protected readonly projectGroups = new RuntimeProjectGroupController({
+    finishFolderCreation: (...args) => this.finishGroupFolderCreation(...args),
     getStore: () => this.store,
     resolveRepo: (...args) => this.managedWorktreeQueries.resolveRepoForConnection(...args),
     notifyReposChanged: () => this.notifyReposChanged(),

@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { View, Text, Pressable, StyleSheet } from 'react-native'
-import { useClipboardWriter } from '../../platform/clipboard'
-import { triggerError } from '../../platform/haptics'
+import { useClipboardWriter } from '../../platform/clipboard/clipboard'
+import { triggerError } from '../../platform/haptics/haptics'
 import { Check, Copy, Pencil, Play, Trash2 } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { MobileAgentIcon } from '../../components/MobileAgentIcon'
 import type { TerminalQuickCommand } from '../../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
-import { getQuickCommandDisplayPreview } from '../quick-commands'
+import { getQuickCommandDisplayPreview } from './quick-commands'
 import {
   getTerminalQuickCommandBody,
   isTerminalAgentQuickCommand as isAgentQuickCommand

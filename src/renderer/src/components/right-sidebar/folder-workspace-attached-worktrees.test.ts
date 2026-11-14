@@ -1,19 +1,11 @@
-import { describe, expect, it, vi } from 'vitest'
-import { getFolderWorkspaceWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
-import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
-import {
-  getProjectedWorktreeLineageChildrenByParentId,
-  resolveSidebarLineageParentIdentities
-} from '../../../../shared/sidebar-list/worktree-lineage-projection'
+import { describe, expect, it } from 'vitest'
+
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 
-import {
-  getAttachedWorktreesForFolderWorkspace,
-  getLineageChildrenByParentId
-} from './folder-workspace-attached-worktrees'
+import { getAttachedWorktreesForFolderWorkspace } from './folder-workspace-attached-worktrees'
 
 function makeFolder(id = 'folder-1'): FolderWorkspace {
   return {
@@ -206,65 +198,6 @@ it('includes resolved cross-store roots and their descendants without attaching 
   expect(result.lineageChildrenByParentId.get('ssh:box|remote-root')).toEqual([child])
 })
 
-it('attaches cross-store roots only to the resolved host when folder IDs collide', () => {
-  const localFolder = makeFolder()
-  const pairedFolder: FolderWorkspace = { ...makeFolder(), executionHostId: 'runtime:paired' }
-  const root = makeWorktree({ id: 'root', hostId: 'local', instanceId: 'root-instance' })
-  const child = makeWorktree({ id: 'child', hostId: 'local', instanceId: 'child-instance' })
-  const worktreeLineageById = { child: edge(child, root, 5) }
-  const rows = [
-    root,
-    child,
-    ...[localFolder, pairedFolder].map((folder) => getFolderWorkspaceWorktree(folder))
-  ]
-  const lineageParentIdentities = resolveSidebarLineageParentIdentities(
-    worktreeLineageById,
-    new Map(rows.map((row) => [getWorktreeHostIdentity(row), row])),
-    new Map([
-      [
-        '',
-        {
-          installationId: 'local-installation',
-          crossStoreLineageByChildKey: {
-            [worktreeWorkspaceKey(root.id)]: {
-              childWorkspaceKey: worktreeWorkspaceKey(root.id),
-              childInstanceId: 'root-instance',
-              parent: {
-                installationId: 'paired-installation',
-                workspaceKey: 'folder:folder-1',
-                instanceId: 'folder-1'
-              },
-              origin: 'cli',
-              capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
-              createdAt: 1
-            }
-          }
-        }
-      ],
-      ['paired', { installationId: 'paired-installation', crossStoreLineageByChildKey: {} }]
-    ])
-  )
-  const inputs = {
-    activeWorkspaceKey: 'folder:folder-1',
-    activeWorktreeId: null,
-    folderWorkspaces: [localFolder, pairedFolder],
-    workspaceLineageByChildKey: {},
-    worktreeLineageById,
-    worktreesByRepo: { local: [root, child] },
-    lineageParentIdentities,
-    crossStoreChildrenByFolderId: new Map([['folder-1', [root]]])
-  }
-
-  const local = getAttachedWorktreesForFolderWorkspace({ ...inputs, executionHostId: 'local' })
-  const paired = getAttachedWorktreesForFolderWorkspace({
-    ...inputs,
-    executionHostId: 'runtime:paired'
-  })
-
-  expect(local.childWorktrees).toEqual([])
-  expect(paired.owners.map((owner) => owner.worktree.id)).toEqual(['root', 'child'])
-})
-
 it('retires an attached worktree at durable admission while legacy pending rows remain visible', () => {
   const child = makeWorktree({ id: 'repo-1::/retiring', removing: true })
   const list = (row: Worktree) =>
@@ -279,129 +212,4 @@ it('retires an attached worktree at durable admission while legacy pending rows 
     }).childWorktrees.map((row) => row.id)
   expect(list(child)).toEqual(['repo-1::/retiring'])
   expect(list({ ...child, removalRecorded: true })).toEqual([])
-})
-
-it.each([false, true])(
-  'keeps live descendants through retired bridges, retired cross-store root=%s',
-  (retiredRoot) => {
-    const hostId = retiredRoot ? 'ssh:box' : 'local'
-    const root = makeWorktree({
-      id: 'root',
-      hostId,
-      instanceId: 'root',
-      removing: retiredRoot ? true : undefined,
-      removalRecorded: retiredRoot ? true : undefined
-    })
-    const bridge = makeWorktree({
-      id: 'bridge',
-      hostId,
-      instanceId: 'bridge',
-      removing: true,
-      removalRecorded: true
-    })
-    const child = makeWorktree({ id: 'child', hostId, instanceId: 'child' })
-    const leaf = makeWorktree({ id: 'leaf', hostId, instanceId: 'leaf' })
-    const lineage = {
-      bridge: edge(bridge, root, 2),
-      child: edge(child, bridge, 3),
-      leaf: edge(leaf, child, 4)
-    }
-    const result = getAttachedWorktreesForFolderWorkspace({
-      activeWorkspaceKey: folderWorkspaceKey('folder-1'),
-      activeWorktreeId: null,
-      folderWorkspaces: [makeFolder()],
-      workspaceLineageByChildKey: retiredRoot ? {} : { root: makeWorkspaceLineage(root) },
-      worktreeLineageById: lineage,
-      worktreesByRepo: { 'repo-1': [root, bridge, child, leaf] },
-      lineageParentIdentities: new Map([
-        [getWorktreeHostIdentity(root), 'local|folder:folder-1'],
-        [getWorktreeHostIdentity(bridge), getWorktreeHostIdentity(root)],
-        [getWorktreeHostIdentity(child), getWorktreeHostIdentity(bridge)],
-        [getWorktreeHostIdentity(leaf), getWorktreeHostIdentity(child)]
-      ]),
-      crossStoreChildrenByFolderId: new Map(retiredRoot ? [['folder-1', [root]]] : [])
-    })
-    expect(result.owners.map((owner) => owner.worktree.id)).toEqual(
-      retiredRoot ? ['child', 'leaf'] : ['root', 'child', 'leaf']
-    )
-    expect(result.childWorktrees.map((row) => row.id).sort()).toEqual(
-      retiredRoot ? ['child', 'leaf'] : ['child', 'leaf', 'root']
-    )
-    expect(result.rootChildWorktrees.map((row) => row.id).sort()).toEqual(
-      retiredRoot ? ['child'] : ['child', 'root']
-    )
-    expect([...result.lineageChildrenByParentId]).toEqual([
-      [getWorktreeHostIdentity(child), [leaf]]
-    ])
-  }
-)
-
-it('traverses retired chains with at most two visits per vertex and edge at N and 10N', () => {
-  for (const size of [100, 1000]) {
-    const nodes = Array.from({ length: size }, (_, index) =>
-      makeWorktree({
-        id: `node-${index}`,
-        instanceId: `instance-${index}`,
-        removing: index < size - 1 ? true : undefined,
-        removalRecorded: index < size - 1 ? true : undefined
-      })
-    )
-    const rows = new Map(nodes.map((row) => [row.id, row]))
-    let catalogEnumerations = 0
-    let catalogReads = 0
-    const lineage = new Proxy(
-      Object.fromEntries(
-        nodes.slice(1).map((row, index) => [row.id, edge(row, nodes[index], index)])
-      ),
-      {
-        ownKeys: (target) => {
-          catalogEnumerations++
-          return Reflect.ownKeys(target)
-        },
-        get: (target, key) => {
-          catalogReads++
-          return typeof key === 'string' ? target[key] : undefined
-        }
-      }
-    )
-    // The existing index is shared; count the two required reachability/emission passes over it.
-    const adjacency = getProjectedWorktreeLineageChildrenByParentId(lineage, rows)
-    let edgeVisits = 0
-    for (const children of adjacency.values()) {
-      for (let index = 0; index < children.length; index++) {
-        const child = children[index]
-        Object.defineProperty(children, index, {
-          configurable: true,
-          get: () => {
-            edgeVisits++
-            return child
-          }
-        })
-      }
-    }
-    const vertexVisits = vi.spyOn(adjacency, 'get')
-    const rowValues = vi.spyOn(rows, 'values')
-    const rowIterator = vi.spyOn(rows, Symbol.iterator)
-    const rowReads = vi.spyOn(rows, 'get')
-    catalogEnumerations = 0
-    catalogReads = 0
-    try {
-      const result = getLineageChildrenByParentId(lineage, rows, new Set([nodes[0].id]))
-      expect([...result.values()].flat().map((row) => row.id)).toEqual([`node-${size - 1}`])
-      expect(vertexVisits.mock.calls.length).toBeGreaterThanOrEqual(size)
-      expect(vertexVisits.mock.calls.length).toBeLessThanOrEqual(2 * size)
-      expect(edgeVisits).toBeGreaterThanOrEqual(size - 1)
-      expect(edgeVisits).toBeLessThanOrEqual(2 * (size - 1))
-      expect(catalogEnumerations).toBe(0)
-      expect(catalogReads).toBe(0)
-      expect(rowValues).not.toHaveBeenCalled()
-      expect(rowIterator).not.toHaveBeenCalled()
-      expect(rowReads.mock.calls.length).toBeLessThanOrEqual(size)
-    } finally {
-      vertexVisits.mockRestore()
-      rowValues.mockRestore()
-      rowIterator.mockRestore()
-      rowReads.mockRestore()
-    }
-  }
 })

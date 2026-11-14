@@ -3,20 +3,33 @@ import { launchOrcaApp } from './launch'
 import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
 
 type ReadStatus = () => Promise<RuntimeRpcSuccess<CliStatusResult>>
+type OpenWindowInBackground = (options: {
+  timeoutMs: number
+}) => Promise<RuntimeRpcSuccess<{ requested: boolean }>>
+
+// The runtime only queues a window request; a stuck one must not hold `orca open` for a full RPC timeout.
+const OPEN_WINDOW_RPC_TIMEOUT_MS = 5_000
 
 export async function openLocalOrca(
   readStatus: ReadStatus,
+  openWindowInBackground: OpenWindowInBackground,
   timeoutMs: number
 ): Promise<RuntimeRpcSuccess<CliStatusResult>> {
   const initial = await getStatusForOpen(readStatus)
+  const windowStatus = initial?.result.app.desktopWindowStatus
 
   // A blocked runtime cannot open a window; a second app would only hit its instance lock.
-  if (initial?.result.app.desktopWindowStatus === 'blocked') {
+  if (windowStatus === 'blocked') {
     throwDesktopActivationBlocked()
   }
-  launchOrcaApp()
-  if (initial?.result.app.desktopWindowStatus === 'available') {
+  // Relaunching a running Orca would hand it the foreground, so ask it to show its own window.
+  const asked =
+    initial?.result.runtime.reachable === true && (await askToOpenWindow(openWindowInBackground))
+  if (initial && windowStatus === 'available') {
     return initial
+  }
+  if (!asked) {
+    launchOrcaApp()
   }
 
   const startedAt = Date.now()
@@ -52,6 +65,16 @@ async function getStatusForOpen(
       return null
     }
     throw error
+  }
+}
+
+async function askToOpenWindow(openWindowInBackground: OpenWindowInBackground): Promise<boolean> {
+  try {
+    const response = await openWindowInBackground({ timeoutMs: OPEN_WINDOW_RPC_TIMEOUT_MS })
+    return response.result.requested === true
+  } catch {
+    // Older runtimes lack the method; any failure falls back to relaunching, as open always did.
+    return false
   }
 }
 

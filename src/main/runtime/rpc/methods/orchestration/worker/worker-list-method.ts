@@ -24,7 +24,7 @@ import { withRemoteWorkerRows } from '../../../../orchestration/federation/remot
 import {
   WORKER_TERMINAL_LIST_STATES,
   WorkerListParams
-} from '../../../../../../shared/rpc-contract/orchestration-worker-release-schemas-params'
+} from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-release-schemas-params'
 
 export const emptyWorkerListPage = (limit: number) => ({
   workers: [],

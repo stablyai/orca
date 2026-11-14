@@ -12,8 +12,8 @@ import {
 import {
   markClaudeLeadTurnInterrupted,
   setClaudeMainAgentTurnState
-} from '../../../shared/agent-hook-listener/providers/claude-roster-state'
-import { claudeRowHasUnlistedLiveWork } from '../../../shared/agent-hook-listener/providers/claude-pane-hold-evidence'
+} from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-roster-state'
+import { claudeRowHasUnlistedLiveWork } from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-pane-hold-evidence'
 import type { HookListenerState } from '../../../shared/agent-hook-listener/listener-state'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import type { AgentHookSource } from '../../../shared/agent-hook-listener/transport/agent-hook-relay'

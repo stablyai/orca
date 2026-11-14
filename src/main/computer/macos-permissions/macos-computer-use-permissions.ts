@@ -33,9 +33,9 @@ let resetInProgress: Promise<ComputerUsePermissionResetResult> | null = null
 /** `locale` comes from the desktop caller; orcad and CLI opens leave the helper on its default copy. */
 export function openComputerUsePermissions(
   permissionId?: ComputerUsePermissionId,
-  locale?: string
+  options: { locale?: string; skipGranted?: boolean } = {}
 ): Promise<ComputerUsePermissionSetupResult> {
-  return openComputerUsePermissionsAsync(permissionId, locale, ++setupRequestSeq, setupGeneration)
+  return openComputerUsePermissionsAsync(permissionId, options, ++setupRequestSeq, setupGeneration)
 }
 
 function cancelPendingSetupLaunches(): void {
@@ -151,7 +151,7 @@ async function launchSetupHelper(
 
 async function openComputerUsePermissionsAsync(
   permissionId: ComputerUsePermissionId | undefined,
-  locale: string | undefined,
+  { locale, skipGranted }: { locale?: string; skipGranted?: boolean },
   seq: number,
   generation: number
 ): Promise<ComputerUsePermissionSetupResult> {
@@ -191,7 +191,13 @@ async function openComputerUsePermissionsAsync(
     )
   }
 
-  if (!permissionId && !nextStep) {
+  const alreadyGranted = permissionId
+    ? skipGranted === true &&
+      status.permissions.some(
+        (permission) => permission.id === permissionId && permission.status === 'granted'
+      )
+    : !nextStep
+  if (alreadyGranted) {
     return {
       platform: process.platform,
       helperAppPath,

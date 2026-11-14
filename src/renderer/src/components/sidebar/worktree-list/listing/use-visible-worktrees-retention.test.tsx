@@ -10,7 +10,7 @@ import {
   makeTerminalTab,
   makeWorktree
 } from '../../../worktree-jump/worktree-jump-palette-test-fixtures'
-import '../../../../../../shared/sidebar-list/sleeping-sweep-retention'
+import '../../../../../../shared/sidebar-list/selection/sleeping-sweep-retention'
 import {
   forgetWorktreeSleepIntent,
   markWorktreeSleepIntent

@@ -1,6 +1,9 @@
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
-import { queueWorkspaceDelete } from '../../runtime/workspaces/lifecycle/workspace-lifecycle-commands'
+import {
+  queueWorkspaceArchive,
+  queueWorkspaceDelete
+} from '../../runtime/workspaces/lifecycle/workspace-lifecycle-commands'
 import { getEffectiveHooks } from '../../workspace-hooks/hooks'
 import { errorMessage } from '../../../shared/error-message'
 import {
@@ -93,11 +96,19 @@ export async function removeWorkspaceForCleanup(args: {
       return { outcome: 'kept', keepCause: 'git-unknown', keptOnRecheck: true }
     }
     const recheck = await decideWorkspaceCleanup(runtime, fresh, args.now())
-    if (recheck.action !== 'delete') {
+    if (recheck.action === 'keep') {
       return { ...keptRunOutcome(recheck), keptOnRecheck: true }
     }
     if (args.signal?.aborted) {
       return { outcome: 'failed', error: 'Cleanup stopped before removing this workspace.' }
+    }
+    // Only reachable once WORKSPACE_ARCHIVE_SUPPORTED is on; archive keeps the branch and the row.
+    if (recheck.action === 'archive') {
+      const hostId = workspace.ref.executionHostId
+      const archived = await queueWorkspaceArchive(runtime, selector, hostId, () =>
+        runtime.archiveManagedWorktree(selector, hostId ? { hostId } : {})
+      )
+      return { outcome: 'archived', reason: recheck.reason, branchKept: archived.branch }
     }
     // Never forced: Git's own dirty-checkout refusal stays the last guard.
     const result = await queueWorkspaceDelete(

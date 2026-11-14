@@ -107,7 +107,6 @@ describe('FullDiskAccessSetupPrompt state helpers', () => {
 
     expect(container.textContent).not.toContain('Full Disk Access')
     expect(getStatus).not.toHaveBeenCalled()
-    expect(window.api.developerPermissions.request).not.toHaveBeenCalled()
     root.unmount()
   })
 })

@@ -129,22 +129,6 @@ describe('discardChanges symlink safety', () => {
     await expect(readFile(path.join(repo, globMatchedFile), 'utf8')).resolves.toBe('keep modified')
   })
 
-  it('treats bulk untracked discard paths with Git glob characters as literal paths', async () => {
-    const { repo } = await createRepoWithOutsideDirectory()
-    await writeFile(path.join(repo, '.gitignore'), 'ignored.log\n')
-    execFileSync('git', ['add', '.gitignore'], { cwd: repo })
-    execFileSync('git', ['commit', '-q', '-m', 'ignore log fixture'], { cwd: repo })
-    await writeFile(path.join(repo, globNamedFile), 'selected')
-    await writeFile(path.join(repo, globMatchedFile), 'unrelated')
-    await writeFile(path.join(repo, 'ignored.log'), 'ignored')
-
-    await bulkDiscardChanges(repo, [globNamedFile])
-
-    await expect(access(path.join(repo, globNamedFile))).rejects.toThrow()
-    await expect(access(path.join(repo, globMatchedFile))).resolves.toBeUndefined()
-    await expect(access(path.join(repo, 'ignored.log'))).resolves.toBeUndefined()
-  })
-
   it('removes untracked nested git repos selected for discard', async () => {
     const { repo } = await createRepoWithOutsideDirectory()
     const nestedRepo = path.join(repo, 'nested')

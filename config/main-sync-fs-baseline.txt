@@ -182,6 +182,7 @@
 5 src/main/daemon/admission/host-terminal-ledger.ts
 1 src/main/daemon/admission/legacy-restore-records.ts
 1 src/main/daemon/daemon-entry.ts
+1 src/main/daemon/daemon-process-name.ts
 1 src/main/daemon/endpoint/identity/daemon-endpoint-incarnation.ts
 3 src/main/daemon/endpoint/identity/daemon-pid-identity.ts
 2 src/main/daemon/endpoint/identity/daemon-pid-record-quarantine.ts

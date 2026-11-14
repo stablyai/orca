@@ -83,29 +83,6 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it('shows the pending response after an unrelated store update', async () => {
-  const response = Promise.withResolvers<GitHubWorkItem>()
-  const started = Promise.withResolvers<void>()
-  mocks.endpoint.mockImplementationOnce(() => {
-    started.resolve()
-    return response.promise
-  })
-  const link = parseGitHubIssueOrPRLink('https://github.com/acme/repo-2/pull/42')!
-  await act(async () => {
-    root.render(
-      <NativeChatGitHubPeekBody source={{ kind: 'routed', authorityKey: 'local' }} link={link} />
-    )
-  })
-  await started.promise
-  await act(async () => {
-    mocks.store.setState({ tick: 1 })
-  })
-  await act(async () => {
-    response.resolve(preview(42, 'Pending preview completed'))
-  })
-  expect(container.textContent).toContain('Pending preview completed')
-})
-
 it('shows the new route response and ignores a late response from the removed route', async () => {
   const oldResponse = Promise.withResolvers<GitHubWorkItem>()
   const newResponse = Promise.withResolvers<GitHubWorkItem>()

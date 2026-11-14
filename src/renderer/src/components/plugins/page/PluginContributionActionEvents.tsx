@@ -1,5 +1,5 @@
 import { Zap } from 'lucide-react'
-import type { PluginHostListEntry } from '../../../../../preload/api-types'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import type { PluginEventName } from '../../../../../shared/plugins/contributions/plugin-event-contribution'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
