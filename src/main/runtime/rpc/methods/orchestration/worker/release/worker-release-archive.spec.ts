@@ -37,7 +37,25 @@ export function registerWorkerReleaseArchiveTests(): void {
           }
         } as never)
         const { dispatchId } = await h.startSettledWorker()
-        await h.call('orchestration.workerRelease', { dispatch: dispatchId })
+        const creatorSessionId = '4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37'
+        const assigneeSessionId = '7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64'
+        h.db.db
+          .prepare(
+            'UPDATE dispatch_contexts SET creator_orca_session_id = ?, assignee_orca_session_id = ? WHERE id = ?'
+          )
+          .run(creatorSessionId, assigneeSessionId, dispatchId)
+        expect(await h.call('orchestration.workerRelease', { dispatch: dispatchId })).toMatchObject(
+          {
+            state: 'released',
+            archive: { source: 'transcript', status: 'captured' }
+          }
+        )
+        expect(await h.call('orchestration.workerShow', { dispatch: dispatchId })).toMatchObject({
+          dispatch: {
+            creatorOrcaSessionId: creatorSessionId,
+            assigneeOrcaSessionId: assigneeSessionId
+          }
+        })
         expect(h.db.getWorkerTerminalArchive(dispatchId)?.content).not.toContain('frozen')
 
         // Like a live read, the first page is the newest messages; a cursor then follows the file.
