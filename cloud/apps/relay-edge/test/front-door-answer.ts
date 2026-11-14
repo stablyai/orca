@@ -6,13 +6,13 @@ export type Answer = { status: number; headers: Record<string, string | string[]
 export type Source = 'upgraded' | 'edge' | 'edge-preauth-limiter' | 'cf-zone' | 'load-balancer' | 'network' | 'other'
 
 export function classify(a: Answer, edgeServer = 'cloudflare'): Source {
-  if (a.status === 101) return 'upgraded'
-  if (a.status < 0) return 'network'
-  if (a.headers['cf-mitigated'] !== undefined) return 'cf-zone'
-  if (/error code: 1\d{3}|cf-error|challenge-platform|cf-chl|Just a moment|Attention Required|Sorry, you have been blocked/i.test(a.body)) return 'cf-zone'
-  if (String(a.headers.server ?? '').toLowerCase() !== edgeServer) return 'load-balancer'
-  if (a.status === 429 && a.body === '') return 'edge-preauth-limiter'
+  if (a.status === 101) { return 'upgraded' }
+  if (a.status < 0) { return 'network' }
+  if (a.headers['cf-mitigated'] !== undefined) { return 'cf-zone' }
+  if (/error code: 1\d{3}|cf-error|challenge-platform|cf-chl|Just a moment|Attention Required|Sorry, you have been blocked/i.test(a.body)) { return 'cf-zone' }
+  if (String(a.headers.server ?? '').toLowerCase() !== edgeServer) { return 'load-balancer' }
+  if (a.status === 429 && a.body === '') { return 'edge-preauth-limiter' }
   // 403 is the edge refusing a front-door request that failed its trust rule (ingress_rejected).
-  if (a.status === 200 || ([400, 401, 403, 404, 426].includes(a.status) && a.body === '')) return 'edge'
+  if (a.status === 200 || ([400, 401, 403, 404, 426].includes(a.status) && a.body === '')) { return 'edge' }
   return 'other'
 }

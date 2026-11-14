@@ -129,7 +129,7 @@ export function edgeConfig(env: Env): EdgeConfig {
     // Never thrown: this runs on every request and in every object's alarms. A secret landing
     // before its vars (or one bad range) switches that ingress mode off, loudly, and nothing else.
     console.error(JSON.stringify({ event: 'relay_edge_ingress_config_invalid', problems: config.ingressProblems }))
-    for (const problem of config.ingressProblems) metric(env, 'ingress_config_invalid', 1, problem)
+    for (const problem of config.ingressProblems) { metric(env, 'ingress_config_invalid', 1, problem) }
   }
   return config
 }
@@ -151,7 +151,7 @@ function ingressConfig(env: Env): Pick<EdgeConfig, 'ingressSecrets' | 'ingressTo
   const tokens = list(env.INGRESS_TOKENS)
   const origins = list(env.INGRESS_ORIGINS)
   const cidrs = list(env.INGRESS_SOURCE_CIDRS)
-  if (tokens.length + origins.length + cidrs.length === 0) return { ingressSecrets, ingressToken: TOKEN_OFF, ingressProblems: problems }
+  if (tokens.length + origins.length + cidrs.length === 0) { return { ingressSecrets, ingressToken: TOKEN_OFF, ingressProblems: problems } }
   const sourceCidrs = cidrs.map(parseCidr)
   const originOk = (o: string) => URL.canParse(o) && new URL(o).protocol === 'https:' && new URL(o).origin === o
   const tokenProblems = [
@@ -161,6 +161,6 @@ function ingressConfig(env: Env): Pick<EdgeConfig, 'ingressSecrets' | 'ingressTo
     sourceCidrs.some((c) => c === null) ? 'cidr_invalid' : '',
     sourceCidrs.some((c) => c !== null && c.bits < (c.v6 ? MIN_PREFIX.v6 : MIN_PREFIX.v4)) ? 'cidr_too_broad' : ''
   ].filter(Boolean)
-  if (tokenProblems.length > 0) return { ingressSecrets, ingressToken: TOKEN_OFF, ingressProblems: problems.concat(tokenProblems) }
+  if (tokenProblems.length > 0) { return { ingressSecrets, ingressToken: TOKEN_OFF, ingressProblems: problems.concat(tokenProblems) } }
   return { ingressSecrets, ingressToken: { tokens, origins, sourceCidrs: sourceCidrs as Cidr[] }, ingressProblems: problems }
 }

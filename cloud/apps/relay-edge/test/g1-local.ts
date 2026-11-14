@@ -41,7 +41,9 @@ if (!process.env.G1_LOCAL_DIR) {
 // What the load balancer adds. Client copies of these names are overwritten, as the LB does.
 function lbHeaders(raw: string[], clientIp: string): [string, string][] {
   const out: [string, string][] = []
-  for (let i = 0; i < raw.length; i += 2) if (!/^(host|x-orca-.*|cf-connecting-ip)$/i.test(raw[i]!)) out.push([raw[i]!, raw[i + 1]!])
+  for (let i = 0; i < raw.length; i += 2) {
+    if (!/^(host|x-orca-.*|cf-connecting-ip)$/i.test(raw[i]!)) { out.push([raw[i]!, raw[i + 1]!]) }
+  }
   return out.concat([
     ['host', `127.0.0.1:${EDGE_PORT}`],
     // Local dev has no Cloudflare in front: the emulated egress address, which wrangler dev passes
@@ -57,7 +59,7 @@ function frontDoor(dir: string) {
   const tls = { key: readFileSync(join(dir, 'key.pem')), cert: readFileSync(join(dir, 'cert.pem')) }
   const blocked = (path = '') => /^\/(__admin|__spike)\//.test(path)
   const server = createServer(tls, (req, res) => {
-    if (blocked(req.url)) return void res.writeHead(404, { 'content-length': 0 }).end()
+    if (blocked(req.url)) { return void res.writeHead(404, { 'content-length': 0 }).end() }
     const up = request({ host: '127.0.0.1', port: EDGE_PORT, method: req.method, path: req.url, headers: lbHeaders(req.rawHeaders, req.socket.remoteAddress ?? '').flat() }, (r) => {
       res.writeHead(r.statusCode ?? 502, { ...r.headers, via: '1.1 google' })
       r.pipe(res)
@@ -66,10 +68,10 @@ function frontDoor(dir: string) {
     req.pipe(up)
   })
   server.on('upgrade', (req, client: Socket, head: Buffer) => {
-    if (blocked(req.url)) return void client.end('HTTP/1.1 404 Not Found\r\ncontent-length: 0\r\n\r\n')
+    if (blocked(req.url)) { return void client.end('HTTP/1.1 404 Not Found\r\ncontent-length: 0\r\n\r\n') }
     const upstream = connect({ host: '127.0.0.1', port: EDGE_PORT })
     upstream.write(`${req.method} ${req.url} HTTP/1.1\r\n${lbHeaders(req.rawHeaders, req.socket.remoteAddress ?? '').map(([k, v]) => `${k}: ${v}\r\n`).join('')}\r\n`)
-    if (head.length) upstream.write(head)
+    if (head.length) { upstream.write(head) }
     upstream.pipe(client)
     client.pipe(upstream)
     upstream.on('error', () => client.destroy())
@@ -109,9 +111,9 @@ async function run(): Promise<void> {
   try {
     for (let i = 0; ; i++) {
       try {
-        if ((await fetch(`${EDGE}/health`)).ok) break
+        if ((await fetch(`${EDGE}/health`)).ok) { break }
       } catch {}
-      if (i > 180) throw new Error('wrangler dev did not start')
+      if (i > 180) { throw new Error('wrangler dev did not start') }
       await new Promise((r) => setTimeout(r, 500))
     }
     const g1 = spawn(process.execPath, ['--import', 'tsx', new URL('./g1-front-door.ts', import.meta.url).pathname], {

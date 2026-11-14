@@ -28,7 +28,7 @@ export async function admitPreAuth(env: Env, request: Request, kind: 'phone' | '
   if (!env.PREAUTH_LIMITER) return true
   try {
     const { success } = await env.PREAUTH_LIMITER.limit({ key: `${kind}:${sourceKey(request, ingress)}` })
-    if (!success) metric(env, 'preauth_limited', 1, kind, [], '', requestPlace(request, ingress))
+    if (!success) { metric(env, 'preauth_limited', 1, kind, [], '', requestPlace(request, ingress)) }
     return success
   } catch {
     return true

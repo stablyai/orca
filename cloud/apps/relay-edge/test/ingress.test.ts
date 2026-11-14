@@ -255,7 +255,7 @@ describe('address parsing', () => {
     expect(inCidrs('2001:DB8:ffff::1', cidrs)).toBe(true)
     expect(inCidrs('2001:db9::1', cidrs)).toBe(false)
     expect(inCidrs('::ffff:34.96.0.1', cidrs)).toBe(false)
-    for (const bad of ['', '1.2.3', '256.1.1.1', '1::2::3', '1:2:3:4:5:6:7:8:9', 'g::1', '1:2:3:4:5:6:7::8']) expect(parseIp(bad)).toBeNull()
+    for (const bad of ['', '1.2.3', '256.1.1.1', '1::2::3', '1:2:3:4:5:6:7:8:9', 'g::1', '1:2:3:4:5:6:7::8']) { expect(parseIp(bad)).toBeNull() }
     expect(parseIp('::')).toEqual({ v6: true, value: 0n })
     expect(parseCidr('34.96.0.0/x')).toBeNull()
   })

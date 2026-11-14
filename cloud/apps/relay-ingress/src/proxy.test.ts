@@ -36,7 +36,7 @@ beforeAll(async () => {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 16 * 1024 * 1024 })
   upstream.on('upgrade', (req, socket, head) => {
     seen.headers.push(req.headers)
-    if (!req.headers.authorization) return void socket.end('HTTP/1.1 401 Unauthorized\r\ncontent-length: 0\r\n\r\n')
+    if (!req.headers.authorization) { return void socket.end('HTTP/1.1 401 Unauthorized\r\ncontent-length: 0\r\n\r\n') }
     wss.handleUpgrade(req, socket, head, (ws) => {
       ws.on('message', (data, binary) => (data.toString() === 'close-me' ? ws.close(4409, 'host not on this cell') : ws.send(data, { binary })))
       ws.on('close', (code) => seen.closes.push(code))
@@ -143,6 +143,6 @@ describe('ingress proxy', () => {
     expect(events.at(-1)).toMatchObject({ cut: 1 })
     expect(proxy.stats.upgrades).toMatchObject({ 'control:101': 2, 'control:401': 1, 'connect:101': 1 })
     const logged = JSON.stringify([events, proxy.stats])
-    for (const leak of ['127.0.0.1', '/v1/', 'Bearer', 'AbCdEfGhIjKlMnOp', 'secret-token']) expect(logged).not.toContain(leak)
+    for (const leak of ['127.0.0.1', '/v1/', 'Bearer', 'AbCdEfGhIjKlMnOp', 'secret-token']) { expect(logged).not.toContain(leak) }
   })
 })

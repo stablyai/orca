@@ -104,7 +104,7 @@ export default {
       metric(env, 'ingress_rejected', 1, '', [], '', requestPlace(request))
       return reject(403)
     }
-    if (!ingress && request.headers.has(INGRESS_HEADER)) metric(env, 'ingress_refused', 1, '', [], '', requestPlace(request))
+    if (!ingress && request.headers.has(INGRESS_HEADER)) { metric(env, 'ingress_refused', 1, '', [], '', requestPlace(request)) }
     // Spike-only: force the object to reset (simulates eviction / runtime restart).
     const abort = url.pathname.match(/^\/__spike\/abort\/([^/]+)$/)
     if (abort && env.SPIKE_ADMIN === '1') {
@@ -146,7 +146,7 @@ export default {
         return Response.json({ colo: cf?.colo ?? 'local', ms })
       }
       const info = url.pathname.match(/^\/__spike\/host\/([A-Za-z0-9_-]{16})$/)
-      if (info) return forward(env, request, ingress, info[1], { 'x-edge-kind': 'info' })
+      if (info) { return forward(env, request, ingress, info[1], { 'x-edge-kind': 'info' }) }
     }
     const isUpgrade = request.headers.get('upgrade')?.toLowerCase() === 'websocket'
 
@@ -163,7 +163,7 @@ export default {
 
     const phone = url.pathname.match(/^\/v1\/connect\/([^/]+)$/)
     if (phone) {
-      if (!(await admitPreAuth(env, request, 'phone', ingress))) return reject(429)
+      if (!(await admitPreAuth(env, request, 'phone', ingress))) { return reject(429) }
       if (!isUpgrade) return reject(426)
       // 429 for malformed ids matches the GCE cells.
       if (!HOST_ID.test(phone[1])) return reject(429)
@@ -183,7 +183,7 @@ export default {
 
     const data = url.pathname.match(/^\/v1\/host\/data\/([^/]+)$/)
     if (data) {
-      if (!(await admitPreAuth(env, request, 'data', ingress))) return reject(429)
+      if (!(await admitPreAuth(env, request, 'data', ingress))) { return reject(429) }
       if (!isUpgrade) return reject(426)
       const connId = decodeURIComponent(data[1])
       const parsed = parseConnId(connId)

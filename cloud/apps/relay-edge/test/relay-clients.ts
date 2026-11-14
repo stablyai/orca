@@ -13,7 +13,7 @@ export const sha = (s: string) => createHash('sha256').update(s).digest('base64u
 export async function waitFor(cond: () => boolean, ms: number): Promise<boolean> {
   const end = Date.now() + ms
   while (Date.now() < end) {
-    if (cond()) return true
+    if (cond()) { return true }
     await sleep(10)
   }
   return cond()
@@ -75,7 +75,7 @@ export function desktop(
         maxPayload: 1024 * 1024 + 1024
       })
       ws.on('message', (raw) => {
-        if (raw.toString().startsWith('{"type":"ping"')) events.serverPings++
+        if (raw.toString().startsWith('{"type":"ping"')) { events.serverPings++ }
       })
       ws.on('pong', () => events.socketPongs++)
       return ws
@@ -99,8 +99,8 @@ export function phone(origin: string, relayHostId: string, credential: string) {
   const state = { hello: null as Record<string, unknown> | null, frames: [] as Buffer[], closed: null as number | null, closedAt: 0, reason: '' }
   ws.on('open', () => ws.send(JSON.stringify({ type: 'relay-auth', v: 1, mode: 'connect', credential })))
   ws.on('message', (raw) => {
-    if (state.hello === null) state.hello = JSON.parse(raw.toString())
-    else state.frames.push(raw as Buffer)
+    if (state.hello === null) { state.hello = JSON.parse(raw.toString()) }
+    else { state.frames.push(raw as Buffer) }
   })
   ws.on('close', (code, reason) => {
     state.closed = code

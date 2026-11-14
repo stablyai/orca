@@ -46,7 +46,7 @@ export function createIngressProxy(config: IngressConfig) {
     const out: [string, string][] = []
     for (let i = 0; i < req.rawHeaders.length; i += 2) {
       const name = req.rawHeaders[i]!
-      if (STRIPPED.test(name) || (!keepHop && HOP.test(name))) continue
+      if (STRIPPED.test(name) || (!keepHop && HOP.test(name))) { continue }
       out.push([name, req.rawHeaders[i + 1]!])
     }
     out.push(['host', config.upstream.host])
@@ -80,11 +80,11 @@ export function createIngressProxy(config: IngressConfig) {
     idle(upstream, both)
     upstream.on('error', () => {
       stats.upstreamErrors++
-      if (!client.writable || client.bytesWritten > 0) return both()
+      if (!client.writable || client.bytesWritten > 0) { return both() }
       client.end('HTTP/1.1 502 Bad Gateway\r\nconnection: close\r\ncontent-length: 0\r\n\r\n')
     })
     upstream.write(`${req.method} ${req.url} HTTP/1.1\r\n${headers.map(([k, v]) => `${k}: ${v}\r\n`).join('')}\r\n`)
-    if (head.length) upstream.write(head)
+    if (head.length) { upstream.write(head) }
     upstream.once('data', (chunk: Buffer) => {
       const status = `${kind}:${chunk.subarray(9, 12).toString('latin1')}`
       stats.upgrades[status] = (stats.upgrades[status] ?? 0) + 1
@@ -120,13 +120,15 @@ export function createIngressProxy(config: IngressConfig) {
     })
     upstream.on('response', (up) => {
       const headers: string[] = []
-      for (let i = 0; i < up.rawHeaders.length; i += 2) if (!HOP.test(up.rawHeaders[i]!)) headers.push(up.rawHeaders[i]!, up.rawHeaders[i + 1]!)
+      for (let i = 0; i < up.rawHeaders.length; i += 2) {
+        if (!HOP.test(up.rawHeaders[i]!)) { headers.push(up.rawHeaders[i]!, up.rawHeaders[i + 1]!) }
+      }
       res.writeHead(up.statusCode ?? 502, headers)
       up.pipe(res)
     })
     upstream.on('error', () => {
       stats.upstreamErrors++
-      if (!res.headersSent) res.writeHead(502, { 'content-length': 0 })
+      if (!res.headersSent) { res.writeHead(502, { 'content-length': 0 }) }
       res.end()
     })
     req.pipe(upstream)
@@ -140,21 +142,21 @@ export function createIngressProxy(config: IngressConfig) {
 
   // Load balancer health and counters, on a separate plain port that is never public.
   const health = createHttpServer((req, res) => {
-    if (req.url === '/stats') return void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ draining, ...stats }))
+    if (req.url === '/stats') { return void res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ draining, ...stats })) }
     res.writeHead(draining ? 503 : 200, { 'content-length': 0 }).end()
   })
 
   async function drain(): Promise<void> {
-    if (draining) return
+    if (draining) { return }
     draining = true
     log({ event: 'drain_start', tunnels: tunnels.size })
     await new Promise((r) => setTimeout(r, config.drainDelayMs))
     server.close()
     server.closeIdleConnections()
     const deadline = Date.now() + config.drainMs
-    while (tunnels.size > 0 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 200))
+    while (tunnels.size > 0 && Date.now() < deadline) { await new Promise((r) => setTimeout(r, 200)) }
     const cut = tunnels.size
-    for (const socket of tunnels) socket.destroy()
+    for (const socket of tunnels) { socket.destroy() }
     server.closeAllConnections()
     health.close()
     agent.destroy()
