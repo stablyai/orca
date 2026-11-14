@@ -1,6 +1,6 @@
 import type { Tab } from '../../../../../../shared/tab-types'
 import { parseAgentStatusPaneIdentity } from '../../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
-import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import {
   isAgentStatusFresh,
   AGENT_STATUS_STALE_AFTER_MS

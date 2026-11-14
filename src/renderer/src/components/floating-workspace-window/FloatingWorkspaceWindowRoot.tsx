@@ -5,7 +5,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppMenuPaste } from '@/hooks/clipboard/menu/useAppMenuPaste'
 import { useAppMenuSelectionActions } from '@/hooks/app-commands/useAppMenuSelectionActions'
 import { useTranslate } from '@/i18n/use-translate'
-import { AgentTerminalPreview } from '../dashboard-popout/AgentTerminalPreview'
+import { AgentTerminalPreview } from '../dashboard/terminal-preview/AgentTerminalPreview'
 import { useFloatingWorkspaceWindowSnapshot } from './use-floating-workspace-window-snapshot'
 
 export function FloatingWorkspaceWindowRoot(): React.JSX.Element {

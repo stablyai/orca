@@ -89,6 +89,8 @@ export const BROWSER_COOKIE_HANDLERS: Record<string, CommandHandler> = {
     }
     Object.assign(params, await getBrowserCommandTarget(flags, cwd, client))
     const result = await client.call<BrowserCookieDeleteResult>('browser.cookie.delete', params)
-    printResult(result, json, () => `Cookie "${name}" deleted`)
+    printResult(result, json, (v) =>
+      v.deleted === false ? `No cookie "${name}" found` : `Cookie "${name}" deleted`
+    )
   }
 }

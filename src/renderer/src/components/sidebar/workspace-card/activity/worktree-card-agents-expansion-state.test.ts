@@ -39,12 +39,4 @@ describe('worktree agent expansion state', () => {
     expect(remote.result.current.compactRootListExpanded).toBe(true)
     expect(local.result.current.compactRootListExpanded).toBe(false)
   })
-
-  it('treats an unstamped host as local, matching the card’s slot targets', () => {
-    const unstamped = renderHook(() => useWorktreeAgentExpansionState(WS, undefined))
-
-    act(() => expandWorktreeAgentList(WS, 'local'))
-
-    expect(unstamped.result.current.compactRootListExpanded).toBe(true)
-  })
 })

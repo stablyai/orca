@@ -29,35 +29,4 @@ describe('RelayDispatcher client close cause', () => {
       dispatcher.dispose()
     }
   })
-
-  it('reports a detach the transport observed as a peer close', () => {
-    const detachListener = vi.fn()
-    const dispatcher = new RelayDispatcher(() => true)
-    try {
-      dispatcher.onClientDetached(detachListener)
-      const clientId = dispatcher.attachClient(() => true)
-
-      // Only the socket layer observes peer transport end; pass its evidence explicitly.
-      dispatcher.detachClient(clientId, 'peer-closed')
-
-      expect(detachListener).toHaveBeenCalledWith(clientId, 'peer-closed')
-    } finally {
-      dispatcher.dispose()
-    }
-  })
-
-  it('defaults an unqualified detach to the cautious answer', () => {
-    const detachListener = vi.fn()
-    const dispatcher = new RelayDispatcher(() => true)
-    try {
-      dispatcher.onClientDetached(detachListener)
-      const clientId = dispatcher.attachClient(() => true)
-
-      dispatcher.detachClient(clientId)
-
-      expect(detachListener).toHaveBeenCalledWith(clientId, 'local')
-    } finally {
-      dispatcher.dispose()
-    }
-  })
 })

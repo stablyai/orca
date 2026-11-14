@@ -19773,7 +19773,8 @@
         "unconfirmedDetail": "它可能已经打开。请先检查会话历史，再创建分支。",
         "failed": "{{agent}} 无法从此聊天创建分支",
         "hostUnsupported": "此主机运行的是旧版 Orca。请更新主机上的 Orca 后重试。",
-        "failedDetail": "聊天未发生更改。请重试。"
+        "failedDetail": "聊天未发生更改。请重试。",
+        "commandWorking": "{{agent}} 回复期间无法创建分支。回复结束后，请再次运行 /fork。"
       },
       "cardKindHidden": {
         "description": "你可以随时在此处更改",

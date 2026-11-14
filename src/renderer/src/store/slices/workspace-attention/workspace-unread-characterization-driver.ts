@@ -1,4 +1,3 @@
-import type { Worktree } from '../../../../../shared/worktree/types'
 import { applyAgentAttention, resolveAgentAttention } from '@/attention/agent-attention-policy'
 import { createTerminalAttentionSurface } from '@/components/terminal-pane/notifications/terminal-attention-surface'
 import { acknowledgeViewedAutoAckTarget } from '@/hooks/agent-auto-ack-surfaces'
@@ -52,14 +51,6 @@ export function pointerDownInTab(
 /** Orca's window gains or loses visibility+focus. */
 export function setWindowOnScreen(store: AttentionStore, onScreen: boolean): void {
   screenOf(store).setWindowOnScreen(onScreen)
-}
-
-/** Sidebar quick action and context menu "Mark as read/unread". */
-export function toggleUnreadByUser(
-  store: AttentionStore,
-  row: Pick<Worktree, 'id' | 'hostId' | 'isUnread'>
-): void {
-  store.getState().setWorkspaceUnreadByUser(row.id, !row.isUnread, row.hostId ?? 'local')
 }
 
 /** on-screen-attention-scan: the viewed terminal tab's agent is acknowledged (markers are the scan's). */

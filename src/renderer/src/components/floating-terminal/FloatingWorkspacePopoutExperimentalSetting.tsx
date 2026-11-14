@@ -1,6 +1,6 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { useTranslate } from '@/i18n/use-translate'
-import { PopoutExperimentalSetting } from '../dashboard/AgentDashboardExperimentalSetting'
+import { PopoutExperimentalSetting } from '../dashboard/settings/AgentDashboardExperimentalSetting'
 import { getExperimentalSearchEntry } from '../settings/advanced/experimental-search'
 import { canOpenFloatingWorkspacePopout } from './floating-workspace-open-mode'
 
