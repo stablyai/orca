@@ -10376,9 +10376,6 @@
                 "unresolvedCount_one": "{{count}} não resolvido",
                 "unresolvedCount_other": "{{count}} não resolvidos",
                 "unresolvedCount_many": "{{count}} não resolvidos",
-                "sendQueuedCommentsToAi_one": "Enviar {{count}} comentário na fila para a IA",
-                "sendQueuedCommentsToAi_other": "Enviar {{count}} comentários na fila para a IA",
-                "sendQueuedCommentsToAi_many": "Enviar {{count}} comentários na fila para a IA",
                 "conflictsBlockThisMr": "Conflitos bloqueiam este MR",
                 "conflictsBlockThisPr": "Conflitos bloqueiam este PR",
                 "copyComment": "Copiar comentário",
@@ -13214,10 +13211,6 @@
           }
         },
         "CombinedDiffViewer": {
-          "1da745c551": "Enviado",
-          "84898c548d": "Limpar",
-          "88b70d0ef5": "Copiar",
-          "bb84b4c374": "Notas de IA",
           "948a5fd6c8": "Limpar Notas",
           "0f806a2ab1": "Cancelar",
           "b6c3b84476": "Mostrar árvore de arquivos",
@@ -13228,7 +13221,6 @@
           "820ec01f24": "Arquivos em conflito são revisados separadamente",
           "fd8892b120": "Nenhuma alteração para exibir",
           "eb5f40e49c": "Esta visualização de diff exclui conflitos não resolvidos porque o pipeline normal de diff bidirecional não é seguro para conflitos.",
-          "45cf23b418": "Falha ao limpar as notas.",
           "ec5053c7f5": "Lado a Lado",
           "f786fd54e1": "Inline",
           "ea08dae15b": "Recolher Tudo",
@@ -13243,12 +13235,6 @@
           "noExtension": "(sem extensão)",
           "diffLoadTimedOut": "O diff não terminou de carregar.",
           "diffLoadFailed": "Não foi possível carregar o diff.",
-          "moreNotesInSourceControl_one": "{{count}} nota a mais no Controle de Código-Fonte",
-          "moreNotesInSourceControl_other": "{{count}} notas a mais no Controle de Código-Fonte",
-          "moreNotesInSourceControl_many": "{{count}} notas a mais no Controle de Código-Fonte",
-          "clearNotesConfirm_one": "Limpar {{count}} nota desta worktree?",
-          "clearNotesConfirm_other": "Limpar {{count}} notas desta worktree?",
-          "clearNotesConfirm_many": "Limpar {{count}} notas desta worktree?",
           "changedFilesVs_one": "{{count}} arquivo alterado em relação a {{baseRef}}",
           "changedFilesVs_other": "{{count}} arquivos alterados em relação a {{baseRef}}",
           "changedFilesVs_many": "{{count}} arquivos alterados em relação a {{baseRef}}",
@@ -13258,10 +13244,6 @@
           "changedFiles_one": "{{count}} arquivo alterado",
           "changedFiles_other": "{{count}} arquivos alterados",
           "changedFiles_many": "{{count}} arquivos alterados",
-          "showAiNotes_one": "Mostrar {{count}} nota de IA",
-          "showAiNotes_other": "Mostrar {{count}} notas de IA",
-          "showAiNotes_many": "Mostrar {{count}} notas de IA",
-          "send": "Enviar",
           "openDiff": "Abrir diff",
           "openInEditor": "Abrir no editor"
         },
@@ -13427,7 +13409,6 @@
           "b1bfc04034": "Texto selecionado",
           "f37b98999e": "Esta nota",
           "2b2b31382c": "Front Matter",
-          "bb629de58a": "Copiar notas para o agente",
           "322afab6ff": "Notas de revisão",
           "0f9969a159": "Ir para a primeira nota de revisão",
           "12052c639c": "Fechar busca",
@@ -13778,8 +13759,6 @@
           "3ababd949d": "Notas de revisão"
         },
         "RichMarkdownReviewRailActions": {
-          "636394af72": "Copiar notas para o agente",
-          "a807596997": "Notas copiadas",
           "8aaf2c4c69": "Mostrar notas de revisão",
           "af02dc2456": "Ocultar notas de revisão"
         },
@@ -13855,7 +13834,6 @@
         },
         "NotesSendMenu": {
           "44dc5e60a6": "Enviar notas",
-          "433928cd9f": "Enviar {{value0}} para um agente",
           "thisNote": "Esta nota",
           "noteAlreadySent": "Nota já enviada",
           "sendNotesToAgent": "Enviar notas a um agente",
@@ -17666,10 +17644,6 @@
             "fa6ea61de3": "Cancelar",
             "c2ef0359b9": "Copiar Conteúdo",
             "f2d0c22d67": "Excluir anotação {{value0}}",
-            "11c5084aa2": "Limpar anotações",
-            "734e4343ec": "Limpar anotações do navegador",
-            "95af781091": "Enviar feedback para um agente",
-            "ac39b9366b": "Enviar",
             "366bf5d62c": "Nova Aba",
             "781d6459ad": "Tentar novamente",
             "2fdca7df09": "Descartar",
@@ -17701,9 +17675,6 @@
             "b5ba6085de": "Pergunta",
             "143204e423": "Alterar",
             "b71dc3d930": "Reconectar",
-            "d51ef37351": "Copiar",
-            "6f4ab3592b": "Copiado",
-            "499b31b84e": "Copiar Tudo",
             "168350ae6a": "Clique ou passe o mouse sobre um elemento e pressione C para copiar ou S para capturar.",
             "e852e20cea": "Copiado — pressione S para capturar, ou selecione outro elemento",
             "777b5bc4ec": "Clique em um elemento para adicionar feedback para o agente.",
@@ -17713,8 +17684,6 @@
             "4300f38145": "Baixando de {{value0}}{{value1}}",
             "572046436a": "Navegador remoto",
             "b313a7275b": "Abrindo navegador remoto",
-            "ea6af700da": "{{value0}} anotação",
-            "c13693fe27": "{{value0}} anotações",
             "074f0ed10b": "{{value0}} anotação pronta. Selecione outro elemento ou copie todo o feedback.",
             "a2164a6e5a": "{{value0}} anotações prontas. Selecione outro elemento ou copie todo o feedback.",
             "9f6f2e8c19": "O caminho do arquivo baixado não está disponível.",
@@ -22573,6 +22542,29 @@
     "toastFallbacks": {
       "worktreeCreateFailed": "Não foi possível criar a árvore de trabalho.",
       "missingBaseBranchHelp": "Crie um commit inicial (por exemplo, em main) ou selecione uma ramificação existente em Criar a partir de e tente novamente."
+    },
+    "notes": {
+      "sendButton": {
+        "clearPageNotes_one": "Limpar {{count}} nota desta página?",
+        "clearPageNotes_other": "Limpar {{count}} notas desta página?",
+        "clearPageNotes_many": "Limpar {{count}} notas desta página?",
+        "sendCommentsToAgent_one": "Enviar {{count}} comentário a um agente",
+        "sendCommentsToAgent_other": "Enviar {{count}} comentários a um agente",
+        "sendCommentsToAgent_many": "Enviar {{count}} comentários a um agente",
+        "sendNotesToAgent_one": "Enviar {{count}} nota a um agente",
+        "sendNotesToAgent_other": "Enviar {{count}} notas a um agente",
+        "sendNotesToAgent_many": "Enviar {{count}} notas a um agente",
+        "sending": "Enviando…",
+        "sendShort": "Enviar {{count}}",
+        "sendComments_one": "Enviar {{count}} comentário",
+        "sendComments_other": "Enviar {{count}} comentários",
+        "sendComments_many": "Enviar {{count}} comentários",
+        "sendNotes_one": "Enviar {{count}} nota",
+        "sendNotes_other": "Enviar {{count}} notas",
+        "sendNotes_many": "Enviar {{count}} notas",
+        "copyNotes": "Copiar notas",
+        "clearNotes": "Limpar notas…"
+      }
     }
   },
   "csv": {

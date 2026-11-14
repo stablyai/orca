@@ -15007,8 +15007,6 @@
                 "pendingCount_other": "{{count}} pending",
                 "unresolvedCount_one": "{{count}} unresolved",
                 "unresolvedCount_other": "{{count}} unresolved",
-                "sendQueuedCommentsToAi_one": "Send {{count}} queued comment to AI",
-                "sendQueuedCommentsToAi_other": "Send {{count}} queued comments to AI",
                 "conflictsBlockThisMr": "Conflicts block this MR",
                 "conflictsBlockThisPr": "Conflicts block this PR",
                 "copyComment": "Copy comment",
@@ -17075,10 +17073,6 @@
           "39b6b9e4e4": "Committed on Branch"
         },
         "CombinedDiffViewer": {
-          "1da745c551": "Sent",
-          "84898c548d": "Clear",
-          "88b70d0ef5": "Copy",
-          "bb84b4c374": "AI notes",
           "948a5fd6c8": "Clear Notes",
           "0f806a2ab1": "Cancel",
           "b6c3b84476": "Show file tree",
@@ -17088,7 +17082,6 @@
           "820ec01f24": "Conflicted files are reviewed separately",
           "fd8892b120": "No changes to display",
           "eb5f40e49c": "This diff view excludes unresolved conflicts because the normal two-way diff pipeline is not conflict-safe.",
-          "45cf23b418": "Failed to clear notes.",
           "ec5053c7f5": "Side by Side",
           "f786fd54e1": "Inline",
           "ea08dae15b": "Collapse All",
@@ -17103,19 +17096,12 @@
           "noExtension": "(no extension)",
           "diffLoadTimedOut": "Diff did not finish loading.",
           "diffLoadFailed": "Unable to load diff.",
-          "moreNotesInSourceControl_one": "{{count}} more note in Source Control",
-          "moreNotesInSourceControl_other": "{{count}} more notes in Source Control",
-          "clearNotesConfirm_one": "Clear {{count}} note from this worktree?",
-          "clearNotesConfirm_other": "Clear {{count}} notes from this worktree?",
           "changedFilesVs_one": "{{count}} changed file vs {{baseRef}}",
           "changedFilesVs_other": "{{count}} changed files vs {{baseRef}}",
           "changedFilesIn_one": "{{count}} changed file in {{compareRef}}",
           "changedFilesIn_other": "{{count}} changed files in {{compareRef}}",
           "changedFiles_one": "{{count}} changed file",
           "changedFiles_other": "{{count}} changed files",
-          "showAiNotes_one": "Show {{count}} AI note",
-          "showAiNotes_other": "Show {{count}} AI notes",
-          "send": "Send",
           "openDiff": "Open diff",
           "openInEditor": "Open in editor",
           "skippedConflictsExcluded": "{{count}} unresolved conflicts were excluded from this diff view."
@@ -17317,7 +17303,6 @@
           "b1bfc04034": "Selected text",
           "f37b98999e": "This note",
           "2b2b31382c": "Front Matter",
-          "bb629de58a": "Copy notes for agent",
           "322afab6ff": "Review notes",
           "0f9969a159": "Jump to first review note",
           "12052c639c": "Close search",
@@ -17388,7 +17373,6 @@
         },
         "NotesSendMenu": {
           "44dc5e60a6": "Send notes",
-          "433928cd9f": "Send {{value0}} to an agent",
           "thisNote": "This note",
           "noteAlreadySent": "Note already sent",
           "sendNotesToAgent": "Send notes to an agent",
@@ -17477,8 +17461,6 @@
           "3ababd949d": "Review notes"
         },
         "RichMarkdownReviewRailActions": {
-          "636394af72": "Copy notes for agent",
-          "a807596997": "Copied notes",
           "8aaf2c4c69": "Show review notes",
           "af02dc2456": "Hide review notes"
         },
@@ -18336,10 +18318,6 @@
             "fa6ea61de3": "Cancel",
             "c2ef0359b9": "Copy Contents",
             "f2d0c22d67": "Delete annotation {{value0}}",
-            "11c5084aa2": "Clear annotations",
-            "734e4343ec": "Clear browser annotations",
-            "95af781091": "Send feedback to an agent",
-            "ac39b9366b": "Send",
             "366bf5d62c": "New Tab",
             "781d6459ad": "Retry",
             "2fdca7df09": "Dismiss",
@@ -18371,9 +18349,6 @@
             "b5ba6085de": "Question",
             "143204e423": "Change",
             "b71dc3d930": "Reconnect",
-            "d51ef37351": "Copy",
-            "6f4ab3592b": "Copied",
-            "499b31b84e": "Copy All",
             "168350ae6a": "Click or hover an element, then press C to copy or S to screenshot.",
             "e852e20cea": "Copied — press S to screenshot, or select another element",
             "777b5bc4ec": "Click an element to add feedback for the agent.",
@@ -18384,8 +18359,6 @@
             "cc4a071d3a": "Annotate page element ({{value0}})",
             "572046436a": "Remote browser",
             "b313a7275b": "Opening remote browser",
-            "ea6af700da": "{{value0}} annotation",
-            "c13693fe27": "{{value0}} annotations",
             "074f0ed10b": "{{value0}} annotation ready. Select another element or copy all feedback.",
             "a2164a6e5a": "{{value0}} annotations ready. Select another element or copy all feedback.",
             "9f6f2e8c19": "The downloaded file path is unavailable.",
@@ -22750,6 +22723,24 @@
       "DictationIndicator": {
         "cleaningUp": "Cleaning up…",
         "skipCleanup": "Skip cleanup and insert as heard"
+      }
+    },
+    "notes": {
+      "sendButton": {
+        "clearPageNotes_one": "Clear {{count}} note from this page?",
+        "clearPageNotes_other": "Clear {{count}} notes from this page?",
+        "sendCommentsToAgent_one": "Send {{count}} comment to an agent",
+        "sendCommentsToAgent_other": "Send {{count}} comments to an agent",
+        "sendNotesToAgent_one": "Send {{count}} note to an agent",
+        "sendNotesToAgent_other": "Send {{count}} notes to an agent",
+        "sending": "Sending…",
+        "sendShort": "Send {{count}}",
+        "sendComments_one": "Send {{count}} comment",
+        "sendComments_other": "Send {{count}} comments",
+        "sendNotes_one": "Send {{count}} note",
+        "sendNotes_other": "Send {{count}} notes",
+        "copyNotes": "Copy notes",
+        "clearNotes": "Clear notes…"
       }
     }
   },

@@ -1515,6 +1515,11 @@ html.native-shell .app-layout {
   overflow: hidden;
 }
 
+/* A send-notes slot after the path takes the free space, so the path keeps its own width. */
+.editor-header-text:has(+ [data-send-notes-slot]) {
+  flex: 0 1 auto;
+}
+
 .editor-header-path {
   display: flex;
   align-items: center;

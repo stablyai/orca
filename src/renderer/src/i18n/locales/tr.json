@@ -14076,8 +14076,6 @@
                 "pendingCount_one": "{{count}} bekleyen",
                 "unresolvedCount_other": "{{count}} çözülmemiş",
                 "unresolvedCount_one": "{{count}} çözülmemiş",
-                "sendQueuedCommentsToAi_other": "Kuyruktaki {{count}} yorumu AI'ya gönder",
-                "sendQueuedCommentsToAi_one": "Kuyruktaki {{count}} yorumu AI'ya gönder",
                 "conflictsBlockThisMr": "Çakışmalar bu MR'ı engelliyor",
                 "conflictsBlockThisPr": "Çakışmalar bu PR'ı engelliyor",
                 "copyComment": "Yorumu kopyala",
@@ -16070,10 +16068,6 @@
           "39b6b9e4e4": "Branch'e Commit'lendi"
         },
         "CombinedDiffViewer": {
-          "1da745c551": "Gönderildi",
-          "84898c548d": "Temizle",
-          "88b70d0ef5": "Kopyala",
-          "bb84b4c374": "AI notları",
           "948a5fd6c8": "Notları Temizle",
           "0f806a2ab1": "İptal",
           "b6c3b84476": "Dosya ağacını göster",
@@ -16083,7 +16077,6 @@
           "820ec01f24": "Conflict'li dosyalar ayrı incelenir",
           "fd8892b120": "Görüntülenecek değişiklik yok",
           "eb5f40e49c": "Bu diff görünümü, normal iki yönlü diff işleyişi conflict'e karşı güvenli olmadığından çözülmemiş conflict'leri hariç tutar.",
-          "45cf23b418": "Notlar temizlenemedi.",
           "ec5053c7f5": "Yan Yana",
           "f786fd54e1": "Satır İçi",
           "ea08dae15b": "Tümünü Daralt",
@@ -16098,19 +16091,12 @@
           "noExtension": "(uzantı yok)",
           "diffLoadTimedOut": "Diff yüklemesi tamamlanamadı.",
           "diffLoadFailed": "Diff yüklenemedi.",
-          "moreNotesInSourceControl_other": "Kaynak Kontrolü bölümünde {{count}} not daha",
-          "moreNotesInSourceControl_one": "Kaynak Kontrolü bölümünde {{count}} not daha",
-          "clearNotesConfirm_other": "Bu worktree'deki {{count}} not temizlensin mi?",
-          "clearNotesConfirm_one": "Bu worktree'deki {{count}} not temizlensin mi?",
           "changedFilesVs_other": "{{baseRef}} ile karşılaştırıldığında {{count}} dosya değişti",
           "changedFilesVs_one": "{{baseRef}} ile karşılaştırıldığında {{count}} dosya değişti",
           "changedFilesIn_other": "{{compareRef}} içinde {{count}} dosya değişti",
           "changedFilesIn_one": "{{compareRef}} içinde {{count}} dosya değişti",
           "changedFiles_other": "{{count}} değişen dosya",
           "changedFiles_one": "{{count}} değişen dosya",
-          "showAiNotes_other": "{{count}} AI notunu göster",
-          "showAiNotes_one": "{{count}} AI notunu göster",
-          "send": "Gönder",
           "openDiff": "Diff'i aç",
           "openInEditor": "Düzenleyicide aç"
         },
@@ -16311,7 +16297,6 @@
           "b1bfc04034": "Seçili metin",
           "f37b98999e": "Bu not",
           "2b2b31382c": "Front Matter",
-          "bb629de58a": "Notları ajan için kopyala",
           "322afab6ff": "İnceleme notları",
           "0f9969a159": "İlk inceleme notuna git",
           "12052c639c": "Aramayı kapat",
@@ -16382,7 +16367,6 @@
         },
         "NotesSendMenu": {
           "44dc5e60a6": "Notları gönder",
-          "433928cd9f": "{{value0}} bir ajana gönder",
           "thisNote": "Bu not",
           "noteAlreadySent": "Not zaten gönderildi",
           "sendNotesToAgent": "Notları bir ajana gönder",
@@ -16468,8 +16452,6 @@
           "3ababd949d": "İnceleme notları"
         },
         "RichMarkdownReviewRailActions": {
-          "636394af72": "Notları ajan için kopyala",
-          "a807596997": "Notlar kopyalandı",
           "8aaf2c4c69": "İnceleme notlarını göster",
           "af02dc2456": "İnceleme notlarını gizle"
         },
@@ -17300,10 +17282,6 @@
             "fa6ea61de3": "İptal",
             "c2ef0359b9": "İçeriği Kopyala",
             "f2d0c22d67": "{{value0}} ek açıklamasını sil",
-            "11c5084aa2": "Ek açıklamaları temizle",
-            "734e4343ec": "Tarayıcı ek açıklamalarını temizle",
-            "95af781091": "Geri bildirimi bir ajana gönder",
-            "ac39b9366b": "Gönder",
             "366bf5d62c": "Yeni Sekme",
             "781d6459ad": "Yeniden dene",
             "2fdca7df09": "Kapat",
@@ -17335,9 +17313,6 @@
             "b5ba6085de": "Soru",
             "143204e423": "Değişiklik",
             "b71dc3d930": "Yeniden bağlan",
-            "d51ef37351": "Kopyala",
-            "6f4ab3592b": "Kopyalandı",
-            "499b31b84e": "Tümünü Kopyala",
             "168350ae6a": "Bir öğeye tıklayın veya üzerine gelin, ardından kopyalamak için C, ekran görüntüsü almak için S tuşuna basın.",
             "e852e20cea": "Kopyalandı, ekran görüntüsü almak için S'ye basın veya başka bir öğe seçin",
             "777b5bc4ec": "Ajan için geri bildirim eklemek üzere bir öğeye tıklayın.",
@@ -17348,8 +17323,6 @@
             "cc4a071d3a": "Sayfa öğesine açıklama ekle ({{value0}})",
             "572046436a": "Uzak tarayıcı",
             "b313a7275b": "Uzak tarayıcı açılıyor",
-            "ea6af700da": "{{value0}} ek açıklama",
-            "c13693fe27": "{{value0}} ek açıklama",
             "074f0ed10b": "{{value0}} ek açıklama hazır. Başka bir öğe seçin veya tüm geri bildirimi kopyalayın.",
             "a2164a6e5a": "{{value0}} ek açıklama hazır. Başka bir öğe seçin veya tüm geri bildirimi kopyalayın.",
             "9f6f2e8c19": "İndirilen dosyanın yolu kullanılamıyor.",
@@ -20945,6 +20918,24 @@
     },
     "dictation": {
       "stoppedAfterSilenceSeconds": "{{seconds}} saniyelik sessizlikten sonra durduruldu"
+    },
+    "notes": {
+      "sendButton": {
+        "clearPageNotes_one": "Bu sayfadaki {{count}} not silinsin mi?",
+        "clearPageNotes_other": "Bu sayfadaki {{count}} not silinsin mi?",
+        "sendCommentsToAgent_one": "{{count}} yorumu bir ajana gönder",
+        "sendCommentsToAgent_other": "{{count}} yorumu bir ajana gönder",
+        "sendNotesToAgent_one": "{{count}} notu bir ajana gönder",
+        "sendNotesToAgent_other": "{{count}} notu bir ajana gönder",
+        "sending": "Gönderiliyor…",
+        "sendShort": "{{count}} gönder",
+        "sendComments_one": "{{count}} yorumu gönder",
+        "sendComments_other": "{{count}} yorumu gönder",
+        "sendNotes_one": "{{count}} notu gönder",
+        "sendNotes_other": "{{count}} notu gönder",
+        "copyNotes": "Notları kopyala",
+        "clearNotes": "Notları temizle…"
+      }
     }
   },
   "dashboardPopout": {

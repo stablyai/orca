@@ -1,7 +1,6 @@
 import type React from 'react'
-import { PanelLeftOpen, Space, Sparkles, WrapText } from 'lucide-react'
+import { PanelLeftOpen, Space, WrapText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -9,7 +8,7 @@ import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
 import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
 import { DiffNotesSendMenu } from '../../diff/review/DiffNotesSendMenu'
-import { DiffNotesPreviewPopover } from './combined-diff-notes-popover'
+import { SendNotesSlot } from '../../review-note-delivery/SendNotesButton'
 
 function changedFilesSummary(
   count: number,
@@ -43,7 +42,6 @@ export function CombinedDiffToolbar({
   branchCompare,
   commitCompare,
   commentOwner,
-  diffCommentCount,
   diffCommentsForWorktree,
   diffShowWhitespace,
   diffWordWrap,
@@ -52,12 +50,8 @@ export function CombinedDiffToolbar({
   isAllMode,
   isBranchMode,
   isCommitMode,
-  notesCopied,
-  onCopyNotes,
   onOpenAlternateDiff,
-  onOpenClearNotes,
   onShowFileTree,
-  previewDiffComments,
   sectionCount,
   setAllSectionsCollapsed,
   sideBySide,
@@ -70,7 +64,6 @@ export function CombinedDiffToolbar({
   branchCompare: NonNullable<OpenFile['branchCompare']> | null
   commitCompare: NonNullable<OpenFile['commitCompare']> | null
   commentOwner: DiffCommentOwner | null
-  diffCommentCount: number
   diffCommentsForWorktree: DiffComment[]
   diffShowWhitespace: boolean | undefined
   diffWordWrap: boolean | undefined
@@ -79,12 +72,8 @@ export function CombinedDiffToolbar({
   isAllMode: boolean
   isBranchMode: boolean
   isCommitMode: boolean
-  notesCopied: boolean
-  onCopyNotes: () => void
   onOpenAlternateDiff: () => void
-  onOpenClearNotes: () => void
   onShowFileTree: () => void
-  previewDiffComments: DiffComment[]
   sectionCount: number
   setAllSectionsCollapsed: (collapsed: boolean) => void
   sideBySide: boolean
@@ -95,7 +84,7 @@ export function CombinedDiffToolbar({
   const t = useTranslate()
   return (
     <div className="flex items-center justify-between gap-3 px-3 py-1.5 border-b border-border bg-background/50 shrink-0">
-      <div className="flex min-w-0 items-center gap-2">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
         {fileTreeCollapsed && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -117,7 +106,7 @@ export function CombinedDiffToolbar({
             </TooltipContent>
           </Tooltip>
         )}
-        <span className="truncate text-xs text-muted-foreground">
+        <span className="min-w-0 truncate text-xs text-muted-foreground">
           {changedFilesSummary(
             sectionCount,
             (isAllMode || isBranchMode) && branchCompare ? branchCompare.baseRef : null,
@@ -125,49 +114,16 @@ export function CombinedDiffToolbar({
             t
           )}
         </span>
-        {diffCommentCount > 0 && (
-          <div className="ml-1 flex shrink-0 items-center overflow-hidden rounded-full border border-border/70 bg-muted/40">
-            <Popover>
-              <PopoverTrigger asChild>
-                <button
-                  type="button"
-                  className="inline-flex h-6 items-center gap-1 pl-2 pr-1.5 text-[11px] font-medium leading-none text-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
-                  aria-label={t(
-                    'auto.components.editor.CombinedDiffViewer.showAiNotes',
-                    'Show {{count}} AI notes',
-                    { count: diffCommentCount, defaultValue_one: 'Show {{count}} AI note' }
-                  )}
-                >
-                  <Sparkles className="size-3 text-violet-500 dark:text-violet-400" />
-                  <span>
-                    {t('auto.components.editor.CombinedDiffViewer.bb84b4c374', 'AI notes')}
-                  </span>
-                  <span className="rounded-full bg-background/80 px-1 text-[10px] tabular-nums text-muted-foreground">
-                    {diffCommentCount}
-                  </span>
-                </button>
-              </PopoverTrigger>
-              <PopoverContent align="start" side="bottom" sideOffset={6} className="w-80 p-0">
-                <DiffNotesPreviewPopover
-                  comments={previewDiffComments}
-                  totalCount={diffCommentCount}
-                  copied={notesCopied}
-                  onCopy={onCopyNotes}
-                  onClear={onOpenClearNotes}
-                />
-              </PopoverContent>
-            </Popover>
-            <DiffNotesSendMenu
-              owner={commentOwner}
-              worktreeId={file.worktreeId}
-              groupId={activeGroupId ?? file.worktreeId}
-              comments={diffCommentsForWorktree}
-              actionLabel={t('auto.components.editor.CombinedDiffViewer.send', 'Send')}
-              triggerClassName="h-6 gap-1 rounded-none border-l border-border/70 px-2 text-[11px] font-medium leading-none text-foreground/80 hover:bg-accent hover:text-foreground"
-              iconClassName="size-3"
-            />
-          </div>
-        )}
+        <SendNotesSlot className="ml-1">
+          <DiffNotesSendMenu
+            owner={commentOwner}
+            worktreeId={file.worktreeId}
+            groupId={activeGroupId ?? file.worktreeId}
+            comments={diffCommentsForWorktree}
+            align="start"
+            batch={{ flush: true }}
+          />
+        </SendNotesSlot>
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {file.combinedAlternate && (

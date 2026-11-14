@@ -13429,7 +13429,6 @@
                 "failingCount_other": "{{count}}개 실패",
                 "pendingCount_other": "{{count}}개 대기 중",
                 "unresolvedCount_other": "{{count}}개 미해결",
-                "sendQueuedCommentsToAi_other": "대기 중인 댓글 {{count}}개를 AI로 보내기",
                 "conflictsBlockThisMr": "충돌로 인해 이 MR이 차단됨",
                 "conflictsBlockThisPr": "충돌로 인해 이 PR이 차단됨",
                 "copyComment": "댓글 복사",
@@ -15404,10 +15403,6 @@
           "39b6b9e4e4": "브랜치에 커밋됨"
         },
         "CombinedDiffViewer": {
-          "1da745c551": "전송된",
-          "84898c548d": "지우기",
-          "88b70d0ef5": "복사",
-          "bb84b4c374": "AI 노트",
           "948a5fd6c8": "메모 지우기",
           "0f806a2ab1": "취소",
           "b6c3b84476": "파일 트리 표시",
@@ -15417,7 +15412,6 @@
           "820ec01f24": "충돌하는 파일은 별도로 리뷰됩니다.",
           "fd8892b120": "표시할 변경사항이 없습니다.",
           "eb5f40e49c": "일반적인 양방향 diff 파이프라인은 충돌로부터 안전하지 않기 때문에 이 diff 보기는 해결되지 않은 충돌을 제외합니다.",
-          "45cf23b418": "메모를 지우지 못했습니다.",
           "ec5053c7f5": "나란히",
           "f786fd54e1": "인라인",
           "ea08dae15b": "모두 축소",
@@ -15432,13 +15426,9 @@
           "noExtension": "(확장자 없음)",
           "diffLoadTimedOut": "차이점 로드를 완료하지 못했습니다.",
           "diffLoadFailed": "차이점을 로드할 수 없습니다.",
-          "moreNotesInSourceControl_other": "소스 제어에 메모 {{count}}개 더 있음",
-          "clearNotesConfirm_other": "이 작업 트리에서 메모 {{count}}개를 지울까요?",
           "changedFilesVs_other": "{{baseRef}} 대비 변경된 파일 {{count}}개",
           "changedFilesIn_other": "{{compareRef}}에서 변경된 파일 {{count}}개",
           "changedFiles_other": "변경된 파일 {{count}}개",
-          "showAiNotes_other": "AI 노트 {{count}}개 표시",
-          "send": "보내기",
           "openDiff": "차이점 열기",
           "openInEditor": "편집기에서 열기",
           "skippedConflictsExcluded": "미해결 충돌 {{count}}개가 이 차이점 보기에서 제외되었습니다."
@@ -15634,7 +15624,6 @@
           "b1bfc04034": "선택한 텍스트",
           "f37b98999e": "이 메모",
           "2b2b31382c": "머리말",
-          "bb629de58a": "agent 용 메모 복사",
           "322afab6ff": "리뷰 노트",
           "0f9969a159": "첫 번째 리뷰 노트로 이동",
           "12052c639c": "검색 닫기",
@@ -15705,7 +15694,6 @@
         },
         "NotesSendMenu": {
           "44dc5e60a6": "메모 보내기",
-          "433928cd9f": "agent에게 {{value0}} 보내기",
           "thisNote": "이 메모",
           "noteAlreadySent": "이미 보낸 메모",
           "sendNotesToAgent": "에이전트에게 메모 보내기",
@@ -15791,8 +15779,6 @@
           "3ababd949d": "리뷰 노트"
         },
         "RichMarkdownReviewRailActions": {
-          "636394af72": "agent 용 메모 복사",
-          "a807596997": "복사된 메모",
           "8aaf2c4c69": "리뷰 메모 표시",
           "af02dc2456": "리뷰 메모 숨기기"
         },
@@ -16619,10 +16605,6 @@
             "fa6ea61de3": "취소",
             "c2ef0359b9": "내용 복사",
             "f2d0c22d67": "주석 {{value0}} 삭제",
-            "11c5084aa2": "주석 지우기",
-            "734e4343ec": "브라우저 주석 지우기",
-            "95af781091": "agent에게 피드백 보내기",
-            "ac39b9366b": "보내기",
             "366bf5d62c": "새 탭",
             "781d6459ad": "다시 시도",
             "2fdca7df09": "닫기",
@@ -16653,9 +16635,6 @@
             "b472c5fe03": "브라우저 주석 추가",
             "b5ba6085de": "질문",
             "143204e423": "변경",
-            "d51ef37351": "복사",
-            "6f4ab3592b": "복사됨",
-            "499b31b84e": "모두 복사",
             "168350ae6a": "요소를 클릭하거나 마우스로 가리킨 다음 C를 눌러 복사하거나 S를 눌러 스크린샷을 찍습니다.",
             "e852e20cea": "복사됨 - S를 눌러 스크린샷을 찍거나 다른 요소를 선택하세요.",
             "777b5bc4ec": "agent에게 보낼 피드백을 추가하려면 요소를 클릭하세요.",
@@ -16666,8 +16645,6 @@
             "cc4a071d3a": "페이지 요소에 주석 달기({{value0}})",
             "572046436a": "원격 브라우저",
             "b313a7275b": "원격 브라우저 열기",
-            "ea6af700da": "{{value0}}개 주석",
-            "c13693fe27": "{{value0}}개 주석",
             "074f0ed10b": "{{value0}}개 주석이 준비되었습니다. 다른 요소를 선택하거나 모든 피드백을 복사하세요.",
             "a2164a6e5a": "{{value0}}개 주석이 준비되었습니다. 다른 요소를 선택하거나 모든 피드백을 복사하세요.",
             "9f6f2e8c19": "다운로드한 파일 경로를 사용할 수 없습니다.",
@@ -20269,6 +20246,19 @@
     },
     "dictation": {
       "stoppedAfterSilenceSeconds": "{{seconds}}초 동안 조용해서 중지했습니다"
+    },
+    "notes": {
+      "sendButton": {
+        "clearPageNotes_other": "이 페이지에서 메모 {{count}}개를 지울까요?",
+        "sendCommentsToAgent_other": "에이전트에게 댓글 {{count}}개 보내기",
+        "sendNotesToAgent_other": "에이전트에게 메모 {{count}}개 보내기",
+        "sending": "전송 중…",
+        "sendShort": "{{count}}개 보내기",
+        "sendComments_other": "댓글 {{count}}개 보내기",
+        "sendNotes_other": "메모 {{count}}개 보내기",
+        "copyNotes": "메모 복사",
+        "clearNotes": "메모 지우기…"
+      }
     }
   },
   "dashboardPopout": {

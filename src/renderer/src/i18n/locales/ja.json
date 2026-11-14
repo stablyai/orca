@@ -13432,7 +13432,6 @@
                 "failingCount_other": "{{count}} 件失敗",
                 "pendingCount_other": "{{count}} 件保留中",
                 "unresolvedCount_other": "{{count}} 件未解決",
-                "sendQueuedCommentsToAi_other": "キュー内の {{count}} 件のコメントを AI に送信",
                 "conflictsBlockThisMr": "競合によりこの MR がブロックされています",
                 "conflictsBlockThisPr": "競合によりこの PR がブロックされています",
                 "copyComment": "コメントをコピー",
@@ -15407,10 +15406,6 @@
           "39b6b9e4e4": "コミット先のブランチ"
         },
         "CombinedDiffViewer": {
-          "1da745c551": "送信済み",
-          "84898c548d": "クリア",
-          "88b70d0ef5": "コピー",
-          "bb84b4c374": "AIメモ",
           "948a5fd6c8": "ノートをクリア",
           "0f806a2ab1": "キャンセル",
           "b6c3b84476": "ファイルツリーを表示",
@@ -15420,7 +15415,6 @@
           "820ec01f24": "競合したファイルは個別にレビューされます",
           "fd8892b120": "表示に変更はありません",
           "eb5f40e49c": "通常の双方向 diff パイプラインは競合に対して安全ではないため、この diff ビューでは未解決の競合が除外されます。",
-          "45cf23b418": "メモを消去できませんでした。",
           "ec5053c7f5": "サイドバイサイド",
           "f786fd54e1": "インライン",
           "ea08dae15b": "すべて折りたたむ",
@@ -15435,13 +15429,9 @@
           "noExtension": "(拡張子なし)",
           "diffLoadTimedOut": "差分の読み込みが完了しませんでした。",
           "diffLoadFailed": "差分を読み込めません。",
-          "moreNotesInSourceControl_other": "ソース管理にさらに {{count}} 件のメモ",
-          "clearNotesConfirm_other": "このワークツリーから {{count}} 件のメモを消去しますか？",
           "changedFilesVs_other": "{{baseRef}} と比較して {{count}} 件のファイルに変更",
           "changedFilesIn_other": "{{compareRef}} の変更ファイル {{count}} 件",
           "changedFiles_other": "変更ファイル {{count}} 件",
-          "showAiNotes_other": "AIメモを {{count}} 件表示",
-          "send": "送信",
           "openDiff": "差分を開く",
           "openInEditor": "エディターで開く",
           "skippedConflictsExcluded": "未解決の競合 {{count}} 件がこの差分ビューから除外されました。"
@@ -15637,7 +15627,6 @@
           "b1bfc04034": "選択したテキスト",
           "f37b98999e": "このメモ",
           "2b2b31382c": "フロントマター",
-          "bb629de58a": "Agent 用のメモをコピーする",
           "322afab6ff": "レビューノート",
           "0f9969a159": "最初のレビューノートにジャンプ",
           "12052c639c": "検索を閉じる",
@@ -15708,7 +15697,6 @@
         },
         "NotesSendMenu": {
           "44dc5e60a6": "メモを送信する",
-          "433928cd9f": "{{value0}} を Agent に送信します",
           "thisNote": "このメモ",
           "noteAlreadySent": "送信済みのメモ",
           "sendNotesToAgent": "メモを Agent に送信",
@@ -15794,8 +15782,6 @@
           "3ababd949d": "レビューノート"
         },
         "RichMarkdownReviewRailActions": {
-          "636394af72": "Agent 用のメモをコピーする",
-          "a807596997": "コピーしたメモ",
           "8aaf2c4c69": "レビューメモを表示",
           "af02dc2456": "レビューメモを非表示にする"
         },
@@ -16622,10 +16608,6 @@
             "fa6ea61de3": "キャンセル",
             "c2ef0359b9": "コンテンツをコピーする",
             "f2d0c22d67": "注釈 {{value0}} を削除",
-            "11c5084aa2": "注釈をクリアする",
-            "734e4343ec": "ブラウザの注釈をクリアする",
-            "95af781091": "Agent にフィードバックを送信する",
-            "ac39b9366b": "送信",
             "366bf5d62c": "新規タブ",
             "781d6459ad": "再試行",
             "2fdca7df09": "閉じる",
@@ -16656,9 +16638,6 @@
             "b472c5fe03": "ブラウザの注釈を追加する",
             "b5ba6085de": "質問",
             "143204e423": "変更",
-            "d51ef37351": "コピー",
-            "6f4ab3592b": "コピーしました",
-            "499b31b84e": "すべてコピー",
             "168350ae6a": "要素をクリックまたはマウスを移動し、C を押してコピーするか、S を押してスクリーンショットを行います。",
             "e852e20cea": "コピーされました — S を押してスクリーンショットを撮るか、別の要素を選択",
             "777b5bc4ec": "要素をクリックして Agent へのフィードバックを追加します。",
@@ -16669,8 +16648,6 @@
             "cc4a071d3a": "ページ要素に注釈を付ける ({{value0}})",
             "572046436a": "リモートブラウザ",
             "b313a7275b": "リモートブラウザを開く",
-            "ea6af700da": "{{value0}} 件の注釈",
-            "c13693fe27": "{{value0}} 件の注釈",
             "074f0ed10b": "{{value0}} 件の注釈が準備できました。別の要素を選択するか、すべてのフィードバックをコピーしてください。",
             "a2164a6e5a": "{{value0}} 件の注釈が準備できました。別の要素を選択するか、すべてのフィードバックをコピーしてください。",
             "9f6f2e8c19": "ダウンロードしたファイルのパスを取得できません。",
@@ -20277,6 +20254,19 @@
       "filesDropFailed": "ファイルをドロップできませんでした。",
       "filesUploadFailed": "ファイルをアップロードできませんでした。",
       "filesResolveDroppedFailed": "ドロップしたファイルを解決できませんでした。"
+    },
+    "notes": {
+      "sendButton": {
+        "clearPageNotes_other": "このページから {{count}} 件のメモを削除しますか？",
+        "sendCommentsToAgent_other": "{{count}} 件のコメントを Agent に送信",
+        "sendNotesToAgent_other": "{{count}} 件のメモを Agent に送信",
+        "sending": "送信中…",
+        "sendShort": "{{count}} 件を送信",
+        "sendComments_other": "{{count}} 件のコメントを送信",
+        "sendNotes_other": "{{count}} 件のメモを送信",
+        "copyNotes": "メモをコピー",
+        "clearNotes": "メモを削除…"
+      }
     }
   },
   "dashboardPopout": {

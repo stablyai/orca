@@ -1,4 +1,3 @@
-import { useMemo } from 'react'
 import { ArrowDown, ArrowUp, Columns2, Eye, FileText, ListTree, Rows2 } from 'lucide-react'
 import { useAppStore } from '@/store/index'
 import { useVisibleWorktreeDiffComments } from '../../../diff-comments/use-visible-worktree-diff-comments'
@@ -14,6 +13,7 @@ import type { CustomEditorToggleValue, EditorToggleValue } from '../../view-mode
 import { MarkdownDefaultViewContextMenu } from '../../view-mode/MarkdownDefaultViewContextMenu'
 import type { EditorHeaderOpenFileState } from './editor-header'
 import { DiffNotesSendMenu } from '../../diff/review/DiffNotesSendMenu'
+import { SendNotesSlot } from '../../review-note-delivery/SendNotesButton'
 import { EditorPanelActionsMenu } from './EditorPanelActionsMenu'
 import { EditorFileLocationMenuItems } from './EditorFileLocationMenuItems'
 import { useTranslate } from '@/i18n/use-translate'
@@ -109,10 +109,6 @@ export function EditorPanelHeader({
   const diffShowWhitespace = useAppStore((s) => s.settings?.diffShowWhitespace === true)
   const editorWordWrap = useAppStore((s) => s.settings?.editorWordWrap !== false)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const fileDiffComments = useMemo(
-    () => diffComments.filter((comment) => comment.filePath === activeFile.relativePath),
-    [activeFile.relativePath, diffComments]
-  )
   const { changeCount, goToPreviousDiff, goToNextDiff } = useDiffNavigation()
   const previousChangeShortcut = useShortcutKeyDetails('editor.previousChange')
   const nextChangeShortcut = useShortcutKeyDetails('editor.nextChange')
@@ -148,6 +144,20 @@ export function EditorPanelHeader({
         onCopyPath={onCopyPath}
         onOpenMarkdownPreview={onOpenMarkdownPreview}
       />
+      {isSingleDiff && (
+        <SendNotesSlot className="ml-1">
+          <DiffNotesSendMenu
+            owner={commentOwner}
+            worktreeId={activeFile.worktreeId}
+            groupId={activeGroupId ?? activeFile.worktreeId}
+            comments={diffComments}
+            filePath={activeFile.relativePath}
+            showFileScope
+            align="start"
+            batch={{ size: 'sm' }}
+          />
+        </SendNotesSlot>
+      )}
       {canOpenPreview && (
         <TooltipProvider>
           <Tooltip>
@@ -196,20 +206,6 @@ export function EditorPanelHeader({
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
-      )}
-      {isSingleDiff && fileDiffComments.length > 0 && (
-        <DiffNotesSendMenu
-          owner={commentOwner}
-          worktreeId={activeFile.worktreeId}
-          groupId={activeGroupId ?? activeFile.worktreeId}
-          comments={diffComments}
-          filePath={activeFile.relativePath}
-          showFileScope
-          triggerLabel="AI notes"
-          triggerCount={fileDiffComments.length}
-          triggerClassName="h-6 shrink-0 gap-1 rounded-full border border-border/70 bg-muted/40 px-2 text-[11px] font-medium leading-none text-foreground/80 hover:bg-accent hover:text-foreground"
-          iconClassName="size-3"
-        />
       )}
       {isDiffSurface && (
         <TooltipProvider>

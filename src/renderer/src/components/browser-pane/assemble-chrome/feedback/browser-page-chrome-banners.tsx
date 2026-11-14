@@ -1,18 +1,10 @@
 import type { Dispatch, SetStateAction } from 'react'
 import { cn } from '@/lib/class-names'
-import { CircleCheck, Copy, Crosshair, Send, Trash2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Crosshair } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import {
-  BrowserAnnotationSendMenuContent,
-  browserAnnotationCopyTooltip
-} from '../../annotate/delivery/BrowserAnnotationSendMenuContent'
+import { SendNotesSlot } from '@/components/editor/review-note-delivery/SendNotesButton'
+import { BrowserAnnotationSendMenu } from '../../annotate/delivery/BrowserAnnotationSendMenu'
+import type { BrowserAnnotationsClearRequest } from '../../annotate/delivery/use-browser-page-annotation-send'
 import { browserAnnotationLimitMessage } from '../../annotate/delivery/browser-annotation-limit-message'
 import {
   isBrowserAnnotationPageFull,
@@ -20,7 +12,6 @@ import {
   type GrabIntent
 } from '../../../../../../shared/browser/element-grab/browser-grab-types'
 import type { GrabModeHook } from '../../annotate/grab/useGrabMode'
-import { preventAgentSendTargetOutsideDismiss } from '../../annotate/delivery/prevent-agent-send-target-outside-dismiss'
 
 export function BrowserPageChromeBanners({
   resourceNotice,
@@ -39,8 +30,8 @@ export function BrowserPageChromeBanners({
   handleBrowserAnnotationsSentToAgent,
   handleBrowserAnnotationsHandedOff,
   handleCopyBrowserAnnotations,
-  browserAnnotationsCopied,
-  handleClearBrowserAnnotations,
+  sendableAnnotationCount,
+  createBrowserAnnotationsClearRequest,
   setPendingAnnotationPayload
 }: {
   resourceNotice: string | null
@@ -59,8 +50,8 @@ export function BrowserPageChromeBanners({
   handleBrowserAnnotationsSentToAgent: () => void
   handleBrowserAnnotationsHandedOff: (delivered: Promise<unknown>) => void
   handleCopyBrowserAnnotations: () => void
-  browserAnnotationsCopied: boolean
-  handleClearBrowserAnnotations: () => void
+  sendableAnnotationCount: number
+  createBrowserAnnotationsClearRequest: () => BrowserAnnotationsClearRequest
   setPendingAnnotationPayload: Dispatch<SetStateAction<BrowserGrabPayload | null>>
 }): React.JSX.Element | null {
   const t = useTranslate()
@@ -96,7 +87,7 @@ export function BrowserPageChromeBanners({
               grab.state === 'error' ? 'text-destructive' : 'text-muted-foreground'
             )}
           />
-          <span className="min-w-0 flex-1 truncate">
+          <span className={cn('min-w-0 truncate', grabIntent !== 'annotate' && 'flex-1')}>
             {grab.state === 'error'
               ? t(
                   'auto.components.browser.pane.BrowserPane.4328a0a062',
@@ -137,93 +128,25 @@ export function BrowserPageChromeBanners({
                       'Click or hover an element, then press C to copy or S to screenshot.'
                     )}
           </span>
-          {grabIntent === 'annotate' && browserAnnotationsLength > 0 ? (
-            <>
-              <DropdownMenu
-                modal={false}
+          {grabIntent === 'annotate' ? (
+            <SendNotesSlot>
+              <BrowserAnnotationSendMenu
+                annotationCount={browserAnnotationsLength}
+                sendableCount={sendableAnnotationCount}
                 open={annotationBannerSendOpen}
                 onOpenChange={handleAnnotationBannerSendOpenChange}
-              >
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        size="xs"
-                        variant="outline"
-                        className="h-6 gap-1.5"
-                        disabled={!browserAnnotationsPrompt}
-                      >
-                        <Send className="size-3" />
-                        {t('auto.components.browser.pane.BrowserPane.ac39b9366b', 'Send')}
-                      </Button>
-                    </DropdownMenuTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sideOffset={6}>
-                    {t(
-                      'auto.components.browser.pane.BrowserPane.95af781091',
-                      'Send feedback to an agent'
-                    )}
-                  </TooltipContent>
-                </Tooltip>
-                <DropdownMenuContent
-                  align="end"
-                  className="min-w-[180px]"
-                  onInteractOutside={preventAgentSendTargetOutsideDismiss}
-                  onPointerDownOutside={preventAgentSendTargetOutsideDismiss}
-                >
-                  <BrowserAnnotationSendMenuContent
-                    worktreeId={worktreeId}
-                    groupId={activeGroupId ?? worktreeId}
-                    prompt={browserAnnotationsPrompt}
-                    includePageDetails={includePageDetails}
-                    onIncludePageDetailsChange={handleIncludePageDetailsChange}
-                    onPromptDelivered={handleBrowserAnnotationsSentToAgent}
-                    onPromptHandedOff={handleBrowserAnnotationsHandedOff}
-                  />
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="xs"
-                    variant="outline"
-                    className="h-6 gap-1.5"
-                    onClick={handleCopyBrowserAnnotations}
-                  >
-                    {browserAnnotationsCopied ? (
-                      <CircleCheck className="size-3" />
-                    ) : (
-                      <Copy className="size-3" />
-                    )}
-                    {browserAnnotationsCopied
-                      ? t('auto.components.browser.pane.BrowserPane.6f4ab3592b', 'Copied')
-                      : t('auto.components.browser.pane.BrowserPane.499b31b84e', 'Copy All')}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>
-                  {browserAnnotationCopyTooltip(includePageDetails, t)}
-                </TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="icon-xs"
-                    variant="ghost"
-                    className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                    onClick={handleClearBrowserAnnotations}
-                    aria-label={t(
-                      'auto.components.browser.pane.BrowserPane.734e4343ec',
-                      'Clear browser annotations'
-                    )}
-                  >
-                    <Trash2 className="size-3" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" sideOffset={6}>
-                  {t('auto.components.browser.pane.BrowserPane.11c5084aa2', 'Clear annotations')}
-                </TooltipContent>
-              </Tooltip>
-            </>
+                worktreeId={worktreeId}
+                groupId={activeGroupId ?? worktreeId}
+                prompt={browserAnnotationsPrompt}
+                includePageDetails={includePageDetails}
+                onIncludePageDetailsChange={handleIncludePageDetailsChange}
+                onPromptDelivered={handleBrowserAnnotationsSentToAgent}
+                onPromptHandedOff={handleBrowserAnnotationsHandedOff}
+                onCopy={handleCopyBrowserAnnotations}
+                createClearRequest={createBrowserAnnotationsClearRequest}
+                size="sm"
+              />
+            </SendNotesSlot>
           ) : null}
           <button
             className="ml-auto shrink-0 rounded px-2 py-0.5 text-muted-foreground transition-colors hover:text-foreground"

@@ -133,8 +133,8 @@ export function BrowserPageChromeHeader({
         handleBrowserAnnotationsSentToAgent={annotationSend.handleBrowserAnnotationsSentToAgent}
         handleBrowserAnnotationsHandedOff={annotationSend.handleBrowserAnnotationsHandedOff}
         handleCopyBrowserAnnotations={annotationSend.handleCopyBrowserAnnotations}
-        browserAnnotationsCopied={annotationSend.browserAnnotationsCopied}
-        handleClearBrowserAnnotations={annotationSend.handleClearBrowserAnnotations}
+        sendableAnnotationCount={annotationSend.sendableAnnotationCount}
+        createBrowserAnnotationsClearRequest={annotationSend.createBrowserAnnotationsClearRequest}
         setPendingAnnotationPayload={grabAnnotations.setPendingAnnotationPayload}
       />
     </div>

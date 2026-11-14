@@ -2,7 +2,7 @@ import { useAppStore } from '@/store/index'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import type { DiffCommentOwner } from '@/store/slices/diff-comments/diff-comment-owner'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Send, Sparkles } from 'lucide-react'
+import { Send } from 'lucide-react'
 import type { AgentSendPopoverTargetMode } from '@/store/slices/ui/ui-slice-contract-core'
 import {
   DropdownMenu,
@@ -16,6 +16,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/class-names'
 import { ReviewNotesSendMenuContent } from './ReviewNotesSendMenuContent'
+import { SendNotesButton, type SendNotesButtonSize } from './SendNotesButton'
 import type { DiffCommentDeliverySnapshot } from '@/store/slices/diff-comments/create-diff-comments-slice'
 import {
   diffCommentSendKey,
@@ -54,12 +55,16 @@ export type NotesSendMenuProps<TNote> = {
   source?: AgentSendPopoverTargetMode['source']
   targetModeLabel?: string
   triggerClassName?: string
-  triggerLabel?: string
-  triggerCount?: number
-  actionLabel?: string
   disabledTooltip?: string
   iconClassName?: string
   align?: 'start' | 'center' | 'end'
+  /**
+   * The shared "Send N notes" trigger. Count, Sending… and the opened send all come from the
+   * requested scope (defaultScopeId); it is hidden when that scope has nothing to send.
+   */
+  batchTrigger?: { size?: SendNotesButtonSize; flush?: boolean }
+  /** Rendered at the bottom of the menu, e.g. Copy and Clear. */
+  menuFooter?: React.ReactNode
   // Drive exactly one mounted instance with each keyboard-open nonce.
   openRequestNonce?: number | null
   // Check expiry on the opening commit; render clocks can lag or freeze.
@@ -83,17 +88,16 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
   source = 'diff-notes',
   targetModeLabel,
   triggerClassName,
-  triggerLabel,
-  triggerCount,
-  actionLabel,
   disabledTooltip,
   iconClassName = 'size-3.5',
   align = 'end',
+  batchTrigger,
+  menuFooter,
   openRequestNonce = null,
   openRequestExpiresAt = null,
   onOpenRequestHandled,
   onDelivered
-}: NotesSendMenuProps<TNote>): React.JSX.Element {
+}: NotesSendMenuProps<TNote>): React.JSX.Element | null {
   const t = useTranslate()
   const [sendMenuOpen, setSendMenuOpen] = useState(false)
   const targetModeId = useMemo(() => buildNotesSendTargetModeId(modeIdParts), [modeIdParts])
@@ -119,7 +123,19 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
     const requested = enabledScopes.find((scope) => scope.id === defaultScopeId)
     return requested ?? enabledScopes[0] ?? null
   }, [defaultScopeId, enabledScopes])
-  const hasDeliverableNotes = enabledScopes.length > 0
+  // Batch triggers never fall back to another scope: a held file must not open the all-notes send.
+  const requestedScope = batchTrigger
+    ? (sendableScopes.find((scope) => scope.id === defaultScopeId) ?? sendableScopes[0] ?? null)
+    : null
+  const requestedExisting = batchTrigger
+    ? (scopes.find((scope) => scope.id === requestedScope?.id)?.notes.length ?? 0)
+    : 0
+  const primaryScope = batchTrigger
+    ? requestedScope && requestedScope.notes.length > 0
+      ? requestedScope
+      : null
+    : defaultScope
+  const hasDeliverableNotes = batchTrigger ? primaryScope !== null : enabledScopes.length > 0
   // Notes only on their way to an agent are not sent yet.
   const disabledTitle = !owner
     ? undefined
@@ -167,14 +183,14 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
     (open: boolean) => {
       setSendMenuOpen(open)
       if (open) {
-        if (defaultScope) {
-          openTargetMode(defaultScope)
+        if (primaryScope) {
+          openTargetMode(primaryScope)
         }
       } else {
         useAppStore.getState().closeAgentSendPopoverTargetMode(targetModeId)
       }
     },
-    [defaultScope, openTargetMode, targetModeId]
+    [primaryScope, openTargetMode, targetModeId]
   )
 
   const effectiveSendMenuOpen = sendMenuOpen && ownsTargetMode
@@ -196,7 +212,7 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
     }
     // Consume even expired or undeliverable requests so a later mount cannot reopen them.
     const expired = openRequestExpiresAt != null && Date.now() >= openRequestExpiresAt
-    if (!expired && hasDeliverableNotes && defaultScope) {
+    if (!expired && hasDeliverableNotes && primaryScope) {
       handleOpenChange(true)
     }
     onOpenRequestHandled?.()
@@ -204,59 +220,58 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
     openRequestNonce,
     openRequestExpiresAt,
     hasDeliverableNotes,
-    defaultScope,
+    primaryScope,
     handleOpenChange,
     onOpenRequestHandled
   ])
 
+  // Unknown owner: whether the notes are held cannot be told yet, so show nothing.
+  if (batchTrigger && (!owner || requestedExisting === 0)) {
+    return null
+  }
+
+  const trigger = batchTrigger ? (
+    <DropdownMenuTrigger asChild>
+      <SendNotesButton
+        count={requestedScope?.notes.length ?? 0}
+        sending={!hasDeliverableNotes}
+        size={batchTrigger.size}
+        flush={batchTrigger.flush}
+        onMouseDown={(event) => event.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
+      />
+    </DropdownMenuTrigger>
+  ) : (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            className={cn(
+              'inline-flex items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground',
+              triggerClassName
+            )}
+            disabled={!hasDeliverableNotes}
+            title={hasDeliverableNotes ? enabledSendTooltip(t) : disabledTitle}
+            aria-label={enabledSendTooltip(t)}
+            onMouseDown={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <Send className={iconClassName} />
+          </button>
+        </DropdownMenuTrigger>
+      </TooltipTrigger>
+      {hasDeliverableNotes || disabledTitle ? (
+        <TooltipContent side="bottom" sideOffset={6}>
+          {hasDeliverableNotes ? enabledSendTooltip(t) : disabledTitle}
+        </TooltipContent>
+      ) : null}
+    </Tooltip>
+  )
+
   return (
     <DropdownMenu modal={false} open={effectiveSendMenuOpen} onOpenChange={handleOpenChange}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className={cn(
-                'inline-flex items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground',
-                triggerClassName
-              )}
-              disabled={!hasDeliverableNotes}
-              title={hasDeliverableNotes ? enabledSendTooltip(t) : disabledTitle}
-              aria-label={
-                triggerLabel
-                  ? t(
-                      'auto.components.editor.NotesSendMenu.433928cd9f',
-                      'Send {{value0}} to an agent',
-                      { value0: triggerLabel }
-                    )
-                  : enabledSendTooltip(t)
-              }
-              onMouseDown={(event) => event.stopPropagation()}
-              onClick={(event) => event.stopPropagation()}
-            >
-              {triggerLabel ? (
-                <>
-                  <Sparkles className="size-3 text-violet-500 dark:text-violet-400" />
-                  <span className="whitespace-nowrap">{triggerLabel}</span>
-                  {triggerCount !== undefined ? (
-                    <span className="rounded-full bg-background/80 px-1 text-[10px] tabular-nums text-muted-foreground">
-                      {triggerCount}
-                    </span>
-                  ) : null}
-                  <span className="mx-0.5 h-3 w-px bg-border/70" aria-hidden />
-                </>
-              ) : null}
-              <Send className={iconClassName} />
-              {actionLabel ? <span className="whitespace-nowrap">{actionLabel}</span> : null}
-            </button>
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        {hasDeliverableNotes || disabledTitle ? (
-          <TooltipContent side="bottom" sideOffset={6}>
-            {hasDeliverableNotes ? enabledSendTooltip(t) : disabledTitle}
-          </TooltipContent>
-        ) : null}
-      </Tooltip>
+      {trigger}
       <DropdownMenuContent
         align={align}
         className="min-w-[220px]"
@@ -307,6 +322,7 @@ export function NotesSendMenu<TNote extends DiffCommentDeliverySnapshot>({
             onPromptHandedOff={holdInFlight(defaultScope?.notes ?? [])}
           />
         )}
+        {menuFooter}
       </DropdownMenuContent>
     </DropdownMenu>
   )

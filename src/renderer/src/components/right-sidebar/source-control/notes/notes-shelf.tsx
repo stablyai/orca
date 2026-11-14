@@ -4,6 +4,7 @@ import type { AppState } from '@/store/types'
 import React from 'react'
 import { Check, ChevronDown, Copy, MessageSquare, MoreHorizontal, Trash2 } from 'lucide-react'
 import { DiffNotesSendMenu } from '@/components/editor/diff/review/DiffNotesSendMenu'
+import { SendNotesSlot } from '@/components/editor/review-note-delivery/SendNotesButton'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,7 +54,7 @@ export function SourceControlNotesShelf({
       <div className="flex items-center gap-1 pl-3 pr-2 py-1.5">
         <button
           type="button"
-          className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-xs text-muted-foreground hover:text-foreground transition-colors"
+          className="flex min-h-6 min-w-0 items-center gap-1.5 text-left text-xs text-muted-foreground hover:text-foreground transition-colors"
           onClick={() => setDiffCommentsExpanded((prev) => !prev)}
           aria-expanded={diffCommentsExpanded}
           title={
@@ -69,22 +70,22 @@ export function SourceControlNotesShelf({
             )}
           />
           <MessageSquare className="size-3.5 shrink-0" />
-          <span>{t('auto.components.right.sidebar.SourceControl.cc474e0b8c', 'Notes')}</span>
-          {diffCommentCount > 0 && (
-            <span className="text-[11px] leading-none text-muted-foreground tabular-nums">
-              {diffCommentCount}
-            </span>
-          )}
+          <span className="truncate">
+            {t('auto.components.right.sidebar.SourceControl.cc474e0b8c', 'Notes')}
+          </span>
         </button>
-        <div className="ml-1 flex shrink-0 items-center gap-1.5">
+        <SendNotesSlot className="ml-1">
           <DiffNotesSendMenu
             owner={owner}
             worktreeId={activeWorktreeId}
             groupId={placementGroupId ?? activeGroupId ?? activeWorktreeId}
             comments={diffCommentsForActive}
-            triggerClassName="size-6"
+            align="start"
+            batch={{ flush: true }}
             respondToOpenRequest
           />
+        </SendNotesSlot>
+        <div className="ml-1 flex shrink-0 items-center gap-1.5">
           {diffCommentCount > 0 && (
             <TooltipProvider>
               <Tooltip>
@@ -145,7 +146,7 @@ export function SourceControlNotesShelf({
                     kind: 'all',
                     worktreeId: activeWorktreeId,
                     owner,
-                    count: diffCommentCount
+                    ids: diffCommentsForActive.map((comment) => comment.id)
                   })
                 }}
               >
@@ -168,7 +169,9 @@ export function SourceControlNotesShelf({
               owner,
               worktreeId: activeWorktreeId,
               filePath,
-              count: diffCommentsForActive.filter((comment) => comment.filePath === filePath).length
+              ids: diffCommentsForActive
+                .filter((comment) => comment.filePath === filePath)
+                .map((comment) => comment.id)
             })
           }
         />

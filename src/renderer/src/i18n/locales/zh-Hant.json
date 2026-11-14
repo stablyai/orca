@@ -13908,7 +13908,6 @@
                 "failingCount_other": "{{count}} 個失敗",
                 "pendingCount_other": "{{count}} 個等待中",
                 "unresolvedCount_other": "{{count}} 個未解決",
-                "sendQueuedCommentsToAi_other": "傳送 {{count}} 則佇列中的評論給 AI",
                 "conflictsBlockThisMr": "衝突阻擋了此 MR",
                 "conflictsBlockThisPr": "衝突阻擋了此 PR",
                 "copyComment": "複製評論",
@@ -15881,10 +15880,6 @@
           "39b6b9e4e4": "已提交到分支"
         },
         "CombinedDiffViewer": {
-          "1da745c551": "已傳送",
-          "84898c548d": "清除",
-          "88b70d0ef5": "複製",
-          "bb84b4c374": "AI 備註",
           "948a5fd6c8": "清除備註",
           "0f806a2ab1": "取消",
           "b6c3b84476": "顯示檔案樹",
@@ -15894,7 +15889,6 @@
           "820ec01f24": "衝突檔案單獨審查",
           "fd8892b120": "沒有可顯示的變更",
           "eb5f40e49c": "此差異檢視排除了未解決的衝突，因為一般的雙向差異處理流程無法安全處理衝突。",
-          "45cf23b418": "無法清除備註。",
           "ec5053c7f5": "並排",
           "f786fd54e1": "行內",
           "ea08dae15b": "全部摺疊",
@@ -15909,13 +15903,9 @@
           "noExtension": "（無副檔名）",
           "diffLoadTimedOut": "差異載入未完成。",
           "diffLoadFailed": "無法載入差異。",
-          "moreNotesInSourceControl_other": "原始碼控制中還有 {{count}} 則備註",
-          "clearNotesConfirm_other": "清除此工作樹中的 {{count}} 則備註？",
           "changedFilesVs_other": "相較於 {{baseRef}}，有 {{count}} 個檔案變更",
           "changedFilesIn_other": "{{compareRef}} 中有 {{count}} 個檔案變更",
           "changedFiles_other": "{{count}} 個變更的檔案",
-          "showAiNotes_other": "顯示 {{count}} 則 AI 備註",
-          "send": "傳送",
           "openDiff": "開啟差異",
           "openInEditor": "在編輯器中開啟"
         },
@@ -16113,7 +16103,6 @@
           "b1bfc04034": "選定的文字",
           "f37b98999e": "這則備註",
           "2b2b31382c": "前置資料",
-          "bb629de58a": "複製備註給代理程式",
           "322afab6ff": "審查備註",
           "0f9969a159": "跳至第一則審查備註",
           "12052c639c": "關閉搜尋",
@@ -16184,7 +16173,6 @@
         },
         "NotesSendMenu": {
           "44dc5e60a6": "傳送備註",
-          "433928cd9f": "將 {{value0}} 傳送給代理程式",
           "thisNote": "這則備註",
           "noteAlreadySent": "備註已傳送",
           "sendNotesToAgent": "將備註傳送給代理程式",
@@ -16270,8 +16258,6 @@
           "3ababd949d": "審查備註"
         },
         "RichMarkdownReviewRailActions": {
-          "636394af72": "複製備註給代理程式",
-          "a807596997": "已複製備註",
           "8aaf2c4c69": "顯示審查備註",
           "af02dc2456": "隱藏審查備註"
         },
@@ -17095,10 +17081,6 @@
             "fa6ea61de3": "取消",
             "c2ef0359b9": "複製內容",
             "f2d0c22d67": "刪除註解 {{value0}}",
-            "11c5084aa2": "清除註解",
-            "734e4343ec": "清除瀏覽器註解",
-            "95af781091": "向代理程式傳送回饋",
-            "ac39b9366b": "傳送",
             "366bf5d62c": "新分頁",
             "781d6459ad": "重試",
             "2fdca7df09": "關閉",
@@ -17130,9 +17112,6 @@
             "b5ba6085de": "疑問",
             "143204e423": "改變",
             "b71dc3d930": "重新連線",
-            "d51ef37351": "複製",
-            "6f4ab3592b": "已複製",
-            "499b31b84e": "全部複製",
             "168350ae6a": "按一下元素或將游標停留在元素上，然後按 C 進行複製或按 S 進行螢幕截圖。",
             "e852e20cea": "已複製 — 按 S 進行螢幕截圖，或選擇另一個元素",
             "777b5bc4ec": "點選元素，為代理程式新增回饋。",
@@ -17143,8 +17122,6 @@
             "cc4a071d3a": "註解頁面元素 ({{value0}})",
             "572046436a": "遠端瀏覽器",
             "b313a7275b": "開啟遠端瀏覽器",
-            "ea6af700da": "{{value0}} 條註解",
-            "c13693fe27": "{{value0}} 條註解",
             "074f0ed10b": "{{value0}} 條註解已準備好。請選擇另一個元素或複製所有回饋。",
             "a2164a6e5a": "{{value0}} 條註解已準備好。請選擇另一個元素或複製所有回饋。",
             "9f6f2e8c19": "下載檔案路徑不可用。",
@@ -20659,6 +20636,19 @@
     "toastFallbacks": {
       "worktreeCreateFailed": "無法建立工作樹。",
       "missingBaseBranchHelp": "請建立初始提交（例如在 main 上），或在「建立來源」中選擇現有分支，然後重試。"
+    },
+    "notes": {
+      "sendButton": {
+        "clearPageNotes_other": "清除此頁面中的 {{count}} 則備註？",
+        "sendCommentsToAgent_other": "將 {{count}} 則留言傳送給代理程式",
+        "sendNotesToAgent_other": "將 {{count}} 則備註傳送給代理程式",
+        "sending": "正在傳送…",
+        "sendShort": "傳送 {{count}} 則",
+        "sendComments_other": "傳送 {{count}} 則留言",
+        "sendNotes_other": "傳送 {{count}} 則備註",
+        "copyNotes": "複製備註",
+        "clearNotes": "清除備註…"
+      }
     }
   },
   "dashboardPopout": {

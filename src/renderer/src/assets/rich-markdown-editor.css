@@ -254,8 +254,7 @@
   gap: 4px;
 }
 
-.rich-markdown-review-rail-toggle,
-.rich-markdown-review-rail-action {
+.rich-markdown-review-rail-toggle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -265,28 +264,18 @@
   background: var(--background);
   color: var(--muted-foreground);
   box-shadow: 0 1px 2px color-mix(in srgb, var(--foreground) 12%, transparent);
-}
-
-.rich-markdown-review-rail-toggle {
   gap: 5px;
   padding: 0 8px;
   font-size: 11px;
   font-weight: 600;
 }
 
-.rich-markdown-review-rail-action {
-  width: 26px;
-  padding: 0;
-}
-
 .rich-markdown-review-rail-toggle:hover,
-.rich-markdown-review-rail-toggle[aria-expanded='true'],
-.rich-markdown-review-rail-action:hover:not(:disabled) {
+.rich-markdown-review-rail-toggle[aria-expanded='true'] {
   background: var(--accent);
   color: var(--foreground);
 }
 
-.rich-markdown-review-rail-action:disabled,
 .rich-markdown-review-note-action:disabled {
   cursor: default;
   opacity: 0.45;
