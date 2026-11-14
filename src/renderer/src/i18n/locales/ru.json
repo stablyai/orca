@@ -23349,6 +23349,7 @@
   "keybindings": {
     "title": {
       "chatFind": "Найти в чате",
+      "editorCommandPalette": "Палитра команд",
       "editorFind": "Найти в редакторе",
       "editorReplace": "Заменить в редакторе",
       "fileExplorerCopyPath": "Скопировать путь к файлу",

@@ -103,7 +103,8 @@ vi.mock('./diff-model-swap-view-state', () => ({
   preserveDiffViewStateAcrossModelSwaps: () => ({ dispose: vi.fn() })
 }))
 vi.mock('../../editor-shortcuts', () => ({
-  installMonacoDiffChangeNavigationShortcut: () => vi.fn()
+  installMonacoDiffChangeNavigationShortcut: () => vi.fn(),
+  installMonacoEditorCommandPaletteShortcut: () => vi.fn()
 }))
 vi.mock('../large-files/LargeDiffFallback', () => ({
   LargeDiffFallback: () => <div>Large diff</div>

@@ -22351,6 +22351,7 @@
       "tabNextTerminal": "次のターミナルタブ",
       "tabPreviousTerminal": "前のターミナルタブ",
       "tabOpenQuickCommandsMenu": "クイックコマンドメニューの切り替え",
+      "editorCommandPalette": "コマンド パレット",
       "editorFind": "エディター内を検索",
       "editorReplace": "エディター内で置換",
       "fileExplorerUndo": "ファイル操作を元に戻す",

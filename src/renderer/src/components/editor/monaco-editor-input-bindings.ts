@@ -11,6 +11,7 @@ import { getDiffCommentPopoverLeft } from '../diff-comments/diff-comment-popover
 import {
   installEditorAddReviewNoteShortcut,
   installEditorSaveShortcut,
+  installMonacoEditorCommandPaletteShortcut,
   installMonacoEditorFindShortcut
 } from './editor-shortcuts'
 import {
@@ -58,6 +59,7 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
     propsRef.current.onSave(value)
   })
   const cleanupFindShortcut = installMonacoEditorFindShortcut(editorInstance)
+  const cleanupCommandPaletteShortcut = installMonacoEditorCommandPaletteShortcut(editorInstance)
   const cleanupAddReviewNoteShortcut = installEditorAddReviewNoteShortcut(editorDomNode, () => {
     // Preserve open drafts during same-tick chords before the composer guard mounts.
     if (commentPopoverRef.current) {
@@ -165,6 +167,7 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
     disposeInputBindings: () => {
       cleanupSaveShortcut()
       cleanupFindShortcut()
+      cleanupCommandPaletteShortcut()
       cleanupAddReviewNoteShortcut()
       pasteCaptureNode.removeEventListener('paste', onLargeTextPaste, { capture: true })
       searchInFilesAction.dispose()

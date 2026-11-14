@@ -22744,6 +22744,7 @@
       "tabNextTerminal": "下一个终端标签页",
       "tabPreviousTerminal": "上一个终端标签页",
       "tabOpenQuickCommandsMenu": "切换快捷命令菜单",
+      "editorCommandPalette": "命令面板",
       "editorFind": "在编辑器中查找",
       "editorReplace": "在编辑器中替换",
       "fileExplorerUndo": "撤销文件操作",

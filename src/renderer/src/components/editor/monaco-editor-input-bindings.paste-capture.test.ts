@@ -11,6 +11,7 @@ vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => f
 vi.mock('./editor-shortcuts', () => ({
   installEditorSaveShortcut: () => () => undefined,
   installMonacoEditorFindShortcut: () => () => undefined,
+  installMonacoEditorCommandPaletteShortcut: () => () => undefined,
   installEditorAddReviewNoteShortcut: () => () => undefined
 }))
 

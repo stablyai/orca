@@ -102,6 +102,8 @@ const STATIC_TITLE_COPY = {
   'browser.grabElement': () => translate('keybindings.title.23350d5072', 'Grab page element'),
   'browser.annotateElement': () =>
     translate('keybindings.title.69b2b72c98', 'Annotate page element'),
+  'editor.commandPalette': () =>
+    translate('keybindings.title.editorCommandPalette', 'Command Palette'),
   'editor.find': () => translate('keybindings.title.editorFind', 'Find in editor'),
   'editor.replace': () => translate('keybindings.title.editorReplace', 'Replace in editor'),
   'editor.save': () => translate('keybindings.title.6a99c55b2d', 'Save file'),

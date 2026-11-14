@@ -22318,6 +22318,7 @@
       "tabNextTerminal": "下一個終端機分頁",
       "tabPreviousTerminal": "上一個終端機分頁",
       "tabOpenQuickCommandsMenu": "顯示或隱藏快速指令選單",
+      "editorCommandPalette": "命令選擇區",
       "editorFind": "在編輯器中尋找",
       "editorReplace": "在編輯器中取代",
       "fileExplorerUndo": "復原檔案操作",

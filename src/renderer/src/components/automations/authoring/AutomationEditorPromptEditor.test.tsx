@@ -23,6 +23,7 @@ vi.mock('@/store/index', () => ({
     })
 }))
 vi.mock('@/components/editor/editor-shortcuts', () => ({
+  installMonacoEditorCommandPaletteShortcut: () => vi.fn(),
   installMonacoEditorFindShortcut: installFindShortcut
 }))
 vi.mock('@/components/editor/monaco-content-sync', () => ({
