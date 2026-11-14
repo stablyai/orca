@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
+import { markHydratedBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   EDITOR_OWNER,
@@ -25,7 +26,16 @@ import EditorPanel from './EditorPanel'
 
 afterEach(() => {
   cleanup()
-  useAppStore.setState(useAppStore.getInitialState(), true)
+  const initialState = useAppStore.getInitialState()
+  useAppStore.setState(
+    {
+      ...initialState,
+      remoteBrowserPageHandlesByPageId: markHydratedBrowserPageHandles({
+        ...initialState.remoteBrowserPageHandlesByPageId
+      })
+    },
+    true
+  )
 })
 
 it('opens the HTML preview in the clicked editor’s folder group', async () => {

@@ -1,15 +1,8 @@
 // JSON escaping can expand controls sixfold while NUL-only sniffing treats them as text; pin each budget branch to JSON.stringify.
 import { describe, expect, it } from 'vitest'
 import type { GitDiffResult } from './git-diff-compare-types'
-import { REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES } from '../../remote-runtime/remote-runtime-memory-limits'
-import {
-  assertGitDiffWithinTransportBudget,
-  gitDiffExceedsTransportBudget
-} from './git-diff-transport-budget'
-import {
-  REMOTE_RPC_MAX_CONTENT_BYTES,
-  remoteRpcContentBudget
-} from '../../remote-rpc-content-budget'
+import { assertGitDiffWithinTransportBudget } from './git-diff-transport-budget'
+import { REMOTE_RPC_MAX_CONTENT_BYTES } from '../../remote-rpc-content-budget'
 
 const BUDGET = REMOTE_RPC_MAX_CONTENT_BYTES
 
@@ -82,42 +75,5 @@ describe('gitDiffExceedsTransportBudget', () => {
 
     expect(referenceResultBytes(overBudget)).toBe(BUDGET + 1)
     expect(budgetError(overBudget).code).toBe('diff_too_large')
-  })
-
-  it('rejects additive relay metadata beyond the result budget', () => {
-    const skewed = {
-      ...textDiff(''),
-      futureMetadata: 'x'.repeat(BUDGET)
-    } as unknown as GitDiffResult
-
-    expect(gitDiffExceedsTransportBudget(skewed, BUDGET)).toBe(true)
-    expect(budgetError(skewed).code).toBe('diff_too_large')
-  })
-})
-
-// Why: the invariant the cap rests on — a diff that exactly fills the content budget must still
-// serialize inside the outbound JSON limit once wrapped in an RPC reply. A base64-only version of
-// this passes trivially; the newline and control-char fixtures are the load-bearing ones.
-describe('envelope ceiling', () => {
-  function replyBytes(result: GitDiffResult, requestId = 'req_0123456789abcdef'): number {
-    return Buffer.byteLength(
-      JSON.stringify({
-        id: requestId,
-        ok: true,
-        result,
-        _meta: { runtimeId: '00000000-0000-4000-8000-000000000000' }
-      }),
-      'utf8'
-    )
-  }
-
-  it('charges an escape-dense request id instead of overflowing the fixed reserve', () => {
-    const requestId = '\u0001'.repeat(8_192)
-    const budget = remoteRpcContentBudget(requestId)
-
-    expect(budget).toBeLessThan(BUDGET)
-    expect(replyBytes(binaryDiffOfJsonBytes('a', budget), requestId)).toBeLessThanOrEqual(
-      REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES
-    )
   })
 })

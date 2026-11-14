@@ -1,6 +1,6 @@
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getPtyIpc } from '../pty-host-bindings'
-import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
+import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import {
   findPaneCodexOnSharedServer,
   resolveCodexPaneHome

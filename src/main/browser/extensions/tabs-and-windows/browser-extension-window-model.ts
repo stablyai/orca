@@ -4,10 +4,12 @@ import { normalizeBrowserNavigationUrl } from '../../../../shared/browser-url'
 import { isSameExtensionNavigation } from '../../../../shared/browser/extensions/browser-extension-url'
 import {
   isBackgroundLaunch,
+  showWhenAppActive,
   showWindowWithoutStealingFocus
-} from '../../../window/foreground-activation-policy'
+} from '../../../window/activation/foreground-activation-policy'
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
 import { watchBrowserMainWindowReadiness } from '../../guest-lifecycle/browser-main-window-readiness'
+import { recordBrowserSessionInput } from '../../guest-lifecycle/input/browser-guest-input-gesture'
 
 /** chrome.windows constants. */
 export const WINDOW_ID_NONE = -1
@@ -187,9 +189,19 @@ export function describeBrowserExtensionWindow(
   }
 }
 
+/** `whenAppActive`: an agent's window, shown without focus once the user is in Orca. */
+export type BrowserExtensionWindowPresentation = 'focused' | 'unfocused' | 'whenAppActive'
+
 /** Focus or reveal per Orca's launch policy; automated (background) runs never take the foreground. */
-export function presentBrowserExtensionWindow(window: BrowserWindow, focused: boolean): void {
-  if (focused && !isBackgroundLaunch()) {
+export function presentBrowserExtensionWindow(
+  window: BrowserWindow,
+  presentation: BrowserExtensionWindowPresentation
+): void {
+  if (presentation === 'whenAppActive') {
+    showWhenAppActive(window)
+    return
+  }
+  if (presentation === 'focused' && !isBackgroundLaunch()) {
     window.show()
     window.focus()
     return
@@ -204,7 +216,7 @@ export type BrowserExtensionPopoutOptions = {
   top?: number
   width?: number
   height?: number
-  focused: boolean
+  presentation: BrowserExtensionWindowPresentation
   state?: 'normal' | 'minimized' | 'maximized' | 'fullscreen'
 }
 
@@ -236,6 +248,7 @@ export function createBrowserExtensionPopout(
     popoutsByWindowId.delete(windowId)
     emitBrowserExtensionEvent({ session: sess }, 'windows', 'onRemoved', [windowId])
   })
+  recordBrowserSessionInput(window.webContents)
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   // Why: the popout gets no Orca guest policies, so it may only move within its extension or to web URLs.
   window.webContents.on('will-navigate', (event, url) => {
@@ -245,16 +258,19 @@ export function createBrowserExtensionPopout(
     }
   })
   window.once('ready-to-show', () => {
-    if (options.state === 'maximized') {
-      window.maximize()
-    } else if (options.state === 'fullscreen') {
-      window.setFullScreen(true)
-    }
     if (options.state === 'minimized') {
       window.minimize()
       return
     }
-    presentBrowserExtensionWindow(window, options.focused)
+    // Why not for an agent: maximize can show the window and fullscreen moves the user to a new Space.
+    if (options.presentation !== 'whenAppActive') {
+      if (options.state === 'maximized') {
+        window.maximize()
+      } else if (options.state === 'fullscreen') {
+        window.setFullScreen(true)
+      }
+    }
+    presentBrowserExtensionWindow(window, options.presentation)
   })
   window.loadURL(options.url).catch((error: unknown) => {
     console.warn('[browser-extensions] Popout failed to load:', error)

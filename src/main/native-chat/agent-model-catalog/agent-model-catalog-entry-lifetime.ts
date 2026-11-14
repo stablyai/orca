@@ -1,39 +1,23 @@
 import {
+  independentAgentModelCatalog,
+  usesModelSpecificAcpEfforts
+} from '../../../shared/agent-session/options/agent-model-catalog-ownership'
+import type { AgentModelCatalogFailures } from './agent-model-catalog-failures'
+import type { AgentModelCatalogPersistence } from './agent-model-catalog-persistence'
+import type { createAgentModelEffortDiscovery } from './agent-model-catalog-effort-discovery'
+import {
   agentModelCatalogEntryWithSuccess,
+  agentModelCatalogListingKey,
   type AgentModelCatalogEntry,
   type AgentModelCatalogSuccess,
   type AgentModelCatalogSource
 } from './agent-model-catalog-entry'
-import {
-  independentAgentModelCatalog,
-  usesModelSpecificAcpEfforts
-} from '../../../shared/agent-session/options/agent-model-catalog-ownership'
-
-export const AGENT_MODEL_CATALOG_FRESH_MS = 10 * 60_000
 
 export function agentModelCatalogEntryIsStale(
   entry: AgentModelCatalogEntry,
-  due: boolean,
-  now: number
+  due: boolean
 ): boolean {
-  return (
-    due ||
-    !entry.discovered ||
-    (independentAgentModelCatalog(entry.agent) && entry.discovered.complete !== true) ||
-    now - entry.discovered.at >=
-      (independentAgentModelCatalog(entry.agent) ? 2 * 60_000 : AGENT_MODEL_CATALOG_FRESH_MS)
-  )
-}
-
-export function pruneAgentModelCatalogPartialAttempts(
-  attempts: Map<string, { agent: string; at: number }>,
-  now: number
-): void {
-  for (const [key, attempt] of attempts) {
-    if (now - attempt.at >= 2 * 60_000) {
-      attempts.delete(key)
-    }
-  }
+  return due || !entry.discovered
 }
 
 export function recordAgentModelCatalogPartialAttempt(
@@ -55,13 +39,11 @@ export function recordAgentModelCatalogPartialAttempt(
 export function agentModelEffortProbeDue(
   entry: AgentModelCatalogEntry | undefined,
   attempts: Map<string, { agent: string; at: number }>,
-  model: string | undefined,
-  now: number
+  model: string | undefined
 ): boolean {
   if (!model || !entry || !usesModelSpecificAcpEfforts(entry.agent)) {
     return false
   }
-  pruneAgentModelCatalogPartialAttempts(attempts, now)
   return (
     entry.models.some((row) => row.id === model && row.effortsKnown === false) &&
     !attempts.has(JSON.stringify([entry.fingerprint, model]))
@@ -130,5 +112,84 @@ export function createAgentModelCatalogEntryFactory(
       success,
       source,
       now()
+    )
+}
+
+function writeAgentModelCatalogSuccess(
+  state: {
+    entries: Map<string, AgentModelCatalogEntry>
+    retiredObservations: Set<string>
+    dueEntries: Set<string>
+    failures: AgentModelCatalogFailures
+    efforts: ReturnType<typeof createAgentModelEffortDiscovery>
+    entryFromSuccess: ReturnType<typeof createAgentModelCatalogEntryFactory>
+    persistence: AgentModelCatalogPersistence | null
+    evict: () => void
+  },
+  fingerprint: string,
+  agent: string,
+  success: AgentModelCatalogSuccess,
+  source: AgentModelCatalogSource,
+  settled = true,
+  accountKnown = settled,
+  unchanged = false
+): AgentModelCatalogEntry | null {
+  const entry =
+    (unchanged ? state.entries.get(fingerprint) : undefined) ??
+    state.entryFromSuccess(fingerprint, agent, success, source)
+  if (!entry) {
+    if (settled && source === 'discovery' && independentAgentModelCatalog(agent)) {
+      state.failures.probeFailed(fingerprint, agent, new Error('agent listed no models'))
+    }
+    return null
+  }
+  state.retiredObservations.delete(fingerprint)
+  const previous = state.entries.get(fingerprint)
+  state.entries.delete(fingerprint)
+  state.entries.set(fingerprint, entry)
+  // Live listings cannot clear discovery failures or account-unavailability verdicts.
+  if (source === 'discovery') {
+    if (settled) {
+      state.dueEntries.delete(fingerprint)
+    }
+    if (accountKnown || success.unavailable) {
+      state.failures.listed(fingerprint, agent, success.origin, success.unavailable)
+    }
+  }
+  if (settled && source === 'discovery' && independentAgentModelCatalog(agent)) {
+    state.efforts.catalogAttempted(fingerprint, agent, success.complete === true)
+  }
+  state.evict()
+  // Unchanged per-turn listings need no disk write.
+  if (
+    previous !== entry &&
+    (!previous || agentModelCatalogListingKey(previous) !== agentModelCatalogListingKey(entry))
+  ) {
+    state.persistence?.save(() => [...state.entries.values()])
+  }
+  return entry
+}
+
+export function createAgentModelCatalogSuccessWriter(
+  readState: () => Parameters<typeof writeAgentModelCatalogSuccess>[0]
+) {
+  return (
+    fingerprint: string,
+    agent: string,
+    success: AgentModelCatalogSuccess,
+    source: AgentModelCatalogSource,
+    settled = true,
+    accountKnown = settled,
+    unchanged = false
+  ) =>
+    writeAgentModelCatalogSuccess(
+      readState(),
+      fingerprint,
+      agent,
+      success,
+      source,
+      settled,
+      accountKnown,
+      unchanged
     )
 }

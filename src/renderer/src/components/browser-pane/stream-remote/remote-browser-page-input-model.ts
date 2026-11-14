@@ -57,7 +57,7 @@ export const WHEEL_DELTA_LINE = 1
 export const WHEEL_DELTA_PAGE = 2
 
 export type RemoteBrowserStreamBridge = {
-  applyTabInfo: (tab: Pick<BrowserTabInfo, 'url' | 'title'>) => void
+  applyTabInfo: (tab: BrowserTabInfo) => void
   clearFrame: () => void
   handleFrameBytes: (token: RemoteBrowserStreamToken, bytes: Uint8Array<ArrayBufferLike>) => void
   closeMissingRemotePage: (remotePageId: string | null) => void

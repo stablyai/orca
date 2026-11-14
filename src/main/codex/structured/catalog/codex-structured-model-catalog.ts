@@ -8,7 +8,7 @@ import type { CodexAppServerConnection } from '../../app-server/codex-app-server
 import {
   assertStructuredAgentResolutionCurrent,
   type StructuredAgentResolutionOperation
-} from '../../../native-chat/structured-agent-command-resolution'
+} from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import { structuredAgentSessionOptionModels } from '../../../native-chat/agent-session-wire/options/structured-agent-session-option-models'
 import {
   CODEX_DEFAULT_SERVICE_TIER,
@@ -154,16 +154,17 @@ export async function listCodexModelPages(
 
 export async function fetchCodexModelCatalogListing(input: {
   connection: Pick<CodexAppServerConnection, 'request'>
-  timeoutMs?: number
+  timeoutMs?: number | null
   deadlineMs?: number
   cwd?: string
   operation?: StructuredAgentResolutionOperation
+  publish?: (listing: CodexModelCatalogListing) => void
 }): Promise<CodexModelCatalogListing> {
   const deadline = Math.min(
     input.operation?.deadline ?? Infinity,
     input.deadlineMs === undefined ? Infinity : Date.now() + input.deadlineMs
   )
-  const remainingTimeout = (): number | undefined => {
+  const remainingTimeout = (): number | null | undefined => {
     assertStructuredAgentResolutionCurrent(input.operation)
     if (!Number.isFinite(deadline)) {
       return input.timeoutMs
@@ -182,6 +183,11 @@ export async function fetchCodexModelCatalogListing(input: {
         return response
       })
   )
+  assertStructuredAgentResolutionCurrent(input.operation)
+  if (parsedModels.length === 0) {
+    return { models: [], complete: false }
+  }
+  input.publish?.({ models: parsedModels, complete: false })
   const configured = await readCodexConfiguredLaunchDefaults(
     input.connection,
     remainingTimeout(),

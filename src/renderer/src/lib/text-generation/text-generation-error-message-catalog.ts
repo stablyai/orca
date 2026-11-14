@@ -4,6 +4,8 @@ import {
   type TextGenerationFailureCode
 } from '../../../../shared/text-generation-failure-copy'
 import { AGENT_OUTPUT_ERROR_COPY } from './agent-output-error-copy'
+import { DICTATION_CLEANUP_ERROR_COPY } from './dictation-cleanup-error-copy'
+import { TEXT_ACTION_RECIPE_ERROR_COPY } from '../text-action-recipe-error-copy'
 
 export type TextGenerationCopyValues = Record<string, string | number>
 
@@ -179,78 +181,6 @@ export const TEXT_GENERATION_ERROR_COPY: Record<
       TEXT_GENERATION_FAILURE_COPY.noBranchChanges,
       values
     ),
-  commandTemplateEmptyCommitMessage: (values) =>
-    translate(
-      'sourceControl.textGeneration.errors.commandTemplateEmptyCommitMessage',
-      TEXT_GENERATION_FAILURE_COPY.commandTemplateEmptyCommitMessage,
-      values
-    ),
-  commandTemplateEmptyPullRequest: (values) =>
-    translate(
-      'sourceControl.textGeneration.errors.commandTemplateEmptyPullRequest',
-      TEXT_GENERATION_FAILURE_COPY.commandTemplateEmptyPullRequest,
-      values
-    ),
-  commandTemplateEmptyBranchName: (values) =>
-    translate(
-      'sourceControl.textGeneration.errors.commandTemplateEmptyBranchName',
-      TEXT_GENERATION_FAILURE_COPY.commandTemplateEmptyBranchName,
-      values
-    ),
-  commandTemplateEmptyChatName: (values) =>
-    translate(
-      'sourceControl.textGeneration.errors.commandTemplateEmptyChatName',
-      TEXT_GENERATION_FAILURE_COPY.commandTemplateEmptyChatName,
-      values
-    ),
-  sourceControlAgentUnsupported: (values) =>
-    translate(
-      'sourceControl.textGeneration.errors.sourceControlAgentUnsupported',
-      TEXT_GENERATION_FAILURE_COPY.sourceControlAgentUnsupported,
-      values
-    ),
-  chatNameAgentUnsupported: (values) =>
-    translate(
-      'sourceControl.textGeneration.errors.chatNameAgentUnsupported',
-      TEXT_GENERATION_FAILURE_COPY.chatNameAgentUnsupported,
-      values
-    ),
-  sourceControlCustomCommandEmpty: (values) =>
-    translate(
-      'sourceControl.textGeneration.errors.sourceControlCustomCommandEmpty',
-      TEXT_GENERATION_FAILURE_COPY.sourceControlCustomCommandEmpty,
-      values
-    ),
-  chatNameCustomCommandEmpty: (values) =>
-    translate(
-      'sourceControl.textGeneration.errors.chatNameCustomCommandEmpty',
-      TEXT_GENERATION_FAILURE_COPY.chatNameCustomCommandEmpty,
-      values
-    ),
-  agentCannotGenerateCommitMessage: (values) =>
-    translate(
-      'sourceControl.textGeneration.errors.agentCannotGenerateCommitMessage',
-      TEXT_GENERATION_FAILURE_COPY.agentCannotGenerateCommitMessage,
-      values
-    ),
-  agentCannotGeneratePullRequest: (values) =>
-    translate(
-      'sourceControl.textGeneration.errors.agentCannotGeneratePullRequest',
-      TEXT_GENERATION_FAILURE_COPY.agentCannotGeneratePullRequest,
-      values
-    ),
-  agentCannotGenerateBranchName: (values) =>
-    translate(
-      'sourceControl.textGeneration.errors.agentCannotGenerateBranchName',
-      TEXT_GENERATION_FAILURE_COPY.agentCannotGenerateBranchName,
-      values
-    ),
-  agentCannotGenerateChatName: (values) =>
-    translate(
-      'sourceControl.textGeneration.errors.agentCannotGenerateChatName',
-      TEXT_GENERATION_FAILURE_COPY.agentCannotGenerateChatName,
-      values
-    ),
   noModelForAgent: (values) =>
     translate(
       'sourceControl.textGeneration.errors.noModelForAgent',
@@ -287,5 +217,7 @@ export const TEXT_GENERATION_ERROR_COPY: Record<
       TEXT_GENERATION_FAILURE_COPY.planThinkingLevelInvalid,
       values
     ),
-  ...AGENT_OUTPUT_ERROR_COPY
+  ...TEXT_ACTION_RECIPE_ERROR_COPY,
+  ...AGENT_OUTPUT_ERROR_COPY,
+  ...DICTATION_CLEANUP_ERROR_COPY
 }

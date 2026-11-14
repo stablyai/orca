@@ -1,5 +1,4 @@
-import type { BrowserWindow } from 'electron'
-import { ipcMain } from 'electron'
+import { type BrowserWindow, ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
 import type { Store } from '../../persistence/loading-store/store'
 import type { SparsePreset } from '../../../shared/worktree/create-types'
@@ -10,8 +9,8 @@ import {
 import {
   SparsePresetValidationError,
   type SparsePresetFailure
-} from '../../../shared/worktree/sparse-preset-failure'
-import { assertWslMoveProjectWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../../shared/worktree/creation/sparse-preset-failure'
+import { assertWslMoveProjectWritable } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 
 export function registerSparsePresetHandlers(mainWindow: BrowserWindow, store: Store): void {
   ipcMain.handle('sparsePresets:list', (_event, args: { repoId: string }) => {

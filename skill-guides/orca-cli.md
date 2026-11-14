@@ -28,9 +28,9 @@ Prefer `--json` for agent-driven calls. If the CLI is missing, say so explicitly
 
 A full handoff transfers ownership to another agent or worktree, then the original agent stops. Treat requests phrased as "hand off", "handoff", "handover", "give this to another agent", "give this to another worktree", "another agent", or "another worktree" as full handoffs unless the user expects the result back ("have another agent review this and report") or explicitly asks to supervise, monitor, wait for results, track completion, coordinate a DAG, use decision gates, or manage ask/reply.
 
-A handoff is done when the new worktree id and agent handle have been reported and the prompt was delivered: the launch's `prompt.outcome` is `journaled` or `handed-to-terminal`, or, for an agent that was already running, the `terminal send` receipt reported `accepted: true` or `chat send` reported `delivery` `submitted` or `queued`. Do not wait for the receiving agent to finish.
+A handoff is done when the new worktree id and agent handle have been reported and the prompt was delivered: the launch's `prompt.outcome` is `journaled` or `handed-to-terminal`, or, for an agent that was already running, the send receipt reported `accepted: true`. Do not wait for the receiving agent to finish.
 
-Do not use `orca orchestration task-create`, `orca orchestration dispatch --inject`, or `orca orchestration check --wait` for full handoffs. `task-create` is also forbidden because it records coordinator-owned tracking state; if a task row is needed, the user asked for supervised orchestration. Deliver the prompt with the agent launch, or with `terminal send` or `chat send` for an agent that is already running.
+Do not use `orca orchestration task-create`, `orca orchestration dispatch --inject`, or `orca orchestration check --wait` for full handoffs. `task-create` is also forbidden because it records coordinator-owned tracking state; if a task row is needed, the user asked for supervised orchestration. Deliver the prompt with the agent launch, or with terminal commands for an agent that is already running.
 
 For local work in the caller’s project, omit `--repo` and `--project`. Pass one to target another project or when Orca asks you to disambiguate; do not pick a repo from a list for unambiguous same-project work. The project comes from the caller’s directory, not the project visible in the app. Paired-server calls require an explicit server-side target.
 
@@ -60,14 +60,6 @@ Existing-terminal handoff:
 
 ```text
 ORCA terminal send --terminal <handle> --text "<task brief>" --enter --json
-```
-
-Existing-chat handoff, for an agent that runs as a chat (`outcome.kind` `structured`):
-
-```text
-ORCA chat send --session <session> --text "<task brief>" --json
-ORCA chat send --session <session> --text "<message>" --wait --timeout-ms 600000 --json
-ORCA chat wait --session <session> --timeout-ms 600000 --json
 ```
 
 ## Starting agents
@@ -111,6 +103,8 @@ ORCA repo show --repo id:<repoId> --json
 ORCA repo add --path /abs/repo --json
 ORCA repo add --path /abs/folder --kind folder --json
 ORCA repo set --repo id:<repoId> --external-worktree-visibility show --json
+ORCA repo hide --repo id:<repoId> --json
+ORCA repo unhide --repo id:<repoId> --json
 ORCA repo set-base-ref --repo id:<repoId> --ref origin/main --json
 ORCA repo search-refs --repo id:<repoId> --query main --limit 10 --json
 ORCA worktree list --repo id:<repoId> --json
@@ -133,6 +127,8 @@ ORCA worktree rm --worktree id:<repoId>::<worktreePath> --force --json
 `repo add` defaults to Git. Use `--kind folder` for an ordinary directory or a parent of separate Git repositories; worktrees attached to a folder workspace appear in its Source Control panel, one section each. With `--environment`, pass an absolute path on that server.
 
 Ports: `ORCA ports --json` lists the listening ports Orca tied to the current workspace (`--worktree <selector>` for another one, `--all` for every listener on that workspace's host). Each row has `port`, `pid`, `processName`, `connectHost`, `protocol`, and `kind` (`workspace`, `container`, or `external`). Only `workspace` rows have `owner` (with `owner.confidence`: `cwd` or `command`) and, when the dev server printed one in an Orca terminal, `advertisedUrl`. Use this to find a dev server's port instead of running `lsof` yourself. If `unavailableReason` is set, the scan could not run on that host. Native folder workspaces need `--all`, because Orca does not tie ports to them. SSH workspaces opened directly from this app report `unavailableReason` for now; a workspace on a managed Orca server is scanned on that server.
+
+Workspace cleanup: `ORCA workspace cleanup preview --json` shows what the user's cleanup rules would remove now and why each other workspace stays (`rows[].evaluation`). `ORCA workspace cleanup run --json` runs the rules now, on the same path as the scheduled runner (every workspace is re-checked right before removal, nothing is forced), and prints the finished run's rows. `ORCA workspace cleanup report --json` lists recent runs; `nextRunAt` is null when no rule is on. Rules live in Orca settings; these commands never change them. Run `run` only when the user asks for cleanup.
 
 Use `repo set --external-worktree-visibility show` to show a repo's non-Orca worktrees.
 `hide` hides them; `inherit` clears the repo override and follows the global default.
@@ -169,15 +165,14 @@ Agent/setup flags:
 ORCA worktree create --name task --parent-worktree active --agent codex --prompt "hi" --json
 ORCA worktree create --name task --parent-worktree active --agent claude --setup run --json
 ORCA worktree create --name task --parent-worktree active --setup skip --json
-ORCA worktree create --name task --parent-worktree active --run-hooks --json
 ```
 
 - `--agent <id>` starts that agent with the worktree, as a chat or a terminal per the user's Chat | CLI choice for that agent (see Starting agents); `--prompt <text>` sends initial work to it, and `--model <id>` / `--effort <level>` pick its model and reasoning effort, and `--surface chat|terminal` picks chat or terminal for this launch. Known ids include `claude`, `codex`, `omp`, `pi`, `grok`, and other installed agents.
 - Repo setup or default-terminal settings may still add tabs or splits. Configured default tabs are intentional; never close one without verifying it is an unused shell.
 - Address the agent through exactly one handle: `launch.outcome.handle`. Handles are runtime-scoped: after an Orca restart or a `terminal_handle_stale` error, re-list and continue with the replacement only; never dual-send to old and replacement handles. `--agent` already started the agent, so do not start it again.
 - `--setup run|skip|inherit` controls repo setup hooks. Default is `inherit`, which follows the repo's setup policy.
-- `--run-hooks` is a legacy alias for `--setup run`; it also reveals/activates the new worktree.
-- `--activate` and `--run-hooks` reveal the new worktree. `--agent` alone stays in the background.
+- `--run-hooks` is a legacy alias for `--setup run` that also reveals the new worktree; use `--setup run` instead.
+- `--activate` and `--run-hooks` switch the user's view to the new worktree, so pass them only when the user asked to switch to it. `--agent` alone stays in the background.
 - Let Orca choose setup terminal placement from repo settings, including tab vs split behavior.
 - `worktree create` makes a new checkout. For a fresh agent in the **current** checkout, use `ORCA agent launch --agent codex --json`.
 
@@ -264,6 +259,7 @@ Terminal rules:
 - A chat tab has no terminal handle, so `terminal rename` cannot rename it. Use `ORCA chat rename --session <sessionId> --name "New Name" --json` with the `sessionId` `agent launch` printed; inside a chat, omit `--session` to rename that chat.
 - `terminal create --title` and `terminal rename` set the tab title, which `terminal list` reports under `visualLayouts`. `terminal set-pane-title` sets one pane's title, reported as `terminals[].paneTitle`. `terminals[].title` may be the tab title or the running program's own title, which agents repaint constantly, so never match on it to re-find a terminal.
 - `terminals[].agentIdentity`, when present, is only the agent type (e.g. `codex`), not a session identity, so two Codex panes share it. To find a specific agent's terminal, join `worktree ps --json` `agents[].paneKey` (`<tabId>:<leafId>`) to the `tabId` and `leafId` of a `terminal list` row to get its handle.
+- `terminal switch` changes the terminal the user is looking at, so run it only when the user asked to switch. Commands that act on one terminal take `--terminal <handle>`, so they never need a switch.
 - A paired server has no window. `terminal switch --environment <name>` moves the desktop app on this machine to that server's terminal, and reports `navigated: false` when no desktop here shows that server.
 - Use `terminal read` before `terminal send` unless the next input is obvious.
 - `terminal read` returns accumulated output with escape sequences stripped, not the rendered screen, so anything that repaints (shells, progress bars, TUIs) reads as stacked fragments. Use `--screen` whenever the answer depends on what the terminal actually shows.
@@ -280,24 +276,6 @@ Terminal rules:
 - Use `terminal wait --for tui-idle` for agent CLIs such as Claude Code, Gemini, Codex, OMP, Pi, and Grok; always pass `--timeout-ms`.
 - For long output, use cursor reads. After a limited tail preview, page from `oldestCursor`; after a cursor read, continue with `nextCursor` while `limited` is true and `nextCursor !== latestCursor`.
 - `--direction vertical` splits left/right. `--direction horizontal` splits top/bottom.
-
-## Chats
-
-Agents launched as chats are read and messaged with `chat`, not `terminal`. `chat list` names each chat's workspace, agent, state and last reply; `--session` takes the `session` it reports or the `handle` a launch returned.
-
-```text
-ORCA chat list --json
-ORCA chat list --state working --json
-ORCA chat read --session <session> --limit 10 --json
-ORCA chat send --session <session> --text "<message>" --json
-```
-
-- `chat read` returns messages, tool calls, errors, and approvals or questions; `pending: true` marks one waiting for the user.
-- `chat send` sends the text as the user's message. While the agent works, a host with a message queue holds it until the turn ends and reports `delivery: "queued"`.
-- A refused send was not delivered. Read the chat again before resending.
-- `chat send --wait` (or `chat wait`) returns when the chat settles, using `chat list` states: `settled: "done"`, or `"blocked"` on an approval or question, with the entries since the last user message; `settled: "timeout"` or `"held"` (queued message stopped or failed) exits 1. Pass `--timeout-ms`. Long or quoted text goes through `--text-file -` on stdin.
-- Paired hosts can `chat list` only; read, send and wait run on the host machine.
-- When relaying for a user from outside Orca (for example a voice or messaging assistant on the same machine), report from `chat list` and `chat read`, repeat an instruction back and get the user's confirmation before `chat send`, and send the user's words without adding instructions.
 
 <!-- host-capability: artifact-publishing -->
 

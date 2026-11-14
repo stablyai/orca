@@ -1,4 +1,4 @@
-import type { PRState } from '../../../../src/shared/github/pull-request-types'
+import type { PRState } from '../../../../src/shared/github/pull-requests/pull-request-types'
 
 export function canEditPRTitle(state: PRState | null | undefined): boolean {
   return state === 'open' || state === 'draft'

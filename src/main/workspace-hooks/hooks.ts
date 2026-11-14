@@ -7,14 +7,14 @@ import { getHookRuntimeTarget, getHookWslContext } from './hook-runtime-target'
 import { getSetupEnvVars, type HookWorkspaceIdentity } from './setup-hook-env-vars'
 import { applyHostHookOrcaCliEnv, wslHookOrcaCliEnv } from './hook-orca-cli-env'
 import { iterateLfScriptLines } from './setup-runner-script-text'
-import { promptGuardShellEnv } from '../git/command-runner/git-process-env'
+import { promptGuardShellEnv } from '../git/command-runner/git-environment/git-process-env'
 import { dropIncoherentCondaActivationEnv } from '../pty/shell-startup/conda-activation-env'
 import { toLinuxPath } from '../../shared/wsl-paths'
 import { runWslProcess } from '../wsl/execution/wsl-runner'
 import { windowsFsPath } from '../wsl/filesystem/wsl-unc-drive-fs-path'
 import type { HookRuntimeTarget } from './hook-runtime-target'
 import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
-import type { Repo } from '../../shared/repo-types'
+import type { WorkspaceHookOwner } from '../../shared/workspace-hook-owner'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/execution-host/project-execution-runtime'
 import { spawn } from 'node:child_process'
 import {
@@ -147,13 +147,16 @@ export function hasUnrecognizedOrcaYamlKeys(repoPath: string): boolean {
   }
 }
 
-export function getEffectiveHooks(repo: Repo, worktreePath?: string): OrcaHooks | null {
+export function getEffectiveHooks(
+  repo: WorkspaceHookOwner,
+  worktreePath?: string
+): OrcaHooks | null {
   const hooksRoot = worktreePath ?? repo.path
   return getEffectiveHooksFromConfig(repo, loadHooks(hooksRoot))
 }
 
 export function getSetupCommandSource(
-  repo: Repo,
+  repo: WorkspaceHookOwner,
   worktreePath?: string
 ): { source: 'yaml' | 'local' | 'both'; command: string } | null {
   const hooksRoot = worktreePath ?? repo.path
@@ -183,7 +186,7 @@ export function getSetupCommandSource(
 export function runHook(
   hookName: 'setup' | 'archive',
   cwd: string,
-  repo: Repo,
+  repo: WorkspaceHookOwner,
   hooksPath?: string,
   projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget,
   options: { identity?: HookWorkspaceIdentity; timeoutMs?: number; hooks?: OrcaHooks } = {}

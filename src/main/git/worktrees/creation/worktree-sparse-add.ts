@@ -1,5 +1,5 @@
 import { windowsLongPathGitArgs } from '../../../../shared/windows-long-path-git-args'
-import { checkoutWorkersGitArgs } from '../../command-runner/checkout-workers-git-args'
+import { checkoutWorkersGitArgs } from './checkout-workers-git-args'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { addWorktree, unsetWorktreeCreationBase } from './worktree-add'
 import type {
@@ -38,14 +38,14 @@ export async function addSparseWorktree(
       checkoutWorkersGitArgs(worktreePath, options),
       gitExecFileAsync(['sparse-checkout', 'init', '--cone'], gitExecOptions(worktreePath, options))
     ])
-    await gitExecFileAsync(
-      [...longPathArgs, 'sparse-checkout', 'set', '--', ...directories],
-      gitExecOptions(worktreePath, options)
-    )
-    await gitExecFileAsync(
-      [...checkoutWorkersArgs, ...longPathArgs, 'checkout', branch],
-      gitExecOptions(worktreePath, options)
-    )
+    await gitExecFileAsync([...longPathArgs, 'sparse-checkout', 'set', '--', ...directories], {
+      ...gitExecOptions(worktreePath, options),
+      admissionClass: 'checkout'
+    })
+    await gitExecFileAsync([...checkoutWorkersArgs, ...longPathArgs, 'checkout', branch], {
+      ...gitExecOptions(worktreePath, options),
+      admissionClass: 'checkout'
+    })
     return addResult
   } catch (error) {
     const wrapped: SparseWorktreeCreateError =

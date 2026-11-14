@@ -5,14 +5,14 @@ import type {
   CarriedSessionFields,
   DesktopLayoutView,
   LayoutContentFacts
-} from '../../../../../shared/workspace-layout/workspace-layout-beside'
-import { workspaceLayoutModelFromPublished } from '../../../../../shared/workspace-layout/workspace-layout-from-published'
-import { editorTabShowsFile } from '../../../../../shared/workspace-layout/workspace-layout-editor-tab-file'
+} from '../../../../../shared/workspace-layout/persistence/workspace-layout-beside'
+import { workspaceLayoutModelFromPublished } from '../../../../../shared/workspace-layout/published-layout/workspace-layout-from-published'
+import { editorTabShowsFile } from '../../../../../shared/workspace-layout/editor-tabs/workspace-layout-editor-tab-file'
 import type {
   PublishedTab,
   PublishedWorkspaceLayout
-} from '../../../../../shared/workspace-layout/workspace-layout-published'
-import { saveWorkspaceLayout } from '../../../../../shared/workspace-layout/workspace-layout-save'
+} from '../../../../../shared/workspace-layout/published-layout/workspace-layout-published'
+import { saveWorkspaceLayout } from '../../../../../shared/workspace-layout/persistence/workspace-layout-save'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import { projectHydratedBrowserSession } from '../../slices/browser/hydration/browser-hydration-state'
 import { buildHydratedEditorSessionState } from '../../slices/editor/hydration/hydrated-editor-session-state'
@@ -25,9 +25,9 @@ import type { EditorTabView } from '../../../../../shared/editor-tab-view-types'
 import { migrateHydratedEditorTabsAndGroups } from '../../slices/editor/file-ids/hydrated-editor-file-ids'
 import { buildHydratedTabState } from '../../slices/tabs/tabs-hydration'
 import { buildByIdIndex } from '../../../../../shared/first-row-by-id-index'
-import { restoreActiveTabIdByWorktree } from '../../terminals/workspace-terminal-active-tabs'
-import { buildWorkspaceTerminalLayoutPlan } from '../../terminals/workspace-terminal-layout-plan'
-import { buildWorkspaceTerminalRowPlan } from '../../terminals/workspace-terminal-row-plan'
+import { restoreActiveTabIdByWorktree } from '../../terminals/hydration/workspace-terminal-active-tabs'
+import { buildWorkspaceTerminalLayoutPlan } from '../../terminals/hydration/workspace-terminal-layout-plan'
+import { buildWorkspaceTerminalRowPlan } from '../../terminals/hydration/workspace-terminal-row-plan'
 import type { AppState } from '../../types'
 import type { WorkspaceLayoutCache } from '../workspace-layout-cache'
 

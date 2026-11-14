@@ -8,6 +8,7 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import type { DetectedWorktreeListResult, Worktree } from '../../../../../../shared/worktree/types'
 import { getNewExternalWorktreeInboxWorktrees } from '../../../../../../shared/external-worktree-inbox'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
+import { isRepoHidden } from '../../../../../../shared/hidden-projects'
 import type { NewExternalWorktreesInboxCandidate } from '../../../../../../shared/sidebar-list/row-types'
 
 export function buildNewExternalWorktreesInboxCandidates(args: {
@@ -30,7 +31,8 @@ export function buildNewExternalWorktreesInboxCandidates(args: {
     if (visibleRepoIds && !visibleRepoIds.has(repo.id)) {
       continue
     }
-    if (!isGitRepoKind(repo)) {
+    // A hidden project draws nothing in the sidebar, notices included.
+    if (!isGitRepoKind(repo) || isRepoHidden(repo)) {
       continue
     }
     const inboxWorktrees = getNewExternalWorktreeInboxWorktrees(

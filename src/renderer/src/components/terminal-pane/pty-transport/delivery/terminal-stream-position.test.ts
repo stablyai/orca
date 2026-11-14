@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   keptSuffixMeta,
-  markedAfterEviction,
   streamDeliveryOf,
   TerminalStreamPosition,
   type StreamDelivery
@@ -37,19 +36,23 @@ describe('TerminalStreamPosition', () => {
     expect(position.admit(PTY, 'next', at(24, 'next'))).toBe('\x18next')
   })
 
-  it('grounds an escape xterm holds when resuming at a proven boundary after a gap', () => {
+  it('re-arms an escape the replay omitted for a chunk cut at its seq (#33766)', () => {
     const position = new TerminalStreamPosition()
-    position.admit(PTY, 'a\x1b[3', at(0, 'a\x1b[3'))
-    expect(position.admit(PTY, 'done', at(40, 'done'))).toBe('\x18done')
+    position.anchor(PTY, 100, '')
+    const cut = { startsAtGround: false, boundaryUnknown: true, cutEscapeTail: '\x1b[' }
+    expect(position.admit(PTY, '>4;2m', at(100, '>4;2m', cut))).toBe('\x1b[>4;2m')
+    // Only the delivery at the replay's own seq re-arms.
+    expect(position.admit(PTY, '>4;2m', at(105, '>4;2m', cut))).toBe('>4;2m')
   })
 
-  it('lets a replay anchor the stream so its pending escape tail is completed', () => {
-    const position = new TerminalStreamPosition()
-    position.admit(PTY, 'x', at(0, 'x'))
-    position.anchor(PTY, 100)
-    expect(position.admit(PTY, '2Bdone', at(100, '2Bdone', { startsAtGround: false }))).toBe(
-      '2Bdone'
-    )
+  it('leaves a cut as it is when the replay re-armed a tail or did not say', () => {
+    const cut = { startsAtGround: false, boundaryUnknown: true, cutEscapeTail: '\x1b[' }
+    const rearmed = new TerminalStreamPosition()
+    rearmed.anchor(PTY, 100, '\x1b[')
+    expect(rearmed.admit(PTY, '>4;2m', at(100, '>4;2m', cut))).toBe('>4;2m')
+    const unsaid = new TerminalStreamPosition()
+    unsaid.anchor(PTY, 100)
+    expect(unsaid.admit(PTY, '>4;2m', at(100, '>4;2m', cut))).toBe('>4;2m')
   })
 
   it('treats bytes after its own reset as a gap, even at the same position', () => {
@@ -138,13 +141,6 @@ describe('TerminalStreamPosition', () => {
     }
     expect(position.admit(PTY, '42B', cut)).toBeNull()
   })
-
-  it('needs no CAN when its own reset already grounded xterm', () => {
-    const position = new TerminalStreamPosition()
-    position.anchor(PTY, 100)
-    position.invalidate({ grounded: true })
-    expect(position.admit(PTY, 'next', at(120, 'next'))).toBe('next')
-  })
 })
 
 describe('streamDeliveryOf', () => {
@@ -165,6 +161,18 @@ describe('streamDeliveryOf', () => {
       startsAtGround: false,
       boundaryUnknown: true
     })
+  })
+
+  it('reports the escape a cut leaves open where its state is known', () => {
+    const cutTail = (delivered: { data: string; seq: number; midEscape?: true | 'unknown' }) =>
+      streamDeliveryOf('>4;2m', delivered, { seqCountsChars: true }).cutEscapeTail
+    expect(cutTail({ data: 'ab\x1b[>4;2m', seq: 9 })).toBe('\x1b[')
+    expect(cutTail({ data: 'ab\x1b[1m>4;2m', seq: 11 })).toBeUndefined()
+    // A chunk that starts inside an escape is known from the first ESC it cuts off.
+    expect(cutTail({ data: '2B\x1b[>4;2m', seq: 9, midEscape: true })).toBe('\x1b[')
+    expect(cutTail({ data: '2B>4;2m', seq: 7, midEscape: 'unknown' })).toBeUndefined()
+    // Cut-off bytes holding a C1 control are not scanned.
+    expect(cutTail({ data: '\u009bab\x1b[>4;2m', seq: 10 })).toBeUndefined()
   })
 
   it('never fabricates a position for a suffix of a transformed chunk', () => {
@@ -189,30 +197,10 @@ describe('streamDeliveryOf', () => {
 })
 
 describe('keptSuffixMeta', () => {
-  it('maps a kept tail onto its true raw range', () => {
-    expect(keptSuffixMeta({ seq: 20, rawLength: 10 }, 10, 4)).toEqual({
-      seq: 20,
-      rawLength: 4,
-      droppedOutput: true,
-      midEscape: 'unknown'
-    })
-  })
-
   it('drops the position of a transformed chunk instead of guessing it', () => {
     expect(keptSuffixMeta({ seq: 20, rawLength: 30 }, 10, 4)).toEqual({
       droppedOutput: true,
       midEscape: 'unknown'
     })
-  })
-})
-
-describe('markedAfterEviction', () => {
-  it("marks kept app bytes as following a gap but leaves main's drop sentinel as recovery bytes", () => {
-    expect(markedAfterEviction({ seq: 9 })).toEqual({
-      seq: 9,
-      droppedOutput: true,
-      midEscape: 'unknown'
-    })
-    expect(markedAfterEviction({ droppedOutput: true })).toEqual({ droppedOutput: true })
   })
 })

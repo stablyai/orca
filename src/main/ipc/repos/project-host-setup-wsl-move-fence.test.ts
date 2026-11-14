@@ -12,7 +12,7 @@ import {
   WslMoveProjectFencedError,
   loadWslMoveFence,
   resetWslMoveFenceForTests
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { RuntimeProjectHostSetupController } from '../../runtime/repositories/runtime-project-host-setup-controller'
 import { RuntimeRepositoryIssueCommand } from '../../runtime/repositories/runtime-repository-issue-command'
 import { RuntimeRepositorySettingsController } from '../../runtime/repositories/runtime-repository-settings-controller'

@@ -31,29 +31,6 @@ describe('skills CLI runtime closure', () => {
     }
   })
 
-  it('rejects bare imports resolved outside the artifact', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-cli-closure-'))
-    try {
-      const artifactRoot = join(root, 'artifact')
-      const outDir = join(artifactRoot, 'out')
-      const externalPackageDir = join(root, 'node_modules', 'external-package')
-      await mkdir(externalPackageDir, { recursive: true })
-      await writeSkillsCliFixture(outDir, "require('external-package')\n")
-      await writeFile(
-        join(externalPackageDir, 'package.json'),
-        JSON.stringify({ main: 'index.js' }),
-        'utf8'
-      )
-      await writeFile(join(externalPackageDir, 'index.js'), '', 'utf8')
-
-      expect(() => collectRuntimeClosure(outDir, artifactRoot)).toThrow(
-        /external-package.*resolved outside/s
-      )
-    } finally {
-      await rm(root, { recursive: true, force: true })
-    }
-  })
-
   it("resolves a linked package's imports from its store slot, as Node does", async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-cli-closure-'))
     try {

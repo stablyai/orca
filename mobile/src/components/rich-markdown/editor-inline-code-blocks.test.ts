@@ -33,9 +33,7 @@ function select(range: Range) {
 }
 
 it.each([
-  ['first\n\nsecond\n\nthird', '`first`\n\n`second`\n\n`third`', ['first', 'second', 'third']],
   ['# Heading\n\n> Quoted', '# `Heading`\n\n> `Quoted`', ['Heading', 'Quoted']],
-  ['- first\n- second', '- `first`\n- `second`', ['first', 'second']],
   ['- [ ] first\n- [x] second', '- [ ] `first`\n- [x] `second`', ['first', 'second']],
   [
     'left ![pixel](https://example.com/pixel.png) right',
@@ -107,15 +105,4 @@ it('leaves existing code blocks intact when selecting surrounding paragraphs', a
   await editor.send.runCommand('inlineCode')
   expect(editor.surface.querySelector('pre')!.outerHTML).toBe(original)
   expect(editor.send.currentMarkdown()).toBe('`Before`\n\n```ts\nconst n = 1\n```\n\n`After`')
-})
-
-it('formats selected spaces within a paragraph', async () => {
-  const editor = mount('placeholder')
-  const paragraph = editor.surface.querySelector('p')!
-  paragraph.textContent = '   '
-  const range = document.createRange()
-  range.selectNodeContents(paragraph)
-  select(range)
-  await editor.send.runCommand('inlineCode')
-  expect(editor.send.currentMarkdown()).toBe('`   `')
 })

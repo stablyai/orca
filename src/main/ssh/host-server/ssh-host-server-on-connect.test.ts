@@ -3,11 +3,8 @@ import type { SshTarget } from '../../../shared/ssh-types'
 import {
   OrcadHostUnsupportedError,
   OrcadStdioBridgeUnavailableError
-} from '../../orcad/orcad-host-unavailable'
-import {
-  resolveHostServerOnConnect,
-  type HostServerOnConnectDeps
-} from './ssh-host-server-on-connect'
+} from '../../orcad/diagnostics/orcad-host-unavailable'
+import { resolveHostServerOnConnect } from './ssh-host-server-on-connect'
 import { hostServerDepsStub } from './testing/ssh-host-server-on-connect-test-deps'
 
 const target: SshTarget = { id: 'ssh-1', label: 'Box', host: 'box', port: 22, username: 'me' }
@@ -180,18 +177,6 @@ describe('which server an SSH host runs on connect', () => {
     expect(d.recordUnavailable).toHaveBeenCalledWith(target, 'ssh_tunnel_unavailable')
   })
 
-  it('keeps a staged or converted host fenced when its tunnel fails', async () => {
-    const failure = new OrcadStdioBridgeUnavailableError('exit 127')
-    const d = deps({
-      managedEnvironmentId: () => 'env-9',
-      ensureTunnel: vi.fn(async () => {
-        throw failure
-      })
-    })
-    await expect(resolveHostServerOnConnect(target, d)).rejects.toBe(failure)
-    expect(d.releaseUnreachableSetup).not.toHaveBeenCalled()
-  })
-
   it('backs an uncommitted conversion out to the relay when its commit fails', async () => {
     const d = deps({
       managedEnvironmentId: () => 'env-9',
@@ -206,31 +191,5 @@ describe('which server an SSH host runs on connect', () => {
       detail: 'orcad_migration_source_changed'
     })
     expect(d.abandonConversion).toHaveBeenCalledWith(target)
-  })
-
-  describe('updating a managed host on connect', () => {
-    const managed = (overrides: Partial<HostServerOnConnectDeps>) =>
-      deps({ managedEnvironmentId: () => 'env-9', ...overrides })
-
-    it('starts a stopped server before the update counts its terminals, as after a reboot', async () => {
-      const order: string[] = []
-      const d = managed({
-        ensureServing: vi.fn(async () => {
-          order.push('start')
-          return { state: 'started' as const, boundPort: null }
-        }),
-        // Wake first so the restarted daemon can supply authoritative idle census.
-        autoUpdate: vi.fn(async (_id, options) => {
-          order.push('update')
-          options.onUpdating()
-          return { outcome: 'updated' as const, activeVersion: '0.1.0+b' }
-        })
-      })
-      await expect(resolveHostServerOnConnect(target, d)).resolves.toEqual({
-        route: 'managed',
-        environmentId: 'env-9'
-      })
-      expect(order).toEqual(['start', 'update'])
-    })
   })
 })

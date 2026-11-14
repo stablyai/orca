@@ -15,7 +15,7 @@ import {
   shouldWriteManualOrderForGroupDrop
 } from './worktree-manual-order'
 import { buildWorkspaceKanbanSidebarDropUpdates } from '../../workspace-board/drag/workspace-kanban-sidebar-drop'
-import type { SortBy } from '../../../../../../shared/sidebar-list/smart-sort'
+import type { WorkspaceSortBy as SortBy } from '../../../../../../shared/workspace-view/workspace-row-sort'
 import { switchSortToManualAfterDrop } from '../listing/manual-sort-switch-toast'
 import { isWorkspaceStatusAllowedOnHost } from '@/store/workspaces/status/host-workspace-status-columns'
 import type { WorktreeReorderArgs, WorktreeStatusDropAtIndexArgs } from './drop-commit-context'

@@ -1,4 +1,5 @@
 import type { AppState } from '../../types'
+import type { PtyExecutionHost } from '../../../../../shared/terminal/pty/lifecycle/terminal-execution-host'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext,
@@ -16,6 +17,7 @@ import type {
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 
 export type RetainedAgentEntry = {
+  executionHostId?: PtyExecutionHost
   entry: AgentStatusEntry
   worktreeId: string
   /** Snapshot of the tab at retention time; kept full (not just an id) because the tab may be gone from `tabsByWorktree` by render time. */
@@ -106,6 +108,7 @@ export type AgentStatusMetadata = {
   /** Structured status rows remain fresh while the host owns the session; cleared on feed loss. */
   structuredHostOwned?: true
   providerSession?: AgentProviderSessionMetadata
+  orcaSessionId?: string | null
   /** Null is a host statement that no Orca launch runs; absent says nothing. */
   launchConfig?: SleepingAgentLaunchConfig | null
   launchToken?: string

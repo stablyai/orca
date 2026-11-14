@@ -2,12 +2,12 @@ import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-va
 import { sessionFileExecutionNamespace } from '../../../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 
 import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
-import { throwIfAiVaultScanCancelled } from '../../ai-vault-scan-cancellation'
-import { sessionSortTime } from '../../session-scanner-accumulator'
+import { throwIfAiVaultScanCancelled } from '../../scan-lifecycle/ai-vault-scan-cancellation'
+import { sessionSortTime } from '../../parsing/session-scanner-accumulator'
 
 // Bridging and backfill expose one rollout through multiple roots; list only its canonical alias (#7521).
 
-// Rollout names narrow candidates; inode or parsed session ID must still prove identity.
+// Legacy names require content proof; canonical names encode immutable rollout identity.
 const CODEX_ROLLOUT_FILE_NAME_PATTERN = /^rollout-.+\.jsonl(?:\.zst)?$/
 
 // Hosts can scan foreign-platform paths, so handle both separators independently of node:path.
@@ -24,6 +24,25 @@ function codexRolloutAliasName(fileName: string): string {
 function codexLiveAliasBeats(filePath: string, bestPath: string): boolean | null {
   const archived = filePath.endsWith('.zst')
   return archived === bestPath.endsWith('.zst') ? null : !archived
+}
+
+const UUID = '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+const CANONICAL_ROLLOUT = new RegExp(
+  `^rollout-(\\d{4}-\\d{2}-\\d{2})T(\\d{2})-(\\d{2})-(\\d{2})-${UUID}(?:_${UUID})?\\.jsonl$`
+)
+
+export function canonicalCodexRolloutKey(filePath: string): string | null {
+  const name = codexRolloutAliasName(lastPathSegment(filePath))
+  const match = CANONICAL_ROLLOUT.exec(name)
+  if (!match) {
+    return null
+  }
+  const iso = `${match[1]}T${match[2]}:${match[3]}:${match[4]}.000Z`
+  const time = Date.parse(iso)
+  if (!Number.isFinite(time) || new Date(time).toISOString() !== iso) {
+    return null
+  }
+  return `${sessionFileExecutionNamespace(filePath)}\0${name}`
 }
 
 export function codexRolloutHardlinkIdentity(file: {
@@ -48,7 +67,7 @@ export function codexRolloutHardlinkIdentity(file: {
 }
 
 /** Prefer the real host home, then managed homes, so resume uses the canonical authentication lane. */
-function codexSessionRootRank(codexHome: string | null): number {
+export function codexSessionRootRank(codexHome: string | null): number {
   if (codexHome === null) {
     return 0
   }

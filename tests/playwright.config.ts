@@ -1,4 +1,5 @@
 import { defineConfig } from '@stablyai/playwright-test'
+import { isAgent } from 'std-env'
 import { resolveBuildSourceCommit } from '../config/scripts/build-identity/build-source-commit.mjs'
 
 // Run ORCA_BACKGROUND_LAUNCH=1 pnpm run test:e2e to build/run; SKIP_BUILD=1 reuses the current E2E build.
@@ -19,7 +20,8 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   forbidOnly: !!process.env.CI,
   retries: 0,
-  reporter: 'list',
+  // Agents read piped output, where 'line' still prints every test; 'dot' keeps full failure details.
+  reporter: isAgent ? 'dot' : 'list',
   use: {
     // Disable retries so CI retains the first failure’s reliable trace.
     trace: 'retain-on-failure',

@@ -14,8 +14,8 @@ import type {
 } from '../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../browser-error'
 import {
-  parseShellArgs,
-  stripAgentBrowserTargetArgs
+  assertAgentBrowserPassthroughStaysOnPage,
+  parseShellArgs
 } from './protocol/agent-browser-passthrough-arguments'
 import { AgentBrowserBridgeInteractionCommands } from './commands/agent-browser-bridge-interaction-commands'
 import { sendGuestCdpCommand } from '../cdp/debugger/guest-cdp-command'
@@ -272,13 +272,14 @@ export class AgentBrowserBridge extends AgentBrowserBridgeInteractionCommands {
   }
 
   async exec(command: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
-    // Passthrough arguments must not override Orca's selected page or CDP proxy.
-    const args = stripAgentBrowserTargetArgs(parseShellArgs(command.trim()))
+    const args = parseShellArgs(command.trim())
+    assertAgentBrowserPassthroughStaysOnPage(args)
     return this.enqueueTargetedCommand(
       worktreeId,
       browserPageId,
       async (sessionName) => await this.execAgentBrowser(sessionName, args, { cliArgv: true }),
-      { elements: passthroughElementArgs(args) }
+      // Raw commands and batches can click or press keys too.
+      { elements: passthroughElementArgs(args), blockFileChooser: true }
     )
   }
 }

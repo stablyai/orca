@@ -17,7 +17,7 @@ import {
   isSingleHostProjectHeader,
   type GroupHeaderRow
 } from '../../../../../../shared/sidebar-list/row-types'
-import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/group-keys'
+import { PINNED_GROUP_KEY } from '../../../../../../shared/sidebar-list/sections/group-keys'
 import '../../workspace-status/presentation/workspace-status'
 import { getWorkspaceStatusFromGroupKey } from '../../../../../../shared/workspace-statuses'
 import { translateWorkspaceStatusHeaderLabel } from '../../workspace-board-status-label'
@@ -382,6 +382,7 @@ export function renderWorktreeSectionHeaderRow(
             {row.repo && ctx.groupBy === 'repo' ? (
               <RepoHeaderProjectActionsMenu
                 repo={row.repo}
+                hostRepos={row.hostRepos}
                 label={label}
                 projectGroups={ctx.projectGroups}
                 actions={ctx.projectActions}

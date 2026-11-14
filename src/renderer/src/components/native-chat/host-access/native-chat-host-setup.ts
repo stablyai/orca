@@ -58,6 +58,8 @@ type NativeChatInstall = {
 export type NativeChatHostSetup = {
   signIn: NativeChatSignIn | null
   install: NativeChatInstall | null
+  /** The chat's host, so setup links open Settings on it. */
+  host?: RuntimeClientTarget
 }
 
 export const NativeChatHostSetupContext = createContext<NativeChatHostSetup | null>(null)
@@ -229,8 +231,8 @@ function useNativeChatInstall(
     setRechecking(true)
     void (
       environmentId
-        ? state.refreshRuntimeDetectedAgents(environmentId, worktreeId)
-        : state.refreshDetectedAgents(worktreeId, { wakeWslDistro: true })
+        ? state.refreshRuntimeDetectedAgents(environmentId, worktreeId, { userInitiated: true })
+        : state.refreshDetectedAgents(worktreeId, { wakeWslDistro: true, userInitiated: true })
     )
       .then(() => {
         // Refreshes can resolve with cached agents after failure; check their explicit outcome.
@@ -277,5 +279,6 @@ export function useNativeChatHostSetup(input: NativeChatHostSetupInput): NativeC
   const terminal = useNativeChatHostCommandTerminal(input)
   const signIn = useNativeChatSignIn(input, terminal)
   const install = useNativeChatInstall(input, terminal)
-  return useMemo(() => ({ signIn, install }), [signIn, install])
+  const { target } = input
+  return useMemo(() => ({ signIn, install, host: target }), [signIn, install, target])
 }

@@ -32,6 +32,18 @@ export const AGENT_SESSION_SETUP_COMMANDS = [
   { agent: 'opencode2', loginCommand: ['opencode2', 'auth', 'login'] },
   { agent: 'pi', loginCommand: ['pi'], slashCommand: '/login' },
   { agent: 'omp', loginCommand: ['omp'], slashCommand: '/login' },
+  {
+    agent: 'copilot',
+    loginCommand: ['copilot', 'login'],
+    remoteLoginCommand: ['copilot', 'login', '--device-code'],
+    installCommand: 'curl -fsSL https://gh.io/copilot-install | bash'
+  },
+  // `kimi login` is already a device-code login.
+  {
+    agent: 'kimi',
+    loginCommand: ['kimi', 'login'],
+    installCommand: 'curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash'
+  },
   // An `agy` login does not sign its chats in: they keep their own sign-in.
   { agent: 'antigravity', loginCommand: [] },
   // Why the TUI: bare `mcode login` heads straight to the cn OAuth flow; the TUI's /login picks the account region.
