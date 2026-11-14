@@ -97,8 +97,13 @@ export class SessionSearchInventoryStorage extends SessionSearchInventoryMutatio
       ? new SessionSearchInventoryObservation(this, Number(row.id), String(row.root))
       : undefined
   }
-  readPhysical(table: SessionSearchPhysicalTable, source: number, path: string) {
-    return (this.page ?? new SessionSearchInventoryPage(this.db)).read(table, source, path)
+  readPhysical<T>(
+    table: SessionSearchPhysicalTable,
+    source: number,
+    path: string,
+    decode: (row: Record<string, unknown>) => T
+  ): T {
+    return (this.page ?? new SessionSearchInventoryPage(this.db)).read(table, source, path, decode)
   }
   writePhysical(
     table: SessionSearchPhysicalTable,

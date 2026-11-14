@@ -1,3 +1,4 @@
+import type { SessionSearchAuthorityPhase } from './session-search-inventory-footprint'
 import { dirname } from 'node:path'
 import type SyncDatabase from '../sqlite/sync-database'
 import type { FileWithMtime } from '../ai-vault/session-scanner-types'
@@ -19,14 +20,38 @@ export abstract class SessionSearchInventoryMutations {
     table: SessionSearchPhysicalTable,
     source: number,
     paths: Iterable<string>
+  ): boolean {
+    return this.page?.prefetch(table, source, paths) ?? false
+  }
+  prefetchFallback(scope: string, paths: Iterable<string>): boolean {
+    return this.page?.prefetchFallback(scope, paths) ?? false
+  }
+  inventoryRoom() {
+    return this.page?.room() ?? { rows: 0, bytes: 0 }
+  }
+  beginWorkingSet(
+    growth: Map<string, number>,
+    source: number,
+    epochPaths: readonly string[],
+    phase: SessionSearchAuthorityPhase,
+    paths: readonly string[],
+    scalar: boolean
   ): void {
-    this.page?.prefetch(table, source, paths)
+    this.page?.beginWorkingSet(growth, source, epochPaths, phase, paths, scalar)
   }
-  prefetchFallback(scope: string, paths: Iterable<string>): void {
-    this.page?.prefetchFallback(scope, paths)
+  releaseTransients(): void {
+    this.page?.releaseTransients()
   }
-  fallbackValue(scope: string, path: string, read: () => SessionSearchValueRow | undefined) {
-    return this.page ? this.page.fallbackValue(scope, path, read) : read()
+  releaseFacts(): void {
+    this.page?.releaseFacts()
+  }
+  fallbackValue(
+    scope: string,
+    path: string,
+    read: () => SessionSearchValueRow | undefined,
+    held = true
+  ) {
+    return this.page ? this.page.fallbackValue(scope, path, read, held) : read()
   }
   forgetFallback(scope: string, path: string): void {
     this.page?.forgetFallback(scope, path)

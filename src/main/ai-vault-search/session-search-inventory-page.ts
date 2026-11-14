@@ -1,3 +1,8 @@
+import { SessionSearchInventoryCapacity } from './session-search-inventory-capacity'
+import {
+  inventoryPhysicalColumns,
+  type SessionSearchAuthorityPhase
+} from './session-search-inventory-footprint'
 import {
   flushSessionSearchPhysical,
   flushSessionSearchEpochs
@@ -15,8 +20,7 @@ import {
   type SessionSearchInventoryFloor
 } from './session-search-inventory-floor'
 import {
-  decodeSessionSearchInventoryValue,
-  sessionSearchInventoryColumns,
+  sessionSearchPhysicalValue,
   type SessionSearchInventoryMember
 } from './session-search-inventory-relation'
 
@@ -38,19 +42,6 @@ export type SessionSearchPhysicalEpoch = {
   path?: string
   cutoff?: number
 }
-const projections = Object.fromEntries(
-  Object.entries(physicalMembers).map(([table, members]) => [
-    table,
-    [
-      ...new Set([
-        'parent',
-        ...members.flatMap((member) => sessionSearchInventoryColumns(member).split(',')),
-        ...(table === 'search_inventory_activity' ? ['reclaimable'] : [])
-      ])
-    ].join(',')
-  ])
-)
-
 /** Only physical facts and final column patches survive within synchronous acceptance. */
 export class SessionSearchInventoryPage {
   private readonly sources = new Map<string, Record<string, unknown> | undefined>()
@@ -60,52 +51,55 @@ export class SessionSearchInventoryPage {
     { table: SessionSearchPhysicalTable } & SessionSearchPhysicalMutation
   >()
   private readonly epochs = new Map<string, SessionSearchPhysicalEpoch>()
-  private readonly sizes = new Map<string, number>()
+  private readonly capacity = new SessionSearchInventoryCapacity()
   private readonly fallback = new Map<string, SessionSearchValueRow | undefined>()
   private readonly floors = new Map<number, SessionSearchInventoryFloor>()
-  private bytes = 1024
-  private queryBytes = 0
-  private queryRows = 0
   constructor(private readonly db: SyncDatabase) {}
 
+  room() {
+    return this.capacity.room()
+  }
+  beginWorkingSet(
+    growth: Map<string, number>,
+    source: number,
+    epochPaths: readonly string[],
+    phase: SessionSearchAuthorityPhase,
+    paths: readonly string[],
+    scalar: boolean
+  ): void {
+    this.capacity.beginWorkingSet(growth, source, epochPaths, phase, paths, scalar)
+  }
   private retain(key: string, value: unknown): boolean {
-    let retained = true
-    // Pending patches reserve their parameter tuples and encoded SQL payload too.
-    const copies = key.startsWith('write:') || key.startsWith('epoch:') ? 3 : 1
-    const bytes = (JSON.stringify([key, value]).length * 2 + 64) * copies
-    const previous = this.sizes.get(key) ?? 0
-    if (
-      this.sizes.size &&
-      (this.sizes.size + this.queryRows + Number(!previous) > 256 ||
-        this.bytes - previous + bytes > 256 * 1024)
-    ) {
+    return this.capacity.retain(key, value, () => {
       this.flush()
-      this.clear()
-      retained = false
-    }
-    const current = this.sizes.get(key) ?? 0
-    this.sizes.set(key, bytes)
-    this.bytes += bytes - current
-    return retained
+      if (!this.capacity.phase) {
+        this.releaseFacts()
+      }
+    })
   }
   fallbackValue(
     scope: string,
     path: string,
-    read: () => SessionSearchValueRow | undefined
+    read: () => SessionSearchValueRow | undefined,
+    held = true
   ): SessionSearchValueRow | undefined {
     const key = `fallback:${scope}:${path}`
     if (!this.fallback.has(key)) {
       const row = read()
-      this.retain(key, row)
-      this.fallback.set(key, row)
+      if (this.retain(key, row)) {
+        this.fallback.set(key, row)
+      } else {
+        this.fallback.delete(key)
+        this.capacity.transient(held ? key : 'fallback-extra', row)
+        return row
+      }
     }
     return this.fallback.get(key)
   }
   forgetFallback(scope: string, path: string): void {
     const key = `fallback:${scope}:${path}`
     this.fallback.delete(key)
-    this.bytes -= this.sizes.get(key) ?? 0
-    this.sizes.delete(key)
+    this.capacity.delete(key)
   }
   peekFallback(scope: string, path: string): SessionSearchValueRow | undefined {
     return this.fallback.get(`fallback:${scope}:${path}`)
@@ -118,8 +112,13 @@ export class SessionSearchInventoryPage {
     const next = changeSessionSearchInventoryFloor(floor, epoch, cutoff)
     if (!next) {
       this.floors.delete(source)
-    } else if (next !== floor && this.retain(`floor:${source}`, next)) {
-      this.floors.set(source, next)
+      this.capacity.delete(`floor:${source}`)
+    } else if (next !== floor) {
+      if (this.retain(`floor:${source}`, next)) {
+        this.floors.set(source, next)
+      } else {
+        this.floors.delete(source)
+      }
     }
   }
   floor(source: number, read: () => SessionSearchInventoryFloor): number {
@@ -131,6 +130,9 @@ export class SessionSearchInventoryPage {
     if (this.retain(`floor:${source}`, value)) {
       this.floors.set(source, value)
     }
+    if (!this.floors.has(source)) {
+      this.capacity.transient(`floor:${source}`, value)
+    }
     return value.cutoff
   }
   source(scope: string): Record<string, unknown> | undefined {
@@ -138,71 +140,94 @@ export class SessionSearchInventoryPage {
       const row = this.db
         .prepare('SELECT id,root FROM temp.search_inventory_sources WHERE scope=?')
         .get(scope)
-      this.retain(`source:${scope}`, row)
-      this.sources.set(scope, row)
+      if (this.retain(`source:${scope}`, row)) {
+        this.sources.set(scope, row)
+      } else {
+        this.capacity.transient(`source:${scope}`, row)
+        return row
+      }
     }
     return this.sources.get(scope)
   }
-  read(table: SessionSearchPhysicalTable, source: number, path: string): Record<string, unknown> {
+  read<T>(
+    table: SessionSearchPhysicalTable,
+    source: number,
+    path: string,
+    decode: (row: Record<string, unknown>) => T
+  ): T {
     const key = `${table}:${source}:${path}`
     let row = this.physical.get(key)
     if (!row) {
       row = this.db
-        .prepare(`SELECT ${projections[table]} FROM temp.${table} WHERE source=? AND path=?`)
+        .prepare(
+          `SELECT ${inventoryPhysicalColumns(table)} FROM temp.${table} WHERE source=? AND path=?`
+        )
         .get(source, path) ?? { path, parent: dirname(path) }
       const pending = this.pending.get(key)
       if (pending) {
         Object.assign(row, { parent: pending.parent }, pending.fields)
       }
-      this.retain(`fact:${key}`, row)
-      this.physical.set(key, row)
+      if (this.retain(`fact:${key}`, row)) {
+        this.physical.set(key, row)
+      } else {
+        this.physical.delete(key)
+      }
     }
-    return row
+    return this.physical.has(key) ? decode(row) : this.capacity.projection.borrow(row, decode)
   }
-  prefetch(table: SessionSearchPhysicalTable, source: number, paths: Iterable<string>): void {
+  releaseTransients(): void {
+    this.capacity.releaseTransients()
+  }
+  prefetch(table: SessionSearchPhysicalTable, source: number, paths: Iterable<string>): boolean {
     const key = (path: string) => `${table}:${source}:${path}`
-    for (const { path, row } of projectSessionSearchPhysical(
-      this.db,
-      table,
-      projections[table],
-      source,
-      paths,
-      (path) => this.physical.has(key(path)),
-      (payload, rows) => this.reserveQuery(payload, rows)
-    )) {
-      const pending = this.pending.get(key(path))
-      const value = { ...row, path, parent: row.parent ?? dirname(path), ...pending?.fields }
-      this.retain(`fact:${key(path)}`, value)
-      this.physical.set(key(path), value)
+    this.capacity.projection.projectionComplete = true
+    try {
+      for (const { path, row } of projectSessionSearchPhysical(
+        this.db,
+        table,
+        inventoryPhysicalColumns(table),
+        source,
+        paths,
+        (path) => this.physical.has(key(path)),
+        (payload, rows) => this.capacity.projection.reserveQuery(payload, rows),
+        (row) => this.capacity.projection.reserveQueryRow(row)
+      )) {
+        const pending = this.pending.get(key(path))
+        const value = { ...row, path, parent: row.parent ?? dirname(path), ...pending?.fields }
+        if (!this.retain(`fact:${key(path)}`, value)) {
+          this.physical.delete(key(path))
+          this.capacity.projection.refusedProjection(value)
+          return false
+        }
+        this.physical.set(key(path), value)
+      }
+      return this.capacity.projection.projectionComplete
+    } finally {
+      this.capacity.projection.releaseQuery()
     }
-    this.releaseQuery()
   }
-  prefetchFallback(scope: string, paths: Iterable<string>): void {
+  prefetchFallback(scope: string, paths: Iterable<string>): boolean {
     const key = (path: string) => `fallback:${scope}:${path}`
-    for (const { path, value } of projectSessionSearchFallback(
-      this.db,
-      scope,
-      paths,
-      (path) => this.fallback.has(key(path)),
-      (payload, rows) => this.reserveQuery(payload, rows)
-    )) {
-      this.retain(key(path), value)
-      this.fallback.set(key(path), value)
-    }
-    this.releaseQuery()
-  }
-  private releaseQuery(): void {
-    this.bytes -= this.queryBytes
-    this.queryBytes = this.queryRows = 0
-  }
-  private reserveQuery(payload: string, rows: number): void {
-    this.releaseQuery()
-    this.queryBytes = payload.length * 4 + rows * 128
-    this.queryRows = rows
-    this.bytes += this.queryBytes
-    if (this.sizes.size + rows > 256 || this.bytes > 256 * 1024) {
-      this.flush()
-      this.clear()
+    this.capacity.projection.projectionComplete = true
+    try {
+      for (const { path, value } of projectSessionSearchFallback(
+        this.db,
+        scope,
+        paths,
+        (path) => this.fallback.has(key(path)),
+        (payload, rows) => this.capacity.projection.reserveQuery(payload, rows),
+        (row) => this.capacity.projection.reserveQueryRow(row)
+      )) {
+        if (!this.retain(key(path), value)) {
+          this.fallback.delete(key(path))
+          this.capacity.projection.refusedProjection(value)
+          return false
+        }
+        this.fallback.set(key(path), value)
+      }
+      return this.capacity.projection.projectionComplete
+    } finally {
+      this.capacity.projection.releaseQuery()
     }
   }
   peek(table: SessionSearchPhysicalTable, source: number, path: string) {
@@ -217,28 +242,9 @@ export class SessionSearchInventoryPage {
     path: string,
     table: SessionSearchPhysicalTable
   ) {
-    const row = this.read(table, source, path)
-    const present =
-      member === 'files'
-        ? row.file_revision != null
-        : member === 'directories'
-          ? row.directory === 1
-          : member === 'authority'
-            ? row.authority_self != null
-            : member === 'observing'
-              ? row.observation_authority != null
-              : row.delivery_revision != null
-    return present
-      ? decodeSessionSearchInventoryValue(member, {
-          ...row,
-          projected_key: path,
-          projected_parent: member === 'authority' ? '' : row.parent,
-          projected_group: member === 'files' ? (row.dependency ?? '') : '',
-          projected_rank: member === 'authority' ? row.authority_tree : 0,
-          projected_ready: member === 'authority' ? row.reclaimable : 0
-        })
-      : undefined
+    return this.read(table, source, path, (row) => sessionSearchPhysicalValue(member, path, row))
   }
+
   write(
     table: SessionSearchPhysicalTable,
     source: number,
@@ -260,8 +266,11 @@ export class SessionSearchInventoryPage {
     const old = this.physical.get(key)
     if (old) {
       const row = { ...old, parent, ...fields }
-      this.retain(`fact:${key}`, row)
-      this.physical.set(key, row)
+      if (this.retain(`fact:${key}`, row)) {
+        this.physical.set(key, row)
+      } else {
+        this.physical.delete(key)
+      }
     }
   }
   observationEpoch(source: number, revision: number, path?: string, cutoff = revision): void {
@@ -278,28 +287,20 @@ export class SessionSearchInventoryPage {
   flush(): void {
     flushSessionSearchPhysical(this.db, this.pending)
     this.flushEpochs()
-    for (const [key, size] of this.sizes) {
-      if (key.startsWith('write:')) {
-        this.sizes.delete(key)
-        this.bytes -= size
-      }
-    }
+    this.capacity.flushedPhysical()
   }
   flushEpochs(): void {
     flushSessionSearchEpochs(this.db, this.epochs)
-    for (const [key, size] of this.sizes) {
-      if (key.startsWith('epoch:')) {
-        this.sizes.delete(key)
-        this.bytes -= size
-      }
-    }
+    this.capacity.flushedEpochs()
   }
-  clear(): void {
+  releaseFacts(): void {
     this.physical.clear()
     this.sources.clear()
     this.floors.clear()
     this.fallback.clear()
-    this.sizes.clear()
-    this.bytes = 1024 + this.queryBytes
+    this.capacity.releaseFacts()
+  }
+  clear(): void {
+    this.releaseFacts()
   }
 }

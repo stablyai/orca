@@ -1,3 +1,9 @@
+import { inventoryValueBytes } from './session-search-inventory-footprint'
+import {
+  authorityWorkingSet,
+  authorityFallbackSuffixes,
+  type SessionSearchAuthorityPhase
+} from './session-search-authority-working-set'
 import { dirname } from 'node:path'
 import { isInsideSessionRoot } from '../ai-vault/discovery/session-file-discovery'
 import type { SessionSearchCatalog, SessionSearchCatalogRow } from './session-search-catalog'
@@ -23,8 +29,11 @@ export class SessionSearchAuthorityPage {
     this.physical = catalog.inventoryObservation(scope)
   }
   get(scope: string, path: string): SessionSearchValueRow | undefined {
-    return this.catalog.inventory.fallbackValue(scope, path, () =>
-      this.catalog.valueRow(scope, path)
+    return this.catalog.inventory.fallbackValue(
+      scope,
+      path,
+      () => this.catalog.valueRow(scope, path),
+      scope.startsWith(`${this.scope}:`)
     )
   }
   forget(scope: string, path: string): void {
@@ -56,30 +65,82 @@ export class SessionSearchAuthorityPage {
   }
   *prefetched<T extends { path: string }>(
     inputs: readonly T[],
-    phase: 'prepare' | 'apply' | 'ack' | 'forget' = 'apply'
+    phase: SessionSearchAuthorityPhase = 'apply'
   ): Generator<T> {
-    for (let offset = 0; offset < inputs.length; offset += 8) {
-      const page = inputs.slice(offset, offset + 8)
-      const ancestry = function* (owner: SessionSearchAuthorityPage) {
-        for (const input of page) {
-          yield* owner.ancestry(input.path)
+    const storage = this.catalog.inventory
+    storage.releaseFacts()
+    try {
+      for (let offset = 0; offset < inputs.length;) {
+        const set = authorityWorkingSet(
+          inputs,
+          offset,
+          phase,
+          this.physical.source,
+          this.scope,
+          this.physical.root,
+          storage.inventoryRoom(),
+          (path) => this.ancestry(path)
+        )
+        const page = inputs.slice(offset, offset + set.count)
+        const paths = page.map((input) => input.path)
+        storage.beginWorkingSet(
+          set.growth,
+          this.physical.source,
+          phase === 'prepare' || phase === 'apply' ? paths : [],
+          phase,
+          paths,
+          !set.project
+        )
+        const ancestry = function* (owner: SessionSearchAuthorityPage) {
+          for (const input of page) {
+            yield* owner.ancestry(input.path)
+          }
         }
+        let projected = set.project
+        if (projected && phase !== 'ack') {
+          projected = this.physical.prefetch(phase === 'apply' ? ancestry(this) : paths)
+        }
+        if (projected) {
+          projected = this.physical.prefetchActivity(phase === 'ack' ? paths : ancestry(this))
+        }
+        if (projected) {
+          for (const suffix of authorityFallbackSuffixes(phase)) {
+            if (!storage.prefetchFallback(`${this.scope}:${suffix}`, paths)) {
+              projected = false
+              break
+            }
+          }
+        }
+        if (!projected) {
+          storage.releaseFacts()
+        }
+        for (const input of page) {
+          if (!projected) {
+            storage.beginWorkingSet(
+              new Map([[input.path, inventoryValueBytes(input.path, input)]]),
+              this.physical.source,
+              phase === 'prepare' || phase === 'apply' ? [input.path] : [],
+              phase,
+              [input.path],
+              true
+            )
+          }
+          try {
+            yield input
+          } finally {
+            storage.releaseTransients()
+          }
+          if (!projected) {
+            this.flush()
+            storage.releaseFacts()
+          }
+        }
+        this.flush()
+        storage.releaseFacts()
+        offset += set.count
       }
-      const paths = page.map((input) => input.path)
-      if (phase !== 'ack') {
-        this.physical.prefetch(phase === 'apply' ? ancestry(this) : paths)
-      }
-      this.physical.prefetchActivity(phase === 'ack' ? paths : ancestry(this))
-      const suffixes =
-        phase === 'prepare'
-          ? ['dirty', 'file-refusals']
-          : phase === 'ack'
-            ? ['dirty', 'file-refusals', 'refusals']
-            : ['dirty', 'file-refusals', 'file-refusals:eligible', 'refusals']
-      for (const suffix of suffixes) {
-        this.catalog.inventory.prefetchFallback(`${this.scope}:${suffix}`, paths)
-      }
-      yield* page
+    } finally {
+      storage.releaseFacts()
     }
   }
   *ancestry(path: string): Generator<string> {

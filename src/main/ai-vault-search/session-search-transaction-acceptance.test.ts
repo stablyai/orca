@@ -105,7 +105,7 @@ it('finishes independent conversations after their discovery transfer rolls back
       const candidates = SessionSearchStore.prototype.candidates;
       SessionSearchStore.prototype.candidates = async function(command) {
         if (command.kind !== 'batch' || !command.admission || !command.rows.some(row => row.candidate.file.path === workerData.path) || Atomics.compareExchange(new Int32Array(workerData.signal), 0, 1, 0) !== 1) { return candidates.call(this, command); }
-        this.connection.exec("CREATE TEMP TRIGGER refuse_first_transfer BEFORE UPDATE OF delivery_revision ON search_inventory_activity WHEN OLD.delivery_revision IS NOT NULL AND NEW.delivery_revision IS NULL BEGIN SELECT RAISE(ABORT,'fixture first transfer rollback'); END");
+        this.connection.exec("CREATE TEMP TRIGGER refuse_first_transfer BEFORE UPDATE OF delivery_revision ON search_inventory_activity WHEN OLD.path='" + workerData.path.replaceAll("'", "''") + "' AND OLD.delivery_revision IS NOT NULL AND NEW.delivery_revision IS NULL BEGIN SELECT RAISE(ABORT,'fixture first transfer rollback'); END");
         try { return await candidates.call(this, command); }
         finally { this.connection.exec('DROP TRIGGER refuse_first_transfer'); }
       };
@@ -145,16 +145,13 @@ it('finishes independent conversations after their discovery transfer rolls back
     )
   try {
     await writeClaudeTranscript(path, ['firsttransferneedle'], 'first-transfer')
-    await writeClaudeTranscript(
-      join(harness.claudeProjectDir, 'independent-a.jsonl'),
-      ['firsttransferneedle'],
-      'independent-a'
-    )
-    await writeClaudeTranscript(
-      join(harness.claudeProjectDir, 'independent-b.jsonl'),
-      ['firsttransferneedle'],
-      'independent-b'
-    )
+    for (let index = 0; index < 20; index++) {
+      await writeClaudeTranscript(
+        join(harness.claudeProjectDir, `independent-${index}.jsonl`),
+        ['firsttransferneedle'],
+        `independent-${index}`
+      )
+    }
     await store.prepare()
     await state.prepare(store)
     state.discovery.begin({ full: true, maintenance: true, recentLimit: 12, overdue: () => false })
@@ -178,7 +175,7 @@ it('finishes independent conversations after their discovery transfer rolls back
       recentPerAgent: 12,
       listings: new SessionSearchDirectoryListings()
     })
-    expect(hits()).toEqual({ n: 6 })
+    expect(hits()).toEqual({ n: 42 })
     expect(result).toMatchObject({
       completed: true,
       outOfTime: false,

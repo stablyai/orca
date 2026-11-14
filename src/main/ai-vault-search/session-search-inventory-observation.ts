@@ -26,14 +26,19 @@ export class SessionSearchInventoryObservation {
     readonly source: number,
     readonly root: string
   ) {}
-  prefetch(paths: Iterable<string>): void {
-    this.storage.prefetchPhysical('search_inventory_entries', this.source, paths)
+  prefetch(paths: Iterable<string>): boolean {
+    return this.storage.prefetchPhysical('search_inventory_entries', this.source, paths)
   }
-  prefetchActivity(paths: Iterable<string>): void {
-    this.storage.prefetchPhysical('search_inventory_activity', this.source, paths)
+  prefetchActivity(paths: Iterable<string>): boolean {
+    return this.storage.prefetchPhysical('search_inventory_activity', this.source, paths)
   }
   directory(path: string): boolean {
-    return this.storage.readPhysical('search_inventory_entries', this.source, path).directory === 1
+    return this.storage.readPhysical(
+      'search_inventory_entries',
+      this.source,
+      path,
+      (row) => row.directory === 1
+    )
   }
   removeDirectory(path: string): void {
     this.storage.writePhysical('search_inventory_entries', this.source, path, { directory: 0 })
@@ -125,14 +130,15 @@ export class SessionSearchInventoryObservation {
     this.storage.removalEpoch(this.source, path, cutoff)
   }
   file(path: string): SessionSearchObservedFacts | undefined {
-    const row = this.storage.readPhysical('search_inventory_entries', this.source, path)
-    return row.file_revision == null
-      ? undefined
-      : {
-          revision: Number(row.file_revision),
-          file: sessionSearchFileFacts(row, path),
-          ...(row.dependency == null ? {} : { dependency: String(row.dependency) })
-        }
+    return this.storage.readPhysical('search_inventory_entries', this.source, path, (row) =>
+      row.file_revision == null
+        ? undefined
+        : {
+            revision: Number(row.file_revision),
+            file: sessionSearchFileFacts(row, path),
+            ...(row.dependency == null ? {} : { dependency: String(row.dependency) })
+          }
+    )
   }
   putFile(path: string, value?: SessionSearchObservedFacts): void {
     const facts = value
@@ -147,20 +153,28 @@ export class SessionSearchInventoryObservation {
     })
   }
   ensureDirectory(path: string): void {
-    if (this.storage.readPhysical('search_inventory_entries', this.source, path).directory === 1) {
+    if (
+      this.storage.readPhysical(
+        'search_inventory_entries',
+        this.source,
+        path,
+        (row) => row.directory === 1
+      )
+    ) {
       return
     }
     this.storage.writePhysical('search_inventory_entries', this.source, path, { directory: 1 })
   }
   authority(path: string): Authority | undefined {
-    const row = this.storage.readPhysical('search_inventory_activity', this.source, path)
-    return row.authority_self == null
-      ? undefined
-      : {
-          self: Number(row.authority_self),
-          tree: Number(row.authority_tree),
-          ready: Number(row.reclaimable)
-        }
+    return this.storage.readPhysical('search_inventory_activity', this.source, path, (row) =>
+      row.authority_self == null
+        ? undefined
+        : {
+            self: Number(row.authority_self),
+            tree: Number(row.authority_tree),
+            ready: Number(row.reclaimable)
+          }
+    )
   }
   putAuthority(path: string, value?: Authority): void {
     this.storage.writePhysical('search_inventory_activity', this.source, path, {
@@ -174,14 +188,15 @@ export class SessionSearchInventoryObservation {
     return row?.observation_authority != null || row?.delivery_revision != null
   }
   observing(path: string): string | undefined {
-    const row = this.storage.readPhysical('search_inventory_activity', this.source, path)
-    return row.observation_authority == null
-      ? undefined
-      : JSON.stringify([
-          Number(row.observation_file),
-          Number(row.observation_dirty),
-          Number(row.observation_authority)
-        ])
+    return this.storage.readPhysical('search_inventory_activity', this.source, path, (row) =>
+      row.observation_authority == null
+        ? undefined
+        : JSON.stringify([
+            Number(row.observation_file),
+            Number(row.observation_dirty),
+            Number(row.observation_authority)
+          ])
+    )
   }
   putObserving(path: string, token?: string): void {
     const parts: number[] = token === undefined ? [] : JSON.parse(token)
@@ -192,19 +207,20 @@ export class SessionSearchInventoryObservation {
     })
   }
   delivery(path: string): SessionSearchObservedDelivery | undefined {
-    const row = this.storage.readPhysical('search_inventory_activity', this.source, path)
-    return row.delivery_revision == null
-      ? undefined
-      : {
-          ...(row.delivery_mtime == null
-            ? {}
-            : { file: sessionSearchFileFacts(row, path, 'delivery_') }),
-          ...(row.delivery_removed == null ? {} : { removed: row.delivery_removed === 1 }),
-          force: row.delivery_force === 1,
-          ...(row.delivery_metadata == null ? {} : { metadata: row.delivery_metadata === 1 }),
-          revision: Number(row.delivery_revision),
-          ...(row.delivery_authority == null ? {} : { authority: Number(row.delivery_authority) })
-        }
+    return this.storage.readPhysical('search_inventory_activity', this.source, path, (row) =>
+      row.delivery_revision == null
+        ? undefined
+        : {
+            ...(row.delivery_mtime == null
+              ? {}
+              : { file: sessionSearchFileFacts(row, path, 'delivery_') }),
+            ...(row.delivery_removed == null ? {} : { removed: row.delivery_removed === 1 }),
+            force: row.delivery_force === 1,
+            ...(row.delivery_metadata == null ? {} : { metadata: row.delivery_metadata === 1 }),
+            revision: Number(row.delivery_revision),
+            ...(row.delivery_authority == null ? {} : { authority: Number(row.delivery_authority) })
+          }
+    )
   }
   putDelivery(path: string, value?: SessionSearchObservedDelivery): void {
     const facts = value?.file

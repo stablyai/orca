@@ -162,3 +162,30 @@ export function decodeSessionSearchInventoryRow(
   const { data, ...fields } = decodeSessionSearchInventoryValue(member, row)
   return { ...fields, value: JSON.stringify(data) }
 }
+
+export function sessionSearchPhysicalValue(
+  member: SessionSearchInventoryMember,
+  path: string,
+  row: Record<string, unknown>
+): SessionSearchValueRow | undefined {
+  const present =
+    member === 'files'
+      ? row.file_revision != null
+      : member === 'directories'
+        ? row.directory === 1
+        : member === 'authority'
+          ? row.authority_self != null
+          : member === 'observing'
+            ? row.observation_authority != null
+            : row.delivery_revision != null
+  return present
+    ? decodeSessionSearchInventoryValue(member, {
+        ...row,
+        projected_key: path,
+        projected_parent: member === 'authority' ? '' : row.parent,
+        projected_group: member === 'files' ? (row.dependency ?? '') : '',
+        projected_rank: member === 'authority' ? row.authority_tree : 0,
+        projected_ready: member === 'authority' ? row.reclaimable : 0
+      })
+    : undefined
+}
