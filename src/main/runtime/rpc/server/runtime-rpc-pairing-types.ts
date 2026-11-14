@@ -1,3 +1,4 @@
+import { stripWebPairingQuery } from '../../../../shared/remote-runtime/pairing/web-pairing-query'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcAnyMethodDeclaration } from '../core'
 import type { DeviceRegistry } from './pairing/device-registry'
@@ -130,7 +131,7 @@ export function createWebClientUrl(endpoint: string, pairingUrl: string): string
   const url = new URL(endpoint)
   url.protocol = url.protocol === 'wss:' ? 'https:' : 'http:'
   url.pathname = webClientPathForEndpoint(url.pathname)
-  url.search = ''
+  url.search = stripWebPairingQuery(url.search)
   // Credential-bearing pairing fragments stay out of proxy logs and Referer headers.
   url.hash = `pairing=${encodeURIComponent(pairingUrl)}`
   return url.toString()

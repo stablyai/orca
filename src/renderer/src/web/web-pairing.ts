@@ -1,4 +1,8 @@
 import {
+  stripWebPairingQuery,
+  WEB_PAIRING_QUERY_KEYS
+} from '../../../shared/remote-runtime/pairing/web-pairing-query'
+import {
   RuntimeHostDescriptorSchema,
   type RuntimeHostDescriptor
 } from '../../../shared/remote-runtime/host-status/runtime-host-descriptor'
@@ -60,7 +64,7 @@ export function readPairingInputFromLocation(
     return null
   }
   const search = new URLSearchParams(location.search)
-  for (const key of ['pairing', 'pair', 'code', 'token']) {
+  for (const key of WEB_PAIRING_QUERY_KEYS) {
     const value = search.get(key)
     if (value?.trim()) {
       return value.trim()
@@ -75,7 +79,7 @@ export function readPairingInputFromLocation(
     return hash
   }
   const hashParams = new URLSearchParams(hash)
-  for (const key of ['pairing', 'pair', 'code', 'token']) {
+  for (const key of WEB_PAIRING_QUERY_KEYS) {
     const value = hashParams.get(key)
     if (value?.trim()) {
       return value.trim()
@@ -124,10 +128,12 @@ function isSameSavedServer(environment: SavedServerIdentity, offer: WebPairingOf
 }
 
 export function clearPairingInputFromAddressBar(): void {
-  if (!window.location.hash && !window.location.search) {
+  const { origin, pathname, search, hash } = window.location
+  const routingQuery = stripWebPairingQuery(search)
+  if (!hash && routingQuery === search) {
     return
   }
-  const cleanUrl = `${window.location.origin}${window.location.pathname}`
+  const cleanUrl = `${origin}${pathname}${routingQuery}`
   // Why: pairing payloads include the runtime auth token. Clear them after
   // import so refresh/share/browser history no longer expose the secret.
   window.history.replaceState(null, document.title, cleanUrl)

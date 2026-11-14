@@ -98,9 +98,19 @@ From the mobile home screen, open **Create Workspace** / **New Workspace** and c
 On the hosts list, tap the host card's **⋯** button (or long-press the card) and choose **Edit host**.
 
 - **Name** — display name on this phone only.
-- **Address** — IP, `host:port`, or `ws://` / `wss://`. Missing port keeps the current port (or defaults to `6768`). Address edits only change where this phone connects; they do **not** re-pair. Use this when the same desktop is reachable at a different path (for example home LAN vs Tailscale).
+- **Address** — IP, `host:port`, or `ws://` / `wss://`. A full WSS URL without a port uses `443`; bare-host edits keep the current port (or default to `6768`). Address edits only change where this phone connects; they do **not** re-pair. Use this when the same desktop is reachable through a different address, such as a home LAN, Tailscale, or a secure tunnel.
 
 Saving an address change reconnects to the new endpoint. Pairing token stays the same.
+
+### Use your own tunnel
+
+The direct/LAN address picker also accepts a user-managed Cloudflare Tunnel or reverse-proxy URL. The phone can connect from any network that can reach that endpoint. Configure the tunnel's HTTP origin to reach Orca's actual local listener port and allow WebSocket upgrades. See [Remote Orca Servers → Your own HTTPS tunnel](/docs/remote-servers#alternative-your-own-https-tunnel) for host setup.
+
+In the desktop mobile-pairing flow, choose a custom network address and enter the public `https://orca.example.com` or `wss://orca.example.com` URL. Generate a mobile pairing code and scan or paste it on the phone. Keep the host and tunnel running. Prefer a stable named tunnel. A Quick Tunnel hostname changes on restart, so a saved phone may need its address updated under **Edit host**.
+
+An already paired phone can switch from LAN to a secure tunnel by entering `wss://orca.example.com` under **Edit host → Address**. A full WSS URL without a port uses `443`. An explicit port is preserved, and the existing pairing token stays the same. The editor preserves the existing path and query. If the tunnel requires a new path or query, generate a mobile pairing code with the full tunnel URL and pair the phone again.
+
+An interactive Cloudflare Access login page cannot authenticate the native mobile WebSocket. The native connection must satisfy any additional proxy authentication. Keep the existing Access policy, Orca device authentication and E2EE enabled.
 
 ## Source control on mobile
 
