@@ -148,24 +148,26 @@ export function useWorktreeJumpPaletteSelectionActions({
   const handleSelectWorkspaceTab = useCallback(
     (result: WorkspaceTabPaletteSearchResult) => {
       const activation = activateWorkspaceTabPaletteResult(result)
-      if (activation.status === 'blocked') {
-        return
-      }
-      if (activation.status === 'failed') {
-        toast.error(
-          activation.reason === 'missing-worktree'
-            ? translate(
-                'auto.components.WorktreeJumpPalette.2c38630a01',
-                'Workspace no longer exists'
-              )
-            : translate(
-                'auto.components.WorktreeJumpPalette.workspaceTabMissing',
-                'Tab no longer exists'
-              )
-        )
+      if (activation.status !== 'activated') {
+        if (activation.status === 'failed') {
+          toast.error(
+            activation.reason === 'missing-worktree'
+              ? translate(
+                  'auto.components.WorktreeJumpPalette.2c38630a01',
+                  'Workspace no longer exists'
+                )
+              : translate(
+                  'auto.components.WorktreeJumpPalette.workspaceTabMissing',
+                  'Tab no longer exists'
+                )
+          )
+        }
         return
       }
       dismissForSelection()
+      if (result.contentType === 'terminal') {
+        queueWorkspaceActivationTerminalFocus(result.worktreeId, { primaryTabId: result.entityId })
+      }
     },
     [dismissForSelection]
   )

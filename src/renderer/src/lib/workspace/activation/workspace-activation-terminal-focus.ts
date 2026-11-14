@@ -1,6 +1,11 @@
 import { shouldPreserveEditableFocus } from '@/lib/text-input/focus/editable-focus-preservation'
 import { useAppStore } from '@/store/index'
-import { focusRuntimeTerminalSurface } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
+import {
+  findRegisteredTerminalTab,
+  focusRuntimeTerminalSurface
+} from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
+import { focusNativeChatCover } from '@/components/terminal-pane/chat/native-chat-covered-pane'
+import { requestNativeChatComposerFocus } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation-outcome'
 
 let cancelPendingFocus: (() => void) | null = null
@@ -58,7 +63,16 @@ export function queueWorkspaceActivationTerminalFocus(
       return
     }
     tabId ??= state.activeTabId
-    if (tabId && focusRuntimeTerminalSurface(tabId, null, worktreeId)) {
+    if (!tabId) {
+      return
+    }
+    const pane = findRegisteredTerminalTab(tabId, worktreeId)?.tab.getManager()?.getActivePane()
+    if (pane && focusNativeChatCover(pane)) {
+      requestNativeChatComposerFocus(tabId)
+      cancel()
+      return
+    }
+    if (focusRuntimeTerminalSurface(tabId, null, worktreeId)) {
       cancel()
     }
   }
