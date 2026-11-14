@@ -1,3 +1,4 @@
+import { observeFreebuffTerminalStatus } from '../output/freebuff-terminal-status'
 import { HeadlessEmulator } from '../../../daemon/emulation/headless-emulator'
 import { readRuntimeFixture } from './agent-transcript-replay-test-harness'
 import { MAX_TAIL_CHARS } from '../output/tail/terminal-tail-limits'
@@ -7,7 +8,6 @@ import {
   setTerminalLineOrigins,
   terminalOriginSpan,
   terminalScreenSupport,
-  joinedTerminalOrigins,
   terminalSupportQuery
 } from '../../../../shared/terminal/output/terminal-content-origin'
 import { buildVisibleSnapshotReadFallback } from '../output/tail/terminal-tail-read'
@@ -23,10 +23,7 @@ import {
   readWaitBlockedCarry
 } from './wait-blocked-check-state'
 import { restoreFromReattachedReadyScreen } from './reattached-ready-screen'
-import {
-  readFreebuffScreenStatus,
-  FreebuffScreenStatusTracker
-} from '../../../../shared/freebuff-screen-status'
+import { readFreebuffScreenStatus } from '../../../../shared/freebuff-screen-status'
 import { TerminalCommandPaint, terminalTitleIsPredecessor } from '../input/terminal-command-paint'
 import { buildTerminalActionText, readTerminalActionText } from '../output/terminal-action-text'
 import { extractAllOscTitleEntries } from '../../../../shared/agent-status/title/osc-title-extraction'
@@ -156,29 +153,47 @@ it('does not promote a known predecessor screen on reattach and retains unknown 
   expect(applyIdle).toHaveBeenCalledOnce()
 })
 
-it('qualifies Freebuff supports before deduplication and keeps unknown grammar', async () => {
+it('qualifies edited Freebuff supports before publishing and keeps unknown grammar', async () => {
   const owner = {}
-  const scope = { owner, epoch: 2 }
+  const old = { owner, epoch: 1 }
+  const current = { owner, epoch: 2 }
   const recording = readRuntimeFixture('freebuff-ready')
   const ready = `${recording.slice(recording.indexOf('\x1b[?1049h')).split('\x1b[?2026l')[0]!}\x1b[?2026l`
   const emulator = new HeadlessEmulator({ cols: 120, rows: 40 })
-  let lines: string[]
   try {
-    await emulator.write(ready)
-    lines = emulator.getVisibleLines()
+    await emulator.write(ready, { contentOrigin: old })
+    expect(
+      observeFreebuffTerminalStatus(emulator, ready, undefined, 'freebuff', old)
+    ).toMatchObject({
+      state: 'done',
+      sessionBoundary: true
+    })
+    const working = '\x1b[33;1Hworking...'
+    await emulator.write(working, { contentOrigin: old })
+    expect(
+      observeFreebuffTerminalStatus(emulator, working, undefined, 'freebuff', old)
+    ).toMatchObject({
+      state: 'working'
+    })
+    const erase = '\x1b[33;1H\x1b[2K'
+    await emulator.write(erase, { contentOrigin: current })
+    expect(
+      observeFreebuffTerminalStatus(emulator, erase, undefined, 'freebuff', current)
+    ).toBeNull()
+    expect(readFreebuffScreenStatus(emulator.getVisibleLines(), true)).toMatchObject({
+      state: 'done',
+      sessionBoundary: true
+    })
+    await emulator.write(ready, { contentOrigin: current })
+    expect(
+      observeFreebuffTerminalStatus(emulator, ready, undefined, 'freebuff', current)
+    ).toMatchObject({
+      state: 'done',
+      sessionBoundary: true
+    })
   } finally {
     emulator.dispose()
   }
-  const old = lines.map((line) => terminalOriginSpan(line.length, { owner, epoch: 1 }))
-  setTerminalLineOrigins(lines, old)
-  const joined = joinedTerminalOrigins(lines)
-  const support = terminalSupportQuery(joined.origins, scope)
-  const tracker = new FreebuffScreenStatusTracker(true)
-  expect(tracker.observe('erase', () => ({ lines, alternate: true, support }))).toBeNull()
-  expect(tracker.observe('paint', () => ({ lines, alternate: true }))).toMatchObject({
-    state: 'done',
-    sessionBoundary: true
-  })
   expect(
     readFreebuffScreenStatus(
       ['freebuff found agent files in this repository', 'Load and run these? [y/N]'],

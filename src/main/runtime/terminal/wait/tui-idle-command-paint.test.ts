@@ -315,34 +315,3 @@ it('does not promote a retained Qoder composer after replacement until it is rep
     vi.useRealTimers()
   }
 })
-
-it('does not turn old Freebuff ready support into fresh status when only the working row is erased', async () => {
-  const { runtime, handle } = await createTranscriptPane({
-    paneTitle: 'Terminal',
-    foregroundProcess: 'freebuff',
-    launchAgent: 'freebuff',
-    data: '',
-    size: { cols: 120, rows: 40 }
-  })
-  vi.useFakeTimers()
-  try {
-    const write = (data: string) => runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, data, Date.now())
-    const recording = readRuntimeFixture('freebuff-ready')
-    const ready = `${recording.slice(recording.indexOf('\x1b[?1049h')).split('\x1b[?2026l')[0]!}\x1b[?2026l`
-    write(`\x1b]133;C\x07\x1b]0;Freebuff: task\x07\x1b[?1049h\x1b[H${ready}`)
-    await runtime.readTerminal(handle, { screen: true })
-    write('\x1b[33;1Hworking...')
-    await runtime.readTerminal(handle, { screen: true })
-    write('\x1b]133;C\x07\x1b[33;1H\x1b[2K')
-    const settled = vi.fn()
-    const wait = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 60000 })
-    wait.then(settled, () => {})
-    await vi.advanceTimersByTimeAsync(6000)
-    expect(settled).not.toHaveBeenCalled()
-    write(`\x1b[H${ready}`)
-    await vi.advanceTimersByTimeAsync(4000)
-    await expect(wait).resolves.toMatchObject({ satisfied: true })
-  } finally {
-    vi.useRealTimers()
-  }
-})
