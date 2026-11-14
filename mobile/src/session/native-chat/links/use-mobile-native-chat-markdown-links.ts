@@ -19,15 +19,15 @@ import { getRepoIdFromWorktreeId } from '../../../../../src/shared/worktree/id'
 import {
   useRecheckNativeChatFileLinksWhenSettled,
   type MobileMarkdownLinks
-} from '../../../components/mobile-markdown-links-context'
+} from '../../../components/markdown/links/mobile-markdown-links-context'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import type { UnvalidatedRpcRequestPort } from '../../../transport/rpc/unvalidated-rpc-request-port'
 import { isMobileMethodUnavailableError } from '../../../transport/rpc/mobile-method-unavailable'
-import { isFilePathCodeSpan } from '../../../components/markdown-file-path-detection'
+import { isFilePathCodeSpan } from '../../../components/markdown/links/markdown-file-path-detection'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../../../transport/rpc/rpc-operation-result-reader'
 import type { ConnectionState } from '../../../transport/connection/connection-state'
-import { fetchGithubRepoSlug } from '../../../source-control/review/github-pr-rpc'
+import { fetchGithubRepoSlug } from '../../../source-control/review/github-operations/github-pr-rpc'
 import { nativeChatRepoListRead } from '../../agent-launch/mobile-runtime-repo-operations'
 
 const chatPathsExistRead = bindDeferredRpcOperation(

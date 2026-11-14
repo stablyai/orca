@@ -7,8 +7,8 @@ import {
   MAX_TOOL_DETAIL_LENGTH,
   truncateToolDetail
 } from '../../../../../../src/shared/native-chat/tools/native-chat-tool-summary'
-import { MobileSourceCopyButton } from '../../../../components/MobileSourceCopyButton'
-import { INLINE_TEXT_SELECTION } from '../../../../components/inline-text-selection'
+import { MobileSourceCopyButton } from '../../../../components/code-presentation/MobileSourceCopyButton'
+import { INLINE_TEXT_SELECTION } from '../../../../platform/text-selection/inline-text-selection'
 import { useMobileTranslation } from '../../../../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatOwnedScrollView } from '../viewport/MobileNativeChatOwnedScrollView'

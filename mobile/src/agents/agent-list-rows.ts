@@ -4,9 +4,16 @@ import {
 } from '../../../src/shared/agent-status/presentation/agent-list-status'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import type { ConnectionState } from '../transport/connection/connection-state'
-import { agentDotState, agentRowTimeAt, type AgentDotState } from '../worktree/agent-row-display'
-import { flattenAgentRowLineage, type AgentRowNode } from '../worktree/agent-row-lineage'
-import type { HomeAgentEntry, HostWorktreeInfo } from '../worktree/home-worktree-info'
+import {
+  agentDotState,
+  agentRowTimeAt,
+  type AgentDotState
+} from '../worktree/agent-lineage/agent-row-display'
+import {
+  flattenAgentRowLineage,
+  type AgentRowNode
+} from '../worktree/agent-lineage/agent-row-lineage'
+import type { HomeAgentEntry, HostWorktreeInfo } from '../worktree/catalog/home-worktree-info'
 import { agentListTitle } from './agent-list-row-text'
 
 export type AgentStatusGroup = 'needs-you' | 'working' | 'done' | 'idle'

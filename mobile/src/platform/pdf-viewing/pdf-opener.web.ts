@@ -1,6 +1,9 @@
 import { useMemo } from 'react'
 import { parseExecutionHostId } from '../../../../src/shared/execution-host'
-import { NativeVerbError, useNativeVerbs } from '../../mobile-web-shell/bridge/use-native-verbs'
+import {
+  NativeVerbError,
+  useNativeVerbs
+} from '../../mobile-web-shell/bridge/native-capabilities/use-native-verbs'
 import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
 import { PdfOpenRefusedError, type PdfOpener } from './pdf-opener-contract'
 
