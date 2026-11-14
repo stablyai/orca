@@ -25,6 +25,7 @@ function baseInput(): RefreshInput {
     activeWorktreePushTarget: null,
     asyncResultKeyRef: { current: 'cache::main::42' },
     branch: 'main',
+    checksPanelReviewLookupResult: { state: 'unknown', openReviewUrl: null },
     expireGitHubPRRefreshState: vi.fn(),
     fallbackGitHubPRNumber: null,
     fetchGitLabDetails: vi.fn(),
@@ -97,7 +98,7 @@ describe('a Checks refresh click', () => {
       .mockRejectedValueOnce(new Error('raw secret provider text'))
     const { result, rerender } = renderPanel(input)
     await act(async () => {
-      await expect(result.current.handleRefresh()).resolves.toBeUndefined()
+      await expect(result.current.handleRefresh()).resolves.toEqual({ kind: 'failed' })
     })
     expect(input.refreshInFlightRef.current).toBe(false)
     expect(result.current.manualRefreshError).toBe(FAILURE)
@@ -106,7 +107,7 @@ describe('a Checks refresh click', () => {
     const late = Promise.withResolvers<HostedReviewInfo | null>()
     input.fetchHostedReviewForBranch = vi.fn(() => late.promise)
     rerender()
-    let old: Promise<void> = Promise.resolve()
+    let old: Promise<unknown> = Promise.resolve()
     act(() => {
       old = result.current.handleRefresh()
     })
@@ -117,7 +118,8 @@ describe('a Checks refresh click', () => {
     expect(result.current.manualRefreshError).toBeNull()
     await act(async () => {
       late.reject(new Error('late failure'))
-      await old
+      // The superseded click reports nothing for the new context.
+      await expect(old).resolves.toEqual({ kind: 'skipped' })
     })
     expect(result.current.manualRefreshError).toBeNull()
   })

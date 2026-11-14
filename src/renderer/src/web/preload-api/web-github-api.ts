@@ -16,7 +16,9 @@ import { noopUnsubscribe } from './web-storage'
 
 export type WebGitHubApi = NonNullable<PreloadApi['gh']>
 
-export type WebGitHubResult<K extends keyof WebGitHubApi> = Awaited<ReturnType<WebGitHubApi[K]>>
+export type WebGitHubResult<K extends keyof WebGitHubApi> = Awaited<
+  ReturnType<NonNullable<WebGitHubApi[K]>>
+>
 
 export function createGitHubApi(): WebGitHubApi {
   const route = <Result>(method: WebGitHubRuntimeMethod, args?: unknown): Promise<Result> =>

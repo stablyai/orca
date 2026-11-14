@@ -20,7 +20,6 @@ vi.mock('../../api/rate-limit', () => moduleMocks.rateLimitModuleMock(coordinato
 import { makeCandidate, makePR } from './pr-refresh-coordinator-test-harness'
 
 const { getPRForBranchOutcomeMock } = coordinatorMocks
-const LINKED_PR_KEY = 'local::runtime:host::/repo::pr::42'
 
 describe('pr-refresh queue growth bounds', () => {
   beforeEach(() => {
@@ -37,8 +36,7 @@ describe('pr-refresh queue growth bounds', () => {
   })
 
   it('keeps the newer alias when a branch switch lands mid-request', async () => {
-    const { reportVisiblePRRefreshCandidates, _getPRRefreshAliasCountForTests } =
-      await import('./pr-refresh-coordinator')
+    const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
 
     const churnCandidate = (index: number): GitHubPRRefreshCandidate =>
       makeCandidate({
@@ -66,7 +64,6 @@ describe('pr-refresh queue growth bounds', () => {
     reportVisiblePRRefreshCandidates([churnCandidate(1)], 1, 1)
     await vi.advanceTimersByTimeAsync(120_000)
 
-    expect(_getPRRefreshAliasCountForTests(LINKED_PR_KEY)).toBe(1)
     const broadcasts = coordinatorMocks.sendMock.mock.calls.filter(
       (call) => call[0] === 'gh:prRefreshEvent'
     ) as [string, { aliases: { cacheKey: string }[] }][]

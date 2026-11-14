@@ -133,7 +133,7 @@ export function transientRefreshState(
   }
 }
 
-const HARD_ERROR_COPY: Record<
+export const HARD_ERROR_COPY: Record<
   'auth' | 'permission' | 'repo_unavailable' | 'gh_unavailable',
   {
     title: KeyedCopy

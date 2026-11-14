@@ -54,6 +54,6 @@ export type ChecksPanelManualRefreshInput = Pick<
     | 'prCacheKey'
     | 'prNumber'
   > &
-  Pick<ChecksPanelReviewState, 'hostedReviewCreateProvider'> &
+  Pick<ChecksPanelReviewState, 'hostedReviewCreateProvider' | 'checksPanelReviewLookupResult'> &
   Pick<ChecksPanelPollingState, 'fetchGitLabDetails'> &
   Pick<ChecksPanelComposerState, 'isCurrentAsyncResult'>

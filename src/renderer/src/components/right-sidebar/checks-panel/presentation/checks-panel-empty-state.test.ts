@@ -23,15 +23,25 @@ function input(overrides: Partial<ChecksPanelReviewStateInput> = {}): ChecksPane
 }
 
 describe('getChecksPanelReviewState — precedence', () => {
-  it('positive_unresolved blocks create and offers Open Review', () => {
-    const state = getChecksPanelReviewState(
-      input({ reviewLookup: 'positive_unresolved', openReviewUrl: 'https://x/pull/1' })
-    )
-    expect(state.title).toBe('Pull request details unavailable')
-    expect(state.composerMode).toBe('hidden')
-    expect(state.workflowAction).toBeNull()
-    expect(state.recovery).toContain('open_review')
-    expect(state.openReviewUrl).toBe('https://x/pull/1')
+  it('positive evidence and an existing review share the Open + Retry layout and never create', () => {
+    for (const overrides of [
+      { reviewLookup: 'positive_unresolved' as const },
+      { reviewLookup: 'not_found' as const, eligibilityBlockedReason: 'existing_review' as const },
+      {
+        reviewLookup: 'positive_unresolved' as const,
+        confirmedReadiness: true,
+        refresh: { status: 'in-flight' as const }
+      }
+    ]) {
+      const state = getChecksPanelReviewState(
+        input({ ...overrides, openReviewUrl: 'https://x/pull/1' })
+      )
+      expect(state.positiveReview).toBe(true)
+      expect(state.composerMode).toBe('hidden')
+      expect(state.workflowAction).toBeNull()
+      expect(state.recovery).toEqual(['open_review', 'retry'])
+      expect(state.openReviewUrl).toBe('https://x/pull/1')
+    }
   })
 
   it('offers Open Review under a branch blocker when positive evidence has a trusted URL', () => {
@@ -39,12 +49,14 @@ describe('getChecksPanelReviewState — precedence', () => {
     const state = getChecksPanelReviewState(
       input({
         reviewLookup: 'positive_unresolved',
+        reviewNumber: 7,
         openReviewUrl: 'https://x/pull/7',
         eligibilityBlockedReason: 'no_upstream',
         hasUpstream: false
       })
     )
     expect(state.title).toBe('No upstream configured')
+    expect(state.description).toBe('Push to update PR #7.')
     expect(state.workflowAction).toBe('publish_branch')
     expect(state.composerMode).toBe('hidden')
     expect(state.recovery).toContain('open_review')

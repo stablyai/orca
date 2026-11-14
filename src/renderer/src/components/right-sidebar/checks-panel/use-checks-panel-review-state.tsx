@@ -201,7 +201,8 @@ export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {
     hostedReview,
     linkedReviewNumber,
     eligibilityReviewLookupOutcome: hostedReviewCreation?.reviewLookupOutcome ?? null,
-    eligibilityReview: hostedReviewCreation?.review ?? null
+    eligibilityReview: hostedReviewCreation?.review ?? null,
+    isGitHub: isGitHubReviewContext
   })
   const checksPanelReviewLookup = checksPanelReviewLookupResult.state
   // Use the last eligibility snapshot; live canCreate would be circular and flap during transient failures.

@@ -1,3 +1,5 @@
+import { injectDeviceScope } from './runtime-rpc-device-status'
+import { pairedAuthorityReply } from '../mobile/paired-socket-authorities'
 import type { WebSocket } from 'ws'
 import type {
   PairingGetEndpointsParams,
@@ -7,9 +9,8 @@ import { callerScopeOf, devicePrincipalOf } from './pairing/device-principal'
 import { registerSocketDeviceKey } from './runtime-rpc-device-key-registration'
 import { exchangeSocketPairingTicket } from './runtime-rpc-pairing-ticket-exchange'
 import type { AuthenticatedMobileSocket } from '../mobile/mobile-socket-wiring'
-import type { RpcRequest, RpcResponse } from '../core'
+import type { RpcRequest } from '../core'
 import type { WebSocketTransport } from '../transports/websocket/ws-transport'
-import type { DeviceScope } from '../../../../shared/runtime-session-contracts'
 import { RuntimeRpcMobileDevices } from './runtime-rpc-mobile-devices'
 import { classifyRuntimeLongPoll } from './runtime-rpc-long-poll'
 import type { RpcBinarySender } from '../transports/rpc-binary-sender'
@@ -18,20 +19,6 @@ import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc-mobile-method-allowli
 import { MOBILE_RPC_METHOD_ROUTES } from './runtime-rpc-mobile-method-routing'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { WorktreeRemove } from '../../../../shared/rpc-contract/workspaces/worktree-params'
-
-// Stamp proven scope at transport boundary; status.get has no connection context.
-function injectDeviceScope(response: string, scope: DeviceScope): string {
-  try {
-    const parsed = JSON.parse(response) as RpcResponse
-    if (parsed.ok !== true || typeof parsed.result !== 'object' || parsed.result === null) {
-      return response
-    }
-    ;(parsed.result as Record<string, unknown>).deviceScope = scope
-    return JSON.stringify(parsed)
-  } catch {
-    return response
-  }
-}
 
 export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
   // Relay only to configured execution hosts; unreachable targets fail, never run locally. Return null after relay/reply.
@@ -171,16 +158,19 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
       return
     }
     // Recheck device/credential revision per request so revocation refuses immediately, before socket close.
+    const registry = this.deviceRegistry
     const device = authenticatedSocket
-      ? this.deviceRegistry?.resolveAuthenticatedPrincipal(authenticatedSocket.device)
-      : this.deviceRegistry?.validateToken(token ?? '')
-    if (!device) {
+      ? registry?.resolveAuthenticatedPrincipal(
+          authenticatedSocket.device,
+          authenticatedSocket.device.authority
+        )
+      : registry?.validateToken(token ?? '')
+    if (!device || !registry) {
       reply(JSON.stringify(this.buildError(request.id, 'unauthorized', 'Invalid device token')))
       return
     }
     const principal = devicePrincipalOf(device)
     // Use authenticated scope for dispatcher permissions, never request scope.
-    const callerScope = callerScopeOf(device)
 
     // Relay bypasses local dispatcher checks; admit only mobile-allowlisted methods.
     if (device.scope === 'mobile' && MOBILE_RPC_METHOD_ALLOWLIST.has(request.method)) {
@@ -219,8 +209,13 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
     const abortRegistration = ws ? this.registerWebSocketDispatchAbort(ws) : null
 
     // Older pairings lack scope metadata; stamp authenticated scope on status.get.
-    const boundedReply = limitRuntimeRpcReplySize(request.id, reply, (id, code, message) =>
-      this.buildError(id, code, message)
+    const authority =
+      authenticatedSocket?.device.authority ??
+      registry.captureAuthority(principal, token ?? undefined)
+    const boundedReply = limitRuntimeRpcReplySize(
+      request.id,
+      pairedAuthorityReply(reply, authority),
+      (id, code, message) => this.buildError(id, code, message)
     )
     const replyForRequest =
       request.method === 'status.get'
@@ -258,11 +253,12 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcMobileDevices {
         authenticatedCallerFingerprint: principal.callerFingerprint,
         connectionId,
         clientId: principal.clientId,
+        authenticatedCredential: authority ?? undefined,
         pairedDeviceId: device.deviceId,
         pairedDeviceParentId: device.parentDeviceId,
         // Diet only mobile payloads; retain full web/desktop replies.
         clientKind: device.scope,
-        callerScope,
+        callerScope: callerScopeOf(device),
         clientCapabilities: authenticatedSocket?.clientCapabilities,
         capabilitySource: authenticatedSocket?.capabilitySource,
         updateClientCapabilities:

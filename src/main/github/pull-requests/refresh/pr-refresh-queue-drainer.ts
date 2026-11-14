@@ -1,19 +1,18 @@
-import { admitPreparedPRRead } from './pr-refresh-read-admission'
-import { deliverablePRBranchOutcome } from '../../client/lookup/pr-branch-read-resources'
+import { PRRefreshRecoveryLifecycle } from './pr-refresh-recovery-lifecycle'
+import { readQueuedPRRefresh } from './pr-refresh-queued-read'
 import type { GitHubPRRefreshCandidate } from '../../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
-import { preparePRBranchRead } from '../../client/lookup/pr-for-branch-outcome'
 import {
-  hostedReviewOptionArgs,
   freshQueuedPROutcome,
-  bypassesFreshnessDelay,
   isBackground,
   isBudgetedBackground,
-  validateCandidate
+  validateCandidate,
+  refreshKey
 } from './pr-refresh-candidate-policy'
 import type { PRRefreshEventPublisher } from './pr-refresh-event-publisher'
 import { type PRRefreshPacing, usesActiveRefreshPacing } from './pr-refresh-pacing'
 import type { PRRefreshQueue } from './pr-refresh-queue'
 import { PRWatchJobRunner } from './pr-refresh-watch-jobs'
+import { prRefreshRequestDigest, queuedRequestId } from './pr-refresh-request-registry'
 import { prRefreshRateLimitPausedUntil } from './pr-refresh-rate-limit-gate'
 import {
   blockedWslDistroForPath,
@@ -26,7 +25,7 @@ import { PRRefreshQueueScheduler } from './pr-refresh-queue-scheduler'
 
 export type PRRefreshRegistrationCheck = (candidate: GitHubPRRefreshCandidate) => boolean
 
-export class PRRefreshQueueDrainer {
+export class PRRefreshQueueDrainer extends PRRefreshRecoveryLifecycle {
   private draining = false
   registrationCheck: PRRefreshRegistrationCheck | null = null
   readonly watchJobs: PRWatchJobRunner
@@ -41,6 +40,7 @@ export class PRRefreshQueueDrainer {
     private readonly retry: PRRefreshRetryState,
     private readonly events: PRRefreshEventPublisher
   ) {
+    super()
     this.watchJobs = new PRWatchJobRunner(queue, retry, this)
     this.scheduler = new PRRefreshQueueScheduler(
       queue,
@@ -49,7 +49,10 @@ export class PRRefreshQueueDrainer {
       retry,
       events,
       this.watchJobs,
-      () => this.drain()
+      () => {
+        this.tickRecovery((delay) => this.schedule(delay))
+        return this.drain()
+      }
     )
     this.scheduleVisibleFollowUp = this.scheduler.scheduleVisibleFollowUp.bind(this.scheduler)
     this.hostedJobs = new HostedPRReadJobs(
@@ -57,12 +60,22 @@ export class PRRefreshQueueDrainer {
       pacing,
       retry,
       () => this.schedule(),
-      (candidate, outcome) => events.observe(candidate, outcome)
+      (candidate, outcome) => events.observe(candidate, outcome),
+      (entry) => {
+        const requestId = queuedRequestId(entry)
+        this.requests.start({
+          requestId,
+          slotKey: refreshKey(entry.candidate),
+          registrationOrder: entry.queuedAt,
+          identityDigest: prRefreshRequestDigest(entry.candidate)
+        })
+        return () => this.requests.settle(requestId)
+      }
     )
   }
 
   schedule(delay = 0): void {
-    this.scheduler.schedule(delay)
+    this.scheduler.schedule(this.recoveryWait(delay))
   }
 
   private async drain(): Promise<void> {
@@ -98,6 +111,13 @@ export class PRRefreshQueueDrainer {
           }
         }
 
+        if (next.recovery) {
+          await this.recovery?.run(next)
+          if (this.queue.get(next.key) === next && next.dueAt <= Date.now()) {
+            this.queue.delete(next.key)
+          }
+          continue
+        }
         this.queue.delete(next.key)
         if (this.hostedJobs.completeFromCache(next)) {
           continue
@@ -161,7 +181,7 @@ export class PRRefreshQueueDrainer {
             requestSequence
           )
         }
-        let joinedRead = next.hosted?.prepared.pending()
+        const joinedRead = next.hosted?.prepared.pending()
         if (isBackground(next.reason) && !joinedRead) {
           const checkRateLimit = () => prRefreshRateLimitPausedUntil(next.candidate, true)
           const pausedUntil = await (next.hosted
@@ -206,55 +226,15 @@ export class PRRefreshQueueDrainer {
         if (await this.watchJobs.readHead(next)) {
           continue
         }
-        if (next.hosted) {
-          next.hosted.running = true
-        }
-        const prepared =
-          next.hosted?.prepared ??
-          (await preparePRBranchRead(
-            next.candidate.repoPath,
-            next.candidate.branch,
-            next.candidate.linkedPRNumber ?? null,
-            next.candidate.connectionId ?? null,
-            next.candidate.linkedPRNumber == null
-              ? (next.candidate.fallbackPRNumber ?? null)
-              : null,
-            ...hostedReviewOptionArgs(next.candidate, next.reason, {
-              watchPRKey: next.watch?.prKey
-            })
-          ))
-        joinedRead ??= bypassesFreshnessDelay(next.reason) ? undefined : prepared.pending()
-        const admitted = admitPreparedPRRead(
-          { queue, pacing, events, scheduler, watchJobs },
+        const outcome = await readQueuedPRRefresh(
+          { queue, pacing, events, scheduler, watchJobs, requests: this.requests },
           next,
-          prepared,
           aliases,
           requestSequence,
           requestStartedAt,
-          Boolean(joinedRead)
+          joinedRead
         )
-        if (!admitted) {
-          continue
-        }
-        const settle = this.scheduler.settleRead(
-          next.key,
-          next.candidate,
-          aliases,
-          prepared,
-          requestSequence,
-          Boolean(next.hosted)
-        )
-        const result = await (joinedRead ?? prepared.readResult(settle, Boolean(next.hosted)))
-        const outcome = result ? deliverablePRBranchOutcome(prepared, result) : null
         if (!outcome) {
-          this.scheduler.finishWithoutOutcome(next, aliases, requestSequence)
-          continue
-        }
-        if (
-          next.hosted &&
-          (!next.hosted.prepared.isCurrent() || !next.hosted.prepared.accepts(outcome))
-        ) {
-          next.hosted.finish(null)
           continue
         }
         if (!this.queue.ownsRequest(next.key, requestSequence)) {

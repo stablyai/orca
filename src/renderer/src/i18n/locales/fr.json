@@ -13414,7 +13414,6 @@
             "495b2f8c4b": "Agent lancé, mais impossible de résoudre ou de répondre aux commentaires sélectionnés.",
             "review": {
               "auto_retry": "Orca réessaiera à {{time}}.",
-              "open_review": "Ouvrir la revue",
               "retry": "Réessayer"
             },
             "sync": {
@@ -14062,10 +14061,6 @@
                   "network": "Orca n'a pas non plus pu vérifier le statut de la {{reviewLabel}} car cet environnement n'a pas pu joindre {{provider}}.",
                   "untyped": "Orca n'a pas non plus pu confirmer si cette branche possède déjà une {{reviewLabel}}."
                 },
-                "positive": {
-                  "title": "Détails de la {{reviewLabelCap}} indisponibles",
-                  "body": "Orca possède des informations {{reviewLabel}} enregistrées pour cette branche, mais n'a pas pu confirmer son statut actuel."
-                },
                 "no_review": {
                   "title": "Aucune {{reviewLabel}} trouvée",
                   "body": "Créez une {{reviewLabel}} pour lancer les vérifications et la revue."
@@ -14159,10 +14154,6 @@
                 "needs_push": {
                   "title": "La branche contient des commits non poussés",
                   "body": "Poussez les derniers commits avant de créer une {{reviewLabel}}."
-                },
-                "existing": {
-                  "title": "{{reviewLabelCap}} existe déjà",
-                  "body": "Orca a trouvé une {{reviewLabel}} existante pour cette branche."
                 },
                 "detached": {
                   "title": "Aucune branche courante",
@@ -21563,6 +21554,25 @@
       "title": "Demande de tirage non liée",
       "description": "PR #{{number}} est masqué pour cet espace de travail. Liez-le à nouveau pour restaurer les vérifications et examiner les détails.",
       "relink": "Lien PR #{{number}}"
+    },
+    "positiveReview": {
+      "status": {
+        "failed": "Impossible de charger les détails",
+        "queued": "En attente du chargement des détails",
+        "rateGate": "Limite {{provider}} atteinte. Chargement à {{time}}.",
+        "loading": "Chargement des détails…",
+        "timeout": "{{provider}} n’a pas répondu",
+        "unusable": "Les détails ne peuvent pas être affichés ici",
+        "notLoaded": "Détails non chargés",
+        "retryGate": "Limite {{provider}} atteinte. Réessayez à {{time}}."
+      },
+      "title": "{{shortLabel}} #{{number}}",
+      "titleNoNumber": "{{shortLabel}} trouvée",
+      "open": "Ouvrir la {{shortLabel}}",
+      "openAria": "Ouvrir la {{shortLabel}} #{{number}} sur {{provider}}",
+      "openAriaNoNumber": "Ouvrir la {{shortLabel}} sur {{provider}}",
+      "pushToUpdate": "Poussez pour mettre à jour la {{shortLabel}} #{{number}}.",
+      "pushToUpdateNoNumber": "Poussez pour mettre à jour cette {{shortLabel}}."
     }
   },
   "sourceControl": {

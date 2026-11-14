@@ -61,56 +61,29 @@ export function getChecksPanelReviewState(
 
   const blockedReason = input.eligibilityBlockedReason
 
-  // Keep positive-review lookups updating without hiding stronger safety guidance.
-  const reviewFetchInFlight =
-    input.refresh?.status === 'queued' || input.refresh?.status === 'in-flight'
+  // Known review evidence keeps one layout (title, status line, Open + Retry) and never offers Create.
   const hasPendingReviewEvidence =
     input.reviewLookup === 'positive_unresolved' || blockedReason === 'existing_review'
   const pendingReviewLookupOwnsState =
-    blockedReason === undefined || blockedReason === 'existing_review'
-  if (reviewFetchInFlight && hasPendingReviewEvidence && pendingReviewLookupOwnsState) {
+    !blockedReason ||
+    blockedReason === 'existing_review' ||
+    (!ELIGIBILITY_SAFETY_BLOCKERS.has(blockedReason) && !isBranchBlocker(blockedReason))
+  if (hasPendingReviewEvidence && pendingReviewLookupOwnsState) {
     return {
       renderReview: false,
-      title: t(
-        'auto.components.right.sidebar.checks.panel.review.active.title',
-        'Checking {{reviewLabel}} status',
-        { reviewLabel }
-      ),
-      description: t(
-        'auto.components.right.sidebar.checks.panel.review.active.body',
-        'Orca is checking {{provider}} for a {{reviewLabel}} on this branch.',
-        { reviewLabel, provider: providerName }
-      ),
+      title: '',
+      description: '',
       composerMode: 'hidden',
       workflowAction: null,
-      recovery: []
+      recovery: ['open_review', 'retry'],
+      openReviewUrl: input.openReviewUrl,
+      positiveReview: true
     }
   }
 
-  // Safety blockers own their guidance; existing_review always blocks create.
+  // Safety blockers own their guidance.
   if (blockedReason && ELIGIBILITY_SAFETY_BLOCKERS.has(blockedReason)) {
     return safetyBlockerState(input, blockedReason, t)
-  }
-
-  // Known but unrenderable review evidence must block create actions.
-  if (input.reviewLookup === 'positive_unresolved' && !isBranchBlocker(blockedReason)) {
-    return {
-      renderReview: false,
-      title: t(
-        'auto.components.right.sidebar.checks.panel.review.positive.title',
-        '{{reviewLabelCap}} details unavailable',
-        { reviewLabelCap: capitalizeReviewLabel(reviewLabel) }
-      ),
-      description: t(
-        'auto.components.right.sidebar.checks.panel.review.positive.body',
-        'Orca has saved {{reviewLabel}} information for this branch but could not confirm its current status.',
-        { reviewLabel }
-      ),
-      composerMode: 'hidden',
-      workflowAction: null,
-      recovery: input.openReviewUrl ? ['open_review', 'retry'] : ['retry'],
-      openReviewUrl: input.openReviewUrl
-    }
   }
 
   if (isBranchBlocker(blockedReason)) {

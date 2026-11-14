@@ -12838,7 +12838,6 @@
             "495b2f8c4b": "agent를 시작했지만 선택한 댓글을 해결하거나 답글할 수 없습니다.",
             "review": {
               "auto_retry": "Orca가 {{time}}에 다시 시도합니다.",
-              "open_review": "검토 열기",
               "retry": "다시 시도"
             },
             "sync": {
@@ -13451,10 +13450,6 @@
                   "network": "이 환경에서 {{provider}}에 연결할 수 없어 Orca도 {{reviewLabel}} 상태를 확인할 수 없었습니다.",
                   "untyped": "Orca는 이 브랜치에 이미 {{reviewLabel}}가 있는지 확인할 수 없었습니다."
                 },
-                "positive": {
-                  "title": "{{reviewLabelCap}} 세부 정보를 사용할 수 없음",
-                  "body": "Orca는 이 브랜치의 {{reviewLabel}} 정보를 저장했지만 현재 상태를 확인할 수 없었습니다."
-                },
                 "no_review": {
                   "title": "{{reviewLabel}}를 찾을 수 없음",
                   "body": "{{reviewLabel}}를 만들어 검사와 리뷰를 시작하세요."
@@ -13548,10 +13543,6 @@
                 "needs_push": {
                   "title": "브랜치에 푸시하지 않은 커밋이 있음",
                   "body": "{{reviewLabel}}를 만들기 전에 최신 커밋을 푸시하세요."
-                },
-                "existing": {
-                  "title": "{{reviewLabelCap}}이(가) 이미 존재함",
-                  "body": "Orca는 이 브랜치의 기존 {{reviewLabel}}를 찾았습니다."
                 },
                 "detached": {
                   "title": "현재 브랜치가 없음",
@@ -20908,6 +20899,25 @@
       "title": "PR 연결 해제됨",
       "description": "이 워크스페이스에서는 PR #{{number}}이(가) 숨겨져 있습니다. 검사와 리뷰 세부정보를 복원하려면 다시 연결하세요.",
       "relink": "링크 PR #{{number}}"
+    },
+    "positiveReview": {
+      "status": {
+        "failed": "세부 정보를 불러오지 못했습니다",
+        "queued": "세부 정보 로드 대기 중",
+        "rateGate": "{{provider}} 한도에 도달했습니다. {{time}}에 불러옵니다.",
+        "loading": "세부 정보 불러오는 중…",
+        "timeout": "{{provider}}에서 응답하지 않았습니다",
+        "unusable": "여기에서는 세부 정보를 표시할 수 없습니다",
+        "notLoaded": "세부 정보를 불러오지 않음",
+        "retryGate": "{{provider}} 한도에 도달했습니다. {{time}}에 다시 시도하세요."
+      },
+      "title": "{{shortLabel}} #{{number}}",
+      "titleNoNumber": "{{shortLabel}} 찾음",
+      "open": "{{shortLabel}} 열기",
+      "openAria": "{{provider}}에서 {{shortLabel}} #{{number}} 열기",
+      "openAriaNoNumber": "{{provider}}에서 {{shortLabel}} 열기",
+      "pushToUpdate": "푸시하여 {{shortLabel}} #{{number}}을(를) 업데이트하세요.",
+      "pushToUpdateNoNumber": "푸시하여 이 {{shortLabel}}을(를) 업데이트하세요."
     }
   },
   "sourceControl": {

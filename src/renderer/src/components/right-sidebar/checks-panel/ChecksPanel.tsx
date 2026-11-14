@@ -11,6 +11,7 @@ import { useChecksPanelPolling } from './refresh/use-checks-panel-polling'
 import { useChecksPanelReviewData } from './use-checks-panel-review-data'
 import { useChecksPanelManualRefresh } from './refresh/use-checks-panel-manual-refresh'
 import { useChecksPanelEntryRefreshAndTitleActions } from './refresh/use-checks-panel-entry-refresh-and-title-actions'
+import { useChecksPanelPRDetailRecovery } from './refresh/use-checks-panel-pr-detail-recovery'
 import { useChecksPanelCommentResolution } from './comments/use-checks-panel-comment-resolution'
 import { useChecksPanelCommentMutations } from './comments/use-checks-panel-comment-mutations'
 import { useChecksPanelAiQueue } from './review-actions/use-checks-panel-ai-queue'
@@ -36,7 +37,12 @@ export default function ChecksPanel(): React.JSX.Element {
     refreshModel,
     useChecksPanelEntryRefreshAndTitleActions(refreshModel)
   )
-  const resolutionModel = Object.assign(entryModel, useChecksPanelCommentResolution(entryModel))
+  // After entry refresh registers its own read, so recovery waits for it instead of racing it.
+  const recoveryModel = Object.assign(entryModel, useChecksPanelPRDetailRecovery(entryModel))
+  const resolutionModel = Object.assign(
+    recoveryModel,
+    useChecksPanelCommentResolution(recoveryModel)
+  )
   const mutationModel = Object.assign(
     resolutionModel,
     useChecksPanelCommentMutations(resolutionModel)

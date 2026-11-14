@@ -39,6 +39,9 @@ export class PRRefreshQueueScheduler {
   ) {}
 
   schedule(delay = 0): void {
+    if (!Number.isFinite(delay)) {
+      return
+    }
     const dueAt = performance.now() + Math.max(0, delay)
     if (this.timer !== null && this.timerDueAt <= dueAt) {
       return

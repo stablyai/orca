@@ -13094,7 +13094,6 @@
             "495b2f8c4b": "已启动代理，但无法解决或回复选中的评论",
             "review": {
               "auto_retry": "Orca 将在 {{time}} 重试",
-              "open_review": "打开评审",
               "retry": "重试"
             },
             "sync": {
@@ -13707,10 +13706,6 @@
                   "network": "Orca 无法检查 {{reviewLabel}} 状态，因为当前环境无法连接到 {{provider}}",
                   "untyped": "Orca 无法确认此分支是否已有 {{reviewLabel}}"
                 },
-                "positive": {
-                  "title": "{{reviewLabelCap}} 详细信息不可用",
-                  "body": "Orca 已为此分支保存了 {{reviewLabel}} 信息，但无法确认其当前状态"
-                },
                 "no_review": {
                   "title": "未找到 {{reviewLabel}}",
                   "body": "创建 {{reviewLabel}} 以开始检查和评审"
@@ -13804,10 +13799,6 @@
                 "needs_push": {
                   "title": "分支有未推送的提交",
                   "body": "请在创建 {{reviewLabel}} 之前推送最新提交"
-                },
-                "existing": {
-                  "title": "{{reviewLabelCap}} 已存在",
-                  "body": "Orca 找到了此分支的现有 {{reviewLabel}}"
                 },
                 "detached": {
                   "title": "没有当前分支",
@@ -21272,6 +21263,25 @@
       "title": "拉取请求已取消关联",
       "description": "此工作区已隐藏 PR #{{number}}，请重新关联，以恢复检查和评审详情",
       "relink": "关联 PR #{{number}}"
+    },
+    "positiveReview": {
+      "status": {
+        "failed": "无法加载详细信息",
+        "queued": "正在等待加载详细信息",
+        "rateGate": "已达到 {{provider}} 限制。将于 {{time}} 加载。",
+        "loading": "正在加载详细信息…",
+        "timeout": "{{provider}} 未响应",
+        "unusable": "无法在此显示详细信息",
+        "notLoaded": "未加载详细信息",
+        "retryGate": "已达到 {{provider}} 限制。请于 {{time}} 重试。"
+      },
+      "title": "{{shortLabel}} #{{number}}",
+      "titleNoNumber": "已找到 {{shortLabel}}",
+      "open": "打开 {{shortLabel}}",
+      "openAria": "在 {{provider}} 上打开 {{shortLabel}} #{{number}}",
+      "openAriaNoNumber": "在 {{provider}} 上打开 {{shortLabel}}",
+      "pushToUpdate": "推送以更新 {{shortLabel}} #{{number}}。",
+      "pushToUpdateNoNumber": "推送以更新此 {{shortLabel}}。"
     }
   },
   "sourceControl": {

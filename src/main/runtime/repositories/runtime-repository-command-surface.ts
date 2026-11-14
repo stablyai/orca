@@ -17,6 +17,7 @@ type HostedReviewCommandName =
   | 'getRepoSlug'
   | 'getRepoUpstream'
   | 'getRepoPRForBranch'
+  | 'resolvePRDetailRecoveryCandidate'
   | 'getHostedReviewForBranch'
   | 'getHostedReviewCreationEligibility'
   | 'createHostedReview'
@@ -176,6 +177,7 @@ export function installRuntimeRepositoryCommandSurface(
     getRepoSlug: reviews.getRepoSlug.bind(reviews),
     getRepoUpstream: reviews.getRepoUpstream.bind(reviews),
     getRepoPRForBranch: reviews.getRepoPRForBranch.bind(reviews),
+    resolvePRDetailRecoveryCandidate: reviews.resolvePRDetailRecoveryCandidate.bind(reviews),
     getHostedReviewForBranch: reviews.getHostedReviewForBranch.bind(reviews),
     getHostedReviewCreationEligibility: reviews.getHostedReviewCreationEligibility.bind(reviews),
     createHostedReview: reviews.createHostedReview.bind(reviews),

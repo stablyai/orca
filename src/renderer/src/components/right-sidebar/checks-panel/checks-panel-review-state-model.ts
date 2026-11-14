@@ -33,6 +33,8 @@ export type ChecksPanelReviewState = {
   autoRetryAt?: number
   /** Retry button stays disabled while now < retryDisabledUntil. */
   retryDisabledUntil?: number
+  /** Known review without renderable details: the shared title/status/actions layout owns the panel. */
+  positiveReview?: boolean
 }
 
 export type ChecksPanelRefreshInput = {
@@ -53,6 +55,8 @@ export type ChecksPanelReviewStateInput = {
   /** GitHub gets typed error rows; other providers use neutral copy. */
   isGitHubProvider: boolean
   reviewLookup: ChecksPanelReviewLookup
+  /** The positive review's number, when the evidence names one. */
+  reviewNumber?: number | null
   openReviewUrl: string | null
   eligibilityBlockedReason: HostedReviewCreationBlockedReason | undefined
   /** Confirmed readiness held for the exact context (see review-creation). */

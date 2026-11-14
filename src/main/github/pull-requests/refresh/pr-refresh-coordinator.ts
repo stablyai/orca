@@ -17,29 +17,18 @@ import {
   shouldBroadcastQueued,
   validateCandidate
 } from './pr-refresh-candidate-policy'
-import {
-  PRRefreshEventPublisher,
-  type PRRefreshOutcomeObserver
-} from './pr-refresh-event-publisher'
-import { PRRefreshPacing } from './pr-refresh-pacing'
-import { PRRefreshQueue } from './pr-refresh-queue'
-import { PRRefreshQueueDrainer, type PRRefreshRegistrationCheck } from './pr-refresh-queue-drainer'
+import type { PRRefreshOutcomeObserver } from './pr-refresh-event-publisher'
+import type { PRRefreshRegistrationCheck } from './pr-refresh-queue-drainer'
 import {
   prWatchQueueKey,
   schedulePRWatchEntry,
   type PRWatchJob,
   type PRWatchJobHooks
 } from './pr-refresh-watch-jobs'
-import { PRRefreshRetryState } from './pr-refresh-retry-state'
-import { PRRefreshVisibility } from './pr-refresh-visibility'
 import { refreshPRPolicyContext } from '../../client/lookup/pr-quiet-policy-evidence'
 
-const retry = new PRRefreshRetryState()
-const queue = new PRRefreshQueue((key) => retry.reset(key))
-const pacing = new PRRefreshPacing()
-const visibility = new PRRefreshVisibility()
-const events = new PRRefreshEventPublisher()
-const drainer = new PRRefreshQueueDrainer(queue, pacing, visibility, retry, events)
+import { drainer, events, pacing, queue, retry, visibility } from './pr-refresh-coordinator-state'
+import { registerPRRefreshRequest } from './pr-detail-recovery-coordinator'
 
 export function addPRRefreshOutcomeObserver(observer: PRRefreshOutcomeObserver): () => void {
   return events.addOutcomeObserver(observer)
@@ -76,6 +65,7 @@ export async function runHostedPRRead(
   didRead: () => boolean = () => true,
   release: () => void = () => {}
 ): Promise<PRRefreshOutcome> {
+  const settle = registerPRRefreshRequest(candidate, 'h', true)
   try {
     if (typeof read !== 'function') {
       const result = await read.readResult((outcome) => {
@@ -90,6 +80,7 @@ export async function runHostedPRRead(
     }
     return outcome
   } finally {
+    settle()
     if (typeof read !== 'function') {
       read.release()
     } else {
@@ -136,7 +127,8 @@ export async function runHostedPRSnapshot(
       acceptRevalidationOnly
     )
   }
-  return drainer.hostedJobs.readCold(candidate, prepared, acceptRevalidationOnly)
+  const settle = registerPRRefreshRequest(candidate, 'h', false)
+  return drainer.hostedJobs.readCold(candidate, prepared, acceptRevalidationOnly).finally(settle)
 }
 
 function removeInvisibleVisibleRefreshes(): void {
@@ -182,6 +174,9 @@ export function enqueuePRRefresh(
   }
 
   const enqueued = queue.enqueue(candidate, reason, priority, windowId)
+  if (reason !== 'visible') {
+    registerPRRefreshRequest(candidate, null, true)
+  }
   const pending = queue.get(key)
   if (pending && reason === 'visible' && candidate.isSelected && priority >= 80) {
     // Foreground exposure keeps retry gates while bypassing the list budget once.
@@ -223,31 +218,16 @@ export function reportVisiblePRRefreshCandidates(
   drainer.schedule()
 }
 
-export function _getVisiblePRRefreshWindowCountForTests(): number {
-  return visibility.windowCount
-}
-
-export function _getPRRefreshErrorBackoffCountForTests(): number {
-  return retry.errorBackoffCount
-}
-
-export function _getPRRefreshQueueSizeForTests(): number {
-  return queue.size
-}
-
-export function _getPRRefreshAliasCountForTests(key: string): number {
-  return queue.aliasCount(key)
-}
-
 export function refreshPRNow(
   candidate: GitHubPRRefreshCandidate,
   reason: GitHubPRRefreshReason = 'manual',
   options: { userRefresh?: boolean } = {}
 ): Promise<PRSnapshotReply> {
+  const settle = registerPRRefreshRequest(candidate, 'd', true)
   return runImmediatePRRefresh(
     { queue, retry, visibility, events, drainer },
     candidate,
     reason,
     options
-  )
+  ).finally(settle)
 }

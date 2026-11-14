@@ -33,6 +33,8 @@ export type PRRefreshQueueEntry = {
   /** A watch job: the PR's current head, or with `headSha` one earlier head's checks. */
   watch?: { prKey: string; headSha?: string }
   hosted?: HostedPRReadJob
+  recovery?: { ticketId: string; slotKey: string; committed: boolean }
+  pacingScope?: string
 }
 
 export type PRRefreshEnqueue = {
@@ -56,7 +58,22 @@ export class PRRefreshQueue {
   // Completion ownership shares the cooldown map's bound.
   private readonly backgroundNotBefore = new Map<string, PRRefreshRequestState>()
 
+  private changeListener: (() => void) | null = null
+
   constructor(private readonly resetRetryState: (key: string) => void) {}
+
+  /** Detail-recovery tickets recheck predecessors and orphaned work when queued entries change. */
+  setChangeListener(listener: (() => void) | null): void {
+    this.changeListener = listener
+  }
+
+  private changed(): void {
+    this.changeListener?.()
+  }
+
+  backgroundUntil(key: string): number {
+    return this.backgroundNotBefore.get(key)?.until ?? 0
+  }
 
   get size(): number {
     return this.entries.size
@@ -69,10 +86,13 @@ export class PRRefreshQueue {
   set(key: string, entry: PRRefreshQueueEntry): void {
     dropSupersededWorktreeAliases(entry.aliases)
     this.entries.set(key, entry)
+    this.changed()
   }
 
   delete(key: string): void {
-    this.entries.delete(key)
+    if (this.entries.delete(key)) {
+      this.changed()
+    }
   }
 
   values(): IterableIterator<PRRefreshQueueEntry> {
@@ -129,7 +149,7 @@ export class PRRefreshQueue {
         this.backgroundNotBefore.get(entry.key)?.until ?? 0
       )
       if (!Number.isFinite(entry.dueAt)) {
-        this.entries.delete(entry.key)
+        this.delete(entry.key)
       }
     }
   }
@@ -151,6 +171,7 @@ export class PRRefreshQueue {
       bypassesFreshnessDelay(reason) ? 0 : (this.backgroundNotBefore.get(key)?.until ?? 0)
     )
     if (!Number.isFinite(dueAt) && !existing) {
+      this.changed()
       return { alias, key, dueAt, coalesced: false }
     }
     if (!existing) {
@@ -201,6 +222,7 @@ export class PRRefreshQueue {
         isSelected: candidate.isSelected
       }
     }
+    this.changed()
     return { alias, key, dueAt, coalesced: true }
   }
 
@@ -212,8 +234,10 @@ export class PRRefreshQueue {
     existing.aliases.delete(alias.cacheKey)
     const replacement = existing.aliases.values().next().value
     if (!replacement) {
-      this.entries.delete(key)
-      this.resetRetryState(key)
+      this.delete(key)
+      if (!existing.recovery) {
+        this.resetRetryState(key)
+      }
       return
     }
     if (existing.candidate.cacheKey === alias.cacheKey) {
@@ -225,6 +249,7 @@ export class PRRefreshQueue {
         isBare: false
       }
     }
+    this.changed()
   }
 
   pruneWorktreeAliases(worktreeId: string): void {
@@ -245,6 +270,9 @@ export class PRRefreshQueue {
       }
       this.entries.delete(key)
       removed.push(entry)
+    }
+    if (removed.length > 0) {
+      this.changed()
     }
     return removed
   }

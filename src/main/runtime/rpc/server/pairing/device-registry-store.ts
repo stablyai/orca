@@ -4,13 +4,44 @@ import { DEVICE_REGISTRY_FILENAME } from './mobile-pairing-files'
 import { withoutEphemeralRows } from './ephemeral-device-rows'
 import { DeviceRegistryWriter } from './device-registry-disk-merge'
 import type { DeviceEntry } from './device-entry'
+import { DeviceAuthorityIndex } from './device-authority-index'
 
 const STALE_WRITE_TEMP_AGE_MS = 24 * 60 * 60 * 1000
 
 /** Registry persistence: every change is written merged over the file before memory takes it. */
 export class DeviceRegistryStore {
   private readonly registryPath: string
-  protected devices: DeviceEntry[] = []
+  private deviceRows: DeviceEntry[] = []
+  protected readonly authorityIndex = new DeviceAuthorityIndex()
+  protected get devices(): DeviceEntry[] {
+    return this.deviceRows
+  }
+  protected set devices(devices: DeviceEntry[]) {
+    if (devices !== this.deviceRows) {
+      this.deviceRows = devices
+      this.authorityIndex.publish(devices)
+    }
+  }
+  protected updateSighting(
+    deviceId: string,
+    sighting: Pick<DeviceEntry, 'lastSeenAt' | 'lastSourceClass' | 'legacyE2EEAuthAt'>
+  ): void {
+    const previous = this.authorityIndex.row(deviceId)
+    if (!previous) {
+      return
+    }
+    const updated = {
+      ...previous,
+      lastSeenAt: sighting.lastSeenAt,
+      lastSourceClass: sighting.lastSourceClass,
+      legacyE2EEAuthAt: sighting.legacyE2EEAuthAt
+    }
+    this.deviceRows = this.deviceRows.map((device) =>
+      device.deviceId === deviceId ? updated : device
+    )
+    this.authorityIndex.updateSighting(updated)
+  }
+
   /** Never overwrite an unreadable registry from the empty in-memory list. */
   protected registryUnreadable = false
   /** Parse failures prevent authoritative absence/revocation verdicts. */
@@ -55,6 +86,17 @@ export class DeviceRegistryStore {
     if (!this.registryUnreadable) {
       this.devices = this.writer.adoptExternalEdits(this.devices, options) ?? this.devices
     }
+  }
+
+  /** The socket owner refreshes even when no caller submits another request. */
+  refreshAuthority(): void {
+    this.adoptExternalEdits()
+    this.authorityIndex.expire(this.devices)
+  }
+
+  /** A stopped observer cannot continue authorizing its captured sockets or queued work. */
+  retireCapturedAuthority(): void {
+    this.authorityIndex.publish(this.devices, Date.now(), true)
   }
 
   private load(): void {

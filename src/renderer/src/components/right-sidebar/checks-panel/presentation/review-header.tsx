@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import { Ellipsis, GitMerge, Link, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -17,9 +17,11 @@ import type { ChecksPanelHostedReviewModifierDestination } from '../review-actio
 import { useTranslate } from '@/i18n/use-translate'
 import { PullRequestIcon, prStateColor } from './check-presentation'
 import { HostedReviewUnlinkMenuItem } from '@/components/HostedReviewUnlinkMenuItem'
+import { takeReviewHeaderFocusAfterRetry } from './positive-review-focus-handoff'
 
 type ChecksPanelReviewHeaderProps = {
   review: ChecksPanelReview
+  worktreeId?: string | null
   isRefreshing: boolean
   canUnlinkReview: boolean
   modifierHintDestination: ChecksPanelHostedReviewModifierDestination
@@ -31,6 +33,7 @@ type ChecksPanelReviewHeaderProps = {
 
 export function ChecksPanelReviewHeader({
   review,
+  worktreeId = null,
   isRefreshing,
   canUnlinkReview,
   modifierHintDestination,
@@ -40,6 +43,12 @@ export function ChecksPanelReviewHeader({
   onLinkAnotherReview
 }: ChecksPanelReviewHeaderProps): React.JSX.Element {
   const t = useTranslate()
+  const numberButtonRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (takeReviewHeaderFocusAfterRetry(worktreeId)) {
+      numberButtonRef.current?.focus()
+    }
+  }, [worktreeId])
   const reviewNumberLabel = review.provider === 'gitlab' ? `!${review.number}` : `#${review.number}`
   const ReviewIcon = review.provider === 'gitlab' ? GitMerge : PullRequestIcon
   const reviewHostLabel = review.provider === 'gitlab' ? 'GitLab' : 'GitHub'
@@ -64,6 +73,7 @@ export function ChecksPanelReviewHeader({
     <div className="flex items-center gap-2">
       <ReviewIcon className="size-4 text-muted-foreground shrink-0" />
       <button
+        ref={numberButtonRef}
         type="button"
         className="rounded px-0.5 text-[12px] font-semibold text-foreground underline decoration-border underline-offset-2 hover:text-foreground hover:decoration-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         title={title}

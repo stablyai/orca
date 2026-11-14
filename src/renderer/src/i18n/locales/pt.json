@@ -380,6 +380,25 @@
       "title": "Pull request desvinculado",
       "description": "O PR #{{number}} está oculto para este espaço de trabalho. Vincule-o novamente para restaurar as verificações e os detalhes da revisão.",
       "relink": "Vincular PR #{{number}}"
+    },
+    "positiveReview": {
+      "status": {
+        "failed": "Não foi possível carregar os detalhes",
+        "queued": "Aguardando para carregar os detalhes",
+        "rateGate": "Limite do {{provider}} atingido. Carrega às {{time}}.",
+        "loading": "Carregando detalhes…",
+        "timeout": "O {{provider}} não respondeu",
+        "unusable": "Os detalhes não podem ser exibidos aqui",
+        "notLoaded": "Detalhes não carregados",
+        "retryGate": "Limite do {{provider}} atingido. Tente novamente às {{time}}."
+      },
+      "title": "{{shortLabel}} #{{number}}",
+      "titleNoNumber": "{{shortLabel}} encontrado",
+      "open": "Abrir {{shortLabel}}",
+      "openAria": "Abrir {{shortLabel}} #{{number}} no {{provider}}",
+      "openAriaNoNumber": "Abrir {{shortLabel}} no {{provider}}",
+      "pushToUpdate": "Faça push para atualizar o {{shortLabel}} #{{number}}.",
+      "pushToUpdateNoNumber": "Faça push para atualizar este {{shortLabel}}."
     }
   },
   "editor": {
@@ -10404,10 +10423,6 @@
                   "network": "O Orca também não conseguiu verificar o status de {{reviewLabel}} porque este ambiente não conseguiu alcançar {{provider}}.",
                   "untyped": "O Orca também não conseguiu confirmar se esta branch já tem um(a) {{reviewLabel}}."
                 },
-                "positive": {
-                  "title": "Detalhes de {{reviewLabelCap}} indisponíveis",
-                  "body": "O Orca salvou informações de {{reviewLabel}} para esta branch, mas não conseguiu confirmar seu status atual."
-                },
                 "no_review": {
                   "title": "Nenhum(a) {{reviewLabel}} encontrado(a)",
                   "body": "Crie um(a) {{reviewLabel}} para iniciar verificações e revisão."
@@ -10501,10 +10516,6 @@
                 "needs_push": {
                   "title": "A branch tem commits não enviados",
                   "body": "Faça push dos commits mais recentes antes de criar um(a) {{reviewLabel}}."
-                },
-                "existing": {
-                  "title": "{{reviewLabelCap}} já existe",
-                  "body": "O Orca encontrou um(a) {{reviewLabel}} existente para esta branch."
                 },
                 "detached": {
                   "title": "Nenhuma branch atual",
@@ -10948,7 +10959,6 @@
             "495b2f8c4b": "Agente iniciado, mas não foi possível resolver ou responder os comentários selecionados.",
             "review": {
               "auto_retry": "O Orca vai tentar novamente às {{time}}.",
-              "open_review": "Abrir Review",
               "retry": "Tentar novamente"
             },
             "sync": {

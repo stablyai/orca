@@ -13496,7 +13496,6 @@
             "495b2f8c4b": "Der Agent wurde gestartet, aber die ausgewählten Kommentare konnten weder als erledigt markiert noch beantwortet werden.",
             "review": {
               "auto_retry": "Orca versucht es um {{time}} erneut.",
-              "open_review": "Review öffnen",
               "retry": "Erneut versuchen"
             },
             "sync": {
@@ -14124,10 +14123,6 @@
                   "network": "Orca konnte außerdem den Status des {{reviewLabel}}s nicht prüfen, da diese Umgebung {{provider}} nicht erreichen konnte.",
                   "untyped": "Orca konnte außerdem nicht bestätigen, ob für diesen Branch bereits ein {{reviewLabel}} existiert."
                 },
-                "positive": {
-                  "title": "Details zum {{reviewLabelCap}} nicht verfügbar",
-                  "body": "Orca hat gespeicherte Informationen zum {{reviewLabel}} für diesen Branch, konnte aber den aktuellen Status nicht bestätigen."
-                },
                 "no_review": {
                   "title": "Kein {{reviewLabel}} gefunden",
                   "body": "Einen {{reviewLabel}} erstellen, um Checks und Review zu starten."
@@ -14221,10 +14216,6 @@
                 "needs_push": {
                   "title": "Branch hat ungepushte Commits",
                   "body": "Vor dem Erstellen eines {{reviewLabel}}s die neuesten Commits pushen."
-                },
-                "existing": {
-                  "title": "{{reviewLabelCap}} existiert bereits",
-                  "body": "Orca hat einen bestehenden {{reviewLabel}} für diesen Branch gefunden."
                 },
                 "detached": {
                   "title": "Kein aktueller Branch",
@@ -21172,6 +21163,25 @@
       "title": "Verknüpfung mit Pull Request aufgehoben",
       "description": "PR #{{number}} ist für diesen Arbeitsbereich ausgeblendet. Erneut verknüpfen, um Checks und Review-Details wiederherzustellen.",
       "relink": "PR #{{number}} verknüpfen"
+    },
+    "positiveReview": {
+      "status": {
+        "failed": "Details konnten nicht geladen werden",
+        "queued": "Warte auf das Laden der Details",
+        "rateGate": "{{provider}}-Limit erreicht. Lädt um {{time}}.",
+        "loading": "Details werden geladen…",
+        "timeout": "{{provider}} hat nicht geantwortet",
+        "unusable": "Details können hier nicht angezeigt werden",
+        "notLoaded": "Details nicht geladen",
+        "retryGate": "{{provider}}-Limit erreicht. Erneuter Versuch ab {{time}} möglich."
+      },
+      "title": "{{shortLabel}} #{{number}}",
+      "titleNoNumber": "{{shortLabel}} gefunden",
+      "open": "{{shortLabel}} öffnen",
+      "openAria": "{{shortLabel}} #{{number}} auf {{provider}} öffnen",
+      "openAriaNoNumber": "{{shortLabel}} auf {{provider}} öffnen",
+      "pushToUpdate": "Pushen, um {{shortLabel}} #{{number}} zu aktualisieren.",
+      "pushToUpdateNoNumber": "Pushen, um diesen {{shortLabel}} zu aktualisieren."
     }
   },
   "sourceControl": {

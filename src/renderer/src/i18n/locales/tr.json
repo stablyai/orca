@@ -13473,7 +13473,6 @@
             "495b2f8c4b": "Ajan başlatıldı, ancak seçilen yorumlar çözülemedi veya yanıtlanamadı.",
             "review": {
               "auto_retry": "Orca {{time}} saatinde tekrar deneyecek.",
-              "open_review": "İncelemeyi Aç",
               "retry": "Tekrar Dene"
             },
             "sync": {
@@ -14101,10 +14100,6 @@
                   "network": "Bu ortam {{provider}} adresine ulaşamadığı için Orca {{reviewLabel}} durumunu da kontrol edemedi.",
                   "untyped": "Orca bu branch için zaten bir {{reviewLabel}} bulunup bulunmadığını da doğrulayamadı."
                 },
-                "positive": {
-                  "title": "{{reviewLabelCap}} ayrıntıları kullanılamıyor",
-                  "body": "Orca bu branch için {{reviewLabel}} bilgisini kaydetti ama mevcut durumunu doğrulayamadı."
-                },
                 "no_review": {
                   "title": "{{reviewLabel}} bulunamadı",
                   "body": "Kontrolleri ve incelemeyi başlatmak için bir {{reviewLabel}} oluşturun."
@@ -14198,10 +14193,6 @@
                 "needs_push": {
                   "title": "Branch'te push edilmemiş commit'ler var",
                   "body": "Bir {{reviewLabel}} oluşturmadan önce son commit'leri push edin."
-                },
-                "existing": {
-                  "title": "{{reviewLabelCap}} zaten mevcut",
-                  "body": "Orca, bu branch için mevcut bir {{reviewLabel}} buldu."
                 },
                 "detached": {
                   "title": "Mevcut branch yok",
@@ -21142,6 +21133,25 @@
       "title": "Pull request bağlantısı kaldırıldı",
       "description": "PR #{{number}} bu çalışma alanı için gizlendi. Kontrolleri ve inceleme ayrıntılarını geri getirmek için tekrar bağlayın.",
       "relink": "PR #{{number}} bağlantısını kur"
+    },
+    "positiveReview": {
+      "status": {
+        "failed": "Ayrıntılar yüklenemedi",
+        "queued": "Ayrıntıların yüklenmesi bekleniyor",
+        "rateGate": "{{provider}} sınırına ulaşıldı. {{time}} saatinde yüklenecek.",
+        "loading": "Ayrıntılar yükleniyor…",
+        "timeout": "{{provider}} yanıt vermedi",
+        "unusable": "Ayrıntılar burada gösterilemiyor",
+        "notLoaded": "Ayrıntılar yüklenmedi",
+        "retryGate": "{{provider}} sınırına ulaşıldı. {{time}} saatinde yeniden deneyin."
+      },
+      "title": "{{shortLabel}} #{{number}}",
+      "titleNoNumber": "{{shortLabel}} bulundu",
+      "open": "{{shortLabel}} aç",
+      "openAria": "{{shortLabel}} #{{number}} öğesini {{provider}} üzerinde aç",
+      "openAriaNoNumber": "{{shortLabel}} öğesini {{provider}} üzerinde aç",
+      "pushToUpdate": "{{shortLabel}} #{{number}} öğesini güncellemek için push yapın.",
+      "pushToUpdateNoNumber": "Bu {{shortLabel}} öğesini güncellemek için push yapın."
     }
   },
   "sourceControl": {
