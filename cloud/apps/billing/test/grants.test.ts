@@ -89,7 +89,7 @@ describe('catalog', () => {
       return file
     }
     expect(() => parseCatalogFile(withSupport('https://orca.dev/support'))).not.toThrow()
-    expect(() => parseCatalogFile(withSupport('mailto:support@orca.dev'))).not.toThrow()
+    expect(() => parseCatalogFile(withSupport('mailto:help@stably.ai'))).not.toThrow()
     for (const bad of ['javascript:alert(1)', 'http://orca.dev/support', 'mailto:nobody']) {
       expect(() => parseCatalogFile(withSupport(bad))).toThrow()
     }
