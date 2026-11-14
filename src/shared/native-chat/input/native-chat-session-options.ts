@@ -36,6 +36,8 @@ export type SessionOptionDescriptor = {
         choices: SessionOptionSelectChoice[]
         /** Presentation when no value is known; never an input selection. */
         placeholder?: string
+        /** What the running agent reports when currentValue delegates to it; presentation only. */
+        reportedValue?: string
       }
     /** Switches require values or unset renders false against the catalog default; confirmation remains valueSource’s responsibility. */
     | {

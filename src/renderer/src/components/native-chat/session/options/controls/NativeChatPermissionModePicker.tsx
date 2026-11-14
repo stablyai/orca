@@ -88,6 +88,8 @@ export function NativeChatPermissionModeItems({
 
 export type NativeChatPermissionModePickerProps = {
   current: string | undefined
+  /** The mode the agent reports running in when `current` is Own. */
+  reported?: string
   modes: readonly AgentChatPermissionMode[]
   /** Whose descriptions to show; absent describes every agent's. */
   agent?: string | null
@@ -99,6 +101,7 @@ export type NativeChatPermissionModePickerProps = {
 
 function NativeChatPermissionModePickerInner({
   current,
+  reported,
   modes,
   agent,
   disabled = false,
@@ -109,9 +112,11 @@ function NativeChatPermissionModePickerInner({
   const t = useTranslate()
   useUiLanguageRevision()
   const title = nativeChatPermissionPickerTitle(t)
-  const selectedLabel = isAgentChatPermissionMode(current)
-    ? nativeChatPermissionModeLabel(current, t)
-    : current === 'own'
+  // Own shows the mode the agent reports; before it reports, name the delegation.
+  const shown = current === 'own' && reported !== undefined ? reported : current
+  const selectedLabel = isAgentChatPermissionMode(shown)
+    ? nativeChatPermissionModeLabel(shown, t)
+    : shown === 'own'
       ? t('settings.agents.permissionOwnAll', "Agents' own settings")
       : (currentLabel ?? title)
   const activeLabel = isAgentChatPermissionMode(activeValue)
@@ -143,8 +148,8 @@ function NativeChatPermissionModePickerInner({
               )}
               className="max-w-40 min-w-0 shrink"
             >
-              {isAgentChatPermissionMode(current) ? (
-                <NativeChatPermissionModeName mode={current} label={label} truncate />
+              {isAgentChatPermissionMode(shown) ? (
+                <NativeChatPermissionModeName mode={shown} label={label} truncate />
               ) : (
                 <>
                   <Settings2 className="size-3.5 shrink-0" aria-hidden />
@@ -203,6 +208,7 @@ export function NativeChatComposerPermissionPicker({
   return (
     <NativeChatPermissionModePicker
       current={current}
+      reported={descriptor.kind.reportedValue}
       modes={modes}
       activeValue={descriptor.valueSource === 'dispatched' ? descriptor.activeValue : undefined}
       agent={agent ?? null}

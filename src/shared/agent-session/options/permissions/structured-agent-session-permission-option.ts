@@ -63,16 +63,20 @@ export function structuredAgentSessionPermissionDescriptor(state: {
     return null
   }
   const current = state.permissionMode ?? undefined
-  const reported = support.modes.find((mode) => mode === current)
-  const label = own
-    ? "Agent's own settings"
-    : reported
-      ? MODE_COPY[reported].label
-      : current === 'plan'
-        ? 'Plan mode'
-        : current === 'read-only'
-          ? 'Read only'
-          : (current ?? 'Permissions')
+  // Own delegates to the agent, so show the mode it reports running in; the saved choice stays Own.
+  const reportedValue = own ? (state.reportedPermissionMode ?? undefined) : undefined
+  const shown = reportedValue ?? current
+  const known = support.modes.find((mode) => mode === shown)
+  const label =
+    own && reportedValue === undefined
+      ? "Agent's own settings"
+      : known
+        ? MODE_COPY[known].label
+        : shown === 'plan'
+          ? 'Plan mode'
+          : shown === 'read-only'
+            ? 'Read only'
+            : (shown ?? 'Permissions')
   // Claude applies a pick on reacquisition; Codex can apply one to its reused child.
   const activeValue =
     state.record.agent === 'claude' &&
@@ -88,6 +92,7 @@ export function structuredAgentSessionPermissionDescriptor(state: {
     kind: {
       type: 'select',
       currentValue: current,
+      ...(reportedValue !== undefined ? { reportedValue } : {}),
       choices: support.modes.map((value) => ({
         value,
         label: MODE_COPY[value].label,
