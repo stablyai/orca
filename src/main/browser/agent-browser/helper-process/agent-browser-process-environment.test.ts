@@ -22,6 +22,7 @@ describe('desktop agent-browser helper environment', () => {
         agent_browser_auto_connect: '1',
         AGENT_BROWSER_CDP: 'ws://127.0.0.1:9222/devtools/browser/user',
         AGENT_BROWSER_SOCKET_DIR: '/tmp/ab-sockets',
+        AGENT_BROWSER_NAMESPACE: 'work',
         AGENT_BROWSER_IDLE_TIMEOUT_MS: '5000'
       },
       platform: 'darwin',

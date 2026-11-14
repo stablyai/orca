@@ -21,10 +21,12 @@ export function createAgentBrowserProcessEnvironment(options: {
 }): AgentBrowserProcessEnvironment {
   // Commands get Orca's tokened proxy URL per spawn; a user's autoConnect, pinTab or extensions
   // would refuse it or open tabs behind Orca's tab model.
-  const env = isolateFromUserAgentBrowserSettings(
-    options.inheritedEnv,
-    writeEmptyAgentBrowserConfig(options.userDataPath)
-  )
+  // A namespace moves sockets under namespaces/<name>/, where session reset and exit waits don't look.
+  const env = isolateFromUserAgentBrowserSettings({
+    inheritedEnv: options.inheritedEnv,
+    keepKeys: ['AGENT_BROWSER_SOCKET_DIR'],
+    configPath: writeEmptyAgentBrowserConfig(options.userDataPath)
+  })
   env.AGENT_BROWSER_IDLE_TIMEOUT_MS =
     options.inheritedEnv.AGENT_BROWSER_IDLE_TIMEOUT_MS?.trim() ||
     String(AGENT_BROWSER_IDLE_TIMEOUT_MS)
