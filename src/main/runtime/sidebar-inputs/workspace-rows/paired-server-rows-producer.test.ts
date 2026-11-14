@@ -1,3 +1,13 @@
+import '../../../../shared/remote-runtime/host-store/environment-store-worker.test-support'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { encodePairingOffer } from '../../../../shared/remote-runtime/pairing/pairing'
+import {
+  addEnvironmentFromPairingCode,
+  resolveEnvironment,
+  updateEnvironmentFromPairingCode
+} from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { RUNTIME_PROTOCOL_VERSION } from '../../../../shared/protocol-version'
 import {
@@ -400,5 +410,59 @@ it('closes a delayed watch from a detached provider without resurrecting its hos
     ])
   } finally {
     detachNext()
+  }
+})
+
+it('publishes a fresh complete listing after a pairing changes between its store reads', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'orca-paired-listing-'))
+  const code = (seed: number) =>
+    encodePairingOffer({
+      v: 2,
+      publicKeyB64: Buffer.alloc(32, seed).toString('base64'),
+      deviceToken: `synthetic-${seed}`,
+      endpoint: 'wss://pairing.example.com/runtime'
+    })
+  const saved = await addEnvironmentFromPairingCode(root, {
+    name: 'Box',
+    pairingCode: code(1),
+    now: 100
+  })
+  const h = fakeHosts([{ id: saved.id, live: false }])
+  const original = h.hosts.list
+  const producer = new PairedServerRowsProducer({
+    hasDemand: () => false,
+    hostLabelOverrides: () => new Map()
+  })
+  const detach = producer.attach(h.hosts)
+  try {
+    await producer.sync()
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    const listing = async () => {
+      const record = await resolveEnvironment(root, saved.id)
+      const result = await original()
+      return {
+        ...result,
+        environments: result.environments.map((environment) => ({
+          ...environment,
+          name: `Pairing ${record.pairingRevision}`
+        }))
+      }
+    }
+    vi.spyOn(h.hosts, 'list')
+      .mockImplementation(listing)
+      .mockImplementationOnce(async () => {
+        const stale = await listing()
+        await updateEnvironmentFromPairingCode(root, saved.id, { pairingCode: code(2), now: 200 })
+        await resolveEnvironment(root, saved.id)
+        return stale
+      })
+    const published: string[][] = []
+    await producer.withPreparedSnapshot((snapshot) => {
+      published.push(snapshot.servers.map((server) => server.host!.label))
+    })
+    expect(published).toEqual([['Pairing 200']])
+  } finally {
+    detach()
+    rmSync(root, { recursive: true, force: true })
   }
 })
