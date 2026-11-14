@@ -17,10 +17,11 @@ import { isPathInsideOrEqual } from '../../../../../../shared/cross-platform-pat
 import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
 import { useAppStore } from '@/store'
+import { previewNestedWorktreeRemoval } from '@/store/slices/worktrees/teardown/preview-nested-worktree-removal'
 import { useTranslate } from '@/i18n/use-translate'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import type { GitWorktreeInfo } from '../../../../../../shared/worktree/types'
-import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal'
+import type { WorktreeRemovalTarget } from '../../../../../../shared/worktree/removal/removal'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function DeleteNestedWorktreesDialog({
@@ -62,19 +63,13 @@ export function DeleteNestedWorktreesDialog({
     setPlan(null)
     setError(null)
     try {
-      const preview = window.api.worktrees.previewNestedRemoval
-      if (!preview) {
-        throw new Error(
-          t(
-            'auto.components.sidebar.DeleteNestedWorktreesDialog.unsupportedHost',
-            'This host does not support nested worktree deletion.'
-          )
+      const result = await previewNestedWorktreeRemoval(
+        target,
+        t(
+          'auto.components.sidebar.DeleteNestedWorktreesDialog.unsupportedHost',
+          'This host does not support nested worktree deletion.'
         )
-      }
-      const result = await preview({
-        worktreeId: target.id,
-        hostId: target.executionHostId ?? undefined
-      })
+      )
       if (generation === request.current) {
         setPlan(result)
       }
@@ -176,9 +171,7 @@ export function DeleteNestedWorktreesDialog({
       >
         <DialogContent surface="security" showCloseButton={!deleting}>
           <DialogHeader>
-            <DialogTitle>
-              {t('worktree.nestedRemoval.title', 'Delete workspace and nested worktrees?')}
-            </DialogTitle>
+            <DialogTitle>{t('common.delete', 'Delete')}</DialogTitle>
             <DialogDescription>
               {t(
                 'worktree.nestedRemoval.description',
@@ -249,7 +242,7 @@ export function DeleteNestedWorktreesDialog({
                 {deleting ? <LoaderCircle className="size-4 animate-spin" /> : null}
                 {deleting
                   ? t('worktree.nestedRemoval.deleting', 'Deleting…')
-                  : t('worktree.nestedRemoval.confirm', 'Delete all listed worktrees')}
+                  : t('common.delete', 'Delete')}
               </Button>
             )}
           </DialogFooter>

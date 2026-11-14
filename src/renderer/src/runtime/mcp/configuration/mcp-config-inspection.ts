@@ -9,7 +9,7 @@ import {
   type McpConfigInspection
 } from '../../../../../shared/mcp-config'
 import { joinPath } from '../../../lib/path'
-import { extractIpcErrorMessage } from '../../../lib/ipc-error'
+import { extractIpcErrorMessage } from '../../errors/ipc-error'
 
 import { readRuntimeDirectory } from '@/runtime/files/reads/runtime-directory-read'
 import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'

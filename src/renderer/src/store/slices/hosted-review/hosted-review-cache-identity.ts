@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { composeRepoCacheKey } from '../../../../../shared/github/github-cache-key'
+import { composeRepoCacheKey } from '../../../../../shared/github/cache/github-cache-key'
 import {
   getSettingsFocusedExecutionHostId,
   normalizeExecutionHostId,

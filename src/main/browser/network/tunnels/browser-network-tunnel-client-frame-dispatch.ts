@@ -1,7 +1,7 @@
 import {
   BrowserNetworkTunnelOpcode,
   type BrowserNetworkTunnelFrame
-} from '../../../../shared/browser-network-tunnel-protocol'
+} from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 
 type BrowserNetworkTunnelClientFrameActions = {
   opened: () => void

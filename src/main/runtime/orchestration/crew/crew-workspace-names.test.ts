@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
-import { fixture } from '../../../persistence/loading-store/profile-state-delayed-authority-fixture'
+import { fixture } from '../../../persistence/loading-store/profile-writing/profile-state-delayed-authority-fixture'
 import {
   makeTerminalTab,
   TEST_LEAF_1,

@@ -1,5 +1,12 @@
 import { useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type HostInstance
+} from 'react-native'
 import {
   ExternalLink,
   FileText,
@@ -8,18 +15,18 @@ import {
   Sparkles,
   Trash2
 } from 'lucide-react-native'
-import type { PRComment } from '../../../../src/shared/github/comment-types'
+import type { PRComment } from '../../../../src/shared/github/comments/comment-types'
 import {
   getPRCommentGroupRoot,
   type PRCommentGroup
 } from '../../../../src/shared/source-control/review-comments/pr-comment-groups'
 import { isBotPRComment } from '../../../../src/shared/source-control/review-comments/pr-comment-audience'
-import { threadDiffLines } from '../../../../src/shared/github/pr-comment-diff-hunk'
+import { threadDiffLines } from '../../../../src/shared/github/comments/pr-comment-diff-hunk'
 import { colors, pressedStyle, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { openExternalLink } from '../../platform/external-link'
+import { openExternalLink } from '../../platform/external-links/external-link'
 import { canEditComment, isResolvableComment } from '../../source-control/review/pr-comment-actions'
 import { ConfirmModal } from '../ConfirmModal'
 import { PullDownMenu } from '../nav-bar/PullDownMenu'
@@ -44,6 +51,8 @@ export type PrThreadActions = {
   isResolveBusy: (threadId: string) => boolean
   isEditBusy: (commentId: number) => boolean
   isDeleteBusy: (commentId: number) => boolean
+  // Where a reply to a comment waits until it is posted.
+  draftKey: (replyTo: number) => string | null
   // Repo slug for the slug-addressed edit/delete RPCs; gates the affordances when absent.
   prRepo: PRCommentRepoSlug | null
 }
@@ -90,7 +99,7 @@ export function PrThreadRow({
   const [editing, setEditing] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const menuRef = useRef<View>(null)
+  const menuRef = useRef<HostInstance>(null)
   const root = getPRCommentGroupRoot(group)
   const replies = group.kind === 'thread' ? group.replies : []
   const lastReply = replies.at(-1)
@@ -267,7 +276,7 @@ export function PrThreadRow({
       {canMutate ? (
         <ConfirmModal
           visible={confirmDelete}
-          title={t('pullRequest.commentCard.deleteConfirmTitle', 'Delete comment?')}
+          title={t('common.delete', 'Delete')}
           message={t(
             'pullRequest.commentCard.deleteConfirmMessage',
             'This permanently deletes the comment on GitHub.'

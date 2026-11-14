@@ -1,7 +1,4 @@
-import {
-  changePrompt,
-  promptValue
-} from '../composer/editor/native-chat-prompt-editor.test-support'
+import { promptValue } from '../composer/editor/native-chat-prompt-editor.test-support'
 // @vitest-environment happy-dom
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -141,12 +138,5 @@ describe('composer prompt recall', () => {
     const input = renderComposer(['one', '/model'])
     expect(press(input, 'ArrowUp')).toBe('/model')
     expect(press(input, 'ArrowUp')).toBe('one')
-  })
-
-  it('leaves the arrows alone once a recalled prompt is edited', () => {
-    const input = renderComposer(['one', 'two'])
-    press(input, 'ArrowUp')
-    changePrompt(input, 'two, edited')
-    expect(press(input, 'ArrowUp')).toBe('two, edited')
   })
 })

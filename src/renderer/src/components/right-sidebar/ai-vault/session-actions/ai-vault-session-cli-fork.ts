@@ -1,4 +1,4 @@
-import { compactIpcErrorMessage } from '@/lib/ipc-error'
+import { compactIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { isAiVaultOwnershipRefusal } from '@/lib/agent-session/resume/history/ai-vault-resume-refusal'
 import { aiVaultCliForkHostTooOldMessage } from '@/lib/agent-session/resume/history/ai-vault-session-resume-preparation'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'

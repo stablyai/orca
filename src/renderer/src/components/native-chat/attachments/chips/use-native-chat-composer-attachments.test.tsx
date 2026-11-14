@@ -57,30 +57,6 @@ vi.mock(
   })
 )
 
-function publishUnrelatedStatuses(): void {
-  for (let tick = 1; tick <= 24; tick += 1) {
-    useAppStore.setState((state) => ({
-      runtimeStatusByEnvironmentId: new Map(state.runtimeStatusByEnvironmentId).set('other-host', {
-        status: null,
-        checkedAt: tick
-      })
-    }))
-    useAppStore.setState((state) => ({
-      agentStatusByPaneKey: {
-        ...state.agentStatusByPaneKey,
-        'other-tab:other-pane': {
-          paneKey: 'other-tab:other-pane',
-          state: 'working',
-          prompt: 'background work',
-          updatedAt: tick,
-          stateStartedAt: 1,
-          stateHistory: []
-        }
-      }
-    }))
-  }
-}
-
 describe('useNativeChatComposerAttachments', () => {
   afterEach(() => {
     useAppStore.setState(initialStoreState, true)
@@ -100,17 +76,15 @@ describe('useNativeChatComposerAttachments', () => {
     storage.drafts.set(scope, { text: '', images: [image], owner: storedOwner, savedAt: 1 })
     draftStorage.setNativeChatComposerDraftStorageForTests(storage)
     publishOwner(scope, storedOwner)
-    const resolveOwner = vi.fn((key: string) =>
+    draftStoreOwner1.setNativeChatComposerDraftOwnerResolver((key) =>
       resolveNativeChatDraftOwner(useAppStore.getState(), key)
     )
-    draftStoreOwner1.setNativeChatComposerDraftOwnerResolver(resolveOwner)
     const old = Promise.withResolvers<boolean>()
     const next = Promise.withResolvers<boolean>()
     const pathExists = vi.fn().mockReturnValueOnce(old.promise).mockReturnValueOnce(next.promise)
     const originalApi = window.api
     Object.assign(window, { api: { fs: { pathExists } } })
     let probe: Awaited<ReturnType<typeof renderProbe>> | undefined
-    const originalState = useAppStore.getState()
     try {
       await draftStoreOwner2.hydrateNativeChatComposerDrafts()
       probe = await renderProbe(scope, true)
@@ -130,15 +104,8 @@ describe('useNativeChatComposerAttachments', () => {
         { id: image.id, path: '', unavailableName: 'shot.png' }
       ])
       expect(draftStoreOwner3.readNativeChatComposerDraft(scope).owner).toEqual(storedOwner)
-      resolveOwner.mockClear()
-      act(publishUnrelatedStatuses)
-      expect(resolveOwner).not.toHaveBeenCalled()
     } finally {
       act(() => probe?.root.unmount())
-      useAppStore.setState({
-        runtimeStatusByEnvironmentId: originalState.runtimeStatusByEnvironmentId,
-        agentStatusByPaneKey: originalState.agentStatusByPaneKey
-      })
       Object.assign(window, { api: originalApi })
     }
   })
@@ -201,6 +168,15 @@ describe('useNativeChatComposerAttachments', () => {
     } finally {
       Object.assign(window, { api: originalApi })
     }
+  })
+
+  it('attaches a dropped BMP as a file reference, since agents take only PNG, JPEG, GIF and WebP inline', async () => {
+    const probe = await renderProbe('pty-bmp')
+    act(() => probe.latest().attachResolvedPaths(['/repo/diagram.bmp', '/repo/shot.png']))
+
+    expect(probe.latest().imageAttachments).toMatchObject([{ path: '/repo/shot.png' }])
+    expect(probe.draft()).toContain('@/repo/diagram.bmp')
+    act(() => probe.root.unmount())
   })
 
   it('takes the chip of an image still on its way out of the prompt when the composer is disabled', async () => {

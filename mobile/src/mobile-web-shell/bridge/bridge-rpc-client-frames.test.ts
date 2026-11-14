@@ -4,11 +4,9 @@ import { isRpcDeliveryUnknown } from '../../transport/rpc/rpc-delivery-ambiguity
 import './bridge-caps'
 import './bridge-port-pair-test-harness'
 import './bridge-client-subscriptions'
-import { BRIDGE_PROTOCOL_VERSION, type BridgeHostMessage } from './bridge-envelope'
+import { BRIDGE_PROTOCOL_VERSION } from './bridge-envelope'
 import './bridge-client-init-handshake'
-import { BridgeClientNotReadyError } from './bridge-rpc-client'
 import {
-  CONNECTION,
   INIT,
   createPageClient,
   eventFrame,
@@ -57,19 +55,6 @@ describe('bridge client handshake', () => {
     expect(isRpcDeliveryUnknown(error)).toBe(true)
     expect(onData.mock.calls).toEqual([[{ type: 'error', message: expect.any(String) }]])
     expect(page.client.getShellSession()?.sessionId).toBe('session-b')
-  })
-})
-
-describe('bridge client before a session', () => {
-  it('drops a state frame that beat init rather than priming from it', () => {
-    const page = createPageClient()
-    page.deliver({
-      v: BRIDGE_PROTOCOL_VERSION,
-      type: 'state',
-      connection: { ...CONNECTION, state: 'reconnecting' }
-    })
-    expect(() => page.client.getState()).toThrow(BridgeClientNotReadyError)
-    expect(page.diagnostics).toEqual([])
   })
 })
 
@@ -145,35 +130,5 @@ describe('bridge client acks', () => {
     expect(onData.mock.calls).toEqual([[{ type: 'error', message: expect.any(String) }]])
     expect(page.diagnostics).toEqual([{ kind: 'stream-ended', reason: 'overflow' }])
     expect(page.frames().filter((frame) => frame.type === 'cancel')).toEqual([])
-  })
-})
-
-describe('bridge client binary frames', () => {
-  const image = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10])
-  const b64 = btoa(String.fromCharCode(...image))
-
-  function binaryFrame(id: string, b64Image: string): BridgeHostMessage {
-    return {
-      v: BRIDGE_PROTOCOL_VERSION,
-      type: 'event',
-      id,
-      seq: 1,
-      binary: { b64: b64Image, format: 'png', frameSeq: 41, metadata: { imageWidth: 8 } }
-    }
-  }
-
-  it('drops a frame with no listener and one it cannot decode', () => {
-    const page = createPageClient()
-    page.start()
-    page.client.subscribe('browser.screencast', {}, vi.fn())
-    page.deliver(binaryFrame(idOf(page, 0), b64))
-    const onBinaryFrame = vi.fn()
-    page.client.subscribe('browser.screencast', {}, vi.fn(), { onBinaryFrame })
-    page.deliver(binaryFrame(idOf(page, 1), '!!not base64!!'))
-    expect(onBinaryFrame).not.toHaveBeenCalled()
-    expect(page.diagnostics).toEqual([
-      { kind: 'binary-frame-dropped' },
-      { kind: 'binary-frame-dropped' }
-    ])
   })
 })

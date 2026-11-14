@@ -12,7 +12,7 @@ import {
   isAgentStatusHooksEnabled,
   isAgentStatusHooksEnabledForAgent
 } from '../../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
-import { probeClaudeCliVersion } from '../../claude/claude-hook-event-versions'
+import { probeClaudeCliVersion } from '../../claude/cli-capabilities/claude-hook-event-versions'
 import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
 import {
   MANAGED_AGENT_HOOK_ASYNC_REMOVERS,

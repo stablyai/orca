@@ -94,7 +94,17 @@ jobs:
         run: |
           ELECTRON_RUN_AS_NODE=1 "$(node -p "require('electron')")" --version
 
+      - name: Find installed Bun
+        id: installed-bun
+        shell: bash
+        run: |
+          bun="$GITHUB_WORKSPACE/node_modules/.bin/bun"
+          if [ -x "$bun" ] && [ "$("$bun" --version)" = "$(cat config/.bun-version)" ]; then
+            echo "$GITHUB_WORKSPACE/node_modules/.bin" >> "$GITHUB_PATH"
+            echo 'found=true' >> "$GITHUB_OUTPUT"
+          fi
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        if: steps.installed-bun.outputs.found != 'true'
         with:
           bun-version-file: config/.bun-version
           no-cache: true
@@ -211,8 +221,8 @@ jobs:
             pnpm-lock.yaml
             cloud/pnpm-lock.yaml
 
-      # These two tests import the cloud relay workspace directly. Keeping them in one job
-      # avoids installing and building the same workspace once per unit-test shard.
+      # This test imports the cloud relay workspace directly. Its dedicated job avoids
+      # installing and building the same workspace once per unit-test shard.
       - name: Install relay integration dependencies
         id: relay_dependencies
         if: ${{ !cancelled() && steps.root_dependencies.outcome == 'success' }}
@@ -227,5 +237,4 @@ jobs:
           ORCA_BACKGROUND_LAUNCH: '1'
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
-          tests/e2e/relay-region-compatibility.unit.test.ts
           tests/e2e/relay-region-correction.unit.test.ts

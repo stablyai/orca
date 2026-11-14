@@ -1,9 +1,9 @@
 import { AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { requestSkillFreshnessUpdateDialog } from '../skills/skill-freshness-update-dialog'
-import { useLatestSkillUpdateRun } from '../skills/skill-update-run-store'
-import { updatedSkillsLabel } from '../skills/skill-plan-op-copy'
+import { requestSkillFreshnessUpdateDialog } from '../skills/freshness/skill-freshness-update-dialog'
+import { useLatestSkillUpdateRun } from '../skills/freshness/skill-update-run-store'
+import { updatedSkillsLabel } from '../skills/freshness/skill-plan-op-copy'
 
 // Keep reporting after the update dialog closes; statusBarItems must not hide the remaining progress surface.
 export function SkillUpdateStatusSegment({

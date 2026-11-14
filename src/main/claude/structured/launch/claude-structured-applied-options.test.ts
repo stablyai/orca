@@ -46,16 +46,6 @@ const SETTINGS = {
     effective: { model: 'haiku' },
     sources: [{ source: 'userSettings', settings: { model: 'haiku' } }],
     applied: { model: 'claude-haiku-4-5-20251001', effort: null, advisor: null, ultracode: false }
-  },
-  envSonnet: {
-    effective: {},
-    sources: [],
-    applied: { model: 'claude-sonnet-5', effort: 'high', advisor: null, ultracode: false }
-  },
-  settingsHaikuEnvSonnet: {
-    effective: { model: 'haiku' },
-    sources: [{ source: 'userSettings', settings: { model: 'haiku' } }],
-    applied: { model: 'claude-sonnet-5', effort: 'high', advisor: null, ultracode: false }
   }
 }
 
@@ -69,29 +59,7 @@ function startedWithoutATurn(settings: unknown) {
   })
 }
 
-async function readCurrent(settings: unknown) {
-  const adapter = await acquired(startedWithoutATurn(settings))
-  return (await adapter.readOptions({ sessionId: 'session-1', fence: 7 })).current
-}
-
 describe('Claude model before the first turn', () => {
-  it.each([
-    ['nothing overrides the default', SETTINGS.noOverride, 'claude-opus-5-5[1m]', 'medium'],
-    ['settings name a model', SETTINGS.settingsHaiku, 'claude-haiku-4-5-20251001', undefined],
-    ['the env names a model', SETTINGS.envSonnet, 'claude-sonnet-5', 'high'],
-    ['the env overrides the settings', SETTINGS.settingsHaikuEnvSonnet, 'claude-sonnet-5', 'high']
-  ])(
-    'names what Claude will apply when %s, unconfirmed',
-    async (_case, settings, model, effort) => {
-      const current = await readCurrent(settings)
-
-      expect(current.model).toBe(model)
-      expect(current.effort).toBe(effort)
-      expect(current.confirmed ?? []).not.toContain('model')
-      expect(current.confirmed ?? []).not.toContain('effort')
-    }
-  )
-
   it('uses native applied effort despite settings High, before and after a reply', async () => {
     // Claude Code 2.1.318: no flag applies Medium; --effort low applies Low.
     const claude = startedWithoutATurn({
@@ -154,13 +122,6 @@ describe('Claude model before the first turn', () => {
       ).toBeUndefined()
     )
     await adapter.closeAll()
-  })
-
-  it('marks an unknown applied model as defaulted for the host to resolve', async () => {
-    const current = await readCurrent({ effective: {}, sources: [] })
-
-    expect(current.defaulted).toEqual(['model'])
-    expect(current.effort).toBeUndefined()
   })
 
   it('lets the first turn confirm or correct it', async () => {

@@ -6,7 +6,7 @@ import {
   getWslHostsTurnedOffLabel,
   getWslHostsTurnOnLabel
 } from '../../../../sidebar/wsl-host-row-status'
-import type { WslHostUnavailableReason } from '../../../../../lib/wsl-host-availability'
+import type { WslHostUnavailableReason } from '../../../../../runtime/hosts/wsl/wsl-host-availability'
 import { useTranslate } from '@/i18n/use-translate'
 
 /** In place of "Reconnecting…" for a WSL host that cannot run: nothing retries, so say why. */

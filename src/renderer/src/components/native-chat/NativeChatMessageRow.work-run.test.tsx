@@ -34,11 +34,18 @@ import {
   APPROVED_REVIEW,
   approvalReviewMessage
 } from '../../../../shared/native-chat-activity.test-fixture'
-import { openToolRunMembers } from './tools/runs/native-chat-tool-run-members-test-support'
 
 afterEach(() => {
   cleanup()
 })
+
+function openToolRunMembers(): void {
+  for (const member of document.body.querySelectorAll<HTMLElement>(
+    '[data-native-chat-tool-run-members] button[aria-expanded="false"]'
+  )) {
+    fireEvent.click(member)
+  }
+}
 
 function command(id: string, cmd: string): NativeChatMessage {
   return {

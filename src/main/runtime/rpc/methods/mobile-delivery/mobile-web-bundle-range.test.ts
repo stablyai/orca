@@ -2,16 +2,16 @@ import { randomBytes } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { gunzipSync } from 'node:zlib'
+import { brotliDecompressSync, gunzipSync } from 'node:zlib'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  MOBILE_WEB_BUNDLE_BROTLI_RANGE_METHOD,
   MOBILE_WEB_BUNDLE_CHUNK_BYTES as RANGE_BYTES,
   MOBILE_WEB_BUNDLE_RANGE_METHOD,
+  MobileWebBundleBrotliRangeResultSchema,
   MobileWebBundleRangeResultSchema,
   type MobileWebBundleRangeResult
 } from '../../../../../shared/mobile-web-bundle/bundle-rpc-contract'
-
-import { resetBundledMobileWebBundleCacheForTests } from './bundled-mobile-web-bundle'
 
 import type { RpcResponse } from '../../core'
 import type { RpcDispatcher } from '../../dispatcher'
@@ -64,7 +64,6 @@ const INCOMPRESSIBLE: SyntheticAsset = (() => {
 beforeEach(() => {
   scratch = mkdtempSync(join(tmpdir(), 'orca-mobile-web-bundle-range-'))
   installMobileWebBundleAppPath(scratch)
-  resetBundledMobileWebBundleCacheForTests()
   resetMobileWebBundleAssetVerdictsForTests()
   resetMobileWebBundleReadAdmissionForTests()
   vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -138,5 +137,70 @@ describe('mobileWeb.bundle.range on an install that carries a bundle', () => {
     expect(
       Buffer.from(result.dataBase64, 'base64').equals(INCOMPRESSIBLE.bytes.subarray(0, RANGE_BYTES))
     ).toBe(true)
+  })
+})
+
+describe('mobileWeb.bundle.brotliRange', () => {
+  // Base64 text shrinks only to about 3/4, so its copy spans several windows.
+  const SCRIPT: SyntheticAsset = (() => {
+    const bytes = Buffer.from(randomBytes(RANGE_BYTES * 2).toString('base64'))
+    return {
+      path: `assets/${sha256Hex(bytes)}.js`,
+      bytes,
+      contentType: 'text/javascript',
+      brotli: true
+    }
+  })()
+  let bundle: SyntheticMobileWebBundle
+
+  beforeEach(() => {
+    bundle = writeSyntheticMobileWebBundle(join(scratch, 'out', 'mobile-web'), 1, [
+      SCRIPT,
+      INCOMPRESSIBLE
+    ])
+  })
+
+  it('pages the brotli copy on the range grid, and the pages inflate to the asset', async () => {
+    const entry = bundle.assets.find((asset) => asset.path === SCRIPT.path)
+    const copyLength = entry?.brotliByteLength ?? 0
+    expect(copyLength).toBeGreaterThan(0)
+    const pieces: Buffer[] = []
+    for (let offset = 0; ; offset += RANGE_BYTES) {
+      const response = await call(MOBILE_WEB_BUNDLE_BROTLI_RANGE_METHOD, {
+        buildId: bundle.buildId,
+        path: SCRIPT.path,
+        offset
+      })
+      if (!response.ok) {
+        throw new Error(response.error.message)
+      }
+      const result = MobileWebBundleBrotliRangeResultSchema.parse(response.result)
+      expect(result).toMatchObject({
+        path: SCRIPT.path,
+        offset,
+        assetByteLength: SCRIPT.bytes.byteLength,
+        sha256: sha256Hex(SCRIPT.bytes),
+        eof: offset + RANGE_BYTES >= copyLength
+      })
+      pieces.push(Buffer.from(result.dataBase64, 'base64'))
+      if (result.eof) {
+        break
+      }
+    }
+    expect(pieces.length).toBe(Math.ceil(copyLength / RANGE_BYTES))
+    expect(pieces.length).toBeGreaterThan(1)
+    expect(Buffer.concat(pieces).byteLength).toBe(copyLength)
+    expect(brotliDecompressSync(Buffer.concat(pieces)).equals(SCRIPT.bytes)).toBe(true)
+  })
+
+  it('refuses an asset the manifest gives no brotli copy', async () => {
+    const response = await call(MOBILE_WEB_BUNDLE_BROTLI_RANGE_METHOD, {
+      buildId: bundle.buildId,
+      path: INCOMPRESSIBLE.path,
+      offset: 0
+    })
+
+    expect(response.ok).toBe(false)
+    expect(response.ok ? null : response.error.message).toBe('mobile_web_bundle_asset_unknown')
   })
 })

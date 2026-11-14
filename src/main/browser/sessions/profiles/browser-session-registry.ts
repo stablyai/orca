@@ -1,7 +1,8 @@
 import { app, session } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
-import { ORCA_BROWSER_PARTITION } from '../../../../shared/constants'
+import '../../../../shared/constants'
+import { ORCA_BROWSER_PARTITION } from '../../../../shared/browser/browser-session-partition'
 import {
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
   getOrcaProfileBrowserDefaultPartition,

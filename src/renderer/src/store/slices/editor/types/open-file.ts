@@ -1,6 +1,6 @@
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { RecentlyClosedTabPosition } from '../../tabs/recently-closed-tab-position'
-import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
+import type { EditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import type {
   GitBranchChangeEntry,
   GitBranchCompareSummary,
@@ -93,8 +93,6 @@ export type OpenFile = {
   liveTail?: boolean
   mode: 'edit' | 'diff' | 'conflict-review' | 'markdown-preview' | 'check-details' | 'git-graph'
 }
-
-export type ActivityBarPosition = 'top' | 'side'
 
 export type MarkdownViewMode = 'source' | 'rich' | 'preview'
 

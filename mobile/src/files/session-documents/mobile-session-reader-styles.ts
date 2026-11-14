@@ -1,4 +1,4 @@
-import { Platform, StyleSheet } from 'react-native'
+import { StyleSheet } from 'react-native'
 
 import { colors, spacing, radii, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -14,7 +14,7 @@ export const mobileSessionReaderStyles = themedStyleSheet(() => ({
     paddingBottom: spacing.xl * 3,
     fontSize: typography.bodySize,
     lineHeight: 22,
-    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
+    fontFamily: typography.monoFamily
   },
   filePreviewScroll: {
     flex: 1,
@@ -30,7 +30,7 @@ export const mobileSessionReaderStyles = themedStyleSheet(() => ({
     color: colors.textPrimary,
     fontSize: typography.bodySize,
     lineHeight: 22,
-    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
+    fontFamily: typography.monoFamily
   },
   imagePreviewContainer: {
     flex: 1,
@@ -106,14 +106,14 @@ export const mobileSessionReaderStyles = themedStyleSheet(() => ({
     color: colors.textMuted,
     fontSize: typography.metaSize,
     lineHeight: 22,
-    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
+    fontFamily: typography.monoFamily
   },
   diffText: {
     flex: 1,
     color: colors.textPrimary,
     fontSize: typography.bodySize,
     lineHeight: 22,
-    fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' })
+    fontFamily: typography.monoFamily
   },
   diffPrefix: {
     color: colors.textMuted

@@ -1,4 +1,4 @@
-import type { GitHubPRMergeMethodSettings } from '../../../../shared/github/pull-request-types'
+import type { GitHubPRMergeMethodSettings } from '../../../../shared/github/pull-requests/pull-request-types'
 import type { CoalescedProbes } from '../../../git/remotes/coalesced-probe'
 export const MERGE_QUEUE_CACHE_TTL_MS = 10 * 60 * 1000
 

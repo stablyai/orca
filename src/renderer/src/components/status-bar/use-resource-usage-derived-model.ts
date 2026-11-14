@@ -21,7 +21,10 @@ import {
   getResourceMemoryMetricCopy
 } from './resource-memory-metric-copy'
 import { formatMemory } from './resource-usage-metrics'
-import { findAmbiguousWorktreeIds, findDuplicateIds } from '../../lib/unified-tab-host-ownership'
+import {
+  findAmbiguousWorktreeIds,
+  findDuplicateIds
+} from '../../lib/workspace/ownership/unified-tab-host-ownership'
 import { useTranslate } from '../../i18n/use-translate'
 
 export function useResourceUsageDerivedModel({

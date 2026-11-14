@@ -11,7 +11,7 @@ import type {
   BrowserCertificateProceedResult,
   BrowserLoadError
 } from '../../../../../shared/browser-workspace-types'
-import { normalizeCertificateError } from '../../../../../shared/browser-certificate-errors'
+import { normalizeCertificateError } from '../../../../../shared/browser/certificate-trust/browser-certificate-errors'
 import {
   describeBrowserLoadFailure,
   type BrowserLoadFailureRoute

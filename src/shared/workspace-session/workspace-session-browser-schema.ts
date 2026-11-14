@@ -4,6 +4,7 @@ import { normalizeBrowserHistoryEntries } from './workspace-session-browser-hist
 import { normalizeWorkspaceDocHistoryEntries } from './workspace-doc-history'
 import { isDocPreviewUrl } from '../document-preview/doc-preview-scheme'
 import { salvagingArray } from '../zod-salvage'
+import { browserPageAnnotationSchema } from '../browser/annotations/browser-page-annotation-schema'
 
 const browserLoadErrorSchema = z.object({
   code: z.number(),
@@ -88,7 +89,9 @@ export const browserPageSchema = z.object({
   docLocation: browserPageDocLocationSchema.nullable().optional(),
   // Persist one-level conversion history; reject preview-scheme URLs at this read boundary as at every URL sink.
   convertedFrom: browserPageConversionOriginSchema,
-  convertedTo: browserPageConversionOriginSchema
+  convertedTo: browserPageConversionOriginSchema,
+  // Unsent notes ride with their page so a reload or restart keeps them (#39856).
+  annotations: salvagingArray(browserPageAnnotationSchema).optional()
 })
 
 const browserHistoryEntrySchema = z.object({

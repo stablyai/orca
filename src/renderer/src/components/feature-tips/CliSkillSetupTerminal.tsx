@@ -7,9 +7,9 @@ import { OnboardingInlineCommandTerminal } from '@/components/onboarding/Onboard
 import {
   buildSkillCommandForRuntime,
   buildSkillSetupTerminalCommand
-} from '@/lib/skill-runtime-command'
-import { ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
-import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
+} from '@/lib/skills/runtime/skill-runtime-command'
+import { ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/skills/installation/agent-feature-install-commands'
+import { useActiveProjectSkillRuntime } from '@/hooks/skills/runtime/useActiveProjectSkillRuntime'
 import { useTranslate } from '@/i18n/use-translate'
 
 export function CliSkillSetupTerminal(): React.JSX.Element {

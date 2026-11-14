@@ -21,13 +21,13 @@ import {
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
-} from '../../../worktree-default-display-name'
+} from '../../display/worktree-default-display-name'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
+import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/hosted-review/github-pr-suppression'
 import {
   getPaletteWorktreeIdentity,
   resolvePaletteRepoForWorktree
@@ -116,6 +116,18 @@ function resolveIssueTitle(
   return sources.issueCache[key]?.data?.title ?? ''
 }
 
+// Each saved link is its own unit: same-number links (another repo, or the legacy issue field) must not
+// shadow each other's saved titles.
+function withEvidenceId(evidence: PaletteComposedEvidence, id: string): PaletteComposedEvidence {
+  const prefix = evidence.unit.id.length
+  return {
+    unit: { ...evidence.unit, id },
+    fields: evidence.fields.map(
+      (field) => field && { ...field, id: `${id}${field.id.slice(prefix)}`, evidenceId: id }
+    )
+  }
+}
+
 function buildEvidence(
   worktree: Worktree,
   repo: Repo | undefined,
@@ -138,7 +150,7 @@ function buildEvidence(
     }),
     ...getWorkspaceAttachments({ linkedItems: worktree.linkedItems }).map((item) => {
       const evidence = buildWorktreeAttachmentEvidence(item)
-      return evidence ? { ...evidence, id: `attachment:${getWorkspaceAttachmentKey(item)}` } : null
+      return evidence && withEvidenceId(evidence, `attachment:${getWorkspaceAttachmentKey(item)}`)
     }),
     ...ports.map((port) => buildWorktreePortEvidence(port))
   ]

@@ -8,7 +8,7 @@ import {
   parseOrcadMachineNameProbe
 } from './orcad-machine-name-home'
 import { ORCAD_ACTIVATION_FILENAME } from '../activation/orcad-activation-record'
-import { parseDarwinPlatformUuid } from '../../persistence/profile-state/profile-state-access-identity'
+import { parseDarwinPlatformUuid } from '../../persistence/profile-state/access/profile-state-access-identity'
 import {
   joinRemotePath,
   normalizeRemoteHome,

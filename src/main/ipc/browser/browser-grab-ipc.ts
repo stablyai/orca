@@ -13,7 +13,7 @@ import type {
   BrowserCaptureSelectionScreenshotResult,
   BrowserExtractHoverArgs,
   BrowserExtractHoverResult
-} from '../../../shared/browser-grab-types'
+} from '../../../shared/browser/element-grab/browser-grab-types'
 
 const grabModeIntentByPageId = new Map<string, { generation: number; enabled: boolean }>()
 const grabModeOperationByPageId = new Map<string, Promise<void>>()

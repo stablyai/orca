@@ -6,7 +6,7 @@ import type {
   RuntimeTerminalListResult,
   RuntimeTerminalSummary
 } from '../../../../../shared/runtime-terminal-contracts'
-import { resolveTerminalPtyOwner } from '../../terminal-worktree-route'
+import { resolveTerminalPtyOwner } from '../../workspace/ownership/terminal-worktree-route'
 import { toAgentHibernationRuntimeOwner } from './agent-hibernation-runtime-owner'
 import { getEntryTabId } from './agent-hibernation-pane-eligibility'
 

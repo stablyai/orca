@@ -11,8 +11,8 @@ import {
 import type {
   MarkdownTemplatePickerRequest,
   MarkdownTemplateSelection
-} from '@/lib/markdown-template-picker-request'
-import { subscribeMarkdownTemplatePicker } from '@/lib/markdown-template-picker-request'
+} from '@/lib/editor/markdown/documents/markdown-template-picker-request'
+import { subscribeMarkdownTemplatePicker } from '@/lib/editor/markdown/documents/markdown-template-picker-request'
 import { useTranslate } from '@/i18n/use-translate'
 
 export function MarkdownTemplatePicker(): JSX.Element {

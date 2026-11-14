@@ -215,6 +215,43 @@ describe('getWorkspaceDeleteLineage', () => {
 })
 
 describe('preserving children during workspace deletion', () => {
+  it('retains the preservation choice until explicitly cleared when it becomes unavailable', () => {
+    const parent = makeWorktree('parent', '/workspaces/parent')
+    const child = makeWorktree('child', '/workspaces/child')
+    const nested = makeWorktree('nested', '/workspaces/parent/nested')
+    const lineage = getWorkspaceDeleteLineage(parent, [parent, child], {
+      child: makeLineage(child, parent)
+    })
+    const hook = renderHook(
+      ({ lineage }) =>
+        useDetachWorktreeDeleteChildren({
+          isOpen: true,
+          parent,
+          lineage,
+          isFolderWorkspace: false,
+          confirmedIdentities: toWorktreeDeleteIdentities([parent, child]),
+          resolveConfirmedTargets: () => [parent, child]
+        }),
+      { initialProps: { lineage } }
+    )
+
+    act(() => hook.result.current.setPreserveChildren(true))
+    expect(hook.result.current.preserveChildren).toBe(true)
+    hook.rerender({
+      lineage: getWorkspaceDeleteLineage(parent, [parent, child, nested], {
+        child: makeLineage(child, parent),
+        nested: makeLineage(nested, parent)
+      })
+    })
+
+    expect(hook.result.current.canPreserveChildren).toBe(false)
+    expect(hook.result.current.preserveChildrenSelected).toBe(true)
+    expect(hook.result.current.preserveChildren).toBe(false)
+
+    act(() => hook.result.current.setPreserveChildren(false))
+    expect(hook.result.current.preserveChildrenSelected).toBe(false)
+  })
+
   it('includes a main-worktree child in preservation confirmation without allowing its deletion', () => {
     const parent = makeWorktree('parent', '/workspaces/parent')
     const child = { ...makeWorktree('main', '/workspaces/main'), isMainWorktree: true }

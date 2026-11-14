@@ -11,7 +11,7 @@ import { notifyWebRuntimeTerminalCreateFailure } from './web-runtime-terminal-cr
 import {
   startStoppedWslHostForUserAct,
   stoppedWslHostMessage
-} from '../../../lib/wsl-host-user-start'
+} from '../../hosts/wsl/wsl-host-user-start'
 
 type TerminalCreateOptions = { notifyFailure?: boolean; userAct?: boolean }
 

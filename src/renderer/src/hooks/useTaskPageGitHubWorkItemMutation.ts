@@ -1,30 +1,33 @@
-import { getWorkItemRepo } from '@/lib/work-item-repo-row'
-import { buildTaskPageGitHubWorkItemMutationPatch } from '@/components/task-page/github/task-page-github-work-item-mutation-patches'
+import { getWorkItemRepo } from '@/lib/work-items/work-item-repo-row'
+import {
+  buildTaskPageGitHubWorkItemMutationPatch,
+  type TaskPageGitHubMutationIntent
+} from '@/components/task-page/github/mutations/task-page-github-work-item-mutation-patches'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { ParsedTaskQuery } from '../../../shared/work-items/task-query'
-import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
-import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
+import type { GitHubWorkItem } from '../../../shared/github/work-items/work-item-types'
+import type { GitHubAssignableUser } from '../../../shared/github/pull-requests/pull-request-types'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import { useAppStore } from '@/store'
 import {
   beginTaskPageGitHubWorkItemMutation,
   canStartTaskPageGitHubWorkItemMutation
-} from '@/components/task-page/github/task-page-github-work-item-mutations'
+} from '@/components/task-page/github/mutations/task-page-github-work-item-mutations'
 import {
   confirmTaskPageGitHubWorkItemMutation,
   rollbackTaskPageGitHubWorkItemMutation
-} from '@/components/task-page/github/task-page-github-work-item-mutation-lifecycle'
-import type { TaskPageGitHubMutationIntent } from '@/components/task-page/github/task-page-github-work-item-mutation-patches'
-import type { TaskPageGitHubPatchWorkItem } from '@/components/task-page/github/task-page-github-work-item-mutation-types'
+} from '@/components/task-page/github/mutations/task-page-github-work-item-mutation-lifecycle'
+
+import type { TaskPageGitHubPatchWorkItem } from '@/components/task-page/github/mutations/task-page-github-work-item-mutation-types'
 import {
   getTaskPageGitHubSoftHiddenItemKeys,
   subscribeTaskPageGitHubMutationRegistry,
   setTaskPageGitHubMutationQueryKey
-} from '@/components/task-page/github/task-page-github-work-item-mutation-registry'
+} from '@/components/task-page/github/mutations/task-page-github-work-item-mutation-registry'
 import { useMountedRef } from './useMountedRef'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 export type UseTaskPageGitHubWorkItemMutationArgs = {
   queryKey: string

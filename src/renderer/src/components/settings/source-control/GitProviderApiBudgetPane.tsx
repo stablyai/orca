@@ -23,7 +23,7 @@ export function GitProviderApiBudgetPane({
 
   const visibleSections = [
     matchesSettingsSearch(searchQuery, {
-      title: t('auto.components.settings.GitPane.612a440e57', 'GitHub API Budget'),
+      title: t('auto.components.settings.GitPane.fdbcd676b0', 'GitHub API budget'),
       description: t(
         'auto.components.settings.GitPane.aa204f185f',
         'Current GitHub CLI REST, Search, and GraphQL rate limits.'
@@ -38,7 +38,7 @@ export function GitProviderApiBudgetPane({
     }) ? (
       <SearchableSetting
         key="github-api-budget"
-        title={t('auto.components.settings.GitPane.612a440e57', 'GitHub API Budget')}
+        title={t('auto.components.settings.GitPane.fdbcd676b0', 'GitHub API budget')}
         description={t(
           'auto.components.settings.GitPane.aa204f185f',
           'Current GitHub CLI REST, Search, and GraphQL rate limits.'
@@ -50,7 +50,7 @@ export function GitProviderApiBudgetPane({
       </SearchableSetting>
     ) : null,
     matchesSettingsSearch(searchQuery, {
-      title: t('auto.components.settings.GitPane.0de4ae556c', 'GitLab API Budget'),
+      title: t('auto.components.settings.GitPane.f2765fbbf6', 'GitLab API budget'),
       description: t(
         'auto.components.settings.GitPane.c4f610d057',
         'Current GitLab CLI REST rate-limit headers when available.'
@@ -64,7 +64,7 @@ export function GitProviderApiBudgetPane({
     }) ? (
       <SearchableSetting
         key="gitlab-api-budget"
-        title={t('auto.components.settings.GitPane.0de4ae556c', 'GitLab API Budget')}
+        title={t('auto.components.settings.GitPane.f2765fbbf6', 'GitLab API budget')}
         description={t(
           'auto.components.settings.GitPane.c4f610d057',
           'Current GitLab CLI REST rate-limit headers when available.'

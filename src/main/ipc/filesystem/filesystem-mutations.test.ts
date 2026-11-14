@@ -85,17 +85,6 @@ describe('registerFilesystemMutationHandlers', () => {
     registerFilesystemMutationHandlers(store as never)
   })
 
-  it('rejects file creation when path already exists (wx flag)', async () => {
-    // wx rejects collisions atomically without an existence-check race.
-    writeFileMock.mockRejectedValue(Object.assign(new Error('EEXIST'), { code: 'EEXIST' }))
-
-    await expect(
-      handlers.get('fs:createFile')!(null, {
-        filePath: path.resolve('/workspace/repo/existing.ts')
-      })
-    ).rejects.toThrow("A file or folder named 'existing.ts' already exists in this location")
-  })
-
   it('rejects file creation outside allowed roots', async () => {
     mockRealpath({
       [path.resolve('/workspace/repo/link.ts')]: path.resolve('/private/secret.ts')

@@ -1,6 +1,6 @@
 import { useTranslate } from '@/i18n/use-translate'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import { BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
+import { BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { SettingsRow, SettingsSegmentedControl } from '../../form-controls/SettingsFormControls'
 import {

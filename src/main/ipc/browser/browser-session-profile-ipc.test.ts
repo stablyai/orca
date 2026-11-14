@@ -1,3 +1,4 @@
+// @orca-isolated-worker: browser registration retains grant listeners bound to this file's mocks.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {

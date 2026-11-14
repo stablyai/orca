@@ -1,4 +1,4 @@
-import { useHostDisplay, type HostDisplaySource } from '../transport/hosts/use-host-display'
+import { useHostDisplay, type HostDisplaySource } from '../host-descriptors/use-host-display'
 import type { DownloadProgressFeed } from './download-progress-feed'
 import { DownloadProgressBar, downloadedMegabytesCaption } from './DownloadProgressBar'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'

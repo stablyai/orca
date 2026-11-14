@@ -1,5 +1,6 @@
 import type { AppState } from '@/store/types'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
+import { remoteTabFaviconUrl } from '../../../../shared/browser/browser-favicon-url'
 import { stableHashString } from './editor-draft-hash'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { getOpenFileIndexes } from './mobile-session-inputs'
@@ -198,7 +199,9 @@ function buildBrowserPagesProjection(
                 url: page.url,
                 loading: page.loading,
                 canGoBack: page.canGoBack,
-                canGoForward: page.canGoForward
+                canGoForward: page.canGoForward,
+                // An icon arriving resyncs; later swaps (animated icons) ride the next sync.
+                hasRemoteFavicon: remoteTabFaviconUrl(page.faviconUrl) !== null
               }))
             )
           }

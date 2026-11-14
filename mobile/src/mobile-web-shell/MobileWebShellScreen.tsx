@@ -20,13 +20,14 @@ import { cancelledShellNavigationTarget } from './cancelled-navigation-target'
 import { playPageHaptic } from './page-haptics'
 import { useMobileWebShellBridge } from './use-mobile-web-shell-bridge'
 import type { MobileWebShellRuntime } from './mobile-web-shell-runtime'
-import { useKeyboardOcclusion } from '../platform/keyboard-occlusion'
+import { useKeyboardOcclusion } from '../platform/keyboard/keyboard-occlusion'
 import { useNativeDeviceVerbs } from '../platform/use-native-device-verbs'
-import { useNativePdfViewer } from '../platform/native-pdf-view'
-import { useNativeImageActions } from '../platform/native-image-actions'
+import { useNativePdfViewer } from '../platform/pdf-viewing/native-pdf-view'
+import { useNativeImageActions } from '../platform/image-actions/native-image-actions'
 import { processDeviceStore } from '../device-store/device-store'
 import { serveDeviceStoreVerb } from './device-store-verb-server'
 import { BRIDGE_STORE_VERB } from './bridge/bridge-store-verb'
+import { useAppLeavesForeground } from './use-app-leaves-foreground'
 import { useShellPageBack } from './use-shell-page-back'
 import { useShellStackPop } from './use-shell-stack-pop'
 import { usePageLocationOnFold } from './page-location-on-fold'
@@ -36,7 +37,8 @@ import { useShellPageStorageRefresh } from './use-shell-page-storage-refresh'
 import { usePageHostSnapshot } from './use-page-host-snapshot'
 import { useReportedHostAreaServing } from './host-area-serving'
 import { isHostRouteOf } from './page-route-policy'
-import { nativeStackReturn } from './native-stack-return'
+import { isStandaloneSessionHref } from '../navigation/host-stack-navigation'
+import { hrefQuery, nativeSessionReturn, nativeStackReturn } from './native-stack-return'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { storageReadParamsSchema, type BridgeNativeVerb } from './bridge/bridge-native-verbs'
 import { SHELL_OPENING_LABEL, ShellPageCover } from './ShellWaitingFrame'
@@ -169,6 +171,22 @@ export function MobileWebShellScreen({
     }
     // Return to an existing screen rather than pushing a duplicate over the live one.
     const rootState = navigationContainer.getRootState()
+    // A pane request goes to the session's existing entry, whose spent paneKey no longer equals the href's.
+    const paneKey = hrefQuery(href).get('paneKey')
+    const session = rootState && paneKey ? nativeSessionReturn(rootState, href) : null
+    if (session && paneKey) {
+      const { target, source, count, routeKey } = session
+      if (count > 0) {
+        navigation.dispatch({ type: 'POP', payload: { count }, target, source })
+      }
+      navigation.dispatch({
+        type: 'SET_PARAMS',
+        target,
+        source: routeKey,
+        payload: { params: { paneKey } }
+      })
+      return
+    }
     const onStack = rootState ? nativeStackReturn(rootState, href) : null
     if (onStack === 'current') {
       return
@@ -187,7 +205,10 @@ export function MobileWebShellScreen({
       router.dismissTo(href)
       return
     }
-    return void (replace ? router.replace(href) : router.push(href))
+    // A standalone session takes the host list's place, so Back leaves the host.
+    return void (replace || isStandaloneSessionHref(href)
+      ? router.replace(href)
+      : router.push(href))
   }
   const openTarget = usePageOpenTarget({
     route,
@@ -263,6 +284,7 @@ export function MobileWebShellScreen({
     // The stream survives dropped frames; keep a count because diagnostics print only once per host.
     onBinaryFramesDropped: reportDroppedBinaryFrames
   })
+  useAppLeavesForeground(bridge.sendAppInactive)
 
   // paneKey changes keep the session mounted; the host deduplicates routes and preserves in-flight frames.
   useShellPageStorageRefresh(refreshStorage, bridge.publishStorage)

@@ -1,11 +1,11 @@
 import { createServer, type Server } from 'node:http'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type * as linearClient from '../../../linear/client'
+import type * as linearClient from '../../../linear/accounts/linear-account-client'
 import { RuntimeLinearSaveCommands } from './runtime-linear-save-commands'
-import { loadLinearSdk } from '../../../linear/linear-sdk'
+import { loadLinearSdk } from '../../../linear/requests/linear-sdk'
 
 const boundary = vi.hoisted(() => ({ clients: vi.fn(), status: vi.fn(), signing: vi.fn() }))
-vi.mock('../../../linear/client', async (importOriginal) => ({
+vi.mock('../../../linear/accounts/linear-account-client', async (importOriginal) => ({
   ...(await importOriginal<typeof linearClient>()),
   getClients: boundary.clients,
   getStatus: boundary.status,

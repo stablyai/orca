@@ -2,10 +2,10 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import { parseExecutionHostId } from '../../../../../shared/execution-host'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { useAppStore } from '@/store/index'
-import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
+import { ensureAgentStartupInTerminal } from '@/lib/workspace/creation/new-workspace'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace/activation/workspace-activation-terminal-focus'
 import { seedAgentTabStateAfterWorktreeCreate } from '@/lib/workspace/creation/worktree-creation-agent-seeds'
-import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation'
+import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation-outcome'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 
 export async function completeWorktreeCreation(args: {

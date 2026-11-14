@@ -9,7 +9,6 @@ export const MAX_STT_SESSIONS = 4
 
 export type SttRecognizerConfig = {
   modelId: string
-  hotwordsFilePath: string | undefined
   language: string | undefined
 }
 
@@ -20,6 +19,12 @@ export type SttEngine = SttRecognizerConfig & {
   detach: () => void
   /** Torn down on purpose, so a load it cut short is not a failure of the model. */
   retired: boolean
+  /** Absent when the VAD wasn't downloaded yet at load, so this process cuts text only at stop. */
+  vadModelPath: string | undefined
+  /** Called once this process is gone; set when it must not outlive its last dictation. */
+  onUnloaded: (() => void)[]
+  /** Set while a canceled stream's last decode finishes; a new dictation waits for it before reusing this process. */
+  draining: Promise<void> | null
 }
 
 export type SttSession = {
@@ -29,6 +34,8 @@ export type SttSession = {
   /** null for cloud models, which load no recognizer. */
   config: SttRecognizerConfig | null
   modelId: string
+  /** Spellings this dictation's stream tells the engine to expect. */
+  vocabulary: string[]
   engine: SttEngine | null
   cloud: OpenAiTranscriptionSession | null
   phase: 'starting' | 'active' | 'stopping'
@@ -68,11 +75,7 @@ export function createSttSessionState(
 }
 
 export function sameSttRecognizerConfig(a: SttRecognizerConfig, b: SttRecognizerConfig): boolean {
-  return (
-    a.modelId === b.modelId &&
-    a.hotwordsFilePath === b.hotwordsFilePath &&
-    a.language === b.language
-  )
+  return a.modelId === b.modelId && a.language === b.language
 }
 
 export function sttEngineUsers(state: SttSessionState, engine: SttEngine): SttSession[] {

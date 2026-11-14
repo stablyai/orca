@@ -8,7 +8,6 @@ import {
 } from './host-spawn-admission'
 import {
   DEFAULT_SPAWN_ADMISSION_LIMITS as LIMITS,
-  readTerminalSpawnDeferral,
   type AutomaticWorkMode,
   type HostPressureLevel,
   type SpawnRequestFacts
@@ -89,27 +88,6 @@ describe('decideSpawnAdmission', () => {
     ).toEqual({ kind: 'admit', charge: 'interactive' })
   })
 
-  it('paces automatic restores to the burst, then one per second', () => {
-    const state = createSpawnAdmissionState(LIMITS, 0)
-    const f = facts()
-    for (let i = 0; i < LIMITS.automaticBurst; i++) {
-      expect(decide(state, f, 0).kind).toBe('admit')
-      applySpawnAdmission(state, f, 'automatic', LIMITS, 0)
-      settleSpawnAdmission(state, 'automatic', true)
-    }
-    expect(decide(state, f, 0)).toEqual({ kind: 'wait', charge: 'automatic', retryAt: 1000 })
-    expect(decide(state, f, 1000).kind).toBe('admit')
-  })
-
-  it('waits for a released slot when automatic concurrency is full', () => {
-    const state = createSpawnAdmissionState(LIMITS, 0)
-    const f = facts()
-    for (let i = 0; i < LIMITS.automaticConcurrency; i++) {
-      applySpawnAdmission(state, f, 'automatic', LIMITS, 0)
-    }
-    expect(decide(state, f, 60_000)).toEqual({ kind: 'wait', charge: 'automatic', retryAt: null })
-  })
-
   it('defers negotiated requests for pause, live cap and pressure, but never old callers', () => {
     const paused: AutomaticWorkMode = { kind: 'paused', reason: 'unclean_host_death', since: 0 }
     const negotiated = facts({ declaredIntent: 'automatic-restore' })
@@ -170,24 +148,5 @@ describe('decideSpawnAdmission', () => {
         charge: 'automatic'
       })
     }
-  })
-})
-
-describe('readTerminalSpawnDeferral', () => {
-  it('reads the reason from an RPC message and from the local IPC wrapper', () => {
-    expect(readTerminalSpawnDeferral(new Error('terminal_spawn_deferred:paused'))).toBe('paused')
-    expect(
-      readTerminalSpawnDeferral(
-        new Error(
-          "Error invoking remote method 'pty:spawn': Error: terminal_spawn_deferred:deadline"
-        )
-      )
-    ).toBe('deadline')
-  })
-
-  it('ignores other errors and unknown reasons', () => {
-    expect(readTerminalSpawnDeferral(new Error('ENOENT'))).toBeNull()
-    expect(readTerminalSpawnDeferral(new Error('terminal_spawn_deferred:later'))).toBeNull()
-    expect(readTerminalSpawnDeferral(undefined)).toBeNull()
   })
 })

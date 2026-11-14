@@ -1,4 +1,4 @@
-import { settledWriteStub } from '../../../../providers/settled-pty-write-stub'
+import { settledWriteStub } from '../../../../providers/testing/settled-pty-write-stub'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

@@ -2,8 +2,8 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { AI_VAULT_AGENT_SOURCES } from '../../session-scanner-agent-sources'
-import { walkSessionFiles } from '../../session-scanner-discovery'
+import { AI_VAULT_AGENT_SOURCES } from '../../discovery/session-scanner-agent-sources'
+import { walkSessionFiles } from '../../discovery/session-scanner-discovery'
 
 // The layout reported in #11394: canonical sessions beside an embedded Codex home.
 const CANONICAL = ['main', 'sessions', 'canonical.jsonl']

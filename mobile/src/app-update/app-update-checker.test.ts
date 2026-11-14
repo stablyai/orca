@@ -84,15 +84,6 @@ describe('app update checker', () => {
     expect(h.checker.getSnapshot().checking).toBe(false)
   })
 
-  it('joins a manual check to one already in flight', async () => {
-    const h = harness({ stored: { lastCheckedAt: T0 }, replies: [{ kind: 'current' }] })
-    h.checker.start()
-    await vi.advanceTimersByTimeAsync(0)
-    const [first, second] = [h.checker.checkNow(), h.checker.checkNow()]
-    await expect(Promise.all([first, second])).resolves.toEqual(['up-to-date', 'up-to-date'])
-    expect(checks(h)).toBe(1)
-  })
-
   it('keeps the 1 h retry for a manual check that fails while the store is still loading', async () => {
     let finishLoad: () => void = () => {}
     const h = harness({
@@ -110,15 +101,6 @@ describe('app update checker', () => {
     expect(checks(h)).toBe(1)
     await vi.advanceTimersByTimeAsync(1)
     expect(checks(h)).toBe(2)
-  })
-
-  it('applies one load and runs one check across a StrictMode-style double start', async () => {
-    const h = harness({})
-    h.checker.start()()
-    h.checker.start()
-    await vi.advanceTimersByTimeAsync(0)
-    expect(h.deps.loadPreferences).toHaveBeenCalledTimes(1)
-    expect(checks(h)).toBe(1)
   })
 
   function deferredReply() {

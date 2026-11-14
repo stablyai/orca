@@ -9,14 +9,14 @@ import { Store } from '../../persistence/loading-store/store'
 import {
   listOrcadMigrationSourceCutovers,
   orcadMigrationCutoverJournalDirectory
-} from '../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
+} from '../../persistence/migrating-orcad-catalog/cutover-journals/orcad-migration-cutover-journal'
 import {
   fenceOrcadMigrationSource,
   resolveOrcadMigrationFence
 } from './orcad-migration-source-fence'
 import type { OrcadMigrationTerminalVerdict } from './orcad-migration-terminal-gate'
 import { SshTargetOrcadClaims } from '../targets/ssh-target-orcad-claims'
-import '../../persistence/migrating-orcad-catalog/orcad-migration-manifest-export'
+import '../../persistence/migrating-orcad-catalog/source/catalog/orcad-migration-manifest-export'
 import '../../../shared/orcad-migration/orcad-migration-manifest-validation'
 
 const TARGET: SshTarget = {

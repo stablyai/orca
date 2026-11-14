@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { buildSnapshot, type CdpCommandSender } from './snapshot-engine'
+import { buildSnapshot } from './snapshot-engine'
+import type { CdpCommandSender } from '../debugger/cdp-command-sender'
 
 type AXNode = {
   nodeId: string

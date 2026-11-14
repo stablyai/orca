@@ -1,7 +1,7 @@
 import type { DecoratedDiffComment } from '@/components/diff-comments/decorated-diff-comment'
 import { formatRelativeTime } from '@/components/github/work-item-state-presentation'
-import type { PRComment } from '../../../../../shared/github/comment-types'
-import { getPRInlineCommentPlacement } from '../../../../../shared/github/pr-inline-comment-placement'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
+import { getPRInlineCommentPlacement } from '../../../../../shared/github/comments/pr-inline-comment-placement'
 
 export function buildInlineReviewComments(
   comments: PRComment[],

@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { Loader2, ZoomIn, ZoomOut } from 'lucide-react'
 import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Button } from '../ui/button'
 import { formatBytes } from './workspace-space-format'
 import { buildTreemapLayout, type TreemapRect } from './workspace-space-layout'

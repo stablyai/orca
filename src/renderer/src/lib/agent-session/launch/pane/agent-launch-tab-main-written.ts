@@ -12,7 +12,7 @@ import {
   forgetAgentLaunchPanePrompt,
   rememberAgentLaunchPanePrompt
 } from './agent-launch-pane-prompt'
-import { revealWorkspaceSurface } from '../../../workspace-surface-reveal'
+import { revealWorkspaceSurface } from '../../../workspace/activation/workspace-surface-reveal'
 import { layoutFramesFlowing } from '@/runtime/workspace-layout/frames/layout-frame-position'
 import { layoutFrameTerminalTab } from '@/runtime/workspace-layout/frames/layout-frame-terminal-panes'
 

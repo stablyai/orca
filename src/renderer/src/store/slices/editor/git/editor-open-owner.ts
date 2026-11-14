@@ -1,6 +1,7 @@
 import type { AppState } from '../../../types'
 import type { EditorOpenTargetOptions } from '../types/open-file'
-import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
+import '@/lib/editor/file-operations/editor-file-operation-owner'
+import { captureEditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import { resolveDiffRuntimeEnvironmentId } from './diff-runtime-owner'
 
 export function editorOpenOwner(

@@ -1,3 +1,4 @@
+import type { BrowserClientInitializationOwner } from '../commands/browser-client-host-command-state'
 import type {
   BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent,
@@ -11,7 +12,7 @@ import {
   closeBrowserClientHostComposition,
   fenceBrowserClientHostComposition
 } from './paired-runtime-browser-client-host-teardown'
-import type { BrowserClientPageNetworkRoute } from '../../client-pages/lifecycle/browser-client-page-cleanup'
+import type { BrowserClientPageNetworkRoute } from '../../network/client-routes/browser-client-page-network-route'
 import type { BrowserClientPageAuthorityIdentity as BrowserClientHostAuthorityTransitionInput } from '../../client-pages/execution/browser-client-page-command-executor-dependencies'
 import {
   type ComposedBrowserClientNetworkRoutes,
@@ -21,7 +22,8 @@ import {
 type ComposedPageExecutor = {
   handle(
     event: BrowserClientHostCommandEvent,
-    signal: AbortSignal
+    signal: AbortSignal,
+    closeInitialization?: BrowserClientInitializationOwner['close']
   ): Promise<BrowserClientHostCommandResult>
   retirePage(browserPageId: string, pageHostGeneration: number): Promise<boolean>
   hasUnresolvedPage(browserPageId: string, pageHostGeneration: number): boolean
@@ -45,7 +47,8 @@ type ComposedClientHost = {
 type ClientHostCallbacks = {
   handler(
     event: BrowserClientHostCommandEvent,
-    signal: AbortSignal
+    signal: AbortSignal,
+    closeInitialization?: BrowserClientInitializationOwner['close']
   ): Promise<BrowserClientHostCommandResult>
   onAuthority(authority: BrowserClientHostLeaseAuthority): void
   getPageInventory(): readonly BrowserClientHostedPageInventory[]
@@ -187,7 +190,7 @@ export class PairedRuntimeBrowserClientHostComposition<
     const generation = ++this.hostGeneration
     let publishedInventory: readonly BrowserClientHostedPageInventory[] | null = null
     return this.options.createHost(input, {
-      handler: (event, signal) => this.handleCommand(generation, event, signal),
+      handler: (event, signal, close) => this.handleCommand(generation, event, signal, close),
       getPageInventory: () => {
         if (this.hostGeneration !== generation) {
           return []
@@ -257,7 +260,8 @@ export class PairedRuntimeBrowserClientHostComposition<
   private async handleCommand(
     generation: number,
     event: BrowserClientHostCommandEvent,
-    signal: AbortSignal
+    signal: AbortSignal,
+    closeInitialization?: BrowserClientInitializationOwner['close']
   ): Promise<BrowserClientHostCommandResult> {
     if (this.hostGeneration !== generation) {
       throw new Error('browser_client_host_command_aborted')
@@ -266,7 +270,7 @@ export class PairedRuntimeBrowserClientHostComposition<
     if (this.closed || signal.aborted || this.hostGeneration !== generation) {
       throw new Error('browser_client_host_command_aborted')
     }
-    return this.executor.handle(event, signal)
+    return this.executor.handle(event, signal, closeInitialization)
   }
 
   private requestPageInventoryRefresh(): void {

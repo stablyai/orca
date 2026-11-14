@@ -40,8 +40,7 @@ function view(sections: DiffSection[]): CachedCombinedDiffViewState {
     gitStatusSignature: 'status',
     sections,
     sectionHeights: { 0: 320 },
-    loadedIndices: sections.map((_, index) => index),
-    sideBySide: true
+    loadedIndices: sections.map((_, index) => index)
   }
 }
 

@@ -5,13 +5,14 @@ import {
   getSelectionIntent,
   pruneSelection,
   updateSelection
-} from '@/lib/list-multi-selection'
+} from '@/lib/list-interaction/list-multi-selection'
 import { useReusedArrayIdentity } from '@/components/sidebar/worktree-list/listing/use-reused-array-identity'
 
 export type ListMultiSelection<T> = {
   visibleKeys: string[]
   selectedKeys: Set<string>
   selectedItems: T[]
+  getItemForKey: (key: string) => T | undefined
   toggleSelection: (item: T) => void
   setAllSelected: (selected: boolean) => void
   /** Returns true for selection-only gestures (Cmd/Ctrl/Shift), which must not navigate. */
@@ -35,13 +36,24 @@ export function useListMultiSelection<T>({
   getScope: () => Element | null
 }): ListMultiSelection<T> {
   // Reuse equal ordered-ID arrays so gesture callbacks stay stable and row memoization survives epoch bumps.
+  const entryByKey = useMemo(() => {
+    const entries = new Map<string, { item: T; index: number }>()
+    items.forEach((item, index) => {
+      const key = getKey(item)
+      if (!entries.has(key)) {
+        entries.set(key, { item, index })
+      }
+    })
+    return entries
+  }, [items, getKey])
   const visibleKeys = useReusedArrayIdentity(
-    useMemo(() => Array.from(new Set(items.map((item) => getKey(item)))), [items, getKey])
+    useMemo(() => Array.from(entryByKey.keys()), [entryByKey])
   )
+  const visibleKeySet = useMemo(() => new Set(visibleKeys), [visibleKeys])
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
   const [selectionAnchorKey, setSelectionAnchorKey] = useState<string | null>(null)
 
-  const prunedSelection = pruneSelection(selectedKeys, selectionAnchorKey, visibleKeys)
+  const prunedSelection = pruneSelection(selectedKeys, selectionAnchorKey, visibleKeySet)
   // Why: filters/grouping can hide selected rows; prune during render so nothing sees stale ids for unrendered items.
   if (!areSelectionsEqual(selectedKeys, prunedSelection.selectedIds)) {
     setSelectedKeys(prunedSelection.selectedIds)
@@ -53,19 +65,17 @@ export function useListMultiSelection<T>({
   // Reuse empty/unchanged selections so context-menu/drag callbacks and row memoization remain stable.
   const selectedItems = useReusedArrayIdentity(
     useMemo(() => {
-      if (selectedKeys.size === 0) {
-        return []
-      }
-      const selected = new Map<string, T>()
-      for (const item of items) {
-        const key = getKey(item)
-        if (selectedKeys.has(key) && !selected.has(key)) {
-          selected.set(key, item)
+      const selected: { item: T; index: number }[] = []
+      for (const key of selectedKeys) {
+        const entry = entryByKey.get(key)
+        if (entry) {
+          selected.push(entry)
         }
       }
-      return Array.from(selected.values())
-    }, [items, getKey, selectedKeys])
+      return selected.sort((a, b) => a.index - b.index).map(({ item }) => item)
+    }, [entryByKey, selectedKeys])
   )
+  const getItemForKey = useCallback((key: string) => entryByKey.get(key)?.item, [entryByKey])
 
   useEffect(() => {
     if (selectedKeys.size === 0) {
@@ -160,6 +170,7 @@ export function useListMultiSelection<T>({
     visibleKeys,
     selectedKeys,
     selectedItems,
+    getItemForKey,
     toggleSelection,
     setAllSelected,
     updateSelectionForGesture,

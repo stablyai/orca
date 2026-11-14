@@ -47,5 +47,8 @@ const syntaxTokenStyles: Record<MobileSyntaxTokenKind, TextStyle> = themedStyleS
   },
   meta: {
     color: colors.syntaxMeta
+  },
+  tag: {
+    color: colors.syntaxTag
   }
 }))

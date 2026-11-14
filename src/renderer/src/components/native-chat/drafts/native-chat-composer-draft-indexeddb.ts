@@ -1,14 +1,14 @@
 // Keep persistence thin; the draft store owns merge and lifecycle policy.
 
-import type {
-  NativeChatComposerDraftStorage,
-  StoredNativeChatComposerDraft
-} from './native-chat-composer-draft-storage'
 import {
   committedTransaction,
   indexedDbConnection,
   settledRequest
-} from '@/lib/indexeddb-connection'
+} from '@/app-shell/storage/indexeddb-connection'
+import type {
+  NativeChatComposerDraftStorage,
+  StoredNativeChatComposerDraft
+} from './native-chat-composer-draft-storage'
 
 const DATABASE_NAME = 'orca-native-chat-composer-drafts'
 const DATABASE_VERSION = 1

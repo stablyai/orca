@@ -6,7 +6,7 @@ import {
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { aiVaultSessionLogFilePath } from '../../../../../../shared/ai-vault/session-display/ai-vault-session-log-resource'
 import '../../../../../../shared/ai-vault/contracts/ai-vault-session-deletion'
-import { revealInFileManager } from '@/lib/reveal-in-file-manager'
+import { revealInFileManager } from '@/lib/files/os-open/reveal-in-file-manager'
 
 export function canUseLocalAiVaultSessionPathActions(
   executionHostId: ExecutionHostId | null | undefined

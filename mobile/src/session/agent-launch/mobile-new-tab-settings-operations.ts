@@ -1,6 +1,5 @@
 import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import type { RpcCompatibleReader } from '../../transport/rpc/rpc-operation-contract'
-import '../../../../src/shared/source-control/listing/source-control-group-order'
 import { settingsMember } from '../../settings/mobile-settings-projection'
 
 // New-tab checks the sibling's refusal before touching settings, but after its own refusal.

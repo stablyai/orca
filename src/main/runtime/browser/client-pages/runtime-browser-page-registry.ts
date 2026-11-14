@@ -54,12 +54,17 @@ export class RuntimeBrowserPageRegistry {
   private readonly pages = new Map<string, RuntimeBrowserClientPage>()
   private globalActivePageId: string | null = null
   private readonly maxPages: number
+  private onRetired?: (page: RuntimeBrowserClientPage) => void
 
   constructor(options: { maxPages?: number } = {}) {
     this.maxPages = options.maxPages ?? DEFAULT_MAX_RUNTIME_BROWSER_PAGES
     if (!Number.isInteger(this.maxPages) || this.maxPages < 1) {
       throw new Error('browser_runtime_page_limit_invalid')
     }
+  }
+
+  setRetirementListener(listener: (page: RuntimeBrowserClientPage) => void): void {
+    this.onRetired = listener
   }
 
   publishClientPage(input: RuntimeBrowserClientPageInput): RuntimeBrowserClientPage {
@@ -145,6 +150,7 @@ export class RuntimeBrowserPageRegistry {
       return false
     }
     this.pages.delete(browserPageId)
+    this.onRetired?.(current)
     if (this.globalActivePageId === browserPageId) {
       this.globalActivePageId = null
     }
@@ -197,6 +203,14 @@ export class RuntimeBrowserPageRegistry {
 
   deactivateGlobal(): void {
     this.globalActivePageId = null
+  }
+
+  /** An engine tab took the selection; unscoped creates and switches move only the global pick. */
+  yieldSelection(workspaceId: string | undefined): void {
+    this.deactivateGlobal()
+    if (workspaceId !== undefined) {
+      this.deactivateWorkspace(workspaceId)
+    }
   }
 
   deactivateWorkspace(workspaceId: string): void {

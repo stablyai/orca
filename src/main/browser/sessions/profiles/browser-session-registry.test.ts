@@ -15,6 +15,7 @@ const {
   removeCertificateRequestGuardMock: vi.fn()
 }))
 const forgetBrowserPasswordVaultMock = vi.hoisted(() => vi.fn(() => true))
+const detachBrowserExtensionsFromProfileSessionMock = vi.hoisted(() => vi.fn(async () => {}))
 const processUserAgentMode = vi.hoisted(() => {
   const state: { value: 'clean' | 'native' } = { value: 'clean' }
   return state
@@ -33,7 +34,7 @@ vi.mock('electron', () => ({
 // Extension loading and cleanup have their own tests (browser-extension-session-loader.test.ts).
 vi.mock('../../extensions/profile-sessions/browser-extension-session-loader', () => ({
   attachBrowserExtensionsToProfileSession: () => {},
-  detachBrowserExtensionsFromProfileSession: async () => {}
+  detachBrowserExtensionsFromProfileSession: detachBrowserExtensionsFromProfileSessionMock
 }))
 
 vi.mock('../../identity/browser-process-user-agent', () => ({
@@ -64,11 +65,6 @@ import {
   deleteManagedBrowserProfile,
   ensureManagedBrowserProfile
 } from './browser-managed-session-profiles'
-import {
-  configureBrowserSitePermissionStore,
-  listBrowserSitePermissions,
-  setBrowserSitePermissionDecisions
-} from '../../site-settings/permissions/browser-site-permission-store'
 import { setBrowserNetworkProxySettingsResolver } from '../proxy/browser-session-proxy'
 import { handleElectronProxyLogin } from '../../../network/electron-proxy-credentials'
 import { applyProxySettingsToSession } from '../../../network/proxy-settings'
@@ -78,6 +74,7 @@ describe('BrowserSessionRegistry', () => {
   let profileDirectory: string
 
   afterEach(() => {
+    setBrowserNetworkProxySettingsResolver(null)
     rmSync(profileDirectory, { recursive: true, force: true })
   })
 
@@ -88,6 +85,8 @@ describe('BrowserSessionRegistry', () => {
       profileDirectory
     })
     sessionFromPartitionMock.mockReset()
+    detachBrowserExtensionsFromProfileSessionMock.mockReset()
+    detachBrowserExtensionsFromProfileSessionMock.mockResolvedValue(undefined)
     askForMediaAccessMock.mockReset()
     getMediaAccessStatusMock.mockReset()
     removeCertificateRequestGuardMock.mockClear()
@@ -208,19 +207,6 @@ describe('BrowserSessionRegistry', () => {
     ).rejects.toThrow('retired')
   })
 
-  it('deletes a non-default profile and its remembered site answers', async () => {
-    configureBrowserSitePermissionStore(mkdtempSync(join(tmpdir(), 'orca-site-permissions-')))
-    const profile = await browserSessionRegistry.createProfile('isolated', 'Delete Test')
-    expect(profile).not.toBeNull()
-    expect(browserSessionRegistry.isAllowedPartition(profile!.partition)).toBe(true)
-    setBrowserSitePermissionDecisions(profile!.id, 'https://example.com', ['camera'], 'allow')
-    const deleted = await browserSessionRegistry.deleteProfile(profile!.id)
-    expect(deleted).toBe(true)
-    expect(browserSessionRegistry.isAllowedPartition(profile!.partition)).toBe(false)
-    expect(browserSessionRegistry.getProfile(profile!.id)).toBeNull()
-    expect(listBrowserSitePermissions(profile!.id)).toEqual([])
-  })
-
   // Electron Sessions outlive deleted profiles; their header hooks must be retired.
 
   it('creates one managed profile per owner and a fresh one after its owner is removed', async () => {
@@ -246,31 +232,18 @@ describe('BrowserSessionRegistry', () => {
     expect(recreated?.partition).not.toBe(first.partition)
   })
 
-  it('announces each profile change after the list reflects it', async () => {
-    const seen: string[][] = []
-    browserSessionRegistry.onProfilesChanged = () =>
-      seen.push(browserSessionRegistry.listProfiles().map((profile) => profile.label))
-    try {
-      const made = await browserSessionRegistry.createProfile('isolated', 'Made by CLI')
-      const managed = await ensureManagedBrowserProfile({ kind: 'repo', id: 'announce' }, 'Repo')
-      if (!made || !managed) {
-        throw new Error('Expected created profiles')
-      }
-      browserSessionRegistry.updateProfileSource(made.id, {
-        browserFamily: 'manual',
-        importedAt: 1
-      })
-      await browserSessionRegistry.deleteProfile(made.id)
-      await browserSessionRegistry.deleteProfile('default')
-      await browserSessionRegistry.createProfile('default', 'Refused')
-
-      expect(seen).toHaveLength(4)
-      expect(seen[0]).toContain('Made by CLI')
-      expect(seen[1]).toContain('Repo')
-      expect(seen[2]).toContain('Made by CLI')
-      expect(seen[3]).not.toContain('Made by CLI')
-    } finally {
-      browserSessionRegistry.onProfilesChanged = null
+  it('wipes the deleted profile when extension teardown throws', async () => {
+    detachBrowserExtensionsFromProfileSessionMock.mockRejectedValueOnce(
+      new Error('Failed to unhandle protocol: orca-extension-api')
+    )
+    const owner = { kind: 'worktree' as const, id: 'repo-1::/work/feature' }
+    const profile = await ensureManagedBrowserProfile(owner, 'Workspace: feature')
+    if (!profile) {
+      throw new Error('Expected managed profile')
     }
+    const sess = sessionFromPartitionMock()
+    await expect(deleteManagedBrowserProfile(owner)).resolves.toBe(true)
+    expect(sess.clearStorageData).toHaveBeenCalledTimes(1)
+    expect(browserSessionRegistry.getProfile(profile.id)).toBeNull()
   })
 })

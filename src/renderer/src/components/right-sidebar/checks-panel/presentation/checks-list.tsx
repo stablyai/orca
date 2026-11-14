@@ -10,10 +10,10 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
-import { observeOffscreenAnimation } from '@/lib/offscreen-animation-pause'
+import { cn } from '@/lib/class-names'
+import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 import { useTranslate } from '@/i18n/use-translate'
-import { CHECK_COLOR, CHECK_ICON } from './check-presentation'
+import { CHECK_COLOR, CHECK_ICON, checkPresentationKey } from './check-presentation'
 import { CheckRunDetails } from './check-run-details'
 import { CheckRunTime } from './check-run-time'
 import { getCheckStatusLabel } from '@/components/github/pr-check-presentation'
@@ -23,7 +23,7 @@ import {
   openAppHttpLink,
   openAppHttpLinkFromAnchor
 } from '@/lib/browser/navigation/app-http-link-open'
-import type { PRCheckDetail } from '../../../../../../shared/github/check-types'
+import type { PRCheckDetail } from '../../../../../../shared/github/checks/check-types'
 
 export function ChecksList(props: ChecksListProps): React.JSX.Element {
   const t = useTranslate()
@@ -249,7 +249,7 @@ export function ChecksList(props: ChecksListProps): React.JSX.Element {
 // The icon already shows the state, so its word lives in the icon's tooltip and accessible name, not beside it.
 function CheckStatusIcon({ check }: { check: PRCheckDetail }): React.JSX.Element {
   const t = useTranslate()
-  const conclusion = getCheckConclusion(check)
+  const conclusion = checkPresentationKey(check)
   const Icon = CHECK_ICON[conclusion] ?? CircleDashed
   const label = getCheckStatusLabel(check, t)
   return (

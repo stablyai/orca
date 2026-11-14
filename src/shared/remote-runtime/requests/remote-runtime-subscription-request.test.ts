@@ -14,10 +14,9 @@ import {
   publicKeyToBase64
 } from '../e2ee/node/e2ee-crypto'
 import { encodePairingOffer, parsePairingCode } from '../pairing/pairing'
-import {
-  subscribeRemoteRuntimeRequest,
-  type RemoteRuntimeSubscription
-} from '../remote-runtime-client'
+import '../requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../requests/remote-runtime-subscription-transport'
+import type { RemoteRuntimeTransportSubscription } from '../requests/remote-runtime-subscription-contract'
 
 const servers: WebSocketServer[] = []
 
@@ -69,7 +68,7 @@ describe('remote runtime subscription JSON requests', () => {
   })
 })
 
-function requireSender(subscription: RemoteRuntimeSubscription) {
+function requireSender(subscription: RemoteRuntimeTransportSubscription) {
   if (!subscription.sendRequest) {
     throw new Error('subscription JSON request sender unavailable')
   }
@@ -82,10 +81,10 @@ async function subscribe(
     onResponse?: (response: unknown) => void
     onError?: (error: unknown) => void
     onClose?: () => void
-    options?: Parameters<typeof subscribeRemoteRuntimeRequest>[5]
+    options?: Parameters<typeof subscribeRemoteRuntimeTransport>[5]
   } = {}
-): Promise<RemoteRuntimeSubscription> {
-  return subscribeRemoteRuntimeRequest(
+): Promise<RemoteRuntimeTransportSubscription> {
+  return subscribeRemoteRuntimeTransport(
     pairing,
     'browser.clientHost.attach',
     {},

@@ -1,4 +1,4 @@
-import type { PipedChildProcess } from '@orca/process-host/process-spec'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import type { RemoteCommandChannel } from '../../managed-server/install/remote-install-transport'
 import { createSshOperationAbortError } from '../../ssh/connection/ssh-exec-options'
 import { startWslCommandLoop, wslCommandLoopMarker, type WslCommandLoop } from './wsl-command-loop'
@@ -11,7 +11,7 @@ export type WslCommandLoopPool = {
 
 type WslCommandLoopPoolOptions = {
   /** Starts `wsl.exe --exec sh -c <loop script> <argv0> <marker>`. */
-  spawnLoop: (marker: string) => PipedChildProcess
+  spawnLoop: (marker: string) => ChildProcessWithoutNullStreams
   /** Concurrent commands beyond this run on their own wsl.exe, as before. */
   maxLoops?: number
   idleMs?: number

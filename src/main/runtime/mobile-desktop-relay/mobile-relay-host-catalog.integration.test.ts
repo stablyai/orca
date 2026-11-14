@@ -10,7 +10,7 @@ import { DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY } from '../../../shared/del
 import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
 import type { PairingOffer } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { RUNTIME_PROTOCOL_VERSION } from '../../../shared/protocol-version'
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
+import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import {
   runtimeEnvironmentStatusFromSnapshot,
   type RuntimeHostStatusSnapshot
@@ -158,11 +158,17 @@ describe('mobile relay hosts: phone -> desktop lists the servers it shows', () =
         return server ? { environmentId, fence: 'pairing-1', pairing: server.pairing } : null
       },
       call: (host, method, params) =>
-        sendRemoteRuntimeRequest(
+        sendRemoteRuntimeRequestOnSocket(
           pairedRuntimeConnectionFromOffer(servers.get(host.environmentId)!.pairing),
           method,
           params,
-          5_000
+          5_000,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined
         ),
       hostsBrowserPage: () => false,
       onEnvironmentRetired: () => () => {},

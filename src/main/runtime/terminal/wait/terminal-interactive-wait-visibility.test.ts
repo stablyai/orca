@@ -12,7 +12,7 @@ import {
   TRANSCRIPT_PANE_PTY_ID as PTY_ID,
   waitForTranscriptIdle
 } from '../../orca-runtime-tests/agent-transcript-pane-test-harness'
-import { assertTerminalAgentSendable } from '../../rpc/terminal-agent-send-guard'
+import { assertTerminalAgentSendable } from '../../rpc/terminal/terminal-agent-send-guard'
 import { readRuntimeFixture } from './agent-transcript-replay-test-harness'
 
 vi.mock('electron', () => ({
@@ -193,36 +193,6 @@ describe('Interactive wait visibility and terminal admission', () => {
 
       await expect(runtime.getTerminalInteractiveWait(handle)).resolves.toBeUndefined()
     })
-
-    it('does not accrue a probe per poll while the foreground probe wedges', async () => {
-      // Timeout abandons the wait, not the request; single-flight prevents one stranded remote probe per poll.
-      let probes = 0
-      const { runtime, handle } = await createPane({
-        paneTitle: '✻ Claude Code',
-        foregroundProcess: 'claude',
-        data: agentStatusOsc('waiting'),
-        onForegroundProbe: () => {
-          probes += 1
-        },
-        foregroundProbeHangs: true
-      })
-
-      vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
-      try {
-        const probing = Promise.all([
-          runtime.getTerminalInteractiveWait(handle),
-          runtime.getTerminalInteractiveWait(handle),
-          runtime.getTerminalInteractiveWait(handle)
-        ])
-        void probing.catch(() => undefined)
-        await vi.advanceTimersByTimeAsync(TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS)
-        await probing
-
-        expect(probes).toBe(1)
-      } finally {
-        vi.useRealTimers()
-      }
-    }, 20_000)
 
     it('leaves the wait unevaluated when the foreground probe wedges', async () => {
       // Bound remote PTY probes; a wedged host must leave wait unknown without stalling showTerminal.

@@ -1,4 +1,4 @@
-// Move frame seal/decode and bundle gunzip off Hermes’s JS thread when native bindings are available.
+// Move frame seal/decode and bundle gunzip/brotli off Hermes’s JS thread when native bindings are available.
 export type PairedE2EENativeCodec = {
   /** Canonical padded base64 only; null for anything else, including what `atob` forgives. */
   decodeBase64(value: string): Uint8Array | null
@@ -10,6 +10,8 @@ export type PairedE2EENativeCodec = {
   sealSecretbox(message: Uint8Array, nonce: Uint8Array, key: Uint8Array): Uint8Array
   /** Throws on a body that is not one well-formed gzip member. See orca-gzip-utf8-codec. */
   gunzip(input: Uint8Array, outputLimit: number): Uint8Array
+  /** Off the JS thread; Hermes has no brotli, so there is no JS fallback. */
+  brotliDecompress(input: Uint8Array, outputLimit: number): Promise<Uint8Array<ArrayBuffer>>
   /** Null where only TextDecoder's replacement or BOM rules give the answer, or native failed. */
   decodeUtf8(input: Uint8Array): string | null
 }
@@ -25,6 +27,7 @@ export type PairedE2EENativeBindings = {
   codec: {
     gunzip(input: Uint8Array, outputLimit: number): Uint8Array
     decodeUtf8(input: Uint8Array): string | null
+    brotliDecompress(input: Uint8Array, outputLimit: number): Promise<Uint8Array<ArrayBuffer>>
   }
   sodium: LibsodiumBindings
 }
@@ -96,6 +99,7 @@ function detectPairedE2EENativeCodec(): PairedE2EENativeCodec | null {
           sodium.secretboxSeal(wholeBuffer(message), wholeBuffer(nonce), wholeBuffer(key))
         ),
       gunzip: (input, outputLimit) => module.gunzip(input, outputLimit),
+      brotliDecompress: (input, outputLimit) => module.brotliDecompress(input, outputLimit),
       decodeUtf8: (input) => {
         // Why: the frame is already open and the counter advanced, so a throw here must not drop it.
         try {

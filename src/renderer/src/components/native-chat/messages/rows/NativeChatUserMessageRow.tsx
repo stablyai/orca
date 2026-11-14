@@ -1,8 +1,8 @@
-import { NativeChatSignInButton } from '../../host-access/NativeChatSignInButton'
+import { NativeChatSetupButton } from '../../host-access/NativeChatSetupButton'
 import { NativeChatTextAttachments } from '../../media/text/NativeChatTextAttachments'
 import { Goal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
@@ -17,7 +17,7 @@ import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { NativeChatAgentMessageCard } from './NativeChatAgentMessageCard'
 import { NativeChatDetailsDisclosure } from '../diagnostics/NativeChatProviderDetails'
 import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAttachments'
-import type { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/native-chat-row-content'
+import type { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
 
 const USER_META_REVEAL =
   'transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 [.group:has(:focus-visible)_&]:pointer-events-auto [.group:has(:focus-visible)_&]:opacity-100'
@@ -160,7 +160,7 @@ export function NativeChatUserMessageRow({
       {deliveryNotice?.text !== undefined ? (
         <div className="flex max-w-[85%] flex-wrap items-center gap-2 text-2xs text-destructive/80">
           <span className="min-w-0 break-words">{deliveryNotice.text}</span>
-          <NativeChatSignInButton failureKind={deliveryNotice.failureKind} />
+          <NativeChatSetupButton failureKind={deliveryNotice.failureKind} />
           {deliveryNotice.onSend ? (
             <Button type="button" variant="ghost" size="xs" onClick={deliveryNotice.onSend}>
               {t('components.native-chat.queuedMessages.send', 'Send')}

@@ -1,4 +1,4 @@
-import type * as MobileNativeChatFileSearch from '../../../session/native-chat/composer/use-mobile-native-chat-file-search'
+import type * as MobileNativeChatFileSearch from '../../../session/native-chat/composer/attachments/use-mobile-native-chat-file-search'
 import { hookMount, performHookAction } from '../hook-mount'
 import type { MountOptions } from '../mounted-operation-module'
 import { operationModuleLoader } from '../operation-module-loader'
@@ -11,7 +11,7 @@ export function fileInventoryMountAdapters(
   return {
     'workspace.file-inventory': ({ client }) => {
       const useSearch = modules.load<typeof MobileNativeChatFileSearch>(
-        'mobile/src/session/native-chat/composer/use-mobile-native-chat-file-search.ts'
+        'mobile/src/session/native-chat/composer/attachments/use-mobile-native-chat-file-search.ts'
       ).useMobileNativeChatFileSearch
       const operations = options.reference
         ? modules

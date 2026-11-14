@@ -2,7 +2,7 @@ import type { AppState } from '@/store/types'
 import type {
   RuntimeMobileSessionFileTab,
   RuntimeMobileSessionMarkdownTab
-} from '../../../../shared/runtime-types'
+} from '../../../../shared/runtime-mobile-session-tab-contracts'
 import type { Tab } from '../../../../shared/tab-types'
 import { editorRowHost } from '../../../../shared/workspace-session/session-tab-file-host'
 import type { MobileSessionWorktreeInputs } from './types'

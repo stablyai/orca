@@ -159,5 +159,3 @@ export function isInheritedFromActivePane(
     }).inheritedFromActivePane
   )
 }
-
-export { resolvePaneKey } from '../../lib/agent-status-pane-ownership'

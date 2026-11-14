@@ -1,7 +1,7 @@
 import type { SkillCloudOperation, SkillCloudOptions } from '../../../shared/skill-cloud-contract'
 import { ensureActiveOrcaProfile } from '../../orca-profiles/profile-index-store'
-import { getOrcaCloudAuthConfig } from '../../orca-profiles/profile-cloud-auth-config'
-import { runWithFreshOrcaCloudSession } from '../../orca-profiles/profile-cloud-session-refresh'
+import { getOrcaCloudAuthConfig } from '../../orca-profiles/cloud-auth/profile-cloud-auth-config'
+import { runWithFreshOrcaCloudSession } from '../../orca-profiles/cloud-session/profile-cloud-session-refresh'
 import {
   allowsArtifactCloudAuthOverride,
   resolveArtifactCloudApiUrl

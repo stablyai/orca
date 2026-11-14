@@ -22,7 +22,7 @@ export const PR_WSL_E2E_SOURCE_ROUTES = [
     id: 'wsl-move.fence',
     specs: ['tests/e2e/wsl-move-fence.spec.ts'],
     matches: (file) =>
-      /^src\/(?:main\/(?:persistence\/moving-wsl-projects\/wsl-move-(?:scope-guard|fence|reset|startup|startup-rewrite|cutover-journal)|ipc\/pty\/host-env\/spawn-cwd|wsl\/host-lifecycle\/wsl-host-gate(?:-startup)?)|shared\/wsl-move\/wsl-move-cutover)\.ts$/.test(
+      /^src\/(?:main\/(?:persistence\/moving-wsl-projects\/(?:quiescence\/wsl-move-(?:scope-guard|fence)|cutover-recovery\/wsl-move-(?:reset|cutover-journal)|startup\/wsl-move-(?:startup|startup-rewrite))|ipc\/pty\/host-env\/spawn-cwd|wsl\/host-lifecycle\/wsl-host-gate(?:-startup)?)|shared\/wsl-move\/wsl-move-cutover)\.ts$/.test(
         file
       )
   },

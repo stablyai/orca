@@ -12,7 +12,7 @@ import {
 import {
   AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY
-} from '../../../../../shared/agent-session/lifecycle/agent-session-stop-capabilities'
+} from '../../../../../shared/agent-session/lifecycle/stopping/agent-session-stop-capabilities'
 import {
   AGENT_SESSION_CREATE_OPTIONS_MODE_RUNTIME_CAPABILITY,
   AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY

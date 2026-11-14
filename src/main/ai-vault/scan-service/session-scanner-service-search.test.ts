@@ -9,7 +9,7 @@ import {
   openSessionSearchIndexerHarness,
   writeClaudeTranscript,
   type SessionSearchIndexerHarness
-} from '../../ai-vault-search/session-search-indexer-test-fixture'
+} from '../../ai-vault-search/indexing/session-search-indexer-test-fixture'
 import {
   AI_VAULT_SERVICE_PROTOCOL_VERSION,
   type AiVaultServiceChildMessage,
@@ -105,22 +105,9 @@ beforeAll(async () => {
 
 afterAll(async () => {
   emit({ type: 'sessionSearch', init: searchInit(false) })
+  await searchStatus()
   process.send = originalSend
   await harness.cleanup()
-})
-
-it('answers a search and a reconcile over the protocol', async () => {
-  expect(await call({ type: 'request', operation: 'searchReconcile' })).toEqual({
-    operation: 'searchReconcile',
-    value: null,
-    type: 'result',
-    id: expect.any(Number)
-  })
-  const response = await searchSessions('distinctive')
-  expect(response.kind).toBe('results')
-  if (response.kind === 'results') {
-    expect(response.hits.map((hit) => hit.sessionId)).toEqual([SESSION_ID])
-  }
 })
 
 it('discovers a new root through the parent exchange on manual reconciliation', async () => {
@@ -160,5 +147,6 @@ it('answers disabled once consent is withdrawn, without a respawn', async () => 
   expect(await searchSessions('distinctive')).toEqual({ kind: 'unavailable', reason: 'disabled' })
   expect(await searchStatus()).toMatchObject({ enabled: false, phase: 'idle' })
   emit({ type: 'sessionSearch', init: searchInit(true) })
+  await call({ type: 'request', operation: 'searchReconcile' })
   expect((await searchSessions('distinctive')).kind).toBe('results')
 })

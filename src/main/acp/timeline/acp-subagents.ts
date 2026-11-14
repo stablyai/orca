@@ -7,7 +7,7 @@ import type {
   AgentChildWorkEvidenceHandle
 } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import { AGENT_CHILD_WORK_ID_MAX_LENGTH } from '../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
-import { MAX_SUBAGENT_FIELD_CHARS } from '../../../shared/native-chat/transcript/native-chat-subagent-summary'
+import { MAX_SUBAGENT_FIELD_CHARS } from '../../../shared/native-chat/transcript/subagents/native-chat-subagent-summary'
 import type { NativeChatSubagentState } from '../../../shared/native-chat/native-chat-types'
 import { boundSubagentLabel } from '../../native-chat/agent-session-journal/item-lifecycle/journal-subagent-item'
 import type {
@@ -19,7 +19,7 @@ import type { AcpSubagentUpdate } from '../acp-dialects/acp-dialect'
 type KnownSubagent = {
   /** Pin replies to the spawning turn. */
   placement: ProviderTimelineJoin
-  reply?: string
+  replyDigest?: string
   /** Preserve the first terminal state; only completed runs can publish replies. */
   ended?: NativeChatSubagentState
 }
@@ -86,6 +86,10 @@ export class AcpSubagents {
         }
       }
       this.known.set(update.id, subagent)
+      if (update.restart && subagent.ended !== undefined) {
+        subagent.ended = undefined
+        subagent.replyDigest = undefined
+      }
       const ending = update.state !== undefined && acpSubagentOutcome(update.state) !== undefined
       // Late live reports must not resurrect an ended run after the host retires its record.
       if (ending || subagent.ended === undefined) {
@@ -102,10 +106,11 @@ export class AcpSubagents {
   }
 
   private reply(id: string, subagent: KnownSubagent, text: string): ProviderTimelineEvent[] {
-    if (subagent.reply === text) {
+    const digest = createHash('sha256').update(text, 'utf16le').digest('hex')
+    if (subagent.replyDigest === digest) {
       return []
     }
-    subagent.reply = text
+    subagent.replyDigest = digest
     return [
       {
         type: 'item.update',
@@ -133,9 +138,11 @@ function subagentEvidence(update: AcpSubagentUpdate, observedAt: number): AgentC
         state: update.state === 'idle' ? 'idle' : 'working',
         ...(update.label !== undefined ? { description: boundSubagentLabel(update.label) } : {}),
         ...(update.tokens !== undefined ? { totalTokens: update.tokens } : {}),
+        ...(update.ownerId !== undefined ? { ownerId: subagentHandle(update.ownerId).id } : {}),
         // Hashed handles cannot address provider cancellation.
         stoppable: handle.id === update.id
-      }
+      },
+      ...(update.restart ? { restart: true } : {})
     }
   }
   return {

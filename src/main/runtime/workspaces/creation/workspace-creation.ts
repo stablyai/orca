@@ -1,4 +1,4 @@
-import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../opencode/opencode-model-startup-plan'
+import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../opencode/model-launch/opencode-model-startup-plan'
 import {
   formatAmbiguousCwdParentMessage,
   type WorktreeLineageInput,
@@ -6,7 +6,7 @@ import {
 } from '../lineage/runtime-worktree-lineage-resolution'
 import { RuntimeLineageError, LINEAGE_PARENT_AMBIGUOUS } from '../lineage/runtime-lineage-error'
 import type { Repo } from '../../../../shared/repo-types'
-import { OrcaRuntimeWithGetWorktreeTerminalProvisioningHost } from '../startup/workspace-terminal-provisioning'
+import { OrcaRuntimeWithGroupFolderSetup } from './runtime-group-folder-setup-host'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
@@ -25,19 +25,18 @@ import { invalidateAuthorizedRootsCacheForRepo } from '../../../ipc/worktrees/re
 import { startRuntimeLocalWorktreeTerminals } from '../startup/runtime-local-worktree-terminal-startup'
 import { trackRuntimeWorkspaceCreate } from '../../../workspaces/creation/workspace-create-telemetry'
 import type { RuntimeWorkspaceCreateEvents } from '../../../workspaces/creation/workspace-create-telemetry'
-import {
-  createdWorkspaceActivationCallbacks,
-  wslUserAct
-} from '../startup/workspace-create-activation'
-import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+
+import { createdWorkspaceActivationCallbacks } from '../startup/workspace-create-activation'
+import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { resolveManagedWorktreeCreateStartup } from '../startup/managed-worktree-create-startup'
 import type { WorkspaceCreationHandle } from '../lifecycle/workspace-lifecycle-creations'
 import { workspaceLifecycleKey } from '../lifecycle/workspace-lifecycle-commands'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { applyWorkspaceCreatePluginHook } from '../../../plugins/hooks/workspace-create-plugin-hook'
 import { withProjectWorktreeCreate } from '../../../workspaces/creation/worktree-create-in-flight'
+import { createdWorktreeLifecycleIdentity } from '../lifecycle/worktree-lifecycle-event'
 
-export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
+export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGroupFolderSetup {
   abstract resolveLineageForWorktreeCreate(
     input?: WorktreeLineageInput,
     childRepo?: Repo
@@ -128,17 +127,15 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
         draftPaste: effectiveDraftPaste,
         deps: {
           store,
-          ptySpawnAvailable: Boolean(this.ptyController?.spawn),
-          provisionInBackground: () => this.shouldProvisionWorktreeInBackground(args.navigation),
-          createTerminal: (selector, options) =>
-            this.createTerminal(selector, { ...options, ...wslUserAct(args) }),
-          pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
-          sendFollowup: (handle, followup, terminal) =>
-            void this.deliverStartupFollowup(handle, followup, { terminalCreation: terminal }),
+          terminals: this.localWorktreeTerminalPorts(args, activationCallbacks.local),
           invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),
           notifyWorktreesChanged: (repoId) => this.notifyWorktreesChanged(repoId),
           emitCreated: (event) => this.emitWorktreeLifecycle(event),
-          activate: activationCallbacks.folder
+          activate: activationCallbacks.folder,
+          setup: {
+            runtimeTarget: () => this.getLocalGitExecutionOptionArgs(repo)[0],
+            shouldUseSetupRunner: this.canUseSetupRunner(effectiveStartup)
+          }
         }
       })
     }
@@ -195,10 +192,7 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       worktreePath,
       settings: createSettings,
       runtimeTarget: this.getLocalGitExecutionOptionArgs(repo)[0],
-      shouldUseSetupRunner:
-        this.authoritativeWindowId !== null ||
-        Boolean(effectiveStartup) ||
-        Boolean(this.ptyController?.spawn),
+      shouldUseSetupRunner: this.canUseSetupRunner(effectiveStartup),
       warning:
         [includeCopyWarning, addResult.upstreamWarning].filter(Boolean).join(' ') || undefined
     })
@@ -234,25 +228,15 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       promisedAgentChat: args.promisedAgentChat,
       draftPaste: effectiveDraftPaste,
       warning,
-      ports: {
-        canSpawn: Boolean(this.ptyController?.spawn),
-        provisionInBackground: () => this.shouldProvisionWorktreeInBackground(args.navigation),
-        createTerminal: (selector, options) =>
-          this.createTerminal(selector, { ...options, ...wslUserAct(args) }, worktree),
-        pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
-        sendFollowup: (handle, followup, terminal) =>
-          void this.deliverStartupFollowup(handle, followup, { terminalCreation: terminal }),
-        provision: (options) =>
-          this.provisionManagedWorktreeTerminals({ ...options, ...wslUserAct(args) }, worktree),
-        activate: activationCallbacks.local
-      }
+      ports: this.localWorktreeTerminalPorts(args, activationCallbacks.local, worktree)
     })
     warning = terminalWarning
     this.emitWorktreeLifecycle({
       kind: 'created',
       worktreeId: worktree.id,
       path: worktree.path,
-      branch: worktree.branch
+      branch: worktree.branch,
+      ...createdWorktreeLifecycleIdentity(worktree)
     })
     return {
       worktree: {
@@ -297,5 +281,12 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
           }
         : {})
     }
+  }
+
+  // A window, an agent or a PTY host can show setup in a terminal; otherwise it runs in-process.
+  private canUseSetupRunner(startup: unknown): boolean {
+    return (
+      this.authoritativeWindowId !== null || Boolean(startup) || Boolean(this.ptyController?.spawn)
+    )
   }
 }

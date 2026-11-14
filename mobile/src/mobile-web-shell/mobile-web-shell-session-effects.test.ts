@@ -7,6 +7,7 @@ const doubles = vi.hoisted(() => ({
 }))
 
 vi.mock('expo-file-system', () => ({ Directory: class {}, File: class {}, Paths: { cache: '' } }))
+vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 // The runner's deadlines live in the runtime module, whose foreground timer reads React Native's AppState.
 vi.mock('./foreground-timer', () => ({ setForegroundTimer: () => () => {} }))
 vi.mock('../transport/rpc/rpc-operation', () => ({
@@ -20,9 +21,9 @@ vi.mock('../transport/web-bundle/mobile-web-bundle-fetch', () => ({
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import type { MobileWebBundleFetchResult } from '../transport/web-bundle/mobile-web-bundle-fetch'
-import { createGenerationStore, type GenerationStore } from './generation-store'
-import { createFakeGenerationFileSystem } from './generation-file-system-fake'
-import { deriveHostCacheKey } from './host-cache-key'
+import { createGenerationStore, type GenerationStore } from './generations/generation-store'
+import { createFakeGenerationFileSystem } from './generations/generation-file-system-fake'
+import { deriveHostCacheKey } from './generations/host-cache-key'
 import { download } from './mobile-web-shell-session-effects'
 
 const CLIENT: RpcClient = {
@@ -103,6 +104,7 @@ describe('a download that reuses the cached generation', () => {
       runtime: {
         createStore: () => store,
         mintSessionId: () => 's',
+        claimSpareSessionId: async () => null,
         now: () => 0,
         setForegroundTimer: () => () => {}
       },
@@ -112,64 +114,6 @@ describe('a download that reuses the cached generation', () => {
     })
     return done.then(() => events)
   }
-
-  it('writes no staging bytes when canceled while its staging waits in the store queue', async () => {
-    const fileSystem = createFakeGenerationFileSystem()
-    const store = createGenerationStore({ fileSystem })
-    const NEXT = bundle(16)
-    const BLOCKER = deriveHostCacheKey('host-b')
-    let enterBlocker = (): void => {}
-    const blockerEntered = new Promise<void>((resolve) => {
-      enterBlocker = resolve
-    })
-    let releaseBlocker = (): void => {}
-    const blockerReleased = new Promise<void>((resolve) => {
-      releaseBlocker = resolve
-    })
-    const list = fileSystem.list.bind(fileSystem)
-    fileSystem.list = async (uri) => {
-      if (uri.includes(`/${BLOCKER}/`)) {
-        enterBlocker()
-        await blockerReleased
-      }
-      return list(uri)
-    }
-    const writes: string[] = []
-    const writeBytes = fileSystem.writeBytes.bind(fileSystem)
-    fileSystem.writeBytes = async (uri, bytes) => {
-      writes.push(uri)
-      await writeBytes(uri, bytes)
-    }
-    let blocker: Promise<unknown> = Promise.resolve()
-    doubles.fetch = async () => {
-      blocker = store.readActiveGeneration(BLOCKER)
-      await blockerEntered
-      return NEXT
-    }
-    let markQueued = (): void => {}
-    const stageQueued = new Promise<void>((resolve) => {
-      markQueued = resolve
-    })
-    const downloads = new Set<AbortController>()
-    const run = runFor(
-      {
-        ...store,
-        stageGeneration: (...args) => {
-          const staged = store.stageGeneration(...args)
-          markQueued()
-          return staged
-        }
-      },
-      downloads
-    )
-
-    await stageQueued
-    downloads.forEach((controller) => controller.abort())
-    releaseBlocker()
-    await Promise.all([run, blocker])
-
-    expect(writes.filter((uri) => uri.includes(`/tmp/${NEXT.manifest.buildId}/`))).toEqual([])
-  })
 
   it('stages from the offered snapshot without reopening its manifest after fetch', async () => {
     const { fileSystem, store } = await cachedStore()

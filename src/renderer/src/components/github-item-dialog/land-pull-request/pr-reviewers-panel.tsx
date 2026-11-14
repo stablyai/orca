@@ -6,16 +6,16 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useAppStore } from '@/store'
 import { useRepoAssignees } from '@/hooks/useGitHubRepoMetadata'
 import { useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
-import { getGitHubPRReviewerRows } from '../../../../../shared/github/pr-reviewer-display'
+import { getGitHubPRReviewerRows } from '../../../../../shared/github/pull-requests/pr-reviewer-display'
 import {
   filterGitHubPRReviewerCandidates,
   getGitHubPRReviewerQueryState
 } from '@/components/github/github-pr-reviewer-candidate-filter'
-import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubAssignableUser } from '../../../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { useTranslate } from '@/i18n/use-translate'
-import { getGitHubRepoRoutingTarget } from '@/lib/github-source-runtime-context'
+import { getGitHubRepoRoutingTarget } from '@/lib/work-items/github/github-source-runtime-context'
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
 import { mergeReviewerSuggestions } from '@/components/github/work-item-state-presentation'
 import type { GitHubItemDialogProjectOrigin } from '../load-item-details/github-item-dialog-types'

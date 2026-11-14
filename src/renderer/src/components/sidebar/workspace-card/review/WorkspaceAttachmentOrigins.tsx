@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTranslate } from '@/i18n/use-translate'
 import { resolveNotificationTabOwner } from '@/attention/notification-subject-owner'
 import { terminalLayoutContainsLeaf } from '../../../../../../shared/workspace-session/workspace-session-pane-ownership'
-import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
 import type { Tab } from '../../../../../../shared/tab-types'

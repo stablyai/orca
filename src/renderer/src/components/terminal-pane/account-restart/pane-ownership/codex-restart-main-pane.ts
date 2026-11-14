@@ -1,5 +1,5 @@
 // Main-owned restarts require an existing main pane and use its frame binding; the window must not invent a tree.
-import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 import { layoutFrameTerminalTab } from '@/runtime/workspace-layout/frames/layout-frame-terminal-panes'
 import type { AppState } from '@/store/types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'

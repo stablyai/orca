@@ -1,6 +1,6 @@
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { BrowserTabInfo } from '../../../../shared/runtime-browser-contracts'
+import type { BrowserTabInfo } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type {
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionClientTab,

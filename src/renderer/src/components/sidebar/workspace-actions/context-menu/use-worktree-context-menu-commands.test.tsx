@@ -55,6 +55,7 @@ function runNewChildWorktree(args: {
       setCreateGroupDialogOpen: () => {},
       setWorkspaceUnreadByUser: state.setWorkspaceUnreadByUser,
       setWorktreesPinnedAndReveal: state.setWorktreesPinnedAndReveal,
+      showsUnread: false,
       sleepableWorktrees: [],
       subtreeSleepableWorktrees: [],
       updateWorktreeMeta: state.updateWorktreeMeta,

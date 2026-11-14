@@ -15,6 +15,8 @@ export function useWorkspaceServer(args: {
   client: RpcClient | null
   connState: ConnectionState
   desktopCapabilities: readonly string[]
+  /** The paired desktop's own gates, carried for screens nested in this server's scope. */
+  desktopGates?: HostStatusGates | null
   executionHost: ExecutionHostId | undefined
 }): {
   routeHost: ExecutionHostId | undefined | null
@@ -25,13 +27,14 @@ export function useWorkspaceServer(args: {
     desktopReach: ServerHostDesktopReach | undefined
     gates: HostStatusGates
     desktopCapabilities: readonly string[]
+    desktopGates: HostStatusGates | null
   } | null
 } {
-  const { client, connState, desktopCapabilities, executionHost } = args
+  const { client, connState, desktopCapabilities, desktopGates = null, executionHost } = args
   const routeHost = workspaceRouteExecutionHost(client, desktopCapabilities, executionHost)
   const serverClient = client && routeHost ? scopeRpcClientToExecutionHost(client, routeHost) : null
   // The same feed the host list reads, so the desktop is not polled twice.
-  const hosts = useRelayHosts(routeHost ? client : null)
+  const hosts = useRelayHosts(routeHost ? client : null, desktopCapabilities)
   const selectedHost = hosts?.find((entry) => entry.hostId === routeHost)
   const state =
     connState === 'connected' && routeHost && hosts ? serverConnState(selectedHost) : connState
@@ -48,7 +51,8 @@ export function useWorkspaceServer(args: {
             name: selectedHost?.label ?? null,
             desktopReach: selectedHost ? serverHostDesktopReach(selectedHost) : undefined,
             gates,
-            desktopCapabilities
+            desktopCapabilities,
+            desktopGates
           }
   }
 }

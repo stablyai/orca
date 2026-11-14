@@ -60,7 +60,12 @@ export class AcpStructuredChildren {
       (pending() || lane.hasPendingDiagnostic(input.clientMessageId))
   }
 
-  stopAfterFailure(sessionId: string): void {
+  stopAfterFailure(sessionId: string, reason: string): void {
+    const session = this.sessions.get(sessionId)
+    // An ending already under way (agent exit, requested close) keeps its own attribution.
+    if (session && !session.ended && !session.closeRequested) {
+      session.failureClose ??= reason
+    }
     void this.stop(sessionId, false).catch((error: unknown) => {
       const logger = neverThrowingStructuredAgentSessionLogger(
         this.deps.logger ?? createStructuredAgentSessionLogger()
@@ -143,6 +148,7 @@ export class AcpStructuredChildren {
     }
     if (requested && session.journalClosed === null) {
       // Allow the running turn to settle before closing the process.
+      session.historyCatchUp?.abort()
       session.closeRequested = true
       await windDownAcpTurn(session, this.stopGraceMs())
       if (session.ended) {
@@ -225,15 +231,15 @@ export class AcpStructuredChildren {
     // Orca refusing what the agent wrote outranks the exit its cleanup then causes.
     this.recordEnding(session, error)
     if (!isAcpReadySession(session)) {
+      session.historyCatchUp?.abort()
       session.journalClosed = error.message || error.name
       return
     }
-    closeAcpSessionJournal(
-      session,
-      `${session.spec.agent} ACP connection closed: ${error.message || error.name}`,
-      error
-    )
-    this.stopAfterFailure(session.sessionId)
+    const reason = `${session.spec.agent} ACP connection closed: ${error.message || error.name}`
+    // Record the cause first: publishing the close can re-enter cleanup through a refused write.
+    session.failureClose ??= reason
+    closeAcpSessionJournal(session, reason, error)
+    this.stopAfterFailure(session.sessionId, reason)
   }
 
   private stopGraceMs(): number {

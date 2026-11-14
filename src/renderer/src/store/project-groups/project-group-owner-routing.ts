@@ -13,7 +13,6 @@ import {
 } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
-type ProjectGroupHostParts = Pick<ProjectGroup, 'connectionId' | 'executionHostId'>
 type ProjectGroupOwnerRecord = Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>
 type RoutingSettings = Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
 
@@ -23,9 +22,6 @@ type ProjectGroupOwnerRoutingState = {
 }
 
 // Normalize legacy padded/invalid host stamps so routing and catalog identity agree.
-export function getProjectGroupHostId(group: ProjectGroupHostParts): ExecutionHostId {
-  return getRepoExecutionHostId(group)
-}
 
 export function catalogOwnsHost(catalogHostId: string, rowHostId: string): boolean {
   if (catalogHostId !== LOCAL_EXECUTION_HOST_ID) {
@@ -42,7 +38,7 @@ export function projectGroupMatchesOwnerHost(
   if (group.id !== groupId) {
     return false
   }
-  return ownerHostId ? catalogOwnsHost(ownerHostId, getProjectGroupHostId(group)) : true
+  return ownerHostId ? catalogOwnsHost(ownerHostId, getRepoExecutionHostId(group)) : true
 }
 
 export function resolveProjectGroupOwnerHostId(
@@ -61,7 +57,7 @@ export function resolveProjectGroupOwnerHostId(
   if (!owner.executionHostId && !owner.connectionId) {
     return null
   }
-  return getProjectGroupHostId(owner)
+  return getRepoExecutionHostId(owner)
 }
 
 /** Route group mutations to owner; null without a row. Direct SSH groups use this app’s catalog/IPC. */
@@ -71,7 +67,7 @@ export function runtimeTargetForProjectGroupOwner(
   hostId?: ExecutionHostId
 ): RuntimeClientTarget | null {
   const owner = findIndexedProjectGroupOwner(state.projectGroups, groupId, hostId)
-  return owner ? ipcOrRuntimeTargetForHostId(hostId ?? getProjectGroupHostId(owner)) : null
+  return owner ? ipcOrRuntimeTargetForHostId(hostId ?? getRepoExecutionHostId(owner)) : null
 }
 
 /** Refuse known groups absent from the target catalog; host would silently clear unknown membership. */
@@ -85,7 +81,7 @@ export function isProjectGroupJoinableFromCatalog(
   return (
     copies.length === 0 ||
     copies.some((group) => {
-      const groupCatalog = ipcOrRuntimeTargetForHostId(getProjectGroupHostId(group))
+      const groupCatalog = ipcOrRuntimeTargetForHostId(getRepoExecutionHostId(group))
       return groupCatalog !== null && getRuntimeTargetHostId(groupCatalog) === catalogHostId
     })
   )

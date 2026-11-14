@@ -1,5 +1,5 @@
 import { defineMethod } from '../../core'
-import { projectRepoResultVisibilityForClient } from '../../repo-visibility-projection'
+import { projectRepoResultVisibilityForClient } from '../../workspace-client-views/repo-visibility-projection'
 import {
   ProjectHostSetupClone,
   ProjectHostSetupCreate,
@@ -7,7 +7,7 @@ import {
   ProjectHostSetupExistingFolder,
   ProjectHostSetupUpdate,
   ProjectUpdate
-} from '../../../../../shared/rpc-contract/project-runtime-params'
+} from '../../../../../shared/rpc-contract/projects/project-runtime-params'
 
 export const PROJECT_RUNTIME_METHODS = [
   defineMethod({

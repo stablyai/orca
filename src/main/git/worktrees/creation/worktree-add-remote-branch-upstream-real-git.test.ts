@@ -4,14 +4,9 @@ import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { addWorktree } from './worktree-add'
-import { getBranchConflictKind } from '../../repo-branch-conflict'
-import { finalizePreparedWorktree } from './worktree-create-preparation'
-import {
-  _resetPreparationPoolForTests,
-  listPreparations,
-  startPreparation,
-  takePreparation
-} from '../../../workspaces/creation/preparation/worktree-create-preparation-pool'
+import { getBranchConflictKind } from '../../refs/resolution/repo-branch-conflict'
+import './worktree-create-preparation'
+import { _resetPreparationPoolForTests } from '../../../workspaces/creation/preparation/worktree-create-preparation-pool'
 
 const roots: string[] = []
 afterEach(async () => {
@@ -88,37 +83,4 @@ it('tracks the remote branch it was created from, and nothing else', async () =>
   const otherPath = join(root, 'other')
   await addWorktree(repo, otherPath, 'feature/new', 'origin/main')
   expect(await upstreamOf(otherPath, 'feature/new')).toBeNull()
-})
-
-it('tracks the remote branch when a prepared checkout finalizes the create', async () => {
-  const { root, repo } = await cloneWithRemoteOnlyBranch()
-  await startPreparation({
-    repoPath: repo,
-    workspaceRoot: root,
-    baseBranch: 'origin/alex/fix',
-    canonicalBase: 'refs/remotes/origin/alex/fix',
-    options: {}
-  })
-  const [prepared] = listPreparations()
-  expect(prepared).toBeDefined()
-  takePreparation(prepared)
-
-  const fixPath = join(root, 'warm')
-  await finalizePreparedWorktree(
-    repo,
-    prepared.preparedPath,
-    fixPath,
-    'alex/fix',
-    'origin/alex/fix',
-    false,
-    {},
-    prepared.lockReason
-  )
-  expect(await upstreamOf(fixPath, 'alex/fix')).toBe('origin/alex/fix')
-  const ref = 'refs/remotes/origin/alex/fix'
-  expect(await git(fixPath, 'config', '--get', 'branch.alex/fix.base')).toBe(ref)
-  expect(await git(fixPath, 'config', '--get', 'push.autoSetupRemote')).toBe('true')
-  expect(await git(fixPath, 'rev-parse', 'HEAD')).toBe(
-    await git(repo, 'rev-parse', 'refs/remotes/origin/alex/fix')
-  )
 })

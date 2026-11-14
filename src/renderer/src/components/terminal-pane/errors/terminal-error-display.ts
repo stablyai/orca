@@ -4,11 +4,11 @@ import type { Translate } from '../../../i18n/use-translate'
 import {
   humanizeFolderWorkspacePathErrors,
   isFolderWorkspacePathError
-} from '../../../lib/folder-workspace-path-status'
+} from '../../../lib/workspace/paths/folder-workspace-path-status'
 import { agentLaunchErrorText } from '../launch-outcome/agent-launch-pane-notice-text'
 import { stripClientEnvironmentFooter } from '../../../../../shared/client-environment-info'
 import { localizeTerminalSpawnHints } from './terminal-spawn-error-display'
-import { localizeWslDistroHoldText } from '../../../lib/wsl-distro-hold-copy'
+import { localizeWslDistroHoldText } from '../../../runtime/hosts/wsl/wsl-distro-hold-copy'
 import {
   describeSshSignInRequiredTerminalError,
   isSshSignInRequiredTerminalError

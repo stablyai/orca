@@ -1,5 +1,5 @@
-import { MobileFileMediaPreview } from '../MobileFileMediaPreview'
-import type { MobileFilePreviewRpcSender } from '../mobile-file-preview-operations'
+import { MobileFileMediaPreview } from '../media/MobileFileMediaPreview'
+import type { MobileFilePreviewRpcSender } from '../preview/mobile-file-preview-operations'
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   FlatList,
@@ -35,6 +35,7 @@ import type { FileDocState, FileSyntaxState } from './session-document-state'
 import { DiffLineRow } from '../../source-control/review/MobileSessionDiffLineRow'
 import { sendableMobileDiffComments } from '../../source-control/review/mobile-diff-comments'
 import { MobileLoadErrorState, MobileStateView } from '../../components/MobileStateView'
+import { useDurableDraftField } from '../../drafts/durable-draft-fields'
 
 type FileReaderProps = {
   doc: FileDocState | undefined
@@ -44,6 +45,8 @@ type FileReaderProps = {
   documentId?: string
   language?: string
   diffCommentActions?: DiffCommentActions
+  // Where an unsaved note waits through leaving the file and the app being killed.
+  noteDraftKey?: string
 }
 
 export function FileReader(props: FileReaderProps) {
@@ -58,7 +61,8 @@ function FileReaderDocument({
   title,
   relativePath,
   language,
-  diffCommentActions
+  diffCommentActions,
+  noteDraftKey
 }: FileReaderProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -69,7 +73,11 @@ function FileReaderDocument({
   const [fileSyntax, setFileSyntax] = useState<FileSyntaxState | null>(null)
   const [diffSyntax, setDiffSyntax] = useState<DiffSyntaxState | null>(null)
   const [activeCommentLine, setActiveCommentLine] = useState<number | null>(null)
-  const [commentDraft, setCommentDraft] = useState('')
+  const [keptNote, setKeptNote] = useDurableDraftField(noteDraftKey ?? null, 'note')
+  const [localNote, setLocalNote] = useState('')
+  const [commentDraft, setCommentDraft] = noteDraftKey
+    ? [keptNote, setKeptNote]
+    : [localNote, setLocalNote]
   const plainDiffLines = useMemo(
     () =>
       doc?.status === 'ready' && doc.kind === 'diff'
@@ -105,10 +113,12 @@ function FileReaderDocument({
       if (!diffCommentActions) {
         return
       }
-      void diffCommentActions.onAdd(relativePath, lineNumber, commentDraft).then((added) => {
+      const note = commentDraft
+      void diffCommentActions.onAdd(relativePath, lineNumber, note).then((added) => {
         if (added) {
           setActiveCommentLine(null)
-          setCommentDraft('')
+          // Only the saved text; a note typed since in a reopened reader stays.
+          setCommentDraft((current) => (current === note ? '' : current))
         }
       })
     },

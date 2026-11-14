@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/host/WorktreeHostContextBadge'
 import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { AgentStateDot, type AgentDotState } from '@/components/AgentStateDot'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 
 import { useRepoById } from '@/store/repos/use-repository-catalog'
 import { resolveRepoBadgeColor } from '../../../../../../shared/repo-badge-color'

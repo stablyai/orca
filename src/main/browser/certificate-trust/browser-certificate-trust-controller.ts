@@ -21,7 +21,7 @@ import {
   SUPPORTED_CERTIFICATE_ERROR,
   SUPPORTED_CERTIFICATE_ERROR_CODE
 } from './browser-certificate-identity'
-import { normalizeCertificateError } from '../../../shared/browser-certificate-errors'
+import { normalizeCertificateError } from '../../../shared/browser/certificate-trust/browser-certificate-errors'
 import { BrowserCertificateRequestGuard } from './browser-certificate-request-guard'
 
 export class BrowserCertificateTrustController {
@@ -140,6 +140,18 @@ export class BrowserCertificateTrustController {
 
   onMainFrameNavigationCommitted(webContentsId: number, url: string): void {
     this.requestGuard.revokeForCommittedNavigation(webContentsId, url)
+  }
+
+  hasFailureForGuest(webContentsId: number): boolean {
+    const pending = this.pendingByGuestId.get(webContentsId)
+    if (!pending) {
+      return false
+    }
+    if (pending.expiresAt <= this.now()) {
+      this.clearPending(webContentsId, true)
+      return false
+    }
+    return true
   }
 
   getFailure(browserPageId: string): BrowserCertificateFailure | null {

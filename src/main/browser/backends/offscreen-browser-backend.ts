@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { BrowserWindow } from 'electron'
-import { ORCA_BROWSER_PARTITION } from '../../../shared/constants'
-import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../../shared/browser-guest-web-preferences'
+import '../../../shared/constants'
+import { ORCA_BROWSER_PARTITION } from '../../../shared/browser/browser-session-partition'
+import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../../shared/browser/guest-lifecycle/browser-guest-web-preferences'
 import { mapSettledWithConcurrency } from '../../../shared/map-with-concurrency'
 import type { BrowserBackend, BrowserBackendCreateTab } from '../browser-backend'
 import type { BrowserManager } from '../guest-lifecycle/manager/browser-manager'
@@ -55,7 +56,9 @@ export class OffscreenBrowserBackend implements BrowserBackend {
         partition,
         sandbox: true,
         contextIsolation: true,
-        nodeIntegration: false
+        nodeIntegration: false,
+        // Sandboxed and without Node, this only runs the session's preloads in iframes too.
+        nodeIntegrationInSubFrames: true
       }
     })
 

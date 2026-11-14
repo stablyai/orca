@@ -1,7 +1,7 @@
 import { useGitHubTextareaImages } from '@/components/github/use-github-textarea-images'
 import { useGitHubImagePending } from '@/components/github/use-github-image-uploads'
 import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
-import { ImeTextarea } from '@/lib/ime-text-field'
+import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { CornerDownLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -10,9 +10,9 @@ import { useTranslate } from '@/i18n/use-translate'
 import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
-} from '@/lib/comment-body-submit-state'
+} from '@/lib/source-control/review/comments/comment-body-submit-state'
 import { toast } from 'sonner'
-import { installOpenDraftAddReviewNoteGuard } from '../editor/editor-shortcuts'
+import { installOpenDraftAddReviewNoteGuard } from '../editor/commands/editor-shortcuts'
 
 export type DiffCommentDraftCardProps = {
   lineNumber: number

@@ -1,5 +1,5 @@
 import { defineMethod } from '../../../core'
-import { linearError } from '../../../../../linear/issue-context/errors'
+import { linearError } from '../../../../../linear/issues/context/linear-access-errors'
 import { isLinearUuid } from '../../../../../../shared/linear/uuid'
 import {
   AgentIssueContext,
@@ -18,7 +18,7 @@ import {
   LinearSaveIssue,
   LinearTeamLookup,
   LinearWorkspaceRead
-} from '../../../../../../shared/rpc-contract/linear-agent-access-params'
+} from '../../../../../../shared/rpc-contract/linear/linear-agent-access-params'
 
 function parseLinearWriteId(writeId: string | undefined): string | undefined {
   if (writeId === undefined) {

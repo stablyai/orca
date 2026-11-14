@@ -5,7 +5,7 @@ import { isValidElement, type ComponentProps } from 'react'
 import type { NativeChatCrewFrame } from '../../../orchestration-crew/NativeChatCrewPanel'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as ImageBlobPng from '@/lib/image-blob-png'
+import type * as ImageBlobPng from '@/lib/clipboard/images/image-blob-png'
 import { NativeChatImageAttachmentPreview } from '../../attachments/chips/NativeChatImageAttachmentPreview'
 import type { NativeChatLiveSession } from '../../session/terminal/read/native-chat-live-session-contract'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
@@ -66,7 +66,7 @@ vi.mock('../../composer/NativeChatComposer', () => ({
 vi.mock('@/components/editor/document-images/useLocalImageSrc', () => ({
   useLocalImageSrc: () => 'blob:original'
 }))
-vi.mock('@/lib/image-blob-png', async (importOriginal) => ({
+vi.mock('@/lib/clipboard/images/image-blob-png', async (importOriginal) => ({
   ...(await importOriginal<typeof ImageBlobPng>()),
   convertImageBlobToPng: mocks.convertImageBlobToPng
 }))

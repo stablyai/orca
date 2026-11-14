@@ -1,5 +1,5 @@
 import type { AgentPermissionMode } from '../../../../../../shared/agent-launch/permissions/tui-agent-permissions'
-import { agentPermissionChoiceLabel } from '../../../agent/launch-settings/AgentPermissionChoiceControls'
+import { agentPermissionChoiceLabel } from '../../../agent/launch-settings/agent-permission-choice-label'
 import type { Translate } from '../../../../i18n/use-translate'
 
 export function agentPermissionModeChoice(mode: Exclude<AgentPermissionMode, 'mixed'>) {

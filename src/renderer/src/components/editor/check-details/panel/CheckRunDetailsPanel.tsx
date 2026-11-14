@@ -3,7 +3,7 @@ import { ExternalLink, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../../shared/github/check-types'
+import type * as GitHubChecks from '../../../../../../shared/github/checks/check-types'
 import { SourceControlFixSplitButton } from '@/components/right-sidebar/source-control/panel/source-control-fix-split-button'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
@@ -36,11 +36,15 @@ function formatCheckTimestamp(
 }
 
 type CheckStatusLike = {
-  status: PRCheckDetail['status'] | (string & {}) | null | undefined
-  conclusion: PRCheckDetail['conclusion'] | (string & {}) | null | undefined
+  gitlabAllowedFailure?: boolean
+  status: GitHubChecks.PRCheckDetail['status'] | (string & {}) | null | undefined
+  conclusion: GitHubChecks.PRCheckDetail['conclusion'] | (string & {}) | null | undefined
 }
 
 function getCheckStatusLabel(check: CheckStatusLike, t: Translate = translate): string {
+  if (check.gitlabAllowedFailure === true && check.conclusion === 'neutral') {
+    return t('checks.gitlabAllowedFailure', 'Allowed to fail')
+  }
   const conclusion = check.conclusion ?? 'pending'
   switch (conclusion) {
     case 'success':
@@ -90,8 +94,8 @@ export function CheckRunDetailsPanel({
   viewStateScopeId,
   contextKey
 }: {
-  check: PRCheckDetail
-  details: PRCheckRunDetails | null
+  check: GitHubChecks.PRCheckDetail
+  details: GitHubChecks.PRCheckRunDetails | null
   loading: boolean
   error: string | null
   openUrl: string | null | undefined
@@ -318,6 +322,7 @@ export function CheckRunDetailsPanel({
                 return hasJobs ? (
                   <CheckRunJobs
                     key="jobs"
+                    check={check}
                     jobs={jobs}
                     hasFailedJobs={failedJobs.length > 0}
                     positionOwner={positionOwner}

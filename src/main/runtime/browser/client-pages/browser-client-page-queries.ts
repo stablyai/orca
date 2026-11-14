@@ -4,7 +4,7 @@ import type {
   BrowserTabListResult,
   BrowserTabShowResult,
   BrowserTabSwitchResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { publishSwitchedBrowserSessionTab } from '../tabs/browser-tab-create-publication'
 import type { RuntimeBrowserClientPage } from './runtime-browser-page-registry'
 import type { RuntimeBrowserCommandHost } from '../commands/browser-command-contracts'
@@ -158,11 +158,12 @@ export async function yieldClientPageSelection(
   worktree: string | undefined
 ): Promise<void> {
   const pages = host.getRuntimeBrowserPageRegistry()
+  if (worktree) {
+    pages.yieldSelection((await host.resolveBrowserWorkspace(worktree)).id)
+    return
+  }
   pages.deactivateGlobal()
-  const workspaceIds = worktree
-    ? [(await host.resolveBrowserWorkspace(worktree)).id]
-    : [...new Set(pages.listPages().map((page) => page.workspaceId))]
-  for (const workspaceId of workspaceIds) {
+  for (const workspaceId of new Set(pages.listPages().map((page) => page.workspaceId))) {
     pages.deactivateWorkspace(workspaceId)
   }
 }

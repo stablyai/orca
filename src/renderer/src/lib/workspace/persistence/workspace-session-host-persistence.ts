@@ -35,7 +35,7 @@ import {
 import {
   indexWorkspaceRuntimeHostOwnership,
   type WorkspaceRuntimeOwnerProjection
-} from '../../workspace-runtime-host-ownership'
+} from '../ownership/workspace-runtime-host-ownership'
 import {
   buildWorktreeIdByTabId,
   extendWorktreeIdByTabId,

@@ -1,5 +1,5 @@
 import type { JiraIssue, JiraSite } from '../../../../../shared/jira/jira-types'
-import { getJiraAccountLabel } from '@/lib/jira-account-label'
+import { getJiraAccountLabel } from '@/lib/work-items/jira/jira-account-label'
 import {
   normalizeTaskSourceContext,
   type TaskSourceContext

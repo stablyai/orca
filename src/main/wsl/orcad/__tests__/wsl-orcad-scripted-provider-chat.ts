@@ -4,7 +4,8 @@ import { z } from 'zod'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../../shared/agent-session/agent-session-wire'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../../shared/electron-remote-runtime-client-capabilities'
-import { subscribeRemoteRuntimeRequest } from '../../../../shared/remote-runtime/remote-runtime-client'
+import '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import { quotePosixShell } from '../../../../shared/shell/launch/shell-argument-quoting'
 import {
   waitForProviderReport,
@@ -80,7 +81,7 @@ export async function exerciseScriptedProviderChat(
   const rows = new Map<string, AgentJournalRenderItem>()
   const text: string[] = []
   const errors: Error[] = []
-  const subscription = await subscribeRemoteRuntimeRequest<AgentSessionSubscribeEvent>(
+  const subscription = await subscribeRemoteRuntimeTransport<AgentSessionSubscribeEvent>(
     lane.pairing(),
     'agentSession.subscribe',
     { sessionId },

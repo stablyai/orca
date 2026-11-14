@@ -8,6 +8,7 @@ import { ButtonGroup } from '../../../ui/button-group'
 import { Label } from '../../../ui/label'
 import { ClaudeIcon } from '../../../status-bar/icons'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
+import { ClaudeOAuthUsageSetting } from './claude-oauth-usage-setting'
 import { ClaudeRunningSessionSwitchSetting } from './claude-running-session-switch-setting'
 import {
   getProviderAccountRuntime,
@@ -45,6 +46,7 @@ export function renderClaudeAccountsSection(
     claudeAccounts,
     claudeAction,
     isRemoteAccountScope,
+    recordFeatureInteraction,
     remoteAccountScopeNotice,
     runClaudeAccountAction,
     setRemoveClaudeTarget,
@@ -98,7 +100,7 @@ export function renderClaudeAccountsSection(
         )}
       >
         <SearchableSetting
-          title={t('auto.components.settings.AccountsPane.8bbfd74556', 'Claude Accounts')}
+          title={t('auto.components.settings.AccountsPane.89b9a151c3', 'Claude accounts')}
           description={t(
             'accounts.claude.profileSwitching',
             'Switching applies to the next Claude you start in any tab.'
@@ -137,7 +139,7 @@ export function renderClaudeAccountsSection(
                   ) : (
                     <Plus className="size-3" />
                   )}
-                  {t('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
+                  {t('auto.components.settings.AccountsPane.7e9977b560', 'Add account')}
                 </Button>
                 {!isRemoteAccountScope && canOfferClaudeSignInLink(accountRuntime.runtime) ? (
                   <ClaudeSignInLinkMenu
@@ -383,6 +385,13 @@ export function renderClaudeAccountsSection(
             )}
           </div>
         </SearchableSetting>
+        {isRemoteAccountScope ? null : (
+          <ClaudeOAuthUsageSetting
+            settings={settings}
+            updateSettings={updateSettings}
+            recordFeatureInteraction={recordFeatureInteraction}
+          />
+        )}
         {isRemoteAccountScope ? null : (
           <ClaudeRunningSessionSwitchSetting settings={settings} updateSettings={updateSettings} />
         )}

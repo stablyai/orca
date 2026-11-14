@@ -1,3 +1,5 @@
+import { getTerminalNoticeLifetime } from '../../provider-notices/terminal-notice-lifetime'
+import { prepareTerminalNoticeExit } from './pty-notice-exit'
 import {
   bufferPreHandlerPtyExit,
   clearPreHandlerPtyState,
@@ -26,15 +28,24 @@ export function isPtyExitReplacedByRestart(ptyId: string): boolean {
 
 /** Delivers one exit to its primary owner and every observational sidecar. */
 export function deliverPtyExitToHandlers(delivery: PtyExitDelivery): void {
-  if (!delivery.replacedByRestart) {
-    deliverClassifiedPtyExit(delivery)
-    return
-  }
-  replacedExitsInDelivery.add(delivery.ptyId)
+  const finishNotice = prepareTerminalNoticeExit(
+    getTerminalNoticeLifetime(delivery.ptyId),
+    delivery.code,
+    delivery.incarnationId
+  )
   try {
-    deliverClassifiedPtyExit(delivery)
+    if (!delivery.replacedByRestart) {
+      deliverClassifiedPtyExit(delivery)
+      return
+    }
+    replacedExitsInDelivery.add(delivery.ptyId)
+    try {
+      deliverClassifiedPtyExit(delivery)
+    } finally {
+      replacedExitsInDelivery.delete(delivery.ptyId)
+    }
   } finally {
-    replacedExitsInDelivery.delete(delivery.ptyId)
+    finishNotice()
   }
 }
 

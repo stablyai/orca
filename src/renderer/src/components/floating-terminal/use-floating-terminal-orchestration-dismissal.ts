@@ -2,7 +2,7 @@ import { useCallback } from 'react'
 import {
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
   notifyOrchestrationSetupStateChanged
-} from '@/lib/orchestration-setup-state'
+} from '@/components/orchestration/setup/orchestration-setup-state'
 import type { FloatingTerminalPanelLocalState } from './use-floating-terminal-panel-local-state'
 
 export function useFloatingTerminalOrchestrationDismissal({

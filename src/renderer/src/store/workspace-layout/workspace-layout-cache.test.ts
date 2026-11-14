@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PublishedWorkspaceLayout } from '../../../../shared/workspace-layout/workspace-layout-published'
+import type { PublishedWorkspaceLayout } from '../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 import { applyLayoutFrame } from './workspace-layout-cache'
 
 function layout(worktreeId: string, tabIds: string[] = []): PublishedWorkspaceLayout {

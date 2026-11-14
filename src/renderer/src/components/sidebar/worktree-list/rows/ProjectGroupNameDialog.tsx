@@ -49,8 +49,13 @@ export function ProjectGroupNameDialog({
   if (open !== previousOpenState.open || initialName !== previousOpenState.initialName) {
     setPreviousOpenState({ open, initialName })
     if (open) {
-      setName(initialName)
-      setSubmitting(false)
+      // Preserve edited drafts when the localized suggestion changes.
+      if (!previousOpenState.open || name === previousOpenState.initialName) {
+        setName(initialName)
+      }
+      if (!previousOpenState.open) {
+        setSubmitting(false)
+      }
     }
   }
 

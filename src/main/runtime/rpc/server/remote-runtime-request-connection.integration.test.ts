@@ -18,7 +18,8 @@ import { RemoteRuntimeRequestConnection } from '../../../../shared/remote-runtim
 
 import { RemoteRuntimeSharedControlConnection } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-connection'
 
-import { subscribeRemoteRuntimeRequest } from '../../../../shared/remote-runtime/remote-runtime-client'
+import '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
 
 import type {
   RuntimeClientEvent,
@@ -145,7 +146,7 @@ describe('remote runtime request connection integration', () => {
         const clientEvents: RuntimeClientEventStreamMessage[][] = [[], []]
         const subscriptions = await Promise.all(
           clientEvents.map((events) =>
-            subscribeRemoteRuntimeRequest<RuntimeClientEventStreamMessage>(
+            subscribeRemoteRuntimeTransport<RuntimeClientEventStreamMessage>(
               pairedRuntimeConnectionFromOffer(pairing),
               'runtime.clientEvents.subscribe',
               undefined,
@@ -197,22 +198,23 @@ describe('remote runtime request connection integration', () => {
             ).toEqual(['started', 'committed'])
           }
           const reconnectedEvents: RuntimeClientEventStreamMessage[] = []
-          const reconnected = await subscribeRemoteRuntimeRequest<RuntimeClientEventStreamMessage>(
-            pairedRuntimeConnectionFromOffer(pairing),
-            'runtime.clientEvents.subscribe',
-            undefined,
-            REMOTE_RUNTIME_REQUEST_TIMEOUT_MS,
-            {
-              onResponse: (response) => {
-                if (response.ok) {
-                  reconnectedEvents.push(response.result)
+          const reconnected =
+            await subscribeRemoteRuntimeTransport<RuntimeClientEventStreamMessage>(
+              pairedRuntimeConnectionFromOffer(pairing),
+              'runtime.clientEvents.subscribe',
+              undefined,
+              REMOTE_RUNTIME_REQUEST_TIMEOUT_MS,
+              {
+                onResponse: (response) => {
+                  if (response.ok) {
+                    reconnectedEvents.push(response.result)
+                  }
+                },
+                onError: (error) => {
+                  throw error
                 }
-              },
-              onError: (error) => {
-                throw error
               }
-            }
-          )
+            )
           try {
             await waitFor(() => reconnectedEvents.some((event) => event.type === 'ready'))
             expect(

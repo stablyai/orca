@@ -1,6 +1,6 @@
 import type { RuntimeCapability } from '../../../../../shared/protocol-version'
 import '../../../../../shared/protocol-version'
-import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../../../shared/browser-runtime-capabilities'
+import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import type { TabGroupLayoutNode } from '../../../../../shared/tab-types'
 import type { RuntimeMobileSessionClientTab } from '../../../../../shared/runtime-mobile-session-tab-contracts'
 import type {

@@ -16,7 +16,7 @@ import { parseJournalRow } from '../durable-rows/journal-row-schema'
 import { fields } from '../outcomes/journal-state-schema'
 import type { AgentSessionJournal } from '../journal-store'
 import { queuePauseHolding } from './queued-message-pause'
-import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { agentSessionSendBodyFingerprint } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 
 export function createFixture() {
@@ -56,10 +56,10 @@ export function createFixture() {
   }
 
   function clearContext(journal: AgentSessionJournal) {
-    return journal.context.clear(
-      { operationId: `clear-${++clock}`, afterFence: 0, clearedAt: clock },
-      { write: () => {}, committed: () => {} }
-    )
+    return journal.write({
+      kind: 'context-clear',
+      boundary: { operationId: `clear-${++clock}`, afterFence: 0, clearedAt: clock }
+    })
   }
 
   async function turn(journal: AgentSessionJournal, id: string, accept = true): Promise<void> {
@@ -89,14 +89,13 @@ export function createFixture() {
     return journal.appendStopEvent({ reason: 'user-stop' }, 0)
   }
 
-  function reason(journal: AgentSessionJournal): string | null {
-    return journal.queuedMessages.pauses()[0]?.reason ?? null
+  async function reason(journal: AgentSessionJournal): Promise<string | null> {
+    return (await journal.queuedMessages.pauses())[0]?.reason ?? null
   }
 
-  function held(journal: AgentSessionJournal): [string, boolean][] {
-    const pauses = journal.queuedMessages.pauses()
-    return journal.queuedMessages
-      .list()
+  async function held(journal: AgentSessionJournal): Promise<[string, boolean][]> {
+    const pauses = await journal.queuedMessages.pauses()
+    return (await journal.queuedMessages.list())
       .filter((card) => card.state === 'waiting')
       .map((card) => [card.messageId, queuePauseHolding(pauses, card) !== undefined])
   }

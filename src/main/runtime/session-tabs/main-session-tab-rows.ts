@@ -11,8 +11,6 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../../shared/runtime-session-contracts'
 
-type Row = RuntimeMobileSessionSnapshotTab
-
 /** Main's projection of the rows (projectSessionTabs): the snapshot minus the runtime's stamps. */
 export type MainSessionTabRows = Omit<
   RuntimeMobileSessionTabsSnapshot,
@@ -20,7 +18,7 @@ export type MainSessionTabRows = Omit<
 >
 
 /** Merge window facts into terminal/edit rows; keep window browser/chat/diff/preview rows whole while listed, including diff-draft dirty state. */
-function isMainRow(row: Row): boolean {
+function isMainRow(row: RuntimeMobileSessionSnapshotTab): boolean {
   return (
     row.type === 'terminal' ||
     (row.type === 'file' && row.mode !== 'diff') ||
@@ -29,7 +27,7 @@ function isMainRow(row: Row): boolean {
 }
 
 /** A terminal row with a manual name: its tab's custom title or its pane's own title. */
-function isNamed(row: Extract<Row, { type: 'terminal' }>): boolean {
+function isNamed(row: Extract<RuntimeMobileSessionSnapshotTab, { type: 'terminal' }>): boolean {
   return !!row.customTitle || !!row.parentLayout?.titlesByLeafId?.[row.leafId]?.trim()
 }
 
@@ -62,7 +60,11 @@ function keepsWindowPtyId(
 }
 
 /** Use window-only fields and pending terminal bindings until main catches up; main's certified exit overrides the window's old terminal id. */
-function withWindowFacts(row: Row, windowRow: Row | undefined, rules: MergeRules): Row {
+function withWindowFacts(
+  row: RuntimeMobileSessionSnapshotTab,
+  windowRow: RuntimeMobileSessionSnapshotTab | undefined,
+  rules: MergeRules
+): RuntimeMobileSessionSnapshotTab {
   if (row.type === 'terminal' && windowRow?.type === 'terminal') {
     return {
       ...row,
@@ -100,10 +102,10 @@ function withWindowFacts(row: Row, windowRow: Row | undefined, rules: MergeRules
 
 /** Main's rows in main's order, each window-only row after the row it follows in the window's. */
 function withWindowOnlyRows(
-  rows: Row[],
-  windowRows: readonly Row[],
+  rows: RuntimeMobileSessionSnapshotTab[],
+  windowRows: readonly RuntimeMobileSessionSnapshotTab[],
   windowOnly: ReadonlySet<string>
-): Row[] {
+): RuntimeMobileSessionSnapshotTab[] {
   const merged = [...rows]
   windowRows.forEach((row, index) => {
     if (!windowOnly.has(row.id)) {
@@ -162,7 +164,7 @@ export function withMainSessionTabRows(
     const shown = !mainRetiredSelection ? windowGroups.get(group.id)?.activeTabId : undefined
     return shown !== undefined ? { ...group, activeTabId: shown } : group
   })
-  const activeGroupIndex = (activeRow: Row | undefined): number => {
+  const activeGroupIndex = (activeRow: RuntimeMobileSessionSnapshotTab | undefined): number => {
     const byRow = activeRow
       ? tabGroups.findIndex((group) => group.tabOrder.includes(orderIdOf(activeRow)))
       : -1

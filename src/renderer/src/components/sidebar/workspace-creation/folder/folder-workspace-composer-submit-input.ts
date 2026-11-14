@@ -1,24 +1,24 @@
-import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import type { AgentLaunchChoice } from '@/lib/agent-session/launch/routing/agent-menu-selection'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import type { AgentStartupSettings } from '../../../../../../shared/agent-launch/startup/agent-startup-plan-inputs'
 import type { AgentLaunchInputViews } from '../../../../../../shared/agent-launch/choices/agent-launch-choices'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { LaunchSource } from '../../../../../../shared/telemetry-events'
 import type { TaskSourceContext } from '../../../../../../shared/work-items/task-source-context'
 
-type FolderWorkspaceCreateInput = {
-  projectGroupId: string
-  name: string
-  connectionId?: string | null
-  linkedTask: FolderWorkspace['linkedTask']
-  linkedTaskSourceContext?: TaskSourceContext | null
-  createdWithAgent?: TuiAgent
-  pendingFirstAgentMessageRename?: boolean
-}
+import type {
+  FolderWorkspaceCreateInput,
+  FolderWorkspaceCreateResult
+} from '../../../../../../shared/folder-workspaces/folder-workspace-create'
 
 export type SubmitFolderWorkspaceCreateParams = {
+  setupSupported?: boolean
+  setupApproval?: Pick<
+    FolderWorkspaceCreateInput,
+    'setupDecision' | 'approvedSetupHash' | 'approvedSetupHashes'
+  >
+  isCancelled?: () => boolean
   projectGroup: ProjectGroup
   name: string
   lastAutoName: string
@@ -40,6 +40,8 @@ export type SubmitFolderWorkspaceCreateParams = {
   isRemote?: boolean
   launchSource?: LaunchSource
   runtimeEnvironmentId?: string | null
-  createFolderWorkspace: (input: FolderWorkspaceCreateInput) => Promise<FolderWorkspace | null>
+  createFolderWorkspace: (
+    input: FolderWorkspaceCreateInput
+  ) => Promise<FolderWorkspaceCreateResult | null>
   onOpenChange: (open: boolean) => void
 }

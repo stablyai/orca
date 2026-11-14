@@ -1,6 +1,6 @@
 import { constants } from 'node:fs'
 import { access, stat } from 'node:fs/promises'
-import type { ChildProcessHandle } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 
 const RIPGREP_CWD_CHECK_TIMEOUT_MS = 1000
 
@@ -35,7 +35,7 @@ export function isTransientRipgrepSpawnError(error: unknown): boolean {
 
 function ignoreRipgrepSpawnError(): void {}
 
-export function killSpawnedRipgrepProcess(child: ChildProcessHandle): boolean {
+export function killSpawnedRipgrepProcess(child: ChildProcess): boolean {
   // Why: killing a failed-spawn handle can signal the relay's own process group.
   if (Object.hasOwn(child, 'pid') && child.pid === undefined) {
     return false
@@ -44,7 +44,7 @@ export function killSpawnedRipgrepProcess(child: ChildProcessHandle): boolean {
 }
 
 export function absorbPendingRipgrepSpawnError(
-  child: ChildProcessHandle,
+  child: ChildProcess,
   state: { errorObserved: boolean; unavailableExitObserved: boolean }
 ): void {
   if (
@@ -107,7 +107,7 @@ export async function classifySynchronousRipgrepSpawnFailure(
 }
 
 export function isRipgrepUnavailableExit(
-  child: ChildProcessHandle,
+  child: ChildProcess,
   code: number | null,
   signal: NodeJS.Signals | null,
   options: { classifyNativeLauncherExit?: boolean } = {}

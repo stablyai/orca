@@ -2,28 +2,20 @@ import { agentSessionFailureFact } from '../../../../shared/agent-session/failur
 import {
   AGENT_SESSION_ORCA_STOP_PRESENTATION,
   isAgentSessionOrcaStopCause
-} from '../../../../shared/agent-session/lifecycle/agent-session-orca-stop'
-import type { AgentSessionResumeTrigger } from '../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+} from '../../../../shared/agent-session/lifecycle/stopping/agent-session-orca-stop'
+import type { AgentSessionResumeTrigger } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import {
   agentSessionFailureWords,
   type AgentSessionFailureWordsContext
 } from '../../../../shared/agent-session/failures/agent-session-failure-words'
-import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalStatusItem
-} from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import {
-  readAgentJournalTurn,
-  readAgentJournalTurnOutcome
-} from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { agentTurnVerdict } from '../../../../shared/agent-status/lifecycle/agent-turn-outcome'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import type { AgentJournalStatusItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { orcaShutdownRowClientMessageId } from '../../../../shared/native-chat/native-chat-orca-stop-cut'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
 
-type OrcaStopRowJournal = Pick<AgentSessionJournal, 'itemsRead' | 'appendItem'>
+type OrcaStopRowJournal = Pick<AgentSessionJournal, 'appendShutdownCut'>
 
 /** Keep legacy stop wording/tone alongside the cause that newer clients render muted. */
 export function orcaStopRowBody(
@@ -43,25 +35,13 @@ export function orcaStopRowBody(
   }
 }
 
-export function runningRootTurnItemId(
-  journal: Pick<AgentSessionJournal, 'itemsRead'>
-): string | null {
+export async function runningRootTurnItemId(
+  journal: Pick<AgentSessionJournal, 'reads'>
+): Promise<string | null> {
   return (
-    journal
-      .itemsRead()
-      .items.findLast(
-        (item) =>
-          isRootAgentJournalItem(item) && readAgentJournalTurn(item.body)?.state === 'running'
-      )?.itemId ?? null
-  )
-}
-
-function cutByNobody(item: AgentJournalRenderItem | undefined): boolean {
-  const turn = item ? readAgentJournalTurn(item.body) : null
-  return (
-    turn !== null &&
-    agentTurnVerdict({ state: turn.state, outcome: readAgentJournalTurnOutcome(turn) }) ===
-      'interruption'
+    (await journal.reads.generation()).items.findLast(
+      (item) => isRootAgentJournalItem(item) && readAgentJournalTurn(item.body)?.state === 'running'
+    )?.itemId ?? null
   )
 }
 
@@ -89,19 +69,12 @@ export async function recordStructuredAgentSessionShutdownCut(input: {
       input.fence,
       input.generation
     )
-    const items = input.journal.itemsRead().items
-    const written = items.some((item) => {
-      const identity = parseAgentJournalItemKey(item.itemId)
-      return identity?.provider === 'orca' && identity.clientMessageId === clientMessageId
+    await input.journal.appendShutdownCut({
+      identity: { provider: 'orca', clientMessageId },
+      body: orcaStopRowBody(input.failureTextContext, input.trigger),
+      fence: input.rowFence,
+      turnItemId
     })
-    if (written || !cutByNobody(items.find((item) => item.itemId === turnItemId))) {
-      return
-    }
-    await input.journal.appendItem(
-      { provider: 'orca', clientMessageId },
-      orcaStopRowBody(input.failureTextContext, input.trigger),
-      { fence: input.rowFence, turnScope: { kind: 'turn', turnItemId } }
-    )
   } catch (error) {
     input.logger.warn('recording why a quit cut a reply failed', {
       scope: 'shutdown-cut-row',

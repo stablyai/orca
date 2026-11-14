@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
-import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
+import type * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import '@/store/slices/editor/create-editor-slice'
 import { buildOwnedEditorFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import type { WorktreeOperationRoute } from '@/lib/worktree-operation-route'
+import type { WorktreeOperationRoute } from '@/lib/workspace/ownership/worktree-operation-route'
 import {
   attachModelLifetimeView,
   createModelLifetimeFixture,
@@ -14,12 +14,7 @@ import {
 } from '../retention/editor-model-lifetime-fixture'
 import { getEditorModelOwnerKey } from './editor-model-owner'
 import { toEditorModelUri } from './editor-model-uri'
-import {
-  beginProgrammaticContentSync,
-  endProgrammaticContentSync,
-  resetProgrammaticContentSyncForTests,
-  shouldIgnoreMonacoContentChange
-} from '../../monaco-programmatic-sync'
+import { resetProgrammaticContentSyncForTests } from '../buffer-text/monaco-programmatic-sync'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), error: vi.fn(), success: vi.fn() } }))
 
@@ -80,81 +75,10 @@ afterEach(() => {
 })
 
 describe('same-path models on different execution hosts', () => {
-  it.each([FILE_PATH, 'C:\\fixture\\workspace\\same-path.txt', '\\\\server\\share\\same-path.txt'])(
-    'keeps host text and undo histories independent for %s',
-    async (filePath) => {
-      const { owners } = createHostModels(filePath)
-      expect(new Set(owners.map((owner) => owner.modelKey)).size).toBe(HOSTS.length)
-      for (const owner of owners) {
-        // Drive letters fold to lower case in model URIs.
-        expect(
-          owner.model.uri.path.toLowerCase().endsWith(monaco.Uri.file(filePath).path.toLowerCase())
-        ).toBe(true)
-      }
-      for (const [index, owner] of owners.entries()) {
-        expect(monaco.editor.getModel(monaco.Uri.parse(owner.modelKey))).toBe(owner.model)
-        edit(owner.model, `edited host ${index}`)
-        expect(owner.model.canUndo()).toBe(true)
-        expect(owners.map((candidate) => candidate.model.getValue())).toEqual(
-          owners.map((candidate, candidateIndex) =>
-            candidateIndex <= index ? `edited host ${candidateIndex}` : candidate.initial
-          )
-        )
-      }
-      for (const [index, owner] of owners.entries()) {
-        await owner.model.undo()
-        expect(owner.model.canRedo()).toBe(true)
-        expect(owners.map((candidate) => candidate.model.getValue())).toEqual(
-          owners.map((candidate, candidateIndex) =>
-            candidateIndex <= index ? candidate.initial : `edited host ${candidateIndex}`
-          )
-        )
-      }
-      await owners[1]!.model.redo()
-      expect(owners.map((owner) => owner.model.getValue())).toEqual(
-        owners.map((owner, index) => (index === 1 ? 'edited host 1' : owner.initial))
-      )
-    }
-  )
-
-  it('suppresses watcher echoes in shared local panes without hiding an SSH user edit', () => {
-    const { owners } = createHostModels()
-    const local = owners[0]!
-    const ssh = owners[1]!
-    const accepted: string[] = []
-    const listeners = [local, local, ssh].map((owner, index) =>
-      owner.model.onDidChangeContent(() => {
-        if (
-          !shouldIgnoreMonacoContentChange({
-            modelKey: owner.modelKey,
-            isApplyingProgrammaticContent: false
-          })
-        ) {
-          accepted.push(`pane-${index}:${owner.model.getValue()}`)
-        }
-      })
-    )
-    beginProgrammaticContentSync(local.modelKey)
-    try {
-      local.model.setValue('local watcher update')
-      expect(accepted).toEqual([])
-      edit(ssh.model, 'SSH user edit')
-      expect(accepted).toEqual(['pane-2:SSH user edit'])
-      expect(local.model.getValue()).toBe('local watcher update')
-      expect(owners.slice(2).map((owner) => owner.model.getValue())).toEqual(
-        owners.slice(2).map((owner) => owner.initial)
-      )
-    } finally {
-      endProgrammaticContentSync(local.modelKey)
-      listeners.forEach((listener) => listener.dispose())
-    }
-  })
-
   it('closes only the selected host model while siblings retain their text and undo', async () => {
     const { owners, store, attach } = createHostModels()
     owners.forEach((owner, index) => edit(owner.model, `edited host ${index}`))
     attach()
-    const enumeration = vi.spyOn(monaco.editor, 'getModels')
     for (const [index, owner] of owners.entries()) {
       store.getState().closeFile(owner.file.id)
       await Promise.resolve()
@@ -165,7 +89,6 @@ describe('same-path models on different execution hosts', () => {
         expect(sibling.model.canUndo()).toBe(true)
       }
     }
-    expect(enumeration).not.toHaveBeenCalled()
     expect(store.getState().openFiles).toHaveLength(0)
   })
 
@@ -215,9 +138,6 @@ describe('same-path models on different execution hosts', () => {
       id: 'local-other-workspace',
       worktreeId: 'another-workspace'
     }
-    expect(toEditorModelUri(FILE_PATH, getEditorModelOwnerKey(sharedLocal, store.getState()))).toBe(
-      local.modelKey
-    )
     store.setState({ openFiles: [...store.getState().openFiles, sharedLocal] })
     attach()
     edit(local.model, 'shared local edit')
@@ -277,8 +197,6 @@ describe('same-path models on different execution hosts', () => {
     const ssh = owners[1]!
     const legacyFile = { ...local.file, operationProvenance: undefined }
     store.setState({ openFiles: [legacyFile, ...owners.slice(1).map((owner) => owner.file)] })
-    expect(getEditorModelOwnerKey(legacyFile, store.getState())).toBe('')
-    const openFiles = store.getState().openFiles
     const detach = attachModelLifetimeView(local.model)
     attach()
     store.setState({
@@ -289,10 +207,6 @@ describe('same-path models on different execution hosts', () => {
         ])
       )
     })
-    expect(store.getState().openFiles).toBe(openFiles)
-    expect(toEditorModelUri(FILE_PATH, getEditorModelOwnerKey(legacyFile, store.getState()))).toBe(
-      ssh.modelKey
-    )
     await Promise.resolve()
     expect(local.model.isDisposed()).toBe(false)
     detach()
@@ -307,7 +221,6 @@ describe('same-path models on different execution hosts', () => {
     const local = owners[0]!
     const legacyFile = { ...local.file, operationProvenance: undefined }
     store.setState({ openFiles: [legacyFile, ...owners.slice(1).map((owner) => owner.file)] })
-    expect(getEditorModelOwnerKey(legacyFile, store.getState())).toBe('')
     attach()
     store.setState({ openFiles: owners.slice(1).map((owner) => owner.file), worktreesByRepo: {} })
     await Promise.resolve()

@@ -91,7 +91,7 @@ const EMPTY_RECEIPTS = new Map()
 const NO_STATUSES = { active: null, completedByTurn: {} }
 const EMPTY_DIFFS = new Map()
 const EMPTY_KEYS = new Set<string>()
-const LINE = { draws: false, thinking: false }
+const LINE = { tailRow: null, thinking: false }
 
 /** Every eligibility decision, in any search, asks this set; count those asks. */
 class CountedSet extends Set<string> {

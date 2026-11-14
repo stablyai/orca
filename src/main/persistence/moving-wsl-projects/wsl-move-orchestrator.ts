@@ -7,8 +7,11 @@
  */
 import type { WslMovePreview, WslMoveResult } from '../../../shared/wsl-move/wsl-move-driver-types'
 import type { WslMoveUseLocallyResult } from '../../../shared/wsl-move/wsl-moved-project'
-import type { WslMoveOrchestratorPorts } from './wsl-move-orchestrator-ports'
-import { readWslMoveFinishedMove, runWslMoveOrchestratorStep } from './wsl-move-orchestrator-step'
+import type { WslMoveOrchestratorPorts } from './orchestration/wsl-move-orchestrator-ports'
+import {
+  readWslMoveFinishedMove,
+  runWslMoveOrchestratorStep
+} from './orchestration/wsl-move-orchestrator-step'
 import { wslMoveJournalKey } from '../../../shared/wsl-move/wsl-move-cutover'
 import type {
   WslMoveOrchestratorDeclineCause,
@@ -20,13 +23,13 @@ import {
   newWslMoveOrchestratorRecord,
   sameWslMoveOrchestratorRecord,
   wslMoveOrchestratorTimerDelay
-} from './wsl-move-orchestrator-transitions'
+} from './orchestration/wsl-move-orchestrator-transitions'
 import {
   applyWslMoveHostAddedByUser,
   applyWslMoveReleasedByUser,
   applyWslMoveUserAction,
   settleWslMoveOrchestratorRecord
-} from './wsl-move-orchestrator-external-transitions'
+} from './orchestration/wsl-move-orchestrator-external-transitions'
 
 /** A project opened again within this window does not read the running distros again. */
 export const WSL_MOVE_ORCHESTRATOR_PROJECT_OPENED_THROTTLE_MS = 60_000

@@ -1,10 +1,7 @@
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
-import type {
-  ProviderCheckSummary,
-  GitHubOwnerRepo,
-  RpcClient,
-  LinearMobileIssue
-} from './mobile-tasks-dependencies'
+import type { ProviderCheckSummary } from '../../../src/shared/github/pull-requests/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../src/shared/github/repositories/repository-identity'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { HostedReviewDecision } from '../../../src/shared/source-control/hosted-review/hosted-review-contracts'
 
 export type RepoSummary = {
@@ -155,8 +152,6 @@ export type LinearIssueChild = {
   url: string
 }
 
-export type LinearIssue = LinearMobileIssue
-
 export type LinearState = {
   id: string
   name: string
@@ -246,14 +241,15 @@ export type DetailPayload =
       comments: DetailComment[]
       labels: string[]
       assignees: string[]
-      pipelineJobs: Array<{
+      pipelineJobs: {
         id?: number
         name: string
         stage: string
         status: string
+        allowFailure?: boolean
         webUrl?: string | null
         duration?: number | null
-      }>
+      }[]
     }
   | {
       provider: 'linear'

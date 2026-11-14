@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../../journal-ingress/structured-agent-session-event-sink'
 import { expect, vi, type Mock } from 'vitest'
@@ -12,7 +13,7 @@ import {
   HOST_TEST_THREAD,
   hostTestAttachParams,
   hostTestMessage
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 type RewindReplayFixture = {
   host: StructuredAgentSessionHost
@@ -68,8 +69,8 @@ export async function expectRetainedPrefixRewindReplay({
   const request = await params(target)
   const result = await host.rewind(caller, request)
   expect(result).toMatchObject({ ok: true })
-  expect((await host.journalSnapshot(HOST_TEST_SESSION)).items).toHaveLength(1)
-  expect((await host.journalSnapshot(HOST_TEST_SESSION)).cursor.epoch).not.toBe(
+  expect((await readTestHostJournal(host, HOST_TEST_SESSION)).items).toHaveLength(1)
+  expect((await readTestHostJournal(host, HOST_TEST_SESSION)).cursor.epoch).not.toBe(
     request.expectedEpoch
   )
   expect(await host.rewind(caller, request)).toMatchObject({ ok: true, replayed: true })
@@ -87,23 +88,23 @@ export async function expectAtomicRewindCompletion({
 }) {
   const target = await seed()
   const request = await params(target)
-  const replaceBeforeCrash = AgentSessionJournal.prototype.replaceEpochItems
+  const replaceBeforeCrash = AgentSessionJournal.prototype.completeRewind
   const checkpoint = vi
-    .spyOn(AgentSessionJournal.prototype, 'replaceEpochItems')
+    .spyOn(AgentSessionJournal.prototype, 'completeRewind')
     .mockImplementationOnce(async function (this: AgentSessionJournal, ...args) {
       await replaceBeforeCrash.apply(this, args)
       throw new Error('completion write failed')
     })
   await expect(host.rewind(caller, request)).rejects.toThrow('completion write failed')
-  const committed = await host.journalSnapshot(HOST_TEST_SESSION)
+  const committed = await readTestHostJournal(host, HOST_TEST_SESSION)
   expect(committed.cursor.epoch).not.toBe(request.expectedEpoch)
   expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
   checkpoint.mockRestore()
-  const replace = vi.spyOn(AgentSessionJournal.prototype, 'replaceEpochItems')
+  const replace = vi.spyOn(AgentSessionJournal.prototype, 'completeRewind')
   expect(
     await attachAndStart(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)
   ).toMatchObject({ ok: true })
-  expect(await host.journalSnapshot(HOST_TEST_SESSION)).toEqual(committed)
+  expect(await readTestHostJournal(host, HOST_TEST_SESSION)).toEqual(committed)
   expect(replace).not.toHaveBeenCalled()
   replace.mockRestore()
   expect(await host.rewind(caller, request)).toMatchObject({ ok: true, replayed: true })
@@ -142,7 +143,7 @@ export async function expectLargeRetainedPrefixRewind({
     await host.rewind(caller, await params(agentJournalItemKey(message('drop'))))
   ).toMatchObject({ ok: true })
   expect(rewind).toHaveBeenCalledWith(expect.objectContaining({ beforeTurnId: 'drop' }))
-  const { items } = await host.journalSnapshot(HOST_TEST_SESSION)
+  const { items } = await readTestHostJournal(host, HOST_TEST_SESSION)
   expect(items.map(({ itemId }) => itemId)).toEqual(
     Array.from({ length: 300 }, (_, turn) => agentJournalItemKey(message(`kept-${turn}`)))
   )
@@ -205,7 +206,7 @@ export async function expectGoalRowRewindRecovery({
   ).toMatchObject({ ok: true })
 
   expect(
-    (await host.journalSnapshot(HOST_TEST_SESSION)).items.map(({ itemId, body }) => ({
+    (await readTestHostJournal(host, HOST_TEST_SESSION)).items.map(({ itemId, body }) => ({
       itemId,
       body
     }))
@@ -286,7 +287,7 @@ export async function expectGoalRowsThroughHydration({
   })
 
   expect(
-    (await host.journalSnapshot(HOST_TEST_SESSION)).items.map(({ itemId, body }) => ({
+    (await readTestHostJournal(host, HOST_TEST_SESSION)).items.map(({ itemId, body }) => ({
       itemId,
       body
     }))

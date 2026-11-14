@@ -9,7 +9,8 @@ import {
 } from '../../../../../../shared/root-project-order'
 import { getDistinctProjectGroups } from '../../../../../../shared/project-groups'
 import { getLogicalRepoOrderRankById } from '../../../../../../shared/project-section-order'
-import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
+import type { HostSectionRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
+import type { GroupHeaderRow } from '../../../../../../shared/sidebar-list/row-types'
 
 export type RootProjectHeaderDrag = {
   rootProjectHeaderKeys?: readonly string[]
@@ -49,6 +50,18 @@ export function getRootProjectHeaderDragKeys(
   return keys.slice(start, end)
 }
 
+export function getRootProjectHeaderKey(row: GroupHeaderRow): string | undefined {
+  if ((row.projectGroupDepth ?? 0) !== 0) {
+    return undefined
+  }
+  const repo = row.repo && (row.anchorRepo ?? row.repo)
+  return repo
+    ? `repo:${repo.id}`
+    : row.projectGroup?.id
+      ? `group:${row.projectGroup.id}`
+      : undefined
+}
+
 export function getSidebarRootProjectHeaderKeys(rows: readonly HostSectionRow[]): string[] {
   const keys: string[] = []
   const seen = new Set<string>()
@@ -58,21 +71,12 @@ export function getSidebarRootProjectHeaderKeys(rows: readonly HostSectionRow[])
       seen.clear()
       continue
     }
-    if (row.type !== 'header' || (row.projectGroupDepth ?? 0) !== 0) {
+    if (row.type !== 'header') {
       continue
     }
-    const repo = row.repo
-    if (repo) {
-      const key = `repo:${repo.id}`
-      if (!seen.has(key)) {
-        keys.push(key)
-      }
-      seen.add(key)
-    } else if (row.projectGroup?.id) {
-      const key = `group:${row.projectGroup.id}`
-      if (!seen.has(key)) {
-        keys.push(key)
-      }
+    const key = getRootProjectHeaderKey(row)
+    if (key && !seen.has(key)) {
+      keys.push(key)
       seen.add(key)
     }
   }
@@ -81,6 +85,28 @@ export function getSidebarRootProjectHeaderKeys(rows: readonly HostSectionRow[])
 
 export function getRootProjectHeaderOccurrenceKey(key: string, hostId?: string): string {
   return JSON.stringify([hostId ?? '', key])
+}
+
+export function getRootProjectHeaderCountByOccurrenceKey(
+  keys: readonly string[] | undefined
+): Map<string, number> {
+  const counts = new Map<string, number>()
+  if (!keys) {
+    return counts
+  }
+  let start = 0
+  let hostId: string | undefined
+  for (let end = 0; end <= keys.length; end += 1) {
+    if (end < keys.length && !keys[end].startsWith('host:')) {
+      continue
+    }
+    for (let index = start; index < end; index += 1) {
+      counts.set(getRootProjectHeaderOccurrenceKey(keys[index], hostId), end - start)
+    }
+    hostId = keys[end]?.slice('host:'.length)
+    start = end + 1
+  }
+  return counts
 }
 
 export function measureRootProjectHeaderDragRects(

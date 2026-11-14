@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import type { View } from 'react-native'
+import type { HostInstance } from 'react-native'
 import { ChevronLeft, MoreHorizontal } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -27,7 +27,7 @@ export function MobileDiffReviewHeader({
 }: Props) {
   const t = useMobileTranslation()
   useMobileColorScheme()
-  const moreRef = useRef<View>(null)
+  const moreRef = useRef<HostInstance>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   return (
     <>

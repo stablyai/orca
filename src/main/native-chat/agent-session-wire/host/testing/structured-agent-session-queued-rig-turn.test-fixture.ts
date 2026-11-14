@@ -5,7 +5,7 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import type { QueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
 import type { AgentJournalTurnOutcome } from '../../../../../shared/agent-status/lifecycle/agent-turn-outcome'
 

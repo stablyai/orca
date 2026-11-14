@@ -4,7 +4,7 @@ import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { createFilePathLinkProvider } from './terminal-link-handlers'
 import { getTerminalFileOpenHint } from '../terminal-link-open-hints'
 
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { createTerminalLinkTestDoubles } from '../terminal-link-handlers-test-fixtures'
 import {
   collectLinks,
@@ -30,7 +30,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/language-detect', () => ({
+vi.mock('../../../../../../shared/editor-language/editor-language-detect', () => ({
   detectLanguage: (filePath: string) => (filePath.endsWith('.md') ? 'markdown' : 'plaintext')
 }))
 
@@ -39,7 +39,7 @@ vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: vi.fn(() => null)
 }))
 
@@ -156,6 +156,27 @@ describe('createFilePathLinkProvider range bounds', () => {
     const links = await collectLinks('see /repo/My Folder now')
 
     expect(links.map((link) => link.text)).toEqual(['/repo/My Folder'])
+  })
+
+  it('maps Git Bash drive paths to the Windows drive only in Windows-drive workspaces', async () => {
+    vi.mocked(window.api.shell.pathExists).mockImplementation(
+      async (pathValue) =>
+        pathValue === 'C:\\Users\\foo\\.claude\\CLAUDE.md' || pathValue === 'C:\\'
+    )
+    const line = 'Read /c/Users/foo/.claude/CLAUDE.md via cmd /c dir'
+    const collect = (worktreePath: string): Promise<ILink[]> => {
+      const { provider } = createProviderSetup([makeBufferLine(line)], makeExistsCache(), {
+        worktreePath,
+        startupCwd: worktreePath
+      })
+      return new Promise((resolve) => provider.provideLinks(1, (links) => resolve(links ?? [])))
+    }
+
+    expect((await collect('C:\\repo')).map((link) => link.text)).toEqual([
+      '/c/Users/foo/.claude/CLAUDE.md'
+    ])
+    expect(await collect('/repo')).toEqual([])
+    expect(window.api.shell.pathExists).toHaveBeenCalledWith('/c/Users/foo/.claude/CLAUDE.md')
   })
 
   it('returns a wrapped file link when hovering the first physical row', async () => {

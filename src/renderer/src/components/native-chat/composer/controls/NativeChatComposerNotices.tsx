@@ -1,7 +1,7 @@
 import { AlertCircle, Paperclip, ServerOff, Smartphone, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { NativeChatCopyButton } from '../../messages/actions/NativeChatCopyButton'
 import { NativeChatActionButton } from './NativeChatActionButton'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'

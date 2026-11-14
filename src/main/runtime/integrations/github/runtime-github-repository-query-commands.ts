@@ -1,21 +1,21 @@
-import type { GhAccountBinding } from '../../../../shared/github/account-binding'
-import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
-import type { ListWorkItemsResult } from '../../../../shared/github/work-item-types'
+import type { GhAccountBinding } from '../../../../shared/github/accounts/account-binding'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
+import type { ListWorkItemsResult } from '../../../../shared/github/work-items/work-item-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { LocalProjectGhExecOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { countWorkItems } from '../../../github/client/list/count-work-items'
 import { getWorkItem, getWorkItemByOwnerRepo } from '../../../github/client/fetch/get-work-item'
-import { listAssignableUsers, listLabels } from '../../../github/issue-field-options'
-import { listIssues } from '../../../github/issues'
+import { listAssignableUsers, listLabels } from '../../../github/issues/issue-field-options'
+import { listIssues } from '../../../github/issues/issues'
 import { listWorkItems } from '../../../github/client/list/list-work-items'
 import type { MainWorkItem } from '../../../github/client/map/work-item-field-coercion'
 import {
   listGhAccountBindingInventory,
   validateGhAccountBinding
-} from '../../../github/gh-account-binding-inventory'
-import { getRateLimit } from '../../../github/rate-limit'
-import { resolveGhAccountRequiredHost } from '../../../github/account-binding-required-host'
-import { getWorkItemDetails } from '../../../github/work-item-details'
+} from '../../../github/accounts/gh-account-binding-inventory'
+import { getRateLimit } from '../../../github/api/rate-limit'
+import { resolveGhAccountRequiredHost } from '../../../github/accounts/account-binding-required-host'
+import { getWorkItemDetails } from '../../../github/work-items/work-item-details'
 import { getRepoRoutingConnectionId } from '../../../../shared/execution-host'
 
 type LocalGitArgs = [] | [LocalProjectGhExecOptions]
