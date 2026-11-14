@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { initStatsPath, StatsCollector } from '../../../stats/collector'
 import type { PreparedPRBranchRead } from '../../../github/client/lookup/pr-for-branch-outcome'
 import type * as GithubRepositoryIdentityModule from '../../../github/repositories/github-repository-identity'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -32,6 +36,7 @@ vi.mock('../../../github/client/lookup/branch-lookup-resolution', () => ({
   resolvePRForBranchOutcome: mocks.resolve
 }))
 vi.mock('../../../github/pull-requests/refresh/pr-refresh-coordinator', () => ({
+  runHostedPRSnapshot: (_candidate: unknown, read: PreparedPRBranchRead) => read.read(),
   runHostedPRRead: (
     _candidate: unknown,
     read: (() => Promise<PRRefreshOutcome>) | PreparedPRBranchRead
@@ -160,3 +165,57 @@ describe('phone PR lookups reuse the desktop’s last result', () => {
     expect('kind' in outcome && outcome.kind === 'found' ? outcome.pr.title : null).toBe(expected)
   })
 })
+
+it.each([undefined, 'visible', 'swr'] as const)(
+  'counts PRs discovered by mobile lookups with reason %s once',
+  async (reason) => {
+    const directory = mkdtempSync(join(tmpdir(), 'orca-mobile-pr-stats-'))
+    initStatsPath(directory)
+    const stats = new StatsCollector()
+    const mobileCommands = new RuntimeHostedReviewCommands({
+      resolveRepo: async () => repo,
+      resolveTarget: async () => ({ repo, repoPath: repo.path }),
+      getExecutionOptions: () => undefined,
+      recordCreated: (repoId, number, url) => {
+        if (!stats.hasCountedPR(url)) {
+          stats.record({
+            type: 'pr_created',
+            at: 1,
+            repoId,
+            meta: { prNumber: number, prUrl: url }
+          })
+        }
+      }
+    })
+    try {
+      if (reason === undefined) {
+        await commands.getRepoPRForBranch(
+          repo.id,
+          `stats-${reason}`,
+          null,
+          null,
+          false,
+          'head-a',
+          'visible'
+        )
+      }
+      for (let index = 0; index < 2; index++) {
+        await mobileCommands.getRepoPRForBranch(
+          repo.id,
+          `stats-${reason}`,
+          null,
+          null,
+          false,
+          'head-a',
+          reason,
+          false,
+          'mobile'
+        )
+      }
+      expect(stats.getSummary().totalPRsCreated).toBe(1)
+    } finally {
+      await stats.flushAsync()
+      rmSync(directory, { recursive: true, force: true })
+    }
+  }
+)
