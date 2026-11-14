@@ -1,3 +1,10 @@
+import { replaceRecordEntries } from '../../keyed-record-transitions'
+import {
+  classifyConversationContinuity,
+  normalizedConversationPrompt,
+  type AgentConversationContinuity,
+  type AgentConversationSource
+} from './agent-conversation-continuity'
 import {
   type AgentProviderSessionMetadata,
   agentProviderSessionsEqual
@@ -6,8 +13,11 @@ import type {
   AgentStatusEntry,
   AgentType
 } from '../../../../../shared/agent-status/contracts/agent-status-types'
+import { AGENT_STATE_HISTORY_MAX } from '../../../../../shared/agent-status/lifecycle/agent-state-history'
+import { sameAgentStatusTerminalOwner } from '../../../../../shared/agent-status/identity/agent-status-terminal-owner'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
+import type { WorktreeRuntimeOwnerState } from '@/lib/workspace/ownership/worktree-runtime-owner-state'
 import type { AppState } from '../../types'
 import { findAgentPaneWorktreeId } from './agent-status-pane-key-tab-binding'
 
@@ -17,56 +27,161 @@ export type AgentPaneConversationIdentity = {
   executionHostId: ExecutionHostId
   connectionId: string | null
   agent: AgentType
-  providerSession: AgentProviderSessionMetadata
+  providerSession?: AgentProviderSessionMetadata
+  firstStateStartedAt?: number
+  promptCandidates?: readonly string[]
+  continuity?: AgentConversationContinuity
 }
 
-/** Conversation identity outlives turn occupancy; it never requests an automatic resume. */
+type ConversationState = WorktreeRuntimeOwnerState &
+  Pick<AppState, 'tabsByWorktree'> &
+  Partial<Pick<AppState, 'agentConversationsByPaneKey'>>
+type ConversationEntry = Pick<
+  AgentStatusEntry,
+  'paneKey' | 'agentType' | 'providerSession' | 'worktreeId' | 'connectionId'
+> &
+  Partial<
+    Pick<
+      AgentStatusEntry,
+      | 'firstStateStartedAt'
+      | 'prompt'
+      | 'state'
+      | 'stateStartedAt'
+      | 'turnStartedAt'
+      | 'promptInteractionKey'
+      | 'observation'
+    >
+  >
+
+export function agentPaneConversationForEntry(
+  state: ConversationState,
+  entry: ConversationEntry,
+  executionHostId = getExecutionHostIdForWorktree(state, entry.worktreeId)
+): AgentPaneConversationIdentity | undefined {
+  const previous = state.agentConversationsByPaneKey?.[entry.paneKey]
+  return previous &&
+    previous.agent === entry.agentType &&
+    previous.executionHostId === executionHostId &&
+    sameAgentStatusTerminalOwner(previous, {
+      worktreeId: entry.worktreeId,
+      connectionId: entry.connectionId ?? null
+    })
+    ? previous
+    : undefined
+}
+
+/** Accepted conversation identity/first clock survives transient occupancy loss, never renders a row or requests resume; explicit pane retirement deletes it. */
 export function projectAgentPaneConversation(
-  state: AppState,
-  entry: Pick<
-    AgentStatusEntry,
-    'paneKey' | 'agentType' | 'providerSession' | 'worktreeId' | 'connectionId'
-  >,
-  copy: (
-    entries: AppState['agentConversationsByPaneKey']
-  ) => AppState['agentConversationsByPaneKey'] = (entries) => ({ ...entries })
+  state: ConversationState,
+  entry: ConversationEntry,
+  write: (
+    entries: AppState['agentConversationsByPaneKey'],
+    key: string,
+    value: AgentPaneConversationIdentity
+  ) => AppState['agentConversationsByPaneKey'] = (entries, key, value) =>
+    replaceRecordEntries(entries, [[key, value]]),
+  executionHostId?: ExecutionHostId,
+  source?: AgentConversationSource
 ): AppState['agentConversationsByPaneKey'] {
-  const current = state.agentConversationsByPaneKey
-  const previous = current[entry.paneKey]
+  const current = state.agentConversationsByPaneKey ?? {}
   const agent = entry.agentType
   const worktreeId = entry.worktreeId ?? findAgentPaneWorktreeId(state, entry.paneKey)
-  if (!agent || agent === 'unknown' || !entry.providerSession?.id || !worktreeId) {
-    if (!previous) {
-      return current
-    }
-    const next = copy(current)
-    delete next[entry.paneKey]
-    return next
+  if (!agent || agent === 'unknown' || !worktreeId) {
+    return current
   }
-  const executionHostId = getExecutionHostIdForWorktree(state, worktreeId)
-  const connectionId = entry.connectionId ?? null
+  const ownerHostId = executionHostId ?? getExecutionHostIdForWorktree(state, worktreeId)
+  const previous = agentPaneConversationForEntry(state, { ...entry, worktreeId }, ownerHostId)
+  const acceptance = classifyAgentPaneConversation(
+    state,
+    { ...entry, worktreeId },
+    source ?? entry,
+    ownerHostId
+  )
+  if (acceptance.stale) {
+    return current
+  }
+  const sameProvider = !acceptance.reset
+  const carried = sameProvider ? previous : undefined
+  const providerSession =
+    carried?.providerSession &&
+    (!source?.providerSession ||
+      providersCompatible(agent, carried.providerSession, source.providerSession))
+      ? carried.providerSession
+      : (source?.providerSession ?? (acceptance.reset ? undefined : entry.providerSession))
+  const firstStateStartedAt =
+    (sameProvider ? previous?.firstStateStartedAt : undefined) ?? entry.firstStateStartedAt
+  const prompt = normalizedConversationPrompt(entry.prompt)
+  let promptCandidates = providerSession ? undefined : carried?.promptCandidates
+  if (prompt && !providerSession && promptCandidates?.at(-1) !== prompt) {
+    promptCandidates = [
+      ...(promptCandidates ?? []).filter((value) => value !== prompt),
+      prompt
+    ].slice(-(AGENT_STATE_HISTORY_MAX + 1))
+  }
   if (
-    previous?.agent === agent &&
-    previous.worktreeId === worktreeId &&
-    previous.executionHostId === executionHostId &&
-    previous.connectionId === connectionId &&
-    agentProviderSessionsEqual(agent, previous.providerSession, entry.providerSession)
+    previous &&
+    sameProvider &&
+    previous.providerSession === providerSession &&
+    previous.firstStateStartedAt === firstStateStartedAt &&
+    previous.promptCandidates === promptCandidates &&
+    previous.continuity === acceptance.continuity
   ) {
     return current
   }
-  const next = copy(current)
-  Object.defineProperty(next, entry.paneKey, {
-    value: {
-      paneKey: entry.paneKey,
-      worktreeId,
-      executionHostId,
-      connectionId,
-      agent,
-      providerSession: entry.providerSession
-    },
-    writable: true,
-    enumerable: true,
-    configurable: true
+  return write(current, entry.paneKey, {
+    paneKey: entry.paneKey,
+    worktreeId,
+    executionHostId: ownerHostId,
+    connectionId: entry.connectionId ?? null,
+    agent,
+    ...(acceptance.continuity ? { continuity: acceptance.continuity } : {}),
+    ...(providerSession ? { providerSession } : {}),
+    ...(firstStateStartedAt !== undefined ? { firstStateStartedAt } : {}),
+    ...(promptCandidates ? { promptCandidates } : {})
   })
-  return next
+}
+
+function providersCompatible(
+  agent: AgentType | undefined,
+  previous: AgentProviderSessionMetadata,
+  incoming: AgentProviderSessionMetadata
+): boolean {
+  return agentProviderSessionsEqual(
+    agent,
+    { ...previous, transcriptPath: previous.transcriptPath ?? incoming.transcriptPath },
+    { ...incoming, transcriptPath: incoming.transcriptPath ?? previous.transcriptPath }
+  )
+}
+
+export function classifyAgentPaneConversation(
+  state: ConversationState,
+  entry: ConversationEntry,
+  source: AgentConversationSource,
+  executionHostId?: ExecutionHostId
+) {
+  const previous = agentPaneConversationForEntry(state, entry, executionHostId)
+  const providerChanged = Boolean(
+    previous?.providerSession &&
+    source.providerSession &&
+    !providersCompatible(entry.agentType, previous.providerSession, source.providerSession)
+  )
+  const confirmedProvider = Boolean(
+    previous?.providerSession && source.providerSession && !providerChanged
+  )
+  const phase = classifyConversationContinuity(
+    providerChanged ? undefined : previous?.continuity,
+    source,
+    entry.agentType,
+    confirmedProvider
+  )
+  const identityChanged =
+    providerChanged || Boolean(state.agentConversationsByPaneKey?.[entry.paneKey] && !previous)
+  const reset = identityChanged || phase.successor
+  return {
+    previous,
+    reset,
+    continuity: phase.continuity,
+    stale: phase.stale,
+    newTurnStartedAt: identityChanged ? undefined : phase.newTurnStartedAt
+  }
 }

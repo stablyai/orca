@@ -3,12 +3,7 @@ import { sleepingAgentRecordIndex } from '../../terminals/sleep/sleeping-agent-r
 import '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { getAgentResumeArgv } from '../../../../../shared/agent-launch/startup/agent-resume-argv'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import type { RetainedAgentEntry } from './agent-status-contract'
-import {
-  normalizePaneKeySet,
-  paneKeyMatchesAnyTabPrefix,
-  retainedAgentEntryFromLive
-} from './agent-status-pane-key-tab-binding'
+import { paneKeyMatchesAnyTabPrefix } from './agent-status-pane-key-tab-binding'
 import {
   isValidCompletedAgentHibernationEntry,
   manualSleepCaptureEntry,
@@ -18,7 +13,6 @@ import {
   type CollectSleepingAgentSessionRecordsOptions
 } from './agent-status-sleeping-records'
 import { getLaunchConfigForEntry } from './agent-status-launch-config'
-import { agentTurnEndedOnPurpose } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from '../../../../../shared/agent-session/lifecycle/live-resume-anchor-record'
 
 export function collectSleepingAgentSessionRecordsForWorktree(
@@ -68,39 +62,6 @@ export function collectSleepingAgentSessionRecordsForWorktree(
     }
   }
 
-  for (const retained of Object.values(state.retainedAgentsByPaneKey)) {
-    if (isCompletedAgentHibernation) {
-      continue
-    }
-    if (allowedPaneKeys && !allowedPaneKeys.has(retained.entry.paneKey)) {
-      continue
-    }
-    if (retained.worktreeId !== worktreeId) {
-      continue
-    }
-    // Promoted checkpoint owns transcript/connection recovery identity; turn rows must not rederive over it.
-    if (promotedLiveRecoveryPaneKeys.has(retained.entry.paneKey)) {
-      continue
-    }
-    const record = sleepingRecordFromEntry({
-      state,
-      entry: isManualWorktreeSleep
-        ? manualSleepCaptureEntry(retained.entry, capturedAt)
-        : retained.entry,
-      worktreeId,
-      tab: retained.tab,
-      capturedAt,
-      launchConfig: getLaunchConfigForEntry(state, retained.entry),
-      origin
-    })
-    if (record) {
-      if (isManualWorktreeSleep) {
-        markManualSleepLazyRestore(record)
-      }
-      records[record.paneKey] = record
-    }
-  }
-
   for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
     if (allowedPaneKeys && !allowedPaneKeys.has(paneKey)) {
       continue
@@ -134,35 +95,4 @@ export function collectSleepingAgentSessionRecordsForWorktree(
   }
 
   return records
-}
-
-export function collectHibernatedCompletionEvidenceForWorktree(
-  state: AppState,
-  worktreeId: string,
-  paneKeys?: readonly string[]
-): RetainedAgentEntry[] {
-  const allowedPaneKeys = normalizePaneKeySet(paneKeys)
-  if (!allowedPaneKeys || allowedPaneKeys.size === 0) {
-    return []
-  }
-  const tabPrefixes = (state.tabsByWorktree[worktreeId] ?? []).map((tab) => `${tab.id}:`)
-  const retained: RetainedAgentEntry[] = []
-  for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
-    const agentType = entry.agentType
-    if (
-      !allowedPaneKeys.has(paneKey) ||
-      entry.state !== 'done' ||
-      agentType === undefined ||
-      agentTurnEndedOnPurpose(entry)
-    ) {
-      continue
-    }
-    const belongsToWorktree =
-      entry.worktreeId === worktreeId || paneKeyMatchesAnyTabPrefix(paneKey, tabPrefixes)
-    if (!belongsToWorktree) {
-      continue
-    }
-    retained.push(retainedAgentEntryFromLive(state, worktreeId, entry, agentType))
-  }
-  return retained
 }

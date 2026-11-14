@@ -5,7 +5,7 @@ import type { AppState } from '../../types'
 import { createTestStore } from '../../testing/app-store-test-fixture'
 import '../../../i18n/i18n'
 
-describe('agent status retention + prefix sweep', () => {
+describe('worktree agent status cleanup', () => {
   // Use fake timers: setAgentStatus schedules a real 30-minute timer through queueMicrotask.
   afterEach(() => {
     vi.useRealTimers()
@@ -37,6 +37,5 @@ describe('agent status retention + prefix sweep', () => {
 
     expect(store.getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
     expect(store.getState().acknowledgedAgentsByPaneKey[paneKey]).toBeUndefined()
-    expect(store.getState().retentionSuppressedPaneKeys[paneKey]).toBe(true)
   })
 })

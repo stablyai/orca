@@ -69,7 +69,7 @@ function rowsFor(worktreeId: string) {
       child('d', 'manifest-schema', 'working', 0.2 * HOUR)
     ]
   }
-  return buildWorktreeAgentRows({ tabs: [tab], entries: [parent], retained: [], now })
+  return buildWorktreeAgentRows({ tabs: [tab], entries: [parent], now })
 }
 
 function render(worktreeId: string) {

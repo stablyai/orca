@@ -8,7 +8,8 @@ export type StoreCascadesMockApi = {
     updateMeta: Mock
   }
   repos: { list: Mock; add: Mock; remove: Mock; update: Mock; pickFolder: Mock }
-  pty: { kill: Mock }
+  pty: { kill: Mock; inspectProcess: Mock }
+  runtime: { call: Mock }
   gh: { prForBranch: Mock; issue: Mock }
   settings: { get: Mock; set: Mock }
   runtimeEnvironments: { call: Mock }
@@ -32,8 +33,24 @@ export function createStoreCascadesMockApi(): StoreCascadesMockApi {
       pickFolder: vi.fn().mockResolvedValue(null)
     },
     pty: {
-      kill: vi.fn().mockResolvedValue(undefined)
+      kill: vi.fn().mockResolvedValue(undefined),
+      inspectProcess: vi.fn(async (ptyId: string) => ({
+        foregroundProcess: 'codex',
+        hasChildProcesses: true,
+        foregroundObservation: {
+          verdict: 'observed',
+          source: 'pty-master',
+          foregroundKind: 'non-shell',
+          processName: 'codex',
+          ptyId,
+          ptyIncarnationId: `inc-${ptyId}`,
+          authorityGeneration: 'test-authority',
+          observationEpoch: 1,
+          capturedAgeMs: 0
+        }
+      }))
     },
+    runtime: { call: vi.fn() },
     gh: {
       prForBranch: vi.fn().mockResolvedValue(null),
       issue: vi.fn().mockResolvedValue(null)

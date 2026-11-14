@@ -18,15 +18,13 @@ export function dashboardCardDotState(state: AgentRowState): DashboardCardDotSta
 
 export type AgentRowUnreadState = {
   agentStatusByPaneKey: AgentAttentionTurnRecords['liveTurns']
-  retainedAgentsByPaneKey: AgentAttentionTurnRecords['retainedTurns']
   acknowledgedAgentsByPaneKey: AgentAttentionTurnRecords['acknowledgedTurnStartedAt']
 }
 
-/** Unread reads live/retained turn records that acknowledgment can clear; synthetic title/subagent/migration rows have no record and stay read. */
+/** Unread reads live turn records that acknowledgment can clear; synthetic title/subagent/migration rows have no record and stay read. */
 export function readAgentRowTurnRecords(state: AgentRowUnreadState): AgentAttentionTurnRecords {
   return {
     liveTurns: state.agentStatusByPaneKey,
-    retainedTurns: state.retainedAgentsByPaneKey,
     acknowledgedTurnStartedAt: state.acknowledgedAgentsByPaneKey
   }
 }

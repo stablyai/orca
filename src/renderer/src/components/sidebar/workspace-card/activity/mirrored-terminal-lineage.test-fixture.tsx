@@ -116,7 +116,7 @@ export async function verifyMirroredTerminalLineage(
       unifiedTabsByWorktree: {},
       ptyIdsByTabId: {},
       agentStatusByPaneKey: {},
-      retainedAgentsByPaneKey: {},
+
       runtimeAgentOrchestrationByPaneKey: {}
     })
     const produced = buildMirroredAgentStatusPatch(
@@ -220,7 +220,6 @@ export async function verifyMirroredTerminalLineage(
     })
     assertNested()
     const canonical = useAppStore.getState().agentStatusByPaneKey[worker]
-    const epoch = useAppStore.getState().agentStatusEpoch
     // Graph before parent hydration; matching task/Dispatch producer remains valid with nonempty connectionId.
     const parentEntry = useAppStore.getState().agentStatusByPaneKey[actualParent]
     patch({
@@ -265,61 +264,12 @@ export async function verifyMirroredTerminalLineage(
     expect(getRows().find((row) => row.paneKey === worker)?.lineage?.depth).toBe(0)
     patch({ unifiedTabsByWorktree: { 'folder-a': [native, terminal] } })
     assertNested()
-    // Retained snapshot proves the runtime after the current terminal tab/PTY/unified row disappears.
-    act(() =>
-      useAppStore.getState().retainAgents([
-        {
-          entry: { ...canonical, state: 'done' },
-          worktreeId: 'folder-a',
-          tab,
-          agentType: 'claude',
-          startedAt: Date.now()
-        }
-      ])
-    )
-    patch({
-      agentStatusByPaneKey: {
-        [actualParent]: useAppStore.getState().agentStatusByPaneKey[actualParent]
-      },
-      tabsByWorktree: {},
-      unifiedTabsByWorktree: { 'folder-a': [native] },
-      ptyIdsByTabId: {}
-    })
-    assertNested()
-    patch({ unifiedTabsByWorktree: { 'folder-a': [{ ...native, id: 'remapped-parent' }] } })
-    // The parent status arrives independently; canonical retained context did not change or need an RPC.
-    patch({
-      agentStatusByPaneKey: {
-        [pane('remapped-parent', LINEAGE_PARENT)]: {
-          ...useAppStore.getState().agentStatusByPaneKey[actualParent],
-          paneKey: pane('remapped-parent', LINEAGE_PARENT),
-          tabId: 'remapped-parent'
-        }
-      }
-    })
-    assertNested(pane('remapped-parent', LINEAGE_PARENT))
-    expect(
-      useAppStore.getState().retainedAgentsByPaneKey[worker].entry.orchestration?.parentPaneKey
-    ).toBe(canonicalChatRow(LINEAGE_PARENT))
-    expect(useAppStore.getState().agentStatusEpoch).toBeGreaterThanOrEqual(epoch)
-    // Removing the only retained PTY proof cannot infer a runtime from its connection spelling.
-    patch({
-      retainedAgentsByPaneKey: {
-        [worker]: {
-          ...useAppStore.getState().retainedAgentsByPaneKey[worker],
-          tab: { ...tab, ptyId: null }
-        }
-      }
-    })
-    expect(getRows().find((row) => row.paneKey === worker)?.lineage?.depth).toBe(0)
-    expect(new Set(getRows().map((row) => row.paneKey)).size).toBe(getRows().length)
     // Matching graph context identifies its producer even when terminal routing names another host.
-    const renamedParent = pane('remapped-parent', LINEAGE_PARENT)
+    const renamedParent = actualParent
     patch({
-      retainedAgentsByPaneKey: {},
       tabsByWorktree: { 'folder-a': [tab] },
       unifiedTabsByWorktree: {
-        'folder-a': [{ ...native, id: 'remapped-parent', executionHostId: 'local' }, terminal]
+        'folder-a': [{ ...native, executionHostId: 'local' }, terminal]
       },
       agentStatusByPaneKey: {
         [renamedParent]: useAppStore.getState().agentStatusByPaneKey[renamedParent],
@@ -345,7 +295,7 @@ export async function verifyMirroredTerminalLineage(
     patch({
       tabsByWorktree: { 'folder-a': [{ ...tab, ptyId: 'remote:%zz@@terminal' }] },
       unifiedTabsByWorktree: {
-        'folder-a': [{ ...native, id: 'remapped-parent', executionHostId: 'local' }]
+        'folder-a': [{ ...native, executionHostId: 'local' }]
       },
       agentStatusByPaneKey: {
         ...useAppStore.getState().agentStatusByPaneKey,

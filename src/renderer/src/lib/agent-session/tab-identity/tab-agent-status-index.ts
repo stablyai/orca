@@ -2,7 +2,6 @@ import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane
 import { agentTypeToIconAgent } from '../../../../../shared/agent-status/presentation/agent-type-icon-agent'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { TerminalAgent } from '../../../../../shared/agent-status/identity/terminal-agent'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 
 /** Index iconable panes once per status-map identity instead of scanning globally per mounted tab. Preserve insertion order: first-match resolution decides split-tab icons. */
 export type TabAgentPane = { readonly leafId: string; readonly agent: TerminalAgent }
@@ -65,33 +64,6 @@ export function selectCompletedTabAgentPanes(
 ): readonly TabAgentPane[] {
   indexAgentStatus(agentStatusByPaneKey)
   return cachedCompletedIndex.get(tabId) ?? NO_PANES
-}
-
-let cachedRetainedSource: Record<string, RetainedAgentEntry> | null = null
-let cachedRetainedIndex: TabAgentPanesByTabId = EMPTY_INDEX
-
-/** Panes of `tabId` kept as sidebar completion evidence after the row went away. */
-export function selectRetainedTabAgentPanes(
-  retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>,
-  tabId: string
-): readonly TabAgentPane[] {
-  if (retainedAgentsByPaneKey !== cachedRetainedSource) {
-    const retainedIndex = new Map<string, TabAgentPane[]>()
-    for (const [paneKey, retained] of Object.entries(retainedAgentsByPaneKey)) {
-      const agent = agentTypeToIconAgent(retained?.agentType)
-      if (!agent) {
-        continue
-      }
-      const parsed = parsePaneKey(paneKey)
-      if (!parsed) {
-        continue
-      }
-      appendPane(retainedIndex, parsed.tabId, { leafId: parsed.leafId, agent })
-    }
-    cachedRetainedIndex = retainedIndex
-    cachedRetainedSource = retainedAgentsByPaneKey
-  }
-  return cachedRetainedIndex.get(tabId) ?? NO_PANES
 }
 
 export function firstTabAgentExcludingLeaf(

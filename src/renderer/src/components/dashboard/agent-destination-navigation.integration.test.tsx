@@ -19,7 +19,6 @@ import WorktreeCardAgents from '../sidebar/workspace-card/activity/WorktreeCardA
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { buildDashboardSnapshot } from './build-dashboard-snapshot'
 import { revealDashboardAgent } from './reveal-dashboard-agent'
-import { activateRetainedAgentRow } from '../sidebar/workspace-card/activity/activate-retained-agent-row'
 import { activateWorktreeAgentPane } from '../sidebar/workspace-card/activity/use-worktree-agent-activation'
 import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
@@ -62,7 +61,7 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-describe('Dashboard and retained sidebar destination contract', () => {
+describe('Dashboard and sidebar destination contract', () => {
   it.each([
     ['worktree', 'native'],
     ['folder', 'native'],
@@ -152,23 +151,17 @@ describe('Dashboard and retained sidebar destination contract', () => {
                 expandedLeafId: null
               }
             },
-        retainedAgentsByPaneKey: {
+        agentStatusByPaneKey: {
           [paneKey]: {
-            entry: {
-              paneKey,
-              tabId,
-              worktreeId: worktree.id,
-              state: 'done',
-              agentType: 'codex',
-              prompt: 'Open this conversation',
-              updatedAt: NOW,
-              stateStartedAt: NOW,
-              stateHistory: []
-            },
+            paneKey,
+            tabId,
             worktreeId: worktree.id,
-            tab: { ...terminal, id: tabId, ptyId: native ? null : terminal.ptyId },
+            state: 'done',
             agentType: 'codex',
-            startedAt: NOW
+            prompt: 'Open this conversation',
+            updatedAt: NOW,
+            stateStartedAt: NOW,
+            stateHistory: []
           }
         }
       })
@@ -178,7 +171,7 @@ describe('Dashboard and retained sidebar destination contract', () => {
         NOW
       )
       const card = snapshot.cards.find((candidate) => candidate.executionHostId === WORKSPACE_HOST)
-      expect(card).toMatchObject({ worktreeId: worktree.id, tabId, ptyId: null })
+      expect(card).toMatchObject({ worktreeId: worktree.id, tabId })
       if (!card) {
         throw new Error('Expected a card from the production snapshot builder')
       }
@@ -228,24 +221,26 @@ describe('Dashboard and retained sidebar destination contract', () => {
       await assertDestination()
       view.unmount()
 
-      useAppStore.setState({
-        activeWorktreeId: null,
-        activeWorkspaceExecutionHostId: null,
-        activeTabType: 'editor',
-        activeTabId: null
-      })
-      const sidebar = render(
-        <TooltipProvider>
-          <WorktreeCardAgents worktreeId={worktree.id} />
-        </TooltipProvider>
-      )
-      const row = sidebar.container.querySelector('.compact-agent-row')
-      if (!row) {
-        throw new Error('Expected the retained sidebar row')
+      if (!native) {
+        useAppStore.setState({
+          activeWorktreeId: null,
+          activeWorkspaceExecutionHostId: null,
+          activeTabType: 'editor',
+          activeTabId: null
+        })
+        const sidebar = render(
+          <TooltipProvider>
+            <WorktreeCardAgents worktreeId={worktree.id} />
+          </TooltipProvider>
+        )
+        const row = sidebar.container.querySelector('.compact-agent-row')
+        if (!row) {
+          throw new Error('Expected the live sidebar row')
+        }
+        effects.environmentCall.mockClear()
+        fireEvent.click(row)
+        await assertDestination()
       }
-      effects.environmentCall.mockClear()
-      fireEvent.click(row)
-      await assertDestination()
 
       // Keep the exact tab alive while its workspace disappears: neither entry may focus or notify it.
       cleanup()
@@ -261,16 +256,18 @@ describe('Dashboard and retained sidebar destination contract', () => {
       effects.composerFocus.mockClear()
       effects.environmentCall.mockClear()
       expect(revealDashboardAgent(card)).toBe(false)
-      const missing = render(
-        <TooltipProvider>
-          <WorktreeCardAgents worktreeId={worktree.id} />
-        </TooltipProvider>
-      )
-      const missingRow = missing.container.querySelector('.compact-agent-row')
-      if (!missingRow) {
-        throw new Error('Expected the retained row after workspace removal')
+      if (!native) {
+        const missing = render(
+          <TooltipProvider>
+            <WorktreeCardAgents worktreeId={worktree.id} />
+          </TooltipProvider>
+        )
+        const missingRow = missing.container.querySelector('.compact-agent-row')
+        if (!missingRow) {
+          throw new Error('Expected the attributed row after workspace removal')
+        }
+        fireEvent.click(missingRow)
       }
-      fireEvent.click(missingRow)
       expect(useAppStore.getState()).toMatchObject({
         activeWorktreeId: null,
         activeTabId: null,
@@ -281,39 +278,6 @@ describe('Dashboard and retained sidebar destination contract', () => {
       expect(effects.environmentCall).not.toHaveBeenCalled()
     }
   )
-
-  it('notifies the exact live retained terminal owner instead of the workspace default', async () => {
-    const worktree = { ...makeCreatedAgentWorktree(), hostId: WORKSPACE_HOST }
-    seedAlreadyActiveWorktree(worktree, {
-      worktreesByRepo: { [worktree.repoId]: [worktree, { ...worktree, hostId: TAB_HOST }] },
-      activeWorkspaceExecutionHostId: WORKSPACE_HOST,
-      ptyIdsByTabId: { 'tab-1': ['remote:host-B@@pty-B'] },
-      terminalLayoutsByTabId: {
-        'tab-1': {
-          root: { type: 'leaf', leafId: LEAF },
-          activeLeafId: LEAF,
-          expandedLeafId: null,
-          ptyIdsByLeafId: { [LEAF]: 'remote:host-B@@pty-B' }
-        }
-      }
-    })
-
-    activateRetainedAgentRow(worktree.id, 'tab-1', makePaneKey('tab-1', LEAF))
-    expect(useAppStore.getState().activeWorkspaceExecutionHostId).toBe(TAB_HOST)
-    await vi.waitFor(() =>
-      expect(effects.environmentCall).toHaveBeenCalledWith(
-        'host-B',
-        expect.objectContaining({
-          method: 'session.tabs.activate',
-          params: expect.objectContaining({ leafId: LEAF })
-        })
-      )
-    )
-    expect(
-      effects.environmentCall.mock.calls.every(([environmentId]) => environmentId === 'host-B')
-    ).toBe(true)
-    expect(useAppStore.getState().getActiveTab(worktree.id)?.id).toBe('tab-1')
-  })
 })
 
 it('rejects a live terminal row on a different host before workspace activation', () => {
@@ -342,55 +306,51 @@ it('rejects a live terminal row on a different host before workspace activation'
   })
 })
 
-it.each(['live', 'retained'] as const)(
-  'opens a %s paired chat from its physical SSH workspace',
-  (source) => {
-    const worktree = {
-      ...makeCreatedAgentWorktree(),
-      hostId: 'ssh:server' as const,
-      runtimeOwnerEnvironmentId: 'host-B'
-    }
-    seedAlreadyActiveWorktree(worktree, {
-      activeWorktreeId: null,
-      activeWorkspaceExecutionHostId: null,
-      activeTabType: 'editor',
-      unifiedTabsByWorktree: {
-        [worktree.id]: [
-          {
-            id: 'native-B',
-            worktreeId: worktree.id,
-            executionHostId: TAB_HOST,
-            contentType: 'agent-session',
-            agentSessionAgent: 'claude',
-            entityId: 'session-B',
-            groupId: 'group-1',
-            label: 'Codex',
-            customLabel: null,
-            color: null,
-            sortOrder: 1,
-            createdAt: NOW
-          }
-        ]
-      }
-    })
-    const activate = source === 'live' ? activateWorktreeAgentPane : activateRetainedAgentRow
-    activate(
-      worktree.id,
-      'native-B',
-      structuredAgentSessionPaneKey('native-B', 'session-B'),
-      'ssh:server'
-    )
-
-    expect(useAppStore.getState()).toMatchObject({
-      activeWorktreeId: worktree.id,
-      activeWorkspaceExecutionHostId: 'ssh:server',
-      activeTabType: 'agent-session'
-    })
-    expect(effects.composerFocus).toHaveBeenCalledWith('native-B')
-    expect(effects.rpc).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'host-B' },
-      'session.tabs.activate',
-      expect.objectContaining({ tabId: 'agent-session:session-B' })
-    )
+it('opens a live paired chat from its physical SSH workspace', () => {
+  const worktree = {
+    ...makeCreatedAgentWorktree(),
+    hostId: 'ssh:server' as const,
+    runtimeOwnerEnvironmentId: 'host-B'
   }
-)
+  seedAlreadyActiveWorktree(worktree, {
+    activeWorktreeId: null,
+    activeWorkspaceExecutionHostId: null,
+    activeTabType: 'editor',
+    unifiedTabsByWorktree: {
+      [worktree.id]: [
+        {
+          id: 'native-B',
+          worktreeId: worktree.id,
+          executionHostId: TAB_HOST,
+          contentType: 'agent-session',
+          agentSessionAgent: 'claude',
+          entityId: 'session-B',
+          groupId: 'group-1',
+          label: 'Codex',
+          customLabel: null,
+          color: null,
+          sortOrder: 1,
+          createdAt: NOW
+        }
+      ]
+    }
+  })
+  activateWorktreeAgentPane(
+    worktree.id,
+    'native-B',
+    structuredAgentSessionPaneKey('native-B', 'session-B'),
+    'ssh:server'
+  )
+
+  expect(useAppStore.getState()).toMatchObject({
+    activeWorktreeId: worktree.id,
+    activeWorkspaceExecutionHostId: 'ssh:server',
+    activeTabType: 'agent-session'
+  })
+  expect(effects.composerFocus).toHaveBeenCalledWith('native-B')
+  expect(effects.rpc).toHaveBeenCalledWith(
+    { kind: 'environment', environmentId: 'host-B' },
+    'session.tabs.activate',
+    expect.objectContaining({ tabId: 'agent-session:session-B' })
+  )
+})

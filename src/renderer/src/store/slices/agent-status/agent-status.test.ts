@@ -1,11 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { createTestStore } from '../../testing/app-store-test-fixture'
 import { makeTab } from '../../terminals/testing/terminal-tab.test-fixture'
 import { makeTabGroup, makeUnifiedTab } from '../tabs/tab-group.test-fixture'
 import { createStoreSessionMockApi } from '../../testing/app-store-session-api.test-fixture'
-import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
-import type { RetainedAgentEntry } from './agent-status-contract'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
@@ -85,37 +82,10 @@ afterEach(() => {
 }
 
 {
-  describe('dropAgentStatus + retention suppressor', () => {
+  describe('agent row teardown', () => {
     // Use fake timers for microtask-scheduled 30-minute freshness timeouts.
     afterEach(() => {
       vi.useRealTimers()
-    })
-
-    it('removes a retained-only entry', () => {
-      vi.useFakeTimers()
-      const store = createTestStore()
-      const now = Date.now()
-      const entry: AgentStatusEntry = {
-        state: 'done',
-        prompt: '',
-        updatedAt: now,
-        stateStartedAt: now,
-        paneKey: 'tab-retained:0',
-        stateHistory: []
-      }
-      const retained: RetainedAgentEntry = {
-        entry,
-        worktreeId: 'wt-x',
-        tab: { id: 'tab-retained', title: 'claude' } as unknown as TerminalTab,
-        agentType: 'claude',
-        startedAt: now
-      }
-      store.getState().retainAgents([retained])
-
-      store.getState().dropAgentStatus('tab-retained:0')
-
-      const s = store.getState()
-      expect(s.retainedAgentsByPaneKey['tab-retained:0']).toBeUndefined()
     })
 
     it('closeTab drops completed worktree-attributed orphan rows', () => {
@@ -179,6 +149,9 @@ afterEach(() => {
       expect(s.tabsByWorktree['wt-1']?.some((tab) => tab.id === 'tab-closed')).toBe(false)
       expect(s.agentStatusByPaneKey['tab-closed:0']).toBeUndefined()
       expect(s.agentStatusByPaneKey['tab-orphan:0']).toBeUndefined()
+      expect(s.agentStatusByPaneKey['tab-active-child:0']).toBeDefined()
+      expect(s.agentStatusByPaneKey['tab-live:0']).toBeDefined()
+      expect(s.agentStatusByPaneKey['tab-other-orphan:0']).toBeDefined()
     })
 
     it.each(['wt-1', 'folder-workspace-1'])(

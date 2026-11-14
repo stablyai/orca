@@ -8,7 +8,6 @@ export type SlotLayout = Pick<
   | 'tabsByWorktree'
   | 'unifiedTabsByWorktree'
   | 'migrationUnsupportedByPtyId'
-  | 'retainedAgentsByPaneKey'
   | 'ptyIdsByTabId'
   | 'terminalLayoutsByTabId'
   | 'runtimeAgentOrchestrationByPaneKey'
@@ -131,7 +130,6 @@ export function addChangedLayoutWorkspaces(
       }
     }
   )
-  forEachChangedKey(before.retainedAgentsByPaneKey, after.retainedAgentsByPaneKey, includePane)
   forEachChangedKey(
     before.paneForegroundAgentByPaneKey,
     after.paneForegroundAgentByPaneKey,

@@ -326,7 +326,7 @@ describe('host-rejected paired-runtime input reaches a pane remount', () => {
       consumePendingSnapshot: vi.fn(() => null),
       runtimePaneTitlesByTabId: {},
       agentStatusByPaneKey: {},
-      retainedAgentsByPaneKey: {},
+
       paneForegroundAgentByPaneKey: {},
       sleepingAgentSessionsByPaneKey: {},
       suppressedPtyExitIds: {},

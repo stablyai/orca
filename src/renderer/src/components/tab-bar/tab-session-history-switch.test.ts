@@ -93,80 +93,124 @@ beforeEach(() => {
 describe('one pane of a terminal tab', () => {
   const paneGate = (state: AppState, paneKey: string) =>
     canPaneOfferResumeInNewChat(state, { worktreeId: WORKTREE_ID, paneKey })
-  it('identifies a provider-only Continue source without a live turn or selecting its sibling', () => {
-    makeState()
-    const [L1, L2] = [
-      '11111111-1111-4111-8111-111111111111',
-      '22222222-2222-4222-8222-222222222222'
-    ]
-    const pane = `term-1:${L1}`
-    const layout = (ptyIdsByLeafId: Record<string, string>) =>
-      useAppStore.setState({
-        terminalLayoutsByTabId: {
-          'term-1': { root: null, activeLeafId: L1, expandedLeafId: null, ptyIdsByLeafId }
+  it.each(['live', 'removed', 'stamped-replay'])(
+    'identifies the current provider without selecting its sibling (predecessor removed: %s)',
+    (predecessor) => {
+      makeState()
+      const [L1, L2] = [
+        '11111111-1111-4111-8111-111111111111',
+        '22222222-2222-4222-8222-222222222222'
+      ]
+      const pane = `term-1:${L1}`
+      const layout = (ptyIdsByLeafId: Record<string, string>) =>
+        useAppStore.setState({
+          terminalLayoutsByTabId: {
+            'term-1': { root: null, activeLeafId: L1, expandedLeafId: null, ptyIdsByLeafId }
+          }
+        })
+      layout({ [L1]: 'pty-1', [L2]: 'pty-2' })
+      applyProviderSessionOnlyUpdate({
+        store: useAppStore.getState(),
+        batch: undefined,
+        paneKey: pane,
+        routing: { tabId: 'term-1', worktreeId: WORKTREE_ID },
+        data: {
+          paneKey: pane,
+          connectionId: null,
+          receivedAt: 1,
+          stateStartedAt: 1,
+          state: 'done',
+          prompt: '',
+          agentType: 'codex',
+          providerSession: { key: 'session_id', id: 'thread-c' },
+          providerSessionOnly: true
         }
       })
-    layout({ [L1]: 'pty-1', [L2]: 'pty-2' })
-    applyProviderSessionOnlyUpdate({
-      store: useAppStore.getState(),
-      batch: undefined,
-      paneKey: pane,
-      routing: { tabId: 'term-1', worktreeId: WORKTREE_ID },
-      data: {
-        paneKey: pane,
-        connectionId: null,
-        receivedAt: 1,
-        stateStartedAt: 1,
-        state: 'done',
-        prompt: '',
-        agentType: 'codex',
-        providerSession: { key: 'session_id', id: 'thread-c' },
-        providerSessionOnly: true
-      }
-    })
-    const state = useAppStore.getState()
-    expect(state.agentStatusByPaneKey).toEqual({})
-    expect(
-      resolveCliChatResumeSource(state, {
-        tab: { id: 'term-1', worktreeId: WORKTREE_ID },
-        paneKey: pane
-      })
-    ).toMatchObject({ agent: 'codex', providerSessionId: 'thread-c' })
-    expect(paneGate(state, `term-1:${L2}`)).toBe(false)
-    useAppStore
-      .getState()
-      .setAgentStatus(
+      const state = useAppStore.getState()
+      expect(state.agentStatusByPaneKey).toEqual({})
+      expect(
+        resolveCliChatResumeSource(state, {
+          tab: { id: 'term-1', worktreeId: WORKTREE_ID },
+          paneKey: pane
+        })
+      ).toMatchObject({ agent: 'codex', providerSessionId: 'thread-c' })
+      expect(paneGate(state, `term-1:${L2}`)).toBe(false)
+      useAppStore.getState().setAgentStatus(
         pane,
-        { state: 'done', prompt: 'first', agentType: 'codex' },
+        {
+          state: 'done',
+          prompt: 'first',
+          agentType: 'codex',
+          ...(predecessor === 'stamped-replay'
+            ? {
+                observation: {
+                  origin: 'hook' as const,
+                  authorityId: 'H',
+                  incarnation: 0,
+                  revision: 2,
+                  observedAt: 5000,
+                  kind: 'transition' as const
+                }
+              }
+            : {})
+        },
         undefined,
-        undefined,
+        predecessor === 'stamped-replay'
+          ? { updatedAt: 5000, stateStartedAt: 5000, turnStartedAt: 1000 }
+          : undefined,
         { tabId: 'term-1', worktreeId: WORKTREE_ID },
         { providerSession: { key: 'session_id', id: 'thread-c' } }
       )
-    useAppStore
-      .getState()
-      .setAgentStatus(pane, { state: 'working', prompt: 'second', agentType: 'codex' })
-    expect(
-      resolveCliChatResumeSource(useAppStore.getState(), {
-        tab: { id: 'term-1', worktreeId: WORKTREE_ID },
-        paneKey: pane
-      })
-    ).toBeNull()
-    expect(paneGate(useAppStore.getState(), pane)).toBe(false)
-    useAppStore
-      .getState()
-      .recordAgentProviderSession(
-        pane,
-        'codex',
-        { key: 'session_id', id: 'thread-next' },
-        undefined,
-        { tabId: 'term-1', worktreeId: WORKTREE_ID }
-      )
-    expect(
-      resolveCliChatResumeSource(useAppStore.getState(), {
-        tab: { id: 'term-1', worktreeId: WORKTREE_ID },
-        paneKey: pane
-      })
-    ).toMatchObject({ providerSessionId: 'thread-next' })
-  })
+      if (predecessor !== 'live') {
+        useAppStore.getState().removeAgentStatus(pane)
+      }
+      if (predecessor === 'stamped-replay') {
+        useAppStore.getState().setAgentStatus(
+          pane,
+          {
+            state: 'working',
+            prompt: 'first',
+            agentType: 'codex',
+            observation: {
+              origin: 'hook',
+              authorityId: 'H',
+              incarnation: 0,
+              revision: 3,
+              observedAt: 6000,
+              kind: 'snapshot'
+            }
+          },
+          undefined,
+          { updatedAt: 6000, stateStartedAt: 1000, turnStartedAt: 1000, isReplay: true },
+          { tabId: 'term-1', worktreeId: WORKTREE_ID }
+        )
+        useAppStore.getState().removeAgentStatus(pane)
+      }
+      useAppStore
+        .getState()
+        .setAgentStatus(pane, { state: 'working', prompt: 'second', agentType: 'codex' })
+      expect(
+        resolveCliChatResumeSource(useAppStore.getState(), {
+          tab: { id: 'term-1', worktreeId: WORKTREE_ID },
+          paneKey: pane
+        })
+      ).toBeNull()
+      expect(paneGate(useAppStore.getState(), pane)).toBe(false)
+      useAppStore
+        .getState()
+        .recordAgentProviderSession(
+          pane,
+          'codex',
+          { key: 'session_id', id: 'thread-next' },
+          undefined,
+          { tabId: 'term-1', worktreeId: WORKTREE_ID }
+        )
+      expect(
+        resolveCliChatResumeSource(useAppStore.getState(), {
+          tab: { id: 'term-1', worktreeId: WORKTREE_ID },
+          paneKey: pane
+        })
+      ).toMatchObject({ providerSessionId: 'thread-next' })
+    }
+  )
 })

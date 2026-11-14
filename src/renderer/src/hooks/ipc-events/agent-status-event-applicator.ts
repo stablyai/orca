@@ -231,6 +231,7 @@ export function createAgentStatusEventApplicator(args: {
       terminalTitle,
       timing: {
         updatedAt: data.receivedAt,
+        isReplay: data.isReplay,
         ...(data.evidenceObservedAt !== undefined
           ? { evidenceObservedAt: data.evidenceObservedAt }
           : {}),

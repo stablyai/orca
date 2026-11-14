@@ -291,7 +291,7 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
       consumePendingSnapshot: vi.fn(() => null),
       runtimePaneTitlesByTabId: {},
       agentStatusByPaneKey: {},
-      retainedAgentsByPaneKey: {},
+
       paneForegroundAgentByPaneKey: {},
       sleepingAgentSessionsByPaneKey: {},
       suppressedPtyExitIds: {},

@@ -59,9 +59,8 @@ describe('agent status cleanup for a lost SSH connection', () => {
           identity: {}
         }
       },
-      acknowledgedAgentsByPaneKey: { [oldA]: 2 },
-      retentionSuppressedPaneKeys: { [oldA]: true }
-    } as Partial<AppState>)
+      acknowledgedAgentsByPaneKey: { [oldA]: 2 }
+    })
     const subscriber = vi.fn()
     const unsubscribe = store.subscribe(subscriber)
     const queueMicrotaskSpy = vi.spyOn(globalThis, 'queueMicrotask').mockImplementation(() => {})
@@ -79,7 +78,6 @@ describe('agent status cleanup for a lost SSH connection', () => {
     expect(store.getState().agentStatusByPaneKey[local]?.connectionId).toBeNull()
     expect(store.getState().agentLaunchConfigByPaneKey[oldA]).toBeDefined()
     expect(store.getState().acknowledgedAgentsByPaneKey[oldA]).toBe(2)
-    expect(store.getState().retentionSuppressedPaneKeys[oldA]).toBe(true)
   })
 
   it('does not clear a live row on another host that shares a repo id', () => {

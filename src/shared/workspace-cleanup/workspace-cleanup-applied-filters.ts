@@ -114,7 +114,7 @@ export function listAppliedWorkspaceCleanupFilters(
   if (agent.retainedDoneAgents !== 'any') {
     add(
       'agent.retainedDoneAgents',
-      format.triState('retainedAgents', agent.retainedDoneAgents),
+      format.triState('finishedAgents', agent.retainedDoneAgents),
       (f) => ({
         ...f,
         agent: { ...f.agent, retainedDoneAgents: 'any' }

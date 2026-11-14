@@ -1,6 +1,9 @@
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
-import { activateRetainedAgentRow } from './activate-retained-agent-row'
+import {
+  structuredAgentSessionOwnerForTab,
+  structuredAgentSessionTargetForTab
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
@@ -30,7 +33,23 @@ export function activateWorktreeAgentPane(
   const state = useAppStore.getState()
   const nativeTab = getStructuredAgentSessionTabsByPaneKey(state.unifiedTabsByWorktree).get(paneKey)
   if (nativeTab?.worktreeId === worktreeId && nativeTab.id === tabId) {
-    activateRetainedAgentRow(worktreeId, tabId, paneKey, executionHostId)
+    const target = structuredAgentSessionTargetForTab(state, nativeTab)
+    const owner = structuredAgentSessionOwnerForTab(state, nativeTab)
+    if (
+      !target ||
+      (executionHostId &&
+        owner &&
+        !isExecutionHostForWorktree(state, worktreeId, executionHostId, owner))
+    ) {
+      return
+    }
+    if (
+      activateAndRevealWorkspace(worktreeId, {
+        executionHostId: executionHostId ?? owner ?? undefined
+      }) !== false
+    ) {
+      activateStructuredAgentSessionTab({ worktreeId, tabId, target })
+    }
     return
   }
   const parsed = parsePaneKey(paneKey)

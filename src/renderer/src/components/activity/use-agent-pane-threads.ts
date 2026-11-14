@@ -78,7 +78,6 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
           agentStatusByPaneKey: storeData.agentStatusByPaneKey,
           runtimeAgentOrchestrationByPaneKey: storeData.runtimeAgentOrchestrationByPaneKey,
           migrationUnsupportedByPtyId: storeData.migrationUnsupportedByPtyId,
-          retainedAgentsByPaneKey: storeData.retainedAgentsByPaneKey,
           tabsByWorktree: storeData.tabsByWorktree,
           ptyIdsByTabId: storeData.ptyIdsByTabId,
           unifiedTabsByWorktree: storeData.activityTabs,

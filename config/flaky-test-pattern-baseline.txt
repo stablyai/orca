@@ -195,7 +195,7 @@
 1 test-no-real-time-wait:src/main/workspaces/removal/local-worktree-removal-recovery-live.test.ts
 2 test-no-real-time-wait:src/main/wsl/execution/wsl-command-loop.test.ts
 2 test-no-real-time-wait:src/main/wsl/orcad/wsl-orcad-real-distro-lane.test.ts
-4 test-no-real-time-wait:src/renderer/src/components/activity/activity-auto-mark-read-loop.react185.test.tsx
+3 test-no-real-time-wait:src/renderer/src/components/activity/activity-auto-mark-read-loop.react185.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/editor/DiagramViewerModal.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/editor/combined-diff/load-sections/combined-diff-stale-analysis-work-budget.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/terminal-pane/layout/split/resolve-split-cwd.test.ts
@@ -502,7 +502,7 @@
 1 test-no-wall-clock:src/main/workspaces/removal/worktree-removal-close-records.test.ts
 2 test-no-wall-clock:src/main/wsl/execution/wsl-runner.wsl.test.ts
 3 test-no-wall-clock:src/main/wsl/orcad/wsl-orcad-real-distro-lane.test.ts
-3 test-no-wall-clock:src/renderer/src/components/activity/activity-auto-mark-read-loop.react185.test.tsx
+1 test-no-wall-clock:src/renderer/src/components/activity/activity-auto-mark-read-loop.react185.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/artifacts/ArtifactCollection.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/browser-pane/assemble-chrome/browser-workspace-pane.adoption-chrome.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/native-chat/tools/tasks/NativeChatStructuredSessionStatus.test.tsx

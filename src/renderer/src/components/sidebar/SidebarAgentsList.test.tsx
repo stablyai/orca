@@ -9,10 +9,8 @@ import {
   makeRepo,
   makeWorktree,
   makeTab,
-  makeRetainedDoneEntry,
   makeWorkingEntryWithoutHistory,
-  PANE_KEY,
-  PANE_KEY_2
+  PANE_KEY
 } from '@/components/activity/ActivityPrototypePage-test-fixtures'
 
 const initialState = useAppStore.getState()
@@ -76,11 +74,10 @@ it('preserves workspace focus on mount and focuses search only when explicitly e
   expect(window.api.ui.set).toHaveBeenCalledWith({ agentsShowSearch: true })
 })
 
-it('keeps filtered live badge counts across sidebar modes and excludes retained waiting history', () => {
+it('keeps filtered live badge counts across sidebar modes', () => {
   vi.spyOn(Date, 'now').mockReturnValue(10_000)
   const worktree = makeWorktree()
   const tab = makeTab()
-  const retained = makeRetainedDoneEntry({ ...tab, id: 'tab-2' })
   useAppStore.setState({
     repos: [makeRepo(), { ...makeRepo(), id: 'other-repo' }],
     worktreesByRepo: { 'repo-1': [worktree] },
@@ -96,12 +93,6 @@ it('keeps filtered live badge counts across sidebar modes and excludes retained 
         state: 'waiting',
         updatedAt: 10_000,
         stateStartedAt: 10_000
-      }
-    },
-    retainedAgentsByPaneKey: {
-      [PANE_KEY_2]: {
-        ...retained,
-        entry: { ...retained.entry, paneKey: PANE_KEY_2, state: 'waiting' }
       }
     }
   })

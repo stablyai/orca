@@ -29,7 +29,6 @@ export function surfaceForAutoAckTarget(
 export function readAgentAttentionTurnRecords(state: StoreSnapshot): AgentAttentionTurnRecords {
   return {
     liveTurns: state.agentStatusByPaneKey,
-    retainedTurns: state.retainedAgentsByPaneKey,
     acknowledgedTurnStartedAt: state.acknowledgedAgentsByPaneKey
   }
 }

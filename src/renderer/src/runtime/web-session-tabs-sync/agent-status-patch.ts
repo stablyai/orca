@@ -1,4 +1,10 @@
-import { resolveAgentSessionStartedAt } from '../../../../shared/agent-session/lifecycle/agent-session-start-time'
+import { recordDraft } from '@/store/keyed-record-transitions'
+import { conversationSessionStartedAt } from '../../store/slices/agent-status/agent-conversation-acceptance'
+import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
+import {
+  classifyAgentPaneConversation,
+  projectAgentPaneConversation
+} from '../../store/slices/agent-status/agent-pane-conversation'
 import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { withMirroredEvidenceReceipt } from '../../../../shared/agent-status/contracts/agent-status-freshness'
@@ -42,7 +48,12 @@ type MirroredAgentStatusPatch = Pick<
   'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'
 > &
   Partial<
-    Pick<WebSessionTabsSyncState, 'agentLaunchConfigByPaneKey' | 'sleepingAgentSessionsByPaneKey'>
+    Pick<
+      WebSessionTabsSyncState,
+      | 'agentLaunchConfigByPaneKey'
+      | 'sleepingAgentSessionsByPaneKey'
+      | 'agentConversationsByPaneKey'
+    >
   >
 
 export function buildMirroredAgentStatusPatch(
@@ -149,14 +160,16 @@ export function buildMirroredAgentStatusPatch(
             },
             entry
           )
-    const retained = existing ? undefined : state.retainedAgentsByPaneKey?.[entry.paneKey]
+    const source = { ...accepted, isReplay: true }
+    const conversation = classifyAgentPaneConversation(
+      state,
+      accepted,
+      source,
+      toRuntimeExecutionHostId(environmentId)
+    )
     nextByPaneKey.set(entry.paneKey, {
       ...accepted,
-      firstStateStartedAt: resolveAgentSessionStartedAt({
-        entry: accepted,
-        previous: existing ?? retained?.entry,
-        previousStartedAt: retained?.startedAt
-      })
+      firstStateStartedAt: conversationSessionStartedAt(accepted, existing, conversation, source)
     })
   }
 
@@ -174,7 +187,7 @@ export function buildMirroredAgentStatusPatch(
     ) {
       continue
     }
-    // The retirement sweep must see the live row to suppress ghost retention.
+    // Explicit retraction retires pane authority after the live-row patch.
     if (isMirroredAgentPaneKeyForTabs(paneKey, retractedTabIds)) {
       continue
     }
@@ -200,7 +213,20 @@ export function buildMirroredAgentStatusPatch(
   }
 
   let retirement: ReturnType<typeof retirePaneLaunchNote> = {}
+  let nextConversations = state.agentConversationsByPaneKey ?? {}
+  const originalConversations = nextConversations
+  const conversationDraft = recordDraft(nextConversations)
   for (const [paneKey, entry] of nextByPaneKey) {
+    nextConversations = projectAgentPaneConversation(
+      { tabsByWorktree: state.tabsByWorktree, agentConversationsByPaneKey: nextConversations },
+      entry,
+      (_entries, key, value) => {
+        conversationDraft.set(key, value)
+        return conversationDraft.view()
+      },
+      toRuntimeExecutionHostId(environmentId),
+      { ...entry, isReplay: true }
+    )
     const existing = nextAgentStatusByPaneKey[paneKey]
     // The host's retirement of this pane's launch ends the client's copies of its note.
     if (retiresLaunch(existing, entry)) {
@@ -248,7 +274,8 @@ export function buildMirroredAgentStatusPatch(
     sortRelevantChange = sortRelevantChange || entrySortRelevantChange
   }
 
-  if (!changed) {
+  nextConversations = conversationDraft.finish()
+  if (!changed && nextConversations === originalConversations) {
     return null
   }
 
@@ -256,6 +283,9 @@ export function buildMirroredAgentStatusPatch(
     agentStatusByPaneKey: nextAgentStatusByPaneKey,
     agentStatusEpoch: aggregateRelevantChange ? state.agentStatusEpoch + 1 : state.agentStatusEpoch,
     sortEpoch: sortRelevantChange ? state.sortEpoch + 1 : state.sortEpoch,
+    ...(nextConversations !== originalConversations
+      ? { agentConversationsByPaneKey: nextConversations }
+      : {}),
     ...retirement
   }
 }

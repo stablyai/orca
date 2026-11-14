@@ -54,8 +54,7 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
       tabsByWorktree: { 'wt-1': [] },
       unifiedTabsByWorktree: { 'wt-1': [structuredTab] },
       agentStatusByPaneKey: { [PANE_KEY_1]: entry },
-      migrationUnsupportedByPtyId: {},
-      retainedAgentsByPaneKey: {}
+      migrationUnsupportedByPtyId: {}
     }
 
     expect(selectLiveAgentStatusEntriesForWorktree(state, 'wt-1')).toEqual([entry])
@@ -75,8 +74,7 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
     const state = {
       tabsByWorktree: { 'wt-1': [], 'wt-2': [] },
       agentStatusByPaneKey: { [PANE_KEY_1]: entry },
-      migrationUnsupportedByPtyId: {},
-      retainedAgentsByPaneKey: {}
+      migrationUnsupportedByPtyId: {}
     }
     expect(selectLiveAgentStatusEntriesForWorktree(state, 'wt-1')).toEqual([entry])
 
@@ -97,8 +95,7 @@ describe('selectLiveAgentStatusEntriesForWorktree', () => {
     const state = {
       tabsByWorktree: { 'wt-1': [] },
       agentStatusByPaneKey: { [PANE_KEY_1]: entry },
-      migrationUnsupportedByPtyId: {},
-      retainedAgentsByPaneKey: {}
+      migrationUnsupportedByPtyId: {}
     }
     expect(selectLiveAgentStatusEntriesForWorktree(state, 'wt-1')).toEqual([entry])
 

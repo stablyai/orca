@@ -32,7 +32,7 @@ vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOri
 
 const mockApi = createStoreCascadesMockApi()
 
-// Sleep must clear live/retained status or mid-turn agents remain working until the 30-minute TTL.
+// Sleep must clear live status or mid-turn agents remain working until the 30-minute TTL.
 describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -104,6 +104,12 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
         { providerSession: { key: 'session_id', id: 'sibling-session' } }
       )
 
+    store.setState({
+      acknowledgedAgentsByPaneKey: { [targetPaneKey]: 2000 },
+      activityClearedAtByPaneKey: { [targetPaneKey]: 2000 },
+      manuallyUnreadTurnsByPaneKey: { [targetPaneKey]: 1000 }
+    })
+
     await store.getState().shutdownCompletedAgentPaneForHibernation(wt, {
       paneKey: targetPaneKey,
       tabId: 'tab-1',
@@ -125,14 +131,14 @@ describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
     })
 
     expect(state.agentStatusByPaneKey[targetPaneKey]).toBeUndefined()
-
-    expect(state.retainedAgentsByPaneKey[targetPaneKey]).toMatchObject({
-      entry: { lastAssistantMessage: 'done' }
-    })
+    expect(state.acknowledgedAgentsByPaneKey[targetPaneKey]).toBe(2000)
+    expect(state.activityClearedAtByPaneKey[targetPaneKey]).toBe(2000)
+    expect(state.manuallyUnreadTurnsByPaneKey[targetPaneKey]).toBe(1000)
+    expect(state.agentStatusByPaneKey[siblingPaneKey]).toBeDefined()
     expect(state.unreadTerminalTabs['tab-1']).toBe(true)
-    expect(state.unreadTerminalPanes[targetPaneKey]).toBeUndefined()
+    expect(state.unreadTerminalPanes[targetPaneKey]).toBe(true)
     expect(state.unreadTerminalPanes[siblingPaneKey]).toBe(true)
-    expect(state.unreadAgentCompletionPanes[targetPaneKey]).toBeUndefined()
+    expect(state.unreadAgentCompletionPanes[targetPaneKey]).toBe(true)
     expect(state.unreadAgentCompletionPanes[siblingPaneKey]).toBe(true)
     expect(state.lastTerminalInputAtByPaneKey[targetPaneKey]).toBeUndefined()
     expect(state.lastTerminalInputAtByPaneKey[siblingPaneKey]).toBe(1100)

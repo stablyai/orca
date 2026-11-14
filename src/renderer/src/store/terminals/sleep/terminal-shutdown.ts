@@ -3,10 +3,7 @@ import { shutdownBufferCaptures } from '@/components/terminal-pane/snapshots/shu
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import '../../slices/agent-status/agent-status'
-import {
-  collectHibernatedCompletionEvidenceForWorktree,
-  collectSleepingAgentSessionRecordsForWorktree
-} from '../../slices/agent-status/agent-status-recovery-collection'
+import { collectSleepingAgentSessionRecordsForWorktree } from '../../slices/agent-status/agent-status-recovery-collection'
 import type { AgentStatusWorktreeShutdownReason } from '../../slices/agent-status/agent-status-contract'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from '../terminal-state'
 import { equalStringSets, sortedUniquePtyIds } from '../pty/terminal-pty-identities'
@@ -69,14 +66,6 @@ export function createTerminalShutdownActions(
                 : {})
             })
           : {}
-      const retainedCompletionEvidence =
-        shutdownReason === 'auto-hibernate-completed-agent'
-          ? collectHibernatedCompletionEvidenceForWorktree(
-              get(),
-              worktreeId,
-              opts?.sleepingPaneKeys
-            )
-          : []
       const guards = createTerminalShutdownGuardController({
         exitGuardPtyIds,
         get,
@@ -197,7 +186,6 @@ export function createTerminalShutdownActions(
         exitGuardPtyIds,
         get,
         keepIdentifiers,
-        retainedCompletionEvidence,
         set,
         shutdownReason,
         sleepingAgentSessionRecords,

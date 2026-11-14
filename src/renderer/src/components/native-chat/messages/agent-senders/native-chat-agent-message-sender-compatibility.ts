@@ -11,17 +11,13 @@ const handleIndexes = new WeakMap<
   object,
   { inputs: unknown[]; index: Map<string, Map<string | null, AgentStatusEntry[]>> }
 >()
-function byHandle(
-  state: AppState,
-  source: AppState['agentStatusByPaneKey'] | AppState['retainedAgentsByPaneKey']
-) {
+function byHandle(state: AppState, source: AppState['agentStatusByPaneKey']) {
   const inputs = structuredAgentSessionOwnerInputs(state)
   let cached = handleIndexes.get(source)
   if (!cached || inputs.some((value, index) => value !== cached?.inputs[index])) {
     const index = new Map<string, Map<string | null, AgentStatusEntry[]>>()
     const owners = new Map<string, string | null>()
-    for (const value of Object.values(source)) {
-      const entry = 'entry' in value ? value.entry : value
+    for (const entry of Object.values(source)) {
       if (!entry.terminalHandle || !entry.worktreeId) {
         continue
       }
@@ -57,20 +53,12 @@ export function locateLegacyAgentMessageSender(
   const chatTab = sessionId ? findAgentMessageSenderChatTab(state, sessionId, owner) : undefined
   let paneKey = chatTab && structuredAgentSessionPaneKey(chatTab.id, chatTab.entityId)
   if (!paneKey && handle) {
-    for (const source of [state.agentStatusByPaneKey, state.retainedAgentsByPaneKey]) {
-      const matches = byHandle(state, source).get(handle)?.get(owner) ?? []
-      if (matches.length) {
-        paneKey = matches.length === 1 ? matches[0].paneKey : undefined
-        break
-      }
-    }
+    const matches = byHandle(state, state.agentStatusByPaneKey).get(handle)?.get(owner) ?? []
+    paneKey = matches.length === 1 ? matches[0].paneKey : undefined
   }
+
   const worktreeId =
-    chatTab?.worktreeId ??
-    (paneKey
-      ? (state.agentStatusByPaneKey[paneKey]?.worktreeId ??
-        state.retainedAgentsByPaneKey[paneKey]?.worktreeId)
-      : undefined)
+    chatTab?.worktreeId ?? (paneKey ? state.agentStatusByPaneKey[paneKey]?.worktreeId : undefined)
   return worktreeId && paneKey
     ? { host: owner, worktreeId, paneKey, agentType: chatTab?.agentSessionAgent }
     : undefined

@@ -61,7 +61,7 @@ function seedFutureStampedTurn(stateStartedAt: number): void {
       }
     },
     agentStatusByPaneKey: { [PANE_KEY]: entry },
-    retainedAgentsByPaneKey: {},
+
     acknowledgedAgentsByPaneKey: {},
     unreadAgentCompletionPanes: {},
     unreadTerminalTabs: {}

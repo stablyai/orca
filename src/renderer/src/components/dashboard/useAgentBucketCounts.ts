@@ -22,7 +22,6 @@ export type AgentBucketCountState = Pick<
   | 'tabsByWorktree'
   | 'unifiedTabsByWorktree'
   | 'agentStatusByPaneKey'
-  | 'retainedAgentsByPaneKey'
   | 'migrationUnsupportedByPtyId'
   | 'runtimeAgentOrchestrationByPaneKey'
   | 'terminalLayoutsByTabId'
@@ -60,7 +59,6 @@ export function selectAgentBucketCountState(s: AppState): AgentBucketCountState 
     previous.tabsByWorktree === s.tabsByWorktree &&
     previous.unifiedTabsByWorktree === s.unifiedTabsByWorktree &&
     previous.agentStatusByPaneKey === s.agentStatusByPaneKey &&
-    previous.retainedAgentsByPaneKey === s.retainedAgentsByPaneKey &&
     previous.migrationUnsupportedByPtyId === s.migrationUnsupportedByPtyId &&
     previous.runtimeAgentOrchestrationByPaneKey === s.runtimeAgentOrchestrationByPaneKey &&
     previous.terminalLayoutsByTabId === s.terminalLayoutsByTabId &&
@@ -89,7 +87,6 @@ export function selectAgentBucketCountState(s: AppState): AgentBucketCountState 
     tabsByWorktree: s.tabsByWorktree,
     unifiedTabsByWorktree: s.unifiedTabsByWorktree,
     agentStatusByPaneKey: s.agentStatusByPaneKey,
-    retainedAgentsByPaneKey: s.retainedAgentsByPaneKey,
     migrationUnsupportedByPtyId: s.migrationUnsupportedByPtyId,
     runtimeAgentOrchestrationByPaneKey: s.runtimeAgentOrchestrationByPaneKey,
     terminalLayoutsByTabId: s.terminalLayoutsByTabId,

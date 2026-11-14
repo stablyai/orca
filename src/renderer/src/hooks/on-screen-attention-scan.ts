@@ -63,7 +63,7 @@ function hasMarkersOnScreen(s: AppState, targets: readonly AutoAckTabTarget[]): 
   )
 }
 
-/** Visible/focused/present users acknowledge every visible target and unread flag. Scan live and retained rows because Codex exit can migrate done state mid-race (codex-agent-row-bold-stuck.md). */
+/** Visible/focused/present users acknowledge every visible live target and unread flag. */
 export function startOnScreenAttentionScan(
   store: ScanStore,
   env: OnScreenAttentionEnvironment
@@ -78,7 +78,6 @@ export function startOnScreenAttentionScan(
   let lastGroups: unknown = undefined
   let lastGroupLayouts: unknown = undefined
   let lastAgentStatus: unknown = undefined
-  let lastRetained: unknown = undefined
   let lastAcknowledged: unknown = undefined
   let lastLayouts: unknown = undefined
   let lastUnreadTerminalTabs: unknown = undefined
@@ -121,7 +120,6 @@ export function startOnScreenAttentionScan(
       s.groupsByWorktree === lastGroups &&
       s.layoutByWorktree === lastGroupLayouts &&
       s.agentStatusByPaneKey === lastAgentStatus &&
-      s.retainedAgentsByPaneKey === lastRetained &&
       s.acknowledgedAgentsByPaneKey === lastAcknowledged &&
       s.terminalLayoutsByTabId === lastLayouts &&
       s.unreadTerminalTabs === lastUnreadTerminalTabs &&
@@ -140,7 +138,6 @@ export function startOnScreenAttentionScan(
     lastGroups = s.groupsByWorktree
     lastGroupLayouts = s.layoutByWorktree
     lastAgentStatus = s.agentStatusByPaneKey
-    lastRetained = s.retainedAgentsByPaneKey
     lastAcknowledged = s.acknowledgedAgentsByPaneKey
     lastLayouts = s.terminalLayoutsByTabId
     lastUnreadTerminalTabs = s.unreadTerminalTabs
@@ -218,7 +215,6 @@ export function startOnScreenAttentionScan(
       const lapsedProtections = computeLapsedManualUnreadProtections(
         {
           liveTurns: s.agentStatusByPaneKey,
-          retainedTurns: s.retainedAgentsByPaneKey,
           manuallyUnreadTurnStartedAt: s.manuallyUnreadTurnsByPaneKey
         },
         activeSubjectKeys

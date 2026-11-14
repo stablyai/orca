@@ -23,7 +23,6 @@ import {
   workspaceLiveMarkerTabIds
 } from '@/store/slices/workspace-attention/workspace-live-markers'
 import { activateWorktreeAgentPane } from './workspace-card/activity/use-worktree-agent-activation'
-import { activateRetainedAgentRow } from './workspace-card/activity/activate-retained-agent-row'
 import { expandWorktreeAgentList } from './workspace-card/activity/worktree-card-agents-expansion-state'
 import type { SlotAgentSignals } from './worktree-card-slot-agent-signals'
 import type { SlotLineKind, SlotLineSignal } from './worktree-card-slot-signal'
@@ -41,7 +40,6 @@ export type SlotTarget = SlotLineSignal & {
   /** Completion subjects represented by this tab target; bells remain independent of agent rows. */
   unreadPaneKeys?: readonly string[]
   terminalBell?: boolean
-  retained: boolean
   agentType: AgentType | null
   entry: AgentStatusEntry | null
 }
@@ -64,7 +62,6 @@ export function slotTargetsFromAgentLines(
       executionHostId,
       // Subagents have no pane of their own; they open their spawning parent.
       paneKey: agent.activationPaneKey ?? agent.paneKey,
-      retained: agent.rowSource === 'retained',
       agentType: agent.agentType,
       entry: agent.entry
     })
@@ -83,7 +80,6 @@ export function workspaceUnreadTarget(
     worktreeId,
     executionHostId,
     paneKey: null,
-    retained: false,
     agentType: null,
     entry: null
   }
@@ -231,11 +227,7 @@ export function openSlotTarget(target: SlotTarget): void {
     return
   }
   expandWorktreeAgentList(target.worktreeId, target.executionHostId)
-  if (target.retained) {
-    activateRetainedAgentRow(target.worktreeId, tabId, target.paneKey, target.executionHostId)
-  } else {
-    activateWorktreeAgentPane(target.worktreeId, tabId, target.paneKey, target.executionHostId)
-  }
+  activateWorktreeAgentPane(target.worktreeId, tabId, target.paneKey, target.executionHostId)
 }
 
 /** Open the tab holding a marker the way Activity opens a thread's tab; arriving reads it. */

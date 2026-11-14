@@ -9,14 +9,12 @@ import type {
   TerminalTab
 } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { migrationUnsupportedToAgentStatusEntry } from '../../../../shared/migration-unsupported-agent-entry'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import type { AppState } from '@/store/types'
 import { applyAgentRowLineage, type DashboardAgentRowWithLineage } from './agent-row-lineage'
 import { buildWorktreeAgentRows } from '../sidebar/workspace-card/activity/worktree-agent-rows'
 import {
   selectLiveAgentStatusEntriesForWorktree,
   selectMigrationUnsupportedEntriesForWorktree,
-  selectRetainedAgentEntriesForWorktree,
   selectTerminalLayoutsForWorktree
 } from '../sidebar/workspace-card/activity/worktree-agent-row-selectors'
 import {
@@ -31,7 +29,6 @@ type WorktreeAgentRowsCacheEntry = {
   generation: unknown
   liveEntries: AgentStatusEntry[]
   migrationUnsupported: MigrationUnsupportedPtyEntry[]
-  retained: RetainedAgentEntry[]
   tabs: TerminalTab[] | undefined
   orchestration: Record<string, AgentStatusOrchestrationContext>
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot | undefined>
@@ -80,7 +77,6 @@ export type WorktreeAgentRowsState = Pick<
   AppState,
   | 'agentStatusByPaneKey'
   | 'migrationUnsupportedByPtyId'
-  | 'retainedAgentsByPaneKey'
   | 'tabsByWorktree'
   | 'terminalLayoutsByTabId'
   | 'ptyIdsByTabId'
@@ -113,7 +109,6 @@ export function selectWorktreeAgentRowsCached(args: {
   cache?.seenWorktreeIds.add(worktreeId)
   const liveEntries = selectLiveAgentStatusEntriesForWorktree(state, worktreeId)
   const migrationUnsupported = selectMigrationUnsupportedEntriesForWorktree(state, worktreeId)
-  const retained = selectRetainedAgentEntriesForWorktree(state, worktreeId)
   const tabs = state.tabsByWorktree[worktreeId]
   const terminalLayoutsByTabId = selectTerminalLayoutsForWorktree(state, worktreeId)
   const paneTitlesByTabId = selectRuntimePaneTitlesForWorktree(state, worktreeId)
@@ -126,7 +121,6 @@ export function selectWorktreeAgentRowsCached(args: {
     cached.generation === generation &&
     cached.liveEntries === liveEntries &&
     cached.migrationUnsupported === migrationUnsupported &&
-    cached.retained === retained &&
     cached.tabs === tabs &&
     cached.orchestration === orchestration &&
     shallowRecordEqual(cached.terminalLayoutsByTabId, terminalLayoutsByTabId) &&
@@ -154,7 +148,6 @@ export function selectWorktreeAgentRowsCached(args: {
         ? getStructuredAgentSessionTabsByPaneKey(state.unifiedTabsByWorktree)
         : undefined,
       entries,
-      retained,
       runtimePaneTitlesByTabId: paneTitlesByTabId,
       ptyIdsByTabId,
       terminalLayoutsByTabId,
@@ -170,7 +163,6 @@ export function selectWorktreeAgentRowsCached(args: {
       generation,
       liveEntries,
       migrationUnsupported,
-      retained,
       tabs,
       orchestration,
       terminalLayoutsByTabId,

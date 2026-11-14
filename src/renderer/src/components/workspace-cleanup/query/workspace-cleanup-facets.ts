@@ -67,7 +67,7 @@ export type WorkspaceCleanupFacets = {
   isUnread: boolean
   hasComment: boolean
   agentState: WorkspaceCleanupAgentState
-  retainedDoneAgentCount: number
+  finishedAgentCount: number | null
   gitState: WorkspaceCleanupGitState
   upstreamAhead: number | null
   upstreamBehind: number | null
@@ -151,7 +151,7 @@ export function buildWorkspaceCleanupFacets(
     agentState: toWorkspaceCleanupAgentState(
       sources.liveAgentStatusByWorktreeId?.get(candidate.worktreeId)
     ),
-    retainedDoneAgentCount: candidate.localContext.retainedDoneAgentCount,
+    finishedAgentCount: candidate.localContext.finishedAgentCount ?? null,
     gitState: getWorkspaceCleanupGitState(candidate),
     upstreamAhead: toFiniteOrNull(candidate.git.upstreamAhead),
     upstreamBehind: toFiniteOrNull(candidate.git.upstreamBehind),
@@ -196,7 +196,7 @@ function getLocalContextCount(candidate: WorkspaceCleanupCandidate): number {
     context.cleanEditorTabCount +
     context.browserTabCount +
     context.diffCommentCount +
-    context.retainedDoneAgentCount
+    (context.finishedAgentCount ?? 0)
   )
 }
 

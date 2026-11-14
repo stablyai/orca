@@ -61,7 +61,6 @@ beforeEach(() => {
       [KEY_A]: entry(KEY_A, 'folder-a'),
       [KEY_B]: { ...entry(KEY_B, 'ssh-b'), connectionId: 'ssh:host' }
     },
-    retainedAgentsByPaneKey: {},
     migrationUnsupportedByPtyId: {},
     runtimePaneTitlesByTabId: {},
     ptyIdsByTabId: {},
@@ -108,3 +107,78 @@ describe('mounted worktree agent row subscriptions', () => {
     expect(rows[0].state).toBe('idle')
   })
 })
+
+it.each([100, 1000])(
+  'keeps unrelated mounted rows stable after equal replay then membership changes (%i workspaces)',
+  (count) => {
+    const ids = Array.from({ length: count }, (_, i) => `fleet-${i}`)
+    const updates = ids.map((worktreeId) => ({
+      paneKey: makePaneKey(`tab-${worktreeId}`, LEAF),
+      payload: { state: 'working' as const, agentType: 'claude', prompt: worktreeId },
+      timing: { updatedAt: 2_000_000, stateStartedAt: 2_000_000 },
+      routing: { tabId: `tab-${worktreeId}`, worktreeId }
+    }))
+    useAppStore.setState({
+      tabsByWorktree: Object.fromEntries(
+        ids.map((id) => [id, [makeTab({ id: `tab-${id}`, worktreeId: id })]])
+      ),
+      terminalLayoutsByTabId: Object.fromEntries(
+        ids.map((id) => [
+          `tab-${id}`,
+          {
+            root: {
+              type: 'split',
+              direction: 'horizontal',
+              first: { type: 'leaf', leafId: LEAF },
+              second: { type: 'leaf', leafId: '22222222-2222-4222-8222-222222222222' }
+            },
+            activeLeafId: LEAF,
+            expandedLeafId: null,
+            ptyIdsByLeafId: {}
+          }
+        ])
+      ),
+      agentStatusByPaneKey: {},
+      agentConversationsByPaneKey: {}
+    })
+    useAppStore.getState().setAgentStatuses(updates)
+    const outputs = new Map<string, DashboardAgentRow[]>()
+    const renders = new Map<string, number>()
+    function FleetProbe({ id }: { id: string }) {
+      outputs.set(id, useWorktreeAgentRows(id))
+      renders.set(id, (renders.get(id) ?? 0) + 1)
+      return null
+    }
+    act(() => root.render(ids.map((id) => <FleetProbe key={id} id={id} />)))
+    const before = new Map(outputs)
+    const rendered = new Map(renders)
+    act(() =>
+      useAppStore.getState().setAgentStatuses(
+        updates.map((update) => ({
+          ...update,
+          timing: { ...update.timing, isReplay: true }
+        }))
+      )
+    )
+    const target = ids[0]
+    const addedPane = makePaneKey(`tab-${target}`, '22222222-2222-4222-8222-222222222222')
+    act(() =>
+      useAppStore
+        .getState()
+        .setAgentStatus(
+          addedPane,
+          { state: 'working', agentType: 'claude', prompt: 'addressed new pane' },
+          undefined,
+          { updatedAt: 2_000_000, stateStartedAt: 2_000_000 },
+          { tabId: `tab-${target}`, worktreeId: target }
+        )
+    )
+    expect(outputs.get(target)).toHaveLength(2)
+    act(() => useAppStore.getState().removeAgentStatus(addedPane))
+    expect(outputs.get(target)).toHaveLength(1)
+    for (const id of ids.slice(1)) {
+      expect(outputs.get(id)).toBe(before.get(id))
+      expect(renders.get(id)).toBe(rendered.get(id))
+    }
+  }
+)

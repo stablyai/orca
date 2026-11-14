@@ -62,8 +62,7 @@ export function createUnreachableHostCleanupCandidate(
       cleanEditorTabCount: 0,
       browserTabCount: 0,
       diffCommentCount: workspace.diffComments?.length ?? 0,
-      newestDiffCommentAt: getNewestWorkspaceCleanupDiffCommentAt(workspace.diffComments),
-      retainedDoneAgentCount: 0
+      newestDiffCommentAt: getNewestWorkspaceCleanupDiffCommentAt(workspace.diffComments)
     },
     git: {
       clean: null,

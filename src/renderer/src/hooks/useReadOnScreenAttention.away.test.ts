@@ -52,7 +52,7 @@ beforeEach(() => {
       'away-tab': { root: { type: 'leaf', leafId: leaf }, activeLeafId: leaf, expandedLeafId: null }
     },
     agentStatusByPaneKey: {},
-    retainedAgentsByPaneKey: {},
+
     acknowledgedAgentsByPaneKey: {},
     unreadAgentCompletionPanes: {},
     unreadTerminalTabs: {},

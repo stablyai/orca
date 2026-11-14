@@ -4666,9 +4666,6 @@
             "ahead": "领先 {{ahead}}",
             "behind": "落后 {{behind}}",
             "activeAgents_other": "{{count}} 个活动智能体",
-            "completedAgents_other": "{{count}} 个已完成的智能体",
-            "activeAndCompletedAgents": "{{active}}，{{completed}}",
-            "completedAgentsRetained_other": "保留了 {{count}} 个已完成的智能体",
             "noTrackedAgents": "没有正在运行的受跟踪智能体",
             "noTerminalTabs": "没有终端标签页",
             "liveTerminalTabs_other": "{{count}} 个终端标签页中有 {{live}} 个正在运行",
@@ -19874,7 +19871,7 @@
               "comment": "评论",
               "prunable": "可修剪",
               "locked": "已锁定",
-              "retainedAgents": "已完成的代理"
+              "finishedAgents": "已完成的代理"
             }
           },
           "noSizes": "尚未测量工作区大小",
@@ -19932,7 +19929,7 @@
           "pinned": "已固定",
           "unread": "未读",
           "comment": "有评论",
-          "retainedDoneAgents": "已完成的代理记录",
+          "finishedAgents": "已完成的代理",
           "contextPresence": "打开的标签页、终端和评论",
           "completelyEmpty": "没有任何需保留的内容",
           "noWorkspaces": "未找到工作区",

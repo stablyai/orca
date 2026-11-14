@@ -59,7 +59,6 @@ export function slotSnapshot(state: AppState): SlotSnapshot {
         tabsByWorktree: state.tabsByWorktree,
         unifiedTabsByWorktree: state.unifiedTabsByWorktree,
         migrationUnsupportedByPtyId: state.migrationUnsupportedByPtyId,
-        retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
         ptyIdsByTabId: state.ptyIdsByTabId,
         terminalLayoutsByTabId: state.terminalLayoutsByTabId,
         runtimeAgentOrchestrationByPaneKey: state.runtimeAgentOrchestrationByPaneKey,
@@ -212,14 +211,6 @@ function changedBetween(
       const owner = entry && liveEntryWorktreeId(paneKey, entry, liveTabOwners, represented)
       if (owner) {
         result.add(owner)
-      }
-    }
-    for (const retained of [
-      before.layout.retainedAgentsByPaneKey[paneKey],
-      after.layout.retainedAgentsByPaneKey[paneKey]
-    ]) {
-      if (retained) {
-        result.add(retained.worktreeId)
       }
     }
   }

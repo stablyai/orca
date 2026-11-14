@@ -119,7 +119,7 @@ function lastReportedCandidate(
   ) {
     return null
   }
-  return { ...identity, priority: 0, refresh: false }
+  return { ...identity, providerSession: identity.providerSession, priority: 0, refresh: false }
 }
 
 function conversationRecords<T>(records: Record<string, T> | undefined, paneKey?: string): T[] {
@@ -127,12 +127,12 @@ function conversationRecords<T>(records: Record<string, T> | undefined, paneKey?
   return paneKey ? (addressed ? [addressed] : []) : Object.values(records ?? {})
 }
 
-/** Each tab's conversation: live, sleeping, retained, then its last reported identity. */
+/** Each tab's conversation: live, sleeping, then its last reported identity. */
 export function collectAgentPaneConversations<Agent extends AgentType>(
   state: AppState,
   isAgent: (agent: AgentType | null | undefined) => agent is Agent,
   options: {
-    /** Skip retained and sleeping records: those remember a conversation after its agent exited. */
+    /** Skip sleeping records: those remember a conversation after its agent exited. */
     runningAgentsOnly?: boolean
     includeLastReported?: boolean
     pane?: { worktreeId: string; paneKey: string }
@@ -147,8 +147,7 @@ export function collectAgentPaneConversations<Agent extends AgentType>(
         tabId: tabIdFromPaneKey(
           options.pane.paneKey,
           state.agentStatusByPaneKey[options.pane.paneKey]?.tabId ??
-            state.sleepingAgentSessionsByPaneKey[options.pane.paneKey]?.tabId ??
-            state.retainedAgentsByPaneKey[options.pane.paneKey]?.entry.tabId
+            state.sleepingAgentSessionsByPaneKey[options.pane.paneKey]?.tabId
         )
       }
     : options.tab
@@ -176,11 +175,13 @@ export function collectAgentPaneConversations<Agent extends AgentType>(
   const records = <T>(record: Record<string, T> | undefined) =>
     conversationRecords(record, options.pane?.paneKey)
   const candidates = new Map<string, RequestCandidate<Agent>>()
-  const retained = options.runningAgentsOnly ? [] : records(state.retainedAgentsByPaneKey)
   const sleeping = options.runningAgentsOnly ? [] : records(state.sleepingAgentSessionsByPaneKey)
 
   if (!options.runningAgentsOnly || options.includeLastReported) {
     for (const identity of records(state.agentConversationsByPaneKey)) {
+      if (!isAgent(identity.agent) || !identity.providerSession?.id) {
+        continue
+      }
       const candidate = lastReportedCandidate(state, identity, tabsById)
       if (candidate) {
         registerCandidate(state, tabsById, candidates, isAgent, candidate)
@@ -188,17 +189,6 @@ export function collectAgentPaneConversations<Agent extends AgentType>(
     }
   }
 
-  for (const entry of retained) {
-    registerCandidate(state, tabsById, candidates, isAgent, {
-      agent: entry.agentType,
-      paneKey: entry.entry.paneKey,
-      priority: 10,
-      providerSession: entry.entry.providerSession,
-      refresh: false,
-      tabId: entry.entry.tabId,
-      worktreeId: entry.worktreeId
-    })
-  }
   for (const record of sleeping) {
     registerCandidate(state, tabsById, candidates, isAgent, {
       agent: record.agent,

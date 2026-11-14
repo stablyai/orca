@@ -33,7 +33,7 @@ vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOri
 
 const mockApi = createStoreCascadesMockApi()
 
-// Sleep must clear live/retained status or mid-turn agents remain working until the 30-minute TTL.
+// Sleep must clear live status or mid-turn agents remain working until the 30-minute TTL.
 describe('shutdownWorktreeTerminals (sleep) — agent status hygiene', () => {
   beforeEach(() => {
     vi.clearAllMocks()

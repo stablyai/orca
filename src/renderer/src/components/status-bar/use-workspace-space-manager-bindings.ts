@@ -30,7 +30,6 @@ export function useWorkspaceSpaceManagerBindings() {
   const migrationUnsupportedByPtyId = useAppStore((state) => state.migrationUnsupportedByPtyId)
   const runtimePaneTitlesByTabId = useAppStore((state) => state.runtimePaneTitlesByTabId)
   const agentStatusEpoch = useAppStore((state) => state.agentStatusEpoch)
-  const retainedAgentsByPaneKey = useAppStore((state) => state.retainedAgentsByPaneKey)
   const openFiles = useAppStore((state) => state.openFiles)
   const editorDrafts = useAppStore((state) => state.editorDrafts)
   const browserTabsByWorktree = useAppStore((state) => state.browserTabsByWorktree)
@@ -85,7 +84,6 @@ export function useWorkspaceSpaceManagerBindings() {
     migrationUnsupportedByPtyId,
     runtimePaneTitlesByTabId,
     agentStatusEpoch,
-    retainedAgentsByPaneKey,
     openFiles,
     editorDrafts,
     browserTabsByWorktree,

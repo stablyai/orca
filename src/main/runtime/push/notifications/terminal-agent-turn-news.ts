@@ -71,7 +71,10 @@ export class TerminalAgentTurnNews<Prepared> {
     ) {
       return
     }
-    this.cancelPending(paneKey)
+    // Departure retracts occupancy; an accepted finish still owns its queued delivery.
+    if (change.to !== 'rest') {
+      this.cancelPending(paneKey)
+    }
     if (transition === 'prompt-submitted' || change.to === 'rest') {
       this.finishedTurnByPane.delete(paneKey)
     }
