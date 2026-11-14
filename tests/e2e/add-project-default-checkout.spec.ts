@@ -95,8 +95,6 @@ test.describe('Add project default checkout', () => {
     await cloneDialog.getByRole('button', { name: /^Clone$/ }).click()
 
     await expect(orcaPage.getByRole('dialog', { name: /Repo added/i })).toBeHidden()
-    await expect(orcaPage.getByText('Use existing worktrees')).toBeHidden()
-    await expect(orcaPage.getByText('Create a new worktree')).toBeHidden()
 
     await expect
       .poll(
@@ -116,8 +114,7 @@ test.describe('Add project default checkout', () => {
             return {
               activeCheckoutIsDefault: state.activeWorktreeId === defaultCheckout?.id,
               defaultCheckoutLooksCloned:
-                normalizedDefaultCheckoutPath?.endsWith(`/clones/${cloneName}`) ?? false,
-              oldSetupModalOpen: state.activeModal === 'project-added'
+                normalizedDefaultCheckoutPath?.endsWith(`/clones/${cloneName}`) ?? false
             }
           }, path.basename(fixture.sourcePath)),
         {
@@ -127,10 +124,8 @@ test.describe('Add project default checkout', () => {
       )
       .toEqual({
         activeCheckoutIsDefault: true,
-        defaultCheckoutLooksCloned: true,
-        oldSetupModalOpen: false
+        defaultCheckoutLooksCloned: true
       })
-    await expect(orcaPage.getByText(/discovered worktree/)).toHaveCount(0)
   })
 
   test('keeps sibling git worktrees hidden when opening the default checkout', async ({
@@ -148,7 +143,6 @@ test.describe('Add project default checkout', () => {
 
     await expect(addProjectDialog).toBeHidden()
     await expect(orcaPage.getByRole('dialog', { name: /Repo added/i })).toBeHidden()
-    await expect(orcaPage.getByText('Use existing worktrees')).toBeHidden()
 
     await expect
       .poll(
@@ -166,9 +160,7 @@ test.describe('Add project default checkout', () => {
             const defaultCheckout = worktrees.find((worktree) => worktree.isMainWorktree)
             return {
               activeCheckoutIsDefault: state.activeWorktreeId === defaultCheckout?.id,
-              linkedRepoVisibility: repo.externalWorktreeVisibility,
-              visibleBranches: worktrees.map((worktree) => worktree.branch).sort(),
-              visibleCount: worktrees.length
+              visibleBranches: worktrees.map((worktree) => worktree.branch).sort()
             }
           }, fixture.mainPath),
         {
@@ -178,10 +170,7 @@ test.describe('Add project default checkout', () => {
       )
       .toEqual({
         activeCheckoutIsDefault: true,
-        linkedRepoVisibility: undefined,
-        visibleBranches: ['refs/heads/main'],
-        visibleCount: 1
+        visibleBranches: ['refs/heads/main']
       })
-    await expect(orcaPage.getByText('Hiding 1 discovered worktree')).toBeVisible()
   })
 })

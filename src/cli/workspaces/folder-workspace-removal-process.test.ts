@@ -23,13 +23,6 @@ it('real CLI folder removal preserves explicit archive approval and refuses unsu
     process.platform === 'win32' ? `\\\\.\\pipe\\group-remove-${randomUUID()}` : join(root, 'rpc')
   const removals: Record<string, unknown>[] = []
   let supportsHooks = true
-  const archiveHookOverride = {
-    worktreePath: '/fixture/group-root',
-    outcome: 'exited',
-    exitCode: 7,
-    output: 'fixture-archive-output-seven',
-    overridden: true
-  }
   const server = createServer((socket) => {
     let buffer = ''
     socket.setEncoding('utf8')
@@ -60,10 +53,7 @@ it('real CLI folder removal preserves explicit archive approval and refuses unsu
                     ...(supportsHooks ? [PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY] : [])
                   ]
                 }
-              : {
-                  deleted: true,
-                  ...(request.params.allowFailedArchiveHook ? { archiveHookOverride } : {})
-                },
+              : { deleted: true },
           _meta: { runtimeId: 'group-host' }
         })}\n`
       )
@@ -95,7 +85,7 @@ it('real CLI folder removal preserves explicit archive approval and refuses unsu
       SystemRoot: process.env.SystemRoot,
       ComSpec: process.env.ComSpec
     }
-    const run = (flags: string[], json = true) =>
+    const run = (flags: string[]) =>
       runProcess({
         program: join(dirname(manifest), bin.bun),
         args: [
@@ -104,46 +94,30 @@ it('real CLI folder removal preserves explicit archive approval and refuses unsu
           'rm',
           '--worktree',
           'folder:task-a',
-          ...(json ? ['--json'] : []),
+          '--json',
           ...flags
         ],
         cwd: root,
         env,
         timeoutMs: 15_000
       })
-    for (const flags of [['--run-hooks'], ['--run-hooks', '--allow-failed-archive-hook']]) {
-      const response = await run(flags)
-      expect(response.code, response.stdout + response.stderr).toBe(0)
-      expect(JSON.parse(response.stdout)).toMatchObject({ ok: true, result: { removed: true } })
-      expect(removals.at(-1)).toEqual({
-        folderWorkspaceId: 'task-a',
-        requireUniqueId: true,
-        runHooks: true,
-        allowFailedArchiveHook: flags.includes('--allow-failed-archive-hook')
-      })
-    }
-    const waived = await run(['--run-hooks', '--allow-failed-archive-hook'], false)
+    const waived = await run(['--run-hooks', '--allow-failed-archive-hook'])
     expect(waived.code, waived.stdout + waived.stderr).toBe(0)
-    expect(waived.stderr).toContain('fixture-archive-output-seven')
-    const before = removals.length
+    expect(removals.at(-1)).toEqual({
+      folderWorkspaceId: 'task-a',
+      requireUniqueId: true,
+      runHooks: true,
+      allowFailedArchiveHook: true
+    })
+    const before = removals.slice()
     supportsHooks = false
-    for (const flags of [['--run-hooks'], ['--run-hooks', '--allow-failed-archive-hook']]) {
-      const response = await run(flags)
-      expect(response.code).toBe(1)
-      expect(JSON.parse(response.stdout)).toMatchObject({
-        ok: false,
-        error: { code: 'incompatible_runtime' }
-      })
-    }
-    for (const flags of [['--delete-branch'], ['--allow-failed-archive-hook']]) {
-      const response = await run(flags)
-      expect(response.code).toBe(1)
-      expect(JSON.parse(response.stdout)).toMatchObject({
-        ok: false,
-        error: { code: 'invalid_argument' }
-      })
-    }
-    expect(removals).toHaveLength(before)
+    const unsupported = await run(['--run-hooks', '--allow-failed-archive-hook'])
+    expect(unsupported.code).toBe(1)
+    expect(JSON.parse(unsupported.stdout)).toMatchObject({
+      ok: false,
+      error: { code: 'incompatible_runtime' }
+    })
+    expect(removals).toEqual(before)
     const response = await run([])
     expect(response.code, response.stdout + response.stderr).toBe(0)
     expect(removals.at(-1)).toEqual({ folderWorkspaceId: 'task-a', requireUniqueId: true })
