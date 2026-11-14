@@ -39,7 +39,6 @@ import { resolvePaneAgentOwner } from '../../../../../../shared/agent-status/ide
 import {
   resolveTitleDerivedAgentType,
   resolveTitleDerivedPaneAgent,
-  TITLE_AGENT_LABEL_TO_TYPE,
   type TitleDerivedPaneForeground
 } from './title-derived-pane-agent-identity'
 import { translate } from '@/i18n/i18n'
@@ -154,23 +153,19 @@ function buildTitleDerivedAgentRow(args: {
     ownerIsLaunch: Boolean(args.tab.launchAgent)
   })
   const isClaudeAgentsTitle = isClaudeManagementTitle(title)
-  // Claude management and Cursor’s status-less native titles still identify idle panes without claiming active work.
+  const titleAgentType = isClaudeAgentsTitle ? 'claude' : resolveTitleDerivedAgentType(title)
+  // Prime’s native title carries workspace text, not turn status.
   const titleStatus = isClaudeAgentsTitle
     ? 'idle'
-    : (detectAgentStatusFromTitle(title) ?? (isCursorAgentTitle(title) ? 'idle' : null))
+    : titleAgentType === 'prime-agent'
+      ? null
+      : (detectAgentStatusFromTitle(title) ?? (isCursorAgentTitle(title) ? 'idle' : null))
   const label = isClaudeAgentsTitle ? 'Claude Code' : getAgentLabel(title)
   if (!isTerminalLeafId(args.leafId)) {
     return null
   }
   const paneKey = makePaneKey(args.tab.id, args.leafId)
   const orchestration = args.runtimeAgentOrchestrationByPaneKey?.[paneKey]
-  // Status frames prove activity, not ownership; a title-derived identity also needs an agent label.
-  const titleAgentType =
-    !titleStatus || !label
-      ? null
-      : isClaudeAgentsTitle
-        ? 'claude'
-        : resolveTitleDerivedAgentType(title, label, args.ownerAgentType)
   const agentType = resolveTitleDerivedPaneAgent({
     title,
     defaultTitle: args.tab.defaultTitle,
@@ -185,12 +180,7 @@ function buildTitleDerivedAgentRow(args: {
   // Why: the title sets activity only; a plain title on a process-identified pane is idle.
   // Jcode's own tail outranks agent names its conversation title happens to mention.
   const status = jcodePaneTitleStatus(title, agentType) ?? titleStatus ?? 'idle'
-  const rowLabel =
-    agentType === titleAgentType &&
-    label &&
-    (agentType === 'unknown' || TITLE_AGENT_LABEL_TO_TYPE[label] === agentType)
-      ? label
-      : formatAgentTypeLabel(agentType)
+  const rowLabel = formatAgentTypeLabel(agentType)
   const rowState = titleStatusToRowState(status)
   const secondary =
     status === 'permission'
@@ -254,14 +244,13 @@ export function resolveAgentTypeFromTerminalTitle(
     return null
   }
   const normalizedTitle = normalizeCompatibleAgentTitleForOwner(title, ownerAgentType, options)
-  const label = getAgentLabel(normalizedTitle)
-  return label
-    ? (resolveCompatibleAgentTypeForOwner(
-        resolveTitleDerivedAgentType(normalizedTitle, label, ownerAgentType),
-        ownerAgentType,
-        options
-      ) ?? null)
-    : null
+  return (
+    resolveCompatibleAgentTypeForOwner(
+      resolveTitleDerivedAgentType(normalizedTitle),
+      ownerAgentType,
+      options
+    ) ?? null
+  )
 }
 
 function titleStatusToRowState(
