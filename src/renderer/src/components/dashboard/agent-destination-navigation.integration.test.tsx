@@ -277,6 +277,47 @@ describe('Dashboard and retained sidebar destination contract', () => {
     }
   )
 
+  it('opens a live sidebar row on its card host', async () => {
+    const worktree = { ...makeCreatedAgentWorktree(), hostId: WORKSPACE_HOST }
+    seedAlreadyActiveWorktree(worktree, {
+      activeWorktreeId: null,
+      activeWorkspaceExecutionHostId: null,
+      agentActivityDisplayMode: 'compact',
+      terminalLayoutsByTabId: {
+        'tab-1': { root: { type: 'leaf', leafId: LEAF }, activeLeafId: LEAF, expandedLeafId: null }
+      }
+    })
+    useAppStore
+      .getState()
+      .setAgentStatus(
+        makePaneKey('tab-1', LEAF),
+        { state: 'working', prompt: 'Open this pane', agentType: 'codex' },
+        'Codex',
+        undefined,
+        { worktreeId: worktree.id }
+      )
+    const sidebar = render(
+      <TooltipProvider>
+        <WorktreeCardAgents worktreeId={worktree.id} executionHostId={WORKSPACE_HOST} />
+      </TooltipProvider>
+    )
+    const row = sidebar.container.querySelector('.compact-agent-row')
+    if (!row) {
+      throw new Error('Expected the live sidebar row')
+    }
+    fireEvent.click(row)
+    await vi.waitFor(() =>
+      expect(effects.environmentCall).toHaveBeenCalledWith(
+        'host-A',
+        expect.objectContaining({
+          method: 'session.tabs.activate',
+          params: expect.objectContaining({ leafId: LEAF })
+        })
+      )
+    )
+    expect(useAppStore.getState().activeWorkspaceExecutionHostId).toBe(WORKSPACE_HOST)
+  })
+
   it('notifies the exact live retained terminal owner instead of the workspace default', async () => {
     const worktree = { ...makeCreatedAgentWorktree(), hostId: WORKSPACE_HOST }
     seedAlreadyActiveWorktree(worktree, {

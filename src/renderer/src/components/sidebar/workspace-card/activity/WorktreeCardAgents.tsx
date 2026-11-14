@@ -31,15 +31,18 @@ import {
   buildCollapsedChildAgentSignalStates
 } from './worktree-card-idle-child-agents'
 import { recomputeOn } from '@/lib/recompute-on'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
 type Props = {
   worktreeId: string
+  executionHostId?: ExecutionHostId
   agents?: DashboardAgentRowData[]
   className?: string
 }
 
 const WorktreeCardAgents = React.memo(function WorktreeCardAgents({
   worktreeId,
+  executionHostId,
   agents: precomputedAgents,
   className
 }: Props) {
@@ -50,17 +53,26 @@ const WorktreeCardAgents = React.memo(function WorktreeCardAgents({
     return null
   }
   // Only non-empty bodies mount the 30s clock, avoiding timer cost for idle worktrees.
-  return <WorktreeCardAgentsBody worktreeId={worktreeId} agents={agents} className={className} />
+  return (
+    <WorktreeCardAgentsBody
+      worktreeId={worktreeId}
+      executionHostId={executionHostId}
+      agents={agents}
+      className={className}
+    />
+  )
 })
 
 type BodyProps = {
   worktreeId: string
+  executionHostId?: ExecutionHostId
   agents: DashboardAgentRowData[]
   className?: string
 }
 
 const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
   worktreeId,
+  executionHostId,
   agents,
   className
 }: BodyProps) {
@@ -147,7 +159,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     [sendPromptToSidebarAgentTarget]
   )
 
-  const handleActivateAgentTab = useWorktreeAgentActivation(worktreeId)
+  const handleActivateAgentTab = useWorktreeAgentActivation(worktreeId, executionHostId)
   const handleActivateRetainedAgent = useCallback(
     (tabId: string, paneKey: string) => activateRetainedAgentRow(worktreeId, tabId, paneKey),
     [worktreeId]

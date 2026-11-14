@@ -1,16 +1,18 @@
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
-import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
 import { activateTerminalTabOnOwner } from '@/lib/workspace/tabs/terminal-tab-owner-activation'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { dismissStaleAgentRowByKey } from '../../../terminal-pane/agent-status/stale-agent-row'
 import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
-export function useWorktreeAgentActivation(worktreeId: string) {
+export function useWorktreeAgentActivation(worktreeId: string, executionHostId?: ExecutionHostId) {
   return useCallback(
-    (tabId: string, paneKey: string) => activateWorktreeAgentPane(worktreeId, tabId, paneKey),
-    [worktreeId]
+    (tabId: string, paneKey: string) =>
+      activateWorktreeAgentPane(worktreeId, tabId, paneKey, executionHostId),
+    [executionHostId, worktreeId]
   )
 }
 
@@ -18,7 +20,8 @@ export function useWorktreeAgentActivation(worktreeId: string) {
 export function activateWorktreeAgentPane(
   worktreeId: string,
   tabId: string,
-  paneKey: string
+  paneKey: string,
+  executionHostId?: ExecutionHostId
 ): void {
   const parsed = parsePaneKey(paneKey)
   if (!parsed) {
@@ -35,8 +38,13 @@ export function activateWorktreeAgentPane(
     dismissStaleAgentRowByKey(paneKey)
     return
   }
-  // Use shared activation for cross-repo reveal and navigation history.
-  activateAndRevealWorktree(worktreeId)
+  // Use the workspace dispatcher for cross-repo reveal, navigation history and folder path gates.
+  if (
+    activateAndRevealWorkspace(worktreeId, executionHostId ? { executionHostId } : undefined) ===
+    false
+  ) {
+    return
+  }
   const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
   if (tabs.some((t) => t.id === tabId)) {
     activateTabAndFocusPane(tabId, parsed.leafId, {
