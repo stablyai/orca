@@ -2,7 +2,7 @@ import type {
   MobileViewPatch,
   MobileViewState,
   WorkspaceViewSettings
-} from '../../worktree/workspace-view-settings'
+} from '../../worktree/workspace-list/workspace-view-settings'
 
 // Show the desired value until the desktop answers; a slow response is not a refusal.
 export type PendingViewChange = { opId: number; sentAt: number } & (

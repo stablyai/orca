@@ -1,6 +1,6 @@
 import { Activity } from 'lucide-react-native'
 import { Animated, View, type ViewStyle } from 'react-native'
-import type { AgentDotState } from '../worktree/agent-row-display'
+import type { AgentDotState } from '../worktree/agent-lineage/agent-row-display'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'

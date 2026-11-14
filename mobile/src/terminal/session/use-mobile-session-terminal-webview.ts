@@ -3,7 +3,7 @@ import { MobileTerminalInputSender } from '../input-delivery/mobile-terminal-inp
 import '../input-delivery/mobile-terminal-input-owner'
 import type { TerminalInputEnqueueOptions } from '../input-delivery/mobile-terminal-input-owner'
 import { TERMINAL_ORDERED_INPUT_CAPABILITY } from '../../../../src/shared/terminal/input/terminal-ordered-input'
-import { useRouteCapability } from '../../worktree/use-workspace-client'
+import { useRouteCapability } from '../../worktree/execution-hosts/use-workspace-client'
 import { pendingSelectionWantsHandle } from '../../session/tabs/pending-session-selection'
 import { useEffect, useCallback, useRef } from 'react'
 import type { TerminalWebViewHandle } from '../webview/terminal-webview-contract'

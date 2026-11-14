@@ -64,7 +64,7 @@ vi.mock('../host-catalog/host-store', () => ({
 }))
 
 import '../storage/preferences'
-import '../worktree/last-visited-worktree-by-host'
+import '../worktree/navigation/last-visited-worktree-by-host'
 import { usePageHostSnapshot, type PageHostSnapshotView } from './use-page-host-snapshot'
 import { persistMirrored, readMirroredStorage } from '../storage/mirrored-storage-keys'
 

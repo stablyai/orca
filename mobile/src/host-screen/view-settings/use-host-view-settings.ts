@@ -1,14 +1,14 @@
 import { useCallback, useRef } from 'react'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../transport/connection/connection-state'
-import { getMobileWorkspaceLineageGroupKey } from '../../worktree/mobile-workspace-lineage'
+import { getMobileWorkspaceLineageGroupKey } from '../../worktree/agent-lineage/mobile-workspace-lineage'
 import {
   applyDesktopViewSettings,
   buildWorkspaceViewSettingsUpdate,
   type MobileViewPatch,
   type MobileViewState,
   type WorkspaceViewSettings
-} from '../../worktree/workspace-view-settings'
+} from '../../worktree/workspace-list/workspace-view-settings'
 import {
   changedWorkspaceRowFilters,
   NO_WORKSPACE_ROW_FILTERS
@@ -31,7 +31,10 @@ import {
   useSwitchedHostPendingViewChanges,
   type PendingViewStatus
 } from './use-host-pending-view-changes'
-import type { FilterState, WorkspaceListItem } from '../../worktree/workspace-list-types'
+import type {
+  FilterState,
+  WorkspaceListItem
+} from '../../worktree/workspace-list/workspace-list-types'
 
 const REFUSED_NOTE = 'The desktop did not take that change.'
 const NOTHING_PENDING: PendingViewStatus = { pending: [], stale: false }

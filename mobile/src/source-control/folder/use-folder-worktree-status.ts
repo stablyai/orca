@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import type { ExecutionHostId } from '../../../../src/shared/execution-host'
 import { useHostQuery } from '../../query/host-query'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { scopeRpcClientToExecutionHost } from '../../worktree/execution-host-scoped-rpc-client'
+import { scopeRpcClientToExecutionHost } from '../../worktree/execution-hosts/execution-host-scoped-rpc-client'
 import {
   gitStatusSummaryQuery,
   serverGitStatusSummaryQuery

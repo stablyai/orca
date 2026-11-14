@@ -20,7 +20,7 @@ import { mobileTuiAgentLabel } from '../../agents/mobile-tui-agents'
 import { colors } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { formatTimeAgo } from '../../worktree/agent-row-display'
+import { formatTimeAgo } from '../../worktree/agent-lineage/agent-row-display'
 import { homeListStyles as list } from '../home-list-styles'
 
 /** A scheduled automation: tap opens the page, the switch pauses or resumes it. */

@@ -1,8 +1,8 @@
 import { useMemo } from 'react'
 
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
-import { useReachableServerClients } from '../worktree/use-reachable-server-clients'
-import { withServerHosts } from '../worktree/server-workspaces'
+import { useReachableServerClients } from '../worktree/execution-hosts/use-reachable-server-clients'
+import { withServerHosts } from '../worktree/execution-hosts/server-workspaces'
 import { NewWorktreeModal } from './NewWorktreeModal'
 import type { NewWorktreeModalProps } from './new-worktree-modal-types'
 

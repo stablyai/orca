@@ -11,7 +11,7 @@ import {
   MOBILE_GITHUB_MARK_PR_DRAFT_RUNTIME_CAPABILITY,
   MOBILE_GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY
 } from '../../../../src/shared/source-control/runtime/source-control-runtime-capabilities'
-import { useRouteCapability } from '../../worktree/use-workspace-client'
+import { useRouteCapability } from '../../worktree/execution-hosts/use-workspace-client'
 import type { MobilePrTab } from './use-mobile-pr-tab'
 
 // Everything that should not compete with Merge; Close is red and last.
