@@ -223,36 +223,59 @@ describe('mobile session tabs: a process started after its pane last reported', 
     vi.useRealTimers()
   })
 
-  it('publishes identity only, and legacy done to clients that cannot read it', async () => {
-    const completedBeforeRestart: AgentStatusIpcPayload = {
-      paneKey: PANE_KEY,
-      state: 'done',
-      prompt: 'ship it',
-      agentType: 'codex',
-      connectionId: null,
-      receivedAt: T0 - 120_000,
-      stateStartedAt: T0 - 120_000,
-      tabId: TAB_ID,
-      worktreeId: WORKTREE_ID,
-      providerSession: PROVIDER_SESSION
-    }
-    const runtime = await createRuntime([completedBeforeRestart])
-    runtime.noteTerminalSpawnCommit({ id: PTY_ID })
-    runtime.onPtyData(PTY_ID, '\x1b]0;zsh\x07', T0)
+  it.each(['headless', 'published'] as const)(
+    'publishes %s identity only after a new process starts',
+    async (route) => {
+      const completedBeforeRestart: AgentStatusIpcPayload = {
+        paneKey: PANE_KEY,
+        state: 'done',
+        prompt: 'ship it',
+        agentType: 'codex',
+        connectionId: null,
+        receivedAt: T0 - 120_000,
+        stateStartedAt: T0 - 120_000,
+        tabId: TAB_ID,
+        worktreeId: WORKTREE_ID,
+        providerSession: PROVIDER_SESSION
+      }
+      const rows = [completedBeforeRestart]
+      const runtime = await createRuntime(rows)
+      runtime.noteTerminalSpawnCommit({ id: PTY_ID })
+      vi.setSystemTime(T0 + 20)
+      runtime.onPtyData(PTY_ID, '\x1b]0;zsh\x07', T0 + 20)
+      if (route === 'published') {
+        publishRendererWorkingPane(runtime, 'zsh', {
+          state: 'done',
+          prompt: '',
+          paneKey: PANE_KEY,
+          agentType: 'codex',
+          updatedAt: T0 - 120_000,
+          stateStartedAt: T0 - 120_000,
+          stateHistory: [],
+          paneSleep: { ptyId: PTY_ID }
+        })
+      }
 
-    const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
-    const tab = result.tabs[0]
-    expect(tab?.type === 'terminal' ? tab.agentStatus : null).toEqual(
-      expect.objectContaining({ restoredUnconfirmed: true, providerSession: PROVIDER_SESSION })
-    )
-    const legacy = projectSessionTabAgentStatus(result, 'runtime', []).tabs[0]
-    expect(legacy?.type === 'terminal' ? legacy.agentStatus : null).toEqual(
-      expect.objectContaining({ state: 'done', providerSession: PROVIDER_SESSION })
-    )
-    expect(legacy?.type === 'terminal' ? legacy.agentStatus : null).not.toHaveProperty(
-      'restoredUnconfirmed'
-    )
-  })
+      const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+      const tab = result.tabs[0]
+      expect(tab?.type === 'terminal' ? tab.agentStatus : null).toEqual(
+        expect.objectContaining({ restoredUnconfirmed: true, providerSession: PROVIDER_SESSION })
+      )
+      const legacy = projectSessionTabAgentStatus(result, 'runtime', []).tabs[0]
+      expect(legacy?.type === 'terminal' ? legacy.agentStatus : null).toEqual(
+        expect.objectContaining({ state: 'done', providerSession: PROVIDER_SESSION })
+      )
+      expect(legacy?.type === 'terminal' ? legacy.agentStatus : null).not.toHaveProperty(
+        'restoredUnconfirmed'
+      )
+      rows.length = 0
+      vi.setSystemTime(T0 + 40)
+      runtime.onPtyData(PTY_ID, '\x1b]0;⠧ New turn\x07', T0 + 40)
+      const successor = await projectAgentStatus(runtime)
+      expect(successor?.state).toBe('working')
+      expect(successor).not.toHaveProperty('paneSleep')
+    }
+  )
 })
 
 // A title repaint and physical Sleep must not make the same finished turn newly unread.
@@ -267,9 +290,14 @@ describe('mobile session tabs: accepted completion identity through Sleep', () =
     vi.useRealTimers()
   })
 
-  it.each(['headless', 'published'] as const)(
-    'preserves the accepted end on every %s output through stop and settlement',
-    async (route) => {
+  it.each([
+    { route: 'headless', stopTitle: 'root@host: ~/repo' },
+    { route: 'published', stopTitle: 'root@host: ~/repo' },
+    { route: 'headless', stopTitle: 'zsh' },
+    { route: 'published', stopTitle: 'zsh' }
+  ])(
+    'preserves the accepted end on $route output through $stopTitle and settlement',
+    async ({ route, stopTitle }) => {
       const rows: AgentStatusIpcPayload[] = []
       const server = new AgentHookServer()
       server.setListener(() =>
@@ -333,15 +361,16 @@ describe('mobile session tabs: accepted completion identity through Sleep', () =
             prompt: '',
             paneKey: PANE_KEY,
             agentType: 'claude',
-            updatedAt: T0 + 20,
+            updatedAt: T0 + 1_000,
             stateStartedAt: T0 + 20,
             stateHistory: []
           })
+          expect((await projectAgentStatus(runtime))?.updatedAt).toBeGreaterThanOrEqual(T0 + 1_000)
         }
         await observe()
         finishStop = runtime.intentionalPtyStops.mark(PTY_ID, 'reversible', null)
         vi.setSystemTime(T0 + 60_000)
-        runtime.onPtyData(PTY_ID, '\x1b]0;root@host: ~/repo\x07', T0 + 60_000)
+        runtime.onPtyData(PTY_ID, `\x1b]0;${stopTitle}\x07`, T0 + 60_000)
         await observe()
         await runtime.onPtyExit(PTY_ID, 0, undefined, { providerExitObserved: true })
         finishStop(true)

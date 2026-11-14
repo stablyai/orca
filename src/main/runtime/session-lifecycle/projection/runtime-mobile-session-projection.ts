@@ -111,12 +111,13 @@ export function projectRuntimeMobileSessionTabs(
       : `${tab.parentTabId}:${legacyPaneId ?? tab.leafId}`
     const mobileStatusPty = livePty ?? pty
     // Use one main hook lookup for both headless title ownership and status to prevent divergence.
-    const retainedAgentStatus = tab.agentStatus
-      ? null
-      : host.getRetainedStatus(paneKey, liveLeafPty ?? mobileStatusPty, tab, getStatusRows)
-    const hookAgentStatus = tab.agentStatus
-      ? selectRuntimeHookAgentRowForPane(getHookRowsForPane(paneKey))
-      : null
+    const retainedAgentStatus = host.getRetainedStatus(
+      paneKey,
+      liveLeafPty ?? mobileStatusPty,
+      tab,
+      getStatusRows
+    )
+    const hookAgentStatus = selectRuntimeHookAgentRowForPane(getHookRowsForPane(paneKey))
     // Do not revive rejected persisted tab.ptyId; after restart it may name another pane and publish its title here.
     const trackerOnlyTitle = host.getTrackedTitle(liveLeafPtyId ?? pty?.ptyId ?? null)
     const displayLeaf = leaf
@@ -178,28 +179,34 @@ export function projectRuntimeMobileSessionTabs(
     const statusPty = nativeStatusPty
       ? getPtyDisplayRecord(nativeStatusPty, host.getTitleDisplayClear(nativeStatusPty.ptyId))
       : null
-    const acceptedRow = hookAgentStatus?.live
-    // A renderer's finished copy cannot replace the host's accepted completion identity.
-    const acceptedStatus =
+    const acceptedRow = retainedAgentStatus ?? hookAgentStatus.live
+    // Resolve the host record once; identity-only and title fallbacks are already adjudicated.
+    const resolvedHostStatus =
       tab.agentStatus &&
       acceptedRow?.payload.state === 'done' &&
       (tab.agentStatus.state === 'done' || tab.agentStatus.updatedAt <= acceptedRow.updatedAt)
-        ? host.buildPtyStatus(statusPty, tab, null, null, getHookRowsForPane).agentStatus
+        ? host.buildPtyStatus(statusPty, tab, null, retainedAgentStatus, getHookRowsForPane)
+            .agentStatus
         : null
-    const normalizedTabAgentStatus = renewRuntimeMobileAgentStatusFromPtyTitle(
-      tab.agentStatus
-        ? normalizeCompatibleAgentStatusEntryForOwner(
-            {
-              ...(acceptedStatus ?? tab.agentStatus),
-              ...(hookProviderSession ? { providerSession: hookProviderSession } : {})
-            },
-            ownerAgent,
-            ownerOptions
-          )
-        : null,
-      statusPty,
-      { preserveQuestionUnderShellTitle: true }
-    )
+    const normalizedTabAgentStatus = resolvedHostStatus
+      ? {
+          ...resolvedHostStatus,
+          updatedAt: Math.max(resolvedHostStatus.updatedAt, tab.agentStatus?.updatedAt ?? 0)
+        }
+      : renewRuntimeMobileAgentStatusFromPtyTitle(
+          tab.agentStatus
+            ? normalizeCompatibleAgentStatusEntryForOwner(
+                {
+                  ...tab.agentStatus,
+                  ...(hookProviderSession ? { providerSession: hookProviderSession } : {})
+                },
+                ownerAgent,
+                ownerOptions
+              )
+            : null,
+          statusPty,
+          { preserveQuestionUnderShellTitle: true }
+        )
     // Live prompt/tool status must survive non-agent titles or interactivePrompt disappears.
     const hasLiveAgentSignal =
       normalizedTabAgentStatus?.interactivePrompt != null ||

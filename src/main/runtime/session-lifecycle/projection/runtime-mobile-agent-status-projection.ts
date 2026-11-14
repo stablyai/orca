@@ -53,10 +53,9 @@ export function renewRuntimeMobileAgentStatusFromPtyTitle(
   // Idle/shutdown titles describe presence, not a second end of an already completed turn.
   if (
     status.state === 'done' &&
-    (status.paneSleep ||
-      (status.restoredUnconfirmed !== true &&
-        pty.lastAgentStatus !== 'working' &&
-        pty.lastAgentStatus !== 'permission'))
+    status.restoredUnconfirmed !== true &&
+    pty.lastAgentStatus !== 'working' &&
+    pty.lastAgentStatus !== 'permission'
   ) {
     const updatedAt = Math.max(status.updatedAt, titleEvidenceAt ?? 0)
     return updatedAt === status.updatedAt
