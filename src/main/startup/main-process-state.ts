@@ -17,7 +17,7 @@ import type { DesktopPushService } from '../runtime/push/desktop-push-service'
 import type { StarNagService } from '../star-nag/service'
 import type { AgentAwakeService } from '../power/agent-awake-service'
 import type { CrashReportStore } from '../crash-reporting/reports/crash-report-store'
-import type { AutomationService } from '../automations/service'
+import type { AutomationService } from '../automations/automation-service'
 import type { PluginService } from '../plugins/plugin-service'
 import type { PluginKillListService } from '../plugins/catalog/plugin-kill-list-service'
 import type { PluginInstallStatsService } from '../plugins/catalog/plugin-install-stats-service'
@@ -116,6 +116,7 @@ export const mainProcessState = {
   crashReports: null as CrashReportStore | null,
   unsubscribeAgentAwakeStatusChanges: null as (() => void) | null,
   unsubscribeSystemResumeBroadcast: null as (() => void) | null,
+  unsubscribeWakeSignalClock: null as (() => void) | null,
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: widens the null slot to the stop function assigned by main-process-observers.
   stopDesktopPresenceReporter: null as (() => void) | null,
   watcherShutdownPromise: null as Promise<void> | null,

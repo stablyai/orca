@@ -40,7 +40,7 @@ export const AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY =
 export const SESSION_TERMINAL_SCROLLBACK_READ_RUNTIME_CAPABILITY =
   'session.terminal-scrollback-read.v1' as const
 
-// Why: a host with this answers terminal.agentId, so a client offers Copy Agent ID for its
+// Why: a host with this answers terminal.agentId, so a client offers Copy Orca Session ID for its
 // sleeping panes; older hosts lack the method, so the item stays hidden there.
 export const TERMINAL_AGENT_ID_RUNTIME_CAPABILITY = 'terminal.agent-id.v1' as const
 

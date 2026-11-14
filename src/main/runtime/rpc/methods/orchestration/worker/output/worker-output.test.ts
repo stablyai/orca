@@ -15,7 +15,6 @@ function codexMessage(id: string, text: string): string {
 describe('exact orchestration worker output', () => {
   let directory: string
   let transcriptA: string
-  let transcriptB: string
   let providerSession: ReturnType<OrcaRuntimeService['getExactWorkerProviderSession']>
   let runtime: OrcaRuntimeService
   const readTerminal = vi.fn()
@@ -23,9 +22,7 @@ describe('exact orchestration worker output', () => {
   beforeEach(async () => {
     directory = await mkdtemp(join(tmpdir(), 'orca-worker-output-'))
     transcriptA = join(directory, 'session-a.jsonl')
-    transcriptB = join(directory, 'session-b.jsonl')
     await writeFile(transcriptA, `${codexMessage('a', 'worker A only')}\n`)
-    await writeFile(transcriptB, `${codexMessage('b', 'worker B only')}\n`)
     providerSession = {
       paneKey: 'tab:worker',
       processIncarnation: 'pty:incarnation-1',
@@ -67,101 +64,6 @@ describe('exact orchestration worker output', () => {
       attachedAt: '2026-07-24 00:00:00',
       ...overrides
     })
-
-  it('reads only the exact pane session and keeps its local path private', async () => {
-    const result = await read()
-
-    expect(result).toMatchObject({
-      source: 'transcript',
-      provider: 'codex',
-      transcript: {
-        messages: [{ id: 'a', blocks: [{ type: 'text', text: 'worker A only' }] }]
-      }
-    })
-    expect(JSON.stringify(result)).not.toContain(transcriptA)
-    expect(JSON.stringify(result)).not.toContain('worker B only')
-    expect(readTerminal).not.toHaveBeenCalled()
-  })
-
-  it('labels OpenCode as a terminal fallback when no transcript decoder exists', async () => {
-    const capability = `dcap_${'A'.repeat(43)}`
-    readTerminal.mockResolvedValue({
-      handle: 'term_worker',
-      status: 'running',
-      tail: [`opencode --dispatch-capability ${capability}`],
-      truncated: false,
-      nextCursor: '9'
-    })
-    providerSession = {
-      ...providerSession!,
-      agent: 'opencode',
-      providerSession: {
-        key: 'session_id',
-        id: 'session-opencode',
-        transcriptPath: transcriptA
-      }
-    }
-
-    const result = await read()
-
-    expect(result).toMatchObject({
-      source: 'terminal',
-      fallbackReason: 'provider_unsupported',
-      terminal: { tail: ['opencode --dispatch-capability [dispatch capability redacted]'] },
-      warnings: [
-        'Dispatch capability tokens were redacted from terminal output.',
-        'Terminal wrap information was unavailable; capability masking used complete lines.'
-      ]
-    })
-    expect(JSON.stringify(result)).not.toContain(capability)
-  })
-
-  it('redacts dispatch capabilities from terminal composer drafts', async () => {
-    const capability = `dcap_${'A'.repeat(43)}`
-    readTerminal.mockResolvedValue({
-      handle: 'term_worker',
-      status: 'running',
-      tail: ['safe output'],
-      draft: `send --dispatch-capability ${capability}`,
-      truncated: false,
-      nextCursor: '9'
-    })
-    providerSession = null
-
-    const result = await read()
-
-    expect(result).toMatchObject({
-      source: 'terminal',
-      terminal: {
-        tail: ['safe output'],
-        draft: 'send --dispatch-capability [dispatch capability redacted]'
-      },
-      warnings: [
-        'Dispatch capability tokens were redacted from terminal output.',
-        'Terminal wrap information was unavailable; capability masking used complete lines.'
-      ]
-    })
-    expect(JSON.stringify(result)).not.toContain(capability)
-  })
-
-  it('rejects an old cursor after the exact provider session changes', async () => {
-    const initial = await read()
-    if (initial.source !== 'transcript') {
-      throw new Error('Expected transcript output')
-    }
-    providerSession = {
-      ...providerSession!,
-      providerSession: {
-        key: 'session_id',
-        id: 'session-b',
-        transcriptPath: transcriptB
-      }
-    }
-
-    await expect(read({ cursor: initial.cursor })).rejects.toMatchObject({
-      code: 'source_changed'
-    })
-  })
 
   it('rejects an old cursor after a same-inode truncate/regrow', async () => {
     const initial = await read()

@@ -25,7 +25,7 @@ import {
   readAgentLaunchModeSettings
 } from '../../../../agent-launch/agent-launch-mode'
 import type { RpcContext } from '../../core'
-import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch-params'
+import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch/agent-launch-params'
 import { agentLaunchOperationCallerKey } from './agent-launch-replay'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 

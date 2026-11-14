@@ -30,7 +30,7 @@
 7 src/main/antigravity/native-file-credentials.ts
 12 src/main/artifacts/artifact-create-intent-store.ts
 2 src/main/artifacts/artifact-share-record-store.ts
-1 src/main/automations/external-manager-discovery.ts
+1 src/main/automations/external-managers/external-manager-discovery.ts
 7 src/main/bitbucket/credential-store.ts
 1 src/main/browser-passwords/browser-password-chromium-import.ts
 2 src/main/browser-passwords/browser-password-vault-file.ts
@@ -182,6 +182,7 @@
 5 src/main/daemon/admission/host-terminal-ledger.ts
 1 src/main/daemon/admission/legacy-restore-records.ts
 1 src/main/daemon/daemon-entry.ts
+1 src/main/daemon/daemon-process-name.ts
 1 src/main/daemon/endpoint/identity/daemon-endpoint-incarnation.ts
 3 src/main/daemon/endpoint/identity/daemon-pid-identity.ts
 2 src/main/daemon/endpoint/identity/daemon-pid-record-quarantine.ts
@@ -251,7 +252,7 @@
 1 src/main/foreign-sqlite-readers/foreign-sqlite-reader-spawn.ts
 1 src/main/foreign-sqlite-readers/readers/cursor-profile.ts
 1 src/main/foreign-sqlite-readers/readers/opencode-binder-sessions.ts
-1 src/main/git/source-control/huge-folder-ignore.ts
+1 src/main/git/source-control/ignores/huge-folder-ignore.ts
 5 src/main/git/repositories/discovery/repo-detection.ts
 13 src/main/git/repositories/discovery/repo-git-marker-scan.ts
 3 src/main/git/worktrees/catalog/worktree-git-path.ts
@@ -441,10 +442,10 @@
 5 src/main/providers/local-pty/local-pty-executable-spawn.ts
 1 src/main/providers/local-pty/local-pty-session-operations.ts
 1 src/main/providers/local-pty/local-pty-shell-ready-wrapper-root.ts
-1 src/main/providers/macos-login-session-pty-probe.ts
-3 src/main/providers/macos-tcc-login-shell.ts
-3 src/main/providers/windows-powershell-executable.ts
-2 src/main/providers/working-directory-validation.ts
+1 src/main/providers/shell-launch/macos/login-session-pty-probe.ts
+3 src/main/providers/shell-launch/macos/tcc-login-shell.ts
+3 src/main/providers/shell-launch/windows/powershell-executable.ts
+2 src/main/providers/working-directory/validation.ts
 4 src/main/pty/history/fish-history-session.ts
 4 src/main/pty/history/terminal-history-deletion.ts
 2 src/main/pty/history/terminal-history-paths.ts
@@ -533,7 +534,7 @@
 3 src/main/startup/windows-startup/windows-user-data-acl.ts
 6 src/main/startup/linux-display/x-display-artifacts.ts
 2 src/main/stats/stats-file-loader.ts
-2 src/main/text-generation/source-control-prompt-files.ts
+2 src/main/text-generation/prompts/source-control-prompt-files.ts
 1 src/main/updater/lifecycle/windows-update-install-directory.ts
 9 src/main/updater/linux-package/appimage-runtime-identity.ts
 1 src/main/updater/linux-package/linux-package-install-command.ts

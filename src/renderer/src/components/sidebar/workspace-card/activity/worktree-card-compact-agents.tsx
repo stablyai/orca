@@ -32,6 +32,7 @@ type CompactAgentSummaryButtonProps = {
   subjectLabel: string
   expanded: boolean
   onToggle: () => void
+  unreadByPaneKey?: Readonly<Record<string, boolean>>
 }
 
 type CompactAgentExpansionProps = {
@@ -85,13 +86,18 @@ export function CompactAgentSummaryButton({
   groups: precomputedGroups,
   subjectLabel,
   expanded,
-  onToggle
+  onToggle,
+  unreadByPaneKey
 }: CompactAgentSummaryButtonProps): React.JSX.Element {
   const t = useTranslate()
-  const groups: readonly AgentGroupSummary[] =
+  const groups: readonly (AgentGroupSummary & { unread?: boolean })[] =
     precomputedGroups ??
-    buildSummaryAgentGroups(agents).map((group) => ({
+    buildSummaryAgentGroups(
+      agents,
+      unreadByPaneKey ? (agent) => unreadByPaneKey[agent.paneKey] ?? false : undefined
+    ).map((group) => ({
       state: group.state,
+      unread: group.unread,
       count: group.agents.length,
       icons: selectSummaryGroupIconAgents(group.agents, 3),
       identities: []
@@ -104,6 +110,14 @@ export function CompactAgentSummaryButton({
           subject: subjectLabel,
           states: groups.map((group) => formatStateCount(group.state, group.count, t)).join(', ')
         })
+  const unreadCount = groups.find((group) => group.unread)?.count ?? 0
+  const unreadSummary =
+    unreadCount > 0
+      ? t('auto.components.activity.ActivityTitlebarControls.unreadCount', '{{count}} unread', {
+          count: unreadCount,
+          defaultValue_one: '{{count}} unread'
+        })
+      : ''
   const visibleGroups = groups.slice(0, 3)
   const hiddenGroupAgentCount = groups
     .slice(visibleGroups.length)
@@ -138,7 +152,7 @@ export function CompactAgentSummaryButton({
       type="button"
       draggable={false}
       className={cn(
-        'compact-agent-summary-button group/agent-summary flex h-6 w-full min-w-0 items-center gap-1 rounded-sm',
+        'compact-agent-summary-button group/agent-summary ms-0.5 flex h-6 w-[calc(100%-0.125rem)] min-w-0 items-center gap-1 rounded-sm',
         'px-1 text-left text-[11px] leading-none text-muted-foreground',
         'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring',
         // The sidebar accent reverses brightness across themes; use the matching hover token mix.
@@ -146,7 +160,7 @@ export function CompactAgentSummaryButton({
         // Only the collapsed pill needs a resting surface; expanded summaries are tree headers.
         expanded
           ? 'compact-agent-summary-button-expanded'
-          : 'border border-worktree-sidebar-border/70 bg-worktree-sidebar-accent/35'
+          : 'translate-y-0.5 border border-worktree-sidebar-border/70 bg-worktree-sidebar-accent/35'
       )}
       aria-label={
         expanded
@@ -158,7 +172,10 @@ export function CompactAgentSummaryButton({
           : t(
               'auto.components.sidebar.worktree.card.compact.agents.289a1d2ca7',
               'Expand {{value0}}. {{value1}}',
-              { value0: summary, value1: agentIdentitySummary }
+              {
+                value0: summary,
+                value1: [agentIdentitySummary, unreadSummary].filter(Boolean).join('; ')
+              }
             )
       }
       aria-expanded={expanded}
@@ -180,10 +197,15 @@ export function CompactAgentSummaryButton({
               const hiddenIconCount = Math.max(0, group.count - iconAgents.length)
               return (
                 <span
-                  key={group.state}
+                  key={group.unread ? 'unread' : group.state}
                   className="inline-flex min-w-0 shrink-0 items-center gap-0.5 rounded-sm bg-worktree-sidebar/70 px-1 py-0.5"
                 >
-                  <AgentStateDot state={group.state} size="sm" tooltipSide="right" />
+                  <AgentStateDot
+                    state={group.state}
+                    unread={group.unread}
+                    size="sm"
+                    tooltipSide="right"
+                  />
                   {/* Overlap identities only within the same status cluster to save width. */}
                   <span className="inline-flex shrink-0 items-center -space-x-0.5 pl-0.5">
                     {iconAgents.map((agent) => (

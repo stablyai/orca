@@ -1,6 +1,9 @@
 import { useCallback, useRef } from 'react'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { isRemoteBrowserPageMissingError } from './remote-browser-stream-errors'
+import {
+  isRemoteBrowserInputOpenedDialogError,
+  isRemoteBrowserPageMissingError
+} from './remote-browser-stream-errors'
 import { useRemoteBrowserPageKeyboard } from './use-remote-browser-page-keyboard'
 import type { RemoteBrowserStreamLifecycle } from './remote-browser-stream-lifecycle'
 import type {
@@ -175,6 +178,9 @@ export function useRemoteBrowserPageInput({
             closeMissingRemotePage(pageId)
             return
           }
+          if (isRemoteBrowserInputOpenedDialogError(error)) {
+            return
+          }
           setPaneNotice({
             kind: 'consequence',
             text: error instanceof Error ? error.message : 'Remote mouse input failed.'
@@ -224,6 +230,9 @@ export function useRemoteBrowserPageInput({
         if (isCurrentRemoteOperationToken(operationToken)) {
           if (isRemoteBrowserPageMissingError(error)) {
             closeMissingRemotePage(pageId)
+            return
+          }
+          if (isRemoteBrowserInputOpenedDialogError(error)) {
             return
           }
           setPaneNotice({

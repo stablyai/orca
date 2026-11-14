@@ -10,11 +10,14 @@ import {
   selectSendTargetInputs
 } from './worktree-card-send-target-inputs'
 import { useAgentPresentation, useWorktreeAgentRow } from './useWorktreeAgentRows'
+import { useHostRootKeys } from './use-worktree-agent-host-roots'
+import { KeyedSummary } from './worktree-card-agent-keyed-summary'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { useWorktreeAgentDisplay } from './use-worktree-agent-display'
 import { cn } from '@/lib/class-names'
 import { recomputeOn } from '@/lib/recompute-on'
 import { useFocusedAgentPaneKey } from './focused-agent-row-highlight'
-import { CompactAgentExpansion, CompactAgentSummaryButton } from './worktree-card-compact-agents'
+import { CompactAgentExpansion } from './worktree-card-compact-agents'
 import { CompactAgentRow } from './worktree-card-compact-agent-row'
 import { revealCompactAgentCard } from '../../worktree-list/navigation/worktree-sidebar-reveal'
 import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion-state'
@@ -27,34 +30,48 @@ import { IdleChildAgentGroupRow } from './worktree-card-idle-child-agents'
 import type { AgentChildren } from '@/store/slices/agent-status/agent-row-display-index'
 import type { DashboardAgentRow as AgentRow } from '@/components/dashboard/useDashboardData'
 
-export const SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT =
-  'orca-suppress-worktree-list-scroll-adjustment'
-const suppressScrollAdjustment = () =>
-  window.dispatchEvent(new CustomEvent(SUPPRESS_WORKTREE_LIST_SCROLL_ADJUSTMENT_EVENT))
 const stopBubble = (event: React.SyntheticEvent) => event.stopPropagation()
-type Props = { worktreeId: string; className?: string }
+type Props = {
+  worktreeId: string
+  /** The card's host; local and remote copies can share a workspace ID, so activation must name it. */
+  executionHostId?: ExecutionHostId
+  className?: string
+}
 
-export default React.memo(function WorktreeCardAgents({ worktreeId, className }: Props) {
-  const roots = useAgentPresentation(
+export default React.memo(function WorktreeCardAgents({
+  worktreeId,
+  executionHostId,
+  className
+}: Props) {
+  const allRoots = useAgentPresentation(
     `roots\0${worktreeId}`,
     useCallback((p) => p.display.roots(worktreeId), [worktreeId])
   )
+  const roots = useHostRootKeys(worktreeId, executionHostId, allRoots)
   return roots.length ? (
-    <WorktreeCardAgentsBody worktreeId={worktreeId} roots={roots} className={className} />
+    <WorktreeCardAgentsBody
+      worktreeId={worktreeId}
+      executionHostId={executionHostId}
+      roots={roots}
+      hostFiltered={roots !== allRoots}
+      className={className}
+    />
   ) : null
 })
 
 function WorktreeCardAgentsBody({
   worktreeId,
+  executionHostId,
   roots,
+  hostFiltered,
   className
-}: Props & { roots: readonly string[] }) {
+}: Props & { roots: readonly string[]; hostFiltered: boolean }) {
   const t = useTranslate(),
     languageRevision = useUiLanguageRevision()
   const display = useWorktreeAgentDisplay()
-  const expansion = useWorktreeAgentExpansionState(worktreeId)
+  const expansion = useWorktreeAgentExpansionState(worktreeId, executionHostId)
   const focusedPaneKey = useFocusedAgentPaneKey(worktreeId)
-  const onActivate = useWorktreeAgentActivation(worktreeId)
+  const onActivate = useWorktreeAgentActivation(worktreeId, executionHostId)
   const onDismiss = useAppStore((s) => s.dropAgentStatus)
   const send = useAppStore((s) => s.sendPromptToSidebarAgentTarget)
   const control = useAppStore(useShallow((s) => selectSendTargetControlInputs(s, worktreeId)))
@@ -94,21 +111,7 @@ function WorktreeCardAgentsBody({
     },
     [send]
   )
-  const { toggleLineageParent, toggleIdleChildGroup } = expansion
-  const toggleLineage = useCallback(
-    (key: string) => {
-      suppressScrollAdjustment()
-      toggleLineageParent(key)
-    },
-    [toggleLineageParent]
-  )
-  const toggleIdle = useCallback(
-    (key: string) => {
-      suppressScrollAdjustment()
-      toggleIdleChildGroup(key)
-    },
-    [toggleIdleChildGroup]
-  )
+  const { toggleLineageParent: toggleLineage, toggleIdleChildGroup: toggleIdle } = expansion
   const now = useNow(30_000)
   const context = useMemo(
     () => ({
@@ -148,7 +151,7 @@ function WorktreeCardAgentsBody({
     const wasExpanded = previousExpanded.current
     previousExpanded.current = expansion.compactRootListExpanded
     if (!wasExpanded && expansion.compactRootListExpanded && compact) {
-      suppressScrollAdjustment()
+      // Defer reveal one frame to avoid synchronous sidebar layout during the opening animation.
       const handle = requestAnimationFrame(() => revealCompactAgentCard(rootRef.current))
       return () => cancelAnimationFrame(handle)
     }
@@ -175,7 +178,8 @@ function WorktreeCardAgentsBody({
         >
           <KeyedSummary
             worktreeId={worktreeId}
-            count={roots.length}
+            roots={roots}
+            hostFiltered={hostFiltered}
             expanded={expansion.compactRootListExpanded}
             onToggle={expansion.toggleCompactRootList}
           />
@@ -184,11 +188,12 @@ function WorktreeCardAgentsBody({
               keysToRender={roots}
               context={context}
               timerActive={expansion.compactRootListExpanded}
+              root
             />
           </CompactAgentExpansion>
         </div>
       ) : (
-        <AgentBranches keysToRender={roots} context={context} timerActive />
+        <AgentBranches keysToRender={roots} context={context} timerActive root />
       )}
     </div>
   )
@@ -196,56 +201,38 @@ function WorktreeCardAgentsBody({
 const AgentBranches = React.memo(function AgentBranches({
   keysToRender,
   context,
-  timerActive
+  timerActive,
+  root = false
 }: {
   keysToRender: readonly string[]
   context: BranchContext
   timerActive: boolean
+  root?: boolean
 }) {
   return (
     <>
       {keysToRender.map((key) => (
-        <AgentBranch key={key} paneKey={key} context={context} timerActive={timerActive} />
+        <AgentBranch
+          key={key}
+          paneKey={key}
+          context={context}
+          timerActive={timerActive}
+          root={root}
+        />
       ))}
     </>
   )
 })
-function KeyedSummary({
-  worktreeId,
-  count,
-  expanded,
-  onToggle
-}: {
-  worktreeId: string
-  count: number
-  expanded: boolean
-  onToggle: () => void
-}) {
-  const t = useTranslate()
-  const groups = useAgentPresentation(
-    `groups\0${worktreeId}`,
-    useCallback((p) => p.display.summary(worktreeId), [worktreeId])
-  )
-  return (
-    <CompactAgentSummaryButton
-      groups={groups}
-      subjectLabel={t('sidebar.agentSummary.agentCount', '{{count}} agents', {
-        count,
-        defaultValue_one: '{{count}} agent'
-      })}
-      expanded={expanded}
-      onToggle={onToggle}
-    />
-  )
-}
 const AgentBranch = React.memo(function AgentBranch({
   paneKey,
   context,
-  timerActive
+  timerActive,
+  root
 }: {
   paneKey: string
   context: BranchContext
   timerActive: boolean
+  root: boolean
 }) {
   const row = useWorktreeAgentRow(paneKey)
   const children = useAgentPresentation(
@@ -316,7 +303,7 @@ const AgentBranch = React.memo(function AgentBranch({
     />
   )
   return (
-    <div className={compact ? 'min-w-0' : undefined}>
+    <div className={compact ? cn('min-w-0', root && 'ms-2') : undefined}>
       {compact ? (
         <CompactAgentRow
           {...common}

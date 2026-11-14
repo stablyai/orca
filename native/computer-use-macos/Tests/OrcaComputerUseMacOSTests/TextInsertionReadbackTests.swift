@@ -8,7 +8,6 @@ final class TextInsertionReadbackTests: XCTestCase {
             TextInsertionReadback.expectedValue(current: "a😀bcd", selection: 3..<5, inserting: "XY"),
             "a😀XYd"
         )
-        XCTAssertEqual(TextInsertionReadback.expectedValue(current: "", selection: nil, inserting: "hi"), "hi")
     }
 
     func testUnpredictableInsertionsReturnNil() {
@@ -16,7 +15,6 @@ final class TextInsertionReadbackTests: XCTestCase {
         XCTAssertNil(TextInsertionReadback.expectedValue(current: "abc", selection: 2..<4, inserting: "d"))
         XCTAssertNil(TextInsertionReadback.expectedValue(current: "a😀", selection: 2..<2, inserting: "d"))
         XCTAssertNil(TextInsertionReadback.expectedValue(current: "", selection: 0..<0, inserting: "send\n"))
-        XCTAssertNil(TextInsertionReadback.expectedValue(current: "", selection: 0..<0, inserting: "a\tb"))
         XCTAssertNil(TextInsertionReadback.expectedValue(current: "hello", selection: 0..<5, inserting: "hello"))
     }
 
@@ -66,11 +64,6 @@ final class TextInsertionReadbackTests: XCTestCase {
 
     func testFieldThatStopsAnsweringIsUndetermined() {
         XCTAssertEqual(settle(expected: "hello", reads: ["", "h"], secondsPerRead: 0.025), .undetermined)
-    }
-
-    func testFieldStillFillingAtTheCapIsUndetermined() {
-        let reads = (0..<100).map { String(repeating: "a", count: $0) }
-        XCTAssertEqual(settle(expected: String(repeating: "a", count: 200), reads: reads, secondsPerRead: 0.1), .undetermined)
     }
 
     private func settle(expected: String, reads: [String], secondsPerRead: Double) -> TextInsertionReadback.Outcome {

@@ -6,7 +6,7 @@ import {
   splitWorktreeIdForFilesystem,
   worktreeIdsEqual
 } from '../../../shared/worktree/id'
-import { areRuntimePathsEqual } from '../../../shared/worktree/ownership'
+import { areRuntimePathsEqual } from '../../../shared/worktree/visibility/ownership'
 import type { SessionSearchScopeCatalog } from './session-search-scope-catalog'
 import type { SessionSearchHostScope } from '../session-search-service'
 import { managedWorktreeDirectories, ScopePathSet } from './session-search-scope-paths'

@@ -24,7 +24,7 @@ export function resolvePaneAgentSessionId(
   return state.sleepingAgentSessionsByPaneKey[paneKey]?.providerSession.id ?? null
 }
 
-/** Copy Agent ID's gate. A trusted live row offers it only when its host stamped the field (an id,
+/** Copy Orca Session ID's gate. A trusted live row offers it only when its host stamped the field (an id,
  *  or null while unresolved), which older hosts never do; a sleeping record only when this app owns the pane on a non-Windows
  *  host, the one place its saved provider key resolves. */
 export function canPaneOfferAgentId(

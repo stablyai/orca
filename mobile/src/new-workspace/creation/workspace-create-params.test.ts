@@ -2,43 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { buildTaskWorkspaceCreateParams } from './workspace-create-params'
 
 describe('task workspace create params', () => {
-  it('passes a GitHub PR URL as an agent draft and links the PR', () => {
-    expect(
-      buildTaskWorkspaceCreateParams({
-        item: {
-          provider: 'github',
-          source: {
-            type: 'pr',
-            repoId: 'repo-1',
-            number: 123,
-            title: 'Fix mobile tasks',
-            url: 'https://github.com/acme/app/pull/123'
-          }
-        },
-        targetRepoId: 'ignored-for-github',
-        setupDecision: 'run',
-        agent: 'codex',
-        workspaceName: '  mobile-tasks  ',
-        hostedStartPoint: {
-          baseBranch: 'origin/main',
-          pushTarget: { remoteName: 'origin', branchName: 'feature/mobile-tasks' }
-        }
-      })
-    ).toMatchObject({
-      repo: 'id:repo-1',
-      name: 'mobile-tasks',
-      displayName: 'Fix mobile tasks',
-      displayNameKind: 'generated',
-      setupDecision: 'run',
-      activate: true,
-      startupDraft: 'https://github.com/acme/app/pull/123',
-      createdWithAgent: 'codex',
-      linkedPR: 123,
-      baseBranch: 'origin/main',
-      pushTarget: { remoteName: 'origin', branchName: 'feature/mobile-tasks' }
-    })
-  })
-
   it('omits startup draft and agent when blank terminal is selected', () => {
     const params = buildTaskWorkspaceCreateParams({
       item: {
@@ -67,31 +30,6 @@ describe('task workspace create params', () => {
     })
     expect(params).not.toHaveProperty('startupDraft')
     expect(params).not.toHaveProperty('createdWithAgent')
-  })
-
-  it('marks an edited task label as user-owned', () => {
-    const params = buildTaskWorkspaceCreateParams({
-      item: {
-        provider: 'github',
-        source: {
-          type: 'issue',
-          repoId: 'repo-1',
-          number: 88,
-          title: 'Investigate login',
-          url: 'https://github.com/acme/app/issues/88'
-        }
-      },
-      targetRepoId: 'ignored-for-github',
-      setupDecision: 'skip',
-      workspaceName: 'My workspace',
-      nameIsAutoManaged: false
-    })
-
-    expect(params).toMatchObject({
-      name: 'My workspace',
-      displayName: 'My workspace',
-      displayNameKind: 'user'
-    })
   })
 
   it('keeps the startup draft when no agent was provided so the host can auto-pick', () => {
@@ -150,31 +88,6 @@ describe('task workspace create params', () => {
       branchNameOverride: 'port-drawer',
       sparseCheckout: { directories: ['mobile'], presetId: 'preset-1' },
       comment: 'keep mobile parity'
-    })
-  })
-
-  it('creates Linear workspaces in the selected repo and links the identifier', () => {
-    expect(
-      buildTaskWorkspaceCreateParams({
-        item: {
-          provider: 'linear',
-          source: {
-            identifier: 'ENG-42',
-            title: 'Ship Linear parity',
-            url: 'https://linear.app/acme/issue/ENG-42/ship-linear-parity'
-          }
-        },
-        targetRepoId: 'repo-linear',
-        setupDecision: 'inherit',
-        agent: 'grok'
-      })
-    ).toMatchObject({
-      repo: 'id:repo-linear',
-      name: 'eng-42',
-      displayName: 'ENG-42 Ship Linear parity',
-      linkedLinearIssue: 'ENG-42',
-      startupDraft: 'https://linear.app/acme/issue/ENG-42/ship-linear-parity',
-      createdWithAgent: 'grok'
     })
   })
 

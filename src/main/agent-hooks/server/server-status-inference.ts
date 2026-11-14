@@ -1,6 +1,6 @@
 import { AgentHookServerQuestionAnswered } from './server-question-answered'
 import type { RemoteAgentInterruptDispatch } from '../../../shared/agent-hook-listener/transport/agent-hook-interrupt-reconciliation'
-import { markClaudeLeadTurnDone } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
+import { markClaudeLeadTurnDone } from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-roster-state'
 import {
   isAgentInterruptInputIntent,
   isNavigationEscapeIntent,

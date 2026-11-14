@@ -16,7 +16,12 @@ type PluginStateSource = {
 
 type AutomationSource = {
   listAutomationsForScope(params: Record<string, never>): { automations: readonly Automation[] }
-  updateAutomation(id: string, updates: AutomationUpdateInput): Promise<Automation>
+  updateAutomations(
+    entries: readonly {
+      id: string
+      updates: Pick<AutomationUpdateInput, 'enabled' | 'createdBy'>
+    }[]
+  ): Promise<readonly ({ id: string } & ({ automation: Automation } | { error: unknown }))[]>
 }
 
 /**
@@ -72,19 +77,27 @@ export function installPluginAutomationOwnershipEnd(
               createdBy: automation.createdBy
             })
         )
+        if (ended.length === 0) {
+          continue
+        }
         const endedAt = Date.now()
-        await Promise.all(
-          ended.map((automation) =>
-            automations
-              .updateAutomation(automation.id, {
+        // Why one batch: per-row updates rewrite and persist the whole list once per automation.
+        const results = await automations
+          .updateAutomations(
+            ended.map((automation) => ({
+              id: automation.id,
+              updates: {
                 enabled: false,
                 ...(automation.createdBy ? { createdBy: { ...automation.createdBy, endedAt } } : {})
-              })
-              .catch((error: unknown) =>
-                log(`[plugins] could not pause automation ${automation.id}: ${String(error)}`)
-              )
+              }
+            }))
           )
-        )
+          .catch((error: unknown) => ended.map(({ id }) => ({ id, error })))
+        for (const result of results) {
+          if ('error' in result) {
+            log(`[plugins] could not pause automation ${result.id}: ${String(result.error)}`)
+          }
+        }
       } while (again)
     } finally {
       running = false

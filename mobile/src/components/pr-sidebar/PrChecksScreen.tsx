@@ -6,7 +6,7 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { Translate } from '../../i18n/mobile-i18n'
-import { openExternalLink } from '../../platform/external-link'
+import { openExternalLink } from '../../platform/external-links/external-link'
 import type { PRCheckDetail } from '../../../../src/shared/github/checks/check-types'
 import { isBrokenCheck } from '../../../../src/shared/source-control/checks/pr-checks-fix-prompt'
 import { sortChecksBySeverity } from '../../../../src/shared/source-control/checks/pr-check-severity-order'
@@ -134,6 +134,7 @@ export function PrChecksScreen({ tab, onBack, bottomInset = 0 }: ScreenProps) {
                 error={notice.error}
                 warning={notice.warning}
                 undeliveredPrompt={notice.undeliveredPrompt}
+                opens={notice.opens}
                 errorStyle={styles.error}
               />
               {tab.actions.error ? <Text style={styles.error}>{tab.actions.error}</Text> : null}

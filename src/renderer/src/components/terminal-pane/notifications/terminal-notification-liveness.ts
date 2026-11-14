@@ -7,7 +7,7 @@ import type { TerminalPaneLayoutNode } from '../../../../../shared/workspace-lay
 import {
   getFirstTerminalTab,
   terminalTabHasOwnerOutside
-} from '@/store/terminals/terminal-tab-owner-index'
+} from '@/store/terminals/ownership/terminal-tab-owner-index'
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>
 const emptyTerminalTabs: StoreSnapshot['tabsByWorktree'] = {}

@@ -10,7 +10,7 @@ import { tabFromWorktreeAttributedStatusEntry } from '@/components/sidebar/works
 import { agentEntrySessionStartedAt } from '../../../../../shared/agent-session/lifecycle/agent-session-start-time'
 import { isAgentStatusFresh } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { applyAgentPaneActivityFlags } from '../../../../../shared/worktree-status-rollup'
-import { resolveAttention, IDLE } from '../../../../../shared/sidebar-list/smart-attention'
+import { resolveAttention, IDLE } from '../../../../../shared/sidebar-list/sorting/smart-attention'
 import { classifyPaneKeyLiveness } from './agent-status-capacity-eviction'
 import {
   parsePaneKey,

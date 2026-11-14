@@ -8,7 +8,7 @@ import { pruneGitWorktrees } from '../../../git/worktrees/removal/worktree-prune
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { GitPushTarget, GitWorktreeInfo } from '../../../../shared/worktree/types'
-import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal'
+import { assertWorktreeUnlockedForRemoval } from '../../../../shared/worktree/removal/removal'
 import type { LocalProjectWorktreeGitOptions } from '../../../workspaces/execution-host/project-runtime-git-options'
 import { listWorktreesStrict as listGitWorktreesStrict } from '../../../git/worktrees/catalog/worktree-listing'
 import { removeWorktree } from '../../../git/worktrees/removal/worktree-removal'

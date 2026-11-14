@@ -1,7 +1,7 @@
 import type { DashboardBucket } from '../../../../../shared/dashboard-snapshot'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import type { WorktreeAgentActivitySummary } from '@/components/sidebar/workspace-card/activity/worktree-agent-activity-summary'
-import type { WorktreeAttention } from '../../../../../shared/sidebar-list/smart-attention'
+import type { WorktreeAttention } from '../../../../../shared/sidebar-list/sorting/smart-attention'
 import { KeyedDeadlines } from '../../../../../shared/keyed-deadlines'
 import type { TabAgentPane } from '@/lib/agent-session/tab-identity/tab-agent-status-index'
 

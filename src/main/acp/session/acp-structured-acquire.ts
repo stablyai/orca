@@ -256,6 +256,7 @@ export async function acquireAcpStructuredSession(input: {
     fence: acquire.fence,
     acquisitionGeneration: generation,
     spec,
+    cwd: launch.cwd,
     permissionModes,
     connection,
     lane: null,

@@ -102,7 +102,7 @@ describe('a live listing beside the account-level discovery', () => {
     expect(read?.models[0]?.defaultEffort).toBe('high')
   })
 
-  it('still refreshes the account listing after ten minutes of live saves', async () => {
+  it('keeps discovery across elapsed time and live saves until the user refreshes', async () => {
     let configured = 'grok-4'
     const run = harness(async () => discovery(configured))
     expect(await run.defaultOf()).toBe('grok-4')
@@ -113,7 +113,10 @@ describe('a live listing beside the account-level discovery', () => {
       run.advance(60_000)
       run.saveLive()
     }
-    expect(run.store.shouldRefresh(agentModelCatalogFingerprintForRecord(RECORD))).toBe(true)
+    expect(run.store.shouldRefresh(agentModelCatalogFingerprintForRecord(RECORD))).toBe(false)
+    await run.catalog.demand({ agent: 'grok' })
+    expect(await run.defaultOf()).toBe('grok-4')
+    run.store.refreshInputs(true)
     await run.catalog.demand({ agent: 'grok' })
     await vi.waitFor(() => expect(run.probes).toHaveBeenCalledTimes(2))
     await vi.waitFor(async () => expect(await run.defaultOf()).toBe('grok-3-mini'))

@@ -23,9 +23,9 @@ import { bindTerminalPaneStatusLifecycle } from '../ipc/pty/pane/terminal-pane-s
 import { rememberPaneKeyForPty, paneKeyPtyId, ptyPaneKey } from '../ipc/pty/pane/key-state'
 import { ptyIncarnationById, ptyOwnership } from '../ipc/pty/provider/ownership-state'
 import { getLocalPtyProvider, setLocalPtyProvider } from '../ipc/pty/provider/registry'
-import type { IPtyProvider } from '../providers/pty-provider-contract'
+import type { IPtyProvider } from '../providers/pty/provider-contract'
 import { stopRendererOwnedPty } from '../ipc/pty/ipc/renderer-kill'
-import { toAppSshPtyId } from '../providers/ssh-pty-id'
+import { toAppSshPtyId } from '../../shared/ssh-pty-id'
 import { getConnectionExecutionHostId } from '../../shared/execution-host'
 import {
   installMainWindowAgentStatusListeners,

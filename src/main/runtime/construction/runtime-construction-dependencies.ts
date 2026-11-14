@@ -1,7 +1,7 @@
 import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { CliWriterObservation } from '../../agent-hooks/server/cli-writer-observation'
 import type { ExecutionHostScope } from '../../../shared/execution-host'
-import type { IPtyProvider } from '../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../providers/pty/provider-contract'
 import type { PrepareClaudeAuth } from '../../ipc/pty/host-env/types'
 import type {
   RuntimeTerminalAgentStatusEvent,

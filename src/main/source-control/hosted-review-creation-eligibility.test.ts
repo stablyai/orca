@@ -120,7 +120,9 @@ vi.mock('../gitlab/projects/gitlab-project-ref-resolution', () => ({
     connectionId ? {} : { cwd: repoPath }
 }))
 
-vi.mock('../git/source-control/upstream', () => ({ getUpstreamStatus: getUpstreamStatusMock }))
+vi.mock('../git/source-control/upstream/upstream', () => ({
+  getUpstreamStatus: getUpstreamStatusMock
+}))
 
 vi.mock('./hosted-review', () => ({
   getHostedReviewForBranch: getHostedReviewForBranchMock

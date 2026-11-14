@@ -58,7 +58,7 @@ export function createAccountRuntimeTargetSettingsSync(
     }
 
     await Promise.all(refreshes)
-    // Antigravity has no targeted refresh; queueing a full one beside targeted ones can drop their reruns.
+    // Antigravity has no targeted refresh, so a usage target change needs a full one.
     if (usageTargetChanged) {
       await rateLimits.refresh()
     }

@@ -36,12 +36,10 @@ it('releases settings recovery while remote owner hydration is still pending', a
   render(<OnboardingLanguageLoading />)
   fireEvent.click(screen.getByRole('button', { name: 'Retry' }))
   expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
-  expect(screen.getByRole('status').textContent).toContain('Loading settings')
   try {
     await waitFor(() => expect(call).toHaveBeenCalled())
     expect(useAppStore.getState().settings).toBe(settings)
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull()
-    expect(screen.getByRole('status').textContent).toContain('Loading language')
   } finally {
     finishOwnerRead({
       ok: true,

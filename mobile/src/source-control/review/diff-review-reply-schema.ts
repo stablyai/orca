@@ -1,7 +1,9 @@
 import * as z from 'zod'
 import { salvagedOptional, salvagingArray } from '../../../../src/shared/zod-salvage'
-import type { MobileGitBranchCompareResult } from '../mobile-branch-compare'
-import type { MobileGitBranchCompareSummary } from '../git-compare-reply-schema'
+import type {
+  MobileGitBranchCompareReply as MobileGitBranchCompareResult,
+  MobileGitBranchCompareSummary
+} from '../branches/git-compare-reply-schema'
 
 // These review projections normalize host payloads; the Changes screen’s readers preserve them verbatim.
 

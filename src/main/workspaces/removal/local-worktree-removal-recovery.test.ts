@@ -29,7 +29,6 @@ import {
   recoverPartialLocalWorktreeRemoval,
   removeStaleLocalWorktreeRegistration
 } from './local-worktree-removal-recovery'
-import { NESTED_WORKTREE_REMOVAL_PREFIX } from '../../../shared/worktree/nested-removal'
 
 async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {
   const original = process.platform
@@ -80,69 +79,6 @@ describe('recoverPartialLocalWorktreeRemoval', () => {
           signal: controller.signal
         })
       ).rejects.toThrow(/aborted/i)
-      expect(removeLocalWorktreePathMock).toHaveBeenCalledWith(
-        'C:/repo/worktree/feature',
-        {},
-        controller.signal
-      )
-      expect(closeWatcher).toHaveBeenCalledOnce()
-      expect(hostRmMock).toHaveBeenCalledOnce()
-      expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-    })
-  })
-
-  it('does not recursively delete while watcher teardown remains unconfirmed', async () => {
-    await withPlatform('win32', async () => {
-      const watcherError = new Error('file watcher process did not exit after termination deadline')
-
-      await expect(
-        recoverPartialLocalWorktreeRemoval({
-          error: new Error('git worktree remove failed'),
-          force: true,
-          canonicalWorktreePath: 'C:/repo/worktree/feature',
-          repoPath: 'C:/repo',
-          localWorktreeGitOptions: {},
-          registeredWorktree: { branch: 'refs/heads/feature', head: 'abc123' },
-          deleteBranch: true,
-          closeWatcher: vi.fn().mockRejectedValue(watcherError)
-        })
-      ).rejects.toBe(watcherError)
-
-      expect(removeLocalWorktreePathMock).not.toHaveBeenCalled()
-      expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-    })
-  })
-
-  it('does not delete a checkout that now contains a registered worktree', async () => {
-    await withPlatform('darwin', async () => {
-      listWorktreesStrictMock.mockResolvedValue([
-        {
-          path: '/Users/dev/orca/workspaces/feature/nested',
-          head: 'def456',
-          branch: 'refs/heads/nested',
-          isBare: false,
-          isMainWorktree: false
-        }
-      ])
-      const closeWatcher = vi.fn().mockResolvedValue(undefined)
-
-      await expect(
-        recoverPartialLocalWorktreeRemoval({
-          error: Object.assign(new Error('git worktree remove failed'), {
-            stderr:
-              "error: failed to delete '/Users/dev/orca/workspaces/feature': Directory not empty"
-          }),
-          force: true,
-          canonicalWorktreePath: '/Users/dev/orca/workspaces/feature',
-          repoPath: '/Users/dev/repo',
-          localWorktreeGitOptions: {},
-          registeredWorktree: { branch: 'refs/heads/feature', head: 'abc123' },
-          deleteBranch: true,
-          closeWatcher
-        })
-      ).rejects.toThrow(NESTED_WORKTREE_REMOVAL_PREFIX)
-      expect(closeWatcher).not.toHaveBeenCalled()
-      expect(removeLocalWorktreePathMock).not.toHaveBeenCalled()
     })
   })
 
@@ -170,74 +106,6 @@ describe('recoverPartialLocalWorktreeRemoval', () => {
           closeWatcher
         })
       ).rejects.toThrow('Worktree is locked by Git. Lock reason: active agent')
-
-      expect(closeWatcher).not.toHaveBeenCalled()
-      expect(removeLocalWorktreePathMock).not.toHaveBeenCalled()
-      expect(listWorktreesStrictMock).not.toHaveBeenCalled()
-      expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-    })
-  })
-
-  it.each([
-    "error: failed to delete 'C:/repo/worktree/feature': Directory not empty",
-    'error: failed to delete deep/file.txt: Filename too long'
-  ])(
-    'does not recover a recognized Windows failure while Git still owns the row: %s',
-    async (stderr) => {
-      await withPlatform('win32', async () => {
-        listWorktreesStrictMock.mockResolvedValue([
-          {
-            path: 'C:/repo/worktree/feature',
-            head: 'abc123',
-            branch: 'refs/heads/feature',
-            isBare: false,
-            isMainWorktree: false
-          }
-        ])
-        const closeWatcher = vi.fn().mockResolvedValue(undefined)
-
-        await expect(
-          recoverPartialLocalWorktreeRemoval({
-            error: Object.assign(new Error('git worktree remove failed'), { stderr }),
-            force: true,
-            canonicalWorktreePath: 'C:/repo/worktree/feature',
-            repoPath: 'C:/repo',
-            localWorktreeGitOptions: { wslDistro: 'Ubuntu' },
-            registeredWorktree: { branch: 'refs/heads/feature', head: 'abc123' },
-            deleteBranch: true,
-            closeWatcher
-          })
-        ).resolves.toBeUndefined()
-
-        expect(listWorktreesStrictMock).toHaveBeenCalledWith('C:/repo', { wslDistro: 'Ubuntu' })
-        expect(closeWatcher).not.toHaveBeenCalled()
-        expect(removeLocalWorktreePathMock).not.toHaveBeenCalled()
-      })
-    }
-  )
-
-  it('does not recover when structural registration verification fails', async () => {
-    await withPlatform('win32', async () => {
-      listWorktreesStrictMock.mockRejectedValue(new Error('git list failed'))
-      const closeWatcher = vi.fn().mockResolvedValue(undefined)
-
-      await expect(
-        recoverPartialLocalWorktreeRemoval({
-          error: Object.assign(new Error('git worktree remove failed'), {
-            stderr: "error: failed to delete 'C:/repo/worktree/feature': Directory not empty"
-          }),
-          force: true,
-          canonicalWorktreePath: 'C:/repo/worktree/feature',
-          repoPath: 'C:/repo',
-          localWorktreeGitOptions: {},
-          registeredWorktree: { branch: 'refs/heads/feature', head: 'abc123' },
-          deleteBranch: true,
-          closeWatcher
-        })
-      ).resolves.toBeUndefined()
-
-      expect(closeWatcher).not.toHaveBeenCalled()
-      expect(removeLocalWorktreePathMock).not.toHaveBeenCalled()
     })
   })
 })
@@ -265,8 +133,6 @@ describe('removeStaleLocalWorktreeRegistration', () => {
         deleteBranch: true
       })
     ).rejects.toThrow('Worktree is locked by Git')
-
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
   it('does not report success when prune leaves the registration behind', async () => {

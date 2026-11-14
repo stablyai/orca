@@ -9,7 +9,7 @@ import { stageAcceptedAgentTransitions } from './agent-status-projection-transit
 import type { AgentStatusChange, AgentStatusChangeListener } from './agent-status-contract'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import type { WorktreeAgentActivitySummary } from '@/components/sidebar/workspace-card/activity/worktree-agent-activity-summary'
-import type { WorktreeAttention } from '../../../../../shared/sidebar-list/smart-attention'
+import type { WorktreeAttention } from '../../../../../shared/sidebar-list/sorting/smart-attention'
 import type { TabAgentPane } from '@/lib/agent-session/tab-identity/tab-agent-status-index'
 import {
   EMPTY_KEYS,
@@ -53,6 +53,10 @@ export class AgentStatusProjection {
   subscribeChanges(listener: (keys: ReadonlySet<string> | null) => void): () => void {
     this.data.changeListeners.add(listener)
     return () => this.data.changeListeners.delete(listener)
+  }
+  /** Accepted keys published but not yet delivered to change listeners; null while unknown. */
+  pendingChangedKeys(): ReadonlySet<string> | null {
+    return this.data.fullResync || this.data.notifying ? null : this.data.changedKeys
   }
   subscribe(channel: string, listener: () => void): () => void {
     const listeners = this.data.listeners.get(channel) ?? new Set()

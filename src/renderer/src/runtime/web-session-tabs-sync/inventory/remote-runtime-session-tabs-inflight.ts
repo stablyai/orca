@@ -1,3 +1,7 @@
+import {
+  captureBrowserInitializationDelivery,
+  recordBrowserInitializationReceipt
+} from '../browser-initialization-presentation'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
 import { nextReceivedSessionTabsFrame } from '../state'
 
@@ -29,14 +33,14 @@ export function listRemoteRuntimeSessionTabsDeduped(
     return existing
   }
   const receivedFrame = nextReceivedSessionTabsFrame()
+  const delivery = captureBrowserInitializationDelivery(args.environmentId)
   // One workspace inventory answers every split pane; share reconnects’ in-flight RPC.
   const request = args
     .load()
-    .then(({ snapshot, runtimeId }) => ({
-      snapshot,
-      receivedFrame,
-      ...(runtimeId ? { runtimeId } : {})
-    }))
+    .then(({ snapshot, runtimeId }) => {
+      recordBrowserInitializationReceipt(args.environmentId, snapshot, receivedFrame, delivery)
+      return { snapshot, receivedFrame, ...(runtimeId ? { runtimeId } : {}) }
+    })
     .finally(() => {
       if (inFlightBySession.get(key) === request) {
         inFlightBySession.delete(key)

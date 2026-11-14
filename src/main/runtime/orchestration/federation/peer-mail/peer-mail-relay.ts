@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import { PeerMailRelayPayload } from '../../../../../shared/rpc-contract/orchestration-peer-mail-params'
+import { PeerMailRelayPayload } from '../../../../../shared/rpc-contract/orchestration/orchestration-peer-mail-params'
 import { resolveBareOrchestrationRecipient } from '../../../rpc/methods/orchestration/messaging/recipient-routing'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import type { MessageRow } from '../../db/orchestration-records'

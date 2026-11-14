@@ -1,6 +1,6 @@
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { worktreeIdentityKey } from '../../../../shared/worktree/id'
-import type { ClientWorkspaceView } from '../../../../shared/rpc-contract/client-workspace-view-params'
+import type { ClientWorkspaceView } from '../../../../shared/rpc-contract/client-ui/client-workspace-view-params'
 
 type ClientView = { workspaceKeys: Set<string>; tabIds: Set<string>; presentUntil: number }
 

@@ -17,7 +17,7 @@ import type {
   BrowserPagePromptResult
 } from '../../../shared/browser/prompts/browser-page-prompt'
 import { readBrowserClientHostIdArgument } from '../../../shared/browser/client-hosting/browser-client-host-id-argument'
-import { browserClientPageRendererRequests } from '../../preload-runtime-support'
+import { browserClientPageRendererRequests } from '../../renderer/renderer-runtime'
 import type { PreloadApi } from '../../api-types'
 
 export const browserGuestRegistrationAndDownloadsApi = {

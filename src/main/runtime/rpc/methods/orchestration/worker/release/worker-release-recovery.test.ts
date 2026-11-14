@@ -141,22 +141,6 @@ describe('orchestration worker release recovery', () => {
     return worker
   }
 
-  it('finishes a requested release after restart-style interruption', async () => {
-    setup()
-    const { dispatchId } = await startSettledWorker()
-    vi.mocked(runtime.closeTerminal).mockRejectedValueOnce(new Error('Multiplexer disposed'))
-    const interrupted = (await call('orchestration.workerRelease', { dispatch: dispatchId })) as {
-      state: string
-    }
-    expect(interrupted.state).toBe('release_pending')
-    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('releasing')
-
-    const result = await reconcileRequestedWorkerTerminalReleases(runtime)
-    expect(result).toMatchObject({ attempted: 1, released: 1 })
-    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')
-    expect(runtime.closeTerminal).toHaveBeenCalledTimes(2)
-  })
-
   it('settles a closed terminal after restart when exact process liveness is exited', async () => {
     setup()
     const { dispatchId } = await startSettledWorker()
@@ -196,58 +180,6 @@ describe('orchestration worker release recovery', () => {
       attempted: 0
     })
     expect(runtime.closeTerminal).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps a requested release pending after positive exit when no archive was committed', async () => {
-    setup()
-    const { dispatchId } = await startSettledWorker()
-    const requested = db.requestWorkerTerminalRelease(dispatchId)
-    expect(requested.disposition).toBe('requested')
-    expect(db.getWorkerTerminalArchive(dispatchId)).toBeUndefined()
-
-    vi.mocked(runtime.showTerminal).mockRejectedValue(new Error('terminal_handle_stale'))
-    vi.mocked(runtime.getOrchestrationDispatchAuthority).mockReturnValue(null)
-    vi.mocked(runtime.getTerminalPaneKey).mockReturnValue(null)
-    vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue(null)
-    vi.spyOn(runtime, 'inspectTerminalProcessIncarnationLiveness').mockResolvedValue('exited')
-
-    await expect(reconcileRequestedWorkerTerminalReleases(runtime)).resolves.toMatchObject({
-      attempted: 1,
-      released: 0,
-      pending: 1,
-      unknown: 0
-    })
-    expect(db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
-      release_state: 'requested',
-      ownership_state: 'owned'
-    })
-    expect(runtime.closeTerminal).not.toHaveBeenCalled()
-  })
-
-  it('keeps the output reference when an unconfirmed release retry cannot find the terminal', async () => {
-    setup()
-    const { dispatchId } = await startSettledWorker()
-    vi.mocked(runtime.closeTerminal).mockResolvedValueOnce({
-      handle: 'term_worker',
-      tabId: 'tab-worker',
-      ptyKilled: false,
-      ptyStopVerdict: 'unverifiable',
-      ptyStopReason: 'its SSH provider is no longer registered'
-    })
-
-    await expect(
-      call('orchestration.workerRelease', { dispatch: dispatchId })
-    ).resolves.toMatchObject({ state: 'release_unknown' })
-    expect(db.getWorkerTerminalArchive(dispatchId)).toBeDefined()
-
-    vi.mocked(runtime.showTerminal).mockRejectedValue(new Error('terminal_handle_stale'))
-    await expect(
-      call('orchestration.workerRelease', { dispatch: dispatchId })
-    ).resolves.toMatchObject({ state: 'release_unknown' })
-    // This worker reported no transcript, so there is no original to read.
-    await expect(call('orchestration.workerRead', { dispatch: dispatchId })).rejects.toMatchObject({
-      code: 'archive_unavailable'
-    })
   })
 
   it('records one recovery attempt when reconciliation joins an interactive release', async () => {

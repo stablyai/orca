@@ -4,7 +4,7 @@ import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AppStateViewContext } from '../../retained-views/app-state-view'
 import { createTestStore } from '../../testing/app-store-test-fixture'
-import { makeTab } from '../../terminals/terminal-tab.test-fixture'
+import { makeTab } from '../../terminals/testing/terminal-tab.test-fixture'
 import { makeWorktree } from '../worktrees/worktree.test-fixture'
 import { TEST_REPO } from '../../repos/repo.test-fixture'
 import {

@@ -5,7 +5,7 @@ import {
 } from '@/components/workspace-cleanup/workspace-cleanup-facet.test.fixture'
 import { expect, it } from 'vitest'
 import { createTestStore } from '../../testing/app-store-test-fixture'
-import { makeTab } from '../../terminals/terminal-tab.test-fixture'
+import { makeTab } from '../../terminals/testing/terminal-tab.test-fixture'
 import { makeUnifiedTab } from '../tabs/tab-group.test-fixture'
 import { makeWorktree } from '../worktrees/worktree.test-fixture'
 import { makeCandidate, WORKTREE_ID } from './workspace-cleanup-slice-test-harness'

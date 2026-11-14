@@ -6,6 +6,7 @@ import {
 } from './github-repository-identity'
 import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../shared/github/repositories/repository-identity'
 import { shouldProbeGitRemote } from '../../git/remotes/remote-name-listing'
+import { resolveOriginWithStandIn } from '../../git/remotes/origin-stand-in-remote'
 
 import {
   getEnterpriseGitHubRepoSlug,
@@ -128,10 +129,14 @@ export async function getGitHubApiRepositoryForRemote(
   })
 }
 
+/** The repo origin names; a project whose origin is missing or a local path reads its stand-in remote. */
 export async function getOriginGitHubApiRepository(
   repoPath: string,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  probeOptions: GitHubRemoteIdentityProbeOptions = {}
 ): Promise<GitHubApiRepository | null> {
-  return getGitHubApiRepositoryForRemote(repoPath, 'origin', connectionId, localGitOptions)
+  return resolveOriginWithStandIn(repoPath, connectionId, localGitOptions, (name) =>
+    getGitHubApiRepositoryForRemote(repoPath, name, connectionId, localGitOptions, probeOptions)
+  )
 }

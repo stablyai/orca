@@ -31,6 +31,10 @@ export const QUEUED_ROW_SHOW_SETTLE_MS = 300
 
 type ShowRow = (row: LayoutRectangle) => void
 
+// Message ids cannot contain NUL.
+const ID_SEPARATOR = '\u0000'
+const NO_IDS: ReadonlySet<string> = new Set()
+
 /**
  * Scrolls the queue to one row (a failure that opened the list) once that row has laid out again.
  * A row whose height never changes reports no layout, so the request settles shortly after either way.
@@ -51,6 +55,20 @@ export function useQueuedRowShow(
   useLayoutEffect(() => {
     order.current = messageIds
   })
+  // Only queued rows keep a height, so a long conversation holds none for messages that left, and
+  // an id that comes back (a requeued draft) waits for its own fresh layout.
+  const liveKey = messageIds.join(ID_SEPARATOR)
+  // Filled before any row lays out: layout effects run before native layout events.
+  const live = useRef(NO_IDS)
+  useLayoutEffect(() => {
+    live.current = new Set(liveKey ? liveKey.split(ID_SEPARATOR) : [])
+    for (const messageId of heights.current.keys()) {
+      if (!live.current.has(messageId)) {
+        heights.current.delete(messageId)
+        fresh.current.delete(messageId)
+      }
+    }
+  }, [liveKey])
   useLayoutEffect(() => {
     fresh.current.clear()
   }, [showId])
@@ -73,6 +91,10 @@ export function useQueuedRowShow(
     height: number,
     show: ShowRow
   ) => {
+    // A row that already left can still report a layout queued before it went.
+    if (!live.current.has(messageId)) {
+      return
+    }
     const { showAll } = list
     shownAll.current = showAll
     heights.current.set(messageId, height)

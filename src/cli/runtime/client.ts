@@ -304,6 +304,13 @@ export class RuntimeClient {
   }
 
   async openOrca(timeoutMs = 15_000): Promise<RuntimeRpcSuccess<CliStatusResult>> {
-    return this.remote ? this.getCliStatus() : openLocalOrca(() => this.getCliStatus(), timeoutMs)
+    if (this.remote) {
+      return this.getCliStatus()
+    }
+    return openLocalOrca(
+      () => this.getCliStatus(),
+      (options) => this.call<{ requested: boolean }>('desktop.openWindowInBackground', {}, options),
+      timeoutMs
+    )
   }
 }

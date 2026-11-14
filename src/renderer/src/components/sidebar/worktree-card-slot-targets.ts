@@ -1,0 +1,262 @@
+import { collectLeafIds } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-layout-tree'
+import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
+import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type {
+  AgentStatusEntry,
+  AgentType
+} from '../../../../shared/agent-status/contracts/agent-status-types'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
+import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
+import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
+import {
+  workspaceMarkerTabIdsForHost,
+  workspaceMarkerPaneKeysForHost
+} from '@/store/slices/workspace-attention/workspace-marker-host'
+import {
+  completionPaneKeysByTabId,
+  paneKeyTabId,
+  workspaceMarkerTabs,
+  workspaceLiveMarkerTabIds
+} from '@/store/slices/workspace-attention/workspace-live-markers'
+import { activateWorktreeAgentPane } from './workspace-card/activity/use-worktree-agent-activation'
+import { expandWorktreeAgentList } from './workspace-card/activity/worktree-card-agents-expansion-state'
+import type { SlotAgentSignals } from './worktree-card-slot-agent-signals'
+import type { SlotLineKind, SlotLineSignal } from './worktree-card-slot-signal'
+
+/** The agent (or unread workspace) behind a rolled-up slot signal, so clicking the slot can open it. */
+export type SlotTarget = SlotLineSignal & {
+  worktreeId: string
+  executionHostId?: ExecutionHostId
+  /** Null for a workspace marked unread with no agent behind it. */
+  paneKey: string | null
+  /** A tab holding the workspace's unread marker; opens that tab rather than the workspace. */
+  tabId?: string
+  /** The user marked the workspace unread; it stands on its own instead of yielding to agents. */
+  markedByUser?: boolean
+  /** Completion subjects represented by this tab target; bells remain independent of agent rows. */
+  unreadPaneKeys?: readonly string[]
+  terminalBell?: boolean
+  agentType: AgentType | null
+  entry: AgentStatusEntry | null
+}
+
+const TARGET_KINDS: ReadonlySet<SlotLineKind> = new Set(['needs', 'failed', 'unread', 'working'])
+
+export function slotTargetsFromAgentLines(
+  worktreeId: string,
+  signals: SlotAgentSignals,
+  executionHostId?: ExecutionHostId
+): SlotTarget[] {
+  const targets: SlotTarget[] = []
+  for (const { agent, signal } of signals.lines) {
+    if (!TARGET_KINDS.has(signal.kind)) {
+      continue
+    }
+    targets.push({
+      ...signal,
+      worktreeId,
+      executionHostId,
+      // Subagents have no pane of their own; they open their spawning parent.
+      paneKey: agent.activationPaneKey ?? agent.paneKey,
+      agentType: agent.agentType,
+      entry: agent.entry
+    })
+  }
+  return targets
+}
+
+export function workspaceUnreadTarget(
+  worktreeId: string,
+  at: number | null,
+  executionHostId?: ExecutionHostId
+): SlotTarget {
+  return {
+    kind: 'unread',
+    at,
+    worktreeId,
+    executionHostId,
+    paneKey: null,
+    agentType: null,
+    entry: null
+  }
+}
+
+/**
+ * Resolves each workspace-level unread into the tabs that hold it, read at press time so the
+ * jump lands where the unread is. Your own mark stays a workspace target; a flag with no tab
+ * behind it (restart, a peer) stays one too.
+ */
+export function expandWorkspaceUnreadTargets(
+  state: AppState,
+  targets: readonly SlotTarget[]
+): SlotTarget[] {
+  return targets.flatMap((target) => {
+    if (target.kind !== 'unread' || target.paneKey !== null || target.tabId !== undefined) {
+      return [target]
+    }
+    const markedByUser = Boolean(
+      state.workspacesMarkedUnreadByUser[
+        composeWorktreeHostIdentity(target.executionHostId ?? 'local', target.worktreeId)
+      ]
+    )
+    const ownedTabs = workspaceMarkerTabIdsForHost(state, target.worktreeId, target.executionHostId)
+    const completionKeysByTab = completionPaneKeysByTabId(state.unreadAgentCompletionPanes)
+    const representedTabs = getStructuredAgentSessionTabsByPaneKey(
+      state.unifiedTabsByWorktree[target.worktreeId]
+    )
+    const structuredKeysByTabId = new Map([...representedTabs].map(([key, tab]) => [tab.id, key]))
+    const ownedPanes = workspaceMarkerPaneKeysForHost(
+      state,
+      target.worktreeId,
+      target.executionHostId,
+      workspaceMarkerTabs(state, target.worktreeId).flatMap((tab) =>
+        unreadPaneKeysForTab(
+          completionKeysByTab.get(tab.id) ?? [],
+          structuredKeysByTabId.get(tab.id)
+        )
+      )
+    )
+    const tabTargets = workspaceLiveMarkerTabIds(state, target.worktreeId)
+      .filter(
+        (tabId) =>
+          (ownedTabs.has(tabId) && Boolean(state.unreadTerminalTabs[tabId])) ||
+          (completionKeysByTab.get(tabId) ?? []).some((key) => ownedPanes.has(key))
+      )
+      .map((tabId): SlotTarget => ({
+        ...target,
+        tabId,
+        terminalBell: ownedTabs.has(tabId) && state.unreadTerminalTabs[tabId] === 'terminal-bell',
+        unreadPaneKeys: unreadPaneKeysForTab(
+          (completionKeysByTab.get(tabId) ?? []).filter((key) => ownedPanes.has(key)),
+          structuredKeysByTabId.get(tabId)
+        )
+      }))
+    return tabTargets.length === 0 || markedByUser
+      ? [...tabTargets, { ...target, markedByUser }]
+      : tabTargets
+  })
+}
+
+/** A structured chat tab owns only its current session's key; a terminal tab owns all of its panes. */
+function unreadPaneKeysForTab(
+  tabKeys: readonly string[],
+  structuredKey: string | undefined
+): readonly string[] {
+  return structuredKey === undefined ? tabKeys : tabKeys.filter((key) => key === structuredKey)
+}
+
+function workspaceKey(target: SlotTarget) {
+  return composeWorktreeHostIdentity(target.executionHostId ?? 'local', target.worktreeId)
+}
+
+/** Targets for the one kind a slot shows, newest first; workspace-level unread yields to the agents that explain it. */
+export function slotTargetsOfKind(
+  targets: readonly SlotTarget[],
+  kind: SlotLineKind
+): SlotTarget[] {
+  const ofKind = targets.filter((target) => target.kind === kind)
+  const agentTargets = ofKind.filter((target) => target.paneKey !== null)
+  const agentTabs = new Set(
+    agentTargets.map((target) => `${workspaceKey(target)}\n${paneKeyTabId(target.paneKey!) ?? ''}`)
+  )
+  const agentPanes = new Set(
+    agentTargets.map((target) => `${workspaceKey(target)}\n${target.paneKey}`)
+  )
+  const seen = new Set<string>()
+  return ofKind
+    .filter((target) => {
+      if (target.paneKey !== null || target.markedByUser || target.terminalBell) {
+        return true
+      }
+      if (target.tabId !== undefined && target.unreadPaneKeys?.length) {
+        return !target.unreadPaneKeys.every((key) =>
+          agentPanes.has(`${workspaceKey(target)}\n${key}`)
+        )
+      }
+      // A marker tab whose agent already has its own target is that agent's unread, not another one.
+      return target.tabId !== undefined
+        ? !agentTabs.has(`${workspaceKey(target)}\n${target.tabId}`)
+        : true
+    })
+    .filter((target) => {
+      const key = `${workspaceKey(target)}\n${target.paneKey ?? ''}\n${target.tabId ?? ''}`
+      if (seen.has(key)) {
+        return false
+      }
+      seen.add(key)
+      return true
+    })
+    .sort((a, b) => (b.at ?? 0) - (a.at ?? 0))
+}
+
+/** Only the unread sources not already represented by the card's visible agent rows. */
+export function workspaceUnreadTargetsOutsideAgentRows(
+  state: AppState,
+  target: SlotTarget,
+  visibleAgents: readonly SlotTarget[]
+): SlotTarget[] {
+  return slotTargetsOfKind(
+    [...visibleAgents, ...expandWorkspaceUnreadTargets(state, [target])],
+    'unread'
+  ).filter((candidate) => candidate.paneKey === null)
+}
+
+/** Open the target the way its own row would, after unfolding its card's agent list. */
+export function openSlotTarget(target: SlotTarget): void {
+  if (target.tabId !== undefined) {
+    activateUnreadTab(
+      target.worktreeId,
+      target.tabId,
+      target.executionHostId,
+      target.unreadPaneKeys
+    )
+    return
+  }
+  const representedTab = target.paneKey
+    ? getStructuredAgentSessionTabsByPaneKey(useAppStore.getState().unifiedTabsByWorktree).get(
+        target.paneKey
+      )
+    : undefined
+  const tabId = representedTab?.id ?? (target.paneKey ? parsePaneKey(target.paneKey)?.tabId : null)
+  if (!target.paneKey || !tabId) {
+    activateAndRevealWorkspace(target.worktreeId, { executionHostId: target.executionHostId })
+    return
+  }
+  expandWorktreeAgentList(target.worktreeId, target.executionHostId)
+  activateWorktreeAgentPane(target.worktreeId, tabId, target.paneKey, target.executionHostId)
+}
+
+/** Open the tab holding a marker the way Activity opens a thread's tab; arriving reads it. */
+function activateUnreadTab(
+  worktreeId: string,
+  tabId: string,
+  executionHostId: ExecutionHostId | undefined,
+  unreadPaneKeys: readonly string[] | undefined
+): void {
+  if (activateAndRevealWorkspace(worktreeId, { executionHostId }) === false) {
+    return
+  }
+  if (activateStructuredAgentSessionTab({ worktreeId, tabId })) {
+    return
+  }
+  const state = useAppStore.getState()
+  if ((state.tabsByWorktree[worktreeId] ?? []).some((tab) => tab.id === tabId)) {
+    state.setActiveTabType('terminal', worktreeId)
+    const layout = state.terminalLayoutsByTabId[tabId]
+    const leafId =
+      unreadPaneKeys
+        ?.map((key) => parsePaneKey(key))
+        .find(
+          (pane) =>
+            pane?.tabId === tabId && layout && collectLeafIds(layout.root).includes(pane.leafId)
+        )?.leafId ?? null
+    activateTabAndFocusPane(tabId, leafId, {
+      flashFocusedPane: true,
+      scrollToBottomIfOutputSinceLastView: true
+    })
+  }
+}

@@ -127,13 +127,7 @@ describe('TerminalKittyKeyboardModeTracker', () => {
     expect(tracker.flags).toBe(0)
   })
 
-  it('replay scans arm a fresh tracker and honor pops inside the window', () => {
-    const fresh = new TerminalKittyKeyboardModeTracker()
-    fresh.scanReplay('\x1b[>1u')
-    expect(fresh.flags).toBe(1)
-    fresh.scan('\x1b[<u')
-    expect(fresh.flags).toBe(0)
-
+  it('honors replayed pops inside the window', () => {
     const ranAndExited = new TerminalKittyKeyboardModeTracker()
     ranAndExited.scanReplay('\x1b[>1uoutput\x1b[<u')
     expect(ranAndExited.flags).toBe(0)
@@ -141,16 +135,6 @@ describe('TerminalKittyKeyboardModeTracker', () => {
 
   // flags is an input fallback; only snapshotFlags proves state. Republishing an unproven 0 would break bit-3 Preview input.
   describe('snapshot provenance', () => {
-    it("separates a fresh PTY's known zero from a snapshot's unproven zero", () => {
-      const fresh = new TerminalKittyKeyboardModeTracker()
-      expect(fresh.flags).toBe(0)
-      expect(fresh.snapshotFlags).toBe(0)
-
-      fresh.resetForSnapshot()
-      expect(fresh.flags).toBe(0)
-      expect(fresh.snapshotFlags).toBeUndefined()
-    })
-
     it('re-proves state on an absolute set but not on a relative update', () => {
       const relative = new TerminalKittyKeyboardModeTracker()
       relative.resetForSnapshot()

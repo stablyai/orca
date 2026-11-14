@@ -1,4 +1,4 @@
-import { unregisteredFolderRefusal } from '../../../shared/worktree/removal'
+import { unregisteredFolderRefusal } from '../../../shared/worktree/removal/removal'
 import { usesNativeWindowsRemoval } from '../../git/worktrees/removal/windows-worktree-removal'
 import type { LocalProjectWorktreeGitOptions } from '../execution-host/project-runtime-git-options'
 import { lstat } from 'node:fs/promises'

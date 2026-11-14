@@ -7,7 +7,7 @@ import { RuntimeClientError } from '../../runtime/types'
 import {
   PLUGIN_SHOT_MAX_WIDTH,
   PLUGIN_SHOT_MIN_WIDTH
-} from '../../../shared/rpc-contract/plugins-params'
+} from '../../../shared/rpc-contract/plugins/plugins-params'
 import {
   parsePluginShotActs,
   type PluginShotAct,

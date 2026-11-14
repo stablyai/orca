@@ -3,7 +3,7 @@ import { defineMethod } from '../../../core'
 import {
   ListIssues,
   McpListIssues
-} from '../../../../../../shared/rpc-contract/linear-issue-list-params'
+} from '../../../../../../shared/rpc-contract/linear/linear-issue-list-params'
 
 export const LINEAR_ISSUE_LIST_METHOD = defineMethod({
   name: 'linear.listIssues',
