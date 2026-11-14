@@ -157,7 +157,8 @@ describe('persisted conversation inventory identity', () => {
       hostId: 'local',
       logger: createStructuredAgentSessionLogger(),
       writerPath: journalSqlWorkerPath(),
-      readerPath: journalSqlReaderPath()
+      readerPath: journalSqlReaderPath(),
+      onMaintenanceTick: () => {}
     })
     const db = new OrchestrationDb(':memory:')
     try {

@@ -88,7 +88,8 @@ it('keeps startup and option reads available when the SQL permission backfill fa
     logger: logged.logger,
     legacySessionTabIds: [],
     writerPath: journalSqlWorkerPath(),
-    readerPath: journalSqlReaderPath()
+    readerPath: journalSqlReaderPath(),
+    onMaintenanceTick: () => {}
   })
   const host = await ensureStructuredAgentSessionHost({
     logger: logged.logger,

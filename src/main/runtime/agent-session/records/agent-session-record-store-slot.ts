@@ -15,6 +15,9 @@ export type AgentSessionRecordStoreLocation = {
   hostId: string
   logger: StructuredAgentSessionLogger
   legacySessionTabIds: readonly string[]
+  maintenanceAfter?: Promise<void>
+  /** Required: whichever opener wins the once-slot owns the store's maintenance pass for every later caller. */
+  onMaintenanceTick: () => void
 } & Pick<
   Parameters<typeof openStructuredAgentSessionSqlJournalDatabase>[0],
   'writerPath' | 'readerPath'
@@ -71,7 +74,12 @@ export function openAgentSessionRecordStoreOnce(
         slot.database = opened.journalDatabase
         if (!slot.retire) {
           slot.store = opened.store
-          void opened.journalDatabase.startMaintenance()
+          // A startup opener holds background maintenance until its host's listening milestone.
+          void Promise.resolve(location.maintenanceAfter).then(() => {
+            if (!slot.retire) {
+              void opened.journalDatabase.startMaintenance()
+            }
+          })
         } else {
           opened.journalDatabase.stopMaintenance()
         }

@@ -29,13 +29,17 @@ export async function openStructuredAgentSessionSqlJournalDatabase(
     stateDirectory: string
     logger: StructuredAgentSessionLogger
     closeFailedOpen?: (database: JournalSqlDatabase) => Promise<void>
-  } & Pick<Parameters<typeof JournalSqlDatabase.open>[1], 'writerPath' | 'readerPath'>
+  } & Pick<
+    Parameters<typeof JournalSqlDatabase.open>[1],
+    'writerPath' | 'readerPath' | 'onMaintenanceTick'
+  >
 ) {
   let journalDatabase: JournalSqlDatabase | undefined
   try {
     journalDatabase = await JournalSqlDatabase.open(args.stateDirectory, {
       writerPath: args.writerPath,
       readerPath: args.readerPath,
+      onMaintenanceTick: args.onMaintenanceTick,
       onMaintenanceError: (error, sessionId) =>
         args.logger.error('maintaining the chat journal database failed', {
           scope: 'journal-database-maintenance',

@@ -9,6 +9,7 @@ import type { AgentSessionJournal } from '../../native-chat/agent-session-journa
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { openAgentSessionRecordStoreOnce } from './records/agent-session-record-store-slot'
+import { isHostShuttingDown } from '../../startup/quit/host-shutdown-state'
 
 export type PRWatchRuntimeDeps = {
   stateDirectory: string
@@ -19,6 +20,8 @@ export type PRWatchRuntimeDeps = {
 }
 
 let generation = 0
+let admitted = false
+let admittedDeps: PRWatchRuntimeDeps | null = null
 let starting: Promise<void> | null = null
 let running: PRWatchService | null = null
 
@@ -32,16 +35,27 @@ function openChatJournal(chatId: string): AgentSessionJournal | null {
   return journal
 }
 
-/** Idempotent; reuses the record store slot the chat host opens, so nothing opens twice. */
-export function startPRWatchRuntime(deps: PRWatchRuntimeDeps): Promise<void> {
+/** Idempotent; reuses the record store slot the chat host opens, so nothing opens twice.
+ *  `admit` is the host's serving milestone; before it, other callers wait for that first start. */
+export function startPRWatchRuntime(
+  deps: PRWatchRuntimeDeps,
+  options: { admit?: boolean } = {}
+): Promise<void> {
+  admitted ||= options.admit === true
+  if (!admitted || isHostShuttingDown()) {
+    return Promise.resolve()
+  }
+  admittedDeps = deps
   const startedIn = generation
   starting ??= (async () => {
-    const { store, journalDatabase } = await openAgentSessionRecordStoreOnce({
-      stateDirectory: deps.stateDirectory,
-      legacySessionTabIds: [...deps.legacySessionTabIds],
-      hostId: deps.hostId,
-      logger: deps.logger
-    })
+    const { store, journalDatabase } = await openAgentSessionRecordStoreOnce(
+      withPRWatchRecovery({
+        stateDirectory: deps.stateDirectory,
+        legacySessionTabIds: [...deps.legacySessionTabIds],
+        hostId: deps.hostId,
+        logger: deps.logger
+      })
+    )
     if (startedIn !== generation) {
       return
     }
@@ -63,7 +77,16 @@ export function startPRWatchRuntime(deps: PRWatchRuntimeDeps): Promise<void> {
       logger: deps.logger
     })
     running = service
-    await service.start()
+    try {
+      await service.start()
+    } catch (error) {
+      // A partly started service holds its outcome observer and job hooks; release them before a retry.
+      if (running === service) {
+        service.stop()
+        running = null
+      }
+      throw error
+    }
   })().catch((error: unknown) => {
     // A stopped run's failure must not clear a newer run's start.
     if (startedIn === generation) {
@@ -72,6 +95,20 @@ export function startPRWatchRuntime(deps: PRWatchRuntimeDeps): Promise<void> {
     deps.logger.warn('starting CI-line watches failed', { scope: 'pr-watch', error })
   })
   return starting
+}
+
+/** Every record-store opener's location: the store's maintenance pass then retries a failed watch start. */
+export function withPRWatchRecovery<T extends object>(
+  location: T
+): T & { onMaintenanceTick: () => void } {
+  return { ...location, onMaintenanceTick: resumePRWatchRuntime }
+}
+
+/** The journal's periodic maintenance pass retries an admitted start that failed; a no-op otherwise. */
+export function resumePRWatchRuntime(): void {
+  if (admittedDeps && !running && !starting) {
+    void startPRWatchRuntime(admittedDeps)
+  }
 }
 
 /** Before the journal database closes; the next start rebuilds from the saved tables. */

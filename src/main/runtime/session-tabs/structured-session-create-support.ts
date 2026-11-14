@@ -299,12 +299,15 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
   }
 
   protected async prepareStructuredAgentSessionStartupRestorationOnce(): Promise<void> {
-    if (!this.hasPersistedStructuredAgentSessionStore()) {
+    const startup = this.structuredAgentSessionStartupOpen
+    this.structuredAgentSessionStartupOpen = undefined
+    if (!(startup ? startup.persisted : this.hasPersistedStructuredAgentSessionStore())) {
       return
     }
     // Load durable agent records before reconciling daemon inventory; refused hosts block only structured requests, not app startup.
+    // This startup's refused open is its answer; a later chat request retries the install.
     await ensureStructuredAgentSessionHostUnlessRefused(() =>
-      this.ensureStructuredAgentSessionHost()
+      Promise.resolve(startup?.opened).then(() => this.ensureStructuredAgentSessionHost())
     )
     await this.refreshMobileSessionPtyRecords()
     await getStructuredAgentSessionHost()?.reconcileRestartLeases()

@@ -28,7 +28,8 @@ export class JournalSqlBackgroundMaintenance {
     private readonly readers: Pick<JournalSqlReaderPool, 'database'>,
     private readonly conversions: Pick<JournalSqlConversions, 'ensure'>,
     private readonly activity: JournalSqlActivity,
-    private readonly onError: (error: unknown, sessionId?: string) => void
+    private readonly onError: (error: unknown, sessionId?: string) => void,
+    private readonly onTick?: () => void
   ) {}
 
   private legacyRetirement?: JournalLegacyRetirement
@@ -73,6 +74,11 @@ export class JournalSqlBackgroundMaintenance {
     }
     this.timer = setTimeout(() => {
       this.timer = undefined
+      try {
+        this.onTick?.()
+      } catch (error) {
+        this.report(error)
+      }
       this.periodic = true
       this.reclaim = 1024
       this.wake.abort()

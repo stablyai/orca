@@ -56,9 +56,14 @@ export async function ensureTestStructuredAgentSessionHost(
 }
 
 export function openTestAgentSessionRecordStoreSlot(
-  location: Omit<Parameters<typeof openAgentSessionRecordStoreOnce>[0], 'writerPath' | 'readerPath'>
+  location: Omit<
+    Parameters<typeof openAgentSessionRecordStoreOnce>[0],
+    'writerPath' | 'readerPath' | 'onMaintenanceTick'
+  > &
+    Partial<Pick<Parameters<typeof openAgentSessionRecordStoreOnce>[0], 'onMaintenanceTick'>>
 ): ReturnType<typeof openAgentSessionRecordStoreOnce> {
   return openAgentSessionRecordStoreOnce({
+    onMaintenanceTick: () => {},
     ...location,
     writerPath: journalSqlWorkerPath(),
     readerPath: journalSqlReaderPath()
