@@ -129,7 +129,7 @@ export function BrowserPageChromeBanners({
                     )}
           </span>
           {grabIntent === 'annotate' ? (
-            <SendNotesSlot>
+            <SendNotesSlot className="justify-end">
               <BrowserAnnotationSendMenu
                 annotationCount={browserAnnotationsLength}
                 sendableCount={sendableAnnotationCount}

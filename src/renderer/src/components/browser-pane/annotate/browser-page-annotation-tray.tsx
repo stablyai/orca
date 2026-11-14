@@ -121,7 +121,7 @@ export function BrowserPageAnnotationTray({
                   )}
             </TooltipContent>
           </Tooltip>
-          <SendNotesSlot>
+          <SendNotesSlot className="justify-end">
             <BrowserAnnotationSendMenu
               annotationCount={browserAnnotations.length}
               sendableCount={sendableAnnotationCount}

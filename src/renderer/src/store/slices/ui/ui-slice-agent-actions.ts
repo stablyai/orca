@@ -9,6 +9,7 @@ import {
 } from '../../../lib/agent-session/messaging/running-agent-targets'
 import { translate } from '@/i18n/i18n'
 import { createUiActivityActions } from './ui-slice-activity-actions'
+import { selectKnownWorktreeById } from '../../workspaces/selection/known-worktree-selection'
 
 let agentSendTargetModeInstanceCounter = 0
 
@@ -96,8 +97,12 @@ export function createUiAgentActions(
       ) {
         return false
       }
-      get().setRightSidebarTab('source-control')
-      get().setRightSidebarOpen(true)
+      // The Changes tab's Send notes button answers the request once its toolbar is showing.
+      const worktree = selectKnownWorktreeById(get(), worktreeId)
+      if (!worktree) {
+        return false
+      }
+      get().openAllDiffs(worktreeId, worktree.path)
       const nonce = (get().diffNotesSendMenuOpenRequest?.nonce ?? 0) + 1
       set({ diffNotesSendMenuOpenRequest: { worktreeId, nonce, issuedAt: Date.now() } })
       return true

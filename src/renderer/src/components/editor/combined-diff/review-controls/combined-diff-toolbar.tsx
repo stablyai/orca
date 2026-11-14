@@ -1,6 +1,7 @@
 import type React from 'react'
 import { PanelLeftOpen, Space, WrapText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useAppStore } from '@/store'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -82,6 +83,7 @@ export function CombinedDiffToolbar({
   toggleSideBySide: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const isFocusedTab = useAppStore((s) => s.activeFileId === file.id)
   return (
     <div className="flex items-center justify-between gap-3 px-3 py-1.5 border-b border-border bg-background/50 shrink-0">
       <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -122,6 +124,8 @@ export function CombinedDiffToolbar({
             comments={diffCommentsForWorktree}
             align="start"
             batch={{ flush: true }}
+            // Only the focused Changes tab opens for the Send review notes shortcut.
+            respondToOpenRequest={isFocusedTab}
           />
         </SendNotesSlot>
       </div>

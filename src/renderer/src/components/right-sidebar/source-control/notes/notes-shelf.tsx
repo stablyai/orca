@@ -1,10 +1,7 @@
-import { useSourceControlScope, useSourceControlState } from '../panel/worktree-scope'
 import { useDiffCommentView } from '@/components/diff-comments/use-diff-comment-owner'
 import type { AppState } from '@/store/types'
 import React from 'react'
 import { Check, ChevronDown, Copy, MessageSquare, MoreHorizontal, Trash2 } from 'lucide-react'
-import { DiffNotesSendMenu } from '@/components/editor/diff/review/DiffNotesSendMenu'
-import { SendNotesSlot } from '@/components/editor/review-note-delivery/SendNotesButton'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,7 +17,6 @@ import { DiffCommentsInlineList } from './diff-comments-list'
 
 export function SourceControlNotesShelf({
   activeWorktreeId,
-  activeGroupId,
   diffCommentsForActive,
   diffCommentCount,
   diffCommentsExpanded,
@@ -32,7 +28,6 @@ export function SourceControlNotesShelf({
   handleOpenComment
 }: {
   activeWorktreeId: string
-  activeGroupId: string | null | undefined
   diffCommentsForActive: DiffComment[]
   diffCommentCount: number
   diffCommentsExpanded: boolean
@@ -44,17 +39,13 @@ export function SourceControlNotesShelf({
   handleOpenComment: (comment: DiffComment) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const scope = useSourceControlScope()
-  const placementGroupId = useSourceControlState((s) =>
-    scope ? s.activeGroupIdByWorktree[scope.placementWorkspaceId] : undefined
-  )
   const { owner } = useDiffCommentView(activeWorktreeId, 'selection')
   return (
     <div className="border-b border-border">
       <div className="flex items-center gap-1 pl-3 pr-2 py-1.5">
         <button
           type="button"
-          className="flex min-h-6 min-w-0 items-center gap-1.5 text-left text-xs text-muted-foreground hover:text-foreground transition-colors"
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-xs text-muted-foreground hover:text-foreground transition-colors"
           onClick={() => setDiffCommentsExpanded((prev) => !prev)}
           aria-expanded={diffCommentsExpanded}
           title={
@@ -70,21 +61,13 @@ export function SourceControlNotesShelf({
             )}
           />
           <MessageSquare className="size-3.5 shrink-0" />
-          <span className="truncate">
-            {t('auto.components.right.sidebar.SourceControl.cc474e0b8c', 'Notes')}
-          </span>
+          <span>{t('auto.components.right.sidebar.SourceControl.cc474e0b8c', 'Notes')}</span>
+          {diffCommentCount > 0 && (
+            <span className="text-[11px] leading-none text-muted-foreground tabular-nums">
+              {diffCommentCount}
+            </span>
+          )}
         </button>
-        <SendNotesSlot className="ml-1">
-          <DiffNotesSendMenu
-            owner={owner}
-            worktreeId={activeWorktreeId}
-            groupId={placementGroupId ?? activeGroupId ?? activeWorktreeId}
-            comments={diffCommentsForActive}
-            align="start"
-            batch={{ flush: true }}
-            respondToOpenRequest
-          />
-        </SendNotesSlot>
         <div className="ml-1 flex shrink-0 items-center gap-1.5">
           {diffCommentCount > 0 && (
             <TooltipProvider>

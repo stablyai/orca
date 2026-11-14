@@ -9,7 +9,6 @@ import type { SourceControlPanelReadyProps } from './panel-props'
 export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
   const { model, worktreePath } = props
   const {
-    activeGroupId,
     activeWorktreeId,
     branchLineTotal,
     branchSummary,
@@ -104,7 +103,6 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
         {activeWorktreeId && worktreePath && diffCommentCount > 0 && (
           <SourceControlNotesShelf
             activeWorktreeId={activeWorktreeId}
-            activeGroupId={activeGroupId}
             diffCommentsForActive={diffCommentsForActive}
             diffCommentCount={diffCommentCount}
             diffCommentsExpanded={diffCommentsExpanded}
