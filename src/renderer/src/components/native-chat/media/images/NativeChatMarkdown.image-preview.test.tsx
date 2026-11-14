@@ -255,6 +255,42 @@ describe('native chat Markdown image preview', () => {
     expect(screen.getAllByRole('button', { name: /^View image/ })).toHaveLength(1)
   })
 
+  it('mounts a preview only once it nears the viewport, then keeps it', async () => {
+    const observed = new Map<Element, (entries: IntersectionObserverEntry[]) => void>()
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(private readonly report: (entries: IntersectionObserverEntry[]) => void) {}
+        observe(element: Element): void {
+          observed.set(element, this.report)
+        }
+        unobserve(element: Element): void {
+          observed.delete(element)
+        }
+        disconnect(): void {}
+      }
+    )
+    const scrolledTo = (isIntersecting: boolean): void => {
+      act(() => {
+        for (const [target, report] of observed) {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: transcript visibility reads only target and isIntersecting.
+          report([{ target, isIntersecting } as IntersectionObserverEntry])
+        }
+      })
+    }
+    render(<Transcript content="[far](shots/far.png)" />)
+    expect(screen.queryByRole('button', { name: /^View image/ })).toBeNull()
+    expect(screen.getByRole('img', { name: 'far.png' })).toBeInTheDocument()
+    expect(mocks.readRuntimeFilePreview).not.toHaveBeenCalled()
+
+    scrolledTo(true)
+    expect(screen.getByRole('button', { name: 'View image: far.png' })).toBeInTheDocument()
+    scrolledTo(true)
+    expect(await screen.findByRole('img')).toHaveAttribute('src', 'blob:image-1')
+    scrolledTo(false)
+    expect(screen.getByRole('button', { name: 'View image: far.png' })).toBeInTheDocument()
+  })
+
   it('keeps each linked image in its own list item', async () => {
     render(<Transcript content={'- [first](shots/a.png)\n- [second](shots/b.png)'} />)
     const items = screen.getAllByRole('listitem')
