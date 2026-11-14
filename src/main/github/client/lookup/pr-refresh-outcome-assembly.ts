@@ -11,6 +11,7 @@ import type {
 import { mapPRState } from '../../api/github-read-response'
 import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type { PullRequestLookupData } from './pull-request-lookup-data'
+import { latestReviewsFromUnknown } from '../map/work-item-field-coercion'
 
 // Main-only: the full rollup stays off the renderer broadcast, beside the outcome it was read for.
 const observedRollups = new WeakMap<PRRefreshOutcome, readonly unknown[]>()
@@ -61,6 +62,9 @@ export function assemblePRRefreshFoundOutcome(args: {
       updatedAt: data.updatedAt,
       mergeable,
       ...(data.reviewDecision !== undefined ? { reviewDecision: data.reviewDecision } : {}),
+      ...(data.latestReviews !== undefined
+        ? { latestReviews: latestReviewsFromUnknown(data.latestReviews) }
+        : {}),
       ...(data.autoMergeEnabled !== undefined ? { autoMergeEnabled: data.autoMergeEnabled } : {}),
       ...(data.autoMergeAllowed !== undefined ? { autoMergeAllowed: data.autoMergeAllowed } : {}),
       ...(stackMergeQueueRequired !== undefined || data.mergeQueueRequired !== undefined

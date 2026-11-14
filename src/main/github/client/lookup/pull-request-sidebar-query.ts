@@ -20,6 +20,7 @@ const SIDEBAR_QUERY = `query($owner: String!, $repo: String!, $number: Int!, $ch
     pullRequest(number: $number) {
       number title state url updatedAt isDraft mergeable reviewDecision mergeStateStatus
       autoMergeRequest { enabledAt }
+      latestOpinionatedReviews(first: 100) { nodes { author { login avatarUrl } state } }
       baseRefName headRefName baseRefOid headRefOid isCrossRepository
       headRepositoryOwner { login }
       headRepository { name }
@@ -50,6 +51,7 @@ const pullRequestSchema = z.object({
   reviewDecision: z.enum(['APPROVED', 'CHANGES_REQUESTED', 'REVIEW_REQUIRED']).nullable(),
   mergeStateStatus: z.string().nullable(),
   autoMergeRequest: z.object({ enabledAt: z.string() }).nullable(),
+  latestOpinionatedReviews: z.object({ nodes: z.array(z.unknown()) }).nullish(),
   baseRefName: z.string(),
   headRefName: z.string(),
   baseRefOid: z.string().nullable(),
@@ -190,9 +192,10 @@ export async function readPullRequestSidebarQuery(
   const validStack = stack.success && entry.success && entry.data.position <= stack.data.size
   const stackMetadataChecked =
     stackErrors.length === 0 && ((pr.stack === null && pr.stackEntry === null) || validStack)
-  const { commits: _commits, stackEntry: _stackEntry, ...metadata } = pr
+  const { commits: _commits, stackEntry: _stackEntry, latestOpinionatedReviews, ...metadata } = pr
   return {
     ...metadata,
+    latestReviews: latestOpinionatedReviews?.nodes,
     baseRefOid: pr.baseRefOid ?? undefined,
     headRefOid: pr.headRefOid ?? undefined,
     statusCheckRollup: statusCheckRollup ?? [],

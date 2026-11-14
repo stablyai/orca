@@ -19116,6 +19116,15 @@
         "title": "Orca bu tarayıcıyı reddetti",
         "retry": "Yeniden dene"
       }
+    },
+    "hostedReview": {
+      "reviewStatus": {
+        "approvedBy": "{{logins}} onayladı",
+        "approved": "Onaylandı",
+        "changesRequestedBy": "{{logins}} değişiklik istedi",
+        "changesRequested": "Değişiklik istendi",
+        "reviewRequired": "İnceleme gerekli"
+      }
     }
   },
   "components": {

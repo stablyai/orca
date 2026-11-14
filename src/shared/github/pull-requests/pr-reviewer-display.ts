@@ -187,3 +187,32 @@ export function getGitHubPRReviewerRows(item: ReviewDisplayItem): GitHubPRReview
   }
   return Array.from(byLogin.values())
 }
+
+export type GitHubPRReviewStatus = {
+  kind: 'approved' | 'changesRequested' | 'reviewRequired'
+  logins: string[]
+}
+
+// GitHub's decision wins; without a required-review rule, a requested change outranks approvals.
+export function getGitHubPRReviewStatus(
+  item: Pick<ReviewDisplayItem, 'reviewDecision' | 'latestReviews'>
+): GitHubPRReviewStatus | null {
+  const loginsIn = (state: string): string[] =>
+    uniqueLogins((item.latestReviews ?? []).filter((r) => r.state === state).map((r) => r.login))
+  const changesRequestedBy = loginsIn('CHANGES_REQUESTED')
+  const approvedBy = loginsIn('APPROVED')
+  switch (item.reviewDecision) {
+    case 'CHANGES_REQUESTED':
+      return { kind: 'changesRequested', logins: changesRequestedBy }
+    case 'APPROVED':
+      return { kind: 'approved', logins: approvedBy }
+    case 'REVIEW_REQUIRED':
+      return { kind: 'reviewRequired', logins: [] }
+    case null:
+    case undefined:
+      if (changesRequestedBy.length > 0) {
+        return { kind: 'changesRequested', logins: changesRequestedBy }
+      }
+      return approvedBy.length > 0 ? { kind: 'approved', logins: approvedBy } : null
+  }
+}
