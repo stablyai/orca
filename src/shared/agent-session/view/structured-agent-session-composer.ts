@@ -78,7 +78,7 @@ function commandParts(text: string, agent?: AgentType) {
     return null
   }
   const token = match[1]!.toLowerCase()
-  const name = agent === 'codex' && token === 'new' ? 'clear' : token
+  const name = (agent === 'codex' || agent === 'claude') && token === 'new' ? 'clear' : token
   const argument = match[2]?.trim() ?? ''
   // Other commands take one line; a longer message that starts with their name is for the agent.
   return /[\n\r\u2028\u2029]/.test(argument) &&
