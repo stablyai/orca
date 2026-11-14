@@ -11,10 +11,10 @@ import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-w
 import {
   resolveCommittedStructuredAgentSessionAdoptionIntent,
   requireUnownedStructuredAgentSessionAdoption,
-  resolveStructuredAgentSessionAdoptionForCreate,
   structuredAgentSessionAdoptAttach,
   type StructuredAgentSessionCreateIntentInput
 } from '../agent-session/structured-agent-session-create-adoption'
+import { resolveStructuredAgentSessionAdoptionForCreateOrFresh } from '../agent-session/structured-agent-session-create-adoption-fresh'
 import type { AgentSessionAttachParams } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
 import {
   resolveHostStructuredAgentCreateSupport,
@@ -214,7 +214,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     // Adoption pins the transcript's actual account home; fresh-create defaults may open a blank conversation under the old name.
     const adoption =
       resumeFrom && transcriptImport
-        ? await resolveStructuredAgentSessionAdoptionForCreate({
+        ? await resolveStructuredAgentSessionAdoptionForCreateOrFresh({
             settings,
             agent: input.agent,
             transcriptImport,
@@ -232,6 +232,9 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
             workspaceCwd: workspaceCwd
           })
         : null
+    // A fresh fallback is a new chat, so it takes the configured new-chat defaults the resume seed withheld.
+    const seedOptions =
+      resumeFrom && !adoption ? structuredLaunchSeedOptions(settings, input.agent) : options
     return {
       envelope: {
         sessionId: input.envelope.sessionId,
@@ -243,7 +246,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
       provider: input.agent,
       agent: input.agent,
       accountHome: adoption ? adoption.accountHome : selectedAccountHome,
-      ...(options ? { options } : {}),
+      ...(seedOptions ? { options: seedOptions } : {}),
       ...(input.resumeFrom && adoption
         ? {
             adopt: structuredAgentSessionAdoptAttach({
