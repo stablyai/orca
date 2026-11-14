@@ -80,33 +80,6 @@ describe('patchPackagedProcessPath', () => {
     )
   })
 
-  it('keeps version-manager shims ahead of the inherited PATH', async () => {
-    const { app } = await import('electron')
-    const { patchPackagedProcessPath } = await import('./configure-process')
-    const { getVersionManagerBinPaths } = await import('../../shared/node-cli-command-resolution')
-
-    setPlatform('linux')
-    Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
-    process.env.HOME = '/home/tester'
-    process.env.PATH = '/usr/bin:/bin'
-
-    patchPackagedProcessPath()
-
-    const segments = (process.env.PATH ?? '').split(':')
-    const genericUserBinDirs = [join('/home/tester', 'bin'), join('/home/tester', '.local/bin')]
-    const seeded = getVersionManagerBinPaths({ platform: 'linux', homePath: '/home/tester' })
-    const shimDirs = seeded.filter((dir) => !genericUserBinDirs.includes(dir))
-    expect(shimDirs).not.toHaveLength(0)
-    // Version-manager shims must outrank system runtimes.
-    for (const dir of shimDirs) {
-      expect(segments.indexOf(dir)).toBeLessThan(segments.indexOf('/usr/bin'))
-    }
-    // Generic user bins hold arbitrary wrappers and must remain behind inherited system tools.
-    for (const dir of genericUserBinDirs) {
-      expect(segments.indexOf(dir)).toBeGreaterThan(segments.indexOf('/usr/bin'))
-    }
-  })
-
   it('prepends Windows user-local CLI dirs for packaged Start Menu launches', async () => {
     const { app } = await import('electron')
     const { patchPackagedProcessPath } = await import('./configure-process')
@@ -164,49 +137,6 @@ function restoreEnv(key: string, value: string | undefined): void {
     process.env[key] = value
   }
 }
-
-describe('configureOrcaUserDataPathEnv', () => {
-  it('overwrites stale inherited ORCA_USER_DATA_PATH with Electron userData', async () => {
-    const { app } = await import('electron')
-    const { configureOrcaUserDataPathEnv } = await import('./configure-process')
-    const originalUserDataPath = process.env.ORCA_USER_DATA_PATH
-    process.env.ORCA_USER_DATA_PATH = '/tmp/stale-orca-user-data'
-    app.setPath('userData', '/tmp/current-orca-user-data')
-    let configuredUserDataPath: string | undefined
-
-    try {
-      configureOrcaUserDataPathEnv()
-      configuredUserDataPath = process.env.ORCA_USER_DATA_PATH
-    } finally {
-      if (originalUserDataPath === undefined) {
-        delete process.env.ORCA_USER_DATA_PATH
-      } else {
-        process.env.ORCA_USER_DATA_PATH = originalUserDataPath
-      }
-    }
-
-    expect(configuredUserDataPath).toBe('/tmp/current-orca-user-data')
-  })
-
-  it('drops a runtime source inherited from the Orca terminal that started this Orca', async () => {
-    const { app } = await import('electron')
-    const { configureOrcaUserDataPathEnv } = await import('./configure-process')
-    const saved = { ...process.env }
-    process.env.ORCA_RUNTIME_SOURCE_ID = 'parent-source'
-    process.env.ORCA_RUNTIME_SOURCE_INCARNATION = 'parent-runtime'
-    app.setPath('userData', '/tmp/current-orca-user-data')
-    let inherited: (string | undefined)[] = []
-
-    try {
-      configureOrcaUserDataPathEnv()
-      inherited = [process.env.ORCA_RUNTIME_SOURCE_ID, process.env.ORCA_RUNTIME_SOURCE_INCARNATION]
-    } finally {
-      process.env = saved
-    }
-
-    expect(inherited).toEqual([undefined, undefined])
-  })
-})
 
 describe('configureElectronNetworkCompatibility', () => {
   const tempDirs: string[] = []

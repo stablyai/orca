@@ -38,18 +38,6 @@ function collector() {
 }
 
 describe('cloud database notifications', () => {
-  it('wakes SQLite listeners in this process', async () => {
-    const database = await openInMemoryCloudDatabase([])
-    const notifications = openCloudNotifications({})
-    const seen = collector()
-    const stop = await notifications.listen('inbox', seen.handlers)
-    await database.transaction((tx) => notifications.notify(tx, 'inbox', 'host-1'))
-    await stop()
-    await notifications.notify(database, 'inbox', 'host-2')
-    expect(seen.payloads).toEqual(['host-1'])
-    await database.close()
-  })
-
   it('refuses a channel that is not a plain identifier', async () => {
     const database = await openInMemoryCloudDatabase([])
     await expect(

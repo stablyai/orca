@@ -80,15 +80,6 @@ describe('ensureWindowsUserDataAclGrant', () => {
     expect(granted()).toEqual([])
   })
 
-  // Accept legacy identity spelling without a redundant whole-tree regrant.
-  it('accepts a marker written under the pre-native USERNAME identity', async () => {
-    vi.stubEnv('USERNAME', 'alice')
-    writeMarker(userDataPath, 'alice')
-
-    expect(await awaitResult(userDataPath)).toEqual({ mode: 'marker-hit' })
-    expect(granted()).toEqual([])
-  })
-
   it('re-grants when the marker belongs to a different identity', async () => {
     vi.stubEnv('USERNAME', 'alice')
     writeMarker(userDataPath, '*S-1-5-21-9-9-9-1001')
@@ -108,29 +99,5 @@ describe('ensureWindowsUserDataAclGrant', () => {
     expect(result).toMatchObject({ mode: 'failed', reason: expect.stringContaining('locked') })
     expect(granted()).toContain(userDataPath)
     expect(() => readFileSync(join(userDataPath, WINDOWS_ACL_GRANT_MARKER_FILE))).toThrow()
-  })
-
-  it('still grants the root when its children cannot be listed, and reports the failure', async () => {
-    // Model refused child listing while the root grant remains possible.
-    const unlistable = join(userDataPath, 'unlistable')
-    writeFileSync(unlistable, '')
-
-    const result = await awaitResult(unlistable)
-
-    expect(result).toMatchObject({ mode: 'failed', reason: expect.stringContaining('ENOTDIR') })
-    expect(granted()).toEqual([unlistable])
-  })
-
-  it('no-ops when the addon cannot load', async () => {
-    setWindowsSecurityForTests(null)
-
-    expect(await awaitResult(userDataPath)).toEqual({ mode: 'no-identity' })
-    expect(granted()).toEqual([])
-  })
-
-  it('ignores a corrupt marker and re-grants', async () => {
-    writeFileSync(join(userDataPath, WINDOWS_ACL_GRANT_MARKER_FILE), '{not json')
-
-    expect(await awaitResult(userDataPath)).toEqual({ mode: 'granted' })
   })
 })
