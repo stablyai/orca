@@ -9,6 +9,8 @@ import type {
 } from './server-types'
 import { toAgentStatusIpcPayload } from './server-status-identity'
 import { AgentHookServerListeners } from './server-listeners'
+import { ProducerProgressStore } from './producer-progress'
+import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/listener-state'
 
 function toMutationIdentity(
   row: EnrichedAgentHookEventPayload | null | undefined
@@ -50,6 +52,13 @@ function semanticRowsEqual(
 }
 
 export abstract class AgentHookServerRowOwnership extends AgentHookServerListeners {
+  readonly producerProgress = new ProducerProgressStore()
+
+  protected clearAllStatusCaches(): void {
+    this.producerProgress.clear()
+    clearAllListenerCaches(this.state)
+  }
+
   /** Set only for the direct applyNormalizedStatus call of applyRestatedStatus. */
   protected restatingStatus = false
 

@@ -28,6 +28,7 @@ import {
   getNestedWorkerDepthDescription,
   getNestedWorkerDepthTitle
 } from './nested-worker-depth-copy'
+import { OrchestrationWorkerQuietSetting } from './OrchestrationWorkerQuietSetting'
 import { OrchestrationWorkerAutoReleaseSetting } from './OrchestrationWorkerAutoReleaseSetting'
 import { OrchestrationCoordinatorApprovalsSetting } from './OrchestrationCoordinatorApprovalsSetting'
 import { SettingsGroup } from '../section-layout/SettingsGroup'
@@ -169,6 +170,9 @@ export function OrchestrationPane({
             settings={settings}
             updateSettings={updateSettings}
           />
+        ) : null}
+        {showLocalRuntimeSettings ? (
+          <OrchestrationWorkerQuietSetting settings={settings} updateSettings={updateSettings} />
         ) : null}
         {showLocalRuntimeSettings ? (
           <OrchestrationCoordinatorApprovalsSetting

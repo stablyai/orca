@@ -15,7 +15,6 @@ import { readRequestBody } from '../../../shared/agent-hook-listener/request-bod
 import { resolveHookSource } from '../../../shared/agent-hook-listener/source-routing'
 import { HOOK_REQUEST_SLOWLORIS_MS } from '../../../shared/agent-hook-listener/listener-limits'
 import { isHookRequestTruncatedError } from '../../../shared/agent-hook-listener/transport/agent-hook-transport-interference'
-import { clearAllListenerCaches } from '../../../shared/agent-hook-listener/listener-state'
 import { trackEmptyPaneKeyHook } from './server-transport-rules'
 import { AgentHookServerStatusHookLifecycle } from './server-status-hook-lifecycle'
 import { OPENCODE_STARTUP_PROMPT_CLAIM_PATH } from '../../../shared/agent-launch/startup/opencode-startup-prompt'
@@ -301,7 +300,7 @@ export abstract class AgentHookServerLifecycle extends AgentHookServerStatusHook
     this.ownerStateInitialized = false
     // Leave the endpoint: stale files fail open, and unlinking can race another Orca instance.
     this.providerRowsByTab = null
-    clearAllListenerCaches(this.state)
+    this.clearAllStatusCaches()
     if (!options?.keepStatus) {
       this.resetCanonicalStatus()
       this.notifyStatusChangeListeners()

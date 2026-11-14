@@ -1,3 +1,4 @@
+import { resolveWorkerQuietMinutes } from '../../../shared/orchestration/workers/worker-quiet-settings'
 import { watchMovedWorkerResumeSessions } from '../rpc/methods/orchestration/worker/follow-up/worker-resume-session-capture'
 import { AgentTransitionDetector } from '../../agent-hooks/observations/agent-transition-detector'
 import type { ConnectorCloud } from '../../connector-cloud/connector-cloud'
@@ -30,6 +31,8 @@ import {
   TerminalAgentPhonePush,
   type TerminalAgentWorkspaceLabels
 } from '../push/notifications/terminal-agent-phone-push'
+
+import { startWorkerQuietSweep } from '../orchestration/workers/reports/worker-quiet-runtime'
 
 function unrefTimer(run: () => void, delayMs: number): { cancel: () => void } {
   const timer = setTimeout(run, delayMs)
@@ -111,8 +114,13 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     ? null
     : new WorktreeRowsChanges((event) => this.emitClientEvent(event))
 
+  private readonly quietWorkerTitleWakes = new Set<() => void>()
+
   protected onTitleAgentStatusChanged(): void {
     this.worktreeRowsChanges?.changed()
+    for (const wake of this.quietWorkerTitleWakes) {
+      wake()
+    }
   }
 
   /** The connector seam while `experimentalConnectors` is on; null refuses every connector call. */
@@ -172,6 +180,36 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
   attachAgentStatusStore(store: AgentStatusStoreView): () => void {
     // Attach connector watches at hook-store startup, before any connector call.
     this.externalConversations.current()
+    const stopQuietSweep = startWorkerQuietSweep({
+      store,
+      getMinutes: () => resolveWorkerQuietMinutes(this.store?.getSettings()),
+      subscribeSettings: (changed) =>
+        this.store?.onSettingsChanged?.((updates) => {
+          if ('orchestrationQuietWorkerMinutes' in updates) {
+            changed()
+          }
+        }) ?? (() => {}),
+      changes: this.crewChanges,
+      subscribeTitleStatus: (wake) => {
+        this.quietWorkerTitleWakes.add(wake)
+        return () => this.quietWorkerTitleWakes.delete(wake)
+      },
+      getDb: () => this._orchestrationDb,
+      resolveTerminal: (paneKey) =>
+        resolveTerminalWorkerDispatch(this.terminalWorkerResolution, paneKey),
+      readPaneKeys: () => {
+        const keys = new Set<string>()
+        for (const pty of this.ptysById.values()) {
+          const paneKey = this.paneOfPty(pty).paneKey
+          if (paneKey) {
+            keys.add(paneKey)
+          }
+        }
+        return keys
+      },
+      readPty: (paneKey) => this.getPtyRecordForPaneKey(paneKey),
+      notify: this.workerTurnStopReportDeps.notify
+    })
     const detachTransitions = this.agentTransitions.attach(store)
     const detachCrew = store.subscribeStatusRowMutations(() =>
       this.crewChanges.notify(new Set(['status', 'names']))
@@ -183,6 +221,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
       ? subscribeHookStatusTitles({ subscribeEnrichedStatus: subscribe }, this)
       : () => {}
     return () => {
+      stopQuietSweep()
       detachCrew()
       detachRows()
       this.crewChanges.notify(new Set(['status', 'names']))

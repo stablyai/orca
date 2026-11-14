@@ -1,3 +1,4 @@
+import { isWorkerQuietMinutes } from '../../../shared/orchestration/workers/worker-quiet-settings'
 import { publishSettingsUpdate } from './settings-update-effects'
 import { legacyChatPermissionWrite } from './legacy-chat-permission-write'
 import { stampDefaultOnMigrationGuards } from './default-on-migration-guards'
@@ -61,6 +62,12 @@ export function updateSettings(
   options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
 ): GlobalSettings {
   const sanitizedUpdates = normalizeWorkspaceDirSetting(stripRetiredGlobalSettings(updates))
+  if ('orchestrationQuietWorkerMinutes' in updates) {
+    const value = updates.orchestrationQuietWorkerMinutes
+    if (value !== null && !isWorkerQuietMinutes(value)) {
+      delete sanitizedUpdates.orchestrationQuietWorkerMinutes
+    }
+  }
   const linkBehavior = updates.terminalLinkClickBehavior
   if (linkBehavior === 'actions' || linkBehavior === 'open' || linkBehavior === 'none') {
     // Loaded defaults are ambiguous; synchronize the legacy switch only on an explicit write.

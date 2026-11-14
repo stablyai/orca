@@ -8,6 +8,12 @@ import { fetchWithElectronManualRedirects } from './electron-manual-redirect-fet
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
 
 export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
+  onResume: (listener) => {
+    powerMonitor.on('resume', listener)
+    return () => {
+      powerMonitor.off('resume', listener)
+    }
+  },
   translateNotification: translateMain,
   isAwayForMobileNotifications: () => readDesktopAwayState(powerMonitor),
   showNotification: ({ title, body }) => {

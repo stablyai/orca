@@ -60,6 +60,25 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
 
     readModelCatalog,
     attentionReads: {
+      workerProgress: (sessionId: string) => {
+        const session = context().sessions.get(sessionId)
+        const turn = session?.journal.runningTurn()
+        const child = session?.child
+        if (!session || !turn || !child) {
+          return null
+        }
+        const { journal } = session
+        const turnStartedAt =
+          turn.item.body.kind === 'turn'
+            ? (turn.item.body.startedAt ?? turn.item.observedAt)
+            : turn.item.observedAt
+        return {
+          turnStartedAt,
+          lastProducerEventAt: journal.lastProviderActivityAt(child.fence) ?? turnStartedAt,
+          tool: journal.runningTool(turn.item.itemId, child.fence)
+        }
+      },
+
       workspace: async (
         location: AgentSessionExecutionLocation
       ): Promise<(StructuredAttentionRead & { scope: AgentSessionExecutionLocation })[]> => {

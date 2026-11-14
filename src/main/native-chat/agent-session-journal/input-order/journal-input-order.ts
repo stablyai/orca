@@ -2,6 +2,7 @@ import type { AgentJournalCursor } from '../../../../shared/agent-session/journa
 import type { AgentJournalSubmission } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { JournalSubmissionIndex } from './journal-submission-index'
 import { JournalNewestTurn } from './journal-newest-turn'
+import { JournalRunningTools } from './journal-running-tools'
 import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalReducerState } from '../projection/journal-reducer'
 import type { JournalRow } from '../durable-rows/journal-row-schema'
@@ -35,6 +36,7 @@ export class JournalInputOrder extends JournalInputEvidence {
   private readonly queued = new Map<string, AgentJournalSubmission>()
   private readonly entered = new Map<string, AgentJournalSubmission>()
   readonly cards: JournalInputCardIndex
+  readonly runningTools: JournalRunningTools
   private receiptCount = 0
   private queueRevision = 0
   private revision = 0
@@ -46,6 +48,7 @@ export class JournalInputOrder extends JournalInputEvidence {
   ) {
     super(state)
     this.cards = new JournalInputCardIndex(journalInputOrder)
+    this.runningTools = new JournalRunningTools(state)
   }
 
   beforeRow(state: JournalReducerState, row: JournalRow): void {
@@ -168,6 +171,7 @@ export class JournalInputOrder extends JournalInputEvidence {
 
   afterRow(state: JournalReducerState, row: JournalRow): void {
     this.newestTurn.afterRow(state, row)
+    this.runningTools.afterRow(state, row)
     this.legacy?.afterRow(state, row)
     if (
       row.kind === 'submission' ||
