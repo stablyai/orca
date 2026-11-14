@@ -28,6 +28,7 @@ import type { MobileStructuredBackgroundTasks } from '../input/use-mobile-struct
 import type { NativeChatContextUsageSummary } from '../../../../../src/shared/native-chat/native-chat-context-usage-summary'
 import type { MobileStructuredInterruptedContinue } from '../composer/use-mobile-structured-interrupted-continue'
 import type { MobileStructuredThreadGoal } from '../input/use-mobile-structured-thread-goal'
+import type { MobileStructuredMcpPanel } from '../mcp/use-mobile-structured-mcp-panel'
 import type { MobileStructuredSends } from '../composer/use-mobile-structured-sends'
 import type { AgentSessionRewindSurface } from '../../../../../src/shared/agent-session/lifecycle/agent-session-rewind-request'
 import type { MobileNativeChatUsageLimit } from '../use-mobile-native-chat-usage-limit'
@@ -73,6 +74,8 @@ export type StructuredMobileSession = Omit<
     interruptedContinue: MobileStructuredInterruptedContinue
     /** Null unless the host reports goals for this chat. */
     threadGoal: MobileStructuredThreadGoal | null
+    /** Null unless the host manages this agent's MCP servers. */
+    mcpPanel: MobileStructuredMcpPanel | null
     /** "Rewind to here" for the chat's own turn openers; absent where the chat cannot rewind. */
     rewind: AgentSessionRewindSurface | undefined
     visualSource: MobileNativeChatVisualSource | null

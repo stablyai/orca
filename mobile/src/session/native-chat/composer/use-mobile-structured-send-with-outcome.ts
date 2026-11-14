@@ -74,6 +74,7 @@ export function useMobileStructuredSendWithOutcome(args: {
     | 'conversationCommands'
     | 'compactInstructions'
     | 'changeThreadGoal'
+    | 'openMcpPanel'
   >
   sessionCommands?: readonly AgentSessionSlashCommand[]
   onSendError: MobileNativeChatSendErrorReporter

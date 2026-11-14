@@ -26,6 +26,7 @@ import type {
 import type { MobileNativeChatCommandRefusalCauses } from './composer/use-mobile-native-chat-send-error'
 import type { MobileStructuredQueuedMessageControls } from './input/use-mobile-structured-queued-message-controls'
 import type { MobileStructuredThreadGoal } from './input/use-mobile-structured-thread-goal'
+import type { MobileStructuredMcpPanel } from './mcp/use-mobile-structured-mcp-panel'
 import type { MobileStructuredBackgroundTasks } from './input/use-mobile-structured-background-tasks'
 import type { MobileStructuredInterruptedContinue } from './composer/use-mobile-structured-interrupted-continue'
 import type { MobileNativeChatPendingMessage } from './transcript/mobile-native-chat-pending-echo'
@@ -104,6 +105,7 @@ export type MobileNativeChatController = {
   nativeChatContextUsage: NativeChatContextUsageSummary | null
   nativeChatInterruptedContinue: MobileStructuredInterruptedContinue | null
   nativeChatThreadGoal: MobileStructuredThreadGoal | null
+  nativeChatMcpPanel: MobileStructuredMcpPanel | null
   nativeChatRewind: AgentSessionRewindSurface | undefined
   nativeChatFilePaths: string[]
   loadNativeChatFiles: (query: string) => void

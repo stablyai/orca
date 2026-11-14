@@ -46,6 +46,7 @@ import { MobileNativeChatDictationLeading } from './MobileNativeChatDictationLea
 import type { MobileNativeChatStructuredComposer } from './mobile-native-chat-structured-composer'
 import { useMobileNativeChatComposerGoalMode } from './use-mobile-native-chat-composer-goal-mode'
 import { MobileNativeChatComposerPlanChip } from './MobileNativeChatComposerPlanChip'
+import { MobileNativeChatMcpSheet } from '../mcp/MobileNativeChatMcpSheet'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
@@ -408,6 +409,7 @@ export function MobileNativeChatComposer({
           </View>
         </View>
       </View>
+      {editSession ? null : <MobileNativeChatMcpSheet panel={structured?.mcpPanel} />}
     </View>
   )
   return (

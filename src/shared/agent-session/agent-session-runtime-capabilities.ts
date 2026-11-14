@@ -111,6 +111,8 @@ export const AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY =
 // Why: hosts before this report goals in options but refuse agentSession.threadGoal from a phone.
 export const AGENT_SESSION_PHONE_THREAD_GOAL_RUNTIME_CAPABILITY =
   'agent-session.thread-goal.phone.v1' as const
+// The host answers agentSession.mcp, from desktops and phones alike.
+export const AGENT_SESSION_MCP_RUNTIME_CAPABILITY = 'agent-session.mcp.v1' as const
 // Why: hosts before this advertise usage-limit auto-continue but refuse its cancel from a phone.
 export const AGENT_SESSION_PHONE_USAGE_LIMIT_CONTINUE_CANCEL_RUNTIME_CAPABILITY =
   'agent-session.usage-limit-auto-continue.phone-cancel.v1' as const
@@ -176,6 +178,7 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     AGENT_SESSION_ATTACHMENTS_RUNTIME_CAPABILITY,
     AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY,
     AGENT_SESSION_PHONE_THREAD_GOAL_RUNTIME_CAPABILITY,
+    AGENT_SESSION_MCP_RUNTIME_CAPABILITY,
     AGENT_SESSION_PHONE_USAGE_LIMIT_CONTINUE_CANCEL_RUNTIME_CAPABILITY,
     AGENT_SESSION_TURN_ITEM_CAPABILITY,
     AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,

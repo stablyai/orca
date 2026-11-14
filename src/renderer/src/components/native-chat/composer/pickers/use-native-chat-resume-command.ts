@@ -19,6 +19,7 @@ import type { NativeChatStructuredComposerTransport } from '@/components/native-
 export const NATIVE_CHAT_RESUME_COMMAND = 'resume'
 
 const FORK_DRAFT = /^\/fork(?:\s+([\s\S]*))?$/i
+const MCP_DRAFT = /^\/mcp\s*$/i
 
 /** Replace the agent’s /resume catalog entry with Orca’s Session History command, and its /usage
  *  and /fork with Orca’s where this chat runs them. */
@@ -92,7 +93,10 @@ export type NativeChatResumeCommand = {
  *  reaches the agent. */
 export function useNativeChatResumeCommand(args: {
   structuredTransport:
-    | Pick<NativeChatStructuredComposerTransport, 'worktreeId' | 'accountUsage' | 'fork'>
+    | Pick<
+        NativeChatStructuredComposerTransport,
+        'worktreeId' | 'accountUsage' | 'fork' | 'mcpPanel'
+      >
     | undefined
   agent: AgentType
   terminalTabId: string
@@ -114,12 +118,13 @@ export function useNativeChatResumeCommand(args: {
   const structuredWorktreeId = structuredTransport?.worktreeId
   const usage = structuredTransport?.accountUsage
   const fork = structuredTransport?.fork
-  const openUsage = useCallback(
-    (draft: string): void => {
+  const mcp = structuredTransport?.mcpPanel
+  const openPanel = useCallback(
+    (draft: string, panel: { open: () => void } | undefined): void => {
       const rest = draft.replace(/^\/\S+\s*/, '')
       // Focus before opening so closing the modal returns to the editor even after a Send click.
       textareaRef.current?.focus()
-      usage?.open()
+      panel?.open()
       setDraft(rest)
       setCaret(rest.length)
       setActiveSuggestion(0)
@@ -130,7 +135,7 @@ export function useNativeChatResumeCommand(args: {
         writeNativeChatComposerText(input, rest, rest.length)
       }
     },
-    [usage, setDraft, setCaret, setActiveSuggestion, setNotice, textareaRef]
+    [setDraft, setCaret, setActiveSuggestion, setNotice, textareaRef]
   )
 
   const runFork = useCallback(
@@ -212,8 +217,10 @@ export function useNativeChatResumeCommand(args: {
       !isPickedSkill(draft) &&
       (parseNativeChatResumeDraft(draft) !== null ||
         (usage !== undefined && /^\/usage\s*$/i.test(draft)) ||
+        // Before goal mode too, so `/mcp` never becomes an objective.
+        (mcp !== undefined && MCP_DRAFT.test(draft)) ||
         (fork !== undefined && FORK_DRAFT.test(draft.trim()))),
-    [fork, isPickedSkill, structured, usage]
+    [fork, isPickedSkill, mcp, structured, usage]
   )
   const consume = useCallback(
     (draft: string): boolean => {
@@ -221,7 +228,9 @@ export function useNativeChatResumeCommand(args: {
         return false
       }
       if (/^\/usage\s*$/i.test(draft)) {
-        openUsage(draft)
+        openPanel(draft, usage)
+      } else if (MCP_DRAFT.test(draft)) {
+        openPanel(draft, mcp)
       } else if (fork && FORK_DRAFT.test(draft.trim())) {
         runFork(draft)
       } else {
@@ -229,7 +238,7 @@ export function useNativeChatResumeCommand(args: {
       }
       return true
     },
-    [fork, matchesDraft, open, openUsage, runFork]
+    [fork, matchesDraft, mcp, open, openPanel, runFork, usage]
   )
 
   const interceptPick = useCallback(
@@ -241,14 +250,15 @@ export function useNativeChatResumeCommand(args: {
           if (
             item.name !== 'resume' &&
             !(item.name === 'usage' && usage) &&
+            !(item.name === 'mcp' && mcp) &&
             !(item.name === 'fork' && fork)
           ) {
             pick(item)
             return
           }
           clearSkillOrigin()
-          if (item.name === 'usage') {
-            openUsage(textareaRef.current?.value ?? '')
+          if (item.name === 'usage' || item.name === 'mcp') {
+            openPanel(textareaRef.current?.value ?? '', item.name === 'usage' ? usage : mcp)
             return
           }
           if (item.name === 'fork') {
@@ -263,7 +273,7 @@ export function useNativeChatResumeCommand(args: {
         }
         pick(item)
       },
-    [autocomplete, clearSkillOrigin, fork, open, openUsage, runFork, textareaRef, usage]
+    [autocomplete, clearSkillOrigin, fork, mcp, open, openPanel, runFork, textareaRef, usage]
   )
 
   return { consume, interceptPick, matchesDraft }

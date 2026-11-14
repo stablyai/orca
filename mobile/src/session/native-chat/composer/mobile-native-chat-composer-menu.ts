@@ -19,7 +19,7 @@ import type {
   NativeChatSessionSkill,
   SlashCommandSuggestion
 } from '../../../../../src/shared/native-chat/input/native-chat-slash-commands'
-import { structuredSessionSlashCommands } from '../../../../../src/shared/agent-session/view/structured-agent-session-composer'
+import { structuredSessionSlashCommands } from '../../../../../src/shared/agent-session/view/structured-agent-session-slash-menu'
 
 // Why: the menu is a plain ScrollView right above a streaming transcript, so it mounts a bounded
 // number of rows; typing narrows the rest.
@@ -30,6 +30,8 @@ export type MobileComposerStructuredCatalog = {
   reported: readonly AgentSessionSlashCommand[] | undefined
   conversationCommands: readonly AgentSessionConversationCommand[]
   compactInstructions?: boolean
+  /** `/mcp` opens the chat's MCP sheet. */
+  mcpPanel?: boolean
 }
 
 export type MobileComposerCatalog = {
@@ -64,7 +66,8 @@ export function mobileComposerCatalog({
         structured.conversationCommands,
         reported,
         structured.compactInstructions,
-        interactionModeSupported
+        interactionModeSupported,
+        structured.mcpPanel
       )
     : getAgentAnsweredNativeChatCommands(agent)
   return {

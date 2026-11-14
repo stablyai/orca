@@ -12,7 +12,7 @@ type ComposerSend = (text: string, intent?: MobileNativeChatSendIntent) => Promi
 
 /** Desktop's goal mode on a structured chat's composer: `/goal` turns the draft into the chat's goal objective. */
 export function useMobileNativeChatComposerGoalMode(
-  structured: { threadGoal?: MobileStructuredThreadGoal | null } | null,
+  structured: { threadGoal?: MobileStructuredThreadGoal | null; mcpPanel?: unknown } | null,
   editing: boolean,
   sendSurfaceId: string
 ): {
@@ -55,7 +55,8 @@ export function useMobileNativeChatComposerGoalMode(
       return true
     },
     send: async (send, text, intent) => {
-      if (!active) {
+      // `/mcp` opens its sheet as a command, never becoming the objective, and goal mode stays.
+      if (!active || (structured?.mcpPanel && /^\/mcp\s*$/i.test(text))) {
         return intent ? send(text, intent) : send(text)
       }
       const sentFrom = entered
