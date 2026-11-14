@@ -231,6 +231,40 @@ describe('native chat Markdown image preview', () => {
     }
   })
 
+  it('shows an image a reply links to under its paragraph and keeps the link', async () => {
+    render(
+      <Transcript
+        content={
+          'Done. [Download the edited image](out/edited.png) and the [notes](out/notes.md).\n\n[remote](//example.com/r.png) [web](https://example.com/w.png)'
+        }
+      />
+    )
+    const trigger = await screen.findByRole('button', { name: 'View image: edited.png' })
+    const image = await within(trigger).findByRole('img')
+    expect(image).toHaveAttribute('src', 'blob:image-1')
+    // The linked file is read on the chat's host, by its worktree path.
+    expect(mocks.readRuntimeFilePreview).toHaveBeenCalledWith(
+      expect.anything(),
+      '/repo/worktree/out/edited.png',
+      { kind: 'chat-image' }
+    )
+    expect(screen.getByText('Download the edited image').closest('a')).not.toBeNull()
+    expect(screen.getByText('notes').closest('a')).not.toBeNull()
+    // Web and protocol-relative links stay links; nothing is fetched from them.
+    expect(screen.getAllByRole('img')).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: /^View image/ })).toHaveLength(1)
+  })
+
+  it('keeps each linked image in its own list item', async () => {
+    render(<Transcript content={'- [first](shots/a.png)\n- [second](shots/b.png)'} />)
+    const items = screen.getAllByRole('listitem')
+    expect(
+      await within(items[0]!).findByRole('button', { name: 'View image: a.png' })
+    ).toBeInTheDocument()
+    expect(within(items[1]!).getByRole('button', { name: 'View image: b.png' })).toBeInTheDocument()
+    expect(within(items[0]!).getByText('first').closest('a')).not.toBeNull()
+  })
+
   it('closes the preview when the owning chat becomes hidden', () => {
     const { rerender } = render(<Transcript />)
     fireEvent.click(screen.getByRole('button', { name: 'View image: Chart' }))
