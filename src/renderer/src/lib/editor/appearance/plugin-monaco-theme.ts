@@ -2,7 +2,7 @@ import type * as Monaco from 'monaco-editor'
 import type { PluginThemeTokenColorRule } from '../../../../../shared/plugins/artifacts/plugin-theme-artifact'
 import { pluginMonacoTokenRules } from './plugin-monaco-token-rules'
 import type { ColorProbe } from '../../../app-shell/appearance/plugin-theme-tokens'
-import { contrastRatio, type Rgba } from '../../../../../shared/color/rgba-contrast'
+import { contrastRatio, over, type Rgba } from '../../../../../shared/color/rgba-contrast'
 
 export type PluginMonacoTheme = { name: string; data: Monaco.editor.IStandaloneThemeData }
 
@@ -87,6 +87,13 @@ export function derivePluginMonacoTheme(input: {
   const themed = input.painted['--editor-selection'] ? color('--editor-selection') : null
   // Why the ring by default: a theme's accent is a faint hover tint, too weak to read as a selection.
   const selection: Rgba = themed ?? [ring[0], ring[1], ring[2], 0.3]
+  const faded: Rgba = [selection[0], selection[1], selection[2], selection[3] / 2]
+  // Why: the contrast gate checks a theme's selection at full strength; halved, a dark one can
+  // land on a mid-tone that hides the text, so an unfocused editor keeps the full color then.
+  const inactive =
+    !themed || contrastRatio(foreground, over(faded, background)) >= MIN_TEXT_CONTRAST
+      ? faded
+      : selection
   const popover = color('--popover')
   const border = color('--border')
   const colors: Record<string, string> = {
@@ -98,12 +105,7 @@ export function derivePluginMonacoTheme(input: {
     'editorLineNumber.activeForeground': hex(foreground),
     'editorCursor.foreground': hex(ring),
     'editor.selectionBackground': hex(selection),
-    'editor.inactiveSelectionBackground': hex([
-      selection[0],
-      selection[1],
-      selection[2],
-      selection[3] / 2
-    ])
+    'editor.inactiveSelectionBackground': hex(inactive)
   }
   if (accent) {
     colors['editor.lineHighlightBackground'] = hex(accent)
