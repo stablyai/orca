@@ -1,5 +1,6 @@
 import type { Terminal } from '@xterm/headless'
 import { HeadlessOriginBuffers } from './headless-origin-buffers'
+import { HeadlessOriginPrintHooks } from './headless-origin-print-hooks'
 import { HeadlessOriginLineEdits, replaceOriginCells } from './headless-origin-line-edits'
 import {
   terminalOriginAt,
@@ -27,6 +28,10 @@ export class HeadlessContentOrigins {
       component?: TerminalOriginRuns
     }
   >()
+  private readonly printHooks = new HeadlessOriginPrintHooks(
+    (line, index, width, code) => this.printed(line, index, width, code),
+    (line, index, code, width, combine) => this.combined(line, index, code, width, combine)
+  )
   private readonly attachments: HeadlessOriginBuffers
   private pending?: {
     line: OriginBufferLine
@@ -126,6 +131,61 @@ export class HeadlessContentOrigins {
     }
   }
 
+  private combined(
+    line: OriginBufferLine,
+    index: number,
+    code: number,
+    width: number,
+    combine: OriginBufferLine['addCodepointToCell']
+  ): void {
+    const pending = this.pending
+    if (
+      pending?.line === line &&
+      pending.start <= index &&
+      index < pending.end &&
+      pending.origin === this.origin
+    ) {
+      combine.call(line, index, code, width)
+      return
+    }
+    const state = this.state(line)
+    const baseOrigin = terminalOriginAt(state.runs, index)
+    if (
+      !state.components.has(index) &&
+      (baseOrigin === this.origin ||
+        (baseOrigin &&
+          this.origin &&
+          baseOrigin.owner === this.origin.owner &&
+          baseOrigin.epoch === this.origin.epoch))
+    ) {
+      combine.call(line, index, code, width)
+      this.revision++
+      return
+    }
+    const before = line.getString(index)
+    const base =
+      state.components.get(index) ??
+      terminalOriginSpan(before.length, terminalOriginAt(state.runs, index))
+    combine.call(line, index, code, width)
+    const components = state.components
+    const after = line.getString(index)
+    const joined = writeTerminalOrigins(
+      base,
+      before.length,
+      after.length,
+      terminalOriginSpan(after.length - before.length, this.origin)
+    )
+    const uniform = this.origin
+      ? joined.length === 1 && joined[0]!.start === 0 && joined[0]!.end === after.length
+      : joined.length === 0
+    if (uniform) {
+      components.delete(index)
+    } else {
+      components.set(index, joined)
+    }
+    this.assign(line, { runs: state.runs, components })
+  }
+
   private writeCell(line: OriginBufferLine, index: number, state?: OriginLineState): void {
     const previous = this.state(line)
     const components = previous.components
@@ -186,68 +246,12 @@ export class HeadlessContentOrigins {
         })
       }
     }
-    const print = line.setCellFromCodepoint
-    line.setCellFromCodepoint = (index, code, width, attrs) => {
-      print.call(line, index, code, width, attrs)
-      if (!edits.collect(index, true)) {
-        this.printed(line, index, width, code)
-      }
-    }
     const setData = line.set
     if (setData) {
       line.set = (index, cell) => {
         setData.call(line, index, cell)
         this.writeCell(line, index)
       }
-    }
-    const combine = line.addCodepointToCell
-    line.addCodepointToCell = (index, code, width) => {
-      const pending = this.pending
-      if (
-        pending?.line === line &&
-        pending.start <= index &&
-        index < pending.end &&
-        pending.origin === this.origin
-      ) {
-        combine.call(line, index, code, width)
-        return
-      }
-      const state = this.state(line)
-      const baseOrigin = terminalOriginAt(state.runs, index)
-      if (
-        !state.components.has(index) &&
-        (baseOrigin === this.origin ||
-          (baseOrigin &&
-            this.origin &&
-            baseOrigin.owner === this.origin.owner &&
-            baseOrigin.epoch === this.origin.epoch))
-      ) {
-        combine.call(line, index, code, width)
-        this.revision++
-        return
-      }
-      const before = line.getString(index)
-      const base =
-        state.components.get(index) ??
-        terminalOriginSpan(before.length, terminalOriginAt(state.runs, index))
-      combine.call(line, index, code, width)
-      const components = state.components
-      const after = line.getString(index)
-      const joined = writeTerminalOrigins(
-        base,
-        before.length,
-        after.length,
-        terminalOriginSpan(after.length - before.length, this.origin)
-      )
-      const uniform = this.origin
-        ? joined.length === 1 && joined[0]!.start === 0 && joined[0]!.end === after.length
-        : joined.length === 0
-      if (uniform) {
-        components.delete(index)
-      } else {
-        components.set(index, joined)
-      }
-      this.assign(line, { runs: state.runs, components })
     }
     const copy = line.copyFrom
     line.copyFrom = (source, blank) => {
@@ -276,6 +280,7 @@ export class HeadlessContentOrigins {
       copyCells.call(line, source, from, to, count, reverse)
       this.assign(line, next)
     }
+    this.printHooks.attach(line, edits)
     edits.attach(line)
     return line
   }
