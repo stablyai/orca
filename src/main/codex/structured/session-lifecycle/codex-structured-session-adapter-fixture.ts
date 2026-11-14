@@ -131,17 +131,18 @@ export function fakeCodex(routes: Record<string, Route> = {}): {
         connection.calls.push({ method, params })
         const route = routes[method]
         const answer = route ? route(params) : {}
-        // Turn calls keep the answers their tests script; a start's calls end with the child.
-        if (!(answer instanceof Promise) || !STARTUP_METHODS.has(method)) {
+        if (method === 'review/start') {
           const result = await answer
           options?.onReply?.(result)
           return result
         }
+        // Turn calls keep the answers their tests script; a start's calls end with the child.
+        if (!(answer instanceof Promise) || !STARTUP_METHODS.has(method)) {
+          return answer
+        }
         const exited = new Promise<never>((_resolve, reject) => waiting.add(reject))
         void exited.catch(() => {})
-        const result = await Promise.race([answer, exited])
-        options?.onReply?.(result)
-        return result
+        return Promise.race([answer, exited])
       },
       notify: () => {},
       respond: (id, result) => connection.replies.push({ id, result }),

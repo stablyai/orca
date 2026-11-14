@@ -260,8 +260,6 @@ it('settles a settings timeout before review as refused and admits the next norm
     ).toMatchObject({ dispatchState: 'accepted' })
     expect(
       after.items.map(({ body }) => readAgentJournalTurn(body)).filter(Boolean)
-    ).toContainEqual(
-      expect.objectContaining({ providerTurnId: 'normal-after-settings', state: 'running' })
-    )
+    ).toContainEqual(expect.objectContaining({ turnId: 'normal-after-settings', state: 'running' }))
   })
 })

@@ -433,7 +433,7 @@ it('admits a normal turn after a review request times out without entering revie
   }
 })
 
-it('uses the reported settings for a first review without an unnecessary settings update', async () => {
+it('uses acknowledged startup settings despite a synthetic mismatched readback', async () => {
   const codex = fakeCodex()
   const adapter = adapterFor(codex)
   try {
@@ -441,6 +441,11 @@ it('uses the reported settings for a first review without an unnecessary setting
       identity: identityFor(SESSION),
       fence: 7,
       spawnToken: 'spawn-9'
+    })
+    // Contract input, not captured output: providers may canonicalize the model Orca wrote.
+    codex.connections[0]!.handlers.onNotification!('thread/settings/updated', {
+      threadId: 'thread-abc',
+      threadSettings: { model: 'synthetic-canonical-model', effort: 'high' }
     })
     expect(
       await adapter.review({

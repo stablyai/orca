@@ -1,10 +1,7 @@
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
 import { resolvedCodexGoalSettings } from './codex-structured-message-options'
-import {
-  CodexAppliedSettings,
-  codexMethodUnavailable
-} from '../catalog/codex-structured-applied-settings'
+import { codexMethodUnavailable } from '../catalog/codex-structured-applied-settings'
 import { readCodexTurnId } from '../../app-server/codex-structured-thread-facts'
 import { isCodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
 import {
@@ -20,11 +17,13 @@ export async function reviewCodexStructuredSession(
 ): ReturnType<NonNullable<StructuredAgentSessionAdapter['review']>> {
   const choices = resolvedCodexGoalSettings(session, input.executionOptions)
   const current: Readonly<Record<string, string | undefined>> = {
-    model: session.appliedTurnOptions?.model ?? session.reportedOptions.model,
-    effort: session.appliedTurnOptions?.effort ?? session.reportedOptions.effort
+    model: session.appliedTurnOptions?.model,
+    effort: session.appliedTurnOptions?.effort
   }
-  const settings = (session.appliedSettings ??= new CodexAppliedSettings())
-  if (!settings.equivalent(choices)) {
+  if (
+    session.appliedSettings?.hasPendingUpdates() ||
+    Object.entries(choices).some(([key, value]) => value !== current[key])
+  ) {
     const previousApplied = session.appliedTurnOptions
     const previousInput = session.appliedTurnInputOptions
     const known = { ...previousApplied }
@@ -35,7 +34,7 @@ export async function reviewCodexStructuredSession(
     }
     session.appliedTurnOptions = known
     session.appliedTurnInputOptions = knownInput
-    const discard = settings.attempt(choices)
+    const discard = session.appliedSettings?.attempt(choices)
     try {
       await session.connection.request(
         'thread/settings/update',
@@ -49,7 +48,7 @@ export async function reviewCodexStructuredSession(
         isCodexAppServerRequestError(error) ||
         codexMethodUnavailable(error, 'thread/settings/update')
       ) {
-        discard()
+        discard?.()
         session.appliedTurnOptions = previousApplied
         session.appliedTurnInputOptions = previousInput
       }
