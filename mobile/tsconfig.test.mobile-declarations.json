@@ -13,7 +13,7 @@
   },
   "files": [
     "src/source-control/review/pull-request/MobilePRSidebar.tsx",
-    "src/mobile-web-shell/bridge-host-test-fakes.ts",
+    "src/mobile-web-shell/test-support/bridge-host-test-fakes.ts",
     "src/transport/connection/stable-logical-rpc-client.ts",
     "src/mobile-web-shell/bridge/test-support/bridge-port-pair-test-harness.ts",
     "src/transport/rpc/rpc-client-contract.ts",

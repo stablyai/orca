@@ -1,7 +1,10 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it } from 'vitest'
-import { createFakeRpcClient, rpcSuccess } from '../../../mobile-web-shell/bridge-host-test-fakes'
+import {
+  createFakeRpcClient,
+  rpcSuccess
+} from '../../../mobile-web-shell/test-support/bridge-host-test-fakes'
 import {
   documentQueryClient,
   settleQueryNotifications

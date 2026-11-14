@@ -10,10 +10,10 @@ import { STANDALONE_SESSION_PARAM } from '../../../../src/navigation/host-stack-
 import {
   shellScreenRoute,
   shellScreenRouteKey
-} from '../../../../src/mobile-web-shell/shell-screen-route'
+} from '../../../../src/mobile-web-shell/routing/shell-screen-route'
 import { MobileWebShellScreen } from '../../../../src/mobile-web-shell/MobileWebShellScreen'
 import type { BridgeClearableRouteParam } from '../../../../src/mobile-web-shell/bridge/page-lifecycle/bridge-route-update'
-import { PageRouteUnavailableScreen } from '../../../../src/mobile-web-shell/PageRouteUnavailableScreen'
+import { PageRouteUnavailableScreen } from '../../../../src/mobile-web-shell/presentation/PageRouteUnavailableScreen'
 
 // paneKey selects a tab within the current session, not a new identity; remounting on it reloads the page and loses repeated taps.
 // Deliver it as a route update via repeated init only to supporting pages, then clear the native param so later init cannot replay it (ruling 33.1).

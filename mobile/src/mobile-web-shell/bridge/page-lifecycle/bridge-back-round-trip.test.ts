@@ -3,7 +3,7 @@ import { BRIDGE_PROTOCOL_VERSION } from '../protocol/bridge-frame-fields'
 
 import { createFakeBridgePortPair as createPair } from '../test-support/bridge-port-pair-test-harness'
 import type { BridgePortPair } from '../test-support/bridge-port-pair-contract'
-import type { FakeRpcClient } from '../../bridge-host-test-fakes'
+import type { FakeRpcClient } from '../../test-support/bridge-host-test-fakes'
 
 const resources = new Set<ReturnType<typeof createPair>>()
 function createFakeBridgePortPair(

@@ -3,10 +3,10 @@ import type {
   BridgeHost,
   BridgeHostDiagnostic,
   BridgeNavigateBackOutcome
-} from '../../bridge-host-contract'
+} from '../../host-bridge/bridge-host-contract'
 import type { BridgeHapticsKind } from '../native-capabilities/bridge-haptics-notify'
 import type { BridgeNativeVerb } from '../native-capabilities/bridge-native-verbs'
-import type { FakeRpcClient } from '../../bridge-host-test-fakes'
+import type { FakeRpcClient } from '../../test-support/bridge-host-test-fakes'
 import type { BridgeClientMessage, BridgeHostMessage } from '../protocol/bridge-envelope'
 import type { BridgeInitRoute } from '../protocol/bridge-init-route'
 import type { BridgeErrorCapture } from '../protocol/bridge-error-capture'

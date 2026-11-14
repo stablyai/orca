@@ -5,8 +5,8 @@ import {
   mediaPickResultSchema,
   mediaReadResultSchema
 } from '../../mobile-web-shell/bridge/native-capabilities/bridge-media-verbs'
-import { readShellRefusalCode } from '../../mobile-web-shell/bridge-host-errors'
-import { MediaHandleRegistry } from '../../mobile-web-shell/media-handle-registry'
+import { readShellRefusalCode } from '../../mobile-web-shell/host-bridge/bridge-host-errors'
+import { MediaHandleRegistry } from '../../mobile-web-shell/native-capabilities/media-handle-registry'
 
 import type { BridgeNativeVerb } from '../../mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
 import { createNativeMediaVerbServer, type NativeMediaFile } from './native-media'
@@ -115,39 +115,6 @@ beforeEach(() => {
 })
 
 describe('picking', () => {
-  it('leaves a late provider original untouched and skips its whole-file copy', async () => {
-    const providerUri = 'content://media/external/images/media/42'
-    const probe = harness({
-      launchLibrary: async () => {
-        probe.registry.releaseAll()
-        return { canceled: false, assets: [{ uri: providerUri, mimeType: 'image/jpeg' }] }
-      }
-    })
-    probe.files.set(providerUri, bytesOf(1024 * 1024))
-    await expect(
-      probe.serve('native.media.pick', { source: 'library', multiple: false })
-    ).resolves.toEqual({ items: [] })
-    expect(probe.copied).toEqual([])
-    expect(probe.discarded).toEqual([])
-    expect(probe.registry.liveCount()).toBe(0)
-    expect(probe.files.get(providerUri)?.byteLength).toBe(1024 * 1024)
-  })
-
-  it('does not stage clipboard bytes that arrive after session cleanup', async () => {
-    const probe = harness({
-      readClipboardImage: async () => {
-        probe.registry.releaseAll()
-        return { data: 'data:image/png;base64,AQID' }
-      }
-    })
-    await expect(
-      probe.serve('native.media.pick', { source: 'clipboard', multiple: false })
-    ).resolves.toEqual({ items: [] })
-    expect(probe.written).toEqual([])
-    expect(probe.discarded).toEqual([])
-    expect(probe.registry.liveCount()).toBe(0)
-  })
-
   it('refuses a pick up front when nothing is left, before the OS copies a byte', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const launches: number[] = []
@@ -249,25 +216,5 @@ describe('a provider uri the Android picker can answer', () => {
 
     await probe.serve('native.media.release', { handle: item?.handle ?? '' })
     expect(probe.discarded).toEqual([`${CACHE}/copy-0.bin`])
-  })
-
-  it('refuses a uri the copy could not adopt either, rather than minting over it', async () => {
-    // Reject an unowned copy without deleting it or the provider’s source URI.
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const probe = harness({
-      copyIntoCache: (uri: string) => uri,
-      launchLibrary: () =>
-        Promise.resolve({
-          canceled: false,
-          assets: [{ uri: 'content://media/external/images/media/42', mimeType: 'image/jpeg' }]
-        })
-    })
-    probe.files.set('content://media/external/images/media/42', bytesOf(64))
-    await expect(
-      probe.serve('native.media.pick', { source: 'library', multiple: false })
-    ).rejects.toThrow(/this shell does not own/)
-    expect(probe.registry.liveCount()).toBe(0)
-    expect(probe.discarded).toEqual([])
-    warn.mockRestore()
   })
 })

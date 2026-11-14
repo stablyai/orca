@@ -28,7 +28,7 @@ import {
   PAGE_STORAGE_MAX_ENTRIES,
   PAGE_STORAGE_MAX_KEY_CHARS,
   PAGE_STORAGE_MAX_VALUE_CHARS
-} from '../../page-storage-keys'
+} from '../../page-storage/page-storage-keys'
 import {
   BRIDGE_MAX_PAGE_ROUTES,
   BRIDGE_MAX_REPLY_PARTS,

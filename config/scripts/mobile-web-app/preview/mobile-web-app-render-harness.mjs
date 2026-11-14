@@ -80,7 +80,7 @@ export async function readBridgeWindowCaps() {
   const sources = await Promise.all(
     [
       'src/shared/mobile-bridge-frame-bytes.ts',
-      'mobile/src/mobile-web-shell/bridge-host-subscriptions.ts'
+      'mobile/src/mobile-web-shell/host-streams/bridge-host-subscriptions.ts'
     ].map((path) => readFile(join(projectDir, path), 'utf8'))
   )
   const source = sources.join('\n')

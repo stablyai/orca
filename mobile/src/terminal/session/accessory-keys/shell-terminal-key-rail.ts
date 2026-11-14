@@ -6,7 +6,10 @@ import type {
 import { createElement, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { useSideRailContent, useSideRailStrip } from '../../../layout/side-rail'
-import { TerminalKeyRail, terminalKeyRailKeys } from '../../../mobile-web-shell/terminal-key-rail'
+import {
+  TerminalKeyRail,
+  terminalKeyRailKeys
+} from '../../../mobile-web-shell/terminal-controls/terminal-key-rail'
 
 const NO_RAIL_KEYS: BridgeTerminalKeyRail = []
 

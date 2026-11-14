@@ -5,7 +5,7 @@ import {
   BRIDGE_ROUTE_HREF_PATTERN
 } from '../mobile-web-shell/bridge/protocol/bridge-caps'
 import { BRIDGE_SESSION_PANE_RETURN_GRANT } from '../mobile-web-shell/bridge/protocol/bridge-frame-fields'
-import { matchesRoutePattern } from '../mobile-web-shell/page-route-policy'
+import { matchesRoutePattern } from '../mobile-web-shell/routing/page-route-policy'
 import type { BridgeRpcClient } from '../mobile-web-shell/bridge/client-state/bridge-rpc-client-contract'
 import { usePageBridgeClient } from '../transport/connection/client-context.web'
 import { stringifyRouteHref, type RouterHref } from './route-href'

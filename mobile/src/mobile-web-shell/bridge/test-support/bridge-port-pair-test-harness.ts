@@ -1,10 +1,13 @@
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
-import { createFakeRpcClient, type FakeRpcClient } from '../../bridge-host-test-fakes'
-import { createBridgeHost } from '../../bridge-host'
-import type { BridgeHostDiagnostic, BridgeNavigateBackOutcome } from '../../bridge-host-contract'
+import { createFakeRpcClient, type FakeRpcClient } from '../../test-support/bridge-host-test-fakes'
+import { createBridgeHost } from '../../host-bridge/bridge-host'
+import type {
+  BridgeHostDiagnostic,
+  BridgeNavigateBackOutcome
+} from '../../host-bridge/bridge-host-contract'
 import { BRIDGE_MAX_PENDING_REQUESTS } from '../protocol/bridge-caps'
 import type { BridgeHapticsKind } from '../native-capabilities/bridge-haptics-notify'
-import { MOBILE_WEB_SHELL_GRANTS } from '../../page-route-policy'
+import { MOBILE_WEB_SHELL_GRANTS } from '../../routing/page-route-policy'
 import { readBridgeClientMessage, readBridgeHostMessage } from '../protocol/bridge-envelope'
 import type { BridgeErrorCapture } from '../protocol/bridge-error-capture'
 import { createBridgeRpcClient } from '../bridge-rpc-client'

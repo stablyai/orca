@@ -7,7 +7,8 @@ vi.mock('@react-native-async-storage/async-storage', async () => ({
 
 const { publishPageStorage } =
   await import('../mobile-web-shell/bridge/page-storage/page-async-storage')
-const { pageStorageKeysForRoute } = await import('../mobile-web-shell/page-storage-keys')
+const { pageStorageKeysForRoute } =
+  await import('../mobile-web-shell/page-storage/page-storage-keys')
 const { persistMirrored, readMirroredStorage, retainMirroredStorage } =
   await import('./mirrored-storage-keys')
 

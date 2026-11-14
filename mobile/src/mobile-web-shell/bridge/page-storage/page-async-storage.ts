@@ -3,7 +3,7 @@ import {
   isHostWorkspaceStorageKey,
   isPageStorageKeyForRoute,
   PAGE_STORAGE_MAX_VALUE_CHARS
-} from '../../page-storage-keys'
+} from '../../page-storage/page-storage-keys'
 
 // Use init-primed native storage, not page localStorage (disabled on Android and session-scoped on iOS).
 // Keep reads synchronous behind AsyncStorage’s async API for first-render timing; writes update cache/post without waiting, and later init repairs dropped writes.

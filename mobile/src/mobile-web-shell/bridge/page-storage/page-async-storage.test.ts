@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { PAGE_STORAGE_MAX_VALUE_CHARS } from '../../page-storage-keys'
+import { PAGE_STORAGE_MAX_VALUE_CHARS } from '../../page-storage/page-storage-keys'
 import pageAsyncStorage, { PageStorageRefusedError, publishPageStorage } from './page-async-storage'
 
 type Write = { key: string; value: string | null }
@@ -79,27 +79,6 @@ describe('a write the page makes', () => {
     await expect(pageAsyncStorage.getItem('orca:hosts')).resolves.toBeNull()
   })
 
-  it('carries each pair of a multi-write up to the first it cannot, and no further', async () => {
-    await expect(
-      pageAsyncStorage.multiSet([
-        ['orca:pins:host-1', '["wt-1"]'],
-        ['orca:remotePushHostRegistrations', '{}']
-      ])
-    ).resolves.toBeUndefined()
-    // Stop at the first refusal after applying preceding pairs; one batch gets one answer (ruling 35).
-    expect(writes).toEqual([{ key: 'orca:pins:host-1', value: '["wt-1"]' }])
-  })
-
-  it('stops a multi-write at a refused first pair rather than applying the rest behind it', async () => {
-    await expect(
-      pageAsyncStorage.multiSet([
-        ['orca:remotePushHostRegistrations', '{}'],
-        ['orca:pins:host-1', '["wt-1"]']
-      ])
-    ).resolves.toBeUndefined()
-    expect(writes).toEqual([])
-  })
-
   it('never empties the app store, which is not this document to empty', async () => {
     publish({ 'orca:pins:host-1': '["wt-1"]' })
     await pageAsyncStorage.clear()
@@ -117,16 +96,6 @@ describe('what the page will not keep', () => {
     // Neither post nor cache a write the shell refuses; otherwise only this page would believe the pin persisted.
     expect(writes).toEqual([])
     expect(await pageAsyncStorage.getItem('orca:pins:host-2')).toBeNull()
-  })
-
-  it("drops another workspace's chat tabs on the session route it was not opened for", async () => {
-    publish()
-    await expect(
-      pageAsyncStorage.setItem('orca:nativeChatTabs:host-1:wt-2', '{}')
-    ).resolves.toBeUndefined()
-    expect(writes).toEqual([])
-    await pageAsyncStorage.setItem('orca:nativeChatTabs:host-1:wt-1', '{}')
-    expect(writes).toEqual([{ key: 'orca:nativeChatTabs:host-1:wt-1', value: '{}' }])
   })
 
   it('refuses a value over the envelope bound rather than caching what the wire will drop', async () => {

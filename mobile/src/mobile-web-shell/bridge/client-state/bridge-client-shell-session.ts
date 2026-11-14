@@ -1,4 +1,4 @@
-import { TERMINAL_SETTINGS_STORAGE_KEYS } from '../../page-storage-keys'
+import { TERMINAL_SETTINGS_STORAGE_KEYS } from '../../page-storage/page-storage-keys'
 import { readShellSession, type BridgeShellSession } from './bridge-client-session'
 import { bridgeRouteMoved } from '../page-lifecycle/bridge-route-update'
 import {

@@ -4,7 +4,7 @@ import {
   type BridgePageGeometry
 } from '../page-geometry/bridge-page-geometry'
 import { BRIDGE_MAX_PENDING_REQUESTS, BRIDGE_MAX_SUBSCRIPTIONS } from './bridge-caps'
-import { MOBILE_WEB_SHELL_GRANTS } from '../../page-route-policy'
+import { MOBILE_WEB_SHELL_GRANTS } from '../../routing/page-route-policy'
 import { BRIDGE_PROTOCOL_VERSION, BRIDGE_SHELL_GRANTS } from './bridge-frame-fields'
 import type {
   BridgeColorScheme,

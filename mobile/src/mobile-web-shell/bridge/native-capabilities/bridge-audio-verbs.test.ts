@@ -1,7 +1,7 @@
 // Exercise table-listed audio verbs through the engine seam; denied permission, full rings and post-stop reads are device-independent conditions expensive to force in simulators.
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { BridgeNativeVerbRefusedError } from '../../bridge-host-errors'
+import { BridgeNativeVerbRefusedError } from '../../host-bridge/bridge-host-errors'
 import {
   createNativeAudioCapture,
   type NativeAudioEngine

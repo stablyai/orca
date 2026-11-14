@@ -9,11 +9,11 @@ export type UnvalidatedRpcRequestPortEntry = {
 /** Modules whose job is the port. These do not shrink to zero. */
 export const UNVALIDATED_RPC_REQUEST_PORT_OWNERS: readonly UnvalidatedRpcRequestPortEntry[] = [
   // Forward raw page requests without choosing a method or decoding replies.
-  { file: 'src/mobile-web-shell/bridge-host-requests.ts', references: 3 },
+  { file: 'src/mobile-web-shell/host-bridge/bridge-host-requests.ts', references: 3 },
   // Expose the port to the page without interpreting its requests or replies.
   { file: 'src/mobile-web-shell/bridge/bridge-rpc-client.ts', references: 1 },
   // Fakes the port for the bridge host suites; a non-test file only because tsconfig excludes tests.
-  { file: 'src/mobile-web-shell/bridge-host-test-fakes.ts', references: 1 },
+  { file: 'src/mobile-web-shell/test-support/bridge-host-test-fakes.ts', references: 1 },
   // Implements the port over the device-to-host websocket.
   { file: 'src/transport/rpc/direct-rpc-client.ts', references: 3 },
   // Fakes the port for the supervisor suites; a non-test file only because tsconfig excludes tests.

@@ -17,7 +17,7 @@ import {
   isPageStorageKey,
   PAGE_STORAGE_MAX_KEY_CHARS,
   PAGE_STORAGE_MAX_VALUE_CHARS
-} from '../../page-storage-keys'
+} from '../../page-storage/page-storage-keys'
 import {
   BRIDGE_MAX_EXTERNAL_LINK_CHARS,
   BRIDGE_MAX_ROUTE_HREF_CHARS,

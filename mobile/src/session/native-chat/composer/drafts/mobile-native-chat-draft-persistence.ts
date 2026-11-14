@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   PAGE_STORAGE_MAX_VALUE_CHARS,
   workspaceScopedKey
-} from '../../../../mobile-web-shell/page-storage-keys'
+} from '../../../../mobile-web-shell/page-storage/page-storage-keys'
 import { readPageDeviceStore } from '../../../../mobile-web-shell/bridge/page-storage/page-device-store'
 import {
   DEVICE_STORE_MAX_VALUE_LENGTH,

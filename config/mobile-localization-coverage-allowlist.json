@@ -189,14 +189,14 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/mobile-web-shell/shell-bridge-log-lines.ts",
+    "filePath": "mobile/src/mobile-web-shell/diagnostics/shell-bridge-log-lines.ts",
     "kind": "object-property:message",
     "text": "Web shell bridge:",
     "dynamic": true,
     "count": 1
   },
   {
-    "filePath": "mobile/src/mobile-web-shell/shell-bridge-log-lines.ts",
+    "filePath": "mobile/src/mobile-web-shell/diagnostics/shell-bridge-log-lines.ts",
     "kind": "object-property:message",
     "text": "Web shell: page frame with no bridge host",
     "dynamic": false,

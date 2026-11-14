@@ -1,5 +1,5 @@
 import { BridgeInitRouteSchema, type BridgeInitRoute } from '../protocol/bridge-init-route'
-import { shellScreenRouteKey } from '../../shell-screen-route'
+import { shellScreenRouteKey } from '../../routing/shell-screen-route'
 import { BRIDGE_PROTOCOL_VERSION } from '../protocol/bridge-frame-fields'
 
 // Reuse init for same-screen pane updates: it already carries route and is reread on every ready, avoiding a new shell-to-page opcode.
