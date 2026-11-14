@@ -190,8 +190,8 @@ export function prepareStructuredAgentSessionComposerCommand(
 
 export function isLoneStructuredAgentSessionConversationCommand(text: string): boolean {
   const command = commandParts(text.trim())
-  return Boolean(
-    command && command.argument === '' && ['clear', 'compact', 'new'].includes(command.name)
+  return (
+    command?.argument === '' && CONVERSATION_COMMANDS.some((entry) => entry.name === command.name)
   )
 }
 
