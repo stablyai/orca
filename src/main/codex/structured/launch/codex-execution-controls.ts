@@ -5,6 +5,13 @@ import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecy
 import { isNativeLocalLocation } from '../../../../shared/execution-host'
 import { CODEX_EXECUTION_MEMORY_CONFIG } from './codex-execution-thread-controls'
 
+export const CODEX_EXECUTION_TELEMETRY_SETTINGS = [
+  'analytics.enabled=false',
+  'otel.exporter="none"',
+  'otel.trace_exporter="none"',
+  'otel.metrics_exporter="none"'
+]
+
 export function supportsCodexExecutionPolicy(
   read: () => { onExecutionReceipt?: unknown; prepareExecutionReporter?: unknown }
 ): (location: AgentSessionRecord['location'], agent: string) => boolean {
@@ -55,9 +62,7 @@ export function codexExecutionLaunch(record: AgentSessionRecord) {
     `model_reasoning_effort="${escapeTomlBasicString(policy.effort)}"`,
     'notify=[]',
     'shell_environment_policy={inherit="none",set={}}',
-    'analytics.enabled=false',
-    'otel.exporter="none"',
-    'otel.trace_exporter="none"',
+    ...CODEX_EXECUTION_TELEMETRY_SETTINGS,
     ...[
       'hooks',
       'codex_hooks',

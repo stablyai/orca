@@ -12,6 +12,7 @@ import {
   assertCodexExecutionMemoryDisabled,
   CODEX_EXECUTION_MEMORY_CONFIG
 } from '../launch/codex-execution-thread-controls'
+import { CODEX_EXECUTION_TELEMETRY_SETTINGS } from '../launch/codex-execution-controls'
 
 export function readCodexExecutionQualification(
   readInvocation: () => CodexProviderInvocationDeps | undefined
@@ -44,6 +45,7 @@ export function readCodexExecutionQualification(
         cliPath: executable.path,
         cwd,
         args: [
+          ...CODEX_EXECUTION_TELEMETRY_SETTINGS.flatMap((setting) => ['-c', setting]),
           ...Object.entries(CODEX_EXECUTION_MEMORY_CONFIG).flatMap(([key, value]) => [
             '-c',
             `${key}=${value}`
