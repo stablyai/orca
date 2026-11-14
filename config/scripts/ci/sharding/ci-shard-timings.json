@@ -6526,7 +6526,6 @@
       "src/shared/remote-runtime/requests/remote-runtime-request-connection.test.ts": 10491,
       "src/shared/remote-runtime/requests/remote-runtime-request-frames.test.ts": 127,
       "src/shared/remote-runtime/requests/remote-runtime-request-websocket.test.ts": 237,
-      "src/shared/remote-runtime/requests/remote-runtime-shared-control-retired-request-ids.test.ts": 41,
       "src/shared/remote-runtime/requests/remote-runtime-shared-control-subscription-start.test.ts": 122,
       "src/shared/remote-runtime/requests/remote-runtime-shared-control-subscriptions.test.ts": 115,
       "src/shared/remote-runtime/requests/remote-runtime-subscription-connect-bound.test.ts": 556,
