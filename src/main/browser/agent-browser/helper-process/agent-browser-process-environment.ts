@@ -46,7 +46,7 @@ export function createAgentBrowserProcessEnvironment(options: {
   return { env, ownsSocketDirectory: true }
 }
 
-/** Until this lands, agent-browser reads the user's config files; a missing file would fail every command. */
+/** Until this lands, agent-browser reads the user's ~/.agent-browser/config.json and ./agent-browser.json. */
 export async function pointAtEmptyAgentBrowserConfig(
   env: NodeJS.ProcessEnv,
   userDataPath: string

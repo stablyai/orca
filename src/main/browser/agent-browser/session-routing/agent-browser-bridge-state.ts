@@ -25,6 +25,8 @@ export abstract class AgentBrowserBridgeState {
   protected readonly processingQueues = new Set<string>()
   protected readonly agentBrowserBin: string
   protected readonly agentBrowserEnv: NodeJS.ProcessEnv
+  // Startup spawns await it; agent commands come long after it lands.
+  protected readonly agentBrowserConfigReady: Promise<void>
   protected readonly ownsAgentBrowserSocketDirectory: boolean
   // Null disables idle-replacement detection when daemon lifetime is unbounded.
   protected readonly agentBrowserIdleTimeoutMs: number | null
@@ -48,8 +50,11 @@ export abstract class AgentBrowserBridgeState {
       userDataPath
     })
     this.agentBrowserEnv = processEnvironment.env
-    // Lands long before an agent's first command; a failed write keeps agent-browser's own lookup.
-    void pointAtEmptyAgentBrowserConfig(this.agentBrowserEnv, userDataPath).catch(() => {})
+    // A failed write keeps agent-browser's own lookup; a missing file would fail every command.
+    this.agentBrowserConfigReady = pointAtEmptyAgentBrowserConfig(
+      this.agentBrowserEnv,
+      userDataPath
+    ).catch(() => {})
     this.ownsAgentBrowserSocketDirectory = processEnvironment.ownsSocketDirectory
     const idleTimeoutMs = Number(this.agentBrowserEnv.AGENT_BROWSER_IDLE_TIMEOUT_MS)
     this.agentBrowserIdleTimeoutMs = idleTimeoutMs > 0 ? idleTimeoutMs : null
