@@ -1520,6 +1520,11 @@ html.native-shell .app-layout {
   flex: 0 1 auto;
 }
 
+/* The send button sits right after the path, so the hidden copy toast must not hold space before it. */
+.editor-header-text:has(+ [data-send-notes-slot]) .editor-header-copy-toast:not(.is-visible) {
+  display: none;
+}
+
 .editor-header-path {
   display: flex;
   align-items: center;
@@ -1602,6 +1607,13 @@ html.native-shell .app-layout {
 .editor-header-copy-toast.is-visible {
   opacity: 1;
   transform: translateY(0);
+}
+
+@starting-style {
+  .editor-header-copy-toast.is-visible {
+    opacity: 0;
+    transform: translateY(2px);
+  }
 }
 
 .content-area {
