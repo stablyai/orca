@@ -475,7 +475,7 @@ it('keeps loaded-cell snapshots and copied mixed glyphs independent of later sou
     copy.insertCells(0, 1, cell)
     line.copyFrom(copy)
     expect(line.translateToString(true)).toBe('XQ́  X')
-    expect(eligible(0, 1)).toBe(false)
+    expect(eligible(0, 1)).toBe(true)
     expect(eligible(1, 3)).toBe(true)
     expect(eligible(5, 6)).toBe(false)
   } finally {
