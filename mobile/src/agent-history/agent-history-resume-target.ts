@@ -13,7 +13,7 @@ import { parseWslUncPath } from '../../../src/shared/wsl-paths'
 import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
 import { getFolderWorkspaceWorktreeHostId } from '../../../src/shared/folder-workspaces/folder-workspace-worktree'
 import { parseWorkspaceKey } from '../../../src/shared/workspace-scope'
-import type { Worktree } from '../worktree/workspace-list-types'
+import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import { translate } from '../i18n/mobile-i18n'
 import {
   canJumpToAiVaultSessionWorktree,

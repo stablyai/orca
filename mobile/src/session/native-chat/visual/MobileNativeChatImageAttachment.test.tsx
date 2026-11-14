@@ -20,7 +20,7 @@ vi.mock('react-native', () => ({
   StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
   Platform: { OS: 'ios', select: (options: { ios?: unknown }) => options.ios }
 }))
-vi.mock('../../../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
+vi.mock('../../../components/markdown/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
 
 const PATH = '/Users/host/Library/Application Support/orca/agent-session-attachments/one/photo.png'
 const URI = 'data:image/png;base64,AA=='
