@@ -109,6 +109,9 @@ function ensurePostHogClient(): PostHog | null {
 
 export const isTelemetryInitialized = (): boolean => storeRef !== null
 
+// An unreported first launch must not label this session's later events (e.g. after a mid-session opt-in).
+export const clearFirstLaunchLayoutProp = (): boolean => delete commonProps?.first_launch_layout_v1
+
 /** Lets producers avoid preparing usage payloads when transmission is disabled. */
 export function isTelemetryEnabled(): boolean {
   return (

@@ -3,6 +3,7 @@ import { toast } from 'sonner'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { useAppStore } from '@/store/index'
 import { selectOnboardingWorkspaceId } from './onboarding-workspace-selection'
+import { selectOnboardingOpensAddProject } from './onboarding-add-project-handoff'
 import { applyDocumentTheme } from '@/app-shell/appearance/document-theme'
 import { resolvePaintedTheme } from '@/app-shell/appearance/terminal-app-theme'
 import { track } from '@/diagnostics/telemetry/telemetry'
@@ -25,6 +26,7 @@ import {
   shouldSkipWindowsTerminalStep
 } from './onboarding-flow-state'
 import { useOnboardingFlowActions } from './use-onboarding-flow-actions'
+import { useOnboardingStepNavigation } from './use-onboarding-step-navigation'
 import { useOnboardingFlowTelemetry } from './use-onboarding-flow-telemetry'
 
 export function useOnboardingFlow(
@@ -272,7 +274,7 @@ export function useOnboardingFlow(
     setError
   })
 
-  const { next, setUpLater, dismissOnboarding, back, jumpToStep } = useOnboardingFlowActions({
+  const actions = useOnboardingFlowActions({
     busyLabel,
     setBusyLabel,
     setError,
@@ -282,6 +284,7 @@ export function useOnboardingFlow(
     settings,
     persistCurrentStep,
     selectedWorkspaceId,
+    opensAddProject: useAppStore(selectOnboardingOpensAddProject),
     closeWith,
     openModal,
     getNextStepIndex,
@@ -292,9 +295,9 @@ export function useOnboardingFlow(
     agentSurface,
     themeLookBaseline,
     setTheme,
-    updateSettings: updateSettingsOrThrow,
-    skipOptions
+    updateSettings: updateSettingsOrThrow
   })
+  const navigation = useOnboardingStepNavigation(setStepIndex, skipOptions, stepIndex)
 
   return {
     settings,
@@ -319,11 +322,8 @@ export function useOnboardingFlow(
     hasSelectedWorkspace: selectedWorkspaceId !== null,
     detectedSet,
     isDetectingAgents,
-    next,
-    setUpLater,
-    dismissOnboarding,
-    back,
-    jumpToStep,
+    ...actions,
+    ...navigation,
     setLifecycleRootRef
   }
 }

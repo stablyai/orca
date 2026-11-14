@@ -26,6 +26,7 @@ import type { EventProps } from '../../shared/telemetry-event-classification'
 let storeRef: Store | null = null
 
 const MAIN_OWNED_TELEMETRY_EVENTS = new Set<EventName>([
+  'first_launch_layout_shown',
   'agent_dashboard_enabled',
   'agent_token_usage',
   'browser_extension_installed',

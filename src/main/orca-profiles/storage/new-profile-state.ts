@@ -39,7 +39,10 @@ export function initializeNewOrcaProfileState(
               ...defaults,
               settings: {
                 ...defaults.settings,
-                telemetry: { ...telemetry, protectedMilestones: { installCohort: 'existing' } }
+                telemetry: {
+                  ...withoutFirstLaunchLayout(telemetry),
+                  protectedMilestones: { installCohort: 'existing' }
+                }
               }
             },
             true
@@ -62,4 +65,12 @@ export function initializeNewOrcaProfileState(
   } finally {
     admission.release()
   }
+}
+
+// Added profiles belong to an install that already started; they always open in `~` and never report a first launch.
+function withoutFirstLaunchLayout(
+  telemetry: NonNullable<GlobalSettings['telemetry']>
+): NonNullable<GlobalSettings['telemetry']> {
+  const { firstLaunchLayout: _layout, firstLaunchLayoutReport: _report, ...rest } = telemetry
+  return rest
 }

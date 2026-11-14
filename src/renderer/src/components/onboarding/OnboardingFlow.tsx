@@ -16,6 +16,8 @@ import { WindowsTerminalStep } from './WindowsTerminalStep'
 import { useOnboardingFlow } from './use-onboarding-flow'
 import { OnboardingSkipConfirmationDialog } from './OnboardingSkipConfirmationDialog'
 import { OnboardingFooter } from './OnboardingFooter'
+import { selectOnboardingOpensAddProject } from './onboarding-add-project-handoff'
+import { useAppStore } from '@/store'
 import { shouldRequestOnboardingSkipConfirmation } from './onboarding-dismiss-target'
 import logo from '../../../../../resources/logo.svg'
 import { useTranslate } from '@/i18n/use-translate'
@@ -42,11 +44,12 @@ export default function OnboardingFlow({
     currentStep.id === 'agent' && flow.agentSurface === 'chat'
       ? stepCopy.agent_chat
       : stepCopy[currentStep.id]
+  const opensAddProject = useAppStore(selectOnboardingOpensAddProject)
   const shouldShowSetUpLater = currentStep.id !== 'notifications'
   const shouldShowFooterBusy = Boolean(busyLabel)
   const footerPrimaryLabel =
     busyLabel ??
-    (currentStep.id === 'notifications' && !flow.hasSelectedWorkspace
+    (currentStep.id === 'notifications' && (!flow.hasSelectedWorkspace || opensAddProject)
       ? t('components.onboarding.flow.actions.addFirstProject', 'Add your first project')
       : t('components.onboarding.flow.actions.continue', 'Continue'))
   const [languagePickerOpen, setLanguagePickerOpen] = useState(false)
@@ -56,13 +59,13 @@ export default function OnboardingFlow({
 
   const requestSkipConfirmation = useCallback(
     (advancedVia: 'button' | 'keyboard') => {
-      if (busyLabel || skipConfirmOpen || languagePickerOpen) {
+      if (flow.locked || skipConfirmOpen || languagePickerOpen) {
         return
       }
       skipConfirmAdvancedViaRef.current = advancedVia
       setSkipConfirmOpen(true)
     },
-    [busyLabel, skipConfirmOpen, languagePickerOpen]
+    [flow.locked, skipConfirmOpen, languagePickerOpen]
   )
 
   const confirmSkipOnboarding = useCallback(() => {
@@ -268,7 +271,8 @@ export default function OnboardingFlow({
 
             <OnboardingFooter
               shouldShowSetUpLater={shouldShowSetUpLater}
-              busyLabel={busyLabel}
+              opensAddProject={opensAddProject}
+              locked={flow.locked}
               onSetUpLater={() => void flow.setUpLater()}
               stepIndex={stepIndex}
               onBack={flow.back}

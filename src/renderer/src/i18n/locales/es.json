@@ -20607,7 +20607,8 @@
         "actions": {
           "continue": "Continuar",
           "addFirstProject": "Añade tu primer proyecto",
-          "openingAddProject": "Abriendo Añadir proyecto..."
+          "openingAddProject": "Abriendo Añadir proyecto...",
+          "skipToProjectSetup": "Saltar a la configuración del proyecto"
         },
         "stepTooltip": {
           "agent": "Agente predeterminado",

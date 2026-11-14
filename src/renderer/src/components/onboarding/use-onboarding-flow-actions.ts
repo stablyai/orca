@@ -1,4 +1,4 @@
-import { useCallback, useRef, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { toast } from 'sonner'
 import { applyDocumentTheme } from '@/app-shell/appearance/document-theme'
 import { track } from '@/diagnostics/telemetry/telemetry'
@@ -6,6 +6,7 @@ import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { launchOnboardingCompletionAgent } from './onboarding-completion-agent-launch'
+import { completionBusyLabel } from './onboarding-add-project-handoff'
 import { ONBOARDING_FINAL_STEP } from '../../../../shared/onboarding-defaults'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../../shared/onboarding-state-types'
@@ -16,8 +17,6 @@ import { STEPS, type AgentSurface, type StepNumber } from './use-onboarding-flow
 import { captureThemeLookSettings } from './onboarding-theme-look-settings'
 import {
   prepareSkippedOnboardingPreferences,
-  resolveStepIndex,
-  type OnboardingStepSkipOptions,
   type TaskSourcesExitAction
 } from './onboarding-flow-state'
 
@@ -42,6 +41,8 @@ type OnboardingFlowActionsArgs = {
   settings: GlobalSettings | null
   persistCurrentStep: () => Promise<PersistCurrentStepResult>
   selectedWorkspaceId: string | null
+  /** The profile started on the landing page, so finishing or leaving onboarding opens Add Project. */
+  opensAddProject: boolean
   closeWith: CloseWith
   openModal: (modal: 'add-repo') => void
   getNextStepIndex: (index: number) => number
@@ -53,7 +54,6 @@ type OnboardingFlowActionsArgs = {
   themeLookBaseline: GlobalSettings | null
   setTheme: Dispatch<SetStateAction<GlobalSettings['theme']>>
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void> | void
-  skipOptions: OnboardingStepSkipOptions
 }
 
 export function useOnboardingFlowActions({
@@ -66,6 +66,7 @@ export function useOnboardingFlowActions({
   settings,
   persistCurrentStep,
   selectedWorkspaceId: worktreeId,
+  opensAddProject,
   closeWith,
   openModal,
   getNextStepIndex,
@@ -76,11 +77,13 @@ export function useOnboardingFlowActions({
   agentSurface,
   themeLookBaseline,
   setTheme,
-  updateSettings,
-  skipOptions
+  updateSettings
 }: OnboardingFlowActionsArgs) {
   // Latch synchronously: busyLabel commits too late to stop shortcut autorepeat from skipping a step.
   const nextInFlightRef = useRef(false)
+  // Locks Back, Escape and dismissal while skipped choices save, independently of the visible busy label.
+  const [savingSkippedChoices, setSavingSkippedChoices] = useState(false)
+  const locked = busyLabel !== null || savingSkippedChoices
   const trackCurrentStepCompleted = useCallback(
     (advancedVia: 'button' | 'keyboard'): void => {
       // Step 1 spans the Chat/Terminal page and the agent page; only the agent page completes it.
@@ -125,7 +128,7 @@ export function useOnboardingFlowActions({
       agent?: TuiAgent | null
     ): Promise<boolean> => {
       const closed = await closeWith('completed', ONBOARDING_FINAL_STEP, path)
-      if (closed && !worktreeId && path === 'add_project_modal') {
+      if (closed && path === 'add_project_modal') {
         openModal('add-repo')
       } else if (closed && worktreeId) {
         await launchOnboardingCompletionAgent(worktreeId, agent, workspaceExecutionHostId)
@@ -150,19 +153,9 @@ export function useOnboardingFlowActions({
         if (result.ok) {
           trackCurrentStepCompleted(advancedVia)
           if (currentStep.id === 'notifications') {
-            setBusyLabel(
-              worktreeId
-                ? translate('components.onboarding.flow.actions.continue', 'Continue')
-                : translate(
-                    'components.onboarding.flow.actions.openingAddProject',
-                    'Opening Add Project...'
-                  )
-            )
-            await complete(
-              workspaceExecutionHostId,
-              worktreeId ? 'workspace' : 'add_project_modal',
-              agent
-            )
+            const path = worktreeId && !opensAddProject ? 'workspace' : 'add_project_modal'
+            setBusyLabel(completionBusyLabel(path))
+            await complete(workspaceExecutionHostId, path, agent)
             return
           }
           const nextIndex = getNextStepIndex(stepIndex)
@@ -197,6 +190,7 @@ export function useOnboardingFlowActions({
       currentStep.stepNumber,
       getNextStepIndex,
       worktreeId,
+      opensAddProject,
       selectedAgent,
       onOnboardingChange,
       persistCurrentStep,
@@ -220,8 +214,11 @@ export function useOnboardingFlowActions({
     const stepId = currentStep.id
     const stepNumber = currentStep.stepNumber
     const valueKind = currentStep.valueKind
+    const path = opensAddProject ? 'add_project_modal' : 'workspace'
     setError(null)
-    setBusyLabel(translate('components.onboarding.flow.actions.continue', 'Continue'))
+    setSavingSkippedChoices(true)
+    // Add Project is named only once the skipped choices are saved.
+    setBusyLabel(opensAddProject ? null : completionBusyLabel(path))
     try {
       const preferencesSaved = await prepareSkippedOnboardingPreferences({
         currentStepId: stepId,
@@ -235,7 +232,11 @@ export function useOnboardingFlowActions({
         updateSettings,
         setError
       })
-      if (!preferencesSaved || !(await complete(workspaceExecutionHostId, 'workspace', agent))) {
+      if (!preferencesSaved) {
+        return
+      }
+      setBusyLabel(completionBusyLabel(path))
+      if (!(await complete(workspaceExecutionHostId, path, agent))) {
         return
       }
       track('onboarding_step_skipped', {
@@ -260,6 +261,7 @@ export function useOnboardingFlowActions({
       }
     } finally {
       setBusyLabel(null)
+      setSavingSkippedChoices(false)
       nextInFlightRef.current = false
     }
   }, [
@@ -278,12 +280,13 @@ export function useOnboardingFlowActions({
     setError,
     setTheme,
     themeLookBaseline,
+    opensAddProject,
     worktreeId
   ])
 
   const dismissOnboarding = useCallback(
     async (advancedVia: 'button' | 'keyboard' = 'button'): Promise<boolean> => {
-      if (busyLabel) {
+      if (locked) {
         return false
       }
       setError(null)
@@ -292,19 +295,8 @@ export function useOnboardingFlowActions({
         advancedVia
       })
     },
-    [busyLabel, closeWith, consumeStepDurationMs, currentStep.stepNumber, setError]
+    [locked, closeWith, consumeStepDurationMs, currentStep.stepNumber, setError]
   )
 
-  const back = useCallback(() => {
-    setStepIndex((index) => resolveStepIndex(index - 1, skipOptions, 'backward'))
-  }, [setStepIndex, skipOptions])
-
-  const jumpToStep = useCallback(
-    (idx: number) => {
-      setStepIndex(resolveStepIndex(idx, skipOptions, idx < stepIndex ? 'backward' : 'forward'))
-    },
-    [setStepIndex, skipOptions, stepIndex]
-  )
-
-  return { next, setUpLater, dismissOnboarding, back, jumpToStep }
+  return { next, setUpLater, dismissOnboarding, locked }
 }
