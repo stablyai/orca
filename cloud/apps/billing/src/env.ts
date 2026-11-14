@@ -77,6 +77,10 @@ export type Env = {
   // Cloud setup sessions (cloud-setup.ts). Origin of the setup pages on Orca Cloud auth
   // (https://auth.onorca.dev, staging https://auth-staging.onorca.dev); Checkout returns there.
   CLOUD_SETUP_PAGES_URL?: string
+  // The web console's origin (https://app.orca.dev, staging https://app-staging.orca.dev). Checkout
+  // and the Customer Portal started from the console return to its billing page. Unset: the setup
+  // pages' origin (auth), which forwards /console there.
+  CONSOLE_URL?: string
   // Control plane origin billing asks for a repository's GitHub install URL (CONTROL_PLANE_TOKEN).
   SANDBOX_CONTROL_URL?: string
   // Service binding to that control plane. Same-account Workers can't fetch each other over
