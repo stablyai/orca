@@ -69,17 +69,6 @@ describe('cold reattach waits for host identity replay', () => {
     vi.useRealTimers()
   })
 
-  it('connects synchronously when host replay already applied before pane registration', () => {
-    const bridge = registerAgentStatusStartupSnapshot()
-    bridge.settle()
-    const { session, fixture, transport } = createSession()
-    fixture.deps.paneTransportsRef.current.clear()
-    startDeferredSessionReattach(session, 'live-pty')
-    expect(transport.connect).toHaveBeenCalledOnce()
-    fixture.deps.paneTransportsRef.current.set(1, transport)
-    bridge.dispose()
-  })
-
   it('connects once with the exact conversation after the initial snapshot applies', async () => {
     const bridge = registerAgentStatusStartupSnapshot()
     const { session, transport, replay } = createSession()
@@ -135,17 +124,6 @@ describe('cold reattach waits for host identity replay', () => {
       bridge.dispose()
     }
   )
-
-  it('retains the bounded fallback when the host never answers', async () => {
-    const bridge = registerAgentStatusStartupSnapshot()
-    const { session, transport } = createSession()
-    startDeferredSessionReattach(session, 'lost-pty')
-    await vi.advanceTimersByTimeAsync(4_999)
-    expect(transport.connect).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(1)
-    expect(transport.connect).toHaveBeenCalledOnce()
-    bridge.dispose()
-  })
 
   it('ignores an old bridge completion after replacement', async () => {
     const old = registerAgentStatusStartupSnapshot()

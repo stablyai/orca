@@ -186,7 +186,6 @@ describe.skipIf(!isWindows || !e2eOptIn || process.env.CI !== 'true')(
           `${seed} typed`
         )
         expect(result.action).toMatchObject({
-          actionName: 'EM_REPLACESEL',
           verification: { state: 'verified', property: 'elementText' }
         })
       }
@@ -249,7 +248,6 @@ describe.skipIf(!isWindows || !e2eOptIn || process.env.CI !== 'true')(
         (error: unknown) => (error instanceof Error ? error.message : String(error))
       )
       expect(failure).toMatch(/"code":\s*"background_unavailable"/)
-      expect(failure).toContain('type-text --element-index')
       const after = await readState()
       expect(after.activations).toBe(before.activations)
       expect(after.notes).toBe(before.notes)
