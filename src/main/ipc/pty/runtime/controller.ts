@@ -43,22 +43,7 @@ import {
   listProcessesFromRuntimeController,
   listProcessesWithHostScopeFromRuntimeController
 } from './inventory-operations'
-import { onLocalPtyExit } from '../../../providers/local-pty/local-pty-session-operations'
-
-// Window reactivation reinstalls the controller; keep one exit observer.
-let stopObservingInProcessExits: (() => void) | null = null
-
-/** Feed this process's own PTY exits to the runtime's exit proof; replaces any earlier observer. */
-export function observeInProcessWorkerExits(runtime: PtyRuntimeControllerDeps['runtime']): void {
-  stopObservingInProcessExits?.()
-  stopObservingInProcessExits = runtime
-    ? onLocalPtyExit(({ id, incarnationId }) => {
-        if (incarnationId) {
-          runtime.recordInProcessPtyExit(`${id}:${incarnationId}`)
-        }
-      })
-    : null
-}
+import { observeInProcessWorkerExits } from './in-process-exit-observer'
 
 export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): void {
   const { runtime, adoptStablePane, requestSerializedBuffer } = deps

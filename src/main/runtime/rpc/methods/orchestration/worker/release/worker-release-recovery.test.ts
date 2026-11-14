@@ -16,7 +16,7 @@ import { exitListeners } from '../../../../../../providers/local-pty/local-pty-p
 import type { IPtyProvider } from '../../../../../../providers/pty/provider-contract'
 import type { PtyProcessInfo } from '../../../../../../providers/pty/process-info'
 import { listLocalProcessesForExitProofFromRuntimeController } from '../../../../../../ipc/pty/runtime/inventory-operations'
-import { observeInProcessWorkerExits } from '../../../../../../ipc/pty/runtime/controller'
+import { observeInProcessWorkerExits } from '../../../../../../ipc/pty/runtime/in-process-exit-observer'
 import { PTY_CONTROLLER_LIST_TIMEOUT_MS } from '../../../../../terminal/lifecycle/pty-controller-inventory-budget'
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
