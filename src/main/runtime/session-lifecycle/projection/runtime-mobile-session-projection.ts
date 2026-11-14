@@ -184,8 +184,7 @@ export function projectRuntimeMobileSessionTabs(
     const resolvedHostProjection =
       tab.agentStatus &&
       (tab.agentStatus.paneSleep ||
-        (acceptedRow?.payload.state === 'done' &&
-          (tab.agentStatus.state === 'done' || tab.agentStatus.updatedAt <= acceptedRow.updatedAt)))
+        (acceptedRow?.payload.state === 'done' && tab.agentStatus.state === 'done'))
         ? host.buildPtyStatus(statusPty, tab, null, retainedAgentStatus, getHookRowsForPane)
         : null
     const normalizedTabAgentStatus = resolvedHostProjection
