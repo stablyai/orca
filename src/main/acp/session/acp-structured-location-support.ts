@@ -1,9 +1,14 @@
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session/lifecycle/agent-session-record'
+import type { ManagedRuntime } from '../../node-runtime/managed-runtime-release'
 import { supportsSupervisedProviderChildLocation } from '../../provider-process/supervised-provider-child-location'
-import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
+
+export type AcpStructuredLocationSpec = {
+  managedRuntime?: Pick<ManagedRuntime, 'pin'>
+  hostBackend?: object
+}
 
 export function supportsAcpStructuredLocation(
-  spec: Pick<AcpLaunchSpec, 'managedRuntime' | 'hostBackend'>,
+  spec: AcpStructuredLocationSpec,
   location: AgentSessionExecutionLocation,
   hasWindowsProcessStartTimeProof?: () => boolean
 ): boolean {
