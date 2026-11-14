@@ -16,6 +16,7 @@ import {
   captureWslAutomountSnapshot
 } from '../../wsl/filesystem/wsl-automount-root'
 import { assertWorktreeDoesNotContainRegisteredWorktree } from './worktree-removal-safety'
+import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
 
 type LocalPartialRemovalRecoveryArgs = {
   error: unknown
@@ -111,15 +112,15 @@ export async function removeStaleLocalWorktreeRegistration(
 export async function recoverPartialLocalWorktreeRemoval(
   args: LocalPartialRemovalRecoveryArgs
 ): Promise<RemoveWorktreeResult | undefined> {
+  throwIfSignalAborted(args.signal)
   // Reject Git locks before recovery can recursively delete files.
   assertWorktreeUnlockedForRemoval(args.registeredWorktree)
 
   const distro =
     process.platform === 'win32' ? args.localWorktreeGitOptions.wslDistro?.trim() : undefined
-  args.signal?.throwIfAborted()
   const proofEpoch = distro ? captureWslAutomountSnapshot(distro) : undefined
   const recoverable = await isRecoverablePartialRemovalFailure(args)
-  args.signal?.throwIfAborted()
+  throwIfSignalAborted(args.signal)
   if (proofEpoch) {
     assertWslAutomountSnapshotCurrent(proofEpoch)
   }
@@ -137,6 +138,7 @@ export async function recoverPartialLocalWorktreeRemoval(
   try {
     await filesystem.remove(args.canonicalWorktreePath)
   } catch (error) {
+    throwIfSignalAborted(args.signal)
     throw new Error(formatWorktreeRemovalError(error, args.canonicalWorktreePath, args.force))
   }
   filesystem.assertCurrent()

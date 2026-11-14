@@ -7553,12 +7553,6 @@
             "title": "代理睡眠",
             "toggleLabel": "切换代理睡眠"
           },
-          "newWorktreeCardStyle": {
-            "copy": "预览更新后的工作树卡片布局、元数据位置、卡片显示菜单选项和状态呈现",
-            "description": "预览更新后的工作树卡片布局、元数据位置、卡片显示菜单选项和状态呈现",
-            "title": "新卡片样式",
-            "toggleLabel": "切换新卡片样式"
-          },
           "nativeChat": {
             "shellEnvNamesLabel": "从 shell 传递的变量",
             "shellEnvNamePlaceholder": "变量名",
@@ -9693,11 +9687,9 @@
             "newWorktreeCardStyle": {
               "card": "卡片",
               "cards": "卡片",
-              "description": "预览更新后的 Worktree 卡片布局、元数据位置、卡片显示菜单选项和状态呈现",
               "menu": "菜单",
               "metadata": "元数据",
               "status": "状态",
-              "title": "新卡片样式",
               "worktree": "工作树",
               "worktrees": "工作树"
             },
@@ -19781,7 +19773,8 @@
         "unconfirmedDetail": "它可能已经打开。请先检查会话历史，再创建分支。",
         "failed": "{{agent}} 无法从此聊天创建分支",
         "hostUnsupported": "此主机运行的是旧版 Orca。请更新主机上的 Orca 后重试。",
-        "failedDetail": "聊天未发生更改。请重试。"
+        "failedDetail": "聊天未发生更改。请重试。",
+        "commandWorking": "{{agent}} 回复期间无法创建分支。回复结束后，请再次运行 /fork。"
       },
       "cardKindHidden": {
         "description": "你可以随时在此处更改",

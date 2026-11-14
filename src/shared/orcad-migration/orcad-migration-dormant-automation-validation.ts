@@ -246,6 +246,7 @@ function isMigratedAutomationRun(value: unknown): value is AutomationRun {
     'orcad_migration_dormant_automation_run_dispatched_invalid',
     true
   )
+  optionalFinite(record.launchedAt, 'orcad_migration_dormant_automation_run_launched_invalid')
   requiredFinite(record.createdAt, 'orcad_migration_dormant_automation_run_created_invalid')
   optionalPositiveInteger(record.runNumber, 'orcad_migration_dormant_automation_run_number_invalid')
   optionalPositiveInteger(

@@ -7,6 +7,7 @@ import {
   ORPHANED_WORKTREE_DIRECTORY_MESSAGE
 } from './worktree-removal-safety'
 import { CLIENT_REMOVAL_HOME } from './worktree-removal-home-guard'
+import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
 
 export async function cleanupLocalOrphanedWorktreeDirectory(
   repoPath: string,
@@ -15,6 +16,7 @@ export async function cleanupLocalOrphanedWorktreeDirectory(
   closeWatchers: (path: string) => Promise<void>,
   signal: AbortSignal | undefined = options.signal
 ): Promise<void> {
+  throwIfSignalAborted(signal)
   if (isDangerousWorktreeRemovalPath(path, repoPath, CLIENT_REMOVAL_HOME)) {
     throw new Error(ORPHANED_WORKTREE_DIRECTORY_MESSAGE)
   }

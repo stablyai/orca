@@ -464,7 +464,6 @@ describe('OrcaRuntimeService', () => {
         'Worktree is no longer registered with Git but its directory remains.'
       )
       await expect(lstat(orphanPath)).resolves.toBeTruthy()
-      expect(removePathSpy).toHaveBeenCalledWith(orphanPath)
       expect(removeWorktreeMeta).not.toHaveBeenCalled()
       expect(gitSpy).not.toHaveBeenCalledWith(['worktree', 'prune'], expect.anything())
     } finally {

@@ -7335,12 +7335,6 @@
             "title": "Agent のスリープ",
             "toggleLabel": "Agent のスリープを切り替え"
           },
-          "newWorktreeCardStyle": {
-            "copy": "更新されたワークツリーカードのレイアウト、メタデータ配置、カード表示メニュー項目、ステータス表示をプレビューします。",
-            "description": "更新されたワークツリーカードのレイアウト、メタデータ配置、カード表示メニュー項目、ステータス表示をプレビューします。",
-            "title": "新規カードスタイル",
-            "toggleLabel": "新規カードスタイルを切り替え"
-          },
           "nativeChat": {
             "shellEnvNamesLabel": "シェルから渡す変数",
             "shellEnvNamePlaceholder": "変数名",
@@ -9496,11 +9490,9 @@
             "newWorktreeCardStyle": {
               "card": "カード",
               "cards": "カード",
-              "description": "更新されたワークツリーカードのレイアウト、メタデータ配置、カード表示メニュー項目、ステータス表示をプレビューします。",
               "menu": "メニュー",
               "metadata": "メタデータ",
               "status": "状態",
-              "title": "新規カードスタイル",
               "worktree": "ワークツリー",
               "worktrees": "ワークツリー"
             },
@@ -19519,7 +19511,8 @@
         "unconfirmedDetail": "チャットが開いている可能性があります。再度分岐する前にセッション履歴を確認してください。",
         "failed": "{{agent}} はこのチャットを分岐できませんでした",
         "hostUnsupported": "このホストでは古いバージョンの Orca が実行されています。ホストの Orca を更新して再試行してください。",
-        "failedDetail": "チャットは変更されていません。もう一度お試しください。"
+        "failedDetail": "チャットは変更されていません。もう一度お試しください。",
+        "commandWorking": "{{agent}} の応答中は分岐できません。応答が終わったら、もう一度 /fork を実行してください。"
       },
       "cardKindHidden": {
         "description": "いつでも次の場所で変更できます：",

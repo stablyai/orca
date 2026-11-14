@@ -252,6 +252,22 @@
       "showOnHostAriaLabel": "Show {{name}} on {{host}} in the sidebar",
       "keywordShow": "show",
       "keywordUnhide": "unhide"
+    },
+    "cardSlot": {
+      "needsYouLabel": "Waiting on you",
+      "failedLabel": "Last turn failed",
+      "markedUnread": "Marked unread by you",
+      "unread": "Unread result",
+      "working": "Working",
+      "monitoring": "Monitoring",
+      "offlineLabel": "Host offline",
+      "offline": "offline",
+      "needYouCount": "{{count}} need you",
+      "needsYou": "Needs you",
+      "failed": "Failed",
+      "detailsRow": "Details row",
+      "workspaceUnread": "Unread in this workspace",
+      "unreadTab": "Unread tab"
     }
   },
   "app": {
@@ -1430,6 +1446,7 @@
         "recipeDescription": "Clean up dictated text before it lands."
       }
     },
+    "experimental": {},
     "groupHooks": {
       "title": "Project Settings > {{name}}",
       "example": "Example: create a worktree in each repo (this machine only)",
@@ -8690,12 +8707,6 @@
             "title": "Agent sleep",
             "toggleLabel": "Toggle agent sleep"
           },
-          "newWorktreeCardStyle": {
-            "copy": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
-            "description": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
-            "title": "New card style",
-            "toggleLabel": "Toggle new card style"
-          },
           "ca2219fe5e": "Shows a small animated pet pinned to the bottom-right corner. Pick a character (Claudino, OpenCode, Gremlin) or upload your own PNG, APNG, GIF, WebP, JPG, or SVG from the status-bar pet menu. Hide it any time from the same menu without disabling this setting.",
           "dd6f0a1d45": "Pet",
           "0e89a574ae": "Floating animated pet in the bottom-right corner.",
@@ -8723,6 +8734,13 @@
             "modeAriaLabel": "Agent Dashboard open mode",
             "modeInWindow": "In-window",
             "modePopout": "Pop-out"
+          },
+          "worktreeCardStyle": {
+            "title": "Card style",
+            "copy": "Choose how workspace cards look in the sidebar.",
+            "ariaLabel": "Card style",
+            "classic": "Classic",
+            "experimental": "Experimental"
           }
         },
         "FloatingWorkspacePane": {
@@ -10896,11 +10914,9 @@
             "newWorktreeCardStyle": {
               "card": "card",
               "cards": "cards",
-              "description": "Preview updated worktree-card layout, metadata placement, card-display menu options, and status presentation.",
               "menu": "menu",
               "metadata": "metadata",
               "status": "status",
-              "title": "New card style",
               "worktree": "worktree",
               "worktrees": "worktrees"
             },
@@ -10923,6 +10939,10 @@
               "inWindow": "in-window",
               "worktrees": "worktrees",
               "eaf17a7214": "Agent dashboard"
+            },
+            "worktreeCardStyle": {
+              "title": "Card style",
+              "description": "Choose how workspace cards look in the sidebar."
             }
           }
         },
@@ -21512,7 +21532,7 @@
         "hostUnsupported": "This host runs an older Orca. Update Orca on the host, then try again.",
         "failedDetail": "Your chat is unchanged. Try again.",
         "commandDescription": "Fork this chat from its latest response",
-        "commandWorking": "Wait for the response to finish, then fork.",
+        "commandWorking": "Can’t fork while {{agent}} is replying. Run /fork again when it finishes.",
         "commandNothing": "There’s no response to fork yet.",
         "commandTakesNoText": "Send /fork on its own, then write in the new chat."
       },

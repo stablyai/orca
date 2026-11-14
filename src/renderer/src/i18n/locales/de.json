@@ -8009,12 +8009,6 @@
             "title": "Agenten-Ruhezustand",
             "toggleLabel": "Agenten-Ruhezustand umschalten"
           },
-          "newWorktreeCardStyle": {
-            "copy": "Vorschau auf das überarbeitete Layout der Worktree-Karten, die Anordnung der Metadaten, Menüoptionen zur Kartenanzeige und die Statusdarstellung.",
-            "description": "Vorschau auf das überarbeitete Layout der Worktree-Karten, die Anordnung der Metadaten, Menüoptionen zur Kartenanzeige und die Statusdarstellung.",
-            "title": "Neuer Kartenstil",
-            "toggleLabel": "Neuen Kartenstil umschalten"
-          },
           "ca2219fe5e": "Zeigt ein kleines animiertes Haustier, das unten rechts angeheftet ist. Im Haustiermenü der Statusleiste eine Figur (Claudino, OpenCode, Gremlin) auswählen oder eine eigene PNG-, APNG-, GIF-, WebP-, JPG- oder SVG-Datei hochladen. Es lässt sich jederzeit über dasselbe Menü ausblenden, ohne diese Einstellung zu deaktivieren.",
           "dd6f0a1d45": "Haustier",
           "0e89a574ae": "Schwebendes animiertes Haustier unten rechts.",
@@ -10174,11 +10168,9 @@
             "newWorktreeCardStyle": {
               "card": "Karte",
               "cards": "Karten",
-              "description": "Vorschau auf das überarbeitete Layout der Worktree-Karten, die Anordnung der Metadaten, Menüoptionen zur Kartenanzeige und die Statusdarstellung.",
               "menu": "Menü",
               "metadata": "Metadaten",
               "status": "Status",
-              "title": "Neuer Kartenstil",
               "worktree": "Worktree",
               "worktrees": "Worktrees"
             },
@@ -20229,7 +20221,8 @@
         "unconfirmedDetail": "Der Chat wurde möglicherweise dennoch geöffnet. Prüfe den Sitzungsverlauf, bevor du erneut abzweigst.",
         "failed": "{{agent}} konnte diesen Chat nicht abzweigen",
         "hostUnsupported": "Auf diesem Host läuft eine ältere Orca-Version. Aktualisiere Orca auf dem Host und versuche es erneut.",
-        "failedDetail": "Dein Chat ist unverändert. Versuche es erneut."
+        "failedDetail": "Dein Chat ist unverändert. Versuche es erneut.",
+        "commandWorking": "Abzweigen ist nicht möglich, während {{agent}} antwortet. Führe /fork erneut aus, wenn die Antwort fertig ist."
       },
       "cardKindHidden": {
         "description": "Das kannst du jederzeit hier ändern:",

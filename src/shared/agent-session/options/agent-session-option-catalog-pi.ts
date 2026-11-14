@@ -2,8 +2,15 @@ import { agentChoiceCliApply } from '../../agent-launch/choices/agent-choice-cli
 import type { AgentSessionOptionCatalog } from './agent-session-option-catalog-types'
 import { PI_THINKING_LEVELS } from './structured-agent-session-effective-effort'
 
+/** Pi chats only accept an exact `provider/id`; its CLI fuzzy-matches anything else. */
+export function isPiModelOptionId(value: string): boolean {
+  const slash = value.indexOf('/')
+  return slash > 0 && slash < value.length - 1
+}
+
 // Why: terminal launches need Pi's CLI flags; Pi chats keep applying picks over RPC.
 export const PI_LAUNCH_OPTION_CATALOG: AgentSessionOptionCatalog = {
+  supportsWorkerLaunchPreferences: true,
   // Pi models depend on configured providers; ids are opaque `provider/id` selectors.
   models: [],
   modelApply: agentChoiceCliApply(

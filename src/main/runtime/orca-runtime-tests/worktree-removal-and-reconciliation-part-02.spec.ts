@@ -435,10 +435,12 @@ describe('OrcaRuntimeService', () => {
     expect(assertWorktreeCleanForRemoval).toHaveBeenCalledWith(registeredWorktree.path, false, {
       wslDistro: 'Ubuntu'
     })
-    expect(removeWorktree).toHaveBeenCalledWith(repo.path, registeredWorktree.path, false, {
-      knownRemovedWorktree: registeredWorktree,
-      wslDistro: 'Ubuntu'
-    })
+    expect(removeWorktree).toHaveBeenCalledWith(
+      repo.path,
+      registeredWorktree.path,
+      false,
+      expect.objectContaining({ knownRemovedWorktree: registeredWorktree, wslDistro: 'Ubuntu' })
+    )
   })
 
   it('surfaces selected-runtime list failures during runtime worktree removal', async () => {

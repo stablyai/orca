@@ -1,4 +1,5 @@
 import { posix } from 'node:path'
+import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
 import { runProcess } from '@orca/process-host'
 import { lstat, stat, readFile, realpath } from 'node:fs/promises'
 import { buildWslExecArgs } from '../../../shared/wsl-login-shell-command'
@@ -80,7 +81,7 @@ export async function prepareLocalWorktreeFilesystem(
 ): Promise<LocalWorktreeFilesystem> {
   const distro = shouldUseWslFilesystem(options) ? options.wslDistro?.trim() : undefined
   const assertProofCurrent = (): void => {
-    options.signal?.throwIfAborted()
+    throwIfSignalAborted(options.signal)
     if (distro && options.proofEpoch) {
       assertWslAutomountSnapshotCurrent(options.proofEpoch)
     }
@@ -178,6 +179,7 @@ export async function removeLocalWorktreePath(
   scope.assertCurrent()
   const distro = options.wslDistro?.trim()
   if (!shouldUseWslFilesystem(options) || !distro) {
+    throwIfSignalAborted(signal)
     await removeHostTree(targetPath, { signal }).finally(scope.assertCurrent)
     return
   }

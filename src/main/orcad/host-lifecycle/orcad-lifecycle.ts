@@ -1,3 +1,4 @@
+import { worktreeRemovalLifetime } from '../../workspaces/removal/worktree-removal-lifetime'
 import { setRuntimeBrowserCommandsFactory } from '../../runtime/browser/installation/runtime-browser-commands-factory'
 import { markHostShuttingDown } from '../../startup/quit/host-shutdown-state'
 import { setDesktopBrowserBridgeHostEnabled } from '../../runtime/desktop-browser-bridge/desktop-browser-bridge-registry'
@@ -76,6 +77,7 @@ export function installOrcadShutdownSignals(
     }
     stopping = true
     markHostShuttingDown()
+    void worktreeRemovalLifetime.close().catch(() => {})
     holdOrcadTerminalAdmissionUntilExit()
     exitCode = stoppedExitCode
     retractClean = onFailed
@@ -117,7 +119,8 @@ export async function stopOrcadStructuredAgentSessions(): Promise<void> {
 
 export async function startOrcadWithLifecycle<T extends object>(
   start: (registerRuntimeCleanup: (cleanup: BackendServiceCleanup) => void) => Promise<T>,
-  cleanupHost: (runtimeCleanupSucceeded: boolean) => Promise<void>
+  cleanupHost: (runtimeCleanupSucceeded: boolean) => Promise<void>,
+  checkpoint: () => Promise<void> = async () => {}
 ): Promise<T & { stop(): Promise<void> }> {
   const runtime = new BackendServiceLifetime()
   const cleanup = createIdempotentOrcadCleanup(async () => {
@@ -125,11 +128,23 @@ export async function startOrcadWithLifecycle<T extends object>(
     recordAgentSessionRuntimeEnd('quit')
     // Startup failures reach cleanup without shutdown admission while RPC may already be serving.
     markHostShuttingDown()
+    void worktreeRemovalLifetime.close().catch(() => {})
+    let checkpointError: unknown
+    const checkpointing = Promise.resolve()
+      .then(checkpoint)
+      .catch((error: unknown) => {
+        checkpointError = error
+      })
     let runtimeCleanupSucceeded = false
     try {
       await runtime.stop()
+      await checkpointing
+      if (checkpointError) {
+        throw checkpointError
+      }
       runtimeCleanupSucceeded = true
     } finally {
+      await checkpointing
       await cleanupHost(runtimeCleanupSucceeded)
     }
   })
@@ -151,7 +166,8 @@ export async function startOrcadWithLifecycle<T extends object>(
 export async function startOrcadWithHost<T extends object>(
   userDataPath: string,
   start: (registerCleanup: (cleanup: BackendServiceCleanup) => void) => Promise<T>,
-  runQuitHandlers: () => void | Promise<void>
+  runQuitHandlers: () => void | Promise<void>,
+  checkpoint: () => Promise<void> = async () => {}
 ): Promise<T & { stop(): Promise<void>; instance: OrcadManagedStopInstance }> {
   const instanceLock = acquireOrcadInstanceLock(userDataPath, {
     // Yield the data root to the process that took its lock; supervisors stand by on this code.
@@ -201,7 +217,8 @@ export async function startOrcadWithHost<T extends object>(
       host.add(() => setDesktopBrowserBridgeHostEnabled(false))
       host.add(() => browserProvider?.stop())
       await host.stop()
-    }
+    },
+    checkpoint
   )
 }
 

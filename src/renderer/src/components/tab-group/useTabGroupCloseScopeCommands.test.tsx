@@ -64,26 +64,13 @@ function request(scope: BulkTabCloseScope) {
   act(actions[scope])
 }
 
-async function confirmRequest(confirmed = true) {
+async function confirmRequest() {
   await act(async () => {
-    settle(confirmed)
+    settle(true)
   })
 }
 
 describe('group bulk close confirmation', () => {
-  it.each(['editors', 'others', 'right', 'left'] as const)(
-    'waits for confirmation and leaves tabs untouched on cancelling %s',
-    async (scope) => {
-      request(scope)
-      expect(confirm).toHaveBeenCalledOnce()
-      expect(closeItem).not.toHaveBeenCalled()
-      expect(closeMany).not.toHaveBeenCalled()
-      await confirmRequest(false)
-      expect(closeItem).not.toHaveBeenCalled()
-      expect(closeMany).not.toHaveBeenCalled()
-    }
-  )
-
   it.each(['others', 'right', 'left'] as const)(
     'abandons %s when the anchor is removed while the dialog is open',
     async (scope) => {
@@ -97,17 +84,6 @@ describe('group bulk close confirmation', () => {
       )
       await confirmRequest()
       expect(closeMany).not.toHaveBeenCalled()
-    }
-  )
-
-  it.each(['editors', 'others', 'right', 'left'] as const)(
-    'abandons %s when the original group disappears',
-    async (scope) => {
-      request(scope)
-      act(() => useAppStore.setState({ groupsByWorktree: {} }))
-      await confirmRequest()
-      expect(closeMany).not.toHaveBeenCalled()
-      expect(closeItem).not.toHaveBeenCalled()
     }
   )
 

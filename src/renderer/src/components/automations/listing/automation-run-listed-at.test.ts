@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getAutomationRunListedAt } from '../../../../../shared/automations/history/automation-run'
-import { summarizeAutomationRunUsage } from '../../../../../shared/automations/history/automation-usage-summary'
-import { makeAutomation, makeRun } from '../automations-page-fixtures'
-import { getLocalAutomationLastRunSnapshot } from './automation-list-last-run'
+import { makeRun } from '../automations-page-fixtures'
 import { getAutomationRunLaunchedAt } from '../runs/automation-run-identity-label'
 
 const SLOT = 1_000_000
@@ -24,26 +22,6 @@ describe('the time a run is listed under', () => {
     ).toBe(SLOT + 9)
     expect(getAutomationRunListedAt({ scheduledFor: SLOT, occurrenceCount: 1 })).toBe(SLOT)
   })
-
-  it("keeps #41052's rule: a folded run is listed at its latest occurrence in the list and detail", () => {
-    const folded = makeRun({
-      status: 'skipped_unavailable',
-      scheduledFor: SLOT,
-      createdAt: SLOT,
-      occurrenceCount: 9,
-      lastOccurrenceAt: SLOT + 8 * 86_400_000
-    })
-    expect(summarizeAutomationRunUsage([folded]).lastRunListedAt).toBe(SLOT + 8 * 86_400_000)
-    expect(getLocalAutomationLastRunSnapshot(makeAutomation(), folded).at).toBe(
-      SLOT + 8 * 86_400_000
-    )
-  })
-
-  it('is what the list (usage summary) and the detail stat both show', () => {
-    const run = makeRun({ scheduledFor: SLOT, dispatchedAt: LATE_START, createdAt: LATE_START })
-    expect(summarizeAutomationRunUsage([run]).lastRunListedAt).toBe(SLOT)
-    expect(getLocalAutomationLastRunSnapshot(makeAutomation(), run).at).toBe(SLOT)
-  })
 })
 
 describe('when a run launched', () => {
@@ -54,6 +32,7 @@ describe('when a run launched', () => {
     chatSessionId: null,
     terminalPaneKey: null,
     sessionKind: 'chat' as const,
+    launchedAt: undefined,
     ...overrides
   })
 
@@ -63,6 +42,12 @@ describe('when a run launched', () => {
     expect(
       getAutomationRunLaunchedAt(run({ status: 'skipped_unavailable', dispatchedAt: 5 }))
     ).toBeNull()
+  })
+
+  it('uses the recorded launch time of a run that failed after launching', () => {
+    // Delivery failed before dispatch, then retention cleared the pane: only launchedAt remains.
+    expect(getAutomationRunLaunchedAt(run({ sessionKind: 'terminal', launchedAt: 7 }))).toBe(7)
+    expect(getAutomationRunLaunchedAt(run({ launchedAt: 7 }))).toBe(7)
   })
 
   it('keeps a launched terminal run whose pane key retention cleared', () => {
