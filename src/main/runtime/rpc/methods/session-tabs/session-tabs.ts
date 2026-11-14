@@ -1,4 +1,5 @@
 import { isDeepStrictEqual } from 'node:util'
+import { chatForkImportLaunchOption } from '../../../../ai-vault/fork-transfer/chat-fork-transfer-ownership'
 import { terminalCreateFeatureRequirement } from '../../startup/agent-launch-feature-requirement'
 import { terminalImageViewerSupported } from '../../../terminal/launch/terminal-image-viewer-env'
 import { resolveRuntimeNavigationTarget } from '../../../../../shared/runtime-navigation'
@@ -73,6 +74,7 @@ export const SESSION_TAB_METHODS = [
       }
       return runtime.createMobileSessionTerminal(params.worktree, {
         ...(params.sourceChatFork ? { sourceChatFork: params.sourceChatFork } : {}),
+        ...chatForkImportLaunchOption(params.sourceChatImport, context),
         terminalImageViewerSupported: terminalImageViewerSupported(context),
         afterTabId: params.afterTabId,
         targetGroupId: params.targetGroupId,

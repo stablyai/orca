@@ -20,11 +20,15 @@ import { seedResumeLaunchIdentity } from '../../../ipc/pty/pane/resume-launch-id
 // Allow lost-response reconnect retries for one minute; later intentional resumes fork fresh.
 const MOBILE_TERMINAL_CREATE_RESULT_TTL_MS = 60_000
 
+/** A placed cross-host fork, bound to the caller that imported it. */
+export type ChatForkImportLaunchRef = { importId: string; owner: string }
+
 /** A paired client's terminal create request. */
 export type MobileTerminalCreateOptions = {
   terminalImageViewerSupported?: boolean
   afterTabId?: string
   sourceChatFork?: { sessionId: string; throughEntryId?: string }
+  sourceChatImport?: ChatForkImportLaunchRef
   targetGroupId?: string
   command?: string
   shellOverride?: string
@@ -99,6 +103,7 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
     opts: {
       afterTabId?: string
       sourceChatFork?: { sessionId: string; throughEntryId?: string }
+      sourceChatImport?: ChatForkImportLaunchRef
       targetGroupId?: string
       command?: string
       shellOverride?: string

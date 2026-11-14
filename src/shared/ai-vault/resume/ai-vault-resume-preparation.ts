@@ -25,6 +25,13 @@ export const AI_VAULT_TERMINAL_FORK_CUT_CAPABILITY = 'ai-vault.terminal-fork-cut
 
 export const AI_VAULT_CHAT_FORK_SOURCE_CAPABILITY = 'ai-vault.chat-fork-source.v1' as const
 
+/** A host that cuts a Claude chat for another host to fetch (aiVault.exportChatFork and its reads). */
+export const AI_VAULT_CHAT_FORK_EXPORT_CAPABILITY = 'ai-vault.chat-fork-export.v1' as const
+
+/** A host that places a Claude chat sent from another host, and launches it through
+ *  session.tabs.createTerminal's sourceChatImport. */
+export const AI_VAULT_CHAT_FORK_IMPORT_CAPABILITY = 'ai-vault.chat-fork-import.v1' as const
+
 export type AiVaultChatForkSource = Pick<
   AiVaultSession,
   'agent' | 'sessionId' | 'filePath' | 'cwd' | 'codexHome'

@@ -10,6 +10,7 @@ import {
   isStructuredChatCliForkSourceCurrent
 } from '../../../ai-vault/structured-sessions/structured-chat-cli-fork'
 import { prepareTerminalChatForkForWorkspace } from '../../../ai-vault/terminal-chat-fork-cut'
+import { chatForkImportLaunchSource } from '../../../ai-vault/fork-transfer/chat-fork-import-placement'
 import { buildMobileTerminalChatFork } from './mobile-terminal-chat-fork'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
@@ -62,9 +63,10 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
   }): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const { workspace, worktreeId, opts, afterTabId, graphEpoch } = args
     const sourceId = opts.sourceChatFork?.sessionId
+    const imported = opts.sourceChatImport
     const mutationId = opts.clientMutationId
     if (
-      !sourceId ||
+      (!sourceId && !imported) ||
       !mutationId ||
       workspace.connectionId ||
       isWslUncPath(workspace.path) ||
@@ -77,22 +79,28 @@ export abstract class OrcaRuntimeWithMobileChatForkCreate extends OrcaRuntimeWit
       try {
         const throughEntryId = opts.sourceChatFork?.throughEntryId
         // A terminal Claude chat: cut its own transcript; the copy lands in this worktree's project.
-        const prepared = throughEntryId
-          ? await prepareTerminalChatForkForWorkspace(sourceId, throughEntryId, workspace.path)
-          : await (async () => {
-              await this.ensureStructuredAgentSessionHost()
-              return prepareStructuredChatCliFork(
-                { sourceChat: { sessionId: sourceId, workspaceId: worktreeId }, fork: true },
-                (prepareArgs) => this.aiVault.prepare(prepareArgs)
-              )
-            })()
+        const prepared = imported
+          ? chatForkImportLaunchSource(imported, worktreeId)
+          : !sourceId
+            ? null
+            : throughEntryId
+              ? await prepareTerminalChatForkForWorkspace(sourceId, throughEntryId, workspace.path)
+              : await (async () => {
+                  await this.ensureStructuredAgentSessionHost()
+                  return prepareStructuredChatCliFork(
+                    { sourceChat: { sessionId: sourceId, workspaceId: worktreeId }, fork: true },
+                    (prepareArgs) => this.aiVault.prepare(prepareArgs)
+                  )
+                })()
         this.assertStableReadyGraph(graphEpoch)
         if (
-          !throughEntryId &&
-          (!isStructuredChatCliForkSourceCurrent(sourceId, worktreeId) ||
-            !this.mobileSessionTabsByWorktree
-              .get(worktreeId)
-              ?.tabs.some((tab) => tab.type === 'agent-session' && tab.sessionId === sourceId))
+          !prepared ||
+          (sourceId &&
+            !throughEntryId &&
+            (!isStructuredChatCliForkSourceCurrent(sourceId, worktreeId) ||
+              !this.mobileSessionTabsByWorktree
+                .get(worktreeId)
+                ?.tabs.some((tab) => tab.type === 'agent-session' && tab.sessionId === sourceId)))
         ) {
           throw new Error('chat_fork_source_unavailable')
         }
