@@ -30,6 +30,7 @@ vi.mock('./ssh-identity-file-read', () => ({
 }))
 
 import { buildConnectConfig } from '../connection/ssh-connect-config'
+import { resolveIdentityFilePaths } from './ssh-auth-resolution'
 import '../system-transport/system-ssh-args'
 import { walkInitialAuthLadder } from '../connection/testing/ssh-connection-test-fixtures'
 import type { SshTarget } from '../../../shared/ssh-types'
@@ -204,5 +205,14 @@ describe('ordered SSH private-key authentication', () => {
       type: 'publickey',
       key: Buffer.from('/keys/unauthorized-first')
     })
+  })
+
+  it('uses every stored identity when fresh config resolution is unavailable', () => {
+    const paths = resolveIdentityFilePaths(
+      makeTarget({ identityFiles: ['/keys/first', '/keys/second'] }),
+      null
+    )
+
+    expect(paths).toEqual(['/keys/first', '/keys/second'])
   })
 })

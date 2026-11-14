@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
-import { parseSshConfig } from './ssh-config-parser'
+import { parseSshConfig, sshConfigHostsToTargets } from './ssh-config-parser'
 import './ssh-g-config-resolution'
 import './ssh-config-host-picker'
 
@@ -100,6 +100,61 @@ Host internal
     expect(hosts.at(-1)).toEqual({
       host: 'after',
       hostname: 'after.example.com'
+    })
+  })
+
+  it('preserves every IdentityFile in directive order', () => {
+    const config = `
+Host myserver
+  HostName example.com
+  IdentityFile ~/.ssh/first
+  IdentityFile ~/.ssh/second
+`
+    const hosts = parseSshConfig(config)
+    expect(hosts[0].identityFile).toBe(testHomePath('.ssh', 'first'))
+    expect(hosts[0].identityFiles).toEqual([
+      testHomePath('.ssh', 'first'),
+      testHomePath('.ssh', 'second')
+    ])
+  })
+
+  it('records a quoted IdentityFile in identityFiles', () => {
+    const hosts = parseSshConfig(`
+Host quoted
+  IdentityFile "~/.ssh/id with space"
+`)
+    expect(hosts[0].identityFile).toBe(testHomePath('.ssh', 'id with space'))
+    expect(hosts[0].identityFiles).toEqual([testHomePath('.ssh', 'id with space')])
+  })
+})
+
+describe('sshConfigHostsToTargets', () => {
+  it('keeps identity files from a later block for the same alias', () => {
+    const hosts = [
+      {
+        host: 'dup',
+        hostname: 'first.example.com',
+        identityFile: '/keys/first',
+        identityFiles: ['/keys/first']
+      },
+      {
+        host: 'dup',
+        hostname: 'second.example.com',
+        user: 'second',
+        port: 2222,
+        identityFile: '/keys/second',
+        identityFiles: ['/keys/second', '/keys/third']
+      }
+    ]
+    const targets = sshConfigHostsToTargets(hosts, new Set())
+
+    expect(targets).toHaveLength(1)
+    expect(targets[0]).toMatchObject({
+      host: 'first.example.com',
+      username: '',
+      port: 22,
+      identityFile: '/keys/first',
+      identityFiles: ['/keys/first', '/keys/second', '/keys/third']
     })
   })
 })

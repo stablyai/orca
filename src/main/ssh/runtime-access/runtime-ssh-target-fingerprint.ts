@@ -10,6 +10,7 @@ export function fingerprintRuntimeSshTarget(target: SshTarget): string {
         username: target.username,
         configHost: target.configHost,
         identityFile: target.identityFile,
+        identityFiles: target.identityFiles,
         identityAgent: target.identityAgent,
         identitiesOnly: target.identitiesOnly,
         gssapiAuthentication: target.gssapiAuthentication,
