@@ -6,6 +6,9 @@ import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from './agent-session-turn-not
 /** A Stop hook sent the agent back to work, so the reply before this row was an answer. */
 export const AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION = 'hook-sent-back'
 
+/** A Stop hook failed after the agent answered; the answer stays the turn's visible end. */
+export const AGENT_SESSION_HOOK_FAILED_PRESENTATION = 'hook-failed'
+
 export type AgentSessionHookOutcome = 'blocked' | 'stopped' | 'sent-back'
 
 const HOOK_OUTCOME_ROWS: Record<AgentSessionHookOutcome, { header: string; presentation: string }> =

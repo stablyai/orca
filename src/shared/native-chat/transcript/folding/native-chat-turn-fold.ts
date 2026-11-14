@@ -1,8 +1,12 @@
 // Derive settled-turn answers from the last assistant prose or system failure, plus the prose a Stop hook sent back; the journal has no answer marker.
 // Earlier work/recovered errors fold behind that answer, while failed turns end visibly on their error.
+// A failed Stop hook follows a completed answer, so it stays visible beside it instead of displacing it.
 
 import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from '../../../agent-session/agent-session-compaction'
-import { AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION } from '../../../agent-session/journal/agent-session-hook-outcome'
+import {
+  AGENT_SESSION_HOOK_FAILED_PRESENTATION,
+  AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION
+} from '../../../agent-session/journal/agent-session-hook-outcome'
 import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../../../agent-session/lifecycle/stopping/agent-session-orca-stop'
 import { AGENT_SESSION_TURN_NOTICE_PRESENTATION } from '../../../agent-session/journal/agent-session-turn-notice'
 import { nativeChatRowRendersContent } from '../row-content/native-chat-row-content'
@@ -29,7 +33,7 @@ export type NativeChatTurnFoldRow = {
   outlivesTurn: boolean
   /** System failures compete as final answers so failed turns end on visible errors. */
   reportsFailure: boolean
-  /** Plans and turn notices remain visible independently of the agent's answer. */
+  /** Plans, turn notices and Stop-hook outcomes remain visible independently of the agent's answer. */
   explainsTurn: boolean
   /** A Stop hook sent the agent back after it answered, so the prose before this row is an answer too. */
   sendsBack: boolean
@@ -72,11 +76,13 @@ function deriveTurnFoldRow(
           isStoppedBeforeStartBlock(block)
       ),
     // A row about Orca's own stop is stored red for clients that predate it; it reports no failure.
+    // A failed Stop hook reports its hook, not the turn, so it cannot displace a completed answer.
     reportsFailure: message.blocks.some(
       (block) =>
         block.type === 'text' &&
         (block.tone === 'error' || block.failure?.kind === 'usageLimitReached') &&
-        block.presentation !== AGENT_SESSION_ORCA_STOP_PRESENTATION
+        block.presentation !== AGENT_SESSION_ORCA_STOP_PRESENTATION &&
+        block.presentation !== AGENT_SESSION_HOOK_FAILED_PRESENTATION
     ),
     explainsTurn:
       message.blocks.some(
@@ -87,7 +93,8 @@ function deriveTurnFoldRow(
             block.presentation === AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION ||
             block.presentation === AGENT_SESSION_ORCA_STOP_PRESENTATION ||
             block.presentation === AGENT_SESSION_TURN_NOTICE_PRESENTATION ||
-            block.presentation === AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION)
+            block.presentation === AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION ||
+            block.presentation === AGENT_SESSION_HOOK_FAILED_PRESENTATION)
       ) ||
       (message.blocks.some(isGeneratedImageOperation) &&
         message.blocks.some((block) => block.type === 'image-ref')),

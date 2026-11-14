@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage, NativeChatTextBlock } from '../../native-chat-types'
+import { AGENT_SESSION_HOOK_FAILED_PRESENTATION } from '../../../agent-session/journal/agent-session-hook-outcome'
 import {
   nativeChatTurnAnswerRows,
   nativeChatTurnFold,
@@ -23,6 +24,24 @@ function row(overrides: Partial<NativeChatTurnFoldRow> = {}): NativeChatTurnFold
 
 /** An error-toned system row: the agent or host reporting the turn failed. */
 const FAILURE = row({ role: 'system', reportsFailure: true })
+
+/** A red host row about a failed Stop hook, carrying the marker the fold reads. */
+function stopHookFailureMessage(id: string, presentation?: string): NativeChatMessage {
+  return {
+    id,
+    role: 'system',
+    timestamp: 1,
+    source: 'transcript',
+    blocks: [
+      {
+        type: 'text',
+        text: 'Codex Stop hook failed: hook exited with code 1.',
+        tone: 'error',
+        ...(presentation !== undefined ? { presentation } : {})
+      }
+    ]
+  }
+}
 
 const SETTLED = new Set(['turn-1'])
 const NONE = new Set<string>()
@@ -93,6 +112,51 @@ describe('rendered plans in collapsed turns', () => {
     const result = nativeChatTurnFold({ rows, settledTurnKeys: SETTLED, expandedTurnKeys: NONE })
     expect([...result.foldedRows]).toEqual(folded)
     expect([...nativeChatTurnAnswerRows(rows)]).toEqual(answers)
+  })
+})
+
+describe('failed Stop hooks after a completed answer', () => {
+  it('keeps the answer unfolded and the hook failure visible beside it', () => {
+    const messages = [
+      PROMPT,
+      ANSWER,
+      stopHookFailureMessage('stop-hook', AGENT_SESSION_HOOK_FAILED_PRESENTATION)
+    ]
+    const rows = messages.map((item) => nativeChatTurnFoldRow(item, 'turn-1', false))
+    const result = nativeChatTurnFold({ rows, settledTurnKeys: SETTLED, expandedTurnKeys: NONE })
+    expect([...result.foldedRows]).toEqual([])
+    expect([...result.foldableTurnKeys]).toEqual([])
+    expect([...nativeChatTurnAnswerRows(rows)]).toEqual([1])
+  })
+
+  it('reads a marked Stop-hook failure as turn context, not a turn failure', () => {
+    const facts = nativeChatTurnFoldRow(
+      stopHookFailureMessage('stop-hook', AGENT_SESSION_HOOK_FAILED_PRESENTATION),
+      'turn-1',
+      false
+    )
+    expect(facts.reportsFailure).toBe(false)
+    expect(facts.explainsTurn).toBe(true)
+    expect(facts.draws).toBe(true)
+  })
+
+  it('still treats an unmarked red row as the turn failing', () => {
+    const facts = nativeChatTurnFoldRow(stopHookFailureMessage('crash'), 'turn-1', false)
+    expect(facts.reportsFailure).toBe(true)
+    expect(facts.explainsTurn).toBe(false)
+  })
+
+  it('shows the Stop-hook failure alone when the agent never answered', () => {
+    const messages = [
+      PROMPT,
+      WORK,
+      stopHookFailureMessage('stop-hook', AGENT_SESSION_HOOK_FAILED_PRESENTATION)
+    ]
+    const rows = messages.map((item) => nativeChatTurnFoldRow(item, 'turn-1', false))
+    const result = nativeChatTurnFold({ rows, settledTurnKeys: SETTLED, expandedTurnKeys: NONE })
+    expect([...result.foldedRows]).toEqual([1])
+    expect([...result.foldableTurnKeys]).toEqual(['turn-1'])
+    expect([...nativeChatTurnAnswerRows(rows)]).toEqual([])
   })
 })
 
