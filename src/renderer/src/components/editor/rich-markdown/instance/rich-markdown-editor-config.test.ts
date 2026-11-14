@@ -18,7 +18,7 @@ import { createRichMarkdownEditorCodec } from '../document/rich-markdown-source-
 import { createRichMarkdownHtmlSuperscriptLinkContext } from '../citations/rich-markdown-html-superscript-link-context'
 
 vi.mock('../links/rich-markdown-editor-click-routing', () => ({
-  handleRichMarkdownEditorClick: vi.fn()
+  handleRichMarkdownEditorClick: vi.fn(() => false)
 }))
 
 function ref<T>(current: T): MutableRefObject<T> {

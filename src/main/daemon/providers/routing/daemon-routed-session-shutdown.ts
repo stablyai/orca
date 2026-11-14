@@ -1,5 +1,5 @@
 import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import type { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
 import { shouldHandoffDaemonHistory } from './daemon-history-handoff'
 

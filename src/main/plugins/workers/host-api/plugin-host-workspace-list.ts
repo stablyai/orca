@@ -8,6 +8,7 @@ import {
 } from '../../../../shared/plugins/workers/plugin-host-api-workspace-methods'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
+import { isRepoHidden } from '../../../../shared/hidden-projects'
 import type { PluginRuntimeRpc } from './plugin-host-runtime-call'
 import type { PluginHostServices } from './plugin-host-method-bindings'
 
@@ -39,7 +40,10 @@ const repoRow = z.object({
 })
 const repoListAnswer = z.object({ repos: z.array(repoRow) })
 const projectListAnswer = z.object({
-  repos: z.array(repoRow.extend({ path: z.string() }))
+  repos: z.array(
+    // A malformed `hiddenAt` reads as shown, as Orca's sidebar reads it, not as a failed list.
+    repoRow.extend({ path: z.string(), hiddenAt: z.number().optional().catch(undefined) })
+  )
 })
 const folderListAnswer = z.object({
   folderWorkspaces: z.array(
@@ -236,7 +240,8 @@ export async function listPluginProjects(
     name: (repo.displayName ?? '').slice(0, LABEL_MAX),
     kind: repo.kind === 'folder' ? ('folder' as const) : ('git' as const),
     hostId: projectHostId(repo),
-    path: repo.path
+    path: repo.path,
+    hidden: isRepoHidden(repo)
   }))
   const projects = candidates.filter((project) => project.id.length > 0 && fitsBounds(project))
   return {

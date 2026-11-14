@@ -1,11 +1,22 @@
-import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { readStructuredConversationJournalPreviews } from './structured-conversation-journal-preview'
+import { migrateJournalDomainSchema } from '../native-chat/agent-session-journal/journal-domain-schema'
+import { prepareJournalDomainImport } from '../native-chat/agent-session-journal/journal-domain-import'
+import {
+  insertJournalDomainImportPage,
+  finishJournalDomainImport
+} from '../native-chat/agent-session-journal/journal-domain-import-rows'
+import { readJournalSqlPoint } from '../native-chat/agent-session-journal/journal-sql-point-read'
+import {
+  openJournalDatabase,
+  runJournalTransaction
+} from '../native-chat/agent-session-journal/database/journal-database'
+import { agentSessionConversationView } from '../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from '../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import type { AiVaultListResult } from '../../shared/ai-vault/contracts/ai-vault-types'
 import type { AgentJournalMessageItem } from '../../shared/agent-session/journal/agent-session-journal-types'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
-import { createJournalTablesSql } from '../native-chat/agent-session-journal/database/journal-database-schema'
 import {
   insertJournalRow,
   publishJournalSessionEpoch
@@ -25,8 +36,7 @@ let db: Database.Database
 let record: AgentSessionRecord
 
 beforeEach(() => {
-  db = new Database(':memory:')
-  db.exec(createJournalTablesSql())
+  db = openJournalDatabase(':memory:').db
   record = agentSessionRecordFixture()
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: projection reads only this host's catalog and journal database.
   setStructuredAgentSessionHost({
@@ -76,10 +86,36 @@ function item(
     ...linkage
   })
 }
-function project(result = EMPTY) {
-  return projectStructuredAiVaultSessions(result, OPENS_EVERY_STRUCTURED_CHAT, {
-    includeStructuredSessions: true
-  })
+async function project(result = EMPTY) {
+  const domain = new Database(':memory:')
+  migrateJournalDomainSchema(domain)
+  try {
+    const journalPreviews = await readStructuredConversationJournalPreviews(
+      {
+        readers: {
+          point: async (request) => {
+            const prepared = prepareJournalDomainImport(db, record.sessionId)
+            if (prepared) {
+              runJournalTransaction(domain, () => {
+                for (const page of prepared.pages) {
+                  insertJournalDomainImportPage(domain, prepared, page)
+                }
+                finishJournalDomainImport(domain, prepared)
+              })
+            }
+            return readJournalSqlPoint(domain, request)
+          }
+        }
+      },
+      [record]
+    )
+    return projectStructuredAiVaultSessions(result, OPENS_EVERY_STRUCTURED_CHAT, {
+      includeStructuredSessions: true,
+      journalPreviews
+    })
+  } finally {
+    domain.close()
+  }
 }
 function providerRow(title: string, messageCount = 1) {
   return {
@@ -91,76 +127,76 @@ function providerRow(title: string, messageCount = 1) {
   }
 }
 
-describe('durable conversation names and bounded content evidence', () => {
-  it('preserves a meaningful provider title through ownership and durable projection, then prefers a saved name', () => {
+describe('durable conversation names and bounded content evidence', async () => {
+  it('preserves a meaningful provider title through ownership and durable projection, then prefers a saved name', async () => {
     const input = { ...EMPTY, sessions: [providerRow('Investigate the deployment failure')] }
-    expect(project(input).sessions[0]?.title).toBe('Investigate the deployment failure')
+    expect((await project(input)).sessions[0]?.title).toBe('Investigate the deployment failure')
     record.conversationName = 'My saved name'
-    expect(project(input).sessions[0]?.title).toBe('My saved name')
+    expect((await project(input)).sessions[0]?.title).toBe('My saved name')
   })
 
-  it('marks only a registered, intact creation epoch empty, including a saved default label', () => {
+  it('marks only a registered, intact creation epoch empty, including a saved default label', async () => {
     record.conversationName = 'Claude Chat'
-    expect(project().sessions[0]).toMatchObject({
+    expect((await project()).sessions[0]).toMatchObject({
       conversationContent: 'unknown',
       title: 'Claude Chat'
     })
     register()
-    const result = project()
+    const result = await project()
     expect(result.sessions[0]).toMatchObject({ conversationContent: 'empty', title: 'Claude Chat' })
     expect(parseAiVaultListResult(result).sessions[0]?.conversationContent).toBe('empty')
   })
 
-  it('derives the first human prompt from the journal while skipping commands, agent mail and child messages', () => {
+  it('derives the first human prompt from the journal while skipping commands, agent mail and child messages', async () => {
     register()
     item(2, 'Mailbox notification', { from: { kind: 'agent', senders: [], orchestration: null } })
     item(3, '/compact', { command: { name: 'compact' } })
     item(4, 'Child task', {}, { agentId: 'child' })
     item(5, 'Проверь настройки проекта')
     item(6, 'Assistant reply', { role: 'assistant' })
-    expect(project().sessions[0]).toMatchObject({
+    expect((await project()).sessions[0]).toMatchObject({
       conversationContent: 'present',
       firstUserPrompt: 'Проверь настройки проекта',
       title: 'Проверь настройки проекта'
     })
     record.conversationName = 'Saved title'
-    expect(project().sessions[0]?.title).toBe('Saved title')
+    expect((await project()).sessions[0]?.title).toBe('Saved title')
   })
 
-  it('does not mark provider conversation or queued recovery evidence empty even if the local epoch has no messages', () => {
+  it('does not mark provider conversation or queued recovery evidence empty even if the local epoch has no messages', async () => {
     register()
     for (const session of [
       providerRow('Provider conversation'),
       { ...providerRow('Queued message', 0), queuedMessageCount: 2 }
     ]) {
-      expect(project({ ...EMPTY, sessions: [session] }).sessions[0]?.conversationContent).toBe(
-        'present'
-      )
+      expect(
+        (await project({ ...EMPTY, sessions: [session] })).sessions[0]?.conversationContent
+      ).toBe('present')
     }
   })
 
-  it('does not let an empty local epoch erase uncertain provider-file history', () => {
+  it('does not let an empty local epoch erase uncertain provider-file history', async () => {
     register()
     expect(
-      project({ ...EMPTY, sessions: [providerRow('Claude Chat', 0)] }).sessions[0]
+      (await project({ ...EMPTY, sessions: [providerRow('Claude Chat', 0)] })).sessions[0]
         ?.conversationContent
     ).toBe('unknown')
   })
 
-  it('keeps an intact creation epoch empty when native turns are proven command metadata only', () => {
+  it('keeps an intact creation epoch empty when native turns are proven command metadata only', async () => {
     register()
     const session = {
       ...providerRow('Claude Chat', 3),
       conversationContent: 'empty' as const
     }
-    expect(project({ ...EMPTY, sessions: [session] }).sessions[0]?.conversationContent).toBe(
-      'empty'
-    )
+    expect(
+      (await project({ ...EMPTY, sessions: [session] })).sessions[0]?.conversationContent
+    ).toBe('empty')
   })
 
   it.each(['workspace mismatch', 'missing epoch', 'corrupt row', 'sequence gap', 'adopted-only'])(
     'keeps uncertain history visible: %s',
-    (reason) => {
+    async (reason) => {
       if (reason === 'missing epoch') {
         publishJournalSessionEpoch(
           db,
@@ -185,24 +221,24 @@ describe('durable conversation names and bounded content evidence', () => {
           item(3, 'Recoverable prompt')
         }
       }
-      expect(project().sessions[0]?.conversationContent).toBe('unknown')
+      expect((await project()).sessions[0]?.conversationContent).toBe('unknown')
     }
   )
 
-  it('bounds journal discovery and never calls a bounded prefix empty', () => {
+  it('bounds journal discovery and never calls a bounded prefix empty', async () => {
     register()
     for (let seq = 2; seq <= 42; seq += 1) {
       const row: JournalRow = { ...base(seq), kind: 'tombstone', itemId: `old-${seq}`, revision: 1 }
       insertJournalRow(db, record.sessionId, row)
     }
     item(43, 'Prompt outside the prefix')
-    expect(project().sessions[0]).toMatchObject({ conversationContent: 'unknown' })
-    expect(project().sessions[0]?.firstUserPrompt).toBeUndefined()
+    expect((await project()).sessions[0]).toMatchObject({ conversationContent: 'unknown' })
+    expect((await project()).sessions[0]?.firstUserPrompt).toBeUndefined()
   })
 
-  it('keeps oversized journal rows unknown instead of loading unbounded output', () => {
+  it('keeps oversized journal rows unknown instead of loading unbounded output', async () => {
     register()
     item(2, 'large prompt '.repeat(10000))
-    expect(project().sessions[0]?.conversationContent).toBe('unknown')
+    expect((await project()).sessions[0]?.conversationContent).toBe('unknown')
   })
 })

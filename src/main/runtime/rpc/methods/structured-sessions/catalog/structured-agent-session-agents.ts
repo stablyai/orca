@@ -15,10 +15,10 @@ import { requireStructuredCapability } from '../creation/structured-agent-sessio
 import {
   AgentsParams,
   AvailabilityParams
-} from '../../../../../../shared/rpc-contract/structured-agent-session-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-continue-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-rename-params'
-import '../../../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
+} from '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-continue-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-rename-params'
+import '../../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-queued-edit-params'
 import { clientReadsStructuredSessionAgent } from '../structured-agent-session-policy'
 import { bindStructuredAgentSessionStream } from '../subscriptions/structured-agent-session-status-stream'
 import { structuredAgentSessionAvailabilitySubscriptionId } from '../subscriptions/structured-agent-session-subscription-id'

@@ -17,8 +17,8 @@ import {
   TerminalReveal,
   TerminalSplit,
   TerminalWait
-} from '../../../../../shared/rpc-contract/terminal-unary-params'
-import { TerminalResizeForClient } from '../../../../../shared/rpc-contract/terminal-stream-params'
+} from '../../../../../shared/rpc-contract/terminal/terminal-unary-params'
+import { TerminalResizeForClient } from '../../../../../shared/rpc-contract/terminal/terminal-stream-params'
 
 export const TERMINAL_LIFECYCLE_METHODS = [
   defineMethod({

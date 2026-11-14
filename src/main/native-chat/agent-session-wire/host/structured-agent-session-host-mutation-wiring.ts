@@ -19,7 +19,7 @@ import { settleStructuredAgentSessionLateDispatch } from '../operations/structur
 import * as agentStart from '../startup/structured-agent-session-agent-start'
 import { joinClosingStructuredAgentSessionChild } from '../termination/structured-agent-session-child-close'
 import type { StructuredAgentSessionAttachContext } from '../acquisition/structured-agent-session-attach-context'
-import type { AgentSessionRewindParams } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { AgentSessionRewindParams } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import { rewindStructuredAgentSession } from '../rewind/structured-agent-session-rewind'
 import type { StructuredAgentSessionClientDelivery } from '../publication/subscribers/structured-agent-session-client-delivery'
 
@@ -62,8 +62,14 @@ export function createStructuredAgentSessionHostMutationContext(
     },
     conversation: input.lifetime.conversation,
     readChildWork: input.clientDelivery.readChildWork,
-    publishChildWork: input.clientDelivery.publishChildWork,
+    publishChildWork: (sessionId, evidence) =>
+      input.clientDelivery.publishChildWork(
+        sessionId,
+        evidence,
+        input.runtimeState.currentEventSink(sessionId)?.sink
+      ),
     publishWorkChanged: (sessionId) => input.clientDelivery.publishGenerationEnded(sessionId),
+    sealEventSink: (sessionId) => input.runtimeState.sealEventSink(sessionId),
     captureChildWorkStops: input.clientDelivery.captureChildWorkStops,
     childWorkOpen: input.clientDelivery.childWorkOpen,
     childWorkIncomplete: input.clientDelivery.childWorkIncomplete,

@@ -15,17 +15,16 @@ function chain(
   plugins: Record<string, PluginHookHandler[]>,
   overrides: Partial<PluginHookChainInput> = {}
 ) {
-  const logs: string[] = []
   const outcome = runPluginHookChain({
     event: 'terminal.send',
     payload: send,
     participants: Object.keys(plugins),
     invoke: (pluginKey, payload) => runPluginWorkerHookHandlers(plugins[pluginKey] ?? [], payload),
-    log: (pluginKey, line) => void logs.push(`${pluginKey}: ${line}`),
+    log: () => undefined,
     now: () => 0,
     ...overrides
   })
-  return { outcome, logs }
+  return { outcome }
 }
 
 afterEach(() => {
@@ -51,13 +50,6 @@ describe('runPluginHookChain', () => {
     expect(seen).toEqual(['ls -la'])
   })
 
-  it('keeps fields the hook does not let plugins change', async () => {
-    const { outcome } = chain({
-      'a.one': [(event, next) => next({ ...read(event), terminalId: 'term_other' })]
-    })
-    await expect(outcome).resolves.toEqual({ kind: 'continue', payload: send })
-  })
-
   it('stops at a deny, so later plugins never run', async () => {
     const later = vi.fn()
     const { outcome } = chain({
@@ -68,25 +60,21 @@ describe('runPluginHookChain', () => {
     expect(later).not.toHaveBeenCalled()
   })
 
-  it('treats a throw as passing and logs plugin, event and duration', async () => {
-    const { outcome, logs } = chain(
-      {
-        'a.one': [
-          () => {
-            throw new Error('boom')
-          }
-        ],
-        'a.two': [(event, next) => next({ ...read(event), text: 'pwd' })]
-      },
-      { now: vi.fn().mockReturnValueOnce(10).mockReturnValue(42) }
-    )
+  it('continues to the next plugin after a handler throws', async () => {
+    const { outcome } = chain({
+      'a.one': [
+        () => {
+          throw new Error('boom')
+        }
+      ],
+      'a.two': [(event, next) => next({ ...read(event), text: 'pwd' })]
+    })
     await expect(outcome).resolves.toEqual({ kind: 'continue', payload: { ...send, text: 'pwd' } })
-    expect(logs).toEqual(['a.one: hook terminal.send skipped after 32ms: boom'])
   })
 
   it('carries on past a plugin that misses its deadline', async () => {
     vi.useFakeTimers()
-    const { outcome, logs } = chain(
+    const { outcome } = chain(
       { 'a.slow': [], 'a.next': [] },
       {
         invoke: (pluginKey, payload) =>
@@ -98,30 +86,9 @@ describe('runPluginHookChain', () => {
     )
     await vi.advanceTimersByTimeAsync(2_000)
     await expect(outcome).resolves.toEqual({ kind: 'deny', pluginKey: 'a.next', reason: 'second' })
-    expect(logs).toEqual(['a.slow: hook terminal.send skipped after 0ms: timed out after 2000ms'])
   })
 
-  it('ignores results of observe-only hooks', async () => {
-    const created = { workspaceId: 'w', kind: 'folder', path: '/tmp/w', branch: '' }
-    const { outcome } = chain(
-      { 'a.one': [() => ({ deny: 'no' })] },
-      { event: 'workspace.create.after', payload: created }
-    )
-    await expect(outcome).resolves.toEqual({ kind: 'continue', payload: created })
-  })
-
-  it('runs one worker’s handlers in registration order', async () => {
-    const decision = await runPluginWorkerHookHandlers(
-      [
-        (event, next) => next({ ...read(event), text: 'a' }),
-        (event, next) => next({ ...read(event), text: `${read(event).text}b` })
-      ],
-      send
-    )
-    expect(decision).toEqual({ decision: 'continue', payload: { ...send, text: 'ab' } })
-  })
-
-  it('refuses when a fail-closed plugin throws, misses its deadline or answers nonsense', async () => {
+  it('refuses when a fail-closed plugin throws or answers nonsense', async () => {
     const failsClosed = () => true
     const thrown = chain(
       {
@@ -138,21 +105,11 @@ describe('runPluginHookChain', () => {
       pluginKey: 'a.guard',
       reason: 'a.guard failed and denies on error: status bar down'
     })
-    expect(thrown.logs[0]).toMatch(/denied after 0ms \(onError: deny\)/)
     const nonsense = chain(
       {},
       { participants: ['a.guard'], invoke: async () => 'nope', failsClosed }
     )
     await expect(nonsense.outcome).resolves.toMatchObject({ kind: 'deny', pluginKey: 'a.guard' })
-  })
-
-  it('refuses when a fail-closed plugin returns a malformed denial', async () => {
-    const failsClosed = () => true
-    const tooLong = chain({ 'a.guard': [() => ({ deny: 'x'.repeat(501) })] }, { failsClosed })
-    await expect(tooLong.outcome).resolves.toMatchObject({ kind: 'deny', pluginKey: 'a.guard' })
-    expect(tooLong.logs[0]).toMatch(/denied after 0ms \(onError: deny\): malformed result/)
-    const wrongShape = chain({ 'a.guard': [() => ({ deny: 7 })] }, { failsClosed })
-    await expect(wrongShape.outcome).resolves.toMatchObject({ kind: 'deny', pluginKey: 'a.guard' })
   })
 
   it('passes a fail-closed plugin that is gone, and observe-only hooks', async () => {

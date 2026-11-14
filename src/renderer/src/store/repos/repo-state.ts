@@ -1,6 +1,10 @@
+import type {
+  FolderWorkspaceCreateInput,
+  FolderWorkspaceCreateResult
+} from '../../../../shared/folder-workspaces/folder-workspace-create'
 import type { WslHostWindowsDriveRefusal } from '../../../../shared/wsl-host-windows-drive-refusal'
 import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachments/workspace-attachment-mutation'
-import type { GhAccountBinding } from '../../../../shared/github/account-binding'
+import type { GhAccountBinding } from '../../../../shared/github/accounts/account-binding'
 import type { SshRepoReadoption } from '../../../../shared/ssh-types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type {
@@ -68,7 +72,9 @@ export type RepoUpdate = Partial<
   agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
   sourceControlAi?: Repo['sourceControlAi'] | null
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
+  hiddenAt?: Repo['hiddenAt'] | null
   ghAccount?: GhAccountBinding | null
+  workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
 }
 
 export type ProjectUpdate = ProjectUpdateArgs['updates']
@@ -235,19 +241,9 @@ export type RepoSlice = {
   /** `hostId` is the host of the project that seeds the group. */
   createProjectGroup: (name: string, hostId: ExecutionHostId) => Promise<ProjectGroup | null>
   createFolderWorkspace: (
-    args: {
-      projectGroupId: string
-      name?: string
-      folderPath?: string | null
-      connectionId?: string | null
-      linkedTask?: FolderWorkspace['linkedTask']
-      linkedItems?: FolderWorkspace['linkedItems']
-      linkedTaskSourceContext?: FolderWorkspace['linkedTaskSourceContext']
-      createdWithAgent?: FolderWorkspace['createdWithAgent']
-      pendingFirstAgentMessageRename?: boolean
-    },
-    options: FolderWorkspacePathStatusRouteOptions
-  ) => Promise<FolderWorkspace | null>
+    args: FolderWorkspaceCreateInput,
+    options: FolderWorkspacePathStatusRouteOptions & { signal?: AbortSignal }
+  ) => Promise<FolderWorkspaceCreateResult | null>
   getFolderWorkspacePathStatusCacheKey: (
     request: FolderWorkspacePathStatusRequest,
     options: FolderWorkspacePathStatusRouteOptions
@@ -267,7 +263,7 @@ export type RepoSlice = {
   ) => Promise<boolean>
   deleteFolderWorkspace: (
     folderWorkspaceId: string,
-    options?: { executionHostId?: ExecutionHostId }
+    options?: { executionHostId?: ExecutionHostId; allowFailedArchiveHook?: boolean }
   ) => Promise<boolean>
   // options.hostId targets a specific host's row + RPC target when the id exists on multiple hosts; else the group's own host owns the call.
   updateProjectGroup: (

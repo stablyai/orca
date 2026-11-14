@@ -1,4 +1,4 @@
-import { randomInt, randomUUID } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import type { PersistedState } from '../../../../shared/persisted-state-types'
 import {
   parseChatUiLaunchTipAudience,
@@ -164,16 +164,10 @@ export class LoadedCohortMigrationOperations {
     ) {
       return state
     }
-    // Resolve cohort once so partial new-user state cannot change its default mid-migration.
     const resolvedExistedBefore =
       typeof existing?.existedBeforeTelemetryRelease === 'boolean'
         ? existing.existedBeforeTelemetryRelease
         : fileExistedOnLoad
-    const onboardingLanguageCohort = !fileExistedOnLoad
-      ? randomInt(2) === 0
-        ? 'control'
-        : 'treatment'
-      : undefined
     this.runtime.loadNeedsSave = true
     return {
       ...state,
@@ -181,7 +175,6 @@ export class LoadedCohortMigrationOperations {
         ...state.settings,
         telemetry: {
           ...existing,
-          ...(onboardingLanguageCohort ? { onboardingLanguageCohort } : {}),
           existedBeforeTelemetryRelease: resolvedExistedBefore,
           // Preserve explicit true, false and null; only absence uses the cohort default.
           optedIn:

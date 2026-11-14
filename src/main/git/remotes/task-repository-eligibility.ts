@@ -1,7 +1,7 @@
 import { parseGitRemoteVerboseOutput } from '../../../shared/git/remotes/git-remote-identity'
-import { isDefaultGitHubHost } from '../../../shared/github/repository-identity-key'
-import { isGitHubHostAuthenticated } from '../../github/github-enterprise-repository'
-import { parseGitHubRemoteIdentity } from '../../github/github-remote-identity-parsing'
+import { isDefaultGitHubHost } from '../../../shared/github/repositories/repository-identity-key'
+import { isGitHubHostAuthenticated } from '../../github/repositories/github-enterprise-repository'
+import { parseGitHubRemoteIdentity } from '../../github/repositories/github-remote-identity-parsing'
 import {
   getGlabKnownHosts,
   getGlabPartialHosts

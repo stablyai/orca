@@ -8,7 +8,7 @@ import {
   localPluginPublisher
 } from '../../../shared/plugins/installation/plugin-publisher-derivation'
 import { isSameGitRepository } from '../../../shared/plugins/catalog/plugin-marketplace'
-import { readPluginVmRecipeIdentities } from '../plugin-vm-recipe-identities'
+import { readPluginVmRecipeIdentities } from '../contributions/plugin-vm-recipe-identities'
 import { checkoutPluginGitSource } from './plugin-git-repository'
 import {
   declaredPublisher,

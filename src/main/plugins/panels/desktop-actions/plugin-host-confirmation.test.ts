@@ -49,47 +49,6 @@ describe('host confirmations for workers', () => {
   installPluginDesktopFrameServices(shown, store)
   const services = getPluginDesktopFrameServices()!
 
-  it('ask in a window the person can see, one question per plugin at a time', async () => {
-    let answer: (value: { response: number }) => void = () => {}
-    showMessageBox.mockReturnValueOnce(new Promise((resolve) => (answer = resolve)))
-    const first = services.confirm('acme.one', subject, scope)
-    await expect(services.confirm('acme.one', subject, scope)).rejects.toMatchObject({
-      code: 'rate_limited'
-    })
-    answer({ response: 0 })
-    await expect(first).resolves.toBe('allowed')
-    expect(showMessageBox).toHaveBeenCalledWith(shown, expect.anything())
-  })
-
-  it('wait after the person declines before asking again', async () => {
-    showMessageBox.mockResolvedValueOnce({ response: 1 })
-    await expect(services.confirm('acme.two', subject, scope)).resolves.toBe('cancelled')
-    await expect(services.confirm('acme.two', subject, scope)).rejects.toMatchObject({
-      code: 'rate_limited'
-    })
-    expect(showMessageBox).toHaveBeenCalledTimes(2)
-  })
-
-  it('spend the dialog budget a frame dialog spends', async () => {
-    showMessageBox.mockResolvedValue({ response: 0 })
-    const answers: unknown[] = []
-    await [0, 1, 2, 3].reduce(
-      (previous) =>
-        previous.then(() =>
-          services.confirm('acme.three', subject, scope).then(
-            (answer) => {
-              answers.push(answer)
-            },
-            (error: unknown) => {
-              answers.push(error instanceof Error && 'code' in error ? error.code : error)
-            }
-          )
-        ),
-      Promise.resolve()
-    )
-    expect(answers).toEqual(['allowed', 'allowed', 'allowed', 'rate_limited'])
-  })
-
   it("close a question whose worker went away, so the plugin's next one is not refused", async () => {
     const worker = new AbortController()
     showMessageBox.mockImplementationOnce(

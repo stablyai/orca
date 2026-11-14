@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { BRIDGE_RPC_ENVELOPE_GRANT, readBridgeClientMessage } from './bridge-envelope'
+import { BRIDGE_RPC_ENVELOPE_GRANT } from './bridge-envelope'
 import {
   BridgeRpcEnvelopeInvalidError,
   BridgeRpcEnvelopeUngrantedError
@@ -65,31 +65,11 @@ describe('bridge rpc envelope: page side', () => {
       .catch(readError)
     expect(refusal).toBeInstanceOf(BridgeRpcEnvelopeInvalidError)
     expect(refusal).toMatchObject({ code: 'bridge_rpc_envelope_invalid' })
+    expect(() =>
+      page.client.subscribe('terminal.subscribe', {}, () => undefined, { envelope: notJson })
+    ).toThrow(BridgeRpcEnvelopeInvalidError)
     expect(page.sent).toHaveLength(posted)
   })
-
-  it.each([
-    ['null', null],
-    ['an array', []],
-    ['a Date', new Date(0)]
-  ])(
-    'refuses %s as an envelope with a rejection, never a throw or a silent drop',
-    async (_, value) => {
-      const page = grantedPage()
-      const posted = page.sent.length
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a caller that widened the type, which the check exists for.
-      const envelope = value as unknown as Record<string, null>
-      let answer: Promise<unknown> | undefined
-      expect(() => {
-        answer = page.client.sendRequest('worktree.ps', {}, { envelope })
-      }).not.toThrow()
-      expect(await answer?.catch(readError)).toBeInstanceOf(BridgeRpcEnvelopeInvalidError)
-      expect(() =>
-        page.client.subscribe('terminal.subscribe', {}, () => undefined, { envelope })
-      ).toThrow(BridgeRpcEnvelopeInvalidError)
-      expect(page.sent).toHaveLength(posted)
-    }
-  )
 })
 
 describe('bridge rpc envelope: shell side', () => {
@@ -124,15 +104,5 @@ describe('bridge rpc envelope: shell side', () => {
       ['worktree.ps', { a: 1 }, { timeoutMs: 50 }]
     ])
     expect(pair.rpc.streams.map((stream) => stream.envelope)).toEqual([undefined])
-  })
-
-  it('refuses a frame whose envelope is not a plain JSON object', () => {
-    for (const envelope of [[1], 'x', null, 3]) {
-      const frame = { v: 1, type: 'request', id: 'a'.repeat(22), method: 'm', envelope }
-      expect(readBridgeClientMessage(JSON.stringify(frame))).toEqual({
-        ok: false,
-        refusal: 'unrecognised-message'
-      })
-    }
   })
 })

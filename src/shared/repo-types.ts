@@ -1,7 +1,7 @@
 import type { DictationTerm } from './dictation-dictionary'
 import type { RepoIcon } from './repo-icon'
-import type { GhAccountBinding } from './github/account-binding'
-import type { GitHubRepositoryIdentity } from './github/pull-request-types'
+import type { GhAccountBinding } from './github/accounts/account-binding'
+import type { GitHubRepositoryIdentity } from './github/repositories/repository-identity'
 import type { RepoHookSettings } from './orca-yaml-hook-types'
 import type { ForkSyncMode } from './git/remotes/git-fork-sync'
 import type { GitRemoteIdentity } from './git/remotes/git-remote-identity'
@@ -93,6 +93,8 @@ export type Repo = {
   worktreeVisibilitySourcePreferences?: WorktreeVisibilitySourcePreferences
   /** User permanently opted out of the new-external-worktree inbox for this repo. */
   externalWorktreeDiscoverySuppressedAt?: number
+  /** When the user hid this host's copy of the project from the sidebar; view-only, nothing stops. */
+  hiddenAt?: number
   /** Relative paths to APFS-clone on macOS when possible, otherwise symlink, into new worktrees. Absent/empty creates none. */
   symlinkPaths?: string[]
   /** Durable sidebar-only repo organization. Execution remains repo-scoped. */

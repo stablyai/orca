@@ -1,5 +1,5 @@
 import { resolve } from 'node:path'
-import type { CommandHandler } from '../dispatch'
+import type { CommandHandler } from '../dispatch/dispatch'
 import {
   formatEnvironmentDoctorChecks,
   type EnvironmentDoctorResult

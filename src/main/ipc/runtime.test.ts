@@ -108,3 +108,53 @@ describe('registerRuntimeHandlers', () => {
     expect(runtime.syncWindowGraph).not.toHaveBeenCalled()
   })
 })
+
+it('cancels the GitHub host handler through the existing local subscription boundary', async () => {
+  handleMock.mockClear()
+  onMock.mockClear()
+  const entered = Promise.withResolvers<AbortSignal>()
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture supplies every runtime method reached by this upload subscription.
+  registerRuntimeHandlers({
+    getRuntimeId: () => 'local',
+    uploadGitHubAttachment: (_params: unknown, _bytes: Buffer, signal: AbortSignal) => {
+      entered.resolve(signal)
+      return new Promise((_resolve, reject) =>
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+      )
+    }
+  } as never)
+  const frame = {}
+  const sender = {
+    mainFrame: frame,
+    id: 14237,
+    once: vi.fn(),
+    on: vi.fn(),
+    send: vi.fn(),
+    isDestroyed: () => false
+  }
+  const event = { senderFrame: frame, sender }
+  const handler = (channel: string) => handleMock.mock.calls.find(([name]) => name === channel)![1]
+  const started = await handler('runtime:call')(event, {
+    method: 'clipboard.startImageUpload',
+    params: { expectedBase64Length: 8, fileName: 'image.png' }
+  })
+  expect(started.ok).toBe(true)
+  await handler('runtime:call')(event, {
+    method: 'clipboard.appendImageUploadChunk',
+    params: { uploadId: started.result.uploadId, offset: 0, contentBase64: 'aW1hZ2U=' }
+  })
+  handler('runtime:subscribe')(event, {
+    subscriptionId: 'image-cancel',
+    method: 'github.uploadAttachment',
+    params: {
+      uploadId: started.result.uploadId,
+      target: { kind: 'repo', repo: 'repo', source: 'origin' },
+      fileName: 'image.png',
+      contentType: 'image/png'
+    }
+  })
+  const signal = await entered.promise
+  const unsubscribe = onMock.mock.calls.find(([name]) => name === 'runtime:unsubscribe')![1]
+  unsubscribe(event, { subscriptionId: 'image-cancel' })
+  expect(signal.aborted).toBe(true)
+})

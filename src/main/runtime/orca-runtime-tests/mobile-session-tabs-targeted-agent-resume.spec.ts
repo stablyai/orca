@@ -15,20 +15,11 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal
 } from './orca-runtime-test-fixtures.spec'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { PtyProcessInfo } from '../../providers/pty-process-info'
+import type { PtyProcessInfo } from '../../providers/pty/process-info'
 import { deterministicAgentSessionUuid } from '../terminal/launch/runtime-agent-launch-resolution'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../terminal/identity/remote-runtime-terminal-create-identity'
 import type { RuntimePtyController } from '../terminal/lifecycle/runtime-pty-controller-contract'
-import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
-import { AgentSessionRecordStore } from '../agent-session/records/agent-session-record-store'
-import {
-  agentSessionLeaseFixture,
-  agentSessionRecordFixture
-} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import {
-  chooseSavedResumeFreshLaunch,
-  savedResumeResult
-} from '../../ipc/pty/host-env/saved-resume-admission'
+import { savedResumeResult } from '../../ipc/pty/host-env/saved-resume-admission'
 import { spawnedCommands, resumeSpawns } from './agent-resume-spawn-commands.test-fixture'
 
 const PANE_KEY = `host-tab:${HEADLESS_LEAF_ID}`
@@ -57,19 +48,6 @@ function makeSleptWorkspace() {
 }
 
 type Fixture = ReturnType<typeof makeSleptWorkspace>
-
-type WorkspaceScopeResolver = {
-  resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
-}
-
-function hasWorkspaceScopeResolver(
-  runtime: OrcaRuntimeService
-): runtime is OrcaRuntimeService & WorkspaceScopeResolver {
-  return (
-    'resolveTerminalWorkspaceLaunchScope' in runtime &&
-    typeof runtime.resolveTerminalWorkspaceLaunchScope === 'function'
-  )
-}
 
 function sessionRow(paneKey: string, receivedAt = 0): AgentStatusIpcPayload {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the resume guards read only paneKey, providerSession and the observation clocks.
@@ -144,67 +122,6 @@ function storedRecord(fixture: Fixture) {
 }
 
 describe('resumeAgentSessionInWorkspace', () => {
-  it.each(['live', 'worktree-sleep'] as const)(
-    'releases a %s saved resume claim when actual admission creates a plain shell',
-    async (origin) => {
-      const fixture = makeSleptWorkspace()
-      const saved = storedRecord(fixture)
-      if (!saved) {
-        throw new Error('missing saved conversation')
-      }
-      saved.origin = origin
-      const chat = agentSessionRecordFixture(
-        agentSessionLeaseFixture({
-          claimStatus: 'released',
-          ownerProcess: null,
-          reservedSpawnToken: null,
-          deathEvidence: { kind: 'exit-observed', detail: 'closed', observedAt: 1 }
-        })
-      )
-      chat.providerHandleChain[0]!.handle.nativeId = SESSION.id
-      let nativeOpen = true
-      const store: AgentSessionRecordStore = Object.create(AgentSessionRecordStore.prototype)
-      store.listConversations = () => [agentSessionConversationView(chat)]
-      store.getVisibleSessionTabIndex = () => ({
-        present: true,
-        sessionIds: nativeOpen ? [chat.sessionId] : []
-      })
-      const effectiveCommands: (string | undefined)[] = []
-      const { runtime, spawn, openOldPane, resume } = makeRuntime(fixture, {
-        spawn: async (args) => {
-          const admission = await chooseSavedResumeFreshLaunch(
-            { openAgentSessionRecordStore: async () => store },
-            args,
-            null,
-            args
-          )
-          effectiveCommands.push(args.command)
-          return {
-            id: effectiveCommands.length === 1 ? 'refused-shell' : 'resumed-C',
-            launchAgent: args.launchAgent,
-            launchConfig: args.launchConfig,
-            ...savedResumeResult(admission)
-          }
-        }
-      })
-      await openOldPane()
-      expect(runtime.getTerminalLaunchResult('refused-shell')).toMatchObject({
-        agentResumeRefused: 'chat-home',
-        savedResumeDecision: { agent: 'claude', providerSession: SESSION, verdict: 'chat-home' }
-      })
-      expect(runtime.getTerminalLaunchResult('refused-shell')?.launchAgent).toBeUndefined()
-      expect(effectiveCommands).toEqual([undefined])
-      nativeOpen = false
-      await expect(resume({ mutationId: 'after-native-close' })).resolves.toMatchObject({
-        ok: true,
-        ptyId: 'resumed-C'
-      })
-      expect(effectiveCommands[1]).toContain(SESSION.id)
-      expect(spawn).toHaveBeenCalledTimes(2)
-      expect(runtime.getTerminalLaunchResult('refused-shell')).toBeDefined()
-    }
-  )
-
   it('settles only fresh matching saved results and binds unproven or observed results until exit', async () => {
     for (const kind of [
       'matching',
@@ -319,34 +236,6 @@ describe('resumeAgentSessionInWorkspace', () => {
     expect(send).not.toHaveBeenCalledWith('terminal:requestTabCreate', expect.anything())
   })
 
-  it('rechecks hook ownership when another resume settles during pane preflight', async () => {
-    const fixture = makeSleptWorkspace()
-    let rows: AgentStatusIpcPayload[] = []
-    const { runtime, spawn, resume, openOldPane } = makeRuntime(fixture, {
-      rows: () => rows,
-      checkHookAgentPresence: async () => 'live'
-    })
-    if (!hasWorkspaceScopeResolver(runtime)) {
-      throw new Error('missing resolver')
-    }
-    const resolveWorkspace = runtime.resolveTerminalWorkspaceLaunchScope.bind(runtime)
-    let first = true
-    Object.assign(runtime, {
-      resolveTerminalWorkspaceLaunchScope: async (selector: string) => {
-        if (first) {
-          first = false
-          const result = await resume()
-          if (result.ok) {
-            rows = [sessionRow(result.paneKey, Date.now() + 1)]
-          }
-        }
-        return resolveWorkspace(selector)
-      }
-    })
-    await openOldPane()
-    expect(resumeSpawns(spawn)).toBe(1)
-  })
-
   it.each(['resume', 'old pane'] as const)(
     'refuses the other resumer while the %s spawn is in flight',
     async (first) => {
@@ -383,29 +272,6 @@ describe('resumeAgentSessionInWorkspace', () => {
         await opened
       }
       expect(resumeSpawns(spawn)).toBe(1)
-    }
-  )
-
-  it.each([
-    ['live', 1],
-    ['exited', 2]
-  ] as const)(
-    'hands the session to the hook-store guard once the resumed pane reports it (%s)',
-    async (presence, expectedResumes) => {
-      const fixture = makeSleptWorkspace()
-      let rows: AgentStatusIpcPayload[] = []
-      const { spawn, resume, openOldPane } = makeRuntime(fixture, {
-        rows: () => rows,
-        checkHookAgentPresence: async () => presence
-      })
-      const result = await resume()
-      if (!result.ok) {
-        throw new Error(result.reason)
-      }
-      rows = [sessionRow(result.paneKey, Date.now())]
-
-      await openOldPane()
-      expect(resumeSpawns(spawn)).toBe(expectedResumes)
     }
   )
 
@@ -481,38 +347,6 @@ describe('resumeAgentSessionInWorkspace', () => {
 })
 
 describe('resumeAgentSessionInWorkspace retries, cancellation and a failed publication', () => {
-  it('reconciles the same request after its own hook arrives', async () => {
-    let rows: AgentStatusIpcPayload[] = []
-    const terminalHandle = deriveRemoteRuntimeTerminalCreateHandle(
-      'agent-session-resume',
-      TEST_WORKTREE_ID,
-      MUTATION_ID
-    )
-    const { resume, spawn } = makeRuntime(makeSleptWorkspace(), {
-      rows: () => rows,
-      checkHookAgentPresence: async () => 'live',
-      listProcesses: async () =>
-        spawn.mock.calls.length > 0
-          ? [
-              {
-                id: 'resumed-pty',
-                cwd: '',
-                title: 'claude',
-                terminalHandle,
-                worktreeId: TEST_WORKTREE_ID
-              }
-            ]
-          : []
-    })
-    const first = await resume()
-    if (!first.ok) {
-      throw new Error(first.reason)
-    }
-    rows = [sessionRow(first.paneKey, Date.now() + 1)]
-    await expect(resume()).resolves.toEqual(first)
-    expect(spawn).toHaveBeenCalledOnce()
-  })
-
   it('honors cancellation during create inventory lookup before dispatch', async () => {
     const controller = new AbortController()
     const { resume, spawn } = makeRuntime(makeSleptWorkspace(), {

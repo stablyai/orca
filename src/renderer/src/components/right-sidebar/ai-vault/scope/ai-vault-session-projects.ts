@@ -3,7 +3,7 @@ import {
   getRepoHostIdentityForParts
 } from '../../../../../../shared/repo-host-identity'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import { managedWorktreeDirectories } from '../../../../../../shared/worktree/ownership'
+import { managedWorktreeDirectories } from '../../../../../../shared/worktree/visibility/ownership'
 import { splitWorktreeIdForFilesystem } from '../../../../../../shared/worktree/id'
 import { resolveActiveProjectKey } from './ai-vault-project-key'
 import { toAiVaultProjectKey } from '../../../../../../shared/ai-vault/scanning/ai-vault-project-key'

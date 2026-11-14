@@ -6,11 +6,14 @@ import { join } from 'node:path'
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import type { StructuredAgentSessionAdapter } from '../../../src/main/native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
-import { emptyAgentSessionBatch } from '../../../src/main/native-chat/agent-session-wire/publication/subscribers/agent-session-empty-batch'
-import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-instant-start.test-support'
+import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-instant-start.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store'
-import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
+import {
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionDatabase,
+  closeTestAgentSessionDatabase
+} from '../../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session/agent-session-wire'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-runtime-capabilities'
 
@@ -32,11 +35,12 @@ import {
 } from './versioned-agent-session-wire'
 import * as journalHostDatabase from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-logger'
-import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { NO_STRUCTURED_AGENTS } from '../../../src/main/native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
+import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import { NO_STRUCTURED_AGENTS } from '../../../src/main/native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router.test-fixture'
 import { describeReleasedStopNoteProjection } from './cross-version-stop-note-scenarios'
 
 const SUITE_TIMEOUT_MS = 180_000
+const RESUMING_CLIENT_REF = 'v1.4.220'
 
 describeReleasedStopNoteProjection({
   build: () => current,
@@ -58,12 +62,19 @@ async function releaseHostRoot(root: string): Promise<void> {
 
 describe('cross-version structured agent sessions', () => {
   describe('a cursor across a host restart', () => {
+    /** An older released client reading the resumed stream; its checkout is shared with the stop-note rig. */
+    let baseline: AgentSessionWireBuild
+    beforeAll(async () => {
+      baseline = await loadAgentSessionWireBuild(RESUMING_CLIENT_REF)
+    }, SUITE_TIMEOUT_MS)
     let root: string
     let store: AgentSessionRecordStore
     let runtime: unknown
 
     /** Holds a provider start open, so a reply's timing can be read against it. */
     let startGate: Promise<void> = Promise.resolve()
+    let ownerProbeGate: Promise<void> = Promise.resolve()
+    let runningHost: StructuredAgentSessionHost | undefined
     /** Holds a published child's handshake: it proves its start only once this settles. */
     let handshake: Promise<void> = Promise.resolve()
     let starts = 0
@@ -119,24 +130,30 @@ describe('cross-version structured agent sessions', () => {
       )
     }
 
-    // Reopen disk state under a fresh host within this process.
+    // Reopen disk state under a fresh host, preserving the journal root as a real process restart does.
     async function bootHost(generation: string, startupLimits?: { ceilingMs: number }) {
+      await runningHost?.flushAllStreamedEvents()
+      await closeTestAgentSessionDatabase(root)
       store = await openTestAgentSessionRecordStore(root)
       const host: StructuredAgentSessionHost = new StructuredAgentSessionHost({
         agents: NO_STRUCTURED_AGENTS,
         logger: createStructuredAgentSessionLogger(),
         store,
         adapter: adapter(() => host),
-        journalDatabase: journalHostDatabase.openTestJournalHostDatabase(root),
+        journalDatabase: await openTestAgentSessionDatabase(root),
         claimKeyId: 'key-1',
         mintSpawnToken: () => `spawn-${generation}`,
         // The provider died with the host that spawned it, which is what makes
         // the restarted host the legitimate next writer.
-        probeOwner: async () => ({ outcome: 'pid-absent' }),
+        probeOwner: async () => {
+          await ownerProbeGate
+          return { outcome: 'pid-absent' }
+        },
         now: () => NOW,
         ...(startupLimits ? { startupLimits } : {})
       })
       setStructuredAgentSessionHost(host)
+      runningHost = host
       return host
     }
 
@@ -147,11 +164,12 @@ describe('cross-version structured agent sessions', () => {
       refusal?: { code: string; currentFence?: number }
     }
 
-    async function call(
+    async function call<Result = unknown>(
       method: string,
       params: unknown,
-      clientCapabilities: readonly string[] = [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
-    ): Promise<RpcReply[]> {
+      clientCapabilities: readonly string[] = [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
+      onReply?: (reply: RpcReply<Result>) => void
+    ): Promise<RpcReply<Result>[]> {
       return callBuild(
         current,
         method,
@@ -162,22 +180,28 @@ describe('cross-version structured agent sessions', () => {
           clientId: 'paired-device-1',
           connectionId: 'connection-1'
         },
-        runtime
+        runtime,
+        onReply
       )
     }
 
     /** The host's own answer, which carries its refusals inside a successful RPC. */
     async function answer(method: string, params: unknown): Promise<HostAnswer> {
-      const reply = (await call(method, params))[0]
+      const reply = (await call<HostAnswer>(method, params))[0]
       if (!reply?.ok) {
         throw new Error(`${method} failed at the wire: ${JSON.stringify(reply?.error ?? reply)}`)
       }
-      return reply.result as HostAnswer
+      if (!reply.result) {
+        throw new Error(`${method} returned no host answer`)
+      }
+      return reply.result
     }
 
     beforeEach(async () => {
       resetOperationIds()
       startGate = Promise.resolve()
+      ownerProbeGate = Promise.resolve()
+      runningHost = undefined
       handshake = Promise.resolve()
       root = await mkdtemp(join(tmpdir(), 'orca-cross-version-agent-session-'))
       runtime = runtimeStub()
@@ -206,12 +230,49 @@ describe('cross-version structured agent sessions', () => {
       const second = await answer('agentSession.send', sendParams('after restart', resumedFence))
       expect(second.ok).toBe(true)
 
-      const events = (
-        await call('agentSession.subscribe', {
+      const restated = Promise.withResolvers<void>()
+      const replies = await call<AgentSessionSubscribeEvent>(
+        'agentSession.subscribe',
+        { sessionId: SESSION, cursor: held },
+        undefined,
+        (reply) => {
+          const event = reply.result
+          if (!reply.ok || event?.type !== 'batch') {
+            restated.reject(new Error(`cursor resume failed: ${JSON.stringify(reply)}`))
+          } else if (
+            event.batch.cursor.sequence > held.sequence &&
+            event.batch.items.length === 0 &&
+            event.batch.removedItemIds.length === 0 &&
+            event.batch.submissions.length === 0 &&
+            event.working !== undefined
+          ) {
+            restated.resolve()
+          }
+        }
+      )
+      await restated.promise
+      const events = replies.map((reply) => {
+        if (!reply.ok || !reply.result) {
+          throw new Error(`cursor resume failed: ${JSON.stringify(reply)}`)
+        }
+        return reply.result
+      })
+      // A roster-only publication may precede catch-up while its initial capture is superseded.
+      const early =
+        events[0]?.type === 'batch' && events[0].batch.cursor.sequence === held.sequence
+          ? events.shift()
+          : undefined
+      if (early) {
+        expect(early).toEqual({
+          type: 'batch',
           sessionId: SESSION,
-          cursor: held
+          batch: { cursor: held, items: [], removedItemIds: [], submissions: [] },
+          fence: store.getConversation(SESSION)?.currentFence,
+          backgroundTasks: null,
+          commands: null,
+          hostNow: expect.any(Number)
         })
-      ).map((reply) => reply.result as AgentSessionSubscribeEvent)
+      }
       expect(events.map((event) => event.type)).toEqual(['batch', 'batch'])
       const batches = events.filter((event) => event.type === 'batch')
       const batch = batches[0]?.batch
@@ -221,7 +282,45 @@ describe('cross-version structured agent sessions', () => {
       expect(rendered).not.toContain('before restart')
       expect(batch?.cursor.epoch).toBe(held.epoch)
       expect(batch?.cursor.sequence).toBeGreaterThan(held.sequence)
-      expect(batches[1]?.batch).toEqual(emptyAgentSessionBatch(batch?.cursor ?? held))
+      expect(batches[1]?.batch).toEqual({
+        cursor: batch?.cursor,
+        items: [],
+        removedItemIds: [],
+        submissions: []
+      })
+      const released = await baseline.clientProjection()
+      const fold = (frames: readonly AgentSessionSubscribeEvent[]) =>
+        frames.reduce<ReturnType<typeof released.reduceStructuredAgentSession>>(
+          (state, event) => released.reduceStructuredAgentSession(state, { type: 'event', event }),
+          { ...released.EMPTY_STRUCTURED_AGENT_SESSION, epoch: held.epoch, cursor: held }
+        )
+      const transcript = ({ epoch, cursor, items, submissions }: ReturnType<typeof fold>) => ({
+        epoch,
+        cursor,
+        items,
+        submissions
+      })
+      // Whether or not this run raced, fold a row-free frame at the held cursor ahead of the rows.
+      const restatement = batches[1]
+      const heldFrame =
+        early ??
+        (restatement && {
+          ...restatement,
+          batch: { cursor: held, items: [], removedItemIds: [], submissions: [] }
+        })
+      expect(heldFrame).toBeDefined()
+      const resumed = fold([...(heldFrame ? [heldFrame] : []), ...events])
+      // The released reducer keeps the same transcript whether or not that frame came first.
+      expect(transcript(resumed)).toEqual(transcript(fold(events)))
+      expect(JSON.stringify(resumed.items)).toContain('after restart')
+      expect(resumed.cursor).toEqual(batch?.cursor)
     })
+
+    // Every released client still sends the fence it last saw; this host names a write by its
+    // target and ignores that fence. Only the attach keeps comparing one, which `reattach` pins.
+
+    // Legacy clients cannot show rejection after pending; answer after handoff, while accepted-send clients may answer before provider start.
+
+    // Unproven starts return the person's message to the queue instead of leaving a legacy RPC waiting.
   })
 })

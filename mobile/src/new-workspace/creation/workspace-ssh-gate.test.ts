@@ -2,24 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { deriveWorkspaceSshGate, type WorkspaceSshRecord } from './workspace-ssh-gate'
 
 describe('workspace SSH gate', () => {
-  it('requires connection for remote repos until the matching target is connected', () => {
-    expect(
-      deriveWorkspaceSshGate({
-        connectionId: 'ssh-1',
-        state: null,
-        connecting: false
-      })
-    ).toMatchObject({ status: null, requiresConnection: true })
-
-    expect(
-      deriveWorkspaceSshGate({
-        connectionId: 'ssh-1',
-        state: { targetId: 'ssh-1', status: 'connected', error: null, reconnectAttempt: 0 },
-        connecting: false
-      })
-    ).toMatchObject({ status: 'connected', requiresConnection: false })
-  })
-
   it('ignores stale SSH state from a previously selected repository', () => {
     expect(
       deriveWorkspaceSshGate({

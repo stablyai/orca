@@ -1,5 +1,5 @@
-import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../shared/github/check-types'
+import type { GitHubWorkItem } from '../../../shared/github/work-items/work-item-types'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../shared/github/checks/check-types'
 
 export type CheckDetailsLoadState = {
   requestId?: number

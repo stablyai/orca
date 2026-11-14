@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process'
 import { mkdtemp, realpath, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { promisify } from 'node:util'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { installRealWorkerThreadChildProcesses } from '../../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
@@ -11,6 +12,7 @@ import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { getWorkspaceCleanupMergeReasons } from '../../../shared/workspace-cleanup/workspace-cleanup'
 import { readWorkspaceCleanupGitEvidence } from './workspace-cleanup-git-evidence'
+import { createWorkspaceCleanupRepoRefs } from './workspace-cleanup-merge-evidence'
 
 const execFileAsync = promisify(execFile)
 
@@ -53,7 +55,8 @@ async function readEvidence(baseRef?: string, branch = 'feature') {
     worktree,
     repo,
     { kind: 'local', hostId: 'local' },
-    {}
+    {},
+    createWorkspaceCleanupRepoRefs(repo)
   )
   return {
     blockers: evidence.blockers,
@@ -165,6 +168,48 @@ describe('workspace cleanup merge evidence against real Git', () => {
       merge: { headInDefaultBranch: false, aheadOfDefault: 1 },
       reasons: []
     })
+  })
+
+  it('never downloads missing blobs from a partial clone to prove a merge', async () => {
+    const origin = join(scratchDir, 'origin.git')
+    await git(['config', 'uploadpack.allowFilter', 'true'], origin)
+    await writeFile(join(clonePath, 'lines.txt'), 'a\nb\nc\nd\ne\n')
+    await git(['add', 'lines.txt'], clonePath)
+    await git(['commit', '-qm', 'lines'], clonePath)
+    await git(['push', '-q', 'origin', 'main'], clonePath)
+    const fullClonePath = clonePath
+    clonePath = join(scratchDir, 'partial')
+    worktreePath = join(scratchDir, 'partial-feature')
+    await git(
+      ['clone', '-q', '--filter=blob:none', pathToFileURL(origin).href, clonePath],
+      scratchDir
+    )
+    await git(['config', 'user.email', 'cleanup@example.invalid'], clonePath)
+    await git(['config', 'user.name', 'Cleanup'], clonePath)
+    await git(['worktree', 'add', '-q', '-b', 'feature', worktreePath, 'origin/main'], clonePath)
+    await writeFile(join(worktreePath, 'lines.txt'), 'a\nb\nc\nd\nfeature\n')
+    await git(['commit', '-qam', 'feature'], worktreePath)
+    await git(['push', '-q', '-u', 'origin', 'feature'], worktreePath)
+    // Main edits the same file again, so only its new blobs could prove the squash.
+    await git(['pull', '-q', 'origin', 'main'], fullClonePath)
+    await writeFile(join(fullClonePath, 'lines.txt'), 'main\nb\nc\nd\ne\n')
+    await git(['commit', '-qam', 'main edit'], fullClonePath)
+    await git(['fetch', '-q', 'origin', 'feature'], fullClonePath)
+    await git(['merge', '-q', '--squash', 'FETCH_HEAD'], fullClonePath)
+    await git(['commit', '-qm', 'squash feature'], fullClonePath)
+    await git(['push', '-q', 'origin', 'main'], fullClonePath)
+    await git(['fetch', '-q', 'origin'], clonePath)
+    const countMissingObjects = async () =>
+      (await git(['rev-list', '--objects', '--missing=print', '--all'], clonePath))
+        .split('\n')
+        .filter((line) => line.startsWith('?')).length
+    const missingBefore = await countMissingObjects()
+    expect(missingBefore).toBeGreaterThan(0)
+
+    const evidence = await readEvidence()
+
+    expect(await countMissingObjects()).toBe(missingBefore)
+    expect(evidence.merge).toEqual({ headInDefaultBranch: false, aheadOfDefault: 1 })
   })
 
   it('keeps unpushed risk for local commits that never landed', async () => {

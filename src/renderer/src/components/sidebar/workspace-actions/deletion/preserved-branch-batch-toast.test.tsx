@@ -97,7 +97,7 @@ describe('showPreservedBranchBatchToast', () => {
     ])
 
     await clickCheckbox('preserved-branch-1')
-    await clickButton(document.body, 'Force Delete 1 Branch')
+    await clickButton(document.body, 'Delete')
 
     expect(mocks.state.closeModal).toHaveBeenCalledOnce()
     expect(mocks.state.forceDeletePreservedBranch).toHaveBeenCalledOnce()
@@ -137,7 +137,7 @@ describe('showPreservedBranchBatchToast', () => {
     ])
 
     expect((document.getElementById('preserved-branch-1') as HTMLButtonElement).disabled).toBe(true)
-    await clickButton(document.body, 'Force Delete 1 Branch')
+    await clickButton(document.body, 'Delete')
 
     expect(mocks.state.forceDeletePreservedBranch).toHaveBeenCalledOnce()
     expect(mocks.state.forceDeletePreservedBranch).toHaveBeenCalledWith(

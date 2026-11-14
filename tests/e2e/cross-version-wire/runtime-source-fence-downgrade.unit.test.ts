@@ -15,7 +15,7 @@ import {
 import { publishHostDescriptor } from '../../../src/main/runtime/hosts/platform-probe/host-descriptor'
 import type { RuntimeMetadata } from '../../../src/shared/runtime-bootstrap'
 import type { ExpectedRuntimeSource } from '../../../src/shared/runtime-rpc-envelope'
-import { sendRequest } from '../../../src/cli/runtime/transport'
+import { sendRequest } from '../../../src/cli/runtime/connection/transport'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,

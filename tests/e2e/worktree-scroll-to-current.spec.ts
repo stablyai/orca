@@ -283,7 +283,7 @@ test.describe('Reveal active workspace button', () => {
           if (!folder) {
             throw new Error(`Folder workspace ${index} was not created`)
           }
-          ids.push(folder.id)
+          ids.push(folder.folderWorkspace.id)
         }
         const targetKey = `folder:${ids[0]}` as const
         store.setState({

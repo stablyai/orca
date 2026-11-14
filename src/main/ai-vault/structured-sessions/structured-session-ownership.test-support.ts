@@ -1,11 +1,11 @@
 import { vi } from 'vitest'
-import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import type { AgentSessionProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+} from '../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
+import type { AgentSessionProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type {
   AiVaultListResult,
   AiVaultSession
@@ -16,7 +16,7 @@ import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-w
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+} from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 export const PROVIDER_SESSION = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
 

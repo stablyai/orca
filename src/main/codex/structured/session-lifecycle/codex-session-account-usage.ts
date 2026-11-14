@@ -1,4 +1,4 @@
-import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { CodexAppServerRpc } from '../../app-server/codex-app-server-session'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import {

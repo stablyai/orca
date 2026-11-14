@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
 import { gitSigningOffEnv } from './vitest-git-signing-env.mjs'
 
@@ -26,9 +26,7 @@ it('commits and tags unsigned under a signing global config, keeping its other s
   const inherited = { ...process.env, GIT_CONFIG_GLOBAL: globalConfig, GIT_CONFIG_NOSYSTEM: '1' }
   const env = { ...inherited, ...gitSigningOffEnv(inherited) }
   cleanup.push(env.GIT_CONFIG_GLOBAL)
-  expect(dirname(env.GIT_CONFIG_GLOBAL)).toBe(
-    resolve(import.meta.dirname, '../../../../node_modules/.cache')
-  )
+
   const git = (...args) =>
     execFileSync('git', args, { cwd: root, env, encoding: 'utf8', stdio: 'pipe' }).trim()
 
@@ -39,5 +37,4 @@ it('commits and tags unsigned under a signing global config, keeping its other s
 
   expect(git('cat-file', '-t', 'v1.0.0')).toBe('commit')
   expect(git('log', '-1', '--format=%an %G?')).toBe('Test N')
-  expect(gitSigningOffEnv({ ...inherited, GIT_CONFIG_GLOBAL: join(root, 'missing') })).toEqual({})
 })

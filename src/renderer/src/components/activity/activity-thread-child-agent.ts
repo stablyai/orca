@@ -3,7 +3,7 @@ import {
   buildAgentRowLineageTree,
   resolveAgentRowParentPaneKey,
   type AgentLineageSourceRow
-} from '../dashboard/agent-row-lineage-model'
+} from '../dashboard/rows/agent-row-lineage-model'
 import { isRunningActivityState } from './activity-event-state'
 import type { ActivityLiveAgentState } from './activity-thread-types'
 

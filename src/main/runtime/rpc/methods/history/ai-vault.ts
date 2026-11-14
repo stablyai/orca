@@ -1,3 +1,5 @@
+import { readStructuredConversationJournalPreviews } from '../../../../ai-vault/structured-conversation-journal-preview'
+import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { prepareStructuredChatCliFork } from '../../../../ai-vault/structured-sessions/structured-chat-cli-fork'
 import { aiVaultOrchestrationChildSessionIds } from '../../../../ai-vault/structured-conversation-navigation'
 import {
@@ -42,7 +44,7 @@ import {
   AiVaultPrepareSessionHandoffParams,
   AiVaultPrepareSessionResumeParams,
   AiVaultSessionTitlesParams
-} from '../../../../../shared/rpc-contract/ai-vault-params'
+} from '../../../../../shared/rpc-contract/ai-vault/ai-vault-params'
 
 export const AI_VAULT_METHODS = [
   defineMethod({
@@ -132,6 +134,14 @@ export const AI_VAULT_METHODS = [
         (agent) => clientOpensStructuredChatFromHistory({ clientKind, clientCapabilities }, agent),
         {
           includeStructuredSessions: params.includeStructuredSessions,
+          ...(params.includeStructuredSessions
+            ? {
+                journalPreviews: await readStructuredConversationJournalPreviews(
+                  getStructuredAgentSessionHost()?.deps.journalDatabase,
+                  getStructuredAgentSessionHost()?.deps.store.listRecords() ?? []
+                )
+              }
+            : {}),
           ...(params.includeStructuredSessions
             ? {
                 childSessionIds: aiVaultOrchestrationChildSessionIds(() =>

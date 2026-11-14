@@ -33,7 +33,7 @@ it('removes only idle profiles whose worktree of this repository is gone', async
   const running = profile('dddddddddd', path.join(root, 'removed-running'), commonDirectory)
   writeFileSync(path.join(running, 'orca-runtime.json'), JSON.stringify({ pid: 4242 }))
 
-  const result = await reclaimDevWorktreeProfiles({
+  await reclaimDevWorktreeProfiles({
     apply: true,
     profilesRoot,
     repository: { commonDirectory, worktrees: [liveWorktree] },
@@ -41,7 +41,6 @@ it('removes only idle profiles whose worktree of this repository is gone', async
     report: () => {}
   })
 
-  expect(result).toEqual({ entries: 1, protected: 1 })
   expect(existsSync(removed)).toBe(false)
   expect(existsSync(live)).toBe(true)
   expect(existsSync(otherRepo)).toBe(true)

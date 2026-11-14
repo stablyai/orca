@@ -7,7 +7,7 @@ import type {
 import { orcadMigrationConflictGuidance } from '../../managed-server/migration/cutover/orcad-migration-conflict-guidance'
 import { boundedDetail, setupFailure, type SetupFailure } from './ssh-host-server-setup-failure'
 import { isSshSessionStartFailure } from '../connection/ssh-session-start-failure'
-import { classifyOrcadHostUnavailable } from '../../orcad/orcad-host-unavailable'
+import { classifyOrcadHostUnavailable } from '../../orcad/diagnostics/orcad-host-unavailable'
 import {
   reportHostServerSetupError,
   type HostServerDecisionTrace

@@ -1,4 +1,4 @@
-import { captureWorkspaceTerminalNoticeRemoval } from '../../../terminals/terminal-notice-removal'
+import { captureWorkspaceTerminalNoticeRemoval } from '../../../terminals/retirement/terminal-notice-removal'
 import type { StateCreator } from 'zustand'
 import { appliedWorktreeCatalogVersionPatch } from './worktree-catalog-version-state'
 import type { AppState } from '../../../types'

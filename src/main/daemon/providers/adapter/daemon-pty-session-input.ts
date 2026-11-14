@@ -1,5 +1,5 @@
 import { DaemonPtySessionSpawn } from './daemon-pty-session-spawn'
-import { PtyWriteUnavailableError } from '../../../providers/pty-write-unavailable-error'
+import { PtyWriteUnavailableError } from '../../../providers/pty/write-unavailable-error'
 import {
   writeRefused,
   type WriteSettlement

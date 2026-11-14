@@ -9,11 +9,11 @@ import {
   shouldShowChecksPanelPublishBranchAction
 } from './checks-panel-empty-state'
 import { openChecksPanelHostedReviewUrl } from '../review-actions/checks-panel-hosted-review-click-routing'
-import { isRateLimitRefresh } from '../checks-panel-review-state-model'
+import { isRateLimitRefresh } from '../review-state/checks-panel-review-state-model'
 import { isMacPlatform } from '../../../terminal-pane/links/terminal-link-open-hints'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { localizedHostedReviewCopy } from '@/i18n/hosted-review-localized-copy'
-import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
+import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/hosted-review/github-pr-suppression'
 import type { ChecksPanelEmptyContentModel } from './empty-content-props'
 import { useNow } from '@/hooks/use-now'
 
