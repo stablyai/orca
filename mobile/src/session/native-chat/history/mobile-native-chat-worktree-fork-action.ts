@@ -14,7 +14,7 @@ type Translate = (key: string, fallback: string) => string
 export function mobileWorktreeForkAction(
   controller: Pick<
     MobileSessionController,
-    'hostCapabilities' | 'isFloatingWorkspaceRoute' | 'connState'
+    'hostCapabilities' | 'isFloatingWorkspaceRoute' | 'connState' | 'hostId' | 'worktreeId'
   >,
   tab: { type: string } | null | undefined,
   t: Translate,
@@ -47,7 +47,10 @@ export function mobileWorktreeForkAction(
     closeBeforePress: true,
     onPress: () => {
       onDismiss?.()
-      requestMobileWorktreeFork(mode)
+      requestMobileWorktreeFork(
+        { hostId: controller.hostId, worktreeId: controller.worktreeId },
+        mode
+      )
     }
   }
 }

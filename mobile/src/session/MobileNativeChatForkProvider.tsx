@@ -138,7 +138,11 @@ export function MobileNativeChatForkProvider({
       ),
     []
   )
-  useMobileWorktreeForkRequest(openLatestForkSheet, showNothingToFork)
+  useMobileWorktreeForkRequest(
+    { hostId: controller.hostId, worktreeId },
+    openLatestForkSheet,
+    showNothingToFork
+  )
   // A fork and its source share a workspace and host.
   const openSource = useMemo(
     () =>
