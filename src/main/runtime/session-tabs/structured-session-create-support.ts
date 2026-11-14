@@ -139,10 +139,11 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
 
   /** Resolve catalog account home through the same host create-intent resolver when no session record exists. */
   async resolveStructuredAgentAccountHome(
-    agent: StructuredAgentId
+    agent: StructuredAgentId,
+    options?: { ownAccount?: boolean }
   ): Promise<AgentSessionAccountHome> {
-    const resolveAccountHome = this.structuredAgentAccountHomeResolver(agent, '', 'read')
-    if (!resolveAccountHome) {
+    const resolver = this.structuredAgentAccountHomeResolver(agent, '', 'read', undefined, options)
+    if (!resolver) {
       throw agentSessionRefusalError('structured_agent_session_unsupported', {
         reason: 'hostUnsupported'
       })
@@ -150,7 +151,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     // A read, not a launch: only the account push is awaited, never a folder refresh.
     await this.accounts.prepareHostAgentLaunch(null)
     const launchEnv = this.structuredAgentLaunchEnv(agent, this.requireStore().getSettings())
-    return resolveAccountHome({ launchEnv, location: null })
+    return resolver({ launchEnv, location: null })
   }
 
   protected async resolveStructuredAgentSessionIntent(

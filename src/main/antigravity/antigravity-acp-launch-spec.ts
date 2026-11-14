@@ -2,6 +2,7 @@
 
 import { join } from 'node:path'
 import { homedir } from 'node:os'
+import { parseAntigravityAcpModels } from '../../shared/antigravity-models-parser'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { ANTIGRAVITY_ACP_DIALECT } from '../acp/acp-dialects/antigravity-dialect'
 import type { StructuredAgentSessionHistory } from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
@@ -118,6 +119,12 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   permissionModeConfig: {
     values: { ask: 'default', 'accept-edits': 'accept-edits', 'full-access': 'default' },
     fullAccessAtLaunch: true
+  },
+  modelDiscovery: {
+    kind: 'command',
+    args: ['models'],
+    parse: parseAntigravityAcpModels,
+    listingNamesConfiguredModel: false
   },
   keepsEverySession: true
 }

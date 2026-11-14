@@ -158,7 +158,7 @@ export function agentModelCatalogEntry(
       discovered,
       live,
       configured,
-      modelCatalogOwnership.usesModelSpecificAcpEfforts(agent)
+      modelCatalogOwnership.retainsModelSpecificAcpEfforts(agent)
     ).map((model) =>
       modelCatalogOwnership.independentAgentModelCatalog(agent) && discovered?.complete !== true
         ? { ...model, isDefault: false }
@@ -219,7 +219,7 @@ export function agentModelCatalogEntryWithSuccess(
     )
   }
   const incoming = retainedAgentModelCatalogModels(previous, success)
-  const models = modelCatalogOwnership.usesModelSpecificAcpEfforts(identity.agent)
+  const models = modelCatalogOwnership.retainsModelSpecificAcpEfforts(identity.agent)
     ? fillUnknownModelEfforts(incoming, previous?.models ?? [])
     : incoming
   if (models.length === 0) {

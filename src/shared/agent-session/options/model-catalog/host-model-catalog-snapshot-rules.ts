@@ -118,6 +118,7 @@ export const HOST_MODEL_CATALOG_ACCOUNT_SETTINGS = [
   'activeClaudeManagedAccountId',
   'activeClaudeManagedAccountIdsByRuntime',
   'claudeManagedAccounts',
+  'antigravityChatAuth',
   'agentDefaultEnv',
   'agentCmdOverrides'
 ] as const satisfies readonly (keyof GlobalSettings)[]

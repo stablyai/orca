@@ -18,6 +18,7 @@ import {
 } from '../../native-chat/conversation-files/native-chat-visuals-delivery'
 import { acpListingDependsOnRelease, acpModelListingForRelease } from './acp-model-discovery-policy'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
+import { acpLaunchSpecForAccount } from '../launch/acp-launch-command'
 import { createAcpAgentConnection } from '../process/acp-agent-connection'
 import { acpRunFolder } from '../launch/acp-private-temp'
 import { supportsAcpStructuredLocation } from '../session/acp-structured-location-support'
@@ -112,8 +113,9 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
           let owned: AcpDiscoveryConnection | undefined
           try {
             check()
+            const effectiveSpec = acpLaunchSpecForAccount(spec, record.accountHome)
             const invocation = await awaitAcpDiscovery(
-              resolveAcpLaunchInvocation(spec, record.accountHome, {
+              resolveAcpLaunchInvocation(effectiveSpec, record.accountHome, {
                 ...deps,
                 resolveWorkingDirectory: () => cwd
               }),
@@ -135,22 +137,22 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
             }
             // A version reader owns work too; retain admission until it drains after cancellation.
             const version = await checkAcpLaunchVersion(
-              spec,
+              effectiveSpec,
               launch,
-              acpListingDependsOnRelease(spec.modelDiscovery),
+              acpListingDependsOnRelease(effectiveSpec.modelDiscovery),
               deps.probeVersion
             )
             check()
             if (version.status === 'tooOld') {
               throw new Error('ACP command discovery unavailable')
             }
-            const listing = acpModelListingForRelease(spec.modelDiscovery, version.version)
+            const listing = acpModelListingForRelease(effectiveSpec.modelDiscovery, version.version)
             // Releases that list without a session (OpenCode 1.x) report commands only in chats.
             if (listing?.kind !== 'session') {
               answer({ commands: undefined, fromAgent: false })
               return
             }
-            const location = spec.visualsSkill
+            const location = effectiveSpec.visualsSkill
               ? await awaitAcpDiscovery(
                   (deps.resolveVisualsSkill ?? resolveNativeChatVisualsSkillLocation)(),
                   signal
@@ -158,9 +160,9 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
               : null
             check()
             const skill =
-              location && spec.visualsSkill
+              location && effectiveSpec.visualsSkill
                 ? await awaitAcpDiscovery(
-                    spec.visualsSkill({
+                    effectiveSpec.visualsSkill({
                       skill: location,
                       version: version.version,
                       env: launch.env
@@ -172,7 +174,7 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
             let folderArgs: string[] = []
             if (listing.sessionFolderArgs) {
               folder = await acpRunFolder(
-                join(deps.dataDirectory, 'acp-command-sessions', spec.agent),
+                join(deps.dataDirectory, 'acp-command-sessions', effectiveSpec.agent),
                 deps.logger
               )
               folderArgs = listing.sessionFolderArgs(folder.path)
@@ -183,7 +185,7 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
               env: { ...launch.env, ...skill?.env },
               args: [
                 ...invocation.prefixArgs,
-                ...spec.args({ fullAccess: false, pluginDir: skill?.pluginDir ?? null }),
+                ...effectiveSpec.args({ fullAccess: false, pluginDir: skill?.pluginDir ?? null }),
                 ...folderArgs
               ]
             })
@@ -192,8 +194,9 @@ export class AcpAtRestCommandCatalog extends AtRestCommandCatalog {
             const discovery = runAcpSessionDiscovery(connection, signal, (checkSession) =>
               readAcpSessionCommands({
                 connection,
-                dialect: spec.dialect,
-                onInitialize: (initialized) => observeAcpForkSupport(spec.agent, initialized),
+                dialect: effectiveSpec.dialect,
+                onInitialize: (initialized) =>
+                  observeAcpForkSupport(effectiveSpec.agent, initialized),
                 cwd,
                 signal,
                 check: () => {

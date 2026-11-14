@@ -13,7 +13,8 @@ export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRu
     agent: StructuredAgentId,
     worktree: string,
     purpose: 'launch' | 'read' | 'identity',
-    hostLaunchDirectory?: string
+    hostLaunchDirectory?: string,
+    options?: { ownAccount?: boolean }
   ) {
     const registration = structuredAgentRuntimeMetadata(agent)
     if (!registration) {
@@ -25,6 +26,7 @@ export abstract class OrcaRuntimeWithStructuredSessionAccountHome extends OrcaRu
           launchEnv,
           location: location ?? null,
           purpose,
+          ...(options?.ownAccount ? { ownAccount: true } : {}),
           ...(permissionMode ? { permissionMode } : {}),
           workspacePath:
             purpose === 'launch'

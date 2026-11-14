@@ -1,12 +1,48 @@
 import { describe, expect, it } from 'vitest'
 import { getAgentSessionOptionCatalog } from '../agent-session-option-catalog'
-import '../launch/agent-session-option-launch'
+import { resolveAgentSessionOptionLaunch } from '../launch/agent-session-option-launch'
 import {
   resolveNativeChatSessionOptionDefaults,
   updateNativeChatSessionOptionDefaults
 } from '../../../native-chat/input/session-options/native-chat-session-option-defaults'
 
 describe('agent session option catalog', () => {
+  it('exposes xhigh and max reasoning effort for Antigravity and emits them on launch', () => {
+    const catalog = getAgentSessionOptionCatalog('antigravity')!
+    const effort = catalog.unknownModelOptions?.find((option) => option.id === 'effort')
+    expect(effort?.kind).toMatchObject({
+      type: 'select',
+      defaultValue: 'high',
+      choices: [
+        { value: 'low', label: 'Low' },
+        { value: 'medium', label: 'Medium' },
+        { value: 'high', label: 'High' },
+        { value: 'xhigh', label: 'Extra high' },
+        { value: 'max', label: 'Max' }
+      ]
+    })
+
+    expect(
+      resolveAgentSessionOptionLaunch('antigravity', {
+        model: 'gemini-4-hydrogen',
+        effort: 'xhigh'
+      })
+    ).toEqual({
+      args: ['--model', 'gemini-4-hydrogen', '--effort', 'xhigh'],
+      appliedValues: { model: 'gemini-4-hydrogen', effort: 'xhigh' }
+    })
+
+    expect(
+      resolveAgentSessionOptionLaunch('antigravity', {
+        model: 'gemini-4-hydrogen',
+        effort: 'max'
+      })
+    ).toEqual({
+      args: ['--model', 'gemini-4-hydrogen', '--effort', 'max'],
+      appliedValues: { model: 'gemini-4-hydrogen', effort: 'max' }
+    })
+  })
+
   it('parses Claude list_models discovery into catalog models with options', () => {
     const stdout = JSON.stringify({
       type: 'control_response',

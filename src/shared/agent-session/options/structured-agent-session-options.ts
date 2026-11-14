@@ -14,8 +14,8 @@ import {
 } from '../../native-chat/input/session-options/native-chat-session-option-defaults'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-launch/permissions/agent-chat-permission-mode-option-id'
 import {
-  usesInstalledAgentModelCatalog,
-  usesModelSpecificAcpEfforts
+  retainsModelSpecificAcpEfforts,
+  usesInstalledAgentModelCatalog
 } from './model-catalog/agent-model-catalog-ownership'
 import {
   fillUnknownCatalogEfforts,
@@ -186,7 +186,7 @@ export function applyStructuredAgentSessionOptions(
   const installed = usesInstalledAgentModelCatalog(state.record.agent, launch.coherentCatalog)
   const keepCatalog = installed || result.modelsKnown === false
   let answeredCatalog = structuredAgentSessionOptionCatalog(seed, result, state.record.agent)
-  if (usesModelSpecificAcpEfforts(state.record.agent)) {
+  if (retainsModelSpecificAcpEfforts(state.record.agent)) {
     answeredCatalog = {
       ...answeredCatalog,
       models: fillUnknownCatalogEfforts(answeredCatalog.models, state.catalog?.models ?? [])

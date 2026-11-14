@@ -28,6 +28,7 @@ import {
   acpModelListingForRelease
 } from './acp-model-discovery-policy'
 import type { AcpLaunchSpec } from '../launch/acp-launch-contract'
+import { acpLaunchSpecForAccount } from '../launch/acp-launch-command'
 import { checkAcpLaunchVersion } from '../launch/acp-launch-version'
 import {
   resolveAcpLaunchInvocation,
@@ -62,18 +63,19 @@ export function createAcpModelCatalogProbe(
     operation?: StructuredAgentResolutionOperation
   ) => {
     assertStructuredAgentResolutionCurrent(operation)
-    const discovery = spec.modelDiscovery
+    const effectiveSpec = acpLaunchSpecForAccount(spec, accountHome)
+    const discovery = effectiveSpec.modelDiscovery
     if (discovery.kind === 'unavailable') {
       throw new Error(discovery.reason)
     }
     // Reject folderless session discovery before spawning even a version probe.
     if (!workspace && acpListingNeedsChatFolder(discovery)) {
-      throw folderlessListing(spec)
+      throw folderlessListing(effectiveSpec)
     }
     // Start in home; only explicit chat-folder discovery reads project config.
     const cwd = deps.homePath ?? homedir()
     const { command, prefixArgs, env, envToDelete } = await resolveAcpLaunchInvocation(
-      spec,
+      effectiveSpec,
       accountHome,
       {
         ...deps,
@@ -109,30 +111,32 @@ export function createAcpModelCatalogProbe(
         const operation = runOperation
         assertStructuredAgentResolutionCurrent(operation)
         const release = await checkAcpLaunchVersion(
-          spec,
+          effectiveSpec,
           { command, prefixArgs, cwd, env, operation },
           acpListingDependsOnRelease(discovery),
           deps.probeVersion ?? ((input) => readAgentCliVersion({ ...input, timeoutMs: null }))
         )
         assertStructuredAgentResolutionCurrent(operation)
         if (release.status === 'tooOld') {
-          throw new Error(`${spec.agent} at ${command} does not run structured chats`)
+          throw new Error(`${effectiveSpec.agent} at ${command} does not run structured chats`)
         }
         const listing = acpModelListingForRelease(discovery, release.version)
         if (listing === null) {
-          throw new Error(`${spec.agent} at ${command} lists its models only through its chats`)
+          throw new Error(
+            `${effectiveSpec.agent} at ${command} lists its models only through its chats`
+          )
         }
         const launch = {
           command,
-          args: [...prefixArgs, ...spec.args({ fullAccess: false, pluginDir: null })],
+          args: [...prefixArgs, ...effectiveSpec.args({ fullAccess: false, pluginDir: null })],
           cwd,
           env,
           envToDelete
         }
-        const run = { label: spec.agent, signal: options?.signal, timeoutMs: null }
+        const run = { label: effectiveSpec.agent, signal: options?.signal, timeoutMs: null }
         // OMP records every model switch as account usage; starting on the picked model records none.
         const launchedModel =
-          spec.launchesWithModel && usesModelSpecificAcpEfforts(spec.agent)
+          effectiveSpec.launchesWithModel && usesModelSpecificAcpEfforts(effectiveSpec.agent)
             ? options?.selectedModels?.[0]
             : undefined
         let models: AgentSessionModelOption[]
@@ -146,24 +150,30 @@ export function createAcpModelCatalogProbe(
               env,
               envToDelete
             },
-            { site: `${spec.agent}-model-catalog-probe`, signal: options?.signal, timeoutMs: null }
+            {
+              site: `${effectiveSpec.agent}-model-catalog-probe`,
+              signal: options?.signal,
+              timeoutMs: null
+            }
           )
           models = listing.parse(stdout)
         } else if (listing.kind === 'session') {
           if (!workspace) {
-            throw folderlessListing(spec)
+            throw folderlessListing(effectiveSpec)
           }
           // Remove disposable session storage after the process closes.
           const folderArgs = listing.sessionFolderArgs
           const listInSession = async (model: string | undefined) => {
             const folder = folderArgs
-              ? await acpRunFolder(join(deps.dataDirectory, 'acp-listing-sessions', spec.agent))
+              ? await acpRunFolder(
+                  join(deps.dataDirectory, 'acp-listing-sessions', effectiveSpec.agent)
+                )
               : null
             try {
               assertStructuredAgentResolutionCurrent(operation)
               const args = [
                 ...prefixArgs,
-                ...spec.args({ fullAccess: false, pluginDir: null, model }),
+                ...effectiveSpec.args({ fullAccess: false, pluginDir: null, model }),
                 ...(folderArgs && folder ? folderArgs(folder.path) : [])
               ]
               return await runAgentModelCatalogSession<
@@ -173,14 +183,14 @@ export function createAcpModelCatalogProbe(
                 () => (deps.connectSession ?? createAcpAgentConnection)({ ...launch, args }),
                 (connection, ready) =>
                   readSessionModels(
-                    spec,
+                    effectiveSpec,
                     listing,
                     connection,
                     workspace,
                     operation,
                     options?.selectedModels,
                     model,
-                    spec.dialect.effortChangesModel ? ready : undefined,
+                    effectiveSpec.dialect.effortChangesModel ? ready : undefined,
                     (result) =>
                       publish?.(
                         {
@@ -228,14 +238,14 @@ export function createAcpModelCatalogProbe(
             async (connection) => {
               const initialized = await connection.initialize()
               assertStructuredAgentResolutionCurrent(operation)
-              observeAcpForkSupport(spec.agent, initialized)
+              observeAcpForkSupport(effectiveSpec.agent, initialized)
               return listing.read(initialized, connection)
             },
             run
           )
         }
         if (models.length === 0) {
-          throw new Error(`${spec.agent} listed no models`)
+          throw new Error(`${effectiveSpec.agent} listed no models`)
         }
         return { models, origin: 'probe' as const, ...(attemptedModels ? { attemptedModels } : {}) }
       }

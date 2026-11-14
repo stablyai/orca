@@ -48,6 +48,8 @@ export type StructuredAgentAccountHomeRequest = {
   /** A `read` has no side effects: it syncs no home, starts no bridge, clears no selection.
    *  `identity` is a read that names the selected account before its folder exists. */
   purpose: 'launch' | 'read' | 'identity'
+  /** Keep the agent's own account instead of switching a `read` to a host backend. */
+  ownAccount?: boolean
   /** The launch's workspace directory on this host; a read has none. */
   workspacePath: (() => Promise<string>) | null
   /** The permission mode a new chat starts in, when it names one. */

@@ -77,7 +77,10 @@ export function acpModelCatalogDiscovery(
   spec: AcpLaunchSpec,
   { deps, environment }: StructuredAgentModelCatalogContext
 ): AgentModelCatalogDiscovery {
-  const discovery = spec.modelDiscovery
+  const discovery =
+    spec.modelDiscovery.kind === 'unavailable' && spec.hostBackend
+      ? spec.hostBackend.spec.modelDiscovery
+      : spec.modelDiscovery
   if (discovery.kind === 'unavailable') {
     return { kind: 'unavailable', reason: discovery.reason }
   }

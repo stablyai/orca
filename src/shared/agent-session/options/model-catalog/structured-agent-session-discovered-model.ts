@@ -5,7 +5,7 @@ import type {
 import type { AgentSessionOptionChoice } from '../../agent-session-wire'
 import type { AgentSessionOptionsResult } from '../protocol/agent-session-options-result'
 import type { AgentType } from '../../../agent-status/contracts/agent-status-types'
-import { usesModelSpecificAcpEfforts } from './agent-model-catalog-ownership'
+import { retainsModelSpecificAcpEfforts } from './agent-model-catalog-ownership'
 
 export function structuredModelEfforts(
   model: AgentSessionOptionsResult['models'][number]
@@ -75,7 +75,7 @@ export function discoveredModel(
   const effort = effortOption(model, agent)
   const serviceTier = model.serviceTiers?.length ? serviceTierOption(model.serviceTiers) : null
   return {
-    ...(usesModelSpecificAcpEfforts(agent) && model.effortsKnown === false
+    ...(retainsModelSpecificAcpEfforts(agent) && model.effortsKnown === false
       ? { effortsKnown: false as const }
       : {}),
     ...(model.declaredDefaultEffort !== undefined

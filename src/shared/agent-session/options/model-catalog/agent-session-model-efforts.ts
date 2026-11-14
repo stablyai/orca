@@ -1,4 +1,4 @@
-import { usesModelSpecificAcpEfforts } from './agent-model-catalog-ownership'
+import { retainsModelSpecificAcpEfforts } from './agent-model-catalog-ownership'
 import { discoveredModel } from './structured-agent-session-discovered-model'
 import type { StructuredAgentSessionOptionState } from '../structured-agent-session-options'
 import type {
@@ -66,7 +66,7 @@ export function enrichStructuredAgentEfforts(
   catalog: AgentSessionModelCatalogResult
 ): StructuredAgentSessionOptionState {
   if (
-    !usesModelSpecificAcpEfforts(state.record.agent) ||
+    !retainsModelSpecificAcpEfforts(state.record.agent) ||
     !state.catalog ||
     catalog.origin === 'unknown'
   ) {
