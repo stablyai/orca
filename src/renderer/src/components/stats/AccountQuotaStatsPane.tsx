@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react'
 import { StatsPane } from './StatsPane'
 import { useAppStore } from '../../store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { SettingsHostScope } from '../settings/host-scope/settings-host-scope'
 import { SettingsHostScopeUnavailableNotice } from '../settings/host-scope/SettingsHostScopePicker'
 import { resolveAccountOwner } from '@/runtime/provider-accounts/ownership/wsl-host-account-owner'
@@ -26,6 +26,7 @@ export function AccountQuotaStatsPane({
   )
 }
 function OwnedAccountQuotas({ hostScope }: { hostScope?: SettingsHostScope }): React.JSX.Element {
+  const t = useTranslate()
   const localRateLimits = useAppStore((state) => state.rateLimits)
   const refreshRateLimits = useAppStore((state) => state.refreshRateLimits)
   const fetchInactiveClaude = useAppStore((state) => state.fetchInactiveClaudeAccountUsage)
@@ -49,7 +50,7 @@ function OwnedAccountQuotas({ hostScope }: { hostScope?: SettingsHostScope }): R
         accounts={accounts}
         accountsUnverifiable={accountsUnverifiable}
         localOwner={remoteOwner === null}
-        ownerLabel={remoteOwner?.label ?? translate('stats.usage.localHost', 'This device')}
+        ownerLabel={remoteOwner?.label ?? t('stats.usage.localHost', 'This device')}
         onRefresh={
           refreshRemote ??
           (async () => {
