@@ -21,6 +21,31 @@ export const BASH_FEATURE_CHANNEL_BLOCK = `_orca_shell_features=",\${${SHELL_STA
 builtin unset ${SHELL_STARTUP_FEATURE_ENV}
 __orca_has_feature() { [[ "$_orca_shell_features" == *",$1,"* ]]; }`
 
+// Hand ZDOTDIR to the sibling zsh wrapper while bash login profiles run so an `exec zsh` in
+// ~/.bash_profile or ~/.bashrc still receives Orca's zsh startup hook (common in Git for Windows).
+export const BASH_LOGIN_PROFILE_ZSH_HANDOFF_OPEN_BLOCK = `__orca_bash_wrapper_source="\${BASH_SOURCE[0]:-}"
+__orca_zsh_handoff_dir="\${__orca_bash_wrapper_source%/bash/rcfile}/zsh"
+__orca_zsh_handoff_armed=""
+if [[ "$__orca_zsh_handoff_dir" != "\${__orca_bash_wrapper_source}/zsh" && -f "$__orca_zsh_handoff_dir/.zshenv" ]]; then
+  __orca_zsh_handoff_armed=1
+  export ORCA_ORIG_ZDOTDIR="\${ZDOTDIR:-}"
+  export ZDOTDIR="$__orca_zsh_handoff_dir"
+  export ${SHELL_STARTUP_FEATURE_ENV}="overlay,markers\${__orca_ready_marker:+,ready}\${${POSIX_SHELL_STARTUP_COMMAND_ENV}:+,startup}"
+fi
+unset __orca_bash_wrapper_source`
+
+export const BASH_LOGIN_PROFILE_ZSH_HANDOFF_CLOSE_BLOCK = `if [[ -n "\${__orca_zsh_handoff_armed:-}" ]]; then
+  if [[ "\${ZDOTDIR:-}" == "$__orca_zsh_handoff_dir" ]]; then
+    if [[ -n "\${ORCA_ORIG_ZDOTDIR:-}" ]]; then
+      export ZDOTDIR="$ORCA_ORIG_ZDOTDIR"
+    else
+      builtin unset ZDOTDIR
+    fi
+  fi
+  builtin unset ORCA_ORIG_ZDOTDIR ${SHELL_STARTUP_FEATURE_ENV} __orca_zsh_handoff_armed
+fi
+unset __orca_zsh_handoff_dir`
+
 export const SHELL_STARTUP_IDENTITY_MARKER_BLOCK = `__orca_has_feature identity && printf "\\033]777;orca-shell-start:%s\\007" "$$"`
 
 // Restore and consume ZDOTDIR before user startup files; reject stale Orca wrapper paths.
