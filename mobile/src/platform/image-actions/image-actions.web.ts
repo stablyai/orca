@@ -9,13 +9,13 @@ import { isSvgFilePath } from '../../../../src/shared/file-preview/svg-document'
 import type {
   BridgeImageOperation,
   BridgeImageRunParams
-} from '../../mobile-web-shell/bridge/bridge-image-verbs'
+} from '../../mobile-web-shell/bridge/native-capabilities/bridge-image-verbs'
 import {
   NativeVerbError,
   useNativeVerbs,
   type NativeVerbReason,
   type NativeVerbs
-} from '../../mobile-web-shell/bridge/use-native-verbs'
+} from '../../mobile-web-shell/bridge/native-capabilities/use-native-verbs'
 import {
   ImageActionRefusedError,
   type ImageAction,

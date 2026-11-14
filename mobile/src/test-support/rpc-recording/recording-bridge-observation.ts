@@ -1,7 +1,7 @@
 import type {
   BridgePortObservation,
   BridgeQueuedObservation
-} from '../../mobile-web-shell/bridge/bridge-port-pair-test-harness'
+} from '../../mobile-web-shell/bridge/test-support/bridge-port-pair-contract'
 import { captureArguments, captureError } from './recording-values'
 
 import type { RecordingCausality } from './recording-causality'

@@ -1,11 +1,11 @@
 import { useEffect, useEffectEvent, useMemo, useState } from 'react'
 import { MOBILE_WEB_PAGE_VERSION_OPENS_TARGETS } from '../transport/web-bundle/mobile-web-bundle-compat'
-import { BRIDGE_MAX_ROUTE_PARAM_CHARS } from './bridge/bridge-caps'
-import type { BridgeInitRoute } from './bridge/bridge-envelope'
+import { BRIDGE_MAX_ROUTE_PARAM_CHARS } from './bridge/protocol/bridge-caps'
+import type { BridgeInitRoute } from './bridge/protocol/bridge-init-route'
 import {
   BRIDGE_OPEN_ROUTE_PARAM,
   type BridgeClearableRouteParam
-} from './bridge/bridge-route-update'
+} from './bridge/page-lifecycle/bridge-route-update'
 
 type PageLocation = Readonly<{ sessionId: string; href: string }>
 

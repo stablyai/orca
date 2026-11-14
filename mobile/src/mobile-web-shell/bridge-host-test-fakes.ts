@@ -4,7 +4,7 @@ import type { BrowserScreencastFrame } from '../browser/screencast/browser-scree
 import type { RpcEnvelopeFields } from '../transport/rpc/rpc-envelope-fields'
 import type { ConnectionState } from '../transport/connection/connection-state'
 import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
-import { BRIDGE_PROTOCOL_VERSION } from './bridge/bridge-envelope'
+import { BRIDGE_PROTOCOL_VERSION } from './bridge/protocol/bridge-frame-fields'
 
 export type SentRequest = {
   method: string

@@ -1,5 +1,5 @@
 // Import the defining module: the envelope re-export cycles through this file and becomes undefined in the page bundle.
-import { BridgeInitRouteSchema, type BridgeInitRoute } from './bridge/bridge-init-route'
+import { BridgeInitRouteSchema, type BridgeInitRoute } from './bridge/protocol/bridge-init-route'
 
 // Validate against the page’s schema here so overlong params (including Windows paths) and unencodable dot segments get a route refusal instead of init.route:null and a misleading update prompt.
 export function shellScreenRoute(route: BridgeInitRoute): BridgeInitRoute | null {

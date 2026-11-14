@@ -1,11 +1,11 @@
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { markRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
 import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
-import { BRIDGE_MAX_PENDING_REQUESTS } from './bridge/bridge-caps'
-import type { BridgeClientMessage } from './bridge/bridge-envelope'
+import { BRIDGE_MAX_PENDING_REQUESTS } from './bridge/protocol/bridge-caps'
+import type { BridgeClientMessage } from './bridge/protocol/bridge-envelope'
 import { BridgeHostDisposedError } from './bridge-host-errors'
-import { isBridgeNativeMethod } from './bridge/bridge-native-verbs'
-import { substituteBridgePageClientIdentity } from './bridge/bridge-page-client-identity'
+import { isBridgeNativeMethod } from './bridge/native-capabilities/bridge-native-verbs'
+import { substituteBridgePageClientIdentity } from './bridge/client-state/bridge-page-client-identity'
 
 type RequestMessage = Extract<BridgeClientMessage, { type: 'request' }>
 

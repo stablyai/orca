@@ -3,7 +3,7 @@ import {
   BRIDGE_MEDIA_MAX_LIVE_HANDLES,
   BRIDGE_MEDIA_READ_MAX_BYTES,
   type BridgeMediaItem
-} from './bridge/bridge-media-verbs'
+} from './bridge/native-capabilities/bridge-media-verbs'
 import { CLIPBOARD_IMAGE_MAX_SOURCE_BYTES } from '../../../src/shared/clipboard-image'
 
 // Expire abandoned picks after five idle minutes; refresh on touch so chunked reads cannot lose their file mid-transfer.

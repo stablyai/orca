@@ -1,9 +1,9 @@
 import type { MobileWebBundleManifestRead } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
-import { BRIDGE_TERMINAL_KEY_RAIL_GRANT } from './bridge/bridge-terminal-key'
+import { BRIDGE_TERMINAL_KEY_RAIL_GRANT } from './bridge/native-capabilities/bridge-terminal-key'
 import { BRIDGE_EXTERNAL_NAVIGATION_GRANT } from './cancelled-navigation-target'
-import { BRIDGE_HAPTICS_GRANT } from './bridge/bridge-haptics-notify'
-import { BRIDGE_NATIVE_VERB_NAMES } from './bridge/bridge-native-verbs'
-import { BRIDGE_SCREENCAST_BINARY_GRANT } from './bridge/bridge-screencast-grant'
+import { BRIDGE_HAPTICS_GRANT } from './bridge/native-capabilities/bridge-haptics-notify'
+import { BRIDGE_NATIVE_VERB_NAMES } from './bridge/native-capabilities/bridge-native-verbs'
+import { BRIDGE_SCREENCAST_BINARY_GRANT } from './bridge/screencast/bridge-screencast-grant'
 
 export type MobileWebPageRoute = NonNullable<MobileWebBundleManifestRead['routes']>[number]
 

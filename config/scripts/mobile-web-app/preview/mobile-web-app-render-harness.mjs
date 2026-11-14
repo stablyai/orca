@@ -65,7 +65,7 @@ export async function readShellDocumentHeaders() {
 export async function readBridgeProtocolVersion() {
   // Read declaring module rather than envelope reexport so source splits cannot silently change reader target.
   const source = await readFile(
-    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-frame-fields.ts'),
+    join(projectDir, 'mobile/src/mobile-web-shell/bridge/protocol/bridge-frame-fields.ts'),
     'utf8'
   )
   const match = /BRIDGE_PROTOCOL_VERSION = (\d+)/.exec(source)
@@ -133,7 +133,10 @@ export async function readBrowserFrameQuality() {
 // Read page client-identity placeholder from declaration so rig cannot silently retain stale copy.
 export async function readBridgePageClientIdentity() {
   const source = await readFile(
-    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-page-client-identity.ts'),
+    join(
+      projectDir,
+      'mobile/src/mobile-web-shell/bridge/client-state/bridge-page-client-identity.ts'
+    ),
     'utf8'
   )
   const read = (name) => {
@@ -148,7 +151,7 @@ export async function readBridgePageClientIdentity() {
 
 export async function readBridgeFaultGrant() {
   const source = await readFile(
-    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-frame-fields.ts'),
+    join(projectDir, 'mobile/src/mobile-web-shell/bridge/protocol/bridge-frame-fields.ts'),
     'utf8'
   )
   const match = /BRIDGE_FAULT_GRANT = '([a-zA-Z]+)'/.exec(source)
@@ -160,7 +163,7 @@ export async function readBridgeFaultGrant() {
 
 export async function readBridgePagePainted() {
   const source = await readFile(
-    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-page-painted.ts'),
+    join(projectDir, 'mobile/src/mobile-web-shell/bridge/page-lifecycle/bridge-page-painted.ts'),
     'utf8'
   )
   const match = /BRIDGE_PAGE_PAINTED = '([a-zA-Z]+)'/.exec(source)
@@ -173,11 +176,11 @@ export async function readBridgePagePainted() {
 // Read claim/back/pop names from source; observing pop distinguishes sheet close from whole-screen navigation.
 export async function readBridgeBackNames() {
   const lane = await readFile(
-    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-page-back.ts'),
+    join(projectDir, 'mobile/src/mobile-web-shell/bridge/page-lifecycle/bridge-page-back.ts'),
     'utf8'
   )
   const fields = await readFile(
-    join(projectDir, 'mobile/src/mobile-web-shell/bridge/bridge-frame-fields.ts'),
+    join(projectDir, 'mobile/src/mobile-web-shell/bridge/protocol/bridge-frame-fields.ts'),
     'utf8'
   )
   const claim = /BRIDGE_BACK_CLAIM_NOTIFY = '([a-z-]+)'/.exec(lane)

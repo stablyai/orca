@@ -6,8 +6,8 @@ import {
   mediaReadParamsSchema,
   mediaReleaseParamsSchema,
   type BridgeMediaSource
-} from '../../mobile-web-shell/bridge/bridge-media-verbs'
-import type { BridgeNativeVerb } from '../../mobile-web-shell/bridge/bridge-native-verbs'
+} from '../../mobile-web-shell/bridge/native-capabilities/bridge-media-verbs'
+import type { BridgeNativeVerb } from '../../mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
 import { BridgeNativeVerbRefusedError } from '../../mobile-web-shell/bridge-host-errors'
 import '../../mobile-web-shell/media-handle-registry'
 import type { MediaHandleRegistry, StagedMedia } from '../../mobile-web-shell/media-handle-registry'

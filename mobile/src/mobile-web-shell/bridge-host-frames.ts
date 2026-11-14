@@ -1,5 +1,6 @@
-import { BRIDGE_PROTOCOL_VERSION, type BridgeHostMessage } from './bridge/bridge-envelope'
-import { captureBridgeError } from './bridge/bridge-error-capture'
+import { BRIDGE_PROTOCOL_VERSION } from './bridge/protocol/bridge-frame-fields'
+import type { BridgeHostMessage } from './bridge/protocol/bridge-envelope'
+import { captureBridgeError } from './bridge/protocol/bridge-error-capture'
 import type { BridgeHostDiagnostic } from './bridge-host-contract'
 
 export type BridgeHostFrames = {

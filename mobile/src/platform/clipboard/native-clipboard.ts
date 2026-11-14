@@ -3,7 +3,7 @@ import {
   clipboardReadParamsSchema,
   clipboardWriteParamsSchema,
   type BridgeNativeVerb
-} from '../../mobile-web-shell/bridge/bridge-native-verbs'
+} from '../../mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
 
 // Text-only: images use staged media handles to stay below reply caps. Parse again at the device boundary for checked types without assertions.
 export async function serveNativeClipboardVerb(

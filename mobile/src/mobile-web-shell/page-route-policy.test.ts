@@ -6,7 +6,7 @@ import {
   routePatternRefusal,
   routeViewOf
 } from './page-route-policy'
-import { BridgePageRouteGrantsSchema } from './bridge/bridge-page-route-grants'
+import { BridgePageRouteGrantsSchema } from './bridge/protocol/bridge-page-route-grants'
 import { MobileWebBundleManifestReadSchema } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import { MANIFEST_WIRE } from './mobile-web-shell-session-test-fixtures'
 

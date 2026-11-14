@@ -1,5 +1,5 @@
 import { sanitizeCrashReportString } from '../../../src/shared/crash-report-redaction'
-import { captureBridgeError } from '../mobile-web-shell/bridge/bridge-error-capture'
+import { captureBridgeError } from '../mobile-web-shell/bridge/protocol/bridge-error-capture'
 import { connectionLogStore } from './connection/persisted-connection-log-store'
 
 export const NATIVE_APP_LOG_ID = 'orca:native-app'

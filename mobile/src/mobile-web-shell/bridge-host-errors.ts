@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { BridgeRefusal } from './bridge/bridge-caps'
+import type { BridgeRefusal } from './bridge/protocol/bridge-caps'
 
 // Use delivery-unknown: the desktop may already have executed an in-flight request before bridge disposal.
 export class BridgeHostDisposedError extends Error {

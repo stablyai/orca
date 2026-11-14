@@ -25,7 +25,7 @@ import type {
   BridgeTerminalToolbar,
   BridgeTerminalKeyId,
   BridgeTerminalKeyRail
-} from './bridge/bridge-terminal-key'
+} from './bridge/native-capabilities/bridge-terminal-key'
 
 const KEY_HEIGHT = 40
 

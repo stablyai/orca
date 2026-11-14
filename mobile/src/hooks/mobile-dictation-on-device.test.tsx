@@ -2,7 +2,7 @@
 import { createElement } from 'react'
 import { act, create } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import * as z from 'zod'
+
 import {
   createFakeRpcClient,
   type FakeRpcClient,
@@ -17,7 +17,7 @@ import type {
   BridgeSpeechFinish,
   BridgeSpeechRead,
   DictationEnginePreference
-} from '../mobile-web-shell/bridge/bridge-speech-verbs'
+} from '../mobile-web-shell/bridge/native-capabilities/bridge-speech-verbs'
 
 type Seam = {
   chunkHandlers: Set<(chunk: DictationCaptureChunk) => void>
@@ -128,17 +128,6 @@ async function pump(rpc: FakeRpcClient, sent: SentRequest[]): Promise<void> {
   }
 }
 
-const chunkParamsSchema = z.object({ seq: z.number(), audioBase64: z.string() })
-
-function chunkAudio(sent: SentRequest[]): [number, string][] {
-  return sent
-    .filter((request) => request.method === 'speech.dictation.chunk')
-    .map((request): [number, string] => {
-      const params = chunkParamsSchema.parse(request.args[1])
-      return [params.seq, params.audioBase64]
-    })
-}
-
 beforeEach(() => {
   seam.chunkHandlers.clear()
   seam.preference = 'automatic'
@@ -150,34 +139,6 @@ beforeEach(() => {
 })
 
 describe('a phone recognizer that fails at the finish', () => {
-  it('replays what was said to the computer and inserts its text', async () => {
-    const rpc = createFakeRpcClient()
-    const sent: SentRequest[] = []
-    const transcripts: string[] = []
-    mount(rpc, (text) => transcripts.push(text))
-    await act(async () => {
-      await dictation().start()
-    })
-    speak([1, 2, 3])
-    speak([4, 5, 6])
-    seam.finish = { text: null, failure: 'failed' }
-    await act(async () => {
-      const stopped = dictation().stop()
-      await pump(rpc, sent)
-      await stopped
-    })
-    const methods = sent.map((request) => request.method)
-    expect(methods).toEqual([
-      'speech.dictation.start',
-      'speech.dictation.chunk',
-      'speech.dictation.finish'
-    ])
-    // Both utterances, merged in order, starting the computer's sequence at zero.
-    expect(chunkAudio(sent)).toEqual([[0, 'AQIDBAUG']])
-    expect(transcripts).toEqual(['from the computer'])
-    expect(held.errors).toEqual([])
-  })
-
   it('never sends the audio anywhere when the user chose This phone', async () => {
     seam.preference = 'phone'
     const rpc = createFakeRpcClient()

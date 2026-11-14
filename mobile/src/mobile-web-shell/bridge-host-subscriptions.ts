@@ -1,10 +1,11 @@
-import { BRIDGE_MAX_MESSAGE_BYTES, utf8ByteLength } from './bridge/bridge-caps'
-import { BRIDGE_PROTOCOL_VERSION, type BridgeHostMessage } from './bridge/bridge-envelope'
+import { BRIDGE_MAX_MESSAGE_BYTES, utf8ByteLength } from './bridge/protocol/bridge-caps'
+import { BRIDGE_PROTOCOL_VERSION } from './bridge/protocol/bridge-frame-fields'
+import type { BridgeHostMessage } from './bridge/protocol/bridge-envelope'
 import {
   bridgeScreencastBase64Length,
   bridgeScreencastFrameHeader,
   encodeBridgeScreencastFrame
-} from './bridge/bridge-screencast-encoder'
+} from './bridge/screencast/bridge-screencast-encoder'
 import {
   BridgeTerminalOutputBacklog,
   drainTerminalBacklog,
@@ -13,7 +14,7 @@ import {
   type TerminalBacklogEnd,
   type TerminalBacklogTimers
 } from './bridge-terminal-output-backlog'
-import type { BridgeBinaryEvent } from './bridge/bridge-screencast-binary'
+import type { BridgeBinaryEvent } from './bridge/screencast/bridge-screencast-binary'
 import type { BrowserScreencastFrame } from '../browser/screencast/browser-screencast-protocol'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { RpcEnvelopeFields } from '../transport/rpc/rpc-envelope-fields'

@@ -9,7 +9,8 @@ export const HAPTICS_SEAM = 'src/platform/haptics/haptics.web.ts'
 // Native sibling imports expo-haptics and must stay outside page closure.
 export const HAPTICS_NATIVE = 'src/platform/haptics/haptics.ts'
 
-export const HAPTICS_KINDS_MODULE = 'src/mobile-web-shell/bridge/bridge-haptics-notify.ts'
+export const HAPTICS_KINDS_MODULE =
+  'src/mobile-web-shell/bridge/native-capabilities/bridge-haptics-notify.ts'
 
 const KINDS_CONST = 'BRIDGE_HAPTICS_KINDS'
 const PUBLISH_FUNCTION = 'publishHapticsNotifier'

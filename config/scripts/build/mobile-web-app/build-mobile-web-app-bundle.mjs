@@ -125,6 +125,7 @@ const PAGE_ASYNC_STORAGE_MODULE = join(
   'src',
   'mobile-web-shell',
   'bridge',
+  'page-storage',
   'page-async-storage.ts'
 )
 

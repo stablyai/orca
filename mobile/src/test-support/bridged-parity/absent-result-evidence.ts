@@ -1,6 +1,6 @@
-import { BridgeReplyRefusedError } from '../../mobile-web-shell/bridge/bridge-rpc-client'
-import { readBridgeHostMessage } from '../../mobile-web-shell/bridge/bridge-envelope'
-import type { BridgePortPair } from '../../mobile-web-shell/bridge/bridge-port-pair-test-harness'
+import { BridgeReplyRefusedError } from '../../mobile-web-shell/bridge/client-state/bridge-client-errors'
+import { readBridgeHostMessage } from '../../mobile-web-shell/bridge/protocol/bridge-envelope'
+import type { BridgePortPair } from '../../mobile-web-shell/bridge/test-support/bridge-port-pair-contract'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { projectMobileRpcRequestParams } from '../../transport/rpc/mobile-rpc-request-projection'
 import {

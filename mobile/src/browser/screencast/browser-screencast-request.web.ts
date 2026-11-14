@@ -1,5 +1,5 @@
-import { BRIDGE_MAX_MESSAGE_BYTES } from '../../mobile-web-shell/bridge/bridge-caps'
-import { BRIDGE_PROTOCOL_VERSION } from '../../mobile-web-shell/bridge/bridge-envelope'
+import { BRIDGE_MAX_MESSAGE_BYTES } from '../../mobile-web-shell/bridge/protocol/bridge-caps'
+import { BRIDGE_PROTOCOL_VERSION } from '../../mobile-web-shell/bridge/protocol/bridge-frame-fields'
 import { METADATA_KEYS } from './browser-screencast-protocol'
 import {
   assembleMobileBrowserScreencastRequest,

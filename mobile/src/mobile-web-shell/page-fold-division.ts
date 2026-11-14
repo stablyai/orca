@@ -2,11 +2,14 @@ import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } fro
 import { useWindowDimensions, type LayoutChangeEvent, type HostInstance } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useSideRailStrip, useSideRailDirectionPadAvailable } from '../layout/side-rail'
-import { pageOcclusions, type BridgePageGeometry } from './bridge/bridge-page-geometry'
+import {
+  pageOcclusions,
+  type BridgePageGeometry
+} from './bridge/page-geometry/bridge-page-geometry'
 import { getFoldSplit } from '../layout/fold-division'
 import { useReservedRegions } from '../layout/reserved-regions'
-import type { BridgeFoldDivision } from './bridge/bridge-fold-division'
-import type { BridgeSafeAreaInsets } from './bridge/bridge-safe-area-insets'
+import type { BridgeFoldDivision } from './bridge/page-geometry/bridge-fold-division'
+import type { BridgeSafeAreaInsets } from './bridge/page-geometry/bridge-safe-area-insets'
 import { measuredPageSafeAreaInsets } from './page-safe-area-insets'
 
 type WindowFrame = { x: number; y: number; width: number; height: number }

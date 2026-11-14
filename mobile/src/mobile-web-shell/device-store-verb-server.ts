@@ -5,7 +5,7 @@ import {
   storeParamsSchema,
   type BridgeStoreReadResult,
   type BridgeStoreWriteResult
-} from './bridge/bridge-store-verb'
+} from './bridge/native-capabilities/bridge-store-verb'
 
 // The host comes from the shell screen, never from params: it is the only fence between hosts' values.
 export async function serveDeviceStoreVerb(

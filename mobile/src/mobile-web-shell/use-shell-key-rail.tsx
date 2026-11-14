@@ -7,7 +7,7 @@ import {
   type BridgeTerminalToolbar,
   type BridgeTerminalKeyId,
   type BridgeTerminalKeyRail
-} from './bridge/bridge-terminal-key'
+} from './bridge/native-capabilities/bridge-terminal-key'
 import { TerminalKeyRail, terminalKeyRailKeys } from './terminal-key-rail'
 
 const NO_RAIL_KEYS: BridgeTerminalKeyRail = []

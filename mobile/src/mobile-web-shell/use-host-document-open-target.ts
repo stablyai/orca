@@ -8,7 +8,7 @@ import {
 import {
   BRIDGE_OPEN_ROUTE_PARAM,
   type BridgeClearableRouteParam
-} from './bridge/bridge-route-update'
+} from './bridge/page-lifecycle/bridge-route-update'
 
 // A session the host list's document opens inside itself (Jump back in, notification taps), and the session its page shows.
 export function useHostDocumentOpenTarget(hostId: string): {
