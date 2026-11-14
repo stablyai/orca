@@ -21,11 +21,7 @@ import { liveWorkerTerminalAutoReleaseAt } from '../../../../orchestration/termi
 import { failedWorkerStartHasOutput } from '../../../../orchestration/workers/turn-stops/failed-worker-start-report'
 import { readFederatedWorkerOutput } from '../../../../orchestration/legacy-remote-home/federated-worker-read'
 import { showFederatedWorker } from '../../../../orchestration/legacy-remote-home/federated-worker-show'
-import {
-  WorkerDispatchParams,
-  WorkerShowParams,
-  WorkerReadParams
-} from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-control-params'
+import * as WorkerControlParams from '../../../../../../shared/rpc-contract/orchestration/orchestration-worker-control-params'
 import { readStructuredWorkerSettings } from './observation/session-worker-observation'
 
 export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
@@ -33,7 +29,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
     name: 'orchestration.workerShow',
     access: { kind: 'reads', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
-    params: WorkerShowParams,
+    params: WorkerControlParams.WorkerShowParams,
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       const dispatch = db.getDispatchContextById(params.dispatch)
@@ -104,7 +100,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
     name: 'orchestration.workerRead',
     access: { kind: 'reads', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
-    params: WorkerReadParams,
+    params: WorkerControlParams.WorkerReadParams,
     handler: async (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       const dispatch = db.getDispatchContextById(params.dispatch)
@@ -235,7 +231,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
     name: 'orchestration.workerAbandon',
     access: { kind: 'writes', targets: { dispatch: 'dispatch' } },
     permission: 'workspace',
-    params: WorkerDispatchParams,
+    params: WorkerControlParams.WorkerDispatchParams,
     handler: (params, { runtime, orchestrationCaller, orchestrationCompatibilityEvidence }) => {
       const db = runtime.getOrchestrationDb()
       // Session identity wins; a terminal-only caller is identified by its launch evidence and pane.
@@ -285,6 +281,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
           residualResources: []
         }
       }
+      const worker = abandoned.worker
       if (abandoned.disposition === 'abandoned') {
         // Only the worker's own Dispatch settles the worker; a side task's parked mail stays.
         releaseStructuredWorkerSession(
@@ -297,7 +294,7 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
       }
       return {
         dispatchId: params.dispatch,
-        state: abandoned.worker.state,
+        state: worker.state,
         alreadySettled: abandoned.disposition !== 'abandoned',
         // Kept for --json readers: this attempt was no longer current, as main reported it.
         stale: abandoned.superseded || abandoned.disposition === 'already_settled',
@@ -305,8 +302,8 @@ export const ORCHESTRATION_WORKER_CONTROL_METHODS = [
         warning:
           abandoned.disposition === 'abandoned'
             ? 'Possibly-live resources were retained; no process was stopped or deleted.'
-            : `The worker was already ${abandoned.worker.state}; its terminal was left open and no process changed.`,
-        residualResources: JSON.parse(abandoned.worker.residual_resources) as unknown[]
+            : `The worker was already ${worker.state}; its terminal was left open and no process changed.`,
+        residualResources: JSON.parse(worker.residual_resources) as unknown[]
       }
     }
   })
