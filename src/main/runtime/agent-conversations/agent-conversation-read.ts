@@ -4,7 +4,6 @@ import {
   type AgentReadEntry,
   type AgentReadResult
 } from '../../../shared/agent-conversations/agent-conversation-contracts'
-import type { AgentReadJournalPosition } from '../../native-chat/agent-session-wire/publication/history/agent-read-journal-page'
 import type { NativeChatMessage } from '../../../shared/native-chat/native-chat-types'
 import type { RpcContext } from '../rpc/core'
 import {
@@ -16,10 +15,8 @@ import {
   canReadWorkerTranscript,
   readWorkerTranscript
 } from '../orchestration/workers/transcripts/worker-transcript-read'
-import { createWorkerOutputSourceIdentity } from '../orchestration/workers/transcripts/worker-output-cursor'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import type { TerminalAgentTranscriptSource } from '../../agent-hooks/server/server-agent-identities'
-import { sameProviderKey } from '../../agent-hooks/identity/agent-provider-key'
 import { tuiAgentDisplayName } from '../../../shared/agent-launch/catalog/tui-agent-display-names'
 import { needsWslHostTranslation } from '../../native-chat/transcript-discovery/host-readable-transcript-path'
 import {
@@ -28,14 +25,8 @@ import {
 } from '../../agent-hooks/identity/agent-identity-worker-protocol'
 import type { ResolvedAgentConversation } from './agent-conversation-address'
 import { AgentConversationRefusal } from './agent-conversation-refusal'
-import {
-  decodeReadCursor,
-  encodeReadCursor,
-  invalidCursor,
-  type ReadCursor
-} from './agent-read-cursor'
 
-type ReadRequest = { limit?: number; cursor?: string }
+type ReadRequest = { limit?: number }
 
 /** One page of what an agent said, by its conversation, never by a pane: a chat's own history,
  *  or a terminal agent's transcript. Reading needs no running agent and never starts one.
@@ -50,22 +41,17 @@ export async function readAgentConversation(
   request: ReadRequest
 ): Promise<AgentReadResult> {
   const limit = request.limit ?? AGENT_READ_DEFAULT_LIMIT
-  const cursor = request.cursor ? decodeReadCursor(request.cursor, resolved.orcaSessionId) : null
   return resolved.kind === 'chat'
-    ? readChat(ctx, resolved, limit, cursor)
-    : readTerminalTranscript(ctx, resolved.orcaSessionId, limit, cursor)
+    ? readChat(ctx, resolved, limit)
+    : readTerminalTranscript(ctx, resolved.orcaSessionId, limit)
 }
 
 async function readChat(
   ctx: RpcContext,
   resolved: Extract<ResolvedAgentConversation, { kind: 'chat' }>,
-  limit: number,
-  cursor: ReadCursor | null
+  limit: number
 ): Promise<AgentReadResult> {
   const { record, store, orcaSessionId } = resolved
-  if (cursor && cursor.s !== 'chat') {
-    throw invalidCursor()
-  }
   requireStructuredAgentAudience(ctx, record.provider)
   // The session that continues the conversation now: a /clear root reads its current chat.
   const running = resolveLineageRunningSession(store, record.sessionId)
@@ -76,58 +62,14 @@ async function readChat(
     )
   }
   const sessionId = running.kind === 'here' ? running.sessionId : record.sessionId
-  if (cursor && cursor.session !== sessionId) {
-    throw sourceChanged(orcaSessionId)
-  }
   const host = await requireInstalledStructuredHost(ctx, sessionId)
-  const encode = (next: AgentReadJournalPosition): string =>
-    encodeReadCursor({
-      v: 2,
-      id: orcaSessionId,
-      s: 'chat',
-      session: sessionId,
-      journal: next.cursor,
-      ...(next.partial ? { partial: next.partial } : {}),
-      ...(next.floor ? { floor: next.floor } : {})
-    })
-  const after = cursor
-    ? {
-        cursor: cursor.journal,
-        ...(cursor.partial ? { partial: cursor.partial } : {}),
-        ...(cursor.floor ? { floor: cursor.floor } : {})
-      }
-    : undefined
-  // A follower re-reading with its cursor does no journal work until the journal moves; a cursor
-  // inside a row always reads it.
-  const head = after && !after.partial ? await host.reads.journalCursor(sessionId) : null
-  if (
-    after &&
-    head &&
-    head.epoch === after.cursor.epoch &&
-    // Only exact equality: a cursor ahead of the journal takes the reader's own reset path.
-    head.sequence === after.cursor.sequence
-  ) {
-    return {
-      orcaSessionId,
-      kind: 'chat',
-      agent: record.provider,
-      source: 'chat',
-      entries: [],
-      cursor: encode(after),
-      limited: false
-    }
-  }
-  const page = await host.reads.agentReadPage(sessionId, { limit, ...(after ? { after } : {}) })
-  if (!page.ok) {
-    throw sourceChanged(orcaSessionId)
-  }
+  const page = await host.reads.agentReadPage(sessionId, { limit })
   return {
     orcaSessionId,
     kind: 'chat',
     agent: record.provider,
     source: 'chat',
     entries: page.entries,
-    cursor: encode(page.next),
     limited: page.limited
   }
 }
@@ -135,21 +77,12 @@ async function readChat(
 async function readTerminalTranscript(
   ctx: RpcContext,
   orcaSessionId: string,
-  limit: number,
-  cursor: ReadCursor | null
+  limit: number
 ): Promise<AgentReadResult> {
-  if (cursor && cursor.s !== 'transcript') {
-    throw invalidCursor()
-  }
-  const locate = (
-    known?: TerminalAgentTranscriptSource
-  ): Promise<TerminalAgentTranscriptSource | ReverseLookupUnavailable | null | undefined> =>
-    agentHookServer.terminalAgentTranscriptSource(
-      orcaSessionId,
-      () => ctx.runtime.readLocalSleepingAgentSessions(),
-      known
+  const source: TerminalAgentTranscriptSource | ReverseLookupUnavailable | null | undefined =
+    await agentHookServer.terminalAgentTranscriptSource(orcaSessionId, () =>
+      ctx.runtime.readLocalSleepingAgentSessions()
     )
-  const source = await locate()
   if (source === undefined) {
     throw new AgentConversationRefusal(
       CODES.unavailable,
@@ -188,41 +121,13 @@ async function readTerminalTranscript(
     transcriptPath: providerSession.transcriptPath,
     // The key's own distro keeps a WSL agent's guest path on that guest.
     ...(key.wslDistro ? { wslDistro: key.wslDistro } : {}),
-    limit,
-    ...(cursor?.s === 'transcript'
-      ? { offset: cursor.p, ...(cursor.c ? { expectedBoundaryCheckpoint: cursor.c } : {}) }
-      : {})
+    limit
   })
   if (!transcript.ok) {
-    if (cursor) {
-      throw sourceChanged(orcaSessionId)
-    }
     throw new AgentConversationRefusal(
       CODES.noTranscript,
       `Orca couldn't read agent ${orcaSessionId}'s transcript (${transcript.reason.replaceAll('_', ' ')}).`
     )
-  }
-  const sourceIdentity = createWorkerOutputSourceIdentity([
-    'agent-transcript',
-    key.executionHost,
-    key.wslDistro,
-    key.agent,
-    key.providerSessionId,
-    key.locator,
-    transcript.filePath,
-    transcript.sourceFingerprint
-  ])
-  // The conversation must still name the file just read: its row may have moved on meanwhile.
-  const after = await locate(source)
-  if (
-    isReverseLookupUnavailable(after) ||
-    (cursor?.s === 'transcript' && cursor.i !== sourceIdentity) ||
-    !after ||
-    !sameProviderKey(after.key, key) ||
-    after.providerSession.id !== providerSession.id ||
-    after.providerSession.transcriptPath !== providerSession.transcriptPath
-  ) {
-    throw sourceChanged(orcaSessionId)
   }
   return {
     orcaSessionId,
@@ -230,20 +135,12 @@ async function readTerminalTranscript(
     agent: key.agent,
     source: 'transcript',
     entries: transcriptEntries(transcript.messages),
-    cursor: encodeReadCursor({
-      v: 1,
-      id: orcaSessionId,
-      s: 'transcript',
-      i: sourceIdentity,
-      p: transcript.nextOffset,
-      ...(transcript.boundaryCheckpoint ? { c: transcript.boundaryCheckpoint } : {})
-    }),
     limited: transcript.limited
   }
 }
 
 /** One entry per transcript message, its tool calls folded in, so `limit` messages are at most
- *  `limit` entries and the cursor after them skips nothing. */
+ *  `limit` entries. */
 function transcriptEntries(messages: readonly NativeChatMessage[]): AgentReadEntry[] {
   const entries: AgentReadEntry[] = []
   for (const message of messages) {
@@ -270,11 +167,4 @@ function transcriptEntries(messages: readonly NativeChatMessage[]): AgentReadEnt
     }
   }
   return entries
-}
-
-function sourceChanged(orcaSessionId: string): AgentConversationRefusal {
-  return new AgentConversationRefusal(
-    CODES.sourceChanged,
-    `What agent ${orcaSessionId}'s cursor pointed into has changed (the chat was cleared or its transcript moved). Read again without --cursor.`
-  )
 }

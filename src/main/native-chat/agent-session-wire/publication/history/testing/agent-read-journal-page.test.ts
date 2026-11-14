@@ -10,17 +10,10 @@ import {
 } from '../../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentSessionJournal } from '../../../../agent-session-journal/journal-store'
 import { journalAgentReadIndex } from '../../../../agent-session-journal/projection/journal-agent-read-index'
-import { agentChatEntryOf } from '../../../../../../shared/agent-conversations/agent-chat-entries'
 import type { AgentReadEntry } from '../../../../../../shared/agent-conversations/agent-conversation-contracts'
 import { isMobileE2EETextPayloadWithinLimit } from '../../../../../runtime/rpc/mobile/e2ee/mobile-e2ee-outbound-admission'
 import { DISPATCH_REJECTED_HOST_RESTARTED } from '../../../../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
-import {
-  readAgentJournalPage,
-  type AgentReadJournalPage,
-  type AgentReadJournalPosition
-} from '../agent-read-journal-page'
-import { readAgentSessionHistory } from '../agent-session-history-page'
-import { agentSessionSendBodyFingerprint } from '../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import { readAgentJournalPage, type AgentReadJournalPage } from '../agent-read-journal-page'
 import { buildJournalQueueRow } from '../../../../agent-session-journal/queued-messages/journal-queue-events'
 import {
   append,
@@ -28,11 +21,8 @@ import {
   base,
   closeAgentReadJournals,
   HISTORY_CONTENT_BYTES,
-  identity,
-  key,
   message,
   publicEntries,
-  readForward,
   resetWork,
   seed,
   status,
@@ -94,13 +84,10 @@ it.each([1_000, 10_000])(
     expect(work.reads).toBe(15 * 4)
     expect(work.nodes).toBeLessThanOrEqual(15 * NODES_PER_READ)
 
-    const before = tail(journal, 1)
     resetWork(journal)
     await append(journal, count, message('newest reply'))
     expect(work.upkeep).toBe(1)
     expect(work.nodes).toBeLessThanOrEqual(NODES_PER_READ)
-    const next = readAgentJournalPage(journal, { limit: 3, after: before.next }, waiting)
-    expect(next).toMatchObject({ ok: true, entries: [{ text: 'newest reply' }], limited: false })
     expect(texts(tail(journal, 1))).toEqual(['newest reply'])
     expect(work.builds).toBe(0)
     expect(publicRead).not.toHaveBeenCalled()
@@ -153,7 +140,7 @@ it.each([1_000, 10_000])(
     expect(work.nodes).toBeLessThanOrEqual(3 * 2 * NODES_PER_READ)
     expect(texts(tail(journal, 2))).toEqual([`reply ${count - 2}`, 'revised newest'])
     const page = readAgentJournalPage(journal, { limit: 100 }, waiting)
-    expect(page.ok && page.entries.length).toBe(100)
+    expect(page.entries.length).toBe(100)
 
     await append(journal, 5, status('early note'))
     await append(journal, 7, message('reply 7 again'))
@@ -190,7 +177,6 @@ it('matches the public timeline through Stop notes, rejected sends, empty heads 
   )
   const sameAsPublic = () =>
     expect(readAgentJournalPage(journal, { limit: 100 }, waiting)).toMatchObject({
-      ok: true,
       entries: publicEntries(journal)
     })
   sameAsPublic()
@@ -214,22 +200,17 @@ it('matches the public timeline through Stop notes, rejected sends, empty heads 
   await journal.rejectPendingSubmissions(1, HOST_RESTARTED)
   sameAsPublic()
 
-  // A head that shows nothing new advances the cursor and returns no entry.
-  const before = tail(journal, 1)
+  // A head that shows nothing new adds no entry.
+  const before = tail(journal, 3)
   await append(journal, 200, status('working'))
-  const after = readAgentJournalPage(journal, { limit: 3, after: before.next }, waiting)
-  expect(after).toMatchObject({ ok: true, entries: [] })
-  expect(after.ok && after.next.cursor.sequence).toBeGreaterThan(before.next.cursor.sequence)
+  expect(tail(journal, 3)).toEqual(before)
 
-  // A new epoch starts a new history; the old cursor no longer reads.
+  // A new epoch starts a new history.
   const work = resetWork(journal)
   await journal.rollEpoch('corruption', 1)
   sameAsPublic()
   tail(journal, 1)
   expect(work.builds).toBe(1)
-  expect(readAgentJournalPage(journal, { limit: 3, after: before.next }, waiting)).toEqual({
-    ok: false
-  })
 })
 
 it('answers a pending prompt from the live owner, not from the index', async () => {
@@ -248,53 +229,6 @@ it('answers a pending prompt from the live owner, not from the index', async () 
   expect(read()).toMatchObject({ entries: [{ kind: 'approval', pending: false }] })
   expect(work.upkeep).toBe(0)
 })
-
-it.each([1, 2])(
-  'continues a row naming [a, b, a, c] at limit %i: each once, current content',
-  async (limit) => {
-    const mutation = (id: string, revision: number, text: string) => ({
-      kind: 'item' as const,
-      itemId: id,
-      revision,
-      body: message(text)
-    })
-    const journal = await seed(
-      1,
-      () => message('before'),
-      (seq) => [
-        {
-          ...base,
-          kind: 'lifecycle-batch',
-          seq,
-          settlementId: 'batch',
-          mutations: [
-            mutation('a', 1, 'a first'),
-            mutation('b', 1, 'b'),
-            mutation('a', 2, 'a revised'),
-            mutation('c', 1, 'c')
-          ]
-        }
-      ]
-    )
-    let after: AgentReadJournalPosition = {
-      cursor: { epoch: journal.cursor().epoch, sequence: 2 }
-    }
-    const read: string[] = []
-    for (let page = 0; page < 5; page++) {
-      const next = readAgentJournalPage(journal, { limit, after }, waiting)
-      if (!next.ok) {
-        throw new Error('expected a page')
-      }
-      read.push(...texts(next))
-      after = next.next
-      if (!next.limited) {
-        break
-      }
-    }
-    expect(read).toEqual(['a revised', 'b', 'c'])
-    expect(after).toEqual({ cursor: { epoch: journal.cursor().epoch, sequence: 3 } })
-  }
-)
 
 it.each([10_000, 100_000])(
   'delivers fifty %i-character replies in pages a remote reply can carry',
@@ -335,90 +269,6 @@ it.each([10_000, 100_000])(
     expect(textOf(latest.entries.at(-1) ?? { kind: 'error', text: '' }).startsWith('huge:')).toBe(
       true
     )
-
-    let after: AgentReadJournalPosition = {
-      cursor: { epoch: journal.cursor().epoch, sequence: 1 }
-    }
-    const seen: string[] = []
-    for (let page = 0; page < 200; page++) {
-      const next = readAgentJournalPage(journal, { limit: 50, after }, waiting)
-      if (!next.ok) {
-        throw new Error('expected a page')
-      }
-      expect(fits(next)).toBe(true)
-      seen.push(...next.entries.map((entry) => textOf(entry).split(':')[0] ?? ''))
-      after = next.next
-      if (!next.limited) {
-        break
-      }
-    }
-    expect(seen).toEqual([
-      ...Array.from({ length: 50 }, (_, index) => String(index)),
-      'big 0',
-      'big 1',
-      'big 2',
-      'huge'
-    ])
-  }
-)
-
-it.each([1, 2])(
-  'continues a row naming two ids for one send at limit %i: once, in place',
-  async (limit) => {
-    const user = (text: string): AgentJournalMessageItem => ({
-      kind: 'message',
-      role: 'user',
-      blocks: [{ type: 'text', text }]
-    })
-    const accepted = key(1)
-    const echo = key(0)
-    const journal = await seed(
-      0,
-      () => null,
-      (seq) => [
-        {
-          ...base,
-          kind: 'submission',
-          seq,
-          clientMessageId: 'send-1',
-          payloadFingerprint: agentSessionSendBodyFingerprint(identity.sessionId, user('hi')),
-          providerHandle: { kind: 'codex', threadId: 'thread-1' },
-          body: user('hi')
-        },
-        {
-          ...base,
-          kind: 'dispatch',
-          seq: seq + 1,
-          clientMessageId: 'send-1',
-          state: 'accepted',
-          providerItemId: accepted,
-          reason: null
-        },
-        {
-          ...base,
-          kind: 'lifecycle-batch',
-          seq: seq + 2,
-          settlementId: 'echoes',
-          mutations: [
-            { kind: 'item', itemId: echo, revision: 1, body: user('hi') },
-            { kind: 'item', itemId: 'b', revision: 1, body: message('b') },
-            { kind: 'item', itemId: accepted, revision: 1, body: user('hi') },
-            { kind: 'item', itemId: 'c', revision: 1, body: message('c') }
-          ]
-        }
-      ]
-    )
-    expect([journal.canonicalItemId(echo), journal.canonicalItemId(accepted)]).toEqual([
-      'orca:send-1',
-      'orca:send-1'
-    ])
-
-    const read = readForward(journal, limit, {
-      cursor: { epoch: 'epoch-1', sequence: 3 }
-    })
-
-    expect(texts(read)).toEqual(['hi', 'b', 'c'])
-    expect(read.after).toEqual({ cursor: { epoch: 'epoch-1', sequence: 4 } })
   }
 )
 
@@ -432,7 +282,7 @@ it.each([1, 2, 50])(
   'reads a reply no page can carry as the history too-large marker, at limit %i',
   async (limit) => {
     const journal = await seed(1, () => message('before'))
-    const start = { cursor: journal.cursor() }
+
     // 70,000 blocks of 64 characters: past any page, and no block can be shortened further.
     const blocks: AgentJournalItemBody = {
       kind: 'message',
@@ -464,12 +314,10 @@ it.each([1, 2, 50])(
       expect(
         isMobileE2EETextPayloadWithinLimit(JSON.stringify({ id: 'r', ok: true, result: page }))
       ).toBe(true)
-      expect(Buffer.byteLength(JSON.stringify(page.ok ? page.entries : []))).toBeLessThanOrEqual(
+      expect(Buffer.byteLength(JSON.stringify(page.entries))).toBeLessThanOrEqual(
         HISTORY_CONTENT_BYTES + 1
       )
     }
-    const label = (entry: AgentReadEntry) =>
-      JSON.stringify(entry) === JSON.stringify(TOO_LARGE) ? 'marker' : textOf(entry).split(':')[0]
 
     const oversizedLatest = tail(journal, limit)
     carried(oversizedLatest)
@@ -482,12 +330,6 @@ it.each([1, 2, 50])(
     if (limit > 1) {
       expect(latest.entries.at(-2)).toEqual(TOO_LARGE)
     }
-
-    const forward = readForward(journal, limit, start)
-    forward.pages.forEach(carried)
-    expect(forward.entries.map(label)).toEqual(['long 1', 'long 2', 'marker', 'after'])
-    expect(forward.entries.filter((entry) => 'shortened' in entry)).toHaveLength(2)
-    expect(forward.after).toEqual({ cursor: journal.cursor() })
   }
 )
 
@@ -545,7 +387,6 @@ it.each([1_000, 10_000])(
     expect(publicEntries(journal).slice(-2).map(textOf)).toEqual(['old', 'new'])
     expect(texts(tail(journal, 3))).toEqual([`reply ${count - 1}`, 'old', 'new'])
     expect(texts(tail(journal, 3))).toEqual([`reply ${count - 1}`, 'old', 'new'])
-    expect(texts(readForward(journal, 1, before.next))).toEqual(['old', 'new'])
     expect(work.builds).toBe(0)
     expect(work.upkeep).toBe(2)
   }
@@ -590,47 +431,5 @@ it.each([1_000, 10_000])(
 
     await batch('restore', [note('shape', 'shaped')])
     expect(index.noteDependencies()).toEqual({ turns: 3, notes: 3 })
-  }
-)
-
-it.each([1, 2])(
-  'reads one write forward in presented order, not stored-id order, at limit %i',
-  async (limit) => {
-    const journal = await seed(1, () => message('before'))
-    const start = { cursor: journal.cursor() }
-    await journal.appendLifecycleBatch({
-      settlementId: 'exchange',
-      fence: 1,
-      mutations: [
-        {
-          kind: 'item',
-          itemId: 'z-question',
-          body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'question' }] },
-          turnScope: AGENT_JOURNAL_THREAD_SCOPE
-        },
-        {
-          kind: 'item',
-          itemId: 'a-answer',
-          body: message('answer'),
-          turnScope: AGENT_JOURNAL_THREAD_SCOPE
-        }
-      ]
-    })
-    const history = readAgentSessionHistory(journal, {
-      sessionId: identity.sessionId,
-      direction: 'after',
-      cursor: start.cursor,
-      limit: 50
-    })
-
-    const forward = readForward(journal, limit, start)
-
-    expect(texts(forward)).toEqual(['question', 'answer'])
-    expect(publicEntries(journal).slice(-2).map(textOf)).toEqual(['question', 'answer'])
-    expect(
-      history.ok &&
-        history.page.items.flatMap((item) => agentChatEntryOf(item, waiting) ?? []).map(textOf)
-    ).toEqual(['question', 'answer'])
-    expect(forward.after).toEqual({ cursor: journal.cursor() })
   }
 )

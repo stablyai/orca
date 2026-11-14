@@ -75,12 +75,6 @@ export class JournalAgentReadIndex {
 
   constructor(private readonly journal: AgentSessionJournal) {}
 
-  /** Where the current context starts: the latest `/clear` divider's sequence, or 0. */
-  contextFloor(): number {
-    this.ensureBuilt()
-    return this.floor
-  }
-
   /** Current-context entries, newest first, rendered as the public timeline presents them; the
    *  walk stops at the latest `/clear` divider, as the chat does. */
   *newestFirst(): Generator<AgentJournalRenderItem> {

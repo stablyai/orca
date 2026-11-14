@@ -70,11 +70,9 @@ export const AGENT_CONVERSATION_HANDLERS: Record<string, CommandHandler> = {
         `--limit can be at most ${AGENT_READ_MAX_LIMIT}.`
       )
     }
-    const cursor = getOptionalStringFlag(flags, 'cursor')
     const result = await callAgentMethod<AgentReadResult>(client, 'agent.read', {
       id: getRequiredStringFlag(flags, 'id'),
-      ...(limit !== undefined ? { limit } : {}),
-      ...(cursor ? { cursor } : {})
+      ...(limit !== undefined ? { limit } : {})
     })
     printResult(result, json, formatAgentRead)
   }
@@ -157,9 +155,6 @@ function formatAgentRead(result: AgentReadResult): string {
   )
   if (lines.length === 0) {
     lines.push('Nothing new.')
-  }
-  if (result.cursor) {
-    lines.push('', `More later: --cursor ${result.cursor}`)
   }
   return lines.join('\n')
 }

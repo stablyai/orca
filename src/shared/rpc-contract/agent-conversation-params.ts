@@ -15,6 +15,5 @@ export const AgentShowParams = z.object({
 
 export const AgentReadParams = z.object({
   id: requiredString('Missing agent ID'),
-  limit: z.number().int().positive().max(AGENT_READ_MAX_LIMIT).optional(),
-  cursor: z.string().min(1).max(4096).optional()
+  limit: z.number().int().positive().max(AGENT_READ_MAX_LIMIT).optional()
 })

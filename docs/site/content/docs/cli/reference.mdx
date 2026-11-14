@@ -246,12 +246,12 @@ For long output, use cursor reads. Save `nextCursor` from one stream read, then 
 orca agent list --json
 orca agent show orca_session_id:claude_1234 --json
 orca agent read orca_session_id:claude_1234 --limit 10
-orca agent read orca_session_id:claude_1234 --cursor <cursor> --json
+orca agent read orca_session_id:claude_1234 --json
 ```
 
 Every agent, chat or terminal, has an Orca session ID (`orca_session_id:<agent>_<uuid>`), what Copy Orca Session ID copies. `agent list` lists the agents open in this host's workspaces with their IDs; a terminal agent shows none until it first reports to Orca. A chat keeps its ID across `/clear`; a terminal agent gets a new one. IDs belong to the host that runs the agent: agents on other hosts are not listed, and the output names those hosts with the `--environment` that lists them.
 
-`agent read` reads the conversation, not a screen: a chat's history, or a terminal agent's own transcript. The agent need not be running and reading never starts it. A terminal agent can be read while Orca knows where its transcript is (it is open, or asleep in a workspace; on Windows, a WSL agent only once it wakes). Pass the printed `cursor` back with `--cursor` to read only what came after. To message an agent, use `orca terminal send` or `orca orchestration send`.
+`agent read` reads the conversation, not a screen: a chat's history, or a terminal agent's own transcript. The agent need not be running and reading never starts it. A terminal agent can be read while Orca knows where its transcript is (it is open, or asleep in a workspace; on Windows, a WSL agent only once it wakes). To message an agent, use `orca terminal send` or `orca orchestration send`.
 
 ## Chats
 

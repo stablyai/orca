@@ -39,8 +39,6 @@ type SleepingAgentSighting = Pick<
 export type TerminalAgentTranscriptSource = {
   key: AgentProviderKey
   providerSession: AgentProviderSessionMetadata
-  /** The identity store generation that vouched for `key`. */
-  authority: number
 }
 
 /** Terminal agent ids are named when a row is admitted, so walks and publications only copy them. */
@@ -206,23 +204,17 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
   /** Where terminal agent `id`'s transcript is: a current row carrying the id, in any state (a read
    *  needs no running agent), else a sleeping record naming its provider key. The session id and
    *  path come from one payload, never from a pane, so a row attributed to the wrong pane still
-   *  names its own conversation. null: nothing names it now; undefined: the store cannot answer.
-   *  `known` is an earlier answer: an id is never relinked, so while its store still stands a
-   *  recheck needs no second store question. */
+   *  names its own conversation. null: nothing names it now; undefined: the store cannot answer. */
   async terminalAgentTranscriptSource(
     id: string,
-    readSleeping: () => Readonly<Record<string, SleepingAgentSighting>>,
-    known?: TerminalAgentTranscriptSource
+    readSleeping: () => Readonly<Record<string, SleepingAgentSighting>>
   ): Promise<TerminalAgentTranscriptSource | ReverseLookupUnavailable | null | undefined> {
     const authority = this.agentIdentities.authority()
-    const live = this.liveTranscriptSource(id, authority)
+    const live = this.liveTranscriptSource(id)
     if (live) {
       return live
     }
-    const linked =
-      known?.authority === authority
-        ? { key: known.key }
-        : await this.agentIdentities.providerKeyOf(id)
+    const linked = await this.agentIdentities.providerKeyOf(id)
     if (!linked || authority !== this.agentIdentities.generation) {
       return undefined
     }
@@ -238,15 +230,12 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
     }
     const record = sleepingRecordOfKey(readSleeping(), key, windows)
     if (record) {
-      return { key, providerSession: record.providerSession, authority }
+      return { key, providerSession: record.providerSession }
     }
     return null
   }
 
-  private liveTranscriptSource(
-    id: string,
-    authority: number
-  ): TerminalAgentTranscriptSource | null {
+  private liveTranscriptSource(id: string): TerminalAgentTranscriptSource | null {
     let best: { key: AgentProviderKey; row: EnrichedAgentHookEventPayload } | null = null
     for (const place of this.agentIdentities.placesOf(id)) {
       const subject = place.canonical
@@ -277,7 +266,7 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
       }
     }
     return best?.row.providerSession
-      ? { key: best.key, providerSession: best.row.providerSession, authority }
+      ? { key: best.key, providerSession: best.row.providerSession }
       : null
   }
 

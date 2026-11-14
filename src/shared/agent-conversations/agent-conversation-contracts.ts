@@ -56,8 +56,6 @@ export type AgentReadResult = {
   /** `chat`: the chat's own history; `transcript`: the terminal agent's transcript file. */
   source: 'chat' | 'transcript'
   entries: AgentReadEntry[]
-  /** Pass back as `cursor` to read only what came after this page; tied to this source. */
-  cursor: string | null
   /** Older entries exist that this page did not include. */
   limited: boolean
 }
@@ -72,7 +70,5 @@ export const AGENT_CONVERSATION_REFUSAL_CODES = {
   terminalHandle: 'agent_terminal_handle',
   invalidId: 'agent_invalid_id',
   unavailable: 'agent_unavailable',
-  noTranscript: 'agent_no_transcript',
-  sourceChanged: 'agent_read_source_changed',
-  invalidCursor: 'agent_read_cursor_invalid'
+  noTranscript: 'agent_no_transcript'
 } as const

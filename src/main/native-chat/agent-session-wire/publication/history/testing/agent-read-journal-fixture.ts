@@ -2,7 +2,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { expect, vi } from 'vitest'
+import { vi } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
@@ -28,13 +28,8 @@ import type { JournalRow } from '../../../../agent-session-journal/durable-rows/
 import { journalAgentReadIndex } from '../../../../agent-session-journal/projection/journal-agent-read-index'
 import { agentChatEntryOf } from '../../../../../../shared/agent-conversations/agent-chat-entries'
 import type { AgentReadEntry } from '../../../../../../shared/agent-conversations/agent-conversation-contracts'
-import {
-  readAgentJournalPage,
-  type AgentReadJournalPage,
-  type AgentReadJournalPosition
-} from '../agent-read-journal-page'
+import { readAgentJournalPage } from '../agent-read-journal-page'
 import { agentJournalItemForWire } from '../agent-session-item-wire-form'
-import { encodeReadCursor } from '../../../../../runtime/agent-conversations/agent-read-cursor'
 
 export const identity: AgentSessionJournalIdentity = {
   sessionId: 'agent-read-page',
@@ -124,13 +119,8 @@ export async function seed(
 export const append = (journal: AgentSessionJournal, index: number, body: AgentJournalItemBody) =>
   journal.appendItem(at(index), body, { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
 
-export const tail = (journal: AgentSessionJournal, limit: number) => {
-  const page = readAgentJournalPage(journal, { limit }, waiting)
-  if (!page.ok) {
-    throw new Error('expected a page')
-  }
-  return page
-}
+export const tail = (journal: AgentSessionJournal, limit: number) =>
+  readAgentJournalPage(journal, { limit }, waiting)
 export const textOf = (entry: AgentReadEntry) => ('text' in entry ? String(entry.text) : '')
 export const texts = (page: { entries: AgentReadEntry[] }) => page.entries.map(textOf)
 
@@ -144,28 +134,6 @@ export function resetWork(journal: AgentSessionJournal) {
   const work = journalAgentReadIndex(journal).work
   Object.assign(work, { builds: 0, builtItems: 0, upkeep: 0, nodes: 0, reads: 0 })
   return work
-}
-
-/** Pages forward from `after` until a page isn't limited. */
-export function readForward(
-  journal: AgentSessionJournal,
-  limit: number,
-  from: AgentReadJournalPosition
-) {
-  let after = from
-  const pages: Extract<AgentReadJournalPage, { ok: true }>[] = []
-  for (let page = 0; page < 20; page++) {
-    const next = readAgentJournalPage(journal, { limit, after }, waiting)
-    if (!next.ok) {
-      throw new Error('expected a page')
-    }
-    pages.push(next)
-    after = next.next
-    if (!next.limited) {
-      break
-    }
-  }
-  return { entries: pages.flatMap((page) => page.entries), pages, after }
 }
 
 export const write = (
@@ -183,71 +151,5 @@ export const write = (
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     }))
   })
-export const remove = (journal: AgentSessionJournal, ...itemIds: string[]) =>
-  journal.appendLifecycleBatch({
-    settlementId: `remove ${itemIds.join(' ')}`,
-    fence: 1,
-    mutations: itemIds.map((itemId) => ({ kind: 'tombstone' as const, itemId }))
-  })
-export const abc: [string, string][] = [
-  ['a', 'a'],
-  ['b', 'b'],
-  ['c', 'c']
-]
-
-/** Reads forward a page at a time, running `between[n]` after page n, through to the head. */
-export async function readThrough(
-  journal: AgentSessionJournal,
-  limit: number,
-  from: AgentReadJournalPosition,
-  between: (() => Promise<unknown>)[]
-) {
-  let after = from
-  const pages: Extract<AgentReadJournalPage, { ok: true }>[] = []
-  for (let page = 0; page < 40; page++) {
-    const next = readAgentJournalPage(journal, { limit, after }, waiting)
-    if (!next.ok) {
-      throw new Error('expected a page')
-    }
-    pages.push(next)
-    after = next.next
-    await between[page]?.()
-    if (!next.limited && page >= between.length) {
-      break
-    }
-  }
-  return { pages, read: pages.flatMap(texts), after }
-}
-
-/** A row written after one reply, the position before it, and its sequence. */
-export async function rowAfterReply(items: [string, string][]) {
-  const journal = await seed(1, () => message('before'))
-  const start: AgentReadJournalPosition = { cursor: journal.cursor() }
-  await write(journal, 'row', items)
-  const row = journal.cursor().sequence
-  /** The row is still there to continue, so a reset can't pass for a read. */
-  const stillThere = () => {
-    const source = journal.readSince(start.cursor)
-    expect(source.ok && source.rows.some((stored) => stored.seq === row)).toBe(true)
-  }
-  return { journal, start, stillThere }
-}
-
-/** An RPC reply as the read method sends it, with the encoded cursor. */
-export function reply(page: Extract<AgentReadJournalPage, { ok: true }>) {
-  const cursor = encodeReadCursor({
-    v: 2,
-    id: 'codex_0b8f2a4e_6c1d_4f7a_9e3b_5a2c8d1f0e47',
-    s: 'chat',
-    session: identity.sessionId,
-    journal: page.next.cursor,
-    ...(page.next.partial ? { partial: page.next.partial } : {})
-  })
-  return {
-    json: JSON.stringify({ id: 'r', ok: true, result: { entries: page.entries, cursor } }),
-    cursor
-  }
-}
-
 // The history page content budget: half the 4 MiB remote reply, less a 64 KiB envelope reserve.
 export const HISTORY_CONTENT_BYTES = 2 * 1024 * 1024 - 64 * 1024
