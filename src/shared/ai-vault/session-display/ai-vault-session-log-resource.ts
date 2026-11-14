@@ -17,6 +17,11 @@ export function rovoTranscriptPathForMetadata(filePath: string): string {
   return replaceSessionFileName(filePath, 'session_context.json')
 }
 
+/** Ante stores `events.jsonl` beside the `meta.json` that discovery scans. */
+export function anteTranscriptPathForMetadata(filePath: string): string {
+  return replaceSessionFileName(filePath, 'events.jsonl')
+}
+
 function replaceSessionFileName(filePath: string, fileName: string): string {
   const basename = getRuntimePathBasename(filePath)
   return `${filePath.slice(0, -basename.length)}${fileName}`
@@ -60,7 +65,11 @@ const logFileResolvers = {
   kimi: () => null,
   muse: jsonlLog,
   jcode: jsonLog,
-  kiro: (filePath) => kiroTranscriptPathForMetadata(filePath) || null
+  kiro: (filePath) => kiroTranscriptPathForMetadata(filePath) || null,
+  ante: (filePath) =>
+    getRuntimePathBasename(filePath) === 'meta.json'
+      ? anteTranscriptPathForMetadata(filePath)
+      : null
 } satisfies Record<AiVaultAgent, LogFileResolver>
 
 export function aiVaultSessionLogFilePath(

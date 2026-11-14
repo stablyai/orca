@@ -22,6 +22,8 @@ export type SessionSearchIndexPassOptions = {
   rows: ReadonlyMap<string, SessionSearchFileRow>
   /** Stop between files once overdue, but always read one file to avoid starving large transcripts. */
   overdue?: () => boolean
+  /** Clock for the failure-holdout backoff; the system clock when absent. */
+  nowMs?: number
 }
 
 /** Deferred candidates stay owed by their stored state; left counts backlog outside the due-row count. */
@@ -52,7 +54,13 @@ export async function runSessionSearchIndexPass(
       const path = candidate.file.path
       const row = options.rows.get(path)
       const cursor = row ? store.indexedFile(path, fileIdentity(candidate.file)) : null
-      const decision = sessionSearchReadDecision({ candidate, row, cursor, cutoffMs })
+      const decision = sessionSearchReadDecision({
+        candidate,
+        row,
+        cursor,
+        cutoffMs,
+        nowMs: options.nowMs
+      })
       if (decision === 'skip') {
         if (
           (cutoffMs === null || candidate.file.mtimeMs >= cutoffMs) &&

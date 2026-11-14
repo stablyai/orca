@@ -12,6 +12,7 @@ import type {
   SessionSearchFileState,
   SessionSearchStateCounts
 } from '../storage/session-search-store-types'
+import type { SessionSearchFailureStat } from '../storage/session-search-file-cursor'
 import type { SearchWorkerCommand, SearchWorkerResponse } from './session-search-worker-protocol'
 
 /** Scanner-side cursor facts only; SQLite and durable staging belong to the writer thread. */
@@ -142,9 +143,13 @@ export class SessionSearchWorkerStoreBase extends SessionSearchCursorSnapshot {
   reportWriteFailure(error: unknown): void {
     this.onError(error)
   }
-  setFileState(path: string, state: SessionSearchFileState, mtime?: number): void {
+  setFileState(
+    path: string,
+    state: SessionSearchFileState,
+    failure?: SessionSearchFailureStat
+  ): void {
     if (this.acceptingReads) {
-      void this.send({ op: 'state', path, state, mtime })
+      void this.send({ op: 'state', path, state, ...(failure ? { failure } : {}) })
     }
   }
   removeFile(path: string): void {

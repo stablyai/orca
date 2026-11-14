@@ -14,6 +14,7 @@ import type {
   SessionSearchFileState,
   SessionSearchStateCounts
 } from '../storage/session-search-store-types'
+import type { SessionSearchFailureStat } from '../storage/session-search-file-cursor'
 import type { SessionContentHash } from '../storage/session-search-content-hash'
 
 export type SessionSearchSnapshotRow = SessionSearchFileRow & {
@@ -40,7 +41,12 @@ export type SearchWorkerCommand =
     }
   | { op: 'finish'; handle: number; outcome: TranscriptReadOutcome; hash: SessionContentHash }
   | { op: 'discard'; handle: number }
-  | { op: 'state'; path: string; state: SessionSearchFileState; mtime?: number }
+  | {
+      op: 'state'
+      path: string
+      state: SessionSearchFileState
+      failure?: SessionSearchFailureStat
+    }
   | { op: 'remove'; path: string }
   | { op: 'purge'; cutoff: number | null }
   | { op: 'sync' }

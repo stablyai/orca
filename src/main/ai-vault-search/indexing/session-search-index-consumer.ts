@@ -11,7 +11,7 @@ import {
   type TranscriptReadStart
 } from '../../ai-vault/transcripts/session-transcript-consumers'
 import type { SessionFileCandidate } from '../../ai-vault/session-scanner-types'
-import { fileIdentity } from '../storage/session-search-file-cursor'
+import { fileIdentity, sessionSearchFailureStat } from '../storage/session-search-file-cursor'
 import type { SessionSearchFileWrite } from '../storage/session-search-index-writer'
 import type {
   SessionSearchResumableCursor,
@@ -43,7 +43,8 @@ export const SELF_CONTAINED_TRANSCRIPT_AGENTS = {
   kimi: false, // agents/main/wire.jsonl supplies messages.
   muse: true,
   jcode: true,
-  kiro: false // A .jsonl sidecar supplies messages.
+  kiro: false, // A .jsonl sidecar supplies messages.
+  ante: false // meta.json supplies identity; events.jsonl supplies messages.
 } satisfies Record<AiVaultAgent, boolean>
 
 /** Proven index gaps need whole reads; declined transfers leave committed coverage unchanged. */
@@ -186,8 +187,10 @@ class SessionSearchReadConsumer implements TranscriptReadConsumer {
       this.store.writeCommitted(candidate)
       return
     }
-    // Stamp and count repeated read failures so unchanged unreadable files can be held out.
-    this.store.setFileState(candidate.file.path, 'failed', candidate.file.mtimeMs)
+    // Stamp and count repeated read failures so unchanged unreadable files can be held out. The
+    // sidecar travels with the stamp: a transcript that grows past a failed read must retry even
+    // when the metadata mtime stays put.
+    this.store.setFileState(candidate.file.path, 'failed', sessionSearchFailureStat(candidate.file))
   }
 }
 

@@ -60,6 +60,8 @@ function isolatedScanRoots(root: string) {
     ompSessionsDir: join(root, 'omp-sessions'),
     jcodeSessionsDir: join(root, 'jcode-sessions'),
     kiroSessionsDir: join(root, 'kiro-sessions'),
+    // Without this the ante source falls back to the real ~/.ante/sessions and fills limit: 50.
+    anteSessionsDir: join(root, 'ante-sessions'),
     primeAgentSessionsDir: join(root, 'prime-agent-sessions')
   }
 }

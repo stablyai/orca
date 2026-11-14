@@ -16,6 +16,7 @@ import {
 } from '../discovery/session-search-scan-roots'
 import { SessionSearchDirectoryListings } from '../discovery/session-search-directory-listings'
 import { SessionSearchStore } from '../storage/session-search-store'
+import { sessionSearchFailureStat } from '../storage/session-search-file-cursor'
 import { registerSessionSearchIndexConsumer } from './session-search-index-consumer'
 import { runSessionSearchPass } from './session-search-pass'
 import {
@@ -130,7 +131,7 @@ it('indexes a readable alias despite a failed preferred open and an overdue pass
   expect(store.coversTranscript(candidate)).toBe(true)
   // Hold out the failed real path without suppressing the committed managed copy.
   for (let i = 0; i < 3; i++) {
-    store.setFileState(real, 'failed', discovered.candidates[0].file.mtimeMs)
+    store.setFileState(real, 'failed', sessionSearchFailureStat(discovered.candidates[0].file))
   }
   io.paths = []
   await sweep()

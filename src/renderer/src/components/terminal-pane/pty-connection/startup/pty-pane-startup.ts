@@ -3,10 +3,10 @@ import type { EventProps } from '../../../../../../shared/telemetry-event-classi
 import type { StartupCommandDelivery } from '../../../../../../shared/agent-launch/startup/codex-startup-delivery'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type {
-  SavedResumeStartupSource,
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SavedResumeStartupSource } from '../../../../../../shared/agent-session/lifecycle/saved-resume-startup-source'
 import type { SessionOptionValue } from '../../../../../../shared/native-chat/input/native-chat-session-options'
 import type { AgentPaneLaunchRequest } from '../../../../../../shared/agent-launch/contracts/agent-pane-launch-request'
 
