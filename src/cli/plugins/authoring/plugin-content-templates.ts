@@ -5,7 +5,7 @@ import {
   readme,
   type PluginTemplate,
   type PluginTemplateInput
-} from './plugin-template-files'
+} from '../../../shared/plugins/authoring/plugin-template-files'
 
 // Content-only templates: execution "data", so loading them never needs approval.
 

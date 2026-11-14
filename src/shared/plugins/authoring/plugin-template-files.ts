@@ -1,7 +1,7 @@
 /** File helpers shared by the `orca plugin create` templates. */
 
-import { localPluginPublisher } from '../../../shared/plugins/installation/plugin-publisher-derivation'
-import { PLUGIN_DERIVED_PUBLISHER_SINCE } from '../../../shared/plugins/manifest/plugin-schema-field-docs'
+import { localPluginPublisher } from '../installation/plugin-publisher-derivation'
+import { PLUGIN_DERIVED_PUBLISHER_SINCE } from '../manifest/plugin-schema-field-docs'
 
 /** `publisher` is deprecated: set only for authors who still support Orca that requires it. */
 export type PluginTemplateInput = { publisher?: string; id: string; name: string }
@@ -17,6 +17,14 @@ const ENGINE = `>=${PLUGIN_DERIVED_PUBLISHER_SINCE}`
 
 export function pluginTemplateKey(input: PluginTemplateInput): string {
   return `${localPluginPublisher(input.publisher)}.${input.id}`
+}
+
+/** A manifest id from a display or folder name: lowercase words joined by `-`. */
+export function pluginIdFromName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
 }
 
 export function json(value: unknown): string {

@@ -258,6 +258,26 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   ...PLUGIN_HANDLER_GROUPS,
   {
+    name: 'theme',
+    keys: [
+      'theme show',
+      'theme tokens',
+      'theme history',
+      'theme reset',
+      'theme edit',
+      'theme set',
+      'theme adjust',
+      'theme check',
+      'theme undo',
+      'theme redo',
+      'theme shot',
+      'theme apply',
+      'theme discard',
+      'theme export'
+    ],
+    load: async () => (await import('../theme/theme-commands.js')).THEME_HANDLERS
+  },
+  {
     name: 'skills',
     keys: ['skills list', 'skills get', 'skills install', 'skills update'],
     load: async () => (await import('../skills/skills.js')).SKILL_HANDLERS

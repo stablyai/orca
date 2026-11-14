@@ -7,6 +7,10 @@ import { useSplitDividerSetting } from '@/hooks/use-split-divider-setting'
 import { rebuildAllTerminalWebglRenderers } from '@/lib/pane-manager/pane-manager-registry'
 import { applyDocumentTheme, applyPluginAppTheme } from './appearance/document-theme'
 import { applyThemeBackground } from './appearance/theme-background'
+import {
+  reportThemeStudioPaint,
+  useThemeStudioAppTheme
+} from './appearance/use-theme-studio-app-theme'
 import { syncThemeBackgroundVideo } from './appearance/theme-background-video'
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion'
 import { useWindowActive } from '../hooks/use-window-active'
@@ -80,15 +84,17 @@ export function useDocumentAppearance(): void {
   // Why find by id: a disabled or removed plugin drops out of the list, which restores built-in colors.
   const pluginTheme =
     pluginThemes.find((entry) => entry.id === selected && (entry.base === 'dark') === dark) ?? null
-  const appTheme = matchTerminal ? terminalTheme : pluginTheme
+  // An `orca theme` draft paints over the selected theme without touching settings.
+  const { paint: draftTheme, preview: draftPreview } = useThemeStudioAppTheme(dark)
+  const appTheme = draftTheme ?? (matchTerminal ? terminalTheme : pluginTheme)
   const editorTheme = findCodeEditorTheme(
     useAppStore((s) => (dark ? s.settings?.editorThemeDark : s.settings?.editorThemeLight)),
     pluginThemes
   )
-  // Why Match Terminal needn't wait: it derives from settings alone, not the plugin list.
+  // Why Match Terminal and drafts needn't wait: they don't come from the plugin list.
   const pluginThemesLoaded = usePluginThemeStore((s) => s.loaded)
   const appPainted = useRef<Readonly<Record<string, string>>>({})
-  const ready = matchTerminal || pluginThemesLoaded
+  const ready = draftTheme !== null || matchTerminal || pluginThemesLoaded
   usePluginTerminalPaletteRefresh()
   usePluginAppThemeSync()
   useSplitDividerSetting()
@@ -107,7 +113,8 @@ export function useDocumentAppearance(): void {
   }, [surfaceOpacity])
   // Why re-parse: the theme list keeps the registration as received, and a newer host may send
   // a background this build cannot paint; it must drop to no image, never reach CSS.
-  const registeredBackground = pluginTheme?.background
+  // Why none under a draft: a kept draft has no image, so the preview must not show one.
+  const registeredBackground = draftTheme ? undefined : pluginTheme?.background
   const themeBackground = useMemo(
     () => tolerantPluginThemeBackgroundRegistration.parse(registeredBackground),
     [registeredBackground]
@@ -130,9 +137,23 @@ export function useDocumentAppearance(): void {
     // Why wait for the list: until it loads, the startup cache is still the right paint.
     // Why theme too: contrast is checked against the built-ins of the current mode.
     if (ready && theme) {
-      appPainted.current = applyPluginAppTheme(appTheme)
+      // Why no cache for a draft: a launch paints the user's own theme until main re-sends it.
+      appPainted.current = applyPluginAppTheme(appTheme, draftTheme ? { storage: null } : {})
     }
-  }, [appTheme, ready, theme, dark])
+  }, [appTheme, draftTheme, ready, theme, dark])
+
+  // Why after the paint above: the report says what that paint actually left unpainted.
+  useEffect(() => {
+    if (ready && theme && draftPreview) {
+      reportThemeStudioPaint(
+        draftPreview,
+        dark ? 'dark' : 'light',
+        draftTheme?.tokens ?? null,
+        appPainted.current,
+        editorTheme !== null
+      )
+    }
+  }, [draftPreview, draftTheme, editorTheme, ready, theme, dark])
 
   const sidebarTint = useAppStore(
     useShallow((s) =>

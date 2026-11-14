@@ -25,4 +25,6 @@ export type PluginAppearanceSettings = {
   /** Palettes of the selected plugin terminal themes, so main, headless serve and relays
    *  resolve them without the plugin loaded. Only selected themes are kept. */
   terminalPluginPalettes?: TerminalPluginPalette[]
+  /** Whether agents may preview and save themes through `orca theme`; unset means yes. */
+  allowAgentThemeEdits?: boolean
 }

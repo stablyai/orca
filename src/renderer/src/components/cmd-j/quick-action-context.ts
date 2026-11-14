@@ -19,6 +19,7 @@ export type CmdJUnavailableReason =
   | 'ssh-disconnected'
   | 'no-active-group'
   | 'no-active-chat'
+  | 'no-theme-draft'
   | 'client-action-unsupported'
 
 export type CmdJQuickActionAvailability =
@@ -242,6 +243,12 @@ export function getUnavailableQuickActionMessage(
       return translate(
         'auto.components.cmdJ.quickActionUnavailable.noMovableChat',
         'Can’t run “{{action}}” — no movable chat is active.',
+        options
+      )
+    case 'no-theme-draft':
+      return translate(
+        'auto.components.cmdJ.quickActionUnavailable.noThemeDraft',
+        'Can’t run “{{action}}” — no theme preview is open.',
         options
       )
     case 'client-action-unsupported':

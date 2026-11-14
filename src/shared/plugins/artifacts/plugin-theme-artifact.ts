@@ -165,7 +165,7 @@ const NON_COLOR_KEYWORDS = new Set([
 
 // Why: values land in CSS custom properties, so only color syntax is accepted: hex, a color
 // function, or a bare color name. The renderer also requires CSS.supports('color', value).
-function isThemeColorValue(value: string): boolean {
+export function isThemeColorValue(value: string): boolean {
   const normalized = value.trim().toLowerCase()
   return (
     normalized.length <= 64 &&
@@ -206,7 +206,7 @@ const tokenColorRuleFields = {
 }
 const tokenColorRuleSchema = z.strictObject(tokenColorRuleFields)
 const MAX_TOKEN_COLOR_RULES = 512
-const tokenColorsSchema = z
+export const tokenColorsSchema = z
   .array(tokenColorRuleSchema)
   .max(MAX_TOKEN_COLOR_RULES)
   .meta(

@@ -59,6 +59,7 @@ import { createWebLinkPreviewApi } from './preload-api/web-link-preview-api'
 import { createWebWorkspaceSessionApi } from './preload-api/web-workspace-session-api'
 import { createWorktreesApi } from './preload-api/web-worktrees-api'
 import { readStoredWebRuntimeEnvironment } from './web-runtime-environment'
+import { noopUnsubscribe } from './preload-api/web-storage'
 
 export function installWebPreloadApi(): void {
   webRuntimeState.activeEnvironment = readStoredWebRuntimeEnvironment()
@@ -84,6 +85,15 @@ function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins'
     keybindings: createWebKeybindingsApi(),
     ui: createWebUiApi(),
     plugins: createWebPluginsApi(),
+    // Drafts paint only in the desktop window that `orca theme` reaches.
+    themeStudio: {
+      current: async () => null,
+      onPreview: () => noopUnsubscribe,
+      report: () => undefined,
+      onRequest: () => noopUnsubscribe,
+      reply: () => undefined,
+      userAction: () => undefined
+    },
     ...createWebDiagnosticsApi(),
     ...createWebWorkspaceSessionApi(),
     ...createWebOnboardingApi(),

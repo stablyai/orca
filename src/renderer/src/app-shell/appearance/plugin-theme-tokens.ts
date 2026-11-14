@@ -72,22 +72,52 @@ function themeTokenResolver(
   return effective
 }
 
+/** Why the contrast check left a theme token unpainted. */
+export type PluginThemeTokenDrop =
+  | { kind: 'invalid'; token: string; value: string }
+  | { kind: 'border-alpha'; token: string; value: string; alpha: number; min: number }
+  | {
+      kind: 'contrast'
+      dropped: readonly string[]
+      surface: string
+      text: string
+      /** Null when either side is translucent, which the check refuses outright. */
+      ratio: number | null
+      min: number
+      surfaceColor: Rgba
+      textColor: Rgba
+    }
+  | {
+      kind: 'ring'
+      token: string
+      surface: string
+      ratio: number
+      min: number
+      ringColor: Rgba
+      surfaceColor: Rgba
+    }
+
 /**
- * The plugin tokens that are safe to paint over the built-in ones for the theme's base.
- * Checks run on the effective set (plugin values, else what main.css derives from them, else
- * built-in), and dropping a token can expose a value that breaks another pair, so checks repeat
- * until nothing changes. Dropped tokens keep their built-in values.
+ * The plugin tokens that are safe to paint over the built-in ones for the theme's base, and why
+ * each other one was dropped. Checks run on the effective set (plugin values, else what main.css
+ * derives from them, else built-in), and dropping a token can expose a value that breaks another
+ * pair, so checks repeat until nothing changes. Dropped tokens keep their built-in values.
  */
-export function safePluginThemeTokens(
+export function evaluatePluginThemeTokens(
   tokens: Readonly<Record<string, string>>,
   base: 'light' | 'dark',
   builtIns: Readonly<Record<string, string>>,
   probe: ColorProbe
-): Record<string, string> {
+): { safe: Record<string, string>; drops: PluginThemeTokenDrop[] } {
+  const drops: PluginThemeTokenDrop[] = []
   const accepted = new Map<string, Rgba>()
   for (const [token, value] of Object.entries(tokens)) {
     const color = probe(value)
-    if (color && !(BORDERS.includes(token) && color[3] < MIN_BORDER_ALPHA)) {
+    if (!color) {
+      drops.push({ kind: 'invalid', token, value })
+    } else if (BORDERS.includes(token) && color[3] < MIN_BORDER_ALPHA) {
+      drops.push({ kind: 'border-alpha', token, value, alpha: color[3], min: MIN_BORDER_ALPHA })
+    } else {
       accepted.set(token, color)
     }
   }
@@ -115,12 +145,26 @@ export function safePluginThemeTokens(
         rule.noWorseThanOver && beneath?.[3] === 1 && textColor?.[3] === 1
           ? Math.min(rule.min, contrastRatio(beneath, textColor))
           : rule.min
-      if (
-        surfaceColor &&
-        textColor &&
-        (surfaceColor[3] < 1 || textColor[3] < 1 || contrastRatio(surfaceColor, textColor) < min)
-      ) {
-        changed = drop(...dropped) || changed
+      if (!surfaceColor || !textColor) {
+        continue
+      }
+      const ratio =
+        surfaceColor[3] < 1 || textColor[3] < 1 ? null : contrastRatio(surfaceColor, textColor)
+      if (ratio === null || ratio < min) {
+        const owned = dropped.filter((token) => accepted.has(token))
+        if (drop(...dropped)) {
+          changed = true
+          drops.push({
+            kind: 'contrast',
+            dropped: owned,
+            surface: rule.surface,
+            text: rule.text,
+            ratio,
+            min,
+            surfaceColor,
+            textColor
+          })
+        }
       }
     }
     for (const [ring, surface] of RINGS) {
@@ -129,15 +173,35 @@ export function safePluginThemeTokens(
         continue
       }
       const surfaceColor = effective(surface)
-      if (
-        surfaceColor &&
-        contrastRatio(over(ringColor, surfaceColor), surfaceColor) < MIN_RING_CONTRAST
-      ) {
+      const ratio = surfaceColor ? contrastRatio(over(ringColor, surfaceColor), surfaceColor) : null
+      if (surfaceColor && ratio !== null && ratio < MIN_RING_CONTRAST) {
         changed = drop(ring) || changed
+        drops.push({
+          kind: 'ring',
+          token: ring,
+          surface,
+          ratio,
+          min: MIN_RING_CONTRAST,
+          ringColor,
+          surfaceColor
+        })
       }
     }
   }
-  return Object.fromEntries(Object.entries(tokens).filter(([token]) => accepted.has(token)))
+  return {
+    safe: Object.fromEntries(Object.entries(tokens).filter(([token]) => accepted.has(token))),
+    drops
+  }
+}
+
+/** The plugin tokens that are safe to paint; see evaluatePluginThemeTokens. */
+export function safePluginThemeTokens(
+  tokens: Readonly<Record<string, string>>,
+  base: 'light' | 'dark',
+  builtIns: Readonly<Record<string, string>>,
+  probe: ColorProbe
+): Record<string, string> {
+  return evaluatePluginThemeTokens(tokens, base, builtIns, probe).safe
 }
 
 export const HOST_PILL_OUTLINE_MIX_TOKEN = '--worktree-host-pill-outline-mix'
