@@ -11,7 +11,7 @@ import type React from 'react'
 import type { CSSProperties } from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { TooltipProvider } from '../ui/tooltip'
-import { ActivityBarButton } from '../right-sidebar/activity-bar-buttons'
+import { ActivityBarButton } from '../right-sidebar/activity-bar/activity-bar-buttons'
 import { ACTIVE_TAB_INDICATOR_CLASSES, getTabRootStateClasses } from './drop-indicator'
 
 type ThemeVariables = CSSProperties & Record<`--${string}`, string>
