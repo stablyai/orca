@@ -224,7 +224,7 @@ export class PRRefreshQueueDrainer {
             this.queue,
             next.hosted ? { retained: producer.retained } : producer,
             Boolean(next.hosted) || this.visibility.has(next.key),
-            this.queue.ownsRequest(next.key, requestSequence)
+            () => this.queue.ownsRequest(next.key, requestSequence)
           )
           this.events.observe(next.candidate, settled, aliases)
           // A host job's read also plans the visible row of the same request, under its own claim.

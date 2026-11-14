@@ -535,3 +535,78 @@ it('a watch that waited for quota while Off slowed it to Minimal reads at the Mi
   await vi.advanceTimersByTimeAsync(1)
   expect(readsOf('watched')).toBe(2)
 })
+
+it('retiming an old HEAD failure cannot delay the newer HEAD return under Off', async () => {
+  const { coordinator, switchTo } = await load()
+  const target = makeCandidate({ branch: 'target', linkedPRNumber: 7, currentHeadOid: 'head-a' })
+  const older = Promise.withResolvers<PRRefreshOutcome>()
+  const newer = Promise.withResolvers<PRRefreshOutcome>()
+  const observed: PRRefreshOutcome[] = []
+  coordinator.addPRRefreshOutcomeObserver((_, outcome) => observed.push(outcome))
+  provider.resolve.mockImplementationOnce(() => older.promise)
+  coordinator.reportVisiblePRRefreshCandidates([target], 1, 1)
+  await vi.advanceTimersByTimeAsync(0)
+
+  await vi.advanceTimersByTimeAsync(1_000)
+  const current = { ...target, currentHeadOid: 'head-b' }
+  coordinator.reportVisiblePRRefreshCandidates([current], 2, 1)
+  provider.resolve.mockImplementationOnce(() => newer.promise)
+  const manual = coordinator.refreshPRNow(current, 'manual')
+  await vi.advanceTimersByTimeAsync(0)
+  await vi.advanceTimersByTimeAsync(1_000)
+  older.resolve(failed())
+  await vi.advanceTimersByTimeAsync(0)
+  const errorsBeforeRetime = observed.filter((outcome) => outcome.kind === 'upstream-error').length
+  expect(errorsBeforeRetime).toBe(1)
+  await switchTo('off', 3_500)
+  await vi.advanceTimersByTimeAsync(500)
+  newer.resolve({
+    kind: 'found',
+    fetchedAt: 4_000,
+    pr: makePR({
+      number: 7,
+      title: 'newer',
+      headSha: 'head-b',
+      state: 'merged',
+      checksStatus: 'success'
+    })
+  })
+  expect(await manual).toMatchObject({ fetchedAt: 4_000, pr: { title: 'newer' } })
+  expect(deliveredTo('target')).toBe('newer')
+  coordinator.clearVisiblePRRefreshWindow(1)
+  await vi.advanceTimersByTimeAsync(65_000 - Date.now())
+  provider.resolve.mockImplementationOnce(async () => ({
+    kind: 'found',
+    fetchedAt: Date.now(),
+    pr: makePR({
+      number: 7,
+      title: 'returned',
+      headSha: 'head-b',
+      state: 'merged',
+      checksStatus: 'success'
+    })
+  }))
+  coordinator.reportVisiblePRRefreshCandidates(
+    [
+      {
+        ...current,
+        cachedFetchedAt: 4_000,
+        cachedHeadOid: 'head-b',
+        cachedHasPR: true,
+        cachedPRState: 'merged',
+        cachedChecksStatus: 'success'
+      }
+    ],
+    3,
+    1
+  )
+  await vi.advanceTimersByTimeAsync(0)
+  expect(deliveredTo('target')).toBe('returned')
+  const delivered = coordinatorMocks.sendToTrustedUIRendererMock.mock.calls
+    .map(([, event]) => event)
+    .findLast((event) => event.outcome?.pr?.title === 'returned')
+  expect(delivered?.outcome.fetchedAt).toBe(65_000)
+  expect(observed.filter((outcome) => outcome.kind === 'upstream-error')).toHaveLength(
+    errorsBeforeRetime
+  )
+})

@@ -189,7 +189,15 @@ export class PRRefreshQueueScheduler {
       candidate,
       prepared,
       this.queue,
-      producer
+      producer,
+      true,
+      () => {
+        const current = this.visibility.shown(key)
+        return (
+          current !== undefined &&
+          prBranchReadKeys(...candidateReadRequest(current, 'visible'))[1] === prepared.key
+        )
+      }
     )
     // A rate limit the read reported holds the row's retries, as a local read's would.
     this.retry.noteManualGate(key, settled)

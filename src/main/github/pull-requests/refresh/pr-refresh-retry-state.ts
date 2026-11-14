@@ -27,7 +27,7 @@ type ErrorBackoff = {
    *  and delivery all read this; `retime` re-plans it and returns the key's gate, or null once a
    *  newer read replaced it. */
   settled?: PRRefreshOutcome
-  retime?: () => { gate: number; timed: boolean } | null
+  retime?: () => { gate: number; timed: boolean; ownsRequest: boolean } | null
   /** Whether the settled failure still owns its request: no newer provider read started, its scope
    *  is unchanged and the exact cache still holds the error it scheduled. */
   current?: () => boolean
@@ -180,7 +180,9 @@ export class PRRefreshRetryState {
         revoke(state)
       } else if (plan !== undefined) {
         const gate = Math.max(plan.gate, this.manualGateUntil(key))
-        queue.protectBackgroundUntil(key, gate)
+        if (plan.ownsRequest) {
+          queue.protectBackgroundUntil(key, gate)
+        }
         if (plan.timed) {
           retries.set(key, gate)
         }
@@ -244,7 +246,7 @@ export class PRRefreshRetryState {
     queue: PRRefreshQueue,
     producer: Parameters<PRReadSettlement>[1] = { retained: true },
     demand = true,
-    ownsRequest = true
+    ownsRequest: () => boolean = () => true
   ): PRRefreshOutcome {
     if (outcome.kind !== 'upstream-error' || !demand || (!producer.retained && !producer.hold)) {
       return outcome
@@ -298,10 +300,11 @@ export class PRRefreshRetryState {
       state.settled = next
       return {
         gate: Math.max(this.errorGateAt(key, candidate, planned), rateLimitedUntil),
-        timed: Number.isFinite(planned)
+        timed: Number.isFinite(planned),
+        ownsRequest: ownsRequest()
       }
     }
-    if (ownsRequest) {
+    if (ownsRequest()) {
       queue.protectBackgroundUntil(
         key,
         Math.max(this.errorGateAt(key, candidate, retryAt), rateLimitedUntil)
