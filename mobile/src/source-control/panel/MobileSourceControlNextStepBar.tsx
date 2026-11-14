@@ -19,11 +19,11 @@ import { composerInputStyles } from '../../components/composer-input/composer-in
 import { KEYBOARD_COMMIT_BAR_CLEARANCE } from '../changes/mobile-source-control-screen-state'
 import type { MobileSourceControlState } from '../use-mobile-source-control-state'
 import type { MobileSourceControlPrimaryAction } from '../workflows/mobile-source-control-primary-action'
-import { AgentLaunchNotice } from '../../components/AgentLaunchNotice'
-import { ConfirmModal } from '../../components/ConfirmModal'
+import { AgentLaunchNotice } from '../../agents/presentation/AgentLaunchNotice'
+import { ConfirmModal } from '../../components/sheets/ConfirmModal'
 import type { MobileMergeConfirm } from './use-mobile-source-control-next-step'
 import type { MobileAgentLaunchAvailability } from '../../session/agent-launch/mobile-agent-launch-availability'
-import type { PrAiTriageLaunchNotice } from '../review/use-mobile-pr-ai-triage'
+import type { PrAiTriageLaunchNotice } from '../review/agent-launch/use-mobile-pr-ai-triage'
 import type {
   MobileNextStepBarView,
   MobileNextStepIcon,

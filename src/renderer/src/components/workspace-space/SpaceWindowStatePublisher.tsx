@@ -1,13 +1,13 @@
 import { useEffect } from 'react'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import {
   pickSpaceWindowState,
   spaceWindowStateChanged,
   type SpaceWindowState
 } from './space-window-state'
-import { revealWorkspaceSpaceChange } from '../status-bar/workspace-space-open-change'
-import { refreshLinkedIssueForWorktree } from '../status-bar/workspace-space-issue-freshness'
+import { revealWorkspaceSpaceChange } from '../status-bar/workspace-storage/table/workspace-space-open-change'
+import { refreshLinkedIssueForWorktree } from '../status-bar/workspace-storage/decisions/workspace-space-issue-freshness'
 
 export function SpaceWindowStatePublisher(): null {
   useEffect(() => {

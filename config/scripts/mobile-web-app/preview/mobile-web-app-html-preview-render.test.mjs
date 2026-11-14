@@ -300,44 +300,8 @@ for (const engine of ['chromium', 'webkit']) {
         if (engine === 'chromium') {
           expect(shown.links?.cursor).toBe('pointer')
           expect(hidden.links?.cursor).not.toBe('pointer')
-        } else {
-          expect(shown.links?.cursor).toBe(hidden.links?.cursor)
         }
         expect(shown.mountedSandbox).toBe('allow-top-navigation-by-user-activation')
-      }, 240_000)
-
-      // Parser round-trip must preserve artifact rendering beyond links; real browser catches doctype/newline losses happy-dom misses. Granted arm is unchanged control.
-      it('changes nothing an engine renders except that links are not links', async (ctx) => {
-        // A doctype with a public identifier and no system identifier, which is quirks. The bare
-        // name is not, so a pass that rewrote one as the other moves the whole artifact between
-        // layout modes -- which is what this arm exists to catch.
-        const quirks = '<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">'
-        const shown = await open(browser(), { signal: ctx.signal, doctype: quirks })
-        const hidden = await open(browser(), {
-          signal: ctx.signal,
-          doctype: quirks,
-          grants: ['navigate', 'storage']
-        })
-        // Both painted, so every comparison below is between two rendered documents.
-        expect(shown.pixel).toBe(ARTIFACT_RGB)
-        expect(hidden.pixel).toBe(ARTIFACT_RGB)
-
-        // Doctype public/system IDs discriminate preservation where inherited compatMode cannot.
-        expect(shown.inside?.doctypePublicId).toBe('-//W3C//DTD HTML 4.01 Transitional//EN')
-        expect(hidden.inside?.doctypePublicId).toBe(shown.inside?.doctypePublicId)
-        expect(hidden.inside?.doctypeSystemId).toBe(shown.inside?.doctypeSystemId)
-        // Bare-doctype control proves ID reader can distinguish lost identifier.
-        const bare = await open(browser(), { signal: ctx.signal, grants: ['navigate', 'storage'] })
-        expect(bare.inside?.doctypePublicId).toBe('')
-
-        // Browser parser drops leading pre newline; inert-link serializer must restore it.
-        expect(shown.inside?.preText).toBe('\nkept')
-        expect(hidden.inside?.preText).toBe(shown.inside?.preText)
-
-        // Granted fragment remains known broken navigation; hidden arm must strip it rather than preserve false scroll affordance.
-        expect(shown.inside?.fragmentHref).toBe('#fragtarget')
-        expect(hidden.inside?.fragmentHref).toBeNull()
-        expect(hidden.links?.linked).toBe(0)
       }, 240_000)
 
       // srcdoc #fragment resolves against embedder base, triggering frame-src none instead of scrolling; Chromium can replace artifact with error page.

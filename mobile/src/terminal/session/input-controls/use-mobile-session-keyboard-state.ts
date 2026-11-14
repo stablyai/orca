@@ -6,7 +6,7 @@ import {
 import { useTerminalViewportRefit } from '../../viewport/terminal-viewport-refit'
 import { removeCustomKey, type CustomKey } from '../../key-input/terminal-custom-keys'
 import { useWorkspaceExecutionHost } from '../../../navigation/workspace-execution-host'
-import { writeLastVisitedWorktree } from '../../../worktree/last-visited-worktree-by-host'
+import { writeLastVisitedWorktree } from '../../../worktree/navigation/last-visited-worktree-by-host'
 import type { MobileSessionLifecycleModel } from '../../../session/use-mobile-session-lifecycle'
 
 export type MobileSessionKeyboardScope = Pick<

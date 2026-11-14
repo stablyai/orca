@@ -9,17 +9,17 @@ import type { ProviderAccountsSnapshot } from '@/runtime/provider-accounts/obser
 import {
   buildClaudeStatusSwitchGroups,
   normalizeClaudeStatusRuntimeTarget
-} from '../status-bar/status-bar-claude-accounts'
+} from '../status-bar/accounts/status-bar-claude-accounts'
 import {
   buildCodexStatusSwitchGroups,
   normalizeCodexStatusRuntimeTarget
-} from '../status-bar/status-bar-codex-accounts'
+} from '../status-bar/accounts/status-bar-codex-accounts'
 import { translate } from '@/i18n/i18n'
-import { USAGE_PROVIDER_KEYS } from '../status-bar/owner-usage-rate-limits'
+import { USAGE_PROVIDER_KEYS } from '../status-bar/usage/owner-usage-rate-limits'
 import {
   getVisibleUsageProvider,
   type UsageProviderSettings
-} from '../status-bar/status-bar-provider-visibility'
+} from '../status-bar/composition/status-bar-provider-visibility'
 
 export type UsageAccountQuotaRow = {
   key: string

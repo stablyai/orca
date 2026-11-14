@@ -1,6 +1,9 @@
 import * as z from 'zod'
 import { salvagedOptional, salvagingArray } from '../../../../src/shared/zod-salvage'
-import { prFlag, prText } from '../../source-control/review/github-pr-entity-reply-schema'
+import {
+  prFlag,
+  prText
+} from '../../source-control/review/github-operations/github-pr-entity-reply-schema'
 import { taskMutationEnvelopeSchema } from '../task-provider-entity-reply-schema'
 
 const GITLAB_TODO_STATE = ['pending', 'done'] as const
