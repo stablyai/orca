@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { CatalogModel } from '../../../../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
 import { readClaudeSessionOptionsFromTerminalScreen } from './claude-terminal-session-options'
 
 const OPTION_LESS_MODEL_60_COLS = [
@@ -40,5 +41,27 @@ describe('Claude terminal session option detection', () => {
     expect(readClaudeSessionOptionsFromTerminalScreen(OPTION_LESS_MODEL_60_COLS)).toEqual({
       model: 'haiku'
     })
+  })
+
+  it('matches a dotted banner version whole, ignoring the listed vendor prefix', () => {
+    // Discovery labels alias-resolved rows by their versioned id, vendor included.
+    const models: CatalogModel[] = [
+      { id: 'claude-opus-5-5', label: 'Claude Opus 5.5', options: [] },
+      { id: 'claude-opus-5', label: 'Opus 5', options: [] },
+      { id: 'claude-sonnet-5', label: 'Sonnet 5', options: [] }
+    ]
+    const read = (descriptor: string) =>
+      readClaudeSessionOptionsFromTerminalScreen(
+        [
+          ' ▐▛███▜▌   Claude Code v2.1.325',
+          `▝▜█████▛▘  ${descriptor}`,
+          '  ▘▘ ▝▝    ~/project'
+        ].join('\n'),
+        models
+      )
+    expect(read('Opus 5.5 · API Usage Billing')).toEqual({ model: 'claude-opus-5-5' })
+    expect(read('Opus 5 · API Usage Billing')).toEqual({ model: 'claude-opus-5' })
+    // An unlisted point release falls back to its family rather than an older listed release.
+    expect(read('Sonnet 5.5 · API Usage Billing')).toEqual({ model: 'sonnet' })
   })
 })
