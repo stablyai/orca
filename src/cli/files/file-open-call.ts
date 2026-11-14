@@ -1,6 +1,6 @@
 import type { RuntimeFileOpenResult } from '../../shared/file-access/runtime-editor-file-open'
 import type { HandlerContext } from '../dispatch/dispatch'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
 
 const NO_APP_WINDOW_MESSAGE =

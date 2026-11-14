@@ -27,7 +27,7 @@ import type { CodexAppServerConnection } from '../../app-server/codex-app-server
 import { isCodexAppServerUnsupportedError } from '../../app-server/codex-app-server-session'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { readCodexTurnId } from '../../app-server/codex-structured-thread-facts'
-import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
 import {
   codexRunningOrOpeningTurn,

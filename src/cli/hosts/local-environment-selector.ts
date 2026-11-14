@@ -1,6 +1,6 @@
 import { normalizeTypedName } from '../../shared/typed-name-normalization'
 import type { RuntimeClient } from '../runtime/client'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
 
 /** `--environment local`: the caller's own Orca, even over an ambient ORCA_ENVIRONMENT or pairing code. */
@@ -13,7 +13,7 @@ export function isLocalEnvironmentSelector(value: unknown): value is string {
 /** `local` is reserved, so a saved entry named local is reached only by its id. */
 export async function savedEnvironmentNamedLocal(): Promise<{ id: string } | undefined> {
   const [{ getDefaultUserDataPath }, { listEnvironments }] = await Promise.all([
-    import('../runtime/metadata.js'),
+    import('../runtime/profile/metadata.js'),
     import('../../shared/remote-runtime/host-store/runtime-environment-store.js')
   ])
   return listEnvironments(getDefaultUserDataPath()).find((environment) =>

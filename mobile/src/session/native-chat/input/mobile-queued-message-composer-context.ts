@@ -1,4 +1,4 @@
-import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
+import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/composer/native-chat-picker-items'
 import { createContext } from 'react'
 import type { MobileNativeChatStructuredComposer } from '../composer/mobile-native-chat-structured-composer'
 

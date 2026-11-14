@@ -15,7 +15,7 @@ import {
   serveLinearHttp
 } from '../../src/main/linear/requests/linear-sdk-http.test-fixture'
 import { LinearAgentAccessError } from '../../src/main/linear/issues/context/linear-access-errors'
-import { RuntimeRpcFailureError } from '../../src/cli/runtime/types'
+import { RuntimeRpcFailureError } from '../../src/cli/runtime/connection/types'
 import { main } from '../../src/cli/index'
 
 const boundary = vi.hoisted(() => ({
@@ -44,7 +44,7 @@ vi.mock('../../src/cli/runtime/launch', async (importOriginal) => ({
   serveOrcaApp: boundary.serveOrcaAppMock
 }))
 
-vi.mock('../../src/cli/runtime/metadata', async (importOriginal) => ({
+vi.mock('../../src/cli/runtime/profile/metadata', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   getDefaultUserDataPath: boundary.getDefaultUserDataPathMock
 }))

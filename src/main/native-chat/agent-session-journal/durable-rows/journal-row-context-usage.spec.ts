@@ -18,7 +18,7 @@ import {
   liveTestJournalRows,
   updateTestJournalRowJson
 } from '../store-lifecycle/journal-host-database-test-support'
-import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 export function registerJournalRowContextUsageTests(): void {
   const IDENTITY: AgentSessionJournalIdentity = {

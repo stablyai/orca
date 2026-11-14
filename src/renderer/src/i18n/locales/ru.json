@@ -850,6 +850,8 @@
       }
     },
     "agents": {
+      "installedRegion": "Установленные агенты",
+      "availableRegion": "Агенты, доступные для установки",
       "permissionsTitle": "Разрешения",
       "permissionsChoiceExplanation": "Что каждый агент может делать без запроса. Ниже можно изменить настройки отдельного агента.",
       "permissionEachOwn": "Собственные настройки каждого агента",

@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import type { AgentSessionSlashCommand } from '../../../../../src/shared/agent-session/agent-session-wire'
-import type { StructuredAgentId } from '../../../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 
 import type {
   MobileNativeChatSendIntent,
@@ -19,7 +19,7 @@ import {
 } from './mobile-native-chat-in-flight-sends'
 import type { MobileStructuredSends } from './use-mobile-structured-sends'
 import { structuredSessionOperationId } from '../agent-session/structured-session-operation-id'
-import { isSlashCommandDraft } from '../../../../../src/shared/native-chat/input/native-chat-slash-commands'
+import { isSlashCommandDraft } from '../../../../../src/shared/native-chat/input/commands/native-chat-slash-commands'
 import { UNCONFIRMED_SEND_RESTORED_MESSAGE } from './use-mobile-native-chat-unconfirmed-sends'
 
 export function useMobileStructuredNativeChatSendBridge(args: {

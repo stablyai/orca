@@ -4,7 +4,7 @@ import {
   withHostModelCatalogAnswer,
   type HostModelCatalogLaunch,
   type HostModelCatalogSnapshot
-} from '../../../../../shared/agent-session/options/host-model-catalog-snapshot-rules'
+} from '../../../../../shared/agent-session/options/model-catalog/host-model-catalog-snapshot-rules'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { callStructuredAgentSession } from '../requests/structured-agent-session-call'
 import { structuredAgentSessionHostKey } from '../host-capabilities/structured-agent-session-host-capability'

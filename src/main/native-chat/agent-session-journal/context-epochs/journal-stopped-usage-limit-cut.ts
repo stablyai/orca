@@ -3,8 +3,8 @@
 
 import { readAgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { UsageLimitContinueIdentity } from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import type { UsageLimitContinueIdentity } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-usage-limit-continue'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { newestStructuredAgentSessionTurnBySequence } from '../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { latestUsageLimitContinueIdentity } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
 import type { JournalReducerState } from '../projection/journal-reducer'

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
 import type { AgentSessionModelCatalogResult } from '../../../../../src/shared/agent-session/agent-session-wire'
-import type { AgentSessionOptionCatalog } from '../../../../../src/shared/agent-session/options/agent-session-option-catalog-types'
-import type { StructuredAgentSessionOptionRecord } from '../../../../../src/shared/agent-session/options/structured-agent-session-option-state'
+import type { AgentSessionOptionCatalog } from '../../../../../src/shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
+import type { StructuredAgentSessionOptionRecord } from '../../../../../src/shared/agent-session/options/reconciliation/structured-agent-session-option-state'
 import type { StructuredAgentSessionOptionState } from '../../../../../src/shared/agent-session/options/structured-agent-session-options'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import {
@@ -9,8 +9,8 @@ import {
   joinHostModelListingWait
 } from '../../../../../src/shared/host-model-listing-waits'
 import { callAgentSession } from '../agent-session/mobile-structured-agent-session-rpc'
-import { usesModelSpecificAcpEfforts } from '../../../../../src/shared/agent-session/options/agent-model-catalog-ownership'
-import type { HostModelCatalogLaunch } from '../../../../../src/shared/agent-session/options/host-model-catalog-snapshot-rules'
+import { usesModelSpecificAcpEfforts } from '../../../../../src/shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
+import type { HostModelCatalogLaunch } from '../../../../../src/shared/agent-session/options/model-catalog/host-model-catalog-snapshot-rules'
 
 /** This world's last host lists for one chat's agent (`useHostModelCatalogCache`). A port, so this hook's
  *  module graph stays free of the query layer for the root-only tests that bundle it. */

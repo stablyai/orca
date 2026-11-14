@@ -8,7 +8,7 @@ import {
   agentSessionExecutionLocationsEqual,
   type AgentSessionExecutionLocation
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import {
   isAgentSessionRefusalError,
   type AgentSessionRefusalError

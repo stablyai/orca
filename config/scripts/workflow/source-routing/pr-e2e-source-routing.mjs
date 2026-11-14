@@ -58,7 +58,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     specs: ['tests/e2e/ssh-orcad-markdown-conversion.spec.ts'],
     matches: (file) =>
       isProductSource(file) &&
-      /^src\/renderer\/src\/components\/editor\/(?:markdown\/documents\/useMarkdownDocuments|restored-editor-workspace-runtime-owner|migrate-restored-editor-file-owner)\.ts$/.test(
+      /^src\/renderer\/src\/components\/editor\/(?:markdown\/documents\/useMarkdownDocuments|file-ownership\/restored-editor-workspace-runtime-owner|file-ownership\/migrate-restored-editor-file-owner)\.ts$/.test(
         file
       )
   },
@@ -133,7 +133,7 @@ export const PR_E2E_SOURCE_ROUTES = [
         file
       ) ||
       (isProductSource(file) &&
-        /^src\/(?:cli\/runtime\/(?:launch|serve-)|main\/orcad\/(?:main|orcad-entry|orcad-command-startup|orcad-instance-lock|orcad-command-arguments|orcad-lifecycle)\.ts$|main\/startup\/profile-startup\/desktop-profile-instance-lock\.ts$|main\/daemon\/(?:[^/]+\/)*daemon-(?:spawner|endpoint-adoption|init)|main\/server\/serve-)/.test(
+        /^src\/(?:cli\/runtime\/(?:launch|profile\/launch-user-data-path|commands\/serve-|app-launch\/serve-|serve\/(?:startup|supervision|updates)\/serve-)|main\/orcad\/(?:main|orcad-entry|orcad-command-startup|orcad-instance-lock|orcad-command-arguments|orcad-lifecycle)\.ts$|main\/startup\/profile-startup\/desktop-profile-instance-lock\.ts$|main\/daemon\/(?:[^/]+\/)*daemon-(?:spawner|endpoint-adoption|init)|main\/server\/serve-)/.test(
           file
         ))
   },
@@ -373,7 +373,7 @@ export const PR_E2E_SOURCE_ROUTES = [
     ],
     matches: (file) =>
       isProductSource(file) &&
-      /^src\/(?:main\/(?:ssh|orcad|managed-server)\/|main\/ipc\/(?:ssh|runtime-environment|orcad-)|cli\/runtime\/(?:launch-)?serve|shared\/(?:remote-runtime|orcad-|protocol-version\.ts$|runtime-capability)|renderer\/src\/store\/repos\/(?:repo-removal|runtime-project-terminal-stop)|renderer\/src\/components\/sidebar\/(?:workspace-actions\/sleep\/(?:sleep-|SleepTwin|WorkspaceSleep|use-worktree-sleep)|ssh-host-remove|host-rename-remove|HostRemove)|renderer\/src\/components\/terminal-pane\/(?:pty-transport\/remote-runtime\/recovery\/(?:TerminalRemoteRuntimeReconnectBanner|use-managed-pairing-refused)|controller\/TerminalPaneCodexRestartPortals|process-exit\/TerminalPaneProcessExitPortals|pty-transport\/recovery\/ssh\/TerminalPaneSshReconnectPortals|mobile-driver\/TerminalPaneMobileDriverPortals))/.test(
+      /^src\/(?:main\/(?:ssh|orcad|managed-server)\/|main\/ipc\/(?:ssh|runtime-environment|orcad-)|cli\/runtime\/(?:launch-serve|(?:commands|app-launch)\/serve|serve\/(?:startup|supervision|updates)\/serve)|shared\/(?:remote-runtime|orcad-|protocol-version\.ts$|runtime-capability)|renderer\/src\/store\/repos\/(?:repo-removal|runtime-project-terminal-stop)|renderer\/src\/components\/sidebar\/(?:workspace-actions\/sleep\/(?:sleep-|SleepTwin|WorkspaceSleep|use-worktree-sleep)|ssh-host-remove|host-rename-remove|HostRemove)|renderer\/src\/components\/terminal-pane\/(?:pty-transport\/remote-runtime\/recovery\/(?:TerminalRemoteRuntimeReconnectBanner|use-managed-pairing-refused)|controller\/TerminalPaneCodexRestartPortals|process-exit\/TerminalPaneProcessExitPortals|pty-transport\/recovery\/ssh\/TerminalPaneSshReconnectPortals|mobile-driver\/TerminalPaneMobileDriverPortals))/.test(
         file
       )
   },

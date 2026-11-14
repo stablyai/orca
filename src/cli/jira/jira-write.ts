@@ -17,7 +17,7 @@ import {
 import { printResult } from '../output/command-result-output'
 import { formatJiraCreate } from './jira-format'
 import { resolveJiraTarget } from './jira-target'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
 
 async function callJiraWrite<T>(

@@ -2,11 +2,11 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { toast } from 'sonner'
 import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
-import type { AgentSessionRewindResult } from '../../../../../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { AgentSessionRewindResult } from '../../../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import {
   createAgentSessionRewindHook,
   type AgentSessionRewindInput
-} from '../../../../../../shared/agent-session/lifecycle/agent-session-rewind-request'
+} from '../../../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind-request'
 import { sayNativeChatRewind } from './native-chat-rewind-copy'
 import type {
   CaptureStructuredAgentSessionPresentation,

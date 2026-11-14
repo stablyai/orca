@@ -27,7 +27,7 @@ import type { StructuredAgentSessionChildExit } from './structured-agent-session
 import { structuredAgentSessionConversationFence } from '../host/structured-agent-session-provider-child'
 import { markStructuredQueueReopen } from '../delivery/structured-agent-session-queued-pause'
 import type { StructuredAgentSessionStopCause } from './structured-agent-session-stop-cause'
-import type { AgentSessionResumeTrigger } from '../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+import type { AgentSessionResumeTrigger } from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import {
   recordStructuredAgentSessionShutdownCut,
   runningRootTurnItemId

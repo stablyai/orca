@@ -4,10 +4,8 @@ import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { buildHeadlessMobileSessionTerminalTabs } from '../../terminal/surface/mobile-session-terminal-projection'
-import {
-  agentProviderSessionsEqual,
-  type SleepingAgentSessionRecord
-} from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import type {
   RecordedAgentSession,
   RecordedAgentSessionResume,

@@ -6,7 +6,7 @@ import { AGENT_MODEL_CATALOG_PICKER_WAIT_MS } from '../../agent-model-catalog/ag
 import {
   independentAgentModelCatalog,
   usesModelSpecificAcpEfforts
-} from '../../../../shared/agent-session/options/agent-model-catalog-ownership'
+} from '../../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import {
   readStructuredAgentSessionOptionsAtRest,
   type StructuredAgentSessionOptionsReader
@@ -18,7 +18,7 @@ import { structuredAgentSessionThreadGoalReport } from '../operations/structured
 import type {
   AgentSessionOptionsResult,
   AgentSessionAcceptedInputSources
-} from '../../../../shared/agent-session/options/agent-session-options-result'
+} from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
 import { journalOpenReadRefusal } from '../../agent-session-journal/replay/journal-open-failure'
 import {
   confirmedCurrentOptions,
@@ -29,7 +29,7 @@ import {
 import { structuredAgentSessionImmediatePermission } from './structured-agent-session-launch-permission'
 import type { StructuredAgentSessionMutationContext } from '../operations/structured-agent-session-mutation-context'
 import { readStructuredSessionRecovery } from '../recovery/structured-agent-session-recovery-read'
-import { fillUnknownModelEfforts } from '../../../../shared/agent-session/options/agent-session-model-efforts'
+import { fillUnknownModelEfforts } from '../../../../shared/agent-session/options/model-catalog/agent-session-model-efforts'
 
 /** A live child's own answer, or the answer at rest; the goal, usage and rewind either way. */
 export async function readStructuredAgentSessionOptions(

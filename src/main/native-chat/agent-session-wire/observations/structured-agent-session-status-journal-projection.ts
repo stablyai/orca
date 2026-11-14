@@ -7,7 +7,7 @@ import { agentJournalSubmissionKey } from '../../../../shared/agent-session/jour
 import { isRootAgentJournalItem } from '../../../../shared/agent-session/journal/agent-session-journal-producer'
 import { isStructuredAgentSessionCommandEntry } from '../../../../shared/agent-session/structured-agent-session-command-entry'
 
-import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { projectStructuredAgentSessionStatusState } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import { structuredAgentSessionCurrentWork } from './structured-agent-session-current-work'

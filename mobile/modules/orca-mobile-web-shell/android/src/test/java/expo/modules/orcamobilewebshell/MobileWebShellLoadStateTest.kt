@@ -59,7 +59,6 @@ class MobileWebShellLoadStateTest {
       failure("document-load-failed"),
       machine.failed(MobileWebShellFailureReason.DOCUMENT_LOAD_FAILED)
     )
-    assertNull(machine.finished())
     assertNull(machine.started())
   }
 

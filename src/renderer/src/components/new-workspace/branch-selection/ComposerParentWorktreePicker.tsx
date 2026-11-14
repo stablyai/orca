@@ -30,7 +30,7 @@ import {
 import {
   getLineageChildrenByParentId,
   getLineageChildWorktree
-} from '@/components/right-sidebar/folder-workspace-attached-worktrees'
+} from '@/components/right-sidebar/folder-workspaces/folder-workspace-attached-worktrees'
 import { COMBOBOX_POPOVER_SURFACE } from '../type-ahead/type-ahead-combobox-styles'
 import {
   sharesWorktreeLineageBoundary,

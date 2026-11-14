@@ -2,9 +2,9 @@ import { useCallback } from 'react'
 import {
   formatAskAnswer,
   type AskAnswerSelection
-} from '../../../../../src/shared/native-chat/input/native-chat-ask-answer'
-import { nativeChatAnswerSendIntent } from '../../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
-import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
+} from '../../../../../src/shared/native-chat/input/questions/native-chat-ask-answer'
+import { nativeChatAnswerSendIntent } from '../../../../../src/shared/native-chat/input/composer/native-chat-follow-up-behavior'
+import type { AskPrompt } from '../../../../../src/shared/native-chat/input/questions/native-chat-ask-types'
 import type { QueuedMessageCard } from '../../../../../src/shared/agent-session/view/structured-agent-session-queued-cards'
 import type { useMobileStructuredAgentSession } from '../agent-session/use-mobile-structured-agent-session'
 

@@ -2,7 +2,7 @@ import type { AgentSessionJournalProviderHandle } from '../../../../shared/agent
 import { resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { journalRowSchemaVersion } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { agentSessionJournalProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentSessionJournalProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { JournalHostDatabase } from '../database/journal-host-database'
 import { restoreJournal, type JournalLoad } from '../replay/journal-open'
 import {

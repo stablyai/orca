@@ -330,6 +330,8 @@
       }
     },
     "agents": {
+      "installedRegion": "インストール済みの Agent",
+      "availableRegion": "インストール可能な Agent",
       "codexTerminalServerIsolation": {
         "title": "各 Codex ターミナルを独自のサーバー上で実行する",
         "description": "Orca のステータスとタブを閉じる動作が正しく動作するようにします。 Codex の共有サーバーとその Agent の概要を使用するには、オフにします。新規ターミナルに適用されます。"

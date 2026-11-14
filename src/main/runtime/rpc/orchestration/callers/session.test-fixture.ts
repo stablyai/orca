@@ -1,4 +1,4 @@
-import { agentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { vi } from 'vitest'
 import type {
   AgentSessionLease,
@@ -7,7 +7,7 @@ import type {
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+} from '../../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import type { OrchestrationCompatibilityEvidence } from '../../../../../shared/orchestration/orchestration-compatibility-evidence'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
@@ -23,7 +23,7 @@ import { structuredWorkerIdentities } from '../../../orchestration/terminal-auth
 import type { RpcRequest, RpcResponse } from '../../core'
 import { RpcDispatcher } from '../../dispatcher'
 import { ORCHESTRATION_METHODS } from '../../methods/orchestration/orchestration'
-import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 export const SESSION_X = testOrcaSessionId('4a1f6c2e-8b3d-4e7a-9c15-0d2b6e8f1a37')
 export const SESSION_Y = testOrcaSessionId('7e3b9d15-2c4a-4f86-a0b1-5c9e2d7f3b64')

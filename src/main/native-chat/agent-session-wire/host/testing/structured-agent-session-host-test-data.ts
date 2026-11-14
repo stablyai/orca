@@ -1,13 +1,13 @@
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { agentSessionRecordFixture } from '../../../testing/agent-session-record-test-fixture'
-import { agentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type {
   AgentJournalSnapshot,
   AgentJournalItemBody,
   AgentJournalSubmission
 } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredAgentSessionHost } from '../structured-agent-session-host'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import type {
   AgentSessionRecord,
   AgentSessionExecutionLocation

@@ -6,14 +6,14 @@ import { agentJournalToolCallLifecycle } from '../../../../../shared/agent-journ
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalItemBody } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { AgentSessionDeathEvidence } from '../../../../../shared/agent-session/lifecycle/agent-session-death-evidence'
-import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import type { AgentSessionDeathEvidence } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-death-evidence'
+import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import '../structured-agent-session-dead-generation-settlement'
 import { settleStaleStructuredAgentSessionState } from '../structured-agent-session-stale-state-settlement'
 
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const SESSION = 'session-late-proof'
 const THREAD = 'thread-1'

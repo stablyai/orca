@@ -6,9 +6,6 @@ import type {
 } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { mintStablePaneId } from '@/lib/pane-manager/pane-layout/mint-stable-pane-id'
 import type { UseTerminalPaneLifecycleDeps } from './terminal-pane-lifecycle-types'
-import type { PtyConnectionDeps } from '../pty-connection/pty-connection-deps'
-import type { ConnectPanePtySession } from '../pty-connection/connect-pane-pty-session'
-import { bindRegisterPaneSerializer } from '../pty-connection/serialization/pane-serializer-register'
 
 export const FIRST_LEAF = '11111111-1111-4111-8111-111111111111'
 export const SECOND_LEAF = '22222222-2222-4222-8222-222222222222'
@@ -20,13 +17,7 @@ export class HeadlessMountManager {
   static instances: HeadlessMountManager[] = []
   panes: { id: number; leafId: string; terminal: Terminal; container: HTMLDivElement }[] = []
   activeId = 1
-  destroyed = false
-  gpu: string | undefined
-  splitStartups: unknown[] = []
-  constructor(
-    readonly container: HTMLDivElement,
-    readonly options: { getStartup?: () => unknown; ptyDeps?: PtyConnectionDeps } = {}
-  ) {
+  constructor(readonly container: HTMLDivElement) {
     HeadlessMountManager.instances.push(this)
   }
   createInitialPane({ leafId }: { leafId: string }) {
@@ -43,7 +34,6 @@ export class HeadlessMountManager {
     return pane
   }
   splitPane(id: number, direction: string, options?: { leafId: string }) {
-    this.splitStartups.push(this.options.getStartup?.())
     const existing = this.panes.find((pane) => pane.id === id)!
     const split = document.createElement('div')
     split.className = `pane-split ${direction === 'horizontal' ? 'is-horizontal' : ''}`
@@ -70,54 +60,14 @@ export class HeadlessMountManager {
   hasWebglRenderer() {
     return true
   }
-  setTerminalGpuAcceleration(value: string) {
-    this.gpu = value
-  }
+  setTerminalGpuAcceleration() {}
   fitAllPanes() {}
   destroy() {
-    this.destroyed = true
     for (const pane of this.panes) {
       pane.terminal.dispose()
       pane.container.remove()
     }
     this.container.replaceChildren()
-  }
-}
-
-export function registerRuntimeClear(manager: HeadlessMountManager, ptyId: string) {
-  const originalApi = window.api
-  const onClearBufferRequest = vi.fn<typeof window.api.pty.onClearBufferRequest>(() => () => {})
-  Object.defineProperty(window, 'api', {
-    configurable: true,
-    value: {
-      ...originalApi,
-      pty: {
-        ...originalApi?.pty,
-        onClearBufferRequest,
-        onResetInputModesRequest: () => () => {},
-        onSerializeBufferRequest: () => () => {}
-      }
-    }
-  })
-  const adapter = {
-    pane: manager.panes[0],
-    manager,
-    deps: manager.options.ptyDeps,
-    disposed: false,
-    clearHiddenOutputRestoreState: () => {},
-    onDataDisposable: { dispose: () => {} }
-  }
-  const session =
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the production clear/title registration reads these fields and real factory deps; serialization and transport are excluded.
-    adapter as unknown as ConnectPanePtySession
-  bindRegisterPaneSerializer(session)
-  session.registerPaneSerializerFor(ptyId)
-  return {
-    clear: () => onClearBufferRequest.mock.calls[0][0]({ ptyId }),
-    dispose: () => {
-      session.onDataDisposable.dispose()
-      Object.defineProperty(window, 'api', { configurable: true, value: originalApi })
-    }
   }
 }
 
@@ -196,10 +146,6 @@ export async function parsedRows(manager: HeadlessMountManager): Promise<string[
 export type TerminalPaneHydrationFixtureState = {
   deps: UseTerminalPaneLifecycleDeps | null
   reads: Mock<(ref: string) => Promise<string | null>>
-  parked: boolean
-  consumeIssue: Mock
-  depsByTab: Record<string, UseTerminalPaneLifecycleDeps>
-  renders: Map<string, number>
   store: {
     tabsByWorktree: Record<string, TerminalTab[]>
     terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>

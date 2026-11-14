@@ -1,7 +1,7 @@
 import type { RefObject } from 'react'
 import type { TextInputInstance } from 'react-native'
-import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
-import type { NativeChatSteerChordPreview } from '../../../../../src/shared/native-chat/input/use-native-chat-steer-chord-preview'
+import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/composer/native-chat-follow-up-behavior'
+import type { NativeChatSteerChordPreview } from '../../../../../src/shared/native-chat/input/composer/use-native-chat-steer-chord-preview'
 import type { MobileNativeChatSteerHead } from './use-mobile-native-chat-composer-tray'
 
 export type MobileNativeChatSteerChordPreviewInput = {

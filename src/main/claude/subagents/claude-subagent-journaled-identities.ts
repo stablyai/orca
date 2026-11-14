@@ -6,7 +6,7 @@ import {
 } from '../background-tasks/claude-background-task-identity'
 import { isBackgroundTaskBlock } from '../../../shared/native-chat/native-chat-types'
 import type { AgentJournalProducerLinkage } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { namedSubagents } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
+import { namedSubagents } from '../../../shared/native-chat/transcript/subagents/native-chat-subagent-items'
 import type { StructuredAgentSessionLinkageJournal } from '../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import { isBoundedClaudeTaskId } from '../background-tasks/claude-background-task-frames'
 

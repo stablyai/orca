@@ -9,16 +9,16 @@ import {
   foldToolMessages,
   isUndrawnProviderFrameMessage
 } from '../../../../../src/shared/native-chat/tools/native-chat-tool-fold'
-import { projectNativeChatTaskListFrames } from '../../../../../src/shared/native-chat/input/native-chat-task-list-frames'
-import { foldSubagentItems } from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-items'
-import { prepareNativeChatMessages } from '../../../../../src/shared/native-chat/transcript/native-chat-message-preparation'
+import { projectNativeChatTaskListFrames } from '../../../../../src/shared/native-chat/input/task-lists/native-chat-task-list-frames'
+import { foldSubagentItems } from '../../../../../src/shared/native-chat/transcript/subagents/native-chat-subagent-items'
+import { prepareNativeChatMessages } from '../../../../../src/shared/native-chat/transcript/messages/native-chat-message-preparation'
 import {
   isImageRefBlock,
   type NativeChatMessage
 } from '../../../../../src/shared/native-chat/native-chat-types'
 import type { AgentType } from '../../../../../src/shared/agent-status/contracts/agent-status-types'
 import type { MobileNativeChatStatus } from '../mobile-native-chat-session-status'
-import { orderNativeChatDisplayMessages } from '../../../../../src/shared/native-chat/transcript/native-chat-message-order'
+import { orderNativeChatDisplayMessages } from '../../../../../src/shared/native-chat/transcript/messages/native-chat-message-order'
 import { translate } from '../../../i18n/mobile-i18n'
 
 function mobileNativeChatEmptyStateCopy(

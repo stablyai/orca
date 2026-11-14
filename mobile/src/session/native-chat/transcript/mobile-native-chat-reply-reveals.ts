@@ -5,7 +5,7 @@ import {
   createNativeChatReplyRevealTracker,
   trackNativeChatReplyRows,
   type NativeChatReplyReveals
-} from '../../../../../src/shared/native-chat/transcript/native-chat-reply-reveals'
+} from '../../../../../src/shared/native-chat/transcript/row-content/native-chat-reply-reveals'
 import { useReducedMotionEnabled } from '../../../platform/accessibility/use-reduced-motion'
 
 // Retain reveal state above list remounts/view toggles so replies resume instead of replaying.

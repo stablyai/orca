@@ -1,5 +1,5 @@
-import { pruneAgentSessionOperationRows } from '../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
-import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import { pruneAgentSessionOperationRows } from '../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
+import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionStoreState } from '../records/agent-session-store-state'
 import { agentSessionReconciliationTargetMatches } from './agent-session-reconciliation-target'

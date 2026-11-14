@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { AgentSessionRewindSurface } from '../../../../../src/shared/agent-session/lifecycle/agent-session-rewind-request'
+import type { AgentSessionRewindSurface } from '../../../../../src/shared/agent-session/lifecycle/rewind/agent-session-rewind-request'
 
 export type MobileNativeChatRewindDialogState =
   | { kind: 'confirm' }

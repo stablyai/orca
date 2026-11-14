@@ -4,7 +4,7 @@ import { AgentHookServerCleanup } from './server-cleanup'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { releaseAgentExitKey } from './agent-exit-evidence'
 import type { RefusedPaneResume } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 
 export abstract class AgentHookServerTabCleanup extends AgentHookServerCleanup {
   /** The host refused `paneKey`'s saved resume because a native chat is its conversation's home:

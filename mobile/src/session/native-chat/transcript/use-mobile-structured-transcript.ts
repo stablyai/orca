@@ -8,8 +8,8 @@ import type { StructuredAgentSessionState } from '../../../../../src/shared/agen
 import type { StructuredAgentSessionOptimisticMessage } from '../../../../../src/shared/agent-session/view/structured-agent-session-message-projection'
 import { createStructuredAgentSessionMessageProjection } from '../../../../../src/shared/agent-session/view/structured-agent-session-message-stream'
 import { tuiAgentDisplayName } from '../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
-import { withNativeChatCutTurnNotices } from '../../../../../src/shared/native-chat/transcript/native-chat-cut-turn-notice'
-import { omitNativeChatThreadGoalRows } from '../../../../../src/shared/native-chat/transcript/native-chat-thread-goal-rows'
+import { withNativeChatCutTurnNotices } from '../../../../../src/shared/native-chat/transcript/turns/native-chat-cut-turn-notice'
+import { omitNativeChatThreadGoalRows } from '../../../../../src/shared/native-chat/transcript/turns/native-chat-thread-goal-rows'
 import { createStructuredQuestionProjection } from '../../../../../src/shared/structured-agent-question-projection'
 import { projectStructuredAgentStartItem } from '../../../../../src/shared/structured-agent-start-projection'
 

@@ -29,7 +29,7 @@ import type { TitleDerivedPaneForeground } from './title-derived-pane-agent-iden
 import { buildSubagentChildRows } from './worktree-subagent-child-rows'
 import { compareWorktreeAgentRows } from './worktree-agent-row-order'
 import { tabFromWorktreeAttributedStatusEntry } from './worktree-agent-row-fallback-tab'
-import { agentEntrySessionStartedAt as effectiveWorktreeAgentRowStartedAt } from '../../../../../../shared/agent-session/lifecycle/agent-session-start-time'
+import { agentEntrySessionStartedAt as effectiveWorktreeAgentRowStartedAt } from '../../../../../../shared/agent-session/lifecycle/resume/agent-session-start-time'
 import { resolveRowAgentType } from './worktree-agent-row-type'
 import { entryWithRuntimeOrchestration } from './worktree-agent-row-orchestration'
 

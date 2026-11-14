@@ -16,7 +16,7 @@ import type { NativeChatToolMetadata } from '../../native-chat/tools/native-chat
 import type { AgentSessionContextUsage } from '../agent-session-context-usage'
 import type { NativeChatBlock, NativeChatRole } from '../../native-chat/native-chat-types'
 import type { AgentMessageSource } from '../agent-session-message-source'
-import type { AgentSessionExecutionOptions } from '../options/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../options/protocol/agent-session-execution-options'
 import type {
   AgentJournalAgentHandoffItem,
   AgentJournalAgentStartItem

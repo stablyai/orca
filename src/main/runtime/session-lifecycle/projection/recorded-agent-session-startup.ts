@@ -1,7 +1,7 @@
 import type { PaneResumeStartup } from './agent-session-resume-ownership'
 import type { RecordedAgentSessionIdentity } from '../../../../shared/agent-session/recorded-agent-session'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
-import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 
 export function requireRecordedResumeStartup(
   startup: PaneResumeStartup | Record<string, never> | undefined,

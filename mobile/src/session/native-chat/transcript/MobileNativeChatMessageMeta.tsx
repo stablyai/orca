@@ -1,6 +1,6 @@
 import { View } from 'react-native'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
-import { nativeChatMessageCopyText } from '../../../../../src/shared/native-chat/transcript/native-chat-message-copy-text'
+import { nativeChatMessageCopyText } from '../../../../../src/shared/native-chat/transcript/messages/native-chat-message-copy-text'
 import { MobileNativeChatMessageTime } from './MobileNativeChatMessageTime'
 import { MobileNativeChatRewindButton } from './MobileNativeChatRewindButton'
 import { MobileNativeChatResponseActions } from './MobileNativeChatResponseActions'

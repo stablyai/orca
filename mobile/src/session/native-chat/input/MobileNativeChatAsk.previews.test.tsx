@@ -1,7 +1,7 @@
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi, type Mock } from 'vitest'
-import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
+import type { AskPrompt } from '../../../../../src/shared/native-chat/input/questions/native-chat-ask-types'
 import { MobileNativeChatAsk } from './MobileNativeChatAsk'
 
 vi.mock('react-native', () => ({
