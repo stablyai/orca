@@ -22906,7 +22906,9 @@
         "body_many": "{{count}} sessões do Claude ainda estão em execução em {{previous}}. Ao reiniciar, cada conversa continua em {{next}}. As sessões ocupadas interrompem o que estão fazendo e reiniciam agora.",
         "reasonSharedSession": "Também aberta em outro painel",
         "sharedOne": "1 sessão do Claude permanece em {{previous}} porque outro painel tem a mesma conversa aberta. Reiniciar pode reabrir a conversa do outro painel.",
-        "sharedOther": "{{count}} sessões do Claude permanecem em {{previous}} porque outro painel tem a mesma conversa aberta. Reiniciar pode reabrir a conversa do outro painel."
+        "sharedOther": "{{count}} sessões do Claude permanecem em {{previous}} porque outro painel tem a mesma conversa aberta. Reiniciar pode reabrir a conversa do outro painel.",
+        "strandedOne": "1 sessão do Claude pode ainda estar em {{previous}}. O Orca não consegue retomá-la, então reinicie-a você mesmo para trocar.",
+        "strandedOther": "{{count}} sessões do Claude podem ainda estar em {{previous}}. O Orca não consegue retomá-las, então reinicie-as você mesmo para trocar."
       },
       "oauthUsage": {
         "title": "Consulta de uso do Claude",

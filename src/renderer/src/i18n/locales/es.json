@@ -21541,7 +21541,9 @@
         "body_many": "{{count}} sesiones de Claude siguen ejecutándose en {{previous}}. Al reiniciarlas, cada conversación continúa en {{next}}. Las sesiones ocupadas interrumpen lo que están haciendo y se reinician ahora.",
         "reasonSharedSession": "También abierta en otro panel",
         "sharedOne": "1 sesión de Claude permanece en {{previous}} porque otro panel tiene abierta la misma conversación. Reiniciarla podría volver a abrir la conversación del otro panel.",
-        "sharedOther": "{{count}} sesiones de Claude permanecen en {{previous}} porque otro panel tiene abierta la misma conversación. Reiniciarlas podría volver a abrir la conversación del otro panel."
+        "sharedOther": "{{count}} sesiones de Claude permanecen en {{previous}} porque otro panel tiene abierta la misma conversación. Reiniciarlas podría volver a abrir la conversación del otro panel.",
+        "strandedOne": "Es posible que 1 sesión de Claude siga en {{previous}}. Orca no puede reanudarla, así que reiníciala tú mismo para cambiarla.",
+        "strandedOther": "Es posible que {{count}} sesiones de Claude sigan en {{previous}}. Orca no puede reanudarlas, así que reinícialas tú mismo para cambiarlas."
       },
       "oauthUsage": {
         "title": "Consulta de uso de Claude",

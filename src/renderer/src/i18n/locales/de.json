@@ -21933,7 +21933,9 @@
         "body_other": "{{count}} Claude-Sitzungen laufen noch auf {{previous}}. Ein Neustart setzt jedes Gespräch auf {{next}} fort. Beschäftigte Sitzungen brechen ihre aktuelle Arbeit ab und starten sofort neu.",
         "reasonSharedSession": "Auch in einem anderen Bereich geöffnet",
         "sharedOne": "1 Claude-Sitzung bleibt auf {{previous}}, weil dieselbe Unterhaltung in einem anderen Bereich geöffnet ist. Ein Neustart könnte die Unterhaltung des anderen Bereichs erneut öffnen.",
-        "sharedOther": "{{count}} Claude-Sitzungen bleiben auf {{previous}}, weil dieselbe Unterhaltung in einem anderen Bereich geöffnet ist. Ein Neustart könnte die Unterhaltung des anderen Bereichs erneut öffnen."
+        "sharedOther": "{{count}} Claude-Sitzungen bleiben auf {{previous}}, weil dieselbe Unterhaltung in einem anderen Bereich geöffnet ist. Ein Neustart könnte die Unterhaltung des anderen Bereichs erneut öffnen.",
+        "strandedOne": "1 Claude-Sitzung läuft möglicherweise noch auf {{previous}}. Orca kann sie nicht fortsetzen. Starte sie selbst neu, um zu wechseln.",
+        "strandedOther": "{{count}} Claude-Sitzungen laufen möglicherweise noch auf {{previous}}. Orca kann sie nicht fortsetzen. Starte sie selbst neu, um zu wechseln."
       },
       "oauthUsage": {
         "title": "Claude-Nutzungsabfrage",

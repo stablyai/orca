@@ -66,13 +66,14 @@ type SeededPane = {
   sessionId?: string | null
   /** Folder Claude writes this session's transcript under; null leaves it unreported. */
   configDir?: string | null
+  launchAgent?: TerminalTab['launchAgent']
 }
 
 const tabId = (n: number): string => `tab-${n}`
 const leafId = (n: number): string => `0195f2ce-1111-4000-8000-00000000000${n}`
 const ptyId = (n: number): string => `pty-${n}`
 
-function makeTab(n: number): TerminalTab {
+function makeTab({ n, launchAgent }: SeededPane): TerminalTab {
   return {
     id: tabId(n),
     ptyId: ptyId(n),
@@ -81,7 +82,8 @@ function makeTab(n: number): TerminalTab {
     customTitle: null,
     color: null,
     sortOrder: n,
-    createdAt: n
+    createdAt: n,
+    ...(launchAgent ? { launchAgent } : {})
   }
 }
 
@@ -118,7 +120,7 @@ function seedPanes(panes: SeededPane[]): void {
       ...getDefaultSettings('/home/dev'),
       claudeManagedAccounts: [account('acct-a', FOLDER_A), account('acct-b', FOLDER_B)]
     },
-    tabsByWorktree: { wt1: panes.map((pane) => makeTab(pane.n)) },
+    tabsByWorktree: { wt1: panes.map(makeTab) },
     ptyIdsByTabId: Object.fromEntries(panes.map((pane) => [tabId(pane.n), [ptyId(pane.n)]])),
     terminalLayoutsByTabId: Object.fromEntries(
       panes.map((pane) => [
@@ -186,8 +188,10 @@ describe('findMovableClaudeSessions', () => {
     const found = await scan()
 
     expect(found.onAccount).toEqual([])
+    // Pane 2's record names no transcript, so its account is unknown: listed, not skipped.
     expect(found.cantMove).toEqual([
-      expect.objectContaining({ ptyId: ptyId(1), reason: 'shared-session' })
+      expect.objectContaining({ ptyId: ptyId(1), reason: 'shared-session' }),
+      expect.objectContaining({ ptyId: ptyId(2), reason: 'unknown-account' })
     ])
   })
 
@@ -205,6 +209,74 @@ describe('findMovableClaudeSessions', () => {
     vi.mocked(confirmRuntimeTerminalForegroundProcess).mockImplementation(async (id) => program(id))
 
     expect(await movable()).toEqual([])
+  })
+
+  it('finds an Agent Teams pane, whose packaged `orca claude-teams` wrapper leads the foreground', async () => {
+    seedPanes([
+      { n: 1, agentType: 'claude', launchAgent: 'claude-agent-teams' },
+      { n: 2, agentType: 'claude' }
+    ])
+    vi.mocked(inspectRuntimeTerminalProcess).mockResolvedValue({
+      foregroundProcess: 'Orca',
+      hasChildProcesses: true
+    })
+    vi.mocked(confirmRuntimeTerminalForegroundProcess).mockResolvedValue('Orca')
+
+    // Pane 2 is a Claude pane now running another `orca` command, such as `orca status`.
+    expect(await movable()).toEqual([ptyId(1)])
+  })
+
+  it('reports a running Claude with no status row instead of skipping it', async () => {
+    seedPanes([{ n: 1, launchAgent: 'claude' }, { n: 2 }, { n: 3 }])
+    useAppStore.setState({
+      paneForegroundAgentByPaneKey: {
+        [makePaneKey(tabId(2), leafId(2))]: { agent: 'claude', shellForeground: false }
+      }
+    })
+    const onStranded = vi.fn()
+
+    const found = await findClaudeSwitchSessions({
+      owner: LOCAL,
+      target: HOST,
+      fromAccountId: 'acct-a',
+      toAccountId: 'acct-b',
+      onStranded
+    })
+
+    expect(found.onAccount).toEqual([])
+    expect(found.cantMove.map(({ ptyId, reason }) => [ptyId, reason])).toEqual([
+      [ptyId(1), 'no-session'],
+      [ptyId(2), 'no-session']
+    ])
+    expect(onStranded).toHaveBeenCalledWith([
+      expect.objectContaining({ ptyId: ptyId(1) }),
+      expect.objectContaining({ ptyId: ptyId(2) })
+    ])
+  })
+
+  it('moves a session whose status row was dismissed, from its saved record', async () => {
+    seedPanes([{ n: 1 }])
+    const paneKey = makePaneKey(tabId(1), leafId(1))
+    useAppStore.setState({
+      sleepingAgentSessionsByPaneKey: {
+        [paneKey]: {
+          paneKey,
+          worktreeId: 'wt1',
+          agent: 'claude',
+          providerSession: {
+            key: 'session_id',
+            id: SESSION_ID,
+            transcriptPath: `${FOLDER_A}/projects/-repo/${SESSION_ID}.jsonl`
+          },
+          prompt: '',
+          state: 'done',
+          capturedAt: 1,
+          updatedAt: 1
+        }
+      }
+    })
+
+    expect(await movable()).toEqual([ptyId(1)])
   })
 
   // WSL stores UNC and guest config paths, hooks report guest transcripts, and Windows sees only wsl.exe in the pane tree.

@@ -22209,7 +22209,9 @@
         "body_many": "{{count}} sessions Claude sont toujours actives sur {{previous}}. Le redémarrage poursuit chaque conversation sur {{next}}. Les sessions occupées interrompent leur travail en cours et redémarrent maintenant.",
         "reasonSharedSession": "Également ouverte dans un autre volet",
         "sharedOne": "1 session Claude reste sur {{previous}} car la même conversation est ouverte dans un autre volet. Un redémarrage pourrait rouvrir la conversation de l’autre volet.",
-        "sharedOther": "{{count}} sessions Claude restent sur {{previous}} car la même conversation est ouverte dans un autre volet. Un redémarrage pourrait rouvrir la conversation de l’autre volet."
+        "sharedOther": "{{count}} sessions Claude restent sur {{previous}} car la même conversation est ouverte dans un autre volet. Un redémarrage pourrait rouvrir la conversation de l’autre volet.",
+        "strandedOne": "1 session Claude est peut-être encore sur {{previous}}. Orca ne peut pas la reprendre : redémarrez-la vous-même pour basculer.",
+        "strandedOther": "{{count}} sessions Claude sont peut-être encore sur {{previous}}. Orca ne peut pas les reprendre : redémarrez-les vous-même pour basculer."
       },
       "oauthUsage": {
         "title": "Suivi de l’utilisation de Claude",
