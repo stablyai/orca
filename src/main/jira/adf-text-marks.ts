@@ -1,5 +1,6 @@
 import type { PhrasingContent } from 'mdast'
-import { PROSE_HTTP_URL_SOURCE } from '../../shared/prose-url-boundary'
+import { findProseUrlEnd } from '../../shared/prose-url-boundary'
+import { bareEmailSpans } from './adf-bare-email'
 import { escapeMarkdownTextLinkDestination } from './adf-media-destination'
 import { adfChildren, adfRecord, adfString } from './adf-nodes'
 
@@ -16,23 +17,67 @@ declare module 'mdast' {
 }
 type Wrapper = Extract<PhrasingContent, { type: 'strong' | 'emphasis' | 'delete' | 'link' }>
 type MediaRenderer = (node: Record<string, unknown>) => string
-const BARE_EMAIL_SOURCE = /[a-zA-Z0-9.!#$%&'*+/=?^_{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)+/.source
-const BARE_LINK = new RegExp(`${PROSE_HTTP_URL_SOURCE}|${BARE_EMAIL_SOURCE}`, 'gu')
+const BARE_HTTP = /https?:\/\/[^\s<>]+|www\.[^\s<>]+/giu
+
+type LinkSpan = { start: number; end: number; url: string }
+
+function httpSpans(value: string): LinkSpan[] {
+  const spans: LinkSpan[] = []
+  for (const match of value.matchAll(BARE_HTTP)) {
+    if (match.index > 0 && !/[\s\p{P}]/u.test(value[match.index - 1])) {
+      continue
+    }
+    const proseEnd = findProseUrlEnd(match[0])
+    let label = proseEnd < 0 ? match[0] : match[0].slice(0, proseEnd)
+    const trailing = /[!"&'),.:;<>?\]}]+$/.exec(label)
+    if (trailing) {
+      const base = label.slice(0, trailing.index)
+      let balance = 0
+      for (const char of base) {
+        balance += char === '(' ? 1 : char === ')' ? -1 : 0
+      }
+      let end = trailing.index
+      for (let i = 0; i < trailing[0].length && balance > 0; i++) {
+        if (trailing[0][i] === ')') {
+          balance--
+          end = trailing.index + i + 1
+        }
+      }
+      label = label.slice(0, end)
+    }
+    if (!label) {
+      continue
+    }
+    spans.push({
+      start: match.index,
+      end: match.index + label.length,
+      url: /^www\./i.test(label) ? `http://${label}` : label
+    })
+  }
+  return spans
+}
 
 function proseNodes(value: string): PhrasingContent[] {
   const result: PhrasingContent[] = []
+  const urls = httpSpans(value)
+  const emails = bareEmailSpans(value)
+  let urlIndex = 0
+  let emailIndex = 0
   let offset = 0
-  for (const match of value.matchAll(BARE_LINK)) {
-    if (match.index > offset) {
-      result.push({ type: 'text', value: value.slice(offset, match.index) })
+  while (urlIndex < urls.length || emailIndex < emails.length) {
+    const url = urls[urlIndex]
+    const email = emails[emailIndex]
+    const next =
+      url && (!email || url.start <= email.start) ? urls[urlIndex++] : emails[emailIndex++]
+    if (!next || next.start < offset) {
+      continue
     }
-    const label = match[0]
-    result.push({
-      type: 'link',
-      url: label.includes('://') ? label : `mailto:${label}`,
-      children: [{ type: 'text', value: label }]
-    })
-    offset = match.index + label.length
+    if (next.start > offset) {
+      result.push({ type: 'text', value: value.slice(offset, next.start) })
+    }
+    const label = value.slice(next.start, next.end)
+    result.push({ type: 'link', url: next.url, children: [{ type: 'text', value: label }] })
+    offset = next.end
   }
   if (offset < value.length) {
     result.push({ type: 'text', value: value.slice(offset) })
@@ -65,7 +110,7 @@ function appendWrapped(
 }
 
 function normalizedStyles(nodes: PhrasingContent[]): PhrasingContent[] {
-  return nodes.flatMap((node): PhrasingContent[] => {
+  const normalized = nodes.flatMap((node): PhrasingContent[] => {
     if (!('children' in node)) {
       return [node]
     }
@@ -90,6 +135,16 @@ function normalizedStyles(nodes: PhrasingContent[]): PhrasingContent[] {
       ...(trailing ? [{ type: 'text' as const, value: trailing }] : [])
     ]
   })
+  const result: PhrasingContent[] = []
+  for (const node of normalized) {
+    const previous = result.at(-1)
+    if (node.type === 'text' && previous?.type === 'text') {
+      previous.value += node.value
+    } else {
+      result.push(node)
+    }
+  }
+  return result
 }
 
 export function adfInlineNodes(
@@ -133,11 +188,7 @@ export function adfInlineNodes(
     } else {
       const attrs = adfRecord(node.attrs)
       const text = adfString(attrs.text) || adfString(attrs.shortName) || adfString(attrs.url)
-      result.push(
-        ...(text
-          ? [{ type: 'text' as const, value: text }]
-          : adfInlineNodes(node.content, renderMedia, inTable))
-      )
+      result.push(...(text ? proseNodes(text) : adfInlineNodes(node.content, renderMedia, inTable)))
     }
   }
   return normalizedStyles(result)

@@ -19,7 +19,11 @@ type MdNode = {
 }
 
 type MarkdownParser = (markdown: string) => MdNode
-type ConversionContext = { definitions: Map<string, string>; source: string }
+type ConversionContext = {
+  definitions: Map<string, string>
+  source: string
+  retainedDefinitions: Set<string>
+}
 
 // ADF only allows these block types inside list items and blockquotes.
 const CONTAINER_BLOCKS = new Set(['paragraph', 'list', 'code'])
@@ -30,10 +34,11 @@ let parserLoad: Promise<MarkdownParser> | null = null
 function loadMarkdownParser(): Promise<MarkdownParser> {
   parserLoad ??= Promise.all([
     import('unified'),
+    import('remark-parse'),
     import('../../shared/comment-markdown-parse-plugins')
   ])
-    .then(([{ unified }, { commentMarkdownParsePlugins }]) => {
-      const processor = unified().use(commentMarkdownParsePlugins)
+    .then(([{ unified }, { default: remarkParse }, { commentMarkdownParsePlugins }]) => {
+      const processor = unified().use(remarkParse).use(commentMarkdownParsePlugins)
       return (markdown: string): MdNode => processor.runSync(processor.parse(markdown))
     })
     .catch((error: unknown) => {
@@ -44,6 +49,7 @@ function loadMarkdownParser(): Promise<MarkdownParser> {
 }
 
 function sourceText(node: MdNode, context: ConversionContext): string {
+  retainReferenceDefinitions(node, context)
   const start = node.position?.start.offset
   const end = node.position?.end.offset
   if (start === undefined || end === undefined) {
@@ -57,6 +63,20 @@ function sourceText(node: MdNode, context: ConversionContext): string {
       index > 0 && /^[ >]*$/.test(line.slice(0, indent)) ? line.slice(indent) : line
     )
     .join('\n')
+}
+
+function retainReferenceDefinitions(node: MdNode, context: ConversionContext): void {
+  if ((node.type === 'linkReference' || node.type === 'imageReference') && node.identifier) {
+    context.retainedDefinitions.add(node.identifier)
+  }
+  node.children?.forEach((child) => retainReferenceDefinitions(child, context))
+}
+
+function retainedDefinitionBlocks(node: MdNode, context: ConversionContext): AdfNode[] {
+  if (node.type === 'definition' && context.retainedDefinitions.has(node.identifier ?? '')) {
+    return [paragraph(textNodes(sourceText(node, context), []))]
+  }
+  return (node.children ?? []).flatMap((child) => retainedDefinitionBlocks(child, context))
 }
 
 function collectDefinitions(node: MdNode, definitions: Map<string, string>): void {
@@ -269,7 +289,16 @@ function blockNode(node: MdNode, context: ConversionContext): AdfNode[] {
 export async function markdownToAdf(markdown: string): Promise<AdfNode> {
   const parse = await loadMarkdownParser()
   const root = parse(markdown)
-  const context: ConversionContext = { definitions: new Map(), source: markdown }
+  const context: ConversionContext = {
+    definitions: new Map(),
+    source: markdown,
+    retainedDefinitions: new Set()
+  }
   collectDefinitions(root, context.definitions)
-  return { type: 'doc', version: 1, content: blockNodes(root.children, context) }
+  const content = blockNodes(root.children, context)
+  return {
+    type: 'doc',
+    version: 1,
+    content: [...content, ...retainedDefinitionBlocks(root, context)]
+  }
 }

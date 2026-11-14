@@ -118,6 +118,7 @@ export function adfToMarkdownText(value: unknown, options?: AdfToMarkdownOptions
       rule: '-',
       ruleSpaces: false,
       handlers: {
+        break: () => '\n',
         jiraMedia: (node: JiraMediaMarkdown) => node.value,
         text: (node: Text, parent, state, info) =>
           state

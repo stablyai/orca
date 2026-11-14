@@ -60,7 +60,7 @@ describe('Jira document publication', () => {
       { transition: { id: '30' }, update: { comment: [{ add: { body: expectedAdf } }] } },
       { body: expectedAdf }
     ])
-    expect(adfToMarkdownText(expectedAdf)).toBe('first\\\nsecond\n\n**third**')
+    expect(adfToMarkdownText(expectedAdf)).toBe('first\nsecond\n\n**third**')
   })
 
   it('keeps Server/DC wiki strings unchanged through the same writes', async () => {

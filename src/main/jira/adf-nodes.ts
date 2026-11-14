@@ -1,7 +1,11 @@
 export type AdfRecord = Record<string, unknown>
 
+function isAdfRecord(value: unknown): value is AdfRecord {
+  return value !== null && typeof value === 'object'
+}
+
 export function adfRecord(value: unknown): AdfRecord {
-  return value && typeof value === 'object' ? (value as AdfRecord) : {}
+  return isAdfRecord(value) ? value : {}
 }
 
 export function adfChildren(value: unknown): unknown[] {

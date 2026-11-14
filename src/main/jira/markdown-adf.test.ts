@@ -1,4 +1,5 @@
-import { expect, it } from 'vitest'
+import { expect, it, vi } from 'vitest'
+import { emailCharacterReader } from './adf-bare-email'
 import { markdownToAdf } from './markdown-adf'
 import { adfToMarkdownText } from './adf-markdown'
 
@@ -144,7 +145,7 @@ it('escapes active literal syntax while keeping identifiers and bare links reada
     ]
   }
   expect(adfToMarkdownText(doc)).toBe(
-    'snake_case & plain https://example.com/a_b?x=1&y=2 me@example.com \\*\\*x\\*\\* \\[x]'
+    'snake_case & plain <https://example.com/a_b?x=1&y=2> <me@example.com> \\*\\*x\\*\\* \\[x]'
   )
 })
 
@@ -185,4 +186,105 @@ it('preserves media resolvers and falls back for rich Jira tables', () => {
       ]
     })
   ).toBe('merged\n\ndetails')
+})
+
+it('keeps Jira smart links active and ordinary hard breaks readable', () => {
+  expect(
+    adfToMarkdownText({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            { type: 'inlineCard', attrs: { url: 'https://example.com/a_b?x=1&y=2' } },
+            { type: 'hardBreak' },
+            { type: 'text', text: 'next line' }
+          ]
+        }
+      ]
+    })
+  ).toBe('<https://example.com/a_b?x=1&y=2>\nnext line')
+})
+
+it('retains reference destinations used by inert source fallbacks', async () => {
+  const doc = await markdownToAdf(
+    '[local][doc] ![plot][img]\n\n[doc]: ../readme.md\n[img]: ../plot.png'
+  )
+  expect(doc).toEqual({
+    type: 'doc',
+    version: 1,
+    content: [
+      {
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: '[local][doc]' },
+          { type: 'text', text: ' ' },
+          { type: 'text', text: '![plot][img]' }
+        ]
+      },
+      { type: 'paragraph', content: [{ type: 'text', text: '[doc]: ../readme.md' }] },
+      { type: 'paragraph', content: [{ type: 'text', text: '[img]: ../plot.png' }] }
+    ]
+  })
+})
+
+it('preserves existing parenthesized and www links and split literal entities', () => {
+  expect(
+    adfToMarkdownText({
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [
+            {
+              type: 'text',
+              text: 'https://example.com/wiki/Foo_(bar) www.example.com me@example.com。次'
+            },
+            { type: 'hardBreak' },
+            { type: 'text', text: '&am' },
+            { type: 'text', text: 'p;' }
+          ]
+        }
+      ]
+    })
+  ).toBe(
+    '<https://example.com/wiki/Foo_(bar)> [www.example.com](http://www.example.com) <me@example.com>。次\n\\&amp;'
+  )
+})
+
+it('bounds real email character reads through document read-back at N and 10N', () => {
+  for (const length of [3200, 32000]) {
+    const addresses = Math.floor(length / 15)
+    const fixtures = [
+      { value: 'A'.repeat(length), expected: 'A'.repeat(length) },
+      { value: `${'a'.repeat(length - 2)}@x`, expected: `${'a'.repeat(length - 2)}\\@x` },
+      { value: '@a. '.repeat(length / 4), expected: '@a. '.repeat(length / 4).trimEnd() },
+      {
+        value: 'me@example.com '.repeat(addresses) + 'a'.repeat(length % 15),
+        expected: '<me@example.com> '.repeat(addresses) + 'a'.repeat(length % 15)
+      }
+    ]
+    for (const { value, expected } of fixtures) {
+      const visited = new Set<number>()
+      let reads = 0
+      const probe = vi.spyOn(emailCharacterReader, 'read').mockImplementation((input, index) => {
+        reads++
+        visited.add(index)
+        return input[index]
+      })
+      try {
+        const actual = adfToMarkdownText({
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: value }] }]
+        })
+        expect(actual).toBe(expected)
+        expect(visited.size).toBe(value.length)
+        expect(reads).toBeLessThanOrEqual(
+          3 * value.length + 2 * [...value].filter((char) => char === '@').length
+        )
+      } finally {
+        probe.mockRestore()
+      }
+    }
+  }
 })
