@@ -23,7 +23,9 @@ const NAME_TOKENS: readonly (readonly [string, TerminalAgent])[] = [
   ['openclaw', 'openclaw'],
   ['aider', 'aider'],
   ['grok', 'grok'],
-  ['devin', 'devin']
+  ['devin', 'devin'],
+  // Qwen Code's hook-less sidebar row reads the `qwen` process title, not only the display label.
+  ['qwen', 'qwen-code']
 ]
 
 /** Agents whose name is matched by a dedicated pattern rather than a plain token. */
@@ -39,7 +41,8 @@ const EMITTED_DISPLAY_LABEL_AGENTS = [
   'mimo-code',
   'prime-agent',
   'command-code',
-  'copilot'
+  'copilot',
+  'qwen-code'
 ] as const satisfies readonly TerminalAgent[]
 
 const DISPLAY_LABELS = [
