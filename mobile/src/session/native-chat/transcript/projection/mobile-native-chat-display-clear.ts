@@ -7,15 +7,16 @@ import {
   NATIVE_CHAT_SOURCES,
   nativeChatSemanticRowId,
   type NativeChatMessage
-} from '../../../../../src/shared/native-chat/native-chat-types'
-import { compareNativeChatTranscriptMessages } from '../../../../../src/shared/native-chat/transcript/native-chat-transcript-projection'
-import { setBoundedScopeCacheEntry } from '../../../../../src/shared/native-chat/native-chat-scope-cache'
+} from '../../../../../../src/shared/native-chat/native-chat-types'
+import { compareNativeChatTranscriptMessages } from '../../../../../../src/shared/native-chat/transcript/native-chat-transcript-projection'
+import { setBoundedScopeCacheEntry } from '../../../../../../src/shared/native-chat/native-chat-scope-cache'
 import {
   decodeDeviceStoreValue,
   encodeDeviceStoreValue
-} from '../../../device-store/device-store-value-codec'
-import { readPageDeviceStore } from '../../../mobile-web-shell/bridge/page-device-store'
-import { chatTranscriptStoreKey } from './mobile-native-chat-transcript-store'
+} from '../../../../device-store/device-store-value-codec'
+import { readPageDeviceStore } from '../../../../mobile-web-shell/bridge/page-device-store'
+import { useChatTranscriptStoreReadWait } from '../persistence/use-stored-chat-transcript'
+import { chatTranscriptStoreKey } from '../persistence/mobile-native-chat-transcript-store'
 
 // Store only placement, never a second copy of the message's content.
 const boundarySchema = z
@@ -156,7 +157,9 @@ export function useMobileNativeChatDisplayMessages(
   preview?: Preview
 ) {
   const read = useCallback(() => (identity === null ? null : boundaries.get(identity)), [identity])
-  const boundary = useSyncExternalStore(subscribe, read, read)
+  const storedBoundary = useSyncExternalStore(subscribe, read, read)
+  const reading = useChatTranscriptStoreReadWait(identity, storedBoundary === undefined)
+  const boundary = storedBoundary === undefined && !reading ? null : storedBoundary
   useEffect(() => {
     if (identity !== null) {
       load(identity)

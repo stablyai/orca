@@ -26,7 +26,7 @@ import { useMobileNativeChatMarkdownLinks } from './links/use-mobile-native-chat
 import { MobileMarkdownLinksContext } from '../../components/mobile-markdown-links-context'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { useMobileNativeChatDisplayMessages } from './transcript/mobile-native-chat-display-clear'
+import { useMobileNativeChatDisplayMessages } from './transcript/projection/mobile-native-chat-display-clear'
 
 type Props = {
   controller: MobileNativeChatController

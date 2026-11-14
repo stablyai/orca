@@ -1,15 +1,74 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { expect, it } from 'vitest'
-import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
-import { publishPageDeviceStore } from '../../../mobile-web-shell/bridge/page-device-store'
-import { encodeDeviceStoreValue } from '../../../device-store/device-store-value-codec'
-import { chatTranscriptStoreKey } from './mobile-native-chat-transcript-store'
+import { expect, it, vi } from 'vitest'
+import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
+import {
+  publishPageDeviceStore,
+  type PageDeviceStoreRead
+} from '../../../../mobile-web-shell/bridge/page-device-store'
+import { encodeDeviceStoreValue } from '../../../../device-store/device-store-value-codec'
+import { chatTranscriptStoreKey } from '../persistence/mobile-native-chat-transcript-store'
 import {
   clearMobileNativeChatDisplay,
   mobileNativeChatMessagesAfterDisplayClear,
   useMobileNativeChatDisplayMessages
 } from './mobile-native-chat-display-clear'
+
+it('shows live content during an unanswered store read and still applies a late saved clear', async () => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  const boundary: NativeChatMessage = {
+    id: 'old',
+    role: 'assistant',
+    blocks: [],
+    timestamp: 1000,
+    source: 'transcript',
+    transcriptOrder: 10
+  }
+  const rows = [boundary, { ...boundary, id: 'new', transcriptOrder: 20 }]
+  let complete: (result: PageDeviceStoreRead) => void = () => {
+    throw new Error('read not started')
+  }
+  const response = new Promise<PageDeviceStoreRead>((resolve) => {
+    complete = resolve
+  })
+  publishPageDeviceStore({
+    available: () => true,
+    read: () => response,
+    write: async () => ({ written: true })
+  })
+  let shown: string[] = []
+  let streaming: string | null = null
+  function Harness(): null {
+    const display = useMobileNativeChatDisplayMessages('unanswered-display-clear-store', rows, {
+      text: 'live preview',
+      turnStartedAt: 2000
+    })
+    shown = display.messages.map((row) => row.id)
+    streaming = display.streaming
+    return null
+  }
+  let renderer: ReactTestRenderer | null = null
+  try {
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000)
+    })
+    expect(shown).toEqual(['old', 'new'])
+    expect(streaming).toBe('live preview')
+    await act(async () => {
+      complete({ status: 'ok', values: [encodeDeviceStoreValue({ row: boundary, preview: null })] })
+    })
+    expect(shown).toEqual(['new'])
+  } finally {
+    await act(async () => {
+      renderer?.unmount()
+    })
+    publishPageDeviceStore(null)
+    vi.useRealTimers()
+  }
+})
 
 it('hides cleared transcript rows and their revisions while showing subsequent output', () => {
   const boundary: NativeChatMessage = {

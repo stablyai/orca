@@ -4,8 +4,8 @@ import { expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import { mountFixture } from '../../../test-support/rpc-recording/recorder-fixture-shape'
-import { storedTabChatTranscriptIdentity } from '../../../session/native-chat/transcript/mobile-native-chat-transcript-store'
-import { useMobileNativeChatDisplayMessages } from '../../../session/native-chat/transcript/mobile-native-chat-display-clear'
+import { storedTabChatTranscriptIdentity } from '../../../session/native-chat/transcript/persistence/mobile-native-chat-transcript-store'
+import { useMobileNativeChatDisplayMessages } from '../../../session/native-chat/transcript/projection/mobile-native-chat-display-clear'
 import { useMobileSessionTerminalInput } from './use-mobile-session-terminal-input'
 
 it('clears a chat display only after the terminal buffer clear succeeds, without sending agent input', async () => {

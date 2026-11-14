@@ -1,13 +1,13 @@
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
-import type { MobileNativeChatTab } from '../../../session/native-chat/mobile-native-chat-eligibility'
-import { resolveMobileNativeChat } from '../../../session/native-chat/mobile-native-chat-eligibility'
-import { storedTabChatTranscriptIdentity } from '../../../session/native-chat/transcript/mobile-native-chat-transcript-store'
-import { heldMobileNativeChatTranscript } from '../../../session/native-chat/transcript/mobile-native-chat-transcript-cache'
+import type { MobileNativeChatTab } from '../../../session/native-chat/conversation/mobile-native-chat-eligibility'
+import { resolveMobileNativeChat } from '../../../session/native-chat/conversation/mobile-native-chat-eligibility'
+import { storedTabChatTranscriptIdentity } from '../../../session/native-chat/transcript/persistence/mobile-native-chat-transcript-store'
+import { heldMobileNativeChatTranscript } from '../../../session/native-chat/transcript/persistence/mobile-native-chat-transcript-cache'
 import { nativeChatSessionPageRead } from '../../../session/native-chat/agent-session/mobile-native-chat-page-read-operations'
 import {
   clearMobileNativeChatDisplay,
   mobileNativeChatDisplayBoundary
-} from '../../../session/native-chat/transcript/mobile-native-chat-display-clear'
+} from '../../../session/native-chat/transcript/projection/mobile-native-chat-display-clear'
 import { nativeChatHookTurnStartedAt } from '../../../../../src/shared/native-chat/native-chat-terminal-turn'
 
 /** Capture the target chat before a slow clear can switch tabs or hosts. Commit only after the terminal clears. */
