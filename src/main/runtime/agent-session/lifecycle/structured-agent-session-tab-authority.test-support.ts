@@ -12,7 +12,7 @@ import { structuredAgentSessionTabId } from '../../../../shared/agent-session/vi
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+} from '../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import {
   createStore,
   closeTestStores,

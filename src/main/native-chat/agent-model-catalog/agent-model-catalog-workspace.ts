@@ -1,9 +1,9 @@
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import { independentAgentModelCatalog } from '../../../shared/agent-session/options/agent-model-catalog-ownership'
+import { independentAgentModelCatalog } from '../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import {
   type AgentSessionAccountHome,
   isLegacyAgentSessionAccountHome
-} from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+} from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { isNativeLocalLocation } from '../../../shared/execution-host'
 import type {
   AgentModelCatalogConfiguredChoice,

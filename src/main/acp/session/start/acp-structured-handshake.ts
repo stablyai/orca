@@ -7,7 +7,7 @@ import { withAcpStartupDiagnostic } from './acp-startup-diagnostic'
 // this one never did; while a reopened session replays its history, nothing it sends is written
 // except context usage, and afterwards the turns of it the chat never saw are added once.
 
-import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentSessionProviderHandleLink } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { StructuredAgentSessionAcquireInput } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { StructuredAgentSessionProviderOpenResult } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import {

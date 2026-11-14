@@ -21,7 +21,7 @@ import type {
 import {
   decodeStructuredAgentSessionOptionValue,
   encodeStructuredAgentSessionOptionValue
-} from '../../agent-session/options/structured-agent-session-option-codec'
+} from '../../agent-session/options/selection/structured-agent-session-option-codec'
 
 export function resolveNativeChatSessionOptionDefaults(
   persisted: PersistedNativeChatSessionOptions | null | undefined,

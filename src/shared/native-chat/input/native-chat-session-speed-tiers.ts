@@ -2,7 +2,7 @@ import type {
   SessionOptionDescriptor,
   SessionOptionSelectChoice
 } from './native-chat-session-options'
-import { isFastServiceTier } from '../../agent-session/options/structured-agent-session-discovered-model'
+import { isFastServiceTier } from '../../agent-session/options/model-catalog/structured-agent-session-discovered-model'
 
 const STANDARD_TIER = 'default'
 

@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import type { AgentSessionSlashCommand } from '../../../../../src/shared/agent-session/agent-session-wire'
-import type { StructuredAgentId } from '../../../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 
 import type {
   MobileNativeChatSendIntent,

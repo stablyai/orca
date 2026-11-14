@@ -1,10 +1,10 @@
 vi.mock('node:fs/promises', { spy: true })
 import '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { expect, it, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../../../shared/agent-session/options/agent-session-optional-model-capability'
-import { agentSessionOperationKey } from '../../../../../../shared/agent-session/lifecycle/agent-session-operation-ledger'
-import { CODEX_SESSION_OPTION_CATALOG } from '../../../../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
+import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../../../shared/agent-session/options/protocol/agent-session-optional-model-capability'
+import { agentSessionOperationKey } from '../../../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
+import { CODEX_SESSION_OPTION_CATALOG } from '../../../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-claude-codex'
 import {
   commitStructuredAgentSessionOptionValues,
   createStructuredAgentSessionOptionState,

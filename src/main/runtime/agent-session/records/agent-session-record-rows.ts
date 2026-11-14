@@ -1,4 +1,4 @@
-import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 // Load session/ledger rows once and persist only changed rows inside the journal transaction.
 // Unreadable records remain present and immutable; every mutation of their ids is refused.
 
@@ -8,7 +8,7 @@ import {
   isPersistedAgentSessionObservationRecord,
   type AgentSessionLease
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { decodePersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
+import { decodePersistedAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/records/agent-session-record-stored-form'
 import type Database from '../../../sqlite/sync-database'
 import type { SqliteRow } from '../../../sqlite/sqlite-statement'
 import type { AgentSessionStoreState } from './agent-session-store-state'

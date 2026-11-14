@@ -3,7 +3,7 @@ import type { NativeChatSubagentRow } from '../../../../../../shared/native-chat
 import type { NativeChatTurnJournal } from '../../../../../../shared/native-chat/transcript/native-chat-turn-membership'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { compareAgentJournalItems } from '../../../../../../shared/agent-session/journal/agent-session-journal-position'
-import { readAgentJournalTurn } from '../../../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 
 // Subagent rows are grouped by the parent turn they belong to; these checks prove that grouping still holds.
 

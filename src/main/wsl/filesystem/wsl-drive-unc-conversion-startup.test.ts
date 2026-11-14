@@ -6,8 +6,8 @@ import { getDefaultPersistedState } from '../../../shared/constants'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { encodeAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
+} from '../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
+import { encodeAgentSessionRecord } from '../../../shared/agent-session/lifecycle/records/agent-session-record-stored-form'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import '../../../shared/wsl-host-internal-gate'
 import { getHistorySessionDirName } from '../../daemon/history/storage/history-paths'

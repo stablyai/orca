@@ -1,6 +1,6 @@
 import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 import { randomUUID } from 'node:crypto'
-import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { createStructuredAgentSessionOperationId } from '../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { structuredAgentSessionSendBody } from '../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { StructuredAgentSessionFirstMessage } from '../../shared/agent-session/structured-agent-session-create'
 import type {

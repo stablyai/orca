@@ -12,7 +12,7 @@ import type {
   SessionOptionValue
 } from '../../../../../../../shared/native-chat/input/native-chat-session-options'
 import { nativeChatSessionChoiceLabel } from '../../../../../../../shared/native-chat/input/native-chat-session-option-labels'
-import { isFastServiceTier } from '../../../../../../../shared/agent-session/options/structured-agent-session-discovered-model'
+import { isFastServiceTier } from '../../../../../../../shared/agent-session/options/model-catalog/structured-agent-session-discovered-model'
 import { loneFastTier } from '../../../../../../../shared/native-chat/input/native-chat-session-speed-tiers'
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 

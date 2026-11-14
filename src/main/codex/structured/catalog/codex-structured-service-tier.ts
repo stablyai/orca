@@ -7,8 +7,8 @@ import { readRecord } from '../../app-server/codex-item-field-readers'
 import type { CodexOpenedThread } from '../threads/codex-structured-thread-open'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
 import { codexSessionCapabilities } from './codex-structured-catalog-entry'
-import { effectiveServiceTier } from '../../../../shared/agent-session/options/structured-agent-session-effective-tier'
-import { isFastServiceTier } from '../../../../shared/agent-session/options/structured-agent-session-discovered-model'
+import { effectiveServiceTier } from '../../../../shared/agent-session/options/reconciliation/structured-agent-session-effective-tier'
+import { isFastServiceTier } from '../../../../shared/agent-session/options/model-catalog/structured-agent-session-discovered-model'
 
 export const CODEX_DEFAULT_SERVICE_TIER = 'default'
 

@@ -9,7 +9,7 @@ import type {
 } from '../../../../../src/shared/agent-session/agent-session-thread-goal-wire'
 import { agentSessionWriteNoticeParts } from '../../../../../src/shared/agent-session/failures/agent-session-refusal-notice'
 import type { AgentJournalThreadGoal } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionOptionsResult } from '../../../../../src/shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../../../../src/shared/agent-session/options/protocol/agent-session-options-result'
 import type { StructuredAgentSessionState } from '../../../../../src/shared/agent-session/structured-agent-session-reducer'
 import type { StructuredAgentSessionComposerOptions } from '../../../../../src/shared/agent-session/view/structured-agent-session-composer'
 import { mobileAgentSessionWriteNoticeText } from '../agent-session/agent-session-write-notice-copy'

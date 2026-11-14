@@ -5,7 +5,7 @@ import { agentSessionRecordFixture } from '../../../testing/agent-session-record
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+} from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalSnapshot } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { prepareStructuredAgentSessionFork } from '../structured-agent-session-fork'

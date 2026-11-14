@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import {
   completedStructuredAgentTurnSeconds,
   selectStructuredAgentRunningTurnTiming
@@ -11,7 +11,7 @@ import { createTrackedJournalOpener } from '../../../native-chat/agent-session-j
 import { createDeferredStructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const SESSION = 'session-codex-failed-turn'
 const THREAD = 'thread-abc'

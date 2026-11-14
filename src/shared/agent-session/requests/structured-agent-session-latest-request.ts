@@ -12,7 +12,7 @@ import { isRootAgentJournalItem } from '../journal/agent-session-journal-produce
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
-} from '../lifecycle/agent-session-turn-record'
+} from '../lifecycle/records/agent-session-turn-record'
 import { classifyDispatchRejection } from './structured-agent-session-dispatch-rejection'
 import { withoutNativeChatVisualDirectiveLines } from '../../native-chat/native-chat-visual-directive'
 import { isUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'

@@ -6,7 +6,7 @@ import {
   MAX_AGENT_SESSION_DEATH_DETAIL_CHARS,
   type AgentSessionRecord
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { nextAgentSessionFence } from '../../../../shared/agent-session/lifecycle/agent-session-next-fence'
+import { nextAgentSessionFence } from '../../../../shared/agent-session/lifecycle/leases/agent-session-next-fence'
 import { assertFence, withLease } from './agent-session-lease-transitions'
 import type { AgentSessionRecordStore } from '../records/agent-session-record-store'
 

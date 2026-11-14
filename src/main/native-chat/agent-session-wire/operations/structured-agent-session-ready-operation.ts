@@ -2,7 +2,7 @@ import { isAgentSessionRefusalError } from '../../../../shared/agent-session/fai
 import {
   agentSessionFingerprintConflict,
   computeAgentSessionPayloadFingerprint
-} from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+} from '../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import type {
   AgentSessionMutationEnvelope,
   AgentSessionMutationResult

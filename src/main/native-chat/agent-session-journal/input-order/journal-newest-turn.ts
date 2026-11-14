@@ -1,6 +1,6 @@
 import { isDeepStrictEqual } from 'node:util'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { isAgentSessionContextClear } from '../../../../shared/agent-session/agent-session-context-clear'
 import { parseAgentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import {

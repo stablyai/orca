@@ -1,5 +1,5 @@
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { PROVIDER_EXIT_ROW_PREFIX } from '../../../../shared/agent-session/lifecycle/agent-session-stop-row-identity'
+import { PROVIDER_EXIT_ROW_PREFIX } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-stop-row-identity'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { ClaudeOpenTurn } from '../turns/claude-open-turn'

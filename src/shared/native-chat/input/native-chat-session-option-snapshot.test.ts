@@ -7,10 +7,10 @@ import { mergeDiscoveredAuthoritativeModels } from '../../agent-session/options/
 import {
   CLAUDE_SESSION_OPTION_CATALOG,
   CODEX_SESSION_OPTION_CATALOG
-} from '../../agent-session/options/agent-session-option-catalog-claude-codex'
-import { CURSOR_SESSION_OPTION_CATALOG } from '../../agent-session/options/agent-session-option-catalog-gemini-cursor'
-import { GROK_SESSION_OPTION_CATALOG } from '../../agent-session/options/agent-session-option-catalog-grok'
-import { resolveAgentSessionOptionLaunch } from '../../agent-session/options/agent-session-option-launch'
+} from '../../agent-session/options/catalog-providers/agent-session-option-catalog-claude-codex'
+import { CURSOR_SESSION_OPTION_CATALOG } from '../../agent-session/options/catalog-providers/agent-session-option-catalog-gemini-cursor'
+import { GROK_SESSION_OPTION_CATALOG } from '../../agent-session/options/catalog-providers/agent-session-option-catalog-grok'
+import { resolveAgentSessionOptionLaunch } from '../../agent-session/options/launch/agent-session-option-launch'
 import {
   createNativeChatSessionOptionRecord,
   type NativeChatSessionOptionRecord

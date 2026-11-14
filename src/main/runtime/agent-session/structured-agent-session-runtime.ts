@@ -1,7 +1,7 @@
 // Install lazily after Electron finalizes the profile path; runtimes without structured requests need no store. Journal-open failures install a refusal.
 
 import { stopPRWatchRuntime } from './pr-watch-runtime'
-import type { AgentSessionResumeTrigger } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+import type { AgentSessionResumeTrigger } from '../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import {
   structuredAgentSessionTeardownTrigger,
   tearDownRuntime,

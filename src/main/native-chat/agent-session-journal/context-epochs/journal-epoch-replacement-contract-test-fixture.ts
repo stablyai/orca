@@ -13,7 +13,7 @@ import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase
 } from '../store-lifecycle/journal-host-database-test-support'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
 import { agentSessionSendBodyFingerprint } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import * as attachmentReferences from '../../agent-session-attachments/agent-session-attachment-references'

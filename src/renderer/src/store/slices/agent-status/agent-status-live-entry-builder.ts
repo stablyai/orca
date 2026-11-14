@@ -1,5 +1,5 @@
 import { canonicalOrchestrationForRow } from '@/runtime/agent-orchestration/visible-agent-orchestration'
-import { resolveAgentSessionStartedAt } from '../../../../../shared/agent-session/lifecycle/agent-session-start-time'
+import { resolveAgentSessionStartedAt } from '../../../../../shared/agent-session/lifecycle/resume/agent-session-start-time'
 import { sameAgentStatusTerminalOwner } from '../../../../../shared/agent-status/identity/agent-status-terminal-owner'
 import { resolveAgentStatusLiveEntryTiming } from './agent-status-live-entry-timing'
 import type { AppState } from '../../types'
@@ -7,12 +7,12 @@ import { resolveAgentStatusLiveEntryMainAgent } from './agent-status-live-entry-
 import { resolveAgentStatusLiveEntryStateHistory } from '../../../../../shared/agent-status/lifecycle/agent-status-live-entry-state-history'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { MigrationUnsupportedPtyEntry } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import {
-  agentProviderSessionsEqual,
-  type AgentProviderSessionMetadata,
-  type SleepingAgentLaunchConfig,
-  type SleepingAgentSessionRecord
+import type {
+  AgentProviderSessionMetadata,
+  SleepingAgentLaunchConfig,
+  SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import {
   resolveAgentStatusIdentity,
   shouldSuppressInheritedTerminalStatus
@@ -36,7 +36,7 @@ import { liveEntryChildFields } from './agent-status-live-entry-children'
 import {
   canReuseStatusProviderSession,
   statusRetainsResumableIdentity
-} from '../../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
+} from '../../../../../shared/agent-session/lifecycle/resume/agent-resume-record-from-status'
 
 export type AgentStatusLiveEntryBuild = {
   entry: AgentStatusEntry

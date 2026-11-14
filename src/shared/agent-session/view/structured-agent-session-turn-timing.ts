@@ -9,7 +9,7 @@ import type {
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
-} from '../lifecycle/agent-session-turn-record'
+} from '../lifecycle/records/agent-session-turn-record'
 import {
   agentTurnVerdict,
   type AgentTurnOutcome

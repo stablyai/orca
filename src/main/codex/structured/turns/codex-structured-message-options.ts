@@ -6,7 +6,7 @@ import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason
 import { StructuredAgentSessionInputNotAdmitted } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
 import { agentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { codexDispatchRejection } from './codex-structured-turn-end-settlement'
-import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
 import { codexSessionCapabilities } from '../catalog/codex-structured-catalog-entry'

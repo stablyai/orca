@@ -13,7 +13,7 @@ import {
 import {
   agentSessionInteractionCommand,
   type AgentSessionInteractionMode
-} from '../../../../../src/shared/agent-session/options/agent-session-interaction-mode'
+} from '../../../../../src/shared/agent-session/options/permissions/agent-session-interaction-mode'
 import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
 import {
   boundedMenuItems,

@@ -10,7 +10,7 @@ import {
   agentSessionRefusalError,
   AgentSessionRefusalError
 } from '../../../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import type {
   AgentSessionAttachResult,
   AgentSessionMutationEnvelope,
@@ -34,7 +34,7 @@ import {
   captureStructuredAgentCliSource,
   type StructuredAgentCliSourceEvidence
 } from '../../../../../native-chat/conversation-adoption/structured-agent-cli-source'
-import type { StructuredAgentId } from '../../../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import { resolveUncommittedStructuredCreate } from './structured-agent-session-precommit-refusal'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import { structuredAgentSessionClosedBeforeCreate } from './structured-agent-session-close-before-create'
