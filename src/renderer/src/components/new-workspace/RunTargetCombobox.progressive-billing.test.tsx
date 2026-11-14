@@ -16,8 +16,8 @@ vi.mock('@/components/ui/popover', () => ({
   PopoverAnchor: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   PopoverContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>
 }))
-vi.mock('@/components/billing/plans/plans-page-store', () => ({
-  openPlansPage: vi.fn()
+vi.mock('@/lib/orca-cloud/open-cloud-console', () => ({
+  openCloudConsole: vi.fn()
 }))
 
 const hosts: ProjectHostSetupOption[] = [

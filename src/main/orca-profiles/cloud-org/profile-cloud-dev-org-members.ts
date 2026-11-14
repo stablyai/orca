@@ -1,19 +1,11 @@
-import { isValidOrgName } from '../../../shared/orca-org-management'
-import type { OrcaProfileOrgCreateResult } from '../../../shared/orca-org-management'
-import { randomUUID } from 'node:crypto'
-import { addDevOrganization, removeDevOrganization } from '../cloud-auth/profile-cloud-dev-auth'
 import type {
   OrcaOrgMember,
   OrcaOrgMembersRoster,
-  OrcaOrgPendingInvite,
-  OrcaProfileOrgMemberChangeRoleArgs,
-  OrcaProfileOrgMemberInviteArgs,
-  OrcaProfileOrgMemberMutationResult,
-  OrcaProfileOrgMemberRemoveArgs,
-  OrcaProfileOrgInviteRevokeArgs
+  OrcaOrgPendingInvite
 } from '../../../shared/orca-profiles'
 
-// With no dev-auth server, this roster mirrors real membership states and mutation results.
+// With no dev-auth server, this roster mirrors real membership states (read-only: the team is
+// managed in the web console).
 type DevOrgRoster = {
   members: OrcaOrgMember[]
   pendingInvites: OrcaOrgPendingInvite[]
@@ -78,116 +70,12 @@ function getDevRoster(orgId: string): DevOrgRoster {
   return seeded
 }
 
-/** ORCA_CLOUD_DEV_INVITE_ACCEPT_MS: invites older than this are accepted (dev demos of seats). */
-function acceptAgedDevInvites(roster: DevOrgRoster): void {
-  const acceptAfterMs = Number(process.env.ORCA_CLOUD_DEV_INVITE_ACCEPT_MS)
-  if (!Number.isFinite(acceptAfterMs) || acceptAfterMs <= 0) {
-    return
-  }
-  const now = Date.now()
-  const accepted = roster.pendingInvites.filter((invite) => now - invite.createdAt >= acceptAfterMs)
-  roster.pendingInvites = roster.pendingInvites.filter((invite) => !accepted.includes(invite))
-  for (const invite of accepted) {
-    const local = invite.email.split('@')[0] ?? invite.email
-    roster.members.push({
-      userId: `dev-${local}`,
-      email: invite.email,
-      displayName: local.charAt(0).toUpperCase() + local.slice(1),
-      role: invite.role
-    })
-  }
-}
-
 export function listDevOrcaCloudOrgMembers(orgId: string): OrcaOrgMembersRoster {
   const roster = getDevRoster(orgId)
-  acceptAgedDevInvites(roster)
   return {
     members: roster.members.map((member) => ({ ...member })),
     pendingInvites: roster.pendingInvites.map((invite) => ({ ...invite })),
     viewerRole: 'owner',
     canManageMembers: true
   }
-}
-
-export function inviteDevOrcaCloudOrgMember(
-  args: OrcaProfileOrgMemberInviteArgs
-): OrcaProfileOrgMemberMutationResult {
-  const roster = getDevRoster(args.orgId)
-  const email = args.email.toLowerCase()
-  if (roster.members.some((member) => member.email.toLowerCase() === email)) {
-    return { status: 'conflict', reason: 'already_member' }
-  }
-  if (roster.pendingInvites.some((invite) => invite.email.toLowerCase() === email)) {
-    return { status: 'conflict', reason: 'already_invited' }
-  }
-  roster.pendingInvites.push({ email: args.email, role: args.role, createdAt: Date.now() })
-  return { status: 'ok' }
-}
-
-export function revokeDevOrcaCloudOrgInvite(
-  args: OrcaProfileOrgInviteRevokeArgs
-): OrcaProfileOrgMemberMutationResult {
-  const roster = getDevRoster(args.orgId)
-  const email = args.email.toLowerCase()
-  const index = roster.pendingInvites.findIndex((invite) => invite.email.toLowerCase() === email)
-  if (index === -1) {
-    return { status: 'not-found' }
-  }
-  roster.pendingInvites.splice(index, 1)
-  return { status: 'ok' }
-}
-
-export function changeDevOrcaCloudOrgMemberRole(
-  args: OrcaProfileOrgMemberChangeRoleArgs
-): OrcaProfileOrgMemberMutationResult {
-  const roster = getDevRoster(args.orgId)
-  if (args.userId === devSelf().userId) {
-    return { status: 'invalid', reason: 'cannot_change_own_role' }
-  }
-  const member = roster.members.find((candidate) => candidate.userId === args.userId)
-  if (!member) {
-    return { status: 'not-found' }
-  }
-  member.role = args.role
-  return { status: 'ok' }
-}
-
-export function removeDevOrcaCloudOrgMember(
-  args: OrcaProfileOrgMemberRemoveArgs
-): OrcaProfileOrgMemberMutationResult {
-  const roster = getDevRoster(args.orgId)
-  if (args.userId === devSelf().userId) {
-    return { status: 'invalid', reason: 'cannot_remove_self' }
-  }
-  const index = roster.members.findIndex((candidate) => candidate.userId === args.userId)
-  if (index === -1) {
-    return { status: 'not-found' }
-  }
-  roster.members.splice(index, 1)
-  return { status: 'ok' }
-}
-
-export function createDevOrcaCloudOrg(name: string): OrcaProfileOrgCreateResult {
-  const trimmed = name.trim()
-  if (!isValidOrgName(trimmed)) {
-    return { status: 'invalid' }
-  }
-  const orgId = `dev-team-${randomUUID().slice(0, 8)}`
-  addDevOrganization({ orgId, name: trimmed, role: 'Owner' })
-  // A new team starts with just its creator.
-  devRostersByOrg.set(orgId, { members: [devSelf()], pendingInvites: [] })
-  return { status: 'created', orgId, name: trimmed }
-}
-
-export function leaveDevOrcaCloudOrg(orgId: string): OrcaProfileOrgMemberMutationResult {
-  const roster = getDevRoster(orgId)
-  const self = devSelf()
-  const owners = roster.members.filter((member) => member.role === 'owner')
-  const selfMember = roster.members.find((member) => member.userId === self.userId)
-  if (selfMember?.role === 'owner' && owners.length <= 1) {
-    return { status: 'invalid', reason: 'last_owner' }
-  }
-  roster.members = roster.members.filter((member) => member.userId !== self.userId)
-  removeDevOrganization(orgId)
-  return { status: 'ok' }
 }

@@ -164,15 +164,6 @@ export type OrcaBillingStatusResult =
   | { status: 'signed-out' }
   | { status: 'failed'; error: string }
 
-export type OrcaBillingCheckoutArgs = {
-  /** The catalog plan id (GET /v1/plans); billing resolves the Stripe price. */
-  plan: string
-  interval: OrcaBillingInterval
-  seats: number
-  /** The plans dialog joins an open cloud setup session: Checkout then returns to its next step. */
-  setupSessionId?: string
-}
-
 export type OrcaBillingOverageArgs = {
   enabled: boolean
   /** Whole cents; omitted keeps the current cap. */
@@ -205,29 +196,6 @@ export type OrcaBillingOverageResult =
   | { status: 'forbidden' }
   | { status: 'no-subscription' }
   | { status: 'cap-too-high' }
-  | { status: 'failed'; error: string }
-
-/** The top entries of a usage breakdown, and everything past them in one line. */
-export type OrcaBillingUsageTop = {
-  top: { id: string; seconds: number }[]
-  otherCount: number
-  otherSeconds: number
-}
-
-/** The last 30 days of sandbox hours (Plan & billing). Breakdowns are owners and admins only. */
-export type OrcaBillingUsageHistory = {
-  /** Oldest first; `start` is the viewer's local midnight in epoch ms. */
-  days: { start: number; seconds: number }[]
-  totalSeconds: number
-  yourSeconds: number
-  members: OrcaBillingUsageTop | null
-  sandboxes: OrcaBillingUsageTop | null
-}
-
-export type OrcaBillingUsageHistoryResult =
-  | { status: 'ok'; history: OrcaBillingUsageHistory }
-  | { status: 'unconfigured' }
-  | { status: 'signed-out' }
   | { status: 'failed'; error: string }
 
 /** Another team the signed-in user is on, and its plan state (cloud start B2, "Switch to <team>"). */

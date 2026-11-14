@@ -11,8 +11,8 @@ import {
   refreshBillingSummary
 } from '@/components/billing/billing-summary-store'
 import { overageFailureCopy } from '@/components/billing/plan-billing-copy'
-import { openPlansPage } from '@/components/billing/plans/plans-page-store'
-import { formatCents } from '@/components/billing/plans/plans-pricing'
+import { openCloudConsole } from '@/lib/orca-cloud/open-cloud-console'
+import { formatCents } from '../../../../shared/orca-billing-usage-alerts'
 import { ORCA_BILLING_OVERAGE_SECTION_ID } from '@/components/new-workspace/orca-cloud-run-target-access'
 import type { OrcaBillingOverageResult } from '../../../../shared/orca-billing'
 import type { CloudWakeBillingFix } from './cloud-wake-billing'
@@ -75,7 +75,7 @@ export function CloudWakeBillingFixButton({
   switch (fix) {
     case 'comparePlans':
       return (
-        <Button size="sm" onClick={() => openPlansPage('sandbox')}>
+        <Button size="sm" onClick={() => void openCloudConsole('billing')}>
           {t('auto.components.billing.comparePlans', 'Compare plans')}
         </Button>
       )

@@ -4,7 +4,6 @@
 import { z } from 'zod'
 import {
   CloudApiApprovalSchema,
-  CloudAuditLogPageSchema,
   CloudApiCreatedKeySchema,
   CloudApiGrantListSchema,
   CloudApiInstallationListSchema,
@@ -20,8 +19,6 @@ import {
   RoutineUpdatedSchema,
   RoutineWebhookSchema,
   type CloudApiErrorCode,
-  type CloudAuditLogExport,
-  type CloudAuditLogQuery,
   type CreateCloudApiApprovalInput,
   type CreateCloudApiKeyInput,
   type RoutineInput,
@@ -32,7 +29,6 @@ import {
 const REQUEST_TIMEOUT_MS = 20_000
 const MAX_DETAIL_CHARS = 200
 // 5000 events is about 1.5 MB; anything far past that is not the export this client asked for.
-const MAX_EXPORT_CHARS = 16 * 1024 * 1024
 
 export class CloudApiError extends Error {
   constructor(
@@ -212,24 +208,6 @@ export function createCloudApiClient(deps: CloudApiClientDeps) {
     getSettings: () => request('GET', 'v1/settings', CloudApiSettingsSchema),
     putSettings: (settings: { vmCliEnabled: boolean }) =>
       request('PUT', 'v1/settings', CloudApiSettingsSchema, { body: settings }),
-    listAuditLog: (query: CloudAuditLogQuery = {}) =>
-      request('GET', 'v1/audit-log', CloudAuditLogPageSchema, {
-        query,
-        notFoundMeansUnavailable: true
-      }),
-    exportAuditLogCsv: async (
-      query: Pick<CloudAuditLogQuery, 'category' | 'actor'> = {}
-    ): Promise<CloudAuditLogExport> => {
-      const response = await send('GET', 'v1/audit-log', {
-        query: { ...query, format: 'csv' },
-        notFoundMeansUnavailable: true
-      })
-      const csv = await response.text().catch(() => null)
-      if (csv === null || csv.length > MAX_EXPORT_CHARS) {
-        throw new CloudApiError('invalid-response')
-      }
-      return { csv, truncated: response.headers.get('x-orca-audit-truncated') === 'true' }
-    },
     listProjects: () => request('GET', 'v1/projects', CloudApiProjectListSchema),
     listInstallations: () =>
       request('GET', 'v1/github/installations', CloudApiInstallationListSchema, {

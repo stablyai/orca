@@ -5,7 +5,6 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { ConfirmationDialogProvider } from './components/confirmation-dialog'
 import { BrowserWebAuthnAccountDialog } from './components/browser-webauthn-account-dialog'
 import { BrowserExtensionInstallDialog } from './components/browser-extension-install-dialog'
-import { PlansDialogHost } from './components/billing/plans/PlansDialogHost'
 import { CloudMoveToComputerDialogMount } from './components/orca-cloud/CloudMoveToComputerDialogMount'
 import { CloudPrimaryDeleteDialogMount } from './components/orca-cloud/CloudPrimaryDeleteDialog'
 import { CloudSecretsAskDialogHost } from './components/cloud-secrets-ask/CloudSecretsMissingNotice'
@@ -13,7 +12,6 @@ import { OrcaCloudSignInSheet } from './components/settings/agent-accounts/sign-
 import { AgentHostPanel } from './components/agent-host-panel/AgentHostPanel'
 import { SecretRequestUnseenNotifier } from './components/agent-pane/SecretRequestUnseenNotifier'
 import { LocalCommandApprovalDialogHost } from './components/local-commands/LocalCommandApprovalDialog'
-import { TeamDialogHost } from './components/billing/team/TeamDialogHost'
 import { TeammateProfileDialog } from './components/teammates/TeammateProfileDialog'
 import { CloudWorkspacePickerDialog } from './components/cloud-workspaces/CloudWorkspacePicker'
 import { PokesNotifier } from './components/teammates/PokesNotifier'
@@ -129,7 +127,6 @@ function App(): React.JSX.Element {
             />
             <BrowserWebAuthnAccountDialog />
             <BrowserExtensionInstallDialog />
-            <PlansDialogHost />
             <CloudMoveToComputerDialogMount />
             <CloudPrimaryDeleteDialogMount />
             <CloudSecretsAskDialogHost />
@@ -137,7 +134,6 @@ function App(): React.JSX.Element {
             <OrcaCloudSignInSheet />
             <SecretRequestUnseenNotifier />
             <LocalCommandApprovalDialogHost />
-            <TeamDialogHost />
             <TeammateProfileDialog />
             <CloudWorkspacePickerDialog />
             <PokesNotifier />

@@ -8,9 +8,8 @@ import type {
   OrcaBillingOverageResult
 } from '../../../../shared/orca-billing'
 import { overageFailureCopy } from '../billing/plan-billing-copy'
-import { openPlansPage } from '../billing/plans/plans-page-store'
-import { requestOrcaCloudAfterCheckout } from '@/lib/orca-cloud-after-checkout'
-import { formatCents } from '../billing/plans/plans-pricing'
+import { openCloudConsole } from '@/lib/orca-cloud/open-cloud-console'
+import { formatCents } from '../../../../shared/orca-billing-usage-alerts'
 
 /** The four ways billing can refuse a create (JA-21 progressive billing). */
 export type BillingBlockKind = 'plan' | 'hoursUsed' | 'spendCap' | 'payment'
@@ -296,19 +295,17 @@ export function VmBuildBillingBlockerView({
 
 /**
  * The live blocker: in-app fixes (overage, a higher cap) save and continue the create at once; a
- * browser fix (payment) re-checks once when Orca regains focus, or on Check again.
+ * browser fix (a plan or payment, in the web console) re-checks once when Orca regains focus, or
+ * on Check again.
  */
 export function VmBuildBillingBlocker({
   kind,
-  creationId,
   canManageBilling,
   entitlement,
   onContinue,
   onBackToDraft
 }: {
   kind: BillingBlockKind
-  /** The blocked create: a paid checkout from Compare plans continues it. */
-  creationId: string
   canManageBilling: boolean
   entitlement: OrcaBillingEntitlement | null
   /** Starts the create again from "Checking your plan…". */
@@ -388,9 +385,8 @@ export function VmBuildBillingBlocker({
       onTurnOnOverage={() => void saveOverage(defaultCapCents)}
       onRaiseCap={(dollars) => void saveOverage(dollars * 100)}
       onComparePlans={() => {
-        // Once paid, the plans page closes and continues this create.
-        requestOrcaCloudAfterCheckout({ kind: 'retry', creationId })
-        openPlansPage('sandbox')
+        setPhase({ kind: 'browser', checking: false, stillBlocked: false })
+        void openCloudConsole('billing')
       }}
       onUpdatePayment={() => {
         setPhase({ kind: 'browser', checking: false, stillBlocked: false })

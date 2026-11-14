@@ -1,13 +1,7 @@
-import {
-  ORCA_TEAM_MFA_GRACE_CHOICES,
-  type OrcaTeamMfaGrace,
-  type OrcaTeamMfaPendingMember,
-  type OrcaTeamMfaPendingResult,
-  type OrcaTeamMfaPolicy,
-  type OrcaTeamMfaPolicyResult,
-  type OrcaTeamMfaPolicySetResult,
-  type OrcaTeamMfaRemindResult,
-  type OrcaTeamMfaSelfState
+import type {
+  OrcaTeamMfaPolicy,
+  OrcaTeamMfaPolicyResult,
+  OrcaTeamMfaSelfState
 } from '../../../shared/orca-team-mfa-policy'
 import {
   getOrcaCloudAuthConfig,
@@ -73,47 +67,11 @@ export function normalizeTeamMfaPolicy(value: unknown, apiBaseUrl: string): Orca
   const selfRecord = isRecord(record.self) ? record.self : {}
   // An unrecognized state is "unknown", never "blocked": only the server's word blocks anyone.
   const self = SELF_STATES.find((state) => state === selfRecord.mfa) ?? 'unknown'
-  const pendingMembers = finiteNumber(record.pendingMembers)
-  const inactive = isRecord(record.inactivePolicy)
-    ? finiteNumber(record.inactivePolicy.enforceAt)
-    : null
   return {
     policy: normalizeDeadline(record.policy),
     self,
-    setupUrl,
-    // Present only when the server sent the manager fields; a member's answer has none.
-    ...(typeof record.available === 'boolean'
-      ? {
-          manage: {
-            available: record.available,
-            pendingMembers: pendingMembers ?? 0,
-            ...(inactive !== null ? { inactiveEnforceAt: inactive } : {}),
-            ssoHandled: record.ssoHandled === true
-          }
-        }
-      : {})
+    setupUrl
   }
-}
-
-export function normalizePendingMembers(value: unknown): OrcaTeamMfaPendingMember[] {
-  const record = isRecord(value) ? value : null
-  const members = Array.isArray(record?.members) ? record.members : []
-  return members.flatMap((entry): OrcaTeamMfaPendingMember[] => {
-    const member = isRecord(entry) ? entry : null
-    const email = typeof member?.email === 'string' ? member.email.trim() : ''
-    if (!member || !email) {
-      return []
-    }
-    const displayName = typeof member.displayName === 'string' ? member.displayName.trim() : ''
-    return [
-      {
-        userId: typeof member.userId === 'string' && member.userId ? member.userId : null,
-        email,
-        ...(displayName ? { displayName } : {}),
-        mfa: member.mfa === 'blocked' ? 'blocked' : member.mfa === 'pending' ? 'pending' : 'off'
-      }
-    ]
-  })
 }
 
 async function request(url: string, init: RequestInit): Promise<unknown> {
@@ -198,101 +156,4 @@ export async function getOrcaTeamMfaPolicy(
   return result.status === 'unconfigured' || result.status === 'unsupported'
     ? result
     : unavailable(result)
-}
-
-export async function setOrcaTeamMfaPolicy(
-  userDataPath: string,
-  args: { orgId: string; enforce: OrcaTeamMfaGrace | 'off' }
-): Promise<OrcaTeamMfaPolicySetResult> {
-  if (args.enforce !== 'off' && !ORCA_TEAM_MFA_GRACE_CHOICES.includes(args.enforce)) {
-    return { status: 'failed', error: 'invalid_enforce' }
-  }
-  const result = await call(
-    userDataPath,
-    async (_apiBaseUrl, token, url) => {
-      const init =
-        args.enforce === 'off'
-          ? { ...requestInit('GET', token), method: 'DELETE' }
-          : { ...requestInit('POST', token, { enforce: args.enforce }), method: 'PUT' }
-      const answer = await request(url('/mfa-policy'), init)
-      const body = isRecord(answer) ? answer : null
-      return {
-        policy: normalizeDeadline(body?.policy),
-        pendingMembers: finiteNumber(body?.pendingMembers) ?? 0
-      }
-    },
-    args.orgId
-  )
-  if (result.status === 'ok') {
-    return { status: 'ok', ...result.value }
-  }
-  if (result.status === 'unconfigured' || result.status === 'unsupported') {
-    return result
-  }
-  if (result.status === 'request-error') {
-    const { errorCode } = result.error
-    if (errorCode === 'actor_needs_mfa') {
-      return { status: 'actor-needs-mfa' }
-    }
-    if (errorCode === 'mfa_enforcement_not_entitled') {
-      return { status: 'not-entitled' }
-    }
-    if (errorCode === 'sso_team_needs_notice') {
-      return { status: 'sso-needs-notice' }
-    }
-  }
-  return unavailable(result)
-}
-
-export async function listOrcaTeamMfaPending(
-  userDataPath: string,
-  orgId: string
-): Promise<OrcaTeamMfaPendingResult> {
-  const result = await call(
-    userDataPath,
-    async (_apiBaseUrl, token, url) =>
-      normalizePendingMembers(await request(url('/mfa-policy/pending'), requestInit('GET', token))),
-    orgId
-  )
-  if (result.status === 'ok') {
-    return { status: 'ok', members: result.value }
-  }
-  return result.status === 'unconfigured' || result.status === 'unsupported'
-    ? result
-    : unavailable(result)
-}
-
-export async function remindOrcaTeamMfa(
-  userDataPath: string,
-  args: { orgId: string; userId?: string }
-): Promise<OrcaTeamMfaRemindResult> {
-  const result = await call(
-    userDataPath,
-    async (_apiBaseUrl, token, url) => {
-      const answer = await request(
-        url('/mfa-policy/remind'),
-        requestInit('POST', token, args.userId ? { userId: args.userId } : {})
-      )
-      const body = isRecord(answer) ? answer : null
-      const delivery: 'log' | 'test-inbox' | 'unknown' =
-        body?.delivery === 'log' || body?.delivery === 'test-inbox' ? body.delivery : 'unknown'
-      return { recipients: finiteNumber(body?.recipients) ?? 0, delivery }
-    },
-    args.orgId
-  )
-  if (result.status === 'ok') {
-    return { status: 'ok', ...result.value }
-  }
-  if (result.status === 'unconfigured' || result.status === 'unsupported') {
-    return result
-  }
-  if (result.status === 'request-error') {
-    if (result.error.errorCode === 'no_policy') {
-      return { status: 'no-policy' }
-    }
-    if (result.error.errorCode === 'member_not_found') {
-      return { status: 'not-found' }
-    }
-  }
-  return unavailable(result)
 }

@@ -1,7 +1,6 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
 import {
-  CloudAuditLogQuerySchema,
   CreateCloudApiApprovalInputSchema,
   CreateCloudApiKeyInputSchema,
   RoutineInputSchema,
@@ -17,7 +16,6 @@ import {
 } from './cloud-api-service'
 
 const Id = z.string().min(1).max(128)
-const AuditExportQuery = CloudAuditLogQuerySchema.pick({ category: true, actor: true })
 const SettingsInput = z.object({ vmCliEnabled: z.boolean() }).strict()
 
 type Handler = (...args: unknown[]) => Promise<CloudApiResult<unknown>>
@@ -55,12 +53,6 @@ const HANDLERS: Record<string, Handler> = {
   'cloudApi:revokeGrant': call([Id], (c, id) => c.revokeGrant(id)),
   'cloudApi:getSettings': call([], (c) => c.getSettings()),
   'cloudApi:putSettings': call([SettingsInput], (c, input) => c.putSettings(input)),
-  'cloudApi:listAuditLog': call([CloudAuditLogQuerySchema.optional()], (c, q) =>
-    c.listAuditLog(q ?? {})
-  ),
-  'cloudApi:exportAuditLogCsv': call([AuditExportQuery.optional()], (c, q) =>
-    c.exportAuditLogCsv(q ?? {})
-  ),
   'cloudApi:listProjects': call([], (c) => c.listProjects()),
   'cloudApi:listInstallations': call([], (c) => c.listInstallations()),
   'cloudApi:listRoutines': call([], (c) => c.listRoutines()),

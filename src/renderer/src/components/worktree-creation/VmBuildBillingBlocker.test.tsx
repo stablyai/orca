@@ -13,8 +13,7 @@ import { VmBuildBillingBlocker, type BillingBlockKind } from './VmBuildBillingBl
 const setOverage =
   vi.fn<(args: { enabled: boolean; spendCapCents?: number }) => Promise<OrcaBillingOverageResult>>()
 const billingStatus = vi.fn<() => Promise<OrcaBillingStatusResult>>()
-vi.mock('../billing/plans/plans-page-store', () => ({ openPlansPage: vi.fn() }))
-vi.mock('@/lib/orca-cloud-after-checkout', () => ({ requestOrcaCloudAfterCheckout: vi.fn() }))
+vi.mock('@/lib/orca-cloud/open-cloud-console', () => ({ openCloudConsole: vi.fn() }))
 
 const openPortal = vi.fn(() => Promise.resolve({ status: 'opened' as const }))
 
@@ -59,7 +58,6 @@ function renderBlocker(
   render(
     <VmBuildBillingBlocker
       kind={kind}
-      creationId="c1"
       canManageBilling={canManageBilling}
       entitlement={{
         ...sampleTeam,
@@ -149,14 +147,20 @@ describe('billing blocker on the creating sheet (JA-21)', () => {
     expect(onContinue).not.toHaveBeenCalled()
   })
 
-  it('no plan: Compare plans opens Plans and continues this create once paid', async () => {
-    const { openPlansPage } = await import('../billing/plans/plans-page-store')
-    const { requestOrcaCloudAfterCheckout } = await import('@/lib/orca-cloud-after-checkout')
-    renderBlocker('plan')
+  it('no plan: Compare plans opens billing in the browser, and returning re-checks once', async () => {
+    const { openCloudConsole } = await import('@/lib/orca-cloud/open-cloud-console')
+    billingStatus.mockResolvedValue({
+      status: 'ok',
+      entitlement: { ...sampleTeam, canStartSandbox: true }
+    })
+    const { onContinue } = renderBlocker('plan')
     expect(screen.getByRole('heading', { name: 'Choose a plan' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Compare plans' }))
-    expect(requestOrcaCloudAfterCheckout).toHaveBeenCalledWith({ kind: 'retry', creationId: 'c1' })
-    expect(openPlansPage).toHaveBeenCalledWith('sandbox')
+    expect(openCloudConsole).toHaveBeenCalledWith('billing')
+    act(() => {
+      window.dispatchEvent(new Event('focus'))
+    })
+    await waitFor(() => expect(onContinue).toHaveBeenCalledOnce())
   })
 
   it.each([

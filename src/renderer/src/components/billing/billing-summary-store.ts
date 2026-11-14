@@ -6,7 +6,7 @@ import { useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import { getOrcaAccountKey } from '@/hooks/use-orca-account-key'
 import type { OrcaBillingStatusResult } from '../../../../shared/orca-billing'
-import { isActivePlan } from './team/team-seat-math'
+import { isActivePlan } from './plan-billing-format'
 
 export type BillingSummary = {
   /** null until the first read answers (or when billing is off for this build/account). */

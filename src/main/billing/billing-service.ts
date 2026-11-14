@@ -6,27 +6,23 @@ import { appendFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { app, shell } from 'electron'
 import type {
-  OrcaBillingCheckoutArgs,
   OrcaBillingLinkResult,
   OrcaBillingOpenResult,
   OrcaBillingOverageArgs,
   OrcaBillingOverageResult,
   OrcaBillingStatusResult,
   OrcaBillingTeamPlansResult,
-  OrcaBillingTrialClaimResult,
-  OrcaBillingUsageHistoryResult
+  OrcaBillingTrialClaimResult
 } from '../../shared/orca-billing'
 import type { OrcaPlanCatalogResult } from '../../shared/orca-billing-plans'
 import { loadPlanCatalog } from './plan-catalog-client'
 import { openResultForError } from './billing-open-result'
-import { withSetupSessionFallback } from './billing-setup-session-fallback'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/cloud-auth/profile-cloud-auth-config'
 import { runWithFreshOrcaCloudSession } from '../orca-profiles/cloud-session/profile-cloud-session-refresh'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import {
   BillingServiceError,
   claimTrial,
-  createCheckoutUrl,
   createPortalUrl,
   fetchEntitlement,
   fetchTeamPlans,
@@ -35,7 +31,6 @@ import {
   type BillingEndpoints
 } from './billing-client'
 import { getBillingEndpoints } from './billing-config'
-import { fetchUsageHistory } from './billing-usage-client'
 import { getBillingDevKeyFile, mintDevBillingToken } from './billing-dev-token'
 import { cleanCloudServiceUrl } from '../../shared/cloud-service-url'
 import { listOrcaProfileOrgMembers } from '../orca-profiles/cloud-org/profile-cloud-org-members-service'
@@ -117,7 +112,11 @@ function prepare(userDataPath: string): Ready {
             // The team this device shows, from the same profile whose session this is (a local
             // profile switch mid-call must not pair one profile's session with another's team);
             // never auth's shared "active team" (EP-9).
-            await mintBillingToken(endpoints, session.accessToken, active.profile.cloud?.activeOrgId ?? null),
+            await mintBillingToken(
+              endpoints,
+              session.accessToken,
+              active.profile.cloud?.activeOrgId ?? null
+            ),
             endpoints
           )
       )
@@ -187,25 +186,6 @@ export async function getOrcaBillingStatus(userDataPath: string): Promise<OrcaBi
   }
 }
 
-/** The last 30 days of sandbox hours, with days starting at the viewer's local midnight. */
-export async function getOrcaBillingUsageHistory(
-  userDataPath: string,
-  utcOffsetMinutes: number
-): Promise<OrcaBillingUsageHistoryResult> {
-  const ready = prepare(userDataPath)
-  if (!ready.ok) {
-    return { status: ready.status }
-  }
-  try {
-    const history = await ready.run((token, endpoints) =>
-      fetchUsageHistory(endpoints, token, utcOffsetMinutes)
-    )
-    return history === 'signed-out' ? { status: 'signed-out' } : { status: 'ok', history }
-  } catch (error) {
-    return { status: 'failed', error: message(error) }
-  }
-}
-
 /** Plan state for other teams the signed-in user is on (cloud start B2); never switches teams. */
 export async function getOrcaBillingTeamPlans(
   userDataPath: string,
@@ -266,17 +246,6 @@ async function openHosted(
   } catch (error) {
     return openResultForError(error)
   }
-}
-
-export function openOrcaBillingCheckout(
-  userDataPath: string,
-  args: OrcaBillingCheckoutArgs
-): Promise<OrcaBillingOpenResult> {
-  return withSetupSessionFallback(args, (checkoutArgs) =>
-    openHosted(userDataPath, (token, endpoints) =>
-      createCheckoutUrl(endpoints, token, checkoutArgs)
-    )
-  )
 }
 
 export function openOrcaBillingPortal(userDataPath: string): Promise<OrcaBillingOpenResult> {

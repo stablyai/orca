@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
 import type { OrcaProfileAuthStatus } from '../../../../../shared/orca-profiles'
-import { openTeamPage } from '../../billing/team/team-page-store'
+import { openCloudConsole } from '@/lib/orca-cloud/open-cloud-console'
 import { switchActiveTeam, usePendingTeamSwitch } from './switch-active-team'
 
 const PERSONAL_VALUE = '__personal__'
@@ -107,7 +107,7 @@ export function SidebarTeamSubmenu({
             <DropdownMenuSeparator />
           </>
         ) : null}
-        <DropdownMenuItem inset onSelect={() => openTeamPage({ kind: 'create' })}>
+        <DropdownMenuItem inset onSelect={() => void openCloudConsole('team')}>
           {t('auto.components.sidebar.teamSwitcher.create', 'Create a team…')}
         </DropdownMenuItem>
       </DropdownMenuSubContent>

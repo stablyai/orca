@@ -2,7 +2,6 @@
 // then call the billing service with it. Pure (fetch injected) so it is testable without Electron.
 import { z } from 'zod'
 import type {
-  OrcaBillingCheckoutArgs,
   OrcaBillingEntitlement,
   OrcaBillingOverageArgs,
   OrcaBillingTeamPlan
@@ -181,28 +180,6 @@ export async function fetchEntitlement(
   return normalizeEntitlement(
     await billingRequest(endpoints, token, 'GET', 'v1/billing/entitlements', undefined, fetchImpl)
   )
-}
-
-export async function createCheckoutUrl(
-  endpoints: BillingEndpoints,
-  token: string,
-  args: OrcaBillingCheckoutArgs,
-  fetchImpl: typeof fetch = fetch
-): Promise<string> {
-  const body = await billingRequest(
-    endpoints,
-    token,
-    'POST',
-    'v1/billing/checkout',
-    {
-      plan: args.plan,
-      interval: args.interval,
-      seats: args.seats,
-      ...(args.setupSessionId ? { setupSessionId: args.setupSessionId } : {})
-    },
-    fetchImpl
-  )
-  return assertStripeHostedUrl(UrlBody.safeParse(body).data?.url)
 }
 
 export async function createPortalUrl(

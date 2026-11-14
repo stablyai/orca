@@ -4,7 +4,7 @@ import React from 'react'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { useTranslate } from '@/i18n/use-translate'
-import { openPlansPage } from '@/components/billing/plans/plans-page-store'
+import { openCloudConsole } from '@/lib/orca-cloud/open-cloud-console'
 import { useOrcaCloudRunTargetAccess } from '../orca-cloud-billing-cache'
 
 export function OrcaCloudTrialUsedUpNotice({
@@ -32,7 +32,12 @@ export function OrcaCloudTrialUsedUpNotice({
         })
       : t('components.newWorkspace.trialUsedUp.memberTitleNoTeam', 'Your team’s trial is used up')
   const action = canManageBilling ? (
-    <Button type="button" variant="outline" size="xs" onClick={() => openPlansPage('sandbox')}>
+    <Button
+      type="button"
+      variant="outline"
+      size="xs"
+      onClick={() => void openCloudConsole('billing')}
+    >
       {t('components.newWorkspace.cloudSetup.choosePlan', 'Choose plan')}
     </Button>
   ) : onAskForPlan ? (

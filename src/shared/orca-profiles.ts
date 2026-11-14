@@ -277,39 +277,10 @@ export type OrcaProfileOrgMembersListArgs = {
   orgId: string
 }
 
-export type OrcaProfileOrgMemberInviteArgs = {
-  orgId: string
-  email: string
-  role: OrcaOrgRole
-}
-
-export type OrcaProfileOrgInviteRevokeArgs = {
-  orgId: string
-  email: string
-}
-
-export type OrcaProfileOrgMemberChangeRoleArgs = {
-  orgId: string
-  userId: string
-  role: OrcaOrgRole
-}
-
-export type OrcaProfileOrgMemberRemoveArgs = {
-  orgId: string
-  userId: string
-}
-
 export type OrcaProfileOrgMembersListResult =
   | { status: 'ok'; roster: OrcaOrgMembersRoster }
   | { status: 'unconfigured' | 'reconnect-required' }
   | { status: 'failed'; error: string }
-
-// Mutation results live with the other team actions; re-exported for existing imports.
-export type {
-  OrcaOrgInviteConflictReason,
-  OrcaOrgMutationInvalidReason,
-  OrcaProfileOrgMemberMutationResult
-} from './orca-org-management'
 
 export function createDefaultLocalOrcaProfile(now: number): OrcaProfileSummary {
   return {

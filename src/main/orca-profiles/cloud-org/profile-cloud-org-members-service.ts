@@ -1,16 +1,4 @@
-import type {
-  OrcaProfileOrgCreateArgs,
-  OrcaProfileOrgCreateResult,
-  OrcaProfileOrgLeaveArgs
-} from '../../../shared/orca-org-management'
-import type {
-  OrcaProfileOrgInviteRevokeArgs,
-  OrcaProfileOrgMemberChangeRoleArgs,
-  OrcaProfileOrgMemberInviteArgs,
-  OrcaProfileOrgMemberMutationResult,
-  OrcaProfileOrgMemberRemoveArgs,
-  OrcaProfileOrgMembersListResult
-} from '../../../shared/orca-profiles'
+import type { OrcaProfileOrgMembersListResult } from '../../../shared/orca-profiles'
 import type { ActiveOrcaProfileState } from '../profile-index-store'
 import { ensureActiveOrcaProfile } from '../profile-index-store'
 import type { OrcaCloudAuthConfig } from '../cloud-auth/profile-cloud-auth-config'
@@ -21,25 +9,8 @@ import {
 import type { OrcaCloudSession } from '../cloud-session/profile-cloud-session-store'
 import { OrcaCloudRequestError } from '../cloud-auth/profile-cloud-client'
 import { runWithFreshOrcaCloudSession } from '../cloud-session/profile-cloud-session-refresh'
-import { bumpOrcaCloudTokenEpoch } from '../cloud-token-epoch'
-import {
-  changeOrcaCloudOrgMemberRole,
-  createOrcaCloudOrg,
-  inviteOrcaCloudOrgMember,
-  leaveOrcaCloudOrg,
-  listOrcaCloudOrgMembers,
-  removeOrcaCloudOrgMember,
-  revokeOrcaCloudOrgInvite
-} from './profile-cloud-org-members-client'
-import {
-  changeDevOrcaCloudOrgMemberRole,
-  createDevOrcaCloudOrg,
-  inviteDevOrcaCloudOrgMember,
-  leaveDevOrcaCloudOrg,
-  listDevOrcaCloudOrgMembers,
-  removeDevOrcaCloudOrgMember,
-  revokeDevOrcaCloudOrgInvite
-} from './profile-cloud-dev-org-members'
+import { listOrcaCloudOrgMembers } from './profile-cloud-org-members-client'
+import { listDevOrcaCloudOrgMembers } from './profile-cloud-dev-org-members'
 
 export type OrgCallResult<T> =
   | { status: 'ok'; value: T }
@@ -82,48 +53,6 @@ export async function runOrgMemberCall<T>(
   }
 }
 
-function mapMutationRequestError(error: OrcaCloudRequestError): OrcaProfileOrgMemberMutationResult {
-  switch (error.statusCode) {
-    case 403:
-      return { status: 'forbidden' }
-    case 404:
-      // An unknown route (no JSON error code) means this auth deployment predates the action.
-      return error.errorCode ? { status: 'not-found' } : { status: 'unsupported' }
-    case 429:
-      return { status: 'rate-limited' }
-    case 409:
-      return {
-        status: 'conflict',
-        reason: error.errorCode === 'already_member' ? 'already_member' : 'already_invited'
-      }
-    case 400:
-      return {
-        status: 'invalid',
-        reason:
-          error.errorCode === 'cannot_remove_self'
-            ? 'cannot_remove_self'
-            : error.errorCode === 'last_owner'
-              ? 'last_owner'
-              : 'cannot_change_own_role'
-      }
-    default:
-      return { status: 'failed', error: error.message }
-  }
-}
-
-function mapMutationResult(result: OrgCallResult<void>): OrcaProfileOrgMemberMutationResult {
-  switch (result.status) {
-    case 'ok':
-      return { status: 'ok' }
-    case 'reconnect-required':
-      return { status: 'reconnect-required' }
-    case 'request-error':
-      return mapMutationRequestError(result.error)
-    case 'failed':
-      return { status: 'failed', error: result.error }
-  }
-}
-
 export async function listOrcaProfileOrgMembers(
   userDataPath: string,
   orgId: string
@@ -146,161 +75,6 @@ export async function listOrcaProfileOrgMembers(
       return { status: 'reconnect-required' }
     case 'request-error':
       return { status: 'failed', error: result.error.message }
-    case 'failed':
-      return { status: 'failed', error: result.error }
-  }
-}
-
-export async function inviteOrcaProfileOrgMember(
-  userDataPath: string,
-  args: OrcaProfileOrgMemberInviteArgs
-): Promise<OrcaProfileOrgMemberMutationResult> {
-  const active = ensureActiveOrcaProfile(userDataPath)
-  if (isOrcaCloudDevAuthEnabled()) {
-    return inviteDevOrcaCloudOrgMember(args)
-  }
-  const configState = getOrcaCloudAuthConfig()
-  if (!configState.configured) {
-    return { status: 'unconfigured' }
-  }
-  return mapMutationResult(
-    await runOrgMemberCall(configState.config, active, userDataPath, (session) =>
-      inviteOrcaCloudOrgMember(configState.config, session, args)
-    )
-  )
-}
-
-export async function revokeOrcaProfileOrgInvite(
-  userDataPath: string,
-  args: OrcaProfileOrgInviteRevokeArgs
-): Promise<OrcaProfileOrgMemberMutationResult> {
-  const active = ensureActiveOrcaProfile(userDataPath)
-  if (isOrcaCloudDevAuthEnabled()) {
-    return revokeDevOrcaCloudOrgInvite(args)
-  }
-  const configState = getOrcaCloudAuthConfig()
-  if (!configState.configured) {
-    return { status: 'unconfigured' }
-  }
-  return mapMutationResult(
-    await runOrgMemberCall(configState.config, active, userDataPath, (session) =>
-      revokeOrcaCloudOrgInvite(configState.config, session, args)
-    )
-  )
-}
-
-export async function changeOrcaProfileOrgMemberRole(
-  userDataPath: string,
-  args: OrcaProfileOrgMemberChangeRoleArgs
-): Promise<OrcaProfileOrgMemberMutationResult> {
-  const active = ensureActiveOrcaProfile(userDataPath)
-  if (isOrcaCloudDevAuthEnabled()) {
-    return changeDevOrcaCloudOrgMemberRole(args)
-  }
-  const configState = getOrcaCloudAuthConfig()
-  if (!configState.configured) {
-    return { status: 'unconfigured' }
-  }
-  const result = mapMutationResult(
-    await runOrgMemberCall(configState.config, active, userDataPath, (session) =>
-      changeOrcaCloudOrgMemberRole(configState.config, session, args)
-    )
-  )
-  // Why: the member may be this user; a cached sandbox token would keep the old role.
-  bumpOrcaCloudTokenEpoch()
-  return result
-}
-
-export async function removeOrcaProfileOrgMember(
-  userDataPath: string,
-  args: OrcaProfileOrgMemberRemoveArgs
-): Promise<OrcaProfileOrgMemberMutationResult> {
-  const active = ensureActiveOrcaProfile(userDataPath)
-  if (isOrcaCloudDevAuthEnabled()) {
-    return removeDevOrcaCloudOrgMember(args)
-  }
-  const configState = getOrcaCloudAuthConfig()
-  if (!configState.configured) {
-    return { status: 'unconfigured' }
-  }
-  const result = mapMutationResult(
-    await runOrgMemberCall(configState.config, active, userDataPath, (session) =>
-      removeOrcaCloudOrgMember(configState.config, session, args)
-    )
-  )
-  // Why: the member may be this user; a cached sandbox token would keep the old role.
-  bumpOrcaCloudTokenEpoch()
-  return result
-}
-
-/** Revoke then re-send so the provider emails a fresh link; the role is kept. */
-export async function resendOrcaProfileOrgInvite(
-  userDataPath: string,
-  args: OrcaProfileOrgMemberInviteArgs
-): Promise<OrcaProfileOrgMemberMutationResult> {
-  const revoked = await revokeOrcaProfileOrgInvite(userDataPath, {
-    orgId: args.orgId,
-    email: args.email
-  })
-  // A missing invite (accepted or revoked elsewhere) still gets a fresh one.
-  if (revoked.status !== 'ok' && revoked.status !== 'not-found') {
-    return revoked
-  }
-  return inviteOrcaProfileOrgMember(userDataPath, args)
-}
-
-export async function leaveOrcaProfileOrg(
-  userDataPath: string,
-  args: OrcaProfileOrgLeaveArgs
-): Promise<OrcaProfileOrgMemberMutationResult> {
-  const active = ensureActiveOrcaProfile(userDataPath)
-  if (isOrcaCloudDevAuthEnabled()) {
-    return leaveDevOrcaCloudOrg(args.orgId)
-  }
-  const configState = getOrcaCloudAuthConfig()
-  if (!configState.configured) {
-    return { status: 'unconfigured' }
-  }
-  return mapMutationResult(
-    await runOrgMemberCall(configState.config, active, userDataPath, (session) =>
-      leaveOrcaCloudOrg(configState.config, session, args.orgId)
-    )
-  )
-}
-
-export async function createOrcaProfileOrg(
-  userDataPath: string,
-  args: OrcaProfileOrgCreateArgs
-): Promise<OrcaProfileOrgCreateResult> {
-  const active = ensureActiveOrcaProfile(userDataPath)
-  if (isOrcaCloudDevAuthEnabled()) {
-    return createDevOrcaCloudOrg(args.name)
-  }
-  const configState = getOrcaCloudAuthConfig()
-  if (!configState.configured) {
-    return { status: 'unconfigured' }
-  }
-  const result = await runOrgMemberCall(configState.config, active, userDataPath, (session) =>
-    createOrcaCloudOrg(configState.config, session, args.name)
-  )
-  switch (result.status) {
-    case 'ok':
-      return { status: 'created', orgId: result.value.orgId, name: result.value.name }
-    case 'reconnect-required':
-      return { status: 'reconnect-required' }
-    case 'request-error':
-      if (result.error.statusCode === 404 || result.error.statusCode === 405) {
-        return { status: 'unsupported' }
-      }
-      if (result.error.statusCode === 429) {
-        return { status: 'rate-limited' }
-      }
-      if (result.error.statusCode === 409) {
-        return { status: 'name-taken' }
-      }
-      return result.error.statusCode === 400
-        ? { status: 'invalid' }
-        : { status: 'failed', error: result.error.message }
     case 'failed':
       return { status: 'failed', error: result.error }
   }

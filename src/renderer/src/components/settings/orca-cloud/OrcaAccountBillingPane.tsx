@@ -4,9 +4,9 @@ import {
   ACCOUNT_BILLING_PLAN_ANCHOR,
   hasOrcaBillingAccount
 } from '@/hooks/settings-navigation-orca-cloud-sections'
-import { PlanBillingSection } from '../../billing/PlanBillingSection'
 import { OrcaAccountSettingsPane } from '../accounts/orca/OrcaAccountSettingsPane'
 import { SettingsGroupHeader } from '../section-layout/SettingsGroup'
+import { PlanBillingConsoleLink } from './OrcaCloudConsoleLinks'
 
 /** The two parts of Account & billing under their headers; with no billing, just the account. */
 export function AccountBillingLayout({
@@ -47,8 +47,9 @@ export function AccountBillingLayout({
 
 /**
  * Neil: Account + Billing is one page in Orca Cloud builds. The account (who's signed in, Sign
- * out) leads; Plan & billing follows for signed-in, billing-enabled accounts. Signed out, the
- * account part already offers sign-in, so billing adds nothing rather than a second sign-in notice.
+ * out) leads; Plan & billing follows for signed-in, billing-enabled accounts, as the plan's status
+ * and a link to the web console, where billing is managed. Signed out, the account part already
+ * offers sign-in, so billing adds nothing rather than a second sign-in notice.
  */
 export function OrcaAccountBillingPane(): React.JSX.Element {
   // The same rule the nav uses for its "Account & billing" / "Account" label.
@@ -56,7 +57,7 @@ export function OrcaAccountBillingPane(): React.JSX.Element {
   return (
     <AccountBillingLayout
       account={<OrcaAccountSettingsPane />}
-      billing={showBilling ? <PlanBillingSection /> : null}
+      billing={showBilling ? <PlanBillingConsoleLink /> : null}
     />
   )
 }

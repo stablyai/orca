@@ -11,7 +11,7 @@ import {
   isAwaitingVmEnvironmentCheckDecision,
   resolveVmEnvironmentCheckDecision
 } from '@/runtime/ephemeral-vm/ephemeral-vm-environment-check-decision'
-import { openPlansPage } from '@/components/billing/plans/plans-page-store'
+import { openCloudConsole } from '@/lib/orca-cloud/open-cloud-console'
 import { ORCA_BILLING_OVERAGE_SECTION_ID } from '@/components/new-workspace/orca-cloud-run-target-access'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 import { toast } from 'sonner'
@@ -36,7 +36,6 @@ import { deriveVmBuildSteps, isOrcaCloudBuild, type VmBuildStep } from './vm-bui
 import { useMinimumRunningSteps } from './use-minimum-running-steps'
 import { useRetryAfterCloudSignIn } from './use-retry-after-cloud-sign-in'
 import { typedComposerPrompt } from './vm-build-composer-return'
-import { requestOrcaCloudAfterCheckout } from '@/lib/orca-cloud-after-checkout'
 import {
   connectOrcaCloudGitHub,
   orcaCloudRepoName,
@@ -270,7 +269,6 @@ export function VmBuildSheet({
         {billingBlock ? (
           <VmBuildBillingBlocker
             kind={billingBlock}
-            creationId={creationId}
             canManageBilling={canManageBilling}
             entitlement={billing.result?.status === 'ok' ? billing.result.entitlement : null}
             onContinue={onRetry}
@@ -354,11 +352,7 @@ export function VmBuildSheet({
                   isBillingFailure(failure) && typedComposerPrompt(entry).trim()
                     ? () => onReturnToComposer({ local: false })
                     : onDismiss,
-                onSeePlans: () => {
-                  // Once paid, the plans dialog closes and retries this create.
-                  requestOrcaCloudAfterCheckout({ kind: 'retry', creationId })
-                  openPlansPage('sandbox')
-                },
+                onSeePlans: () => void openCloudConsole('billing'),
                 onCreateLocally: () => onReturnToComposer({ local: true }),
                 onOpenBilling: () => {
                   const store = useAppStore.getState()

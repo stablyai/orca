@@ -1,28 +1,20 @@
 import { ipcMain } from 'electron'
 import { z } from 'zod'
 import type {
-  OrcaBillingCheckoutArgs,
   OrcaBillingOpenResult,
   OrcaBillingOverageArgs,
   OrcaBillingOverageResult,
   OrcaBillingStatusResult,
   OrcaBillingTeamPlansResult,
-  OrcaBillingTrialClaimResult,
-  OrcaBillingUsageHistoryResult
+  OrcaBillingTrialClaimResult
 } from '../../../shared/orca-billing'
 import type { OrcaPlanCatalogResult } from '../../../shared/orca-billing-plans'
-import {
-  ORCA_BILLING_INTERVALS,
-  ORCA_BILLING_MAX_SEATS,
-  ORCA_BILLING_TEAM_PLANS_MAX_ORGS
-} from '../../../shared/orca-billing'
+import { ORCA_BILLING_TEAM_PLANS_MAX_ORGS } from '../../../shared/orca-billing'
 import {
   claimOrcaBillingTrial,
   getOrcaBillingStatus,
   getOrcaBillingTeamPlans,
-  getOrcaBillingUsageHistory,
   getOrcaPlanCatalog,
-  openOrcaBillingCheckout,
   openOrcaBillingPortal,
   setOrcaBillingOverage
 } from '../../billing/billing-service'
@@ -45,16 +37,6 @@ import {
   startCloudSetup
 } from '../../billing/cloud-setup-service'
 
-const CheckoutArgs = z
-  .object({
-    // A plan id from billing's catalog (GET /v1/plans); billing decides what it sells.
-    plan: z.string().regex(/^[a-z][a-z0-9_]{0,39}$/),
-    interval: z.enum(ORCA_BILLING_INTERVALS),
-    seats: z.number().int().min(1).max(ORCA_BILLING_MAX_SEATS),
-    setupSessionId: z.string().regex(CLOUD_SETUP_SESSION_ID).optional()
-  })
-  .strict()
-
 // Cents; the billing service enforces the plan's maximum.
 const OverageArgs = z
   .object({
@@ -62,21 +44,6 @@ const OverageArgs = z
     spendCapCents: z.number().int().min(0).max(100_000_000).optional()
   })
   .strict()
-
-// Minutes east of UTC (the renderer's -getTimezoneOffset()), so chart days are local days.
-const UsageHistoryArgs = z
-  .object({ utcOffsetMinutes: z.number().int().min(-840).max(840) })
-  .strict()
-
-export function billingUsageHistoryArgsFromUnknown(args: unknown): {
-  utcOffsetMinutes: number
-} {
-  const parsed = UsageHistoryArgs.safeParse(args)
-  if (!parsed.success) {
-    throw new Error('invalid_orca_billing_usage_history')
-  }
-  return parsed.data
-}
 
 const TeamPlansArgs = z
   .object({
@@ -121,14 +88,6 @@ export function cloudSetupStartArgsFromUnknown(args: unknown): CloudSetupStartAr
   return parsed.data
 }
 
-export function billingCheckoutArgsFromUnknown(args: unknown): OrcaBillingCheckoutArgs {
-  const parsed = CheckoutArgs.safeParse(args)
-  if (!parsed.success) {
-    throw new Error('invalid_orca_billing_checkout')
-  }
-  return parsed.data
-}
-
 export function billingOverageArgsFromUnknown(args: unknown): OrcaBillingOverageArgs {
   const parsed = OverageArgs.safeParse(args)
   if (!parsed.success) {
@@ -164,22 +123,9 @@ export function registerOrcaProfileBillingHandlers(store: Store): void {
     getOrcaPlanCatalog(getProfileUserDataPath())
   )
   ipcMain.handle(
-    'orcaProfiles:billingOpenCheckout',
-    async (_event, rawArgs: unknown): Promise<OrcaBillingOpenResult> =>
-      openOrcaBillingCheckout(getProfileUserDataPath(), billingCheckoutArgsFromUnknown(rawArgs))
-  )
-  ipcMain.handle(
     'orcaProfiles:billingSetOverage',
     async (_event, rawArgs: unknown): Promise<OrcaBillingOverageResult> =>
       setOrcaBillingOverage(getProfileUserDataPath(), billingOverageArgsFromUnknown(rawArgs))
-  )
-  ipcMain.handle(
-    'orcaProfiles:billingUsageHistory',
-    async (_event, rawArgs: unknown): Promise<OrcaBillingUsageHistoryResult> =>
-      getOrcaBillingUsageHistory(
-        getProfileUserDataPath(),
-        billingUsageHistoryArgsFromUnknown(rawArgs).utcOffsetMinutes
-      )
   )
   ipcMain.handle(
     'orcaProfiles:billingTeamPlans',

@@ -1,12 +1,11 @@
 import type {
-  OrcaTeamMfaPendingResult,
   OrcaTeamMfaPolicyArgs,
-  OrcaTeamMfaPolicyResult,
-  OrcaTeamMfaPolicySetArgs,
-  OrcaTeamMfaPolicySetResult,
-  OrcaTeamMfaRemindArgs,
-  OrcaTeamMfaRemindResult
+  OrcaTeamMfaPolicyResult
 } from '../../shared/orca-team-mfa-policy'
+import type {
+  OrcaCloudConsoleOpenArgs,
+  OrcaCloudConsoleOpenResult
+} from '../../shared/orca-cloud-console'
 import type { OrcaAccountMfaResult } from '../../shared/orca-account-mfa'
 import type {
   CloudSetupGetResult,
@@ -14,24 +13,6 @@ import type {
   CloudSetupStartArgs,
   CloudSetupStartResult
 } from '../../shared/orca-cloud-setup'
-import type {
-  OrcaProfileOrgDeleteArgs,
-  OrcaProfileOrgDeleteCheckArgs,
-  OrcaProfileOrgDeleteCheckResult,
-  OrcaProfileOrgDeleteResult
-} from '../../shared/orca-org-delete'
-import type {
-  OrcaProfileOrgEnterpriseArgs,
-  OrcaProfileOrgEnterpriseDomainArgs,
-  OrcaProfileOrgEnterpriseResult,
-  OrcaProfileOrgSsoDomainResult,
-  OrcaProfileOrgSsoSetupLinkResult
-} from '../../shared/orca-org-enterprise'
-import type {
-  OrcaProfileOrgCreateArgs,
-  OrcaProfileOrgCreateResult,
-  OrcaProfileOrgLeaveArgs
-} from '../../shared/orca-org-management'
 import type {
   OrcaCloudSignInEnd,
   OrcaCloudSignInProgress,
@@ -44,11 +25,6 @@ import type {
   FindOrcaProfileProjectsByPathResult,
   OrcaProfileAuthStatus,
   OrcaProfileListResult,
-  OrcaProfileOrgInviteRevokeArgs,
-  OrcaProfileOrgMemberChangeRoleArgs,
-  OrcaProfileOrgMemberInviteArgs,
-  OrcaProfileOrgMemberMutationResult,
-  OrcaProfileOrgMemberRemoveArgs,
   OrcaProfileOrgMembersListArgs,
   OrcaProfileOrgMembersListResult,
   RefreshCurrentOrcaProfileAuthResult,
@@ -61,15 +37,13 @@ import type {
   TransferOrcaProfileProjectResult
 } from '../../shared/orca-profiles'
 import type {
-  OrcaBillingCheckoutArgs,
   OrcaBillingOpenResult,
   OrcaBillingOverageArgs,
   OrcaBillingOverageResult,
   OrcaBillingTrialClaimResult,
   OrcaBillingReturn,
   OrcaBillingStatusResult,
-  OrcaBillingTeamPlansResult,
-  OrcaBillingUsageHistoryResult
+  OrcaBillingTeamPlansResult
 } from '../../shared/orca-billing'
 import type { OrcaCloudSetupReturn } from '../../shared/orca-cloud-setup-link'
 import type { OrcaPlanCatalogResult } from '../../shared/orca-billing-plans'
@@ -105,49 +79,12 @@ export type OrcaProfileApi = {
   accountMfa: () => Promise<OrcaAccountMfaResult>
   /** The team's "require MFA" policy and the person's own state in it. */
   teamMfaPolicy: (args: OrcaTeamMfaPolicyArgs) => Promise<OrcaTeamMfaPolicyResult>
-  teamMfaPolicySet: (args: OrcaTeamMfaPolicySetArgs) => Promise<OrcaTeamMfaPolicySetResult>
-  teamMfaPending: (args: OrcaTeamMfaPolicyArgs) => Promise<OrcaTeamMfaPendingResult>
-  teamMfaRemind: (args: OrcaTeamMfaRemindArgs) => Promise<OrcaTeamMfaRemindResult>
   orgMembersList: (args: OrcaProfileOrgMembersListArgs) => Promise<OrcaProfileOrgMembersListResult>
-  orgMemberInvite: (
-    args: OrcaProfileOrgMemberInviteArgs
-  ) => Promise<OrcaProfileOrgMemberMutationResult>
-  orgInviteRevoke: (
-    args: OrcaProfileOrgInviteRevokeArgs
-  ) => Promise<OrcaProfileOrgMemberMutationResult>
-  orgMemberChangeRole: (
-    args: OrcaProfileOrgMemberChangeRoleArgs
-  ) => Promise<OrcaProfileOrgMemberMutationResult>
-  orgMemberRemove: (
-    args: OrcaProfileOrgMemberRemoveArgs
-  ) => Promise<OrcaProfileOrgMemberMutationResult>
-  /** Revokes and re-sends a pending invite with the same role. */
-  orgInviteResend: (
-    args: OrcaProfileOrgMemberInviteArgs
-  ) => Promise<OrcaProfileOrgMemberMutationResult>
-  /** Leaves the org as the signed-in user; the last owner is refused. */
-  orgLeave: (args: OrcaProfileOrgLeaveArgs) => Promise<OrcaProfileOrgMemberMutationResult>
-  /** Creates a team owned by the signed-in user. */
-  orgCreate: (args: OrcaProfileOrgCreateArgs) => Promise<OrcaProfileOrgCreateResult>
-  /** Whether an owner can delete the team now, and what blocks it (TEAM-DELETE). */
-  orgDeleteCheck: (args: OrcaProfileOrgDeleteCheckArgs) => Promise<OrcaProfileOrgDeleteCheckResult>
-  /** Deletes the team for everyone; `confirmName` is the name exactly as typed. */
-  orgDelete: (args: OrcaProfileOrgDeleteArgs) => Promise<OrcaProfileOrgDeleteResult>
-  /** Settings › Enterprise for the team: single sign-on and directory sync, as auth reports them. */
-  orgEnterprise: (args: OrcaProfileOrgEnterpriseArgs) => Promise<OrcaProfileOrgEnterpriseResult>
-  /** A fresh single sign-on setup link (owners, just after signing in). Never stored. */
-  orgSsoSetupLink: (args: OrcaProfileOrgEnterpriseArgs) => Promise<OrcaProfileOrgSsoSetupLinkResult>
-  /** Starts verifying an email domain: answers the DNS record to publish. */
-  orgSsoDomainAdd: (
-    args: OrcaProfileOrgEnterpriseDomainArgs
-  ) => Promise<OrcaProfileOrgSsoDomainResult>
-  /** Checks the domain's DNS record. */
-  orgSsoDomainVerify: (
-    args: OrcaProfileOrgEnterpriseDomainArgs
-  ) => Promise<OrcaProfileOrgSsoDomainResult>
-  orgSsoDomainRemove: (
-    args: OrcaProfileOrgEnterpriseDomainArgs
-  ) => Promise<OrcaProfileOrgSsoDomainResult>
+  /**
+   * Opens a web console page (team, billing, Enterprise) in the system browser, signed in with a
+   * single-use code when auth gives one.
+   */
+  openCloudConsole: (args: OrcaCloudConsoleOpenArgs) => Promise<OrcaCloudConsoleOpenResult>
   /** Fires when the browser comes back from Stripe Checkout or the Portal (orca:// link). */
   onBillingReturn: (callback: (event: OrcaBillingReturn) => void) => () => void
   /** Main asks for a billing re-read (cloud workspace created/woken, or the usage poll). */
@@ -158,8 +95,6 @@ export type OrcaProfileApi = {
   billingStatus: () => Promise<OrcaBillingStatusResult>
   /** Billing's public plan catalog: prices (Stripe's), features, seat bounds. */
   billingPlans: () => Promise<OrcaPlanCatalogResult>
-  /** Opens hosted Stripe Checkout in the browser. */
-  billingOpenCheckout: (args: OrcaBillingCheckoutArgs) => Promise<OrcaBillingOpenResult>
   /** Starts Orca Cloud setup: one browser tab for sign-in, team, plan and GitHub. */
   cloudSetupStart: (args: CloudSetupStartArgs) => Promise<CloudSetupStartResult>
   /** The setup session's steps, for the composer's setup panel. */
@@ -168,10 +103,6 @@ export type OrcaProfileApi = {
   cloudSetupLink: (args: { sessionId: string }) => Promise<CloudSetupLinkResult>
   /** Opens the Stripe Customer Portal in the browser. */
   billingOpenPortal: () => Promise<OrcaBillingOpenResult>
-  /** The last 30 days of sandbox hours (breakdowns for owners and admins only). */
-  billingUsageHistory: (args: {
-    utcOffsetMinutes: number
-  }) => Promise<OrcaBillingUsageHistoryResult>
   /** Plan state for other teams the user is on ("Switch to <team>"); never switches teams. */
   billingTeamPlans: (args: { orgIds: string[] }) => Promise<OrcaBillingTeamPlansResult>
   /** Opt in/out of sandbox overage and set the monthly spend cap (org admins). */

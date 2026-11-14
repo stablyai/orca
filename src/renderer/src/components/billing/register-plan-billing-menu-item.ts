@@ -8,8 +8,7 @@ import {
   resetBillingSummary,
   subscribeBillingSummary
 } from './billing-summary-store'
-import { openPlansPage } from './plans/plans-page-store'
-import { openTeamPage } from './team/team-page-store'
+import { openCloudConsole } from '@/lib/orca-cloud/open-cloud-console'
 
 /** Cloud capability flag that turns billing on per account (server-controlled rollout). */
 export const BILLING_CAPABILITY = 'billing'
@@ -17,8 +16,8 @@ export const BILLING_CAPABILITY = 'billing'
 const UPGRADE_ITEM_ID = 'orca.upgrade'
 
 /**
- * Account menu: "Team" opens the Team page; "Plan & billing" opens the plans page. Accounts
- * without a plan also get "Upgrade to Orca Cloud" at the top of the group.
+ * Account menu: "Team" and "Plan & billing" open the web console in the browser. Accounts without
+ * a plan get "Upgrade to Orca Cloud" (also the console's billing page) in place of Plan & billing.
  */
 export function registerPlanBillingMenuItem(): () => void {
   const registerBilling = (): (() => void) =>
@@ -28,7 +27,7 @@ export function registerPlanBillingMenuItem(): () => void {
       icon: CreditCard,
       order: 11,
       requiredCapability: BILLING_CAPABILITY,
-      onSelect: () => openPlansPage('account-menu')
+      onSelect: () => void openCloudConsole('billing')
     })
   let disposeBilling: (() => void) | null = registerBilling()
   const disposeTeam = registerAccountMenuItem({
@@ -38,7 +37,7 @@ export function registerPlanBillingMenuItem(): () => void {
     order: 10,
     // Team management doesn't depend on billing or a flag: any signed-in account can open it.
     requiresSignIn: true,
-    onSelect: () => openTeamPage()
+    onSelect: () => void openCloudConsole('team')
   })
 
   let disposeUpgrade: (() => void) | null = null
@@ -60,7 +59,7 @@ export function registerPlanBillingMenuItem(): () => void {
         order: 9,
         tone: 'accent',
         requiredCapability: BILLING_CAPABILITY,
-        onSelect: () => openPlansPage('account-menu')
+        onSelect: () => void openCloudConsole('billing')
       })
     } else if (!show && disposeUpgrade) {
       disposeUpgrade()

@@ -3,7 +3,7 @@
 // one-trip setup session (#255) with its deep-link return (#257), B2's team switch, and the
 // tracker's error parsing (#260). Only the UI moved: from a card in the dialog to this page.
 import { mintFirstClickLink } from '@/components/orca-sign-in-link'
-import { usePlanCatalog } from '@/components/billing/plans/use-plan-catalog'
+import { usePlanCatalog } from '@/components/billing/use-plan-catalog'
 import { cloudContactUrl } from './cloud-contact-url'
 import { recheckCloudCapability } from './cloud-capability-recheck'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
