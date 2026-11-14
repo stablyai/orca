@@ -1,0 +1,181 @@
+import type { CommandHandler } from '../dispatch/dispatch'
+import {
+  getOptionalPositiveIntegerFlag,
+  getOptionalStringFlag,
+  getRequiredStringFlag
+} from '../arguments/flags'
+import { printResult } from '../output/command-result-output'
+import { RuntimeClientError } from '../runtime/types'
+import type { RuntimeClient } from '../runtime/client'
+import { getOptionalWorktreeSelector } from '../workspace-selection/workspace-selector'
+import {
+  annotateOmittedHostScope,
+  formatListingHostScope,
+  type WithAnnotatedHostScope
+} from '../hosts/omitted-host-scope-selectors'
+import {
+  AGENT_LIST_STATES,
+  AGENT_READ_MAX_LIMIT,
+  type AgentConversationRow,
+  type AgentListResult,
+  type AgentReadEntry,
+  type AgentReadResult,
+  type AgentReadTool,
+  type AgentShowResult
+} from '../../shared/agent-conversations/agent-conversation-contracts'
+import type { RuntimeWorktreeRecord } from '../../shared/runtime-worktree-contracts'
+import { ORCA_SESSION_ADDRESS_PREFIX } from '../../shared/orca-session-address-prefix'
+import {
+  AGENT_SESSION_UNATTACHED_REFUSAL_CODE,
+  isUnattachedAgentSessionReadRefusal
+} from '../../shared/agent-session/failures/structured-agent-session-read-refusal'
+
+export const AGENT_CONVERSATION_HANDLERS: Record<string, CommandHandler> = {
+  'agent list': async ({ flags, client, cwd, json }) => {
+    const state = getOptionalStringFlag(flags, 'state')
+    if (state !== undefined && !AGENT_LIST_STATES.some((known) => known === state)) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `--state must be one of: ${AGENT_LIST_STATES.join(', ')}.`
+      )
+    }
+    const selector = await getOptionalWorktreeSelector(flags, 'worktree', cwd, client)
+    const worktreeId = selector
+      ? (
+          await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
+            worktree: selector,
+            matchFolderWorkspaces: true
+          })
+        ).result.worktree.id
+      : undefined
+    const result = await callAgentMethod<WithAnnotatedHostScope<AgentListResult>>(
+      client,
+      'agent.list',
+      { ...(worktreeId ? { worktreeId } : {}), ...(state ? { state } : {}) }
+    )
+    await annotateOmittedHostScope(result.result)
+    printResult(result, json, formatAgentList)
+  },
+  'agent show': async ({ flags, client, json }) => {
+    const result = await callAgentMethod<AgentShowResult>(client, 'agent.show', {
+      id: getRequiredStringFlag(flags, 'id')
+    })
+    printResult(result, json, formatAgentShow)
+  },
+  'agent read': async ({ flags, client, json }) => {
+    const limit = getOptionalPositiveIntegerFlag(flags, 'limit')
+    if (limit !== undefined && limit > AGENT_READ_MAX_LIMIT) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        `--limit can be at most ${AGENT_READ_MAX_LIMIT}.`
+      )
+    }
+    const result = await callAgentMethod<AgentReadResult>(client, 'agent.read', {
+      id: getRequiredStringFlag(flags, 'id'),
+      ...(limit !== undefined ? { limit } : {})
+    })
+    printResult(result, json, formatAgentRead)
+  }
+}
+
+async function callAgentMethod<TResult>(client: RuntimeClient, method: string, params: unknown) {
+  return client.call<TResult>(method, params).catch((error: unknown) => {
+    if (!(error instanceof RuntimeClientError)) {
+      throw error
+    }
+    if (error.code === 'method_not_found') {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        'This Orca host has no agent commands yet. Update Orca on that host to use agent commands.'
+      )
+    }
+    // Chat reads answer with bare wire codes; say what they mean.
+    if ([error.code, error.message].includes('structured_agent_session_unsupported')) {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        "This Orca host can't read that chat from the CLI. Update Orca on that host, or check that it has chats turned on."
+      )
+    }
+    if (isUnattachedAgentSessionReadRefusal(error)) {
+      throw new RuntimeClientError(
+        AGENT_SESSION_UNATTACHED_REFUSAL_CODE,
+        'That chat is opening or closing right now. Try again in a moment.'
+      )
+    }
+    throw error
+  })
+}
+
+function address(row: { orcaSessionId: string | null; savedWithoutDistro?: true }): string {
+  if (row.orcaSessionId) {
+    return `${ORCA_SESSION_ADDRESS_PREFIX}${row.orcaSessionId}`
+  }
+  return row.savedWithoutDistro
+    ? 'unknown while asleep (saved before Orca recorded which WSL distro it ran in; open its tab to wake it)'
+    : 'none yet (Orca names a terminal agent after its first report)'
+}
+
+function formatAgentRow(row: AgentConversationRow): string {
+  return [
+    `${row.repo ? `${row.repo} › ` : ''}${row.workspace} · ${row.agent ?? 'agent'} ${row.kind} · ${row.state}`,
+    `  id: ${address(row)}`,
+    ...(row.title ? [`  title: ${row.title}`] : []),
+    ...(row.lastAssistantMessage
+      ? [`  last reply: ${row.lastAssistantMessage.replace(/\s+/g, ' ').slice(0, 200)}`]
+      : [])
+  ].join('\n')
+}
+
+function formatAgentList(result: WithAnnotatedHostScope<AgentListResult>): string {
+  const scope = result.hostScope
+  const lines = [
+    result.agents.length === 0 ? 'No agents.' : result.agents.map(formatAgentRow).join('\n\n')
+  ]
+  // Agents on hosts this one does not list are reached by running there or with --environment.
+  if (!scope || scope.omittedHostIds.length > 0) {
+    lines.push('', formatListingHostScope(scope))
+  }
+  return lines.join('\n')
+}
+
+function formatAgentShow(result: AgentShowResult): string {
+  const id = `${ORCA_SESSION_ADDRESS_PREFIX}${result.orcaSessionId}`
+  if (result.places.length === 0) {
+    return result.savedWithoutDistro
+      ? `Agent ${id} (${result.kind}) is asleep, but it was saved before Orca recorded which WSL distro it ran in, so Orca can't find its tab by its ID. Open its tab to wake it.`
+      : `Agent ${id} (${result.kind}) isn't open in any workspace right now.`
+  }
+  return result.places.map(formatAgentRow).join('\n\n')
+}
+
+function formatTool(tool: AgentReadTool): string {
+  return `[tool ${tool.name}${tool.state ? `: ${tool.state}` : ''}]`
+}
+
+function formatAgentRead(result: AgentReadResult): string {
+  const lines = result.entries.map((entry) =>
+    entry.shortened
+      ? `${formatEntry(entry)}\n[shortened to fit; open it in Orca to see it whole]`
+      : formatEntry(entry)
+  )
+  if (lines.length === 0) {
+    lines.push('Nothing new.')
+  }
+  return lines.join('\n')
+}
+
+function formatEntry(entry: AgentReadEntry): string {
+  if (entry.kind === 'message') {
+    return [
+      ...(entry.text ? [`${entry.role}: ${entry.text}`] : []),
+      ...(entry.tools ?? []).map((tool) => formatTool(tool))
+    ].join('\n')
+  }
+  if (entry.kind === 'error') {
+    return `[error] ${entry.text}`
+  }
+  if (entry.kind === 'tool') {
+    return formatTool(entry)
+  }
+  return `[${entry.kind}${entry.pending ? ', waiting for an answer' : ''}] ${entry.text}`
+}

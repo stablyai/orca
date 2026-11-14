@@ -6,6 +6,7 @@ export type RuntimeStore = {
   getRepos: Store['getRepos']
   getSshTargets?: Store['getSshTargets']
   getRepo: Store['getRepo']
+  getRepoForHost?: Store['getRepoForHost']
   addRepo: Store['addRepo']
   updateRepo: Store['updateRepo']
   addRetiredWorktreeName?: Store['addRetiredWorktreeName']

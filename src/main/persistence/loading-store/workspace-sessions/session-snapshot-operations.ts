@@ -5,6 +5,7 @@ import type {
 } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import { pruneWorkspaceSessionBrowserHistory } from '../../../../shared/workspace-session/workspace-session-browser-history'
+import { keepSavedAgentSummaries } from '../../../../shared/agent-session/lifecycle/saved-agent-summary'
 
 import { workspaceSessionPatchNeedsFullNormalization } from './terminal-session-cleanup'
 
@@ -42,6 +43,9 @@ export class SessionSnapshotOperations {
   setWorkspaceSession(session: PersistedState['workspaceSession'], hostId?: string | null): void {
     const resolved = resolveHostId(hostId)
     const { runtime } = this[sessionSnapshotOperationsContext]
+    if (runtime.durableMutationPhase !== 'rollback') {
+      session = this.keepingSavedAgentSummaries(session, resolved)
+    }
     if (runtime.durableMutationPhase === 'rollback') {
       this.assertSnapshotAdmission(true)
       // The fieldwise rollback already preserves newer edits; renderer rebasing would undo it.
@@ -77,10 +81,13 @@ export class SessionSnapshotOperations {
   patchWorkspaceSession(patch: WorkspaceSessionPatch, hostId?: string | null): void {
     const resolved = resolveHostId(hostId)
     // Scalar patches skip topology work; membership patches retain stale-binding protections.
-    let next: WorkspaceSessionState = {
-      ...this[sessionSnapshotOperationsContext].sessions.getWorkspaceSession(resolved),
-      ...patch
-    }
+    let next: WorkspaceSessionState = this.keepingSavedAgentSummaries(
+      {
+        ...this[sessionSnapshotOperationsContext].sessions.getWorkspaceSession(resolved),
+        ...patch
+      },
+      resolved
+    )
     if (workspaceSessionPatchNeedsFullNormalization(patch)) {
       this.setWorkspaceSession(next, resolved)
       return
@@ -97,6 +104,22 @@ export class SessionSnapshotOperations {
       next = keepWslMoveFrozenSessionsForStore(next, state.workspaceSession)
     }
     this.publishSession(next, resolved)
+  }
+
+  /** Every writer's saved places keep their conversation's last reply, title and distro when a
+   *  replacement lacks them: the store is the one owner `orca agent list` reads them from. */
+  private keepingSavedAgentSummaries(
+    session: WorkspaceSessionState,
+    hostId: ExecutionHostId
+  ): WorkspaceSessionState {
+    const previous =
+      this[sessionSnapshotOperationsContext].sessions.getWorkspaceSession(
+        hostId
+      ).sleepingAgentSessionsByPaneKey
+    const kept = keepSavedAgentSummaries(previous, session.sleepingAgentSessionsByPaneKey)
+    return kept === session.sleepingAgentSessionsByPaneKey
+      ? session
+      : { ...session, sleepingAgentSessionsByPaneKey: kept }
   }
 
   private publishSession(session: WorkspaceSessionState, hostId: ExecutionHostId): void {

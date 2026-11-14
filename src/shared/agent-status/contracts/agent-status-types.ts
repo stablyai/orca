@@ -87,6 +87,8 @@ export type AgentStatusEntry = {
   worktreeId?: string
   /** Accepted transport authority for this live row; null means local. */
   connectionId?: string | null
+  /** The WSL distro its hook relay named, '' for a native local row; absent when not known. */
+  wslDistro?: string
   /** Tab attribution from the hook IPC payload, when available. */
   tabId?: string
   terminalTitle?: string

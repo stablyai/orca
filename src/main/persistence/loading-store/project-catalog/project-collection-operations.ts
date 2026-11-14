@@ -11,6 +11,7 @@ import type {
   ProjectHostSetupUpdateResult,
   ProjectUpdateArgs
 } from '../../../../shared/project-types'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
 import type { RepoHostTarget } from '../../../../shared/repo-host-identity'
 import { ProjectGroupPersistenceOperations } from '../../tracking-repos/project-group-operations'
@@ -46,6 +47,7 @@ type ProjectCollectionOperationsRuntime = Pick<
   | 'projectGroupOperations'
   | 'projectHostOperations'
   | 'state'
+  | 'stateWriteListeners'
   | 'orcadTerminalRestoreHints'
 >
 
@@ -108,6 +110,10 @@ export class ProjectCollectionOperations {
 
   getRepo(id: string): Repo | undefined {
     return getProjectHostOperations(this).getRepo(id)
+  }
+
+  getRepoForHost(id: string, hostId: ExecutionHostId): Repo | undefined {
+    return getProjectHostOperations(this).getRepoForHost(id, hostId)
   }
 
   setResolvedRepoGitUsername(
@@ -195,31 +201,46 @@ export class ProjectCollectionOperations {
 export function getProjectHostOperations(
   owner: ProjectCollectionOperations
 ): ProjectHostPersistenceOperations {
-  owner[projectCollectionOperationsContext].runtime.projectHostOperations ??=
-    new ProjectHostPersistenceOperations({
-      state: owner[projectCollectionOperationsContext].runtime.state,
-      gitUsernameCache: owner[projectCollectionOperationsContext].runtime.gitUsernameCache,
-      bumpLocalWorktreeScanGeneration,
-      hydrateRepo: (repo) => hydrateRepo(owner[projectCollectionOperationsContext].repos, repo),
-      updateRepoBackedProjectHostSetup: (setup, repo, updates) =>
-        updateRepoBackedProjectHostSetup(
-          owner[projectCollectionOperationsContext].repos,
-          setup,
-          repo,
-          updates
-        ),
-      updateIndependentProjectHostSetup: (setup, updates) =>
-        updateIndependentProjectHostSetup(
-          owner[projectCollectionOperationsContext].repos,
-          setup,
-          updates
-        ),
-      removeProjectForHost: (target) =>
-        owner[projectCollectionOperationsContext].repos.removeProjectForHost(target),
-      scheduleSave: (domains) =>
-        scheduleSave(owner[projectCollectionOperationsContext].scheduling, domains)
+  const { runtime } = owner[projectCollectionOperationsContext]
+  if (!runtime.projectHostOperations) {
+    const operations = createProjectHostOperations(owner)
+    // Repo writes save the `repos` domain; load and migration save everything.
+    runtime.stateWriteListeners.add((domains) => {
+      if (!domains || domains.includes('repos')) {
+        operations.invalidateRepoIndex()
+      }
     })
-  return owner[projectCollectionOperationsContext].runtime.projectHostOperations
+    runtime.projectHostOperations = operations
+  }
+  return runtime.projectHostOperations
+}
+
+function createProjectHostOperations(
+  owner: ProjectCollectionOperations
+): ProjectHostPersistenceOperations {
+  return new ProjectHostPersistenceOperations({
+    state: owner[projectCollectionOperationsContext].runtime.state,
+    gitUsernameCache: owner[projectCollectionOperationsContext].runtime.gitUsernameCache,
+    bumpLocalWorktreeScanGeneration,
+    hydrateRepo: (repo) => hydrateRepo(owner[projectCollectionOperationsContext].repos, repo),
+    updateRepoBackedProjectHostSetup: (setup, repo, updates) =>
+      updateRepoBackedProjectHostSetup(
+        owner[projectCollectionOperationsContext].repos,
+        setup,
+        repo,
+        updates
+      ),
+    updateIndependentProjectHostSetup: (setup, updates) =>
+      updateIndependentProjectHostSetup(
+        owner[projectCollectionOperationsContext].repos,
+        setup,
+        updates
+      ),
+    removeProjectForHost: (target) =>
+      owner[projectCollectionOperationsContext].repos.removeProjectForHost(target),
+    scheduleSave: (domains) =>
+      scheduleSave(owner[projectCollectionOperationsContext].scheduling, domains)
+  })
 }
 
 export function getProjectGroupOperations(

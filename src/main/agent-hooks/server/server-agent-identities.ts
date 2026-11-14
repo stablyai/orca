@@ -9,7 +9,19 @@ import {
   type ProviderSessionSighting,
   type SettledAgentIdentityPlace
 } from '../identity/pane-agent-identities'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { AgentProviderKey } from '../identity/agent-provider-key'
+import {
+  sleepingRecordIds,
+  sleepingRecordNaming,
+  sleepingRecordSighting,
+  SAVED_WITHOUT_DISTRO,
+  type SleepingAgentSighting
+} from '../identity/sleeping-agent-records'
+import {
+  isReverseLookupUnavailable,
+  type ReverseLookupUnavailable
+} from '../identity/agent-identity-worker-protocol'
 import type { OrcaSessionId } from '../../../shared/orca-session-address'
 
 import type { EnrichedAgentHookEventPayload } from './server-types'
@@ -21,10 +33,13 @@ import {
 import { AgentHookServerState } from './server-state'
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
 
-type SleepingAgentSighting = Pick<
-  SleepingAgentSessionRecord,
-  'agent' | 'providerSession' | 'connectionId'
->
+/** One terminal agent conversation's own transcript, as the payload naming it reported it. */
+export type TerminalAgentTranscriptSource = {
+  key: AgentProviderKey
+  providerSession: AgentProviderSessionMetadata
+  /** The identity store generation that vouched for `key`. */
+  authority: number
+}
 
 /** Terminal agent ids are named when a row is admitted, so walks and publications only copy them. */
 export abstract class AgentHookServerAgentIdentities extends AgentHookServerState {
@@ -173,6 +188,132 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
     return places
   }
 
+  /** Whether this host minted terminal agent `id`; undefined when the store cannot answer now. */
+  async isTerminalAgentId(id: string): Promise<boolean | undefined> {
+    return this.agentIdentities.isTerminalIdentity(id)
+  }
+
+  /** Orca ids this host linked to a provider's own session id; unavailable when this identity
+   *  file can't answer that by index. */
+  async terminalAgentIdsOfProviderSession(
+    providerSessionId: string
+  ): Promise<OrcaSessionId[] | ReverseLookupUnavailable> {
+    return (await this.agentIdentities.idsOfProviderSession(providerSessionId)) ?? []
+  }
+
+  /** Where terminal agent `id`'s transcript is: a current row carrying the id, in any state (a read
+   *  needs no running agent), else a sleeping record naming its provider key. The session id and
+   *  path come from one payload, never from a pane, so a row attributed to the wrong pane still
+   *  names its own conversation. null: nothing names it now; undefined: the store cannot answer.
+   *  `known` is an earlier answer: an id is never relinked, so while its store still stands a
+   *  recheck needs no second store question. */
+  async terminalAgentTranscriptSource(
+    id: string,
+    readSleeping: () => Readonly<Record<string, SleepingAgentSighting>>,
+    known?: TerminalAgentTranscriptSource
+  ): Promise<
+    | TerminalAgentTranscriptSource
+    | ReverseLookupUnavailable
+    | typeof SAVED_WITHOUT_DISTRO
+    | null
+    | undefined
+  > {
+    const authority = this.agentIdentities.authority()
+    const live = this.liveTranscriptSource(id, authority)
+    if (live) {
+      return live
+    }
+    const sleeping = await this.sleepingTerminalAgent(id, readSleeping, authority, known)
+    return typeof sleeping === 'object' && sleeping && 'record' in sleeping
+      ? { key: sleeping.key, providerSession: sleeping.record.providerSession, authority }
+      : sleeping
+  }
+
+  /** The ids of `records`, saved sleeping records from `saved`, in order; null for one never
+   *  named or not answered now. One store question for keys this authority has not answered. */
+  sleepingTerminalAgentIds(
+    saved: Readonly<Record<string, SleepingAgentSighting>>,
+    records: readonly SleepingAgentSighting[]
+  ): Promise<(OrcaSessionId | null)[]> {
+    return sleepingRecordIds(saved, records, process.platform === 'win32', (keys, population) =>
+      this.agentIdentities.idsOfKeys(keys, population)
+    )
+  }
+
+  /** The saved sleeping record naming terminal agent `id`'s conversation, by its provider key;
+   *  null when none does, undefined when the store cannot answer now. */
+  async sleepingTerminalAgent<T extends SleepingAgentSighting>(
+    id: string,
+    readSleeping: () => Readonly<Record<string, T>>,
+    authority = this.agentIdentities.authority(),
+    known?: TerminalAgentTranscriptSource
+  ): Promise<
+    | { key: AgentProviderKey; record: T }
+    | ReverseLookupUnavailable
+    | typeof SAVED_WITHOUT_DISTRO
+    | null
+    | undefined
+  > {
+    const linked =
+      known?.authority === authority
+        ? { key: known.key }
+        : await this.agentIdentities.providerKeyOf(id)
+    if (!linked || authority !== this.agentIdentities.generation) {
+      return undefined
+    }
+    if (isReverseLookupUnavailable(linked)) {
+      return linked
+    }
+    const { key } = linked
+    if (!key) {
+      return null
+    }
+    // A record matches only by its full key, so a WSL agent's needs its saved distro.
+    const record = sleepingRecordNaming(readSleeping(), key, process.platform === 'win32')
+    if (record === SAVED_WITHOUT_DISTRO) {
+      return record
+    }
+    return record ? { key, record } : null
+  }
+
+  private liveTranscriptSource(
+    id: string,
+    authority: number
+  ): TerminalAgentTranscriptSource | null {
+    let best: { key: AgentProviderKey; row: EnrichedAgentHookEventPayload } | null = null
+    for (const place of this.agentIdentities.placesOf(id)) {
+      const subject = place.canonical
+        ? this.canonicalSubjectsByPane.get(place.paneKey)?.get(place.key)
+        : undefined
+      const status = subject && this.canonicalStatusStore.getParent(subject)?.status
+      const row = place.canonical
+        ? status && structuredStatusLegacyEvent(status)
+        : // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Main admits enriched legacy rows; the shared view declares their base event type.
+          (this.state.lastStatusByPaneKey.get(place.key) as
+            | EnrichedAgentHookEventPayload
+            | undefined)
+      const key = place.canonical
+        ? this.agentIdentities.canonicalIdentity(place.key)?.key
+        : row?.agentIdentity?.key
+      if (!row?.providerSession || !key) {
+        continue
+      }
+      // Rows of one conversation share its key; prefer one that reported the transcript path.
+      const hasPath = (candidate: EnrichedAgentHookEventPayload): boolean =>
+        Boolean(candidate.providerSession?.transcriptPath)
+      if (
+        !best ||
+        (hasPath(row) && !hasPath(best.row)) ||
+        (hasPath(row) === hasPath(best.row) && row.receivedAt > best.row.receivedAt)
+      ) {
+        best = { key, row }
+      }
+    }
+    return best?.row.providerSession
+      ? { key: best.key, providerSession: best.row.providerSession, authority }
+      : null
+  }
+
   /** The pane's terminal agent id, keyed as Copy Session ID picks its id: a confirmed live row
    *  (legacy or tmux-selected) wins even without a provider session; only an absent or
    *  unconfirmed row falls back to the pane's sleeping record. An explicit request: it waits for
@@ -219,17 +360,8 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
           }
     }
     const sleeping = readSleeping()
-    // Sleeping records carry no WSL distro; a woken agent's own hook names it. A record from a
-    // foreign connection (a direct SSH relay) names no conversation on this host.
-    if (!sleeping || process.platform === 'win32') {
-      return null
-    }
-    return {
-      sighting: {
-        agent: sleeping.agent,
-        providerSession: sleeping.providerSession,
-        connectionId: sleeping.connectionId ?? null
-      }
-    }
+    // Qualified as its live row was: a record that no longer says which distro names none.
+    const sighting = sleeping && sleepingRecordSighting(sleeping, process.platform === 'win32')
+    return sighting ? { sighting } : null
   }
 }

@@ -1,19 +1,25 @@
 import { EventEmitter } from 'node:events'
 import type { AgentProviderKey } from './agent-provider-key'
-import type {
-  AgentIdentityWorkerRequest,
-  AgentIdentityWorkerResponse
+import {
+  isReverseLookupUnavailable,
+  type AgentIdentityWorkerRequest,
+  type AgentIdentityWorkerResponse,
+  type ReverseLookupUnavailable
 } from './agent-identity-worker-protocol'
 import type { WorkerRequestTransport } from '../../worker-threads/worker-thread-transport'
 import type { AgentIdentityClient, AgentIdentityLookup } from './agent-identity-worker-client'
 import { handleAgentIdentityRequest } from './agent-identity-worker-entry'
-import { isOrcaSessionId } from '../../../shared/orca-session-address'
+import { isOrcaSessionId, type OrcaSessionId } from '../../../shared/orca-session-address'
 
 /** The worker's real SQL handler behind an asynchronous boundary, counting requests. Each answer
  *  can be held so a test decides when (and in which order) replies arrive. */
 export class InProcessAgentIdentityClient implements AgentIdentityClient {
   identifyRequests = 0
   hasRequests = 0
+  providerKeyRequests = 0
+  idsOfKeysRequests = 0
+  /** Keys `idsOfKeys` has looked up, one indexed SELECT each. */
+  idsOfKeysKeys = 0
   /** When set, `identify` waits for `release()` before answering. */
   hold = false
   /** Answers the next N identify requests as unavailable after running their SQL. */
@@ -41,6 +47,53 @@ export class InProcessAgentIdentityClient implements AgentIdentityClient {
     this.hasRequests++
     const response = handleAgentIdentityRequest({ id: 0, kind: 'has', path, orcaSessionId })
     return response.ok && typeof response.value === 'boolean' ? response.value : undefined
+  }
+
+  async providerKeyOf(
+    path: string,
+    orcaSessionId: string
+  ): Promise<{ key: AgentProviderKey | null } | ReverseLookupUnavailable | undefined> {
+    this.providerKeyRequests++
+    const response = handleAgentIdentityRequest({
+      id: 0,
+      kind: 'providerKeyOf',
+      path,
+      orcaSessionId
+    })
+    if (!response.ok || typeof response.value !== 'object' || Array.isArray(response.value)) {
+      return undefined
+    }
+    return isReverseLookupUnavailable(response.value) ? response.value : { key: response.value }
+  }
+
+  async idsOfProviderSession(
+    path: string,
+    providerSessionId: string
+  ): Promise<OrcaSessionId[] | ReverseLookupUnavailable | undefined> {
+    const response = handleAgentIdentityRequest({
+      id: 0,
+      kind: 'idsOfProviderSession',
+      path,
+      providerSessionId
+    })
+    if (response.ok && isReverseLookupUnavailable(response.value)) {
+      return response.value
+    }
+    return response.ok && Array.isArray(response.value)
+      ? response.value.filter(isOrcaSessionId)
+      : undefined
+  }
+
+  async idsOfKeys(
+    path: string,
+    keys: AgentProviderKey[]
+  ): Promise<(OrcaSessionId | null)[] | undefined> {
+    this.idsOfKeysRequests++
+    this.idsOfKeysKeys += keys.length
+    const response = handleAgentIdentityRequest({ id: 0, kind: 'idsOfKeys', path, keys })
+    return response.ok && Array.isArray(response.value)
+      ? response.value.map((id) => (isOrcaSessionId(id) ? id : null))
+      : undefined
   }
 
   /** Lets every held request answer, oldest first. */
@@ -76,7 +129,11 @@ export class ScriptedIdentityWorkers {
   answer: (request: AgentIdentityWorkerRequest) => ScriptedAnswer = (request) =>
     request.kind === 'identify'
       ? { id: request.id, ok: true, value: `claude_${request.key.providerSessionId}` }
-      : { id: request.id, ok: true, value: this.known.has(request.orcaSessionId) }
+      : {
+          id: request.id,
+          ok: true,
+          value: request.kind === 'has' && this.known.has(request.orcaSessionId)
+        }
   private readonly exits: (() => void)[] = []
 
   readonly factory = (): WorkerRequestTransport => {

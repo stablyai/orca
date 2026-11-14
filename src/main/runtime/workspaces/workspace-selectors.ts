@@ -18,14 +18,13 @@ import type { Repo } from '../../../shared/repo-types'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import type { RuntimeWorkspaceCatalog } from './catalog/workspace-catalog'
-import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import { resolveWorktreeMetaOwner } from '../../persistence/host-qualified-worktree-meta'
+import { resolvedWorktreeForHost, resolvedWorktreeRow } from './catalog/resolved-worktree-row'
 import { resolveWorktreeHostRouting } from './catalog/worktree-launch-host-repo'
 import {
   createRepoRowExecutionHostLookup,
   type RepoRowExecutionHostLookup
 } from '../../../shared/execution-host/worktree-execution-host-resolution'
-import { mergeWorktree } from '../../ipc/worktree-metadata-merge'
 import { RuntimeProjectLaunchContext } from './startup/runtime-project-launch-context'
 import { folderIdOfSelector } from '../../../shared/workspace-scope'
 import {
@@ -287,28 +286,20 @@ export abstract class RuntimeWorkspaceSelectors extends RuntimeProjectLaunchCont
     if (!owner) {
       return null
     }
-    const repo = repos.byHost(parsed.repoId, owner.hostId)
-    const git = {
-      path: parsed.worktreePath,
-      head: '',
-      branch: '',
-      isBare: false,
-      isMainWorktree: repo ? areWorktreePathsEqual(parsed.worktreePath, repo.path) : false
-    }
-    const meta = this.store?.getWorktreeMeta(worktreeId)
-    const merged = {
-      ...mergeWorktree(parsed.repoId, git, meta, repo?.displayName),
-      hostId: owner.hostId
-    }
-    return {
-      ...merged,
-      id: worktreeId,
-      parentWorktreeId: null,
-      childWorktreeIds: [],
-      lineage: null,
-      git,
-      displayName: merged.displayName,
-      comment: merged.comment
-    }
+    return resolvedWorktreeRow(
+      worktreeId,
+      owner.hostId,
+      repos.byHost(parsed.repoId, owner.hostId),
+      this.store?.getWorktreeMeta(worktreeId)
+    )
+  }
+
+  /** One known place's row from its own host's records: the repo registered there (keyed) and
+   *  that host's metadata. Null when no repo is registered on that host. */
+  protected buildResolvedWorktreeForHost(
+    worktreeId: string,
+    hostId: ExecutionHostId
+  ): ResolvedWorktree | null {
+    return this.store ? resolvedWorktreeForHost(this.store, worktreeId, hostId) : null
   }
 }

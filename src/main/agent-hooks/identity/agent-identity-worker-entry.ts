@@ -6,9 +6,11 @@ import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
 import { createStructuredAgentSessionId } from '../../../shared/agent-session/structured-agent-session-create'
 import { isOrcaSessionId, type OrcaSessionId } from '../../../shared/orca-session-address'
 import type { AgentProviderKey } from './agent-provider-key'
-import type {
-  AgentIdentityWorkerRequest,
-  AgentIdentityWorkerResponse
+import {
+  REVERSE_LOOKUP_UNAVAILABLE,
+  type AgentIdentityWorkerRequest,
+  type AgentIdentityWorkerResponse,
+  type ReverseLookupUnavailable
 } from './agent-identity-worker-protocol'
 
 /** Bump only with additive DDL below; a newer file opens read-only, never rebuilt. */
@@ -30,6 +32,112 @@ CREATE TABLE IF NOT EXISTS provider_links(
 
 const SELECT_LINK = `SELECT orca_session_id FROM provider_links
   WHERE execution_host = ? AND wsl_distro = ? AND agent = ? AND provider_session_id = ? AND locator = ?`
+// Reverse lookups for `orca agent` reads: indexes only, so older builds open the file unchanged.
+const LOOKUP_INDEX_SQL = `CREATE INDEX IF NOT EXISTS provider_links_by_orca_session
+  ON provider_links(orca_session_id);
+CREATE INDEX IF NOT EXISTS provider_links_by_provider_session
+  ON provider_links(provider_session_id);`
+
+type ReverseLookupColumn = 'orca_session_id' | 'provider_session_id'
+
+const PROVIDER_SESSION_ID_MATCH_LIMIT = 8
+
+function querySql(column: ReverseLookupColumn, index: string): string {
+  const from = `FROM provider_links INDEXED BY ${quoteIdentifier(index)}`
+  return column === 'orca_session_id'
+    ? `SELECT execution_host, wsl_distro, agent, provider_session_id, locator ${from}
+       WHERE orca_session_id = ? LIMIT 1`
+    : `SELECT DISTINCT orca_session_id ${from}
+       WHERE provider_session_id = ? LIMIT ${PROVIDER_SESSION_ID_MATCH_LIMIT}`
+}
+
+function quoteIdentifier(name: string): string {
+  return `"${name.replaceAll('"', '""')}"`
+}
+
+/** The reverse queries a provider-links table can answer by index search, never by a scan of
+ *  every link. A candidate leads with the requested ordinary column under BINARY collation, and
+ *  the exact query forced onto it (`INDEXED BY`) must plan as a SEARCH on that column: a partial
+ *  index the query doesn't imply, a NOCASE one or a name alone never qualify. Checked once per
+ *  schema version; the validated query is the one executed. */
+class ReverseLookupQueries {
+  private checked: { schema: number; sql: Map<ReverseLookupColumn, string | null> } | null = null
+
+  constructor(
+    private readonly db: SyncDatabase,
+    /** Run once per schema version before inspecting, e.g. a writable file's own indexes. */
+    private readonly prepareSchema: () => void
+  ) {}
+
+  /** The validated query for `column`, or null when no index can serve it. */
+  sqlFor(column: ReverseLookupColumn): string | null {
+    let schema = this.schemaVersion()
+    if (this.checked?.schema !== schema) {
+      this.prepareSchema()
+      schema = this.schemaVersion()
+      this.checked = { schema, sql: new Map() }
+    }
+    let sql = this.checked.sql.get(column)
+    if (sql === undefined) {
+      sql = this.find(column)
+      this.checked.sql.set(column, sql)
+    }
+    return sql
+  }
+
+  private schemaVersion(): number {
+    return Number(this.db.pragma('schema_version', { simple: true }))
+  }
+
+  private find(column: ReverseLookupColumn): string | null {
+    for (const index of this.db.prepare('PRAGMA index_list(provider_links)').all()) {
+      const name = String(index.name)
+      const lead = this.db
+        .prepare(`PRAGMA index_xinfo(${quoteIdentifier(name)})`)
+        .all()
+        .find((term) => Number(term.key) === 1)
+      if (
+        !lead ||
+        Number(lead.seqno) !== 0 ||
+        Number(lead.cid) < 0 ||
+        lead.name !== column ||
+        String(lead.coll).toUpperCase() !== 'BINARY'
+      ) {
+        continue
+      }
+      const sql = querySql(column, name)
+      if (this.searches(sql, name, column)) {
+        return sql
+      }
+    }
+    return null
+  }
+
+  /** The forced plan searches `provider_links` by `column` and walks no table or index. */
+  private searches(sql: string, index: string, column: ReverseLookupColumn): boolean {
+    let plan: string[]
+    try {
+      plan = this.db
+        .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+        .all('')
+        .map((row) => String(row.detail))
+    } catch {
+      // A partial index the query doesn't imply cannot be forced at all.
+      return false
+    }
+    return (
+      plan.some((detail) =>
+        new RegExp(
+          `^SEARCH provider_links USING (COVERING )?INDEX ${escapeRegExp(index)} \\(${column}=\\?`
+        ).test(detail)
+      ) && !plan.some((detail) => detail.startsWith('SCAN provider_links'))
+    )
+  }
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
 
 /** Orca ids for provider conversations, which nothing can rebuild: the file is never deleted, and
  *  an unreadable one throws so ids stay unavailable. A linked key is never relinked. Runs only in
@@ -39,11 +147,21 @@ export class AgentIdentityStore {
   /** A newer build's file: existing ids resolve, nothing is minted. */
   readonly readOnly: boolean
 
+  /** Reverse lookups run only as an index search, never as a scan of every link. */
+  private readonly reverse: ReverseLookupQueries
+
   constructor(path: string, busyTimeoutMs = 25) {
     const opened = openIdentityDatabase(path, busyTimeoutMs)
     this.db = opened.db
     this.readOnly = opened.readOnly
     hardenSqliteDatabaseFiles(path)
+    // A writable file gets this build's indexes, and a busy one throws so the caller's failure
+    // backoff retries it; a newer build's read-only file is used as it is.
+    this.reverse = new ReverseLookupQueries(this.db, () => {
+      if (!this.readOnly) {
+        this.db.exec(LOOKUP_INDEX_SQL)
+      }
+    })
   }
 
   lookup(key: AgentProviderKey): OrcaSessionId | null {
@@ -95,6 +213,37 @@ export class AgentIdentityStore {
     return (
       this.db.prepare('SELECT 1 FROM identities WHERE orca_session_id = ?').get(id) !== undefined
     )
+  }
+
+  /** The provider conversation `id` names: each mint links exactly one key. */
+  providerKeyOf(id: string): AgentProviderKey | null | ReverseLookupUnavailable {
+    const sql = this.reverse.sqlFor('orca_session_id')
+    if (!sql) {
+      return REVERSE_LOOKUP_UNAVAILABLE
+    }
+    const row = this.db.prepare(sql).get(id)
+    return row
+      ? {
+          executionHost: String(row.execution_host),
+          wslDistro: String(row.wsl_distro),
+          agent: String(row.agent),
+          providerSessionId: String(row.provider_session_id),
+          locator: String(row.locator)
+        }
+      : null
+  }
+
+  /** Orca ids linked to a provider's own session id, so a caller can be told which to use. */
+  idsOfProviderSession(providerSessionId: string): OrcaSessionId[] | ReverseLookupUnavailable {
+    const sql = this.reverse.sqlFor('provider_session_id')
+    if (!sql) {
+      return REVERSE_LOOKUP_UNAVAILABLE
+    }
+    return this.db
+      .prepare(sql)
+      .all(providerSessionId)
+      .map((row) => row.orca_session_id)
+      .filter((id): id is OrcaSessionId => typeof id === 'string' && isOrcaSessionId(id))
   }
 
   close(): void {
@@ -168,9 +317,26 @@ export function handleAgentIdentityRequest(
 ): AgentIdentityWorkerResponse {
   try {
     const opened = storeFor(request.path)
-    return request.kind === 'identify'
-      ? { id: request.id, ok: true, value: opened.identify(request.key) }
-      : { id: request.id, ok: true, value: opened.has(request.orcaSessionId) }
+    switch (request.kind) {
+      case 'identify':
+        return { id: request.id, ok: true, value: opened.identify(request.key) }
+      case 'has':
+        return { id: request.id, ok: true, value: opened.has(request.orcaSessionId) }
+      case 'providerKeyOf':
+        return { id: request.id, ok: true, value: opened.providerKeyOf(request.orcaSessionId) }
+      case 'idsOfProviderSession':
+        return {
+          id: request.id,
+          ok: true,
+          value: opened.idsOfProviderSession(request.providerSessionId)
+        }
+      case 'idsOfKeys':
+        return {
+          id: request.id,
+          ok: true,
+          value: request.keys.map((key) => opened.lookup(key) ?? '')
+        }
+    }
   } catch (error) {
     // A store that failed to open is reopened by the next request, never rebuilt.
     store?.store.close()

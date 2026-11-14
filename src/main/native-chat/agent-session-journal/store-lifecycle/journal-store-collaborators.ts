@@ -32,6 +32,7 @@ import { claimAgentSessionAttachmentsInTransaction } from '../../agent-session-a
 import { JournalGoalAttachmentInverse } from '../writing/journal-goal-attachment-inverse'
 import { isJournalOutputRevision } from '../writing/journal-streamed-text-revision'
 
+import { journalAgentReadCommitted } from '../projection/journal-agent-read-index'
 export type JournalStoreHost = {
   /** Notify readers of durable draft-only transactions that append no journal row. */
   notifyCommitted: () => void
@@ -87,7 +88,11 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     highestFence: () => host.state().highestFence,
     nextSequence: () => host.state().lastSequence + 1,
     prepare: host.prepare,
-    commit: host.commit,
+    commit: (rows, savedAt, inputChanged) => {
+      // The agent-read index follows each committed row before observers hear of it.
+      journalAgentReadCommitted(host.journal(), rows)
+      host.commit(rows, savedAt, inputChanged)
+    },
     project: (rows) => projectJournalRows(host.state(), rows),
     outputRevision: (row) => isJournalOutputRevision(host.state(), row)
   })
@@ -101,7 +106,10 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     state: host.state,
     reopenFloor: () => host.journal().reopenFloor(),
     writer: rowWriter,
-    committed: host.notifyCommitted,
+    committed: () => {
+      journalAgentReadCommitted(host.journal(), [])
+      host.notifyCommitted()
+    },
     claimAttachments
   })
   const rewindReceipt = (rows: readonly JournalRow[], receipt?: JournalOperationReceipt) => {

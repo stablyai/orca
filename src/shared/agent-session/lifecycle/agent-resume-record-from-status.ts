@@ -26,6 +26,7 @@ export type ResumeRecordStatus = Pick<
   | 'updatedAt'
   | 'providerSession'
   | 'connectionId'
+  | 'wslDistro'
   | 'terminalTitle'
   | 'lastAssistantMessage'
   | 'terminalResumeEligible'
@@ -73,6 +74,7 @@ export function resumeRecordFromStatus(args: {
     agent,
     providerSession: args.entry.providerSession,
     ...(args.entry.connectionId !== undefined ? { connectionId: args.entry.connectionId } : {}),
+    ...(args.entry.wslDistro !== undefined ? { wslDistro: args.entry.wslDistro } : {}),
     prompt: args.entry.prompt,
     state: args.entry.state,
     capturedAt: args.capturedAt,
@@ -127,7 +129,8 @@ export function recordLaunchConfigForStatus(
     : undefined
 }
 
-/** Checkpoint live sessions for terminal loss; finished resumable sessions retain identity but drop turn text. */
+/** Checkpoint live sessions for terminal loss; finished resumable sessions retain identity and
+ *  their last reply for display, but drop the turn's prompt. */
 export function liveResumeRecord(args: {
   entry: ResumeRecordStatus
   retainsResumableIdentity: boolean
@@ -141,9 +144,7 @@ export function liveResumeRecord(args: {
     args.entry.state === 'done' && !args.retainsResumableIdentity ? null : args.worktreeIdOf()
   return worktreeId
     ? resumeRecordFromStatus({
-        entry: args.retainsResumableIdentity
-          ? { ...args.entry, prompt: '', lastAssistantMessage: undefined }
-          : args.entry,
+        entry: args.retainsResumableIdentity ? { ...args.entry, prompt: '' } : args.entry,
         worktreeId,
         tabOf: () => args.tabOf(worktreeId),
         capturedAt: args.capturedAt,
@@ -157,10 +158,16 @@ export function liveResumeRecordChange(
   existing: SleepingAgentSessionRecord | undefined,
   live: SleepingAgentSessionRecord | null
 ): { set: SleepingAgentSessionRecord } | 'clear' | null {
-  if (live) {
-    return recoveryRecordMatches(existing, live) ? null : { set: live }
+  if (!live) {
+    return existing ? 'clear' : null
   }
-  return existing ? 'clear' : null
+  if (!existing || !recoveryRecordMatches(existing, live)) {
+    return { set: live }
+  }
+  // An unchanged recovery state still saves the conversation's newer reply.
+  return live.lastAssistantMessage && live.lastAssistantMessage !== existing.lastAssistantMessage
+    ? { set: { ...existing, lastAssistantMessage: live.lastAssistantMessage } }
+    : null
 }
 
 /** Quit captures keep running agents resumable; periodic capture must not replace a quit record. Null leaves the existing record. */

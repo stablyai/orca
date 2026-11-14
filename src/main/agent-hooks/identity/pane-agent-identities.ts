@@ -7,7 +7,9 @@ import { providerSessionLocatorIdentifies } from '../../../shared/agent-session/
 import type { OrcaSessionId } from '../../../shared/orca-session-address'
 import { sameProviderKey, type AgentProviderKey } from './agent-provider-key'
 import { AgentIdentityWorkerClient, type AgentIdentityClient } from './agent-identity-worker-client'
+import { SavedAgentKeyIds, type SavedKeyPopulation } from './saved-agent-key-ids'
 import { AgentIdentityDemand, type KeyDemand } from './agent-identity-demand'
+import type { ReverseLookupUnavailable } from './agent-identity-worker-protocol'
 
 /** Ids live on the hook server's own host, so the host column names "this host". */
 const THIS_HOST = 'local'
@@ -97,6 +99,7 @@ export class PaneAgentIdentities {
   private readonly placesById = new Map<string, Set<string>>()
   private readonly canonicalBySubject = new Map<string, RowAgentIdentity>()
   private readonly keyStrings = new WeakMap<AgentProviderKey, string>()
+  private readonly savedIds: SavedAgentKeyIds
   private readonly demand: AgentIdentityDemand
 
   constructor(
@@ -108,8 +111,13 @@ export class PaneAgentIdentities {
       databasePath,
       (demand, identity) => this.publish(demand, identity),
       createClient,
-      () => this.invalidateSettled()
+      () => {
+        this.savedIds.clear()
+        this.invalidateSettled()
+      },
+      (keyString, id, authority) => this.savedIds.linked(keyString, id, authority)
     )
+    this.savedIds = new SavedAgentKeyIds(this.demand, (key) => this.keyString(key))
   }
 
   /** Changes whenever the store authority ends; a caller compares it across its own awaits. */
@@ -163,6 +171,33 @@ export class PaneAgentIdentities {
     const authority = this.authority()
     const known = this.placesById.has(id) ? true : await this.demand.has(id)
     return authority === this.demand.generation ? known : undefined
+  }
+
+  /** The provider conversation this host linked `id` to: `{ key: null }` for none, undefined
+   *  when the store cannot answer now. An explicit lookup, never per hook. */
+  async providerKeyOf(
+    id: string
+  ): Promise<{ key: AgentProviderKey | null } | ReverseLookupUnavailable | undefined> {
+    return this.demand.lookup(`providerKeyOf\0${id}`, (client, path) =>
+      client.providerKeyOf(path, id)
+    )
+  }
+
+  async idsOfProviderSession(
+    providerSessionId: string
+  ): Promise<OrcaSessionId[] | ReverseLookupUnavailable | undefined> {
+    return this.demand.lookup(`idsOfProviderSession\0${providerSessionId}`, (client, path) =>
+      client.idsOfProviderSession(path, providerSessionId)
+    )
+  }
+
+  /** Each saved key's id, in order, null for none or unanswered, linking nothing; at most one
+   *  store question per new key of `population` and authority. */
+  idsOfKeys(
+    keys: readonly AgentProviderKey[],
+    population: SavedKeyPopulation
+  ): Promise<(OrcaSessionId | null)[]> {
+    return this.savedIds.idsOf(keys, population)
   }
 
   /** Keeps the indexes and demand subscriptions exact: `place` is a legacy row key or a

@@ -1,11 +1,21 @@
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  composeWorktreeHostIdentity,
+  type HostScopedWorktreeKey
+} from '../../../../shared/worktree/host-qualified-identity'
 
 export type ResolvedWorktreeSnapshot = {
   worktrees: ResolvedWorktree[]
   platformByRepoId: ReadonlyMap<string, NodeJS.Platform>
 }
 
-type ResolvedCache = ResolvedWorktreeSnapshot & { expiresAt: number; inventoryRevision: number }
+type ResolvedCache = ResolvedWorktreeSnapshot & {
+  expiresAt: number
+  inventoryRevision: number
+  /** The published rows by host-qualified id, built with the snapshot it belongs to. */
+  byHostKey: ReadonlyMap<HostScopedWorktreeKey, ResolvedWorktree>
+}
 type ResolvedInFlight = {
   generation: number
   inventoryRevision: number
@@ -22,6 +32,11 @@ export class RuntimeResolvedWorktreeCache {
 
   peek(): ResolvedCache | null {
     return this.resolved
+  }
+
+  /** One published row by its host and id, or undefined when none is published. */
+  lookup(hostId: ExecutionHostId, worktreeId: string): ResolvedWorktree | undefined {
+    return this.resolved?.byHostKey.get(composeWorktreeHostIdentity(hostId, worktreeId))
   }
 
   /** Revision invalidates catalogs missing newly registered repos; TTL alone could wrongly report remote worktrees absent. */
@@ -54,7 +69,12 @@ export class RuntimeResolvedWorktreeCache {
       const result = await promise
       if (generation === this.resolvedGeneration) {
         // Start TTL on completion or slow computation publishes already-expired entries.
-        this.resolved = { ...result, inventoryRevision, expiresAt: Date.now() + ttlMs }
+        this.resolved = {
+          ...result,
+          inventoryRevision,
+          expiresAt: Date.now() + ttlMs,
+          byHostKey: indexByHostKey(result.worktrees)
+        }
       }
       return result
     } finally {
@@ -68,4 +88,18 @@ export class RuntimeResolvedWorktreeCache {
     this.resolvedGeneration += 1
     this.resolved = null
   }
+}
+
+/** Part of publishing a snapshot: one pass over rows the publication already holds. */
+function indexByHostKey(
+  worktrees: readonly ResolvedWorktree[]
+): Map<HostScopedWorktreeKey, ResolvedWorktree> {
+  const byHostKey = new Map<HostScopedWorktreeKey, ResolvedWorktree>()
+  for (const worktree of worktrees) {
+    const hostId = worktree.identity?.executionHostId ?? worktree.hostId
+    if (hostId) {
+      byHostKey.set(composeWorktreeHostIdentity(hostId, worktree.id), worktree)
+    }
+  }
+  return byHostKey
 }

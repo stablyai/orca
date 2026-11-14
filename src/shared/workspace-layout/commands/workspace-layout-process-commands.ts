@@ -1,5 +1,6 @@
 // Return terminal process effects separately from bindings/sleeping records; the runtime runs them after replying.
 
+import { withSavedSummary } from '../../agent-session/lifecycle/saved-agent-summary'
 import { isPaneSleepRecord } from '../../agent-session/lifecycle/agent-session-resume'
 import { omitStoredFields } from '../persistence/stored-record-fields'
 import {
@@ -90,8 +91,13 @@ export function sleep(model: WorkspaceLayoutModel, command: CommandOf<'sleep'>):
   for (const { paneKey, leafId } of targets) {
     const record = command.records.find((entry) => entry.paneKey === paneKey)
     if (record) {
-      const kept = omitStoredFields(workspace.leaves?.[leafId] ?? {}, ['sleeping', 'resume'])
-      const stored = omitStoredFields(record, ['paneKey', 'tabId', 'worktreeId'])
+      const leaf = workspace.leaves?.[leafId] ?? {}
+      const kept = omitStoredFields(leaf, ['sleeping', 'resume'])
+      // The place keeps its conversation's last reply, title and distro when a capture lacks them.
+      const stored = withSavedSummary(
+        omitStoredFields(record, ['paneKey', 'tabId', 'worktreeId']),
+        leaf.sleeping ?? leaf.resume
+      )
       // A recordOnly capture of a running agent ('live'/'quit') is a resume record, not a sleep.
       const next = isPaneSleepRecord(stored) ? { sleeping: stored } : { resume: stored }
       workspace = setLeaf(workspace, leafId, { ...kept, ...next })

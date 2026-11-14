@@ -10,9 +10,13 @@ import type {
 } from '../../worker-threads/worker-thread-transport'
 import { isOrcaSessionId, type OrcaSessionId } from '../../../shared/orca-session-address'
 import type { AgentProviderKey } from './agent-provider-key'
-import type {
-  AgentIdentityWorkerRequest,
-  AgentIdentityWorkerResponse
+import { isRecord } from '../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
+import {
+  isReverseLookupUnavailable,
+  REVERSE_LOOKUP_UNAVAILABLE,
+  type AgentIdentityWorkerRequest,
+  type AgentIdentityWorkerResponse,
+  type ReverseLookupUnavailable
 } from './agent-identity-worker-protocol'
 
 const WORKER_ENTRY_FILENAME = 'agent-identity-worker-entry.js'
@@ -27,6 +31,17 @@ export type AgentIdentityLookup = { id: OrcaSessionId | null } | undefined
 export type AgentIdentityClient = {
   identify(path: string, key: AgentProviderKey): Promise<AgentIdentityLookup>
   has(path: string, orcaSessionId: string): Promise<boolean | undefined>
+  /** `{ key: null }`: this host never linked `orcaSessionId`; undefined: no answer now. */
+  providerKeyOf(
+    path: string,
+    orcaSessionId: string
+  ): Promise<{ key: AgentProviderKey | null } | ReverseLookupUnavailable | undefined>
+  idsOfProviderSession(
+    path: string,
+    providerSessionId: string
+  ): Promise<OrcaSessionId[] | ReverseLookupUnavailable | undefined>
+  /** Each key's linked id in order, null for none; links nothing. */
+  idsOfKeys(path: string, keys: AgentProviderKey[]): Promise<(OrcaSessionId | null)[] | undefined>
   /** Terminated but not yet exited: a replacement must wait for `retired()`. */
   readonly isRetiring: boolean
   retired(): Promise<void>
@@ -76,6 +91,46 @@ export class AgentIdentityWorkerClient implements AgentIdentityClient {
     return typeof value === 'boolean' ? value : undefined
   }
 
+  async providerKeyOf(
+    path: string,
+    orcaSessionId: string
+  ): Promise<{ key: AgentProviderKey | null } | ReverseLookupUnavailable | undefined> {
+    const value = await this.request((id) => ({ id, kind: 'providerKeyOf', path, orcaSessionId }))
+    if (value === null) {
+      return { key: null }
+    }
+    if (isReverseLookupUnavailable(value)) {
+      return REVERSE_LOOKUP_UNAVAILABLE
+    }
+    return isProviderKey(value) ? { key: value } : undefined
+  }
+
+  async idsOfProviderSession(
+    path: string,
+    providerSessionId: string
+  ): Promise<OrcaSessionId[] | ReverseLookupUnavailable | undefined> {
+    const value = await this.request((id) => ({
+      id,
+      kind: 'idsOfProviderSession',
+      path,
+      providerSessionId
+    }))
+    if (isReverseLookupUnavailable(value)) {
+      return REVERSE_LOOKUP_UNAVAILABLE
+    }
+    return Array.isArray(value) ? value.filter(isOrcaSessionId) : undefined
+  }
+
+  async idsOfKeys(
+    path: string,
+    keys: AgentProviderKey[]
+  ): Promise<(OrcaSessionId | null)[] | undefined> {
+    const value = await this.request((id) => ({ id, kind: 'idsOfKeys', path, keys }))
+    return Array.isArray(value) && value.length === keys.length
+      ? value.map((id) => (isOrcaSessionId(id) ? id : null))
+      : undefined
+  }
+
   get isRetiring(): boolean {
     return this.queue.isRetiring
   }
@@ -92,7 +147,7 @@ export class AgentIdentityWorkerClient implements AgentIdentityClient {
    *  dispatch; callers' waits are bounded by the owner, not here. */
   private async request(
     build: (id: number) => AgentIdentityWorkerRequest
-  ): Promise<string | null | boolean | undefined> {
+  ): Promise<Extract<AgentIdentityWorkerResponse, { ok: true }>['value'] | undefined> {
     try {
       const response = await this.queue.dispatch(build, OPERATION_TIMEOUT_MS)
       if (!response.ok) {
@@ -104,4 +159,13 @@ export class AgentIdentityWorkerClient implements AgentIdentityClient {
       return undefined
     }
   }
+}
+
+function isProviderKey(value: unknown): value is AgentProviderKey {
+  return (
+    isRecord(value) &&
+    ['executionHost', 'wslDistro', 'agent', 'providerSessionId', 'locator'].every(
+      (field) => typeof value[field] === 'string'
+    )
+  )
 }

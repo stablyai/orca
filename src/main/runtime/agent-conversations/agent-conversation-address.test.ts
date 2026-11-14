@@ -1,0 +1,97 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { resolveAgentConversation } from './agent-conversation-address'
+import { REVERSE_LOOKUP_UNAVAILABLE } from '../../agent-hooks/identity/agent-identity-worker-protocol'
+
+const hookServer = vi.hoisted(() => ({
+  isTerminalAgentId: vi.fn<(id: string) => Promise<boolean | undefined>>(),
+  terminalAgentIdsOfProviderSession: vi.fn<(id: string) => Promise<unknown>>()
+}))
+const chats = vi.hoisted(() => ({ ids: new Set<string>(), aliases: new Map<string, string>() }))
+
+vi.mock('../../agent-hooks/server/agent-hook-server', () => ({ agentHookServer: hookServer }))
+vi.mock('../orchestration/addressing/session-lineage/structured-session-lineage', async (load) => ({
+  ...(await load<object>()),
+  readAgentSessionRecordStore: () => ({
+    getRecord: (id: string) =>
+      chats.ids.has(id) ? { sessionId: id, provider: 'codex', providerHandleChain: [] } : null,
+    listRecords: () => [],
+    providerAliasOwner: (id: string) => chats.aliases.get(id) ?? null
+  })
+}))
+
+const CHAT = 'codex_0b8f2a4e_6c1d_4f7a_9e3b_5a2c8d1f0e47'
+const TERMINAL = 'claude_5688af50_12a0_4b0b_9a4a_098d87fe1e68'
+const runtime = { ensureStructuredAgentSessionHost: async () => undefined }
+
+beforeEach(() => {
+  chats.ids = new Set([CHAT])
+  chats.aliases = new Map()
+  hookServer.isTerminalAgentId.mockReset().mockResolvedValue(false)
+  hookServer.terminalAgentIdsOfProviderSession.mockReset().mockResolvedValue([])
+})
+
+describe('resolveAgentConversation', () => {
+  it('resolves a chat from the chat store alone, without the terminal identity store', async () => {
+    await expect(
+      resolveAgentConversation(runtime, ` orca_session_id:${CHAT}\n`)
+    ).resolves.toMatchObject({ kind: 'chat', orcaSessionId: CHAT })
+    expect(hookServer.isTerminalAgentId).not.toHaveBeenCalled()
+  })
+
+  it('names the Orca ID for a terminal provider id before refusing its spelling', async () => {
+    hookServer.terminalAgentIdsOfProviderSession.mockResolvedValue([TERMINAL])
+    await expect(
+      resolveAgentConversation(runtime, '7f201ef0-437e-44d9-94da-6323eee9a3f4')
+    ).rejects.toMatchObject({
+      code: 'agent_provider_id',
+      message: expect.stringContaining(`orca_session_id:${TERMINAL}`)
+    })
+  })
+
+  it('names the Orca ID for a provider id shaped like one, as typed', async () => {
+    // Kimi's own session ids are `session_<uuid>`, stored with the UUID's hyphens.
+    hookServer.terminalAgentIdsOfProviderSession.mockImplementation(async (id) =>
+      id === 'session_5688af50-12a0-4b0b-9a4a-098d87fe1e68' ? [TERMINAL] : []
+    )
+    await expect(
+      resolveAgentConversation(runtime, 'session_5688af50-12a0-4b0b-9a4a-098d87fe1e68')
+    ).rejects.toMatchObject({ code: 'agent_provider_id' })
+  })
+
+  it('refuses a terminal handle, and an ID no store on this host knows', async () => {
+    await expect(resolveAgentConversation(runtime, 'term_0a1b2c')).rejects.toMatchObject({
+      code: 'agent_terminal_handle'
+    })
+    await expect(resolveAgentConversation(runtime, TERMINAL)).rejects.toMatchObject({
+      code: 'agent_unknown'
+    })
+    hookServer.isTerminalAgentId.mockResolvedValue(true)
+    await expect(resolveAgentConversation(runtime, TERMINAL)).resolves.toEqual({
+      kind: 'terminal',
+      orcaSessionId: TERMINAL
+    })
+    // The same ID with its UUID hyphenated, as a UUID is usually written.
+    await expect(
+      resolveAgentConversation(
+        runtime,
+        'orca_session_id:claude_5688af50-12a0-4b0b-9a4a-098d87fe1e68'
+      )
+    ).resolves.toEqual({ kind: 'terminal', orcaSessionId: TERMINAL })
+  })
+
+  it.each([
+    '7f201ef0-437e-44d9-94da-6323eee9a3f4',
+    'session_7f201ef0-437e-44d9-94da-6323eee9a3f4',
+    'thread-not-a-uuid'
+  ])('says %s cannot be converted when this file cannot look provider ids up', async (input) => {
+    hookServer.terminalAgentIdsOfProviderSession.mockResolvedValue(REVERSE_LOOKUP_UNAVAILABLE)
+    await expect(resolveAgentConversation(runtime, input)).rejects.toMatchObject({
+      code: 'agent_unavailable'
+    })
+    // A real empty answer still says what it does.
+    hookServer.terminalAgentIdsOfProviderSession.mockResolvedValue([])
+    await expect(resolveAgentConversation(runtime, input)).rejects.not.toMatchObject({
+      code: 'agent_unavailable'
+    })
+  })
+})
