@@ -1,3 +1,9 @@
+import {
+  admitEnvironmentStoreOperation,
+  environmentStoreRunsInline,
+  sealEnvironmentStorePlacement
+} from './runtime-environment-store-execution'
+export { useInlineEnvironmentStoreForCli } from './runtime-environment-store-execution'
 import { captureEnvironmentStoreRead } from './runtime-environment-store-read-observation'
 import type { Worker } from 'node:worker_threads'
 import type { runEnvironmentStoreBatch } from './runtime-environment-store-batch'
@@ -47,17 +53,7 @@ let retiring: Promise<void> | undefined
 let scheduled = false
 let closing: Promise<void> | undefined
 let finishClose: (() => void) | undefined
-let inline = false
-let admitted = false
 let runInline: typeof runEnvironmentStoreBatch | undefined
-
-/** Only the disposable CLI executable bootstrap may select this before admission. */
-export function useInlineEnvironmentStoreForCli(): void {
-  if (inline || admitted || closing) {
-    throw new Error('Environment store placement is already sealed')
-  }
-  inline = true
-}
 
 /** Parent generation survives worker restarts and invalidates derived pairing caches on uncertainty. */
 export function environmentStoreWriteCount(): number {
@@ -165,7 +161,7 @@ function dispatch(): void {
   }
   try {
     if (!owner) {
-      const worker = inline
+      const worker = environmentStoreRunsInline()
         ? undefined
         : spawnWorkerThread(
             resolveWorkerThreadEntryPath(
@@ -233,10 +229,10 @@ export function submitEnvironmentStoreCommand(
   if (closing) {
     return Promise.reject(new Error('Environment store is closing'))
   }
-  admitted = true
+  admitEnvironmentStoreOperation(closeEnvironmentStore)
   const result = new Promise<EnvironmentStoreSuccess>((resolve, reject) =>
     queue.push({
-      command: inline ? structuredClone(command) : command,
+      command: structuredClone(command),
       servingWsl: isWslHostsServing(process.env),
       observe: captureEnvironmentStoreRead(),
       resolve,
@@ -252,6 +248,7 @@ export function submitEnvironmentStoreCommand(
 
 /** Call after RPC and other producers stop, before a normal host exit. */
 export function closeEnvironmentStore(): Promise<void> {
+  sealEnvironmentStorePlacement()
   if (!closing) {
     closing = new Promise<void>((resolve) => {
       finishClose = resolve

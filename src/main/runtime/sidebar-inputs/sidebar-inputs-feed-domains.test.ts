@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { normalizePairedServerRow } from '../../../shared/sidebar-list/feed-facts/paired-server-rows'
 import type { WorkspaceActivityFacts } from '../../../shared/sidebar-list/feed-facts/workspace-activity-facts'
 import { buildWorkspaceRows } from '../../../shared/sidebar-list/feed-facts/workspace-rows'
+import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import type {
@@ -56,7 +58,8 @@ function repo(overrides: Partial<Repo> = {}): Repo {
 /** This host lists `r::/w/same` locally and over SSH; a paired server lists the same id. */
 function harness(
   hostFacts: Record<string, WorkspaceActivityFacts>,
-  paired?: PairedServerRowsProducer
+  paired?: Pick<PairedServerRowsProducer, 'revision' | 'withPreparedSnapshot'>,
+  events?: { store: () => unknown; onClientEvent: SidebarInputsFeedSources['onClientEvent'] }
 ) {
   const listing = { scanned: true }
   const repos = [repo(), repo({ connectionId: 'box' })]
@@ -105,7 +108,8 @@ function harness(
           : null
     },
     store: () => null,
-    onClientEvent: () => () => {}
+    onClientEvent: () => () => {},
+    ...events
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the activity and workspaces domains read only the members built above.
   const domains = sidebarInputsFeedDomains(sources as unknown as SidebarInputsFeedSources)
@@ -206,3 +210,83 @@ it('prepares first host facts and sees an external rename on an activity-only di
     detach()
   }
 })
+
+it.each([10, 100])(
+  'ignores %i unrelated UI and worktree events but publishes a host-label change',
+  async (count) => {
+    let label = 'Before'
+    let prepares = 0
+    let written: Parameters<NonNullable<RuntimeStore['onStateWritten']>>[0] | undefined
+    const listeners = new Set<(event: RuntimeClientEvent) => void>()
+    const paired: Pick<PairedServerRowsProducer, 'revision' | 'withPreparedSnapshot'> = {
+      revision: new ProducerRevision(),
+      withPreparedSnapshot: async (consume) => {
+        prepares++
+        return consume({
+          revision: 0,
+          servers: [
+            {
+              hostId: 'runtime:env',
+              freshness: 'live',
+              host: { label, health: 'online', compatibility: null, pairedDeviceId: 'device' },
+              rows: []
+            }
+          ]
+        })
+      }
+    }
+    const { domains } = harness({}, paired, {
+      store: () => ({
+        onStateWritten: (listener: typeof written) => {
+          written = listener
+          return () => {
+            written = undefined
+          }
+        }
+      }),
+      onClientEvent: (listener) => {
+        listeners.add(listener)
+        return () => {
+          listeners.delete(listener)
+        }
+      }
+    })
+    const events: unknown[] = []
+    const feed = new SidebarInputsFeed(
+      () =>
+        domains.filter((domain) => ['pairedServerHosts', 'pairedServerRows'].includes(domain.name)),
+      (event) => {
+        events.push(event)
+      }
+    )
+    feed.acquire('phone')
+    try {
+      const initial = await feed.read({ maxBytes: 256 * 1024 })
+      expect(initial.domains.pairedServerHosts.upserts).toMatchObject({
+        'runtime:env': { host: { label: 'Before' } }
+      })
+      const initialPrepares = prepares
+      const initialEvents = events.length
+      for (let i = 0; i < count; i++) {
+        written?.(['ui'])
+        for (const listener of listeners) {
+          listener({ type: 'worktreesChanged', repoId: 'r' })
+        }
+      }
+      const unchanged = await feed.read({ maxBytes: 256 * 1024 })
+      expect(unchanged.revision).toBe(initial.revision)
+      expect(prepares - initialPrepares).toBe(0)
+      expect(events).toHaveLength(initialEvents)
+      label = 'After'
+      written?.(['settings'])
+      const changed = await feed.read({ maxBytes: 256 * 1024 })
+      expect(changed.domains.pairedServerHosts.upserts).toMatchObject({
+        'runtime:env': { host: { label: 'After' } }
+      })
+      expect(changed.revision).toBeGreaterThan(initial.revision)
+      expect(prepares - initialPrepares).toBe(1)
+    } finally {
+      feed.release('phone')
+    }
+  }
+)

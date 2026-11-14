@@ -107,7 +107,8 @@ const SSH_IPC_CHANNELS = [
 export async function registerSshHandlers(
   store: Store,
   getMainWindow: () => BrowserWindow | null,
-  runtime?: OrcaRuntimeService
+  runtime?: OrcaRuntimeService,
+  hostInitialization?: Promise<void>
 ): Promise<{ connectionManager: SshConnectionManager; sshStore: SshConnectionStore }> {
   initializeSshConnectionGenerationSession()
   // macOS window recreation re-registers handlers; remove old channels to avoid duplicate registration.
@@ -120,6 +121,7 @@ export async function registerSshHandlers(
   setSshTargetRegistryStore(new SshConnectionStore(store))
   setPersistedStore(store)
   const ready = (async () => {
+    await hostInitialization
     await holdLaunchReconnectOptOuts(getSshTargetRegistryStore()!.listTargets())
     await reconcileManagedOrcadSshTargets(getAppEnvironment().getPath('userData'), store)
   })()

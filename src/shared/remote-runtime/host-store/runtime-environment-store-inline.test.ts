@@ -23,7 +23,7 @@ it('keeps the disposable CLI owner fresh, isolated, ordered and durable through 
   const root = mkdtempSync(join(tmpdir(), 'orca-environment-cli-'))
   try {
     useInlineEnvironmentStoreForCli()
-    const added = addEnvironmentFromPairingCode(root, {
+    const args = {
       name: 'Before',
       now: 100,
       pairingCode: encodePairingOffer({
@@ -32,7 +32,9 @@ it('keeps the disposable CLI owner fresh, isolated, ordered and durable through 
         publicKeyB64: Buffer.alloc(32, 7).toString('base64'),
         deviceToken: 'synthetic'
       })
-    })
+    }
+    const added = addEnvironmentFromPairingCode(root, args)
+    args.name = 'Changed after admission'
     const listing = listEnvironments(root)
     expect(() => useInlineEnvironmentStoreForCli()).toThrow('placement is already sealed')
     const saved = await added

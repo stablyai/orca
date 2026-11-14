@@ -37,8 +37,13 @@ type DeliveryHost = {
 /** One prepared sender walk serves every frame in a publication pass. */
 export function createMobileSessionTabsDelivery(
   host: DeliveryHost
-): (...args: DeliveryArgs) => void {
-  const pending: { args: DeliveryArgs; source: unknown; epoch: number | null }[] = []
+): (...args: DeliveryArgs) => Promise<void> {
+  const pending: {
+    args: DeliveryArgs
+    source: unknown
+    epoch: number | null
+    complete: () => void
+  }[] = []
   let scheduled = false
   const deliverNow = (args: DeliveryArgs, senderScope: () => SenderPass): void => {
     const [result, sequence, navigation, candidates, delivery] = args
@@ -90,6 +95,7 @@ export function createMobileSessionTabsDelivery(
         })
         .catch((error: unknown) => console.warn('[runtime] Sender frame publication failed', error))
         .finally(() => {
+          batch.forEach(({ complete }) => complete())
           scheduled = false
           if (pending.length) {
             schedule()
@@ -97,7 +103,7 @@ export function createMobileSessionTabsDelivery(
         })
     })
   }
-  return (...args): void => {
+  return (...args): Promise<void> => {
     const [result, , navigation, candidates] = args
     if (
       !host
@@ -107,9 +113,12 @@ export function createMobileSessionTabsDelivery(
       deliverNow(args, () => {
         throw new Error('Mobile frames do not contain sender associations')
       })
-      return
+      return Promise.resolve()
     }
-    pending.push({ args, source: host.source(result.worktree), epoch: host.epoch() })
+    const delivered = new Promise<void>((complete) => {
+      pending.push({ args, source: host.source(result.worktree), epoch: host.epoch(), complete })
+    })
     schedule()
+    return delivered
   }
 }

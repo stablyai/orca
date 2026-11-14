@@ -183,9 +183,8 @@ export function writeWslHostDeployment(
     path,
     { version: 1, deployments: raws },
     MAX_WSL_HOST_DEPLOYMENTS_FILE_BYTES,
-    { durable: true }
+    { durable: true, onPublished: noteEnvironmentStoreWrite }
   )
-  noteEnvironmentStoreWrite()
 }
 
 export function hasNonWslOwner(environment: KnownRuntimeEnvironment): boolean {

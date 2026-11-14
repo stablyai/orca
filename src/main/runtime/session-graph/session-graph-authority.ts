@@ -261,20 +261,24 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
       return
     }
     const deliver = this.createMobileSessionTabsDelivery()
+    const delivered: Promise<void>[] = []
     for (const worktree of held) {
       const selected = this.selectMobileSessionTabsListeners(worktree, pairedDeviceId, candidates)
       if (selected.length === 0) {
         continue
       }
-      deliver(
-        await this.getMobileSessionTabsForWorktree(worktree, pairedDeviceId, {
-          includeAgentSenders: false
-        }),
-        ++this.mobileSessionTabsChangeSequence,
-        pairedDeviceId,
-        selected,
-        'reconciliation'
+      delivered.push(
+        deliver(
+          await this.getMobileSessionTabsForWorktree(worktree, pairedDeviceId, {
+            includeAgentSenders: false
+          }),
+          ++this.mobileSessionTabsChangeSequence,
+          pairedDeviceId,
+          selected,
+          'reconciliation'
+        )
       )
     }
+    await Promise.all(delivered)
   }
 }

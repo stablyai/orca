@@ -29,9 +29,9 @@ import {
   refuseLocalManagementSelector
 } from './hosts/local-environment-selector'
 import {
-  closeEnvironmentStore,
+  closeAdmittedEnvironmentStore,
   useInlineEnvironmentStoreForCli
-} from '../shared/remote-runtime/host-store/runtime-environment-store-worker-client'
+} from '../shared/remote-runtime/host-store/runtime-environment-store-execution'
 
 const COMMAND_PATHS = COMMAND_SPECS.flatMap((spec) => specPaths(spec))
 
@@ -274,5 +274,5 @@ if (require.main === module) {
     if (commandPath[0] !== 'serve') {
       useInlineEnvironmentStoreForCli()
     }
-  }).finally(closeEnvironmentStore)
+  }).finally(closeAdmittedEnvironmentStore)
 }

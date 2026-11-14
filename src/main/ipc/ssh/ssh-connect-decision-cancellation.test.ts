@@ -5,6 +5,15 @@ const mocks = await vi.hoisted(async () => {
   return createSshIpcMocks()
 })
 
+const listing = vi.hoisted(() => vi.fn(async (): Promise<never[]> => []))
+vi.mock(
+  '../../../shared/remote-runtime/host-store/runtime-environment-store',
+  async (importOriginal) => ({
+    ...(await importOriginal<object>()),
+    listEnvironments: listing
+  })
+)
+
 vi.mock('../../ssh/config/ssh-config-host-picker', () => mocks.sshConfigHostPicker)
 vi.mock('electron', () => mocks.electron)
 vi.mock('../../ssh/targets/ssh-connection-store', () => mocks.sshConnectionStore)
@@ -54,7 +63,10 @@ describe('a connect cancelled during its server decision', () => {
   const harness = createSshIpcHarness(mocks)
   const { handlers } = harness
 
-  beforeEach(harness.reset)
+  beforeEach(async () => {
+    listing.mockResolvedValue([])
+    await harness.reset()
+  })
 
   it('does not publish connected when the user disconnected during the legacy bridge wait', async () => {
     const target: SshTarget = {
@@ -74,12 +86,21 @@ describe('a connect cancelled during its server decision', () => {
       mockConnectionManager.getConnection.mockReturnValue(opened)
       return { route: 'managed', environmentId: 'env-1' }
     })
+    const bridge = Promise.withResolvers<void>()
+    const entered = Promise.withResolvers<void>()
     vi.mocked(startLegacyRelayBridge).mockImplementationOnce(async () => {
-      await handlers.get('ssh:disconnect')!(null, { targetId: 'ssh-1' })
+      entered.resolve()
+      await bridge.promise
     })
-    await expect(
-      Promise.resolve(handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' }))
-    ).rejects.toThrow('SSH connection attempt was cancelled')
+    const connecting = Promise.resolve(handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' }))
+    await entered.promise
+    const enumeration = Promise.withResolvers<never[]>()
+    listing.mockReturnValueOnce(enumeration.promise)
+    const disconnecting = handlers.get('ssh:disconnect')!(null, { targetId: 'ssh-1' })
+    bridge.resolve()
+    await expect(connecting).rejects.toThrow('SSH connection attempt was cancelled')
+    enumeration.resolve([])
+    await disconnecting
     expect(publishManagedServerConnect).not.toHaveBeenCalled()
     expect(stopLegacyRelayBridge).toHaveBeenCalledWith('ssh-1')
   })

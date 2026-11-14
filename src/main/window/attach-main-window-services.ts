@@ -66,6 +66,7 @@ export async function attachMainWindowServices(
   ) => Promise<ClaudeRuntimeAuthPreparation>,
   options?: {
     deferSshInitialization?: boolean
+    hostInitialization?: Promise<void>
     prepareCodexSessionResume?: PrepareCodexSessionResume
     awaitLocalPtyStartup?: () => Promise<void>
     awaitLocalPtyProviderStartup?: () => Promise<void>
@@ -132,7 +133,12 @@ export async function attachMainWindowServices(
   } else {
     void hydrateLocalPtyRegistryAtBoot(store)
   }
-  const sshReady = registerSshHandlers(store, () => mainWindow, runtime)
+  const sshReady = registerSshHandlers(
+    store,
+    () => mainWindow,
+    runtime,
+    options?.hostInitialization
+  )
   if (options?.deferSshInitialization) {
     void sshReady.catch((error: unknown) =>
       console.warn('[startup] SSH initialization failed:', error)

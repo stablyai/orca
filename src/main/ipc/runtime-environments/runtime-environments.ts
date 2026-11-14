@@ -140,7 +140,10 @@ async function reactivateRuntimeEnvironmentStatus(environmentId: string): Promis
 const pendingSubscriptions = new Map<string, PendingRuntimeSubscription>()
 let stopPreferenceWatch: (() => void) | undefined
 
-export async function registerRuntimeEnvironmentHandlers(store: Store): Promise<void> {
+export async function registerRuntimeEnvironmentHandlers(
+  store: Store,
+  hostInitialization?: Promise<void>
+): Promise<void> {
   stopPreferenceWatch?.()
   stopPreferenceWatch = watchRuntimeEnvironmentPreference(store, getUserDataPath(), async () => {
     // CLI and recipe removals skip the Settings path; drop their session partitions here too.
@@ -212,6 +215,7 @@ export async function registerRuntimeEnvironmentHandlers(store: Store): Promise<
     recordLayoutFrame: (environmentId, method, response) =>
       recordRemoteLayoutFrame(store, environmentId, method, response)
   })
+  await hostInitialization
   await holdLaunchReconnectOptOuts(store.getSshTargets?.() ?? [])
   await reconcileOrphanedRuntimeSessions(store, getUserDataPath())
   await Promise.all(

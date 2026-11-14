@@ -202,8 +202,10 @@ export async function openMainWindow(
     clearExpectedRendererReload(rendererWebContentsId)
     clearMainWindowAgentStatusListeners()
   })
+  const hostInitialization = Promise.withResolvers<void>()
   try {
     await attachMainWindowCoreServices(window, {
+      hostInitialization: hostInitialization.promise,
       markExpectedRendererReload,
       recordRendererReload: (ignoreCache) =>
         recordCrashBreadcrumb('renderer_reload_requested', { ignoreCache })
@@ -212,6 +214,7 @@ export async function openMainWindow(
       throw new Error('Main window closed while preparing services')
     }
   } catch (error) {
+    hostInitialization.resolve()
     if (!window.isDestroyed()) {
       window.destroy()
     }
@@ -247,5 +250,6 @@ export async function openMainWindow(
   })
   logStartupMilestone('load-start')
   loadMainWindow(window)
+  hostInitialization.resolve()
   return window
 }

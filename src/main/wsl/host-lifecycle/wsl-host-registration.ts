@@ -95,6 +95,6 @@ export async function registerWslHost(
   if (record) {
     context.setReady(record, connection)
   }
-  context.deps.ready(environmentId)
+  context.deps.ready(environmentId, distro.name)
   return { ok: true, environmentId }
 }

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 type Handler = (event: unknown, request?: unknown) => unknown
 
+const serviceAccess = vi.hoisted(() => vi.fn())
 const handlers = vi.hoisted(() => new Map<string, Handler>())
 const sent = vi.hoisted((): { channel: string; payload: unknown }[] => [])
 vi.mock('electron', () => ({
@@ -60,7 +61,10 @@ const service = vi.hoisted(() => ({
   recordForEnvironment: vi.fn(() => ({ distro: 'Ubuntu', environmentId: 'wsl:Ubuntu' }))
 }))
 vi.mock('../../wsl/host-lifecycle/wsl-host-service-instance', () => ({
-  getWslHostService: () => service,
+  getWslHostService: () => {
+    serviceAccess()
+    return service
+  },
   setWslHostService: vi.fn()
 }))
 
@@ -73,8 +77,9 @@ import {
 } from '../../wsl/host-lifecycle/wsl-host-gate'
 import { WSL_HOST_CAPABILITY_CHANNEL } from '../../../shared/wsl-host-types'
 
-async function register(): Promise<void> {
+async function register(hostInitialization?: Promise<void>): Promise<void> {
   await registerWslHostHandlers({
+    hostInitialization,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only the add and remove handlers run, and they read the active runtime setting alone.
     store: { getSettings: () => ({ activeRuntimeEnvironmentId: null }) } as never,
     getUserDataPath: () => '/user-data',
@@ -120,4 +125,28 @@ describe('WSL host IPC: the user Add and Remove (D3a)', () => {
       resetWslHostsGateForTests()
     }
   })
+})
+
+it('registers WSL actions before load without starting the service or acting before readiness', async () => {
+  vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', '1')
+  await configureWslHostsGate({ hasSavedWslHost: () => true, hasWslMoveCutover: () => false })
+  const load = Promise.withResolvers<void>()
+  serviceAccess.mockClear()
+  service.add.mockClear()
+  try {
+    const registered = register(load.promise)
+    expect(handlers.has('wslHosts:add')).toBe(true)
+    const adding = handlers.get('wslHosts:add')?.({}, { distro: 'Ubuntu' })
+    await Promise.resolve()
+    expect(serviceAccess).not.toHaveBeenCalled()
+    expect(service.add).not.toHaveBeenCalled()
+    load.resolve()
+    await registered
+    expect(await adding).toMatchObject({ ok: true, environmentId: 'wsl:Ubuntu' })
+    expect(service.add).toHaveBeenCalledTimes(1)
+  } finally {
+    load.resolve()
+    resetWslHostsGateForTests()
+    vi.unstubAllEnvs()
+  }
 })

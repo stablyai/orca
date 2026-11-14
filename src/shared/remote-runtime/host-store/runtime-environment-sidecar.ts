@@ -266,9 +266,8 @@ export function writeRuntimeEnvironmentSidecarEntry(
       entries: { ...SidecarSchema.parse({ version: 1, entries }).entries, ...current.unreadable }
     },
     MAX_SIDECAR_FILE_BYTES,
-    { durable: true }
+    { durable: true, onPublished: noteEnvironmentStoreWrite }
   )
-  noteEnvironmentStoreWrite()
 }
 
 /** The current sidecar entry for an environment, or none when absent or stale. Throws when unreadable. */

@@ -98,6 +98,7 @@ function pushHostAccounts(
 }
 
 type WslHostHandlerArgs = {
+  hostInitialization?: Promise<void>
   store: Store
   getUserDataPath: () => string
   invalidateTransport: (environmentId: string) => Promise<void> | void
@@ -126,14 +127,11 @@ async function createService(args: WslHostHandlerArgs): Promise<WslHostService |
     ...runGate,
     publish: publishWslHostStatus,
     pairingChanged: (environmentId) => void args.invalidateTransport(environmentId),
-    ready: async (environmentId) => {
+    ready: (environmentId, distro) => {
       void getRuntimeEnvironmentStatus(args.getUserDataPath(), environmentId, undefined, {
         reconnect: true
       }).catch(() => {})
-      const distro = (await created.recordForEnvironment(environmentId))?.distro
-      if (distro) {
-        pushHostAccounts(args.getUserDataPath, environmentId, distro)
-      }
+      pushHostAccounts(args.getUserDataPath, environmentId, distro)
       void automationWake?.learn(environmentId)
     },
     removed: (environmentId) => {
@@ -241,6 +239,7 @@ export async function registerWslHostHandlers(args: WslHostHandlerArgs): Promise
   }
   let wsl: WslHostService
   const ready = (async () => {
+    await args.hostInitialization
     const service = getWslHostService() ?? (await startService(args))
     if (!service) {
       throw new Error('WSL host service is unavailable')

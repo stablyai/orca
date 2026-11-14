@@ -40,6 +40,17 @@ afterEach(() => {
 })
 
 describe('asynchronous environment store owner', () => {
+  it('captures arguments before the caller can mutate them', async () => {
+    const root = profile()
+    const args = { name: 'Before', pairingCode: pairing(9), now: 100 }
+    const saved = addEnvironmentFromPairingCode(root, args)
+    args.name = 'Changed after admission'
+    args.pairingCode = pairing(10)
+    const environment = await saved
+    expect(environment.name).toBe('Before')
+    expect(environment.endpoints[0]?.publicKeyB64).toBe(Buffer.alloc(32, 9).toString('base64'))
+  })
+
   it.each([
     [100, 2],
     [1000, 16]

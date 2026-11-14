@@ -19,6 +19,7 @@ import {
 } from '../host-catalog/runtime-environments'
 import {
   readEnvironmentStore,
+  readEnvironmentStoreSelection,
   readPersistedEnvironmentStore,
   writeEnvironmentStore
 } from './runtime-environment-store-file'
@@ -204,7 +205,9 @@ export function resolveEnvironment(
   userDataPath: string,
   selector: string
 ): KnownRuntimeEnvironment {
-  return resolveEnvironmentFromStore(readEnvironmentStore(userDataPath), selector)
+  return readEnvironmentStoreSelection(userDataPath, {}, (store) =>
+    resolveEnvironmentFromStore(store, selector)
+  )
 }
 
 export function resolveEnvironmentPairingOffer(

@@ -59,12 +59,13 @@ export async function disconnectSshHostForUser(
 ): Promise<void> {
   // Fence status probes and reserve teardown synchronously so later Connect queues behind it.
   recordSshUserDisconnected(targetId)
+  const teardown = disconnectRegisteredSshTarget(targetId)
+  void teardown.catch(() => {})
   const userDataPath = runtimeLayer?.userDataPath ?? appUserDataPath()
   const environments = (await environmentsReachedThrough(userDataPath, targetId)).filter(
     (environment) => !isRuntimeEnvironmentManuallyDisconnected(environment.id)
   )
   environments.forEach((environment) => markRuntimeEnvironmentManuallyDisconnected(environment.id))
-  const teardown = disconnectRegisteredSshTarget(targetId)
   if (environments.length > 0) {
     // Import lazily because runtime-environments wires handlers and imports this SSH layer.
     const invalidateTransport =

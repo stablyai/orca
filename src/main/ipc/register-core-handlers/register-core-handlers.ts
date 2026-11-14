@@ -27,11 +27,7 @@ import { registerStatsHandlers } from '../stats'
 import { registerMemoryHandlers } from '../memory'
 import { registerRateLimitHandlers } from '../rate-limits'
 import { registerRuntimeHandlers } from '../runtime'
-import {
-  invalidateRuntimeEnvironmentTransport,
-  registerRuntimeEnvironmentHandlers
-} from '../runtime-environments/runtime-environments'
-import { registerWslHostHandlers } from '../wsl/wsl-host-handlers'
+import { registerRuntimeHostHandlers } from './runtime-host-handler-registration'
 import { registerEphemeralVmHandlers } from '../ephemeral-vm'
 import { registerAiVaultHandlers } from '../ai-vault/ai-vault'
 import { registerAiVaultSearchHandlers } from '../ai-vault/ai-vault-search'
@@ -114,6 +110,7 @@ let registration: Promise<void> | null = null
 
 type CoreHandlerLifecycleOptions = {
   deferHostInitialization?: boolean
+  hostInitialization?: Promise<void>
   onBeforeRelaunch?: () => void | Promise<void>
   onOrcaProfileAuthMutation?: () => void
   onBeforeOrcaProfileSignOut?: () => void
@@ -235,12 +232,7 @@ export async function registerCoreHandlers(
     registerFilesystemHandlers(store, commitMessageAgentEnv)
     registerFilesystemWatcherHandlers()
     registerRuntimeHandlers(runtime)
-    const environmentsReady = registerRuntimeEnvironmentHandlers(store)
-    const wslReady = registerWslHostHandlers({
-      store,
-      getUserDataPath: () => app.getPath('userData'),
-      invalidateTransport: invalidateRuntimeEnvironmentTransport
-    })
+    const hostsReady = registerRuntimeHostHandlers(store, lifecycleOptions.hostInitialization)
     registerWslMoveWiring(store, runtime)
     registerWslDriveProjectHandlers(store, runtime)
     installProjectRuntimeGitRouter(store)
@@ -297,7 +289,6 @@ export async function registerCoreHandlers(
     })
     registerUpdaterHandlers(store)
     registerSpeechHandlers(store, commitMessageAgentEnv)
-    const hostsReady = Promise.all([environmentsReady, wslReady])
     void hostsReady.catch((error: unknown) =>
       console.warn('[startup] Host initialization failed:', error)
     )

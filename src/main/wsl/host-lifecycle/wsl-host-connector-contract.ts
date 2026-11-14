@@ -43,7 +43,7 @@ export type WslHostServiceDependencies = {
   /** The environment's pairing changed: transports that authenticate with the old one retire. */
   pairingChanged: (environmentId: string) => void
   /** A connection came up: verify the server now rather than on the status owner's backoff. */
-  ready: (environmentId: string) => void
+  ready: (environmentId: string, distro: string) => void
   removed: (environmentId: string) => Promise<void> | void
   /** Test seam; production runs the task once a running list confirms the distro runs again. */
   deferUntilRunning?: (distro: string, key: string, task: () => unknown) => void

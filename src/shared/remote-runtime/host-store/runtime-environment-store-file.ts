@@ -100,8 +100,17 @@ export function readEnvironmentStore(
   userDataPath: string,
   options: EnvironmentStoreRecordsReadOptions = {}
 ): MergedEnvironmentStore {
+  return readEnvironmentStoreSelection(userDataPath, options, (store) => store)
+}
+
+/** Copy only the selected output while the owner retains its parsed store. */
+export function readEnvironmentStoreSelection<T>(
+  userDataPath: string,
+  options: EnvironmentStoreRecordsReadOptions,
+  select: (store: MergedEnvironmentStore) => T
+): T {
   if (options.requireStoreFile || options.recoverBlankStore) {
-    return readEnvironmentStoreUncached(userDataPath, options)
+    return select(readEnvironmentStoreUncached(userDataPath, options))
   }
   const storePath = getEnvironmentStorePath(userDataPath)
   const sidecarPath = getRuntimeEnvironmentSidecarPath(userDataPath)
@@ -129,7 +138,8 @@ export function readEnvironmentStore(
             ? { deployments: [], unreadableEnvironmentIds: new Set() }
             : parseWslHostDeploymentsText(wslPath, wslText)
       }),
-    () => readEnvironmentStoreUncached(userDataPath, options)
+    () => readEnvironmentStoreUncached(userDataPath, options),
+    select
   )
 }
 
@@ -228,8 +238,7 @@ export function writeEnvironmentStore(userDataPath: string, store: RuntimeEnviro
   }
   // Without fsync before the rename, a crash can publish the name over NUL-filled data (#18766).
   invalidateEnvironmentStoreObservation(path)
-  writeSecureFile(path, serialized, { durable: true })
-  noteEnvironmentStoreWrite()
+  writeSecureFile(path, serialized, { durable: true, onPublished: noteEnvironmentStoreWrite })
 }
 
 export { environmentStoreWriteCount } from './runtime-environment-store-write-generation'

@@ -28,6 +28,7 @@ let attachmentTail: Promise<void> = Promise.resolve()
 export function attachMainWindowCoreServices(
   window: BrowserWindow,
   deps: {
+    hostInitialization: Promise<void>
     markExpectedRendererReload: (webContentsId: number) => void
     recordRendererReload: (ignoreCache: boolean) => void
   }
@@ -40,6 +41,7 @@ export function attachMainWindowCoreServices(
 async function installMainWindowCoreServices(
   window: BrowserWindow,
   deps: {
+    hostInitialization: Promise<void>
     markExpectedRendererReload: (webContentsId: number) => void
     recordRendererReload: (ignoreCache: boolean) => void
   }
@@ -90,6 +92,7 @@ async function installMainWindowCoreServices(
     keybindings,
     {
       deferHostInitialization: true,
+      hostInitialization: deps.hostInitialization,
       getAdditionalAiVaultCodexHomePaths: () =>
         codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery(),
       prepareAiVaultSessionResume: (args) =>
@@ -146,6 +149,7 @@ async function installMainWindowCoreServices(
     {
       prepareCodexSessionResume: prepareCodexSessionResumeForLaunch,
       deferSshInitialization: true,
+      hostInitialization: deps.hostInitialization,
       awaitLocalPtyStartup: () => state.localPtyStartupReady,
       awaitLocalPtyProviderStartup: () => state.localPtyProviderStartupReady,
       onBeforeRendererReload: ({ ignoreCache, webContentsId }) => {

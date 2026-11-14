@@ -250,3 +250,43 @@ it('routes removal only to the matching workspace and broad RPC streams', async 
     await h.close()
   }
 })
+
+it.each([10, 100])(
+  'uses one sender refresh for a full %i-workspace notification',
+  async (count) => {
+    const h = createReconciliationDeliveryRuntime()
+    const runtime = h.hostRuntime
+    const corpus = snapshots(count)
+    runtime.attachWindow(1)
+    await runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: corpus })
+    const frames: string[] = []
+    let complete!: () => void
+    const delivered = new Promise<void>((resolve) => {
+      complete = resolve
+    })
+    const detach = runtime.onMobileSessionTabsChanged(
+      (frame) => {
+        frames.push(frame.worktree)
+        if (frames.length === count) {
+          complete()
+        }
+      },
+      'sender-contract',
+      'runtime'
+    )
+    const pass = vi.spyOn(RuntimeAgentSenderAssociations.prototype, 'buildForFramePass')
+    const refresh = vi.spyOn(RuntimeAgentSenderAssociations.prototype, 'build')
+    try {
+      runtime.notifyMobileSessionTabsChanged()
+      await delivered
+      expect(frames).toEqual(corpus.map((snapshot) => snapshot.worktree))
+      expect(pass).toHaveBeenCalledTimes(1)
+      expect(refresh).toHaveBeenCalledTimes(1)
+    } finally {
+      detach()
+      pass.mockRestore()
+      refresh.mockRestore()
+      await h.close()
+    }
+  }
+)

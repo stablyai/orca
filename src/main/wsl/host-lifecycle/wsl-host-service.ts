@@ -85,7 +85,7 @@ export class WslHostService {
     }
     this.setStatus(record, status, connection)
     if (status.state === 'ready' && connection) {
-      this.deps.ready(record.environmentId)
+      this.deps.ready(record.environmentId, record.distro)
     }
   }
 
