@@ -170,11 +170,15 @@ export function LinearIssueSubIssues({
           return
         }
         if (result.ok) {
+          // Stamp local time so date orderings place it as newest until the server copy replaces it.
+          const createdAt = new Date().toISOString()
           const child = {
             id: result.id,
             identifier: result.identifier,
             title: result.title || trimmed,
-            url: result.url
+            url: result.url,
+            createdAt,
+            updatedAt: createdAt
           }
           setCreatedSubIssues((current) => {
             if (
