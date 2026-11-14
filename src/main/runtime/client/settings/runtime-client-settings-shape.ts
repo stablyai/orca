@@ -1,3 +1,4 @@
+import type { WorkspaceCleanupGuardedUpdate } from '../../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
 // What a paired client reads and may write of this host's settings.
 
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
@@ -74,7 +75,7 @@ export type RuntimeHostDisplayLabelOverrides = Partial<
   Record<ExecutionHostId, { displayLabel: string }>
 >
 
-export type RuntimeClientSettingsUpdate = Pick<
+export type RuntimeClientSettingsUpdate = WorkspaceCleanupGuardedUpdate & Pick<
   Partial<GlobalSettings>,
   | 'agentStatusHooksEnabled'
   | 'claudeSubagentNavigationEnabled'

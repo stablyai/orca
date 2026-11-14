@@ -1,3 +1,4 @@
+import type { WorkspaceCleanupPolicyGuard } from '../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
 import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { isRepoHidden } from '../../../shared/project/catalog/hidden-projects'
 import { commitProvenRepoKindChange } from '../../workspaces/catalog/folder-repo-git-conversion'
@@ -61,6 +62,7 @@ type RepositoryUpdates = Partial<
   projectGroupOrder?: number | null
   sourceControlAi?: Repo['sourceControlAi'] | null
   workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
+  workspaceCleanupGuard?: WorkspaceCleanupPolicyGuard
   externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
   hiddenAt?: Repo['hiddenAt'] | null
   /** Only `null` clears; `omitUndefined` drops a stripped (undefined) field so it never unbinds. */

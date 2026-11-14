@@ -1,3 +1,7 @@
+import type {
+  WorkspaceCleanupPolicyState,
+  WorkspaceCleanupPolicyChange
+} from '../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { worktreeIdentityKey } from '../../../shared/worktree/id'
@@ -24,7 +28,6 @@ import {
 import type { RuntimeWorktreePsSummary } from '../../../shared/worktree/catalog/runtime-worktree-contracts'
 import {
   getPersistedWorkspaceCleanupActivityAt,
-  WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT,
   type WorkspaceCleanupBlocker,
   type WorkspaceCleanupCandidate
 } from '../../../shared/workspace-cleanup/workspace-cleanup'
@@ -46,6 +49,7 @@ export type WorkspaceCleanupWorkspace = {
   ref: WorkspaceCleanupWorkspaceRef
   repo: Repo
   policy: ResolvedWorkspaceCleanupPolicy
+  nextPolicy?: ResolvedWorkspaceCleanupPolicy
   input: WorkspaceCleanupEvaluationInput
   paneAgentStates: WorkspaceCleanupPaneAgentStates
   removing: boolean
@@ -138,23 +142,30 @@ async function scanTargets(
   store: RuntimeStore,
   runtime: OrcaRuntimeService,
   worktreeIds: string[],
-  signal: AbortSignal | undefined
+  signal: AbortSignal | undefined,
+  inventorySize?: number
 ): Promise<Map<string, WorkspaceCleanupCandidate>> {
   const candidates = new Map<string, WorkspaceCleanupCandidate>()
-  for (let start = 0; start < worktreeIds.length; start += WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT) {
-    const batch = worktreeIds.slice(start, start + WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT)
-    // Re-stat activity: a time rule must not fire on a stale persisted stamp.
-    const result = await scanWorkspaceCleanup(
-      store,
-      { worktreeIds: batch, refreshActivity: true },
-      // Without the orchestration store the scan can't prove a worker was released.
-      { signal, getOrchestrationDb: () => runtime.getExistingOrchestrationDb() }
-    )
-    for (const candidate of result.candidates) {
-      // A same-id repo row on another host scans too; only this host's checkout is evidence here.
-      if (normalizeExecutionHostId(candidate.executionHostId) === LOCAL_EXECUTION_HOST_ID) {
-        candidates.set(candidate.worktreeId, candidate)
-      }
+  if (worktreeIds.length === 0) {
+    return candidates
+  }
+  const result = await scanWorkspaceCleanup(
+    store,
+    { refreshActivity: true },
+    {
+      signal,
+      targetWorktreeIds: worktreeIds,
+      // Large real Git inventories can exceed the normal interactive 8-second listing budget.
+      listingTimeoutMs: inventorySize ? Math.min(60_000, 8_000 + inventorySize * 40) : undefined,
+      getOrchestrationDb: () => runtime.getExistingOrchestrationDb()
+    }
+  )
+  if (result.errors.length) {
+    throw new Error(result.errors[0].message)
+  }
+  for (const candidate of result.candidates) {
+    if (normalizeExecutionHostId(candidate.executionHostId) === LOCAL_EXECUTION_HOST_ID) {
+      candidates.set(candidate.worktreeId, candidate)
     }
   }
   return candidates
@@ -195,6 +206,7 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
   withFolderSiblings?: boolean
   /** The scan's read of paired servers, so a re-check never asks them again. */
   readPairedFolderChildren?: () => Promise<PairedFolderChildren>
+  comparison?: { state: WorkspaceCleanupPolicyState; change: WorkspaceCleanupPolicyChange }
   signal?: AbortSignal
 }): Promise<WorkspaceCleanupWorkspace[]> {
   const { store, runtime, globalRules, now, worktreeId, signal } = args
@@ -217,30 +229,57 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
     ps.worktrees,
     readPairedFolderChildren
   )
-  const owned = ps.worktrees.filter((summary) => isOwnedSummary(summary, repos))
+  const owned = ps.worktrees.filter(
+    (summary) =>
+      isOwnedSummary(summary, repos) &&
+      (!args.comparison?.state.repoId || summary.repoId === args.comparison.state.repoId)
+  )
   const summaries =
     args.withFolderSiblings && worktreeId !== undefined
       ? folderGroupOf(owned, worktreeId, folderSiblingsOf)
       : owned
   const policies = new Map<string, ResolvedWorkspaceCleanupPolicy>()
+  const nextPolicies = new Map<string, ResolvedWorkspaceCleanupPolicy>()
+  const saved = new Map(args.comparison?.state.projects.map((row) => [row.id, row.policy]))
   for (const summary of summaries) {
-    if (!policies.has(summary.repoId)) {
-      policies.set(
-        summary.repoId,
-        resolveWorkspaceCleanupPolicy(
-          { workspaceCleanupPolicy: globalRules },
-          repos.get(summary.repoId)!
-        )
-      )
+    if (policies.has(summary.repoId)) {
+      continue
     }
+    const repo = repos.get(summary.repoId)!
+    const policy = args.comparison ? saved.get(repo.id) : repo.workspaceCleanupPolicy
+    const current = resolveWorkspaceCleanupPolicy(
+      { workspaceCleanupPolicy: globalRules },
+      { workspaceCleanupPolicy: policy ?? undefined }
+    )
+    policies.set(repo.id, current)
+    const change = args.comparison?.change
+    const proposed =
+      change?.scope === 'project' && change.repoId === repo.id ? change.policy : policy
+    const nextRules = change?.scope === 'global' ? change.rules : globalRules
+    nextPolicies.set(
+      repo.id,
+      resolveWorkspaceCleanupPolicy(
+        { workspaceCleanupPolicy: nextRules },
+        { workspaceCleanupPolicy: proposed ?? undefined }
+      )
+    )
   }
   const gitTargets = summaries
     .filter((summary) => {
       const rules = policies.get(summary.repoId)!.rules
-      return needsGitEvidence(summary, rules, now)
+      return (
+        needsGitEvidence(summary, rules, now) ||
+        needsGitEvidence(summary, nextPolicies.get(summary.repoId)!.rules, now)
+      )
     })
     .map((summary) => summary.worktreeId)
-  const candidates = await scanTargets(store, runtime, gitTargets, signal)
+  const candidates = await scanTargets(
+    store,
+    runtime,
+    gitTargets,
+    signal,
+    args.comparison ? ps.worktrees.length : undefined
+  )
   const dirtyEditors = dirtyEditorWorktreeIds(store, runtime)
   const scanned = new Set(gitTargets)
   return summaries.map((summary) => {
@@ -257,6 +296,7 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
     return {
       ref: {
         worktreeId: summary.worktreeId,
+        ...(summary.worktreeInstanceId ? { instanceId: summary.worktreeInstanceId } : {}),
         ...(candidate?.executionHostId ? { executionHostId: candidate.executionHostId } : {}),
         repoId: repo.id,
         repoName: repo.displayName,
@@ -266,6 +306,7 @@ export async function collectWorkspaceCleanupWorkspaces(args: {
       },
       repo,
       policy: policies.get(summary.repoId)!,
+      ...(args.comparison ? { nextPolicy: nextPolicies.get(summary.repoId)! } : {}),
       input: withHostBlockers(
         baseInput,
         summary,

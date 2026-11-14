@@ -9,11 +9,12 @@ export function hasTargetedWorkspaceCleanupScan(args: WorkspaceCleanupScanArgs):
 }
 
 export function getTargetWorktreeIdsByRepo(
-  args: WorkspaceCleanupScanArgs
+  args: WorkspaceCleanupScanArgs,
+  limit = WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT
 ): Map<string, Set<string>> {
   const requestedIds = args.worktreeId
     ? [args.worktreeId]
-    : (args.worktreeIds ?? []).slice(0, WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT)
+    : (args.worktreeIds ?? []).slice(0, limit)
   const idsByRepo = new Map<string, Set<string>>()
   for (const worktreeId of requestedIds) {
     if (typeof worktreeId !== 'string') {

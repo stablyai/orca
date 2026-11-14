@@ -18,7 +18,10 @@ import {
   collectWorkspaceCleanupWorkspaces,
   type WorkspaceCleanupWorkspace
 } from './workspace-cleanup-run-evidence'
-import { readWorkspaceCleanupTerminalActivity } from './workspace-cleanup-terminal-activity'
+import {
+  type WorkspaceCleanupTerminalActivity,
+  readWorkspaceCleanupTerminalActivity
+} from './workspace-cleanup-terminal-activity'
 import { keptRunOutcome } from './workspace-cleanup-run-summary'
 
 function selectorFor(workspace: WorkspaceCleanupWorkspace): string {
@@ -29,7 +32,8 @@ function selectorFor(workspace: WorkspaceCleanupWorkspace): string {
 async function decideWorkspaceCleanup(
   runtime: OrcaRuntimeService,
   workspace: WorkspaceCleanupWorkspace,
-  now: number
+  now: number,
+  terminalActivity?: () => Promise<WorkspaceCleanupTerminalActivity>
 ): Promise<WorkspaceCleanupEvaluation> {
   if (workspace.removing) {
     return { action: 'keep', cause: 'removing' }
@@ -47,11 +51,13 @@ async function decideWorkspaceCleanup(
   ) {
     return { action: 'keep', cause: 'archive-script', reason }
   }
-  const terminals = await readWorkspaceCleanupTerminalActivity(
-    runtime,
-    workspace.ref.worktreeId,
-    workspace.paneAgentStates
-  )
+  const terminals = await (terminalActivity
+    ? terminalActivity()
+    : readWorkspaceCleanupTerminalActivity(
+        runtime,
+        workspace.ref.worktreeId,
+        workspace.paneAgentStates
+      ))
   if (terminals === 'idle') {
     return evaluation
   }

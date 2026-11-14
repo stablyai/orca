@@ -29,7 +29,7 @@ vi.mock('node:fs/promises', () => ({
 }))
 
 vi.mock('../../workspaces/catalog/repo-worktrees', () => ({
-  listRepoWorktrees: listRepoWorktreesMock,
+  listRepoWorktreeGraphForCleanup: listRepoWorktreesMock,
   createFolderWorktree: vi.fn()
 }))
 

@@ -3,6 +3,7 @@ import type { Repo } from '../../../shared/repository/repo-types'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
 import {
   listWorktreeGraph,
+  listWorktreeGraphSharedStrict,
   listWorktrees,
   listWorktreesSharedStrictAllowingTrueEmpty
 } from '../../git/worktrees/catalog/worktree-scan-cache'
@@ -57,6 +58,14 @@ export async function listRepoWorktreesForDetectedScan(
   options?: LocalRepoWorktreeListOptions
 ): Promise<GitWorktreeInfo[]> {
   return listRoutedRepoWorktrees(repo, options, listWorktreesSharedStrictAllowingTrueEmpty)
+}
+
+/** Cleanup needs authoritative registration and lock evidence, without sparse-checkout decoration. */
+export async function listRepoWorktreeGraphForCleanup(
+  repo: Repo,
+  options?: LocalRepoWorktreeListOptions
+): Promise<GitWorktreeInfo[]> {
+  return listRoutedRepoWorktrees(repo, options, listWorktreeGraphSharedStrict)
 }
 
 function assertLocalGitRoute(repo: Repo): void {

@@ -24,6 +24,7 @@ export type WorkspaceCleanupRunOutcome = 'removed' | 'archived' | 'kept' | 'fail
 
 export type WorkspaceCleanupWorkspaceRef = {
   worktreeId: string
+  instanceId?: string
   executionHostId?: ExecutionHostId
   repoId: string
   repoName: string

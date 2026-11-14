@@ -1,3 +1,4 @@
+import { WorkspaceCleanupGuardParam } from '../workspace-cleanup/workspace-cleanup-change-params'
 import * as z from 'zod'
 import { isTaskProvider } from '../../work-items/task-providers'
 import type { TaskProvider } from '../../work-items/task-providers'
@@ -151,6 +152,7 @@ export const SettingsUpdate = z
     nativeChatCiResultLines: z.boolean().optional(),
     /** This host's own notification switches; see HOST_NOTIFICATION_SETTINGS_RUNTIME_CAPABILITY. */
     hostNotifications: HostNotificationSettingsUpdate.optional(),
+    workspaceCleanupGuard: WorkspaceCleanupGuardParam.optional(),
     workspaceCleanupPolicy: WorkspaceCleanupRulesParam.optional(),
     prAutoRefresh: z.enum(PR_AUTO_REFRESH_CADENCES).optional(),
     newTabMenuLayout: z.unknown().transform(normalizeNewTabMenuLayout).optional(),

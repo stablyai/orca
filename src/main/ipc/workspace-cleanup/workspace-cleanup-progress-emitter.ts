@@ -10,6 +10,9 @@ const WORKSPACE_CLEANUP_PROGRESS_EMIT_INTERVAL_MS = 100
 
 export type WorkspaceCleanupScanOptions = {
   onProgress?: (progress: WorkspaceCleanupScanProgress) => void
+  /** Host-internal targets: one inventory pass, without the public RPC batch cap. */
+  targetWorktreeIds?: readonly string[]
+  listingTimeoutMs?: number
   signal?: AbortSignal
   /** The scanning host's orchestration database, so released workers' workspaces can be classified. */
   getOrchestrationDb?: () => OrchestrationDb | null

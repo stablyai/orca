@@ -76,6 +76,7 @@ type SettingsSwitchRowProps = {
   className?: string
   ariaLabel?: string
   disabled?: boolean
+  ariaDisabled?: boolean
 }
 
 export function SettingsSwitchRow({
@@ -85,7 +86,8 @@ export function SettingsSwitchRow({
   onChange,
   className,
   ariaLabel,
-  disabled
+  disabled,
+  ariaDisabled
 }: SettingsSwitchRowProps): React.JSX.Element {
   return (
     <SettingsRow
@@ -95,7 +97,12 @@ export function SettingsSwitchRow({
       control={
         <Switch
           checked={checked}
-          onCheckedChange={onChange}
+          onCheckedChange={() => {
+            if (!ariaDisabled) {
+              onChange()
+            }
+          }}
+          aria-disabled={ariaDisabled}
           disabled={disabled}
           aria-label={ariaLabel ?? (typeof label === 'string' ? label : undefined)}
         />
@@ -284,6 +291,7 @@ type NumberFieldProps = {
   placeholder?: string
   suffix?: string
   className?: string
+  ariaDisabled?: boolean
   disabled?: boolean
   disabledReason?: string
 }
@@ -337,6 +345,7 @@ export function NumberField({
   suffix,
   className,
   disabled = false,
+  ariaDisabled = false,
   disabledReason
 }: NumberFieldProps): React.JSX.Element {
   const t = useTranslate()
@@ -349,7 +358,8 @@ export function NumberField({
   }
 
   const commit = (): void => {
-    if (disabled) {
+    if (disabled || ariaDisabled) {
+      setDraft(Number.isFinite(value) ? String(value) : '')
       return
     }
     const revert = (): void => setDraft(Number.isFinite(value) ? String(value) : '')
@@ -402,13 +412,15 @@ export function NumberField({
             <Input
               type="number"
               disabled={disabled}
+              aria-disabled={ariaDisabled}
+              readOnly={ariaDisabled}
               min={min}
               max={max}
               step={step}
               aria-label={label}
               placeholder={placeholder}
               value={draft}
-              onChange={(e) => setDraft(e.target.value)}
+              onChange={(e) => setDraft(ariaDisabled ? String(value ?? '') : e.target.value)}
               onBlur={commit}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {

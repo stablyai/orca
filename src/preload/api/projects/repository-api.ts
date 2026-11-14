@@ -1,3 +1,4 @@
+import type { WorkspaceCleanupPolicyGuard } from '../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
 import type { GroupHookCheckResult } from '../../../shared/project/groups/project-group-hooks'
 import type { RepoCreateFailure } from '../../../shared/repository/creation/repo-create-failure-copy'
 import type {
@@ -88,6 +89,7 @@ export type RepositoryApi = {
       ghAccount?: GhAccountBinding | null
       workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
       browserProfileId?: string | null
+      workspaceCleanupGuard?: WorkspaceCleanupPolicyGuard
     }
   }) => Promise<Repo>
   pickFolder: () => Promise<string | null>

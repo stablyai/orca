@@ -1,3 +1,4 @@
+import { WorkspaceCleanupGuardParam } from '../workspace-cleanup/workspace-cleanup-change-params'
 import { z } from 'zod'
 import { normalizeRepoSourceControlAiOverrides } from '../../source-control/ai/settings/source-control-ai-repo-settings'
 import { normalizeRepoBadgeColor } from '../../repository/appearance/repo-badge-color'
@@ -98,6 +99,7 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
       browserProfileId: OptionalString.nullable().optional(),
       projectGroupOrder: OptionalFiniteNumber.nullable().optional(),
       sourceControlAi: RepoSourceControlAiOverrides,
+      workspaceCleanupGuard: WorkspaceCleanupGuardParam.optional(),
       workspaceCleanupPolicy: RepoWorkspaceCleanupPolicyParam.optional()
     })
   })

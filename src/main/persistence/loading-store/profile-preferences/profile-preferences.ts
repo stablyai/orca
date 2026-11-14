@@ -1,3 +1,4 @@
+import type { WorkspaceCleanupGuardedUpdate } from '../../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
 import { normalizeFeatureTipIds } from '../../../../shared/feature-education/feature-tips'
 import type { GlobalSettings } from '../../../../shared/settings/global-settings-types'
 import { retireAtRestCommandSettings } from '../../../native-chat/agent-session-wire/options/at-rest-command-context'
@@ -70,7 +71,7 @@ export class ProfilePreferences {
 
   onSettingsChanged(
     listener: (
-      updates: Partial<GlobalSettings>,
+      updates: Partial<GlobalSettings> & WorkspaceCleanupGuardedUpdate,
       settings: GlobalSettings,
       originWebContentsId?: number
     ) => void
@@ -89,14 +90,14 @@ export class ProfilePreferences {
   }
 
   updateSettings(
-    updates: Partial<GlobalSettings>,
+    updates: Partial<GlobalSettings> & WorkspaceCleanupGuardedUpdate,
     options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
   ): GlobalSettings {
     return updateSettingsOperation(getSettingsMutationOperations(this), updates, options)
   }
 
   async updateSettingsAndFlush(
-    updates: Partial<GlobalSettings>,
+    updates: Partial<GlobalSettings> & WorkspaceCleanupGuardedUpdate,
     options: { notifyListeners?: boolean; originWebContentsId?: number } = {}
   ): Promise<GlobalSettings> {
     const { runtime } = this[profilePreferencesContext]
@@ -230,7 +231,7 @@ export class ProfilePreferences {
 
 export function notifySettingsChanged(
   owner: ProfilePreferences,
-  updates: Partial<GlobalSettings>,
+  updates: Partial<GlobalSettings> & WorkspaceCleanupGuardedUpdate,
   originWebContentsId?: number
 ): void {
   for (const listener of owner[profilePreferencesContext].runtime.settingsChangeListeners) {

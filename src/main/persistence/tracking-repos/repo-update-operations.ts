@@ -1,3 +1,5 @@
+import type { WorkspaceCleanupPolicyGuard } from '../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
+import { beginWorkspaceCleanupPolicyWrite } from '../../workspaces/cleanup/workspace-cleanup-policy-write'
 import type { PersistedState } from '../../../shared/orca-profiles/persisted-state-types'
 import type { Repo } from '../../../shared/repository/repo-types'
 import {
@@ -17,7 +19,8 @@ import { isFolderRepo } from '../../../shared/repository/repo-kind'
 import { findExtraFolderWorkspaceIds } from '../../workspaces/catalog/folder-workspace-meta-presence'
 
 export type RepoUpdateMutationOperations = {
-  state: Pick<PersistedState, 'repos' | 'projectGroups' | 'worktreeMeta'>
+  state: Pick<PersistedState, 'repos' | 'projectGroups' | 'worktreeMeta'> &
+    Partial<Pick<PersistedState, 'settings'>>
   bumpLocalWorktreeScanGeneration: (repoId: string) => void
   syncProjectHostSetupCompatibilityState: () => void
   scheduleSave: () => void
@@ -67,7 +70,8 @@ function assertKindChangeKeepsFolderWorkspaces(
 export class RepoUpdatePersistenceOperations {
   constructor(private readonly operations: RepoUpdateMutationOperations) {}
 
-  private get state(): Pick<PersistedState, 'repos' | 'projectGroups' | 'worktreeMeta'> {
+  private get state(): Pick<PersistedState, 'repos' | 'projectGroups' | 'worktreeMeta'> &
+    Partial<Pick<PersistedState, 'settings'>> {
     return this.operations.state
   }
 
@@ -124,6 +128,7 @@ export class RepoUpdatePersistenceOperations {
       agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
       sourceControlAi?: Repo['sourceControlAi'] | null
       workspaceCleanupPolicy?: Repo['workspaceCleanupPolicy'] | null
+      workspaceCleanupGuard?: WorkspaceCleanupPolicyGuard
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
       hiddenAt?: Repo['hiddenAt'] | null
       ghAccount?: GhAccountBinding | null
@@ -138,9 +143,19 @@ export class RepoUpdatePersistenceOperations {
     if (!repo) {
       return null
     }
+    const { workspaceCleanupGuard, ...policyUpdates } = updates
+    if (workspaceCleanupGuard && !('workspaceCleanupPolicy' in updates)) {
+      throw new Error('workspace_cleanup_policy_conflict')
+    }
+    beginWorkspaceCleanupPolicyWrite(
+      this.state,
+      workspaceCleanupGuard,
+      repo.id,
+      getRepoExecutionHostId(repo)
+    )
     assertKindChangeKeepsFolderWorkspaces(repo, updates.kind, this.state.worktreeMeta)
     const previousGhAccount = repo.ghAccount
-    const sanitizedUpdates = sanitizeRepoUpdatesForPersistence(updates)
+    const sanitizedUpdates = sanitizeRepoUpdatesForPersistence(policyUpdates)
     if (
       'executionHostId' in updates &&
       getRepoExecutionHostId({ ...repo, ...updates }) !== getRepoExecutionHostId(repo)

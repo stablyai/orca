@@ -1,5 +1,4 @@
-import { useId, useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { formatBytes } from '../../../../../shared/text/format-bytes'
@@ -11,12 +10,12 @@ import {
   type WorkspaceCleanupRules
 } from '../../../../../shared/workspace-cleanup/workspace-cleanup-policy'
 import type { WorkspaceCleanupPreviewRow } from '../../../../../shared/workspace-cleanup/workspace-cleanup-run'
-import { Switch } from '../../ui/switch'
 import {
   NumberField,
   SettingsBadge,
   SettingsRow,
-  SettingsSegmentedControl
+  SettingsSegmentedControl,
+  SettingsSwitchRow
 } from '../form-controls/SettingsFormControls'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsGroupDisclosure } from '../section-layout/SettingsGroupDisclosure'
@@ -33,25 +32,6 @@ export type WorkspaceCleanupRuleMatches = {
   sizeBytes: number
 }
 
-/**
- * `checking`: turning a rule on, while its preview runs. `enabling`: that preview found nothing new
- * and the save is in flight. `saving`: any other change waiting on its write.
- */
-export type WorkspaceCleanupRulePhase = 'checking' | 'enabling' | 'saving'
-
-/** The Workspace Cleanup page's change in flight; a project's custom rules leave it unset. */
-export type WorkspaceCleanupRuleOperation = {
-  pending: { key: WorkspaceCleanupRuleKey; phase: WorkspaceCleanupRulePhase } | null
-  /** A rule whose turn-on check failed and can be tried again. */
-  failedKey: WorkspaceCleanupRuleKey | null
-  /** The rule whose switch gets focus back when the confirm dialog closes. */
-  returnTargetKey: WorkspaceCleanupRuleKey | null
-  /** Switches stay focusable while busy; the toggle is dropped instead of natively disabled. */
-  busy: boolean
-  onRetry: () => void
-  switchRef: (key: WorkspaceCleanupRuleKey, element: HTMLButtonElement | null) => void
-}
-
 type RuleRowsProps = {
   rules: WorkspaceCleanupRules
   onToggle: (key: WorkspaceCleanupRuleKey) => void
@@ -59,21 +39,12 @@ type RuleRowsProps = {
   onChange: (change: (rules: WorkspaceCleanupRules) => WorkspaceCleanupRules) => void
   /** What each rule that is on would remove now; omitted where no preview is read. */
   matches?: Partial<Record<WorkspaceCleanupRuleKey, WorkspaceCleanupRuleMatches>>
-  operation?: WorkspaceCleanupRuleOperation
-  /** Changes after a change that was not saved, so the Inactive fields show the saved values. */
-  inactiveDraftKey?: number
-  /** Natively disables every control while a change is in flight. */
+  /** A rule whose change is waiting on a preview or a write. */
+  pendingRule?: WorkspaceCleanupRuleKey | null
+  /** Set while any change is in flight, so a second change cannot start from stale rules. */
   disabled?: boolean
+  error?: { key: WorkspaceCleanupRuleKey; message: string; retry: () => void }
   forceVisible?: boolean
-}
-
-const ADVANCED_RULES: ReadonlySet<WorkspaceCleanupRuleKey> = new Set([
-  'automationRuns',
-  'orchestrationWorkers'
-])
-
-function isAdvancedRule(key: WorkspaceCleanupRuleKey | null): boolean {
-  return key !== null && ADVANCED_RULES.has(key)
 }
 
 /** The rule switches, shared by the Workspace Cleanup page and a project's custom rules. */
@@ -82,116 +53,64 @@ export function WorkspaceCleanupRuleRows({
   onToggle,
   onChange,
   matches,
-  operation,
-  inactiveDraftKey,
+  pendingRule,
   disabled = false,
-  forceVisible = false
+  forceVisible = false,
+  error
 }: RuleRowsProps): React.JSX.Element {
   const t = useTranslate()
-  const idPrefix = useId()
   const query = useAppStateValue((state) => state.settingsSearchQuery)
   const search = getWorkspaceCleanupSettingsSearchParts()
   const advancedMatches =
     query.trim() !== '' &&
     matchesSettingsSearch(query, [search.automationRuns, search.orchestrationWorkers])
 
-  // Advanced opens for a rule being changed and stays open once the change settles, so the switch
-  // that gets focus back is visible; only the user closes it again.
-  const target = operation
-    ? (operation.pending?.key ?? operation.failedKey ?? operation.returnTargetKey)
-    : null
-  const [advancedOpen, setAdvancedOpen] = useState(() => isAdvancedRule(target))
-  const [revealedFor, setRevealedFor] = useState(target)
-  if (target !== revealedFor) {
-    setRevealedFor(target)
-    if (isAdvancedRule(target)) {
-      setAdvancedOpen(true)
-    }
-  }
-
-  const ruleRow = (key: WorkspaceCleanupRuleKey, description: string, badge?: string) => {
-    const phase = operation?.pending?.key === key ? operation.pending.phase : null
-    const failed = operation?.failedKey === key && !rules[key].enabled
-    const errorId = `${idPrefix}-${key}-check-failed`
-    const shownOn = phase === 'checking' || phase === 'enabling' ? true : rules[key].enabled
-    // Every switch ignores a toggle while a change is in flight, the pending one included.
-    const held = Boolean(operation?.busy) || phase !== null
-    return (
-      <SearchableSetting {...search[key]} forceVisible={forceVisible}>
-        <SettingsRow
-          label={
-            // Inline, so a wrapping title carries its badge with it.
-            <span className="leading-snug">
-              {search[key].title}
-              {badge ? <SettingsBadge className="ml-2 align-middle">{badge}</SettingsBadge> : null}
-            </span>
+  const ruleRow = (key: WorkspaceCleanupRuleKey, description: string, badge?: string) => (
+    <SearchableSetting {...search[key]} forceVisible={forceVisible}>
+      <SettingsSwitchRow
+        label={
+          <span className="inline-flex items-center gap-2">
+            {search[key].title}
+            {badge ? <SettingsBadge>{badge}</SettingsBadge> : null}
+          </span>
+        }
+        description={
+          <>
+            {description}
+            {pendingRule === key ? (
+              <span className="mt-1 block">
+                {t(
+                  'components.settings.workspaceCleanup.rules.checking',
+                  'Checking which workspaces match…'
+                )}
+              </span>
+            ) : matches?.[key] && rules[key].enabled ? (
+              <RuleMatchesLine matches={matches[key]} />
+            ) : null}
+          </>
+        }
+        checked={rules[key].enabled}
+        ariaDisabled={disabled}
+        onChange={() => {
+          if (!disabled) {
+            onToggle(key)
           }
-          description={
-            <>
-              {description}
-              {phase === 'checking' ? (
-                <span role="status" className="mt-1 flex items-center gap-1.5 text-foreground">
-                  <Loader2 className="size-3 shrink-0 animate-spin motion-reduce:animate-none" />
-                  {t(
-                    'components.settings.workspaceCleanup.rules.checking',
-                    'Checking which workspaces match…'
-                  )}
-                </span>
-              ) : failed ? (
-                <span id={errorId} role="alert" className="mt-1 block text-destructive">
-                  {t(
-                    'components.settings.workspaceCleanup.rules.checkFailed',
-                    "Couldn't check which workspaces match."
-                  )}{' '}
-                  <button
-                    type="button"
-                    onClick={operation?.onRetry}
-                    className="font-medium underline decoration-destructive/50 underline-offset-4 hover:decoration-destructive"
-                  >
-                    {t('components.settings.workspaceCleanup.retry', 'Try again')}
-                  </button>
-                </span>
-              ) : matches?.[key] && rules[key].enabled ? (
-                <RuleMatchesLine matches={matches[key]} />
-              ) : null}
-            </>
-          }
-          control={
-            <Switch
-              ref={operation ? (element) => operation.switchRef(key, element) : undefined}
-              // Shown On while its turn-on is checked or saved; screen readers hear the saved value.
-              checked={shownOn}
-              aria-checked={rules[key].enabled}
-              aria-disabled={held ? true : undefined}
-              aria-describedby={failed ? errorId : undefined}
-              disabled={disabled}
-              pending={
-                phase === null
-                  ? undefined
-                  : shownOn && !rules[key].enabled
-                    ? 'turning-on'
-                    : 'saving'
-              }
-              onCheckedChange={() => {
-                if (!held) {
-                  onToggle(key)
-                }
-              }}
-              aria-label={search[key].title}
-            />
-          }
-        />
-        {key === 'inactive' && rules.inactive.enabled ? (
-          <InactiveRuleOptions
-            key={inactiveDraftKey}
-            rules={rules}
-            onChange={onChange}
-            disabled={disabled || Boolean(operation?.busy)}
-          />
-        ) : null}
-      </SearchableSetting>
-    )
-  }
+        }}
+        ariaLabel={search[key].title}
+      />
+      {error?.key === key ? (
+        <p role="alert" className="text-xs text-muted-foreground">
+          {error.message}{' '}
+          <button type="button" className="underline" onClick={error.retry}>
+            {t('components.settings.workspaceCleanup.retry', 'Try again')}
+          </button>
+        </p>
+      ) : null}
+      {key === 'inactive' && rules.inactive.enabled ? (
+        <InactiveRuleOptions rules={rules} onChange={onChange} disabled={disabled} />
+      ) : null}
+    </SearchableSetting>
+  )
 
   return (
     <>
@@ -215,10 +134,6 @@ export function WorkspaceCleanupRuleRows({
           'Automation and orchestration worker workspaces'
         )}
         forceOpen={advancedMatches}
-        // The page lines Advanced rows up with the others and keeps them open for a change.
-        open={operation ? advancedOpen : undefined}
-        onOpenChange={operation ? setAdvancedOpen : undefined}
-        flush={operation !== undefined}
       >
         {ruleRow('automationRuns', search.automationRuns.description)}
         {ruleRow('orchestrationWorkers', search.orchestrationWorkers.description)}
@@ -248,7 +163,7 @@ function InactiveRuleOptions({
         max={WORKSPACE_CLEANUP_POLICY_MAX_DAYS}
         integer
         suffix={t('components.settings.workspaceCleanup.rules.days', 'days')}
-        disabled={disabled}
+        ariaDisabled={disabled}
         onChange={(afterDays) => setInactive({ afterDays })}
       />
       {WORKSPACE_ARCHIVE_SUPPORTED ? (

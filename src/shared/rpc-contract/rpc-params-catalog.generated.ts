@@ -2138,6 +2138,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'workspaceCleanup.reportUnsavedEditors': WorkspaceCleanupReportUnsavedEditorsParams,
   'workspaceCleanup.runNow': WorkspaceCleanupRunNowParams,
   'workspaceCleanup.scan': WorkspaceCleanupScanParams,
+  'workspaceCleanup.settlePolicyWrite': WorkspaceCleanupSettleParams,
   'workspacePorts.kill': WorkspacePortKillParams,
   'workspacePorts.killHost': WorkspacePortKillHostParams,
   'workspacePorts.probePage': WorkspacePortProbePageParams,

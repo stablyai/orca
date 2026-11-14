@@ -1,7 +1,16 @@
+import type {
+  WorkspaceCleanupPolicyRead,
+  WorkspaceCleanupPolicyChange,
+  WorkspaceCleanupPolicyComparison
+} from '../../../shared/workspace-cleanup/workspace-cleanup-policy-change'
+import {
+  readWorkspaceCleanupPolicy,
+  readWorkspaceCleanupSizes,
+  previewWorkspaceCleanupChange
+} from './workspace-cleanup-policy-preview'
 import { randomUUID } from 'node:crypto'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
-import { readWorkspaceSpaceAnalysisSnapshot } from '../space-analysis/workspace-space-analysis-snapshot'
 import {
   getDefaultWorkspaceCleanupRules,
   type WorkspaceCleanupRules
@@ -64,6 +73,7 @@ export class WorkspaceCleanupRunner {
   private readonly deps: WorkspaceCleanupRunnerDeps
   private current: Promise<WorkspaceCleanupRun> | null = null
   // Every caller asking for the same rules while one evaluation runs shares it: reopened pages, several clients.
+  private readonly changePreviews = new Map<string, Promise<WorkspaceCleanupPolicyComparison>>()
   private readonly previews = new Map<string, Promise<WorkspaceCleanupPreview>>()
   private timer: ReturnType<typeof setTimeout> | null = null
   private nextRunAt: number | null = null
@@ -149,6 +159,31 @@ export class WorkspaceCleanupRunner {
     const evaluatedAt = Date.now()
     const decided = await this.evaluate(rules, evaluatedAt)
     return { evaluatedAt, rows: decided.map(({ ref, evaluation }) => ({ ...ref, evaluation })) }
+  }
+
+  readPolicy(repoId: string | null): WorkspaceCleanupPolicyRead {
+    return readWorkspaceCleanupPolicy(this.deps.store, repoId)
+  }
+
+  previewChange(change: WorkspaceCleanupPolicyChange): Promise<WorkspaceCleanupPolicyComparison> {
+    const read = this.readPolicy(change.scope === 'project' ? change.repoId : null)
+    const key = JSON.stringify([read.state, change])
+    const existing = this.changePreviews.get(key)
+    if (existing) {
+      return existing
+    }
+    const request = previewWorkspaceCleanupChange(
+      this.deps,
+      change,
+      read,
+      this.abort.signal
+    ).finally(() => {
+      if (this.changePreviews.get(key) === request) {
+        this.changePreviews.delete(key)
+      }
+    })
+    this.changePreviews.set(key, request)
+    return request
   }
 
   async report(): Promise<WorkspaceCleanupReport> {
@@ -249,7 +284,7 @@ export class WorkspaceCleanupRunner {
         now,
         signal: this.abort.signal
       }),
-      this.readSizes()
+      readWorkspaceCleanupSizes(this.deps.historyDirectory)
     ])
     const evaluations = await decideWorkspaceCleanups(this.deps.runtime, workspaces, now)
     return workspaces.map((workspace, index) => {
@@ -264,17 +299,6 @@ export class WorkspaceCleanupRunner {
         evaluation: evaluations[index]
       }
     })
-  }
-
-  private async readSizes(): Promise<Map<string, number>> {
-    const analysis = await readWorkspaceSpaceAnalysisSnapshot(this.deps.historyDirectory)
-    const sizes = new Map<string, number>()
-    for (const row of analysis?.worktrees ?? []) {
-      if (row.status === 'ok') {
-        sizes.set(row.worktreeId, row.sizeBytes)
-      }
-    }
-    return sizes
   }
 
   private async execute(trigger: WorkspaceCleanupRunTrigger): Promise<WorkspaceCleanupRun> {
