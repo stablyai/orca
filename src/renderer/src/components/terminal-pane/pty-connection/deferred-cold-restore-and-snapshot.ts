@@ -26,6 +26,7 @@ import { deferHiddenAgentResume } from './spawn/hidden-agent-resume-deferral'
 import { holdInPlaceResumeUntilSettled } from './startup/in-place-resume-hold'
 import { attachToMainResumedSleepPane, mainResumedSleepPane } from './spawn/main-resumed-sleep-pane'
 import { startPaneThroughMainThenAttach } from './spawn/main-pane-start-request'
+import { markUnprovenResumeRecord } from './startup/unproven-resume-record'
 
 export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySession): void {
   session.applyColdRestoreAgentResumeStartup = (
@@ -99,6 +100,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
         session.cacheKey
       )
     }
+    markUnprovenResumeRecord(session)
   }
   session.mergeStartupEnvWithPaneIdentity = (
     env: Record<string, string> | undefined
