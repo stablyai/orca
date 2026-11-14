@@ -3,16 +3,18 @@
 import { execFileSync } from 'node:child_process'
 import { appendFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
+import { isReleaseAppBot } from '../workflow-contracts/release-policy.mjs'
 import { verifyRequiredReleaseAssets } from './verify-release-required-assets.mjs'
 
 const API_VERSION = '2022-11-28'
 const RELEASE_CUT_AUTHOR = 'github-actions[bot]'
 const DESKTOP_RC_TAG_PATTERN = /^v[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$/
+const FULL_SHA = /^[a-f0-9]{40}$/
 
 export function isReleaseCutDraft(release) {
   return (
     release?.draft === true &&
-    release?.author?.login === RELEASE_CUT_AUTHOR &&
+    (release?.author?.login === RELEASE_CUT_AUTHOR || isReleaseAppBot(release?.author)) &&
     typeof release?.tag_name === 'string' &&
     DESKTOP_RC_TAG_PATTERN.test(release.tag_name)
   )
@@ -73,6 +75,33 @@ async function fetchReleases(repo, token, fetchImpl) {
   return releases
 }
 
+// Why: the draft's target_commitish is the expected commit. create-draft-release sets it to the exact
+// commit it verified the tag against, and builds checked out that commit. Drafts without a full-SHA
+// target (for example default-branch targets) cannot be verified and stay drafts.
+async function assertDraftTagMatchesTarget(fetchImpl, repo, token, release) {
+  const tag = release.tag_name
+  const expected = release.target_commitish
+  if (!FULL_SHA.test(expected ?? '')) {
+    throw new Error('draft does not record the commit it was built from')
+  }
+  const base = `https://api.github.com/repos/${repo}`
+  const ref = await githubJson(fetchImpl, `${base}/git/ref/tags/${encodeURIComponent(tag)}`, token)
+  let commit = ref?.ref === `refs/tags/${tag}` ? ref.object?.sha : undefined
+  if (ref?.object?.type === 'tag') {
+    // Peel the captured object ID, never the tag name again.
+    const annotated = await githubJson(fetchImpl, `${base}/git/tags/${ref.object.sha}`, token)
+    commit =
+      annotated?.sha === ref.object.sha && annotated.object?.type === 'commit'
+        ? annotated.object.sha
+        : undefined
+  } else if (ref?.object?.type !== 'commit') {
+    commit = undefined
+  }
+  if (commit !== expected) {
+    throw new Error(`remote tag no longer resolves to draft commit ${expected}`)
+  }
+}
+
 export async function publishCompleteDraftReleases({
   repo,
   token,
@@ -114,6 +143,15 @@ export async function publishCompleteDraftReleases({
       continue
     }
 
+    try {
+      await assertDraftTagMatchesTarget(fetchImpl, repo, token, release)
+    } catch (error) {
+      const reason = error instanceof Error ? error.message.split('\n')[0] : String(error)
+      skipped.push({ tag, reason })
+      log(`Skipping unverifiable RC draft release ${tag}: ${reason}`)
+      continue
+    }
+
     // Resume only release-cut RC drafts with complete assets; incomplete drafts stay private for normal rebuild.
     await githubJson(
       fetchImpl,
@@ -121,7 +159,9 @@ export async function publishCompleteDraftReleases({
       token,
       {
         method: 'PATCH',
+        // tag_name on every PATCH: one without it reset the v1.4.259 draft to an untagged-… release.
         body: JSON.stringify({
+          tag_name: tag,
           draft: false,
           prerelease: isRcTag(tag)
         })

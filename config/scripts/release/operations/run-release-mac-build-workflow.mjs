@@ -12,6 +12,7 @@ export function readReleaseMacBuildWorkflowOptions(env = process.env) {
     pollSeconds: readPositiveInteger(env.RELEASE_MAC_BUILD_POLL_SECONDS, DEFAULT_POLL_SECONDS),
     ref: requiredEnv(env.RELEASE_MAC_BUILD_REF, 'RELEASE_MAC_BUILD_REF'),
     javascriptSourceSha: env.RELEASE_MAC_BUILD_JAVASCRIPT_SOURCE_SHA || undefined,
+    releaseSha: env.RELEASE_MAC_BUILD_RELEASE_SHA || undefined,
     releaseRunId: requiredEnv(
       env.RELEASE_MAC_BUILD_RELEASE_RUN_ID ?? env.GITHUB_RUN_ID,
       'RELEASE_MAC_BUILD_RELEASE_RUN_ID'
@@ -117,6 +118,7 @@ export async function dispatchReleaseMacBuildWorkflow(api, options) {
     inputs: {
       release_run_id: options.releaseRunId,
       tag: options.tag,
+      ...(options.releaseSha ? { release_sha: options.releaseSha } : {}),
       ...(options.javascriptSourceSha ? { javascript_source_sha: options.javascriptSourceSha } : {})
     },
     ref: options.ref

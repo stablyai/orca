@@ -9,6 +9,18 @@ import {
 
 const BOT_LOGIN = 'github-actions[bot]'
 const BOT_EMAIL = '41898282+github-actions[bot]@users.noreply.github.com'
+const RELEASE_APP_BOT_LOGIN = 'orca-release[bot]'
+
+// Why: release-cut drafts and publishes with the release GitHub App, whose releases (unlike GITHUB_TOKEN's)
+// emit release events. Match its bot by repo variable RELEASE_APP_BOT_ID (its user ID, stable across App
+// renames) or by its login, which only that App can hold.
+export function isReleaseAppBot(author, botId = process.env.RELEASE_APP_BOT_ID) {
+  const id = botId?.trim()
+  return (
+    author?.type === 'Bot' &&
+    (author.login === RELEASE_APP_BOT_LOGIN || (Boolean(id) && String(author.id) === id))
+  )
+}
 
 // Bot-authored agent-state prereleases need separate policy because updater follows Latest, which prereleases cannot become.
 export function isPrereleaseTag(tag) {
@@ -64,7 +76,11 @@ async function isAuthorizedRelease(github, repoRef, release) {
   if (!STABLE_TAG.test(tag) && !isPrereleaseTag(tag)) {
     return false
   }
-  return release.author?.login === BOT_LOGIN || isCutByReleasePipeline(github, repoRef, tag)
+  return (
+    release.author?.login === BOT_LOGIN ||
+    isReleaseAppBot(release.author) ||
+    isCutByReleasePipeline(github, repoRef, tag)
+  )
 }
 
 // Force highest authorized stable release to Latest; GitHub’s choice/old bot filter can select an older version.

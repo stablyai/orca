@@ -48,9 +48,6 @@ function fixture(options = {}) {
       const sha = route.slice('/git/commits/'.length)
       return response({ sha, parents: (options.parents ?? [source]).map((p) => ({ sha: p })) })
     }
-    if (route === '') {
-      return response({ default_branch: 'main' })
-    }
     if (route.startsWith('/releases?')) {
       return response(options.listed ?? (options.existing ? [draft] : []))
     }
@@ -89,7 +86,7 @@ function fixture(options = {}) {
 
 describe('release draft source and uploader contract', () => {
   it.each([false, true])(
-    'drafts the existing tag with default-branch metadata (annotated=%s)',
+    'drafts the existing tag at the exact verified commit (annotated=%s)',
     async (annotated) => {
       const f = fixture({ annotated })
       await expect(f.run()).resolves.toEqual({
@@ -102,7 +99,7 @@ describe('release draft source and uploader contract', () => {
           route: '/releases',
           body: {
             tag_name: tag,
-            target_commitish: 'main',
+            target_commitish: checkout,
             name: 'release',
             body: 'new notes',
             draft: true,
@@ -160,15 +157,25 @@ describe('release draft source and uploader contract', () => {
     }
   )
 
-  it('heals existing-draft metadata and preserves the draft identity', async () => {
+  it('heals existing-draft metadata and always resends tag_name so the PATCH cannot untag it', async () => {
     const f = fixture({ existing: true })
     await f.run()
     expect(f.writes).toEqual([
       {
         method: 'PATCH',
         route: '/releases/259',
-        body: { body: 'new notes', target_commitish: 'main' }
+        body: { tag_name: tag, body: 'new notes', target_commitish: checkout }
       }
+    ])
+  })
+
+  it('resends tag_name when rolling back a body patched onto a just-published release', async () => {
+    const published = { ...draft, draft: false, body: 'new notes' }
+    const f = fixture({ existing: true, writeResult: published, afterPatch: published })
+    await expect(f.run()).rejects.toThrow('restored its published body')
+    expect(f.writes.map((write) => write.body)).toEqual([
+      { tag_name: tag, body: 'new notes', target_commitish: checkout },
+      { tag_name: tag, body: 'original notes' }
     ])
   })
 
@@ -187,12 +194,12 @@ describe('release draft source and uploader contract', () => {
 const workflow = parse(readFileSync('.github/workflows/release-cut.yml', 'utf8'))
 
 describe('release-cut draft wiring', () => {
-  it('passes the approved source and only the job token to the helper', () => {
+  it('passes the approved source and the release App token to the helper', () => {
     const job = workflow.jobs['create-release']
     const step = job.steps.find((s) => s.id === 'draft')
     expect(step.env).toMatchObject({
       SOURCE_SHA: '${{ needs.cut.outputs.source_sha }}',
-      GH_TOKEN: '${{ secrets.GITHUB_TOKEN }}'
+      GH_TOKEN: '${{ steps.release-app-token.outputs.token }}'
     })
     expect(job.outputs.tag_object).toBe('${{ steps.draft.outputs.tag_object }}')
   })

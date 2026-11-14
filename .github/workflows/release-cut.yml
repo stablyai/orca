@@ -49,10 +49,15 @@ jobs:
     if: github.repository == 'stablyai/orca'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Why: the release App key lives only in this environment, whose deployment branch rule (main)
+    # keeps it from runs of any other workflow ref. Same for create-release and publish-release.
+    environment: release
     permissions:
       contents: write
     outputs:
       tag: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
+      # Every build checks out this commit, never the movable tag name.
+      release_sha: ${{ steps.release-sha.outputs.sha }}
       should_release: ${{ steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != '' }}
       latest_published_rc_tag: ${{ steps.publish_drafts.outputs.latest_published_tag }}
       # Why: downstream SignPath Slack pings need the cut source (not only the
@@ -291,13 +296,48 @@ jobs:
           echo "Already ran this slot: ${{ steps.existing.outputs.already_ran }}"
           echo "Reason: ${{ steps.existing.outputs.reason }}"
 
+      # Why fail closed: GITHUB_TOKEN can never get workflows write, so a fallback would only repeat the
+      # tag-push timeouts and draft 403s for a release commit whose .github/workflows differ from main's.
+      - name: Require release App credentials
+        if: steps.window.outputs.allowed == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+        env: &release-app-credentials
+          RELEASE_APP_CLIENT_ID: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          HAS_RELEASE_APP_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY != '' }}
+        run: &require-release-app |
+          if [[ -z "$RELEASE_APP_CLIENT_ID" || "$HAS_RELEASE_APP_KEY" != "true" ]]; then
+            echo "::error::Release GitHub App is not configured: set variable RELEASE_APP_CLIENT_ID and secret RELEASE_APP_PRIVATE_KEY on the 'release' environment."
+            exit 1
+          fi
+
+      # Scoped to this repo, contents + workflows write; minted right before each use and passed only via env.
+      - name: Mint release App token for draft recovery
+        id: release-app-token
+        if: steps.window.outputs.allowed == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with: &release-app-token
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-workflows: write
+
       - name: Publish complete release-cut RC drafts from prior runs
         id: publish_drafts
         # Recover complete RC drafts before deciding whether manual dispatch needs another tag.
         if: steps.window.outputs.allowed == 'true' && !(github.event_name == 'workflow_dispatch' && inputs.dry_run)
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: node config/scripts/release/publication/publish-complete-draft-releases.mjs
+          GH_TOKEN: ${{ steps.release-app-token.outputs.token }}
+          RELEASE_APP_BOT_ID: ${{ vars.RELEASE_APP_BOT_ID }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        # Why the workflow ref's copy: a dispatch may check out an older ref whose publisher lacks the tag check.
+        run: |
+          set -euo pipefail
+          scripts="$RUNNER_TEMP/workflow-release-scripts"
+          mkdir -p "$scripts"
+          git fetch --no-tags origin "$WORKFLOW_SHA"
+          git archive "$WORKFLOW_SHA" config/scripts/release | tar -x -C "$scripts"
+          node "$scripts/config/scripts/release/publication/publish-complete-draft-releases.mjs"
 
       - name: Compute next version
         id: version
@@ -612,11 +652,19 @@ jobs:
           echo "tag=v$VERSION" >>"$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
 
+      - name: Mint release App token for the tag push
+        id: release-app-token-push
+        if: steps.tag.outputs.tag != ''
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with: *release-app-token
+
       - name: Push tag
         if: steps.tag.outputs.tag != ''
         env:
           PUSH_MAIN: ${{ steps.resolve.outputs.push_main }}
           TAG: ${{ steps.tag.outputs.tag }}
+          RELEASE_APP_TOKEN: ${{ steps.release-app-token-push.outputs.token }}
+          SERVER_URL: ${{ github.server_url }}
         run: |
           set -euo pipefail
           if [[ "$PUSH_MAIN" == "true" ]]; then
@@ -631,7 +679,21 @@ jobs:
               exit 1
             fi
           fi
-          git push origin "$TAG"
+          # Why: only this push swaps checkout's persisted GITHUB_TOKEN header for the App token (an empty value
+          # resets the header list), so the main push above stays under branch rules. GIT_CONFIG_* keeps it out of argv.
+          release_auth="$(printf 'x-access-token:%s' "$RELEASE_APP_TOKEN" | base64 -w0)"
+          echo "::add-mask::$release_auth"
+          GIT_CONFIG_COUNT=2 \
+            GIT_CONFIG_KEY_0="http.$SERVER_URL/.extraheader" GIT_CONFIG_VALUE_0="" \
+            GIT_CONFIG_KEY_1="http.$SERVER_URL/.extraheader" GIT_CONFIG_VALUE_1="AUTHORIZATION: basic $release_auth" \
+            git push origin "$TAG"
+
+      - name: Record the release commit
+        id: release-sha
+        if: steps.tag.outputs.tag != '' || steps.version.outputs.recovered_tag != ''
+        env:
+          TAG: ${{ steps.tag.outputs.tag || steps.version.outputs.recovered_tag }}
+        run: echo "sha=$(git rev-parse --verify "refs/tags/${TAG}^{commit}")" >>"$GITHUB_OUTPUT"
 
       # Why: a patch cut from a base older than #24155 has no orcad template to build or ship.
       - name: Detect whether the tag ships the orcad template
@@ -666,6 +728,7 @@ jobs:
     needs: cut
     if: needs.cut.outputs.should_release == 'true'
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
     outputs:
@@ -675,7 +738,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: refs/tags/${{ needs.cut.outputs.tag }}
+          ref: ${{ needs.cut.outputs.release_sha }}
+
+      # Why: check out the commit cut recorded, then prove it, so a tag moved mid-run can't change what ships.
+      - &verify-release-checkout
+        name: Verify checkout is the release commit
+        shell: bash
+        env:
+          RELEASE_SHA: ${{ needs.cut.outputs.release_sha }}
+        run: |
+          head="$(git rev-parse HEAD)"
+          if [[ ! "$RELEASE_SHA" =~ ^[0-9a-f]{40}$ || "$head" != "$RELEASE_SHA" ]]; then
+            echo "::error::Checkout $head is not the verified release commit '$RELEASE_SHA'."
+            exit 1
+          fi
 
       - name: Restore draft-release scripts from the workflow ref
         env:
@@ -687,11 +763,21 @@ jobs:
             config/scripts/release/publication/create-draft-release.mjs \
             config/scripts/release/publication/assert-github-release-is-draft.mjs
 
+      - name: Require release App credentials
+        env: *release-app-credentials
+        run: *require-release-app
+
+      # Why: a draft targeting the exact release commit needs workflows write when its .github/workflows differ from main's.
+      - name: Mint release App token
+        id: release-app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with: *release-app-token
+
       - name: Create draft release with bounded generated notes
         id: draft
         env:
           SOURCE_SHA: ${{ needs.cut.outputs.source_sha }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.release-app-token.outputs.token }}
           TAG: ${{ needs.cut.outputs.tag }}
         run: node config/scripts/release/publication/create-draft-release.mjs "$TAG"
 
@@ -700,7 +786,7 @@ jobs:
     if: needs.cut.outputs.should_release == 'true' && !contains(needs.cut.outputs.tag, '-')
     uses: ./.github/workflows/dependency-security.yml
     with:
-      ref: refs/tags/${{ needs.cut.outputs.tag }}
+      ref: ${{ needs.cut.outputs.release_sha }}
       runner: ubuntu-latest
 
   terminal-rendering-golden:
@@ -728,7 +814,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: refs/tags/${{ needs.cut.outputs.tag }}
+          ref: ${{ needs.cut.outputs.release_sha }}
+
+      - *verify-release-checkout
 
       - name: Restore golden test harness from the workflow ref
         shell: bash
@@ -840,7 +928,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: refs/tags/${{ needs.cut.outputs.tag }}
+          ref: ${{ needs.cut.outputs.release_sha }}
+
+      - *verify-release-checkout
 
       - name: Restore skill-sharing test harness from the workflow ref
         shell: bash
@@ -899,10 +989,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: refs/tags/${{ needs.cut.outputs.tag }}
+          ref: ${{ needs.cut.outputs.release_sha }}
 
       - name: Trust the checked-out workspace in the job container
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - *verify-release-checkout
 
       - name: Restore skill-sharing test harness from the workflow ref
         shell: bash
@@ -971,7 +1063,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: refs/tags/${{ needs.cut.outputs.tag }}
+          ref: ${{ needs.cut.outputs.release_sha }}
+
+      - *verify-release-checkout
 
       - name: Install native build tools
         if: runner.os == 'Linux'
@@ -1043,7 +1137,7 @@ jobs:
       actions: read
     uses: ./.github/workflows/qualified-orcad-template.yml
     with:
-      ref: refs/tags/${{ needs.cut.outputs.tag }}
+      ref: ${{ needs.cut.outputs.release_sha }}
       fast_runners: false
 
   # Server-only Linux tarballs from the same qualified template. Nothing depends on this job, so a
@@ -1058,7 +1152,7 @@ jobs:
       actions: read
     uses: ./.github/workflows/orca-server-artifact.yml
     with:
-      ref: refs/tags/${{ needs.cut.outputs.tag }}
+      ref: ${{ needs.cut.outputs.release_sha }}
       template_artifact: orcad-template
 
   # Gate SignPath artifact requests behind blocking tests to avoid approvals for unpublishable builds.
@@ -1089,7 +1183,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/release-javascript.yml
     with:
-      ref: refs/tags/${{ needs.cut.outputs.tag }}
+      ref: ${{ needs.cut.outputs.release_sha }}
       runner: ubuntu-latest
     secrets:
       ORCA_POSTHOG_WRITE_KEY: ${{ secrets.ORCA_POSTHOG_WRITE_KEY }}
@@ -1157,7 +1251,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: refs/tags/${{ needs.cut.outputs.tag }}
+          ref: ${{ needs.cut.outputs.release_sha }}
+
+      - *verify-release-checkout
 
       # GitHub reruns also resume jobs skipped behind a failed gate. Never
       # recreate Windows signing requests on a rerun; reuse the assets from the
@@ -2096,7 +2192,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
-        run: node config/scripts/release/publication/assert-github-release-is-draft.mjs "${{ needs.cut.outputs.tag }}"
+        run: node config/scripts/release/publication/assert-github-release-is-draft.mjs "$TAG"
 
       # Check Linux telemetry after inseparable pack/upload, then block final undraft. Reject null identity/key transport from missing configuration (#1385); prior step re-drafts premature publication.
       - name: Verify telemetry constants present in app.asar
@@ -2148,6 +2244,7 @@ jobs:
           RELEASE_MAC_BUILD_RELEASE_RUN_ID: ${{ github.run_id }}
           RELEASE_MAC_BUILD_JAVASCRIPT_SOURCE_SHA: ${{ needs.release-javascript.outputs.supported == 'true' && needs.release-javascript.outputs.source_sha || '' }}
           RELEASE_MAC_BUILD_TAG: ${{ needs.cut.outputs.tag }}
+          RELEASE_MAC_BUILD_RELEASE_SHA: ${{ needs.cut.outputs.release_sha }}
           RELEASE_MAC_BUILD_WORKFLOW: release-mac-build.yml
 
   verify-mac-build:
@@ -2211,9 +2308,14 @@ jobs:
       needs.skill-sharing-release-gate.result == 'success' &&
       needs.terminal-rendering-golden.result == 'success'
     runs-on: ubuntu-latest
+    environment: release
     permissions:
       contents: write
     steps:
+      - name: Require release App credentials
+        env: *release-app-credentials
+        run: *require-release-app
+
       - name: Checkout
         uses: actions/checkout@v6
 
@@ -2250,9 +2352,16 @@ jobs:
           TAG: ${{ needs.cut.outputs.tag }}
         run: node config/scripts/release/publication/verify-release-required-assets.mjs "$TAG"
 
+      # Why: undrafting a release whose target commit carries different .github/workflows needs workflows write.
+      # Minted before the tag guard so nothing runs between that guard and the undraft.
+      - name: Mint release App token
+        id: release-app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with: *release-app-token
+
       - name: Verify release tag still matches the drafted source
-        # Why: the draft targets default-branch metadata, so undrafting after a moved or deleted tag would publish
-        # these assets under the wrong commit. Fail unless the tag is still the object create-release verified.
+        # Why: undrafting after a moved tag would publish these assets under the wrong commit, and a deleted one
+        # would be recreated. Fail unless the tag is still the object create-release verified.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ needs.cut.outputs.tag }}
@@ -2279,8 +2388,9 @@ jobs:
 
       - name: Publish release
         # Reassert prerelease from tag: on 2026-04-27 builder flipped RC to false/latest and broke release math; builder output is not authoritative.
+        # gh release edit resends the current tag_name, so the PATCH can't untag the draft.
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.release-app-token.outputs.token }}
           TAG: ${{ needs.cut.outputs.tag }}
         run: |
           set -euo pipefail
@@ -2358,9 +2468,8 @@ jobs:
     needs:
       - cut
       - publish-release
-    # A release created with GITHUB_TOKEN does not reliably emit a release
-    # event to other workflows. Dispatch the trusted default-branch workflow;
-    # it validates and checks out the released tag before deploying.
+    # Dispatch the trusted default-branch workflow; it validates and checks out the released tag
+    # before deploying. docs.yml skips the release event of App-published releases so this is the one deploy.
     # Why explicit: a skipped orcad-template (tags that predate it) would skip every job after it.
     if: ${{ !cancelled() && needs.publish-release.result == 'success' && needs.cut.outputs.tag != '' }}
     runs-on: ubuntu-latest
