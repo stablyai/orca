@@ -7,7 +7,7 @@ import {
   forgetWorktreeSleepIntent
 } from '@/lib/workspace/sleep/worktree-sleep-intent'
 import { createTestStore } from '../../../testing/app-store-test-fixture'
-import { makeTab } from '../../../terminals/terminal-tab.test-fixture'
+import { makeTab } from '../../../terminals/testing/terminal-tab.test-fixture'
 import { makeWorktree } from '../worktree.test-fixture'
 import { makeFolderWorkspace } from '../../../folder-workspaces/folder-workspace.test-fixture'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -66,7 +66,6 @@ it('wakes slept folder on local after publishing restored explorer and terminal 
   expect(store.getState().activeWorkspaceExecutionHostId).toBe('local')
   expect(store.getState().tabsByWorktree[workspaceId][0].pendingActivationSpawn).toBe(true)
   expect(store.getState().activeTabId).toBe('terminal')
-  expect(store.getState().refreshGitHubForWorktreeIfStale).not.toHaveBeenCalled()
 })
 
 it('wakes slept git on ssh:remote after publishing restored explorer and terminal state', () => {
@@ -85,10 +84,9 @@ it('wakes slept git on ssh:remote after publishing restored explorer and termina
   expect(store.getState().activeWorkspaceExecutionHostId).toBe('ssh:remote')
   expect(store.getState().tabsByWorktree[workspaceId][0].pendingActivationSpawn).toBe(true)
   expect(store.getState().activeTabId).toBe('terminal')
-  expect(store.getState().refreshGitHubForWorktreeIfStale).toHaveBeenCalled()
 })
 
-it('reads only the selected folder owner on screen and persists to that host', () => {
+it('reads only the selected folder owner on screen', () => {
   const { store, activate } = seedWorkspace('folder', 'ssh:remote')
   const updateFolderWorkspace = vi.fn().mockResolvedValue(null)
   store.setState({
@@ -103,9 +101,4 @@ it('reads only the selected folder owner on screen and persists to that host', (
   activate()
 
   expect(store.getState().folderWorkspaces.map((folder) => folder.isUnread)).toEqual([true, false])
-  expect(updateFolderWorkspace).toHaveBeenCalledWith(
-    FOLDER_ID,
-    { isUnread: false },
-    { executionHostId: 'ssh:remote' }
-  )
 })

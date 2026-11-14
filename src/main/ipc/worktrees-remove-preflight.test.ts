@@ -403,16 +403,9 @@ it.each(['ipc', 'runtime'] as const)(
   }
 )
 
-it.each([
-  ['ipc', 'before-delete'],
-  ['ipc', 'after-delete'],
-  ['ipc', 'partial-delete'],
-  ['runtime', 'before-delete'],
-  ['runtime', 'after-delete'],
-  ['runtime', 'partial-delete']
-] as const)(
-  '%s synchronous WSL owner preserves its result and metadata at %s',
-  async (entry, phase) => {
+it.each(['ipc', 'runtime'] as const)(
+  '%s synchronous WSL removal retains main shutdown behavior without a journal lease',
+  async (entry) => {
     const runtime = setupWorktreeHandlers()
     mockSelectedWslProjectRuntime()
     const rows = mockKnownFeatureWorktree()
@@ -422,14 +415,10 @@ it.each([
     runtime.acquireFileWatcherRemoval = acquireWatcherRemoval
     const signal = worktreeRemovalLifetime.signal
     removeWorktreeMock.mockImplementation(async (_repo, _path, _force, options) => {
-      expect(options).toMatchObject({ checkoutDeleteSignal: signal })
-      worktreeRemovalLifetime.abortCleanup()
-      if (phase !== 'after-delete') {
-        if (phase === 'partial-delete') {
-          listWorktreesMock.mockResolvedValue([rows[0]])
-        }
-        throw signal.reason
-      }
+      expect(options.checkoutDeleteSignal).toBeUndefined()
+      expect(options.signal).toBeUndefined()
+      await worktreeRemovalLifetime.close()
+      expect(signal.aborted).toBe(true)
       return {}
     })
     const result =
@@ -472,20 +461,13 @@ it.each([
             onRemoved: () => {},
             publish: () => {}
           })
-    if (phase === 'after-delete') {
-      await expect(result).resolves.toMatchObject({})
-      if (entry === 'runtime') {
-        expect(finish).toHaveBeenCalledOnce()
-      } else {
-        expect(store.removeWorktreeMeta).toHaveBeenCalled()
-      }
-      expect(gate.finish).toHaveBeenCalledWith(true)
+    await expect(result).resolves.toMatchObject({})
+    if (entry === 'runtime') {
+      expect(finish).toHaveBeenCalledOnce()
     } else {
-      await expect(result).rejects.toThrow()
-      expect(finish).not.toHaveBeenCalled()
-      expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
-      expect(gate.finish).toHaveBeenCalledWith(false)
+      expect(store.removeWorktreeMeta).toHaveBeenCalled()
     }
+    expect(gate.finish).toHaveBeenCalledWith(true)
     expect(removeWorktreeMock).toHaveBeenCalledOnce()
   }
 )

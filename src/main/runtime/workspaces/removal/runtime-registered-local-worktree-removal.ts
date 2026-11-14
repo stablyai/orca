@@ -120,10 +120,9 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
     console.warn(`[hooks] ${warning}`)
   }
 
-  const refreshedWorktrees = await listWorktreesStrict(repo.path, {
-    ...localOptions,
-    signal: worktreeRemovalLifetime.signal
-  })
+  const refreshedWorktrees = args.hasLocalOptions
+    ? await listWorktreesStrict(repo.path, localOptions)
+    : await listWorktreesStrict(repo.path)
   const refreshed = findRegisteredDeletableWorktree(
     repo.path,
     canonicalPath,
@@ -177,7 +176,8 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
     }
   }
 
-  return worktreeRemovalLifetime.withPreparation(async () => {
+  const background = removesInBackground(canonicalPath, localOptions)
+  const prepare = async (): Promise<RemoveWorktreeResult> => {
     const gate = await args.acquireWatcherRemoval(canonicalPath)
     let accepted = false
     try {
@@ -196,13 +196,8 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
       ...(archiveHookOverride ? { archiveHookOverride } : {}),
       ...(warning ? { warning } : {})
     }
-    if (!removesInBackground(canonicalPath, localOptions)) {
-      const result = await finishRuntimeLocalWorktreeRemoval(
-        args,
-        refreshed,
-        gate,
-        worktreeRemovalLifetime.signal
-      )
+    if (!background) {
+      const result = await finishRuntimeLocalWorktreeRemoval(args, refreshed, gate)
       args.publish()
       return { ...result, ...acceptedFields }
     }
@@ -227,7 +222,8 @@ async function acceptRuntimeRegisteredLocalWorktreeRemoval(args: {
     })
     await waitForWorktreeRemovalAcceptance(args.target.id)
     return { removing: true, ...acceptedFields }
-  })
+  }
+  return background ? worktreeRemovalLifetime.withPreparation(prepare) : prepare()
 }
 
 export type RuntimeLocalWorktreeRemovalFinishArgs = Pick<

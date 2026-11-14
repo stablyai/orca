@@ -1,5 +1,6 @@
 import type { MailboxDeliveryHold } from '../../orchestration/mailbox/delivery-hold/mailbox-delivery-hold'
 import { isTuiIdleReadyVerdict, type TuiIdleVerdict } from './tui-idle-evidence'
+import type { TuiIdleEvidenceSource } from './tui-idle-evidence-source'
 
 /** Why pointer plus Enter would not be typed into a settled-looking worker terminal now (dialogs and
  *  drafts are checked first); null means it would. Takes the waits' readiness ranking plus a working
@@ -25,4 +26,13 @@ export function terminalDeliveryRefusal(input: {
   return verdict.kind === 'blocked'
     ? { kind: 'blocked', reason: verdict.reason }
     : { kind: 'unsettled' }
+}
+
+/** A wait that accepts mid-turn input settles on a working agent exactly where mail would be typed in. */
+export function settlesForMidTurnInput(
+  verdict: TuiIdleVerdict,
+  ptyId: string,
+  source: Pick<TuiIdleEvidenceSource, 'isSettledForDelivery'>
+): boolean {
+  return verdict.kind === 'working' && source.isSettledForDelivery?.(ptyId) === true
 }

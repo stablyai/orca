@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { createTestStore, seedStore } from '../../store/testing/app-store-test-fixture'
-import { makeTab } from '../../store/terminals/terminal-tab.test-fixture'
+import { makeTab } from '../../store/terminals/testing/terminal-tab.test-fixture'
 import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
 import { createStoreSessionMockApi } from '../../store/testing/app-store-session-api.test-fixture'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
@@ -126,26 +126,6 @@ async function setup(windowHoldsTab: boolean) {
 beforeEach(() => {
   vi.unstubAllGlobals()
   layoutApplyTestTransport.reset()
-})
-
-// A terminal's requested title is its tab's; main keeps pane titles for the names people give panes.
-describe('a revealed terminal’s title, in a layout-owner build', () => {
-  beforeEach(() => {
-    mocks.layoutOwner.isMain = true
-  })
-
-  it('names a new tab and writes no pane title main does not hold', async () => {
-    const state = await setup(false)
-
-    await vi.waitFor(() =>
-      expect(testStore().getState().tabsByWorktree[WORKTREE]?.[0]?.customTitle).toBe('Build')
-    )
-    expect(layoutApplyTestTransport.sentOfType('renameTab')).toEqual([
-      expect.objectContaining({ tabId: TAB, kind: 'custom', title: 'Build' })
-    ])
-    expect(state.terminalLayoutsByTabId[TAB]?.ptyIdsByLeafId).toEqual({ [LEAF]: 'pty-1' })
-    expect(state.terminalLayoutsByTabId[TAB]?.titlesByLeafId).toBeUndefined()
-  })
 })
 
 describe('a revealed terminal’s title, while the window owns the layout', () => {

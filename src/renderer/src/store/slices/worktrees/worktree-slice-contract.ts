@@ -50,7 +50,7 @@ import type { TerminalPaneRecoveryOutcome } from '../../../../../shared/workspac
 import type {
   TerminalRecoveryRemountRequest,
   TerminalRecoveryRemountResult
-} from '../../terminals/terminal-tab-recovery-ledger'
+} from '../../terminals/pty/terminal-tab-recovery-ledger'
 import type { RemoveWorktreeOptions } from './teardown/worktree-removal-options'
 import type { HostQualifiedDetectedWorktreeResult } from '../../../../../shared/detected-worktree-provider-contract'
 

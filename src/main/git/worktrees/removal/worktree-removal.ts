@@ -90,14 +90,7 @@ async function performRemoveWorktree(
   }
   const execOptions = {
     ...finalizationOptions,
-    ...(options.checkoutDeleteSignal
-      ? {
-          signal: options.checkoutDeleteSignal,
-          ...(process.platform === 'win32' && (options.wslDistro || parseWslPath(repoPath))
-            ? { terminationBarrier: true, requireGuestTerminationProof: true as const }
-            : {})
-        }
-      : {})
+    ...(options.checkoutDeleteSignal ? { signal: options.checkoutDeleteSignal } : {})
   }
   const args = [...longPathArgs, 'worktree', 'remove']
   if (force) {

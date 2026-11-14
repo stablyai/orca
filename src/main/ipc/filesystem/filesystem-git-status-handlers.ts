@@ -16,11 +16,10 @@ import {
 } from '../../git/source-control/mutations/git-conflict-operation'
 import { getDiff } from '../../git/source-control/diffs/file-diff'
 import { registerFilesystemGitHistoryHandlers } from './filesystem-git-history-handlers'
+import { registerFilesystemGitAtRiskLocalFilesHandlers } from './filesystem-git-at-risk-local-files-handlers'
 import { isGitWorktreeMutationInFlight } from '../../git/command-runner/git-worktree-mutation-state'
 import type { GitMutationInFlight } from '../../../shared/git/commands/git-mutation-in-flight'
 import { checkIgnoredPaths } from '../../git/source-control/ignores/check-ignored-paths'
-import { readWorktreeAtRiskLocalFiles } from '../../git/worktrees/removal/worktree-at-risk-local-files'
-import type { WorktreeAtRiskLocalFiles } from '../../../shared/worktree/removal/at-risk-local-files'
 import {
   appendFolderToGitignore,
   findKnownHugeFolderPathsToIgnore
@@ -48,6 +47,7 @@ import {
 export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerContext): void {
   const { store, gitStatusCancellations } = context
   registerFilesystemGitHistoryHandlers(context)
+  registerFilesystemGitAtRiskLocalFilesHandlers(context)
   ipcMain.handle(
     'git:status',
     async (
@@ -169,29 +169,6 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
             args.paths.map((p) => validateGitRelativeFilePath(worktreePath, p)),
             gitOptions
           )
-      )
-    }
-  )
-
-  ipcMain.handle(
-    'git:atRiskLocalFiles',
-    async (
-      _event,
-      args: { worktreePath: string; connectionId?: string }
-    ): Promise<WorktreeAtRiskLocalFiles> => {
-      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      return readWorktreeGitUnlessWslStopped(
-        store,
-        args.worktreePath,
-        false,
-        (worktreePath, gitOptions) =>
-          readWorktreeAtRiskLocalFiles({
-            worktreePath,
-            mainCheckoutPath:
-              getLocalRepoForRegisteredWorktree(store, args.worktreePath, worktreePath)?.path ??
-              null,
-            gitOptions
-          })
       )
     }
   )

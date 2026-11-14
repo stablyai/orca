@@ -23,8 +23,6 @@ export type GitExecOptions = {
   preferWslDirectGit?: boolean
   useConfiguredSshCommandForNetwork?: boolean
   terminationBarrier?: boolean
-  /** Destructive WSL checkout removal must retain ownership until guest death is proved. */
-  requireGuestTerminationProof?: true
   observeChildTermination?: (terminated: Promise<void>, writes: boolean) => void
   /** Scheduler priority for this child; status is the safe default. */
   admissionTier?: GitAdmissionTier

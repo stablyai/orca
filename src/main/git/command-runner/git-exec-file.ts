@@ -27,11 +27,7 @@ import {
 } from '../../../shared/git/commands/git-command-timeout'
 import { classifyGitCommand } from '../../../shared/git/commands/git-command-classification'
 import { createAbortError } from './process-capture/abort-error'
-import {
-  readCapturedGitBuffer,
-  readCapturedGitString,
-  withCapturedErrorStdout
-} from './process-capture/captured-git-output'
+import { readCapturedGitBuffer, readCapturedGitString } from './process-capture/captured-git-output'
 import { runUnlessGitCwdKnownMissing } from './host-routing/missing-git-spawn-cwd'
 import { trackGitWorktreeMutation } from './git-worktree-mutation-state'
 import { trackGitRefMutation } from './git-ref-mutation-state'
@@ -45,7 +41,7 @@ async function gitExecFileAsyncUnlocked(
 ): Promise<{ stdout: string; stderr: string }> {
   // Trace caller intent rather than the resolved binary so WSL and native commands group together.
   return withGitSpan(
-    { args, ...(options.cwd !== undefined ? { cwd: options.cwd } : {}) },
+    { args, cwd: options.cwd, admissionTier: options.admissionTier },
     async (span) => {
       if (options.onStderr && options.terminationBarrier) {
         throw new Error('onStderr is not supported with terminationBarrier.')
@@ -106,7 +102,6 @@ async function gitExecFileAsyncUnlocked(
           env: policy.env,
           signal: options.signal,
           terminationBarrier: options.terminationBarrier,
-          requireGuestTerminationProof: options.requireGuestTerminationProof,
           admissionTier: options.admissionTier,
           spawnOnWorkerThread: options.spawnOnWorkerThread,
           onChildTerminated: reportTerminated,
@@ -142,6 +137,9 @@ async function gitExecFileAsyncUnlocked(
           ) {
             await terminationState.current
             const wasMissing = invalidateMissingDirectWslGit(error, resolved)
+            if (options.canStart?.() === false) {
+              throw createAbortError()
+            }
             const fallback = resolveGitCommand(args, effectiveOptions, true, true)
             result = await capture(fallback)
             // Why: matching failures can be normal Git control flow; only a successful login retry proves the direct environment was insufficient.
@@ -185,6 +183,16 @@ async function gitExecFileAsyncUnlocked(
   )
 }
 
+/** Callers parse stdout of non-zero exits (check-ignore exit 1), so strip the fence there too. */
+function withCapturedErrorStdout(error: unknown, command: ResolvedCommand): unknown {
+  if (command.captured && error && typeof error === 'object' && 'stdout' in error) {
+    if (typeof error.stdout === 'string') {
+      error.stdout = readCapturedGitString(error.stdout, command)
+    }
+  }
+  return error
+}
+
 export function gitExecFileAsync(args: string[], callerOptions: GitExecOptions) {
   const options = routeLocalGitOptions(callerOptions)
   const releaseMutation = trackGitWorktreeMutation(args, options)
@@ -220,7 +228,8 @@ async function gitExecFileAsyncBufferInSpan(
   args: string[],
   options: GitBufferExecOptions
 ): Promise<{ stdout: Buffer }> {
-  return withGitSpan({ args, cwd: options.cwd }, async (span) => {
+  const meta = { args, cwd: options.cwd, admissionTier: options.admissionTier }
+  return withGitSpan(meta, async (span) => {
     const checkoutRoutingReady = pendingWslDriveCheckoutGitRouting(args, options)
     if (checkoutRoutingReady) {
       await checkoutRoutingReady

@@ -1,3 +1,7 @@
+import {
+  projectGroupHookOwner,
+  projectGroupHookTrustKey
+} from '../../../../../../shared/workspace-hook-owner'
 import type { AppState } from '@/store/types'
 import {
   getRepoExecutionHostId,
@@ -9,6 +13,7 @@ import type { ApprovedSetupHashes } from '../../../../../../shared/worktree/crea
 import { approvedOrcaHookContentHashes } from '../../../../../../shared/orca-hook-trust-entries'
 import { ensureHooksApproved } from '../../../../runtime/repo-hooks/ensure-hooks-confirmed'
 import { settleComposerSubmit } from '../composer-submit-cancellation'
+import type { SetupHooksCreateSource } from '../../../../../../shared/worktree/setup-hooks-create-source'
 
 export async function confirmWorkspaceSetupDecision<T extends SetupDecision | undefined>(
   stateOrGetter: AppState | (() => AppState),
@@ -16,7 +21,8 @@ export async function confirmWorkspaceSetupDecision<T extends SetupDecision | un
   decision: T,
   ownerHostId: ExecutionHostId | undefined,
   isCancelled: () => boolean,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  createSource?: SetupHooksCreateSource
 ): Promise<
   | ({ setupDecision: T | 'skip' | 'run'; trustDecision: 'run' | 'skip' } & ApprovedSetupHashes)
   | 'cancelled'
@@ -29,7 +35,8 @@ export async function confirmWorkspaceSetupDecision<T extends SetupDecision | un
       ownerHostId,
       undefined,
       isCancelled,
-      signal
+      signal,
+      createSource
     ),
     isCancelled
   )
@@ -74,10 +81,18 @@ function explicitFolderRunUnderRepoTrust<T extends SetupDecision | undefined>(
   if (decision !== undefined && decision !== 'inherit') {
     return decision
   }
-  const repo = state.repos.find(
-    (candidate) =>
-      candidate.id === repoId && (!ownerHostId || getRepoExecutionHostId(candidate) === ownerHostId)
+  const group = state.projectGroups.find(
+    (entry) =>
+      projectGroupHookTrustKey(entry) === repoId &&
+      (!ownerHostId || getRepoExecutionHostId(entry) === ownerHostId)
   )
+  const repo =
+    (group ? projectGroupHookOwner(group) : null) ??
+    state.repos.find(
+      (candidate) =>
+        candidate.id === repoId &&
+        (!ownerHostId || getRepoExecutionHostId(candidate) === ownerHostId)
+    )
   return repo &&
     isFolderRepo(repo) &&
     (repo.hookSettings?.setupRunPolicy ?? 'run-by-default') === 'run-by-default'

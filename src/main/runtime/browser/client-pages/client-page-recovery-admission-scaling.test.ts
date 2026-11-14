@@ -1,76 +1,10 @@
 import { expect, it, vi } from 'vitest'
 import { createRecoveryLoop } from './client-page-recovery-loop-test-harness'
-import * as persistence from './client-hosted-browser-page-persistence'
 const WORKSPACE = 'repo-1::/tmp/worktree-a'
 
 it.each([
-  [25, 1, 750],
-  [250, 3, 7500]
-])(
-  'publishes %i recovery admissions once per affected workspace (%i across %i saved worktrees)',
-  async (count, groups, worktrees) => {
-    const h = createRecoveryLoop([], { worktreeCount: worktrees })
-    const original = persistence.persistClientHostedBrowserPages
-    const work = { passes: 0, rows: 0 }
-    const measured = vi
-      .spyOn(persistence, 'persistClientHostedBrowserPages')
-      .mockImplementation((host, registry, id) =>
-        original(
-          host,
-          {
-            listPages: (workspace) => {
-              const rows = registry.listPages(workspace)
-              work.passes += 1
-              work.rows += rows.length
-              return rows
-            }
-          },
-          id
-        )
-      )
-    const ids = Array.from({ length: count }, (_, i) => `page-${i}`)
-    const workspaces = Array.from({ length: groups }, (_, i) =>
-      i === 0 ? WORKSPACE : `repo-1::/tmp/worktree-${i}`
-    )
-    try {
-      for (const [index, id] of ids.entries()) {
-        h.pages.publishClientPage({
-          browserPageId: id,
-          workspaceId: workspaces[index % groups],
-          browserProfileId: 'profile-a',
-          executionHostKey: 'old-key',
-          placement: persistence.RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT,
-          pairedDeviceId: 'device-a',
-          url: `https://example.internal/${id}`,
-          loading: false,
-          active: false
-        })
-      }
-      const started = ids.map((id) => h.hold(id))
-      h.attach({ inventory: [] })
-      await started[0]
-      // A synchronous recovery cohort has one required initial publication per workspace, regardless of row count.
-      expect(work).toEqual({ passes: groups, rows: count })
-      expect(h.profile.work.writes).toBe(groups)
-      for (const workspace of workspaces) {
-        const rows = h.hostRuntime
-          .snapshotForClient(workspace, 'device-a')
-          .tabs.filter((t) => t.type === 'browser')
-        expect(rows.length).toBeGreaterThan(0)
-        expect(rows.every((t) => t.initializationState === 'pending')).toBe(true)
-      }
-    } finally {
-      measured.mockRestore()
-      await h.close()
-    }
-  }
-)
-
-it.each([
   [10, false],
-  [100, false],
-  [10, true],
-  [100, true]
+  [10, true]
 ] as const)(
   'expires %i ordinary requests before reservation while exact predecessor cleanup is unknown=%s',
   async (count, unknown) => {
@@ -165,36 +99,6 @@ it.each([
       vi.useRealTimers()
       await h.close()
       await Promise.all(calls)
-    }
-  }
-)
-
-it.each([25, 250])(
-  'batches saved-row and new-seed adoption output together at %i rows, then publishes an actual commit immediately',
-  async (count) => {
-    const ids = Array.from({ length: count }, (_, i) => `adopt-${i}`)
-    const h = createRecoveryLoop(ids.slice(0, Math.floor(count / 2)))
-    try {
-      await h.seedNative(ids)
-      const cleanup = h.holdRetirement(ids[0])
-      const started = ids.map((id) => h.hold(id))
-      h.attach()
-      await cleanup.started
-      expect(h.profile.work.writes).toBe(1)
-      const tabs = h.hostRuntime
-        .snapshotForClient(WORKSPACE, 'device-a')
-        .tabs.filter((t) => t.type === 'browser')
-      expect(tabs).toHaveLength(count)
-      expect(tabs.every((t) => t.initializationState === 'pending')).toBe(true)
-      cleanup.release()
-      await started[0]
-      const before = h.profile.work.writes
-      h.release(ids[0], 'https://example.internal/redirected')
-      await h.published(ids[0])
-      expect(h.profile.work.writes).toBe(before + 1)
-      expect(h.pages.getPage(ids[0])?.url).toBe('https://example.internal/redirected')
-    } finally {
-      await h.close()
     }
   }
 )

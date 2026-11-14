@@ -1,4 +1,5 @@
 import { posix } from 'node:path'
+import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
 import { runProcess } from '@orca/process-host'
 import { lstat, stat, readFile, realpath } from 'node:fs/promises'
 import { buildWslExecArgs } from '../../../shared/wsl-login-shell-command'
@@ -7,9 +8,6 @@ import { removeHostTree } from '../../filesystem/host-tree-removal'
 import { toLinuxPath } from '../../../shared/wsl-paths'
 import { resolveWslInteropSpawnCwd } from '../../wsl/execution/wsl-interop-spawn-directory'
 import { describeWslProcessFailure } from '../../wsl/execution/wsl-process-failure'
-import { createWslProcessGroupTermination } from '../../git/command-runner/process-capture/wsl-process-group-termination'
-import { createWslGuestTerminationProof } from '../../git/command-runner/process-capture/wsl-guest-termination-proof'
-import { throwIfSignalAborted } from '../../../shared/abort-signal-reason'
 import type { WorktreeProofAccess } from './worktree-orphan-gitdir-proof'
 
 export type LocalWorktreeFilesystemOptions = {
@@ -122,38 +120,13 @@ export async function removeLocalWorktreePath(
   options: LocalWorktreeFilesystemOptions = {},
   signal?: AbortSignal
 ): Promise<void> {
-  throwIfSignalAborted(signal)
   const distro = options.wslDistro?.trim()
   if (!shouldUseWslFilesystem(options) || !distro) {
+    throwIfSignalAborted(signal)
     await removeHostTree(targetPath, { signal })
     return
   }
 
   // Delete guest paths inside their distro; Windows Node cannot safely remove them.
-  const group = createWslProcessGroupTermination(distro)
-  const proof = createWslGuestTerminationProof(group)
-  const pending = runProcess({
-    program: 'wsl.exe',
-    args: buildWslExecArgs(
-      distro,
-      group.wrapGuestArgs(['sh', '-c', `rm -rf -- ${quotePosixShell(toLinuxPath(targetPath))}`])
-    ),
-    cwd: resolveWslInteropSpawnCwd(),
-    // A deadline can lose the completion observer while a large guest delete is still running.
-    timeoutMs: null,
-    signal,
-    terminationBarrier: proof.barrier,
-    onChildTerminated: proof.onChildTerminated
-  })
-  const result = await pending.finally(() => proof.terminated)
-  if (proof.stopping) {
-    throwIfSignalAborted(signal)
-  }
-  const cleanResult = { ...result, stderr: group.stripControlOutput(result.stderr) }
-  if (result.timedOut || proof.stopping) {
-    throw new Error('Workspace deletion stopped before it finished. Retry deletion.')
-  }
-  if (result.code !== 0) {
-    throw new Error(describeWslProcessFailure(cleanResult))
-  }
+  await runWslCommand(distro, `rm -rf -- ${quotePosixShell(toLinuxPath(targetPath))}`)
 }

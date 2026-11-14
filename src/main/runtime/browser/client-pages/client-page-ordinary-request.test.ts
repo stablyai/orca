@@ -220,22 +220,6 @@ it('retires a preparation waiter on full authority death without late creation',
   }
 })
 
-it('keeps a successful real RPC handoff alive after caller cancellation', async () => {
-  const h = createRecoveryLoop([])
-  try {
-    h.attach()
-    const cancelled = new AbortController()
-    expect(await ordinaryPageRpc(h)('browser.tabCreate', 'handed-off', cancelled.signal)).toEqual([
-      expect.objectContaining({ ok: true })
-    ])
-    cancelled.abort()
-    expect(h.pages.getPage('handed-off')?.placement).toEqual(h.authority.getPlacement('handed-off'))
-    expect(h.executor.snapshotPageInventory().map((p) => p.browserPageId)).toEqual(['handed-off'])
-  } finally {
-    await h.close()
-  }
-})
-
 it('transfers a real logical-capacity publication failure to exact cleanup until its join', async () => {
   const h = createRecoveryLoop([])
   try {

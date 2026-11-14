@@ -1,4 +1,3 @@
-import { worktreeRemovalLifetime } from '../../../workspaces/removal/worktree-removal-lifetime'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
@@ -62,10 +61,9 @@ export async function executeWorktreeRemoval(
   }
   const localWorktreeGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
   const hasLocalWorktreeGitOptions = Object.keys(localWorktreeGitOptions).length > 0
-  const registeredWorktrees = await listGitWorktreesStrict(repo.path, {
-    ...localWorktreeGitOptions,
-    signal: worktreeRemovalLifetime.signal
-  })
+  const registeredWorktrees = hasLocalWorktreeGitOptions
+    ? await listGitWorktreesStrict(repo.path, localWorktreeGitOptions)
+    : await listGitWorktreesStrict(repo.path)
   const removedMeta = resolveWorktreeRemovalMetadata(store, repoId, args.worktreeId, removalHostId)
   const removedPushTarget = removedMeta?.pushTarget
   const registeredWorktree = findRegisteredDeletableWorktree(
