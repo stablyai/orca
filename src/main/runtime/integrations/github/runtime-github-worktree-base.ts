@@ -3,10 +3,10 @@ import type { Repo } from '../../../../shared/repo-types'
 import {
   fetchPrHeadTrackingRef,
   fetchGitHubPullRequestHeadRef
-} from '../../../github/pr-head-tracking-ref'
-import { resolveGitHubPrStartPoint } from '../../../github/pr-start-point'
-import { resolvePrStartPointUnlessWslStopped } from '../../../github/pr-start-point-wsl-gate'
-import { resolveGitHubReviewHeadRemote } from '../../../github/review-head-remote'
+} from '../../../github/pull-requests/start-points/pr-head-tracking-ref'
+import { resolveGitHubPrStartPoint } from '../../../github/pull-requests/start-points/pr-start-point'
+import { resolvePrStartPointUnlessWslStopped } from '../../../github/pull-requests/start-points/pr-start-point-wsl-gate'
+import { resolveGitHubReviewHeadRemote } from '../../../github/pull-requests/start-points/review-head-remote'
 import { gitExecFileAsync } from '../../../git/command-runner/git-exec-file'
 import {
   getLocalProjectGitExecOptions,

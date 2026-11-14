@@ -1,5 +1,5 @@
 import './create-branch'
-import { detectConflictOperation } from '../../source-control/git-conflict-operation'
+import { detectConflictOperation } from '../../source-control/mutations/git-conflict-operation'
 import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'

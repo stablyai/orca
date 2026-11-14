@@ -11,7 +11,7 @@ import {
 } from './plugin-install'
 import { serveRepositoriesOverTestSsh } from '../__mocks__/plugin-git-ssh-remote-fixture'
 import { installStagedPluginTree } from './plugin-install-staging'
-import { discoverPlugins, isInvalidDiscoveredPlugin } from '../plugin-discovery'
+import { discoverPlugins, isInvalidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import { PLUGIN_DERIVED_PUBLISHER_SINCE } from '../../../shared/plugins/manifest/plugin-schema-field-docs'
 
 const execFileAsync = promisify(execFile)

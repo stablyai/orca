@@ -5,7 +5,7 @@ import {
   canProveUnchangedByStamp,
   isDiffStampClockSkewed,
   type WorktreeDiffStamp
-} from './worktree-diff-stamp'
+} from './input-stamps/worktree-diff-stamp'
 
 /** Reuse diffs only with matching input stamps; decline unknown, recent, failed or mutation-overlapped reads. */
 

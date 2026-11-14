@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { mintAgentSessionOperationId } from '../mailbox/structured-pointer/structured-pointer-operation-id'
 import type { SessionLinkStore } from './session-link-store'
@@ -55,11 +55,14 @@ export async function stopSessionLinkTurns(
         }
         return
       }
-      const snapshot = await host.journalSnapshot(sessionId)
-      const work = host.currentWork(sessionId)
+      const events = store.events(id)
+      const inputIds = events
+        .filter((event) => event.recipient === sessionId && event.operationId)
+        .map((event) => event.operationId)
+      const snapshot = await host.automationRun(sessionId, inputIds[0] ?? operationId, inputIds)
+      const work = await host.currentWorkAtRest(sessionId)
       const turn = work?.activeTurn()
       const userItemId = readAgentJournalTurn(turn?.item.body)?.userItemId
-      const events = store.events(id)
       const completedInputs = new Set(
         snapshot.items.flatMap(({ body }) => {
           const completed = readAgentJournalTurn(body)

@@ -6,9 +6,9 @@ import type {
   LinearCommentEditResult
 } from '../../shared/linear/agent-access'
 import type { LinearCommentAddResult } from '../../shared/linear/agent-result-types'
-import type { CommandHandler } from '../dispatch'
-import { getOptionalStringFlag, getRequiredStringFlag } from '../flags'
-import { printResult } from '../command-result-output'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { getOptionalStringFlag, getRequiredStringFlag } from '../arguments/flags'
+import { printResult } from '../output/command-result-output'
 import {
   formatLinearCommentAdd,
   formatLinearCommentDelete,

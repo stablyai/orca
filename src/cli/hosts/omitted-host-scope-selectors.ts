@@ -40,8 +40,8 @@ export async function resolveOmittedHostScopeSelectors(
 
 async function listPairedEnvironments(): Promise<{ id: string; name: string }[]> {
   const [, { getDefaultUserDataPath }, { listEnvironments }] = await Promise.all([
-    import('../runtime/environments.js'),
-    import('../runtime/metadata.js'),
+    import('../runtime/pairing/environments.js'),
+    import('../runtime/profile/metadata.js'),
     import('../../shared/remote-runtime/host-store/runtime-environment-store.js')
   ])
   return listEnvironments(getDefaultUserDataPath()).map((environment) => ({

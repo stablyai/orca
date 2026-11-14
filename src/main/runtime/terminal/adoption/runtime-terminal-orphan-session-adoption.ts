@@ -14,7 +14,7 @@ import type { TerminalPaneLayoutNode } from '../../../../shared/workspace-layout
 import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import { mergeTerminalOrphanGroupLayout } from './terminal-orphan-topology'
 import { canonicalizeTerminalSessionWorktreeId } from '../identity/workspace-session-worktree-id'
-import { advanceTerminalTopologyRevision } from '../../../persistence/terminal-topology/terminal-topology-membership'
+import { advanceTerminalTopologyRevision } from '../../../persistence/terminal-topology/pane-ownership/terminal-topology-membership'
 
 type Claim = RuntimeTerminalOrphanAdoptionRequest['claims'][number]
 type Topology = NonNullable<RuntimeTerminalOrphanAdoptionRequest['topology']>

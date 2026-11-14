@@ -1,5 +1,4 @@
 import type { AcpItemOwnership } from './acp-item-ownership'
-import type { AcpOwnershipReader } from '../journal/acp-ownership-reader'
 import { createPatch } from 'diff'
 import { z } from 'zod'
 import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
@@ -79,18 +78,11 @@ export class AcpToolTimeline {
   // Closing updates may omit fields; only their running journal copies are previews.
   private readonly whole = new Map<string, { input?: unknown; output?: string }>()
 
-  constructor(
-    private readonly owners: AcpItemOwnership,
-    private readonly read?: AcpOwnershipReader
-  ) {}
+  constructor(private readonly owners: AcpItemOwnership) {}
 
   join(toolCallId: string): ProviderTimelineJoin {
     const turn = this.turn(toolCallId)
-    if (turn !== undefined) {
-      return { turn }
-    }
-    const scope = this.read?.tool(toolCallId)
-    return scope ? { scope } : {}
+    return { ...(turn === undefined ? {} : { turn }), scopeItems: [`tool:${toolCallId}`] }
   }
 
   translate(
@@ -98,7 +90,7 @@ export class AcpToolTimeline {
     dialect: AcpDialect,
     join: ProviderTimelineJoin
   ): ProviderTimelineEvent[] {
-    join = join.turn === undefined ? { ...join, ...this.join(raw.toolCallId) } : join
+    join = { ...join, ...this.join(raw.toolCallId), ...(join.turn ? { turn: join.turn } : {}) }
     const turn = join.turn
     // Thread-scoped calls have no owning turn to end them, so they keep context until completion.
     const retain =

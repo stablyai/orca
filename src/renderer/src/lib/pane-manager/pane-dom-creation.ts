@@ -2,7 +2,12 @@ import { SearchAddon } from '@xterm/addon-search'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { WebLinksAddon } from '@xterm/addon-web-links'
-import { Terminal, type ILink, type ITerminalOptions } from '@xterm/xterm'
+import {
+  Terminal,
+  type ILink,
+  type ITerminalInitOnlyOptions,
+  type ITerminalOptions
+} from '@xterm/xterm'
 
 import { createWrappedTerminalHttpLinkProvider } from '../../components/terminal-pane/links/http/wrapped-terminal-http-link-provider'
 import { TERMINAL_HTTP_URL_REGEX } from '../../../../shared/terminal/links/terminal-http-url-extraction'
@@ -43,7 +48,7 @@ export function createPaneDOM(
 
   const userOpts = options.terminalOptions?.(id) ?? {}
   const defaultOpts = buildDefaultTerminalOptions()
-  const terminalOpts: ITerminalOptions = {
+  const terminalOpts: ITerminalOptions & ITerminalInitOnlyOptions = {
     ...defaultOpts,
     ...userOpts,
     vtExtensions: {

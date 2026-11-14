@@ -9,12 +9,12 @@ import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/cont
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
 import type { Store } from '../../../persistence/loading-store/store'
-import { WindowSession } from '../../../persistence/terminal-topology/terminal-topology-window-session-fixture'
+import { WindowSession } from '../../../persistence/terminal-topology/testing/terminal-topology-window-session-fixture'
 import {
   emptyTerminalSessionProfile,
   FIXTURE_GIT_WORKTREE_ID as GIT,
   openTopologyStore
-} from '../../../persistence/terminal-topology/terminal-topology-profile-fixture'
+} from '../../../persistence/terminal-topology/testing/terminal-topology-profile-fixture'
 import { OrcaRuntimeService } from '../../orca-runtime'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({

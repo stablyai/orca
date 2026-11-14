@@ -269,23 +269,27 @@ export type MarkdownTone = {
 }
 
 /** Colours and weight over the styles above, for one surface. The default tone overrides nothing. */
-export const MARKDOWN_TONES: Record<'default' | 'userMessage' | 'strong' | 'muted', MarkdownTone> =
-  {
-    default: { text: null, secondary: null, link: null, inlineCode: null },
-    // A card's title: the question an agent asks.
-    strong: { text: { fontWeight: '600' }, secondary: null, link: null, inlineCode: null },
-    // Settled text beside a receipt's muted answer.
-    muted: themedStyles(() => ({
-      text: { color: colors.textMuted },
-      secondary: null,
-      link: null,
-      inlineCode: null
-    })),
-    // Desktop's user bubble only strengthens the text; links and code keep their chat colors.
-    userMessage: themedStyles(() => ({
-      text: { color: colors.chatForegroundStrong },
-      secondary: null,
-      link: null,
-      inlineCode: null
-    }))
-  }
+export const MARKDOWN_TONES: Record<
+  'default' | 'userMessage' | 'strong' | 'medium' | 'muted',
+  MarkdownTone
+> = {
+  default: { text: null, secondary: null, link: null, inlineCode: null },
+  // A card's title: the question an agent asks.
+  strong: { text: { fontWeight: '600' }, secondary: null, link: null, inlineCode: null },
+  // The answer card's question: body size, lighter than its options' bold labels.
+  medium: { text: { fontWeight: '500' }, secondary: null, link: null, inlineCode: null },
+  // Settled text beside a receipt's muted answer.
+  muted: themedStyles(() => ({
+    text: { color: colors.textMuted },
+    secondary: null,
+    link: null,
+    inlineCode: null
+  })),
+  // Desktop's user bubble only strengthens the text; links and code keep their chat colors.
+  userMessage: themedStyles(() => ({
+    text: { color: colors.chatForegroundStrong },
+    secondary: null,
+    link: null,
+    inlineCode: null
+  }))
+}

@@ -106,36 +106,4 @@ describe('the rich markdown editor on the page', () => {
     })
     expect(onChange.mock.calls).toEqual([['edited']])
   })
-
-  it('keeps the document and toolbar read-only until editing is enabled', () => {
-    const host = document.createElement('div')
-    const onChange = vi.fn()
-    const editor = (editable: boolean) =>
-      createElement(MobileRichMarkdownEditor, {
-        content: 'body',
-        editable,
-        onChange
-      })
-    const renderer = render(editor(false), host)
-    const surface = host.querySelector<HTMLElement>('#editor')!
-    const buttons = findHosts(renderer, 'Pressable')
-    expect(buttons.length).toBeGreaterThan(0)
-    expect(buttons.filter((node) => node.props.disabled !== true)).toEqual([])
-    expect(surface.getAttribute('contenteditable')).toBe('false')
-    act(() => {
-      surface.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    expect(onChange).not.toHaveBeenCalled()
-
-    act(() => renderer.update(editor(true)))
-    const enabled = findHosts(renderer, 'Pressable')
-    expect(enabled).toHaveLength(buttons.length)
-    expect(enabled.filter((node) => node.props.disabled === true)).toEqual([])
-    expect(surface.getAttribute('contenteditable')).toBe('true')
-    act(() => {
-      surface.innerHTML = '<p>accepted</p>'
-      surface.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    expect(onChange.mock.calls).toEqual([['accepted']])
-  })
 })

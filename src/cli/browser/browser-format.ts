@@ -1,6 +1,6 @@
 import { readBrowserActionEffects } from '../../shared/browser-action-effects'
 import { formatBrowserPasskeyRequest } from '../../shared/browser-passkey-request'
-import { writeCliScreenshotTempFile } from '../cli-screenshot-temp-file'
+import { writeCliScreenshotTempFile } from '../screenshots/cli-screenshot-temp-file'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
 import { formatBrowserAnnotationsAsMarkdown } from '../../shared/browser/annotations/browser-annotation-output'
 import type {
@@ -203,6 +203,11 @@ export function formatBrowserActionEffects(result: unknown): string {
   }
   if (effects.passkeyRequest) {
     lines.push(formatPasskeyRequest(effects.passkeyRequest))
+  }
+  if (effects.blockedPrint) {
+    lines.push(
+      `${effects.blockedPrint.origin} tried to open the system print dialog, which Orca blocked so it wouldn't take over the user's screen. To save the page as a PDF, run \`pdf\`.`
+    )
   }
   if (effects.loading) {
     lines.push('Still loading; run `wait --load load`, then `snapshot`.')

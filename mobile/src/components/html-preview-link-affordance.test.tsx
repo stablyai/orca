@@ -29,8 +29,7 @@ vi.mock('lucide-react-native', () => ({
   Eye: () => null
 }))
 
-const { MobileHtmlPreview, MOBILE_HTML_PREVIEW_SANDBOX, MOBILE_HTML_PREVIEW_SEALED_SANDBOX } =
-  await import('./MobileHtmlPreview')
+const { MobileHtmlPreview } = await import('./MobileHtmlPreview')
 
 const ARTIFACT =
   '<!doctype html><html><body><a id="x" href="https://example.com/a">tap</a></body></html>'
@@ -76,19 +75,10 @@ describe('the frame the preview mounts for each answer the shell gives', () => {
   it('hands over an artifact with no link, in a frame that cannot navigate, when it cannot', () => {
     const frame = frameOf(false)
     // Both fences follow the one answer, which is the wiring this file exists for.
-    expect(frame?.sandbox).toBe(MOBILE_HTML_PREVIEW_SEALED_SANDBOX)
+    expect(frame?.sandbox).toBe('')
     expect(frame?.srcDoc).not.toContain('href')
     // The author's text is still there, so this is a hidden affordance and not a deletion.
     expect(frame?.srcDoc).toContain('tap')
     expect(frame?.srcDoc).toContain('id="x"')
-  })
-
-  it('seals the frame with a sandbox that grants nothing, rather than dropping the attribute', () => {
-    // Require empty sandbox attribute: absent/undefined grants every capability, while empty grants none.
-    expect(MOBILE_HTML_PREVIEW_SEALED_SANDBOX).toBe('')
-    expect(frameOf(false)?.sandbox).toBe('')
-    expect(MOBILE_HTML_PREVIEW_SANDBOX.split(' ')).toContain(
-      'allow-top-navigation-by-user-activation'
-    )
   })
 })

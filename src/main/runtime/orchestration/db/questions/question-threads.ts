@@ -123,6 +123,7 @@ export function answerQuestion(
         `Question ${params.messageId} is closed because its Dispatch is inactive.`
       )
     }
+    this.markAsRead([question.message_id])
     if (question.status === 'answered') {
       if (question.answer_body !== params.body || !question.answer_message_id) {
         throw new OrchestrationError(

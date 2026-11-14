@@ -3,7 +3,7 @@ import { tuiAgentToAgentKind } from '../../../../shared/agent-kind'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { isDeepStrictEqual } from 'node:util'
 import { abortSignalReason } from '../../../../shared/abort-signal-reason'
-import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type {
   AgentSessionProcessIdentity,
   AgentSessionRecord
@@ -102,6 +102,7 @@ export async function acquireOwner(
       sessionId: record.sessionId,
       fence,
       ...(acquired.link ? { link: acquired.link } : {}),
+      ...(acquired.accountHome ? { launchedAccountHome: acquired.accountHome } : {}),
       ...(acquired.accountRecipe
         ? {
             accountAcquisition: {

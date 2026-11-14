@@ -1,4 +1,7 @@
 import './runtime-test-module-registration.spec'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   MOCK_GIT_WORKTREES,
   addGitHubIssueCommentMock,
@@ -85,7 +88,7 @@ import { _resetTerminalViewAttributesForTest } from '../terminal/view/terminal-v
 import { addSparseWorktree } from '../../git/worktrees/creation/worktree-sparse-add'
 import { addWorktree } from '../../git/worktrees/creation/worktree-add'
 import { advertisedUrlWatcher } from '../../ports/advertised-url-watcher'
-import { afterAll, afterEach, beforeEach, vi, type MockInstance } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, vi, type MockInstance } from 'vitest'
 import { initOrcaProfilePaths } from '../../orca-profiles/profile-storage-paths'
 import { stopStructuredAgentSessionRuntime } from '../agent-session/structured-agent-session-runtime'
 import { assertWorktreeCleanForRemoval } from '../../git/worktrees/removal/worktree-removal-preflight'
@@ -128,6 +131,7 @@ import {
   _settlePendingWorktreeRemovalsForTests
 } from '../../workspaces/removal/worktree-background-removal'
 import { _resetCanonicalRepoKeyCacheForTests } from '../../git/repositories/canonical-repo-key'
+import { setWorktreeRemovalRecordsDirectory } from '../../workspaces/removal/worktree-removal-table'
 
 awaitBackgroundRemovalsInRuntimeTests(runtimeMockOrcaRuntimeService.prototype)
 commitFakeSpawnsInRuntimeTests(runtimeMockOrcaRuntimeService.prototype)
@@ -135,6 +139,7 @@ commitFakeSpawnsInRuntimeTests(runtimeMockOrcaRuntimeService.prototype)
 function resetRuntimeTestMocks(): void {
   _resetCanonicalRepoKeyCacheForTests()
   _resetPendingWorktreeRemovalsForTests()
+  setWorktreeRemovalRecordsDirectory(removalRecordsDirectory)
   // Chromium commands install only at Electron entry; Node hosts must refuse browser RPCs without them.
   setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host), {
     clientHosting: true
@@ -378,6 +383,11 @@ function resetRuntimeTestMocks(): void {
 let registrationSpy:
   | MockInstance<typeof worktreeChangeInvalidators.registerWorktreeChangeInvalidator>
   | undefined
+let removalRecordsDirectory = ''
+
+beforeAll(async () => {
+  removalRecordsDirectory = await mkdtemp(join(tmpdir(), 'orca-runtime-removal-records-'))
+})
 
 beforeEach(() => {
   resetRuntimeTestMocks()
@@ -405,4 +415,5 @@ export { resetRuntimeTestMocks }
 
 afterAll(async () => {
   await stopStructuredAgentSessionRuntime()
+  await rm(removalRecordsDirectory, { recursive: true, force: true })
 })

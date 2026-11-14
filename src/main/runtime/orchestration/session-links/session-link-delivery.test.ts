@@ -13,11 +13,11 @@ import {
   attach,
   hostTestState,
   seedApproval
-} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host.test-fixture'
 import {
   hostTestSendParams,
   HOST_TEST_SESSION as SESSION
-} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 
 vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: vi.fn()
@@ -114,7 +114,7 @@ describe('session link delivery through the real structured host', () => {
 
   it('wakes an idle chat with typed peer provenance, once, and does not touch an empty partner journal', async () => {
     const { host, dispatch } = hostTestState()
-    const read = vi.spyOn(host, 'journalSnapshot')
+    const read = vi.spyOn(host, 'currentWorkAtRest')
     await redriveSessionLinks(db, SESSION)
     expect(read).not.toHaveBeenCalled()
     const event = message()
@@ -360,10 +360,8 @@ describe('session link delivery through the real structured host', () => {
     const { host, dispatch } = hostTestState()
     const event = message()
     store.reserve('link-test', event.id)
-    const answer = vi.spyOn(host, 'queuedSendAnswer').mockResolvedValue({
-      clientMessageId: event.operationId,
-      queued: { messageId: event.operationId, position: 1, state: 'waiting' }
-    })
+    const readAnswer = host.sendAnswer
+    const answer = vi.spyOn(host, 'sendAnswer').mockResolvedValue({ kind: 'waiting' })
     await redriveSessionLinks(db, SESSION)
     expect(store.event(event.id)?.state).toBe('dispatching')
     expect(store.get('link-test').state).toBe('active')
@@ -373,13 +371,9 @@ describe('session link delivery through the real structured host', () => {
     await host.waitForSendSettlement(SESSION, converted.envelope.clientOperationId, {
       budgetMs: 1000
     })
-    const submission = (await host.journalSnapshot(SESSION)).submissions.find(
-      (s) => s.clientMessageId === converted.envelope.clientOperationId
-    )
-    if (!submission) {
-      throw new Error('Missing converted submission')
-    }
-    answer.mockResolvedValue({ clientMessageId: event.operationId, submission })
+    const convertedAnswer = await readAnswer(SESSION, converted.envelope.clientOperationId)
+    expect(convertedAnswer).toEqual({ kind: 'accepted' })
+    answer.mockResolvedValue(convertedAnswer)
     await redriveSessionLinks(db, SESSION)
     await redriveSessionLinks(db, SESSION)
     expect(store.event(event.id)).toMatchObject({

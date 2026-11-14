@@ -1,9 +1,12 @@
 import type {
-  MobileGitFileStatus,
-  MobileGitStagingArea,
-  MobileGitStatusResult
-} from '../mobile-git-status'
-import type { MobileGitStatusEntry, MobileGitUpstreamStatus } from '../git-status-reply-schema'
+  GitFileStatus as MobileGitFileStatus,
+  GitStagingArea as MobileGitStagingArea
+} from '../../../../src/shared/git/status/git-status-types'
+import type {
+  MobileGitStatusHostPayload as MobileGitStatusResult,
+  MobileGitStatusEntry,
+  MobileGitUpstreamStatus
+} from '../git/git-status-reply-schema'
 
 // Normalize the status value already in hand for PR prefill; reply boundaries use schema readers.
 

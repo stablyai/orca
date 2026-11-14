@@ -4,7 +4,7 @@ import type { BrowserProfileScope } from './browser/profiles/browser-profile-sco
 import type { GlobalSettingsBase } from './global-settings-base'
 import type { ExecutionHostId } from './execution-host'
 import type { OrcaWorkspaceLayout } from './orca-workspace-layout'
-import type { GitHubProjectSettings } from './github/project-types'
+import type { GitHubProjectSettings } from './github/projects/project-types'
 import type { VoiceSettings } from './speech-types'
 import type { AiVaultSearchSettings } from './ai-vault/search/ai-vault-search-settings'
 import type { GitLabProjectSettings } from './gitlab-types'
@@ -375,6 +375,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   zcodePlanSite?: ZcodePlanSite
   /** Extract OAuth credentials from the local Gemini CLI for rate-limit fetching. Off by default (explicit opt-in). */
   geminiCliOAuthEnabled: boolean
+  /** Poll Claude usage with existing CLI credentials. Off uses live terminal readings only. */
+  claudeOAuthUsageEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
   /** Off keeps each Codex home's history to itself: Orca links no sessions between accounts or

@@ -27,6 +27,7 @@ const pluginRequestParams = z.strictObject({
 const pluginRequestResult = z.object({ output: z.json() })
 
 export const PLUGIN_AGENT_LIST_LIMIT = 50
+export const PLUGIN_AGENT_TASK_TITLE_MAX = 512
 const agentsListParams = z.strictObject({}).optional()
 const agentsListResult = z.object({
   agents: z
@@ -43,7 +44,14 @@ const agentsListResult = z.object({
         stateStartedAt: z.number().finite(),
         /** The agent's own session id, which `agent.resume` takes; null when Orca has none.
          *  Absent before host API 1.8. */
-        sessionId: pluginAgentSessionIdSchema.nullable().optional()
+        sessionId: pluginAgentSessionIdSchema.nullable().optional(),
+        /** The orchestration task Orca dispatched to this agent and that is still open, with its
+         *  title (`''` when the task has none); null when it runs none, including once its task
+         *  completed or failed. Absent before host API 1.9. */
+        task: z
+          .object({ title: z.string().max(PLUGIN_AGENT_TASK_TITLE_MAX) })
+          .nullable()
+          .optional()
       })
     )
     .max(PLUGIN_AGENT_LIST_LIMIT)
@@ -67,7 +75,7 @@ export const PLUGIN_PANEL_BRIDGE_API = {
   }),
   'agents.list': spec({
     summary:
-      'The agents in the focused workspace: their terminal, title, agent kind and status. `agent.status.changed` reports each change after.',
+      'The agents in the focused workspace: their terminal, title, agent kind, status, session and dispatched task. `agent.status.changed` reports each change after.',
     since: 2,
     scope: 'active-workspace',
     capability: 'agent:read',

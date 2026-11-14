@@ -5,7 +5,7 @@ import {
   HOST_LIST_TARGET,
   homeWorktreeCountsKey,
   NO_HOST_LIST_INPUT
-} from '../host-screen/host-list-queries'
+} from '../host-screen/catalog/host-list-queries'
 import { hostObserverOptions } from '../query/host-query'
 import { accountsSnapshotFamily, accountsSnapshotKey } from '../accounts/accounts-snapshot-stream'
 import { persistedHostQueryKey } from '../query/host-query-persistence'

@@ -1,6 +1,6 @@
 import { app, nativeImage, type BrowserWindow } from 'electron'
 import { setPluginViewForRpc } from '../../runtime/rpc/methods/plugins/plugin-view'
-import { listPluginsForClients } from '../plugin-client-list'
+import { listPluginsForClients } from '../discovery/plugin-client-list'
 import type { PluginService } from '../plugin-service'
 import {
   livePluginFrameGuests,

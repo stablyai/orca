@@ -1,5 +1,8 @@
-import type { GitHubPRMergeMethod, PRState } from '../../../../src/shared/github/pull-request-types'
-import { githubRepoIdentityKey } from '../../../../src/shared/github/repository-identity-key'
+import type {
+  GitHubPRMergeMethod,
+  PRState
+} from '../../../../src/shared/github/pull-requests/pull-request-types'
+import { githubRepoIdentityKey } from '../../../../src/shared/github/repositories/repository-identity-key'
 import { classifyPrSidebarFailure } from './mobile-pr-sidebar-state'
 import { createOptimisticField, type OptimisticField } from './optimistic-write-sequence'
 import type { GitHubPrMutationOutcome } from './github-pr-mutation-outcome'

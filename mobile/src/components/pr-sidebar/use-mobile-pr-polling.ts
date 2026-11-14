@@ -3,9 +3,9 @@ import { useFocusEffect } from 'expo-router'
 import {
   ChecksDetailPollingPolicy,
   nextChecksPollBackoffMs
-} from '../../../../src/shared/github/checks-detail-polling-policy'
-import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
-import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
+} from '../../../../src/shared/github/checks/checks-detail-polling-policy'
+import type { PRCheckDetail } from '../../../../src/shared/github/checks/check-types'
+import type { PRInfo } from '../../../../src/shared/github/pull-requests/pull-request-types'
 import { useHostQuery } from '../../query/host-query'
 import {
   NO_BRANCH,

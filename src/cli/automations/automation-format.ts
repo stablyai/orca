@@ -7,7 +7,7 @@ import type { AutomationOwnerPrecondition } from '../../shared/automations/owner
 import { getAutomationLegacyRepoId } from '../../shared/automations/history/automation-run-identity'
 import { formatAutomationPrecheckTimeout } from '../../shared/automations/launch/automation-precheck'
 import { formatAutomationSchedule } from '../../shared/automations/scheduling/automation-schedules'
-import { quoteCliCommandArgument } from '../shell-command-quote'
+import { quoteCliCommandArgument } from '../arguments/shell-command-quote'
 
 export type AutomationListPayload = {
   automations: Automation[]

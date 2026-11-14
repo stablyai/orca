@@ -5,7 +5,6 @@ import { sendAgentTurn } from '../turn-delivery/send-agent-turn'
 import type { OrchestrationDb } from '../db/orchestration-db'
 import { conversationRecordReader } from '../addressing/session-lineage/structured-session-lineage'
 import { structuredSessionMailReach } from '../mailbox/routing/structured-session-mail-address'
-import { structuredSessionGateFacts } from '../mailbox/structured-pointer/structured-session-pointer-delivery'
 import { SessionLinkStore } from './session-link-store'
 
 const flights = new WeakMap<OrchestrationDb, { running: Set<string>; dirty: Set<string> }>()
@@ -94,40 +93,34 @@ async function deliverNext(
   if (!event || !record) {
     return
   }
-  const snapshot = await host.journalSnapshot(sessionId)
-  const work = host.currentWork(sessionId)
-  const gates = structuredSessionGateFacts(snapshot.items, work?.scope)
+  const work = await host.currentWorkAtRest(sessionId)
   if (event.state === 'dispatching' || (event.state === 'blocked' && event.retryable === false)) {
-    const direct = snapshot.submissions.find((s) => s.clientMessageId === event.operationId)
-    const answer = direct ? null : await host.queuedSendAnswer(sessionId, event.operationId)
+    const answer = await host.sendAnswer(sessionId, event.operationId)
     if (store.event(event.id)?.state === 'cancelled') {
       return
     }
-    if (answer && 'queued' in answer) {
-      if (answer.queued.state === 'withdrawn') {
-        store.write({
-          ...event,
-          state: 'cancelled',
-          detail: 'The queued message was removed in the recipient chat.'
-        })
-      }
+    if (answer.kind === 'withdrawn') {
+      store.write({
+        ...event,
+        state: 'cancelled',
+        detail: 'The queued message was removed in the recipient chat.'
+      })
       return
     }
-    const previous = direct ?? (answer && 'submission' in answer ? answer.submission : undefined)
-    if (previous?.dispatchState === 'accepted') {
+    if (answer.kind === 'waiting') {
+      return
+    }
+    if (answer.kind === 'accepted') {
       store.write({ ...event, state: 'accepted', detail: '' })
-    } else if (previous?.dispatchState === 'rejected' || previous?.dispatchState === 'unknown') {
+    } else if (answer.kind === 'rejected' || answer.kind === 'refused') {
       store.write({
         ...event,
         state: 'blocked',
-        retryable: previous.dispatchState === 'rejected',
-        detail: previous.reason ?? 'Delivery needs owner review.'
+        retryable: true,
+        detail: 'Agent refused delivery.'
       })
-      store.pause(
-        linkId,
-        previous.dispatchState === 'rejected' ? 'delivery-refused' : 'delivery-unknown'
-      )
-    } else if (!previous) {
+      store.pause(linkId, 'delivery-refused')
+    } else {
       store.write({
         ...event,
         state: 'blocked',
@@ -142,13 +135,13 @@ async function deliverNext(
   if (
     link.state !== 'active' ||
     event.state === 'blocked' ||
-    gates.awaitingHuman ||
-    gates.turnRunning ||
+    work?.hasActionablePrompt() ||
+    work?.activeTurnId() !== null ||
     work?.working()
   ) {
     return
   }
-  if (!host.canAdmitBackgroundMessage(sessionId)) {
+  if (!(await host.canAdmitBackgroundMessage(sessionId))) {
     return
   }
   const reserved = store.reserve(linkId, event.id)
@@ -167,7 +160,7 @@ async function deliverNext(
         operationId: reserved.operationId,
         expectedRuntimeFence: record.currentFence,
         delivery: 'now',
-        beforeRun: () => {
+        beforeRun: async () => {
           const current = store.get(linkId)
           const currentVisible = host.deps.store.getVisibleSessionTabIndex()
           const currentRecord = host.deps.store.getConversation(sessionId)
@@ -188,7 +181,7 @@ async function deliverNext(
             currentReach.session.sessionId !== sessionId ||
             current.state !== 'active' ||
             current.version !== link.version ||
-            !host.canAdmitBackgroundMessage(sessionId, reserved.operationId)
+            !(await host.canAdmitBackgroundMessage(sessionId, reserved.operationId))
           ) {
             held = true
             throw new Error('Session link delivery held before dispatch.')

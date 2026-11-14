@@ -4,7 +4,7 @@ import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-s
 import {
   toWorktreeRemovalTarget,
   type WorktreeRemovalTarget
-} from '../../../../shared/worktree/removal'
+} from '../../../../shared/worktree/removal/removal'
 import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import { useAppStore } from '../../store'
 import { getWorktreeOnHostFromState } from '../../store/workspaces/selection/worktree-on-host-selector'

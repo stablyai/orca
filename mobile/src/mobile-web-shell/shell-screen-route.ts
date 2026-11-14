@@ -7,7 +7,7 @@ export function shellScreenRoute(route: BridgeInitRoute): BridgeInitRoute | null
 }
 
 // Include params in remount identity so files/labels update the document; pane taps deliberately use a separate in-place init path.
-// Match the page bootstrap serializer, pinned by tests instead of importing its RPC/document dependencies into native routes.
+// Match the page bootstrap serializer without importing its RPC/document dependencies into native routes.
 export function shellScreenRouteKey(route: BridgeInitRoute): string {
   const search = new URLSearchParams(route.params ?? {}).toString()
   return search === '' ? route.pathname : `${route.pathname}?${search}`

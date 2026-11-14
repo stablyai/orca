@@ -6,20 +6,17 @@ export function backgroundAdmission(
   readSessions: () => ReadonlyMap<string, StructuredAgentSessionHostSession>,
   currentWork: StructuredAgentSessionClientDelivery['readCurrentWork']
 ) {
-  return (sessionId: string, ownMessageId?: string): boolean => {
+  return async (sessionId: string, ownMessageId?: string): Promise<boolean> => {
     const session = readSessions().get(sessionId)
-    const work = currentWork(sessionId)
+    const work = await currentWork(sessionId)
     if (!session || !work || work.hasActionablePrompt() || work.activeTurnId() !== null) {
       return false
     }
+    const state = work.queueState()
+    const owed = [...state.owedEnteredSubmissions, ...state.owedSendingSubmissions]
     return (
-      !session.journal.queuedMessages.list().some(isUnsettledQueuedMessage) &&
-      !session.journal
-        .submissions()
-        .some(
-          (submission) =>
-            submission.clientMessageId !== ownMessageId && work.scope.owesSend(submission)
-        )
+      !(await session.journal.queuedMessages.list()).some(isUnsettledQueuedMessage) &&
+      !owed.some((submission) => submission.clientMessageId !== ownMessageId)
     )
   }
 }

@@ -15,6 +15,7 @@ export type SettingsNavInstallStatus =
 
 const SETTINGS_NAV_TARGETS = [
   'general',
+  'workspace-cleanup',
   'integrations',
   'accounts',
   'browser',
@@ -74,6 +75,7 @@ export const BROWSER_USER_AGENT_SETTINGS_TARGET_ID = 'browser-user-agent'
 export const CODEX_TERMINAL_SERVER_ISOLATION_SETTINGS_TARGET_ID =
   'agents-codex-terminal-server-isolation'
 export const GLOBAL_WORKTREE_VISIBILITY_SETTINGS_TARGET_ID = 'general-global-worktree-visibility'
+export const NODE_DIST_MIRROR_SETTINGS_TARGET_ID = 'advanced-node-dist-mirror'
 
 export type SettingsNavigationTarget = {
   pane: SettingsNavTarget

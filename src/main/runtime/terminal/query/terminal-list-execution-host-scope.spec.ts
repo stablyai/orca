@@ -5,7 +5,7 @@ import type { WorkspaceSessionState } from '../../../../shared/workspace-session
 import '../../../../shared/workspace-scope'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { type ExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import type { PtyProcessInfo } from '../../../providers/pty-process-info'
+import type { PtyProcessInfo } from '../../../providers/pty/process-info'
 
 export function registerTerminalListExecutionHostScopeTests(): void {
   // A scoped list must identify its hosts so omitting a live remote worker cannot be mistaken for exit.

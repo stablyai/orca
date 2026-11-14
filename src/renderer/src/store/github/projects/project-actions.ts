@@ -2,7 +2,7 @@ import { translate } from '@/i18n/i18n'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { GitHubSlice } from '../github-slice-contract'
-import type { GetProjectViewTableResult } from '../../../../../shared/github/project-result-types'
+import type { GetProjectViewTableResult } from '../../../../../shared/github/projects/project-result-types'
 import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import {
   projectViewCacheKey,

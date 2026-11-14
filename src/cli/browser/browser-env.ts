@@ -2,16 +2,16 @@ import type {
   BrowserGeolocationResult,
   BrowserViewportResult
 } from '../../shared/browser/runtime/runtime-browser-contracts'
-import type { CommandHandler } from '../dispatch'
-import { printResult } from '../command-result-output'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { printResult } from '../output/command-result-output'
 import {
   getOptionalStringFlag,
   getRequiredFiniteNumber,
   getRequiredPositiveNumber,
   getRequiredStringFlag,
   getRequiredStringFlagAllowingEmpty
-} from '../flags'
-import { RuntimeClientError } from '../runtime/types'
+} from '../arguments/flags'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { getBrowserCommandTarget } from './browser-command-target'
 
 export const BROWSER_ENV_HANDLERS: Record<string, CommandHandler> = {

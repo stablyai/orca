@@ -111,3 +111,16 @@ export async function resolveBundledSkillTargets(
   }
   return [...roots.values()]
 }
+
+/** Whether the link at `path` (raw target `rawTarget`) resolves to `realPath`. */
+export async function linkPointsAt(
+  filesystem: BundledSkillFilesystem,
+  path: string,
+  rawTarget: string,
+  realPath: string
+): Promise<boolean> {
+  const resolved =
+    (await filesystem.realpath(path)) ??
+    resolve(await resolveBundledSkillRealPath(filesystem, dirname(path)), rawTarget)
+  return bundledSkillPathKey(resolved) === bundledSkillPathKey(realPath)
+}

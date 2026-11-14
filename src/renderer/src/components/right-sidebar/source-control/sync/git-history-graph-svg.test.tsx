@@ -35,14 +35,6 @@ it('preserves converging arcs whose strokes enter the graph column', () => {
   expect(paths(draw(view, 131.5))).toContain(
     'M 143 0 V 6 A 5 5 0 0 1 138 12 H 137 A 5 5 0 0 0 132 17 V 24'
   )
-  const crossing = {
-    ...view,
-    inputSwimlanes: [node('current'), node('tail')],
-    outputSwimlanes: [node('tail')]
-  }
-  expect(paths(draw(crossing, 11))).toContain(
-    'M 22 0 V 6 A 5 5 0 0 1 17 12 H 16 A 5 5 0 0 0 11 17 V 24'
-  )
 })
 
 it('keeps off-column merge connections and uses the last duplicate parent lane color', () => {

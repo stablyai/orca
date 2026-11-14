@@ -1,23 +1,15 @@
 import {
   ipcMain,
   type IpcMainEvent,
-  type Session,
   type WebContents,
   type WebFrameMain,
   webFrameMain
 } from 'electron'
 import {
   BROWSER_PASSKEY_REQUEST_CANCEL_CHANNEL,
-  BROWSER_PASSKEY_REQUEST_PENDING_CHANNEL,
-  BROWSER_PASSKEY_REQUEST_PRELOAD_FILE
+  BROWSER_PASSKEY_REQUEST_PENDING_CHANNEL
 } from '../../../shared/browser-passkey-request'
 import type { BrowserPasskeyRequest } from '../../../shared/browser/runtime/runtime-browser-contracts'
-import {
-  registerBrowserSessionFramePreload,
-  unregisterBrowserSessionFramePreload
-} from '../sessions/browser-session-frame-preloads'
-
-const PRELOAD_ID = 'orca-browser-passkey-request'
 // Frames waiting on a passkey request, by guest WebContents id and frame tree node.
 const pendingFramesByGuest = new Map<number, Map<number, WebFrameMain>>()
 
@@ -78,23 +70,6 @@ function onPendingChanged(event: IpcMainEvent, pending: unknown): void {
 /** Receives what every watched page reports; once per app. */
 export function listenForBrowserPasskeyRequests(): void {
   ipcMain.on(BROWSER_PASSKEY_REQUEST_PENDING_CHANNEL, onPendingChanged)
-}
-
-/** Watches the session's pages for passkey requests, which Electron neither shows nor reports. */
-export function watchBrowserPasskeyRequests(browserSession: Session): void {
-  if (
-    !registerBrowserSessionFramePreload(
-      browserSession,
-      PRELOAD_ID,
-      BROWSER_PASSKEY_REQUEST_PRELOAD_FILE
-    )
-  ) {
-    console.warn('[browser-webauthn] Passkey request preload is missing')
-  }
-}
-
-export function unwatchBrowserPasskeyRequests(browserSession: Session): void {
-  unregisterBrowserSessionFramePreload(browserSession, PRELOAD_ID)
 }
 
 function livePendingFrames(webContentsId: number): WebFrameMain[] {

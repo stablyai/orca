@@ -1,4 +1,4 @@
-import { isResourceWindowVisible } from '../window/resource-view-admission'
+import { isResourceWindowVisible } from '../window/visibility/resource-view-admission'
 import { BrowserWindow, ipcMain, Notification, powerMonitor } from 'electron'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import type { RuntimeDesktopSurface } from '../runtime/construction/runtime-desktop-surface'

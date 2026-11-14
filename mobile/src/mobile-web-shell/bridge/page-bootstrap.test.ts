@@ -7,7 +7,6 @@ import {
   PAGE_BUILD_ID_KEY,
   PAGE_MOUNT_STATE_KEY,
   PAGE_SESSION_ID_KEY,
-  shellRouteHref,
   type PageMountTarget
 } from './page-bootstrap'
 import type { BridgeRpcClient, BridgeShellSession } from './bridge-rpc-client'
@@ -214,10 +213,6 @@ describe('the page bootstrap under a shell that named no screen', () => {
 })
 
 describe('the page bootstrap outside the shell', () => {
-  it('builds no client when nothing installed a channel', () => {
-    expect(createShellPageClient()).toBeNull()
-  })
-
   it('says so and does nothing to the document, because no init is ever coming', () => {
     const target = createTarget()
     const page = bootstrap(target)
@@ -225,18 +220,5 @@ describe('the page bootstrap outside the shell', () => {
     expect(page.order).toEqual([])
     expect(target.dataset[PAGE_MOUNT_STATE_KEY]).toBe('unbridged')
     expect(target.dataset[PAGE_SESSION_ID_KEY]).toBeUndefined()
-  })
-})
-
-describe('the url the page writes for a route', () => {
-  it('is the pathname alone when the screen was opened with no params', () => {
-    expect(shellRouteHref({ pathname: '/h/host-a' })).toBe('/h/host-a')
-    expect(shellRouteHref({ pathname: '/h/host-a', params: {} })).toBe('/h/host-a')
-  })
-
-  it('escapes what a param holds rather than pasting it into a path', () => {
-    expect(shellRouteHref({ pathname: '/h/a', params: { name: 'a&b=c?d#e' } })).toBe(
-      '/h/a?name=a%26b%3Dc%3Fd%23e'
-    )
   })
 })

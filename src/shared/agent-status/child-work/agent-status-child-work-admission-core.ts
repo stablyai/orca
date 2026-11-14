@@ -180,6 +180,7 @@ function parseObservationFacts(
     ),
     agentType: normalizeChildWorkText(request.agentType, AGENT_CHILD_WORK_LABEL_MAX_LENGTH),
     model: normalizeChildWorkText(request.model, AGENT_CHILD_WORK_LABEL_MAX_LENGTH),
+    effort: normalizeChildWorkText(request.effort, AGENT_CHILD_WORK_LABEL_MAX_LENGTH),
     totalTokens: isChildWorkTokenCount(request.totalTokens) ? request.totalTokens : undefined,
     providerTiming: timing ?? undefined,
     parentChildWorkId: isAgentChildWorkOwner(request.parentChildWorkId, host.childWorkId)
@@ -206,6 +207,7 @@ function mergeObservationFacts(
     description: said.description ?? prior?.description,
     agentType: said.agentType ?? prior?.agentType,
     model: said.model ?? prior?.model,
+    effort: said.effort ?? prior?.effort,
     residency: said.residency ?? prior?.residency,
     // Cumulative, so a late or duplicate frame never shrinks it.
     totalTokens:

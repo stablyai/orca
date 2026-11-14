@@ -1,4 +1,4 @@
-import { nativeChatQueueFollowUps } from '../../../../shared/native-chat/input/native-chat-follow-up-behavior'
+import { nativeChatQueueFollowUps } from '../../../../shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import { nativeChatShowsCiResultLines } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { isOrcaSessionId, type OrcaSessionId } from './orca-session-address'
-import { isStructuredAgentId } from './agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { isStructuredAgentId } from './agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 export {
   SESSION_LINK_CAPABILITY,

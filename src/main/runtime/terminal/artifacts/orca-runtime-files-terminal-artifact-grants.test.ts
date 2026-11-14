@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { realpath } from 'node:fs/promises'
 
 import { useRuntimeFileHostLifecycle } from '../../files/runtime-file-host.test-fixture'
+import { resolveAuthorizedPathMock, statMock } from '../../files/runtime-file-command-mock-registry'
 
 vi.mock('fs', async () =>
   (await import('../../files/runtime-file-command-mock-registry')).fsModuleMock()
@@ -76,6 +77,43 @@ describe('RuntimeTerminalArtifacts', () => {
           'client-a'
         )
       ).resolves.toEqual({ ok: true })
+    })
+
+    it('answers the root of a workspace nested inside the tapped one as that workspace', async () => {
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      statMock.mockResolvedValue({ isDirectory: () => true, size: 0, dev: 1, ino: 2, mtimeMs: 3 })
+      const resolveKnownWorkspaceFileTarget = vi.fn(async (absolutePath: string) =>
+        absolutePath === '/repo/worktrees/wt-2'
+          ? {
+              worktree: { id: 'wt-2', repoId: 'repo-1', path: '/repo/worktrees/wt-2' },
+              executionHostId: 'local',
+              relativePath: ''
+            }
+          : {
+              worktree: { id: 'wt-1', repoId: 'repo-1', path: '/repo' },
+              executionHostId: 'local',
+              relativePath: 'src'
+            }
+      )
+      const { paths } = createTerminalArtifactSubjects({
+        path: '/repo',
+        resolveKnownWorkspaceFileTarget
+      })
+      const resolve = (pathText: string) =>
+        paths.resolveTerminalPath('id:wt-1', pathText, null, 'client-a', null, true)
+
+      expect(await resolve('/repo/worktrees/wt-2')).toEqual({
+        worktree: 'wt-2',
+        relativePath: '',
+        absolutePath: '/repo/worktrees/wt-2',
+        exists: true,
+        isDirectory: true
+      })
+      expect(await resolve('/repo/src')).toMatchObject({
+        worktree: 'wt-1',
+        relativePath: 'src',
+        isDirectory: true
+      })
     })
 
     // Why: procfs reports size 0 for files with content, so the grant digest cannot trust stat size.

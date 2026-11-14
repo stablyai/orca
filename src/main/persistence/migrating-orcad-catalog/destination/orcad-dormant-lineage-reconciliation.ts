@@ -2,7 +2,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { PersistedState } from '../../../../shared/persisted-state-types'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
-import { toWorkspaceLineageRow } from '../../../../shared/worktree/worktree-lineage-workspace-row'
+import { toWorkspaceLineageRow } from '../../../../shared/worktree/lineage/worktree-lineage-workspace-row'
 import {
   folderWorkspaceKey,
   parseWorkspaceKey,

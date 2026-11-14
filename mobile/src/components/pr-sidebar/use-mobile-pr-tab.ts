@@ -8,7 +8,7 @@ import {
   type PrSidebarData,
   type PrSidebarState
 } from '../../source-control/review/mobile-pr-sidebar-state'
-import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
+import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-items/work-item-types'
 import type { PrSidebarLoadOptions } from '../../source-control/review/use-mobile-pr-sidebar-controller'
 import {
   prActionSlices,
@@ -16,7 +16,7 @@ import {
   type PrSlice
 } from '../../source-control/review/mobile-pr-queries'
 import type { PrActionBusyKey } from '../../source-control/review/pr-actions-engine'
-import type { MobileGitStatusResult } from '../../source-control/mobile-git-status'
+import type { MobileGitStatusHostPayload as MobileGitStatusResult } from '../../source-control/git/git-status-reply-schema'
 import {
   useMobilePrActions,
   type MobilePrActions
@@ -30,7 +30,7 @@ import {
 import { usePRBotAuthorOverrides } from '../../source-control/review/use-pr-bot-author-overrides'
 import { useHostProtocolGates } from '../host-protocol-gates-context'
 import { useMobilePrPolling, type PrTabLive } from './use-mobile-pr-polling'
-import { unlinkMobilePr } from '../../source-control/mobile-pr-link'
+import { unlinkMobilePr } from '../../source-control/review/mobile-pr-link'
 import { translate } from '../../i18n/mobile-i18n'
 import { usePrCheckRunDetails } from './use-pr-check-run-details'
 import {

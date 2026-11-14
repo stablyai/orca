@@ -15,7 +15,7 @@ import type { AgentType } from '../../../../../../shared/agent-status/contracts/
 import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { resolveNativeChatTabAgentEvidence } from '../../../tab-bar/native-chat-tab-agent-evidence'
 import { canToggleNativeChat } from '../../../../../../shared/native-chat/native-chat-availability'
-import { isNativeChatTranscriptLocalReadable } from '../../../../../../shared/native-chat/transcript/native-chat-transcript-readability'
+import { isNativeChatTranscriptLocalReadable } from '../../../../../../shared/native-chat/transcript/messages/native-chat-transcript-readability'
 import { matchesNativeChatToggleShortcut } from './native-chat-shortcut'
 import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'

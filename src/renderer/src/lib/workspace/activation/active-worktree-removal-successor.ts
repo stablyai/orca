@@ -21,6 +21,7 @@ import {
 } from '../../../../../shared/execution-host'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
+import { isWorktreeRetiredByRemoval } from '../../../../../shared/worktree/removal/removal-visibility'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type RemovedActiveRow = {
@@ -81,6 +82,7 @@ export function pickActiveWorktreeSuccessor(
   const siblings = (selectWorktreesByRepo(state)[removed.repoId] ?? []).filter(
     (worktree) =>
       !getDeleteStateForWorktreeHost(worktree, state.deleteStateByWorktreeId)?.isDeleting &&
+      !isWorktreeRetiredByRemoval(worktree) &&
       !isHostedOnRuntimeOwnedSshTarget(worktree, repoById) &&
       !isHiddenAsleep?.(worktree)
   )
@@ -135,6 +137,44 @@ export function installActiveWorktreeRemovalSuccessor(store = useAppStore): () =
     return row && !isScoped(row) ? row : null
   }
   witness = observe()
+  const retireAcceptedSelection = (state: AppState): boolean => {
+    const removed = listedActiveRow(state)
+    const row = removed ? findListedRow(state, removed.id, removed.hostId) : undefined
+    if (!removed || !row || !isWorktreeRetiredByRemoval(row) || isScoped(removed)) {
+      return false
+    }
+    const scheduled = ++generation
+    queueMicrotask(() => {
+      const current = store.getState()
+      const active = findListedRow(current, removed.id, removed.hostId)
+      if (
+        generation !== scheduled ||
+        current.activeView !== 'terminal' ||
+        current.activePendingCreationId !== null ||
+        current.activeWorktreeId !== removed.id ||
+        current.activeWorkspaceExecutionHostId !== removed.hostId ||
+        !active ||
+        !isWorktreeRetiredByRemoval(active)
+      ) {
+        return
+      }
+      witness = null
+      const successor = pickActiveWorktreeSuccessor(
+        current,
+        removed,
+        getSidebarSleepingSweepRetainedIds()
+      )
+      if (successor) {
+        activateAndRevealWorktree(successor.id, {
+          revealInSidebar: false,
+          executionHostId: successor.hostId
+        })
+      } else {
+        current.setActiveWorktree(null)
+      }
+    })
+    return true
+  }
   const unsubscribeIntent = subscribeWorktreeDeselectionIntent((scope, entering) => {
     if (!scope || entering) {
       if (scope) {
@@ -178,6 +218,9 @@ export function installActiveWorktreeRemovalSuccessor(store = useAppStore): () =
       return
     }
     if (next.activeWorktreeId !== null) {
+      if (retireAcceptedSelection(next)) {
+        return
+      }
       const listed = observe()
       // An unlisted pointer to the witness is a row dropped before its selection clears.
       if (listed || witness?.id !== next.activeWorktreeId) {
@@ -226,6 +269,9 @@ export function installActiveWorktreeRemovalSuccessor(store = useAppStore): () =
       }
     })
   })
+  if (store.getState().activeView === 'terminal') {
+    retireAcceptedSelection(store.getState())
+  }
   return () => {
     generation += 1
     unsubscribeIntent()

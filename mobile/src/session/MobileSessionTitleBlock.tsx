@@ -7,7 +7,7 @@ import type { ConnectionState } from '../transport/connection/connection-state'
 import { styles } from './mobile-session-styles'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { pressedStyle } from '../theme/mobile-theme'
-import { useKeyboardPersistingTaps } from '../platform/keyboard-persisting-taps'
+import { useKeyboardPersistingTaps } from '../platform/keyboard/keyboard-persisting-taps'
 
 /** The session's title and status line. A tap opens a card with the full name, where it lives
  *  and its host, as desktop's tab card does, because a sideways phone cuts the title short. */

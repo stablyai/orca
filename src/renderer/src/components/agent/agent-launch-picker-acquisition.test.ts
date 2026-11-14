@@ -206,3 +206,51 @@ it('keeps an unflagged saved catalog provisional when its read fails', async () 
     stop()
   }
 })
+
+it('keeps an open picker subscribed after usable progress until late enrichment arrives', async () => {
+  const inventory = Promise.withResolvers<AgentPickerEntry['catalog']>()
+  const enriched = Promise.withResolvers<AgentPickerEntry['catalog']>()
+  let next = inventory.promise
+  let published: AgentPickerEntry[] = []
+  const close = observeAgentPickerAcquisition(
+    'late-enrichment',
+    [codex],
+    {
+      catalog: async (_entry, wait) =>
+        wait ? next : { origin: 'unknown', listingInProgress: true },
+      support: async () => undefined
+    },
+    {
+      selected: () => 'codex',
+      publish: (entries) => {
+        published = entries
+      }
+    }
+  )
+  onTestFinished(close)
+  await vi.waitFor(() => expect(published[0]?.catalog).toMatchObject({ listingInProgress: true }))
+  next = enriched.promise
+  inventory.resolve({
+    origin: 'probe',
+    fetchedAt: 1,
+    models: [model('listed')],
+    listingInProgress: true
+  })
+  await vi.waitFor(() =>
+    expect(published[0]?.catalog).toMatchObject({ models: [{ id: 'listed' }] })
+  )
+  expect(published[0]?.catalogRead).toBe('pending')
+  enriched.resolve({
+    origin: 'probe',
+    fetchedAt: 2,
+    models: [
+      { ...model('listed'), defaultEffort: 'high', efforts: [{ value: 'high', label: 'High' }] }
+    ]
+  })
+  await vi.waitFor(() =>
+    expect(published[0]).toMatchObject({
+      catalogRead: 'settled',
+      catalog: { models: [{ id: 'listed', defaultEffort: 'high' }] }
+    })
+  )
+})

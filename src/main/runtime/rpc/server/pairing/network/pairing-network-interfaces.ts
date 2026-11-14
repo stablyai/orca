@@ -4,6 +4,7 @@ import {
   isVirtualBridgeInterface,
   selectAutoAdvertisedPairingAddress
 } from '../../../../../../shared/pairing-address-auto-selection'
+import { isLinkLocalAddress } from '../../../../../../shared/network/link-local-address'
 import { isTailnetIPv4Address } from '../../../../../../shared/tailnet-address'
 import { getWindowsDefaultRouteInterfaceNames } from './windows-default-route-interfaces'
 
@@ -14,11 +15,6 @@ export type NetworkInterface = {
 }
 
 export type DefaultRouteInterfaceLookup = () => Promise<ReadonlySet<string> | null>
-
-function isUsableIPv6Address(address: string): boolean {
-  // Link-local IPv6 needs a scope id the QR hostname cannot advertise.
-  return !/^fe[89ab][0-9a-f]:/i.test(address)
-}
 
 // 0.0.0.0 cannot accept IPv6; only an IPv6 bind can offer both families (#31161).
 function listenerServesFamily(listenerHost: string, family: 'IPv4' | 'IPv6'): boolean {
@@ -52,12 +48,12 @@ export async function getPairingNetworkInterfaces(
 
   for (const [name, addrs] of Object.entries(interfaces)) {
     for (const addr of addrs ?? []) {
-      if (addr.internal || (addr.family === 'IPv4' && isProxyFakeIpIPv4Address(addr.address))) {
-        continue
-      }
       if (
-        addr.family !== 'IPv4' &&
-        !(addr.family === 'IPv6' && isUsableIPv6Address(addr.address))
+        addr.internal ||
+        (addr.family !== 'IPv4' && addr.family !== 'IPv6') ||
+        (addr.family === 'IPv4' && isProxyFakeIpIPv4Address(addr.address)) ||
+        // An APIPA/idle adapter's 169.254 or fe80 address is never dialable from the phone.
+        isLinkLocalAddress(addr.address)
       ) {
         continue
       }
@@ -81,7 +77,9 @@ function rankInterface({ name, address, hasDefaultRoute }: NetworkInterface): nu
     return 0
   }
   const bridgePenalty = isVirtualBridgeInterface(name, hasDefaultRoute) ? 2 : 0
-  return (address.includes(':') ? 2 : 1) + bridgePenalty
+  // The default-route adapter is the one the LAN reaches; it wins ties with idle or VPN adapters.
+  const defaultRouteBonus = hasDefaultRoute ? 0.5 : 0
+  return (address.includes(':') ? 2 : 1) + bridgePenalty - defaultRouteBonus
 }
 
 export async function getDefaultPairingAddress(

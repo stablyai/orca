@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../../shared/repo-types'
 import { createWorktreeIdentity } from '../../../../../shared/worktree/identity'
-import { getGitHubPRCacheKey } from '../../../../../shared/github/github-cache-key'
+import { getGitHubPRCacheKey } from '../../../../../shared/github/cache/github-cache-key'
 import { forgeOwnerHostIdForWorkspace } from '../../../runtime/source-control/forge/forge-credential-target'
 import { _clearGitHubPRRefreshStartedEntriesForTest } from '../requests/request-coordination'
 import { createUpdateWorktreeMeta } from '../../slices/worktrees/metadata/update-worktree-meta'

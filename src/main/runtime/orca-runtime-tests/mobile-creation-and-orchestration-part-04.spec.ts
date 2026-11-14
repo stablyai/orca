@@ -118,9 +118,7 @@ describe('OrcaRuntimeService', () => {
       }
       const staleScan = deferred<typeof MOCK_GIT_WORKTREES>()
       const scansBefore = vi.mocked(listWorktrees).mock.calls.length
-      vi.mocked(listWorktrees)
-        .mockImplementationOnce(() => staleScan.promise)
-        .mockResolvedValueOnce(MOCK_GIT_WORKTREES)
+      vi.mocked(listWorktrees).mockImplementationOnce(() => staleScan.promise)
       const runtime = new OrcaRuntimeService(runtimeStore as never)
 
       const stalePoll = runtime.getWorktreePs()
@@ -129,8 +127,8 @@ describe('OrcaRuntimeService', () => {
       const freshPolling = runtime.getWorktreePs()
       staleScan.resolve(MOCK_GIT_WORKTREES)
       const [staleResult, freshPoll] = await Promise.all([stalePoll, freshPolling])
-      // Both generations scanned; neither poll fell back to stored rows at the scan timeout.
-      expect(vi.mocked(listWorktrees).mock.calls.length - scansBefore).toBe(2)
+      // Only the live route lists; the poll admitted for the replaced WSL route runs no Git.
+      expect(vi.mocked(listWorktrees).mock.calls.length - scansBefore).toBe(1)
 
       // Concurrent scans retain the platform map from their own generation even when they finish out of order.
       expect(staleResult.worktrees[0]).toMatchObject({ terminalPlatform: 'linux' })

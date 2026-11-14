@@ -1,5 +1,5 @@
 import { defineOrchestrationMethod } from '../access/orchestration-method-access'
-import { ResetParams } from '../../../../../../shared/rpc-contract/orchestration-params'
+import { ResetParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { listLiveRemoteRunLinkEnvironments } from '../../../../orchestration/db/remote-owned/remote-run-links'
 

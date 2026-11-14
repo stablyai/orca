@@ -1,15 +1,15 @@
+import { NativeChatQuestionSteps } from './NativeChatQuestionSteps'
 import { ImeTextarea } from '@/lib/text-input/ime/ime-text-field'
-import { Textarea } from '@/components/ui/textarea'
 import { useRef, useState, type RefObject, type ReactNode } from 'react'
 import { Check, Pencil } from 'lucide-react'
 import { cn } from '@/lib/class-names'
-import { useScrollEdgeFades } from '@/lib/list-interaction/use-scroll-edge-fades'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatQuestionHeader } from './NativeChatQuestionHeader'
 import { NativeChatQuestionOption } from './NativeChatQuestionOption'
-import type { AskAnswerSelection } from '../../../../../shared/native-chat/input/native-chat-ask-answer'
-import type { AskPrompt } from '../../../../../shared/native-chat/input/native-chat-ask-types'
+import { NativeChatQuestionConfirmButton } from './NativeChatQuestionConfirmButton'
+import type { AskAnswerSelection } from '../../../../../shared/native-chat/input/questions/native-chat-ask-answer'
+import type { AskPrompt } from '../../../../../shared/native-chat/input/questions/native-chat-ask-types'
 import { useNativeChatPromptCardFocus } from './use-native-chat-prompt-card-focus'
 import { useNativeChatQuestionAutoAdvance } from './use-native-chat-question-auto-advance'
 import { useNativeChatQuestionKeys } from './use-native-chat-question-keys'
@@ -22,7 +22,7 @@ import {
   askConfirmLabel,
   askTypedText,
   toggleAskOption
-} from '../../../../../shared/native-chat/input/native-chat-ask-card-rules'
+} from '../../../../../shared/native-chat/input/questions/native-chat-ask-card-rules'
 
 export type NativeChatQuestionCardProps = {
   prompt: AskPrompt
@@ -78,7 +78,6 @@ export function NativeChatQuestionCard({
 }: NativeChatQuestionCardProps): React.JSX.Element {
   const t = useTranslate()
   const cardRef = useRef<HTMLDivElement>(null)
-  const fades = useScrollEdgeFades<HTMLDivElement>()
   const blocked = disabled || isSubmitting || isCancelling
   const autoAdvance = useNativeChatQuestionAutoAdvance(blocked)
   const [index, setIndex] = useState(0)
@@ -144,6 +143,8 @@ export function NativeChatQuestionCard({
   }
 
   const currentAnswered = answerFor(index).length > 0 || acceptsEmpty(index)
+  const anyAnswered = prompt.questions.some((_, i) => answerFor(i).length > 0 || acceptsEmpty(i))
+  const confirmLabel = askConfirmLabel(currentAnswered, isLast, anyAnswered)
   const currentTypedAnswerChosen = typedAnswerChosen(index)
 
   const submitAll = (sel: number[][], oth: string[]): void => {
@@ -170,7 +171,8 @@ export function NativeChatQuestionCard({
     }
   }
 
-  // Preview choices wait for Enter; other single picks briefly show before advancing.
+  // Briefly show a single-select pick before advancing; clicking it again retracts it, while Enter on
+  // the chosen row confirms. With previews, a pick stays put and a digit only focuses its row.
   const pickOption = (
     optionIndex: number,
     via: 'pointer' | 'digit' | 'enter' = 'pointer'
@@ -182,7 +184,8 @@ export function NativeChatQuestionCard({
         ?.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
         [optionIndex]?.focus()
     }
-    if (showsPreviews && cur.includes(optionIndex)) {
+    // Enter on a chosen single-select row does what the footer says (Next/Submit), never deselects.
+    if (cur.includes(optionIndex) && (showsPreviews || (via === 'enter' && !q.multiSelect))) {
       if (via === 'enter') {
         confirm(true)
       }
@@ -203,7 +206,6 @@ export function NativeChatQuestionCard({
     if (blocked || (requireAnswer && !currentAnswered)) {
       return
     }
-    const anyAnswered = prompt.questions.some((_, i) => answerFor(i).length > 0 || acceptsEmpty(i))
     const action = askConfirmAction({ isLast, anyAnswered, fromKeyboard })
     if (action === 'proceed') {
       advanceOrSubmit(selections, otherText)
@@ -242,19 +244,6 @@ export function NativeChatQuestionCard({
       }
     : undefined
 
-  const options = q.options.map((opt, i) => (
-    <NativeChatQuestionOption
-      key={`${i}:${opt.label}`}
-      badge={String(i + 1)}
-      initialFocus={i === 0}
-      label={opt.label}
-      description={opt.description}
-      preview={opt.preview}
-      selected={(selections[index] ?? []).includes(i)}
-      disabled={blocked}
-      onSelect={() => pickOption(i)}
-    />
-  ))
   return (
     <div
       ref={cardRef}
@@ -270,7 +259,7 @@ export function NativeChatQuestionCard({
           event.key === 'Escape' &&
           !event.nativeEvent.isComposing &&
           collapse &&
-          !isSubmitting &&
+          !blocked &&
           !isEditableTarget(event.target)
         ) {
           event.preventDefault()
@@ -280,66 +269,72 @@ export function NativeChatQuestionCard({
       }}
     >
       <div className="mx-auto w-full max-w-(--chat-content-max-width) px-3 pt-2 pb-4 sm:px-4">
-        {total > 1 ? (
-          <div className="mb-2 flex gap-1 overflow-x-auto pb-1 scrollbar-sleek">
-            {prompt.questions.map((qq, i) => (
-              <button
-                key={i}
-                type="button"
-                data-native-chat-question-step
+        <NativeChatQuestionSteps
+          questions={prompt.questions}
+          index={index}
+          disabled={blocked}
+          onSelect={goTo}
+          answered={prompt.questions.map((_, i) => answerFor(i).length > 0)}
+        />
+
+        {/* One 14px gutter (px-3.5) for the question, option tiles and footer, so their edges line up. */}
+        <div
+          className={cn(
+            'overflow-hidden rounded-[14px] border border-question-card-border bg-chat-composer-surface shadow-sm',
+            heading && 'flex max-h-[75vh] flex-col'
+          )}
+        >
+          <NativeChatQuestionHeader
+            question={q.question}
+            heading={heading}
+            context={context}
+            disabled={blocked}
+            isCancelling={isCancelling}
+            onCancel={onCancel ? cancel : undefined}
+            onCollapse={collapse}
+          />
+
+          {/* Option rings are inset, so the scroll clip cannot cut them. */}
+          <div
+            className={cn(
+              'flex max-h-[50vh] flex-col gap-1.5 overflow-y-auto px-3.5 pb-3 scrollbar-sleek',
+              heading && 'shrink-0'
+            )}
+          >
+            {q.options.map((opt, i) => (
+              <NativeChatQuestionOption
+                key={`${i}:${opt.label}`}
+                badge={String(i + 1)}
+                initialFocus={i === 0}
+                label={opt.label}
+                description={opt.description}
+                preview={opt.preview}
+                selected={(selections[index] ?? []).includes(i)}
                 disabled={blocked}
-                onClick={() => goTo(i)}
-                className={cn(
-                  'flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium disabled:pointer-events-none',
-                  i === index
-                    ? 'bg-accent text-accent-foreground'
-                    : 'text-muted-foreground hover:text-foreground'
-                )}
-              >
-                <span className="max-w-[10rem] truncate">
-                  {qq.header ||
-                    t('components.native-chat.question.step', 'Step {{value0}}', {
-                      value0: i + 1
-                    })}
-                </span>
-                {answerFor(i).length > 0 ? (
-                  <Check className="size-3 text-primary" strokeWidth={3} />
-                ) : null}
-              </button>
+                onSelect={() => pickOption(i)}
+                onEnter={() => pickOption(i, 'enter')}
+              />
             ))}
           </div>
-        ) : null}
-
-        <div className="flex max-h-[75vh] flex-col overflow-hidden rounded-lg border border-input bg-card shadow-xs">
           <div
-            ref={heading ? fades.ref : undefined}
-            className={cn('min-h-0 overflow-y-auto scrollbar-sleek', heading && fades.className)}
+            className={cn(
+              'flex shrink-0 gap-2.5 px-3.5 pb-3.5',
+              freeTextInput?.multiline ? 'items-end' : 'items-center'
+            )}
           >
-            <NativeChatQuestionHeader
-              question={q.question}
-              heading={heading}
-              context={context}
-              disabled={blocked}
-              isCancelling={isCancelling}
-              onCancel={onCancel ? cancel : undefined}
-              onCollapse={collapse}
-            />
-            {!heading ? (
-              <div className="divide-y divide-border/60 border-t border-border">{options}</div>
-            ) : null}
-          </div>
-          <div className="shrink-0 divide-y divide-border/60 border-t border-border">
-            {heading ? options : null}
-          </div>
-          <div className="flex shrink-0 flex-wrap items-center gap-3 border-t border-border px-3.5 py-2.5">
             {questionAllowsOther ? (
-              <>
+              <div
+                className={cn(
+                  'flex min-h-9 min-w-0 flex-1 gap-3 rounded-[10px] border border-question-option-border px-2.5 py-1.5 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-chat-focus-ring',
+                  freeTextInput?.multiline ? 'items-start' : 'items-center'
+                )}
+              >
                 <span
                   className={cn(
-                    'flex size-6 shrink-0 items-center justify-center rounded-md',
+                    'flex size-5.5 shrink-0 items-center justify-center rounded-md border',
                     currentTypedAnswerChosen
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground'
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-question-option-border text-muted-foreground'
                   )}
                 >
                   {currentTypedAnswerChosen ? (
@@ -350,7 +345,8 @@ export function NativeChatQuestionCard({
                 </span>
                 {/* Deliver free text verbatim as a tool result; composer slash commands and autocomplete do not apply. */}
                 {freeTextInput?.multiline ? (
-                  <Textarea
+                  // The box draws the field's edge, so the bare field (not the bordered Textarea primitive) sits inside it.
+                  <ImeTextarea
                     data-native-chat-answer-field
                     data-native-chat-prompt-card-focus-target={fieldTakesFocus}
                     disabled={blocked}
@@ -358,6 +354,7 @@ export function NativeChatQuestionCard({
                     onChange={(e) => setOther(index, e.target.value)}
                     onClick={autoAdvance.cancel}
                     placeholder={answerPlaceholder}
+                    className="scrollbar-sleek max-h-[12lh] min-h-16 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent [field-sizing:content] text-sm text-foreground outline-none placeholder:text-muted-foreground disabled:cursor-default disabled:opacity-50"
                   />
                 ) : (
                   <ImeTextarea
@@ -393,32 +390,28 @@ export function NativeChatQuestionCard({
                     }}
                     placeholder={answerPlaceholder}
                     className={cn(
-                      'scrollbar-sleek max-h-[6lh] min-w-28 flex-1 resize-none overflow-y-auto bg-transparent text-sm outline-none [field-sizing:content] placeholder:text-muted-foreground disabled:cursor-default disabled:opacity-50',
+                      'scrollbar-sleek max-h-[6lh] min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-sm outline-none [field-sizing:content] placeholder:text-muted-foreground disabled:cursor-default disabled:opacity-50',
                       currentTypedAnswerChosen || !otherText[index]
                         ? 'text-foreground'
                         : 'text-muted-foreground'
                     )}
                   />
                 )}
-              </>
+              </div>
             ) : (
               <span className="flex-1" />
             )}
-            <button
-              type="button"
+            <NativeChatQuestionConfirmButton
+              label={
+                isSubmitting
+                  ? t('components.native-chat.question.sending', 'Sending…')
+                  : (submitLabel ?? CONFIRM_LABEL[confirmLabel]())
+              }
+              answered={confirmLabel !== 'skip'}
+              enterHint={currentAnswered && !blocked && !q.multiSelect && !freeTextInput?.multiline}
               disabled={blocked || (requireAnswer && !currentAnswered)}
-              onClick={() => confirm()}
-              className={cn(
-                'ml-auto shrink-0 whitespace-nowrap rounded-md px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-50',
-                currentAnswered
-                  ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-              )}
-            >
-              {isSubmitting
-                ? t('components.native-chat.question.sending', 'Sending…')
-                : (submitLabel ?? CONFIRM_LABEL[askConfirmLabel(currentAnswered, isLast)]())}
-            </button>
+              onConfirm={() => confirm()}
+            />
           </div>
         </div>
 

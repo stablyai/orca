@@ -4,8 +4,8 @@ import { getStructuredAgentSessionHost } from '../../../native-chat/agent-sessio
 import {
   attach,
   hostTestState
-} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
-import { HOST_TEST_SESSION as SESSION } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host.test-fixture'
+import { HOST_TEST_SESSION as SESSION } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { OrcaRuntimeService } from '../../orca-runtime'
 
 vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({

@@ -1,7 +1,7 @@
 import { ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
 import type { MobileSessionTab } from './mobile-session-tabs'
 import { ActionSheetModal, type ActionSheetAction } from '../../components/ActionSheetModal'
-import { getMobileSessionTabTitle } from '../../terminal/session/mobile-terminal-tab-agent'
+import { getMobileSessionTabTitle } from './mobile-terminal-tab-agent'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 type BrowserTab = Extract<MobileSessionTab, { type: 'browser' }>

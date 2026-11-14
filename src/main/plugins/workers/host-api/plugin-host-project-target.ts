@@ -14,7 +14,14 @@ const repoListAnswer = z.object({
   )
 })
 
-export type PluginProjectTarget = { id: string; kind: 'git' | 'folder'; hostId: string | null }
+export type PluginProjectTarget = {
+  id: string
+  kind: 'git' | 'folder'
+  /** The host the plugin named; null when it named none. */
+  hostId: string | null
+  /** The host of the one copy found, named or not: `local`, `ssh:…` or `runtime:…`. */
+  ownerHostId: string
+}
 
 /**
  * The project a plugin names by its `project.list` id, refused with a fixed message when no
@@ -44,6 +51,7 @@ export async function resolvePluginProject(
   return {
     id: repo.id,
     kind: repo.kind === 'folder' ? 'folder' : 'git',
-    hostId: wantedHost ?? null
+    hostId: wantedHost ?? null,
+    ownerHostId: getRepoExecutionHostId(repo)
   }
 }

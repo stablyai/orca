@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PluginCatalogRelease } from '../../../shared/plugins/catalog/plugin-catalog-release'
 import type { PluginMarketplace } from '../../../shared/plugins/catalog/plugin-marketplace'
 import { readPluginLockfile, removeInstalledPlugin } from '../installation/plugin-install'
-import type { PluginImageCache } from '../plugin-image-cache'
+import type { PluginImageCache } from '../media/plugin-image-cache'
 import { PluginMarketplaceInstaller } from './plugin-marketplace-installer'
 import { PluginMarketplaceService } from './plugin-marketplace-service'
 

@@ -1,8 +1,8 @@
 import type {
   PreflightStatus,
-  PreloadApi,
   RefreshAgentsResult
-} from '../../../../preload/api-types'
+} from '../../../../preload/api/preflight/preflight-api'
+import type { PreloadApi } from '../../../../preload/api-types'
 import type {
   ComputerUsePermissionSetupResult,
   ComputerUsePermissionStatusResult
@@ -71,9 +71,9 @@ export function createPreflightApi(): NonNullable<Partial<PreloadApi>['preflight
       }
       return callRuntimeResult<string[]>('preflight.detectAgents').catch(() => [])
     },
-    refreshAgents: () =>
+    refreshAgents: (args) =>
       requireActiveEnvironmentOrNull()
-        ? callRuntimeResult('preflight.refreshAgents')
+        ? callRuntimeResult('preflight.refreshAgents', args)
             .then((result) => result as RefreshAgentsResult)
             .catch(() => fallbackRefreshAgents)
         : Promise.resolve(fallbackRefreshAgents),
