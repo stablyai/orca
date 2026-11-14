@@ -41,15 +41,30 @@ export function readEnvironmentRegistryFile(
   if (observation?.has(path)) {
     return observation.get(path) ?? null
   }
-  let read: BoundedNodeFileRead | null = null
+  let read: BoundedNodeFileRead | null
   try {
+    read = readPresentEnvironmentRegistryFile(path, maxBytes)
+  } catch {
     hardenExistingSecureFile(path)
-    read = readNodeFileSyncWithinLimit(path, maxBytes)
-  } catch (error) {
-    if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) {
-      throw error
-    }
+    read = readPresentEnvironmentRegistryFile(path, maxBytes)
+  }
+  if (read) {
+    hardenExistingSecureFile(path)
   }
   observation?.set(path, read)
   return read
+}
+
+function readPresentEnvironmentRegistryFile(
+  path: string,
+  maxBytes: number
+): BoundedNodeFileRead | null {
+  try {
+    return readNodeFileSyncWithinLimit(path, maxBytes)
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return null
+    }
+    throw error
+  }
 }

@@ -3,7 +3,7 @@ import {
   closeEnvironmentStore,
   environmentStoreWriteCount
 } from './runtime-environment-store-worker-client'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
@@ -42,6 +42,22 @@ afterEach(() => {
 })
 
 describe('asynchronous environment store owner', () => {
+  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
+    'repairs owner read permission before returning an existing environment',
+    async () => {
+      const root = profile()
+      const saved = await addEnvironmentFromPairingCode(root, {
+        name: 'Private',
+        pairingCode: pairing(11),
+        now: 100
+      })
+      const path = getEnvironmentStorePath(root)
+      chmodSync(path, 0)
+      expect((await resolveEnvironment(root, saved.id)).name).toBe('Private')
+      expect(statSync(path).mode & 0o777).toBe(0o600)
+    }
+  )
+
   it('captures arguments before the caller can mutate them', async () => {
     const root = profile()
     const args = { name: 'Before', pairingCode: pairing(9), now: 100 }
