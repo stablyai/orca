@@ -62,7 +62,7 @@ export function WorktreeCardHeader({
   const hasHoverDetails = presentation.hasHoverDetails && !titleRenaming
 
   return (
-    <div className="flex min-w-0 items-center justify-between gap-2">
+    <div className="relative flex min-w-0 items-center justify-between gap-2">
       <div className="flex min-w-0 flex-1 items-center gap-1.5">
         {showPinnedRepoIcon && <WorktreeCardRepoChip repo={repo!} />}
 
@@ -128,7 +128,15 @@ export function WorktreeCardHeader({
       </div>
 
       {showHeaderActions && (
-        <div className="ml-auto flex shrink-0 items-center justify-center gap-1 pr-1.5">
+        <div
+          className={
+            'ml-auto flex shrink-0 items-center justify-center gap-1 pr-1.5' +
+            // The modifier-only delete action must not take an in-flow lane and shift the title.
+            (!showTitleRowPrimary
+              ? ' can-hover:absolute can-hover:right-0 can-hover:top-1/2 can-hover:z-10 can-hover:-translate-y-1/2'
+              : '')
+          }
+        >
           {showTitleRowPrimary && <WorktreeCardPrimaryStar />}
 
           {showDeleteQuickAction && (
