@@ -4,6 +4,8 @@ import { scanCodexUsageFiles } from '../../codex-usage/scanner'
 import { scanOpenCodeUsageDatabases } from '../../opencode-usage/scanner'
 import { scanMuseUsageFiles } from '../../muse-usage/scanner'
 import { normalizeMuseUsagePersistedFiles } from '../../muse-usage/persisted-file-normalization'
+import { scanMistralVibeUsageFiles } from '../../mistral-vibe-usage/scanner'
+import { normalizeMistralVibeUsagePersistedFiles } from '../../mistral-vibe-usage/persisted-file-normalization'
 import { normalizeOpenCodeUsagePersistedDatabases } from '../../opencode-usage/persisted-database-normalization'
 import {
   readClaudeUsageSourceCache,
@@ -13,6 +15,7 @@ import {
 import type { CodexUsagePersistedFile } from '../../codex-usage/types'
 import type { OpenCodeUsagePersistedDatabase } from '../../opencode-usage/types'
 import type { MuseUsagePersistedFile } from '../../muse-usage/types'
+import type { MistralVibeUsagePersistedFile } from '../../mistral-vibe-usage/types'
 import type {
   UsageScanWorkerProgress,
   UsageScanWorkerRequest,
@@ -137,6 +140,22 @@ async function runScan(
       return {
         operation: 'scan',
         providerId: 'muse',
+        sessions: result.sessions,
+        dailyAggregates: result.dailyAggregates
+      }
+    }
+    case 'mistral-vibe': {
+      const result = await scanMistralVibeUsageFiles(
+        request.worktrees,
+        normalizeMistralVibeUsagePersistedFiles(
+          await readUsageSourceCache<MistralVibeUsagePersistedFile>(request.sourceCache)
+        ),
+        onFilesScanned
+      )
+      await persistSourceCache(request.sourceCache, result.processedFiles)
+      return {
+        operation: 'scan',
+        providerId: 'mistral-vibe',
         sessions: result.sessions,
         dailyAggregates: result.dailyAggregates
       }

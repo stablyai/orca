@@ -74,6 +74,7 @@ import { claudeUsageApi } from './api/agent-usage/claude-usage-bridge'
 import { codexUsageApi } from './api/agent-usage/codex-usage-bridge'
 import { openCodeUsageApi } from './api/agent-usage/open-code-usage-bridge'
 import { museUsageApi } from './api/agent-usage/muse-usage-bridge'
+import { mistralVibeUsageApi } from './api/agent-usage/mistral-vibe-usage-bridge'
 import { aiVaultApi } from './api/ai-vault/ai-vault-bridge'
 import { nativeChatApi } from './api/native-chat/native-chat-bridge'
 import { runtimeApi } from './api/runtime/runtime-bridge'
@@ -183,6 +184,7 @@ const api = {
   codexUsage: codexUsageApi,
   openCodeUsage: openCodeUsageApi,
   museUsage: museUsageApi,
+  mistralVibeUsage: mistralVibeUsageApi,
   aiVault: aiVaultApi,
   nativeChat: nativeChatApi,
   runtime: runtimeApi,

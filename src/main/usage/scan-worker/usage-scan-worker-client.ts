@@ -4,6 +4,10 @@ import type { ClaudeUsageDailyAggregate, ClaudeUsageSession } from '../../claude
 import type { CodexUsageDailyAggregate, CodexUsageSession } from '../../codex-usage/types'
 import type { OpenCodeUsageDailyAggregate, OpenCodeUsageSession } from '../../opencode-usage/types'
 import type { MuseUsageDailyAggregate, MuseUsageSession } from '../../muse-usage/types'
+import type {
+  MistralVibeUsageDailyAggregate,
+  MistralVibeUsageSession
+} from '../../mistral-vibe-usage/types'
 import type { UsageScanWorktreeRef } from '../provider-lifecycle/usage-provider-contract'
 import type {
   UsageScanWorkerProviderId,
@@ -139,6 +143,23 @@ export async function scanMuseUsageOnWorker(
   const value = await scan({ operation: 'scan', providerId: 'muse', worktrees, sourceCache })
   if (value.operation !== 'scan' || value.providerId !== 'muse') {
     throw wrongProvider('muse', value)
+  }
+  return { sessions: value.sessions, dailyAggregates: value.dailyAggregates }
+}
+
+export async function scanMistralVibeUsageOnWorker(
+  scan: (body: UsageScanWorkerScanBody) => Promise<UsageScanWorkerValue>,
+  worktrees: UsageScanWorktreeRef[],
+  sourceCache: UsageSourceCacheRef
+): Promise<ProviderScanResult<MistralVibeUsageSession, MistralVibeUsageDailyAggregate>> {
+  const value = await scan({
+    operation: 'scan',
+    providerId: 'mistral-vibe',
+    worktrees,
+    sourceCache
+  })
+  if (value.operation !== 'scan' || value.providerId !== 'mistral-vibe') {
+    throw wrongProvider('mistral-vibe', value)
   }
   return { sessions: value.sessions, dailyAggregates: value.dailyAggregates }
 }

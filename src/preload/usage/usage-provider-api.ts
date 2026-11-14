@@ -4,7 +4,12 @@ import type {
 } from '../../shared/backend-service-contract'
 import type { PreloadApi } from '../api-types'
 
-type UsageProviderApiKey = 'claudeUsage' | 'codexUsage' | 'openCodeUsage' | 'museUsage'
+type UsageProviderApiKey =
+  | 'claudeUsage'
+  | 'codexUsage'
+  | 'openCodeUsage'
+  | 'museUsage'
+  | 'mistralVibeUsage'
 type UsageProviderApi = PreloadApi[UsageProviderApiKey]
 type UsageRangeArgs = { scope: string; range: string }
 
