@@ -2965,7 +2965,9 @@
     "contextUsage": {
       "label": "Context {{used}} of {{window}} tokens, {{percent}}% used",
       "title": "Context",
-      "estimated": "Estimated from the last response."
+      "estimated": "Estimated from the last response.",
+      "deferredTitle": "Loaded on demand",
+      "deferredDescription": "Not included in current usage. Loaded when needed."
     },
     "composerAttachments": {
       "file": "File",

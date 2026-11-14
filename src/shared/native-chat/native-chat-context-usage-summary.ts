@@ -52,6 +52,13 @@ export function summarizeContextUsage(
   }
 }
 
+export function groupContextUsageRows(rows: NativeChatContextUsageSummary['rows']) {
+  return {
+    used: keyContextUsageRows(rows.filter((row) => !row.deferred)),
+    deferred: keyContextUsageRows(rows.filter((row) => row.deferred))
+  }
+}
+
 /** The CLI can repeat a category name, so a row's key counts which repeat it is. */
 export function keyContextUsageRows(
   rows: NativeChatContextUsageSummary['rows']
