@@ -113,10 +113,14 @@ export function applyParsedSshHostInput(draft: EditingTarget): EditingTarget {
     return draft
   }
 
+  const keptConfigHost = draft.configHost.trim()
+  // Why: blur used to copy the parsed host into configHost. That copy is not an OpenSSH alias, and keeping it dials the first hostname after Host is edited.
+  const configHost = keptConfigHost !== '' && keptConfigHost !== parsed.host ? keptConfigHost : ''
+
   return {
     ...draft,
     host: parsed.host,
-    configHost: draft.configHost.trim() || parsed.configHost,
+    configHost,
     username: draft.username.trim() || parsed.username || '',
     port:
       parsed.port !== undefined && isDefaultPortDraft(draft.port) ? String(parsed.port) : draft.port

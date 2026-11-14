@@ -29,6 +29,35 @@ describe('parseSshHostInput', () => {
 })
 
 describe('applyParsedSshHostInput', () => {
+  it('dials the corrected Host after the first blur copied an implicit configHost', () => {
+    const blurred = applyParsedSshHostInput({
+      ...EMPTY_FORM,
+      host: 'host-a.example'
+    })
+    const corrected = applyParsedSshHostInput({
+      ...blurred,
+      host: 'host-b.example'
+    })
+
+    expect(getSshTargetDraftConnectionFields(corrected)).toMatchObject({
+      host: 'host-b.example',
+      configHost: 'host-b.example'
+    })
+  })
+
+  it('keeps an explicit SSH config alias when Host is blurred again', () => {
+    const normalized = applyParsedSshHostInput({
+      ...EMPTY_FORM,
+      host: 'other.internal',
+      configHost: 'prod'
+    })
+
+    expect(getSshTargetDraftConnectionFields(normalized)).toMatchObject({
+      host: 'other.internal',
+      configHost: 'prod'
+    })
+  })
+
   it('does not overwrite explicit username or non-default port', () => {
     expect(
       applyParsedSshHostInput({
