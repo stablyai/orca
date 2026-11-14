@@ -176,7 +176,8 @@ export function registerRuntimeWindowLifecycle(
         worktreeId: opts.worktreeId,
         sourceLeafId: opts.sourceLeafId,
         telemetrySource: opts.telemetrySource,
-        newLeafId: opts.newLeafId
+        newLeafId: opts.newLeafId,
+        ...(opts.activate === false ? { activate: false } : {})
       })
     },
     renameTerminal: (tabId, title, options) =>
