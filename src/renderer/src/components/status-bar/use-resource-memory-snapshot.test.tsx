@@ -120,3 +120,11 @@ describe('Resource Manager memory observation', () => {
     })
   })
 })
+
+describe('Resource Manager closed badge seed', () => {
+  it('reads once for a seeded closed badge', async () => {
+    renderHook(() => useResourceMemorySnapshot(false, true))
+    await flush()
+    expect(getSnapshot).toHaveBeenCalledExactlyOnceWith({ resourceManagerView: true })
+  })
+})
