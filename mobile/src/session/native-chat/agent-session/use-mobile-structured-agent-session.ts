@@ -1,5 +1,5 @@
 import { asyncQuestionSourceScope as questionSourceScope } from '../../../../../src/shared/native-chat/input/native-chat-ask'
-import { structuredChatTranscriptIdentity } from '../transcript/mobile-native-chat-transcript-store'
+import { structuredChatTranscriptIdentity } from '../transcript/persistence/mobile-native-chat-transcript-store'
 import { useMemo, useRef } from 'react'
 import { tuiAgentDisplayName } from '../../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
@@ -29,7 +29,7 @@ import { useMobileStructuredAgentOptions } from '../input/session-options/use-mo
 import { useHostModelCatalogCache } from '../input/session-options/mobile-host-model-catalog-query'
 import { useMobileStructuredCommandController } from '../composer/commands/use-mobile-structured-command-controller'
 import { useMobileStructuredSessionOptionStamp } from '../input/session-options/use-mobile-structured-session-option-stamp'
-import { useMobileStructuredAgentTurnTiming } from '../transcript/use-mobile-structured-agent-turn-timing'
+import { useMobileStructuredAgentTurnTiming } from '../transcript/ingestion/use-mobile-structured-agent-turn-timing'
 import {
   pendingStructuredPromptIdentity,
   useMobileStructuredRequestCancel
@@ -42,14 +42,14 @@ import { useMobileStructuredSends } from '../composer/delivery/use-mobile-struct
 import { useMobileStructuredSendRecorded } from '../composer/delivery/mobile-structured-send-recorded-read'
 import { useMobileNativeChatQueueFollowUps as useQueueFollowUps } from '../preferences/use-mobile-native-chat-queue-follow-ups'
 import { useMobileStructuredStopOffer } from '../composer/delivery/use-mobile-structured-stop-offer'
-import { useMobileStructuredTurnIndicator } from '../transcript/use-mobile-structured-turn-indicator'
+import { useMobileStructuredTurnIndicator } from '../transcript/ingestion/use-mobile-structured-turn-indicator'
 import { useMobileStructuredContextUsage } from '../composer/commands/use-mobile-structured-context-usage'
 import { useMobileStructuredInterruptedContinue } from '../composer/delivery/use-mobile-structured-interrupted-continue'
 import {
   useMobileStructuredThreadGoal,
   useMobileStructuredThreadGoalSend
 } from '../input/tasks/use-mobile-structured-thread-goal'
-import { useMobileStructuredTranscript } from '../transcript/use-mobile-structured-transcript'
+import { useMobileStructuredTranscript } from '../transcript/ingestion/use-mobile-structured-transcript'
 import { useMobileStructuredAgentRewind } from './use-mobile-structured-agent-rewind'
 import { useMobileNativeChatUsageLimit } from '../status/use-mobile-native-chat-usage-limit'
 

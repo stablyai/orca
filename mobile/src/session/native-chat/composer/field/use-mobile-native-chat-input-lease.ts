@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { nativeChatTurnStatusCopy } from '../../transcript/native-chat-turn-status-copy'
+import { nativeChatTurnStatusCopy } from '../../transcript/messages/native-chat-turn-status-copy'
 import { translate, type Translate } from '../../../../i18n/mobile-i18n'
 import type { MobileNativeChatInputLockReason } from '../../MobileNativeChatView'
 

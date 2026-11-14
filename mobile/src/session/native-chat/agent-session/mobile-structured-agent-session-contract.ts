@@ -13,7 +13,7 @@ import type { MobileNativeChatSession } from '../conversation/use-mobile-native-
 import type { NativeChatLiveTurnIndicator } from '../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
 import type { useMobileStructuredAgentOptions } from '../input/session-options/use-mobile-structured-agent-options'
-import type { useMobileStructuredAgentTurnTiming } from '../transcript/use-mobile-structured-agent-turn-timing'
+import type { useMobileStructuredAgentTurnTiming } from '../transcript/ingestion/use-mobile-structured-agent-turn-timing'
 import type { StructuredMobileSendAttachment } from '../composer/delivery/use-mobile-structured-send-with-outcome'
 import type {
   AgentJournalSkillRef,

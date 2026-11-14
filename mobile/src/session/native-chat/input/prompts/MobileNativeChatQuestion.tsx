@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Check, CircleHelp } from 'lucide-react-native'
 import { MobileNativeChatCardHeaderAction } from './MobileNativeChatCardHeaderAction'
-import { MobileNativeChatQuestionText } from '../../transcript/MobileNativeChatQuestionText'
+import { MobileNativeChatQuestionText } from '../../transcript/message-content/MobileNativeChatQuestionText'
 import {
   colors,
   concentricRadius,

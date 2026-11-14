@@ -28,7 +28,7 @@ import {
   visibleMobileNativeChatPending,
   type MobileNativeChatPendingMessage,
   type MobileNativeChatSendOrigin
-} from '../../transcript/mobile-native-chat-pending-echo'
+} from '../../transcript/sending/mobile-native-chat-pending-echo'
 import { mobileNativeChatScopeKey } from '../../conversation/mobile-native-chat-scope-key'
 import { mobileNativeChatDraftDestination } from './mobile-native-chat-draft-inputs'
 import { useMobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
