@@ -172,6 +172,33 @@ describe('keybindings', () => {
     ).toBe(false)
   })
 
+  it('does not let AltGr text input match Mod+Alt punctuation shortcuts', () => {
+    // Windows/Linux AltGr arrives as Ctrl+Alt with AltGraph set. When the pressed key is
+    // the physical bracket itself, the logical key is the bracket and the physical-code
+    // AltGr guard does not fire, so the Mod+Alt same-type tab pair would preventDefault
+    // and switch tabs instead of sending the bracket to the terminal.
+    for (const platform of ['win32', 'linux'] as const) {
+      const altGrBracket = {
+        key: ']',
+        code: 'BracketRight',
+        control: true,
+        meta: false,
+        alt: true,
+        shift: false,
+        getModifierState: (key: string) => key === 'AltGraph'
+      }
+      expect(keybindingMatchesAction('tab.nextSameType', altGrBracket, platform)).toBe(false)
+      // A deliberate Ctrl+Alt chord (left-hand modifiers, no AltGraph) must keep working.
+      expect(
+        keybindingMatchesAction(
+          'tab.nextSameType',
+          { ...altGrBracket, getModifierState: () => false },
+          platform
+        )
+      ).toBe(true)
+    }
+  })
+
   it('uses shifted punctuation aliases only while Shift is pressed', () => {
     const shiftedComma = {
       key: '<',
@@ -351,5 +378,60 @@ describe('keybindings', () => {
     expect(keybindingMatchesAction('tab.previousSameType', macOptionRightBracket, 'darwin')).toBe(
       false
     )
+  })
+  it('keeps all-types tab cycling active in terminal-first mode', () => {
+    for (const platform of ['darwin', 'linux', 'win32'] as const) {
+      const modifiers = {
+        meta: platform === 'darwin',
+        control: platform !== 'darwin',
+        alt: false
+      }
+      expect(
+        keybindingMatchesAction(
+          'tab.nextAllTypes',
+          { key: '}', code: 'BracketRight', ...modifiers, shift: true },
+          platform,
+          undefined,
+          { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
+        )
+      ).toBe(true)
+      expect(
+        keybindingMatchesAction(
+          'tab.previousAllTypes',
+          { key: '{', code: 'BracketLeft', ...modifiers, shift: true },
+          platform,
+          undefined,
+          { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
+        )
+      ).toBe(true)
+    }
+  })
+
+  it('keeps same-type tab cycling active in terminal-first mode', () => {
+    for (const platform of ['darwin', 'linux', 'win32'] as const) {
+      const modifiers = {
+        meta: platform === 'darwin',
+        control: platform !== 'darwin',
+        alt: true
+      }
+      expect(
+        keybindingMatchesAction(
+          'tab.nextSameType',
+          { key: ']', code: 'BracketRight', ...modifiers, shift: false },
+          platform,
+          undefined,
+          { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
+        )
+      ).toBe(true)
+      expect(
+        keybindingMatchesAction(
+          'tab.previousSameType',
+          { key: '[', code: 'BracketLeft', ...modifiers, shift: false },
+          platform,
+          undefined,
+          { context: 'terminal', terminalShortcutPolicy: 'terminal-first' }
+        )
+      ).toBe(true)
+    }
   })
 })
