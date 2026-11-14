@@ -6,6 +6,7 @@ import {
 } from '../render-tree/markdown-preview-tree-content'
 
 import { splitMarkdownPreviewTable } from '../render-tree/markdown-preview-table-chunks'
+import { getDiffContentSignature } from '../../diff/sections/diff-content-signature'
 import type { Root as MarkdownRoot, Nodes as MarkdownNodes } from 'mdast'
 import remarkParse from 'remark-parse'
 import remarkRehype from 'remark-rehype'
@@ -96,6 +97,13 @@ function sourceBounds(node: Nodes): { sourceLine: number | null; sourceEndLine: 
   }
 }
 
+function imageSourceText(node: Nodes): string {
+  if (node.type === 'element' && node.tagName === 'img') {
+    return String(node.properties.src ?? '')
+  }
+  return 'children' in node ? node.children.map((child) => imageSourceText(child)).join('\n') : ''
+}
+
 export function parseMarkdownPreviewDocument(content: string): {
   tree: Root
   document: MarkdownPreviewDocument
@@ -120,12 +128,14 @@ export function parseMarkdownPreviewDocument(content: string): {
   const blocks = tree.children.map((node, index) => {
     const anchors: string[] = []
     collectAnchors(node, anchors, headings)
-    const textLength = getMarkdownPreviewTreeText(node).length
+    const text = getMarkdownPreviewTreeText(node)
     return {
       index,
       anchors,
       sourceColumn: node.position?.start.column,
-      estimate: Math.min(1200, Math.max(40, Math.ceil(textLength / 90) * 24 + 32)),
+      estimate: Math.min(1200, Math.max(40, Math.ceil(text.length / 90) * 24 + 32)),
+      // Length stays the visible text. Src is hashed so empty-alt images do not collide.
+      contentSignature: `${getDiffContentSignature(`${text}\n${imageSourceText(node)}`)}:${text.length}`,
       ...sourceBounds(node)
     }
   })
