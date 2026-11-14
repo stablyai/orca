@@ -168,6 +168,10 @@ const EnvSchema = z.object({
   // Comma-separated account ids (relay token `sub`); every host of these accounts joins.
   ORCA_RELAY_EDGE_ALLOW_USERS: z.string().default(''),
   ORCA_RELAY_EDGE_REGIONS: z.string().default(RELAY_DEFAULT_REGION),
+  // Comma-separated origins of the edge's front doors (e.g. a load balancer for clients that cannot
+  // hold a socket to the edge directly). director/edge.json `frontDoor` may only name one of these.
+  // Unset: no front door is ever answered.
+  ORCA_RELAY_EDGE_FRONT_DOOR_URLS: z.string().default(''),
   // Set: the edge keeps host data in its objects, so moves push and export it (signed with this
   // key, never the assignment lease key). Never unset while rows are on the edge.
   ORCA_RELAY_EDGE_ADMIN_SIGNING_KEY: z.preprocess(
@@ -494,8 +498,16 @@ function parseEdgeConfig(
   if (adminKey === parsed.ORCA_RELAY_ASSIGNMENT_SIGNING_KEY) {
     throw new Error('ORCA_RELAY_EDGE_ADMIN_SIGNING_KEY must differ from the assignment signing key')
   }
+  const frontDoorUrls = parsed.ORCA_RELAY_EDGE_FRONT_DOOR_URLS.split(',')
+    .map((url) => url.trim())
+    .filter((url) => url.length > 0)
+    .map((url) => canonicalOrigin(url, 'ORCA_RELAY_EDGE_FRONT_DOOR_URLS'))
+  if (frontDoorUrls.some((url) => url === cellUrl || url === publicUrl)) {
+    throw new Error('ORCA_RELAY_EDGE_FRONT_DOOR_URLS must differ from the edge and the director')
+  }
   return {
     cellUrl,
+    ...(frontDoorUrls.length === 0 ? {} : { frontDoorUrls: new Set(frontDoorUrls) }),
     adminSigningKey: new TextEncoder().encode(adminKey),
     rolloutPercent: parsed.ORCA_RELAY_EDGE_ROLLOUT_PERCENT,
     allowHosts: hostIdList(parsed.ORCA_RELAY_EDGE_ALLOW_HOSTS, 'ORCA_RELAY_EDGE_ALLOW_HOSTS'),

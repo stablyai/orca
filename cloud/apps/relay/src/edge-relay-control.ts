@@ -37,7 +37,15 @@ export type EdgeControlFlags = {
   // excluded too. Default false: an unknown country joins, so a gap in the database can let a
   // host of an excluded country in; true keeps those out at the cost of every unknown host.
   regionExcludeUnknownCountry?: Partial<Record<RelayRegion, boolean>>
+  // A host on the edge whose ask comes from one of `countries`, or whose id is in `hosts`, is
+  // answered with `url` (a front door in ORCA_RELAY_EDGE_FRONT_DOOR_URLS) instead of the edge's
+  // own URL. Sticky: a host switches only on a reconnect ask or a move onto the edge, at a newer
+  // epoch (edge-relay.ts). A region's country exclusion wins: an excluded host is never answered
+  // it. Absent: no host is newly mapped, and mapped hosts return to the edge URL on reconnect.
+  frontDoor?: EdgeFrontDoorFlag
 }
+
+export type EdgeFrontDoorFlag = { url: string; countries?: string[]; hosts?: string[] }
 
 export const EDGE_CONTROL_DEFAULTS: EdgeControlFlags = { mode: 'on' }
 export const EDGE_CONTROL_OBJECT_NAME = 'director/edge.json'
@@ -55,7 +63,16 @@ const EdgeControlFlagsSchema = z.object({
     // Upper-cased first, so a lower-case code is not a typo that voids the whole file.
     .partialRecord(regionKey, z.array(z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/)).max(250))
     .optional(),
-  regionExcludeUnknownCountry: z.partialRecord(regionKey, z.boolean()).optional()
+  regionExcludeUnknownCountry: z.partialRecord(regionKey, z.boolean()).optional(),
+  frontDoor: z
+    .object({
+      // A bare https origin; that it is an allowed front door is checked against the boot list.
+      url: z.string().refine((url) => URL.canParse(url) && new URL(url).protocol === 'https:' && new URL(url).origin === url),
+      countries: z.array(z.string().trim().toUpperCase().regex(/^[A-Z]{2}$/)).max(250).optional(),
+      hosts: z.array(z.string().regex(/^[A-Za-z0-9_-]{16}$/)).max(1_000).optional()
+    })
+    .strict()
+    .optional()
 })
 const KNOWN_FLAG_KEYS = new Set(Object.keys(EdgeControlFlagsSchema.shape))
 const EdgeControlObjectSchema = z.object({
@@ -88,7 +105,8 @@ export const parseEdgeControl: ControlFlagParse<EdgeControlFlags> = (body) => {
     leaveCeilingPermille,
     regionRolloutPermille,
     regionExcludeCountries,
-    regionExcludeUnknownCountry
+    regionExcludeUnknownCountry,
+    frontDoor
   } = parsed.data.flags
   return {
     flags: {
@@ -97,7 +115,8 @@ export const parseEdgeControl: ControlFlagParse<EdgeControlFlags> = (body) => {
       ...(leaveCeilingPermille === undefined ? {} : { leaveCeilingPermille }),
       ...(regionRolloutPermille === undefined ? {} : { regionRolloutPermille }),
       ...(regionExcludeCountries === undefined ? {} : { regionExcludeCountries }),
-      ...(regionExcludeUnknownCountry === undefined ? {} : { regionExcludeUnknownCountry })
+      ...(regionExcludeUnknownCountry === undefined ? {} : { regionExcludeUnknownCountry }),
+      ...(frontDoor === undefined ? {} : { frontDoor })
     },
     ignoredKeys
   }
@@ -186,4 +205,21 @@ export function edgeCountryExcluded(flags: EdgeControlFlags, region: RelayRegion
     return flags.regionExcludeUnknownCountry?.[region] === true
   }
   return flags.regionExcludeCountries?.[region]?.includes(country) === true
+}
+
+// The front door a host's ask maps to, or undefined for the edge's own URL. `frontDoorUrls`: the
+// boot allowlist (a flag naming any other URL maps nobody). `country` null: unknown, which only a
+// host listed by id can be mapped with.
+export function edgeFrontDoorFor(
+  flags: EdgeControlFlags,
+  frontDoorUrls: ReadonlySet<string> | undefined,
+  relayHostId: string,
+  region: RelayRegion,
+  country: string | null
+): string | undefined {
+  const door = flags.frontDoor
+  if (door === undefined || frontDoorUrls?.has(door.url) !== true) return undefined
+  if (edgeCountryExcluded(flags, region, country)) return undefined
+  if (door.hosts?.includes(relayHostId) === true) return door.url
+  return country !== null && door.countries?.includes(country) === true ? door.url : undefined
 }

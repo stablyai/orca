@@ -73,8 +73,10 @@ export class EdgeAdminUnavailableError extends Error {
 }
 
 // Objects never move, so the first push decides where a host's object lives.
-export function edgeLocationHint(region: RelayRegion | undefined): EdgeLocationHint {
-  return region === 'asia-east2' ? 'apac' : 'enam'
+// A host answered through a front door (its clients are where the front door serves) is placed in
+// apac whatever region it asked for. Only an object's first placement reads it.
+export function edgeLocationHint(region: RelayRegion | undefined, viaFrontDoor = false): EdgeLocationHint {
+  return region === 'asia-east2' || viaFrontDoor ? 'apac' : 'enam'
 }
 
 export function createEdgeAdmin(options: {
