@@ -4,7 +4,7 @@ import {
   statRuntimeReadTarget,
   type RuntimeFileSnapshot
 } from '@/runtime/files/reads/runtime-file-range-client'
-import type { FileContent } from '../../editor-panel-content-types'
+import type { FileContent } from '../../loading/editor-panel-content-types'
 
 import { CSV_PAGED_PREVIEW_BYTES } from '../csv-file-limits'
 

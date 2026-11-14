@@ -10,7 +10,7 @@ import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-a
 import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
 import type { AppState } from '../../store/types'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
-import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/sort-order-update'
+import type { WorktreeSortOrderUpdate } from '../../../../shared/worktree/metadata/sort-order-update'
 import {
   hasHostRowsForSortOrders,
   patchWorktreeSortOrderBatch

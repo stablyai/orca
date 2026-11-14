@@ -13,7 +13,10 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { finishAcceptedWorktreeRemoval } from '../../../workspaces/removal/worktree-background-removal'
+import {
+  finishAcceptedWorktreeRemoval,
+  waitForWorktreeRemovalAcceptance
+} from '../../../workspaces/removal/worktree-background-removal'
 import { preservedBranchCleanupScopeKey } from '../../../../shared/git/branches/preserved-branch-cleanup'
 import {
   getRuntimeWorktreeRemovalOptionsKey,
@@ -38,6 +41,7 @@ import {
   isWslMoveSourceHost
 } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { worktreeHostIdentity } from '../../../persistence/worktree-meta-host-identity'
+import { archiveMarkStep } from '../archive/workspace-archive-checkout'
 
 export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorkspaceMetadata {
   abstract removeWorktreeMetadataAndHistory(
@@ -91,6 +95,7 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorksp
     // Why: a retry or a second client asking while Git still deletes joins that removal.
     const pending = this.joinPendingWorktreeRemoval(removalTarget.id, options)
     if (pending) {
+      await waitForWorktreeRemovalAcceptance(removalTarget.id, cleanupHostId)
       return options.waitForBackgroundRemoval ? await pending : { removing: true }
     }
     // Identity read now: the purge drops the row before listeners hear `removed`.
@@ -105,13 +110,7 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorksp
       worktreeId: removalTarget.id,
       hostId: cleanupHostId
     })
-    const optionsKey = getRuntimeWorktreeRemovalOptionsKey({
-      force,
-      runHooks,
-      allowUnverifiedPtyStop,
-      allowFailedArchiveHook,
-      deleteBranch: options.deleteBranch
-    })
+    const optionsKey = getRuntimeWorktreeRemovalOptionsKey(options)
     const inFlightRemoval = this.removeManagedWorktreeInFlight.get(
       cleanupScopeKey,
       removalTarget.id,
@@ -267,6 +266,7 @@ export abstract class OrcaRuntimeWithRemoveManagedWorktree extends RuntimeWorksp
             this.stopPtysForDestructiveWorktreeRemoval(removalTarget.id, {
               allowUnverifiedStop: allowUnverifiedPtyStop
             }),
+          beforeCheckoutDelete: archiveMarkStep(options, store, removalTarget.id, removalHostId!),
           closeWatchers: (path) => this.closeFileWatchersForRemoval(path),
           preserveBranchHead: (result, fallbackHead) =>
             this.preservedBranchCleanup.preserveHead(result, fallbackHead),

@@ -1,16 +1,15 @@
-import { latestNativeChatUsageLimitCut } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
 import {
   structuredSessionRecoveryOptions,
   type RecoveryContextCache
 } from '../../../runtime/agent-session/lifecycle/structured-session-recovery-options'
 import { withoutInheritedClaudeConfigDir } from '../../../claude/structured/launch/claude-config-dir-pin'
-import type {
-  StructuredAgentSessionHostDeps,
-  StructuredAgentSessionHostSession
-} from '../host/structured-agent-session-host-types'
+import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
+import type { AgentSessionJournalReads } from '../../agent-session-journal/journal-reads'
 
 type RecoverySession = {
-  journal: Pick<StructuredAgentSessionHostSession['journal'], 'statusRead' | 'cursor'>
+  journal: {
+    reads: Pick<AgentSessionJournalReads, 'cursor' | 'usageLimitCut'>
+  }
 }
 type RecoveryDeps = Pick<
   StructuredAgentSessionHostDeps,
@@ -20,13 +19,14 @@ type RecoveryDeps = Pick<
 }
 const contexts = new WeakMap<RecoverySession, RecoveryContextCache>()
 
-function recoveryIdentity(session: RecoverySession, deps: RecoveryDeps, sessionId: string) {
-  const snapshot = session.journal.statusRead()
-  const cut = latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions)
+async function recoveryIdentity(session: RecoverySession, deps: RecoveryDeps, sessionId: string) {
+  // Before the rows: a write between them moves the cursor, so a stale key never matches.
+  const cursor = await session.journal.reads.cursor()
+  const cut = await session.journal.reads.usageLimitCut()
   const record = deps.store.getRecord(sessionId)
   return cut && record
     ? JSON.stringify([
-        session.journal.cursor(),
+        cursor,
         cut.turnItemId,
         record.provider,
         record.providerHandleChain,
@@ -45,7 +45,7 @@ export async function readStructuredSessionRecovery(
 ) {
   try {
     const deps = context.deps
-    const key = recoveryIdentity(session, deps, sessionId)
+    const key = await recoveryIdentity(session, deps, sessionId)
     if (!key) {
       contexts.delete(session)
       return { canSwitchAccount: false }
@@ -71,7 +71,7 @@ export async function readStructuredSessionRecovery(
       resolveWorkspacePath: deps.resolveWorkspacePath
     })
     const current = await context.conversation(sessionId)
-    return current === session && key === recoveryIdentity(session, deps, sessionId)
+    return current === session && key === (await recoveryIdentity(session, deps, sessionId))
       ? result
       : { canSwitchAccount: false }
   } catch (error: unknown) {

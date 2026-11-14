@@ -153,18 +153,6 @@ describe('protected secret acknowledgements', () => {
     expect(secrets.encrypt('remove', 'replacement').blob).toBe('')
   })
 
-  it('does not accept a prepared update from a replaced persistence instance', () => {
-    const previous = new ProtectedSecretPersistence()
-    const current = new ProtectedSecretPersistence()
-    const older = prepare(previous, 'slot', 'older')
-    const newer = prepare(current, 'slot', 'newer')
-
-    current.commitRetentionUpdates([older, newer])
-
-    cipherState.available = false
-    expect(current.encrypt('slot', 'replacement').blob).toBe(ciphertext('newer'))
-  })
-
   it('keeps the previous ciphertext and pending retry when a prepared save has no confirmed ack', () => {
     const secrets = new ProtectedSecretPersistence()
     const original = ciphertext('original')

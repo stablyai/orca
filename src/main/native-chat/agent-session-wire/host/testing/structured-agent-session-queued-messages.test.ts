@@ -11,7 +11,7 @@ import {
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import { createStructuredSessionObservationClock } from './structured-agent-session-observation-clock.test-fixture'
 
 let rig: QueuedMessageTestRig
@@ -60,7 +60,7 @@ it('a steer send waiting on approval joins the running turn when approval clears
   expect(await rig.handoff(steer.id)).toBeUndefined()
   const itemId = agentJournalItemKey(identity)
   const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
-  const prompt = journal.item(itemId)!
+  const prompt = (await journal.reads.item(itemId))!
   const fields = { itemId, expectedRevision: prompt.revision, optionId: 'allow' }
   expect(
     await host.respondToPrompt(CALLER, {

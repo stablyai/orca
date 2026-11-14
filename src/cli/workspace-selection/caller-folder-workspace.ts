@@ -7,8 +7,8 @@ import {
   parseWorkspaceKey,
   type WorkspaceKey
 } from '../../shared/workspace-scope'
-import { getOptionalStringFlag } from '../flags'
-import { RuntimeClientError } from '../runtime/types'
+import { getOptionalStringFlag } from '../arguments/flags'
+import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'
 import { getOptionalWorktreeSelector } from './workspace-selector'
 

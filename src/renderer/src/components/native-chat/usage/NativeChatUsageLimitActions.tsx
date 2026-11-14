@@ -25,7 +25,7 @@ import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/sessio
 import { NativeChatOrcaStopContext } from '@/components/native-chat/messages/notices/native-chat-orca-stop-context'
 import type { NativeChatOrcaStopView } from '@/components/native-chat/messages/notices/native-chat-orca-stop-context'
 import { resolveNativeChatSessionContext } from '@/components/native-chat/pane/routing/native-chat-session-context'
-import type { AgentSessionOptionsResult } from '../../../../../shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../../../../shared/agent-session/options/protocol/agent-session-options-result'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'
 import type { NativeChatFileLinkContext } from '@/components/native-chat/links/actions/native-chat-file-link-context'

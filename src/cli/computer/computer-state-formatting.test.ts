@@ -16,7 +16,7 @@ vi.mock('../runtime/client', () => {
 })
 
 import { main } from '../index'
-import { okFixture, queueFixtures } from '../test-fixtures'
+import { okFixture, queueFixtures } from '../runtime/fixtures/runtime-rpc-fixtures'
 
 describe('orca computer get-app-state formatting', () => {
   let screenshotDirectory: string

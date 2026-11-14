@@ -1,7 +1,7 @@
-import type { CommandHandler } from '../dispatch'
-import { getOptionalStringFlag } from '../flags'
-import { printResult } from '../command-result-output'
-import { RuntimeClientError } from '../runtime/types'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { getOptionalStringFlag } from '../arguments/flags'
+import { printResult } from '../output/command-result-output'
+import { RuntimeClientError } from '../runtime/connection/types'
 import {
   PAIRING_CREATE_OFFER_METHOD,
   type PairingCreateOfferParams,

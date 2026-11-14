@@ -1,4 +1,4 @@
-import type { MobileNativeChatSessionOptionsController } from './use-mobile-native-chat-session-options'
+import type { MobileNativeChatSessionOptionsController } from './session-options/use-mobile-native-chat-session-options'
 
 export type MobileNativeChatPickerPresentation = { page: string | null; refocus: boolean }
 

@@ -1,3 +1,4 @@
+import { useProjectGroupSetup } from './use-project-group-setup'
 import { useFolderSetupSupport } from '@/lib/workspace/creation/setup/folder-setup-support'
 import type { DerivedComposerStateInput } from './composer-target-input-contracts'
 
@@ -9,9 +10,9 @@ import {
 import {
   parseGitHubIssueOrPRNumber,
   parseGitHubIssueOrPRLink
-} from '../../../../shared/github/links'
+} from '../../../../shared/github/repositories/links'
 import { normalizeGitHubLinkQuery } from '../../../../shared/new-workspace/github-links'
-import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
+import { githubRepoIdentityKey } from '../../../../shared/github/repositories/repository-identity-key'
 import { getWorkspaceSourceProvider } from '../../../../shared/new-workspace/workspace-source'
 import {
   canUseIssueCommandForLinkedItemProvider,
@@ -28,6 +29,8 @@ const EMPTY_SPARSE_PRESETS: SparsePreset[] = []
 
 export function useDerivedComposerState(input: DerivedComposerStateInput) {
   const {
+    selectedProjectGroup,
+    isProjectGroupTarget,
     agentPrompt,
     checkedHooksContextKey,
     enableIssueAutomation,
@@ -53,6 +56,8 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
     worktreesByRepo,
     yamlHooks
   } = input
+
+  const groupSetup = useProjectGroupSetup(isProjectGroupTarget ? selectedProjectGroup : null)
 
   const sparsePresetsForRepo = sparsePresetsByRepo[repoId]
 
@@ -238,6 +243,7 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
   ])
 
   return {
+    groupSetup,
     sparsePresetsForRepo,
     sparsePresets,
     normalizedSparseDirectories,

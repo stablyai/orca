@@ -1,4 +1,4 @@
-export type { AgentSessionOptionResult } from './options/agent-session-options-result'
+export type { AgentSessionOptionResult } from './options/protocol/agent-session-options-result'
 import type { AgentSessionUnavailable } from './agent-session-availability'
 import type { AgentSessionFrameFields } from './agent-session-frame-fields'
 import type { AgentSessionUsageLimitContinue } from './agent-session-usage-limit-continue-wire'
@@ -7,7 +7,7 @@ import type {
   AgentSessionBackgroundTask,
   AgentSessionBackgroundTaskState
 } from './agent-session-background-task-wire'
-import type { AgentSessionRewindReason } from './lifecycle/agent-session-rewind'
+import type { AgentSessionRewindReason } from './lifecycle/rewind/agent-session-rewind-reasons'
 import type { AgentSessionWireRefusal } from './failures/agent-session-wire-refusals'
 import type { AgentChildWorkView } from '../agent-status/child-work/agent-status-child-work-view'
 import type {

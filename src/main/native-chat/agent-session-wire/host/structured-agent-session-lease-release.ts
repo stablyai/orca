@@ -1,3 +1,6 @@
+import type { StructuredAgentSessionChildExit } from '../termination/structured-agent-session-child-exit-record'
+import type { StructuredAgentSessionChildExitContext } from '../termination/structured-agent-session-child-exit'
+import { evictStructuredAgentSession } from '../termination/structured-agent-session-eviction'
 // Release only this host’s child with observed/proven exit; read-only or TUI ownership
 // proves no exit and must never admit a second writer.
 
@@ -11,7 +14,7 @@ import type { StructuredAgentSessionEndedEvent } from '../providers/structured-a
 
 export type StructuredAgentSessionLeaseStore = Pick<
   AgentSessionRecordStore,
-  'getRecord' | 'transitionHandoff'
+  'getRecord' | 'updateRecord'
 >
 
 /** Release the observed child; throw agent_session_checkpoint_stale if ownership changed. */
@@ -55,25 +58,50 @@ export async function upgradeStoredStructuredAgentSessionOwnerExitEvidence(
     record.lease.deathEvidence?.kind === 'kill-delivered' &&
     record.lease.deathEvidence.ownerFence === event.fence
   ) {
-    await store.transitionHandoff(event.sessionId, (current) => {
-      if (
-        current.lease.claimStatus !== 'released' ||
-        current.lease.deathEvidence?.kind !== 'kill-delivered' ||
-        current.lease.deathEvidence.ownerFence !== event.fence
-      ) {
-        return current
-      }
-      return {
-        ...current,
-        lease: {
-          ...current.lease,
-          deathEvidence: {
-            ...current.lease.deathEvidence,
-            kind: 'exit-observed',
-            observedAt: event.observedAt ?? now
-          }
-        }
-      }
+    await store.updateRecord(event.sessionId, {
+      kind: 'exit-observed',
+      fence: event.fence,
+      observedAt: event.observedAt ?? now
     })
   }
+}
+
+/** Release proven ownership and its sink before publishing the child as gone. */
+export async function releaseExitedStructuredAgentSessionOwner(
+  context: Pick<StructuredAgentSessionChildExitContext, 'store' | 'now' | 'route' | 'logger'>,
+  sessionId: string,
+  fence: number,
+  exit: StructuredAgentSessionChildExit,
+  observedAt: number
+): Promise<boolean> {
+  let released = false
+  try {
+    await releaseStoredStructuredAgentSessionOwnerAfterExit({
+      store: context.store,
+      sessionId,
+      expectedFence: fence,
+      now: context.now(),
+      exitObservedAt: observedAt,
+      exitReason: exit.reason,
+      ...(exit.deathEvidenceKind ? { deathEvidenceKind: exit.deathEvidenceKind } : {})
+    })
+    released = true
+  } catch (error) {
+    context.logger.warn('settling a provider exit did not finish', {
+      scope: 'exit-owner-release',
+      sessionId,
+      error
+    })
+  }
+  if (context.route) {
+    const { runtimeState, acknowledgeRelease } = context.route
+    await evictStructuredAgentSession({
+      sessionId,
+      eventSink: runtimeState.eventSinkFor(sessionId),
+      logger: context.logger,
+      discardSink: () => runtimeState.discardEventSink(sessionId),
+      acknowledgeRelease: () => acknowledgeRelease(sessionId)
+    })
+  }
+  return released
 }

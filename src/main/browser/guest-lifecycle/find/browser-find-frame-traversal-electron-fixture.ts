@@ -1,5 +1,5 @@
 import { app, BrowserWindow } from 'electron'
-import { applyBackgroundActivationPolicy } from '../../../window/foreground-activation-policy'
+import { applyBackgroundActivationPolicy } from '../../../window/activation/foreground-activation-policy'
 
 if (process.env.ORCA_BACKGROUND_LAUNCH !== '1') {
   throw new Error('Find traversal fixture requires background launch')

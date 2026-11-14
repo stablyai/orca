@@ -2,8 +2,8 @@ import type {
   AgentSessionModelOption,
   AgentSessionOptionChoice
 } from '../../../../shared/agent-session/agent-session-wire'
-import { CLAUDE_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
-import type { CatalogModel } from '../../../../shared/agent-session/options/agent-session-option-catalog-types'
+import { CLAUDE_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-claude-codex'
+import type { CatalogModel } from '../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
 import { claudeListedModelLabel } from '../../../../shared/claude-model-list-probe'
 
 export type ListedModel = AgentSessionModelOption & { resolvedModel: string | null }
@@ -65,8 +65,8 @@ function listedRow(row: Record<string, unknown>, id: string, label: string): Lis
 }
 
 // Rows are keyed by the versioned model each entry runs, so a pick saves the
-// same id the CLI reports after a turn. An alias that no row is keyed by stays
-// selectable after them; the `default` entry only marks the default row.
+// same id the CLI reports after a turn. An alias that no row is keyed by follows them, under
+// the CLI's own name; the `default` entry only marks the default row.
 export function listedModels(value: unknown): ListedModel[] {
   const response = record(value)
   const rows = (Array.isArray(response?.models) ? response.models : [])
@@ -95,7 +95,7 @@ export function listedModels(value: unknown): ListedModel[] {
     if (value === 'default' || [...primary, ...aliases].some((model) => model.id === value)) {
       continue
     }
-    aliases.push(listedRow(row, value, `${text(row.displayName) ?? value} alias`))
+    aliases.push(listedRow(row, value, text(row.displayName) ?? value))
   }
   return [
     ...primary.map((model) =>

@@ -1,10 +1,10 @@
-import { structuredOptionPickIsPending } from '../../../../../../../shared/agent-session/options/structured-agent-session-option-pick-book'
+import { structuredOptionPickIsPending } from '../../../../../../../shared/agent-session/options/selection/structured-agent-session-option-pick-book'
 import { useCallback } from 'react'
 import type { StructuredAgentSessionSendControl } from '../../../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import {
   structuredAgentSessionMessageSelection,
   structuredAgentSessionSendSelection
-} from '../../../../../../../shared/agent-session/options/structured-agent-session-option-view'
+} from '../../../../../../../shared/agent-session/options/view/structured-agent-session-option-view'
 import { getStructuredAgentSessionLaunchSelection } from '@/lib/agent-session/launch/structured-agent-session-launch-options'
 import type { StructuredAgentSessionLaunchView } from '../../../host-access/use-native-chat-provisional-launch'
 import type { useStructuredAgentSessionOptionState } from '../../options/structured/use-structured-agent-session-option-state'

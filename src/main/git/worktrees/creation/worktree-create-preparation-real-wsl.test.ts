@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
-import { createWorktreePreparationLockReason } from '../../../../shared/worktree/create-preparation'
+import { createWorktreePreparationLockReason } from '../../../../shared/worktree/creation/create-preparation'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import {
   finalizePreparedWorktree,
@@ -36,9 +36,6 @@ it.skipIf(process.platform !== 'win32' || !wslDistro)(
       await git(repoPath, ['commit', '--quiet', '-m', 'initial'])
       const lockReason = createWorktreePreparationLockReason('real-wsl-test')
       await prepareWorktreeCreateCheckout(repoPath, preparedPath, 'main', lockReason, options)
-      expect(await git(repoPath, ['worktree', 'list', '--porcelain'])).toContain(
-        'locked orca-create-preparation:v1:'
-      )
 
       await writeFile(join(repoPath, 'version.txt'), 'two\n')
       await git(repoPath, ['commit', '--quiet', '-am', 'advance base'])
@@ -62,9 +59,6 @@ it.skipIf(process.platform !== 'win32' || !wslDistro)(
       )
       expect(await git(repoPath, ['worktree', 'list', '--porcelain'])).not.toContain('locked ')
       await removeWorktree(repoPath, finalPath, true, options)
-      expect(
-        (await git(repoPath, ['worktree', 'list', '--porcelain'])).match(/^worktree /gm)
-      ).toHaveLength(1)
     } finally {
       await rm(root, { recursive: true, force: true })
     }

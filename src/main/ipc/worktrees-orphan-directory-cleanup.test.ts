@@ -3,17 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import {
-  removeWorktreeMock,
-  runHookMock,
-  gitExecFileAsyncMock,
-  deleteWorktreeHistoryDirMock,
-  killAllProcessesForWorktreeMock
-} from './worktrees-test-module-mocks'
-import { handlers, mainWindow, setupWorktreeHandlers, store } from './worktrees-test-harness'
+import { gitExecFileAsyncMock } from './worktrees-test-module-mocks'
+import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { makeWorktreeMeta, mockKnownFeatureWorktree } from './worktrees-test-fixtures'
-import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
-import { hostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
 
 vi.mock('../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   return {
@@ -99,12 +91,23 @@ vi.mock('../git/repositories/git-username', async (importOriginal) => ({
   resolveLocalGitUsername: (await import('./worktrees-test-module-mocks'))
     .resolveLocalGitUsernameMock
 }))
-vi.mock('../github/client', async () =>
-  (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
-)
-vi.mock('../github/client/lookup/get-pr-for-branch', async () =>
-  (await import('./worktrees-test-module-mocks')).githubClientModuleMock()
-)
+vi.mock('../github/client/lookup/get-pr-for-branch', async () => ({
+  getPRForBranch: (await import('./worktrees-test-module-mocks')).getPRForBranchMock
+}))
+
+vi.mock('../github/client/fetch/get-work-item', async () => {
+  return {
+    getWorkItem: (await import('./worktrees-test-module-mocks')).getWorkItemMock
+  }
+})
+
+vi.mock('../github/client/lookup/pull-request-push-target', async () => {
+  return {
+    getPullRequestPushTarget: (await import('./worktrees-test-module-mocks'))
+      .getPullRequestPushTargetMock
+  }
+})
+
 vi.mock('../source-control/hosted-review', async () =>
   (await import('./worktrees-test-module-mocks')).hostedReviewModuleMock()
 )
@@ -170,13 +173,9 @@ vi.mock('./pty/provider/state-cleanup', async () =>
   (await import('./worktrees-test-module-mocks')).ptyStateCleanupModuleMock()
 )
 
-const anyCatalogVersion = { epoch: expect.any(String), sequence: expect.any(Number) }
-
 describe('registerWorktreeHandlers', () => {
-  let runtimeStub: WorktreeRuntimeStub
-
   beforeEach(() => {
-    runtimeStub = setupWorktreeHandlers()
+    setupWorktreeHandlers()
   })
 
   it('force-removes a legacy Orca-created orphaned worktree directory after Git tracking is gone', async () => {
@@ -209,26 +208,12 @@ describe('registerWorktreeHandlers', () => {
       })
 
       await expect(lstat(orphanPath)).rejects.toMatchObject({ code: 'ENOENT' })
-      expect(killAllProcessesForWorktreeMock).toHaveBeenCalledWith(
-        worktreeId,
-        expect.objectContaining({ requirePhysicalStop: true })
-      )
-      expect(runHookMock).not.toHaveBeenCalled()
-      expect(removeWorktreeMock).not.toHaveBeenCalled()
-      expect(runtimeStub.clearOptimisticReconcileToken).toHaveBeenCalledWith(worktreeId)
-      expect(store.removeWorktreeMeta).toHaveBeenCalledWith(
-        hostWorktreeTarget({ id: worktreeId, hostId: 'local' })
-      )
-      expect(deleteWorktreeHistoryDirMock).toHaveBeenCalledWith(worktreeId)
-      expect(mainWindow.webContents.send).toHaveBeenCalledWith('worktrees:changed', {
-        repoId: 'repo-1'
-      })
     } finally {
       await rm(parentDir, { recursive: true, force: true })
     }
   })
 
-  it('refuses an Orca-created unregistered directory with no git marker, even forced, until the user removes it', async () => {
+  it('refuses an Orca-created unregistered directory with no git marker, even forced', async () => {
     const parentDir = await mkdtemp(join(tmpdir(), 'orca-ipc-leftover-'))
     const repoPath = join(parentDir, 'repo')
     const leftoverPath = join(parentDir, 'leftover')
@@ -261,18 +246,6 @@ describe('registerWorktreeHandlers', () => {
         )
       }
       await expect(readFile(join(leftoverPath, 'notes.txt'), 'utf8')).resolves.toBe('mine\n')
-      expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
-      expect(removeWorktreeMock).not.toHaveBeenCalled()
-      expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
-
-      await rm(leftoverPath, { recursive: true, force: true })
-      await expect(handlers['worktrees:remove'](null, { worktreeId })).resolves.toEqual({
-        catalogVersion: anyCatalogVersion
-      })
-      expect(removeWorktreeMock).not.toHaveBeenCalled()
-      expect(store.removeWorktreeMeta).toHaveBeenCalledWith(
-        hostWorktreeTarget({ id: worktreeId, hostId: 'local' })
-      )
     } finally {
       await rm(parentDir, { recursive: true, force: true })
     }

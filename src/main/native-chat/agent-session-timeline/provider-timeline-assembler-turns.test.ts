@@ -84,7 +84,7 @@ describe('provider timeline turns', () => {
     expect(await rig.turn('turn-2')).toMatchObject({ state: 'running', startedAt: 2_000 })
   })
 
-  it('drops a repeated open and an end for a turn it never opened; a repeated end writes nothing', async () => {
+  it('drops a repeated open; an end for a turn it never opened or a repeated end writes nothing', async () => {
     const rig = await openProviderTimelineRig()
     rig.assembler.apply({ type: 'turn.open', turn: 'turn-1', at: 1_000 })
     expect(rig.assembler.apply({ type: 'turn.open', turn: 'turn-1', at: 1_100 }).dropped).toBe(
@@ -93,8 +93,7 @@ describe('provider timeline turns', () => {
     expect(rig.assembler.apply({ type: 'turn.open', at: 1_200 }).dropped).toBe('turn-duplicate')
     expect(
       rig.assembler.apply({ type: 'turn.end', turn: 'turn-9', at: 1_500, state: 'completed' })
-        .dropped
-    ).toBe('turn-unknown')
+    ).toEqual({ admission: { accepted: true } })
     rig.assembler.apply({ type: 'turn.end', at: 2_000, state: 'completed', outcome: 'success' })
     expect(
       rig.assembler.apply({ type: 'turn.end', turn: 'turn-1', at: 3_000, state: 'interrupted' })
@@ -111,6 +110,7 @@ describe('provider timeline turns', () => {
       startedAt: 1_000,
       completedAt: 2_000
     })
+    expect(await rig.turn('turn-9')).toBeUndefined()
   })
 
   it('writes nothing for an open admitted before bind whose row the journal already holds settled', async () => {

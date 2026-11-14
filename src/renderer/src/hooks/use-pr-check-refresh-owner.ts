@@ -1,13 +1,16 @@
 import { useCallback, useState } from 'react'
-import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
-import { getTaskSourceCacheScope } from '../../../shared/work-items/task-source-context'
+import type { GitHubWorkItem } from '../../../shared/github/work-items/work-item-types'
+import {
+  type TaskSourceContext,
+  getTaskSourceCacheScope
+} from '../../../shared/work-items/task-source-context'
+
 import {
   acceptPRCheckObservation,
   completePRCheckOwnerScope,
   projectPRCheckOwner,
   samePRCheckObservation
-} from '../../../shared/github/complete-pr-check-owner'
+} from '../../../shared/github/checks/complete-pr-check-owner'
 
 export function usePRCheckRefreshOwner(item: GitHubWorkItem, source?: TaskSourceContext | null) {
   const sourceKey = source ? getTaskSourceCacheScope(source) : 'local'

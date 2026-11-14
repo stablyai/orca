@@ -1,5 +1,5 @@
-import type { AgentSessionOptionResult } from '../../../../shared/agent-session/options/agent-session-options-result'
-import { structuredAgentSessionOptionSnapshot } from '../../../../shared/agent-session/options/structured-agent-session-option-snapshot'
+import type { AgentSessionOptionResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
+import { structuredAgentSessionOptionSnapshot } from '../../../../shared/agent-session/options/view/structured-agent-session-option-snapshot'
 import { useCallback, type RefObject } from 'react'
 import type { AgentType } from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
@@ -14,7 +14,7 @@ import {
   beginStructuredOptionPick,
   isLatestStructuredOptionPick,
   settleStructuredOptionPick
-} from '../../../../shared/agent-session/options/structured-agent-session-option-pick-book'
+} from '../../../../shared/agent-session/options/selection/structured-agent-session-option-pick-book'
 import type { StructuredAgentSessionMutate } from './session/structured/writes/use-structured-agent-session-mutate'
 import type { useStructuredAgentSessionOptionState } from './session/options/structured/use-structured-agent-session-option-state'
 import { enqueueSessionOptionSettingsWrite } from './session/options/native-chat-session-option-settings-write'

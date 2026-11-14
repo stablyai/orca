@@ -1,21 +1,21 @@
 import { asyncQuestionSourceScope } from '../../../../src/shared/native-chat/input/native-chat-ask'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
-import { useMobileNativeChatDrafts } from './composer/use-mobile-native-chat-drafts'
-import { useMobileNativeChatWorkspaceCatalog } from './composer/use-mobile-native-chat-workspace-catalog'
-import { useMobileNativeChatMessageSend } from './transcript/use-mobile-native-chat-message-send'
-import { useMobileNativeChatSessionOptionController } from './input/use-mobile-native-chat-session-option-controller'
-import { useMobileNativeChatSessionLane } from './use-mobile-native-chat-session-lane'
-import { useMobileStructuredNativeChatSendBridge } from './composer/use-mobile-structured-native-chat-send-bridge'
-import { useMobileNativeChatTerminalTurn } from './transcript/use-mobile-native-chat-terminal-turn'
+import { useMobileNativeChatDrafts } from './composer/drafts/use-mobile-native-chat-drafts'
+import { useMobileNativeChatWorkspaceCatalog } from './composer/attachments/use-mobile-native-chat-workspace-catalog'
+import { useMobileNativeChatMessageSend } from './transcript/sending/use-mobile-native-chat-message-send'
+import { useMobileNativeChatSessionOptionController } from './input/session-options/use-mobile-native-chat-session-option-controller'
+import { useMobileNativeChatSessionLane } from './conversation/use-mobile-native-chat-session-lane'
+import { useMobileStructuredNativeChatSendBridge } from './composer/delivery/use-mobile-structured-native-chat-send-bridge'
+import { useMobileNativeChatTerminalTurn } from './transcript/ingestion/use-mobile-native-chat-terminal-turn'
 import type {
   MobileNativeChatController,
   MobileNativeChatControllerArgs
 } from './mobile-native-chat-controller-contract'
-import { useMobileBridgeChatPromptWrites } from './input/use-mobile-bridge-chat-prompt-writes'
-import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-active-resolution'
-import { useMobileNativeChatPromptController } from './input/use-mobile-native-chat-prompt-controller'
-import { nativeChatPendingSendPlacement } from '../../../../src/shared/native-chat/transcript/native-chat-pending-sends'
-import { mobileNativeChatScopeKey } from './mobile-native-chat-scope-key'
+import { useMobileBridgeChatPromptWrites } from './input/prompts/use-mobile-bridge-chat-prompt-writes'
+import { useMobileNativeChatActiveResolution } from './conversation/use-mobile-native-chat-active-resolution'
+import { useMobileNativeChatPromptController } from './input/prompts/use-mobile-native-chat-prompt-controller'
+import { nativeChatPendingSendPlacement } from '../../../../src/shared/native-chat/transcript/pending-sends/native-chat-pending-sends'
+import { mobileNativeChatScopeKey } from './conversation/mobile-native-chat-scope-key'
 import { useMobileNativeChatCiResultLines } from './preferences/use-mobile-native-chat-ci-result-lines'
 
 export function useMobileNativeChatController(

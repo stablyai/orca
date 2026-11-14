@@ -2,7 +2,7 @@ import { refuse } from '../../../shared/agent-session/failures/agent-session-wir
 import type {
   AgentSessionOptionResult,
   AgentSessionOptionsResult
-} from '../../../shared/agent-session/options/agent-session-options-result'
+} from '../../../shared/agent-session/options/protocol/agent-session-options-result'
 import { effectiveAgentSessionOptions } from '../../../shared/agent-session-default-model'
 
 import type {
@@ -90,7 +90,9 @@ export async function resetStructuredAgentSessionModel(
     listing && listing.origin !== 'unknown' ? listing.defaultModelOptions : undefined
   if (
     !record ||
-    (!configured && !baseline && (hasProviderChild || ctx.journal.submissions().length > 0))
+    (!configured &&
+      !baseline &&
+      (hasProviderChild || (await ctx.journal.reads.savedContent()) !== 'empty'))
   ) {
     return {
       ok: false,

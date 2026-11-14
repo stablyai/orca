@@ -28,8 +28,8 @@ export type StructuredAgentSessionOptionsArgs = {
 }
 
 import type { AgentSessionConversationCommand } from '../../../../../../../shared/agent-session/agent-session-conversation-command'
-import type { AgentSessionRewindSupport } from '../../../../../../../shared/agent-session/lifecycle/agent-session-rewind'
-import type { AgentSessionOptionsResult } from '../../../../../../../shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionRewindSupport } from '../../../../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
+import type { AgentSessionOptionsResult } from '../../../../../../../shared/agent-session/options/protocol/agent-session-options-result'
 
 export type StructuredSessionConversationSupport = {
   sessionId: string
@@ -45,7 +45,7 @@ export type StructuredSessionConversationSupport = {
   fence: number | null
 }
 
-import type { AgentSessionOptionCatalog } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog-types'
+import type { AgentSessionOptionCatalog } from '../../../../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
 
 export type StructuredAgentSessionOptionStateArgs = {
   agent: AgentType

@@ -1,14 +1,13 @@
 // Fill unsaved choices from execution evidence, never startup/config reports or host defaults.
 
-import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
-import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
+import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
+import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession,
   StructuredAgentSessionProviderChild
 } from '../host/structured-agent-session-host-types'
 import { structuredAgentSessionOptionOverridesRefusal } from './structured-agent-session-option-intent'
-import { recordAgentSessionRanOptions } from '../../../runtime/agent-session/records/agent-session-record-options'
 
 type RanOptionsContext = {
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'logger' | 'agents' | 'modelCatalog'>
@@ -59,9 +58,6 @@ export function noteStructuredAgentSessionRuntimeOptions(
   initial = false
 ): void {
   const previous = childRuns.get(child)
-  if (!initial || previous?.reportedModel === undefined) {
-    childRuns.set(child, { ...previous, reportedModel: reported.reportedModel ?? reported.model })
-  }
   if (
     reported.reportedPermissionMode !== undefined &&
     (!initial || previous?.permission === undefined)
@@ -154,7 +150,11 @@ export async function recordStructuredAgentSessionRanOptions(
   // A report only completes an agent's own evidence of the dispatch, never stands in for it.
   const newerModel = checkpoint && reported !== checkpoint.reported ? reported?.model : undefined
   const model = executed ? (executed.model ?? newerModel) : message?.model
-  childRuns.set(child, { ...childRuns.get(child), owed: executed && !model ? handed : undefined })
+  childRuns.set(child, {
+    ...childRuns.get(child),
+    ...(executed && model ? { reportedModel: model } : {}),
+    owed: executed && !model ? handed : undefined
+  })
   if (!model) {
     return
   }
@@ -176,13 +176,16 @@ export async function recordStructuredAgentSessionRanOptions(
     return
   }
   await store
-    .reviseSessionOptions(recordAgentSessionRanOptions, {
-      sessionId,
-      fence: child.fence,
-      model,
-      options: ran,
-      models: undefined,
-      now: context.now()
+    .updateRecord(sessionId, {
+      kind: 'ran-options',
+      args: {
+        sessionId,
+        fence: child.fence,
+        model,
+        options: ran,
+        models: undefined,
+        now: context.now()
+      }
     })
     .catch((error: unknown) =>
       logger.warn('recording the options a turn ran failed', {

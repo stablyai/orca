@@ -28,7 +28,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { type HookCheckResult, checkRuntimeHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import type { GitHubRepositoryIdentity } from '../../../../shared/github/pull-request-types'
+import type { GitHubRepositoryIdentity } from '../../../../shared/github/repositories/repository-identity'
 import {
   getRepoSetupAgentStartupPolicy,
   buildSetupAgentStartupHookSettings

@@ -8,6 +8,8 @@ export type SessionOptionSelectChoice = {
   description?: string
   /** Folded under More models; a matching search still lists it. */
   legacy?: true
+  /** Listed only by a matching search; never set on the current choice. */
+  hidden?: true
 }
 
 /** default describes catalog display, never running-agent evidence. dispatched is sent but unread and may be corrected by reports.
@@ -33,6 +35,8 @@ export type SessionOptionDescriptor = {
         type: 'select'
         currentValue?: string
         choices: SessionOptionSelectChoice[]
+        /** Presentation when no value is known; never an input selection. */
+        placeholder?: string
       }
     /** Switches require values or unset renders false against the catalog default; confirmation remains valueSource’s responsibility. */
     | {
@@ -40,14 +44,15 @@ export type SessionOptionDescriptor = {
         currentValue: boolean
       }
   valueSource: SessionOptionValueSource
-  /** Model-pill display only; currentValue remains the accepted selection. */
-  reportedModel?: string
   /** Explicit lane is required: dispatched cannot distinguish PTY from structured transports. */
   transport: NativeChatLiveOptionTransport
   settable: boolean
   disabledReason?: SessionOptionDisabledReason
   /** A reset action, separate from catalog model IDs. Absent on older hosts and PTY surfaces. */
   defaultChoice?: { selected: boolean; model?: SessionOptionSelectChoice }
+  /** Execution label for Default only; never a picker choice or send option. */
+  reportedModel?: string
+  reportedModelLabel?: string
   /** Picker-only/flip-only PTY commands need action rows rather than invented absolute control states. */
   action?: { type: 'agent-picker' | 'toggle-command' }
 }

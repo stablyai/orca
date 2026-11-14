@@ -7,7 +7,7 @@ import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-cl
 import type * as RuntimeCapabilityProof from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import type * as LaunchOptions from '@/lib/agent-session/launch/structured-agent-session-launch-options'
 import type * as HostCapability from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
-import type { SelectionOutcome } from '../../../../../../../shared/agent-session/options/structured-agent-session-selection-operations'
+import type { SelectionOutcome } from '../../../../../../../shared/agent-session/options/selection/structured-agent-session-selection-operations'
 
 type OptionsFixtureMocks = {
   call: Mock

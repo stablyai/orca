@@ -1,4 +1,4 @@
-import type { AgentSessionOptionResult } from '../../../../shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
 // @vitest-environment happy-dom
 
 import { act, renderHook, waitFor } from '@testing-library/react'
@@ -17,7 +17,7 @@ import { FAST_OPTIONS } from './session/options/structured/structured-session-op
 import {
   applyNativeChatSessionOptionSettingsMutation,
   resolveStructuredLaunchSeedOptions
-} from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
+} from '../../../../shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import type {
   NativeChatSessionOptionSettingsMutation,
   PersistedNativeChatSessionOptions

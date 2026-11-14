@@ -1,27 +1,27 @@
-import { withGitHubRepoExecution } from '../../github-repository-identity'
-import type { IssueSourcePreference } from '../../../../shared/repo-types'
-import { isGitHubWorkItemsQueryTooLarge } from '../../../../shared/github/work-items-query-bounds'
-import { parseTaskQuery, type ParsedTaskQuery } from '../../../../shared/work-items/task-query'
 import {
-  ghExecFileAsync,
-  acquire,
-  release,
+  withGitHubRepoExecution,
   ghRepoExecOptions,
   githubRepoContext,
-  type LocalGitExecOptions,
-  type OwnerRepo
-} from '../../gh-utils'
+  type LocalGitExecOptions
+} from '../../repositories/github-repository-identity'
+import type { IssueSourcePreference } from '../../../../shared/repo-types'
+import { isGitHubWorkItemsQueryTooLarge } from '../../../../shared/github/work-items/work-items-query-bounds'
+import { parseTaskQuery, type ParsedTaskQuery } from '../../../../shared/work-items/task-query'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import { acquire, release } from '../../execution/github-operation-slots'
+
+import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
+import { githubHostExecOptions } from '../../repositories/github-repository-host'
 import {
-  githubHostExecOptions,
   resolveIssueGitHubApiRepositorySource,
   type GitHubRepoExecOptions
-} from '../../github-api-repository'
+} from '../../repositories/github-api-repository'
 import {
   getRateLimit,
   noteRepositoryRateLimitSpend,
   repositoryRateLimitGuard,
   spendsSharedGitHubComQuota
-} from '../../rate-limit'
+} from '../../api/rate-limit'
 import { sameOwnerRepo } from './../github-exec-scope'
 import { buildWorkItemListRequest, resolvePrWorkItemSource } from './work-item-list-request'
 import { buildSearchQueryString, defaultOpenWorkItemQuery } from './work-item-search-query'

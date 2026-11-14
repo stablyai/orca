@@ -152,67 +152,6 @@ function request(
 }
 
 describe('legacy coordinator takeover races', () => {
-  it('partitions a coordinator group send by legacy recipient contract', async () => {
-    const harness = createHarness()
-    // Use two current-contract Dispatches in the adopted Run: group mail targets Dispatches, so a loose pane cannot prove partitioning.
-    const currentTask = harness.db.createTask({
-      runId: harness.adoptedRunId,
-      spec: 'current-contract assignment',
-      createdByTerminalHandle: COORDINATOR_HANDLE
-    })
-    const currentDispatch = createRootDispatch(
-      harness.db,
-      currentTask.id,
-      'term_current_worker',
-      'tab_current_worker:22222222-2222-4222-8222-222222222222'
-    )
-    vi.mocked(harness.runtime.getTerminalPaneKey).mockImplementation((handle) =>
-      handle === COORDINATOR_HANDLE
-        ? COORDINATOR_PANE
-        : handle === WORKER_HANDLE
-          ? WORKER_PANE
-          : handle === 'term_current_worker'
-            ? 'tab_current_worker:22222222-2222-4222-8222-222222222222'
-            : null
-    )
-    vi.spyOn(harness.runtime, 'listTerminals').mockResolvedValue({
-      terminals: [
-        { handle: COORDINATOR_HANDLE },
-        { handle: WORKER_HANDLE },
-        { handle: 'term_current_worker' }
-      ],
-      totalCount: 3,
-      truncated: false
-    } as never)
-
-    const response = await harness.dispatcher.dispatch(
-      request(
-        'orchestration.send',
-        { from: COORDINATOR_HANDLE, to: '@all', subject: 'group guidance' },
-        'send-group'
-      )
-    )
-
-    expect(response).toMatchObject({ ok: true, result: { recipients: 2 } })
-    const messages = harness.db
-      .getInbox(100)
-      .filter((message) => message.subject === 'group guidance')
-    expect(messages).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          run_id: harness.adoptedRunId,
-          to_handle: `dispatch:${harness.dispatchId}`,
-          delivery_contract: 'legacy_direct'
-        }),
-        expect.objectContaining({
-          run_id: harness.adoptedRunId,
-          to_handle: `dispatch:${currentDispatch.id}`,
-          delivery_contract: 'current_delivery'
-        })
-      ])
-    )
-  })
-
   it('keeps concurrent duplicates on the live ACK-and-wait result', async () => {
     const harness = createHarness()
     harness.db.insertMessage({

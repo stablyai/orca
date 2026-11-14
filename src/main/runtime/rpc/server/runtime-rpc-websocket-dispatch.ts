@@ -17,7 +17,7 @@ import { limitRuntimeRpcReplySize } from './runtime-rpc-reply-size-limit'
 import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc-mobile-method-allowlist'
 import { MOBILE_RPC_METHOD_ROUTES } from './runtime-rpc-mobile-method-routing'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { WorktreeRemove } from '../../../../shared/rpc-contract/worktree-params'
+import { WorktreeRemove } from '../../../../shared/rpc-contract/workspaces/worktree-params'
 
 // Stamp proven scope at transport boundary; status.get has no connection context.
 function injectDeviceScope(response: string, scope: DeviceScope): string {

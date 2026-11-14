@@ -1,4 +1,4 @@
-import type { AgentSessionOptionResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionResult } from '../../../src/shared/agent-session/options/protocol/agent-session-options-result'
 import { act } from 'react-test-renderer'
 import { describe, expect, it } from 'vitest'
 
@@ -13,12 +13,12 @@ import {
   mountOptions,
   optionsClient,
   recordingMutate
-} from './native-chat/input/use-mobile-structured-agent-options.test-fixture'
+} from './native-chat/input/session-options/use-mobile-structured-agent-options.test-fixture'
 import {
   applyNativeChatSessionOptionSettingsMutation,
   resolveStructuredLaunchSeedOptions
-} from '../../../src/shared/native-chat/input/native-chat-session-option-defaults'
-import { NativeChatSessionOptionsMutation } from '../../../src/shared/rpc-contract/client-settings-params'
+} from '../../../src/shared/native-chat/input/session-options/native-chat-session-option-defaults'
+import { NativeChatSessionOptionsMutation } from '../../../src/shared/rpc-contract/client-ui/client-settings-params'
 
 import { OPTIONS } from './mobile-structured-agent-option-test-data'
 

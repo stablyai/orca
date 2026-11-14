@@ -10,12 +10,12 @@ import {
   compareNativeChatDisplayMessages as compareMessages,
   orderNativeChatDisplayEntries as orderEntries,
   orderNativeChatDisplayMessages as orderMessages
-} from '../../../../../../../shared/native-chat/transcript/native-chat-message-order'
+} from '../../../../../../../shared/native-chat/transcript/messages/native-chat-message-order'
 import {
   hasImagePromptMarker,
   isImageSourceUserTurn,
   normalizeImageTranscriptMessages
-} from '../../../../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
+} from '../../../../../../../shared/native-chat/transcript/images/native-chat-image-transcript-markers'
 
 /** For the same turn, prefer transcript over hook over scrape. */
 export type NativeChatSources = {

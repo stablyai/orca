@@ -1,7 +1,7 @@
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import type { StructuredAgentSessionHostSupport } from '../agent-session/mobile-structured-agent-session-host-support'
 import type { MobileStructuredAgentMutate } from '../agent-session/use-mobile-structured-agent-mutation'
-import type { HostModelCatalogCache } from './use-mobile-host-model-catalog-upgrade'
+import type { HostModelCatalogCache } from './session-options/use-mobile-host-model-catalog-upgrade'
 
 export type MobileStructuredAgentOptionsArgs = {
   modelCatalogCache?: HostModelCatalogCache | null

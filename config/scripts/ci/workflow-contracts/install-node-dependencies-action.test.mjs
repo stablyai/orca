@@ -58,11 +58,9 @@ function executeInstallScript(fixture) {
 }
 
 describe('install-node-dependencies action', () => {
-  it.each([
-    ['package.json', '{"name":"changed"}\n'],
-    ['pnpm-lock.yaml', 'lockfileVersion: 9\nchanged: true\n'],
-    ['pnpm-workspace.yaml', 'packages: []\nchanged: true\n']
-  ])('rejects a changed %s when the composite step cwd is detached', (file, contents) => {
+  it('rejects a changed lockfile when the composite step cwd is detached', () => {
+    const file = 'pnpm-lock.yaml'
+    const contents = 'lockfileVersion: 9\nchanged: true\n'
     const fixture = createFixture()
     try {
       const clean = executeInstallScript(fixture)

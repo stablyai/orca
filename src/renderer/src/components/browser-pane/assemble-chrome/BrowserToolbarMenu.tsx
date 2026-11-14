@@ -31,6 +31,7 @@ type BrowserToolbarMenuProps = {
   viewportPresetId: BrowserViewportPresetId | null
   onDestroyWebview: () => void
   isActive: boolean
+  extensionDiscoveryTarget?: boolean
   /** A blank tab shows the import hint on its new tab page, so the tour points there instead. */
   isBlankTab: boolean
   pageActions: BrowserToolbarPageActions
@@ -46,6 +47,7 @@ export function BrowserToolbarMenu({
   viewportPresetId,
   onDestroyWebview,
   isActive,
+  extensionDiscoveryTarget = false,
   isBlankTab,
   pageActions,
   extensionsSub,
@@ -262,6 +264,7 @@ export function BrowserToolbarMenu({
   return (
     <>
       <BrowserToolbarMenuDropdown
+        extensionDiscoveryTarget={extensionDiscoveryTarget}
         browserPageId={browserPageId}
         menuOpen={menuOpen}
         onMenuOpenChange={handleMenuOpenChange}

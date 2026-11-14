@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { checkOrcaStarred } from '../github/client'
+import { checkOrcaStarred } from '../github/client/fetch/orca-star'
 import type { Store } from '../persistence/loading-store/store'
 import type { StarNagPromptMode } from '../../shared/star-nag-telemetry'
 

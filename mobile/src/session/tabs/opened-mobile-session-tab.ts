@@ -9,6 +9,8 @@ export type OpenedMobileSessionTabActivationState = {
   activeTabType: string | null
   sourceNavigationGeneration?: number
   activeNavigationGeneration?: number
+  // False once the host, client or its authority generation changed after the tap; absent means unfenced.
+  sourceAuthorityCurrent?: boolean
 }
 
 export function shouldActivateOpenedMobileSessionTab(
@@ -26,6 +28,7 @@ export function shouldActivateOpenedMobileSessionTab(
     !state.activated &&
     state.activationSeq === state.latestActivationSeq &&
     state.sourceNavigationGeneration === state.activeNavigationGeneration &&
+    state.sourceAuthorityCurrent !== false &&
     sourceStillActive
   )
 }

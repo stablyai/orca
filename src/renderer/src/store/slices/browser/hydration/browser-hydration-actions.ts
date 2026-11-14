@@ -1,8 +1,9 @@
+import { markHydratedBrowserPageHandles } from '../hosts/browser-initialization-presentation-ownership'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import type { BrowserSlice, BrowserSliceGet, BrowserSliceSet } from '../browser-slice-contract'
 import { addAdditionalValidWorkspaceKeys } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
-import { buildValidWorktreeIdsForSessionHydration } from '../../../../../../shared/worktree/degraded-repo-worktree-validity'
+import { buildValidWorktreeIdsForSessionHydration } from '../../../../../../shared/worktree/catalog/degraded-repo-worktree-validity'
 import { destroyWorkspaceWebviews } from '../cleanup/browser-webview-cleanup'
 import { projectHydratedBrowserSession } from './browser-hydration-state'
 import { ensureBrowserClientHostsForRestoredPages } from '@/runtime/browser/client-hosting/restored-client-hosted-browser-host-attach'
@@ -53,7 +54,11 @@ export function createBrowserHydrationActions(
           validWorktreeIds.add(folderWorkspaceKey(workspace.id))
         }
         addAdditionalValidWorkspaceKeys(validWorktreeIds, options)
-        return projectHydratedBrowserSession(s, session, validWorktreeIds)
+        const restored = projectHydratedBrowserSession(s, session, validWorktreeIds)
+        if (restored.remoteBrowserPageHandlesByPageId !== s.remoteBrowserPageHandlesByPageId) {
+          markHydratedBrowserPageHandles(restored.remoteBrowserPageHandlesByPageId)
+        }
+        return restored
       })
 
       const state = get()

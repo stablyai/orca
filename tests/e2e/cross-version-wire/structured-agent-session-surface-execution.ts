@@ -97,18 +97,23 @@ export function runtimeStub(overrides: Record<string, unknown> = {}) {
 }
 
 // Collect every streaming reply: refusals must arrive explicitly, never as silence.
-export async function callBuild(
+export async function callBuild<Result = unknown>(
   build: AgentSessionWireBuild,
   method: string,
   params: unknown,
   client: RpcClientIdentity,
-  runtime: unknown = runtimeStub()
-): Promise<RpcReply[]> {
-  const replies: RpcReply[] = []
+  runtime: unknown = runtimeStub(),
+  onReply?: (reply: RpcReply<Result>) => void
+): Promise<RpcReply<Result>[]> {
+  const replies: RpcReply<Result>[] = []
   await build.createDispatcher(runtime).dispatchStreaming(
     { id: `request-${method}`, authToken: 'cross-version-token', method, params },
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the build's RPC dispatcher serializes its own reply; result/error shape is asserted by each surface case.
-    (raw) => replies.push(JSON.parse(raw) as RpcReply),
+    (raw) => {
+      // The build serializes its own reply; each surface case checks its result/error shape.
+      const reply: RpcReply<Result> = JSON.parse(raw)
+      replies.push(reply)
+      onReply?.(reply)
+    },
     client
   )
   return replies

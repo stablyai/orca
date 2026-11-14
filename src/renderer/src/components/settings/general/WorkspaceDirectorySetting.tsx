@@ -9,7 +9,7 @@ import {
   clearHostSettingOverride
 } from '../../../../../shared/host-setting-overrides'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
-import { normalizeWorkspaceDirInput } from '../../../../../shared/worktree/workspace-dir-input'
+import { normalizeWorkspaceDirInput } from '../../../../../shared/worktree/paths/workspace-dir-input'
 import { isWindowsUserAgent } from '@/app-shell/platform/user-agent-platform'
 import { Button } from '../../ui/button'
 import { Input } from '../../ui/input'

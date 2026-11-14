@@ -12,7 +12,9 @@
 - Only the [terminal perf](e2e/terminal-perf-presentation.ts) and
   [native IBus](e2e/terminal-native-ibus-window.ts) fixtures, and the guarded
   [native browser image-focus test](e2e/browser-image-link-focus.spec.ts), may explicitly present windows
-  on their isolated hosted-CI Xvfb displays. Preserve their guards and keep
+  on their isolated hosted-CI Xvfb displays, and the guarded
+  [Windows agent focus test](e2e/browser-agent-input-focus-isolation-native.spec.ts) on the
+  hosted Windows CI desktop. Preserve their guards and keep
   `ORCA_BACKGROUND_LAUNCH=1`; do not generalize these exceptions to other fixtures or
   production launch policy. Background terminal panes stay hidden.
 - The browser image-focus test also permits an isolated Docker Xvfb display, with

@@ -1,4 +1,4 @@
-import { agentSessionSetupFor } from './lifecycle/agent-session-setup-commands'
+import { agentSessionSetupFor } from './lifecycle/launch/agent-session-setup-commands'
 
 export type AgentSessionAccountKind = 'managed' | 'system'
 

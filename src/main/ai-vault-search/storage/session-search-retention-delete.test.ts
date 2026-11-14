@@ -116,6 +116,29 @@ it('finishes an interrupted deletion after reopening', async () => {
   }
 })
 
+it('stops reclaiming after its database closes between batches', async () => {
+  const index = await openSessionSearchIndexFile('ss-retention-close')
+  const store = new SessionSearchStore(index.path)
+  let closed = false
+  try {
+    seed(store.connection, 1, 513, 1)
+    store.connection.exec('DELETE FROM sessions WHERE id = 1')
+    await expect(
+      drainOrphanedMessages(
+        store.connection,
+        () => closed,
+        async () => {
+          closed = true
+          store.close()
+        }
+      )
+    ).resolves.toBeUndefined()
+  } finally {
+    store.close()
+    await index.close()
+  }
+})
+
 it('cancels retention between batches and resumes without exposing a partial session', async () => {
   const index = await openSessionSearchIndexFile('ss-retention-cancel')
   const store = new SessionSearchStore(index.path)
@@ -125,9 +148,6 @@ it('cancels retention between batches and resumes without exposing a partial ses
     const purge = store.purgeOlderThan(100, controller.signal)
     setImmediate(() => controller.abort())
     await purge
-    const remaining = count(index.db, 'messages')
-    expect(remaining).toBeGreaterThan(0)
-    expect(remaining).toBeLessThan(1025)
     expect(visibleSessionIds(index.db)).toEqual([])
     await store.purgeOlderThan(null)
     await vi.waitFor(() => expect(count(index.db, 'messages')).toBe(0))

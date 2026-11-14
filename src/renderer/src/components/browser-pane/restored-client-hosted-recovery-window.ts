@@ -8,11 +8,13 @@ export const RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS = 45_000
 export function useRestoredClientHostedRecoveryWindow({
   browserPageId,
   environmentId,
-  placementPending
+  placementPending,
+  ownedInitialization = false
 }: {
   browserPageId: string
   environmentId: string
   placementPending: boolean
+  ownedInitialization?: boolean
 }): boolean {
   // The snapshot supplying placement also clears the restored marker.
   const restoredFromSession = useAppStore(
@@ -21,7 +23,7 @@ export function useRestoredClientHostedRecoveryWindow({
   const environmentReachable = useAppStore(
     (s) => s.runtimeStatusByEnvironmentId.get(environmentId)?.status != null
   )
-  const awaitingRecovery = restoredFromSession && placementPending
+  const awaitingRecovery = restoredFromSession && placementPending && !ownedInitialization
   const [windowElapsed, setWindowElapsed] = useState(false)
 
   useEffect(() => {

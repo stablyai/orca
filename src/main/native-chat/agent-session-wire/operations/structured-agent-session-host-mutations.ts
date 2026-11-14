@@ -1,4 +1,4 @@
-import type { AgentSessionOptionResult } from '../../../../shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionResult } from '../../../../shared/agent-session/options/protocol/agent-session-options-result'
 // Share mutation admission/planning/publication. Conversation writes need no child lease;
 // provider-only effects start their child before admission, sends start through delivery.
 
@@ -6,8 +6,6 @@ import {
   forgetNativeChatPrompt,
   rememberNativeChatPrompt
 } from '../../../telemetry/native-chat-prompt-submissions'
-import { latestNativeChatUsageLimitCut } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
-import { refuse } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,
@@ -15,8 +13,6 @@ import type {
   AgentSessionPromptResult,
   AgentSessionSendResult
 } from '../../../../shared/agent-session/agent-session-wire'
-import { contextStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-current-work'
-import { shouldQueueStructuredAgentSessionSend } from '../delivery/structured-agent-session-queued-gate'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type {
   AgentSessionThreadGoalChange,
@@ -38,7 +34,7 @@ import {
 import { cancelPlan, sendPlan, setOptionPlan } from './structured-agent-session-mutation-plans'
 import { promptPlan } from './structured-agent-session-prompt-plan'
 import { resetStructuredAgentSessionModel } from '../structured-agent-session-model-default'
-import { runQueueableStructuredAgentSessionSend } from '../delivery/structured-agent-session-queued-send'
+import { admitStructuredAgentSessionSend } from '../delivery/structured-agent-session-send-admission'
 import { cancelStructuredAgentSessionPrompt } from './structured-agent-session-prompt-cancel'
 import { mutateWithChatStop, abortProviderWaitForStop } from './structured-agent-session-chat-stop'
 import {
@@ -50,10 +46,7 @@ import { openWithReadyStructuredAgentSessionChild } from './structured-agent-ses
 
 import type { StructuredAgentSessionCaller } from '../host/structured-agent-session-host-types'
 import '../options/structured-agent-session-options-read'
-import {
-  noteStructuredAgentSessionOptionPick,
-  recordStructuredAgentSessionOptionIntent
-} from '../options/structured-agent-session-option-intent'
+import { recordStructuredAgentSessionOptionIntent } from '../options/structured-agent-session-option-intent'
 import { confirmIdleStructuredAgentSessionOption } from '../options/structured-agent-session-idle-option'
 
 export function sendStructuredAgentSessionTurn(
@@ -72,7 +65,7 @@ export function sendStructuredAgentSessionTurn(
     userSend?: true
     /** Host-origin personal text, including launch prompts; other agents carry from instead. */
     personsMessage?: true
-    beforeRun?: () => void
+    beforeRun?: () => void | Promise<void>
   },
   arrival?: Parameters<typeof sendPreparation>[2]
 ): Promise<AgentSessionMutationResult<AgentSessionSendResult>> {
@@ -90,28 +83,7 @@ export function sendStructuredAgentSessionTurn(
           if (blocked) {
             return blocked
           }
-          if (params.usageLimitContinuationOfTurnItemId !== undefined) {
-            const snapshot = ctx.journal.statusRead()
-            const cut = latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions)
-            if (
-              cut?.turnItemId !== params.usageLimitContinuationOfTurnItemId ||
-              shouldQueueStructuredAgentSessionSend({
-                record,
-                journal: ctx.journal,
-                work: contextStructuredAgentSessionCurrentWork(ctx)
-              })
-            ) {
-              return {
-                ok: false as const,
-                refusal: refuse(
-                  'agent_session_operation_invalid',
-                  { reason: 'continuationSuperseded' },
-                  'This chat has moved on. Check the latest messages before continuing.'
-                )
-              }
-            }
-          }
-          params.beforeRun?.()
+          await params.beforeRun?.()
           if (params.userSend && !params.body.command) {
             rememberNativeChatPrompt(
               ctx.journal,
@@ -122,16 +94,16 @@ export function sendStructuredAgentSessionTurn(
             )
           }
           try {
-            const sent = await runQueueableStructuredAgentSessionSend(context, ctx, params, () =>
-              plan.run(ctx)
-            )
+            const sent = await admitStructuredAgentSessionSend(context, ctx, params)
             if (!sent.ok) {
               forgetNativeChatPrompt(ctx.journal, params.envelope.clientOperationId)
             }
             return sent
           } catch (error) {
             const id = params.envelope.clientOperationId
-            if (!ctx.journal.submission(id) && !ctx.journal.queuedMessages.get(id)) {
+            const submission = await ctx.journal.reads.submission(id)
+            const queued = await ctx.journal.queuedMessages.get(id)
+            if (!submission && !queued) {
               forgetNativeChatPrompt(ctx.journal, id)
             }
             throw error
@@ -244,14 +216,6 @@ export async function setStructuredAgentSessionOption(
             Boolean((await context.conversation(ctx.sessionId)).child),
             params.key
           )
-          if (reset.ok) {
-            noteStructuredAgentSessionOptionPick(
-              context,
-              ctx,
-              { key: 'model', value: reset.value.options?.model ?? '' },
-              true
-            )
-          }
           return reset
         }
         const input = { key: params.key, value: params.value }
@@ -259,8 +223,15 @@ export async function setStructuredAgentSessionOption(
           readsWithoutModel: caller.readsOptionsWithoutModel !== false
         })
         if (picked.ok) {
-          noteStructuredAgentSessionOptionPick(context, ctx, input, !noChoice)
-          confirmIdleStructuredAgentSessionOption(context, ctx, input)
+          const confirming = confirmIdleStructuredAgentSessionOption(context, ctx, input)
+          context.trackProviderOperation?.(confirming)
+          void confirming.catch((error) => {
+            ctx.logger.warn('confirming idle session metadata failed', {
+              scope: 'idle-option',
+              sessionId: ctx.sessionId,
+              error
+            })
+          })
         }
         return picked
       },

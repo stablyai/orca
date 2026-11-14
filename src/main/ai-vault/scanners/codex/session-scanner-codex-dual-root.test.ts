@@ -1,15 +1,65 @@
-import { copyFile, link, mkdtemp, mkdir, rm, utimes, writeFile } from 'node:fs/promises'
+import type * as TranscriptFs from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { appendFile, copyFile, link, mkdtemp, mkdir, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { Readable } from 'node:stream'
+import { resetSessionParseCacheForTests } from '../../parse-cache/session-parse-cache-store'
+import { sessionCandidatesFromDiscoveries } from '../../discovery/session-scanner-candidates'
 import { scanAiVaultSessions } from '../../session-scanner'
 import { isolatedScanRoots, jsonLines } from '../../scanner-fixtures/session-scanner-test-fixtures'
+
+const reads = vi.hoisted(
+  (): {
+    failed: string
+    failedSlice: string
+    cancel: AbortController | null
+    paths: string[]
+  } => ({
+    failed: '',
+    failedSlice: '',
+    cancel: null,
+    paths: []
+  })
+)
+vi.mock(
+  '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof TranscriptFs>()
+    return {
+      ...actual,
+      readTranscriptSlice: async (...args: Parameters<typeof actual.readTranscriptSlice>) => {
+        if (args[0] === reads.failedSlice) {
+          throw Object.assign(new Error('unreadable'), { code: 'EACCES' })
+        }
+        return actual.readTranscriptSlice(...args)
+      },
+      openTranscriptReadStream: (...args: Parameters<typeof actual.openTranscriptReadStream>) => {
+        reads.paths.push(args[0])
+        if (args[0] === reads.failed) {
+          reads.cancel?.abort()
+          return new Readable({
+            read() {
+              this.destroy(Object.assign(new Error('unreadable'), { code: 'EACCES' }))
+            }
+          })
+        }
+        return actual.openTranscriptReadStream(...args)
+      }
+    }
+  }
+)
 
 let tempRoots: string[] = []
 
 afterEach(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
   tempRoots = []
+  reads.failed = ''
+  reads.failedSlice = ''
+  reads.cancel = null
+  reads.paths = []
+  resetSessionParseCacheForTests()
 })
 
 describe('scanAiVaultSessions codex dual-root dedup', () => {
@@ -254,4 +304,151 @@ describe('scanAiVaultSessions codex dual-root dedup', () => {
       }
     )
   })
+})
+
+async function canonicalCopies(nonUser = false) {
+  const root = await mkdtemp(join(tmpdir(), 'orca-canonical-choice-'))
+  tempRoots.push(root)
+  const realHome = join(root, 'real-home')
+  const managedHome = join(root, 'codex-accounts', 'account', 'home')
+  const name = 'rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-444444444444.jsonl'
+  const real = join(realHome, 'sessions', name)
+  const managed = join(managedHome, 'sessions', name)
+  await mkdir(join(realHome, 'sessions'), { recursive: true })
+  await mkdir(join(managedHome, 'sessions'), { recursive: true })
+  await writeFile(
+    real,
+    jsonLines([
+      {
+        type: 'session_meta',
+        payload: {
+          id: '019f0000-1111-7222-8333-444444444444',
+          cwd: '/repo/app',
+          ...(nonUser ? { source: { internal: 'guardian_review' } } : {})
+        }
+      },
+      {
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_text', text: 'readablealiasneedle' }]
+        }
+      }
+    ])
+  )
+  await appendFile(real, '\n')
+  await copyFile(real, managed)
+  return {
+    real,
+    managed,
+    managedHome,
+    options: {
+      ...isolatedScanRoots(root),
+      codexSessionsDir: join(realHome, 'sessions'),
+      defaultCodexHomeDir: realHome,
+      additionalCodexSessionsDirs: [join(managedHome, 'sessions')],
+      platform: 'darwin' as const,
+      limit: 1
+    }
+  }
+}
+
+it('falls back to a readable canonical copy with its own resume ownership, then recovers the real home', async () => {
+  const fixture = await canonicalCopies()
+  reads.failed = fixture.real
+  const first = await scanAiVaultSessions(fixture.options)
+  expect(first.sessions).toHaveLength(1)
+  expect(first.sessions[0]).toMatchObject({
+    filePath: fixture.managed,
+    codexHome: fixture.managedHome,
+    title: 'readablealiasneedle'
+  })
+  expect(first.sessions[0].resumeCommand).toContain(`CODEX_HOME='${fixture.managedHome}'`)
+  reads.failed = ''
+  const recovered = await scanAiVaultSessions(fixture.options)
+  expect(recovered.sessions).toHaveLength(1)
+  expect(recovered.sessions[0]).toMatchObject({ filePath: fixture.real, codexHome: null })
+})
+
+it('does not open an alternate after cancellation', async () => {
+  const fixture = await canonicalCopies()
+  reads.failed = fixture.real
+  reads.cancel = new AbortController()
+  await expect(
+    scanAiVaultSessions({ ...fixture.options, signal: reads.cancel.signal })
+  ).rejects.toThrow()
+  expect(reads.paths).not.toContain(fixture.managed)
+})
+
+it('excludes a canonical non-user rollout after one physical attempt', async () => {
+  const fixture = await canonicalCopies(true)
+  expect((await scanAiVaultSessions(fixture.options)).sessions).toEqual([])
+  expect(reads.paths).toEqual([fixture.real])
+})
+
+it('tries readable content after a provisional filename-only row', async () => {
+  const fixture = await canonicalCopies()
+  await writeFile(fixture.real, '{}\n')
+  const result = await scanAiVaultSessions(fixture.options)
+  expect(result.sessions).toHaveLength(1)
+  expect(result.sessions[0]).toMatchObject({
+    filePath: fixture.managed,
+    title: 'readablealiasneedle'
+  })
+})
+
+it('keeps distinct canonical rollouts and execution namespaces, preferring nonempty copies', async () => {
+  const name = 'rollout-2026-07-01T10-00-00-019f0000-1111-7222-8333-444444444444'
+  const paths = [
+    `/real/${name}.jsonl`,
+    `/managed/${name}.jsonl`,
+    `/real/${name}_019f0000-2222-7222-8333-444444444444.jsonl`,
+    `\\\\wsl.localhost\\Ubuntu\\home\\neil\\${name}.jsonl`
+  ]
+  const candidates = await sessionCandidatesFromDiscoveries(
+    [
+      {
+        agent: 'codex',
+        rootDir: '/real',
+        files: paths.map((path, i) => ({
+          path,
+          mtimeMs: 1,
+          modifiedAt: '2026-07-01T10:00:00Z',
+          sizeBytes: i === 0 ? 0 : 100
+        }))
+      }
+    ],
+    {}
+  )
+  expect(candidates.map((choice) => choice.file.path).sort()).toEqual(paths.slice(1).sort())
+  expect(
+    candidates
+      .find((choice) => choice.file.path === paths[1])
+      ?.alternatives?.map((candidate) => candidate.file.path)
+  ).toEqual([paths[1], paths[0]])
+})
+
+it('falls back when a growing cached preferred file fails its resume boundary read', async () => {
+  const fixture = await canonicalCopies()
+  expect((await scanAiVaultSessions(fixture.options)).sessions[0].filePath).toBe(fixture.real)
+  await appendFile(
+    fixture.real,
+    jsonLines([
+      {
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'user',
+          content: [{ type: 'input_text', text: 'newaliasmessage' }]
+        }
+      }
+    ])
+  )
+  await appendFile(fixture.real, '\n')
+  await copyFile(fixture.real, fixture.managed)
+  reads.failedSlice = fixture.real
+  const result = await scanAiVaultSessions(fixture.options)
+  expect(result.sessions).toHaveLength(1)
+  expect(result.sessions[0]).toMatchObject({ filePath: fixture.managed, messageCount: 2 })
 })

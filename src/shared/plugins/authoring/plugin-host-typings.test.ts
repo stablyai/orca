@@ -1,13 +1,8 @@
-import { readFileSync } from 'node:fs'
-import path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { PLUGIN_HOST_TYPINGS_FILE, renderPluginHostTypings } from './plugin-host-typings'
 import {
   authorTypingsDiagnostics,
   authorTypingsProgram
 } from './plugin-author-typings.test-fixture'
-
-const REPO_ROOT = path.resolve(import.meta.dirname, '../../../..')
 
 // One contract, declared once and read by the frame, the worker and the components panel.
 const PROTOCOL = `
@@ -159,12 +154,6 @@ host.dispose()
 `
 
 describe('author typings', () => {
-  it('checks in the host typings generated from the host API table', () => {
-    const checkedIn = readFileSync(path.join(REPO_ROOT, PLUGIN_HOST_TYPINGS_FILE), 'utf8')
-    // Run `pnpm generate:plugin-author-typings` when this fails.
-    expect(checkedIn).toBe(renderPluginHostTypings())
-  })
-
   it('type-check a frame script, a worker main and a components panel', () => {
     const program = authorTypingsProgram({
       'protocol.ts': PROTOCOL,

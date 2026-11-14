@@ -1,11 +1,11 @@
 import type { StructuredAgentSessionOptionState } from './structured-agent-session-options'
 import type { SessionOptionValue } from '../../native-chat/input/native-chat-session-options'
-import { STRUCTURED_LAUNCH_SEED_OPTION_IDS } from '../../native-chat/input/native-chat-session-option-defaults'
-import { structuredAgentSessionRememberedPickModel } from './structured-agent-session-remembered-pick-model'
+import { STRUCTURED_LAUNCH_SEED_OPTION_IDS } from '../../native-chat/input/session-options/native-chat-session-option-defaults'
+import { structuredAgentSessionRememberedPickModel } from './selection/structured-agent-session-remembered-pick-model'
 import {
   decodeStructuredAgentSessionOptionValue,
   encodeStructuredAgentSessionOptionValue
-} from './structured-agent-session-option-codec'
+} from './selection/structured-agent-session-option-codec'
 
 export type StructuredSessionOptionPick = {
   modelId: string

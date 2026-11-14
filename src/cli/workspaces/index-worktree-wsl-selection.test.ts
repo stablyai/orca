@@ -12,7 +12,7 @@ import {
   selectEnclosingRepoOnHost,
   selectEnclosingWorktreeSelectionOnHost
 } from '../workspace-selection/caller-host-worktree-selection'
-import { buildWorktree } from '../test-fixtures'
+import { buildWorktree } from '../runtime/fixtures/runtime-rpc-fixtures'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 
 const UPPER = String.raw`\\wsl.localhost\Ubuntu\home\Alice\App`

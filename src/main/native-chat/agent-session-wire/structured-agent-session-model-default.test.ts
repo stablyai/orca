@@ -1,7 +1,7 @@
 import { appendUsageLimitedTurn } from './host/testing/structured-agent-session-rewind-usage-limit.test-fixture'
 import { eventually } from './host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { SetOptionParams } from '../../../shared/rpc-contract/structured-agent-session-params'
+import { SetOptionParams } from '../../../shared/rpc-contract/structured-agent-session/structured-agent-session-params'
 import {
   createQueuedMessageTestRig,
   QUEUED_RIG_CALLER,
@@ -12,10 +12,9 @@ import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_NOW as NOW,
   hostTestOperationId
-} from './host/testing/structured-agent-session-host-test-data'
+} from './host/testing/structured-agent-session-host-test-data.test-fixture'
 import { openRigTurnFor } from './host/testing/structured-agent-session-queued-rig-turn.test-fixture'
-import { createTestParams } from './host/testing/structured-agent-session-create-test-fixture'
-import { recordAgentSessionRanOptions } from '../../runtime/agent-session/records/agent-session-record-options'
+import { createTestParams } from './host/testing/structured-agent-session-create.test-fixture'
 import { effectiveAgentSessionOptions } from '../../../shared/agent-session-default-model'
 import { optionSession } from '../../codex/structured/catalog/codex-structured-option-session.test-fixture'
 import { resolvedCodexMessageOptions } from '../../codex/structured/turns/codex-structured-message-options'
@@ -132,13 +131,16 @@ it('learns an omitted new-chat default once from execution without restoring an 
     throw new Error('expected the session')
   }
   const report = (model: string) =>
-    rig.store.reviseSessionOptions(recordAgentSessionRanOptions, {
-      sessionId,
-      fence: record.lease.runtimeFence,
-      now: 1_700_000_000_000,
-      model,
-      options: { model, effort: 'medium' },
-      models: []
+    rig.store.updateRecord(sessionId, {
+      kind: 'ran-options',
+      args: {
+        sessionId,
+        fence: record.lease.runtimeFence,
+        now: 1_700_000_000_000,
+        model,
+        options: { model, effort: 'medium' },
+        models: []
+      }
     })
   await report('original-executed-default')
   expect(rig.store.getRecord(sessionId)).toMatchObject({
@@ -166,11 +168,11 @@ it('snapshots the original host default for future queued messages while preserv
     throw new Error('expected queued drafts')
   }
   const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
-  expect(journal.queuedMessages.get(before.value.queued.messageId)?.options).toEqual({
+  expect((await journal.queuedMessages.get(before.value.queued.messageId))?.options).toEqual({
     model: 'picked-model',
     effort: 'high'
   })
-  expect(journal.queuedMessages.get(after.value.queued.messageId)?.options).toEqual({
+  expect((await journal.queuedMessages.get(after.value.queued.messageId))?.options).toEqual({
     model: 'configured-model',
     effort: 'high'
   })

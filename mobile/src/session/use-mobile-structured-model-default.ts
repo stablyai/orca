@@ -1,11 +1,11 @@
-import type { AgentSessionOptionResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionResult } from '../../../src/shared/agent-session/options/protocol/agent-session-options-result'
 import { useCallback, type RefObject } from 'react'
 import { structuredAgentSessionDefaultModelChoice } from '../../../src/shared/structured-agent-session-default-model-choice'
 import {
   beginStructuredOptionPick,
   settleStructuredOptionPick,
   structuredOptionPickCommit
-} from '../../../src/shared/agent-session/options/structured-agent-session-option-pick-book'
+} from '../../../src/shared/agent-session/options/selection/structured-agent-session-option-pick-book'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 
 import type { SessionOptionDescriptor } from '../../../src/shared/native-chat/input/native-chat-session-options'
@@ -14,10 +14,10 @@ import {
   commitStructuredAgentSessionOptionValues,
   type StructuredAgentSessionOptionState
 } from '../../../src/shared/agent-session/options/structured-agent-session-options'
-import { structuredAgentSessionShownSnapshot } from '../../../src/shared/agent-session/options/structured-agent-session-option-view'
+import { structuredAgentSessionShownSnapshot } from '../../../src/shared/agent-session/options/view/structured-agent-session-option-view'
 import type { StructuredAgentSessionMutate } from './native-chat/agent-session/mobile-structured-agent-session-rpc'
-import type { useMobileStructuredOptionState } from './native-chat/input/use-mobile-structured-option-state'
-import { nativeChatSessionOptionsWrite } from './native-chat/input/mobile-native-chat-options-operations'
+import type { useMobileStructuredOptionState } from './native-chat/input/session-options/use-mobile-structured-option-state'
+import { nativeChatSessionOptionsWrite } from './native-chat/input/session-options/mobile-native-chat-options-operations'
 import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
 
 export const MOBILE_MODEL_DEFAULT_PICK = ''

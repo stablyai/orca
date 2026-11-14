@@ -133,6 +133,11 @@ export class WorkerThreadRequestQueue<
     return this.host.retired()
   }
 
+  /** A terminated worker that has not exited yet; nothing new can start until it does. */
+  get isRetiring(): boolean {
+    return this.host.isRetiring
+  }
+
   private pump(): void {
     if (this.disposed || this.active || this.queue.length === 0) {
       return
