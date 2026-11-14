@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import {
   CHAT_FORK_TRANSFER_CHUNK_BASE64_MAX_CHARS,
   CHAT_FORK_TRANSFER_CHUNK_BYTES,
