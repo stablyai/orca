@@ -274,4 +274,58 @@ describe('createRemoteRuntimePtyTransport: restore spawn intent', () => {
     expect(transport.getPtyId()).toBeNull()
     transport.destroy?.()
   })
+  it.each(['owner-change', 'disconnect', 'takeover'] as const)(
+    'does not adopt a committed restart result after %s',
+    async (scenario) => {
+      const pending = Promise.withResolvers<unknown>()
+      runtimeCall.mockImplementation(async (args: RpcCall) =>
+        args.method === 'terminal.resolvePane' ? pending.promise : okResponse({ capabilities })
+      )
+      vi.mocked(window.api.runtimeEnvironments.subscribe).mockImplementation(() => {
+        throw new Error('this obsolete result must not subscribe')
+      })
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const onPtySpawn = vi.fn()
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'repo1::/remote/wt',
+        tabId: 'tab-1',
+        leafId: LEAF_ID,
+        onPtySpawn
+      })
+      const connecting = transport.connect({
+        url: '',
+        sessionId: 'remote:env-1@@committed',
+        attachOnlyView: true,
+        isAccountRestartCurrent: () => true,
+        shouldContinue: () => true,
+        callbacks: {}
+      })
+      await vi.waitFor(() =>
+        expect(runtimeCall).toHaveBeenCalledWith(
+          expect.objectContaining({ method: 'terminal.resolvePane' })
+        )
+      )
+      if (scenario === 'disconnect') {
+        transport.disconnect()
+      } else if (scenario === 'takeover') {
+        transport.attach({ existingPtyId: 'remote:env-1@@successor', callbacks: {} })
+      }
+      pending.resolve(
+        okResponse({
+          terminal: {
+            handle: scenario === 'owner-change' ? 'foreign-owner' : 'committed',
+            connected: true,
+            incarnationId: 'inc-committed',
+            worktreeId: 'repo1::/remote/wt',
+            tabId: 'tab-1',
+            leafId: LEAF_ID
+          }
+        })
+      )
+      await connecting
+      expect(onPtySpawn).not.toHaveBeenCalled()
+      expect(transport.getPtyId()).not.toBe('remote:env-1@@foreign-owner')
+      transport.destroy?.()
+    }
+  )
 })

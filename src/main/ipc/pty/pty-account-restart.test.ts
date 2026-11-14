@@ -1,5 +1,8 @@
 import type { RuntimeStore } from '../../runtime/construction/runtime-store-contract'
-import { resolveAccountRestartPane } from '../../runtime/terminal/recovery/account-restart-pane-snapshot'
+import {
+  resolveAccountRestartPane,
+  boundLaunchToken
+} from '../../runtime/terminal/recovery/account-restart-pane-snapshot'
 import { agentSessionOwners } from './pane/agent-session-owners'
 import { accountRestartErrorReceipt } from './pane/account-restart-owner'
 import { terminalStartError } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
@@ -333,4 +336,25 @@ describe('conditional Codex account restart at the IPC boundary', () => {
     )
     expect(resolved.accountRestart?.owner).toEqual({ ptyId: 'pty-old', incarnationId: 'inc-old' })
   })
+  it.each([
+    [null, null, 'pty-bound', undefined],
+    ['inc-bound', 'inc-bound', 'pty-bound', 'account-attempt'],
+    ['inc-bound', 'inc-other', 'pty-bound', undefined],
+    ['inc-bound', 'inc-bound', 'another-pty', undefined]
+  ] as const)(
+    'attests a restart launch token only for its exact bound incarnation (%s, %s, %s)',
+    (incarnationId, launchIncarnationId, boundPtyId, expectedToken) => {
+      expect(
+        boundLaunchToken(
+          {
+            ptyId: 'pty-bound',
+            incarnationId,
+            launchIncarnationId,
+            launchToken: 'account-attempt'
+          },
+          boundPtyId
+        ).launchToken
+      ).toBe(expectedToken)
+    }
+  )
 })

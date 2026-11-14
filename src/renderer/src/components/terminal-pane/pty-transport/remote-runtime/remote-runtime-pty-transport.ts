@@ -1634,11 +1634,13 @@ export function createRemoteRuntimePtyTransport(
     options: { cols?: number; rows?: number; existingPtyId?: string },
     notifySpawn = true,
     expectedAttachGeneration?: number,
-    expectedRecoveryEpoch?: number
+    expectedRecoveryEpoch?: number,
+    expectedLifecycleEpoch?: number
   ): Promise<PtyConnectResult | undefined> {
     if (
       destroyed ||
-      (expectedAttachGeneration !== undefined && expectedAttachGeneration !== attachGeneration)
+      (expectedAttachGeneration !== undefined && expectedAttachGeneration !== attachGeneration) ||
+      (expectedLifecycleEpoch !== undefined && expectedLifecycleEpoch !== lifecycleEpoch)
     ) {
       return undefined
     }
@@ -1682,7 +1684,8 @@ export function createRemoteRuntimePtyTransport(
       destroyed ||
       !connected ||
       !remotePtyId ||
-      (expectedAttachGeneration !== undefined && expectedAttachGeneration !== attachGeneration)
+      (expectedAttachGeneration !== undefined && expectedAttachGeneration !== attachGeneration) ||
+      (expectedLifecycleEpoch !== undefined && expectedLifecycleEpoch !== lifecycleEpoch)
     ) {
       return undefined
     }
@@ -3612,6 +3615,9 @@ export function createRemoteRuntimePtyTransport(
       if (options.attachOnlyView) {
         const hostTabId = toHostSessionTabId(tabId ?? '')
         const terminal = await resolveHostSessionPane(hostTabId)
+        if (destroyed || lifecycleEpoch !== connectLifecycleEpoch) {
+          return undefined
+        }
         if (
           !terminal ||
           terminal.handle !== getRemoteRuntimeTerminalHandle(options.sessionId ?? '') ||
@@ -3625,7 +3631,14 @@ export function createRemoteRuntimePtyTransport(
         ) {
           throw new Error('terminal_pane_owner_changed')
         }
-        return await adoptResolvedHostPane(terminal, options)
+        return await adoptResolvedHostPane(
+          terminal,
+          options,
+          true,
+          attachGeneration,
+          undefined,
+          connectLifecycleEpoch
+        )
       }
       if (isWebTerminalSurfaceTabId(tabId ?? '') && !options.accountRestart) {
         // Commit tab/layout reattach ownership before publishing replacement as a fresh spawn.
@@ -4052,7 +4065,7 @@ export function createRemoteRuntimePtyTransport(
       if (!destroyed && lifecycleEpoch === connectLifecycleEpoch) {
         connecting = false
         const message = runtimeTerminalErrorMessage(error)
-        if (options.accountRestart) {
+        if (options.accountRestart || options.isAccountRestartCurrent) {
           const deferral = readTerminalSpawnDeferral(error)
           recovery.cancel()
           emitRecoveryState()

@@ -59,11 +59,18 @@ export function resolveAccountRestartPane(
 }
 
 export function boundLaunchToken(
-  pty: RuntimePtyWorktreeRecord | null | undefined,
+  pty:
+    | Pick<
+        RuntimePtyWorktreeRecord,
+        'ptyId' | 'incarnationId' | 'launchIncarnationId' | 'launchToken'
+      >
+    | null
+    | undefined,
   boundPtyId: string | null | undefined
 ): { launchToken?: string } {
   return pty &&
     pty.ptyId === boundPtyId &&
+    pty.incarnationId &&
     pty.launchIncarnationId === pty.incarnationId &&
     pty.launchToken
     ? { launchToken: pty.launchToken }
