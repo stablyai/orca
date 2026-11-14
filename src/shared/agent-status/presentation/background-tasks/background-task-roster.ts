@@ -70,7 +70,10 @@ function groupRosterEntries(entries: BackgroundRosterTask[]): BackgroundTaskGrou
   })).filter((group) => group.tasks.length > 0)
 }
 
-function rosterEntries(rows: readonly AgentChildRowModel[]): BackgroundTaskGroup[] {
+/** Kind groups from rows a surface already built, as a terminal chat's hook row gives them. */
+export function buildBackgroundTaskGroupsFromRows(
+  rows: readonly AgentChildRowModel[]
+): BackgroundTaskGroup[] {
   return groupRosterEntries(
     rows.map((row) => ({ row, state: agentChildRunStateFor(row.displayState) }))
   )
@@ -83,7 +86,7 @@ export function buildBackgroundTaskGroups(
   say: BackgroundTaskSay
 ): BackgroundTaskGroup[] {
   // An old host's unlabeled row keeps the kind label it always showed; a view row reads its state.
-  return rosterEntries(
+  return buildBackgroundTaskGroupsFromRows(
     buildLegacyTaskRowModels(tasks, settledTasks).map((row) =>
       row.name ? row : { ...row, name: backgroundTaskKindLabel(row.kind, say) }
     )
@@ -103,7 +106,7 @@ export function buildBackgroundTaskGroupsFromViews(
   views: readonly AgentChildWorkView[],
   context: AgentChildRowContext = REPORTED_ROW_CONTEXT
 ): BackgroundTaskGroup[] {
-  return rosterEntries(buildAgentChildRowModels(views, context))
+  return buildBackgroundTaskGroupsFromRows(buildAgentChildRowModels(views, context))
 }
 
 export function backgroundTaskStateWord(state: RunState, say: BackgroundTaskSay): string {

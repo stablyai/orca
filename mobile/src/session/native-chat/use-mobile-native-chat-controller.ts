@@ -157,6 +157,7 @@ export function useMobileNativeChatController(args: {
   })
 
   const terminalTurn = useMobileNativeChatTerminalTurn({
+    ...args,
     status: nativeChatStatus,
     resolution: activeChatResolution,
     session: activeChatStructured ? null : nativeChatSession,
@@ -167,21 +168,20 @@ export function useMobileNativeChatController(args: {
     stop: handleNativeChatStop
   })
   const activeTurn = activeChatStructured ? structuredNativeChat : terminalTurn
-  const workingEpoch = terminalTurn.workingEpoch
   const placedChatPending = useMemo(
     () =>
       chatPending.map((entry) => ({
         ...entry,
-        pendingSend: nativeChatPendingSendPlacement(entry, workingEpoch)
+        pendingSend: nativeChatPendingSendPlacement(entry, terminalTurn.workingEpoch)
       })),
-    [chatPending, workingEpoch]
+    [chatPending, terminalTurn.workingEpoch]
   )
   const captureTerminalSendOrigin = useCallback(
     (text: string, sentAt?: number) => {
       const origin = captureSendOrigin(text, sentAt)
-      return origin ? { ...origin, queuedDuringWorkingEpoch: workingEpoch } : null
+      return origin ? { ...origin, queuedDuringWorkingEpoch: terminalTurn.workingEpoch } : null
     },
-    [captureSendOrigin, workingEpoch]
+    [captureSendOrigin, terminalTurn.workingEpoch]
   )
 
   const workspaceCatalog = useMobileNativeChatWorkspaceCatalog(args, activeChatAgent)
@@ -294,7 +294,7 @@ export function useMobileNativeChatController(args: {
     ...prompts,
     handleNativeChatStop: activeChatStructured ? structuredNativeChat.cancel : terminalTurn.stop,
     nativeChatQueued: structuredNativeChat.queued,
-    nativeChatBackgroundTasks: activeChatStructured ? structuredNativeChat.backgroundTasks : null,
+    nativeChatBackgroundTasks: activeTurn.backgroundTasks,
     nativeChatContextUsage: activeChatStructured ? structuredNativeChat.contextUsage : null,
     nativeChatInterruptedContinue: activeChatStructured
       ? structuredNativeChat.interruptedContinue

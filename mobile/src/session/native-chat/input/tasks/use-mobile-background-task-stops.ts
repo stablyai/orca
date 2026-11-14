@@ -12,7 +12,9 @@ const NO_CONFIRMED_STOPS: ReadonlyMap<string, string> = new Map()
 const NOT_STOPPING: MobileBackgroundTaskStopping = { taskIds: NO_TASKS, all: false }
 
 export function useMobileBackgroundTaskStops(
-  tasks: Pick<MobileStructuredBackgroundTasks, 'view' | 'stop'>
+  // A terminal chat's strip lists rows no Stop reaches.
+  tasks: Pick<MobileStructuredBackgroundTasks, 'view'> &
+    Partial<Pick<MobileStructuredBackgroundTasks, 'stop'>>
 ): { stopping: MobileBackgroundTaskStopping; onStop: (taskId?: string) => void } {
   const { view, stop } = tasks
   const [stopping, setStopping] = useState<MobileBackgroundTaskStopping>(NOT_STOPPING)
@@ -32,7 +34,7 @@ export function useMobileBackgroundTaskStops(
   // Close same-frame double taps with a ref before React disables the button.
   const onStop = (taskId?: string): void => {
     const current = stoppingRef.current
-    if (taskId ? current.taskIds.has(taskId) : current.all) {
+    if (!stop || (taskId ? current.taskIds.has(taskId) : current.all)) {
       return
     }
     // A provider may reuse the row's id for the task's next run, which this Stop did not end.

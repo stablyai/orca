@@ -49,7 +49,8 @@ function view(id: string, overrides: Partial<AgentChildWorkView> = {}): AgentChi
 }
 
 type Props = Parameters<typeof MobileNativeChatBackgroundTasks>[0]
-type StopResult = Awaited<ReturnType<Props['tasks']['stop']>>
+type StructuredTasks = Extract<Props['tasks'], { stop: unknown }>
+type StopResult = Awaited<ReturnType<StructuredTasks['stop']>>
 
 const REJECTED: StopResult = { status: 'rejected' }
 const STOPPED: StopResult = { status: 'accepted', value: { cancelled: true }, sameFence: true }
@@ -64,9 +65,9 @@ function tasksFor(
   options: {
     streamLive?: boolean
     hostClockOffsetMs?: number
-    stop?: Props['tasks']['stop']
+    stop?: StructuredTasks['stop']
   } = {}
-): Props['tasks'] {
+): StructuredTasks {
   return {
     view: structuredSessionBackgroundTasksView(state, null),
     rowContext: agentChildRowContextForSessionStream(
