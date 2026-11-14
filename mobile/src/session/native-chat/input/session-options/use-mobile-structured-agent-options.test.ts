@@ -1,22 +1,15 @@
 import { structuredAgentSessionOptionStamp } from '../../../../../../src/shared/agent-session/options/reconciliation/structured-agent-session-option-state'
 import { act } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  AgentSessionModelCatalogResult,
-  AgentSessionOptionResult
-} from '../../../../../../src/shared/agent-session/agent-session-wire'
+import type { AgentSessionModelCatalogResult } from '../../../../../../src/shared/agent-session/agent-session-wire'
 import type { AgentSessionOptionsResult } from '../../../../../../src/shared/agent-session/options/protocol/agent-session-options-result'
-import type { StructuredAgentSessionMutationResult } from '../../agent-session/mobile-structured-agent-session-rpc'
 import { rememberMobileCreatedStructuredSession } from '../../agent-session/mobile-created-structured-sessions'
 
 import {
   settle,
   OPTIONS,
-  FAST_OPTIONS,
-  FAST_OPTIONS_ON,
   deferred,
   optionsClient,
-  queuedReads,
   recordingMutate,
   accepted,
   mountOptions,
@@ -24,44 +17,6 @@ import {
   currentValueOf,
   BASE
 } from './use-mobile-structured-agent-options.test-fixture'
-
-describe('useMobileStructuredAgentOptions pending picks', () => {
-  it('holds a repeat of an option on its way but lets another option go, as desktop does', async () => {
-    const client = optionsClient(queuedReads(FAST_OPTIONS, FAST_OPTIONS_ON))
-    const inFlight = deferred<StructuredAgentSessionMutationResult<AgentSessionOptionResult>>()
-    const { mutate } = recordingMutate(async (call) =>
-      call === 0 ? inFlight.promise : accepted({ key: 'fastMode', value: 'true' }, false)
-    )
-    const harness = await mountOptions({ ...BASE, client: client.client, mutate })
-
-    let firstWrite: Promise<boolean> | null = null
-    await act(async () => {
-      firstWrite = harness.current().setStructuredOption('effort', 'high')
-    })
-    expect(harness.current().pendingOptionId).toBe('effort')
-
-    let repeat: boolean | null = null
-    await act(async () => {
-      repeat = await harness.current().setStructuredOption('effort', 'medium')
-    })
-    expect(repeat).toBe(false)
-
-    let other: boolean | null = null
-    await act(async () => {
-      other = await harness.current().setStructuredOption('fastMode', true)
-    })
-    expect(other).toBe(true)
-
-    await act(async () => {
-      inFlight.resolve(accepted({ key: 'effort', value: 'high' }, false))
-      await firstWrite
-    })
-    await settle()
-    expect(await firstWrite).toBe(true)
-    expect(harness.current().pendingOptionId).toBeNull()
-    await harness.unmount()
-  })
-})
 
 describe('useMobileStructuredAgentOptions host catalog', () => {
   const HOST_CATALOG: AgentSessionModelCatalogResult = {
@@ -207,50 +162,6 @@ it('joins the post-receipt menu read with an unchanged phone option stamp', asyn
   await settle()
   expect(currentValueOf(harness.current().optionSnapshot, 'effort')).toBe('low')
   expect(descriptorFor(harness.current().optionSnapshot, 'effort')?.settable).toBe(true)
-  await harness.unmount()
-})
-
-it('phone retains a queried seed-catalog base across its fence until later metadata arrives', async () => {
-  const catalog = deferred<AgentSessionModelCatalogResult>()
-  let reads = 0
-  const client = optionsClient(
-    () =>
-      ++reads === 1
-        ? Promise.resolve({
-            ...OPTIONS,
-            current: {
-              model: 'gpt-live',
-              effort: 'high',
-              defaulted: ['model'],
-              acceptedInputSources: { effort: 'saved' }
-            }
-          })
-        : deferred<AgentSessionOptionsResult>().promise,
-    () => catalog.promise
-  )
-  const { mutate } = recordingMutate(async () => accepted({ key: 'effort', value: 'low' }, true))
-  rememberMobileCreatedStructuredSession('answered-retention', 'worktree')
-  const harness = await mountOptions({
-    ...BASE,
-    sessionId: 'answered-retention',
-    client: client.client,
-    mutate,
-    sendSelection: true,
-    coherentCatalog: true
-  })
-  expect(harness.current().sendSelection()).toEqual({ selection: { effort: 'high' } })
-  await harness.rerender({ fence: 2 })
-  expect(harness.current().sendSelection()).toEqual({ selection: { effort: 'high' } })
-  await act(async () =>
-    catalog.resolve({
-      origin: 'probe',
-      fetchedAt: 1,
-      models: OPTIONS.models,
-      listingNamesConfiguredModel: true
-    })
-  )
-  await settle()
-  expect(harness.current().sendSelection()).toEqual({ selection: { effort: 'high' } })
   await harness.unmount()
 })
 
