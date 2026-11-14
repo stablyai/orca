@@ -35,6 +35,8 @@ export type AcpAdvertisedEfforts = {
 export type AcpRequestPresentation = {
   body: ProviderTimelineRequestBody
   reply(response: AgentSessionPromptResponse | null): unknown
+  /** A URL request the agent may later report finished with `elicitation/complete`. */
+  elicitationId?: string
 }
 
 export type AcpRequestSettlement = { reply: unknown; plan?: string }
@@ -168,6 +170,8 @@ export type AcpDialect = {
   sessionlessRequests?: readonly string[]
   /** Claimed permission requests are never auto-approved. */
   request?(method: string, params: unknown): AcpRequestPresentation | undefined
+  /** The agent's own notification that a URL request it raised finished, carrying `elicitationId`. */
+  elicitationComplete?(method: string): boolean
   settleRequest?(method: string, params: unknown): AcpRequestSettlement | undefined
   promptErrorDetail?(error: AcpAgentError): string | undefined
   promptFailure?(
