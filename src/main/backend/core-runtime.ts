@@ -7,7 +7,7 @@ import { BackendCoreProfileShutdown } from './core-profile-shutdown'
 export type BackendCoreHost = {
   userDataPath: string
   supervised: boolean
-  server: { options: OrcadOptions }
+  options: OrcadOptions
   prepareCliLauncher(): Promise<void>
   prepareSecrets(userDataPath: string): Promise<void>
   runQuitHandlers(): void

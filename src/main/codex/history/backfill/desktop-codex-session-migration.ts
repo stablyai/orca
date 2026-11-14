@@ -1,14 +1,14 @@
-import type { Store } from '../persistence/loading-store/store'
-import type { createProviderAccountServices } from '../providers/accounts/provider-account-services'
-import { createCodexSessionMigrationScheduler } from '../codex/history/backfill/codex-session-migration-scheduler'
-import { startCodexSessionBackfillInBackground } from '../codex/history/backfill/codex-session-backfill'
-import { startCodexSessionIndexHealInBackground } from '../codex/history/index/codex-session-index-heal'
-import { resolveHostCodexSessionSourceHome } from '../codex/history/rollouts/codex-session-source-home'
+import type { Store } from '../../../persistence/loading-store/store'
+import type { createProviderAccountServices } from '../../../providers/accounts/provider-account-services'
+import { createCodexSessionMigrationScheduler } from './codex-session-migration-scheduler'
+import { startCodexSessionBackfillInBackground } from './codex-session-backfill'
+import { startCodexSessionIndexHealInBackground } from '../index/codex-session-index-heal'
+import { resolveHostCodexSessionSourceHome } from '../rollouts/codex-session-source-home'
 import {
   getCodexPaneAccount,
   isCodexPaneHomeRouteProvenAwayFromSharedHome
-} from '../codex/configuration/homes/codex-pane-account-registry'
-import type { CodexHomePtySpawnedLifecycleArgs } from '../ipc/pty/host-env/types'
+} from '../../configuration/homes/codex-pane-account-registry'
+import type { CodexHomePtySpawnedLifecycleArgs } from '../../../ipc/pty/host-env/types'
 
 type CodexRuntimeHome = ReturnType<typeof createProviderAccountServices>['codexRuntimeHome']
 
@@ -35,6 +35,7 @@ export function recordCodexMigrationPtySpawn(
   runtimeHome: CodexRuntimeHome | null | undefined,
   args: CodexHomePtySpawnedLifecycleArgs
 ): void {
+  // Only shared/ambiguous retained shells may still produce rollout logs needing publication.
   if (args.reattached && args.startedSequence !== undefined) {
     const paneAccount = getCodexPaneAccount(args.id)
     const homeRoute =

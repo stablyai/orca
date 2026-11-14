@@ -46,6 +46,7 @@ export function installDesktopWorkspaceVmWaker(
   runtime: OrcaRuntimeService,
   userDataPath: () => string
 ): void {
+  // Opening a recipe VM's workspace from a client wakes the VM through the runtime's one owner.
   registerRecipeVmWaker({
     state: (workspaceId, suspended) => runtime.workspaceVmState(workspaceId, suspended),
     noteOpened: (workspaceId) => runtime.noteWorkspaceReopened(workspaceId),
@@ -56,6 +57,7 @@ export function installDesktopWorkspaceVmWaker(
       return openRecipeVmEnvironment(root, resolveEnvironment(root, selector))
     }
   })
+  // A sleeping VM's SSH host takes no background login until its workspace wakes (#36363).
   setRecipeVmAsleepStoreRoot(getRuntimeEnvironmentRegistryRoot)
   setSshHostAsleepCheck((targetId) => isRecipeVmSshTargetAsleep(userDataPath(), targetId))
 }

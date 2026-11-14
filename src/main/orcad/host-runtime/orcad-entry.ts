@@ -19,7 +19,7 @@ export async function startOrcad(options: OrcadOptions = {}): Promise<OrcadHandl
   return startBackendCore({
     userDataPath,
     supervised: process.env[ORCA_SERVE_SUPERVISED_ENV] === '1',
-    server: { options },
+    options,
     prepareCliLauncher: prepareOrcadCliLauncher,
     prepareSecrets: prepareOrcadSecretStoreAndMigrate,
     runQuitHandlers: runOrcadQuitHandlers

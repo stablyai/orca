@@ -1,7 +1,6 @@
 import type { BackendCoreHost } from './core-runtime'
 import type { OrcadHandle } from '../orcad/serve-startup/orcad-start-contract'
 import type { BackendCoreProfileShutdown } from './core-profile-shutdown'
-import { prepareBackendAccountHomes, prepareBackendAccounts } from './core-account-startup'
 import { prepareBackendDaemon } from './core-daemon-startup'
 import { prepareWorktreeRemovalsForStore } from '../workspaces/removal/worktree-removal-records-load'
 import { worktreeRemovalLifetime } from '../workspaces/removal/worktree-removal-lifetime'
@@ -35,7 +34,7 @@ export async function activateBackendRuntime(
   profileShutdown: BackendCoreProfileShutdown,
   setObservabilityCleanup: (close: () => Promise<void>) => void
 ): Promise<Pick<OrcadHandle, 'readiness'>> {
-  const options = host.server.options
+  const { options } = host
   const { time: timed, report: reportStartupTiming } = createOrcadStartupTiming()
   // Overlap login-shell probing with imports and store startup.
   const loginEnvironment = adoptWslHostLoginEnvironmentLogged()
@@ -134,16 +133,24 @@ export async function activateBackendRuntime(
   // Runtime constructor callbacks use this index only after it is installed.
   let sessionSearch: { apply(settings: AiVaultSearchSettings): void; dispose(): void } | null = null
 
-  const { codexAccountHomes } = await prepareBackendAccountHomes(profileStore, registerCleanup)
+  const { orcadCodexAccountHomes } =
+    await import('../orcad/account-launch/orcad-codex-account-homes')
+  const codexAccountHomes = orcadCodexAccountHomes(
+    () => profileStore.getSettings(),
+    registerCleanup
+  )
 
   // Gates open where each phase finishes today; RPC starts after all of them.
   const featureReadiness = installOrcadFeatureReadiness()
-  const accountLaunch = await prepareBackendAccounts(
-    profileStore,
-    agentHookServer,
-    codexAccountHomes,
-    registerCleanup
-  )
+  const { createOrcadAccountServices } =
+    await import('../orcad/account-launch/orcad-account-services')
+  const accountLaunch = createOrcadAccountServices({
+    store: profileStore,
+    setClaudeStatusLineListener: (listener) =>
+      agentHookServer.setClaudeStatusLineListener(listener),
+    registerCleanup,
+    clientCodexHomes: codexAccountHomes
+  })
 
   const { loadAgentSessionClaimSigner } =
     await import('../runtime/agent-session/ownership/agent-session-claim-identity')

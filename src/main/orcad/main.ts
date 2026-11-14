@@ -33,19 +33,18 @@ import { runWindowsBreakawayLaunchIfRequested } from '../../shared/windows-break
 import { parseArgs } from './serve-startup/orcad-command-arguments'
 import { ORCAD_RECLAIM_STALE_LOCK_FLAG } from '../../shared/orcad-stale-lock-reclaim'
 
-// A resolved plain-Node module graph proves the build guard; skip probes, ports and data-root locks.
-if (process.argv.includes('--orcad-smoke-load-check')) {
-  process.exit(0)
-}
-
 function failStartup(error: unknown): void {
   console.error('orcad: failed to start:', error)
   // Distinguish configuration refusals so supervisors cannot restart-spin on them.
   process.exit(resolveOrcadExitCode(error))
 }
 
-// One-shot launch and stop commands must skip server startup and preflights.
-if (process.argv[2] === '--orcad-structured-provider-load-check') {
+// A resolved plain-Node module graph proves the build guard; skip probes, ports and data-root locks.
+if (process.argv.includes('--orcad-smoke-load-check')) {
+  // Activation loads lazily at startup; load it here so the guard still covers its graph.
+  void import('../backend/core-runtime-activation').then(() => process.exit(0), failStartup)
+} else if (process.argv[2] === '--orcad-structured-provider-load-check') {
+  // One-shot launch and stop commands must skip server startup and preflights.
   void import('./native-runtime/orcad-structured-provider-smoke')
     .then(({ smokeLoadOrcadStructuredProviders }) => smokeLoadOrcadStructuredProviders())
     .then(() => process.exit(0))

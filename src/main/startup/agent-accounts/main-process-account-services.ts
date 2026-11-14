@@ -1,5 +1,5 @@
 import { installProviderAccountCatalogWarmup } from '../../providers/accounts/provider-account-catalog-warmup'
-import { createDesktopCodexSessionMigration } from '../../backend/desktop-codex-session-migration'
+import { createDesktopCodexSessionMigration } from '../../codex/history/backfill/desktop-codex-session-migration'
 import { app } from 'electron'
 import { KeybindingService } from '../../keybindings/keybinding-service'
 import { createProviderAccountServices } from '../../providers/accounts/provider-account-services'

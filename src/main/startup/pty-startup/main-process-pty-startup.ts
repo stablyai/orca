@@ -1,4 +1,4 @@
-import { recordCodexMigrationPtySpawn } from '../../backend/desktop-codex-session-migration'
+import { recordCodexMigrationPtySpawn } from '../../codex/history/backfill/desktop-codex-session-migration'
 import { app } from 'electron'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { isLocalExecutionHost } from '../../../shared/execution-host'

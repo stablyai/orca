@@ -12,11 +12,17 @@ import { desktopWorktreeWatcherRemoval } from '../ipc/filesystem/watchers/filesy
 import { setDefaultProxySessionResolver } from '../network/electron-default-proxy-session'
 
 export function installElectronNativeServices(): void {
+  // Bind PTY IPC/power at process scope: headless serve has no window yet and must not register no-op handlers.
   setPtyHostBindings({ ipc: ipcMain, power: powerMonitor })
+  // Node hosts omit desktop surfaces and route notifications to paired clients instead.
   setRuntimeDesktopSurface(electronRuntimeDesktopSurface)
+  // Install Chromium browser commands only in Electron; Node hosts advertise no browser capability and reject those RPCs.
   installElectronBrowserCommands()
+  // Electron consults default-session proxy config; Node hosts use environment only.
   setDefaultProxySessionResolver(() => session.defaultSession)
+  // Desktop integrations use Chromium networking; Node differs in proxy environment and user agent.
   setMainHttpClient(electronHttpClient)
+  // Only Electron supplies streaming speech services; other hosts reject speech calls.
   setSpeechServiceFactories(electronSpeechServiceFactories)
   setWorktreeWatcherRemoval(desktopWorktreeWatcherRemoval)
 }
