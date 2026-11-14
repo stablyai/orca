@@ -5,7 +5,12 @@ import { Label } from '../../../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 
-const POLICIES: readonly ClaudeAccountSwitchRunningSessions[] = ['ask', 'restart', 'keep']
+const POLICIES: readonly ClaudeAccountSwitchRunningSessions[] = [
+  'ask',
+  'restart',
+  'restart-all',
+  'keep'
+]
 
 function isPolicy(value: string): value is ClaudeAccountSwitchRunningSessions {
   return POLICIES.some((policy) => policy === value)
@@ -46,7 +51,7 @@ export function ClaudeRunningSessionSwitchSetting({
           }
         }}
       >
-        <SelectTrigger size="sm" className="w-[140px]" aria-label={title}>
+        <SelectTrigger size="sm" className="min-w-[140px]" aria-label={title}>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -55,6 +60,9 @@ export function ClaudeRunningSessionSwitchSetting({
           </SelectItem>
           <SelectItem value="restart">
             {t('accounts.claude.switchSessions.settingRestart', 'Always restart')}
+          </SelectItem>
+          <SelectItem value="restart-all">
+            {t('accounts.claude.switchSessions.settingRestartAll', 'Always restart every session')}
           </SelectItem>
           <SelectItem value="keep">
             {t('accounts.claude.switchSessions.settingKeep', 'Never restart')}

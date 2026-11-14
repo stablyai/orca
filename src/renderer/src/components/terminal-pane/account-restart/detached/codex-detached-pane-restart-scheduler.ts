@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store/index'
+import { subscribeMountedTerminalTabChanges } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import {
   resetDetachedCodexPaneRestartClaimsForTests,
@@ -19,6 +20,10 @@ export function hasAddedPendingCodexPaneRestart(
   return Object.keys(current).some((ptyId) => !previous[ptyId])
 }
 
+function hasPendingClaudeRestart(pending: Record<string, AccountRestartAgent>): boolean {
+  return Object.values(pending).includes('claude')
+}
+
 /** Installed once at app startup; returns the uninstaller (tests). */
 export function installCodexDetachedPaneRestartExecutor(): () => void {
   executorInstalled = true
@@ -31,14 +36,21 @@ export function installCodexDetachedPaneRestartExecutor(): () => void {
       ) ||
       // Why: a deferred Claude restart runs once its turn ends, which only a status change reports.
       (state.agentStatusByPaneKey !== previousState.agentStatusByPaneKey &&
-        Object.values(state.pendingPaneAccountRestarts).includes('claude'))
+        hasPendingClaudeRestart(state.pendingPaneAccountRestarts))
     ) {
+      scheduleClaimSweep()
+    }
+  })
+  // Why: an unmount writes nothing to the store, yet hands its queued Claude restarts to this sweep.
+  const unsubscribeMountedTabs = subscribeMountedTerminalTabChanges(() => {
+    if (hasPendingClaudeRestart(useAppStore.getState().pendingPaneAccountRestarts)) {
       scheduleClaimSweep()
     }
   })
   scheduleClaimSweep()
   return () => {
     unsubscribe()
+    unsubscribeMountedTabs()
     if (executorGeneration === generation) {
       executorInstalled = false
       executorGeneration += 1

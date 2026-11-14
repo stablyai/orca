@@ -21543,7 +21543,10 @@
         "body_other": "{{count}} 件の Claude セッションがまだ {{previous}} で実行中です。再起動すると、各会話が {{next}} で続行されます。処理中のセッションは待機状態になってから再起動します。",
         "reasonSharedSession": "別のペインでも開いています",
         "sharedOne": "別のペインで同じ会話が開いているため、1 件の Claude セッションは {{previous}} のままです。再起動すると別のペインの会話が再び開く可能性があります。",
-        "sharedOther": "別のペインで同じ会話が開いているため、{{count}} 件の Claude セッションは {{previous}} のままです。再起動すると別のペインの会話が再び開く可能性があります。"
+        "sharedOther": "別のペインで同じ会話が開いているため、{{count}} 件の Claude セッションは {{previous}} のままです。再起動すると別のペインの会話が再び開く可能性があります。",
+        "settingRestartAll": "常にすべてのセッションを再起動する",
+        "notMovedToOne": "1 件のセッションは {{account}} に移動されませんでした。",
+        "notMovedToOther": "{{count}} 件のセッションは {{account}} に移動されませんでした。"
       },
       "oauthUsage": {
         "title": "Claude の使用量の定期取得",

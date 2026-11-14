@@ -35,6 +35,7 @@ import {
 } from './structured-agent-session-restart-continuation'
 import { restartContinuationId } from './structured-agent-session-restart-continuation-envelope'
 import { createInterruptedContinuation } from './structured-agent-session-interrupted-continuation'
+import { continueStructuredAgentSessionAfterAccountSwitch } from './structured-agent-session-account-switch'
 import {
   createStructuredAgentSessionRestartOfferWithdrawal,
   type StructuredAgentSessionRestartOfferSession
@@ -309,6 +310,9 @@ export function createStructuredAgentSessionRestartResume(
       ),
     continueAfterRestart,
     onAgentStarted: withdrawal.onAgentStarted,
-    continueInterrupted: createInterruptedContinuation(continuationHost, readMarkers)
+    continueInterrupted: createInterruptedContinuation(continuationHost, readMarkers),
+    retireForAccountSwitch: surfaces.retireForAccountSwitch,
+    continueAfterAccountSwitch: (sessionId, continueAfter) =>
+      continueStructuredAgentSessionAfterAccountSwitch(continuationHost, sessionId, continueAfter)
   }
 }

@@ -1,8 +1,14 @@
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
+import { discoverLocalPtyClaudeSession } from '../../../claude-accounts/selection/claude-pane-session-discovery'
 import {
   getClaudeProfileRouter,
   getClaudeWslProfileRouter
 } from '../../../claude-accounts/profiles/routing/claude-profile-installed-router'
 import { getPtyIpc } from '../pty-host-bindings'
+import { ptyOwnership } from '../provider/ownership-state'
 import {
   CLAUDE_ACCOUNT_FUNCTION_DAEMON_PROTOCOL_VERSION,
   CLAUDE_ACCOUNT_FUNCTION_REVERTED_DAEMON_PROTOCOL_VERSION
@@ -41,6 +47,27 @@ export function installPtyClaudeOldTerminalIpcHandler(deps: Deps): void {
           : getClaudeProfileRouter()?.systemDefaultRunsAnotherAccount()
       return runsAnother === true
     }
+  )
+  getPtyIpc().removeHandler('pty:discoverClaudeSession')
+  getPtyIpc().handle(
+    'pty:discoverClaudeSession',
+    async (_event, args: { id?: unknown }): Promise<AgentProviderSessionMetadata | null> => {
+      const id = args?.id
+      if (!isLocalHostPtyId(id)) {
+        return null
+      }
+      await deps.getLocalPtyProviderStartupPromise()
+      return discoverLocalPtyClaudeSession(id)
+    }
+  )
+}
+
+function isLocalHostPtyId(id: unknown): id is string {
+  return (
+    typeof id === 'string' &&
+    !isRemoteRuntimePtyId(id) &&
+    !parseAppSshPtyId(id) &&
+    (ptyOwnership.get(id) ?? LOCAL_EXECUTION_HOST_ID) === LOCAL_EXECUTION_HOST_ID
   )
 }
 

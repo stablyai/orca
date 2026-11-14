@@ -79,7 +79,7 @@ async function withoutDetachedOrphans(
 }
 
 /** A child older than its parent carries a reused ppid; only checkable when the snapshot has start times. */
-function startedBefore(
+export function startedBefore(
   childStartMs: number | undefined,
   parentStartMs: number | undefined
 ): boolean {

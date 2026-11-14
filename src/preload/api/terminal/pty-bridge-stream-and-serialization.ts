@@ -9,6 +9,7 @@ import type {
   NewerDaemonHeldScreen,
   NewerDaemonReopenResult
 } from '../../../shared/newer-daemon-hold'
+import type { AgentProviderSessionMetadata } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 
 export const ptyStreamAndSerializationApi = {
   inspectProcess: (
@@ -32,6 +33,8 @@ export const ptyStreamAndSerializationApi = {
     id: string,
     target: { runtime: 'host' } | { runtime: 'wsl'; wslDistro: string }
   ): Promise<boolean> => ipcRenderer.invoke('pty:openedBeforeClaudeAccounts', { id, target }),
+  discoverClaudeSession: (id: string): Promise<AgentProviderSessionMetadata | null> =>
+    ipcRenderer.invoke('pty:discoverClaudeSession', { id }),
   claudeDiffPanelMayAutoOpen: (
     id: string,
     target: { runtime: 'host' } | { runtime: 'wsl'; wslDistro: string }

@@ -1,18 +1,24 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import { provideLayoutFrameTerminalPanes } from '@/runtime/workspace-layout/frames/layout-frame-terminal-panes'
+import { registerRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
+import { getDefaultSettings } from '../../../../../../shared/constants'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
+import type { ClaudeAccountSwitchRunningSessions } from '../../../../../../shared/claude-account-switch-settings'
+import { createIpcPtySessionHandlers } from '../../pty-transport/ipc/ipc-pty-session-handlers'
+import { createPtyOutputProcessor } from '../../pty-transport/output/pty-output-processor'
 
 import {
   installCodexDetachedPaneRestartExecutor,
   resetCodexDetachedPaneRestartExecutorForTests
 } from './codex-detached-pane-restart-scheduler'
+import { recordQueuedClaudeRestarts } from '@/lib/agent-session/accounts/claude/claude-queued-restart-records'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const OLD_PTY = 'wt1@@old'
 const NEW_PTY = 'wt1@@new'
-const SESSION_ID = '01a006a6-1d07-70a1-bad5-f9110d5845c0'
+const SESSION_ID = '00000000-0000-4000-8000-0000000000a1'
 
 function seedClaudePane(
   overrides: Partial<Pick<AgentStatusEntry, 'state' | 'providerSession'>> = {}
@@ -57,6 +63,18 @@ function seedClaudePane(
       }
     }
   })
+}
+
+function setRunningSessionSetting(value: ClaudeAccountSwitchRunningSessions): void {
+  useAppStore.setState({
+    settings: { ...getDefaultSettings('/home/dev'), claudeAccountSwitchRunningSessions: value }
+  })
+}
+
+function queueFromSwitch(): void {
+  const setting = useAppStore.getState().settings?.claudeAccountSwitchRunningSessions
+  recordQueuedClaudeRestarts([OLD_PTY], setting === 'restart-all')
+  useAppStore.getState().queuePaneAccountRestarts([OLD_PTY], 'claude')
 }
 
 function setPaneState(state: AgentStatusEntry['state']): void {
@@ -123,7 +141,7 @@ describe('detached Claude account-move restart', () => {
     const uninstall = installCodexDetachedPaneRestartExecutor()
     try {
       seedClaudePane({ state: 'working' })
-      useAppStore.getState().queuePaneAccountRestarts([OLD_PTY], 'claude')
+      queueFromSwitch()
       await settle()
       // Why waiting: Claude's hooks report a permission prompt or question as waiting, mid-turn.
       setPaneState('waiting')
@@ -139,4 +157,178 @@ describe('detached Claude account-move restart', () => {
       uninstall()
     }
   })
+
+  it.each([
+    { setting: 'restart-all' as const, spawns: 1, pending: {} },
+    { setting: 'restart' as const, spawns: 0, pending: { [OLD_PTY]: 'claude' } }
+  ])('under $setting, a working session queued now spawns $spawns time(s)', async (row) => {
+    const uninstall = installCodexDetachedPaneRestartExecutor()
+    try {
+      seedClaudePane({ state: 'working' })
+      setRunningSessionSetting(row.setting)
+      queueFromSwitch()
+      await settle()
+
+      expect(window.api.pty.spawn).toHaveBeenCalledTimes(row.spawns)
+      expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual(row.pending)
+    } finally {
+      uninstall()
+    }
+  })
+
+  it.each([
+    { setting: 'restart-all' as const, spawns: 1 },
+    { setting: 'restart' as const, spawns: 0 }
+  ])(
+    'under $setting, a working session queued while mounted spawns $spawns time(s) once its tab and handler are released',
+    async (row) => {
+      seedClaudePane({ state: 'working' })
+      setRunningSessionSetting(row.setting)
+      const unregister = registerRuntimeTerminalTab({
+        tabId: 'tab-1',
+        worktreeId: 'wt1',
+        getManager: () => null,
+        getContainer: () => null,
+        getPtyIdForPane: () => OLD_PTY,
+        getTabWideAgentHintLeafId: () => LEAF_ID
+      })
+      const handlers = createIpcPtySessionHandlers({
+        outputProcessor: createPtyOutputProcessor({}),
+        getPtyId: () => OLD_PTY,
+        getCallbacks: () => ({}),
+        getSuppressAttentionEvents: () => false,
+        markExited: () => {}
+      })
+      const uninstall = installCodexDetachedPaneRestartExecutor()
+      try {
+        queueFromSwitch()
+        await settle()
+        expect(window.api.pty.spawn).not.toHaveBeenCalled()
+        handlers.registerData(OLD_PTY)
+        unregister()
+        handlers.unregisterAll(OLD_PTY)
+        await settle()
+
+        expect(window.api.pty.spawn).toHaveBeenCalledTimes(row.spawns)
+      } finally {
+        unregister()
+        handlers.unregisterAll(OLD_PTY)
+        uninstall()
+      }
+    }
+  )
+
+  it.each(['ask', 'restart', 'keep'] as const)(
+    'under %s, a rejected spawn is tried once and its restart dropped',
+    async (setting) => {
+      vi.mocked(window.api.pty.spawn).mockRejectedValue(new Error('launch refused'))
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const uninstall = installCodexDetachedPaneRestartExecutor()
+      try {
+        seedClaudePane()
+        setRunningSessionSetting(setting)
+        queueFromSwitch()
+        await settle()
+        await settle()
+
+        expect(window.api.pty.spawn).toHaveBeenCalledTimes(1)
+        expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
+      } finally {
+        uninstall()
+        warn.mockRestore()
+      }
+    }
+  )
+
+  it.each([
+    { rejections: 2, bound: NEW_PTY },
+    { rejections: 4, bound: OLD_PTY }
+  ])(
+    'under restart-all, a spawn rejected $rejections times is tried at most three times and the pane ends on $bound',
+    async (row) => {
+      const spawn = vi.mocked(window.api.pty.spawn)
+      for (let i = 0; i < row.rejections; i += 1) {
+        spawn.mockRejectedValueOnce(new Error('launch refused'))
+      }
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const uninstall = installCodexDetachedPaneRestartExecutor()
+      try {
+        seedClaudePane({ state: 'working' })
+        setRunningSessionSetting('restart-all')
+        queueFromSwitch()
+        await settle()
+        await settle()
+        setPaneState('done')
+        await settle()
+
+        expect(spawn).toHaveBeenCalledTimes(3)
+        expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
+        expect(useAppStore.getState().terminalLayoutsByTabId['tab-1']?.ptyIdsByLeafId).toEqual({
+          [LEAF_ID]: row.bound
+        })
+      } finally {
+        uninstall()
+        warn.mockRestore()
+      }
+    }
+  )
+
+  it('tries a restart-all session again when a new restart is queued after it gave up', async () => {
+    const spawn = vi.mocked(window.api.pty.spawn)
+    spawn.mockRejectedValue(new Error('launch refused'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const uninstall = installCodexDetachedPaneRestartExecutor()
+    try {
+      seedClaudePane()
+      setRunningSessionSetting('restart-all')
+      queueFromSwitch()
+      await settle()
+      await settle()
+      expect(spawn).toHaveBeenCalledTimes(3)
+
+      spawn.mockReset().mockResolvedValue({ id: NEW_PTY })
+      useAppStore.getState().consumePendingPaneAccountRestart(OLD_PTY)
+      queueFromSwitch()
+      await settle()
+
+      expect(spawn).toHaveBeenCalledTimes(1)
+      expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
+    } finally {
+      uninstall()
+      warn.mockRestore()
+    }
+  })
+
+  it.each([
+    { release: 'clearTabPtyId', run: () => useAppStore.getState().clearTabPtyId('tab-1', OLD_PTY) },
+    {
+      release: 'closeTab',
+      run: () => useAppStore.getState().closeTab('tab-1', { reason: 'pty-exit' })
+    }
+  ])(
+    'queues nothing again for a pane released by $release while its spawn was in flight',
+    async (row) => {
+      const spawning = Promise.withResolvers<Awaited<ReturnType<typeof window.api.pty.spawn>>>()
+      vi.mocked(window.api.pty.spawn).mockReturnValueOnce(spawning.promise)
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const uninstall = installCodexDetachedPaneRestartExecutor()
+      try {
+        seedClaudePane({ state: 'working' })
+        setRunningSessionSetting('restart-all')
+        queueFromSwitch()
+        await settle()
+        expect(window.api.pty.spawn).toHaveBeenCalledTimes(1)
+
+        row.run()
+        spawning.reject(new Error('replaced pty gone'))
+        await settle()
+
+        expect(window.api.pty.spawn).toHaveBeenCalledTimes(1)
+        expect(useAppStore.getState().pendingPaneAccountRestarts).toEqual({})
+      } finally {
+        uninstall()
+        warn.mockRestore()
+      }
+    }
+  )
 })

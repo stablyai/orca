@@ -13,6 +13,7 @@ import {
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
 import { clearWorktreeSleepIntent } from '@/lib/workspace/sleep/worktree-sleep-intent'
 import { omitDisownedPtyIds } from './terminal-disowned-pty-sources'
+import { moveQueuedClaudeRestart } from '@/lib/agent-session/accounts/claude/claude-queued-restart-records'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from '../terminal-state'
 
 export function createTerminalPtyBindingActions(
@@ -164,6 +165,7 @@ export function createTerminalPtyBindingActions(
           if (hasReplacementPendingRestart) {
             nextPendingPaneAccountRestarts[ptyId] = nextPendingPaneAccountRestarts[replacementPtyId]
             delete nextPendingPaneAccountRestarts[replacementPtyId]
+            moveQueuedClaudeRestart(replacementPtyId, ptyId)
           }
           if (hasReplacementRestartNotice) {
             const replacedNotice = nextCodexRestartNoticeByPtyId[replacementPtyId]

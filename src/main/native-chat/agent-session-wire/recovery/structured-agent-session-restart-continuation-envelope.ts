@@ -1,12 +1,15 @@
 import { createHash } from 'node:crypto'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import { restartContinuationMessage } from '../../../../shared/agent-session/lifecycle/agent-session-restart-continuation'
+import {
+  restartContinuationMessage,
+  type AgentSessionContinuationSource
+} from '../../../../shared/agent-session/lifecycle/agent-session-restart-continuation'
 import type { AgentSessionResumeMarker } from '../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import type { AgentSessionMutationEnvelope } from '../../../../shared/agent-session/agent-session-wire'
 
 export function restartContinuationBody(
-  marker: Pick<AgentSessionResumeMarker, 'activity'>
+  marker: AgentSessionContinuationSource
 ): AgentJournalMessageItem {
   return {
     kind: 'message',
@@ -52,7 +55,7 @@ export function isRestartContinuationOf(
 export function restartContinuationEnvelope(
   sessionId: string,
   fence: number,
-  marker: Pick<AgentSessionResumeMarker, 'activity'>,
+  marker: AgentSessionContinuationSource,
   continuationId: string
 ): { envelope: AgentSessionMutationEnvelope; body: AgentJournalMessageItem } {
   const body = restartContinuationBody(marker)

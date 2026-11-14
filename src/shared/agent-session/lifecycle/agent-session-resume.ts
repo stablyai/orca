@@ -1,5 +1,5 @@
 import { readAgentEffortLevel } from '../../agent-launch/choices/agent-effort-level'
-import { readClaudePermissionMode } from './provider-session-live-settings'
+import { readClaudeLiveSettings } from './provider-session-live-settings'
 import type { AgentHookSource } from '../../agent-hook-listener/transport/agent-hook-relay'
 import type {
   AgentStatusCacheIdentity,
@@ -55,6 +55,7 @@ export type AgentProviderSessionMetadata = {
   effort?: string
   /** Claude's live permission mode; a resume with no recorded recipe takes its permission from it. */
   permissionMode?: string
+  model?: string
 }
 
 export type SleepingAgentLaunchConfig = {
@@ -189,14 +190,13 @@ export function normalizeAgentProviderSession(raw: unknown): AgentProviderSessio
   const transcriptPath = readPathFromKeys(record, ['transcriptPath'])
   const cwd = readPathFromKeys(record, ['cwd'])
   const effort = readAgentEffortLevel(record.effort)
-  const permissionMode = readClaudePermissionMode(record.permissionMode)
   return {
     key: record.key,
     id,
     ...(transcriptPath ? { transcriptPath } : {}),
     ...(cwd ? { cwd } : {}),
     ...(effort ? { effort } : {}),
-    ...(permissionMode ? { permissionMode } : {})
+    ...readClaudeLiveSettings(record)
   }
 }
 
