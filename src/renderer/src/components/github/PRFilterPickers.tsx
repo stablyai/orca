@@ -89,10 +89,9 @@ function pickerFallbackText(
 // Allow external authors/reviewers missing from the collaborator-only assignable-user list.
 function customPickerValue(
   filtered: PickerOption[],
-  query: string,
+  { queryTooLarge, trimmedQuery }: ReturnType<typeof getPullRequestPickerQueryState>,
   allowCustomValue: boolean | undefined
 ): string | null {
-  const { queryTooLarge, trimmedQuery } = getPullRequestPickerQueryState(query)
   const show =
     allowCustomValue &&
     trimmedQuery.length > 0 &&
@@ -152,8 +151,9 @@ export function SingleSelectList({
   const t = useTranslate()
   const [query, setQuery] = useState('')
   const filtered = useMemo(() => filterPullRequestPickerOptions(options, query), [options, query])
-  const { queryTooLarge } = getPullRequestPickerQueryState(query)
-  const customValue = customPickerValue(filtered, query, allowCustomValue)
+  const queryState = getPullRequestPickerQueryState(query)
+  const { queryTooLarge } = queryState
+  const customValue = customPickerValue(filtered, queryState, allowCustomValue)
   const fallback = pickerFallbackText({ customValue, loading, queryTooLarge, error, emptyText }, t)
 
   return (
@@ -227,8 +227,9 @@ export function MultiSelectList({
   const [query, setQuery] = useState('')
   const filtered = useMemo(() => filterPullRequestPickerOptions(options, query), [options, query])
   const selectedSet = useMemo(() => new Set(selected), [selected])
-  const { queryTooLarge } = getPullRequestPickerQueryState(query)
-  const customValue = customPickerValue(filtered, query, allowCustomValue)
+  const queryState = getPullRequestPickerQueryState(query)
+  const { queryTooLarge } = queryState
+  const customValue = customPickerValue(filtered, queryState, allowCustomValue)
   const fallback = pickerFallbackText({ customValue, loading, queryTooLarge, error, emptyText }, t)
 
   const toggle = (key: string): void => {

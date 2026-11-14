@@ -174,8 +174,9 @@ export default function PRFilterDropdowns({
         open={popoverOpen}
         onOpenChange={(next) => {
           setPopoverOpen(next)
-          setAuthorLoginsAtOpen(next ? authorLogins : [])
-          if (!next) {
+          if (next) {
+            setAuthorLoginsAtOpen(authorLogins)
+          } else {
             setOpenSection(null)
           }
         }}

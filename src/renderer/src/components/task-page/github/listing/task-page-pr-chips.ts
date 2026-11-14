@@ -72,9 +72,16 @@ export function deriveGitHubPRStateChip(query: ParsedTaskQuery): GitHubPRStateCh
   return query.state === null ? 'all' : query.state
 }
 
+function isMe(login: string | null): boolean {
+  return login?.toLowerCase() === '@me'
+}
+
+export function isOnlyMeAuthor(query: ParsedTaskQuery): boolean {
+  return query.authors.length === 1 && isMe(query.authors[0])
+}
+
 /** Who means author or reviewer, independent of assignee, labels and text; other people light no chip. */
 export function deriveGitHubPRWhoChip(query: ParsedTaskQuery): GitHubPRWhoChip | null {
-  const isMe = (login: string | null): boolean => login?.toLowerCase() === '@me'
   if (query.reviewedBy !== null) {
     return null
   }
@@ -84,9 +91,7 @@ export function deriveGitHubPRWhoChip(query: ParsedTaskQuery): GitHubPRWhoChip |
     }
     return isMe(query.reviewRequested) ? 'reviewing' : null
   }
-  return query.reviewRequested === null && query.authors.length === 1 && isMe(query.authors[0])
-    ? 'mine'
-    : null
+  return query.reviewRequested === null && isOnlyMeAuthor(query) ? 'mine' : null
 }
 
 export function gitHubPRWhoChange(who: GitHubPRWhoChip): PRFilterChange {
