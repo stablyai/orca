@@ -1,5 +1,5 @@
-import type { BridgeRpcClientDiagnostic } from '../../mobile-web-shell/bridge/bridge-rpc-client'
-import { readBridgeHostMessage } from '../../mobile-web-shell/bridge/bridge-envelope'
+import type { BridgeRpcClientDiagnostic } from '../../mobile-web-shell/bridge/client-state/bridge-client-diagnostics'
+import { readBridgeHostMessage } from '../../mobile-web-shell/bridge/protocol/bridge-envelope'
 import { checkpointListDifference, recordingDifferences } from '../rpc-recording/golden-difference'
 import { RecordingParamsMismatch } from '../rpc-recording/recording-mismatch'
 import type { Recording, RecordingScenario } from '../rpc-recording/recording-scenario'

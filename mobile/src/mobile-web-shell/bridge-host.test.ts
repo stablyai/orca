@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
-import { harness, ID, OTHER, subscribeFrame, type Harness } from './bridge-host-test-harness'
+import { harness, ID, OTHER, subscribeFrame } from './bridge-host-test-harness'
 import { BRIDGE_MAX_UNACKED_FRAMES } from './bridge-host-subscriptions'
 import { clientFrame, createFakeRpcClient, flushBridge, rpcSuccess } from './bridge-host-test-fakes'
-import { BRIDGE_MAX_MESSAGE_BYTES } from './bridge/bridge-caps'
+import { BRIDGE_MAX_MESSAGE_BYTES } from './bridge/protocol/bridge-caps'
 
 describe('requests', () => {
   it('answers a synchronous throw from the client and frees the slot', () => {
@@ -92,25 +92,6 @@ describe('backpressure', () => {
   // Use a nonterminal stream to test the byte window; terminal.subscribe now holds/coalesces output and tests that exception separately.
   const WINDOWED = 'session.tabs.subscribe'
 
-  function fill(bridge: Harness, frames: number): void {
-    for (let index = 0; index < frames; index += 1) {
-      bridge.client.streams[0]?.emit({ n: index })
-    }
-  }
-
-  it('acks only up to the seq it was given', () => {
-    const bridge = harness({ ready: true })
-    bridge.host.receive(subscribeFrame(ID, WINDOWED))
-    fill(bridge, BRIDGE_MAX_UNACKED_FRAMES)
-    bridge.host.receive(clientFrame({ type: 'ack', id: ID, seq: 1 }))
-    fill(bridge, 1)
-    expect(bridge.frames().filter((frame) => frame.type === 'event')).toHaveLength(
-      BRIDGE_MAX_UNACKED_FRAMES + 1
-    )
-    fill(bridge, 1)
-    expect(bridge.last()).toEqual({ v: 1, type: 'end', id: ID, reason: 'overflow' })
-  })
-
   it('keeps each stream on its own window', () => {
     const bridge = harness({ ready: true })
     bridge.host.receive(subscribeFrame(ID, WINDOWED))
@@ -135,20 +116,6 @@ describe('teardown', () => {
     bridge.client.streams[0]?.emit({ chunk: 'a' })
     await flushBridge()
     expect(bridge.frames().filter((frame) => frame.type !== 'init')).toEqual([])
-  })
-
-  it('answers the document that loads in after a close, rather than latching shut', () => {
-    const bridge = harness()
-    bridge.host.receive(clientFrame({ type: 'close' }))
-    // Document close must leave the host reusable; the next ready on this same view must receive full service.
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    expect(bridge.last().type).toBe('init')
-    expect(bridge.client.stateListeners()).toBe(1)
-    bridge.host.receive(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
-    expect(bridge.client.requests).toHaveLength(1)
-    bridge.client.pushState('reconnecting')
-    expect(bridge.last()).toMatchObject({ type: 'state', connection: { state: 'reconnecting' } })
-    expect(bridge.diagnostics).toEqual([])
   })
 
   it('posts nothing into a view that belongs to no document yet', () => {

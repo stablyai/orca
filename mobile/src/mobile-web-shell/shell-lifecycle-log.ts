@@ -1,4 +1,4 @@
-import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
+import type { BridgeErrorCapture } from './bridge/protocol/bridge-error-capture'
 import { gateVerdict } from './mobile-web-shell-gates'
 import type {
   MobileWebShellSession,

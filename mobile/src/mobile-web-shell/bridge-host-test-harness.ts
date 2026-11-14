@@ -10,20 +10,17 @@ import {
 import { createBridgeHost, type BridgeHost, type BridgeHostDiagnostic } from './bridge-host'
 import type { BridgeSessionBack } from './bridge-host-back'
 import type { BridgeNavigateBackOutcome } from './bridge-host-contract'
-import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
+import type { BridgeHapticsKind } from './bridge/native-capabilities/bridge-haptics-notify'
 import { MOBILE_WEB_SHELL_GRANTS } from './page-route-policy'
 import {
   BRIDGE_NATIVE_VERBS,
   clipboardWriteParamsSchema,
   type BridgeNativeVerb
-} from './bridge/bridge-native-verbs'
-import {
-  readBridgeHostMessage,
-  type BridgeHostMessage,
-  type BridgeInitRoute
-} from './bridge/bridge-envelope'
+} from './bridge/native-capabilities/bridge-native-verbs'
+import { readBridgeHostMessage, type BridgeHostMessage } from './bridge/protocol/bridge-envelope'
+import type { BridgeInitRoute } from './bridge/protocol/bridge-init-route'
 import type { TerminalBacklogTimers } from './bridge-terminal-output-backlog'
-import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
+import type { BridgeErrorCapture } from './bridge/protocol/bridge-error-capture'
 import type { PageStorageForInit } from './page-storage-keys'
 
 const hosts = new Set<BridgeHost>()

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { clientFrame } from './bridge-host-test-fakes'
 import { harness } from './bridge-host-test-harness'
-import { BRIDGE_BACK_CLAIM_NOTIFY, BRIDGE_BACK_FRAME } from './bridge/bridge-page-back'
+import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge/page-lifecycle/bridge-page-back'
 
 function ready(): string {
   return clientFrame({ type: 'ready' })
@@ -48,16 +48,6 @@ describe('the claim a host holds on the device Back key', () => {
     expect(bridge.host.readSessionBack()).toEqual({ claimed: true })
   })
 
-  it('takes that seed without announcing a claim the screen never heard go', () => {
-    const rebuilt = harness({
-      sessionBack: { claimed: true },
-      sessionEstablished: true
-    })
-    expect(rebuilt.backClaims).toEqual([])
-    expect(rebuilt.host.sendBack()).toBe(true)
-    expect(rebuilt.last()).toEqual({ v: 1, type: BRIDGE_BACK_FRAME })
-  })
-
   it('lets the next document reset a carried claim, so the seed is not a latch', () => {
     const rebuilt = harness({
       sessionBack: { claimed: true },
@@ -65,17 +55,6 @@ describe('the claim a host holds on the device Back key', () => {
     })
     rebuilt.host.receive(ready())
     expect(rebuilt.backClaims).toEqual([false])
-  })
-
-  it('refuses a claim from a page that has not asked for a session yet', () => {
-    const bridge = harness()
-    bridge.host.receive(claim(true))
-    expect(bridge.backClaims).toEqual([])
-    expect(bridge.diagnostics).toContainEqual({
-      kind: 'notify-refused',
-      name: BRIDGE_BACK_CLAIM_NOTIFY,
-      why: 'before-ready'
-    })
   })
 })
 

@@ -3,25 +3,25 @@ import type {
   BridgeTerminalKeyId,
   BridgeTerminalToolbar,
   BridgeTerminalKeyRail
-} from './bridge/bridge-terminal-key'
-import type { BridgePageGeometry } from './bridge/bridge-page-geometry'
+} from './bridge/native-capabilities/bridge-terminal-key'
+import type { BridgePageGeometry } from './bridge/page-geometry/bridge-page-geometry'
 import type { TerminalBacklogEnd, TerminalBacklogTimers } from './bridge-terminal-output-backlog'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { BridgeSessionBack } from './bridge-host-back'
-import type { BridgeRefusal } from './bridge/bridge-caps'
+import type { BridgeRefusal } from './bridge/protocol/bridge-caps'
 import type {
   BridgeColorScheme,
   BridgeInitHost,
-  BridgeInitRoute,
   BridgeUiLocale
-} from './bridge/bridge-envelope'
-import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
-import type { BridgeSafeAreaInsets } from './bridge/bridge-safe-area-insets'
-import type { BridgeFoldDivision } from './bridge/bridge-fold-division'
-import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
-import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
-import type { BridgeNativeVerb } from './bridge/bridge-native-verbs'
-import type { BridgeNotifyRefusal } from './bridge/bridge-notify-grants'
+} from './bridge/protocol/bridge-envelope'
+import type { BridgeInitRoute } from './bridge/protocol/bridge-init-route'
+import type { BridgeClearableRouteParam } from './bridge/page-lifecycle/bridge-route-update'
+import type { BridgeSafeAreaInsets } from './bridge/page-geometry/bridge-safe-area-insets'
+import type { BridgeFoldDivision } from './bridge/page-geometry/bridge-fold-division'
+import type { BridgeHapticsKind } from './bridge/native-capabilities/bridge-haptics-notify'
+import type { BridgeErrorCapture } from './bridge/protocol/bridge-error-capture'
+import type { BridgeNativeVerb } from './bridge/native-capabilities/bridge-native-verbs'
+import type { BridgeNotifyRefusal } from './bridge/protocol/bridge-notify-grants'
 import type { PageStorageForInit } from './page-storage-keys'
 
 // Only popped moves the stack; nothing-to-pop means root entry, while pop-pending means a duplicate frame before the queued pop commits.

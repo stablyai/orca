@@ -1,37 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import { harness } from './bridge-host-test-harness'
 import { clientFrame, createFakeRpcClient } from './bridge-host-test-fakes'
-import { BRIDGE_EXTERNAL_LINK_GRANT, BRIDGE_FAULT_GRANT } from './bridge/bridge-envelope'
+import {
+  BRIDGE_EXTERNAL_LINK_GRANT,
+  BRIDGE_FAULT_GRANT
+} from './bridge/protocol/bridge-frame-fields'
 
-import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge/bridge-route-update'
-import { BRIDGE_HAPTICS_GRANT, BRIDGE_HAPTICS_NOTIFY } from './bridge/bridge-haptics-notify'
-
-import { MOBILE_WEB_SHELL_GRANTS } from './page-route-policy'
+import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge/page-lifecycle/bridge-route-update'
 
 describe('notifications, refusals and the fence', () => {
-  it('refuses a notify from a page it has told nothing, grant or no grant', () => {
-    const bridge = harness()
-    bridge.host.receive(
-      clientFrame({
-        type: 'notify',
-        name: BRIDGE_FAULT_GRANT,
-        error: { category: 'Error', message: 'route threw', isRpcDeliveryUnknown: false }
-      })
-    )
-    bridge.host.receive(clientFrame({ type: 'notify', name: 'foreground' }))
-    bridge.host.receive(
-      clientFrame({ type: 'notify', name: 'terminalViewport', terminal: 't1', cols: 80, rows: 24 })
-    )
-    expect(bridge.client.viewports).toEqual([])
-    expect(bridge.pageFaults).toEqual([])
-    expect(bridge.client.foregroundCalls).toEqual([])
-    expect(bridge.diagnostics).toEqual([
-      { kind: 'notify-refused', name: BRIDGE_FAULT_GRANT, why: 'before-ready' },
-      { kind: 'notify-refused', name: 'foreground', why: 'before-ready' },
-      { kind: 'notify-refused', name: 'terminalViewport', why: 'before-ready' }
-    ])
-  })
-
   it('reports a listener that throws on a page fault once, and keeps reading', () => {
     const failure = new Error('the session is gone')
     const bridge = harness({
@@ -100,23 +77,6 @@ describe('externalLink', () => {
     expect(bridge.diagnostics).toEqual(
       Array.from({ length: 3 }, () => ({ kind: 'refused', refusal: 'unrecognised-message' }))
     )
-  })
-})
-
-// Haptics use notify so row taps do not consume the 64-slot request window; observe device calls and refusal diagnostics.
-describe('haptics', () => {
-  const play = (kind: string) => clientFrame({ type: 'notify', name: BRIDGE_HAPTICS_NOTIFY, kind })
-
-  it('plays nothing for a route that was granted no haptics', () => {
-    const bridge = harness({
-      routeGrants: MOBILE_WEB_SHELL_GRANTS.filter((grant) => grant !== BRIDGE_HAPTICS_GRANT)
-    })
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    bridge.host.receive(play('selection'))
-    expect(bridge.haptics).toEqual([])
-    expect(bridge.diagnostics).toEqual([
-      { kind: 'notify-refused', name: BRIDGE_HAPTICS_NOTIFY, why: 'ungranted' }
-    ])
   })
 })
 

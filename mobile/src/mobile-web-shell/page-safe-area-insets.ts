@@ -5,7 +5,7 @@ import {
   BRIDGE_MAX_SAFE_AREA_INSET,
   BridgeSafeAreaInsetsSchema,
   type BridgeSafeAreaInsets
-} from './bridge/bridge-safe-area-insets'
+} from './bridge/page-geometry/bridge-safe-area-insets'
 
 const coordinate = z
   .number()

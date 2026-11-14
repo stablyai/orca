@@ -1,7 +1,7 @@
 import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import type { createBridgeHostFrames } from './bridge-host-frames'
 import { BridgeReplyUndeliverableError } from './bridge-host-errors'
-import { splitBridgeReply } from './bridge/bridge-reply-chunking'
+import { splitBridgeReply } from './bridge/protocol/bridge-reply-chunking'
 
 type BridgeHostFrames = ReturnType<typeof createBridgeHostFrames>
 

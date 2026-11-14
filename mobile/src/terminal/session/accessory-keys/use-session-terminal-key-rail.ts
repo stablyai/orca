@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import type {
   BridgeTerminalKeyId,
   BridgeTerminalToolbar
-} from '../../../mobile-web-shell/bridge/bridge-terminal-key'
+} from '../../../mobile-web-shell/bridge/native-capabilities/bridge-terminal-key'
 import { sessionCommandDockShown } from '../../../session/mobile-session-command-dock-shown'
 import { isTerminalPhoneDisplayMode } from '../pane-layout/terminal-phone-display-mode'
 import { isMobileTerminalTabRunningAgent } from '../../../session/tabs/mobile-terminal-tab-agent'

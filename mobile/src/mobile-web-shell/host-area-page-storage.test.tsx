@@ -31,9 +31,9 @@ vi.mock('../host-catalog/host-store', () => ({
 }))
 
 import { usePageHostSnapshot, type PageHostSnapshotView } from './use-page-host-snapshot'
-import './bridge/bridge-port-pair-test-harness'
-import './bridge/bridge-native-verbs'
-import './bridge/page-async-storage'
+import './bridge/test-support/bridge-port-pair-test-harness'
+import './bridge/native-capabilities/bridge-native-verbs'
+import './bridge/page-storage/page-async-storage'
 import './page-route-policy'
 import { readMirroredKeyOrStore, readMirroredStorage } from '../storage/mirrored-storage-keys'
 

@@ -1,6 +1,6 @@
 import { terminalStreamJsonByteLength } from '../../../src/shared/terminal/stream/terminal-stream-json-byte-length'
-import { BRIDGE_MAX_MESSAGE_BYTES, utf8ByteLength } from './bridge/bridge-caps'
-import { bridgeEventEnvelopeBytes } from './bridge/bridge-event-envelope-bytes'
+import { BRIDGE_MAX_MESSAGE_BYTES, utf8ByteLength } from './bridge/protocol/bridge-caps'
+import { bridgeEventEnvelopeBytes } from './bridge/protocol/bridge-event-envelope-bytes'
 
 // Hold and merge terminal output rather than dropping bytes or killing ordinary cat bursts; measured host JSON (70.3 MiB/s) outruns xterm (2.2 MiB/s) and fills 4 MiB in 62 ms.
 // End only for an unresponsive page or process-memory ceiling; the page is told so it can resubscribe.

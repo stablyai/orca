@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { loadHosts } from '../host-catalog/host-store'
-import type { BridgeInitHost } from './bridge/bridge-envelope'
+import type { BridgeInitHost } from './bridge/protocol/bridge-envelope'
 import {
   hydrateMirroredStorage,
   retainMirroredStorage,

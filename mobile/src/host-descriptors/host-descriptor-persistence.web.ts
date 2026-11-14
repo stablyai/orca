@@ -1,4 +1,4 @@
-import '../mobile-web-shell/bridge/page-host-profile'
+import '../mobile-web-shell/bridge/page-lifecycle/page-host-profile'
 import type { ReportedHostDescriptor } from '../host-catalog/host-name-identity'
 
 // Last-known descriptors belong to the native host list.

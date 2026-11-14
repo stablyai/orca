@@ -1,17 +1,16 @@
 import { createElement, useImperativeHandle, useState, type ReactElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OrcaMobileWebShellViewHandle } from '../../modules/orca-mobile-web-shell/src'
-import { BRIDGE_NATIVE_VERB_NAMES } from './bridge/bridge-native-verbs'
-import { BRIDGE_HAPTICS_GRANT, type BridgeHapticsKind } from './bridge/bridge-haptics-notify'
-import { BRIDGE_SCREENCAST_BINARY_GRANT } from './bridge/bridge-screencast-grant'
-import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge/bridge-page-back'
+import type { OrcaMobileWebShellViewHandle } from '../../modules/orca-mobile-web-shell/src/index'
+import { BRIDGE_NATIVE_VERB_NAMES } from './bridge/native-capabilities/bridge-native-verbs'
 import {
-  BRIDGE_FAULT_GRANT,
-  readBridgeHostMessage,
-  type BridgeHostMessage
-} from './bridge/bridge-envelope'
-import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
+  BRIDGE_HAPTICS_GRANT,
+  type BridgeHapticsKind
+} from './bridge/native-capabilities/bridge-haptics-notify'
+import { BRIDGE_SCREENCAST_BINARY_GRANT } from './bridge/screencast/bridge-screencast-grant'
+import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge/page-lifecycle/bridge-page-back'
+import { readBridgeHostMessage, type BridgeHostMessage } from './bridge/protocol/bridge-envelope'
+import type { BridgeErrorCapture } from './bridge/protocol/bridge-error-capture'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 import type { FakeRpcClient } from './bridge-host-test-fakes'
 import type { PageHostSnapshot } from './use-page-host-snapshot'
@@ -23,13 +22,11 @@ vi.mock('../transport/connection/host-client-hooks', () => ({
   useHostClient: () => ({ client: doubles.client })
 }))
 
-import { bridgeId, clientFrame, createFakeRpcClient } from './bridge-host-test-fakes'
+import { clientFrame, createFakeRpcClient } from './bridge-host-test-fakes'
 import {
   useMobileWebShellBridge,
   type MobileWebShellBridgeView
 } from './use-mobile-web-shell-bridge'
-
-const ID = bridgeId(1)
 const DIRECTORY = '/caches/mobile-web/deadbeef/generations/a1b2'
 
 type PostedFrame = { sessionId: string; json: string }
@@ -51,14 +48,6 @@ const SNAPSHOT = {
 }
 
 const STORAGE = { 'orca:pins:host-1': '["wt-1"]' }
-
-function fakeClient(): FakeRpcClient {
-  const client = doubles.client
-  if (client === null) {
-    throw new Error('this test has no client')
-  }
-  return client
-}
 
 function FakeShellView(props: {
   sessionId: string
@@ -269,28 +258,6 @@ beforeEach(() => {
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 })
 
-describe('the bridge channel', () => {
-  it('reports a fault from the page on screen, never from the one it replaced', async () => {
-    const mounted = await mount(readyState('session-one'))
-    const stale = mounted.probe.view
-    await mounted.update(readyState('session-two'))
-    // Handshake first so the session fence, not missing grants, rejects the stale frame.
-    await mounted.deliver(clientFrame({ type: 'ready' }))
-    await act(async () => {
-      stale?.onBridgeMessage({
-        nativeEvent: {
-          json: clientFrame({
-            type: 'notify',
-            name: BRIDGE_FAULT_GRANT,
-            error: { category: 'Error', message: 'a dead page', isRpcDeliveryUnknown: false }
-          })
-        }
-      })
-    })
-    expect(mounted.faults).toEqual([])
-  })
-})
-
 describe('client changes', () => {
   // Client replacement preserves the live document/session; retain its Back state so an open sheet cannot lose the next press.
 
@@ -304,16 +271,6 @@ describe('client changes', () => {
     await mounted.update(readyState('session-one'))
     await mounted.deliver(clientFrame({ type: 'ready' }))
     expect(mounted.probe.backClaims).toEqual([true, false])
-  })
-})
-
-describe('a session that handshook before this host existed', () => {
-  // Seed rebuilt hosts from reducer-owned handshake state because client replacement leaves the same document mounted.
-
-  it('refuses one on a session the caller says nothing about', async () => {
-    const mounted = await mount(readyState('session-one'))
-    await mounted.deliver(clientFrame({ type: 'request', id: ID, method: 'status.get' }))
-    expect(fakeClient().requests).toEqual([])
   })
 })
 

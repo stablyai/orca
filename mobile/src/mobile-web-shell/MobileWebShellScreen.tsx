@@ -5,14 +5,14 @@ import { useNavigation, useNavigationContainerRef, useRouter } from 'expo-router
 import {
   OrcaMobileWebShellView,
   parseMobileWebShellLoadState
-} from '../../modules/orca-mobile-web-shell/src'
+} from '../../modules/orca-mobile-web-shell/src/index'
 import { HostRouteNoticeBanner } from '../components/host-connection/HostRouteNoticeBanner'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileUiLocale } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import type { BridgeInitRoute } from './bridge/bridge-envelope'
-import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
+import type { BridgeInitRoute } from './bridge/protocol/bridge-init-route'
+import type { BridgeClearableRouteParam } from './bridge/page-lifecycle/bridge-route-update'
 import type { MobileWebShellUpdateNotice } from './mobile-web-shell-session-contract'
 import { useMobileWebShellDroppedFrames } from './mobile-web-shell-dev-facts'
 import { ShellDevFacts } from './ShellDevFacts'
@@ -26,7 +26,7 @@ import { useNativePdfViewer } from '../platform/pdf-viewing/native-pdf-view'
 import { useNativeImageActions } from '../platform/image-actions/native-image-actions'
 import { processDeviceStore } from '../device-store/device-store'
 import { serveDeviceStoreVerb } from './device-store-verb-server'
-import { BRIDGE_STORE_VERB } from './bridge/bridge-store-verb'
+import { BRIDGE_STORE_VERB } from './bridge/native-capabilities/bridge-store-verb'
 import { useAppLeavesForeground } from './use-app-leaves-foreground'
 import { useShellPageBack } from './use-shell-page-back'
 import { useShellStackPop } from './use-shell-stack-pop'
@@ -40,7 +40,10 @@ import { isHostRouteOf } from './page-route-policy'
 import { isStandaloneSessionHref } from '../navigation/host-stack-navigation'
 import { hrefQuery, nativeSessionReturn, nativeStackReturn } from './native-stack-return'
 import { useResponsiveLayout } from '../layout/responsive-layout'
-import { storageReadParamsSchema, type BridgeNativeVerb } from './bridge/bridge-native-verbs'
+import {
+  storageReadParamsSchema,
+  type BridgeNativeVerb
+} from './bridge/native-capabilities/bridge-native-verbs'
 import { SHELL_OPENING_LABEL, ShellPageCover } from './ShellWaitingFrame'
 import { ShellStateScreen } from './ShellStateScreen'
 import { useReportedShellOverlayLoad, type ShellOverlayLoad } from './shell-overlay-load'

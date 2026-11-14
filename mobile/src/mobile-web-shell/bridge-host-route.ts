@@ -2,21 +2,23 @@ import {
   EMPTY_PAGE_GEOMETRY,
   samePageGeometry,
   type BridgePageGeometry
-} from './bridge/bridge-page-geometry'
-import {
-  BridgeInitRouteSchema,
-  type BridgeColorScheme,
-  type BridgeInitRoute,
-  type BridgeUiLocale
-} from './bridge/bridge-envelope'
-import { readBridgeRouteUpdate } from './bridge/bridge-route-update'
+} from './bridge/page-geometry/bridge-page-geometry'
+import { BridgeInitRouteSchema, type BridgeInitRoute } from './bridge/protocol/bridge-init-route'
+import type { BridgeColorScheme, BridgeUiLocale } from './bridge/protocol/bridge-envelope'
+import { readBridgeRouteUpdate } from './bridge/page-lifecycle/bridge-route-update'
 import {
   sameSafeAreaInsets,
   ZERO_SAFE_AREA_INSETS,
   type BridgeSafeAreaInsets
-} from './bridge/bridge-safe-area-insets'
-import { sameFoldDivision, type BridgeFoldDivision } from './bridge/bridge-fold-division'
-import { sameTerminalKeyRail, type BridgeTerminalKeyRail } from './bridge/bridge-terminal-key'
+} from './bridge/page-geometry/bridge-safe-area-insets'
+import {
+  sameFoldDivision,
+  type BridgeFoldDivision
+} from './bridge/page-geometry/bridge-fold-division'
+import {
+  sameTerminalKeyRail,
+  type BridgeTerminalKeyRail
+} from './bridge/native-capabilities/bridge-terminal-key'
 
 export type BridgeHostRoute = {
   readonly current: () => BridgeInitRoute | null

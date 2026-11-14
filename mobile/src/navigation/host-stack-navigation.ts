@@ -1,5 +1,5 @@
-import { BRIDGE_MAX_ROUTE_PARAM_CHARS } from '../mobile-web-shell/bridge/bridge-caps'
-import { BRIDGE_OPEN_ROUTE_PARAM } from '../mobile-web-shell/bridge/bridge-route-update'
+import { BRIDGE_MAX_ROUTE_PARAM_CHARS } from '../mobile-web-shell/bridge/protocol/bridge-caps'
+import { BRIDGE_OPEN_ROUTE_PARAM } from '../mobile-web-shell/bridge/page-lifecycle/bridge-route-update'
 import { focusedIndex } from '../mobile-web-shell/native-stack-return'
 
 export type HostStackNavigationState = Readonly<{

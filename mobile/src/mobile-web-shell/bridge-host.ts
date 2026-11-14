@@ -1,26 +1,25 @@
 import type { ConnectionState } from '../transport/connection/connection-state'
-import { BRIDGE_APP_INACTIVE_FRAME } from './bridge/bridge-app-inactive'
+import { BRIDGE_APP_INACTIVE_FRAME } from './bridge/page-lifecycle/bridge-app-inactive'
 
 import { BridgeCapExceededError } from './bridge-host-errors'
 import { createNativeVerbServer } from './bridge-host-native-verbs'
 import { BridgeHostRequests } from './bridge-host-requests'
 import { BridgeHostSubscriptions } from './bridge-host-subscriptions'
 import { createBridgeHostStreamFrames } from './bridge-host-stream-frames'
+import { BRIDGE_PROTOCOL_VERSION, BRIDGE_SHELL_GRANTS } from './bridge/protocol/bridge-frame-fields'
 import {
-  BRIDGE_PROTOCOL_VERSION,
-  BRIDGE_SHELL_GRANTS,
   readBridgeClientMessage,
   type BridgeClientMessage
-} from './bridge/bridge-envelope'
-import { BridgePageRouteGrantsSchema } from './bridge/bridge-page-route-grants'
-import { createBridgeInitFrame } from './bridge/bridge-init-frame'
+} from './bridge/protocol/bridge-envelope'
+import { BridgePageRouteGrantsSchema } from './bridge/protocol/bridge-page-route-grants'
+import { createBridgeInitFrame } from './bridge/protocol/bridge-init-frame'
 import { createBridgeHostReplySender } from './bridge-host-reply-sender'
 import { createBridgeHostFrames } from './bridge-host-frames'
 import { createBridgeHostBack } from './bridge-host-back'
 import { createBridgeNotifyForwarder } from './bridge-host-notify'
 import { createBridgeHostRoute } from './bridge-host-route'
 import { pageStorageForReader } from './page-storage-keys'
-import { BRIDGE_TERMINAL_KEY_FRAME } from './bridge/bridge-terminal-key'
+import { BRIDGE_TERMINAL_KEY_FRAME } from './bridge/native-capabilities/bridge-terminal-key'
 import { createBridgeVerdictHold, isDesktopBound } from './bridge-host-verdict-hold'
 import type { BridgeHost, BridgeHostOptions } from './bridge-host-contract'
 

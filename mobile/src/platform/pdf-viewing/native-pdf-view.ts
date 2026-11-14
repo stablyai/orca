@@ -13,7 +13,7 @@ import {
 import {
   pdfViewParamsSchema,
   type BridgePdfOpenParams
-} from '../../mobile-web-shell/bridge/bridge-native-verbs'
+} from '../../mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
 import { BridgeNativeVerbRefusedError } from '../../mobile-web-shell/bridge-host-errors'
 import { scopeRpcClientToExecutionHost } from '../../worktree/execution-hosts/execution-host-scoped-rpc-client'
 import { useHostClient } from '../../transport/connection/host-client-hooks'

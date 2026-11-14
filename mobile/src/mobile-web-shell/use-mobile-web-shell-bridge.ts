@@ -3,27 +3,28 @@ import type {
   BridgeTerminalToolbar,
   BridgeTerminalKeyId,
   BridgeTerminalKeyRail
-} from './bridge/bridge-terminal-key'
-import type { BridgePageGeometry } from './bridge/bridge-page-geometry'
+} from './bridge/native-capabilities/bridge-terminal-key'
+import type { BridgePageGeometry } from './bridge/page-geometry/bridge-page-geometry'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type {
   MobileWebShellBridgeMessagePayload,
   OrcaMobileWebShellViewHandle
-} from '../../modules/orca-mobile-web-shell/src'
+} from '../../modules/orca-mobile-web-shell/src/index'
 import { useHostClient } from '../transport/connection/host-client-hooks'
 import { createBridgeDiagnosticReporter } from './bridge-diagnostic-log'
 import { bridgeDiagnosticLine } from './shell-bridge-log-lines'
 import { recordShellLifecycleLine } from './shell-lifecycle-line-recorder'
-import type { BridgeColorScheme, BridgeInitRoute, BridgeUiLocale } from './bridge/bridge-envelope'
-import type { BridgeClearableRouteParam } from './bridge/bridge-route-update'
-import type { BridgeSafeAreaInsets } from './bridge/bridge-safe-area-insets'
-import type { BridgeFoldDivision } from './bridge/bridge-fold-division'
-import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
+import type { BridgeColorScheme, BridgeUiLocale } from './bridge/protocol/bridge-envelope'
+import type { BridgeInitRoute } from './bridge/protocol/bridge-init-route'
+import type { BridgeClearableRouteParam } from './bridge/page-lifecycle/bridge-route-update'
+import type { BridgeSafeAreaInsets } from './bridge/page-geometry/bridge-safe-area-insets'
+import type { BridgeFoldDivision } from './bridge/page-geometry/bridge-fold-division'
+import type { BridgeHapticsKind } from './bridge/native-capabilities/bridge-haptics-notify'
 import { createBridgeHost, type BridgeHost } from './bridge-host'
 import type { BridgeSessionBack } from './bridge-host-back'
 import type { BridgeNavigateBackOutcome } from './bridge-host-contract'
-import type { BridgeNativeVerb } from './bridge/bridge-native-verbs'
-import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
+import type { BridgeNativeVerb } from './bridge/native-capabilities/bridge-native-verbs'
+import type { BridgeErrorCapture } from './bridge/protocol/bridge-error-capture'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 import type { PageHostSnapshot } from './use-page-host-snapshot'
 import type { PageStorageForInit } from './page-storage-keys'

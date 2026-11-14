@@ -1,20 +1,20 @@
-import type { BridgeTerminalToolbar } from './bridge/bridge-terminal-key'
-import { readBridgeExternalLinkUrl } from './bridge/bridge-caps'
+import type { BridgeTerminalToolbar } from './bridge/native-capabilities/bridge-terminal-key'
+import { readBridgeExternalLinkUrl } from './bridge/protocol/bridge-caps'
 import {
   BRIDGE_EXTERNAL_LINK_GRANT,
   BRIDGE_FAULT_GRANT,
-  BRIDGE_NAVIGATE_BACK_NOTIFY,
-  type BridgeClientMessage,
-  type BridgeInitRoute
-} from './bridge/bridge-envelope'
-import { BRIDGE_HAPTICS_NOTIFY } from './bridge/bridge-haptics-notify'
-import { BRIDGE_LIVENESS_PROBE_NOTIFY } from './bridge/bridge-liveness-probe-notify'
-import { bridgeNotifyRefusal } from './bridge/bridge-notify-grants'
-import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge/bridge-page-back'
-import { BRIDGE_PAGE_LOCATION } from './bridge/bridge-page-location'
-import { BRIDGE_PAGE_PAINTED } from './bridge/bridge-page-painted'
-import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge/bridge-route-update'
-import { BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY } from './bridge/bridge-terminal-key'
+  BRIDGE_NAVIGATE_BACK_NOTIFY
+} from './bridge/protocol/bridge-frame-fields'
+import type { BridgeClientMessage } from './bridge/protocol/bridge-envelope'
+import type { BridgeInitRoute } from './bridge/protocol/bridge-init-route'
+import { BRIDGE_HAPTICS_NOTIFY } from './bridge/native-capabilities/bridge-haptics-notify'
+import { BRIDGE_LIVENESS_PROBE_NOTIFY } from './bridge/native-capabilities/bridge-liveness-probe-notify'
+import { bridgeNotifyRefusal } from './bridge/protocol/bridge-notify-grants'
+import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge/page-lifecycle/bridge-page-back'
+import { BRIDGE_PAGE_LOCATION } from './bridge/page-lifecycle/bridge-page-location'
+import { BRIDGE_PAGE_PAINTED } from './bridge/page-lifecycle/bridge-page-painted'
+import { BRIDGE_ROUTE_PARAM_CLEAR } from './bridge/page-lifecycle/bridge-route-update'
+import { BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY } from './bridge/native-capabilities/bridge-terminal-key'
 import type { BridgeHostOptions } from './bridge-host-contract'
 import { pageMayWriteStorageKey } from './page-storage-keys'
 

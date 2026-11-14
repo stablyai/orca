@@ -1,4 +1,4 @@
-import { readBridgeExternalLinkUrl } from './bridge/bridge-caps'
+import { readBridgeExternalLinkUrl } from './bridge/protocol/bridge-caps'
 
 // Offer cancelled top-frame HTML-preview links through the shared scheme/normalization rule; native only caps the URL and identifies its frame.
 // Open normalized hrefs, never raw spellings with stripped controls; changed native payload shapes fail closed without throwing from frame callbacks.

@@ -1,5 +1,6 @@
-import { BRIDGE_PROTOCOL_VERSION, type BridgeHostMessage } from './bridge/bridge-envelope'
-import { BRIDGE_BACK_FRAME } from './bridge/bridge-page-back'
+import { BRIDGE_PROTOCOL_VERSION } from './bridge/protocol/bridge-frame-fields'
+import type { BridgeHostMessage } from './bridge/protocol/bridge-envelope'
+import { BRIDGE_BACK_FRAME } from './bridge/page-lifecycle/bridge-page-back'
 
 // Carry Back state across client-driven host rebuilds: the page remains mounted and is never told to claim again.
 export type BridgeSessionBack = {

@@ -4,10 +4,10 @@ import type { ConnectionState } from '../transport/connection/connection-state'
 import {
   readBridgeConnectionSnapshot,
   type BridgeConnectionSnapshot
-} from './bridge/bridge-connection-snapshot'
-import { bridgePendingRequestCap } from './bridge/bridge-caps'
-import { isPhoneOnlyNativeVerb } from './bridge/bridge-native-verbs'
-import type { BridgeClientMessage } from './bridge/bridge-envelope'
+} from './bridge/protocol/bridge-connection-snapshot'
+import { bridgePendingRequestCap } from './bridge/protocol/bridge-caps'
+import { isPhoneOnlyNativeVerb } from './bridge/native-capabilities/bridge-native-verbs'
+import type { BridgeClientMessage } from './bridge/protocol/bridge-envelope'
 import { BridgeCapExceededError, BridgeHostDisposedError } from './bridge-host-errors'
 
 export type DesktopBound = Extract<BridgeClientMessage, { type: 'request' | 'subscribe' }>

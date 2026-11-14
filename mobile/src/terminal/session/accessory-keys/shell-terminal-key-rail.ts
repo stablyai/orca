@@ -2,7 +2,7 @@ import type {
   BridgeTerminalToolbar,
   BridgeTerminalKeyId,
   BridgeTerminalKeyRail
-} from '../../../mobile-web-shell/bridge/bridge-terminal-key'
+} from '../../../mobile-web-shell/bridge/native-capabilities/bridge-terminal-key'
 import { createElement, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { useSideRailContent, useSideRailStrip } from '../../../layout/side-rail'

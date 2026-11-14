@@ -4,11 +4,11 @@ import {
   BRIDGE_MEDIA_MAX_LIVE_HANDLES,
   mediaPickResultSchema,
   mediaReadResultSchema
-} from '../../mobile-web-shell/bridge/bridge-media-verbs'
+} from '../../mobile-web-shell/bridge/native-capabilities/bridge-media-verbs'
 import { readShellRefusalCode } from '../../mobile-web-shell/bridge-host-errors'
 import { MediaHandleRegistry } from '../../mobile-web-shell/media-handle-registry'
 
-import type { BridgeNativeVerb } from '../../mobile-web-shell/bridge/bridge-native-verbs'
+import type { BridgeNativeVerb } from '../../mobile-web-shell/bridge/native-capabilities/bridge-native-verbs'
 import { createNativeMediaVerbServer, type NativeMediaFile } from './native-media'
 
 const CACHE = 'file:///cache'

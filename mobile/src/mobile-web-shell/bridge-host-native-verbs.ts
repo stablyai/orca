@@ -5,7 +5,7 @@ import {
   BRIDGE_NATIVE_VERBS,
   readBridgeNativeVerbCall,
   type BridgeNativeVerb
-} from './bridge/bridge-native-verbs'
+} from './bridge/native-capabilities/bridge-native-verbs'
 
 export type NativeVerbServerDeps = {
   granted: readonly string[]

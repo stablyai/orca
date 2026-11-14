@@ -19,9 +19,9 @@ import {
   BridgeSendFailedError,
   BridgeRpcEnvelopeInvalidError,
   BridgeRpcEnvelopeUngrantedError
-} from '../../mobile-web-shell/bridge/bridge-client-errors'
+} from '../../mobile-web-shell/bridge/client-state/bridge-client-errors'
 import { AsyncLocalStorage } from 'node:async_hooks'
-import type { BridgePortObservation } from '../../mobile-web-shell/bridge/bridge-port-pair-test-harness'
+import type { BridgePortObservation } from '../../mobile-web-shell/bridge/test-support/bridge-port-pair-contract'
 import { captureArguments } from './recording-values'
 import type { RecordingFault } from './recording-fault'
 import type { WriteOrdinal } from './write-ordinal'

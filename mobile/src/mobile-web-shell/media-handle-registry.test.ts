@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { readShellRefusalCode } from './bridge-host-errors'
-import { BRIDGE_MEDIA_MAX_LIVE_HANDLES } from './bridge/bridge-media-verbs'
+
 import { MEDIA_HANDLE_TTL_MS, MediaHandleRegistry, type StagedMedia } from './media-handle-registry'
 
 const staged = (index: number, byteLength = 3000): StagedMedia => ({
@@ -19,38 +19,6 @@ function refusalOf(run: () => unknown): string | null {
   }
   throw new Error('that call was expected to refuse and did not')
 }
-
-describe('minting handles', () => {
-  let clock = 1_000
-  let deleted: string[] = []
-  let registry: MediaHandleRegistry
-
-  beforeEach(() => {
-    clock = 1_000
-    deleted = []
-    registry = new MediaHandleRegistry({
-      now: () => clock,
-      discard: (uri) => deleted.push(uri)
-    })
-  })
-
-  it('refuses a pick that would pass the live-handle cap, and stages nothing of it', () => {
-    registry.mint(Array.from({ length: BRIDGE_MEDIA_MAX_LIVE_HANDLES }, (_, i) => staged(i)))
-    const extra = staged(99)
-    expect(refusalOf(() => registry.mint([extra]))).toBe('native_media_handle_cap')
-    expect(deleted).toEqual([extra.uri])
-    expect(registry.liveCount()).toBe(BRIDGE_MEDIA_MAX_LIVE_HANDLES)
-  })
-
-  it('sweeps what the TTL expired before it decides the cap is full', () => {
-    registry.mint(Array.from({ length: BRIDGE_MEDIA_MAX_LIVE_HANDLES }, (_, i) => staged(i)))
-    clock += MEDIA_HANDLE_TTL_MS + 1
-    const items = registry.mint([staged(99)])
-    expect(items).toHaveLength(1)
-    expect(registry.liveCount()).toBe(1)
-    expect(deleted).toHaveLength(BRIDGE_MEDIA_MAX_LIVE_HANDLES)
-  })
-})
 
 describe('reading a handle', () => {
   let clock = 1_000

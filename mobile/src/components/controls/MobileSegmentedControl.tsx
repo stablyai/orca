@@ -9,7 +9,7 @@ import {
   type ViewStyle
 } from 'react-native'
 import { triggerSelection } from '../../platform/haptics/haptics'
-import { resolveTabStripScrollOffset } from '../../session/tabs/tab-strip-scroll'
+import { resolveTabStripScrollOffset } from './tab-strip-scroll'
 import { colors, concentricRadius, feedback, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'

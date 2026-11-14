@@ -1,4 +1,4 @@
-import { BRIDGE_READY_RETRY_MAX_MS } from './bridge/bridge-client-init-handshake'
+import { BRIDGE_READY_RETRY_MAX_MS } from './bridge/client-state/bridge-client-init-handshake'
 import type { GenerationStore } from './generations/generation-store'
 import { processGenerationStore } from './generations/process-generation-store'
 import { setForegroundTimer } from './foreground-timer'

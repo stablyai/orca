@@ -1,4 +1,4 @@
-import { readBridgeClientMessage } from './bridge/bridge-envelope'
+import { readBridgeClientMessage } from './bridge/protocol/bridge-envelope'
 import { frameWithoutHostLine } from './shell-bridge-log-lines'
 import { recordShellLifecycleLine } from './shell-lifecycle-line-recorder'
 
