@@ -156,7 +156,8 @@ export abstract class OrcaRuntimeWithResumeAgentSessionInWorkspace extends OrcaR
     try {
       resume = this.resolveMobileSessionResumeCommand(workspace, {
         ...session,
-        launchConfig: request.launchConfig ?? record?.launchConfig
+        launchConfig: request.launchConfig ?? record?.launchConfig,
+        ...(record?.claudeAccountId ? { claudeAccountId: record.claudeAccountId } : {})
       })
     } catch (error) {
       if (error instanceof WslHostWindowsOnlyAgentError) {

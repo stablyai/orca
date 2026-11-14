@@ -118,10 +118,11 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
         paneId,
         paneHost: paneTransportsRef,
         worktreeId,
+        tabId,
         restartPane: (refusedPaneId, startup) =>
           handleRestartPane(refusedPaneId, startup, { focus: true })
       }),
-    [handleRestartPane, paneTransportsRef, worktreeId]
+    [handleRestartPane, paneTransportsRef, tabId, worktreeId]
   )
 
   return {

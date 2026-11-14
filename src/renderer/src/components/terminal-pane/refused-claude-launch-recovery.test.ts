@@ -5,7 +5,8 @@ import type { PtyPaneStartup } from './pty-connection/startup/pty-pane-startup'
 import {
   recordRefusedClaudeLaunchStartup,
   redirectsPtylessPaneActivation,
-  startRefusedPaneOnActiveClaudeAccount
+  startRefusedPaneOnActiveClaudeAccount,
+  withLaunchPanePromptDraft
 } from './refused-claude-launch-recovery'
 
 const refusal = claudePinnedLaunchError('account-missing', 'Account missing.').message
@@ -108,5 +109,23 @@ describe('activating a refused pane in a split tab', () => {
         refusedStartups: new Map()
       })
     ).toBe(true)
+  })
+
+  it("restores a launch pane's unsent prompt as a draft, but not one its launch line carries", () => {
+    const launch = {
+      agent: 'claude' as const,
+      target: { kind: 'existing' as const, worktree: 'wt-1' }
+    }
+    expect(withLaunchPanePromptDraft({ agentLaunch: { launch } }, 'fix the bug')).toEqual({
+      agentLaunch: { launch },
+      draftPrompt: 'fix the bug',
+      launchAgent: 'claude'
+    })
+    const carried = {
+      agentLaunch: {
+        launch: { ...launch, prompt: { text: 'fix the bug', delivery: 'submit' as const } }
+      }
+    }
+    expect(withLaunchPanePromptDraft(carried, 'fix the bug')).toBe(carried)
   })
 })

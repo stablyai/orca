@@ -64,6 +64,29 @@ export function withActiveClaudeAccount(startup: RefusedStartup): RefusedStartup
   }
 }
 
+/**
+ * A launch pane pastes its prompt only after its first start, which the refusal ended, so the
+ * replay restores it as a draft rather than losing it; one carried on the launch line stays put.
+ */
+export function withLaunchPanePromptDraft(
+  startup: PtyPaneStartup,
+  prompt: string | null
+): PtyPaneStartup {
+  if (
+    !startup?.agentLaunch ||
+    !prompt ||
+    startup.draftPrompt ||
+    startup.agentLaunch.launch.prompt
+  ) {
+    return startup
+  }
+  return {
+    ...startup,
+    draftPrompt: prompt,
+    launchAgent: startup.launchAgent ?? startup.agentLaunch.launch.agent
+  }
+}
+
 type RefusedPaneReplay = {
   paneId: number
   refusedStartups: Map<number, RefusedStartup>
