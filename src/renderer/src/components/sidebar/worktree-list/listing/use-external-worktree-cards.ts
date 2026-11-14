@@ -16,6 +16,11 @@ import {
 } from './new-external-worktrees-inbox-actions'
 import { buildNewExternalWorktreesInboxCandidates } from './new-external-worktrees-inbox-candidates'
 import { selectDetectedWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import {
+  indexHiddenProjects,
+  withoutHiddenFilterRepoIds
+} from '../../../../../../shared/hidden-projects'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 
 export function useSidebarExternalWorktreeCards(args: {
   repos: readonly Repo[]
@@ -23,7 +28,16 @@ export function useSidebarExternalWorktreeCards(args: {
   detectedWorktreesByRepo: AppState['detectedWorktreesByRepo']
   filterRepoIds: readonly string[]
 }) {
-  const { repos, visibleReposForRows, detectedWorktreesByRepo, filterRepoIds } = args
+  const { repos, visibleReposForRows, detectedWorktreesByRepo } = args
+  // A filter naming only hidden projects selects nothing listed, so notices ignore it as rows do.
+  const filterRepoIds = useMemo(
+    () =>
+      withoutHiddenFilterRepoIds(
+        args.filterRepoIds,
+        indexHiddenProjects(repos, LOCAL_EXECUTION_HOST_ID)
+      ),
+    [args.filterRepoIds, repos]
+  )
   const updateRepo = useAppStore((s) => s.updateRepo)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
   const settings = useAppStore((s) => s.settings)

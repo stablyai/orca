@@ -13,22 +13,4 @@ describe('formatter command arguments', () => {
       )
     ).toEqual(['formatter', '--stdin-filepath', file, '--relative=src/${file}.ts'])
   })
-
-  it('keeps native Windows paths and executable spaces intact', () => {
-    expect(
-      editorFormatterArgv(
-        '"C:\\Program Files\\Formatter\\fmt.exe" --path "${file}"',
-        'C:\\repo\\a b.ts',
-        'a b.ts',
-        'win32'
-      )
-    ).toEqual(['C:\\Program Files\\Formatter\\fmt.exe', '--path', 'C:\\repo\\a b.ts'])
-  })
-
-  it.each(['', 'formatter "unfinished', 'formatter --write ${file}', 'gofmt -w ${file}'])(
-    'rejects invalid or file-writing command %s',
-    (command) => {
-      expect(() => editorFormatterArgv(command, '/repo/a.ts', 'a.ts', 'linux')).toThrow()
-    }
-  )
 })

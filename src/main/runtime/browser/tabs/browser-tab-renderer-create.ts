@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { ipcMain } from 'electron'
-import { captureActiveRpcCall } from '../../rpc/rpc-active-caller'
+import { captureActiveRpcCall } from '../../rpc/callers/active-call'
 import { retainBrowserMemoryPageForAgent } from '../../../browser/guest-lifecycle/browser-page-memory'
 import type { RuntimeBrowserCommandHost } from '../commands/browser-command-contracts'
 import type { BrowserTabSplitDirection } from '../../../../shared/browser-tab-split-direction'

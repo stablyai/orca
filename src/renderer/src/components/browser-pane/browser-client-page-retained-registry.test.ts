@@ -54,6 +54,8 @@ function createRig(
 function attach(webview: Electron.WebviewTag): void {
   webview.dataset.attached = 'true'
   webview.dispatchEvent(new Event('did-attach'))
+  webview.dispatchEvent(new Event('did-finish-load'))
+  webview.dispatchEvent(new Event('did-stop-loading'))
 }
 
 afterEach(() => {
@@ -121,4 +123,26 @@ describe('browser client page retained registry', () => {
     webview.dispatchEvent(new Event('destroyed'))
     expect(registry.getMemoryProfile().retainedPageCount).toBe(0)
   })
+})
+
+it('waits for the bootstrap finish and subsequent stop before granting creation readiness', async () => {
+  const { registry, webviews } = createRig()
+  const mounting = registry.mountPage(PAGE)
+  const webview = webviews[0]!
+  webview.dataset.attached = 'true'
+  webview.dispatchEvent(new Event('did-attach'))
+  webview.dispatchEvent(new Event('dom-ready'))
+  webview.dispatchEvent(new Event('did-stop-loading'))
+  let available = false
+  void mounting.then(() => {
+    available = true
+  })
+  await Promise.resolve()
+  expect(available).toBe(false)
+  webview.dispatchEvent(new Event('did-finish-load'))
+  await Promise.resolve()
+  expect(available).toBe(false)
+  webview.dispatchEvent(new Event('did-stop-loading'))
+  await expect(mounting).resolves.toEqual({ webContentsId: 41 })
+  registry.dispose()
 })

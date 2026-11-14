@@ -1,4 +1,4 @@
-import { watchMovedWorkerResumeSessions } from '../rpc/methods/orchestration/worker/worker-resume-session-capture'
+import { watchMovedWorkerResumeSessions } from '../rpc/methods/orchestration/worker/follow-up/worker-resume-session-capture'
 import { AgentTransitionDetector } from '../../agent-hooks/observations/agent-transition-detector'
 import type { ConnectorCloud } from '../../connector-cloud/connector-cloud'
 import type { ExternalConversationSeam } from '../../external-conversations/external-conversation-seam'
@@ -7,16 +7,16 @@ import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-cont
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
-import { OrcaRuntimeWithWindowlessTerminalActivity } from '../sidebar-inputs/orca-runtime-windowless-terminal-activity'
+import { OrcaRuntimeWithWindowlessTerminalActivity } from '../sidebar-inputs/temporal/orca-runtime-windowless-terminal-activity'
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
-import type { AgentStatusStoreView } from '../sidebar-inputs/workspace-activity-facts-producer'
+import type { AgentStatusStoreView } from '../sidebar-inputs/workspace-facts/workspace-activity-facts-producer'
 import { subscribeHookStatusTitles } from '../terminal/layout/hook-status-title-subscription'
 import {
   resolveTerminalWorkerDispatch,
   TerminalWorkerTurnStops
 } from '../orchestration/workers/turn-stops/terminal-worker-turn-stops'
 import { TerminalWorkerApprovalHolds } from '../orchestration/workers/approvals/terminal-worker-approval-holds'
-import { readClaudeToolResult } from '../orchestration/workers/approvals/claude-tool-result-close'
+import { readClaudeToolRecord } from '../orchestration/workers/approvals/claude-tool-result-close'
 import type { WorkerTerminalResourceRow } from '../orchestration/terminal-authority/release/worker-terminal-ownership'
 import { resolveStructuredWorkerIdentity } from '../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import {
@@ -84,7 +84,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
       return process.platform !== 'win32' && pty !== null && pty.connectionId === null && !pty.isWsl
     },
     processIncarnation: (handle) => this.getTerminalProcessIncarnation(handle),
-    readToolResult: (call) => readClaudeToolResult(call.transcriptPath, call.toolUseId),
+    readToolRecord: (call) => readClaudeToolRecord(call.transcriptPath, call.toolUseId),
     readScreen: (paneKey) => {
       const ptyId = this.getPtyRecordForPaneKey(paneKey)?.ptyId
       return ptyId ? (this.readCaughtUpRuledScreen(ptyId)?.lines ?? null) : null
@@ -100,7 +100,8 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithWin
     setTimer: unrefTimer,
     readScreen: (handle) => this.readTerminal(handle, { screen: true, limit: 15 }),
     takeOpenApproval: (paneKey, dispatchId) =>
-      this.terminalWorkerApprovals.takeOpenApproval(paneKey, dispatchId)
+      this.terminalWorkerApprovals.takeOpenApproval(paneKey, dispatchId),
+    markApprovalReported: (approvalId) => this.terminalWorkerApprovals.markReported(approvalId)
   })
 
   private readonly externalConversations = installExternalConversations(this.store, this)

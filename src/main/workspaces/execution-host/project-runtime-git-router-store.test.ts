@@ -9,7 +9,7 @@ import {
   isLocalGitRuntimeRouterInstalled,
   routeLocalGitOptions,
   setLocalGitRuntimeRouter
-} from '../../git/command-runner/local-git-runtime-route'
+} from '../../git/command-runner/host-routing/local-git-runtime-route'
 import {
   noteWslHostsLivePolicyBlock,
   resetWslHostsGateForTests

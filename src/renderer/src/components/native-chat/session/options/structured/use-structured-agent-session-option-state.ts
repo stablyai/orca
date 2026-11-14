@@ -3,18 +3,18 @@ import {
   structuredSessionSelectionController
 } from '../../../../../lib/agent-session/options/structured-agent-session-selection-controller'
 import { useStructuredSessionSelectionReads } from './use-structured-session-selection-reads'
-import { applyRuntimePermissionReport } from '../../../../../../../shared/agent-session/options/structured-agent-session-permission-option'
+import { applyRuntimePermissionReport } from '../../../../../../../shared/agent-session/options/permissions/structured-agent-session-permission-option'
 import { useStructuredAgentSessionPermissionStatus } from '../../status/structured-agent-session-status-hooks'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import type { AgentSessionOptionsResult } from '../../../../../../../shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../../../../../../shared/agent-session/options/protocol/agent-session-options-result'
 import type { AgentType } from '../../../../../../../shared/agent-status/contracts/agent-status-types'
-import type { AgentSessionOptionCatalog } from '../../../../../../../shared/agent-session/options/agent-session-option-catalog-types'
-import { usesInstalledAgentModelCatalog } from '../../../../../../../shared/agent-session/options/agent-model-catalog-ownership'
+import type { AgentSessionOptionCatalog } from '../../../../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
+import { usesInstalledAgentModelCatalog } from '../../../../../../../shared/agent-session/options/model-catalog/agent-model-catalog-ownership'
 import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import type { StructuredAgentSessionOptionState } from '../../../../../../../shared/agent-session/options/structured-agent-session-options'
-import { structuredAgentSessionReportsAtFence } from '../../../../../../../shared/agent-session/options/structured-agent-session-runtime-reports'
+import { structuredAgentSessionReportsAtFence } from '../../../../../../../shared/agent-session/options/reconciliation/structured-agent-session-runtime-reports'
 import type { RuntimeClientTarget } from '../../../../../../../shared/runtime-client-target'
-import { structuredAgentSessionOptionView } from '../../../../../../../shared/agent-session/options/structured-agent-session-option-view'
+import { structuredAgentSessionOptionView } from '../../../../../../../shared/agent-session/options/view/structured-agent-session-option-view'
 import {
   AGENT_SESSION_SEND_SELECTION_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY
@@ -26,7 +26,7 @@ import {
 } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { recomputeOn } from '@/lib/recompute-on'
-import { createStructuredAgentSessionOptionsReadOwner } from '../../../../../../../shared/agent-session/options/structured-agent-session-options-read-owner'
+import { createStructuredAgentSessionOptionsReadOwner } from '../../../../../../../shared/agent-session/options/reconciliation/structured-agent-session-options-read-owner'
 
 import { firstFrameOptionState } from './structured-agent-session-option-first-frame'
 

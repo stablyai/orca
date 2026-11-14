@@ -8,7 +8,7 @@ import type {
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/class-names'
 import { SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
-import { SettingsGroup } from '../section-layout/SettingsGroup'
+import { SETTINGS_GROUP_BLEED_CLASS, SettingsGroup } from '../section-layout/SettingsGroup'
 import {
   speechModelTab,
   voiceSpeechModelRows,
@@ -20,6 +20,7 @@ import {
   VoiceSpeechModelRow
 } from './VoiceSpeechModelRow'
 import { VoiceDictationLanguageSetting } from './VoiceDictationLanguageSetting'
+import { VOICE_SETTING_ANCHORS } from './voice-pane-search'
 import { cancelSpeechModelDownload, startSpeechModelDownload } from './speech-model-download'
 
 type VoiceSpeechModelSectionProps = {
@@ -91,8 +92,8 @@ export function VoiceSpeechModelSection({
   const title = t('auto.components.settings.VoicePane.c5ea32143e', 'Speech model')
   return (
     <SettingsGroup
+      id={VOICE_SETTING_ANCHORS.speechModel}
       title={title}
-      bodyClassName="px-0"
       action={
         <SettingsSegmentedControl
           size="sm"
@@ -109,7 +110,8 @@ export function VoiceSpeechModelSection({
         />
       }
     >
-      <div className="@container">
+      {/* Model rows span the card so the selected row's highlight reaches its edges. */}
+      <div className={cn('@container', SETTINGS_GROUP_BLEED_CLASS)}>
         <div role="list" aria-label={title} className={SPEECH_MODEL_GRID_COLUMNS}>
           <div
             aria-hidden="true"
@@ -146,7 +148,6 @@ export function VoiceSpeechModelSection({
       </div>
       {tab === 'cloud' ? cloudSettings : null}
       <VoiceDictationLanguageSetting
-        className="px-5"
         voiceSettings={voiceSettings}
         selectedModel={selectedModel}
         onUpdateVoiceSettings={onUpdateVoiceSettings}

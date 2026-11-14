@@ -1,8 +1,8 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, vi } from 'vitest'
 import { RuntimeBrowserCommands } from './browser-commands'
-import { runWithActiveRpcCaller } from '../../rpc/rpc-active-caller'
-import { LOCAL_CLI_RPC_CALLER } from '../../rpc/rpc-caller-identity'
+import { runWithActiveRpcCaller } from '../../rpc/callers/active-call'
+import { LOCAL_CLI_RPC_CALLER } from '../../rpc/callers/rpc-caller-identity'
 import {
   prepareBrowserPageAttach,
   admitBrowserPageAttach,
@@ -48,7 +48,7 @@ vi.mock('../../../ipc/browser/browser-tab-registration-wait', () => ({
   waitForTabFirstLoad: async () => {},
   waitForWorktreeTabRegistration: async () => {}
 }))
-vi.mock('../../../window/renderer-publication-throttle', () => ({
+vi.mock('../../../window/visibility/renderer-publication-throttle', () => ({
   rendererPublicationThrottle: { acquire: () => () => {} }
 }))
 

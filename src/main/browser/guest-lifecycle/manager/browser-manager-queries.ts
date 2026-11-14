@@ -13,6 +13,7 @@ import {
   listBrowserRouteGuestPopups
 } from '../../routing/guest-authority/browser-route-guest-popup-ownership'
 import { browserPopupPageId, browserPopupPageWebContentsId } from '../popups/browser-popup-page-id'
+import { readGuestNavigationState } from '../navigation/browser-guest-navigation-state'
 
 export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
   isGuestMemoryProtected(browserPageId: string): boolean {
@@ -79,6 +80,20 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
     return this.worktreeIdByTabId.get(this.getOwningTabIdForPage(browserTabId))
   }
 
+  /** The workspace of a page an agent is driving whose guest lives in `sess` (null when unknown). */
+  findAgentPageInSession(sess: Electron.Session): { worktreeId: string | null } | null {
+    for (const browserPageId of this.agentActivity.activePageIds()) {
+      const guestId =
+        this.resolvePopupPageWebContentsId(browserPageId) ??
+        this.webContentsIdByTabId.get(browserPageId)
+      const guest = guestId === undefined ? undefined : webContents.fromId(guestId)
+      if (guest && !guest.isDestroyed() && guest.session === sess) {
+        return { worktreeId: this.getWorktreeIdForTab(browserPageId) ?? null }
+      }
+    }
+    return null
+  }
+
   getSessionProfileIdForTab(browserTabId: string): string | null {
     return this.sessionProfileIdByPageId.get(this.getOwningTabIdForPage(browserTabId)) ?? null
   }
@@ -142,6 +157,17 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
       : (this.remoteTabFaviconUrlByGuestId.get(webContentsId) ?? null)
   }
 
+  getBrowserPageNavigationState(
+    browserPageId: string
+  ): { loading: boolean; canGoBack: boolean; canGoForward: boolean } | null {
+    const webContentsId = this.webContentsIdByTabId.get(browserPageId)
+    const guest = webContentsId === undefined ? undefined : webContents.fromId(webContentsId)
+    if (!guest || guest.isDestroyed()) {
+      return null
+    }
+    return { loading: guest.isLoadingMainFrame(), ...readGuestNavigationState(guest) }
+  }
+
   getBrowserPageCertificateFailure(browserPageId: string): BrowserCertificateFailure | null {
     return this.certificateTrustController?.getFailure(browserPageId) ?? null
   }
@@ -203,6 +229,7 @@ export abstract class BrowserManagerQueries extends BrowserManagerRegistration {
   }
 
   protected notifyBrowserGuestStateChanged(webContentsId: number): void {
+    this.offscreenGuestStateNotices.cancel(String(webContentsId))
     if (!this.offscreenGuestIds.has(webContentsId)) {
       return
     }

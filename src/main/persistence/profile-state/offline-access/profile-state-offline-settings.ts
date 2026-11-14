@@ -36,6 +36,14 @@ export type AgentHookSettingsUpdate = {
   settingsPath: string
 }
 
+/** The file the reader below takes settings from. */
+export function resolveAgentHookSettingsPath(location: ProfileStateOfflineLocation): string {
+  const classification = classifyProfileStateStorage(location.dataFile, location.databaseFile)
+  return classification === 'json-only' || classification === 'neither'
+    ? location.dataFile
+    : location.databaseFile
+}
+
 /** JSON-only profiles must not create SQLite while reading settings. */
 export function readAgentHookSettingsFromProfileState(
   location: ProfileStateOfflineLocation

@@ -8,7 +8,7 @@ import type {
   WorkItemsCacheError,
   WorkItemsCacheSources
 } from '@/store/github/cache/cache-model'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import {
   taskPageWorkItemKey,
   taskPageWorkItemStatusSignature,

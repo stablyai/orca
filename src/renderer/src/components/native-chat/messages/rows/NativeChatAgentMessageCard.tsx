@@ -35,6 +35,13 @@ function heading(
   switch (agentMessageHeading(from, message)) {
     case 'started':
       return t('components.native-chat.agentMessage.startedWorker', 'Started worker')
+    case 'reopened-worker':
+      return t('components.native-chat.agentMessage.reopenedWorker', 'Reopened worker')
+    case 'followed-up-worker':
+      return t(
+        'components.native-chat.agentMessage.sentFollowUpToWorker',
+        'Sent follow-up to worker'
+      )
     case 'handed-off':
       return t('components.native-chat.agentMessage.handedOffToAgent', 'Handed off to agent')
     case 'started-agent':

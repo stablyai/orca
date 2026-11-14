@@ -1,4 +1,5 @@
-import { useEffect } from 'react'
+import { usageFailureMessage } from './usage-failure-message'
+import { useUsageObservation } from '../../store/slices/usage/use-usage-observation'
 import {
   Activity,
   Coins,
@@ -54,6 +55,8 @@ export function ClaudeUsagePane(): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const scanState = useAppStore((state) => state.claudeUsageScanState)
+  const failure = useAppStore((state) => state.claudeUsageFailure)
+  const failureMessage = usageFailureMessage(failure, t)
   const summary = useAppStore((state) => state.claudeUsageSummary)
   const daily = useAppStore((state) => state.claudeUsageDaily)
   const modelBreakdown = useAppStore((state) => state.claudeUsageModelBreakdown)
@@ -61,16 +64,14 @@ export function ClaudeUsagePane(): React.JSX.Element {
   const recentSessions = useAppStore((state) => state.claudeUsageRecentSessions)
   const scope = useAppStore((state) => state.claudeUsageScope)
   const range = useAppStore((state) => state.claudeUsageRange)
-  const fetchClaudeUsage = useAppStore((state) => state.fetchClaudeUsage)
+  const observeClaudeUsage = useAppStore((state) => state.observeClaudeUsage)
   const setClaudeUsageEnabled = useAppStore((state) => state.setClaudeUsageEnabled)
   const refreshClaudeUsage = useAppStore((state) => state.refreshClaudeUsage)
   const setClaudeUsageScope = useAppStore((state) => state.setClaudeUsageScope)
   const setClaudeUsageRange = useAppStore((state) => state.setClaudeUsageRange)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
-  useEffect(() => {
-    void fetchClaudeUsage()
-  }, [fetchClaudeUsage])
+  useUsageObservation(observeClaudeUsage)
 
   const handleSetEnabled = (enabled: boolean): void => {
     recordFeatureInteraction('usage-tracking')
@@ -87,6 +88,9 @@ export function ClaudeUsagePane(): React.JSX.Element {
     return (
       <UsageTrackingPaneShell
         enabled={false}
+        failure={failureMessage}
+        stateKnown={scanState !== null}
+        retry={{ label: t('usage.failure.retry', 'Refresh'), onRefresh: refreshClaudeUsage }}
         title={title}
         disabledDescription={t(
           'auto.components.stats.ClaudeUsagePane.0cb1a36d7d',
@@ -98,7 +102,11 @@ export function ClaudeUsagePane(): React.JSX.Element {
     )
   }
 
-  if (!summary && (scanState.isScanning || scanState.lastScanCompletedAt === null)) {
+  if (
+    !failureMessage &&
+    !summary &&
+    (scanState.isScanning || scanState.lastScanCompletedAt === null)
+  ) {
     return <ClaudeUsageLoadingState />
   }
 
@@ -107,6 +115,7 @@ export function ClaudeUsagePane(): React.JSX.Element {
   return (
     <UsageTrackingPaneShell
       enabled
+      failure={failureMessage}
       title={title}
       status={
         <>

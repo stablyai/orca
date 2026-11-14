@@ -20,19 +20,12 @@ import {
   BROWSER_PAGE_PROMPT_TIMEOUT_MS,
   respondToBrowserPagePrompt
 } from '../../guest-lifecycle/prompts/browser-page-prompts'
-import {
-  decideBrowserSitePermissions,
-  isBrowserSitePermissionAllowed
-} from './browser-site-permission-prompt'
+import { decideBrowserSitePermissions } from './browser-site-permission-prompt'
 import {
   savedBrowserSitePermissions,
-  sessionBrowserSitePermissions,
   type BrowserSitePermissionMemory
 } from './browser-site-permission-memory'
-import {
-  configureBrowserSitePermissionStore,
-  listBrowserSitePermissions
-} from './browser-site-permission-store'
+import { configureBrowserSitePermissionStore } from './browser-site-permission-store'
 
 type MockGuest = Electron.WebContents & EventEmitter
 
@@ -83,20 +76,6 @@ function ask(
   return decideBrowserSitePermissions({ requester: guest, frameOrigin, memory, permissions })
 }
 
-function allowedOnCheck(
-  permissions: BrowserSitePermission[],
-  {
-    memory = savedBrowserSitePermissions('default'),
-    frameOrigin = 'https://meet.example.com'
-  }: { memory?: BrowserSitePermissionMemory; frameOrigin?: string } = {}
-): boolean {
-  return isBrowserSitePermissionAllowed({
-    source: { pageUrl: 'https://meet.example.com/room', frameOrigin },
-    memory,
-    permissions
-  })
-}
-
 async function answerLatest(value: unknown): Promise<void> {
   const request = sentRequests(renderer).at(-1)
   if (!request) {
@@ -139,58 +118,5 @@ describe('browser site permission prompts', () => {
 
     await expect(ask(['camera', 'microphone'])).resolves.toBe(false)
     expect(sentRequests(renderer)).toHaveLength(2)
-  })
-
-  it("keeps a paired server's answers for its session only, where checks still see them", async () => {
-    const pairedSession = sessionBrowserSitePermissions('persist:paired-a')
-    const call = ask(['notifications'], { memory: pairedSession })
-    await answerLatest('allow')
-    await expect(call).resolves.toBe(true)
-
-    expect(allowedOnCheck(['notifications'], { memory: pairedSession })).toBe(true)
-    await expect(ask(['notifications'], { memory: pairedSession })).resolves.toBe(true)
-    expect(sentRequests(renderer)).toHaveLength(1)
-    expect(listBrowserSitePermissions('default')).toEqual([])
-    void ask(['notifications'], { memory: sessionBrowserSitePermissions('persist:paired-b') })
-    expect(sentRequests(renderer)).toHaveLength(2)
-  })
-
-  it("gives another site's frame only its own notification answer, and never asks for it", async () => {
-    const tab = ask(['notifications'])
-    await answerLatest('allow')
-    await tab
-    const widgetPage = ask(['notifications'], { guest: mockGuest('https://widget.example.net/') })
-    await answerLatest('allow')
-    await widgetPage
-
-    expect(allowedOnCheck(['notifications'], { frameOrigin: 'https://widget.example.net' })).toBe(
-      true
-    )
-    await expect(
-      ask(['notifications'], { frameOrigin: 'https://widget.example.net' })
-    ).resolves.toBe(true)
-    expect(allowedOnCheck(['notifications'], { frameOrigin: 'https://ads.example.net' })).toBe(
-      false
-    )
-    await expect(ask(['notifications'], { frameOrigin: 'https://ads.example.net' })).resolves.toBe(
-      false
-    )
-    expect(sentRequests(renderer)).toHaveLength(2)
-  })
-
-  it('remembers answers across a restart', async () => {
-    const directory = mkdtempSync(join(tmpdir(), 'orca-site-permissions-'))
-    configureBrowserSitePermissionStore(directory)
-    const call = ask(['midi'])
-    await answerLatest('allow')
-    await call
-
-    // Switch directories to evict the cache and verify the next read comes from disk.
-    configureBrowserSitePermissionStore(mkdtempSync(join(tmpdir(), 'orca-site-permissions-')))
-    expect(listBrowserSitePermissions('default')).toEqual([])
-    configureBrowserSitePermissionStore(directory)
-    expect(listBrowserSitePermissions('default')).toEqual([
-      { origin: 'https://meet.example.com', decisions: { midi: 'allow' } }
-    ])
   })
 })

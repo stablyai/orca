@@ -47,7 +47,3 @@ export function getBrowserProcessUserAgentIdentity(): BrowserProcessUserAgentIde
   }
   return identity
 }
-
-export function resetBrowserProcessUserAgentForTests(): void {
-  identity = null
-}

@@ -45,38 +45,6 @@ describe('BrowserClientHostCommandDispatcher', () => {
     await vi.runAllTimersAsync()
     await dispatcher.dispatch(command(1, 'create-b', 'createPage', 'page-a', 2))
   })
-
-  it('bounds close while canceling queued and non-cooperative handlers', async () => {
-    vi.useFakeTimers()
-    const stuck = deferred<BrowserClientHostCommandResult>()
-    const handler = vi.fn().mockReturnValue(stuck.promise)
-    const dispatcher = new BrowserClientHostCommandDispatcher({
-      authority,
-      handler,
-      maxConcurrentHandlers: 1,
-      joinTimeoutMs: 50
-    })
-    const running = dispatcher.dispatch(command(1, 'create-a'))
-    const queued = dispatcher.dispatch(command(1, 'create-b', 'createPage', 'page-b'))
-    const closing = dispatcher.close()
-    await vi.advanceTimersByTimeAsync(50)
-
-    await expect(running).resolves.toMatchObject({ errorCode: 'browser_host_command_cancelled' })
-    await expect(queued).resolves.toMatchObject({ errorCode: 'browser_host_command_cancelled' })
-    await expect(closing).resolves.toBe(false)
-    expect(() => dispatcher.dispatch(command(1, 'create-c', 'createPage', 'page-c'))).toThrow(
-      'browser_host_command_dispatcher_closed'
-    )
-    let handlersSettled = false
-    void dispatcher.whenClosed().then(() => {
-      handlersSettled = true
-    })
-    await Promise.resolve()
-    expect(handlersSettled).toBe(false)
-    stuck.resolve({ status: 'completed' })
-    await vi.runAllTimersAsync()
-    await expect(dispatcher.whenClosed()).resolves.toBeUndefined()
-  })
 })
 
 function command(

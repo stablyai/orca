@@ -4,6 +4,9 @@ export const CLIPBOARD_IMAGE_MAX_SOURCE_BYTES = Math.floor(
 )
 export const CLIPBOARD_IMAGE_MAX_PIXELS = 32 * 1024 * 1024
 export const CLIPBOARD_IMAGE_TOO_LARGE_ERROR = 'Clipboard image is too large'
+// Agents downscale to about this edge anyway, and Anthropic refuses images over 5 MiB of base64.
+export const AGENT_IMAGE_MAX_LONG_EDGE = 2000
+export const AGENT_IMAGE_MAX_BYTES = Math.floor(((5 * 1024 * 1024) / 4) * 3)
 
 export type ClipboardImageDimensions = {
   height: number
@@ -55,7 +58,8 @@ function scaleClipboardImageDimensions(
 export async function encodeClipboardImageWithinLimit<T>(
   source: ClipboardImageDimensions,
   encode: (size: ClipboardImageDimensions) => T | Promise<T>,
-  byteLength: (encoded: T) => number
+  byteLength: (encoded: T) => number,
+  maxBytes: number = CLIPBOARD_IMAGE_MAX_SOURCE_BYTES
 ): Promise<T> {
   const { height, width } = source
   if (!Number.isFinite(width * height) || width <= 0 || height <= 0) {
@@ -71,12 +75,12 @@ export async function encodeClipboardImageWithinLimit<T>(
   for (let attempt = 0; attempt < CLIPBOARD_IMAGE_FIT_ATTEMPTS; attempt += 1) {
     const encoded = await encode(size)
     const bytes = byteLength(encoded)
-    if (bytes <= CLIPBOARD_IMAGE_MAX_SOURCE_BYTES) {
+    if (bytes <= maxBytes) {
       return encoded
     }
     const next = scaleClipboardImageDimensions(
       size,
-      CLIPBOARD_IMAGE_FIT_MARGIN * Math.min(1, Math.sqrt(CLIPBOARD_IMAGE_MAX_SOURCE_BYTES / bytes))
+      CLIPBOARD_IMAGE_FIT_MARGIN * Math.min(1, Math.sqrt(maxBytes / bytes))
     )
     if (next.width === size.width && next.height === size.height) {
       break
@@ -95,15 +99,22 @@ export type ClipboardImageThumbnail = ClipboardImageDimensions & {
 }
 
 /** Fit the thumbnail budget; preserve already-small dimensions so callers skip resizing. */
-export function clipboardImageThumbnailSize({
-  height,
-  width
-}: ClipboardImageDimensions): ClipboardImageDimensions {
+export function clipboardImageThumbnailSize(
+  size: ClipboardImageDimensions
+): ClipboardImageDimensions {
+  return clipboardImageSizeWithinEdge(size, CLIPBOARD_IMAGE_THUMBNAIL_MAX_EDGE)
+}
+
+/** Preserve already-small dimensions so callers can skip resizing. */
+export function clipboardImageSizeWithinEdge(
+  { height, width }: ClipboardImageDimensions,
+  maxEdge: number
+): ClipboardImageDimensions {
   const longestEdge = Math.max(width, height)
-  if (longestEdge <= CLIPBOARD_IMAGE_THUMBNAIL_MAX_EDGE) {
+  if (longestEdge <= maxEdge) {
     return { height, width }
   }
-  const scale = CLIPBOARD_IMAGE_THUMBNAIL_MAX_EDGE / longestEdge
+  const scale = maxEdge / longestEdge
   return {
     height: Math.max(1, Math.round(height * scale)),
     width: Math.max(1, Math.round(width * scale))

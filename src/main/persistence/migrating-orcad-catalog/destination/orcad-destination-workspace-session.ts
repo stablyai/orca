@@ -4,7 +4,7 @@ import type { PersistedState } from '../../../../shared/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { SESSION_FOCUS_FIELDS } from '../../../../shared/workspace-session/workspace-session-host-field-ownership'
 import { mergeWorkspaceSessions } from '../../../orca-profiles/project-transfer/profile-project-session-state'
-import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-pane-tree'
+import { collectLayoutLeafIdsInOrder } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 
 const MERGED_SESSION_RECORD_FIELDS = [
   'tabsByWorktree',

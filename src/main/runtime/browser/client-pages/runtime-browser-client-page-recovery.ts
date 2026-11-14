@@ -1,3 +1,12 @@
+import { batchBrowserPageInitializationNotifications } from './browser-page-initialization-notifications'
+import {
+  isRecoverableByLease,
+  isActiveExactPage,
+  assertInventoryAuthority
+} from './runtime-browser-client-page-recovery-authority'
+import { recoverClientPagesWithConcurrency } from './runtime-browser-client-page-recovery-queue'
+import { BROWSER_CLIENT_PAGE_INITIALIZATION_CAPABILITY } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
+import { admitRuntimeBrowserPageInitialization } from './runtime-browser-page-initialization'
 import {
   BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY,
   type BrowserClientAutomationResult as BrowserClientHostCommandResult
@@ -27,7 +36,13 @@ type RecoveryAuthority = Pick<
   | 'completePageRetirement'
   | 'createClientPage'
   | 'getPlacement'
+  | 'claimLegacyClientPageRecovery'
+  | 'admitClientPageInitialization'
 > & {
+  clientPageInitializations: Pick<
+    BrowserHostLeaseRegistry['clientPageInitializations'],
+    'canContinue'
+  >
   issueClientPageCommand(
     authority: {
       authorityRuntimeId: string
@@ -44,6 +59,8 @@ type RecoveryAuthority = Pick<
 export async function recoverUnavailableRuntimeBrowserClientPages(options: {
   lease: BrowserClientHostLeaseAuthority & {
     pairedDeviceId: string
+    connectionId?: string
+    hostCapabilities?: readonly string[]
     pageInventory?: readonly BrowserClientHostedPageInventory[]
   }
   authority: RecoveryAuthority
@@ -55,6 +72,8 @@ export async function recoverUnavailableRuntimeBrowserClientPages(options: {
   releaseUnrecoverablePage?: (page: RuntimeBrowserClientPage) => void
   /** Skip newly adopted pages: inventory still names predecessor authority and would wrongly trigger their teardown. */
   adoptedPageIds?: ReadonlySet<string>
+  /** Adoption owns these queued/running rows and their current attach observer. */
+  claimedPageIds?: ReadonlySet<string>
   /** Re-resolve routes for persisted pages: keys name their minting runtime process and clients refuse predecessor keys. */
   resolveExecutionHostKey?: (workspaceId: string) => Promise<BrowserExecutionHostKeyResolution>
   signal?: AbortSignal
@@ -74,10 +93,35 @@ export async function recoverUnavailableRuntimeBrowserClientPages(options: {
       (page) =>
         isPlacedAsObservedAtAttach(page, options.pagePlacementsAtAttach) &&
         !options.adoptedPageIds?.has(page.browserPageId) &&
-        isRecoverableByLease(page, options.lease) &&
+        !options.claimedPageIds?.has(page.browserPageId) &&
+        (isRecoverableByLease(page, options.lease) ||
+          options.authority.clientPageInitializations.canContinue(
+            page.browserPageId,
+            page.placement,
+            options.lease
+          )) &&
         !isActiveExactPage(page, inventoryByPageId.get(page.browserPageId), options.lease)
     )
-  await mapWithConcurrency(
+  if (options.lease.hostCapabilities?.includes(BROWSER_CLIENT_PAGE_INITIALIZATION_CAPABILITY)) {
+    batchBrowserPageInitializationNotifications(options.notifyWorkspace, (notifyWorkspace) => {
+      for (const page of pages) {
+        const previous = inventoryByPageId.get(page.browserPageId)
+        admitRuntimeBrowserPageInitialization({
+          ...options,
+          notifyWorkspace,
+          lease: options.lease,
+          page,
+          url: previous?.currentUrl ?? page.url,
+          ...(previous ? { previous } : {}),
+          resolveExecutionHostKey:
+            options.resolveExecutionHostKey ??
+            (async () => ({ status: 'resolved', executionHostKey: page.executionHostKey }))
+        })
+      }
+    })
+    return
+  }
+  await recoverClientPagesWithConcurrency(
     pages,
     MAX_RECOVERY_CONCURRENCY,
     async (page) => {
@@ -89,7 +133,7 @@ export async function recoverUnavailableRuntimeBrowserClientPages(options: {
           browserPageId: page.browserPageId,
           error
         })
-        releaseUnhostablePage(page, options)
+        // The logical saved row remains closeable for a later authenticated recovery.
       }
     },
     options.signal
@@ -108,21 +152,6 @@ function isPlacedAsObservedAtAttach(
   return observed !== undefined && sameRuntimeBrowserPlacement(observed, page.placement)
 }
 
-/** Retained pages match client identity across generations. Restored pages match paired device because client ids rotate per process.
- * Device matching prevents another or revoked/re-paired device from inheriting tabs; unmatched rows stay host-absent and closeable. */
-function isRecoverableByLease(
-  page: RuntimeBrowserClientPage,
-  lease: BrowserClientHostLeaseAuthority & { pairedDeviceId: string }
-): boolean {
-  if (isRestoredClientHostedBrowserPlacement(page.placement)) {
-    return page.pairedDeviceId === lease.pairedDeviceId
-  }
-  return (
-    page.placement.browserHostClientId === lease.browserHostClientId &&
-    page.placement.browserHostGeneration <= lease.browserHostGeneration
-  )
-}
-
 /** Keep routes minted by this runtime; restored pages re-resolve. Retire only workspace-gone; unavailable routes leave held rows for later attach. */
 async function resolveRecoveryExecutionHostKey(
   page: RuntimeBrowserClientPage,
@@ -139,17 +168,6 @@ async function resolveRecoveryExecutionHostKey(
     options.releaseUnrecoverablePage?.(page)
   }
   return null
-}
-
-/** Retires a page left with no placement at all; anything still placed can retry on a later attach. */
-function releaseUnhostablePage(
-  page: RuntimeBrowserClientPage,
-  options: Parameters<typeof recoverUnavailableRuntimeBrowserClientPages>[0]
-): void {
-  if (options.authority.getPlacement(page.browserPageId)) {
-    return
-  }
-  options.releaseUnrecoverablePage?.(page)
 }
 
 async function recoverPage(
@@ -185,6 +203,22 @@ async function recoverPage(
       }
     }
   }
+  const legacyRecovery = options.authority.claimLegacyClientPageRecovery(options.lease, {
+    browserPageId: page.browserPageId,
+    browserProfileId: page.browserProfileId,
+    workspaceId: page.workspaceId,
+    expected: page.placement,
+    isCurrent: () => {
+      const current = options.pages.getPage(page.browserPageId)
+      return Boolean(
+        current &&
+        current.pairedDeviceId === page.pairedDeviceId &&
+        current.browserProfileId === page.browserProfileId &&
+        current.workspaceId === page.workspaceId &&
+        sameRuntimeBrowserPlacement(current.placement, page.placement)
+      )
+    }
+  })
   const placement = await options.authority.createClientPage({
     browserPageId: page.browserPageId,
     browserHostClientId: options.lease.browserHostClientId,
@@ -192,14 +226,18 @@ async function recoverPage(
     browserProfileId: page.browserProfileId,
     executionHostKey,
     requiredCapabilities: [BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY],
-    workspaceId: page.workspaceId
+    workspaceId: page.workspaceId,
+    signal: options.signal,
+    legacyRecovery,
+    committed: (placement) =>
+      options.pages.replaceClientPagePlacement(
+        page.browserPageId,
+        page.placement,
+        placement,
+        executionHostKey
+      )
   })
-  const recovered = options.pages.replaceClientPagePlacement(
-    page.browserPageId,
-    page.placement,
-    placement,
-    executionHostKey
-  )
+  const recovered = options.pages.getPage(page.browserPageId)!
   const url = inventory?.currentUrl ?? page.url
   if (url && url !== 'about:blank') {
     await navigateRecoveredPage(options.authority, page.browserPageId, placement, url)
@@ -270,56 +308,4 @@ function commandAuthority(
     browserHostGeneration: placement.browserHostGeneration,
     pageHostGeneration: placement.pageHostGeneration
   }
-}
-
-function isActiveExactPage(
-  page: RuntimeBrowserClientPage,
-  inventory: BrowserClientHostedPageInventory | undefined,
-  lease: BrowserClientHostLeaseAuthority
-): boolean {
-  return Boolean(
-    inventory?.state === 'active' &&
-    inventory.authorityRuntimeId === lease.authorityRuntimeId &&
-    inventory.authorityEpoch === lease.authorityEpoch &&
-    inventory.browserHostClientId === page.placement.browserHostClientId &&
-    inventory.browserHostGeneration === page.placement.browserHostGeneration &&
-    inventory.pageHostGeneration === page.placement.pageHostGeneration &&
-    inventory.browserProfileId === page.browserProfileId &&
-    inventory.executionHostKey === page.executionHostKey
-  )
-}
-
-function assertInventoryAuthority(
-  page: RuntimeBrowserClientPage,
-  inventory: BrowserClientHostedPageInventory,
-  lease: BrowserClientHostLeaseAuthority
-): void {
-  if (
-    inventory.authorityRuntimeId !== lease.authorityRuntimeId ||
-    inventory.authorityEpoch !== lease.authorityEpoch ||
-    inventory.browserHostClientId !== page.placement.browserHostClientId ||
-    inventory.browserHostGeneration !== page.placement.browserHostGeneration ||
-    inventory.pageHostGeneration !== page.placement.pageHostGeneration
-  ) {
-    throw new Error('browser_client_page_reconciliation_authority_stale')
-  }
-}
-
-async function mapWithConcurrency<T>(
-  values: readonly T[],
-  concurrency: number,
-  operation: (value: T) => Promise<void>,
-  signal?: AbortSignal
-): Promise<void> {
-  let index = 0
-  const worker = async (): Promise<void> => {
-    while (index < values.length && !signal?.aborted) {
-      const value = values[index]
-      index += 1
-      if (value !== undefined) {
-        await operation(value)
-      }
-    }
-  }
-  await Promise.all(Array.from({ length: Math.min(concurrency, values.length) }, worker))
 }

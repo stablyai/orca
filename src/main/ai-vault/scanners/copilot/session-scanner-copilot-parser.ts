@@ -1,4 +1,4 @@
-import { openTranscriptReadStream } from '../../../native-chat/wsl-transcript-fs-access'
+import { openTranscriptReadStream } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -13,12 +13,13 @@ import {
   createAccumulator,
   sessionIdFromFileName,
   updateTimeline
-} from '../../session-scanner-accumulator'
-import { addSessionText } from '../../session-scanner-messages'
-import { asRecord } from '../../session-scanner-record-value'
-import { copilotModelMetricsTotal, numberValue } from '../../session-scanner-token-values'
-import { extractString, extractTrustedFolder, parseJsonObject } from '../../session-scanner-values'
-import { normalizeTitleText } from '../../session-scanner-text-normalization'
+} from '../../parsing/session-scanner-accumulator'
+import { addSessionText } from '../../parsing/session-scanner-messages'
+import { asRecord } from '../../parsing/session-record-fields'
+import { copilotModelMetricsTotal, numberValue } from '../../parsing/session-scanner-token-values'
+import { extractString } from '../../../../shared/trimmed-string'
+import { parseJsonObject } from '../../parsing/session-json-object'
+import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 
 type ParserSessionOptions = {
   executionHostId?: ExecutionHostId
@@ -117,4 +118,12 @@ async function parseCopilotSessionLines(args: {
     state.consumeLine(line)
   }
   return state.finalize(args.platform, args.options)
+}
+
+function extractTrustedFolder(value: unknown): string | null {
+  const message = extractString(value)
+  if (!message) {
+    return null
+  }
+  return message.match(/^Folder (.+) has been added to trusted folders\.$/)?.[1] ?? null
 }

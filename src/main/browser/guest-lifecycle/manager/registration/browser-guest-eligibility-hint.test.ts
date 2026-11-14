@@ -33,7 +33,7 @@ import {
   closeBrowserMemoryPage,
   retainBrowserMemoryPageForAgent
 } from '../../browser-page-memory'
-import { runWithActiveRpcCaller } from '../../../../runtime/rpc/rpc-active-caller'
+import { runWithActiveRpcCaller } from '../../../../runtime/rpc/callers/active-call'
 import {
   browserGuestActivity,
   touchBrowserGuestActivity,

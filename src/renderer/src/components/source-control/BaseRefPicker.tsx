@@ -9,6 +9,11 @@ import {
 } from '@/runtime/source-control/references/runtime-repo-client'
 import { isRuntimeRepoRefSearchQueryWithinLimit } from '@/runtime/source-control/references/runtime-repo-search-bounds'
 import { useTranslate } from '@/i18n/use-translate'
+import {
+  branchRefLabel,
+  branchRefLabels,
+  probedDefaultBranchRef
+} from '../../../../shared/git/refs/branch-ref-label'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 
 type BaseRefPickerProps = {
@@ -132,14 +137,15 @@ export function BaseRefPicker({
     }
   }, [baseRefQuery, ownerHostId, repoId, viewActive])
 
-  const effectiveBaseRef = currentBaseRef ?? defaultBaseRef
+  const effectiveBaseRef = currentBaseRef ?? probedDefaultBranchRef(defaultBaseRef, baseRefResults)
+  const labels = branchRefLabels(baseRefResults)
 
   return (
     <div className="space-y-2.5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <div className="text-sm font-medium text-foreground">
-            {effectiveBaseRef ??
+            {(effectiveBaseRef ? branchRefLabel(effectiveBaseRef) : null) ??
               t('auto.components.settings.BaseRefPicker.ee110e1830', 'No default base ref')}
           </div>
           <p className="text-xs text-muted-foreground">
@@ -149,7 +155,7 @@ export function BaseRefPicker({
                 ? t(
                     'auto.components.settings.BaseRefPicker.086ce7f369',
                     'Following primary branch ({{value0}})',
-                    { value0: defaultBaseRef }
+                    { value0: branchRefLabel(defaultBaseRef) }
                   )
                 : t(
                     'auto.components.settings.BaseRefPicker.9a14ec7400',
@@ -204,6 +210,7 @@ export function BaseRefPicker({
               {baseRefResults.map((ref) => (
                 <button
                   key={ref}
+                  aria-current={effectiveBaseRef === ref ? 'true' : undefined}
                   onClick={() => {
                     // Return to rest after selection so search results cannot imply the new pin is still pending.
                     setBaseRefQuery('')
@@ -216,7 +223,7 @@ export function BaseRefPicker({
                       : 'text-foreground'
                   }`}
                 >
-                  <span className="truncate">{ref}</span>
+                  <span className="truncate">{labels.get(ref)}</span>
                   {effectiveBaseRef === ref ? (
                     <span className="text-[10px] uppercase tracking-[0.18em]">
                       {t('auto.components.settings.BaseRefPicker.d166ff883d', 'Current')}

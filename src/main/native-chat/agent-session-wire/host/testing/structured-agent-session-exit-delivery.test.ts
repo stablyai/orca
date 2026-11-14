@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionOwnerProbe } from '../../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
+import type { AgentSessionOwnerProbe } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession
@@ -13,7 +14,7 @@ import { createQueuedMessageTestRig } from './structured-agent-session-queued-me
 
 import { eventually } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import type { QueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
-import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
+import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data.test-fixture'
 // Proven generation death must immediately disable old work and wake cards even when lease release fails.
 
 let rig: QueuedMessageTestRig | undefined
@@ -41,21 +42,15 @@ async function queuedBehindPrompt(
   return { current, draftId: queued.value.queued.messageId }
 }
 
-function refuseReleases(current: QueuedMessageTestRig): () => number {
+async function refuseReleases(current: QueuedMessageTestRig): Promise<void> {
   vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-  const transition = current.store.transitionHandoff.bind(current.store)
-  let refused = 0
-  vi.spyOn(current.store, 'transitionHandoff').mockImplementation((sessionId, change) =>
-    transition(sessionId, (record) => {
-      const next = change(record)
-      if (next.lease.claimStatus === 'released') {
-        refused += 1
-        throw new Error('disk full')
-      }
-      return next
-    })
+  await withTestAgentSessionDatabase(current.root, (db) =>
+    db.exec(`
+    CREATE TRIGGER reject_release BEFORE UPDATE OF record_json ON agent_session_records
+    WHEN json_extract(NEW.record_json, '$.lease.claimStatus')='released'
+    BEGIN SELECT RAISE(ABORT, 'disk full'); END
+  `)
   )
-  return () => refused
 }
 
 async function watchChat(current: QueuedMessageTestRig) {
@@ -74,6 +69,7 @@ async function watchChat(current: QueuedMessageTestRig) {
       })
     }
   })
+  await eventually(() => expect(reads.length).toBeGreaterThan(0))
   return reads
 }
 
@@ -84,7 +80,7 @@ const provenDead: StructuredAgentSessionHostDeps['probeOwner'] = async () => ({
 describe('an exit whose settlement lands while its release keeps failing', () => {
   it('reads the dead generation as ended in every frame, and the card is sent over the proven-dead owner', async () => {
     const { current, draftId } = await queuedBehindPrompt(provenDead)
-    const refused = refuseReleases(current)
+    await refuseReleases(current)
     const reads = await watchChat(current)
     const before = reads.length
 
@@ -92,7 +88,6 @@ describe('an exit whose settlement lands while its release keeps failing', () =>
     await eventually(async () => expect(await current.handoff(draftId)).toBeDefined())
     await eventually(() => expect(current.dispatch).toHaveBeenCalledTimes(2))
 
-    expect(refused()).toBeGreaterThan(0)
     const untilSent = reads.slice(before).filter((read) => !read.cardSent)
     expect(untilSent.length).toBeGreaterThan(0)
     expect(untilSent.filter((read) => read.working)).toEqual([])
@@ -110,7 +105,7 @@ describe('an owner this host cannot prove dead', () => {
     'is never replaced when %s: no agent starts over it, and the card comes back',
     async (_name, probe) => {
       const { current, draftId } = await queuedBehindPrompt(async () => probe)
-      refuseReleases(current)
+      await refuseReleases(current)
       const owner = current.store.getRecord(SESSION)?.lease
 
       await exitChild(current)

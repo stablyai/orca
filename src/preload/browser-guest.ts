@@ -1,12 +1,12 @@
 import type { ContextBridge, IpcRenderer, WebFrame } from 'electron'
-import { installBrowserPasswordDetector } from './browser-password-detector'
+import { installBrowserPasswordDetector } from './browser/passwords/browser-password-detector'
 import {
   installBrowserWindowCloseGuard,
   PRELOAD_BROWSER_GUEST_WINDOW_CLOSE_CHANNEL
-} from './browser-window-close-installation'
-import { installBrowserWindowPrompt } from './browser-window-prompt-installation'
-import { installNativeChatVisualGuestTheme } from './native-chat-visual-guest-theme'
-import { installBrowserGuestEditProtection } from './browser-guest-edit-protection'
+} from './browser/window-controls/browser-window-close-installation'
+import { installBrowserWindowPrompt } from './browser/window-controls/browser-window-prompt-installation'
+import { installNativeChatVisualGuestTheme } from './native-chat/native-chat-visual-guest-theme'
+import { installBrowserGuestEditProtection } from './browser/edit-protection/browser-guest-edit-protection'
 
 // Raw require keeps the sandboxed preload standalone in the CJS build.
 const electron: {

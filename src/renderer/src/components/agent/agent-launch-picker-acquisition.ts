@@ -190,7 +190,7 @@ class AgentPickerAcquisition {
     const refresh =
       !signal.aborted &&
       this.observers.size > 0 &&
-      (waitForListing ? catalog.waitExpired : catalog.listingInProgress) === true
+      (catalog.waitExpired === true || catalog.listingInProgress === true)
     if (refresh) {
       this.queued.refresh.add(index)
     }

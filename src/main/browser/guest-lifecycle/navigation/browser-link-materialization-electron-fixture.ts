@@ -6,7 +6,7 @@ import {
   associateBrowserPageAttach,
   startBrowserPageAttach
 } from '../browser-page-attach'
-import { applyBackgroundActivationPolicy } from '../../../window/foreground-activation-policy'
+import { applyBackgroundActivationPolicy } from '../../../window/activation/foreground-activation-policy'
 
 if (process.env.ORCA_BACKGROUND_LAUNCH !== '1') {
   throw new Error('Popup identity probes require a background launch')

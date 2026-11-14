@@ -17,10 +17,10 @@ import {
 import { reportBrowserSessionWebRequest } from '../../../sessions/requests/browser-session-web-request-observer'
 import { BROWSER_GUEST_PROTECTION_REPORT } from '../../../../../shared/browser/guest-lifecycle/browser-guest-discard-protection'
 
-vi.mock('../../../../runtime/rpc/rpc-active-caller', () => ({
+vi.mock('../../../../runtime/rpc/callers/active-call', () => ({
   getActiveRpcCaller: () => ({ kind: 'desktop' })
 }))
-vi.mock('../../../../window/renderer-publication-throttle', () => ({
+vi.mock('../../../../window/visibility/renderer-publication-throttle', () => ({
   rendererPublicationThrottle: { acquire: vi.fn(() => vi.fn()) }
 }))
 

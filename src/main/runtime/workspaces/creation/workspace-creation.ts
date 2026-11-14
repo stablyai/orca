@@ -6,7 +6,7 @@ import {
 } from '../lineage/runtime-worktree-lineage-resolution'
 import { RuntimeLineageError, LINEAGE_PARENT_AMBIGUOUS } from '../lineage/runtime-lineage-error'
 import type { Repo } from '../../../../shared/repo-types'
-import { OrcaRuntimeWithGetWorktreeTerminalProvisioningHost } from '../startup/workspace-terminal-provisioning'
+import { OrcaRuntimeWithGroupFolderSetup } from './runtime-group-folder-setup-host'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
 import { isFolderRepo } from '../../../../shared/repo-kind'
@@ -15,8 +15,6 @@ import { resolveWorktreeCreateRoute } from '../../../workspaces/creation/worktre
 import { ExecutionHostNotDispatchableError } from '../../../providers/execution-host-provider-dispatch'
 import { SshHostNotServedError } from '../../../providers/ssh-host-not-served-error'
 import { createRuntimeFolderWorktree } from './runtime-folder-worktree-create'
-import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
-import type { Worktree } from '../../../../shared/worktree/types'
 import { createRuntimeLocalManagedWorktree } from './runtime-local-worktree-create'
 import type { PreparationRearmHolder } from '../../../workspaces/creation/preparation/worktree-create-preparation'
 import {
@@ -25,14 +23,10 @@ import {
 } from './runtime-local-worktree-setup'
 import { invalidateAuthorizedRootsCacheForRepo } from '../../../ipc/worktrees/removal/registered-worktree-roots-scoped-invalidation'
 import { startRuntimeLocalWorktreeTerminals } from '../startup/runtime-local-worktree-terminal-startup'
-import type { RuntimeLocalWorktreeTerminalPorts } from '../startup/runtime-local-worktree-terminal-startup'
 import { trackRuntimeWorkspaceCreate } from '../../../workspaces/creation/workspace-create-telemetry'
 import type { RuntimeWorkspaceCreateEvents } from '../../../workspaces/creation/workspace-create-telemetry'
 
-import {
-  createdWorkspaceActivationCallbacks,
-  wslUserAct
-} from '../startup/workspace-create-activation'
+import { createdWorkspaceActivationCallbacks } from '../startup/workspace-create-activation'
 import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { resolveManagedWorktreeCreateStartup } from '../startup/managed-worktree-create-startup'
 import type { WorkspaceCreationHandle } from '../lifecycle/workspace-lifecycle-creations'
@@ -40,8 +34,9 @@ import { workspaceLifecycleKey } from '../lifecycle/workspace-lifecycle-commands
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { applyWorkspaceCreatePluginHook } from '../../../plugins/hooks/workspace-create-plugin-hook'
 import { withProjectWorktreeCreate } from '../../../workspaces/creation/worktree-create-in-flight'
+import { createdWorktreeLifecycleIdentity } from '../lifecycle/worktree-lifecycle-event'
 
-export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWorktreeTerminalProvisioningHost {
+export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGroupFolderSetup {
   abstract resolveLineageForWorktreeCreate(
     input?: WorktreeLineageInput,
     childRepo?: Repo
@@ -240,7 +235,8 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
       kind: 'created',
       worktreeId: worktree.id,
       path: worktree.path,
-      branch: worktree.branch
+      branch: worktree.branch,
+      ...createdWorktreeLifecycleIdentity(worktree)
     })
     return {
       worktree: {
@@ -292,26 +288,5 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     return (
       this.authoritativeWindowId !== null || Boolean(startup) || Boolean(this.ptyController?.spawn)
     )
-  }
-
-  private localWorktreeTerminalPorts(
-    args: { navigation?: RuntimeNavigationTarget; wslUserAct?: true },
-    activate: RuntimeLocalWorktreeTerminalPorts['activate'],
-    worktree?: Worktree
-  ): RuntimeLocalWorktreeTerminalPorts {
-    return {
-      canSpawn: Boolean(this.ptyController?.spawn),
-      provisionInBackground: () => this.shouldProvisionWorktreeInBackground(args.navigation),
-      createTerminal: (selector, options) =>
-        worktree
-          ? this.createTerminal(selector, { ...options, ...wslUserAct(args) }, worktree)
-          : this.createTerminal(selector, { ...options, ...wslUserAct(args) }),
-      pasteDraft: (handle, draft) => this.pasteStartupDraftWhenReady(handle, draft),
-      sendFollowup: (handle, followup, terminal) =>
-        void this.deliverStartupFollowup(handle, followup, { terminalCreation: terminal }),
-      provision: (options) =>
-        this.provisionManagedWorktreeTerminals({ ...options, ...wslUserAct(args) }, worktree),
-      activate
-    }
   }
 }

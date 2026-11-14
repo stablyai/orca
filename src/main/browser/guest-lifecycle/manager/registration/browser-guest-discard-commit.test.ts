@@ -27,7 +27,7 @@ vi.mock('../../popups/presentation/popup-origin-bar-window', () => ({
 vi.mock('../../../identity/browser-process-user-agent', () => ({
   getBrowserProcessUserAgentIdentity: () => ({ userAgent: 'Chrome/140.0.0.0' })
 }))
-vi.mock('../../../../runtime/rpc/rpc-active-caller', () => ({
+vi.mock('../../../../runtime/rpc/callers/active-call', () => ({
   getActiveRpcCaller: () => ({ kind: 'desktop' })
 }))
 

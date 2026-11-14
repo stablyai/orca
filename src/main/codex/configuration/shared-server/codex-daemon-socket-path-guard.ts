@@ -1,4 +1,8 @@
 import { realpathSync } from 'node:fs'
+import {
+  observeResolvedFilePath,
+  observeResolvedFilePathError
+} from '../../../filesystem/file-content-observation'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { unixSocketPathFits } from '../../../../shared/unix-socket-path-limit'
 import { upsertTableSettingsInContent } from '../settings/codex-config-settings-upsert'
@@ -26,9 +30,11 @@ export function codexDaemonSocketPath(homePath: string, platform = process.platf
   let canonical = homePath
   try {
     canonical = realpathSync.native(homePath)
-  } catch {
+  } catch (error) {
+    observeResolvedFilePathError('daemon-home', homePath, error)
     // Unresolvable homes are measured as spelled.
   }
+  canonical = observeResolvedFilePath('daemon-home', homePath, canonical)
   const separator = platform === 'win32' ? '\\' : '/'
   return [canonical.replace(/[\\/]+$/, ''), ...DAEMON_SOCKET_SEGMENTS].join(separator)
 }

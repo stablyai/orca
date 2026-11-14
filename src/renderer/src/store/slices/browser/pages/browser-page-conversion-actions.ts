@@ -1,3 +1,4 @@
+import { copyBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import { planBrowserPageConversion } from './browser-page-conversion'
 import { findPage, findWorkspace, mirrorWorkspaceFromActivePage } from './browser-page-records'
 import { assertManagedBrowserMaterializationAllowed } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
@@ -58,7 +59,10 @@ export function createBrowserPageConversionActions(
           if (remoteHandle) {
             remotePageToClose = { worktreeId: plan.oldPage.worktreeId, handle: remoteHandle }
           }
-          const nextRemoteBrowserPageHandlesByPageId = { ...s.remoteBrowserPageHandlesByPageId }
+          const nextRemoteBrowserPageHandlesByPageId = copyBrowserPageHandles(
+            s.remoteBrowserPageHandlesByPageId,
+            [plan.oldPage.id]
+          )
           delete nextRemoteBrowserPageHandlesByPageId[plan.oldPage.id]
           const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
           const nextBrowserAnnotationMarkerIdsByPageId = { ...s.browserAnnotationMarkerIdsByPageId }

@@ -13,7 +13,7 @@ import {
   getDefaultPairingAddress,
   type DefaultRouteInterfaceLookup
 } from './network/pairing-network-interfaces'
-import type { RuntimeDeviceGrant } from '../../rpc-method-permission'
+import type { RuntimeDeviceGrant } from '../../callers/rpc-method-permission'
 import type { RuntimeRpcPairing } from '../runtime-rpc-pairing'
 import {
   pairingUnavailable,

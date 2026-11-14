@@ -4,7 +4,7 @@ import {
   creatureNameAtTier,
   EMPTY_RETIRED_NAME_REGISTRY,
   type RetiredNameRegistry
-} from './worktree/retired-name-registry'
+} from './worktree/naming/retired-name-registry'
 
 /** Desktop and mobile share selection rules; callers supply live/retired names from their own stores. */
 

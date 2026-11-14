@@ -22,6 +22,17 @@ export type AutomationPrecheck = {
   timeoutSeconds: number
 }
 
+/** Who created an automation, when Orca knows it was not the person. Set by Orca, never by the
+ *  creator; `name` is the plugin's name then, so the label survives the plugin's removal. */
+export type AutomationCreator = {
+  kind: 'plugin'
+  pluginKey: string
+  name: string
+  /** When the plugin was removed, disabled or blocked: it no longer owns the automation, and a
+   *  plugin installed later under the same key does not either. */
+  endedAt?: number
+}
+
 export type Automation = {
   id: string
   /** Optional client request key used to make cross-authority creates retry-safe. */
@@ -69,6 +80,7 @@ export type Automation = {
   missedRunGraceMinutes: number
   createdAt: number
   updatedAt: number
+  createdBy?: AutomationCreator
 }
 
 export type AutomationCreateInput = {
@@ -97,6 +109,7 @@ export type AutomationCreateInput = {
   dtstart: number
   enabled?: boolean
   missedRunGraceMinutes?: number
+  createdBy?: AutomationCreator
 }
 
 export type AutomationUpdateInput = { launchSetupPatch?: AutomationLaunchSetupPatch } & Partial<
@@ -121,5 +134,6 @@ export type AutomationUpdateInput = { launchSetupPatch?: AutomationLaunchSetupPa
     | 'dtstart'
     | 'enabled'
     | 'missedRunGraceMinutes'
+    | 'createdBy'
   >
 >

@@ -9,6 +9,7 @@ import { worktreeRetentionPathComparisonKey } from './worktree-retention-path-co
 import type { Store } from '../../persistence/loading-store/store'
 import { isWslMoveRepoBlocked } from '../../persistence/moving-wsl-projects/orchestration/wsl-move-background-backoff'
 import { hostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
+import { isLocalWorktreeScanGenerationCurrent } from './local-worktree-scan-generation'
 
 type WorktreeLineagePruningStore = Pick<Store, 'getRepos' | 'getWorktreeMeta' | 'setWorktreeMeta'> &
   Partial<
@@ -58,12 +59,16 @@ export function pruneLineageForMissingRepoWorktrees(
   options: {
     platform?: NodeJS.Platform
     preservedMetadataCandidateIds?: ReadonlySet<string>
+    /** Scan-start generation; a worktree change since then may have recorded lineage these rows miss (#16654). */
+    scanGeneration?: number
   } = {}
 ): void {
-  const { platform = process.platform, preservedMetadataCandidateIds } = options
+  const { platform = process.platform, preservedMetadataCandidateIds, scanGeneration } = options
   // Mid-move a scan can miss paths that still exist; lineage waits for the move to settle.
   if (
     isWslMoveRepoBlocked(repo) ||
+    (scanGeneration !== undefined &&
+      !isLocalWorktreeScanGenerationCurrent(repo.id, scanGeneration)) ||
     typeof store.getAllWorktreeLineage !== 'function' ||
     typeof store.removeWorktreeLineage !== 'function'
   ) {
@@ -87,7 +92,11 @@ export function pruneLineageForMissingRepoWorktrees(
     )
   )
   const isLive = (worktreeId: string): boolean => {
-    if (liveIds.has(worktreeId) || preservedMetadataCandidateIds?.has(worktreeId)) {
+    if (
+      liveIds.has(worktreeId) ||
+      preservedMetadataCandidateIds?.has(worktreeId) ||
+      store.getWorktreeMeta(worktreeId)?.archivedCheckout
+    ) {
       return true
     }
     const worktreePath = splitWorktreeId(worktreeId)?.worktreePath

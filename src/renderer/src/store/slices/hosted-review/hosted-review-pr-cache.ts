@@ -4,7 +4,7 @@ import type { AppState } from '../../types'
 import {
   getGitHubPRCacheKey,
   getLegacyGitHubPRCacheKey
-} from '../../../../../shared/github/github-cache-key'
+} from '../../../../../shared/github/cache/github-cache-key'
 
 export function clearHostedReviewConflictingPrCache(args: {
   cache: NonNullable<AppState['prCache']>

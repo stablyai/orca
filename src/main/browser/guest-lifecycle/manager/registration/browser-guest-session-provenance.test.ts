@@ -42,7 +42,7 @@ vi.mock('electron', () => ({
   screen: { getCursorScreenPoint: () => ({ x: 0, y: 0 }) },
   webContents: { fromId: () => null }
 }))
-vi.mock('../../../popups/presentation/popup-origin-bar-window', () => ({
+vi.mock('../../popups/presentation/popup-origin-bar-window', () => ({
   openPopupWithOriginBar: vi.fn()
 }))
 vi.mock('../../../../network/proxy-settings', () => ({

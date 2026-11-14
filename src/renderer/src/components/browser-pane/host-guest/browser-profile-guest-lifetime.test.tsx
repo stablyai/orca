@@ -44,10 +44,10 @@ vi.mock(
   '../../../../../main/browser/guest-lifecycle/popups/presentation/popup-origin-bar-window',
   () => ({ openPopupWithOriginBar: vi.fn() })
 )
-vi.mock('../../../../../main/runtime/rpc/rpc-active-caller', () => ({
+vi.mock('../../../../../main/runtime/rpc/callers/active-call', () => ({
   getActiveRpcCaller: () => ({ kind: mocks.agent ? 'local-cli' : 'desktop' })
 }))
-vi.mock('../../../../../main/window/renderer-publication-throttle', () => ({
+vi.mock('../../../../../main/window/visibility/renderer-publication-throttle', () => ({
   rendererPublicationThrottle: { acquire: () => vi.fn() }
 }))
 vi.mock(

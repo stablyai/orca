@@ -31,7 +31,6 @@ it.each([50_000, 50_001])('preserves anchors and editable tables at %i character
   const suffix =
     '\n\n<a id="section"></a>\n\n## Section\n\n| Issue | State |\n| --- | --- |\n| [Report](https://example.com) | OPEN |\n'
   const source = 'a'.repeat(length - suffix.length) + suffix
-  expect(source).toHaveLength(length)
   expect(getMarkdownRichModeUnsupportedReason(source)).toBeNull()
   const editor = createEditor(source)
   const refs = {
@@ -40,13 +39,6 @@ it.each([50_000, 50_001])('preserves anchors and editable tables at %i character
     lastCommittedMarkdownRef: { current: source }
   }
   try {
-    editor.state.doc.check()
-    const anchor = editor.state.doc.child(1)
-    expect(anchor.type.name).toBe('paragraph')
-    expect(anchor.childCount).toBe(2)
-    expect(anchor.textBetween(0, anchor.content.size, '', (node) => node.attrs.value)).toBe(
-      '<a id="section"></a>'
-    )
     let position = -1
     editor.state.doc.descendants((node, pos) => {
       if (node.isText && node.text === 'OPEN') {

@@ -12,6 +12,7 @@ import { BrowserToolbarMenu } from './BrowserToolbarMenu'
 import { BrowserExtensionToolbar, BrowserExtensionsMenuSub } from './browser-extension-toolbar'
 import { BrowserOpenSourceFileButton, BrowserPageStateChips } from './browser-address-chips'
 import { useBrowserExtensionToolbar } from './use-browser-extension-toolbar'
+import { useBrowserExtensionsTour } from '../use-browser-extensions-tour'
 import { SshEgressIndicator } from './browser-egress-indicator'
 import {
   getShareableBrowserArtifactFile,
@@ -139,6 +140,11 @@ export function BrowserPageToolbar({
     isActive,
     `${currentBrowserUrl}\n${loading}`
   )
+  const extensionDiscoveryTarget = useAppStore(
+    (state) =>
+      isActive && state.activeTabType === 'browser' && state.activeBrowserTabId === workspaceId
+  )
+  useBrowserExtensionsTour(extensionDiscoveryTarget, extensionToolbar !== null)
 
   return (
     <BrowserChromeToolbar
@@ -197,6 +203,7 @@ export function BrowserPageToolbar({
                 <ArtifactPublishButton
                   sourceKey={shareableArtifactFile.filePath}
                   size="icon-xs"
+                  variant="muted-field-icon"
                   createRequest={() => readBrowserHtmlArtifactRequest(currentBrowserUrl)}
                 />
               ) : null}
@@ -248,6 +255,7 @@ export function BrowserPageToolbar({
       notes={notes}
       overflowMenu={(overflow) => (
         <BrowserToolbarMenu
+          extensionDiscoveryTarget={extensionDiscoveryTarget}
           currentProfileId={sessionProfileId}
           workspaceId={workspaceId}
           browserPageId={browserPageId}

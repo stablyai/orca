@@ -1,7 +1,7 @@
 import { existsSync, readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, normalize, parse, resolve, win32 } from 'node:path'
-import { normalizeAgentSessionsDir } from '../../session-scanner-values'
+import { normalizeAgentSessionsDir } from '../../discovery/agent-session-directories'
 import { normalizedOmpProfile } from '../../../../shared/omp-profile'
 
 function safeRoot(value: string): string {

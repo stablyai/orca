@@ -1,13 +1,13 @@
-import type { RuntimeDeviceGrant } from '../rpc-method-permission'
+import type { RuntimeDeviceGrant } from '../callers/rpc-method-permission'
 import type { DeviceRegistry } from './pairing/device-registry'
 import type { DeviceScope } from '../../../../shared/runtime-session-contracts'
 import type { TokenDeviceEntry } from './pairing/device-entry'
 import type { E2EEKeypair } from './pairing/e2ee-keypair'
-import type { MobileSocketWiring } from '../mobile-socket-wiring'
+import type { MobileSocketWiring } from '../mobile/mobile-socket-wiring'
 import type {
   RelayDeviceBinding,
   RelayRevokeOutbox
-} from '../../mobile-cloud-relay/relay-revoke-outbox'
+} from '../../mobile-cloud-relay/pairing/relay-revoke-outbox'
 import type { PushUnregisterOutbox } from '../../push/push-unregister-outbox'
 import { encodePairingOffer } from '../../../../shared/remote-runtime/pairing/pairing'
 import { PAIRING_OFFER_VERSION } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'

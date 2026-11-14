@@ -1,7 +1,7 @@
 import { expect, it } from 'vitest'
 import { attach, rig } from './browser-page-creation.test-fixture'
-import { runWithActiveRpcCaller } from '../../rpc/rpc-active-caller'
-import { LOCAL_CLI_RPC_CALLER, DESKTOP_RPC_CALLER } from '../../rpc/rpc-caller-identity'
+import { runWithActiveRpcCaller } from '../../rpc/callers/active-call'
+import { LOCAL_CLI_RPC_CALLER, DESKTOP_RPC_CALLER } from '../../rpc/callers/rpc-caller-identity'
 import {
   reserveBrowserPageDiscard,
   closeBrowserMemoryPage

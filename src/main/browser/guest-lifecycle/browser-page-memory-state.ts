@@ -1,4 +1,4 @@
-import { rendererPublicationThrottle } from '../../window/renderer-publication-throttle'
+import { rendererPublicationThrottle } from '../../window/visibility/renderer-publication-throttle'
 
 export type History = { entries: { url: string; title: string }[]; index: number }
 export type Claim = { held: boolean; operations: number; pendingRendererId?: number }

@@ -4,13 +4,13 @@ import {
   emptiedWorktreeLandingPatch,
   landOnEmptiedWorktree
 } from './tabs-empty-workspace'
-import { retireRemovedNativeChatDraftPositions } from '@/components/native-chat/drafts/native-chat-draft-position-retirement'
+import { retireRemovedNativeChatTabs } from '@/components/native-chat/session/native-chat-removed-tab-retirement'
 import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
-import { collapseWorktreeGroupLayout } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
+import { collapseWorktreeGroupLayout } from '../../../../../shared/workspace-layout/tab-groups/tab-group-layout-tree'
 import { findGroupForTab, findTabAndWorktree } from './tab-group-state'
 import { pickNextActiveTab, sanitizeRecentTabIds } from './tab-selection-history'
-import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-order'
+import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-groups/tab-order'
 import { buildActiveSurfacePatch } from './tabs-surface'
 import { beginStructuredAgentSessionTabClose } from '@/runtime/native-chat/tab-retirement/structured-agent-session-tab-retirement'
 import {
@@ -127,7 +127,7 @@ export function createTabsCloseActions(
           set((current) => {
             const nextTabs = (current.unifiedTabsByWorktree[worktreeId] ?? []).filter((item) => {
               if (item.id === tabId) {
-                retireRemovedNativeChatDraftPositions([item], [])
+                retireRemovedNativeChatTabs([item], [])
               }
               return item.id !== tabId
             })

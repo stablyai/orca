@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CacheEntry } from '@/store/github/cache/cache-model'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import { reconcileTaskPagePagesWithWorkItemsCache } from './task-page-cache-selectors'
 
 function entry<T>(data: T): CacheEntry<T> {

@@ -10,7 +10,7 @@ import {
   type RpcStreamingMethod
 } from './core'
 
-import { successResponse } from './errors'
+import { successResponse } from './responses/rpc-response'
 import { withoutMethodsThisHostDoesNotServe } from './methods/terminal/session-terminal-scrollback'
 import { emulatorProbe, emulatorProbeError } from '../../emulator/emulator-probe'
 import type { OrcaRuntimeService } from '../orca-runtime'
@@ -20,19 +20,19 @@ import {
   getOrchestrationMutationExecutor,
   type DurableMutationInvocation,
   type OrchestrationMutationExecutor
-} from './orchestration-mutation-executor'
-import { OrchestrationLegacyCompatibility } from './orchestration-legacy-compatibility'
+} from './orchestration/mutations/orchestration-mutation-executor'
+import { OrchestrationLegacyCompatibility } from './orchestration/compatibility/orchestration-legacy-compatibility'
 import {
   rpcContextFromTransport,
   type RpcDispatchStreamingOptions
-} from './dispatcher-stream-options'
-import { mapDispatcherError } from './dispatcher-error-response'
-import { createDispatcherStreamingFeatureEmitter } from './dispatcher-streaming-feature-emitter'
-import { recordRuntimeFeatureInteraction } from './runtime-feature-interaction'
-import type { RpcCallerScope } from './rpc-caller-scope'
-import { runWithActiveRpcCaller } from './rpc-active-caller'
-import { admitRpcRequest } from './rpc-request-admission-prologue'
-import { resolveOrcadFeatureRequirement, rpcMethodFeatureWait } from './orcad-feature-readiness'
+} from './dispatch/dispatcher-stream-options'
+import { mapDispatcherError } from './responses/dispatcher-error-response'
+import { createDispatcherStreamingFeatureEmitter } from './dispatch/dispatcher-streaming-feature-emitter'
+import { recordRuntimeFeatureInteraction } from './dispatch/runtime-feature-interaction'
+import type { RpcCallerScope } from './callers/rpc-caller-scope'
+import { runWithActiveRpcCaller } from './callers/active-call'
+import { admitRpcRequest } from './dispatch/rpc-request-admission-prologue'
+import { resolveOrcadFeatureRequirement, rpcMethodFeatureWait } from './startup/orcad-readiness'
 import { routeRemoteOwnedCall } from '../orchestration/federation/remote-owned/remote-owned-route'
 
 export type DispatcherOptions = {
@@ -94,6 +94,7 @@ export class RpcDispatcher {
       options?.beforeInvoke?.()
       return successResponse(request.id, meta, await this.invokeUnary(admission, options))
     } catch (error) {
+      options?.onHandlerError?.(error)
       if (probeEmulator) {
         emulatorProbeError(`rpc ${request.method}`, error, {
           params: request.params

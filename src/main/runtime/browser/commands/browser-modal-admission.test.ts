@@ -26,12 +26,13 @@ vi.mock('electron', () => ({
   webContents: { fromId: (id: number) => native.guests.get(id) }
 }))
 vi.mock('../../../browser/agent-browser/helper-process/agent-browser-process-environment', () => ({
-  createAgentBrowserProcessEnvironment: () => ({ env: {}, ownsSocketDirectory: false })
+  createAgentBrowserProcessEnvironment: () => ({ env: {}, ownsSocketDirectory: false }),
+  pointAtEmptyAgentBrowserConfig: async () => {}
 }))
-vi.mock('../../../runtime/rpc/rpc-active-caller', () => ({
+vi.mock('../../../runtime/rpc/callers/active-call', () => ({
   getActiveRpcCaller: () => ({ kind: caller.agent ? 'local-cli' : 'desktop' })
 }))
-vi.mock('../../../window/renderer-publication-throttle', () => ({
+vi.mock('../../../window/visibility/renderer-publication-throttle', () => ({
   rendererPublicationThrottle: {
     acquire: (guest: Electron.WebContents) => {
       leases.add(guest.id)

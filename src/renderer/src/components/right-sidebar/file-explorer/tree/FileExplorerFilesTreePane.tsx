@@ -17,7 +17,7 @@ import type { useFileExplorerSelection } from '../selection/useFileExplorerSelec
 import type { useFileExplorerTree } from './useFileExplorerTree'
 import type { useFileExplorerTreePaneState } from './use-file-explorer-tree-pane-state'
 import type { WslHostUnavailableReason } from '../../../../runtime/hosts/wsl/wsl-host-availability'
-import type { StoppedWslHost } from '../../../wsl-host-stopped/use-stopped-wsl-host'
+import type { WslHostReadOutage } from '../../../wsl-host-stopped/use-stopped-wsl-host'
 
 type FileExplorerFilesTreePaneProps = {
   activeRepo: Repo | null
@@ -39,7 +39,7 @@ type FileExplorerFilesTreePaneProps = {
   handleExplorerBackgroundContextMenuCapture: (event: React.MouseEvent<HTMLDivElement>) => void
   handleExplorerBackgroundDoubleClick: (event: React.MouseEvent<HTMLDivElement>) => void
   wslHostUnavailable?: WslHostUnavailableReason | null
-  stoppedWslHost?: StoppedWslHost | null
+  stoppedWslHost?: WslHostReadOutage | null
 }
 
 export function FileExplorerFilesTreePane({

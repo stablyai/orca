@@ -11,7 +11,7 @@ import {
   isUnsupportedRevParsePathFormatError,
   isUnsupportedWorktreeListZError
 } from '../../../../shared/git/worktrees/git-worktree-command-capabilities'
-import { withLocalGitCapabilityCacheForExecution } from '../../command-runner/git-capability-state'
+import { withLocalGitCapabilityCacheForExecution } from '../../command-runner/host-routing/git-capability-state'
 import { parseWorktreeList } from '../../../../shared/git/worktrees/git-worktree-porcelain-parser'
 import type { GitWorktreeExecOptions } from '../worktree-operation-options'
 import {

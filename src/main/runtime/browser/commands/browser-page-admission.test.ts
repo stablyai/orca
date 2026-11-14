@@ -38,7 +38,7 @@ vi.mock('../../../ipc/browser/browser-tab-registration-wait', () => ({
 vi.mock('../../../browser/guest-lifecycle/browser-main-window-readiness', () => ({
   whenBrowserMainWindowReady: async () => null
 }))
-vi.mock('../../../runtime/rpc/rpc-active-caller', () => ({
+vi.mock('../../../runtime/rpc/callers/active-call', () => ({
   getActiveRpcCaller: () => ({ kind: 'desktop' })
 }))
 
@@ -176,11 +176,15 @@ it('runs production reload after a failed cold restore, then admits an ordinary 
         AgentBrowserBridgeUtilityCommands.prototype.reload.call(
           {
             getWebContents: () => cold.guest,
-            enqueuePageAction: (
+            browserManager: { getBrowserPageLoadError: () => null },
+            enqueueInertAction: (
               _worktree: string | undefined,
               _page: string | undefined,
-              action: (session: string, target: { webContentsId: number }) => Promise<unknown>
-            ) => action('native-reload', { webContentsId: cold.guest.id })
+              action: (
+                session: string,
+                target: { webContentsId: number; browserPageId: string }
+              ) => Promise<unknown>
+            ) => action('native-reload', { webContentsId: cold.guest.id, browserPageId: pageId })
           },
           ...args
         )

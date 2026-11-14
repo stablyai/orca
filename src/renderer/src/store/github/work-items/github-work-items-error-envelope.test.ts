@@ -7,7 +7,7 @@ import {
   runtimeEnvironmentCall
 } from '../github-slice-test-harness'
 
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 
 describe('createGitHubSlice.fetchWorkItems source/error envelope', () => {
   beforeEach(() => {

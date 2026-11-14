@@ -73,6 +73,13 @@
     "notice": {
       "modelFallback": "Claude switched models: {{from}} → {{to}}."
     },
+    "queuedMessages": {
+      "moreCount_one": "{{count}} more",
+      "moreCount_other": "{{count}} more",
+      "queuedCount_one": "{{count}} queued message",
+      "queuedCount_other": "{{count}} queued messages",
+      "foldNeedsAttention": "{{more}}, a message needs attention"
+    },
     "subagentGroup": {
       "ran_one": "Ran {{count}} subagent",
       "ran_other": "Ran {{count}} subagents",

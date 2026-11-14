@@ -10,7 +10,7 @@ import { resolveWorktreeCreateDisplayNameRequest } from '../../../ipc/worktree-d
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { WorktreeStartupLaunch } from '../../../../shared/worktree/launch-types'
+import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation/launch-types'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
 import {
   getRuntimeFolderWorkspaceInstanceId,
@@ -31,6 +31,7 @@ import {
   type RuntimeFolderWorktreeSetupDeps
 } from './runtime-folder-worktree-setup'
 import { buildRuntimeSetupReceipt } from './runtime-local-worktree-setup'
+import { createdWorktreeLifecycleIdentity } from '../lifecycle/worktree-lifecycle-event'
 
 type RuntimeFolderWorktreeCreateDeps = {
   store: RuntimeStore
@@ -146,7 +147,8 @@ export async function createRuntimeFolderWorktree(args: {
     kind: 'created',
     worktreeId: worktree.id,
     path: worktree.path,
-    branch: worktree.branch
+    branch: worktree.branch,
+    ...createdWorktreeLifecycleIdentity(worktree)
   })
   const setupResult = deps.setup
     ? await prepareFolderWorktreeSetup({

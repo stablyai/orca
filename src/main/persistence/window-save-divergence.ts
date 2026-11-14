@@ -7,9 +7,9 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../shared/execution-host'
-import { loadWorkspaceLayoutWithoutReport } from '../../shared/workspace-layout/workspace-layout-load'
-import { stableJson } from '../../shared/workspace-layout/workspace-layout-load-report'
-import { nameBasedLoadContext } from '../../shared/workspace-layout/workspace-layout-minted-ids'
+import { loadWorkspaceLayoutWithoutReport } from '../../shared/workspace-layout/persistence/workspace-layout-load'
+import { stableJson } from '../../shared/workspace-layout/persistence/workspace-layout-load-report'
+import { nameBasedLoadContext } from '../../shared/workspace-layout/persistence/workspace-layout-minted-ids'
 import type {
   WorkspaceLayout,
   WorkspaceLayoutModel

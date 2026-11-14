@@ -54,6 +54,7 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         // Facets are stitched at publication; discard any copy that reached the map.
         programStatus: _programStatus,
         programStatusOnly: _programStatusOnly,
+        agentIdentity: _agentIdentity,
         // Hydration restamps restoredUnconfirmed.
         restoredUnconfirmed: _restoredUnconfirmed,
         // Observation sequences belong to this runtime.

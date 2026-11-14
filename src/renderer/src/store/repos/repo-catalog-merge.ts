@@ -1,3 +1,4 @@
+import { isProjectGroupHookTrustKey } from '../../../../shared/workspace-hook-owner'
 import { setPendingLaunchReadoptions } from '@/components/native-chat/drafts/native-chat-launch-draft-source'
 import { continueReadoptedLaunchDrafts } from '@/components/native-chat/drafts/native-chat-launch-draft-continuity'
 import type { AppState } from '../types'
@@ -174,7 +175,7 @@ export function filterTrustedOrcaHooksToValidRepos(
 ): AppState['trustedOrcaHooks'] {
   const next: AppState['trustedOrcaHooks'] = {}
   for (const [repoId, entry] of Object.entries(trust)) {
-    if (validRepoIds.has(repoId)) {
+    if (validRepoIds.has(repoId) || isProjectGroupHookTrustKey(repoId)) {
       next[repoId] = entry
     }
   }

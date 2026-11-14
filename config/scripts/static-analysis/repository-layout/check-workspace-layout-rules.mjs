@@ -23,7 +23,7 @@ try {
       contents: `
         export { readPersistedProfileState } from './tests/e2e/helpers/persisted-profile-state'
         export { partitionsFromProfileRoot } from './tests/e2e/helpers/workspace-layout-oracle-views'
-        export { checkWorkspaceLayoutRules } from './src/shared/workspace-layout/workspace-layout-rules'
+        export { checkWorkspaceLayoutRules } from './src/shared/workspace-layout/invariants/workspace-layout-rules'
       `,
       resolveDir: root,
       loader: 'ts'

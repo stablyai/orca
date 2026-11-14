@@ -19,10 +19,10 @@ const { caller, throttle } = vi.hoisted(() => ({
   caller: { agent: false },
   throttle: vi.fn(() => vi.fn())
 }))
-vi.mock('../../runtime/rpc/rpc-active-caller', () => ({
+vi.mock('../../runtime/rpc/callers/active-call', () => ({
   getActiveRpcCaller: () => ({ kind: caller.agent ? 'local-cli' : 'desktop' })
 }))
-vi.mock('../../window/renderer-publication-throttle', () => ({
+vi.mock('../../window/visibility/renderer-publication-throttle', () => ({
   rendererPublicationThrottle: { acquire: throttle }
 }))
 vi.mock('./manager/registration/browser-guest-discard-protection', () => ({
