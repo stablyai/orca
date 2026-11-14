@@ -8,14 +8,17 @@ export async function killSourceControlAgentProcess(
   child: SpawnedSourceControlAgentProcess
 ): Promise<void> {
   const pid = child.pid
-  if (!pid) {
+  if (!pid && child.ready) {
+    child.kill('SIGTERM')
+  }
+  if (!pid && !child.ready) {
     return
   }
   if (child.supervised) {
     await stopSupervisedChildProcess(child, { site: SOURCE_CONTROL_KILL_SITE })
     return
   }
-  if (process.platform === 'win32') {
+  if (process.platform === 'win32' && pid) {
     // Tree-walk refusal must not release the home lock having killed nothing; root handle kill cannot hit a recycled PID.
     await terminateWindowsProcessTree(pid, { site: SOURCE_CONTROL_KILL_SITE })
   }

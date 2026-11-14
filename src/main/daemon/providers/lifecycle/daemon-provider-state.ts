@@ -192,3 +192,9 @@ export function releaseDaemonRetirementFence(): void {
     adapter.releaseIdleRetirementFence()
   }
 }
+
+export function getProviderProcessHostClient() {
+  return adapter && !(adapter instanceof DegradedDaemonPtyProvider)
+    ? getCurrentDaemonAdapter(adapter).getProviderProcessClient()
+    : null
+}

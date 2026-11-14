@@ -105,3 +105,31 @@ describe('guardSupervisedProviderGroup', () => {
     expect(signalGroup).not.toHaveBeenCalled()
   })
 })
+
+it('sweeps a proven group once on actual supervisor absence, but not on connection failure', async () => {
+  const child = new FakeSupervisor()
+  const signalGroup = vi.fn()
+  const proven = Promise.withResolvers<void>()
+  const swept = Promise.withResolvers<unknown>()
+  guardSupervisedProviderGroup(child, {
+    site: 'test',
+    supervised: true,
+    signalGroup,
+    now: () => Date.parse(STARTED) + 2_000,
+    readProcessRow: async () => row({ ppid: child.connected ? 777 : 1 }),
+    onProven: () => proven.resolve(),
+    onSwept: swept.resolve
+  })
+  child.emit('message', { pgid: 4242 })
+  await proven.promise
+  child.on('error', () => {})
+  child.emit('error', new Error('Connection lost'))
+  expect(signalGroup).not.toHaveBeenCalled()
+  child.connected = false
+  child.emit('disconnect')
+  child.emit('providerAbsent')
+  child.emit('exit')
+  await expect(swept.promise).resolves.toBe('killed')
+  expect(signalGroup).toHaveBeenCalledTimes(2)
+  expect(signalGroup).toHaveBeenLastCalledWith(4242, 'SIGKILL')
+})

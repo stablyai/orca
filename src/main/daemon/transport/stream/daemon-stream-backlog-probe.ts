@@ -1,3 +1,6 @@
+import type { DaemonClientConnections } from '../../server/daemon-client-connections'
+import type { DaemonStreamDataBatcher } from './daemon-stream-data-batcher'
+import type { BackgroundTransientFactRelay } from './daemon-background-transient-facts'
 /** Set ORCA_DAEMON_STREAM_BACKLOG_FILE to append queue and socket diagnostics as JSONL. */
 import { appendFileSync } from 'node:fs'
 
@@ -44,4 +47,19 @@ export function startDaemonStreamBacklogProbe(sample: () => StreamBacklogSample)
   }, SAMPLE_INTERVAL_MS)
   timer.unref?.()
   return () => clearInterval(timer)
+}
+
+export function startDaemonClientBacklogProbe(
+  connections: DaemonClientConnections,
+  batcher: DaemonStreamDataBatcher,
+  relay: BackgroundTransientFactRelay
+): () => void {
+  return startDaemonStreamBacklogProbe(() => ({
+    clients: Array.from(connections.values(), (client) => ({
+      clientId: client.clientId,
+      socketBufferedBytes: client.streamSocket?.writableLength ?? 0,
+      batcherQueuedChars: batcher.queuedCharsForClient(client.clientId)
+    })),
+    backgroundedSessionIdSuffixes: relay.backgroundedSessionIdSuffixes()
+  }))
 }

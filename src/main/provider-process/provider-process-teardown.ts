@@ -1,4 +1,5 @@
 import type { ChildProcess } from 'node:child_process'
+import { signalProviderRoot, type ProviderChild } from './provider-child'
 import {
   captureDescendantSnapshot,
   type DescendantSnapshot
@@ -19,7 +20,7 @@ export type ProviderProcessTeardownVerdict =
 
 const activeTeardowns = new WeakMap<object, Promise<ProviderProcessTeardownVerdict>>()
 
-type TeardownChild = Pick<ChildProcess, 'pid' | 'kill'>
+type TeardownChild = Pick<ChildProcess, 'pid' | 'kill'> & Pick<ProviderChild, 'signalRoot'>
 
 export type ProviderProcessTeardownDeps = {
   site: string
@@ -87,14 +88,17 @@ async function terminatePosixTree(
   rootPid: number,
   deps: ProviderProcessTeardownDeps
 ): Promise<ProviderProcessTeardownVerdict> {
-  child.kill('SIGSTOP')
+  const stopped = await signalProviderRoot(child, 'SIGSTOP')
+  if (child.signalRoot && !stopped) {
+    return 'unverifiable'
+  }
   const capture = deps.captureDescendants ?? captureDescendantSnapshot
   const snapshot = await capture(rootPid).catch(() => null)
   if (!snapshot) {
     // Preserve Codex compatibility: missing snapshot is no observation (null), not an unverifiable verdict.
     const delivered = killProviderWriter(child, null, deps)
     if (deps.supervised) {
-      child.kill('SIGKILL')
+      await signalProviderRoot(child, 'SIGKILL')
     }
     return delivered ? { tree: null, killDelivered: true } : null
   }
@@ -147,7 +151,7 @@ async function terminatePosixTree(
     }
     try {
       if (deps.supervised) {
-        child.kill('SIGKILL')
+        await signalProviderRoot(child, 'SIGKILL')
       } else {
         killDelivered = killProviderWriter(child, snapshot, deps)
       }
@@ -165,7 +169,7 @@ async function terminateOnce(
 ): Promise<ProviderProcessTeardownVerdict> {
   const rootPid = child.pid
   if (!rootPid) {
-    child.kill('SIGKILL')
+    await signalProviderRoot(child, 'SIGKILL')
     return 'unverifiable'
   }
   if ((deps.platform ?? process.platform) === 'win32') {
@@ -173,7 +177,7 @@ async function terminateOnce(
     const treeTerminated = await terminate(rootPid, { site: deps.site })
     // Always stop the held root, even when taskkill fails.
     try {
-      child.kill('SIGKILL')
+      await signalProviderRoot(child, 'SIGKILL')
     } catch {
       // Exact-root cleanup cannot retract successful tree termination.
     }

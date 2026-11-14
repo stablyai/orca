@@ -1,3 +1,4 @@
+import { awaitProviderChildSpawn } from '../../provider-process/provider-child'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { spawnProcess } from '@orca/process-host'
 import { spawnManagedProviderProcess } from '../../provider-process/managed-provider-process'
@@ -242,7 +243,10 @@ async function connectCodexAppServer(
 
   let handshaking = false
   try {
-    // A spawn that failed has no pid; the handshake below reports why.
+    if (child.ready) {
+      await awaitProviderChildSpawn(child)
+    }
+    // A direct spawn that failed has no pid; the handshake below reports why.
     if (child.pid !== undefined) {
       await handlers.onSpawned?.(child.pid)
     }

@@ -6,14 +6,14 @@ import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { withManagedHookInstallLock } from '../../../agent-hooks/installation/locking/managed-hook-install-lock'
 import { readManagedHookHostIdentity } from '../../../agent-hooks/installation/locking/managed-hook-owner-identity'
 import { resolveCodexCommand } from '../../../codex-cli/command'
-import type { ChildProcess } from 'node:child_process'
 import {
   spawnCodexAppServerProcess,
   type CodexAppServerSpawn
 } from '../../app-server/codex-app-server-process-tree-kill'
 import {
   spawnCodexBackfillRecoveryProcess,
-  stopCodexBackfillRecoveryProcess
+  stopCodexBackfillRecoveryProcess,
+  type CodexBackfillChild
 } from './codex-state-db-backfill-recovery-process'
 import { getOrcaUserDataPath } from '../../configuration/homes/codex-home-paths'
 import {
@@ -43,7 +43,7 @@ type RecoveryDependencies = {
   countSessions: (sessionsRoot: string, limit: number) => number
   now: () => number
   sleep: (ms: number, signal: AbortSignal) => Promise<void>
-  terminate: (child: ChildProcess, supervised: boolean) => Promise<void>
+  terminate: (child: CodexBackfillChild, supervised: boolean) => Promise<void>
 }
 
 const defaultDependencies: RecoveryDependencies = {
@@ -109,7 +109,12 @@ export async function runCodexStateDbBackfillRecovery(
     const terminate = (): Promise<void> => dependencies.terminate(child, supervised)
     spawnCount += 1
     let childDown = false
+    let unprovenExit = false
     child.once('error', () => {
+      childDown = true
+      unprovenExit = child.spawnAbsenceKnown === false
+    })
+    child.once('providerAbsent', () => {
       childDown = true
     })
     child.once('exit', () => {
@@ -141,6 +146,10 @@ export async function runCodexStateDbBackfillRecovery(
       return finish('stopped', spawnCount)
     }
     if (!childDown) {
+      await terminate()
+      return finish('gave-up', spawnCount)
+    }
+    if (unprovenExit) {
       await terminate()
       return finish('gave-up', spawnCount)
     }

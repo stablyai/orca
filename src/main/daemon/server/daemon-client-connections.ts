@@ -32,6 +32,7 @@ type DaemonClientConnectionOptions = {
     entryPath: string | null
     appVersion: string | null
     spawnerExecPath: string | null
+    providerSpawn?: true
   }
   log: DaemonFileLog
   streamDataBatcher: DaemonStreamDataBatcher
@@ -166,6 +167,7 @@ export class DaemonClientConnections {
         ...(identity.launchNonce && identity.startedAtMs
           ? {
               daemonIdentity: {
+                ...(identity.providerSpawn ? { providerSpawn: true } : {}),
                 pid: process.pid,
                 startedAtMs: identity.startedAtMs,
                 launchNonce: identity.launchNonce,

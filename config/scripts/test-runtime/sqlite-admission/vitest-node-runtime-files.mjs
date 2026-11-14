@@ -9,6 +9,8 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/ssh/legacy-relay/endpoints/ssh-relay-endpoint-incumbent-shell.integration.test.ts',
   'src/main/ssh/remote-exec/ssh-remote-commands.test.ts',
   'src/packages/process-host/src/run-process.test.ts',
+  // The host's synchronous no-start proof depends on Node's native spawn boundary.
+  'src/main/provider-process/hosted-provider-child.integration.test.ts',
   'tests/e2e/cursor-quota-transport.unit.test.ts',
   'tests/e2e/helpers/electron-process-shutdown.unit.test.ts',
   'src/main/ai-vault-search/storage/session-search-index-writer.test.ts',

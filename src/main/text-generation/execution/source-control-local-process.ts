@@ -1,3 +1,4 @@
+import { providerSpawnAbsenceKnown } from '../../provider-process/provider-child'
 import { textGenerationFailure } from '../../../shared/text-generation-failure-copy'
 import { killSourceControlAgentProcess } from './source-control-agent-termination'
 import { wslDistroForCommand } from '../../../shared/wsl-paths'
@@ -183,7 +184,7 @@ export function runLocalSourceControlPlan(
       stderr += chunk.toString('utf-8')
     }
     const onError = (error: Error): void => {
-      if (!child.pid) {
+      if (providerSpawnAbsenceKnown(child)) {
         markProcessClosed()
       } else if (!terminal && child.exitCode == null && child.signalCode == null) {
         startTermination()

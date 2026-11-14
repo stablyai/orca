@@ -1,3 +1,5 @@
+import type { ClaudeChildExitVerdict } from './child-process/claude-child-exit-proof-ladder'
+export type { ClaudeChildExitVerdict } from './child-process/claude-child-exit-proof-ladder'
 import { withOrcaClaudeChatEntrypoint } from '../../shared/agent-launch/startup/claude-chat-entrypoint'
 import { claudeStartupAnswerObservation } from './child-process/claude-startup-answer-observation'
 import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
@@ -13,7 +15,6 @@ import {
 } from './sdk-transport/claude-agent-sdk-control-requests'
 import { createClaudeChildTreeReaper } from './child-process/claude-agent-sdk-exit-proof'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
-import type { DescendantTreeVerdict } from '../pty/process-retirement/pty-descendant-exit-verification'
 import { claudeChildCloseProven } from './child-process/claude-child-exit-proof-ladder'
 import { createClaudeCodeProcessSpawn } from './child-process/claude-agent-sdk-process-spawn'
 import {
@@ -61,6 +62,7 @@ function withoutKeys(env: Record<string, string>, keys: readonly string[]): Reco
 }
 
 export type ClaudeStreamJsonConnectionHandlers = {
+  onConnection?: (connection: ClaudeStreamJsonConnection) => void
   onMessage?: (message: Record<string, unknown>) => void
   /** Raw stdout before the SDK reads it, for state that must keep wire order with permission requests. */
   onStdout?: (chunk: Buffer | string) => void
@@ -68,18 +70,10 @@ export type ClaudeStreamJsonConnectionHandlers = {
   canUseTool?: CanUseTool
   /** `request_user_dialog` control; the CLI only emits kinds declared in `supportedDialogKinds`. */
   onUserDialog?: OnUserDialog
-  /** A transport/process fault; a physical root exit arrives marked observed and is followed by onExit. */
+  /** A transport/process fault; proven root death arrives marked observed and is followed by onExit. */
   onFault?: (error: Error) => void
   /** Report observed root exit once; expected stays true even after an unproven close attempt. */
   onExit?: (error: Error, exit?: { expected: boolean }) => void
-}
-
-/** Root proof comes from our child handle or processless settlement; tree proof is independently verified. */
-export type ClaudeChildExitVerdict = {
-  root: DescendantTreeVerdict
-  tree: DescendantTreeVerdict
-  processless?: boolean
-  killDelivered?: true
 }
 
 export type ClaudeStreamJsonConnection = ClaudeControlSurface & {
@@ -185,7 +179,7 @@ export async function openClaudeStreamJsonConnection(
       const error = claudeStreamJsonExitError(managed.stderrTail(), managed.exitStatus, cause)
       terminalError = withProviderSpawnAbsence(error, managed.spawnAbsence)
     }
-    // One physical exit reaches both callbacks; mark it first so onFault cannot treat it as live-root.
+    // Proven root death reaches both callbacks; mark it first so onFault cannot treat it as live-root.
     if (managed.rootExitObserved && !closing) {
       withObservedProviderExit(terminalError)
     }
@@ -305,7 +299,7 @@ export async function openClaudeStreamJsonConnection(
   }
 
   const controls = createClaudeControlSurface(session)
-  return {
+  const connection: ClaudeStreamJsonConnection = {
     ...controls,
     startupFailure: startup.failure,
     exited: exited.promise,
@@ -333,4 +327,10 @@ export async function openClaudeStreamJsonConnection(
     send,
     close
   }
+  handlers.onConnection?.(connection)
+  await child.ready?.catch(async (error: unknown) => {
+    await close()
+    throw error
+  })
+  return connection
 }

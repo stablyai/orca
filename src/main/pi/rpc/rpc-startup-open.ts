@@ -1,3 +1,5 @@
+import type { PiRpcConnection, PiRpcSession } from './rpc-session'
+import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import type {
   StructuredAgentSessionAcquireInput,
   StructuredAgentSessionAdapter
@@ -6,7 +8,6 @@ import type { AgentSessionStartEndings } from '../../native-chat/agent-session-w
 import type { StructuredAgentSessionProviderOpenInput } from '../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import { JsonlRpcAgentExitError } from '../../jsonl-rpc/agent-connection'
 import { withProviderSpawnAbsence } from '../../provider-process/provider-executable-missing'
-import type { PiRpcSession } from './rpc-session'
 import { piStartFailure } from './rpc-startup-outcome'
 
 /** Takes this child's own exit when first seen, so a start settling meanwhile cannot miss it; the
@@ -62,5 +63,15 @@ export async function openPiStart(
       error,
       session?.connection.rootVerdict === 'exited' && !session.requestedClose
     )
+  }
+}
+
+export async function waitForPiSpawn(
+  connection: PiRpcConnection,
+  signal: AbortSignal
+): Promise<void> {
+  const spawned = connection.spawned
+  if (spawned) {
+    await waitForPromiseWithSignal(spawned, signal)
   }
 }

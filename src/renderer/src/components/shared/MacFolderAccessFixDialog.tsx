@@ -116,7 +116,7 @@ function FixSteps({
               ? undefined
               : t(
                   'auto.components.shared.MacFolderAccessFixDialog.restartConsequence',
-                  'Open terminals and agents will restart.'
+                  'Open terminals restart; running agents stop.'
                 )
           }
         />
