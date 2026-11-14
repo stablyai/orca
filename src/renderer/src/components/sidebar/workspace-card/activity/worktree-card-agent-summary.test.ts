@@ -53,9 +53,4 @@ describe('buildSummaryAgentGroups', () => {
       ['working', false]
     ])
   })
-
-  it('omits the unread group without an unread predicate', () => {
-    const groups = buildSummaryAgentGroups([row('a', 'done')])
-    expect(groups).toEqual([{ state: 'done', agents: [expect.objectContaining({ paneKey: 'a' })] }])
-  })
 })

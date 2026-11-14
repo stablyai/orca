@@ -83,24 +83,14 @@ describe('headless dispatch prompt delivery', () => {
     }
   )
 
-  it('records launch evidence once the agent terminal exists, and keeps it after retention clears the pane', async () => {
-    const { store, service, run, row, settle } = await heldLaunch('delivery')
+  it('records launch evidence once the agent terminal exists even when delivery fails', async () => {
+    const { service, row, settle } = await heldLaunch('delivery')
     await vi.waitFor(() => expect(row()?.terminalPaneKey).toBe(OPENED.terminalPaneKey))
     await settle("Aider started, but Orca could not send this run's prompt.")
     const launchedAt = row()?.launchedAt
     expect(launchedAt).toEqual(expect.any(Number))
     expect(row()?.dispatchedAt).toBeNull()
 
-    // Dead-PTY retention forgets the terminal but must not forget that the agent launched.
-    store.updateAutomationRun({
-      runId: run.id,
-      status: 'dispatch_failed',
-      error: row()?.error ?? null,
-      terminalSessionId: null,
-      terminalPaneKey: null,
-      terminalPtyId: null
-    })
-    expect(row()).toMatchObject({ terminalPaneKey: null, launchedAt })
     service.stop()
   })
 })

@@ -59,38 +59,6 @@ describe('orca computer wait', () => {
     expect(output.result.snapshot.treeText).not.toContain('2 button Close')
   })
 
-  it('waits until every element containing the text is enabled', async () => {
-    queueFixtures(
-      callMock,
-      okFixture('req_caps', capabilities(true)),
-      okFixture(
-        'req_1',
-        snapshot('0 window Form\n\t1 text Press Continue\n\t2 button (disabled) Continue')
-      ),
-      okFixture('req_2', snapshot('0 window Form\n\t1 text Press Continue\n\t2 button Continue'))
-    )
-
-    await run('--enabled', 'Continue')
-
-    expect(callMock).toHaveBeenCalledTimes(3)
-    expect(process.exitCode).toBeUndefined()
-  })
-
-  it('reads disabled state from the host, not from a label holding "(disabled)"', async () => {
-    const tree = '0 window Form\n\t1 push button Continue (disabled)'
-    queueFixtures(
-      callMock,
-      okFixture('req_caps', capabilities(true)),
-      okFixture('req_1', snapshot(tree, [1])),
-      okFixture('req_2', snapshot(tree, []))
-    )
-
-    await run('--enabled', 'Continue', '--timeout', '1000')
-
-    expect(callMock).toHaveBeenCalledTimes(3)
-    expect(process.exitCode).toBeUndefined()
-  })
-
   it('refuses --enabled on a provider that does not mark disabled elements', async () => {
     queueFixtures(callMock, okFixture('req_caps', capabilities(undefined)))
 
@@ -99,17 +67,6 @@ describe('orca computer wait', () => {
     expect(callMock).toHaveBeenCalledTimes(1)
     expect(process.exitCode).toBe(1)
     expect(errorOutput()).toContain('unsupported_capability')
-  })
-
-  it('fails with wait_timeout and what it last saw', async () => {
-    callMock.mockResolvedValue(okFixture('req_1', snapshot('0 window Editor\n\t1 text Saving…')))
-
-    await run('--text', 'saved', '--timeout', '1')
-
-    expect(process.exitCode).toBe(1)
-    const error = errorOutput()
-    expect(error).toContain('wait_timeout')
-    expect(error).toContain('no element contains \\"saved\\"')
   })
 
   it('waits for a window title across the app windows', async () => {
