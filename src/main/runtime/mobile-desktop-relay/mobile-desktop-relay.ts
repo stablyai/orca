@@ -6,6 +6,7 @@ import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../shared/github/work-
 import { randomUUID } from 'node:crypto'
 import type { RpcRequest } from '../rpc/core'
 import type { DelegatedMobileDeviceSyncParams } from '../../../shared/delegated-mobile-device-contract'
+import type { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import {
   failure,
   linkKey,
