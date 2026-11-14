@@ -119,16 +119,20 @@ jobs:
             exit 0
           fi
 
-          # Release-cut publishes with its GitHub App, then dispatches this workflow itself.
+          # Release-cut publishes with its GitHub App, then dispatches this workflow itself. Match the App's bot
+          # only by numeric user ID (a login could be re-registered); without a valid ID nothing matches.
+          if [[ ! "$RELEASE_APP_BOT_ID" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::warning::Repository variable RELEASE_APP_BOT_ID is not set to the release App bot user ID."
+          fi
           is_release_app_bot() {
-            [[ "$1" == "Bot" && ("$2" == "orca-release[bot]" || (-n "$RELEASE_APP_BOT_ID" && "$3" == "$RELEASE_APP_BOT_ID")) ]]
+            [[ "$RELEASE_APP_BOT_ID" =~ ^[1-9][0-9]*$ && "$1" == "Bot" && "$2" == "$RELEASE_APP_BOT_ID" ]]
           }
 
           if [[ "$EVENT_NAME" == "release" ]]; then
             # Why: App-published releases also emit this event; skip it so release-cut's dispatch is the only deploy.
             # A leftover github-actions[bot] draft that the App publishes deploys here and again from the dispatch;
             # both deploy the same commit in turn (docs-production concurrency), which is accepted.
-            if is_release_app_bot "$RELEASE_AUTHOR_TYPE" "$RELEASE_AUTHOR" "$RELEASE_AUTHOR_ID"; then
+            if is_release_app_bot "$RELEASE_AUTHOR_TYPE" "$RELEASE_AUTHOR_ID"; then
               echo "Release $tag was published by the release App; its release-cut dispatch deploys docs."
               echo "deploy=false" >> "$GITHUB_OUTPUT"
               exit 0
@@ -156,7 +160,7 @@ jobs:
             authorized_author=false
             author_login="$(jq -r '.author.login' <<<"$release_json")"
             [[ "$author_login" == "github-actions[bot]" ]] && authorized_author=true
-            if is_release_app_bot "$(jq -r '.author.type' <<<"$release_json")" "$author_login" "$(jq -r '.author.id' <<<"$release_json")"; then
+            if is_release_app_bot "$(jq -r '.author.type' <<<"$release_json")" "$(jq -r '.author.id' <<<"$release_json")"; then
               authorized_author=true
             fi
             release_state_ok=false
