@@ -1,100 +1,34 @@
 import type { IDisposable } from '@xterm/xterm'
-import {
-  encodeImeCommitForKitty,
-  encodeImeReleaseForKitty,
-  type ImeCommitReleaseObligation,
-  type ImeReleaseKeyEvent
-} from './terminal-ime-kitty-commit-encoding'
+import { encodeImeCommitForKitty } from './terminal-ime-kitty-commit-encoding'
 import { getLayoutCharacterForCode } from '../../../../lib/keyboard-layout/layout-base-character'
 import { installTerminalImeRetainedHangulCommit } from './terminal-ime-retained-hangul-commit'
+import {
+  copyReleaseEvent,
+  createClaimedKeyReleaseTracker,
+  isNativeTextKeydown,
+  matchesClaimedPress,
+  MODIFIER_KEYDOWN_KEYS,
+  stripTrailingCommittedText,
+  type ClaimedKeyPress,
+  type DeferredCommit,
+  type ImeNativeTextKeyEvent,
+  type PendingCommit
+} from './terminal-ime-claimed-key-records'
+import {
+  installTerminalImePostCompositionCommit,
+  XTERM_COMPOSITION_TRANSACTION_ACCEPTED_EVENT,
+  XTERM_COMPOSITION_TRANSACTION_SETTLED_EVENT
+} from './terminal-ime-post-composition-commit'
 
 // Claim plain printable keydowns so native input commits supply substituted text before xterm can cancel it; Linux fcitx4 candidate picks need the same path (#28213). Match key length, never source identity or character tables.
 
-type ClaimedKeyPress = {
-  key: string
-  code?: string
-  shiftKey: boolean
-  repeat?: boolean
-  capsLock?: boolean
-  numLock?: boolean
-}
+export type { ImeNativeTextKeyEvent }
 
-/** A claimed press waiting for its `insertText`, plus an early keyup if one already landed. */
-type PendingCommit = {
-  press: ClaimedKeyPress
-  /** Non-null when `keyup` preceded `insertText` — an order some macOS IMEs use. */
-  keyup: ImeReleaseKeyEvent | null
-}
-
-/** A delivered press owes an encoder-owned release; an undelivered press leaves only a tombstone to keep its keyup from xterm. */
-type ClaimedKeyRecord = {
-  key: string
-  code?: string
-  obligation: ImeCommitReleaseObligation | null
-}
-
-// Bare modifiers may interleave before a prior commit during fast typing; they do not retire its claim.
-const MODIFIER_KEYDOWN_KEYS = new Set([
-  'Shift',
-  'Control',
-  'Alt',
-  'Meta',
-  'CapsLock',
-  'AltGraph',
-  'Fn'
-])
-
-export type ImeNativeTextKeyEvent = {
-  type: string
-  key: string
-  code?: string
-  metaKey: boolean
-  ctrlKey: boolean
-  altKey: boolean
-  shiftKey?: boolean
-  repeat?: boolean
-  isComposing?: boolean
-  getModifierState?: (key: string) => boolean
-}
-
-export const XTERM_COMPOSITION_TRANSACTION_ACCEPTED_EVENT = 'xterm-composition-transaction-accepted'
-export const XTERM_COMPOSITION_TRANSACTION_SETTLED_EVENT = 'xterm-composition-transaction-settled'
+export { XTERM_COMPOSITION_TRANSACTION_ACCEPTED_EVENT, XTERM_COMPOSITION_TRANSACTION_SETTLED_EVENT }
 
 export type TerminalImeNativeTextForwarder = IDisposable & {
   /** Claim the key lifecycle by bypassing xterm; input later forwards the committed text through sendInput. */
   claimKeyEvent: (event: ImeNativeTextKeyEvent) => boolean
-}
-
-/** Claim one printable character without control chords or live composition; length excludes named keys and survives IME rewrites. KeyCode 229 positively identifies IME ownership but its absence proves nothing on Wayland. Swallowed claims retire on the next keydown, never a timer that could invent input. */
-function isNativeTextKeydown(event: ImeNativeTextKeyEvent, compositionActive: boolean): boolean {
-  return (
-    event.type === 'keydown' &&
-    // Control chords are the byte-producing case and belong to xterm's encoder.
-    // Shift stays eligible: shifted punctuation still commits substituted text.
-    !event.ctrlKey &&
-    !event.altKey &&
-    !event.metaKey &&
-    // Keep Space/letters claimable: clearing the helper field suppresses macOS double-space period substitution (#11504).
-    event.key.length === 1 &&
-    // Composing keystrokes already belong to xterm's composition helper.
-    event.isComposing !== true &&
-    !compositionActive
-  )
-}
-
-function matchesClaimedPress(
-  event: ImeNativeTextKeyEvent,
-  claimedPress: { key: string; code?: string }
-): boolean {
-  if (event.code && claimedPress.code) {
-    return event.code === claimedPress.code
-  }
-  return event.key === claimedPress.key
-}
-
-/** Different held keys coexist, so records are keyed by physical identity. */
-function claimedKeyId(press: { key: string; code?: string }): string {
-  return press.code || press.key
 }
 
 export function installTerminalImeNativeTextForwarder(args: {
@@ -112,80 +46,81 @@ export function installTerminalImeNativeTextForwarder(args: {
   }
 
   const terminalElement = args.terminalElement
-  let compositionTransactionPending = false
   let pendingCommit: PendingCommit | null = null
-  // Rollover and repeat leave multiple keys held; each needs its own release record.
-  const claimedKeyRecords = new Map<string, ClaimedKeyRecord>()
+  // Commits that arrived while an xterm composition transaction was settling wait in order.
+  const deferredPostCompositionCommits: DeferredCommit[] = []
+  const {
+    findClaimedRecordId,
+    settleRelease,
+    settleCommit,
+    clear: clearClaimedKeyRecords
+  } = createClaimedKeyReleaseTracker({
+    sendInput: args.sendInput,
+    getKittyKeyboardFlags: args.getKittyKeyboardFlags
+  })
   const retainedHangulCommit = installTerminalImeRetainedHangulCommit({
     terminalElement,
     sendInput: args.sendInput,
     getKittyKeyboardFlags: () => args.getKittyKeyboardFlags?.() ?? 0
   })
 
-  const findClaimedRecordId = (event: ImeNativeTextKeyEvent): string | null => {
-    const direct = claimedKeyId(event)
-    if (claimedKeyRecords.has(direct)) {
-      return direct
+  const matchesPendingCommitText = (press: ClaimedKeyPress, data: string | null): boolean => {
+    if (!data) {
+      return false
     }
-    for (const [id, record] of claimedKeyRecords) {
-      if (matchesClaimedPress(event, record)) {
-        return id
-      }
+    if (data === press.key) {
+      return true
     }
-    if (event.type === 'keyup') {
-      // XIM pick presses lack code/key identity; pair their real-key releases by elimination (#28213).
-      for (const [id, record] of claimedKeyRecords) {
-        if (!record.code) {
-          return id
-        }
-      }
-    }
-    return null
+    return press.code ? data === getLayoutCharacterForCode(press.code, press.shiftKey) : false
   }
 
-  /** Emits at most one release for a claimed press; xterm emits none for it. */
-  const settleRelease = (recordId: string, release: ImeReleaseKeyEvent): void => {
-    const record = claimedKeyRecords.get(recordId)
-    claimedKeyRecords.delete(recordId)
-    if (!record?.obligation) {
+  const flushDeferredPostCompositionCommits = (): void => {
+    if (deferredPostCompositionCommits.length === 0) {
       return
     }
-    const report = encodeImeReleaseForKitty(record.obligation, release, {
-      press: { key: record.key, code: record.code },
-      currentKittyKeyboardFlags: args.getKittyKeyboardFlags?.() ?? 0,
-      layoutCharacterForCode: getLayoutCharacterForCode
-    })
-    if (report) {
-      args.sendInput(report)
+    const deferred = deferredPostCompositionCommits.splice(0)
+    for (const entry of deferred) {
+      if (entry.kind === 'raw') {
+        args.sendInput(entry.committedText)
+        continue
+      }
+      const encoding = encodeImeCommitForKitty(
+        entry.commit.press,
+        args.getKittyKeyboardFlags?.() ?? 0,
+        {
+          committedText: entry.committedText,
+          layoutCharacterForCode: getLayoutCharacterForCode
+        }
+      )
+      args.sendInput(encoding.report ?? entry.committedText)
+      settleCommit(entry.commit, encoding.release)
     }
   }
 
-  /** Settle commit ownership without erasing a prior delivered press’s release obligation when a repeat/cancellation owes none. */
-  const settleCommit = (
-    commit: PendingCommit,
-    obligation: ImeCommitReleaseObligation | null
-  ): void => {
-    const recordId = claimedKeyId(commit.press)
-    const existing = claimedKeyRecords.get(recordId)
-    if (obligation || !existing) {
-      claimedKeyRecords.set(recordId, {
-        key: commit.press.key,
-        code: commit.press.code,
-        obligation: obligation ?? existing?.obligation ?? null
-      })
-    }
-    if (commit.keyup) {
-      settleRelease(recordId, commit.keyup)
-    }
+  // Dispose discards held records without flushing; blur flushes already-stripped deferred commits first.
+  const cancelPending = (): void => {
+    pendingCommit = null
+    deferredPostCompositionCommits.length = 0
+    clearClaimedKeyRecords()
   }
 
-  const markCompositionTransactionAccepted = (): void => {
-    compositionTransactionPending = true
-  }
-
-  const markCompositionTransactionSettled = (): void => {
-    compositionTransactionPending = false
-  }
+  const postComposition = installTerminalImePostCompositionCommit({
+    terminalElement,
+    getPendingCommit: () => pendingCommit,
+    matchesPendingCommitText,
+    onQueueRawCommit: (committedText) => {
+      deferredPostCompositionCommits.push({ kind: 'raw', committedText })
+    },
+    onFlushDeferredCommits: flushDeferredPostCompositionCommits,
+    onSendPostCompositionCommit: (text) => {
+      args.sendInput(text)
+    },
+    onBlurFlushAndCancel: () => {
+      flushDeferredPostCompositionCommits()
+      cancelPending()
+    },
+    onDisposeCancel: cancelPending
+  })
 
   const claimKeyEvent = (event: ImeNativeTextKeyEvent): boolean => {
     if (event.type === 'keydown') {
@@ -233,33 +168,26 @@ export function installTerminalImeNativeTextForwarder(args: {
     if (event.type === 'keyup') {
       if (pendingCommit && matchesClaimedPress(event, pendingCommit.press)) {
         // Copy actual keyup modifiers now; they may differ from press-time state before commit arrives.
-        pendingCommit.keyup = {
-          key: event.key,
-          code: event.code,
-          shiftKey: event.shiftKey === true,
-          ctrlKey: event.ctrlKey,
-          altKey: event.altKey,
-          metaKey: event.metaKey,
-          capsLock: event.getModifierState?.('CapsLock') === true,
-          numLock: event.getModifierState?.('NumLock') === true
-        }
+        pendingCommit.keyup = copyReleaseEvent(event)
         return true
+      }
+      for (let index = deferredPostCompositionCommits.length - 1; index >= 0; index -= 1) {
+        const deferred = deferredPostCompositionCommits[index]
+        if (
+          deferred.kind === 'claimed' &&
+          !deferred.commit.keyup &&
+          matchesClaimedPress(event, deferred.commit.press)
+        ) {
+          deferred.commit.keyup = copyReleaseEvent(event)
+          return true
+        }
       }
       const recordId = findClaimedRecordId(event)
       if (recordId === null) {
         return false
       }
       // Application negotiation can outlive xterm’s reset; encode releases here to avoid missing or mismatched reports.
-      settleRelease(recordId, {
-        key: event.key,
-        code: event.code,
-        shiftKey: event.shiftKey === true,
-        ctrlKey: event.ctrlKey,
-        altKey: event.altKey,
-        metaKey: event.metaKey,
-        capsLock: event.getModifierState?.('CapsLock') === true,
-        numLock: event.getModifierState?.('NumLock') === true
-      })
+      settleRelease(recordId, copyReleaseEvent(event))
       return true
     }
     // Bypass keypress without retiring the pending commit so xterm cannot double-send text.
@@ -270,11 +198,41 @@ export function installTerminalImeNativeTextForwarder(args: {
     if (!(event instanceof InputEvent)) {
       return
     }
+    postComposition.observeInputBeforeForwarding(event)
     // Accepted transactions already own claimed commits; leave unclaimed input to xterm’s dedup or Linux Process commits can be lost.
-    if (compositionTransactionPending && event.inputType === 'insertText' && pendingCommit) {
+    if (
+      postComposition.isTransactionPending() &&
+      event.inputType === 'insertText' &&
+      pendingCommit
+    ) {
+      // Async IME commits arriving right after an empty compositionend look unclaimed if a later plain keydown beat them.
+      if (
+        postComposition.expectsPostInput() &&
+        !matchesPendingCommitText(pendingCommit.press, event.data) &&
+        postComposition.consumePostCompositionInput(event)
+      ) {
+        return
+      }
+      // Claimed key echoes (e.g. Space or punctuation right after compositionend) must wait for settled so order and Kitty encoding survive.
+      if (event.data) {
+        if (event.target instanceof HTMLTextAreaElement) {
+          stripTrailingCommittedText(event.target, event.data)
+        }
+        deferredPostCompositionCommits.push({
+          kind: 'claimed',
+          commit: pendingCommit,
+          committedText: event.data
+        })
+        pendingCommit = null
+        event.stopImmediatePropagation()
+        return
+      }
       settleCommit(pendingCommit, null)
       pendingCommit = null
       event.stopImmediatePropagation()
+      return
+    }
+    if (postComposition.consumePostCompositionInput(event)) {
       return
     }
     const commit = pendingCommit
@@ -308,43 +266,14 @@ export function installTerminalImeNativeTextForwarder(args: {
     }
   }
 
-  // Blur/dispose discard records without invented releases after this element stops receiving keys.
-  const cancelPending = (): void => {
-    compositionTransactionPending = false
-    pendingCommit = null
-    claimedKeyRecords.clear()
-  }
-
-  terminalElement.addEventListener(
-    XTERM_COMPOSITION_TRANSACTION_ACCEPTED_EVENT,
-    markCompositionTransactionAccepted,
-    true
-  )
-  terminalElement.addEventListener(
-    XTERM_COMPOSITION_TRANSACTION_SETTLED_EVENT,
-    markCompositionTransactionSettled,
-    true
-  )
   terminalElement.addEventListener('input', forwardCommittedText, true)
-  terminalElement.addEventListener('blur', cancelPending, true)
 
   return {
     claimKeyEvent,
     dispose: () => {
-      cancelPending()
+      postComposition.dispose()
       retainedHangulCommit.dispose()
-      terminalElement.removeEventListener(
-        XTERM_COMPOSITION_TRANSACTION_ACCEPTED_EVENT,
-        markCompositionTransactionAccepted,
-        true
-      )
-      terminalElement.removeEventListener(
-        XTERM_COMPOSITION_TRANSACTION_SETTLED_EVENT,
-        markCompositionTransactionSettled,
-        true
-      )
       terminalElement.removeEventListener('input', forwardCommittedText, true)
-      terminalElement.removeEventListener('blur', cancelPending, true)
     }
   }
 }
