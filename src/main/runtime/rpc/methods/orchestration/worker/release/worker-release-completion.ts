@@ -19,6 +19,7 @@ import { resolveStructuredWorkerForDispatch } from '../../structured-workers/orc
 import { stopStructuredWorkerForRelease } from './structured-worker-release-stop'
 import { isStructuredWorkerHandle } from '../../../../../../../shared/orchestration/workers/structured-worker-handle'
 import { captureWorkerReleaseArchive } from './worker-release-archive-capture'
+import { settleProvenExitedWorkerTerminal } from './worker-release-proven-exit'
 import { WorkerTerminalReleaseSingleFlight } from './worker-terminal-release-single-flight'
 import { releaseUnknownRecovery } from './worker-release-unknown-recovery'
 import { yieldAutoReleaseToWorkingAgent } from '../../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-working-yield'
@@ -98,28 +99,13 @@ async function completeWorkerTerminalReleaseOnce(
   }
   if (observation.status === 'missing' || observation.status === 'unattached') {
     // After remint fails, proven incarnation death settles before recovery deferral; never leave dead workers release_pending.
-    if (resource.process_incarnation) {
-      const processLiveness = await runtime.inspectTerminalProcessIncarnationLiveness(
-        resource.process_incarnation,
-        resource.host_scope
-      )
-      if (processLiveness === 'exited') {
-        // Prefer incarnation-fenced settle (dispatch relation + process_incarnation CAS).
-        const reconciled = db.settleDeadWorkerTerminalRelease({
-          requestingDispatchId: dispatchId,
-          resourceId: resource.id,
-          processIncarnation: resource.process_incarnation
-        })
-        if (reconciled.disposition === 'released') {
-          runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
-          return {
-            dispatchId,
-            state: 'released',
-            processAction: 'none',
-            archive: archiveSummary(reconciled.resource)
-          }
-        }
-        // Missing mandatory archives make settleDead retain; plain settlement would discard output.
+    const exited = await settleProvenExitedWorkerTerminal({ runtime, db, dispatchId, resource })
+    if (exited) {
+      return {
+        dispatchId,
+        state: 'released',
+        processAction: 'none',
+        archive: archiveSummary(exited)
       }
     }
     if (args.mode === 'recovery') {

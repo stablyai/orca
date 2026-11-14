@@ -192,6 +192,11 @@ export type RuntimePtyController = {
       targetOwnerOnly?: boolean
     }
   ): Promise<PtyProcessInfo[]>
+  /** Local inventory from the provider that owns local PTYs, after startup; `inProcessOwner` marks this process's own provider. */
+  listLocalProcessesForExitProof?(): Promise<{
+    processes: PtyProcessInfo[]
+    inProcessOwner: boolean
+  }>
   listProcessesWithHostScope?(opts?: {
     deadlineMs?: number
     includeForegroundProcessEvidence?: boolean

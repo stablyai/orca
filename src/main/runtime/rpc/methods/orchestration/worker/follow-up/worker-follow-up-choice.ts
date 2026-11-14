@@ -207,7 +207,7 @@ export async function userTabHoldingSession(
 function unverifiable(dispatchId: string, reason: string): OrchestrationError {
   return new OrchestrationError(
     'worker_unverifiable',
-    `Orca cannot tell whether Dispatch ${dispatchId}'s worker still runs (${reason}), so it starts no second one. Send again once worker-show reads it. No effects were applied.`,
+    `Orca cannot tell whether Dispatch ${dispatchId}'s worker still runs (${reason}), so it starts no second one. Send again once worker-show reads it, or start a new worker if it stays unreadable. No effects were applied.`,
     { effectsApplied: false }
   )
 }
