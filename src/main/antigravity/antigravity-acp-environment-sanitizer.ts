@@ -7,7 +7,7 @@ const CONFIGURED_ANTIGRAVITY_ACP_ENVIRONMENT_KEYS = new Set([
 
 /** Remove inherited authentication, harness and stale Electron Crashpad overrides. */
 export function scrubAntigravityAcpEnvironment(
-  env: Record<string, string>,
+  env: Record<string, string | undefined>,
   inherited: NodeJS.ProcessEnv
 ): string[] {
   const removed = [...new Set([...Object.keys(env), ...Object.keys(inherited)])].filter((key) => {

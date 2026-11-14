@@ -52,7 +52,7 @@ export async function antigravityBrowserHelperWorks(): Promise<boolean> {
     return false
   }
   const [program = '', ...args] = antigravityBrowserArgv(PREFLIGHT_URL)
-  const env = { ...process.env } as Record<string, string>
+  const env: Record<string, string | undefined> = { ...process.env }
   scrubAntigravityAcpEnvironment(env, process.env)
   const spec = {
     program,
