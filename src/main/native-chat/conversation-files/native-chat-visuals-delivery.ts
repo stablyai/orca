@@ -2,7 +2,11 @@
 
 import { mkdir } from 'node:fs/promises'
 import type { StructuredAgentSessionLogger } from '../agent-session-wire/host/structured-agent-session-logger'
-import { nativeChatScratchFolderFor } from './native-chat-scratch-folder'
+import {
+  nativeChatScratchFolderFor,
+  nativeChatScratchFolderName
+} from './native-chat-scratch-folder'
+import { prepareChatTemporaryFolder } from './native-chat-temporary-storage'
 import {
   resolveNativeChatVisualsSkillLocation,
   type NativeChatVisualsSkillLocation
@@ -10,12 +14,14 @@ import {
 
 /** Keep the per-chat path in the child environment rather than generated skill text. */
 export const NATIVE_CHAT_SCRATCH_DIR_ENV = 'ORCA_CHAT_SCRATCH_DIR'
+export const NATIVE_CHAT_TEMP_DIR_ENV = 'ORCA_CHAT_TEMP_DIR'
 
 /** Strip the legacy name so launching Orca from a chat cannot leak that folder to new agents. */
 export const LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV = 'ORCA_CHAT_VISUALS_DIR'
 
 export type NativeChatVisualsLaunch = {
   folder: string
+  temporaryFolder?: string
   skill: NativeChatVisualsSkillLocation
 }
 
@@ -46,7 +52,20 @@ export function createNativeChatVisualsDelivery(deps: {
       }
       const folder = nativeChatScratchFolderFor(deps.stateDirectory, sessionId)
       await mkdir(folder, { recursive: true, mode: 0o700 })
-      return { folder, skill }
+      let temporaryFolder: string | undefined
+      try {
+        temporaryFolder = await prepareChatTemporaryFolder(
+          deps.stateDirectory,
+          nativeChatScratchFolderName(sessionId)
+        )
+      } catch (error) {
+        deps.logger.warn('native-chat temporary storage could not be prepared', {
+          scope: 'nativeChatVisuals.temporary',
+          sessionId,
+          error
+        })
+      }
+      return { folder, skill, ...(temporaryFolder ? { temporaryFolder } : {}) }
     } catch (error) {
       deps.logger.warn('native-chat scratch folder could not be prepared', {
         scope: 'nativeChatVisuals.folder',
@@ -65,8 +84,19 @@ export function withNativeChatVisualsEnv(
 ): Record<string, string> {
   const {
     [NATIVE_CHAT_SCRATCH_DIR_ENV]: _inherited,
+    [NATIVE_CHAT_TEMP_DIR_ENV]: _inheritedTemporary,
     [LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV]: _inheritedLegacy,
     ...rest
   } = env
-  return visuals ? { ...rest, [NATIVE_CHAT_SCRATCH_DIR_ENV]: visuals.folder } : rest
+  return visuals
+    ? {
+        ...rest,
+        [NATIVE_CHAT_SCRATCH_DIR_ENV]: visuals.folder,
+        ...(visuals.temporaryFolder ? { [NATIVE_CHAT_TEMP_DIR_ENV]: visuals.temporaryFolder } : {})
+      }
+    : rest
+}
+
+export function nativeChatVisualsWritableFolders(visuals: NativeChatVisualsLaunch): string[] {
+  return [visuals.folder, ...(visuals.temporaryFolder ? [visuals.temporaryFolder] : [])]
 }

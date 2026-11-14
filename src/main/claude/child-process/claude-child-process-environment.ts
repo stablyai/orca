@@ -5,7 +5,8 @@ import {
 import { stripInheritedAgentSessionEnv } from '../../../shared/agent-launch/startup/parent-agent-session-env'
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
-  NATIVE_CHAT_SCRATCH_DIR_ENV
+  NATIVE_CHAT_SCRATCH_DIR_ENV,
+  NATIVE_CHAT_TEMP_DIR_ENV
 } from '../../native-chat/conversation-files/native-chat-visuals-delivery'
 
 function cloneProcessEnv(source: NodeJS.ProcessEnv): Record<string, string> {
@@ -64,7 +65,11 @@ export function buildClaudeChildProcessEnv(
     }
   }
   // Only the launch names a chat's scratch folder: an inherited one belongs to another chat.
-  stripEnvKeys(env, [NATIVE_CHAT_SCRATCH_DIR_ENV, LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV], platform)
+  stripEnvKeys(
+    env,
+    [NATIVE_CHAT_SCRATCH_DIR_ENV, NATIVE_CHAT_TEMP_DIR_ENV, LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV],
+    platform
+  )
   // Windows env names are case-insensitive, so a launch key replaces a differently cased inherited twin.
   if (platform === 'win32') {
     stripEnvKeys(

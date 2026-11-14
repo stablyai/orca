@@ -1,4 +1,7 @@
-import type { NativeChatVisualsLaunch } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
+import {
+  nativeChatVisualsWritableFolders,
+  type NativeChatVisualsLaunch
+} from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import { isCodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
@@ -70,7 +73,7 @@ function writableRootsOf(response: unknown): string[] | null {
 /** Overrides replace Codex's list; merge readable user/project roots or leave configuration unchanged. */
 async function writableRootsConfig(
   connection: CodexVisualsConnection,
-  input: { cwd: string; folder: string },
+  input: { cwd: string; folders: string[] },
   report: (message: string, error: unknown) => void
 ): Promise<Record<string, unknown> | null> {
   try {
@@ -85,7 +88,7 @@ async function writableRootsConfig(
       report('codex config/read gave no readable writable roots', null)
       return null
     }
-    return { [WRITABLE_ROOTS_KEY]: [...new Set([...roots, input.folder])] }
+    return { [WRITABLE_ROOTS_KEY]: [...new Set([...roots, ...input.folders])] }
   } catch (error) {
     report('codex config/read failed; the chat folder is not a writable root', error)
     return null
@@ -115,7 +118,11 @@ export async function prepareCodexThreadForVisuals(
     setSkillRoots(connection, visuals, report),
     launch.permissionPolicy?.sandbox === 'danger-full-access'
       ? null
-      : writableRootsConfig(connection, { cwd: launch.cwd, folder: visuals.folder }, report)
+      : writableRootsConfig(
+          connection,
+          { cwd: launch.cwd, folders: nativeChatVisualsWritableFolders(visuals) },
+          report
+        )
   ])
   return threadConfig
 }

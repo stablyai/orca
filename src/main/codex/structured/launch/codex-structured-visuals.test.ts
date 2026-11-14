@@ -7,6 +7,7 @@ import { codexStructuredPermissionPolicy } from '../../../../shared/codex-permis
 
 const VISUALS: NativeChatVisualsLaunch = {
   folder: '/state/chat-scratch/abc',
+  temporaryFolder: '/state/chat-temporary/abc/files',
   skill: { pluginDir: '/app/native-chat-visuals', skillsRoot: '/app/native-chat-visuals/skills' }
 }
 const MANUAL = codexStructuredPermissionPolicy('ask')
@@ -34,6 +35,24 @@ const configWithRoots = (roots: unknown) => () => ({
 })
 
 describe('setting up a Codex app-server for a chat with visuals', () => {
+  it('keeps configured roots and adds both persistent artifacts and disposable storage', async () => {
+    const { connection } = connectionAnswering({
+      'config/read': configWithRoots(['/user/root', VISUALS.folder])
+    })
+    await expect(
+      prepareCodexThreadForVisuals(connection, {
+        cwd: '/w',
+        visuals: VISUALS,
+        permissionPolicy: MANUAL
+      })
+    ).resolves.toEqual({
+      'sandbox_workspace_write.writable_roots': [
+        '/user/root',
+        VISUALS.folder,
+        VISUALS.temporaryFolder
+      ]
+    })
+  })
   it('overrides nothing when the user roots cannot be read, so none are dropped', async () => {
     const logger = { warn: vi.fn(), error: vi.fn() }
     for (const route of [

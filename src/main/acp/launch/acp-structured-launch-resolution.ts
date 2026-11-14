@@ -28,6 +28,7 @@ import type { StructuredAgentLaunchPartResolver } from '../../runtime/agent-sess
 import {
   LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV,
   NATIVE_CHAT_SCRATCH_DIR_ENV,
+  NATIVE_CHAT_TEMP_DIR_ENV,
   withNativeChatVisualsEnv
 } from '../../native-chat/conversation-files/native-chat-visuals-delivery'
 import type { AcpLaunchSpec } from './acp-launch-contract'
@@ -221,7 +222,7 @@ export function acpStructuredLaunchPart(
       inheritedEnvToDelete: [
         ...envToDelete,
         // An inherited scratch directory belongs to a different chat.
-        ...(skill ? [] : [NATIVE_CHAT_SCRATCH_DIR_ENV]),
+        ...(skill ? [] : [NATIVE_CHAT_SCRATCH_DIR_ENV, NATIVE_CHAT_TEMP_DIR_ENV]),
         LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV
       ]
     }
