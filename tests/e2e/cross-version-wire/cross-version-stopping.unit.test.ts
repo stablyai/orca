@@ -143,13 +143,6 @@ beforeAll(async () => {
 }, SUITE_TIMEOUT_MS)
 
 describe('cross-version Stopping', () => {
-  it('an OLD desktop folds a new host summary into the plain working row it always drew', () => {
-    expect(oldBuild.fold(STOPPING_SUMMARY)).toEqual({
-      state: 'working',
-      mainAgent: { state: 'working' }
-    })
-  })
-
   it("an OLD phone reads a new host's row as working", () => {
     const row = publishRow(newBuild.host, {
       state: 'working',

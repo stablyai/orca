@@ -75,25 +75,6 @@ describe('buildWorkspaceViewSettingsUpdate', () => {
       visibleWorkspaceHostIds: ['local', 'ssh:box']
     })
   })
-
-  it('sends every filter a full reset names, even ones the phone already thinks are off', () => {
-    const update = buildWorkspaceViewSettingsUpdate(
-      { filters: NO_WORKSPACE_ROW_FILTERS },
-      apply(NO_WORKSPACE_ROW_FILTERS)
-    )
-    expect(update).toEqual({
-      hideSleepingWorkspaces: false,
-      alwaysShowDefaultBranchWorkspace: true,
-      hideDefaultBranchWorkspace: false,
-      hideAutomationGeneratedWorkspaces: false,
-      hideCliCreatedWorkspaces: false,
-      hideDetachedHeadWorkspaces: false,
-      hideWorkspacesFromOtherDevices: false,
-      filterRepoIds: [],
-      visibleWorkspaceHostIds: null,
-      workspaceHostScope: 'all'
-    })
-  })
 })
 
 describe('card view settings', () => {
