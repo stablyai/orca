@@ -37,6 +37,7 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
   }
   if (condition) {
     args.launchToken = condition.attemptId
+    args.env = { ...args.env, ORCA_AGENT_LAUNCH_TOKEN: condition.attemptId }
   }
   if (condition?.expected.kind === 'endpoint') {
     args.replacesPtyId = condition.expected.ptyId

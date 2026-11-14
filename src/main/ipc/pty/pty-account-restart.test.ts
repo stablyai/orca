@@ -93,6 +93,24 @@ describe('conditional Codex account restart at the IPC boundary', () => {
     expect(h.shutdown).toHaveBeenCalledTimes(1)
   })
 
+  it('registers the restart attempt as the process launch authority despite a restored token', async () => {
+    const h = installRestartHarness()
+    h.store.trackPtyBindingGeneration({ hostId: 'local', leafId })
+    registerWithFakes(mainWindow, h.runtime, h.store)
+    const args = restartSpawnArgs({ accountRestart: condition() })
+    await expect(
+      handlers.get('pty:spawn')!(null, {
+        ...args,
+        launchToken: 'restored-launch-token',
+        env: { ...args.env, ORCA_AGENT_LAUNCH_TOKEN: 'restored-launch-token' },
+        launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} }
+      })
+    ).resolves.toMatchObject({ id: 'pty-new', launchToken: 'account-attempt' })
+    expect(h.runtime.registerPty.mock.lastCall?.[3]).toMatchObject({
+      agentLaunchAuthority: { launchToken: 'account-attempt' }
+    })
+  })
+
   it('refuses same-ID/new-incarnation ownership before stopping anything', async () => {
     const h = installRestartHarness()
     h.store.trackPtyBindingGeneration({ hostId: 'local', leafId })
