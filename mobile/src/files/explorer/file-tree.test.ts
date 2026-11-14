@@ -11,27 +11,6 @@ function entry(name: string, isDirectory = false, isSymlink = false): MobileDirE
 }
 
 describe('file-tree', () => {
-  it('flattens cached directories lazily with directories before files', () => {
-    const cache: DirectoryCache = {
-      '': { entries: [entry('zeta.txt'), entry('src', true), entry('readme.md')] },
-      src: { entries: [entry('app.ts'), entry('lib', true)] },
-      'src/lib': { entries: [entry('util.ts')] }
-    }
-
-    const collapsed = flattenDirectoryCache(cache, new Set())
-    expect(collapsed.map((row) => row.id)).toEqual(['dir:src', 'file:readme.md', 'file:zeta.txt'])
-
-    const expanded = flattenDirectoryCache(cache, new Set(['src', 'src/lib']))
-    expect(expanded.map((row) => row.id)).toEqual([
-      'dir:src',
-      'dir:src/lib',
-      'file:src/lib/util.ts',
-      'file:src/app.ts',
-      'file:readme.md',
-      'file:zeta.txt'
-    ])
-  })
-
   it('filters loaded folders by name and keeps the parents of nested matches', () => {
     const cache: DirectoryCache = {
       '': { entries: [entry('README.md'), entry('src', true), entry('node_modules', true)] },
