@@ -22028,6 +22028,8 @@
         "inlineVisualsCopy": "Let the agent show charts, diagrams and mockups inside its replies. Applies to newly started chats.",
         "inlineVisualsToggleLabel": "Toggle inline visuals",
         "followUpBehaviorCopy": "Messages sent while the agent works wait as cards until the turn ends, instead of going into the running turn. Cmd/Ctrl+Enter does the opposite for one message, and with nothing typed steers the first waiting card into the running turn. Messages with images wait as cards too.",
+        "autoExpandToolsCopy": "Open tool runs as the agent works. Runs you collapse by hand stay collapsed.",
+        "autoExpandToolsTitle": "Auto expand tools",
         "behaviorTitle": "Behavior",
         "resumeSearchUpdate": "update",
         "resumeSearchRelaunch": "relaunch",

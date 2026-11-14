@@ -29,12 +29,14 @@ const STRUCTURED_CHAT_HOST: RuntimeClientTarget = { kind: 'local' }
 type ChatBehaviorSettingProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
+  showDesktopOnlySettings: boolean
   forceVisible?: boolean
 }
 
 export function ChatBehaviorSetting({
   settings,
   updateSettings,
+  showDesktopOnlySettings,
   forceVisible = false
 }: ChatBehaviorSettingProps): React.JSX.Element | null {
   const t = useTranslate()
@@ -57,6 +59,7 @@ export function ChatBehaviorSetting({
     ...(hostContinuesUsageLimits ? [entries.autoContinueAfterUsageLimit] : []),
     ...(hostQueuesMessages ? [entries.queueFollowUps] : []),
     entries.scrollToLatestOnSend,
+    ...(showDesktopOnlySettings ? [entries.autoExpandTools] : []),
     entries.markNewMessages,
     entries.linkPreviews,
     entries.shellEnvironment
@@ -68,6 +71,7 @@ export function ChatBehaviorSetting({
   const queueFollowUps = nativeChatQueueFollowUps(settings)
   const autoContinueEnabled = settings.nativeChatAutoContinueAfterUsageLimit === true
   const scrollToLatestOnSend = nativeChatScrollsToLatestOnSend(settings)
+  const autoExpandTools = settings.nativeChatAutoExpandTools === true
   const markNewMessages = nativeChatMarksNewMessages(settings)
   const linkPreviewsEnabled = settings.nativeChatLinkPreviews !== false
   return (
@@ -161,6 +165,22 @@ export function ChatBehaviorSetting({
           onChange={() => updateSettings({ nativeChatScrollToLatestOnSend: !scrollToLatestOnSend })}
         />
       </SearchableSetting>
+      {showDesktopOnlySettings ? (
+        <SearchableSetting
+          {...entries.autoExpandTools}
+          id={entries.autoExpandTools.targetSectionId}
+          forceVisible={forceVisible}
+          className="max-w-none"
+        >
+          <SettingsSwitchRow
+            label={entries.autoExpandTools.title}
+            description={entries.autoExpandTools.description}
+            checked={autoExpandTools}
+            ariaLabel={entries.autoExpandTools.title}
+            onChange={() => updateSettings({ nativeChatAutoExpandTools: !autoExpandTools })}
+          />
+        </SearchableSetting>
+      ) : null}
       <SearchableSetting
         {...entries.markNewMessages}
         id={entries.markNewMessages.targetSectionId}
