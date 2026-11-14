@@ -130,7 +130,7 @@ async function listAiVaultSessions(
       signal: options.signal,
       start: (scanSignal, _scanId, publish) => {
         const force = (scanRecoveryInterest(scanSignal)?.required ?? 0) > 0
-        const effectiveArgs = force ? { ...args, force: true } : args
+        const effectiveArgs = { ...args, force }
         const scan = () =>
           scanAiVaultSessionsByHostScope(
             effectiveArgs,

@@ -49,6 +49,28 @@ it.each(['local', 'all'] as const)(
   }
 )
 
+it.each(['local', 'all'] as const)(
+  'keeps the ordinary %s cache policy when its forced creator detaches before start',
+  async (executionHostScope) => {
+    registerAiVaultHandlers()
+    mocks.scan.mockResolvedValue(empty)
+    mocks.runtime.mockResolvedValue(empty)
+    const args = { executionHostScope }
+    await _internals.listAiVaultSessions(args)
+    const controller = new AbortController()
+    const forced = _internals.listAiVaultSessions(
+      { ...args, force: true },
+      { signal: controller.signal }
+    )
+    const cancelled = expect(forced).rejects.toMatchObject({ name: 'AbortError' })
+    const ordinary = _internals.listAiVaultSessions(args)
+    controller.abort()
+    await cancelled
+    await ordinary
+    expect(mocks.scan).toHaveBeenCalledOnce()
+  }
+)
+
 it('disarms nested recovery after the last force detaches while an ordinary owner remains', async () => {
   vi.useFakeTimers()
   registerAiVaultHandlers()
