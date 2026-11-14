@@ -78,6 +78,7 @@ export function getAgentStatusRunCloseOutSourceLines(): string[] {
     '      lifecycleState.active.add(id)',
     '      subagentDetails.set(id, detail)',
     '    }',
+    '    nativeChatRosterChanged()',
     '    if (!isHeldByChildren()) return',
     '    lifecycleState.waiting = true',
     '    lifecycleState.completionPostedGeneration = -1',
