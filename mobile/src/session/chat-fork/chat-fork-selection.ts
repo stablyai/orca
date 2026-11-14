@@ -78,10 +78,11 @@ export function resolveChatForkSelection(input: {
   picks: ChatForkPicks
 }): ChatForkSelection {
   const { source, preset, picks } = input
-  const picked = input.hosts.find((host) => host.hostId === picks.hostId)
-  const hostId = picked?.status === 'ready' ? picked.hostId : source.hostId
+  // A picked host that drops offline stays picked, unready: never a silent fork elsewhere.
+  const hostId = picks.hostId ?? source.hostId
   const sameHost = hostId === source.hostId
   const target = input.hosts.find((host) => host.hostId === hostId)
+  const hostReady = sameHost || target?.status === 'ready'
   const sameAgentAllowed = sameHost || (source.canExport && target?.canImport === true)
   const otherAgentAllowed = target?.canFirstMessage === true
   const others = (input.targetAgents ?? []).filter((agent) => agent !== source.agent)
@@ -116,7 +117,7 @@ export function resolveChatForkSelection(input: {
     agentChoices,
     newWorktreeOffered,
     subagentOffered,
-    ready: agent !== null && workspace !== null
+    ready: hostReady && agent !== null && workspace !== null
   }
 }
 

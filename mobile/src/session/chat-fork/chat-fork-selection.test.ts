@@ -3,7 +3,8 @@ import {
   chatForkRoute,
   resolveChatForkSelection,
   type ChatForkHost,
-  type ChatForkSource
+  type ChatForkSource,
+  type ChatForkWorkspace
 } from './chat-fork-selection'
 
 const source: ChatForkSource = {
@@ -83,8 +84,15 @@ describe('resolveChatForkSelection', () => {
     expect(selection.agentChoices).toContainEqual({ agent: 'claude', enabled: false })
   })
 
-  it('ignores a host that cannot take the fork', () => {
-    expect(resolve({ picks: { hostId: 'old' } }).hostId).toBe('desk')
+  it('keeps a picked host that can no longer take the fork, and blocks Fork', () => {
+    const workspace: ChatForkWorkspace = {
+      kind: 'existing',
+      hostId: 'old',
+      worktreeId: 'wt',
+      name: 'wt'
+    }
+    const selection = resolve({ picks: { hostId: 'old', workspace } })
+    expect(selection).toMatchObject({ hostId: 'old', workspace, ready: false })
   })
 
   it('drops a workspace picked on the host the person moved away from', () => {
