@@ -16,7 +16,7 @@ import {
   setPresenceGated
 } from './agent-auto-ack-presence'
 import type { AppState } from '@/store/types'
-import { selectFloatingWorkspacePanelVisible } from '@/store/workspaces/floating/floating-workspace-panel-selector'
+import { selectFloatingWorkspaceOnScreen } from '@/store/workspaces/floating/floating-workspace-panel-selector'
 import {
   acknowledgeViewedAutoAckTarget,
   readAgentAttentionTurnRecords,
@@ -106,7 +106,7 @@ export function startOnScreenAttentionScan(
   }): void => {
     const s = store.getState()
     // Why both edges: opening puts the floating tab on screen; closing moves the screen back.
-    const floatingPanelVisible = selectFloatingWorkspacePanelVisible(s)
+    const floatingPanelVisible = selectFloatingWorkspaceOnScreen(s)
     const floatingPanelClosed = !floatingPanelVisible && lastFloatingPanelVisible
     const floatingPanelToggled = floatingPanelVisible !== lastFloatingPanelVisible
     lastFloatingPanelVisible = floatingPanelVisible

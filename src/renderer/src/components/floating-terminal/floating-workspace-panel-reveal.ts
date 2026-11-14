@@ -1,5 +1,6 @@
 import type { AppState } from '@/store/types'
 import { selectFloatingWorkspacePanelVisible } from '@/store/workspaces/floating/floating-workspace-panel-selector'
+import { resolveFloatingWorkspaceMode } from './floating-workspace-open-mode'
 import { toast } from 'sonner'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from './floating-terminal'
 import { floatingWorkspaceUnavailableReason } from './floating-workspace-availability'
@@ -25,7 +26,15 @@ export function revealFloatingWorkspacePanel(
     return false
   }
   if (state.settings.floatingTerminalEnabled === true) {
-    if (!selectFloatingWorkspacePanelVisible(state)) {
+    if (selectFloatingWorkspacePanelVisible(state)) {
+      return true
+    }
+    if (
+      state.floatingWorkspacePanelOpen &&
+      resolveFloatingWorkspaceMode(state.settings) === 'popout'
+    ) {
+      void window.api.floatingWorkspaceWindow.show({ focus: true }).catch(() => undefined)
+    } else {
       toggleFloatingWorkspacePanel()
     }
     return true

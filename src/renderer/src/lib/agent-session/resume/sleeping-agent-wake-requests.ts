@@ -35,6 +35,22 @@ export function requestSleepingAgentWakeOnMount(
   }
 }
 
+// Why one tab: a pop-out window shows a single tab while that tab's in-window pane stays hidden.
+let tabShownOutsidePane: { worktreeId: string; tabId: string } | null = null
+
+/** Marks the tab a pop-out window shows; its hidden pane then starts a sleeping agent as if revealed. */
+export function setTabShownOutsidePane(worktreeId: string, tabId: string | null): void {
+  tabShownOutsidePane = tabId ? { worktreeId, tabId } : null
+}
+
+/** True once for a recorded request, and on every connect while the record's tab is shown outside its pane. */
 export function takeSleepingAgentWakeRequest(record: SleepingAgentSessionRecord): boolean {
-  return requestedRecords.delete(record)
+  if (requestedRecords.delete(record)) {
+    return true
+  }
+  return (
+    tabShownOutsidePane !== null &&
+    record.worktreeId === tabShownOutsidePane.worktreeId &&
+    getSleepingRecordTabId(record) === tabShownOutsidePane.tabId
+  )
 }

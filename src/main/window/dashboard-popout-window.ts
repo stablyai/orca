@@ -42,7 +42,7 @@ export function isDashboardPopoutRenderer(sender: WebContents): boolean {
   return getDashboardPopoutWindow()?.webContents === sender
 }
 
-function zoomDashboardPopout(window: BrowserWindow, direction: UIZoomDirection): void {
+export function zoomDashboardPopout(window: BrowserWindow, direction: UIZoomDirection): void {
   const webContents = window.webContents
   webContents.setZoomLevel(stepUIZoomLevel(webContents.getZoomLevel(), direction))
 }
@@ -53,7 +53,7 @@ const ZOOM_SHORTCUTS: readonly [KeybindingActionId, UIZoomDirection][] = [
   ['zoom.reset', 'reset']
 ]
 
-function resolveZoomShortcut(
+export function resolveZoomShortcut(
   input: KeybindingInput,
   keybindings: KeybindingOverrides | undefined
 ): UIZoomDirection | null {

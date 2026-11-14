@@ -8745,6 +8745,13 @@
             "modeInWindow": "In-window",
             "modePopout": "Pop-out"
           },
+          "floatingWorkspacePopout": {
+            "title": "Floating Workspace pop-out",
+            "description": "Open the Floating Workspace terminal in its own window.",
+            "toggleLabel": "Toggle Floating Workspace pop-out",
+            "modeCopy": "Show the Floating Workspace as an in-window panel or a separate pop-out window.",
+            "modeAriaLabel": "Floating Workspace open mode"
+          },
           "worktreeCardStyle": {
             "title": "Card style",
             "copy": "Choose how workspace cards look in the sidebar.",
@@ -10949,6 +10956,11 @@
               "inWindow": "in-window",
               "worktrees": "worktrees",
               "eaf17a7214": "Agent dashboard"
+            },
+            "floatingWorkspacePopout": {
+              "title": "Floating Workspace pop-out",
+              "description": "Open the Floating Workspace terminal in its own window.",
+              "floating": "floating"
             },
             "worktreeCardStyle": {
               "title": "Card style",
@@ -16505,7 +16517,8 @@
             "1c79cba25d": "Restore floating workspace",
             "648352c51f": "Open {{value0}} in floating workspace",
             "109870e023": "Maximize",
-            "b5686fee1e": "Restore"
+            "b5686fee1e": "Restore",
+            "popout": "Pop out floating workspace"
           }
         }
       },
@@ -22733,6 +22746,16 @@
       }
     }
   },
+  "floatingWorkspaceWindow": {
+    "recoverableError": {
+      "title": "Orca floating workspace hit an error.",
+      "description": "The floating workspace could not finish rendering. Retry to remount it, or reopen it."
+    },
+    "dock": "Dock",
+    "starting": "Starting terminal...",
+    "otherTab": "This tab opens in the main window.",
+    "empty": "No terminal is open."
+  },
   "dashboardPopout": {
     "recoverableError": {
       "title": "Orca dashboard hit an error.",
@@ -24979,6 +25002,7 @@
     "dialog": {
       "spaceTitle": "Orca Space Beta",
       "dashboardTitle": "Orca Agent Dashboard",
+      "floatingWorkspaceTitle": "Orca Floating Workspace",
       "importCookies": "Import Cookies",
       "cookieFiles": "Cookie Files",
       "allFiles": "All Files",

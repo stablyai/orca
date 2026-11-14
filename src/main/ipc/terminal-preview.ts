@@ -5,6 +5,8 @@ import type {
 } from '../../shared/terminal/replay/terminal-preview'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { isDashboardPopoutRenderer } from '../window/dashboard-popout-window'
+import { isFloatingWorkspaceWindowRenderer } from '../window/floating-workspace-window'
+import { getFloatingWorkspaceAdmittedPtyId } from './floating-workspace-window'
 import { isTrustedUIRenderer } from './ui'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 import {
@@ -20,7 +22,18 @@ function isValidPtyId(value: unknown): value is string {
 
 // Both popout and main-renderer overlay host previews; trusted UI already has ordinary PTY access.
 function isTerminalPreviewRenderer(sender: WebContents): boolean {
-  return isDashboardPopoutRenderer(sender) || isTrustedUIRenderer(sender)
+  return (
+    isDashboardPopoutRenderer(sender) ||
+    isFloatingWorkspaceWindowRenderer(sender) ||
+    isTrustedUIRenderer(sender)
+  )
+}
+
+// Why: the floating window reaches only the PTY its last admitted snapshot names.
+function canUsePreviewPty(sender: WebContents, ptyId: string): boolean {
+  return isFloatingWorkspaceWindowRenderer(sender)
+    ? getFloatingWorkspaceAdmittedPtyId() === ptyId
+    : isTerminalPreviewRenderer(sender)
 }
 /** Pop-out terminal transport with an atomic snapshot/live boundary. */
 export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): void {
@@ -91,7 +104,7 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
       event,
       args: { ptyId?: unknown; opts?: { scrollbackRows?: unknown } }
     ): Promise<TerminalPreviewConnectResult> => {
-      if (!isTerminalPreviewRenderer(event.sender) || !isValidPtyId(args?.ptyId)) {
+      if (!isValidPtyId(args?.ptyId) || !canUsePreviewPty(event.sender, args.ptyId)) {
         return { snapshot: null, replay: [] }
       }
       const ptyId = args.ptyId
@@ -165,8 +178,8 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
     'terminalPreview:input',
     (event, args: { ptyId?: unknown; data?: unknown }): Promise<boolean> => {
       if (
-        !isTerminalPreviewRenderer(event.sender) ||
         !isValidPtyId(args?.ptyId) ||
+        !canUsePreviewPty(event.sender, args.ptyId) ||
         typeof args.data !== 'string'
       ) {
         return Promise.resolve(false)
@@ -200,8 +213,8 @@ export function registerTerminalPreviewHandlers(runtime: OrcaRuntimeService): vo
       args: { ptyId?: unknown; cols?: unknown; rows?: unknown }
     ): Promise<{ cols: number; rows: number } | null> => {
       if (
-        !isTerminalPreviewRenderer(event.sender) ||
         !isValidPtyId(args?.ptyId) ||
+        !canUsePreviewPty(event.sender, args.ptyId) ||
         typeof args.cols !== 'number' ||
         typeof args.rows !== 'number' ||
         !Number.isFinite(args.cols) ||

@@ -152,7 +152,11 @@ export function installMainWindowCloseLifecycle(args: {
     }
   }
 
-  const onConfirmClose = (): void => {
+  // Why the sender check: companion windows load the same preload, and a confirm skips the save and process guards.
+  const onConfirmClose = (event: Electron.IpcMainEvent): void => {
+    if (event.sender.id !== rendererWebContentsId) {
+      return
+    }
     clearQuitRendererAckTimer()
     windowCloseConfirmed = true
     if (!mainWindow.isDestroyed()) {

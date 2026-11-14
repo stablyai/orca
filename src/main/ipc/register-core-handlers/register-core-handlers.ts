@@ -81,7 +81,7 @@ import { registerCursorAccountHandlers } from '../cursor-accounts'
 import { registerUpdaterHandlers } from '../../updater/lifecycle/main-window-updater'
 import { registerClipboardHandlers } from '../../window/clipboard/clipboard-ipc-handlers'
 import { setTrustedClipboardRendererWebContentsId } from '../../window/clipboard/clipboard-ipc-sender-trust'
-import { isDashboardPopoutRenderer } from '../../window/dashboard-popout-window'
+import { isDashboardOrFloatingRenderer } from '../../window/floating-workspace-window'
 import type { RateLimitService } from '../../rate-limits/service/rate-limit-service'
 import type { CodexAccountService } from '../../codex-accounts/service'
 import type { ClaudeAccountService } from '../../claude-accounts/service'
@@ -211,7 +211,7 @@ export function registerCoreHandlers(
   registerShellHandlers(store)
   registerPetHandlers()
   registerSessionHandlers(store, runtime)
-  registerUIHandlers(store, { isDashboardPopoutRenderer })
+  registerUIHandlers(store, { isDashboardPopoutRenderer: isDashboardOrFloatingRenderer })
   registerEmulatorFrameStreamHandlers()
   registerEmulatorVideoStreamHandlers((id) => runtime.getEmulatorBridge()?.getIosVideoStreamUrl(id))
   registerEmulatorScrcpyTouchHandler()

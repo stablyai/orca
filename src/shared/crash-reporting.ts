@@ -79,6 +79,7 @@ export type ReactErrorBoundarySurface =
   | 'rich-markdown-editor'
   | 'code-editor'
   | 'dashboard-popout'
+  | 'floating-workspace-window'
 
 export type ReactErrorBoundaryReportArgs = {
   boundaryId: string
