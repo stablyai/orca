@@ -13,6 +13,7 @@ type ResolvedInFlight = {
 }
 export class RuntimeResolvedWorktreeCache {
   private resolved: ResolvedCache | null = null
+  private lastKnown: ResolvedWorktreeSnapshot | null = null
   private resolvedInFlight: ResolvedInFlight | null = null
   private resolvedGeneration = 0
 
@@ -22,6 +23,11 @@ export class RuntimeResolvedWorktreeCache {
 
   peek(): ResolvedCache | null {
     return this.resolved
+  }
+
+  /** Survives invalidation, for readers that prefer a possibly stale listing over none. */
+  peekLastKnown(): ResolvedWorktreeSnapshot | null {
+    return this.lastKnown
   }
 
   /** Revision invalidates catalogs missing newly registered repos; TTL alone could wrongly report remote worktrees absent. */
@@ -55,6 +61,7 @@ export class RuntimeResolvedWorktreeCache {
       if (generation === this.resolvedGeneration) {
         // Start TTL on completion or slow computation publishes already-expired entries.
         this.resolved = { ...result, inventoryRevision, expiresAt: Date.now() + ttlMs }
+        this.lastKnown = result
       }
       return result
     } finally {
