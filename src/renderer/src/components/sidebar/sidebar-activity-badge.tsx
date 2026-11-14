@@ -16,10 +16,10 @@ export function SidebarActivityBadge({
       : t('dashboardPopout.bucket.idle', 'Idle')
   return (
     <span
-      className="pointer-events-none absolute inset-0"
+      className="pointer-events-none flex items-center gap-0.5"
       aria-label={`${activityStatusLabel}: ${activityCount}`}
     >
-      <span className="absolute right-0 top-0 flex h-2 w-3 items-center justify-center">
+      <span className="flex size-2 items-center justify-center">
         {counts.attention > 0 ? (
           <AgentQuestionIcon className="size-2" />
         ) : (
@@ -31,13 +31,8 @@ export function SidebarActivityBadge({
           />
         )}
       </span>
-      <span className="absolute right-0 top-2.5 flex h-2.5 w-3 items-center justify-center">
-        <span
-          className={cn('icon-superscript-count', activityCount > 99 && 'origin-center scale-x-65')}
-          data-multiple-digits={activityCount > 9}
-        >
-          {activityCount > 99 ? '99+' : activityCount}
-        </span>
+      <span className="icon-superscript-count" data-multiple-digits={activityCount > 9}>
+        {activityCount > 99 ? '99+' : activityCount}
       </span>
     </span>
   )
