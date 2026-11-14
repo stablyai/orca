@@ -1,9 +1,11 @@
 import {
   admitDetachedWorkspaceSessionInput,
-  patchDetachedWorkspaceSession
+  patchDetachedWorkspaceSession,
+  setDetachedWorkspaceSession
 } from './loading-store/workspace-sessions/session-snapshot-operations'
 import { borrowWorkspaceSession } from './loading-store/workspace-sessions/session-host-partitions'
 import { describe, it, expect, vi } from 'vitest'
+import { getDefaultWorkspaceSession } from '../../shared/constants'
 
 import {
   createWorkerMaintenanceFixture,
@@ -47,6 +49,64 @@ describe('worker persistence avoids synchronous profile filesystem calls', () =>
     await store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
     expect(readState().ui.sidebarWidth).toBe(641)
   })
+  it.each(['local', 'ssh:field-test'])(
+    'bounds an owned tab save by its fields at 100 and 1000 workspaces (%s)',
+    async (hostId) => {
+      for (const size of [100, 1000]) {
+        const { store, authority, readState } = await createWorkerMaintenanceFixture()
+        const session = {
+          ...getDefaultWorkspaceSession(),
+          activeTabIdByWorktree: { w: 'before' },
+          openFilesByWorktree: Object.fromEntries(
+            Array.from({ length: size }, (_, index) => [
+              `w${index}`,
+              [
+                {
+                  id: `file${index}`,
+                  path: `/synthetic/${index}`,
+                  dirtyDraftContent: 'unrelated'.repeat(100)
+                }
+              ]
+            ])
+          )
+        }
+        admitDetachedWorkspaceSessionInput(store, session, hostId)
+        setDetachedWorkspaceSession(store, session, hostId)
+        await store.flushPendingOrThrowAsync()
+        const writes = vi.spyOn(authority, 'writePreparedState')
+        const patch = { activeTabIdByWorktree: { w: 'after' } }
+        admitDetachedWorkspaceSessionInput(store, patch, hostId)
+        patchDetachedWorkspaceSession(store, patch, hostId)
+        await store.flushPendingOrThrowAsync()
+        const write = writes.mock.calls[0]?.[0]
+        expect(write?.replacements).toEqual([])
+        expect(write?.patches).toEqual([
+          {
+            domain: hostId === 'local' ? 'workspaceSession' : 'workspaceSessionsByHostId',
+            operations: [
+              {
+                kind: 'set',
+                path:
+                  hostId === 'local'
+                    ? ['activeTabIdByWorktree']
+                    : [hostId, 'activeTabIdByWorktree'],
+                payload: '{"w":"after"}'
+              }
+            ]
+          }
+        ])
+        const saved =
+          hostId === 'local'
+            ? readState().workspaceSession
+            : readState().workspaceSessionsByHostId[hostId]
+        expect(saved.activeTabIdByWorktree.w).toBe('after')
+        expect(Object.keys(saved.openFilesByWorktree)).toHaveLength(size)
+        expect(saved.openFilesByWorktree.w0[0].dirtyDraftContent).toBe('unrelated'.repeat(100))
+        writes.mockRestore()
+      }
+    }
+  )
+
   it('saves a retained getter edit after ACK and an unrelated detached publication', async () => {
     const { store, readState } = await createWorkerMaintenanceFixture()
     const retained = store.getWorkspaceSession()

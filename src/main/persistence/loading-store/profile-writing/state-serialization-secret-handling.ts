@@ -108,7 +108,7 @@ export class StateSerializationSecretHandlingOperations {
       protectedSecretUpdates,
       automationRuns,
       serializeRoot: projection
-        ? () => this.serializeCompleteProjection(projection, false)
+        ? () => this.serializeCompleteProjection(projection, true)
         : undefined
     })
   }

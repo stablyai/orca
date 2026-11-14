@@ -254,7 +254,15 @@ export class WorkspaceSessionFieldCapture {
       return undefined
     }
     const operations: ProfileStateDomainPatchOperation[] = []
-    changes(candidate.fields, previous, depths.get(domain)!, [], operations)
-    return { patch: { domain, operations }, candidate }
+    try {
+      changes(candidate.fields, previous, depths.get(domain)!, [], operations)
+      return { patch: { domain, operations }, candidate }
+    } catch (error) {
+      if (error !== unsupported) {
+        throw error
+      }
+      this.expose(domain)
+      return undefined
+    }
   }
 }

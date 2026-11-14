@@ -76,7 +76,9 @@ function beginWrite(
       ? authority.assertCurrentRevision()
       : captured.write
         ? authority.writePreparedState(captured.write)
-        : authority.writeSerializedState(captured.payload)
+        : captured.domains
+          ? authority.writeCompleteSerializedDomains(captured.domains)
+          : authority.writeSerializedState(captured.payload)
     return {
       completion,
       stateHash: captured.stateHash,

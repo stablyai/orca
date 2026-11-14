@@ -21,7 +21,12 @@ export type CapturedProfileStateWrite = {
   acknowledge: () => void
 } & (
   | { write: PreparedProfileStateWrite; stateHash: null; payload?: never }
-  | { write?: never; stateHash: string; payload: Buffer }
+  | {
+      write?: never
+      stateHash: string
+      payload: Buffer
+      domains?: readonly ProfileStateDomainReplacement[]
+    }
 )
 
 type PreparedWriteProjection = {
@@ -32,6 +37,7 @@ type PreparedWriteProjection = {
   protectedSecretUpdates: ProtectedSecretRetentionUpdate[]
   automationRuns?: readonly AutomationRun[]
   serializeRoot?: () => {
+    domains?: readonly ProfileStateDomainReplacement[]
     payload: Buffer
     stateHash: string
     protectedSecretUpdates: ProtectedSecretRetentionUpdate[]
@@ -68,7 +74,16 @@ export function capturePreparedProfileStateWrite({
         appendProfileStateOwnValue(candidates, candidate)
       }
     }
-    return { ...serializeRoot!(), acknowledge }
+    const serialized = serializeRoot!()
+    return {
+      domains: serialized.domains,
+      get payload() {
+        return serialized.payload
+      },
+      stateHash: serialized.stateHash,
+      protectedSecretUpdates: serialized.protectedSecretUpdates,
+      acknowledge
+    }
   }
   const domainOrder: string[] = []
   const replacements: ProfileStateDomainReplacement[] = []

@@ -46,6 +46,8 @@ export function writeToDiskSync(
       } else {
         if (captured.write) {
           authority.writePreparedState(captured.write)
+        } else if (captured.domains && authority.writeCompleteSerializedDomains) {
+          authority.writeCompleteSerializedDomains(captured.domains)
         } else {
           authority.writeSerializedState(captured.payload)
         }
