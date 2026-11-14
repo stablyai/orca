@@ -17,6 +17,10 @@ export function shouldShowViewFileAction(node: TreeNode): boolean {
   return !node.isDirectory
 }
 
+export function shouldShowAttachAsContextAction(node: TreeNode): boolean {
+  return !node.isDirectory
+}
+
 export function shouldShowRemoteDownloadAction(
   node: TreeNode,
   connectionId?: string | null,
