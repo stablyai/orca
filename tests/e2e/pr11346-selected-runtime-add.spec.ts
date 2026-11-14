@@ -1,5 +1,5 @@
 import { expectSidebarProjectVisible } from './helpers/sidebar-project-visibility'
-import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
+import { openSidebarProjectMenu } from './helpers/sidebar-project-dialog'
 import { rmSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Locator, Page, TestInfo } from '@stablyai/playwright-test'
@@ -22,16 +22,12 @@ import {
 } from './pr11346-selected-runtime-identity-oracle'
 
 async function selectRuntimeHost(page: Page, runtimeName: string): Promise<Locator> {
-  await openSidebarProjectDialog(page)
-  const dialog = page.getByRole('dialog', { name: /Add a project/i })
-  await expect(dialog).toBeVisible()
-  const hostPicker = dialog.getByRole('combobox')
-  if (!(await hostPicker.textContent())?.includes(runtimeName)) {
-    await hostPicker.click()
-    await page.locator('[cmdk-item]').filter({ hasText: runtimeName }).click()
-  }
-  await expect(hostPicker).toContainText(runtimeName)
-  return dialog
+  await openSidebarProjectMenu(page)
+  const menu = page.getByRole('menu', { name: 'Add project' })
+  await menu.getByRole('menuitem', { name: /Project host:/i }).hover()
+  await page.getByRole('menuitem', { name: runtimeName }).click()
+  await expect(menu.getByRole('menuitem', { name: /Project host:/i })).toContainText(runtimeName)
+  return menu
 }
 
 async function selectRuntimeHostAndOpenManualPath(
@@ -39,7 +35,7 @@ async function selectRuntimeHostAndOpenManualPath(
   runtimeName: string
 ): Promise<Locator> {
   const dialog = await selectRuntimeHost(page, runtimeName)
-  await dialog.getByRole('button', { name: /Browse folder|Browse host/i }).click()
+  await dialog.getByRole('menuitem', { name: /Browse folder/i }).click()
   const browseDialog = page.getByRole('dialog', { name: /Browse host filesystem/i })
   await expect(browseDialog).toBeVisible()
   await browseDialog.getByRole('button', { name: /^Cancel$/i }).click()
@@ -140,7 +136,7 @@ async function runSelectedRuntimeAddJourney(
 
     startedAt = Date.now()
     const cloneDialog = await selectRuntimeHost(client.page, runtimeName)
-    await cloneDialog.getByRole('button', { name: /Clone from URL/i }).click()
+    await cloneDialog.getByRole('menuitem', { name: /Clone from URL/i }).click()
     const cloneStep = client.page.getByRole('dialog', { name: /Clone from URL/i })
     await cloneStep.getByRole('textbox').nth(0).fill(fixture.gitPath)
     await cloneStep.getByRole('textbox').nth(1).fill(fixture.cloneParentPath)
@@ -151,7 +147,7 @@ async function runSelectedRuntimeAddJourney(
 
     startedAt = Date.now()
     const createDialog = await selectRuntimeHost(client.page, runtimeName)
-    await createDialog.getByRole('button', { name: /Create (?:on host|new project)/i }).click()
+    await createDialog.getByRole('menuitem', { name: /Create new project/i }).click()
     const createStep = client.page.getByRole('dialog', { name: /Create a new project/i })
     await createStep.locator('#create-project-name').fill('runtime-created-project')
     await createStep.getByPlaceholder('/home/user/projects').fill(fixture.createParentPath)
