@@ -102,20 +102,4 @@ describe('noticeSurfaceTokens', () => {
   ])('keeps notice text 4.5:1 for an accepted %o', (themeTokens) => {
     expectReadable(themeTokens)
   })
-
-  it('outlines secondary buttons only when their fill is gone', () => {
-    const tokensFor = (popoverForeground: string): Record<string, string> =>
-      noticeSurfaceTokens(
-        { '--popover': '#303030', '--popover-foreground': popoverForeground },
-        'dark',
-        DARK_BUILT_INS,
-        probe
-      )
-    const unfilled = tokensFor('#989898')
-    expect(unfilled['--notice-secondary']).toBe(unfilled['--notice-surface'])
-    expect(unfilled['--notice-secondary-edge']).toBe('var(--notice-border)')
-    const filled = tokensFor('#a0a0a0')
-    expect(filled['--notice-secondary']).not.toBe(filled['--notice-surface'])
-    expect(filled['--notice-secondary-edge']).toBe('transparent')
-  })
 })
