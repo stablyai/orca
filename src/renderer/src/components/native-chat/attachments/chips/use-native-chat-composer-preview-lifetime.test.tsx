@@ -22,7 +22,6 @@ async function mount(scopeKey: string) {
     latest = useNativeChatComposerAttachments({
       attachmentScopeKey: scopeKey,
       allowWithoutTarget: true,
-      imageReferences: true,
       caret: 0,
       disabled: false,
       isComposing: () => false,

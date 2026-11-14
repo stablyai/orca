@@ -27,6 +27,7 @@ import {
   type DraftSubmission,
   type NativeChatDraftPosition
 } from './native-chat-composer-draft-memory'
+import { nativeChatDraftWithoutLegacyImages } from '../native-chat-composer-legacy-images'
 
 import {
   captureLaunchDraftDestination,
@@ -123,8 +124,11 @@ export function updateNativeChatComposerDraft(
     return
   }
   const current = records.get(scopeKey) ?? EMPTY_DRAFT
-  const text = change.text ?? current.text
-  const document = 'document' in change ? change.document : current.document
+  const proposedText = change.text ?? current.text
+  const proposedDocument = 'document' in change ? change.document : current.document
+  const { text, document } = proposedDocument
+    ? nativeChatDraftWithoutLegacyImages(proposedText, proposedDocument)
+    : { text: proposedText, document: proposedDocument }
   const pastedTextFiles = Object.fromEntries(
     Object.entries(change.pastedTextFiles ?? current.pastedTextFiles ?? {}).filter(([id]) =>
       text.includes(nativeChatPastedTextToken(id))
@@ -160,6 +164,7 @@ export function updateNativeChatComposerDraft(
   const owner = current.owner ?? change.owner ?? resolveNativeChatComposerDraftOwner(scopeKey)
   const record: DraftRecord = {
     text,
+    textFormat: 'literal',
     ...(Object.keys(pastedTextFiles).length ? { pastedTextFiles } : {}),
     ...(document ? { document } : {}),
     // Why: an unchanged row keeps its identity, so typing does not re-render every image consumer.
@@ -211,7 +216,7 @@ export function appendToNativeChatComposerDraft(
     },
     'immediate',
     (loaded) => {
-      const merged = compose(loaded)
+      const merged: DraftRecord = { ...compose(loaded), textFormat: 'literal' }
       if (position) {
         nativeChatDraftPositions.set(merged, position(merged))
       }

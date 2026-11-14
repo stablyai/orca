@@ -13,7 +13,6 @@ import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { isNativeChatLongPaste } from '../../../../../shared/native-chat/input/composer/native-chat-long-paste'
 import { structuredAgentSessionBlocksTooLarge } from '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-message-params'
 import { structuredAgentSessionSendBody } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
-import { imageReferencesToPromptMarkers } from '../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import {
   nativeChatAttachFailedNotice,
   nativeChatAttachmentOwnerChangedNotice
@@ -23,7 +22,6 @@ import type { NativeChatAttachmentOwner } from '../attachments/uploads/native-ch
 import { nativeChatAttachmentOwnerUnchanged } from '../attachments/uploads/native-chat-resolved-path-ownership'
 import type { NativeChatComposerInput } from '../composer/editor/native-chat-composer-input'
 import { readNativeChatComposerDraft } from '../drafts/native-chat-composer-draft-store'
-import { nativeChatImageRowIds } from '../composer/editor/native-chat-composer-image-references'
 import {
   resolveNativeChatPastedText,
   settleNativeChatPastedText
@@ -37,10 +35,7 @@ function pastedTextTooLargeNotice(): string {
 }
 
 function nativeChatDraftTooLarge(scopeKey: string, text: string): boolean {
-  const prompt = imageReferencesToPromptMarkers(
-    resolveNativeChatPastedText(scopeKey, text),
-    nativeChatImageRowIds(scopeKey)
-  )
+  const prompt = resolveNativeChatPastedText(scopeKey, text)
   const images = readNativeChatComposerDraft(scopeKey).images
   const body = structuredAgentSessionSendBody(
     prompt,
