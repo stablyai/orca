@@ -294,4 +294,16 @@ describe('renderer registration completion ownership', () => {
     expect(page.loadFailure.current).toBe(failure)
     expect(page.update).not.toHaveBeenCalled()
   })
+
+  it('does not repair a deliberately unregistered guest from a visibility check', async () => {
+    isRegistered.mockResolvedValue(false)
+    const page = createSession('page', 1)
+    registeredWebContentsIds.set('page', 1)
+    page.session.guestRecovery.validateVisibleRegistration()
+    await flush()
+    await flush()
+    expect(isRegistered).toHaveBeenCalledOnce()
+    expect(repair).not.toHaveBeenCalled()
+    expect(page.update).not.toHaveBeenCalled()
+  })
 })

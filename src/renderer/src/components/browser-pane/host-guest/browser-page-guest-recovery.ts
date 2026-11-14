@@ -12,7 +12,7 @@ type BrowserPageGuestRecoveryOptions = {
   isCurrentWebview: () => boolean
   isPending: () => boolean
   setPending: (pending: boolean) => void
-  validateRegistration: () => Promise<boolean | null>
+  validateRegistration: (repair: boolean) => Promise<boolean | null>
   replaceGuest: () => Promise<void>
   onReplacementReady: () => void
   onRecoveryFailed: () => void
@@ -27,6 +27,7 @@ export type BrowserPageGuestRecovery = {
   recoverRenderer: () => void
   retryRecovery: () => void
   validateAfterResume: () => void
+  validateVisibleRegistration: () => void
 }
 
 export function createBrowserPageGuestRecovery(
@@ -155,16 +156,18 @@ export function createBrowserPageGuestRecovery(
       validateAfterResume()
     }, BROWSER_GUEST_VALIDATION_RETRY_DELAY_MS)
   }
-  const validateRegistrationWithTimeout = (): Promise<boolean | null> => {
+  const validateRegistrationWithTimeout = (repair: boolean): Promise<boolean | null> => {
     const deadline = new Promise<never>((_resolve, reject) => {
       validationTimeoutTimer = window.setTimeout(() => {
         validationTimeoutTimer = null
         reject(new Error('Guest registration validation timed out'))
       }, BROWSER_GUEST_VALIDATION_TIMEOUT_MS)
     })
-    return Promise.race([options.validateRegistration(), deadline]).finally(clearValidationTimeout)
+    return Promise.race([options.validateRegistration(repair), deadline]).finally(
+      clearValidationTimeout
+    )
   }
-  function validateAfterResume(): void {
+  function validateAfterResume(repair = true): void {
     if (
       disposed ||
       recoveryStarted ||
@@ -179,7 +182,7 @@ export function createBrowserPageGuestRecovery(
     clearValidationRetry()
     const validationGeneration = lifecycleGeneration
     let retryValidation = false
-    void validateRegistrationWithTimeout()
+    void validateRegistrationWithTimeout(repair)
       .then((registered) => {
         if (validationGeneration !== lifecycleGeneration) {
           return
@@ -193,6 +196,7 @@ export function createBrowserPageGuestRecovery(
             replaceGuest()
           }
         } else if (
+          repair &&
           !disposed &&
           !options.isPending() &&
           options.browserPageExists() &&
@@ -214,6 +218,7 @@ export function createBrowserPageGuestRecovery(
         }
         console.warn('[browser] guest registration validation failed:', error)
         if (
+          !repair ||
           disposed ||
           options.isPending() ||
           !options.browserPageExists() ||
@@ -247,17 +252,19 @@ export function createBrowserPageGuestRecovery(
       })
   }
 
+  const confirmRegistration = (): void => {
+    lifecycleGeneration += 1
+    registrationConfirmedGeneration = lifecycleGeneration
+    validationFailureCount = 0
+    clearValidationRetry()
+  }
+
   if (options.isPending()) {
     watchRecovery()
   }
 
   return {
-    confirmRegistration: () => {
-      lifecycleGeneration += 1
-      registrationConfirmedGeneration = lifecycleGeneration
-      validationFailureCount = 0
-      clearValidationRetry()
-    },
+    confirmRegistration,
     dispose: () => {
       disposed = true
       lifecycleGeneration += 1
@@ -286,6 +293,10 @@ export function createBrowserPageGuestRecovery(
       }
       recoverRenderer()
     },
-    validateAfterResume
+    validateAfterResume,
+    // Why: visibility checks confirm or rebuild only; repairing registration is reserved
+    // for explicit triggers (resume, committed navigation) so a deliberately
+    // unregistered guest cannot be silently resurrected by a remount.
+    validateVisibleRegistration: () => validateAfterResume(false)
   }
 }
