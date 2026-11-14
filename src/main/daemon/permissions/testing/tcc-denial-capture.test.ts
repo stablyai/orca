@@ -1,26 +1,33 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { trackMock, telemetryEnabledMock, logVerdictMock } = vi.hoisted(() => ({
-  trackMock: vi.fn(),
-  telemetryEnabledMock: vi.fn(),
-  logVerdictMock: vi.fn()
+const mocks = vi.hoisted(() => ({
+  track: vi.fn(),
+  telemetryEnabled: vi.fn(),
+  logVerdict: vi.fn(),
+  signatures: vi.fn(),
+  fullDiskAccess: vi.fn(),
+  codeIdentity: vi.fn(),
+  runProcess: vi.fn()
 }))
+const trackMock = mocks.track
+const telemetryEnabledMock = mocks.telemetryEnabled
+const logVerdictMock = mocks.logVerdict
+vi.mock('@orca/process-host', () => ({ runProcess: mocks.runProcess }))
 vi.mock('../../../telemetry/client', () => ({
-  track: trackMock,
-  isTelemetryEnabled: telemetryEnabledMock
+  track: mocks.track,
+  isTelemetryEnabled: mocks.telemetryEnabled
 }))
-vi.mock('../tcc-denial-log-verdict', () => ({ readTccLogVerdict: logVerdictMock }))
-vi.mock('../tcc-denial-signature-checks', () => ({
-  checkHelperSignatures: async () => ({ live: 'pass', diskCopy: 'fail' })
-}))
+vi.mock('../tcc-denial-log-verdict', () => ({ readTccLogVerdict: mocks.logVerdict }))
+vi.mock('../tcc-denial-signature-checks', () => ({ checkHelperSignatures: mocks.signatures }))
 vi.mock('../daemon-full-disk-access-status', () => ({
-  getTerminalHostsFullDiskAccessStatus: async () => 'denied'
+  getTerminalHostsFullDiskAccessStatus: mocks.fullDiskAccess
 }))
 vi.mock('../../executable-host/macos/daemon-mac-code-identity', () => ({
-  inspectMacProcessCodeIdentity: async () => ({ identity: 'resolved', executablePath: null })
+  inspectMacProcessCodeIdentity: mocks.codeIdentity
 }))
 
 import type { DaemonEndpointIdentity } from '../../protocol/daemon-hello-protocol'
+import type { readTccFolderState } from '../tcc-denial-folder-state'
 import {
   noteHelperFolderReadable,
   prepareTccDenialCapture,
@@ -36,6 +43,16 @@ beforeEach(() => {
   resetTccDenialCaptureForTests()
   trackMock.mockReset()
   telemetryEnabledMock.mockReset().mockReturnValue(true)
+  mocks.signatures.mockReset().mockResolvedValue({ live: 'pass', diskCopy: 'fail' })
+  mocks.fullDiskAccess.mockReset().mockResolvedValue('denied')
+  mocks.codeIdentity.mockReset().mockResolvedValue({ identity: 'resolved', executablePath: null })
+  mocks.runProcess.mockReset().mockResolvedValue({
+    code: 0,
+    signal: null,
+    stdout: '',
+    stderr: '',
+    timedOut: false
+  })
   logVerdictMock.mockReset().mockResolvedValue({
     logAccess: 'ok',
     tccdAsked: 'no',
@@ -61,6 +78,57 @@ describe('tcc denial capture', () => {
     await runTccDenialCapture(start)
     expect(logVerdictMock).not.toHaveBeenCalled()
     expect(trackMock).not.toHaveBeenCalled()
+  })
+
+  // Opt out while each stage is in flight: nothing after it may start, and the claim is freed.
+  it.each([
+    {
+      stage: 'identity probe',
+      probe: mocks.codeIdentity,
+      result: { identity: 'resolved', executablePath: null },
+      skipped: [mocks.logVerdict, mocks.signatures, mocks.fullDiskAccess]
+    },
+    {
+      stage: 'log, signature and access probes',
+      probe: mocks.signatures,
+      result: { live: 'pass', diskCopy: 'pass' },
+      skipped: []
+    }
+  ])('stops after the $stage when telemetry is turned off', async ({ probe, result, skipped }) => {
+    const start = (await prepareTccDenialCapture(HELPER, 'documents', 5_000, FOLDER))!
+    probe.mockImplementationOnce(async () => {
+      telemetryEnabledMock.mockReturnValue(false)
+      return result
+    })
+    await runTccDenialCapture(start)
+
+    for (const probe of skipped) {
+      expect(probe).not.toHaveBeenCalled()
+    }
+    expect(trackMock).not.toHaveBeenCalled()
+    telemetryEnabledMock.mockReturnValue(true)
+    expect(await prepareTccDenialCapture(HELPER, 'documents', 6_000, FOLDER)).not.toBeNull()
+  })
+
+  it('stops after the folder probes when telemetry is turned off', async () => {
+    const readFolder = vi.fn(async () => {
+      telemetryEnabledMock.mockReturnValue(false)
+      return FOLDER()
+    })
+    expect(await prepareTccDenialCapture(HELPER, 'documents', 5_000, readFolder)).toBeNull()
+    telemetryEnabledMock.mockReturnValue(true)
+    expect(await prepareTccDenialCapture(HELPER, 'documents', 6_000, FOLDER)).not.toBeNull()
+  })
+
+  it('hands every probe a runner that refuses to spawn once telemetry is off', async () => {
+    const readFolder = vi.fn<typeof readTccFolderState>(FOLDER)
+    await prepareTccDenialCapture(HELPER, 'documents', 5_000, readFolder)
+    const runner = readFolder.mock.calls[0][2]
+
+    await runner({ program: '/usr/bin/true' })
+    telemetryEnabledMock.mockReturnValue(false)
+    await expect(runner({ program: '/usr/bin/true' })).rejects.toThrow('telemetry is off')
+    expect(mocks.runProcess).toHaveBeenCalledTimes(1)
   })
 
   it('captures once per helper incarnation and folder class', async () => {

@@ -1,6 +1,6 @@
 // macOS's own record of a terminal-host folder denial: tccd decisions and kernel sandbox denies.
 
-import { runProcess } from '@orca/process-host'
+import type { runProcess } from '@orca/process-host'
 import { z } from 'zod'
 import type { MacTccFolderClass } from '../../../shared/daemon-adoption-telemetry'
 import type {
@@ -207,7 +207,7 @@ function classifyLogFailure(output: string): TccLogAccess {
 export async function readTccLogVerdict(
   denialAtMs: number,
   subject: TccLogSubject,
-  run: typeof runProcess = runProcess
+  run: typeof runProcess
 ): Promise<TccLogVerdict> {
   let logAccess: TccLogAccess
   let stdout = ''

@@ -1,6 +1,6 @@
 // Whether the live helper and its on-disk copy still carry the app's signature at a denial.
 
-import { runProcess } from '@orca/process-host'
+import type { runProcess } from '@orca/process-host'
 import type { SignatureCheck } from '../../../shared/daemon-tcc-denial-capture'
 
 const CODESIGN = '/usr/bin/codesign'
@@ -106,7 +106,7 @@ async function checkLiveHelper(helperPid: number, run: typeof runProcess): Promi
 export async function checkHelperSignatures(
   helperPid: number,
   helperExecutablePath: string | null,
-  run: typeof runProcess = runProcess
+  run: typeof runProcess
 ): Promise<HelperSignatureChecks> {
   const helperBundle = bundlePathOf(helperExecutablePath)
   const [live, diskCopy] = await Promise.all([

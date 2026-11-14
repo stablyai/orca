@@ -1,7 +1,7 @@
 // Folder-class root state read before the app's own opendir can materialize or change it.
 
 import { realpath } from 'node:fs/promises'
-import { runProcess } from '@orca/process-host'
+import type { runProcess } from '@orca/process-host'
 import type { MacTccFolderClass } from '../../../shared/daemon-adoption-telemetry'
 import type {
   FolderFlag,
@@ -119,7 +119,7 @@ async function resolveWithin(path: string, timeoutMs: number): Promise<string> {
 export async function readTccFolderState(
   classRoot: string,
   cwdClass: MacTccFolderClass,
-  run: typeof runProcess = runProcess
+  run: typeof runProcess
 ): Promise<TccFolderState> {
   // A relocated class root (symlink to another volume) is what decides the volume.
   const resolved = await resolveWithin(classRoot, PROBE_TIMEOUT_MS)

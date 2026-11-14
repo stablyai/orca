@@ -1,6 +1,7 @@
 // Capture macOS's verdict once per helper incarnation and folder class when a denial is confirmed.
 
 import { homedir } from 'node:os'
+import { runProcess } from '@orca/process-host'
 import { join } from 'node:path'
 import type { MacTccFolderClass } from '../../../shared/daemon-adoption-telemetry'
 import {
@@ -72,6 +73,25 @@ function remember<V>(map: Map<string, V>, key: string, value: V): void {
   }
 }
 
+class TelemetryOptedOutError extends Error {}
+
+/** Opted-out users never have their log read or checks run; asked again before every stage. */
+function requireTelemetryConsent(): void {
+  if (!isTelemetryEnabled()) {
+    throw new TelemetryOptedOutError('telemetry is off')
+  }
+}
+
+/** Every capture subprocess runs through this, so a stage added later cannot skip consent. */
+export const runProcessWithTelemetryConsent: typeof runProcess = (spec, outputCapture) => {
+  try {
+    requireTelemetryConsent()
+  } catch (error) {
+    return Promise.reject(error)
+  }
+  return runProcess(spec, outputCapture)
+}
+
 /** Earlier good reads are the "was readable, then flipped" evidence for this helper. */
 export function noteHelperFolderReadable(
   identity: DaemonEndpointIdentity | null,
@@ -112,8 +132,13 @@ export async function prepareTccDenialCapture(
   }
   const folderState = await readFolderState(
     join(homedir(), CLASS_ROOT_NAME[cwdClass]),
-    cwdClass
+    cwdClass,
+    runProcessWithTelemetryConsent
   ).catch(() => UNKNOWN_FOLDER_STATE)
+  if (!isTelemetryEnabled()) {
+    claimedKeys.delete(key)
+    return null
+  }
   return { key, identity, cwdClass, denialAtMs, folderState, context }
 }
 
@@ -150,28 +175,32 @@ export async function runTccDenialCapture(start: TccDenialCaptureStart): Promise
   if (claimedKeys.get(start.key) === 'captured') {
     return
   }
-  // Consent can be withdrawn while the app-side read waits on a prompt.
-  if (!isTelemetryEnabled()) {
-    releaseTccDenialCapture(start)
-    return
-  }
   remember(claimedKeys, start.key, 'captured')
   try {
     const { identity, cwdClass, denialAtMs, folderState } = start
+    // Consent can be withdrawn at any await (the app-side read can wait on a prompt), so every
+    // stage asks again; the shared identity probe is gated here, the rest through the runner.
+    requireTelemetryConsent()
     const helperPath =
       (await inspectMacProcessCodeIdentity(identity.pid)).executablePath ??
       identity.spawnerExecPath ??
       null
+    requireTelemetryConsent()
     const [log, signatures, fullDiskAccess] = await Promise.all([
-      readTccLogVerdict(denialAtMs, {
-        helperPid: identity.pid,
-        helperPath,
-        appId: LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId,
-        cwdClass
-      }),
-      checkHelperSignatures(identity.pid, helperPath),
+      readTccLogVerdict(
+        denialAtMs,
+        {
+          helperPid: identity.pid,
+          helperPath,
+          appId: LOCAL_BUILD_COMPATIBILITY_CONTRACT.appId,
+          cwdClass
+        },
+        runProcessWithTelemetryConsent
+      ),
+      checkHelperSignatures(identity.pid, helperPath, runProcessWithTelemetryConsent),
       readFullDiskAccess()
     ])
+    requireTelemetryConsent()
     const origin = helperOriginOf(identity)
     const props: EventProps<'daemon_pty_cwd_denial_capture'> = {
       cwd_class: cwdClass,
@@ -197,7 +226,11 @@ export async function runTccDenialCapture(start: TccDenialCaptureStart): Promise
       volume_type: folderState.volumeType
     }
     track('daemon_pty_cwd_denial_capture', props)
-  } catch {
+  } catch (error) {
+    // An opted-out capture was not taken, so a later denial may still capture after opt-in.
+    if (error instanceof TelemetryOptedOutError) {
+      claimedKeys.delete(start.key)
+    }
     // Diagnostics are best-effort; a failed capture must not reach terminal creation.
   }
 }
