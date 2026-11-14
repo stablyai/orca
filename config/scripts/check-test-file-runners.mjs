@@ -70,8 +70,15 @@ const NON_UNIT_TEST_RUNNERS = [
     sources: [`cloud/apps/${app}/vitest.config.ts`],
     mirrors: ["include: ['src/**/*.test.ts']"]
   })),
+  {
+    name: 'cloud relay-edge',
+    include: ['cloud/apps/relay-edge/test/**/*.test.ts'],
+    sources: ['cloud/apps/relay-edge/vitest.config.ts'],
+    mirrors: ["include: ['test/**/*.test.ts']"]
+  },
   ...[
     'cloud/apps/relay-fence-broker',
+    'cloud/apps/relay-ingress',
     'cloud/packages/cloud-database',
     'cloud/packages/connector-contract',
     'cloud/packages/postgres-schema',
