@@ -1,6 +1,6 @@
 import { stat } from 'node:fs/promises'
 import { isWslPath } from '../../../wsl/filesystem/unc-path-access'
-import { WATCHER_IGNORE_DIRS } from './filesystem-watcher-ignore'
+import { WATCHER_IGNORE_DIRS, WATCHER_IGNORE_DIR_SUFFIXES } from './filesystem-watcher-ignore'
 import { createWslWatcher, type WatchedRoot } from './filesystem-watcher-wsl'
 import { WatcherChildCapacityError } from '../watcher-process/child-lifecycle/parcel-watcher-child-registry'
 import { isWatcherProcessFailure } from '../watcher-process/parcel-watcher-process-failure'
@@ -85,6 +85,7 @@ export async function installLocalWatcher(
             worktreePath,
             {
               ignoreDirs: WATCHER_IGNORE_DIRS,
+              ignoreDirSuffixes: WATCHER_IGNORE_DIR_SUFFIXES,
               scheduleBatchFlush: scheduleLocalBatchFlush,
               watchedRoots: watcherLifecycleState.watchedRoots,
               onUnexpectedStop: (stoppedRoot, distro) => {

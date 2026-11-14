@@ -45,6 +45,7 @@ function makeDeps(
 } {
   return {
     ignoreDirs: ['node_modules', '.git'],
+    ignoreDirSuffixes: ['.staging', '.asar'],
     scheduleBatchFlush,
     watchedRoots: new Map()
   }
@@ -109,5 +110,21 @@ describe('createWslWatcher', () => {
 
     child.emit('close', null, 'SIGTERM')
     await expect(promise).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('applies the shared suffix exclusions to the snapshot script (#40204)', async () => {
+    const child = new FakeChildProcess()
+    child.kill = vi.fn(() => true)
+    const chunks: string[] = []
+    child.stdin.on('data', (chunk: Buffer) => chunks.push(String(chunk)))
+    spawnMock.mockReturnValueOnce(child)
+    const promise = createWslWatcher(ROOT_KEY, ROOT_KEY, makeDeps())
+    const root = await resolveInitialSnapshot(child, promise)
+
+    const script = chunks.join('')
+    // The staging dir is pruned; a staged *.asar file is skipped instead of reported.
+    expect(script).toContain("-name '*.staging'")
+    expect(script).toContain("! -name '*.asar'")
+    root.subscription.unsubscribe().catch(() => {})
   })
 })

@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { subscribe, type AsyncSubscription, type Event } from '@parcel/watcher'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WATCHER_IGNORE_DIRS, buildParcelWatcherIgnoreOptions } from './filesystem-watcher-ignore'
@@ -79,5 +79,63 @@ describe('filesystem watcher native ignores', () => {
     expect(errors).toEqual([])
     const generatedPaths = new Set(generatedFiles)
     expect(events.filter((event) => generatedPaths.has(event.path))).toEqual([])
+  })
+
+  it('drops installer staging trees and asar archive events (#40204)', async () => {
+    root = await realpath(await mkdtemp(join(tmpdir(), 'orca-watch-ignore-')))
+    // Mirror Docker Desktop's staging layout under %LOCALAPPDATA% for a home-level workspace root.
+    const stagingResources = join(
+      root,
+      'AppData',
+      'Local',
+      'Programs',
+      'DockerDesktop.staging',
+      'frontend',
+      'resources'
+    )
+    const unpackedArchive = join(root, 'packages', 'app', 'resources')
+    await Promise.all(
+      [stagingResources, unpackedArchive].map((directory) => mkdir(directory, { recursive: true }))
+    )
+
+    const events: Event[] = []
+    const errors: Error[] = []
+    subscription = await subscribe(
+      root,
+      (error, batch) => {
+        if (error) {
+          errors.push(error)
+        }
+        events.push(...batch)
+      },
+      buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)
+    )
+    const seen = (file: string): boolean => events.some((event) => event.path === file)
+    const writeUntilSeen = async (files: string[]): Promise<void> => {
+      await vi.waitFor(
+        async () => {
+          const missing = files.filter((file) => !seen(file))
+          await Promise.all(missing.map((file) => writeFile(file, 'source')))
+          expect(missing).toEqual([])
+        },
+        { timeout: DELIVERY_TIMEOUT_MS, interval: 200 }
+      )
+    }
+
+    await writeUntilSeen([join(root, 'ready.ts')])
+
+    const stagedFiles = [
+      join(stagingResources, 'app.asar'),
+      join(stagingResources, 'app.asar.unpacked', 'lib.node'),
+      join(unpackedArchive, 'app.asar')
+    ]
+    await Promise.all(stagedFiles.map((file) => mkdir(dirname(file), { recursive: true })))
+    await Promise.all(stagedFiles.map((file) => writeFile(file, 'staged-archive')))
+
+    await writeUntilSeen([join(root, 'sentinel.ts')])
+
+    expect(errors).toEqual([])
+    const stagedPaths = new Set(stagedFiles)
+    expect(events.filter((event) => stagedPaths.has(event.path))).toEqual([])
   })
 })
