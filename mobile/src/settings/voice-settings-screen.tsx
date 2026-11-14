@@ -1,22 +1,22 @@
 import { useCallback, useRef, useState } from 'react'
 import { Text } from 'react-native'
 import type { VoiceSettingsOperations } from './voice-settings-operations'
-import { MobileStateView } from '../components/MobileStateView'
+import { MobileStateView } from '../components/feedback/MobileStateView'
 import { voiceSettingsStyles as styles } from './voice-settings-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
 import { ListRow } from '../components/list/ListGroup'
-import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
-import { VoiceModelList } from '../components/VoiceModelList'
+import { MobileSegmentedControl } from '../components/controls/MobileSegmentedControl'
+import { VoiceModelList } from '../dictation/setup/VoiceModelList'
 import { useDictationSetupPoller } from '../dictation/use-dictation-setup-poller'
 import {
   isModelInFlight,
   type MobileSpeechModel,
   type MobileSpeechSetup
 } from '../dictation/mobile-dictation-setup'
-import { MobileSwitch } from '../components/MobileSwitch'
+import { MobileSwitch } from '../components/controls/MobileSwitch'
 import {
   dictationShortcutMode,
   dictationShortcutModeSettings

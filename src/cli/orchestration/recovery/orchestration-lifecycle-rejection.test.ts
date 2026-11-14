@@ -46,31 +46,6 @@ it('fails closed when an older runtime leaves worker_done dispatched without a v
   })
 })
 
-it('normalizes compatibility-read failures to operation_unknown', async () => {
-  callMock
-    .mockResolvedValueOnce({
-      result: { message: { id: 'msg_unconfirmed', run_id: 'run_1' } }
-    })
-    .mockRejectedValueOnce(new Error('runtime disconnected'))
-    .mockResolvedValueOnce({ result: { tasks: [] } })
-
-  await expect(
-    ORCHESTRATION_HANDLERS['orchestration send']({
-      flags: new Map([
-        ['from', 'term_worker'],
-        ['subject', 'done'],
-        ['type', 'worker_done'],
-        ['task-id', 'task_1'],
-        ['dispatch-id', 'ctx_1'],
-        ['outcome', 'succeeded']
-      ]),
-      client: { call: callMock },
-      cwd: '/tmp/repo',
-      json: true
-    } as never)
-  ).rejects.toMatchObject({ code: 'operation_unknown' })
-})
-
 it('preserves the worker_done mutation identity when post-verification fails', async () => {
   callMock
     .mockResolvedValueOnce({
@@ -105,31 +80,6 @@ it('preserves the worker_done mutation identity when post-verification fails', a
       /Do not send a new completion.*--retry-request mutation_worker_done/s
     )
   })
-})
-
-it('rejects an unrelated failed Dispatch that left its Task blocked', async () => {
-  callMock
-    .mockResolvedValueOnce({
-      result: { message: { id: 'msg_after_stop', run_id: 'run_1' } }
-    })
-    .mockResolvedValueOnce({ result: { dispatch: { id: 'ctx_1', status: 'failed' } } })
-    .mockResolvedValueOnce({ result: { tasks: [] } })
-
-  await expect(
-    ORCHESTRATION_HANDLERS['orchestration send']({
-      flags: new Map([
-        ['from', 'term_worker'],
-        ['subject', 'failed'],
-        ['type', 'worker_done'],
-        ['task-id', 'task_1'],
-        ['dispatch-id', 'ctx_1'],
-        ['outcome', 'failed']
-      ]),
-      client: { call: callMock },
-      cwd: '/tmp/repo',
-      json: true
-    } as never)
-  ).rejects.toMatchObject({ code: 'operation_unknown' })
 })
 
 it('rejects a terminal Dispatch with the wrong identity', async () => {

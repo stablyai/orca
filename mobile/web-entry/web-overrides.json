@@ -170,19 +170,19 @@
       "reason": "expo-image-picker and expo-document-picker are native modules whose import runs a codegen lookup that throws in a browser, and the route manifest imports every route, so one of them in a page closure takes the whole bundle down rather than one picker. This one asks the shell through native.media.pick, reads the bytes back a chunk at a time over native.media.read because a picked image reaches 18 MiB raw against an 8 MiB reply ceiling, and releases every handle it was handed, including the ones its caller never took. The pasteboard is not here: clipboard.web.ts owns it on both platforms and reaches the same verbs for an image."
     },
     {
-      "file": "src/components/AuthFailedBannerActions.web.tsx",
-      "reason": "The auth-failed banner offers Retry, Re-pair and Remove, and on the page only Re-pair works. /pair-scan sits outside the page's route root of app/h (config/scripts/mobile-web-app/mobile-web-app-route-manifest.mjs:6), so route-handoff.web.ts:207 hands the push to the shell, which opens the native scan screen and returns to the same page document on Back. Retry and Remove are inert here: forceReconnect is null (client-context.web.tsx:45, read through host-client-hooks.ts:88) and removal refuses (page-host-removal-refusal.ts). The banner is reachable on the page because the shell forwards the native client's state (mobile-web-shell/bridge-host.ts:301) and auth-failed is in the wire enum (bridge/bridge-envelope.ts:44). So this one renders Re-pair as native does and one line naming the app for reconnect and removal."
+      "file": "src/components/host-connection/AuthFailedBannerActions.web.tsx",
+      "reason": "The auth-failed banner offers Retry, Re-pair and Remove, and on the page only Re-pair works. /pair-scan sits outside the page's route root of app/h (config/scripts/mobile-web-app/mobile-web-app-route-manifest.mjs:6), so route-handoff.web.ts:207 hands the push to the shell, which opens the native scan screen and returns to the same page document on Back. Retry and Remove are inert here: forceReconnect is null (client-context.web.tsx:45, read through host-client-hooks.ts:88) and removal refuses (page-host-removal-refusal.ts). The banner is reachable on the page because the shell forwards the native client's state (mobile-web-shell/bridge-host.ts:301) and auth-failed is in the wire enum (bridge/protocol/bridge-connection-snapshot.ts). So this one renders Re-pair as native does and one line naming the app for reconnect and removal."
     },
     {
-      "file": "src/components/use-html-preview-link-grant.web.ts",
+      "file": "src/files/preview/documents/use-html-preview-link-grant.web.ts",
       "reason": "Natively the HTML preview is its own WebView and onShouldStartLoadWithRequest hands every request to openExternalLink, so there is nothing to negotiate and the native sibling answers yes. In the page a tap on a link inside the sealed frame becomes a top-frame navigation only the shell around the document can cancel and open, and a shell built before that event drops it in silence. This file asks the shell through the grants init carried (C8.1, ruling 37), and without the externalNavigation grant the preview renders the artifact with its links as text rather than offering a tap that does nothing."
     },
     {
-      "file": "src/mobile-web-shell/catch-all-page-route.web.tsx",
+      "file": "src/mobile-web-shell/routing/catch-all-page-route.web.tsx",
       "reason": "The catch-all's native body mounts the shell, and the page is what that shell displays; nesting one here would open a second document inside the first, and the shell module calls requireNativeViewManager at import, which throws in a browser."
     },
     {
-      "file": "src/mobile-web-shell/page-owns-host-area.web.ts",
+      "file": "src/mobile-web-shell/routing/page-owns-host-area.web.ts",
       "reason": "Natively there is no `init` and the shell layout decides who draws the host sidebar. Inside the page the only answer is the `ownsHostArea` init fact, never the page's own width, because a detail-route page on a wide iPad sits beside the shell's sidebar."
     },
     {
@@ -226,7 +226,7 @@
       "reason": "The iPhone Duo key rail is drawn by the shell in a side inset strip the page cannot reach. The native file has no shell around it and answers no rail; this one reads whether the shell shows one from `init` and takes its presses from the bridge."
     },
     {
-      "file": "src/components/use-working-motion.web.ts",
+      "file": "src/components/motion/use-working-motion.web.ts",
       "reason": "React Native Web has no native animation driver, so every working ring and live tool-run pulse ran as its own JS loop writing a style each frame on the page's main thread, which is busiest while a reply streams. The native file keeps the native-driver loops; this one runs the same spin and pulse as Web Animations on the element, which the compositor plays, with one shared phase like desktop's spinner."
     },
     {
@@ -234,7 +234,7 @@
       "reason": "Native settings screens can cover a still-mounted page. Observe same-session storage snapshots so preference readers refresh on return without remounting the terminal."
     },
     {
-      "file": "src/components/mobile-markdown-math-typesetter.web.ts",
+      "file": "src/components/markdown/math/mobile-markdown-math-typesetter.web.ts",
       "reason": "KaTeX draws a formula as HTML and CSS with its own fonts, which only a document can show. The native file leaves formulas as their source, so the native bundle never carries KaTeX; this one loads KaTeX with the first formula the page draws and adds its stylesheet."
     },
     {

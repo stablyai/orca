@@ -1,12 +1,12 @@
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
 import { replayAppKeyDown } from '@/lib/keyboard/app-keyboard-router'
-import { resolveFloatingWorkspaceBrowserWorkspaceId } from '@/components/floating-terminal/floating-workspace-terminal-actions'
+import { resolveFloatingWorkspaceBrowserWorkspaceId } from '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
 import {
   dispatchFloatingWorkspaceGuestClose,
   dispatchFloatingWorkspaceGuestSelectIndex
-} from '@/components/floating-terminal/floating-workspace-guest-bridge'
+} from '@/components/floating-terminal/workspace/floating-workspace-guest-bridge'
 
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 
 export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(

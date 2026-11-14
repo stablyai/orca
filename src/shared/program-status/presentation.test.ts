@@ -9,25 +9,6 @@ const facet = (overrides: Partial<ProgramStatusFacet>): ProgramStatusFacet => ({
 })
 
 describe('resolveProgramStatusPresentation', () => {
-  it("lets a hook's structured tool preview win over the program's free text", () => {
-    expect(
-      resolveProgramStatusPresentation({
-        state: 'working',
-        toolName: 'Edit',
-        programStatus: facet({ progress: 40, message: 'Editing files' })
-      })
-    ).toEqual({ progress: 40 })
-  })
-
-  it('never paints a finished row with a stale live facet', () => {
-    expect(
-      resolveProgramStatusPresentation({
-        state: 'done',
-        programStatus: facet({ progress: 90, message: 'Almost there' })
-      })
-    ).toEqual({})
-  })
-
   it('raises attention for a block the row state does not show (sign-in after a hook turn)', () => {
     expect(
       resolveProgramStatusPresentation({

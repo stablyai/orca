@@ -9,7 +9,10 @@ import {
   View,
   type LayoutChangeEvent
 } from 'react-native'
-import { SHEET_CURVE, SHEET_HEIGHT_DURATION_MS } from '../../../../components/sheet-motion-values'
+import {
+  SHEET_CURVE,
+  SHEET_HEIGHT_DURATION_MS
+} from '../../../../components/motion/sheet-motion-values'
 import { useReducedMotionEnabled } from '../../../../platform/accessibility/use-reduced-motion'
 import { colors, pressedStyle, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'

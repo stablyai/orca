@@ -8,7 +8,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   activateFloatingWorkspaceCyclableTab,
   isFloatingWorkspacePanelFocused
-} from '@/components/floating-terminal/floating-workspace-terminal-actions'
+} from '@/components/floating-terminal/workspace/floating-workspace-terminal-actions'
 import {
   isRecentTabSwitcherCommitRelease,
   matchesRecentTabSwitcherChord
