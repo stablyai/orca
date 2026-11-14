@@ -82,6 +82,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       "worker_done and heartbeat are exact-Dispatch signals and cannot target groups; omit --to to use the Dispatch's Run mailbox.",
       'worker_done requires --outcome succeeded or --outcome failed.',
       'From a worker, an omitted recipient defaults to its coordinator, also after it finished; mail sent after finishing, worker_done included, leaves the finished task unchanged.',
+      'A --to terminal handle that coordinates a Run is queued for that run:<id> mailbox, with a warning.',
       'Use --to dispatch:<id> for attempt-specific coordinator guidance; Orca durably relays it to a connected worker server.',
       'A worker_done with the active task/dispatch IDs completes that task only from the dispatched pane. When stable pane identity is unavailable, the sender handle must exactly match the dispatch assignee; injected preambles include the correct --from value.',
       'Prefer --task-id/--dispatch-id/etc. over raw --payload JSON in worker commands; PowerShell strips JSON quotes easily.',
