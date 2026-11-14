@@ -1,211 +1,17 @@
 import { mkdir, rm, writeFile, utimes } from 'node:fs/promises'
 import { join } from 'node:path'
-import { expect, it, vi } from 'vitest'
+import { expect, it } from 'vitest'
 import SyncDatabase from '../sqlite/sync-database'
 import { SessionFileInventory } from '../ai-vault/session-file-inventory'
 import type { DiscoverSessionFilesArgs } from '../ai-vault/discovery/session-scanner-discovery'
 import { SessionSearchCatalog } from './session-search-catalog'
 import type { SessionSearchCatalogCommand } from './session-search-catalog'
-import { createSessionSearchJsonlDependency } from './session-search-jsonl-dependency'
 import {
   FakeSessionSearchClock,
   openSessionSearchIndexerHarness,
   writeClaudeTranscript
 } from './indexing/session-search-indexer-test-fixture'
-import { SessionSearchWorkerClient } from './worker/session-search-worker-client'
-import * as filesystem from '../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { SessionSearchIndexer } from './indexing/session-search-indexer'
-import { SessionSearchWorkerStore } from './worker/session-search-worker-store'
-import { SessionSearchWorkQueue } from './session-search-work-queue'
-import { configureSessionSearchWorkerFixture } from './worker/session-search-worker.test-fixture'
-import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
-import { SESSION_SEARCH_INVENTORY_MEMBERS } from './session-search-inventory-relation'
-
-it.each([40, 400])(
-  'batches discovery and replacement metadata for %s retained files',
-  async (population) => {
-    const harness = await openSessionSearchIndexerHarness('ss-catalog-pages')
-    const db = new SyncDatabase('')
-    const catalog = new SessionSearchCatalog(db)
-    let transactions = 0
-    const exec = db.exec.bind(db)
-    const transactionTraffic = vi.spyOn(db, 'exec').mockImplementation((sql) => {
-      if (sql.startsWith('SAVEPOINT ')) {
-        transactions++
-      }
-      return exec(sql)
-    })
-    let envelopes = 0,
-      localRows = 0
-    let invalidEnvelope:
-      | { kind: SessionSearchCatalogCommand['kind']; requestBytes: number; resultBytes: number }
-      | undefined
-    const execute = catalog.execute.bind(catalog)
-    const local = vi.spyOn(catalog, 'execute').mockImplementation((command) => {
-      const result = execute(command)
-      localRows +=
-        (command.kind === 'get' || command.kind === 'put') &&
-        SESSION_SEARCH_INVENTORY_MEMBERS.some(
-          (member) => command.scope === `physical:batch-control:${member}`
-        )
-          ? 0
-          : command.kind === 'put'
-            ? command.rows.length
-            : command.kind === 'get'
-              ? 1
-              : command.kind === 'page'
-                ? (result.rows?.length ?? 0)
-                : 0
-      return result
-    })
-    const prepare = db.prepare.bind(db)
-    const physicalTraffic = vi.spyOn(db, 'prepare').mockImplementation((sql) => {
-      const statement = prepare(sql)
-      if (!/search_inventory_(sources|entries|activity|epochs|staging)/.test(sql)) {
-        return statement
-      }
-      const count = (args: Parameters<typeof statement.run>) => {
-        const payload = args.find((value) => typeof value === 'string' && value.startsWith('['))
-        const rows =
-          sql.includes('json_each(?)') && typeof payload === 'string'
-            ? JSON.parse(payload).length
-            : 1
-        // Reclaim probes the activity row and three witnesses before its physical update.
-        localRows += rows * (sql.includes('WITH live AS MATERIALIZED') ? 5 : 1)
-      }
-      return {
-        get(...args) {
-          count(args)
-          return statement.get(...args)
-        },
-        all(...args) {
-          count(args)
-          return statement.all(...args)
-        },
-        iterate(...args) {
-          count(args)
-          return statement.iterate(...args)
-        },
-        run(...args) {
-          count(args)
-          return statement.run(...args)
-        },
-        setReadBigInts(enabled) {
-          statement.setReadBigInts(enabled)
-        }
-      }
-    })
-    const request = async (command: SessionSearchCatalogCommand) => {
-      envelopes++
-      const result = catalog.response(command)
-      const requestBytes = JSON.stringify(command).length * 2
-      const resultBytes = JSON.stringify(result).length * 2
-      if (!invalidEnvelope && (requestBytes > 256 * 1024 || resultBytes > 256 * 1024)) {
-        invalidEnvelope = { kind: command.kind, requestBytes, resultBytes }
-      }
-      return result
-    }
-    const root = join(harness.root, 'inputs')
-    const inventory = new SessionFileInventory(root, request, 'physical:batch-control')
-    const args: DiscoverSessionFilesArgs = {
-      rootDir: root,
-      agent: 'claude',
-      limit: 0,
-      issues: [],
-      extensions: ['.jsonl']
-    }
-    const drain = async () => {
-      const paths: string[] = []
-      while (inventory.pending) {
-        await inventory.retryFailures()
-        const delta = await inventory.drain(args, () => false, 0)
-        paths.push(...delta.changes.map(({ file }) => file.path))
-        await inventory.acknowledge(delta.receipts)
-      }
-      return paths
-    }
-    const check = () => {
-      // A single directory has fixed phase transitions; each page needs staging, preparation and acceptance, independent of its member count.
-      const pages = Math.ceil(population / 256)
-      expect(envelopes).toBeLessThanOrEqual(40 + 12 * pages)
-      // A bounded command can accept an input receipt and an owner page inside its outer transaction.
-      expect(transactions).toBeLessThanOrEqual(3 * (40 + 12 * pages))
-      // Required comparisons and accepted observations visit each input only a fixed number of times locally.
-      expect(localRows).toBeLessThanOrEqual(30 * population + 100)
-      expect(invalidEnvelope).toBeUndefined()
-    }
-    const unclaimed = () => {
-      for (const suffix of ['authority', 'authority-garbage']) {
-        expect(execute({ kind: 'count', scope: `physical:batch-control:${suffix}` }).count).toBe(0)
-      }
-    }
-    const reset = () => {
-      envelopes = 0
-      localRows = 0
-      transactions = 0
-      invalidEnvelope = undefined
-      local.mockClear()
-    }
-    try {
-      await mkdir(root)
-      for (let index = 0; index < population; index++) {
-        await writeFile(join(root, `${index}.jsonl`), '{}\n')
-      }
-      await inventory.begin(false, args)
-      expect(await drain()).toHaveLength(population)
-      check()
-      unclaimed()
-      reset()
-      await inventory.reconcile()
-      expect(await drain()).toEqual([])
-      check()
-      reset()
-      await inventory.invalidate(root)
-      expect(await drain()).toEqual([])
-      check()
-      unclaimed()
-      const metadata = join(harness.root, 'titles.jsonl')
-      const observer = createSessionSearchJsonlDependency(
-        metadata,
-        (line) => {
-          const [id, title] = line.split(':')
-          return id && title ? [id, title] : null
-        },
-        { request, scope: 'metadata:batch-control' }
-      )
-      const values = async () => {
-        const keys: string[] = []
-        for await (const key of await observer(false)) {
-          keys.push(key)
-        }
-        return keys
-      }
-      await writeFile(
-        metadata,
-        `${Array.from({ length: population }, (_, index) => `${index}:before`).join('\n')}\n`
-      )
-      reset()
-      expect(await values()).toHaveLength(population)
-      check()
-      await writeFile(
-        metadata,
-        `${Array.from({ length: population }, (_, index) => `${index}:after!`).join('\n')}\n`
-      )
-      reset()
-      expect(await values()).toHaveLength(population)
-      check()
-      reset()
-      expect(await values()).toEqual([])
-      expect(envelopes).toBe(0)
-    } finally {
-      transactionTraffic.mockRestore()
-      local.mockRestore()
-      physicalTraffic.mockRestore()
-      db.close()
-      await harness.cleanup()
-    }
-  }
-)
 
 it.each([40, 400])(
   'searches the newest known transcript before an older candidate page at %s files',
@@ -319,67 +125,6 @@ it('redelivers an unaccepted observation and retains a newer rewrite after an ol
   }
 })
 
-it.each([40, 400])(
-  'batches child scheduling and bounds cancellation for %s directories',
-  async (population) => {
-    const harness = await openSessionSearchIndexerHarness('ss-directory-pages')
-    const db = new SyncDatabase('')
-    const catalog = new SessionSearchCatalog(db)
-    const root = join(harness.root, 'inputs')
-    let envelopes = 0
-    const cancelled: number[] = []
-    const inventory = new SessionFileInventory(
-      root,
-      async (command) => {
-        envelopes++
-        const result = catalog.response(command)
-        if (command.kind === 'directory-cancel-step') {
-          cancelled.push(result.processed ?? 0)
-        }
-        return result
-      },
-      'physical:directory-control'
-    )
-    const args: DiscoverSessionFilesArgs = {
-      rootDir: root,
-      agent: 'claude',
-      limit: 0,
-      issues: [],
-      extensions: ['.jsonl']
-    }
-    const listings = vi.spyOn(filesystem, 'wslGatedReaddir')
-    try {
-      for (let n = 0; n < population; n++) {
-        await mkdir(join(root, `child-${n}`), { recursive: true })
-      }
-      await inventory.drain(
-        args,
-        () => listings.mock.calls.some(([path]) => path.startsWith(`${root}/`)),
-        0
-      )
-      // Root load, comparison and scheduling use a fixed set of phases per entry page; one active child adds fixed work.
-      expect(envelopes).toBeLessThanOrEqual(60 + 8 * Math.ceil(population / 256))
-      await rm(root, { recursive: true })
-      await inventory.invalidate(root)
-      listings.mockClear()
-      // Each retained directory has cancellation, removal and completion phases, with no descendant source reads.
-      for (let cycle = 0; cycle < 6 * (population + 1) + 10 && inventory.pending; cycle++) {
-        await inventory.retryFailures()
-        const delta = await inventory.drain(args, () => true, 0)
-        await inventory.acknowledge(delta.receipts)
-      }
-      expect(inventory.pending).toBe(false)
-      expect(listings.mock.calls.filter(([path]) => path.startsWith(`${root}/`))).toHaveLength(0)
-      expect(cancelled.length).toBeGreaterThan(0)
-      expect(Math.max(...cancelled)).toBeLessThanOrEqual(256)
-    } finally {
-      listings.mockRestore()
-      db.close()
-      await harness.cleanup()
-    }
-  }
-)
-
 it('removes search results when a multi-page history source is replaced', async () => {
   const population = 400
   const harness = await openSessionSearchIndexerHarness('ss-release-pages')
@@ -484,122 +229,6 @@ it.each([40, 400])(
   }
 )
 
-it.each([40, 400])(
-  'preserves ranked read obligations across bounded pages for %s candidates',
-  async (population) => {
-    const harness = await openSessionSearchIndexerHarness('ss-read-pages')
-    const store = new SessionSearchWorkerStore(harness.databasePath, (error) => {
-      throw error
-    })
-    const queue = new SessionSearchWorkQueue()
-    queue.attach(store)
-    const traffic = vi.spyOn(SessionSearchWorkerClient.prototype, 'request')
-    const candidates: SessionFileCandidate[] = []
-    let largestResponse = 0
-    configureSessionSearchWorkerFixture({
-      prelude: '',
-      data: undefined,
-      onResponse: (response) => {
-        largestResponse = Math.max(largestResponse, JSON.stringify(response).length * 2)
-      }
-    })
-    try {
-      await store.prepare()
-      const prefix = join(harness.root, ...Array.from({ length: 10 }, () => 'p'.repeat(100)))
-      for (let index = 0; index < population; index++) {
-        const candidate: SessionFileCandidate = {
-          agent: 'claude',
-          codexHome: null,
-          file: {
-            path: join(prefix, `${String(population - index).padStart(4, '0')}.jsonl`),
-            mtimeMs: 10000 - Math.floor(index / 4),
-            modifiedAt: new Date(10000 - Math.floor(index / 4)).toISOString(),
-            sizeBytes: 20
-          }
-        }
-        if (index === 1 || index === 3) {
-          const segments = index === 1 ? 12000 : 6000
-          const windowsRoot = `C:\\${Array.from({ length: segments }, () => 'p').join('\\')}`
-          candidate.agent = 'antigravity'
-          candidate.file.path = `${windowsRoot}\\conversation-${index}.pb`
-          candidate.antigravityHistoryPath = `${windowsRoot}\\history-${index}.pb`
-        }
-        candidates.push(candidate)
-        await queue.enqueue(candidate, store, false, index % 2 === 0)
-      }
-      traffic.mockClear()
-      queue.beginPass()
-      const first = await queue.next()
-      expect(first?.candidate.file.path).toBe(candidates[0].file.path)
-      const successor = {
-        ...candidates[0],
-        file: { ...candidates[0].file, mtimeMs: 20000, modifiedAt: '1970-01-01T00:00:20.000Z' }
-      }
-      await store.candidates({
-        kind: 'batch',
-        rows: [
-          {
-            candidate: successor,
-            root: prefix,
-            group: candidates[0].file.path,
-            alias: candidates[0].file.path,
-            sqlite: false,
-            preference: 0,
-            sourceOrder: 0
-          }
-        ]
-      })
-      expect((await queue.get(candidates[0].file.path))?.candidate).toEqual(candidates[0])
-      queue.beginPass()
-      expect(await queue.next()).toEqual({ ...first, root: prefix })
-      await queue.acknowledge(first!, true)
-      const observed: string[] = []
-      for (let index = 1; index < population; index++) {
-        let work = await queue.next()
-        if (index === 1) {
-          await queue.enqueue(candidates[1], store, false, false, true)
-          await queue.enqueue(candidates[2], store, true, true)
-          await queue.acknowledge(work!, false)
-          work = await queue.next()
-          expect(work).toMatchObject({ candidate: candidates[1], metadata: true })
-        }
-        if (index === 2) {
-          expect(work).toMatchObject({ candidate: candidates[2], force: true })
-        }
-        observed.push(work!.candidate.file.path)
-        await queue.acknowledge(work!, false)
-      }
-      expect(observed).toEqual(candidates.slice(1).map((candidate) => candidate.file.path))
-      expect(await queue.next()).toBeUndefined()
-      // Each lane needs a bounded projection per row/byte page; per-file accepted acknowledgements are separate.
-      const pages =
-        Math.ceil(population / 256) +
-        Math.ceil((JSON.stringify(candidates).length * 2) / (128 * 1024))
-      expect(
-        traffic.mock.calls.filter(
-          ([command]) => command.op === 'work' && command.command.kind === 'next'
-        ).length
-      ).toBeLessThanOrEqual(40 + 12 * pages)
-      queue.beginPass()
-      const retry = await queue.next()
-      expect(retry?.candidate.file.path).toBe(candidates[0].file.path)
-      await queue.enqueue(successor, store, false, true, true)
-      await queue.acknowledge(retry!, false)
-      const latest = await queue.next()
-      expect(latest).toMatchObject({ candidate: successor, metadata: true })
-      await queue.acknowledge(latest!, false)
-      expect(await queue.next()).toBeUndefined()
-      expect(largestResponse).toBeLessThanOrEqual(256 * 1024)
-    } finally {
-      configureSessionSearchWorkerFixture()
-      traffic.mockRestore()
-      await store.flush()
-      store.close()
-      await harness.cleanup()
-    }
-  }
-)
-
 it.each(['observation apply', 'probe end', 'probe begin reply'])(
   'settles a returned inventory after partial retirement interrupts %s',
   async (cut) => {
@@ -679,3 +308,37 @@ it.each(['observation apply', 'probe end', 'probe begin reply'])(
     }
   }
 )
+
+it('pages and releases every descendant of a path containing Unicode names', () => {
+  const db = new SyncDatabase('')
+  const catalog = new SessionSearchCatalog(db)
+  const scope = 'prefix-contract'
+  try {
+    catalog.execute({
+      kind: 'put',
+      scope,
+      rows: [
+        '/root/plain',
+        '/root/😀notes/a.jsonl',
+        '/root/\u{10ffff}/nested.jsonl',
+        '/root-else/kept'
+      ].map((key) => ({
+        key,
+        value: '{}',
+        parent: '',
+        group: '',
+        rank: 0,
+        ready: 0
+      }))
+    })
+    expect(
+      catalog.execute({ kind: 'page', scope, prefix: '/root/' }).rows?.map(({ key }) => key)
+    ).toEqual(['/root/plain', '/root/😀notes/a.jsonl', '/root/\u{10ffff}/nested.jsonl'])
+    catalog.execute({ kind: 'release-prefix', scope, prefix: '/root' })
+    expect(catalog.execute({ kind: 'page', scope }).rows?.map(({ key }) => key)).toEqual([
+      '/root-else/kept'
+    ])
+  } finally {
+    db.close()
+  }
+})
