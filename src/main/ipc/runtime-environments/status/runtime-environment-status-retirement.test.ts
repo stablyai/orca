@@ -124,7 +124,7 @@ it.each([
   ['a caller pinned to the old pairing', async () => await repairMidProbe(2), false]
 ] as const)('never answers %s from the replacement', async (_name, replace, follow) => {
   mocks.request.mockImplementationOnce(async () => {
-    replace()
+    await replace()
     return response()
   })
   mocks.request.mockResolvedValue(response())
