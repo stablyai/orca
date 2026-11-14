@@ -5,14 +5,17 @@ import {
 } from './loading-store/workspace-sessions/session-snapshot-operations'
 import { borrowWorkspaceSession } from './loading-store/workspace-sessions/session-host-partitions'
 import { describe, it, expect, vi } from 'vitest'
-import { getDefaultWorkspaceSession } from '../../shared/constants'
-import { makeSessionWithTerminalBuffers, TEST_LEAF_1 } from './persistence-session-fixtures'
+import { getDefaultPersistedState, getDefaultWorkspaceSession } from '../../shared/constants'
+import { makeSessionWithTerminalBuffers } from './persistence-session-fixtures'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 
 import {
   createWorkerMaintenanceFixture,
   maintenanceBarrier
 } from './loading-store/profile-writing/profile-state-maintenance-fixture'
+import { clearSshRemotePtyBindingsForLeases } from './leasing-ssh-ptys/ssh-pty-binding-cleanup'
+import { scheduleSave } from './loading-store/profile-writing/write-scheduling'
+import type { Store } from './loading-store/store'
 import type { ProfileStateWorkerAuthority } from './profile-state/profile-state-worker-authority'
 vi.mock('../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../telemetry/cohort-classifier', () => ({
@@ -33,6 +36,29 @@ function pauseCommit(authority: ProfileStateWorkerAuthority) {
     await original(write)
   })
   return { started: started.promise, release: finish.resolve }
+}
+
+function clearOwnedBinding(store: Store): void {
+  clearSshRemotePtyBindingsForLeases(
+    {
+      state: {
+        ...getDefaultPersistedState('/synthetic'),
+        workspaceSession: borrowWorkspaceSession(store)
+      },
+      toComparablePtyId: (_target, ptyId) => ptyId,
+      scheduleSave: () => scheduleSave(store, ['workspaceSession'])
+    },
+    'field-test',
+    [
+      {
+        targetId: 'field-test',
+        ptyId: 'local-pty',
+        state: 'terminated',
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ]
+  )
 }
 
 describe('worker persistence avoids synchronous profile filesystem calls', () => {
@@ -111,53 +137,57 @@ describe('worker persistence avoids synchronous profile filesystem calls', () =>
     }
   )
 
-  it('keeps an in-place binding full when its write listener publishes a field patch', async () => {
-    const { store, readState } = await createWorkerMaintenanceFixture()
-    const input = makeSessionWithTerminalBuffers()
-    admitDetachedWorkspaceSessionInput(store, input)
-    setDetachedWorkspaceSession(store, input)
-    await store.flushPendingOrThrowAsync()
-    const stop = store.onWorkspaceSessionWritten(() => {
-      stop()
-      patchDetachedWorkspaceSession(store, { activeTabId: 'listener' })
-    })
-    expect(
-      await store.persistPtyBinding({
-        worktreeId: 'local-repo::/local',
-        tabId: 'local-tab',
-        leafId: TEST_LEAF_1,
-        ptyId: 'replacement',
-        incarnationId: 'replacement-incarnation'
-      })
-    ).toBe(true)
-    const saved = readState().workspaceSession
-    expect(saved.terminalLayoutsByTabId['local-tab'].ptyIdsByLeafId[TEST_LEAF_1]).toBe(
-      'replacement'
-    )
-    expect(saved.activeTabId).toBe('listener')
-  })
+  it.each([false, true])(
+    'persists next-save in-place cleanup with a field publication, reentrant=%s',
+    async (reentrant) => {
+      const { store, readState } = await createWorkerMaintenanceFixture()
+      const input = makeSessionWithTerminalBuffers()
+      admitDetachedWorkspaceSessionInput(store, input)
+      setDetachedWorkspaceSession(store, input)
+      await store.flushPendingOrThrowAsync()
+      if (reentrant) {
+        const stop = store.onWorkspaceSessionWritten(() => {
+          stop()
+          clearOwnedBinding(store)
+        })
+      } else {
+        clearOwnedBinding(store)
+      }
+      patchDetachedWorkspaceSession(store, { activeTabId: 'next' })
+      await store.flushPendingOrThrowAsync()
+      const saved = readState().workspaceSession
+      expect(saved.tabsByWorktree['local-repo::/local'][0].ptyId).toBeNull()
+      expect(saved.terminalLayoutsByTabId['local-tab'].ptyIdsByLeafId).toEqual({})
+      expect(saved.activeTabId).toBe('next')
+    }
+  )
 
-  it('keeps an in-place binding when a failed field save is retried', async () => {
+  it('restores a failed field capture without downgrading newer in-place cleanup', async () => {
     const { store, authority, readState } = await createWorkerMaintenanceFixture()
     const input = makeSessionWithTerminalBuffers()
     admitDetachedWorkspaceSessionInput(store, input)
     setDetachedWorkspaceSession(store, input)
     await store.flushPendingOrThrowAsync()
-    vi.spyOn(authority, 'writePreparedState').mockRejectedValueOnce(new Error('known failure'))
-    patchDetachedWorkspaceSession(store, { activeTabId: 'retry' })
-    await expect(store.flushPendingOrThrowAsync()).rejects.toThrow('known failure')
-    await store.persistPtyBinding({
-      worktreeId: 'local-repo::/local',
-      tabId: 'local-tab',
-      leafId: TEST_LEAF_1,
-      ptyId: 'after-failure',
-      incarnationId: 'after-failure-incarnation'
+    const started = maintenanceBarrier()
+    const reject = maintenanceBarrier()
+    vi.spyOn(authority, 'writePreparedState').mockImplementationOnce(async () => {
+      started.resolve()
+      await reject.promise
+      throw new Error('known failure')
     })
+    patchDetachedWorkspaceSession(store, { activeTabId: 'retry' })
+    const failed = expect(
+      store.flushPendingOrThrowAsync({ drainToStableGeneration: false })
+    ).rejects.toThrow('known failure')
+    await started.promise
+    clearOwnedBinding(store)
+    reject.resolve()
+    await failed
+    await store.flushPendingOrThrowAsync()
     const saved = readState().workspaceSession
     expect(saved.activeTabId).toBe('retry')
-    expect(saved.terminalLayoutsByTabId['local-tab'].ptyIdsByLeafId[TEST_LEAF_1]).toBe(
-      'after-failure'
-    )
+    expect(saved.tabsByWorktree['local-repo::/local'][0].ptyId).toBeNull()
+    expect(saved.terminalLayoutsByTabId['local-tab'].ptyIdsByLeafId).toEqual({})
   })
 
   it('persists an alias retained by a refused layout admission before a detached patch', async () => {

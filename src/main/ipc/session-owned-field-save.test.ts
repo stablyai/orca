@@ -48,11 +48,13 @@ it('keeps renderer field saves after runtime startup, sidebar, crew and agent id
     for (const method of TERMINAL_QUERY_METHODS) {
       if (method.name === 'terminal.agentId') {
         await method.handler(
-          { paneKey: 'field-tab:field-leaf', worktreeId: 'field-repo::/synthetic' },
+          { paneKey: 'tab-local:leaf-local', worktreeId: 'repo-local::/fixture/local' },
           { runtime }
         )
       }
     }
+    await runtime.resolveActiveWorktreeContext()
+    await runtime.listMobileSessionTabs('id:repo-local::/fixture/local')
     await runtime.listTerminals()
     const writes = vi.spyOn(authority, 'writePreparedState')
     structuredClone(get({}))
