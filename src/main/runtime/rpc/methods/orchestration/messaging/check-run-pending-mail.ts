@@ -4,6 +4,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { interruptedAcknowledgedCheck } from '../routing'
 import { checkWorkerMailbox } from './check-worker'
 import { acknowledgedOnlyReceipt, handsOverBatch } from './mailbox-message-receipt'
+import type { CheckMailReconciliation } from './check-mail-reconciliation'
 import { currentDispatchAssigneeRun } from './recipient-routing'
 import { callerHoldsDispatchPane, dispatchFenced } from './dispatch-mailbox-fence'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
@@ -22,6 +23,7 @@ export async function checkRunPendingMail(args: {
   typeFilter: MessageType[] | undefined
   signal: AbortSignal | undefined
   revalidateConsumer: () => void
+  reconciliation: CheckMailReconciliation
   recordMutationReceipt: ((receipt: unknown) => void) | undefined
 }): Promise<{ acknowledged?: string; result?: unknown }> {
   const {
@@ -108,6 +110,7 @@ export async function checkRunPendingMail(args: {
         }
       },
       recordMutationReceipt,
+      reconciliation: args.reconciliation,
       runAcknowledged: acknowledged?.delivery.id,
       acknowledgeOnly: !params.wait
     })

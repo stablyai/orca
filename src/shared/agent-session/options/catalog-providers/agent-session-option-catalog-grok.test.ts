@@ -3,7 +3,7 @@ import { mergeDiscoveredAuthoritativeModels } from '../agent-session-option-cata
 import type { CatalogModel } from './agent-session-option-catalog-types'
 import { GROK_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-grok'
 import { resolveAgentSessionOptionLaunch } from '../launch/agent-session-option-launch'
-import '../../../native-chat/input/native-chat-session-option-commands'
+import '../../../native-chat/input/session-options/native-chat-session-option-commands'
 
 describe('grok agent-arg overrides', () => {
   it('drops only the overridden key from the launch record and argv', () => {

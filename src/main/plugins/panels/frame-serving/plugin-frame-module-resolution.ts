@@ -2,7 +2,7 @@ import { posix } from 'node:path'
 import {
   PLUGIN_MODULE_RESOLVE_EXTENSIONS,
   pluginModuleCandidatePaths
-} from '../../plugin-module-candidate-paths'
+} from '../../source-loading/plugin-module-candidate-paths'
 
 export type PluginModuleSpecifierResolution =
   | { kind: 'keep' }

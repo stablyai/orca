@@ -14,7 +14,7 @@ export type AgentSessionRestartProbeArgs = {
   now: number
 }
 
-type RestartProbe = { record: AgentSessionRecord; probe: AgentSessionOwnerProbe }
+export type AgentSessionRestartProbe = { record: AgentSessionRecord; probe: AgentSessionOwnerProbe }
 
 export async function collectAgentSessionRestartProbes(
   store: {
@@ -22,8 +22,8 @@ export async function collectAgentSessionRestartProbes(
     getRecord: (sessionId: string) => AgentSessionRecord | null
   },
   args: AgentSessionRestartProbeArgs
-): Promise<Map<string, RestartProbe>> {
-  const probes = new Map<string, RestartProbe>()
+): Promise<Map<string, AgentSessionRestartProbe>> {
+  const probes = new Map<string, AgentSessionRestartProbe>()
   const target = args.sessionId === undefined ? null : store.getRecord(args.sessionId)
   const candidates = args.sessionId === undefined ? store.listRecords() : target ? [target] : []
   const records = candidates.filter((record) => record.lease.unreconciled)
@@ -46,7 +46,7 @@ export async function collectAgentSessionRestartProbes(
 
 export function applyAgentSessionRestartProbes(
   state: AgentSessionStoreState,
-  probes: ReadonlyMap<string, RestartProbe>,
+  probes: ReadonlyMap<string, AgentSessionRestartProbe>,
   now: number
 ): Map<string, AgentSessionRecord> {
   const reconciled = new Map<string, AgentSessionRecord>()

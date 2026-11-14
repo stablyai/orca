@@ -8,7 +8,7 @@ import { agentSessionConversationView } from '../../../shared/agent-session/life
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentSessionCloseCause } from '../../native-chat/agent-session-wire/termination/structured-agent-session-host-lifetime'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 
 const hostRef: { current: unknown } = { current: null }
 

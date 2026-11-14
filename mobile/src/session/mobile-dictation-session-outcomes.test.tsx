@@ -4,8 +4,8 @@ import { act } from 'react-test-renderer'
 import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFakeRpcClient, type FakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
-import type * as NativeChatSendError from './native-chat/composer/use-mobile-native-chat-send-error'
-import type * as NativeChatDraftStore from './native-chat/composer/mobile-native-chat-draft-store'
+import type * as NativeChatSendError from './native-chat/composer/delivery/use-mobile-native-chat-send-error'
+import type * as NativeChatDraftStore from './native-chat/composer/drafts/mobile-native-chat-draft-store'
 
 type ChatView = { shown: boolean; scope: string | null }
 
@@ -66,20 +66,23 @@ vi.mock('../platform/clipboard/clipboard', () => {
 })
 
 // Stub off-path native chat dependencies to keep Expo out of this mic test.
-vi.mock('./native-chat/composer/use-mobile-native-chat-send-error', async (importOriginal) => ({
-  ...(await importOriginal<typeof NativeChatSendError>()),
-  useMobileNativeChatSendError: () => ({
-    message: null,
-    show: () => {},
-    clear: () => {},
-    keepWhile: () => {},
-    bannerMountedRef: { current: false }
+vi.mock(
+  './native-chat/composer/delivery/use-mobile-native-chat-send-error',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof NativeChatSendError>()),
+    useMobileNativeChatSendError: () => ({
+      message: null,
+      show: () => {},
+      clear: () => {},
+      keepWhile: () => {},
+      bannerMountedRef: { current: false }
+    })
   })
-}))
-vi.mock('./native-chat/transcript/use-mobile-native-chat-readability', () => ({
+)
+vi.mock('./native-chat/transcript/viewport/use-mobile-native-chat-readability', () => ({
   useMobileNativeChatReadability: () => false
 }))
-vi.mock('./native-chat/composer/use-mobile-native-chat-input-lease', () => ({
+vi.mock('./native-chat/composer/field/use-mobile-native-chat-input-lease', () => ({
   useMobileNativeChatInputLease: () => ({
     ready: true,
     readyRef: { current: true },
@@ -100,7 +103,7 @@ vi.mock('./native-chat/use-mobile-native-chat-controller', () => ({
     }
   })
 }))
-vi.mock('./native-chat/composer/mobile-native-chat-draft-store', async (importOriginal) => ({
+vi.mock('./native-chat/composer/drafts/mobile-native-chat-draft-store', async (importOriginal) => ({
   ...(await importOriginal<typeof NativeChatDraftStore>()),
   editMobileNativeChatDraft: (scope: string, update: (current: string) => string) => {
     seen.chatWrites.push([scope, update('')])

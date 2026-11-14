@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ORCHESTRATION_HANDLERS } from '../orchestration-handlers'
 import { RuntimeClient } from '../../runtime/client'
-import { RuntimeClientError } from '../../runtime/types'
+import { RuntimeClientError } from '../../runtime/connection/types'
 import { okFixture } from '../../runtime/fixtures/runtime-rpc-fixtures'
 
 const client = new RuntimeClient('/tmp/orca-older-runtime-run', 60_000, null, null)

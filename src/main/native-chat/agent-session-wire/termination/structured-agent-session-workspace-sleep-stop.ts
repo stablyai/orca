@@ -1,4 +1,3 @@
-import { recordAgentSessionAcquisitionExit } from '../../../runtime/agent-session/agent-session-acquisition-exit-transition'
 import {
   agentSessionLeaseIsReleased,
   agentSessionLeaseOwnerVerdict
@@ -39,21 +38,24 @@ export async function stopWorkspaceSleepChat(input: {
       const receipt = deps.adapter.stoppedAcquisition?.(sessionId)
       if (ownedStopped && receipt) {
         try {
-          await deps.store.transitionHandoff(sessionId, (record) => {
-            if (
-              deps.adapter.stoppedAcquisition?.(sessionId) !== receipt ||
-              sessions.get(sessionId)?.child
-            ) {
-              throw new Error('agent_session_ownership_unknown')
-            }
-            return recordAgentSessionAcquisitionExit(
-              record,
+          await deps.store.updateRecord(
+            sessionId,
+            {
+              kind: 'acquisition-exit',
               receipt,
-              input.fence,
-              input.now(),
-              stopped === 'kill-delivered' ? stopped : undefined
-            )
-          })
+              fence: input.fence,
+              now: input.now(),
+              deathEvidenceKind: stopped === 'kill-delivered' ? stopped : undefined
+            },
+            () => {
+              if (
+                deps.adapter.stoppedAcquisition?.(sessionId) !== receipt ||
+                sessions.get(sessionId)?.child
+              ) {
+                throw new Error('agent_session_ownership_unknown')
+              }
+            }
+          )
           deps.adapter.acknowledgeSessionRelease?.(sessionId, receipt)
         } catch (error) {
           deps.logger.warn('saving failed acquisition exit evidence failed', {

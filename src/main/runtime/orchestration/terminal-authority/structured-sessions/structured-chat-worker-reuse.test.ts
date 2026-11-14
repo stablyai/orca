@@ -1,3 +1,5 @@
+import { queuedCardTexts } from './structured-chat-coordinator-journal.test-fixture'
+import { readTestHostJournal } from '../../../../native-chat/agent-session-journal/journal-observation.test-support'
 // A finished structured worker takes follow-up work in its own chat through worker-start --terminal <handle>, or a send to its Dispatch.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -15,7 +17,6 @@ import {
   host,
   isWholeMail,
   openChat,
-  queuedCardTexts,
   request,
   runtime,
   sendUserMessage,
@@ -286,7 +287,7 @@ describe('a send to a finished structured worker', () => {
     expect(host.isSessionTabVisible(identity.sessionId)).toBe(true)
     // The coordinator's chat shows the reopen, never a newly started worker.
     await vi.waitFor(async () => {
-      const cards = (await host.journalSnapshot(COORDINATOR)).items.flatMap(({ body }) =>
+      const cards = (await readTestHostJournal(host, COORDINATOR)).items.flatMap(({ body }) =>
         body?.kind === 'agent-start' ? [body] : []
       )
       expect(cards).toEqual([

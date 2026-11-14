@@ -18,7 +18,7 @@ import {
   getRepeatedStringFlag,
   getRequiredStringFlag
 } from '../arguments/flags'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 const LINEAR_PRIORITY_VALUES = new Map([
   ['none', 0],

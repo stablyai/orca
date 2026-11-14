@@ -160,7 +160,6 @@ describe('ChecksList expanded check details', () => {
     expect(container.textContent).not.toContain('stale request failed')
   })
 
-  // No retry button exists; state changes must rearm transient GitLab trace failures.
   it('retries a failed detail load once the check state moves on', async () => {
     const runningCheck: PRCheckDetail = {
       name: 'test: unit',

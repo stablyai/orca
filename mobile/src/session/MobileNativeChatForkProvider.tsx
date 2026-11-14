@@ -2,14 +2,14 @@ import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type { StructuredAgentSessionForkSource } from '../../../src/shared/agent-session/structured-agent-session-create'
-import { MobileNativeChatForkedFromContext } from './native-chat/transcript/mobile-native-chat-notice-context'
+import { MobileNativeChatForkedFromContext } from './native-chat/transcript/notices/mobile-native-chat-notice-context'
 import { forkMobileStructuredChat } from './mobile-structured-chat-fork'
 import {
   forkMobileStructuredChatIntoWorktree,
   mobileSubagentForkAvailable,
   type MobileWorktreeForkMode
 } from './mobile-structured-chat-worktree-fork'
-import { useMobileWorktreeForkRequest } from './native-chat/mobile-native-chat-worktree-fork-requests'
+import { useMobileWorktreeForkRequest } from './native-chat/history/mobile-native-chat-worktree-fork-requests'
 import { useNewWorktreeRuntimeCapabilities } from '../new-workspace/creation/worktree-create-capability'
 import { hostNewWorktreeSessionRoute } from '../host-new-worktree-session-route'
 import {
@@ -20,8 +20,8 @@ import { translate } from '../i18n/mobile-i18n'
 import {
   MobileNativeChatForkContext,
   useMobileNativeChatFork
-} from './native-chat/use-mobile-native-chat-fork'
-import { resolveMobileNativeChatSessionId } from './native-chat/mobile-native-chat-eligibility'
+} from './native-chat/history/use-mobile-native-chat-fork'
+import { resolveMobileNativeChatSessionId } from './native-chat/conversation/mobile-native-chat-eligibility'
 import { useMobileChatForkSheet } from './chat-fork/use-mobile-chat-fork-sheet'
 import type { MobileSessionController } from './use-mobile-session-controller'
 

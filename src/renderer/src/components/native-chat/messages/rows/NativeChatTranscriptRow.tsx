@@ -7,7 +7,7 @@ import { NativeChatWorkingStatus } from '../../conversation/turns/NativeChatWork
 import { NativeChatTurnDiffRollup } from '../../tools/diffs/NativeChatTurnDiffRollup'
 import { NativeChatOpenedPullRequestCard } from '../../tools/pull-requests/NativeChatOpenedPullRequestCard'
 import { NativeChatSubagentHead } from '../../subagents/NativeChatSubagentHead'
-import type { NativeChatTaskListPredecessors } from '../../../../../../shared/native-chat/input/native-chat-task-list-history'
+import type { NativeChatTaskListPredecessors } from '../../../../../../shared/native-chat/input/task-lists/native-chat-task-list-history'
 import type { NativeChatTranscriptSlot } from '../../conversation/slots/native-chat-transcript-slots'
 import type { NativeChatTimedRow } from '../../conversation/slots/native-chat-timed-rows'
 import type {

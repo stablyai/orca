@@ -23,6 +23,8 @@ import type { WorkspaceSleepPlatform } from '../workspaces/sleep/workspace-sleep
 import type { SessionSearchSettingsApply } from '../integrations/ai-vault/runtime-session-search-settings'
 
 export type RuntimeConstructionDependencies = {
+  /** A host that opened the saved-chat store before construction passes the ids it used. */
+  legacyStructuredSessionTabIds?: readonly string[]
   getSetupTerminalTitle?: () => string
   getLocalProvider?: () => IPtyProvider
   prepareClaudeAuth?: PrepareClaudeAuth

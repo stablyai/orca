@@ -1,3 +1,4 @@
+import type { AgentSessionSubscribers } from '../publication/subscribers/structured-agent-session-subscribers'
 import type { AttachFlowInput } from './structured-agent-session-attach-flow'
 import type { AgentSessionCreatePhaseRecorder } from '../../../observability/agent-session-instrumentation'
 import type { StructuredAgentSessionAttachLock } from './structured-agent-session-attach-lock'
@@ -8,7 +9,7 @@ import type { StructuredAgentSessionAttachLock } from './structured-agent-sessio
 
 import type { AgentSessionTurnActivity } from '../../../../shared/agent-session/agent-session-wire'
 import type { AgentSessionWireRefusal } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession,
@@ -18,12 +19,14 @@ import type { StructuredAgentSessionHostRuntimeState } from '../host/structured-
 import type { StructuredAgentSessionLifetimeContext } from '../termination/structured-agent-session-host-lifetime'
 import type { StructuredAgentSessionTaskQueue } from '../host/structured-agent-session-task-queue'
 import type { StructuredAgentSessionConversationOpenOptions } from '../host/structured-agent-session-conversation-open'
+import type { StructuredAgentSessionConversations } from '../host/structured-agent-session-conversations'
 
 export type StructuredAgentSessionAttachContext = {
   deps: StructuredAgentSessionHostDeps
   runtimeState: StructuredAgentSessionHostRuntimeState
-  sessions: Map<string, StructuredAgentSessionHostSession>
-  subscribers: {
+  sessions: Map<string, StructuredAgentSessionHostSession> &
+    Pick<StructuredAgentSessionConversations, 'observeSettledTurns' | 'snapshotSource'>
+  subscribers: Pick<AgentSessionSubscribers, 'publishLiveText'> & {
     snapshot: (sessionId: string, journal: AgentSessionJournal, fence: number) => void
     publish: (
       sessionId: string,

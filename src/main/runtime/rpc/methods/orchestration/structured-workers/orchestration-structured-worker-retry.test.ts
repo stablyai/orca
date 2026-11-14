@@ -1,9 +1,11 @@
+import { readTestHostJournal } from '../../../../../native-chat/agent-session-journal/journal-observation.test-support'
+import '../../../dispatch/testing/unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   createRestTestRig,
   type RestTestRig
-} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
-import { HOST_TEST_NOW } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
+import { HOST_TEST_NOW } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { CodexAppServerRequestError } from '../../../../../codex/app-server/codex-app-server-request-error'
 import { codexStartFailure } from '../../../../../codex/app-server/codex-startup-outcome'
@@ -128,13 +130,13 @@ it('starts only for its agent-sourced preamble and observes it after a transient
   const { created, deliverPreamble } = await createWorker()
   const sessionId = created.identity.sessionId
   expect(rig.adapter.acquire).not.toHaveBeenCalled()
-  expect((await rig.host.journalSnapshot(sessionId)).submissions).toEqual([])
+  expect((await readTestHostJournal(rig.host, sessionId)).submissions).toEqual([])
   vi.spyOn(rig.host.deps.adapter, 'open').mockRejectedValueOnce(overloaded())
   const result = await deliverPreamble()
   expect(result.structuredTurnStart).toEqual({ verdict: 'observed' })
   expect(rig.adapter.acquire).toHaveBeenCalledTimes(2)
   expect(rig.adapter.dispatch).toHaveBeenCalledOnce()
-  const snapshot = await rig.host.journalSnapshot(sessionId)
+  const snapshot = await readTestHostJournal(rig.host, sessionId)
   expect(snapshot.submissions).toMatchObject([
     {
       dispatchState: 'accepted',
@@ -164,7 +166,7 @@ it('retains a refused first task and worker identity while stopping the failed p
   expect(error).toMatchObject({ code: 'dispatch_preamble_undelivered' })
   expect(rig.adapter.acquire).toHaveBeenCalledTimes(5)
   expect(rig.adapter.dispatch).not.toHaveBeenCalled()
-  const snapshot = await rig.host.journalSnapshot(sessionId)
+  const snapshot = await readTestHostJournal(rig.host, sessionId)
   expect(snapshot.submissions).toHaveLength(1)
   expect(snapshot.submissions).toMatchObject([
     { dispatchState: 'rejected', source: { kind: 'agent' } }
@@ -180,7 +182,7 @@ it('retains a refused first task and worker identity while stopping the failed p
   expect(rig.store.listVisibleSessionIds()).toContain(sessionId)
   expect(workerRuntime.forgetStructuredSessionMail).not.toHaveBeenCalled()
   expect(workerRuntime.retireStructuredAgentSessionTabFromSnapshot).not.toHaveBeenCalled()
-  expect((await rig.host.journalSnapshot(sessionId)).submissions).toMatchObject([
+  expect((await readTestHostJournal(rig.host, sessionId)).submissions).toMatchObject([
     { dispatchState: 'rejected', source: { kind: 'agent' } }
   ])
 })

@@ -17,7 +17,7 @@ import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSessionController } from './use-mobile-session-controller'
-import { mobileWorktreeForkAction } from './native-chat/mobile-native-chat-worktree-fork-action'
+import { mobileWorktreeForkAction } from './native-chat/history/mobile-native-chat-worktree-fork-action'
 
 type Props = {
   controller: MobileSessionController

@@ -1,9 +1,9 @@
 import { ActionSheetModal } from '../../components/ActionSheetModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { getMobileNativeChatCliForkActions } from '../native-chat/mobile-native-chat-cli-fork'
+import { getMobileNativeChatCliForkActions } from '../native-chat/history/mobile-native-chat-cli-fork'
 import { useMobileAllowAutoCloseActions, workerSubjectOf } from './mobile-worker-auto-close'
 import type { MobileSessionController } from '../use-mobile-session-controller'
-import { mobileWorktreeForkAction } from '../native-chat/mobile-native-chat-worktree-fork-action'
+import { mobileWorktreeForkAction } from '../native-chat/history/mobile-native-chat-worktree-fork-action'
 
 /** The long-pressed chat tab's actions: continue in a CLI, Allow Auto-Close on a kept worker, close. */
 export function MobileAgentSessionTabActionSheet({

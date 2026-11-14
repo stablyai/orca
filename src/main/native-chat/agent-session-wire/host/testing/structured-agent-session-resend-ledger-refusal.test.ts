@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 
-import { openTestJournalHostDatabase } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { withTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { StructuredAgentSessionAdapter } from '../../providers/structured-agent-session-adapter'
 import type { StructuredAgentSessionHost } from '../structured-agent-session-host'
 import {
@@ -8,8 +8,8 @@ import {
   CALLER,
   envelope,
   hostTestState
-} from './structured-agent-session-host-test-harness'
-import { hostTestMessage } from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host.test-fixture'
+import { hostTestMessage } from './structured-agent-session-host-test-data.test-fixture'
 
 let root: string
 let host: StructuredAgentSessionHost
@@ -39,8 +39,9 @@ describe('send without ledger policy', () => {
     const params = sendParams('receipt survives the ledger')
     await host.send(CALLER, params)
     await vi.waitFor(() => expect(dispatch).toHaveBeenCalledTimes(1))
-    const db = openTestJournalHostDatabase(root).db
-    db.prepare('DELETE FROM agent_session_operations').run()
+    await withTestAgentSessionDatabase(root, (db) =>
+      db.prepare('DELETE FROM agent_session_operations').run()
+    )
     await expect(host.send(CALLER, params)).resolves.toMatchObject({ ok: true, replayed: true })
     expect(dispatch).toHaveBeenCalledTimes(1)
   })

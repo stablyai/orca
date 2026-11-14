@@ -3,7 +3,7 @@ import type { ProjectHostSetup } from '../../shared/project-types'
 import { hostFilterMatchesHostId, resolveHostFlagTarget } from '../hosts/execution-host-flag'
 import { findProjectSetups, setupHostId } from '../projects/project-selector'
 import type { RuntimeClient } from '../runtime/client'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { getPresentStringFlag } from '../arguments/flags'
 import { getFolderWorkspaceMissingRepoError } from '../workspace-selection/caller-folder-workspace'
 

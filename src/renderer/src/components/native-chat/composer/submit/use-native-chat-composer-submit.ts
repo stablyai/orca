@@ -3,7 +3,7 @@ import { serializeNativeChatAgentReferences } from '../pickers/native-chat-agent
 import { mayHoldAgentReferences } from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import { useCallback, useMemo, useState, type RefObject } from 'react'
 import { translate } from '@/i18n/i18n'
-import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/native-chat-picker-items'
+import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
 import type { NativeChatComposerSendIntent } from './native-chat-composer-send-intent'
 import type { NativeChatStructuredComposerTransport } from './native-chat-structured-composer-transport'
 import type { NativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'

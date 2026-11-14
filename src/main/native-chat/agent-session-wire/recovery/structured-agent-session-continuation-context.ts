@@ -1,7 +1,6 @@
 import { projectSavedChatContextItems } from '../../conversation-context/agent-session-saved-prompt-text'
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionContinuationContext } from '../../../../shared/agent-session/agent-session-wire'
-import { agentSessionCurrentContextRows } from '../../../../shared/agent-session/agent-session-context-clear'
 import { buildAgentSessionHandoffContext } from '../../../../shared/agent-session-handoff-context'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { projectStructuredAgentSessionMessages } from '../../../../shared/agent-session/view/structured-agent-session-message-projection'
@@ -33,16 +32,15 @@ export function continuationContextReader(
       return { status: 'superseded' }
     }
     const session = await conversation(input.sessionId)
+    const context = await session.journal.reads.continuationContext()
     const record = sourceConversation()
-    const snapshot = session.journal.snapshot()
     if (
       !record ||
-      snapshot.cursor.epoch !== input.expectedCursor.epoch ||
-      snapshot.cursor.sequence < input.expectedCursor.sequence
+      context.cursor.epoch !== input.expectedCursor.epoch ||
+      context.cursor.sequence < input.expectedCursor.sequence
     ) {
       return { status: 'superseded' }
     }
-    const context = agentSessionCurrentContextRows(snapshot.items, snapshot.submissions)
     const messages = projectStructuredAgentSessionMessages(
       context.items,
       [],

@@ -4,7 +4,7 @@ import {
   getAgentSlashCommands,
   type NativeChatCommandReply,
   type SlashCommandSuggestion
-} from './input/native-chat-slash-commands'
+} from './input/commands/native-chat-slash-commands'
 
 export type NativeChatAgentProfile = {
   skillPrefix: '$' | '/'

@@ -15,7 +15,7 @@ vi.mock('../runtime/client', async (importOriginal) => ({
 
 import { main } from '../index'
 import type * as RuntimeClientExports from '../runtime/client'
-import { RuntimeRpcFailureError } from '../runtime/types'
+import { RuntimeRpcFailureError } from '../runtime/connection/types'
 import { okFixture, queueFixtures } from '../runtime/fixtures/runtime-rpc-fixtures'
 
 describe('orca computer wait', () => {
