@@ -56,9 +56,15 @@ export function buildRuntimeMobileAgentStatus(
     return {}
   }
   const providerSession = hookRow.providerSession
-    ? { providerSession: hookRow.providerSession }
+    ? {
+        providerSession: hookRow.providerSession,
+        ...(hookRow.orcaSessionId !== undefined ? { orcaSessionId: hookRow.orcaSessionId } : {})
+      }
     : retained?.providerSession
-      ? { providerSession: retained.providerSession }
+      ? {
+          providerSession: retained.providerSession,
+          ...(retained.orcaSessionId !== undefined ? { orcaSessionId: retained.orcaSessionId } : {})
+        }
       : {}
   const leaf = host.getLeaf(tab)
   const trackerOnlyTitle = host.getTrackedTitle(pty?.ptyId ?? leaf?.ptyId ?? null)

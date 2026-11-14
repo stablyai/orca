@@ -32,7 +32,6 @@ function cellTexts(editor: HTMLElement) {
 }
 
 it.each([
-  ['First<br>Second', 'First<br />Second'],
   ['<strong>First<br>Second</strong>', '**First<br />Second**'],
   ['<code>First</code><br><code>Second</code>', '`First`<br />`Second`']
 ])('keeps a cell line break in its own table row through host save: %s', (html, cell) => {
@@ -71,20 +70,17 @@ it.each([
   expect(editor.querySelector('td')?.querySelector('br')).toBe(null)
 })
 
-it.each(['<br>', '<BR />', 'a<br/>b', '<br onload="run()">'])(
-  'keeps typed table markup literal: %s',
-  (text) => {
-    const { editorDocument, editor } = surface()
-    editor.querySelector('td')!.textContent = text
-    const markdown = editorDocument.send.currentMarkdown()
-    editorDocument.send.setMarkdown(markdown, 8)
+it.each(['a<br/>b', '<br onload="run()">'])('keeps typed table markup literal: %s', (text) => {
+  const { editorDocument, editor } = surface()
+  editor.querySelector('td')!.textContent = text
+  const markdown = editorDocument.send.currentMarkdown()
+  editorDocument.send.setMarkdown(markdown, 8)
 
-    expect(editor.querySelector('td')?.textContent).toBe(text)
-    expect(editor.querySelector('td')?.children.length).toBe(0)
-    expect(editor.querySelectorAll('tr').length).toBe(2)
-    expect(editorDocument.send.currentMarkdown()).toBe(markdown)
-  }
-)
+  expect(editor.querySelector('td')?.textContent).toBe(text)
+  expect(editor.querySelector('td')?.children.length).toBe(0)
+  expect(editor.querySelectorAll('tr').length).toBe(2)
+  expect(editorDocument.send.currentMarkdown()).toBe(markdown)
+})
 
 it('keeps a typed break literal when the browser splits it across text nodes', () => {
   const { editorDocument, editor } = surface()

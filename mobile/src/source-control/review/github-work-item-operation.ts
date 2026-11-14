@@ -1,12 +1,12 @@
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { SendRequestOptions } from '../../transport/rpc/unvalidated-rpc-request-port'
-import type { GitHubOwnerRepo } from '../../../../src/shared/github/pull-request-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../src/shared/github/repositories/repository-identity'
 import { hasReachedAppVersion } from '../../../../src/shared/app-version'
 import {
   GITHUB_EXACT_OPERATION_UNSUPPORTED,
   matchesGitHubWorkItemTarget,
   type GitHubWorkItemTarget
-} from '../../../../src/shared/github/work-item-target'
+} from '../../../../src/shared/github/work-items/work-item-target'
 import {
   captureGitHubInvocation,
   GITHUB_DESKTOP_UPDATE_REQUIRED,

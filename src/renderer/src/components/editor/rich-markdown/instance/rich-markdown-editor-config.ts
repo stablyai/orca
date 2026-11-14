@@ -24,6 +24,7 @@ import {
   handleRichMarkdownEditorClick,
   type ActivateMarkdownLink
 } from '../links/rich-markdown-editor-click-routing'
+import { createRichMarkdownLinkDomEventHandlers } from '../links/rich-markdown-link-dom-events'
 import { createRichMarkdownKeyHandler } from '../commands/rich-markdown-key-handler'
 import { captureViewEditGeneration } from '../../save/flush/editor-stale-view-edit'
 import {
@@ -36,10 +37,7 @@ import type { MutableRefObject, Dispatch, SetStateAction } from 'react'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
 import type { RichMarkdownEditorCodec } from '../document/rich-markdown-source-transport'
 import type { RichMarkdownHtmlSuperscriptLinkContext } from '../citations/rich-markdown-html-superscript-link-context'
-import {
-  getRichMarkdownSelectionLinkBubble,
-  openSelectedHtmlSuperscriptLink
-} from '../links/rich-markdown-selected-link-actions'
+import { openSelectedHtmlSuperscriptLink } from '../links/rich-markdown-selected-link-actions'
 
 export type EditorConfigParams = {
   codec: RichMarkdownEditorCodec
@@ -136,26 +134,39 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
     setDocLinkMenu
   } = params
 
-  const handleClick = (view: EditorView, pos: number, event: MouseEvent): boolean => {
-    return handleRichMarkdownEditorClick({
-      activateMarkdownLink,
-      editorRef,
-      event,
-      filePath,
-      htmlSuperscriptLinkContext,
-      isMac,
-      markdownCommentsRef,
-      markdownSourceLineOffsetRef,
-      onOpenDocLinkRef,
-      pos,
-      rootRef,
-      runtimeEnvironmentId,
-      scrollRichMarkdownReviewNoteCardIntoView,
-      view,
-      worktreeId,
-      worktreeRoot
-    })
-  }
+  const linkDomEvents = createRichMarkdownLinkDomEventHandlers({
+    filePath,
+    htmlSuperscriptLinkContext,
+    isMac,
+    worktreeId,
+    worktreeRoot,
+    onDismissLinkBubble: () => {
+      setIsEditingLink(false)
+      setLinkBubble(null)
+    },
+    handleClick: (view: EditorView, pos: number, event: MouseEvent) => {
+      setIsEditingLink(false)
+      setLinkBubble(null)
+      return handleRichMarkdownEditorClick({
+        activateMarkdownLink,
+        editorRef,
+        event,
+        filePath,
+        htmlSuperscriptLinkContext,
+        isMac,
+        markdownCommentsRef,
+        markdownSourceLineOffsetRef,
+        onOpenDocLinkRef,
+        pos,
+        rootRef,
+        runtimeEnvironmentId,
+        scrollRichMarkdownReviewNoteCardIntoView,
+        view,
+        worktreeId,
+        worktreeRoot
+      })
+    }
+  })
 
   return {
     immediatelyRender: false,
@@ -178,23 +189,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
             runtimeEnvironmentId,
             view
           }),
-        // ProseMirror skips handleClick for Shift gestures to extend the selection.
-        click: (view, event) => {
-          if (
-            event.defaultPrevented ||
-            event.button !== 0 ||
-            !event.shiftKey ||
-            !(isMac ? event.metaKey : event.ctrlKey)
-          ) {
-            return false
-          }
-          const position = view.posAtCoords({ left: event.clientX, top: event.clientY })
-          if (!position || !handleClick(view, position.pos, event)) {
-            return false
-          }
-          event.preventDefault()
-          return true
-        }
+        ...linkDomEvents.domEvents
       },
       handlePaste: (view, event, slice) =>
         handleRichMarkdownPaste({
@@ -229,7 +224,7 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
           })
       }),
       // Shift clicks route only through the DOM handler, including modifier changes during a click.
-      handleClick: (view, pos, event) => !event.shiftKey && handleClick(view, pos, event)
+      handleClick: linkDomEvents.handleProseMirrorClick
     },
     onFocus: () => {
       window.api.ui.setMarkdownEditorFocused(true)
@@ -285,10 +280,10 @@ export function createRichMarkdownEditorConfig(params: EditorConfigParams): UseE
       syncSlashMenu(nextEditor, rootRef.current, setSlashMenu)
       syncDocLinkMenu(nextEditor, rootRef.current, setDocLinkMenu)
       syncAnnotationTarget(nextEditor)
-      setIsEditingLink(false)
-      setLinkBubble(
-        getRichMarkdownSelectionLinkBubble(nextEditor, rootRef.current, htmlSuperscriptLinkContext)
-      )
+      if (params.isEditingLinkRef.current) {
+        setIsEditingLink(false)
+        setLinkBubble(null)
+      }
     }
   }
 }

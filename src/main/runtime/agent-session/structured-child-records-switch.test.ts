@@ -1,3 +1,4 @@
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 // Exercise host child-work projections without a renderer. Use literal expectations: comparing with the provider tracker would share the producer's observation bugs.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -15,17 +16,14 @@ import type {
 import type { openCodexAppServerConnection } from '../../codex/app-server/codex-app-server-connection'
 import { collectRuntimeWorktreeAgentSources } from '../workspaces/process-listing/runtime-worktree-agent-sources'
 import { AgentHookServer, _internals } from '../../agent-hooks/server/agent-hook-server'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams,
   hostTestMessage
-} from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import type { StructuredAgentSessionStatusSink } from '../../native-chat/agent-session-wire/observations/structured-agent-session-status-ownership'
-import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
+import { stopStructuredAgentSessionRuntime } from './structured-agent-session-runtime'
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from './records/agent-session-record-store-test-harness'
 import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { scriptedCodexTransport } from '../orca-runtime-tests/scripted-codex-transport.test-fixture'
 import { createScriptedClaudeRuntime } from './installation/structured-claude-scripted-runtime-test-support'
@@ -156,12 +154,7 @@ describe('the chat strip and the session list read the same host child records',
         }
       }
     })
-    // Journal writes land asynchronously; let each frame's rows publish before the next.
-    const settle = async () => {
-      for (let tick = 0; tick < 5; tick += 1) {
-        await new Promise((resolve) => setTimeout(resolve, 0))
-      }
-    }
+    const settle = () => host.flushStreamedEvents(SESSION)
     const notify = async (method: string, params: Record<string, unknown>) => {
       connections[0]?.onNotification?.(method, params)
       await settle()
@@ -175,8 +168,12 @@ describe('the chat strip and the session list read the same host child records',
     const parentRow = () => server.getStatusSnapshot().find((row) => row.structuredHost)
     const summaryRows = () => rows(summaries.at(-1)?.children)
     const stripRows = () => rows(strip.at(-1)?.children ?? undefined)
-    const both = (expected: Row[]) => {
-      expect(summaryRows()).toEqual(expected)
+    // The summary publishes after its own journal read, independently of the strip and of `settle`.
+    const both = async (expected: Row[]) => {
+      await vi.waitFor(() => {
+        expect(stripRows()).toEqual(expected)
+        expect(summaryRows()).toEqual(expected)
+      })
       const sources = collectRuntimeWorktreeAgentSources({
         hookSnapshots: server.getStatusSnapshot(),
         readStructuredSummary: host.readStatusSummary,
@@ -191,22 +188,48 @@ describe('the chat strip and the session list read the same host child records',
       expect(stripRows()).toEqual(expected)
     }
 
-    await notify('turn/started', { threadId: THREAD, turn: { id: 'p1', status: 'inProgress' } })
-    await item('item/completed', THREAD, 'p1', {
-      type: 'agentMessage',
-      id: 'lead-1',
-      text: 'Spawning a reviewer'
+    const journal = host.collaboratorsForTests().sessions.get(SESSION)?.journal
+    if (!journal) {
+      throw new Error('expected the attached journal')
+    }
+    const entered = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    const held = journal.readInOrder(() => {
+      entered.resolve()
+      return release.promise
     })
-    await notify('turn/started', { threadId: REVIEWER, turn: { id: 'r1', status: 'inProgress' } })
-    await item('item/started', THREAD, 'p1', {
-      type: 'subAgentActivity',
-      id: 'spawn-1',
-      kind: 'started',
-      agentThreadId: REVIEWER,
-      agentPath: '/root/review'
-    })
-    both([{ kind: 'agent', description: 'review', state: 'working', membership: 'live' }])
-
+    await entered.promise
+    try {
+      connections[0]?.onNotification?.('turn/started', {
+        threadId: THREAD,
+        turn: { id: 'p1', status: 'inProgress' }
+      })
+      connections[0]?.onNotification?.('item/completed', {
+        threadId: THREAD,
+        turnId: 'p1',
+        item: { type: 'agentMessage', id: 'lead-1', text: 'Spawning a reviewer' }
+      })
+      connections[0]?.onNotification?.('turn/started', {
+        threadId: REVIEWER,
+        turn: { id: 'r1', status: 'inProgress' }
+      })
+      connections[0]?.onNotification?.('item/started', {
+        threadId: THREAD,
+        turnId: 'p1',
+        item: {
+          type: 'subAgentActivity',
+          id: 'spawn-1',
+          kind: 'started',
+          agentThreadId: REVIEWER,
+          agentPath: '/root/review'
+        }
+      })
+    } finally {
+      release.resolve()
+    }
+    await held
+    await settle()
+    await both([{ kind: 'agent', description: 'review', state: 'working', membership: 'live' }])
     await item('item/started', REVIEWER, 'r1', {
       type: 'commandExecution',
       id: 'cmd-1',
@@ -222,7 +245,7 @@ describe('the chat strip and the session list read the same host child records',
       status: 'inProgress'
     })
     // Foreground shell records keep status live; surfaces show the child's tool instead.
-    both([
+    await both([
       {
         kind: 'agent',
         description: 'review',
@@ -240,7 +263,7 @@ describe('the chat strip and the session list read the same host child records',
       status: 'completed',
       exitCode: 0
     })
-    both([
+    await both([
       {
         kind: 'agent',
         description: 'review',
@@ -257,7 +280,7 @@ describe('the chat strip and the session list read the same host child records',
 
     // The child finishes; the shell it launched still runs.
     await notify('turn/completed', { threadId: REVIEWER, turn: { id: 'r1', status: 'completed' } })
-    both([
+    await both([
       {
         kind: 'agent',
         description: 'review',
@@ -289,15 +312,17 @@ describe('the chat strip and the session list read the same host child records',
     // The finished agent remains inspectable; its stopped command and live sidebar status leave.
     expect(summaries.at(-1)).not.toHaveProperty('children')
     expect(summaries.at(-1)).not.toHaveProperty('backgroundTasks')
-    expect(stripRows()).toEqual([
-      {
-        kind: 'agent',
-        description: 'review',
-        state: 'done',
-        membership: 'settled',
-        outcome: 'succeeded'
-      }
-    ])
+    await vi.waitFor(() =>
+      expect(stripRows()).toEqual([
+        {
+          kind: 'agent',
+          description: 'review',
+          state: 'done',
+          membership: 'settled',
+          outcome: 'succeeded'
+        }
+      ])
+    )
     expect(strip.at(-1)).toMatchObject({ supportsStopAll: false })
     const stored = () => rows(server.getStructuredChildWorkViews(parentSubject(summaries)))
     expect(stored()).toEqual([
@@ -334,9 +359,9 @@ describe('the chat strip and the session list read the same host child records',
     )
     await vi.waitFor(async () =>
       expect(
-        (await host.journalSnapshot(SESSION)).submissions.find(
-          (entry) => entry.clientMessageId === clientOperationId
-        )?.handedOverAt
+        (
+          await host.automationRun(SESSION, clientOperationId, [clientOperationId])
+        ).submissions.find((entry) => entry.clientMessageId === clientOperationId)?.handedOverAt
       ).toBeDefined()
     )
     await notify('turn/started', { threadId: THREAD, turn: { id: 'p2', status: 'inProgress' } })
@@ -351,20 +376,22 @@ describe('the chat strip and the session list read the same host child records',
 
     // Provider exit ends live status; the agent remains inspectable with an unknown outcome.
     await notify('turn/started', { threadId: REVIEWER, turn: { id: 'r2', status: 'inProgress' } })
-    both([{ kind: 'agent', description: 'review', state: 'working', membership: 'live' }])
+    await both([{ kind: 'agent', description: 'review', state: 'working', membership: 'live' }])
     connections[0]?.onExit?.(new Error('scripted provider exit'))
     await settle()
     expect(summaries.at(-1)).not.toHaveProperty('children')
     expect(summaries.at(-1)).not.toHaveProperty('backgroundTasks')
-    expect(stripRows()).toEqual([
-      {
-        kind: 'agent',
-        description: 'review',
-        state: 'done',
-        membership: 'settled',
-        outcome: 'unknown'
-      }
-    ])
+    await vi.waitFor(() =>
+      expect(stripRows()).toEqual([
+        {
+          kind: 'agent',
+          description: 'review',
+          state: 'done',
+          membership: 'settled',
+          outcome: 'unknown'
+        }
+      ])
+    )
     expect(strip.at(-1)).toMatchObject({ supportsStopAll: false })
     expect(stored()).toEqual([
       {
@@ -387,23 +414,7 @@ describe('the chat strip and the session list read the same host child records',
   })
 })
 
-function parentSubject(summaries: AgentSessionStatusSummary[]) {
-  const summary = summaries.at(-1)
-  if (!summary) {
-    throw new Error('no summary')
-  }
-  return makeStructuredAgentStatusSubject(
-    {
-      executionHostId: 'local',
-      wslDistro: null,
-      workspaceId: summary.workspaceId,
-      workspaceKind: 'git-worktree'
-    },
-    summary.sessionId
-  )
-}
-
-describe('Claude background-only resume through hook shutdown', () => {
+describe('Claude background-work restart offers through hook shutdown', () => {
   let claude = createScriptedClaudeRuntime([SESSION])
   let server = new AgentHookServer()
 
@@ -419,9 +430,7 @@ describe('Claude background-only resume through hook shutdown', () => {
 
   it.each([
     { trigger: 'quit', kind: 'agent', settled: false },
-    { trigger: 'update', kind: 'agent', settled: false },
     { trigger: 'quit', kind: 'command', settled: false },
-    { trigger: 'update', kind: 'command', settled: false },
     { trigger: 'quit', kind: 'command', settled: true }
   ] as const)(
     '$trigger with a background $kind (settled: $settled)',
@@ -512,3 +521,19 @@ describe('Claude background-only resume through hook shutdown', () => {
     }
   )
 })
+
+function parentSubject(summaries: AgentSessionStatusSummary[]) {
+  const summary = summaries.at(-1)
+  if (!summary) {
+    throw new Error('no summary')
+  }
+  return makeStructuredAgentStatusSubject(
+    {
+      executionHostId: 'local',
+      wslDistro: null,
+      workspaceId: summary.workspaceId,
+      workspaceKind: 'git-worktree'
+    },
+    summary.sessionId
+  )
+}

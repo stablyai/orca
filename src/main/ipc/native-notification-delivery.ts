@@ -4,8 +4,8 @@ import type {
   NotificationDispatchResult,
   NotificationSettings
 } from '../../shared/notification-settings-types'
-import { safelyRevealWindow } from '../window/focus-existing-window'
-import { isBackgroundLaunch } from '../window/foreground-activation-policy'
+import { safelyRevealWindow } from '../window/activation/focus-existing-window'
+import { isBackgroundLaunch } from '../window/activation/foreground-activation-policy'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
 import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import type { buildNotificationOptions } from './notification-options'

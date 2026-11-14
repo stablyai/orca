@@ -13,13 +13,13 @@ import { useAppStore } from '../../store/index'
 import { useNativeChatLaunchDraftSignal } from './drafts/use-native-chat-launch-draft-adoption'
 import { useNativeChatRetainedSession } from './session/terminal/read/use-native-chat-retained-session'
 import { selectNativeChatViewState } from './session/status/native-chat-view-state'
-import { NativeChatMessageList } from './NativeChatMessageList'
 import { NativeChatChildTranscriptStack } from './NativeChatChildTranscript'
-import type { NativeChatMessageListHandle } from './messages/actions/use-native-chat-reveal-latest'
 import {
   NativeChatChildNavigationContext,
   useNativeChatChildNavigator
 } from './native-chat-child-navigation'
+import { NativeChatSubagentTranscripts } from './subagents/NativeChatSubagentTranscripts'
+import { closeNativeChatSubagentOnEscape } from './subagents/native-chat-open-subagent'
 import {
   useNativeChatInteractiveSendReveal,
   useNativeChatRevealLatest
@@ -78,7 +78,6 @@ export function NativeChatResolvedView({
   readTerminalDraft,
   contextMenuActions
 }: NativeChatResolvedViewProps): React.JSX.Element {
-  const childMessageListRef = useRef<NativeChatMessageListHandle>(null)
   // Route reads/subscriptions through the pane’s runtime owner; null retains local routing.
   const selectOwner = useMemo(() => createNativeChatRuntimeSelector(terminalTabId), [terminalTabId])
   const runtimeEnvironmentId = useAppStore(selectOwner)
@@ -199,7 +198,8 @@ export function NativeChatResolvedView({
     questionAnswerInputRef: activeQuestionAnswerInputRef,
     isVisible,
     isFocusedGroup,
-    composerReady: composerReady && childNavigator.child === null
+    composerReady: composerReady && childNavigator.child === null,
+    surfaceReady: shownPromptCard !== null || childNavigator.child !== null
   })
 
   const sessionWithPending = useNativeChatPendingProjection(
@@ -260,7 +260,7 @@ export function NativeChatResolvedView({
     isVisible && isFocusedGroup,
     rootRef,
     activeComposerRef,
-    childNavigator.child ? childMessageListRef : messageListRef
+    childNavigator.child ? childNavigator.messageListRef : messageListRef
   )
   const contextMenu = useNativeChatContextMenu({
     rootRef,
@@ -272,7 +272,7 @@ export function NativeChatResolvedView({
       down: formatShortcutLabel('terminal.splitDown', keybindings)
     },
     actions: { onPaste, ...(contextMenuActions ?? emptyNativeChatContextMenuActions) },
-    messageListRef: childNavigator.child ? childMessageListRef : messageListRef,
+    messageListRef: childNavigator.child ? childNavigator.messageListRef : messageListRef,
     fileLinkContext,
     onFind: find.open
   })
@@ -300,6 +300,7 @@ export function NativeChatResolvedView({
           }
           rootInput.onKeyDownCapture(event)
         }}
+        onKeyDown={(event) => closeNativeChatSubagentOnEscape(event, paneKey)}
         onContextMenuCapture={contextMenu.onContextMenuCapture}
         className={cn(
           NATIVE_CHAT_APPEARANCE_ROOT_CLASS,
@@ -332,7 +333,9 @@ export function NativeChatResolvedView({
               ) : viewState.kind === 'empty' ? (
                 <NativeChatEmptyState kind="empty" agent={agent} />
               ) : (
-                <NativeChatMessageList
+                <NativeChatSubagentTranscripts
+                  paneKey={paneKey}
+                  find={find}
                   ref={messageListRef}
                   session={sessionWithPending}
                   isVisible={isVisible && childNavigator.child === null}
@@ -400,7 +403,7 @@ export function NativeChatResolvedView({
         </NativeChatPaneFileDropScope>
         {childNavigator.child ? (
           <NativeChatChildTranscriptStack
-            messageListRef={childMessageListRef}
+            messageListRef={childNavigator.messageListRef}
             path={childNavigator.path}
             onBack={childNavigator.back}
             session={sessionWithPending}

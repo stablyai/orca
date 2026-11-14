@@ -1,28 +1,35 @@
+import {
+  readTestJournalItems,
+  readTestJournalSnapshot,
+  readTestJournalSubmissions
+} from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
+} from '../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import {
   closeTestJournalHostDatabase,
   createTrackedJournalOpener
 } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store'
 import { createDeferredStructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import {
   settleStructuredAgentSessionChildExit,
   type StructuredAgentSessionChildExitSession
 } from '../../../native-chat/agent-session-wire/termination/structured-agent-session-child-exit'
 import type { StructuredAgentSessionEndedEvent } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
-import { StructuredAgentSessionCurrentWork } from '../../../native-chat/agent-session-wire/observations/structured-agent-session-current-work'
+import { structuredAgentSessionHandoverAuthority } from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-handing-over'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
+import { applyAgentSessionRecordCommand } from '../../../runtime/agent-session/records/agent-session-record-command'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import { handleCodexSessionExit } from '../session-lifecycle/codex-structured-session-close'
 import type {
@@ -51,12 +58,27 @@ afterEach(async () => {
   }
 })
 
-function userVisible(journal: AgentSessionJournal, liveFence: number | null) {
-  const items = journal.snapshot().items
-  const work = new StructuredAgentSessionCurrentWork(journal, liveFence)
+async function userVisible(
+  journal: AgentSessionJournal,
+  session: StructuredAgentSessionChildExitSession,
+  record: AgentSessionRecord
+) {
+  const items = await readTestJournalItems(journal)
+  const { state: work } = await journal.readWork(
+    () => ({
+      handle: journal.observationHandle(),
+      record: agentSessionConversationView(record),
+      ended: session.lastEndedChild,
+      child: session.child && { fence: session.child.fence, heldSends: [] },
+      ...structuredAgentSessionHandoverAuthority(journal),
+      openedThrough: journal.openingCursor(),
+      operationalRevision: 0
+    }),
+    { kind: 'state' }
+  )
   return {
-    working: work.working(),
-    prompt: work.hasActionablePrompt(),
+    working: work.working,
+    prompt: work.actionablePrompts.length > 0,
     turnStates: items.flatMap((item) => readAgentJournalTurn(item.body)?.state ?? []),
     runningCalls: items.filter(
       (item) => item.body.kind === 'tool-call' && item.body.state === 'running'
@@ -64,7 +86,7 @@ function userVisible(journal: AgentSessionJournal, liveFence: number | null) {
     endedCalls: items.filter(
       (item) => item.body.kind === 'tool-call' && item.body.state !== 'running'
     ).length,
-    send: journal.submission('send-1')?.dispatchState
+    send: (await journal.reads.submission('send-1'))?.dispatchState
   }
 }
 
@@ -149,7 +171,14 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
   ).toEqual({ accepted: true })
   await expect(deferred.drained()).resolves.toEqual({ ok: true })
   expect(deferred.state().queuedBytes).toBe(0)
-  expect(userVisible(journal, 7)).toEqual({
+  let record: AgentSessionRecord = agentSessionRecordFixture(
+    agentSessionLeaseFixture({ sessionId: SESSION })
+  )
+  const hostSession: StructuredAgentSessionChildExitSession = {
+    child: { generation: 'generation', fence: 7, phase: 'ready' },
+    journal
+  }
+  expect(await userVisible(journal, hostSession, record)).toEqual({
     working: true,
     prompt: true,
     turnStates: ['running'],
@@ -157,7 +186,7 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
     endedCalls: 0,
     send: 'pending'
   })
-  const before = journal.snapshot()
+  const before = await readTestJournalSnapshot(journal)
   const commits = vi.fn()
   journal.observeCommits(commits)
   const admission = vi.spyOn(translator, 'handle')
@@ -210,15 +239,8 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
   expect(events).toHaveLength(1)
   await expect(deferred.drained()).resolves.toEqual({ ok: true })
   expect(onFailed).not.toHaveBeenCalled()
-  expect(journal.snapshot()).toEqual(before)
+  expect(await readTestJournalSnapshot(journal)).toEqual(before)
   expect(commits).not.toHaveBeenCalled()
-  let record: AgentSessionRecord = agentSessionRecordFixture(
-    agentSessionLeaseFixture({ sessionId: SESSION })
-  )
-  const hostSession: StructuredAgentSessionChildExitSession = {
-    child: { generation: 'generation', fence: 7, phase: 'ready' },
-    journal
-  }
   const [event] = events
   if (!event) {
     throw new Error('Codex did not report its observed exit')
@@ -228,10 +250,12 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
       logger: recording.logger,
       store: {
         getRecord: () => record,
-        transitionHandoff: async (
-          _sessionId: string,
-          transition: (current: AgentSessionRecord) => AgentSessionRecord
-        ) => (record = transition(record))
+        updateRecord: async (_sessionId, command) => {
+          const applied = applyAgentSessionRecordCommand(record, command)
+          record = applied.record
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the store answers each command with its own result.
+          return applied.result as never
+        }
       },
       sessions: new Map([[SESSION, hostSession]]),
       flushLifecycle: () => deferred.lifecycleBarrier(),
@@ -241,7 +265,7 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
     },
     event
   )
-  expect(userVisible(journal, null)).toEqual({
+  expect(await userVisible(journal, hostSession, record)).toEqual({
     working: false,
     prompt: false,
     turnStates: ['interrupted'],
@@ -263,12 +287,12 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
       body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'again' }] }
     })
   ).resolves.toMatchObject({ sequence })
-  const settled = journal.snapshot()
-  const submissions = journal.submissions()
+  const settled = await readTestJournalSnapshot(journal)
+  const submissions = await readTestJournalSubmissions(journal)
   await journal.close()
   await closeTestJournalHostDatabase(root)
   const reopened = await journals.open(options)
-  expect(reopened.snapshot()).toEqual(settled)
-  expect(reopened.submissions()).toEqual(submissions)
+  expect(await readTestJournalSnapshot(reopened)).toEqual(settled)
+  expect(await readTestJournalSubmissions(reopened)).toEqual(submissions)
   deferred.close()
 })

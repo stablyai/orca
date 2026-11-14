@@ -1,5 +1,5 @@
 import type { WorkerTerminalReleaseRuntime } from '../terminal-authority/release/worker-terminal-release-runtime'
-import { resolvePinnedFederatedServer } from '../../rpc/methods/orchestration/worker/pinned-federated-server'
+import { resolvePinnedFederatedServer } from './pinned-federated-server'
 import { releaseFederatedWorker } from './federated-worker-release'
 
 /** The home's deadline for a host that did not arm its own; the host's takeover and ownership checks still refuse it. */

@@ -2,9 +2,11 @@ import { useId, useState } from 'react'
 import { AlertCircle, Check, Copy } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { LoadingSpinner } from '../LoadingSpinner'
 import { ManagedRuntimeLinkButton } from '../managed-runtime/ManagedRuntimeLinkButton'
 import { Badge } from '../ui/badge'
+import { AntigravityInfoTooltip } from './AntigravityInfoTooltip'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import type { AntigravityChatAuthAction } from './AntigravityChatAuthForm'
@@ -65,6 +67,39 @@ function actionLabel(
     : t('accounts.antigravity.chatSignIn', 'Sign in')
 }
 
+function SignInAlert({ message }: { message: string | null }): React.JSX.Element | null {
+  return message ? (
+    <span role="alert" className="flex items-center gap-1.5 text-destructive">
+      <AlertCircle className="size-3.5 shrink-0" />
+      {message}
+    </span>
+  ) : null
+}
+
+function SignInButton({
+  signIn,
+  auth,
+  size
+}: {
+  signIn: AntigravityChatSignInControls
+  auth: AntigravityChatAuthAction
+  size: 'default' | 'sm' | 'xs'
+}): React.JSX.Element {
+  const t = useTranslate()
+  return (
+    <Button
+      size={size}
+      variant={changingAccount(signIn, auth) ? 'outline' : 'default'}
+      disabled={
+        (auth.recovering ? signIn.recoveryDisabled : signIn.signInDisabled) || auth.disabled
+      }
+      onClick={auth.start}
+    >
+      {actionLabel(signIn, auth, t)}
+    </Button>
+  )
+}
+
 /** One status line and one full-size action; a running sign-in swaps in its own panel. */
 export function AntigravityChatSignInAction({
   signIn,
@@ -76,14 +111,9 @@ export function AntigravityChatSignInAction({
   size: 'default' | 'sm'
 }): React.JSX.Element {
   const t = useTranslate()
-  const alert = auth.alert ? (
-    <span role="alert" className="flex items-center gap-1.5 text-destructive">
-      <AlertCircle className="size-3.5 shrink-0" />
-      {auth.alert}
-    </span>
-  ) : null
+  const alert = <SignInAlert message={auth.alert} />
   if (signIn.ownFlow) {
-    return <SignInFlowPanel signIn={signIn} alert={alert} />
+    return <SignInFlowPanel signIn={signIn} alert={auth.alert ? alert : null} />
   }
   const message =
     signIn.line ??
@@ -98,7 +128,6 @@ export function AntigravityChatSignInAction({
           method: auth.method
         })
       : null)
-  const secondary = changingAccount(signIn, auth)
   // The badge is not announced, so the live region carries the settled result too.
   const settled =
     signIn.auth === 'signedIn'
@@ -109,18 +138,92 @@ export function AntigravityChatSignInAction({
   return (
     <div className="flex flex-wrap items-center justify-end gap-3">
       <div role="status" className="min-w-0 flex-1 basis-40 text-xs text-muted-foreground">
-        {alert ?? message ?? (settled && <span className="sr-only">{settled}</span>)}
+        {auth.alert ? alert : (message ?? (settled && <span className="sr-only">{settled}</span>))}
       </div>
-      <Button
-        size={size}
-        variant={secondary ? 'outline' : 'default'}
-        disabled={
-          (auth.recovering ? signIn.recoveryDisabled : signIn.signInDisabled) || auth.disabled
+      <SignInButton signIn={signIn} auth={auth} size={size} />
+    </div>
+  )
+}
+
+function StatusDot({ className }: { className: string }): React.JSX.Element {
+  return <span aria-hidden className={cn('size-1.5 shrink-0 rounded-full', className)} />
+}
+
+/** Settings row: "Account" over its status line, with the action beside it; a running sign-in renders in place. */
+export function AntigravityChatAccountRow({
+  signIn,
+  auth
+}: {
+  signIn: AntigravityChatSignInControls
+  auth: AntigravityChatAuthAction
+}): React.JSX.Element {
+  const t = useTranslate()
+  const title = (
+    <p className="flex items-center gap-1 text-sm font-medium">
+      {t('accounts.antigravity.chatAccount', 'Chat account')}
+      <AntigravityInfoTooltip
+        info={t('accounts.antigravity.chatSeparate', 'Separate from your agy terminal account.')}
+      />
+    </p>
+  )
+  if (signIn.ownFlow) {
+    return (
+      <div data-settings-row="" className="py-3">
+        <SignInFlowPanel
+          signIn={signIn}
+          alert={auth.alert ? <SignInAlert message={auth.alert} /> : null}
+          title={title}
+        />
+      </div>
+    )
+  }
+  const hint = auth.incomplete
+    ? t('accounts.antigravity.enterpriseFieldsShort', 'Enter a project and location.')
+    : null
+  const state =
+    auth.reauth && auth.method
+      ? {
+          dot: 'bg-status-warning',
+          text: t('accounts.antigravity.chatUseMethod', 'Sign in again to use {{method}}', {
+            method: auth.method
+          })
         }
-        onClick={auth.start}
-      >
-        {actionLabel(signIn, auth, t)}
-      </Button>
+      : signIn.auth === 'signedIn'
+        ? {
+            dot: 'bg-status-success',
+            text: t('accounts.antigravity.chatBadgeSignedIn', 'Signed in')
+          }
+        : signIn.auth === 'signedOut'
+          ? {
+              dot: 'bg-muted-foreground/60',
+              text: t('accounts.antigravity.chatBadgeSignedOut', 'Not signed in')
+            }
+          : null
+  const status = auth.alert ? (
+    <SignInAlert message={auth.alert} />
+  ) : signIn.line ? (
+    <>
+      {signIn.signingIn ? <LoadingSpinner className="size-3 shrink-0" /> : null}
+      <span className="min-w-0 break-words">{signIn.line}</span>
+    </>
+  ) : (
+    <>
+      {state ? <StatusDot className={state.dot} /> : null}
+      {[state?.text, hint].filter(Boolean).join(' · ')}
+    </>
+  )
+  return (
+    <div data-settings-row="" className="flex items-center justify-between gap-4 py-3">
+      <div className="min-w-0 flex-1">
+        {title}
+        <div
+          role="status"
+          className="mt-0.5 flex min-h-4 flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground"
+        >
+          {status}
+        </div>
+      </div>
+      <SignInButton signIn={signIn} auth={auth} size="xs" />
     </div>
   )
 }
@@ -128,29 +231,42 @@ export function AntigravityChatSignInAction({
 /** Mounted only while this client's sign-in runs, so the paste form starts closed for each flow. */
 function SignInFlowPanel({
   signIn,
-  alert
+  alert,
+  title
 }: {
   signIn: AntigravityChatSignInControls
   alert: React.ReactNode
+  /** A titled panel sits inside a settings row, so it drops its own frame. */
+  title?: React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const [pasteOpen, setPasteOpen] = useState(false)
   const { copy, url } = signIn
+  const size = title ? 'xs' : 'sm'
   return (
-    <div className="space-y-3 rounded-md border border-border bg-muted/30 p-3">
+    <div className={cn('space-y-3', !title && 'rounded-md border border-border bg-muted/30 p-3')}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div role="status" className="flex min-w-0 items-center gap-2 text-xs">
-          <LoadingSpinner className="size-3 shrink-0" />
-          <span className="min-w-0 break-words">{signIn.line}</span>
+        <div className="min-w-0">
+          {title}
+          <div
+            role="status"
+            className={cn(
+              'flex min-w-0 items-center gap-2 text-xs',
+              title && 'mt-0.5 text-muted-foreground'
+            )}
+          >
+            <LoadingSpinner className="size-3 shrink-0" />
+            <span className="min-w-0 break-words">{signIn.line}</span>
+          </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {url && (
-            <Button size="sm" variant="outline" onClick={() => void copy.copyText()}>
+            <Button size={size} variant="outline" onClick={() => void copy.copyText()}>
               {copy.status === 'copied' ? <Check /> : <Copy />}
               {signIn.copyLabel}
             </Button>
           )}
-          <Button size="sm" variant="ghost" disabled={signIn.pending} onClick={signIn.cancel}>
+          <Button size={size} variant="ghost" disabled={signIn.pending} onClick={signIn.cancel}>
             {t('accounts.antigravity.chatCancel', 'Cancel')}
           </Button>
         </div>

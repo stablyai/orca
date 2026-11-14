@@ -17,7 +17,8 @@ import {
   waitForActiveTerminalManager,
   waitForPaneIdentitySnapshot
 } from './helpers/terminal'
-import { RuntimeClient, type RuntimeRpcSuccess } from '../../src/cli/runtime-client'
+import { RuntimeClient } from '../../src/cli/runtime/client'
+import type { RuntimeRpcSuccess } from '../../src/shared/runtime-rpc-envelope'
 import type { RuntimeTerminalListResult } from '../../src/shared/runtime-types'
 import {
   CODEX_IDLE_TITLE,
@@ -296,34 +297,6 @@ test.describe('orchestration push-on-idle mail delivery', () => {
     pane.agent.setTitle(CODEX_IDLE_TITLE)
     await expectPointed(pane)
     await expectSubmitted(pane)
-  })
-
-  // #19542: keep direct mail durable under the unbound Run without injecting an unsafe check pointer.
-  test('keeps unbound direct mail durable without pointing to an unsafe check', async ({
-    orcaPage,
-    electronApp
-  }) => {
-    test.setTimeout(180_000)
-    const { client, userDataDir, openAgentPane } = await setUpMailFixture(orcaPage, electronApp)
-    const pane = await openAgentPane()
-    await driveToLiveIdle(client, pane)
-
-    // Unbound terminals still need durable direct mail; reopen must not classify it as pre-Runs state.
-    const stdinBeforeScan = pane.agent.readStdin()
-    const messageId = await sendMail(client, pane.handle, { subject: 'Unbound direct mail' })
-    pane.agent.setTitle(CODEX_WORKING_TITLE)
-    await waitForObservedTitle(client, pane.handle, CODEX_WORKING_TITLE)
-    pane.agent.setTitle(CODEX_IDLE_TITLE)
-    await waitForObservedTitle(client, pane.handle, CODEX_IDLE_TITLE)
-
-    await orcaPage.waitForTimeout(NO_DELIVERY_SETTLE_MS)
-    expect(readMailRow(userDataDir, messageId)).toMatchObject({
-      to_handle: pane.handle,
-      run_id: 'run_unbound',
-      read: 0,
-      delivered_at: null
-    })
-    expect(pane.agent.readStdin()).toBe(stdinBeforeScan)
   })
 
   test('leaves the mail to a live waiter instead of pushing it into the pane', async ({

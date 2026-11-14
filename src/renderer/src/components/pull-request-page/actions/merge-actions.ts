@@ -9,12 +9,10 @@ import {
   getPullRequestMergeMethodLabel,
   getPullRequestStateConfirmationTitle
 } from '@/components/github/pull-request-confirmation-copy'
-import type { resolveGitHubPRMergeMethods } from '../../../../../shared/github/pull-request-merge-methods'
-import type {
-  GitHubOwnerRepo,
-  GitHubPRMergeMethod
-} from '../../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { resolveGitHubPRMergeMethods } from '../../../../../shared/github/pull-requests/merge/pull-request-merge-methods'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import type { GitHubPRMergeMethod } from '../../../../../shared/github/pull-requests/pull-request-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { PullRequestPageProjectOrigin } from '../page-types'
 import { translate } from '@/i18n/i18n'

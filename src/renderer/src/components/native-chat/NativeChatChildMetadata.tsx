@@ -4,7 +4,7 @@ import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/executi
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import { useAppStore } from '@/store'
 import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
-import { isStructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { isStructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import type { OrchestrationSessionChild } from '../../../../shared/orchestration-session-children'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'

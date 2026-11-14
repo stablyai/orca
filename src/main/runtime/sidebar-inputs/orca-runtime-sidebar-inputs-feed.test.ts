@@ -2,8 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import { OrcaRuntimeService } from '../orca-runtime'
-import { requireSwitchedOn } from './require-switched-on'
-import { TestPhone } from './sidebar-inputs-feed.test-fixture'
+import { requireSwitchedOn } from '../construction/require-sidebar-inputs-enabled'
+import { TestPhone } from './feed/testing/sidebar-inputs-feed.test-fixture'
 
 vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 

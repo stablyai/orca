@@ -1,13 +1,13 @@
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { agentSessionConversationView } from '../../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+} from '../../../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 /** Mutate journals between reads to catch in-place revisions and mid-array insertions missed by oldest-item-only cursor identity; both can silently omit or duplicate output. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { boundStructuredJournalTail } from '../../../../orchestration/workers/archives/structured-worker-journal-archive'
-import { projectSavedChatContextItems } from '../../../../../native-chat/agent-session-saved-prompt-text'
+import { projectSavedChatContextItems } from '../../../../../native-chat/conversation-context/agent-session-saved-prompt-text'
 import { formatWorkerTranscriptMessage } from '../../../../../../shared/worker-transcript-text'
 import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { StructuredWorkerIdentity } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'

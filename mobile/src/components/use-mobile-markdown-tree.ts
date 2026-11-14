@@ -3,7 +3,7 @@ import { useMemo, useRef } from 'react'
 import {
   linkGitHubReferences,
   type GitHubRepoReference
-} from '../../../src/shared/github/github-reference-links'
+} from '../../../src/shared/github/markdown/github-reference-links'
 import {
   linkNativeChatFilePaths,
   type FileLinkExists

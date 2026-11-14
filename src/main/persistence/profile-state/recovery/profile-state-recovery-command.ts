@@ -36,7 +36,7 @@ import { profileHasPendingProjectMove } from '../../../orca-profiles/project-tra
 import {
   invalidateHttp1CompatibilityMarker,
   writeHttp1CompatibilityMarker
-} from '../../../startup/http1-compatibility-marker'
+} from '../../../startup/network-compatibility/http1-compatibility-marker'
 
 export function getProfileStateExports(
   userDataPath: string,

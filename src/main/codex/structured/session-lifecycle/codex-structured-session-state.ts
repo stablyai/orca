@@ -8,7 +8,6 @@ import type { AgentJournalAnsweredTurnIdentity } from '../../../../shared/agent-
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import { randomUUID } from 'node:crypto'
 import type { AgentJournalDispatchRejection } from '../../../../shared/agent-session/failures/agent-session-failure-words'
-import { cancelProcessAcquisition } from '@orca/process-host/cancel-process-acquisition'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import type { openCodexAppServerConnection } from '../../app-server/codex-app-server-connection'
 import { CodexAcquisitionWindow } from '../acquisition/codex-structured-acquisition-window'
@@ -28,7 +27,7 @@ import type { StructuredLaunchRequest } from '../../../runtime/agent-session/lau
 import type { AgentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import type { AgentModelCatalogSessionAccess } from '../../../native-chat/agent-model-catalog/agent-model-catalog-lister'
 import type { StructuredAgentSessionProviderOpen } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
-import type { NativeChatVisualsLaunch } from '../../../native-chat/native-chat-visuals-delivery'
+import type { NativeChatVisualsLaunch } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import type { CodexSandboxPolicy } from '../launch/codex-structured-sandbox-policy'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
@@ -179,6 +178,8 @@ export type CodexSession = {
   nativeDefaults?: { personality?: string; serviceTier?: string }
   /** Acquisition facts overlaid by controls actually sent, independently of reports or saved picks. */
   appliedTurnOptions?: Readonly<Record<string, string>>
+  /** Saved/start input choices before protocol shaping; later catalogs cannot change eligibility. */
+  appliedTurnInputOptions?: Readonly<Record<string, string>>
   appliedSettings?: CodexAppliedSettings
   /** Optional for adapters without a host catalog store. */
   catalogAccess?: CodexSessionCatalogAccess
@@ -237,6 +238,7 @@ export type CodexAcquisitionAttempt = {
   requestedClose?: boolean
   exitProven: boolean
   exitError?: Error
+  historyCatchUp?: AbortController
   finished: Promise<void>
   finish: () => void
 }
@@ -273,6 +275,7 @@ export class CodexAcquisitionRegistry {
       throw new Error('codex structured session adapter is closing')
     }
     const previousAttempt = this.attempts.get(sessionId)
+    previousAttempt?.historyCatchUp?.abort()
     const attempt = createCodexAcquisitionAttempt()
     this.attempts.set(sessionId, attempt)
     return { previousAttempt, attempt }
@@ -290,6 +293,7 @@ export class CodexAcquisitionRegistry {
 
   deleteIfCurrent(sessionId: string, attempt: CodexAcquisitionAttempt): void {
     if (this.attempts.get(sessionId) === attempt) {
+      attempt.historyCatchUp?.abort()
       this.attempts.delete(sessionId)
     }
   }
@@ -300,6 +304,7 @@ export class CodexAcquisitionRegistry {
     previous: CodexAcquisitionAttempt
   ): void {
     if (this.attempts.get(sessionId) === replacement) {
+      replacement.historyCatchUp?.abort()
       this.attempts.set(sessionId, previous)
     }
   }
@@ -318,30 +323,12 @@ export class CodexAcquisitionRegistry {
   }
 
   close(): void {
+    for (const attempt of this.attempts.values()) {
+      attempt.historyCatchUp?.abort()
+    }
     this.closing = true
     this.endings.clear()
   }
 }
 
-export async function cancelCodexAcquisitionAttempt(
-  attempt: CodexAcquisitionAttempt | undefined,
-  requestedClose = true
-): Promise<boolean> {
-  if (!attempt) {
-    return true
-  }
-  const closed = await cancelProcessAcquisition({
-    cancel: () => {
-      attempt.cancelled = true
-      attempt.requestedClose = requestedClose
-    },
-    connection: () => attempt.window.connection,
-    exitProven: () => attempt.exitProven,
-    finished: attempt.finished
-  })
-  if (closed) {
-    attempt.exitProven = true
-    attempt.dispose?.()
-  }
-  return closed
-}
+export { cancelCodexAcquisitionAttempt } from '../acquisition/codex-structured-acquisition-lifecycle'

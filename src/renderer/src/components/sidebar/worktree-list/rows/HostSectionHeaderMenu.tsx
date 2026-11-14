@@ -37,7 +37,7 @@ import { startWslHostAndReloadProjects } from '@/runtime/hosts/wsl/wsl-host-user
 import { clearRuntimeCompatibilityCache } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { unwrapRuntimeRpcResult } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
-import type { HostHeaderRow } from '../../../../../../shared/sidebar-list/host-section-rows'
+import type { HostHeaderRow } from '../../../../../../shared/sidebar-list/hosts/host-section-rows'
 import { buildHostHeaderMenuModel } from '../../host-header-menu-items'
 import { selectStartableStoppedWslDistro } from '../../../wsl-host-stopped/use-stopped-wsl-host'
 import { HostRenameDialog } from '../../HostRenameDialog'

@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { useClipboardWriter } from '../../platform/clipboard'
-import { triggerError, triggerSuccess } from '../../platform/haptics'
+import { useClipboardWriter } from '../../platform/clipboard/clipboard'
+import { triggerError, triggerSuccess } from '../../platform/haptics/haptics'
 import { openMobilePrUrl } from '../mobile-pr-url'
 import type { ActionSheetAction } from '../ActionSheetModal'
 import { canEditPRTitle } from '../../source-control/review/pr-title-edit'
-import { resolveGitHubPRMergeMethods } from '../../../../src/shared/github/pull-request-merge-methods'
-import { resolveGitHubPRMergeState } from '../../../../src/shared/github/pull-request-merge-state'
+import { resolveGitHubPRMergeMethods } from '../../../../src/shared/github/pull-requests/merge/pull-request-merge-methods'
+import { resolveGitHubPRMergeState } from '../../../../src/shared/github/pull-requests/merge/pull-request-merge-state'
 import {
   MOBILE_GITHUB_MARK_PR_DRAFT_RUNTIME_CAPABILITY,
   MOBILE_GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY

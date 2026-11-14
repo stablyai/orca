@@ -2,7 +2,13 @@ import { defineMethod } from '../../core'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { remoteFileContentBudget } from '../files/files-remote-content-budget'
 import { remoteRpcResultExceedsContentBudget } from '../../../../../shared/remote-rpc-content-budget'
+import { agentHookServer } from '../../../../agent-hooks/server/agent-hook-server'
 import {
+  formatOrcaSessionAddress,
+  type OrcaSessionAddress
+} from '../../../../../shared/orca-session-address'
+import {
+  TerminalAgentId,
   TerminalHandle,
   TerminalInspectProcess,
   TerminalListParams,
@@ -13,7 +19,7 @@ import {
   TerminalResolveActive,
   TerminalResolvePane,
   TerminalSetPaneTitle
-} from '../../../../../shared/rpc-contract/terminal-unary-params'
+} from '../../../../../shared/rpc-contract/terminal/terminal-unary-params'
 
 export const TERMINAL_QUERY_METHODS = [
   defineMethod({
@@ -64,6 +70,22 @@ export const TERMINAL_QUERY_METHODS = [
     handler: async (params, { runtime }) => ({
       terminal: runtime.resolveTerminalPane(params.paneKey, params.worktreeId)
     })
+  }),
+  defineMethod({
+    // The id lives with the pane's hook server, so a failed earlier commit is retried here.
+    name: 'terminal.agentId',
+    permission: 'workspace',
+    params: TerminalAgentId,
+    handler: async (params, { runtime }): Promise<{ orcaSessionId: OrcaSessionAddress | null }> => {
+      // Re-read on each look: the pane may wake or sleep while the worker answers.
+      const id = await agentHookServer.resolvePaneAgentId(
+        params.paneKey,
+        () =>
+          runtime.getWorkspaceSessionForWorktree(params.worktreeId)
+            ?.sleepingAgentSessionsByPaneKey?.[params.paneKey]
+      )
+      return { orcaSessionId: id ? formatOrcaSessionAddress(id) : null }
+    }
   }),
   defineMethod({
     name: 'terminal.recoverPane',

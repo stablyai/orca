@@ -1,4 +1,4 @@
-import { pendingSendsAsMessages } from '../../../../../../../shared/native-chat/transcript/native-chat-pending-sends'
+import { pendingSendsAsMessages } from '../../../../../../../shared/native-chat/transcript/pending-sends/native-chat-pending-sends'
 import {
   deriveNativeChatStreamingText,
   nativeChatStreamingMessage

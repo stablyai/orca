@@ -3,7 +3,7 @@ import {
   createNativeChatReplyRevealTracker,
   trackNativeChatReplyRows,
   type NativeChatReplyReveals
-} from '../../../../../shared/native-chat/transcript/native-chat-reply-reveals'
+} from '../../../../../shared/native-chat/transcript/row-content/native-chat-reply-reveals'
 
 /** Absent outside a transcript: such a row neither begins nor is remembered. */
 export const NativeChatReplyRevealsContext = createContext<NativeChatReplyReveals | null>(null)

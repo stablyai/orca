@@ -6,8 +6,8 @@ import {
   attach,
   hostTestState,
   serveHostTestChildWork
-} from './structured-agent-session-host-test-harness'
-import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host.test-fixture'
+import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data.test-fixture'
 
 function running(id: string, over: Partial<AgentChildWorkView> = {}): AgentChildWorkView {
   return {

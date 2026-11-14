@@ -35,10 +35,8 @@ function renderDetail(props: Partial<React.ComponentProps<typeof AutomationDetai
         projectDefaultBaseRef="main"
         runNowAvailability={{ canRunNow: true, reason: 'available', message: null }}
         now={NOW}
-        onRunNow={noop}
-        onEdit={noop}
-        onToggle={noop}
-        onDelete={noop}
+        onOpenRun={noop}
+        onShowAllRuns={noop}
         {...props}
       />
     </div>
@@ -85,6 +83,27 @@ export const failed = defineFixture({
           createdAt: NOW - 2 * HOUR,
           dispatchedAt: null,
           startedAt: NOW - 2 * HOUR
+        })
+      ]
+    })
+})
+
+export const foldedRun = defineFixture({
+  width: 1000,
+  render: () =>
+    renderDetail({
+      automation: { ...automation, lastRunAt: NOW - 6 * HOUR },
+      runs: [
+        makeRun({
+          id: 'run-4',
+          status: 'skipped_unavailable',
+          error: 'The execution host is offline.',
+          scheduledFor: NOW - 8 * 24 * HOUR - 6 * HOUR,
+          createdAt: NOW - 8 * 24 * HOUR - 6 * HOUR,
+          dispatchedAt: null,
+          startedAt: null,
+          occurrenceCount: 9,
+          lastOccurrenceAt: NOW - 6 * HOUR
         })
       ]
     })

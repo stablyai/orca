@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store/index'
 import { recordRendererCrashBreadcrumb } from '@/diagnostics/crash-reporting/crash-breadcrumb-recorder'
-import { locateTerminalTab } from '@/store/terminals/terminal-tab-location'
+import { locateTerminalTab } from '@/store/terminals/ownership/terminal-tab-location'
 import {
   admitTerminalRecoveryRemount,
   captureTabRecoveryGeneration,
@@ -8,7 +8,7 @@ import {
   type TerminalRecoveryRemountRequest,
   type TerminalRecoveryRemountResult,
   type TerminalRecoveryTrigger
-} from '@/store/terminals/terminal-tab-recovery-ledger'
+} from '@/store/terminals/pty/terminal-tab-recovery-ledger'
 
 import type { TerminalPaneRecoveryReason } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import {

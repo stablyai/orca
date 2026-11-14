@@ -15,8 +15,8 @@ import {
   formatAskAnswer,
   hasAskAnswer,
   type AskAnswerSelection
-} from '../../../../../../../shared/native-chat/input/native-chat-ask-answer'
-import type { AskPrompt } from '../../../../../../../shared/native-chat/input/native-chat-ask-types'
+} from '../../../../../../../shared/native-chat/input/questions/native-chat-ask-answer'
+import type { AskPrompt } from '../../../../../../../shared/native-chat/input/questions/native-chat-ask-types'
 import {
   sendNativeChatAskAnswer,
   sendNativeChatMessage,

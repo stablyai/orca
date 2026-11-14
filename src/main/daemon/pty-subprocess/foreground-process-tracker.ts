@@ -1,16 +1,16 @@
 import type * as pty from 'node-pty'
 import { ptyShellProcessId } from '../../windows/windows-pty-job'
-import * as foreground from '../../providers/pty-foreground-confirmation'
-import { getAgentForegroundContextPaths } from '../../providers/agent-foreground-context-paths'
+import * as foreground from '../../providers/foreground/pty-confirmation'
+import { getAgentForegroundContextPaths } from '../../providers/foreground/context-paths'
 import { confirmPtyShellForeground } from './pty-shell-foreground-confirmation'
 import {
   judgeCachedAgentJobEvidence,
   WINDOWS_DETACHED_DESCENDANT_IDENTITY_MAX_AGE_MS
-} from '../../providers/windows-cached-agent-revalidation'
+} from '../../providers/foreground/windows/cached-agent-revalidation'
 import {
   isWindowsPtyJobReadable,
   readWindowsPtyJobProcessIds
-} from '../../providers/windows-pty-job-membership'
+} from '../../providers/foreground/windows/pty-job-membership'
 
 import {
   isAgentForegroundWrapperProcess,

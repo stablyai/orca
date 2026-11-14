@@ -238,12 +238,11 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     this.orchestrationStructuredMailboxPointerDelivery.withdrawStale(mailboxes)
   }
 
-  /** Asked as a chat's queue hands over an agent's card, or, with `peek`, as it chooses its next card;
-   *  opening the database lets a restart's first handover decide. */
+  /** Read current mailbox custody without settling a card or its reservation. */
   structuredChatMailOwed(
     sessionId: string,
     from: AgentMessageSource,
-    peek = false
+    claimedDeliveryId?: string
   ): QueuedMessageOwed {
     if (!orchestrationMailNotice(from)) {
       return 'owed'
@@ -254,10 +253,12 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
     } catch {
       return 'unavailable'
     }
-    const delivery = this.orchestrationStructuredMailboxPointerDelivery
-    return peek
-      ? delivery.owedNow(sessionId, from, db)
-      : delivery.owedAtHandover(sessionId, from, db)
+    return this.orchestrationStructuredMailboxPointerDelivery.owedNow(
+      sessionId,
+      from,
+      db,
+      claimedDeliveryId
+    )
   }
 
   /** Resolve every structured-owned mailbox here; declining Run or direct mail would leave both delivery lanes refusing it. */

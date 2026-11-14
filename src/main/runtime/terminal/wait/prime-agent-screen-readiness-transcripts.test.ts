@@ -1,13 +1,6 @@
-import { describe, vi } from 'vitest'
-import './agent-transcript-replay-test-harness'
-import { describeScreenRuledAgentTranscripts } from './screen-ruled-agent-transcript-suite'
-
-vi.mock('electron', () => ({
-  BrowserWindow: { fromId: vi.fn(() => null) },
-  webContents: { fromId: vi.fn(() => null) },
-  ipcMain: { on: vi.fn(), removeListener: vi.fn() },
-  app: { getPath: vi.fn(() => '/tmp') }
-}))
+import { describe, expect, it } from 'vitest'
+import { finalReplayFrame } from './agent-transcript-replay-test-harness'
+import { evaluateAgentStateRules } from '../../agent-state-rules/agent-state-rules-engine'
 
 // prime-agent 0.9.8 on macOS, OpenRouter, isolated HOME; 0.9.5 recorded for PR #22154 (see
 // each .meta.json); STA-8741.
@@ -30,11 +23,17 @@ const NOT_READY = [
 ]
 
 describe('Prime Agent readiness from captured bytes', () => {
-  describeScreenRuledAgentTranscripts({
-    agent: 'prime-agent',
-    foregroundProcess: 'prime-agent',
-    ready: READY,
-    notReady: NOT_READY,
-    readyWithoutScreen: READY.map(({ name }) => name)
+  it.each(READY)('$name ($what) reads ready', async ({ name, cols, rows }) => {
+    const { ruledScreenLines } = await finalReplayFrame(name, cols, rows)
+    expect(
+      evaluateAgentStateRules('prime-agent', { readScreenLines: () => ruledScreenLines })?.state
+    ).toBe('idle')
+  })
+
+  it.each(NOT_READY)('$name ($what) does not read ready', async ({ name, cols, rows }) => {
+    const { ruledScreenLines } = await finalReplayFrame(name, cols, rows)
+    expect(
+      evaluateAgentStateRules('prime-agent', { readScreenLines: () => ruledScreenLines })?.state
+    ).not.toBe('idle')
   })
 })

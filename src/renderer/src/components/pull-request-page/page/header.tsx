@@ -20,11 +20,11 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
-import { parseOwnerRepoFromItemUrl } from '@/components/github/github-work-item-identity'
+import { parseGitHubItemRepository as parseOwnerRepoFromItemUrl } from '../../../../../shared/github/work-items/work-item-target'
 import { formatRelativeTime, getStateLabel } from '@/components/github/work-item-state-presentation'
 import { cn } from '@/lib/class-names'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import { getSolidStateTone } from '../presentation/state-badge'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 

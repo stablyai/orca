@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { DiffComment, MobileDiffReviewState } from '../../../../src/shared/diff-comment-types'
-import type { MobileGitBranchChangeEntry } from '../git-compare-reply-schema'
-import type { MobileGitStatusEntry } from '../git-status-reply-schema'
+import type { MobileGitBranchChangeEntry } from '../branches/git-compare-reply-schema'
+import type { MobileGitStatusEntry } from '../git/git-status-reply-schema'
 import { buildMobileDiffReviewQueue } from './mobile-diff-review-queue'
 
 const emptyReviewState: MobileDiffReviewState = { version: 1, files: {} }

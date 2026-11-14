@@ -268,10 +268,13 @@ function CommandGroup({
   )
 }
 
+const COMMAND_ITEM_BASE_CLASS =
+  'relative flex cursor-default gap-2 select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*="size-"])]:size-4'
+
 const commandItemVariants = cva('', {
   variants: {
     selection: { default: '', palette: 'jump-palette-item' },
-    density: { default: '', workspace: 'px-3 py-2 text-xs' },
+    density: { default: '', workspace: 'px-3 py-2 text-xs', flush: 'p-0' },
     // Cmd+J's workspace row box: titles share one column across row kinds.
     shape: {
       default: '',
@@ -297,7 +300,53 @@ function CommandItem({
       ref={ref}
       data-slot="command-item"
       className={cn(
-        'relative flex cursor-default gap-2 select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*="size-"])]:size-4',
+        COMMAND_ITEM_BASE_CLASS,
+        commandItemVariants({ selection, density, emphasis, shape }),
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+type CommandOptionProps = Omit<React.ComponentProps<'div'>, 'onSelect'> &
+  VariantProps<typeof commandItemVariants> & {
+    selected: boolean
+    /** Rendered as `data-value`, the identity automation reads from command rows. */
+    value?: string
+    disabled?: boolean
+    onHighlight?: () => void
+    onSelect?: () => void
+  }
+
+/** A listbox option cmdk never sees, for windowed lists that own selection; omitting `cmdk-item` keeps cmdk's DOM queries off it. */
+function CommandOption({
+  className,
+  selection,
+  density,
+  emphasis,
+  shape,
+  selected,
+  value,
+  disabled = false,
+  onHighlight,
+  onSelect,
+  ...props
+}: CommandOptionProps): React.JSX.Element {
+  return (
+    <div
+      data-slot="command-item"
+      data-value={value}
+      role="option"
+      aria-selected={selected}
+      data-selected={selected}
+      aria-disabled={disabled}
+      data-disabled={disabled}
+      // Like cmdk, moving over the already-highlighted option does no work.
+      onPointerMove={disabled || selected ? undefined : onHighlight}
+      onClick={disabled ? undefined : onSelect}
+      className={cn(
+        COMMAND_ITEM_BASE_CLASS,
         commandItemVariants({ selection, density, emphasis, shape }),
         className
       )}
@@ -327,5 +376,6 @@ export {
   CommandInput,
   CommandItem,
   CommandList,
+  CommandOption,
   CommandSeparator
 }

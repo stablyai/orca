@@ -274,8 +274,8 @@
     {
       "files": [
         "src/main/runtime/rpc/dispatcher.ts",
-        "src/main/plugins/plugin-runtime-rpc.ts",
-        "src/main/plugins/plugin-runtime-binding.ts"
+        "src/main/plugins/runtime/plugin-runtime-rpc.ts",
+        "src/main/plugins/runtime/plugin-runtime-binding.ts"
       ],
       "rules": {
         "no-restricted-imports": [
@@ -308,7 +308,7 @@
   "ignorePatterns": [
     "src/main/acp/generated/acp-protocol.generated.ts",
     "src/shared/rpc-contract/rpc-params-catalog.generated.ts",
-    "src/cli/bundled-skill-guides.ts",
+    "src/cli/skills/bundled-skill-guides.ts",
     "resources/plugins/declarative/*.mjs",
     "**/node_modules",
     "**/dist",

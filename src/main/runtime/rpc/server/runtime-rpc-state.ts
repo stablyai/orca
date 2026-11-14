@@ -12,7 +12,7 @@ import type { UnpairedDeviceAuthThrottle } from '../mobile/unpaired-device-auth-
 import type { MobileSocketWiring } from '../mobile/mobile-socket-wiring'
 import type { MobileDesktopRelay } from '../../mobile-desktop-relay/mobile-desktop-relay'
 import type { MobileRelayHostCatalog } from '../../mobile-desktop-relay/mobile-relay-host-catalog'
-import { RelayRevokeOutbox } from '../../mobile-cloud-relay/relay-revoke-outbox'
+import { RelayRevokeOutbox } from '../../mobile-cloud-relay/pairing/relay-revoke-outbox'
 import { PushUnregisterOutbox } from '../../push/push-unregister-outbox'
 import { RuntimeBinaryMessageRouter } from './runtime-binary-message-router'
 

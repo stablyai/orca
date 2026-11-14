@@ -25,7 +25,7 @@ import type { ClaudeChildWorkDecoder } from '../child-work/claude-child-work-dec
 import type { ClaudeSlashCommandCatalog } from '../command-catalog/claude-slash-command-catalog'
 import type { ClaudeAtRestCommandCatalog } from '../command-catalog/claude-at-rest-commands'
 import type { ClaudeInitProof } from './claude-structured-init-proof'
-import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import type { ClaudeNamingInputs } from '../conversation-naming/claude-naming-invocation'
 import type { ClaudeInitializeFacts } from './claude-structured-session-startup'
@@ -106,6 +106,7 @@ export type ClaudeDispatchWaiter = {
 }
 
 export type ClaudeSession = {
+  historyCatchUp?: AbortController
   connection: ClaudeStreamJsonConnection
   providerSessionId: string
   /** Latest main-chain message seen on the live stream, mid-turn included. */
@@ -124,7 +125,6 @@ export type ClaudeSession = {
   replayContentFallbackBlocked: boolean
   options: Map<string, string>
   reportedOptions: {
-    reportedModel?: string
     model?: string
     effort?: string
     fastMode?: boolean
@@ -138,10 +138,6 @@ export type ClaudeSession = {
   fastModePerSessionOptIn?: boolean
   /** Mutation sequence of the last model report; newer writes outrank it. */
   reportedModelMutation: number
-  /** A saved model pick no turn of this process has carried; its reports predate the pick. */
-  modelPickAwaitingTurn?: string
-  /** `dispatchSequence` at the last model write; that turn's replies predate the pick. */
-  modelMutationDispatch?: number
   /** Options whose recorded value the provider reported, not merely accepted. */
   confirmedOptions: Set<string>
   /** Inputs carried by launch or accepted controls, independent of provider reports. */

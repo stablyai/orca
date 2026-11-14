@@ -8,8 +8,8 @@ import {
   buildTerminalTabRetirementPlans,
   type TerminalTabRetirementPlan,
   type TerminalTabRetirementState
-} from '@/store/terminals/terminal-tab-retirement'
-import { reserveTerminalRetirementTeardowns } from '@/store/terminals/terminal-retirement-teardown-reservation'
+} from '@/store/terminals/retirement/terminal-tab-retirement'
+import { reserveTerminalRetirementTeardowns } from '@/store/terminals/retirement/terminal-retirement-teardown-reservation'
 import { notifyDaemonSessionInventoryInvalidated } from '../status-bar/daemon-session-inventory-invalidation'
 
 const CLOSE_BATCH_SIZE = 2

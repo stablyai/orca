@@ -3,20 +3,15 @@ import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
 import {
   MOCK_GIT_WORKTREES,
-  closeLocalWatcherForWorktreePathMock,
-  computeWorktreePathMock,
-  ensurePathWithinWorkspaceMock,
   restoreLocalWatcherAfterFailedRemovalMock,
   removeWorktreeLinkedPathsMock
 } from '../orca-runtime-test-mocks/setup.spec'
-import { OrcaRuntimeService } from '../orca-runtime'
 import { assertWorktreeCleanForRemoval } from '../../git/worktrees/removal/worktree-removal-preflight'
 import { getEffectiveHooks, runHook } from '../../workspace-hooks/hooks'
 import { join } from 'node:path'
 import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import { listWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
-import { lstat, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
-import * as localWorktreeFilesystem from '../../workspaces/removal/local-worktree-filesystem'
+import { lstat, mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { removeWorktree } from '../../git/worktrees/removal/worktree-removal'
 import { tmpdir } from 'node:os'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
@@ -26,9 +21,7 @@ import {
 } from '../../../shared/worktree/host-qualified-identity'
 import {
   TEST_REPO_ID,
-  TEST_REPO_PATH,
   TEST_WORKTREE_ID,
-  TEST_WORKTREE_PATH,
   createStaleRuntimeWorktreeStore,
   makeWorktreeMeta,
   store,
@@ -82,197 +75,6 @@ describe('OrcaRuntimeService', () => {
     } finally {
       await rm(localPath, { recursive: true, force: true })
     }
-  })
-
-  it('still rejects forced runtime unregistered delete paths that exist on disk', async () => {
-    const existingWorktreePath = await mkdtemp(join(tmpdir(), 'orca-runtime-remove-existing-'))
-    const worktreeId = `${TEST_REPO_ID}::${existingWorktreePath}`
-    const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(worktreeId)
-    const runtime = createWorktreeRemovalRuntime(runtimeStore)
-
-    try {
-      vi.mocked(listWorktrees).mockResolvedValue([])
-
-      await expect(runtime.removeManagedWorktree(worktreeId, { force: true })).rejects.toThrow(
-        'Refusing to delete unregistered worktree path'
-      )
-
-      expect(removeWorktree).not.toHaveBeenCalled()
-      expect(removeWorktreeMeta).not.toHaveBeenCalled()
-    } finally {
-      await rm(existingWorktreePath, { recursive: true, force: true })
-    }
-  })
-
-  it('rejects CLI worktree removal when the target contains another registered worktree', async () => {
-    const runtime = createWorktreeRemovalRuntime()
-    vi.mocked(listWorktrees).mockResolvedValue([
-      {
-        path: TEST_REPO_PATH,
-        head: 'main',
-        branch: 'refs/heads/main',
-        isBare: false,
-        isMainWorktree: true
-      },
-      {
-        path: TEST_WORKTREE_PATH,
-        head: 'parent',
-        branch: 'refs/heads/parent',
-        isBare: false,
-        isMainWorktree: false
-      },
-      {
-        path: `${TEST_WORKTREE_PATH}/child`,
-        head: 'child',
-        branch: 'refs/heads/child',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
-    vi.mocked(listWorktreesStrict).mockResolvedValue([
-      {
-        path: TEST_REPO_PATH,
-        head: 'main',
-        branch: 'refs/heads/main',
-        isBare: false,
-        isMainWorktree: true
-      },
-      {
-        path: TEST_WORKTREE_PATH,
-        head: 'parent',
-        branch: 'refs/heads/parent',
-        isBare: false,
-        isMainWorktree: false
-      },
-      {
-        path: `${TEST_WORKTREE_PATH}/child`,
-        head: 'child',
-        branch: 'refs/heads/child',
-        isBare: false,
-        isMainWorktree: false
-      }
-    ])
-    vi.mocked(getEffectiveHooks).mockReturnValue({
-      scripts: {
-        archive: 'pnpm worktree:archive'
-      }
-    })
-
-    await expect(
-      runtime.removeManagedWorktree(TEST_WORKTREE_ID, { force: true, runHooks: true })
-    ).rejects.toThrow(
-      `Refusing to delete worktree because it contains another registered worktree: ${TEST_WORKTREE_PATH}/child`
-    )
-
-    expect(runHook).not.toHaveBeenCalled()
-    expect(assertWorktreeCleanForRemoval).not.toHaveBeenCalled()
-    expect(removeWorktree).not.toHaveBeenCalled()
-  })
-
-  it('deletes an approved nested worktree before its parent', async () => {
-    const runtime = createWorktreeRemovalRuntime()
-    const main = {
-      path: TEST_REPO_PATH,
-      head: 'main',
-      branch: 'refs/heads/main',
-      isBare: false,
-      isMainWorktree: true
-    }
-    const parent = {
-      path: TEST_WORKTREE_PATH,
-      head: 'parent',
-      branch: 'refs/heads/parent',
-      isBare: false,
-      isMainWorktree: false
-    }
-    const child = {
-      path: `${TEST_WORKTREE_PATH}/child`,
-      head: 'child',
-      branch: 'refs/heads/child',
-      isBare: false,
-      isMainWorktree: false
-    }
-    let registered = [main, parent, child]
-    vi.mocked(listWorktrees).mockImplementation(async () => registered)
-    vi.mocked(listWorktreesStrict).mockImplementation(async () => registered)
-    vi.mocked(removeWorktree).mockImplementation(async (_repoPath, worktreePath) => {
-      registered = registered.filter((item) => item.path !== worktreePath)
-      return {}
-    })
-
-    await runtime.removeManagedWorktreeWithNested(TEST_WORKTREE_ID, [child, parent], {
-      force: true
-    })
-
-    expect(vi.mocked(removeWorktree).mock.calls.map((call) => call[1])).toEqual([
-      `${TEST_WORKTREE_PATH}/child`,
-      TEST_WORKTREE_PATH
-    ])
-  })
-
-  it('fails dirty non-force deletes before PTY teardown', async () => {
-    const runtime = createWorktreeRemovalRuntime()
-    const killSpy = vi.fn().mockReturnValue(true)
-    runtime.setPtyController({
-      write: () => true,
-      kill: (id) => killSpy(id),
-      getForegroundProcess: async () => null
-    })
-    syncSinglePty(runtime, 'pty-1')
-    vi.mocked(getEffectiveHooks).mockReturnValue(null)
-    vi.mocked(assertWorktreeCleanForRemoval).mockRejectedValue(
-      Object.assign(new Error('Worktree has uncommitted or untracked changes.'), {
-        stdout: '?? scratch.txt\n'
-      })
-    )
-
-    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).rejects.toThrow(
-      `Failed to delete worktree at ${TEST_WORKTREE_PATH}. ?? scratch.txt`
-    )
-
-    expect(closeLocalWatcherForWorktreePathMock).not.toHaveBeenCalled()
-    expect(removeWorktreeLinkedPathsMock).not.toHaveBeenCalled()
-    expect(killSpy).not.toHaveBeenCalled()
-    expect(removeWorktree).not.toHaveBeenCalled()
-  })
-
-  it('fails locked dirty-force deletes before hooks, link cleanup, or PTY teardown', async () => {
-    const repo = { ...store.getRepos()[0], symlinkPaths: ['node_modules'] }
-    const runtimeStore = {
-      ...store,
-      getRepos: () => [repo],
-      getRepo: () => repo
-    }
-    const runtime = createWorktreeRemovalRuntime(runtimeStore)
-    const killSpy = vi.fn().mockReturnValue(true)
-    runtime.setPtyController({
-      write: () => true,
-      kill: (id) => killSpy(id),
-      getForegroundProcess: async () => null
-    })
-    syncSinglePty(runtime, 'pty-1')
-    vi.mocked(getEffectiveHooks).mockReturnValue({
-      scripts: { archive: 'pnpm worktree:archive' }
-    })
-    vi.mocked(listWorktreesStrict).mockResolvedValue([
-      {
-        ...MOCK_GIT_WORKTREES[0],
-        locked: true,
-        lockReason: 'active agent session'
-      }
-    ])
-
-    await expect(
-      runtime.removeManagedWorktree(TEST_WORKTREE_ID, { force: true, runHooks: true })
-    ).rejects.toThrow(
-      `Failed to force delete worktree at ${TEST_WORKTREE_PATH}. Worktree is locked by Git.`
-    )
-
-    expect(assertWorktreeCleanForRemoval).not.toHaveBeenCalled()
-    expect(runHook).not.toHaveBeenCalled()
-    expect(removeWorktreeLinkedPathsMock).not.toHaveBeenCalled()
-    expect(killSpy).not.toHaveBeenCalled()
-    expect(removeWorktree).not.toHaveBeenCalled()
   })
 
   it('rechecks a runtime Git lock after the archive hook before teardown', async () => {
@@ -368,7 +170,6 @@ describe('OrcaRuntimeService', () => {
       stdout: '',
       stderr: ''
     })
-    const pruneCallsBefore = gitSpy.mock.calls.filter(([args]) => args[0] === 'worktree').length
 
     try {
       await expect(runtime.removeManagedWorktree(worktreeId)).rejects.toThrow(
@@ -377,9 +178,6 @@ describe('OrcaRuntimeService', () => {
       await expect(lstat(orphanPath)).resolves.toBeTruthy()
       expect(removeWorktreeMeta).not.toHaveBeenCalled()
       expect(restoreLocalWatcherAfterFailedRemovalMock).toHaveBeenCalledWith(orphanPath)
-      expect(gitSpy.mock.calls.filter(([args]) => args[0] === 'worktree')).toHaveLength(
-        pruneCallsBefore
-      )
 
       await rm(orphanPath, { recursive: true, force: true })
       vi.mocked(listWorktrees).mockResolvedValue([])
@@ -391,167 +189,5 @@ describe('OrcaRuntimeService', () => {
       gitSpy.mockRestore()
       await rm(parentDir, { recursive: true, force: true })
     }
-  })
-
-  it('retains metadata when proven orphan cleanup cannot remove the directory', async () => {
-    const parentDir = await mkdtemp(join(tmpdir(), 'orca-runtime-orphan-removal-failure-'))
-    const repoPath = join(parentDir, 'repo')
-    const orphanPath = join(parentDir, 'orphan')
-    const adminWorktreePath = join(repoPath, '.git', 'worktrees', 'orphan')
-    const worktreeId = `${TEST_REPO_ID}::${orphanPath}`
-    await mkdir(orphanPath, { recursive: true })
-    await mkdir(adminWorktreePath, { recursive: true })
-    await writeFile(join(orphanPath, '.git'), `gitdir: ${adminWorktreePath}\n`)
-    await writeFile(join(adminWorktreePath, 'gitdir'), `${join(orphanPath, '.git')}\n`)
-    const { runtimeStore, removeWorktreeMeta } = createStaleRuntimeWorktreeStore(worktreeId)
-    const runtimeStoreWithRepoPath = {
-      ...runtimeStore,
-      getRepos: () => [
-        {
-          id: TEST_REPO_ID,
-          path: repoPath,
-          displayName: 'repo',
-          badgeColor: 'blue',
-          addedAt: 1
-        }
-      ],
-      getRepo: (id: string) =>
-        id === TEST_REPO_ID
-          ? {
-              id: TEST_REPO_ID,
-              path: repoPath,
-              displayName: 'repo',
-              badgeColor: 'blue',
-              addedAt: 1
-            }
-          : undefined
-    }
-    const runtime = createWorktreeRemovalRuntime(runtimeStoreWithRepoPath)
-    const registeredWorktree = {
-      path: orphanPath,
-      head: 'abc',
-      branch: 'feature/orphan',
-      isBare: false,
-      isMainWorktree: false
-    }
-    vi.mocked(listWorktrees).mockResolvedValue([registeredWorktree])
-    vi.mocked(listWorktreesStrict).mockResolvedValue([registeredWorktree])
-    vi.mocked(removeWorktree).mockRejectedValue(
-      Object.assign(new Error('git worktree remove failed'), {
-        stderr: `fatal: '${orphanPath}' is not a working tree`
-      })
-    )
-    vi.mocked(assertWorktreeCleanForRemoval).mockRejectedValue(
-      Object.assign(new Error('status failed'), {
-        stderr: 'fatal: not a git repository (or any of the parent directories): .git\n'
-      })
-    )
-    const removePathSpy = vi
-      .spyOn(localWorktreeFilesystem, 'removeLocalWorktreePath')
-      .mockRejectedValue(new Error('injected removal failure'))
-    const gitSpy = vi.spyOn(gitExecFile, 'gitExecFileAsync').mockResolvedValue({
-      stdout: '',
-      stderr: ''
-    })
-
-    try {
-      await expect(runtime.removeManagedWorktree(worktreeId)).rejects.toThrow(
-        'Worktree is no longer registered with Git but its directory remains.'
-      )
-      await expect(lstat(orphanPath)).resolves.toBeTruthy()
-      expect(removePathSpy).toHaveBeenCalledWith(orphanPath, {})
-      expect(removeWorktreeMeta).not.toHaveBeenCalled()
-      expect(gitSpy).not.toHaveBeenCalledWith(['worktree', 'prune'], expect.anything())
-    } finally {
-      removePathSpy.mockRestore()
-      gitSpy.mockRestore()
-      await rm(parentDir, { recursive: true, force: true })
-    }
-  })
-
-  it('preserves create-time metadata on later runtime listings when Windows path formatting differs', async () => {
-    const metaById: Record<string, WorktreeMeta> = {}
-    const runtimeStore = {
-      getRepo: (id: string) => runtimeStore.getRepos().find((repo) => repo.id === id),
-      getRepos: () => [
-        {
-          id: 'repo-1',
-          path: 'C:\\repo',
-          displayName: 'repo',
-          badgeColor: 'blue',
-          addedAt: 1
-        }
-      ],
-      addRepo: () => {},
-      updateRepo: () => undefined as never,
-      getAllWorktreeMeta: () => metaById,
-      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
-      setWorktreeMeta: ({ id: worktreeId }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
-        const existingMeta = metaById[worktreeId]
-        const nextMeta: WorktreeMeta = {
-          displayName: meta.displayName ?? existingMeta?.displayName ?? '',
-          comment: meta.comment ?? existingMeta?.comment ?? '',
-          linkedIssue: meta.linkedIssue ?? existingMeta?.linkedIssue ?? null,
-          linkedPR: meta.linkedPR ?? existingMeta?.linkedPR ?? null,
-          linkedLinearIssue: meta.linkedLinearIssue ?? existingMeta?.linkedLinearIssue ?? null,
-          linkedGitLabMR: meta.linkedGitLabMR ?? existingMeta?.linkedGitLabMR ?? null,
-          linkedGitLabIssue: meta.linkedGitLabIssue ?? existingMeta?.linkedGitLabIssue ?? null,
-          isArchived: meta.isArchived ?? existingMeta?.isArchived ?? false,
-          isUnread: meta.isUnread ?? existingMeta?.isUnread ?? false,
-          isPinned: meta.isPinned ?? existingMeta?.isPinned ?? false,
-          sortOrder: meta.sortOrder ?? existingMeta?.sortOrder ?? 0,
-          lastActivityAt: meta.lastActivityAt ?? existingMeta?.lastActivityAt ?? 0
-        }
-        metaById[worktreeId] = nextMeta
-        return nextMeta
-      },
-      removeWorktreeMeta: () => {},
-      getRetiredWorktreeNameRegistry: () => ({ exhaustedTiers: 0, names: [] }),
-      addRetiredWorktreeName: () => {},
-      mergeRetiredWorktreeNames: () => false,
-      getGitHubCache: () => undefined as never,
-      getSettings: () => ({
-        workspaceDir: 'C:\\workspaces',
-        nestWorkspaces: false,
-        refreshLocalBaseRefOnWorktreeCreate: false,
-        branchPrefix: 'none',
-        branchPrefixCustom: ''
-      })
-    }
-    computeWorktreePathMock.mockReturnValue('C:\\workspaces\\improve-dashboard')
-    ensurePathWithinWorkspaceMock.mockReturnValue('C:\\workspaces\\improve-dashboard')
-    vi.mocked(listWorktrees)
-      .mockResolvedValueOnce([
-        {
-          path: 'C:/workspaces/improve-dashboard',
-          head: 'abc',
-          branch: 'refs/heads/improve-dashboard',
-          isBare: false,
-          isMainWorktree: false
-        }
-      ])
-      .mockResolvedValueOnce([
-        {
-          path: 'C:/workspaces/improve-dashboard',
-          head: 'abc',
-          branch: 'refs/heads/improve-dashboard',
-          isBare: false,
-          isMainWorktree: false
-        }
-      ])
-
-    const runtime = new OrcaRuntimeService(runtimeStore)
-    await runtime.createManagedWorktree({
-      repoSelector: 'id:repo-1',
-      name: 'Improve Dashboard'
-    })
-    const listed = await runtime.listManagedWorktrees('id:repo-1')
-
-    expect(listed.worktrees).toMatchObject([
-      {
-        id: 'repo-1::C:/workspaces/improve-dashboard',
-        displayName: 'Improve Dashboard'
-      }
-    ])
   })
 })

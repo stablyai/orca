@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { track } from '../../../../telemetry/client'
-import { CALLER, attachParams, hostTestState } from './structured-agent-session-host-test-harness'
-import './structured-agent-session-create-test-fixture'
+import { CALLER, attachParams, hostTestState } from './structured-agent-session-host.test-fixture'
+import './structured-agent-session-create.test-fixture'
 
 vi.mock('../../../../telemetry/client', () => ({ track: vi.fn() }))
 beforeEach(() => vi.mocked(track).mockClear())

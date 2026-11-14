@@ -21,7 +21,7 @@ import {
   discardHookLaneCompletionRequests,
   submitHookLaneCompletion
 } from './agent-hook-completion-revision-hold'
-import { getFirstTerminalTab } from '@/store/terminals/terminal-tab-owner-index'
+import { getFirstTerminalTab } from '@/store/terminals/ownership/terminal-tab-owner-index'
 import * as finishDrops from '@/attention/agent-finish-drop-breadcrumb'
 import type {
   CoordinatorEntry,

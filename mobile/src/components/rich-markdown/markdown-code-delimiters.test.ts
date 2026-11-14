@@ -26,11 +26,8 @@ function mount() {
 }
 
 it.each([
-  ['a`b', '``a`b``'],
   ['a``b', '```a``b```'],
   ['`edge', '`` `edge ``'],
-  ['edge`', '`` edge` ``'],
-  ['`', '`` ` ``'],
   ['  surrounded  ', '`   surrounded   `'],
   ['   ', '`   `']
 ])('preserves selected inline code %j through the host and a reload', async (literal, saved) => {

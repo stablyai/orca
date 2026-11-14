@@ -1,3 +1,8 @@
+import {
+  readTestJournalSnapshot,
+  readTestJournalSubmissions
+} from '../../../agent-session-journal/journal-observation.test-support'
+import { openTestAgentSessionDatabase } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -6,11 +11,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { openAgentSessionJournal } from '../../../agent-session-journal/journal-store-factory'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import { settleObservedExitForTest } from './structured-agent-session-observed-exit.test-fixture'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { closeTestJournalHostDatabases } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const SESSION = 'session-dead-generation'
 const THREAD = 'thread-1'
@@ -27,7 +29,7 @@ beforeEach(async () => {
       agent: 'codex',
       providerHandle: codexProviderHandle(THREAD)
     },
-    database: openTestJournalHostDatabase(root),
+    database: await openTestAgentSessionDatabase(root),
     now: () => 1_000
   })
 })
@@ -94,7 +96,7 @@ describe('dead structured-session generation settlement', () => {
       })
     ).resolves.toMatchObject({ ok: true })
 
-    const snapshot = journal.snapshot()
+    const snapshot = await readTestJournalSnapshot(journal)
     expect(snapshot.submissions).toEqual([
       expect.objectContaining({ clientMessageId: 'client-1', dispatchState: 'unknown' })
     ])
@@ -144,7 +146,7 @@ describe('dead structured-session generation settlement', () => {
       })
     ).resolves.toMatchObject({ ok: true })
 
-    expect(journal.submissions()).toEqual([
+    expect(await readTestJournalSubmissions(journal)).toEqual([
       expect.objectContaining({
         clientMessageId: 'client-unknown',
         dispatchState: 'unknown',

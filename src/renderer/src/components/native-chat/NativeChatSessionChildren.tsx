@@ -6,12 +6,11 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import { NativeChatSubagentRun } from './subagents/NativeChatSubagentRun'
 import { useNativeChatSessionChildren } from './use-native-chat-session-children'
 import {
-  NativeChatChildNavigationContext,
   useNativeChatChildNavigation,
   type NativeChatChildLocation
 } from './native-chat-child-navigation'
 import type { OrchestrationSessionChild } from '../../../../shared/orchestration-session-children'
-import { subagentStateLabel } from '../../../../shared/native-chat/transcript/native-chat-subagent-group-header'
+import { subagentStateLabel } from '../../../../shared/native-chat/transcript/subagents/native-chat-subagent-group-header'
 import { sayNativeChatSubagentGroupTranslated as say } from './subagents/native-chat-subagent-group-words-text'
 import { NativeChatChildMetadata } from './NativeChatChildMetadata'
 
@@ -84,37 +83,37 @@ export function NativeChatSessionChildren({
       className="max-h-[30%] shrink-0 overflow-y-auto px-3 py-2 scrollbar-sleek sm:px-4"
     >
       <div className="mx-auto w-full max-w-(--chat-content-max-width)">
-        <NativeChatChildNavigationContext.Provider value={workerNavigation}>
-          <NativeChatSubagentRun
-            block={{ type: 'subagent-group', groupId: `session-workers:${sessionId}`, agents }}
-            entryDetails={
-              new Map(
-                children.map((child) => [
-                  `dispatch:${child.dispatchId}`,
-                  child.metadata?.agent ||
-                  child.metadata?.executionHost ||
-                  child.conversation.kind === 'journal' ? (
-                    <NativeChatChildMetadata
-                      key={child.dispatchId}
-                      worker={child}
-                      target={target}
-                    />
-                  ) : null
-                ])
-              )
-            }
-            stateLabels={
-              new Map(
-                children.map((child) => [
-                  `dispatch:${child.dispatchId}`,
-                  current
-                    ? nativeChatWorkerStateLabel(child, t)
-                    : t('components.native-chat.children.unavailableState', 'Unavailable')
-                ])
-              )
-            }
-          />
-        </NativeChatChildNavigationContext.Provider>
+        <NativeChatSubagentRun
+          block={{ type: 'subagent-group', groupId: `session-workers:${sessionId}`, agents }}
+          onOpenSubagent={(agentId) =>
+            workerNavigation.open({
+              agentId,
+              label: agents.find((agent) => agent.id === agentId)?.label ?? agentId
+            })
+          }
+          entryDetails={
+            new Map(
+              children.map((child) => [
+                `dispatch:${child.dispatchId}`,
+                child.metadata?.agent ||
+                child.metadata?.executionHost ||
+                child.conversation.kind === 'journal' ? (
+                  <NativeChatChildMetadata key={child.dispatchId} worker={child} target={target} />
+                ) : null
+              ])
+            )
+          }
+          stateLabels={
+            new Map(
+              children.map((child) => [
+                `dispatch:${child.dispatchId}`,
+                current
+                  ? nativeChatWorkerStateLabel(child, t)
+                  : t('components.native-chat.children.unavailableState', 'Unavailable')
+              ])
+            )
+          }
+        />
         {!current ? (
           <p className="text-xs text-chat-foreground-faint">
             {t(

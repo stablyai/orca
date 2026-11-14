@@ -6,9 +6,9 @@ import {
   agentSessionProviderHandleChainHead,
   type AgentSessionProviderHandleChain,
   type AgentSessionProviderHandleLink
-} from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { agentSessionProviderHandleKey } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+} from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import { agentSessionProviderHandleKey } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
+import { requireLegacyAgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { resolveCliCommand } from '../../../../shared/node-cli-command-resolution'
 import { hasReachedAppVersion } from '../../../../shared/app-version'
 import {
@@ -16,7 +16,7 @@ import {
   type AgentCliVersionCheck,
   type AgentCliVersionReader
 } from '../../../agent-launch/preflight/agent-cli-version-probe'
-import { AgentCliInstallationError } from '../../../native-chat/agent-cli-installation-error'
+import { AgentCliInstallationError } from '../../../native-chat/agent-launch/agent-cli-installation-error'
 import {
   resolveAgainAfterRefreshOnMissingProgram,
   assertStructuredAgentResolutionCurrent,
@@ -24,7 +24,7 @@ import {
   resolveStructuredAgentCommand,
   type StructuredAgentCommand,
   type StructuredAgentCommandSettings
-} from '../../../native-chat/structured-agent-command-resolution'
+} from '../../../native-chat/agent-launch/structured-agent-command-resolution'
 import type { StructuredAgentLaunchPartResolver } from '../../../runtime/agent-session/launch/structured-agent-launch-composition'
 import { isWindowsProcessStartTimeAvailable } from '../../../windows/windows-process-table'
 import { sessionIdFromFileName } from '../../../ai-vault/parsing/session-scanner-accumulator'
@@ -76,6 +76,7 @@ export function resolvePiRpcCommand(
 
 export function checkPiRpcVersion(
   launch: {
+    operation?: StructuredAgentResolutionOperation
     command: string
     prefixArgs?: readonly string[]
     cwd: string
@@ -84,7 +85,13 @@ export function checkPiRpcVersion(
   read?: AgentCliVersionReader
 ): Promise<AgentCliVersionCheck> {
   return checkAgentCliVersion(
-    { program: launch.command, prefixArgs: launch.prefixArgs, cwd: launch.cwd, env: launch.env },
+    {
+      program: launch.command,
+      prefixArgs: launch.prefixArgs,
+      cwd: launch.cwd,
+      env: launch.env,
+      operation: launch.operation
+    },
     PI_RPC_MINIMUM_VERSIONS,
     read
   )

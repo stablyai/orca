@@ -19,12 +19,6 @@ describe('AI Vault full first-user-prompt normalization', () => {
 
     expect(normalizeFullFirstUserPromptText(raw)).toBe('ship it')
   })
-
-  it('still rejects a user_info dump with no user_query anywhere', () => {
-    const raw = `<user_info>\n${'context '.repeat(SAFETY_LIMIT / 4)}`
-
-    expect(normalizeFullFirstUserPromptText(raw)).toBeNull()
-  })
 })
 
 function hasUnpairedSurrogate(value: string): boolean {

@@ -7,7 +7,7 @@ import type {
   StructuredAgentSessionHostSession
 } from './host/structured-agent-session-host-types'
 import type { AgentSessionSubscribers } from './publication/subscribers/structured-agent-session-subscribers'
-import { recordingStructuredAgentSessionLogger } from './host/testing/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from './host/testing/structured-agent-session-logger.test-fixture'
 
 const child: AgentChildWorkView = {
   id: 'child-1',
@@ -46,12 +46,17 @@ function channelOver(
     async () => {
       throw new Error('not opened here')
     },
+    async () => null,
     children,
     incomplete
   )
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the map reads only the journal's commit observer and the session's provider.
   const session = {
-    journal: { observeCommits: () => {}, stopMarks: { observeSettleEdges: () => {} } },
+    journal: {
+      observeCommits: () => () => {},
+      epochReplacements: { observe: () => () => {} },
+      stopMarks: { observeSettleEdges: () => () => {} }
+    },
     params: { provider: 'claude' }
   } as unknown as StructuredAgentSessionHostSession
   return { sessions, republished, channel, session }

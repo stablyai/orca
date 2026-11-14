@@ -1,11 +1,11 @@
 import { join } from 'node:path'
-import type { CommandHandler } from '../dispatch'
-import { printResult } from '../command-result-output'
-import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
-import { RuntimeClientError } from '../runtime/types'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { printResult } from '../output/command-result-output'
+import { rejectRemoteSelectionFlags } from '../dispatch/remote-selection-flag-rejection'
+import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeClient } from '../runtime/client'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
-import { getDefaultUserDataPath } from '../runtime/metadata'
+import { getDefaultUserDataPath } from '../runtime/profile/metadata'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../shared/orca-profiles'
 import type { GlobalSettings } from '../../shared/global-settings-types'
@@ -30,7 +30,7 @@ async function getSettingsPath(): Promise<string> {
 }
 
 async function getProfileStateLocation(): Promise<ProfileStateOfflineLocation | undefined> {
-  const { getActiveProfileStateLocation } = await import('../profile-state-location.js')
+  const { getActiveProfileStateLocation } = await import('../profiles/profile-state-location.js')
   return getActiveProfileStateLocation()
 }
 

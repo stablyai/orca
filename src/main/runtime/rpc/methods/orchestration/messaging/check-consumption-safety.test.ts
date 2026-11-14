@@ -3,6 +3,10 @@ import { z } from 'zod'
 import { createRootDispatch } from '../../../../orchestration/db/root-dispatch-test-fixture'
 import { ORCHESTRATION_DELIVERY_BATCH_LIMIT } from '../../../../orchestration/db/messages/mailbox-routing-page'
 import { createOrchestrationRpcHarness } from '../rpc-test-harness'
+import { RpcDispatcher } from '../../../dispatcher'
+import { ORCHESTRATION_METHODS } from '../orchestration'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import { resultOf } from '../../../orchestration/callers/session.test-fixture'
 
 const LEAD = 'tab_lead:22222222-2222-4222-9222-222222222222'
 const OTHER = 'tab_other:33333333-3333-4333-8333-333333333333'
@@ -10,7 +14,9 @@ const OTHER = 'tab_other:33333333-3333-4333-8333-333333333333'
 const checkResult = z.object({
   deliveryId: z.string().nullable(),
   count: z.number(),
-  messages: z.array(z.object({ subject: z.string() }).passthrough())
+  messages: z.array(z.object({ subject: z.string() }).passthrough()),
+  acknowledged: z.string().nullable(),
+  formatted: z.string().optional()
 })
 type CheckResult = z.infer<typeof checkResult>
 
@@ -66,28 +72,96 @@ describe('consuming checks', () => {
   }
 
   describe.each(['dispatch', 'run'] as const)('on a %s mailbox', (kind) => {
-    it('gives waiters woken by one notification the same whole batch and receipt', async () => {
+    it.each([true, false])(
+      'shares a whole batch with each waiter’s own format and receipt (first formatted: %s)',
+      async (firstFormatted) => {
+        const box = await mailbox(kind)
+        insert(box, 'handled before waiting')
+        const handled = await check()
+        const waits = vi.spyOn(state.runtime, 'waitForMessage')
+        const dispatcher = new RpcDispatcher({
+          runtime: state.runtime,
+          methods: ORCHESTRATION_METHODS
+        })
+        const requests = [0, 1].map((index) => ({
+          id: `rpc-wait-${index}`,
+          authToken: 'test-token',
+          method: 'orchestration.check',
+          orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+          orchestrationRequestId: `mutation-wait-${index}`,
+          params: {
+            terminal: 'term_lead',
+            wait: true,
+            timeoutMs: 5_000,
+            format: index === 0 ? firstFormatted : !firstFormatted,
+            ...(index === 0 ? { ack: handled.deliveryId } : {})
+          }
+        }))
+        const waiting = requests.map((request) => dispatcher.dispatch(request))
+        await vi.waitFor(() => expect(waits).toHaveBeenCalledTimes(2))
+        for (let index = 0; index <= ORCHESTRATION_DELIVERY_BATCH_LIMIT; index += 1) {
+          insert(box, `report ${index}`)
+        }
+        state.runtime.notifyMessageArrived(box.address, 'status')
+
+        const responses = await Promise.all(waiting)
+        const [first, second] = responses.map((response) => checkResult.parse(resultOf(response)))
+        expect(first.count).toBe(ORCHESTRATION_DELIVERY_BATCH_LIMIT)
+        expect(second).toMatchObject({ deliveryId: first.deliveryId, count: first.count })
+        expect(first).toMatchObject({ acknowledged: handled.deliveryId })
+        expect(second).toMatchObject({ acknowledged: null })
+        const formatted = firstFormatted ? first : second
+        const plain = firstFormatted ? second : first
+        expect(formatted).toMatchObject({ formatted: expect.stringContaining('report 0') })
+        expect(plain).not.toHaveProperty('formatted')
+        for (const [index, request] of requests.entries()) {
+          expect(await dispatcher.dispatch(request)).toEqual({
+            ...responses[index],
+            result: {
+              ...resultOf(responses[index]),
+              mutation: { requestId: request.orchestrationRequestId, replayed: true }
+            }
+          })
+        }
+        expect(state.db.getUnreadMessages(box.address)).toHaveLength(1)
+      }
+    )
+
+    it('keeps a shared raw claim after its whole mail leaves the outstanding view', async () => {
       const box = await mailbox(kind)
       const waits = vi.spyOn(state.runtime, 'waitForMessage')
       const receipts = [vi.fn(), vi.fn()]
       const waiting = receipts.map((recordMutationReceipt) =>
-        check({ wait: true, timeoutMs: 5_000 }, { ...state.ctx, recordMutationReceipt })
+        check({ wait: true }, { ...state.ctx, recordMutationReceipt })
       )
       await vi.waitFor(() => expect(waits).toHaveBeenCalledTimes(2))
-      for (let index = 0; index <= ORCHESTRATION_DELIVERY_BATCH_LIMIT; index += 1) {
-        insert(box, `report ${index}`)
-      }
+      const original = insert(box, 'already delivered whole')
+      const select = state.db.getOrCreateMailboxDelivery.bind(state.db)
+      vi.spyOn(state.db, 'getOrCreateMailboxDelivery').mockImplementationOnce((params) => {
+        const claim = select(params)
+        // Whole-delivery settlement hides D before either notified check can finalize it.
+        state.db.markAsRead([original.id])
+        insert(box, 'arrived after the claim')
+        return claim
+      })
       state.runtime.notifyMessageArrived(box.address, 'status')
-
       const [first, second] = await Promise.all(waiting)
-      expect(first.count).toBe(ORCHESTRATION_DELIVERY_BATCH_LIMIT)
-      expect(second).toMatchObject({ deliveryId: first.deliveryId, count: first.count })
+      expect(first).toMatchObject({ count: 0, messages: [] })
+      expect(first.deliveryId).toMatch(/^delivery_/)
+      expect(second).toMatchObject({ deliveryId: first.deliveryId, count: 0, messages: [] })
+      expect(state.db.getDeliveryRaw(first.deliveryId!)?.message_ids).toBe('[]')
+      expect(state.db.getUnreadMessages(box.address)).toMatchObject([
+        { subject: 'arrived after the claim' }
+      ])
       for (const receipt of receipts) {
         expect(receipt).toHaveBeenLastCalledWith(
-          expect.objectContaining({ deliveryId: first.deliveryId })
+          expect.objectContaining({
+            deliveryId: first.deliveryId,
+            count: 0,
+            messages: []
+          })
         )
       }
-      expect(state.db.getUnreadMessages(box.address)).toHaveLength(1)
     })
 
     it('never hands a woken filtered waiter a batch from before its wake', async () => {
@@ -121,10 +195,10 @@ describe('consuming checks', () => {
         state.db.db
           .prepare('UPDATE runs SET consumer_generation = consumer_generation + 1 WHERE id = ?')
           .run(run)
-      const take = state.db.takeMailboxDelivery.bind(state.db)
+      const take = state.db.finalizeMailboxDelivery.bind(state.db)
       const getRun = state.db.getRun.bind(state.db)
       let fenceOnNextRead = false
-      vi.spyOn(state.db, 'takeMailboxDelivery').mockImplementationOnce((params) => {
+      vi.spyOn(state.db, 'finalizeMailboxDelivery').mockImplementationOnce((params) => {
         const taken = take(params)
         if (when === 'inside the take') {
           fence()
@@ -195,6 +269,52 @@ describe('consuming checks', () => {
       h.call('orchestration.check', { terminal: 'term_other', ack: 'delivery_foreign' }, state.ctx)
     ).rejects.toMatchObject({ code: 'stale_delivery' })
     expect(state.db.getMessageById(mail.id)?.read).toBe(0)
+  })
+
+  it('leaves its exact claim and mail unread when final receipt recording rolls back', async () => {
+    const box = { address: `dispatch:${dispatch.id}`, runId: dispatch.run_id }
+    const mail = insert(box, 'receipt must commit')
+    await expect(
+      check(
+        {},
+        {
+          ...state.ctx,
+          recordMutationReceipt: () => {
+            throw new Error('receipt failed')
+          }
+        }
+      )
+    ).rejects.toThrow('receipt failed')
+    expect(state.db.getMessageById(mail.id)?.read).toBe(0)
+    expect(state.db.getOutstandingMailboxDelivery(box.address)?.messageIds).toEqual([mail.id])
+    expect(await check()).toMatchObject({ messages: [{ subject: 'receipt must commit' }] })
+  })
+
+  it('lets a same-wake sibling commit the claim after the first receipt rolls back', async () => {
+    const box = { address: `dispatch:${dispatch.id}`, runId: dispatch.run_id }
+    const waits = vi.spyOn(state.runtime, 'waitForMessage')
+    const failed = check(
+      { wait: true },
+      {
+        ...state.ctx,
+        recordMutationReceipt: () => {
+          throw new Error('receipt failed')
+        }
+      }
+    )
+    const sibling = check({ wait: true })
+    const results = Promise.allSettled([failed, sibling])
+    await vi.waitFor(() => expect(waits).toHaveBeenCalledTimes(2))
+    const mail = insert(box, 'commit after rollback')
+    state.runtime.notifyMessageArrived(box.address, 'status')
+    const [first, second] = await results
+    expect(first).toMatchObject({ status: 'rejected', reason: { message: 'receipt failed' } })
+    expect(second).toMatchObject({
+      status: 'fulfilled',
+      value: { messages: [{ subject: 'commit after rollback' }] }
+    })
+    expect(state.db.getMessageById(mail.id)?.read).toBe(1)
+    expect(state.db.getOutstandingMailboxDelivery(box.address)).toBeUndefined()
   })
 
   it('rolls the take back when its receipt cannot be recorded', () => {

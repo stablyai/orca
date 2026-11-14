@@ -12,16 +12,16 @@ import type {
   BrowserTypeResult,
   BrowserUploadResult
 } from '../../shared/browser/runtime/runtime-browser-contracts'
-import type { CommandHandler } from '../dispatch'
+import type { CommandHandler } from '../dispatch/dispatch'
 import { resolveRepoPathArgument } from '../projects/repo-path-arguments'
-import { printResult } from '../command-result-output'
+import { printResult } from '../output/command-result-output'
 import {
   getOptionalNumberFlag,
   getOptionalStringFlag,
   getRequiredFiniteNumber,
   getRequiredStringFlag,
   getRequiredStringFlagAllowingEmpty
-} from '../flags'
+} from '../arguments/flags'
 import { getBrowserCommandTarget } from './browser-command-target'
 
 const checkHandler =

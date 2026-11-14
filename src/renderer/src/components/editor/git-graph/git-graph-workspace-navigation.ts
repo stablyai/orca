@@ -5,6 +5,7 @@ import { getWorktreeExecutionHostId } from '../../../../../shared/execution-host
 import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { useAppStore } from '@/store'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { gitGraphScope } from '@/lib/source-control/graph/git-graph-tab'
 import { getRuntimeGitRefs } from '@/runtime/source-control/git/runtime-git-status-client'
 
@@ -67,7 +68,11 @@ export async function switchGitGraphWorkspace(
           normalizeRuntimePathForComparison(row.path) === normalizeRuntimePathForComparison(path)
       )
     if (workspace) {
-      useAppStore.getState().setActiveWorktree(workspace.id, hostId)
+      activateAndRevealWorktree(workspace.id, {
+        navigationIntent: 'user-open',
+        executionHostId: hostId,
+        clearSidebarFilters: false
+      })
     } else {
       toast.message(
         translate(

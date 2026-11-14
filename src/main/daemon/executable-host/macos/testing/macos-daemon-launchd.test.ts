@@ -92,7 +92,7 @@ const nativePlatform = process.platform
 const originalGetuid = Object.getOwnPropertyDescriptor(process, 'getuid')
 const originalGetSystemVersion = Object.getOwnPropertyDescriptor(process, 'getSystemVersion')
 const roomyDeadline = (): number => Date.now() + 60_000
-const helperExec = (): string => join(copyDir, 'MacOS', 'orca-terminal-host')
+const helperExec = (): string => join(copyDir, 'MacOS', 'Orca Agents')
 const helperEntry = (): string => join(copyDir, 'daemon-entry.js')
 const service = (): string => `gui/501/${macDaemonJobLabel(state.root)}`
 const launchctlCalls = (verb: string): ProcessSpec[] =>

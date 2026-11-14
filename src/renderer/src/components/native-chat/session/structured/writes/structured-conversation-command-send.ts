@@ -24,6 +24,7 @@ import {
   type StructuredConversationCommandHold
 } from '../../../../../../../shared/structured-conversation-command-hold'
 import type { StructuredAgentSessionWriteOutcome } from './use-structured-agent-session-mutate'
+import { structuredAgentSessionCommandWriteRefusalCause } from '../../../../../../../shared/agent-session/failures/structured-agent-session-command-refusal-cause'
 
 type CommandOutcome = Omit<StructuredAgentSessionCommandOutcome, 'handled'>
 
@@ -81,7 +82,10 @@ export async function sendStructuredConversationCommand(input: {
     input.onSent?.()
     const outcome = await sending
     if (outcome.kind === 'not-done') {
-      return { accepted: false, error: outcome.notice }
+      return refused(
+        outcome.notice,
+        structuredAgentSessionCommandWriteRefusalCause(outcome.failure)
+      )
     }
     // The pane stopped waiting on this reply (closed, left the chat, or sent a newer command).
     if (outcome.kind === 'dropped') {
@@ -160,12 +164,12 @@ export function structuredConversationCommandRunner(args: {
       agentName: args.agentName,
       pending: args.pending,
       hold: structuredConversationCommandHold({
+        command,
         waitsInLine,
         agentWorking,
         promptPending,
-        // A rewind on its way holds a command as background work does, in the same words.
-        backgroundTasksRunning:
-          args.chat.backgroundTasks.isMonitoring || args.rewindInFlight.current,
+        backgroundTasksRunning: args.chat.backgroundTasks.isMonitoring,
+        rewindInFlight: args.rewindInFlight.current,
         sendPending
       }),
       causes,

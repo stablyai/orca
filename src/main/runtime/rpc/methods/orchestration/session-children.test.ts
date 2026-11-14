@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-runtime-capabilities'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -10,13 +10,13 @@ import {
   hostTestAttachParams,
   hostTestMessage,
   hostTestOperationId
-} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
   createRestTestRig,
   REST_TEST_CALLER,
   type RestTestRig
-} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+} from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
 import { OrchestrationDb } from '../../../orchestration/db/orchestration-db'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import {
@@ -203,7 +203,7 @@ it('opens released worker history and a live reader through RPC without acquirin
     'Full original recorded answer'
   ]) {
     expect(JSON.stringify(history)).toContain(text)
-    expect(JSON.stringify(subscription)).toContain(text)
+    await vi.waitFor(() => expect(JSON.stringify(subscription)).toContain(text))
   }
   expect(rig.adapter.acquire).not.toHaveBeenCalled()
   expect(rig.adapter.dispatch).not.toHaveBeenCalled()

@@ -1,6 +1,6 @@
 import { createServer as createHttpServer, type IncomingMessage, type Server } from 'node:http'
 import { createServer, connect as connectTcp, type Socket } from 'node:net'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   connectNativeBrowserNetworkTarget,
   resolveNativeBrowserNetworkExecutionRoute
@@ -9,6 +9,10 @@ import { setNetworkProxySettingsSource } from '../execution-routes/browser-netwo
 import type { BrowserNetworkTunnelSocket } from './browser-network-tunnel-stream-state'
 
 const closers: (() => Promise<void>)[] = []
+
+beforeEach(() => {
+  setNetworkProxySettingsSource(null)
+})
 
 afterEach(async () => {
   vi.unstubAllEnvs()

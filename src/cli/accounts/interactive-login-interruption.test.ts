@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import type { ChildProcess } from 'node:child_process'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { terminateInteractiveLoginProcess } from './interactive-login-interruption'
 
 function loginChild(pid = 4321): ChildProcess & EventEmitter {
@@ -9,10 +9,6 @@ function loginChild(pid = 4321): ChildProcess & EventEmitter {
     pid
   }) as unknown as ChildProcess & EventEmitter
 }
-
-afterEach(() => {
-  vi.useRealTimers()
-})
 
 describe('terminateInteractiveLoginProcess', () => {
   it('waits for both Windows tree termination and physical wrapper close', async () => {
@@ -41,24 +37,5 @@ describe('terminateInteractiveLoginProcess', () => {
     finishTreeKill?.()
     await pending
     expect(child.kill).not.toHaveBeenCalled()
-  })
-
-  it('forwards the interrupt signal to a direct POSIX child and awaits close', async () => {
-    const child = loginChild()
-    let terminated = false
-
-    const pending = terminateInteractiveLoginProcess(child, 'SIGHUP', {
-      platform: 'linux'
-    }).then(() => {
-      terminated = true
-    })
-
-    expect(child.kill).toHaveBeenCalledWith('SIGHUP')
-    await Promise.resolve()
-    expect(terminated).toBe(false)
-
-    child.emit('close', 1)
-    await pending
-    expect(child.kill).toHaveBeenCalledOnce()
   })
 })

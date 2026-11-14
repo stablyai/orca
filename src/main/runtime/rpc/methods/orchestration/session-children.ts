@@ -1,5 +1,5 @@
 import { isOrcaSessionId } from '../../../../../shared/orca-session-address'
-import { SessionChildrenParams } from '../../../../../shared/rpc-contract/orchestration-params'
+import { SessionChildrenParams } from '../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import { structuredSessionChildWorkers } from '../../../orchestration/structured-session-child-workers'
 import { OrchestrationError } from '../../../orchestration/orchestration-error'
 import { defineOrchestrationMethod } from './access/orchestration-method-access'

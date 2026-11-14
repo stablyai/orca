@@ -1,5 +1,5 @@
-import { wslGatedReadFile } from '../../native-chat/wsl-transcript-fs-access'
-import { WslTranscriptFsError } from '../../native-chat/wsl-transcript-fs-error'
+import { wslGatedReadFile } from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
 import { asRecord } from '../parsing/session-record-fields'
 import { throwIfAiVaultScanCancelled } from '../scan-lifecycle/ai-vault-scan-cancellation'
 

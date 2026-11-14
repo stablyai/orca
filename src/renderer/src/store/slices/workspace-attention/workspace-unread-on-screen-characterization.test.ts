@@ -3,7 +3,12 @@ import type * as WorktreeMetaPersistModule from '../worktrees/metadata/worktree-
 import '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import '@/attention/agent-subject-read-actions'
 
-import { ringBell, setWindowOnScreen } from './workspace-unread-characterization-driver'
+import {
+  completeAgentTurn,
+  pointerDownInTab,
+  ringBell,
+  setWindowOnScreen
+} from './workspace-unread-characterization-driver'
 import {
   addLiveTerminalTab,
   createAttentionStore,
@@ -40,6 +45,34 @@ const dismissedPaneKeys = (): string[][] =>
   dismiss.mock.calls.map((call) => [...(call[1] ?? [])].sort())
 
 describe('on screen means read', () => {
+  it('clears the workspace dot when returning input reads a completed agent on the same tab', async () => {
+    const { store } = createAttentionStore({ desktopAway: true })
+    const pane = addLiveTerminalTab(store, WS_A, 'tab-a1')
+    store.getState().setActiveWorktree(WS_A)
+    store.setState({
+      agentStatusByPaneKey: {
+        [pane.paneKey]: {
+          state: 'done',
+          prompt: 'Fix the sidebar',
+          updatedAt: 900,
+          stateStartedAt: 900,
+          stateHistory: [],
+          agentType: 'claude',
+          ...pane
+        }
+      }
+    })
+    completeAgentTurn(store, pane)
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(store.getState().worktreesByRepo.repo1![0]!.isUnread).toBe(true)
+
+    pointerDownInTab(store, pane)
+
+    expect(store.getState().unreadAgentCompletionPanes).toEqual({})
+    expect(store.getState().worktreesByRepo.repo1![0]!.isUnread).toBe(false)
+  })
+
   it('a bell on screen waits while the window is unfocused and is read when focus returns', () => {
     const { store, persists } = createAttentionStore({ windowOnScreen: false })
     const pane = addLiveTerminalTab(store, WS_A, 'tab-a1')

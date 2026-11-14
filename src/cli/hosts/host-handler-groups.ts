@@ -1,4 +1,4 @@
-import type { HandlerGroup } from '../handler-group-manifest'
+import type { HandlerGroup } from '../dispatch/handler-group-manifest'
 
 // The machines Orca reaches: saved hosts and paired environments, the Orca servers it manages on
 // them, and recipe VMs.

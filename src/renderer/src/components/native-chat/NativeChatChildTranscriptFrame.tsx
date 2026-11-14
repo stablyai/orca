@@ -8,11 +8,11 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { NativeChatSubagentEntry } from '../../../../shared/native-chat/native-chat-types'
 import type { StructuredAgentSessionState } from '../../../../shared/agent-session/structured-agent-session-reducer'
-import { normalizeSubagentState } from '../../../../shared/native-chat/transcript/native-chat-subagent-summary'
-import { subagentStateLabel } from '../../../../shared/native-chat/transcript/native-chat-subagent-group-header'
+import { normalizeSubagentState } from '../../../../shared/native-chat/transcript/subagents/native-chat-subagent-summary'
+import { subagentStateLabel } from '../../../../shared/native-chat/transcript/subagents/native-chat-subagent-group-header'
 import { sayNativeChatSubagentGroupTranslated as say } from './subagents/native-chat-subagent-group-words-text'
 import { NativeChatMessageList } from './NativeChatMessageList'
-import { StatusDot } from './subagents/NativeChatSubagentRun'
+import { NativeChatSubagentStatusIcon } from './subagents/NativeChatSubagentStatusIcon'
 import { NativeChatRewindContext } from './messages/actions/native-chat-rewind-context'
 import type { NativeChatChildTranscriptProps } from './NativeChatChildTranscript'
 import { nativeChatWorkerStateLabel, NativeChatSessionChildren } from './NativeChatSessionChildren'
@@ -81,7 +81,7 @@ export function NativeChatChildTranscriptFrame({
           </span>
           {state ? (
             <span className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-chat-foreground-faint">
-              <StatusDot state={state} pulsing={working} />
+              <NativeChatSubagentStatusIcon state={state} />
               {worker
                 ? nativeChatWorkerStateLabel(worker, t)
                 : subagentStateLabel(state, 1, 1, say)}

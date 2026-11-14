@@ -1,4 +1,4 @@
-import { resolveConfiguredRemoteBranchName } from './repo-base-ref-search'
+import { resolveConfiguredRemoteBranchName } from '../snapshot/branch-ref-snapshot-data'
 import { gitExecOptions, type LocalGitExecOptions } from './repo-default-base-ref'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { isSafeGitRefName } from '../../../../shared/git/status/git-status-upstream-ref'

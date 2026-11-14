@@ -352,7 +352,13 @@ test('opens a remote pane link on the pane runtime and refuses to fall back to t
 
     await host.client.call(
       'browser.tabCreate',
-      { worktree: `id:${worktreeId}`, url: fixture.paneUrl, activate: true },
+      // Unplaced server-side creates go to the paired desktop; this pane is a streamed page.
+      {
+        worktree: `id:${worktreeId}`,
+        url: fixture.paneUrl,
+        activate: true,
+        placement: { kind: 'server' }
+      },
       { timeoutMs: 30_000 }
     )
     await expect

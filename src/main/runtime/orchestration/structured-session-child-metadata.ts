@@ -1,12 +1,12 @@
-import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
-import { isStructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import type { AgentSessionConversationView } from '../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
+import { isStructuredAgentId } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { parseRoutableExecutionHostId } from '../../../shared/execution-host'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
 import type {
   OrchestrationChildExecutionHost,
   OrchestrationChildMetadata
 } from '../../../shared/orchestration-session-children'
-import { FederationAttachStartParams } from '../../../shared/rpc-contract/orchestration-federation-start-params'
+import { FederationAttachStartParams } from '../../../shared/rpc-contract/orchestration/orchestration-federation-start-params'
 import {
   readWorkerTerminalHostScope,
   type WorkerTerminalHostScopeRead

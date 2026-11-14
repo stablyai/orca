@@ -8,7 +8,7 @@ import { NativeChatSessionChildren } from './NativeChatSessionChildren'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import { NativeChatUsageLimitActionsProvider } from './usage/NativeChatUsageLimitActions'
 import type { ComponentProps, ReactNode, Ref } from 'react'
-import { NativeChatMessageList } from './NativeChatMessageList'
+import { NativeChatSubagentTranscripts } from './subagents/NativeChatSubagentTranscripts'
 import { NativeChatRowActionsProvider } from './messages/actions/NativeChatRowActionsProvider'
 import {
   NativeChatHostSetupContext,
@@ -28,7 +28,7 @@ export function NativeChatStructuredTranscript({
   messageListRef,
   ...props
 }: Omit<
-  ComponentProps<typeof NativeChatMessageList>,
+  ComponentProps<typeof NativeChatSubagentTranscripts>,
   | 'ref'
   | 'journalItems'
   | 'journalSubmissions'
@@ -63,7 +63,7 @@ export function NativeChatStructuredTranscript({
         <NativeChatHostSetupContext.Provider value={setup}>
           <NativeChatWorkerApprovalTimeline party={nativeChatWorkerApprovalParty(pane)}>
             {(timedRows) => (
-              <NativeChatMessageList
+              <NativeChatSubagentTranscripts
                 {...props}
                 timedRows={timedRows}
                 structuredAttachments
