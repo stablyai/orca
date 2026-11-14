@@ -1,3 +1,5 @@
+import { shallow } from 'zustand/shallow'
+import { reuseArrayIfEqual } from './worktree-agent-row-selectors'
 import { resolveQualifiedWorktreeExecutionOwner } from '@/lib/workspace/ownership/qualified-worktree-execution-owner'
 import { isExecutionHostAliasForWorktree } from '@/lib/workspace/ownership/worktree-execution-host-alias'
 import { structuredAgentSessionOwnerInputs } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
@@ -27,6 +29,22 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getAgentPaneExecutionHost } from '@/store/slices/agent-status/agent-pane-execution-host'
 
 export const EMPTY_AGENT_ROWS: DashboardAgentRow[] = []
+
+function reuseUnchangedRows(previous: DashboardAgentRow[], next: DashboardAgentRow[]) {
+  const byPaneKey = new Map(previous.map((row) => [row.paneKey, row]))
+  return reuseArrayIfEqual(
+    previous,
+    next.map((row) => {
+      const old = byPaneKey.get(row.paneKey)
+      return old &&
+        shallow(old.tab, row.tab) &&
+        shallow(old.lineage, row.lineage) &&
+        shallow({ ...old, tab: row.tab, lineage: row.lineage }, row)
+        ? old
+        : row
+    })
+  )
+}
 
 function rowBelongsToHost(
   state: AppState,
@@ -151,10 +169,13 @@ export function createWorktreeAgentRowsSelector(worktreeId: string, hostId?: Exe
         .filter((tab) => tab.contentType === 'terminal')
         .map((tab) => [tab.entityId, tab.executionHostId])
     )
-    result = applyAgentRowLineage(
-      hostId
-        ? rows.filter((row) => rowBelongsToHost(state, row, hostId, workspaceOwner, stampedHosts))
-        : rows
+    result = reuseUnchangedRows(
+      result,
+      applyAgentRowLineage(
+        hostId
+          ? rows.filter((row) => rowBelongsToHost(state, row, hostId, workspaceOwner, stampedHosts))
+          : rows
+      )
     )
     return result
   }
