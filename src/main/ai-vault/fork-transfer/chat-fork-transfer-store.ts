@@ -8,6 +8,7 @@ import {
   CHAT_FORK_TRANSFER_IDLE_MS,
   CHAT_FORK_TRANSFER_MAX_BYTES
 } from '../../../shared/ai-vault/fork-transfer/chat-fork-transfer-limits'
+import { writeChatForkChunk } from './chat-fork-chunk-write'
 import { ChatForkImportLaunches } from './chat-fork-import-launches'
 import {
   ChatForkTransferError,
@@ -192,7 +193,7 @@ export class ChatForkTransferStore {
     }
     entry.busy = true
     try {
-      await entry.handle.write(bytes, 0, bytes.length, offset)
+      await writeChatForkChunk(entry.handle, bytes, offset)
     } catch (error) {
       void this.disposeImport(importId)
       throw error
