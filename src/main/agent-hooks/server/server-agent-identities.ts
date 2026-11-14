@@ -221,13 +221,14 @@ export abstract class AgentHookServerAgentIdentities extends AgentHookServerStat
       : sleeping
   }
 
-  /** Each saved sleeping record's terminal agent id, in order, null for one never named; one
-   *  store question for keys this authority has not answered. Undefined when it cannot answer. */
+  /** The ids of `records`, saved sleeping records from `saved`, in order; null for one never
+   *  named or not answered now. One store question for keys this authority has not answered. */
   sleepingTerminalAgentIds(
+    saved: Readonly<Record<string, SleepingAgentSighting>>,
     records: readonly SleepingAgentSighting[]
-  ): Promise<(OrcaSessionId | null)[] | undefined> {
-    return sleepingRecordIds(records, process.platform === 'win32', (keys) =>
-      this.agentIdentities.idsOfKeys(keys)
+  ): Promise<(OrcaSessionId | null)[]> {
+    return sleepingRecordIds(saved, records, process.platform === 'win32', (keys, population) =>
+      this.agentIdentities.idsOfKeys(keys, population)
     )
   }
 

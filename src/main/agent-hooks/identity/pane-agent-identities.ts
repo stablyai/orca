@@ -7,7 +7,7 @@ import { providerSessionLocatorIdentifies } from '../../../shared/agent-session/
 import type { OrcaSessionId } from '../../../shared/orca-session-address'
 import { sameProviderKey, type AgentProviderKey } from './agent-provider-key'
 import { AgentIdentityWorkerClient, type AgentIdentityClient } from './agent-identity-worker-client'
-import { SavedAgentKeyIds } from './saved-agent-key-ids'
+import { SavedAgentKeyIds, type SavedKeyPopulation } from './saved-agent-key-ids'
 import { AgentIdentityDemand, type KeyDemand } from './agent-identity-demand'
 import type { ReverseLookupUnavailable } from './agent-identity-worker-protocol'
 
@@ -187,10 +187,13 @@ export class PaneAgentIdentities {
     )
   }
 
-  /** Each saved key's id, in order, null for none, linking nothing; at most one store question
-   *  per new key and authority. Undefined when the store cannot answer now. */
-  idsOfKeys(keys: readonly AgentProviderKey[]): Promise<(OrcaSessionId | null)[] | undefined> {
-    return this.savedIds.idsOf(keys)
+  /** Each saved key's id, in order, null for none or unanswered, linking nothing; at most one
+   *  store question per new key of `population` and authority. */
+  idsOfKeys(
+    keys: readonly AgentProviderKey[],
+    population: SavedKeyPopulation
+  ): Promise<(OrcaSessionId | null)[]> {
+    return this.savedIds.idsOf(keys, population)
   }
 
   /** Keeps the indexes and demand subscriptions exact: `place` is a legacy row key or a
@@ -295,6 +298,9 @@ export class PaneAgentIdentities {
   /** Hands every current place still pending on the answered key to the hook server. An
    *  observer's failure is not the store's: the answer stays committed. */
   private publish(demand: KeyDemand, identity: RowAgentIdentity): void {
+    if (identity.id) {
+      this.savedIds.named(this.keyString(demand.key), identity.id)
+    }
     const settled: SettledAgentIdentityPlace[] = []
     for (const place of demand.places) {
       const indexed = this.places.get(place)

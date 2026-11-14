@@ -28,8 +28,10 @@ type AgentPlaceRuntime = {
 
 /** Every agent in this host's workspaces: `worktree.ps` rows, then each terminal agent with no
  *  open pane from its saved sleeping record (asleep, or its tab not reopened since a wake), so
- *  a list never wakes one. Work beyond `worktree.ps` is one pass over those records, keyed
- *  labels, and a store question only for keys this store authority has not answered. */
+ *  a list never wakes one. Filters run before any record's id or label: beyond `worktree.ps`, a
+ *  list visits the saved records of its workspace only when it can show asleep rows, and
+ *  otherwise only the records of its own reply-less rows' panes, by key. Ids are asked only
+ *  for keys this store authority has not answered. */
 export async function listAgentConversations(
   runtime: AgentPlaceRuntime & {
     getWorktreePs(limit: number): Promise<RuntimeWorktreePsResult>
@@ -37,27 +39,39 @@ export async function listAgentConversations(
   worktreeLimit: number,
   filter: ListFilter = {}
 ): Promise<AgentListResult> {
+  // Every state's rows: a pane open in any state is not asleep.
   const list = projectAgentConversationList(
     await runtime.getWorktreePs(worktreeLimit),
     filter.worktreeId ? { worktreeId: filter.worktreeId } : {}
   )
-  const records = Object.values(runtime.readLocalSleepingAgentSessions()).filter(
-    (record) => !filter.worktreeId || record.worktreeId === filter.worktreeId
-  )
-  const ids = records.length > 0 ? await agentHookServer.sleepingTerminalAgentIds(records) : []
-  const open = new Map(list.agents.map((row) => [row.paneKey, row]))
+  const shown = list.agents.filter((row) => !filter.state || row.state === filter.state)
+  const saved = runtime.readLocalSleepingAgentSessions()
+  // A woken agent's row before its first new reply: its pane's saved record holds the last one.
+  const borrowing = shown.flatMap((row) => {
+    const record = row.orcaSessionId && !row.lastAssistantMessage ? saved[row.paneKey] : undefined
+    return record ? [{ row, record }] : []
+  })
+  const open = new Set(list.agents.map((row) => row.paneKey))
+  const candidates =
+    !filter.state || filter.state === 'asleep'
+      ? Object.values(saved).filter(
+          (record) =>
+            !open.has(record.paneKey) &&
+            (!filter.worktreeId || record.worktreeId === filter.worktreeId)
+        )
+      : []
+  const records = [...borrowing.map(({ record }) => record), ...candidates]
+  const ids =
+    records.length > 0 ? await agentHookServer.sleepingTerminalAgentIds(saved, records) : []
+  borrowing.forEach(({ row, record }, index) => {
+    if (ids[index] === row.orcaSessionId) {
+      row.lastAssistantMessage = record.lastAssistantMessage ?? null
+    }
+  })
   const listed = new Set(list.agents.map((row) => row.orcaSessionId))
   const asleep: AgentConversationRow[] = []
-  records.forEach((record, index) => {
-    const orcaSessionId = ids?.[index] ?? null
-    const row = open.get(record.paneKey)
-    if (row) {
-      // A woken agent's row before its first new reply: its saved record holds the last one.
-      if (orcaSessionId && row.orcaSessionId === orcaSessionId && !row.lastAssistantMessage) {
-        row.lastAssistantMessage = record.lastAssistantMessage ?? null
-      }
-      return
-    }
+  candidates.forEach((record, index) => {
+    const orcaSessionId = ids[borrowing.length + index] ?? null
     if (orcaSessionId && listed.has(orcaSessionId)) {
       return
     }
@@ -68,10 +82,7 @@ export async function listAgentConversations(
     }
   })
   asleep.sort((a, b) => a.updatedAt - b.updatedAt)
-  return {
-    ...list,
-    agents: [...list.agents, ...asleep].filter((row) => !filter.state || row.state === filter.state)
-  }
+  return { ...list, agents: [...shown, ...asleep] }
 }
 
 /** A terminal agent's saved sleeping record as a listed place; none for a workspace this host

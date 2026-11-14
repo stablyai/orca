@@ -3,6 +3,7 @@ import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/l
 import { sameProviderKey, type AgentProviderKey } from './agent-provider-key'
 import { agentProviderKeyOf } from './pane-agent-identities'
 import type { OrcaSessionId } from '../../../shared/orca-session-address'
+import type { SavedKeyPopulation } from './saved-agent-key-ids'
 
 export type SleepingAgentSighting = Pick<
   SleepingAgentSessionRecord,
@@ -55,18 +56,27 @@ export function sleepingRecordKey(
       })
 }
 
-/** Each record's id through `idsOfKeys`, in order; null for one naming no key. */
+/** Each of `records`' ids through `idsOfKeys`, in order; null for one naming no key. Answers
+ *  are kept for every record of `saved`, the map they come from. */
 export async function sleepingRecordIds(
+  saved: Readonly<Record<string, SleepingAgentSighting>>,
   records: readonly SleepingAgentSighting[],
   windows: boolean,
-  idsOfKeys: (keys: AgentProviderKey[]) => Promise<(OrcaSessionId | null)[] | undefined>
-): Promise<(OrcaSessionId | null)[] | undefined> {
+  idsOfKeys: (
+    keys: AgentProviderKey[],
+    population: SavedKeyPopulation
+  ) => Promise<(OrcaSessionId | null)[]>
+): Promise<(OrcaSessionId | null)[]> {
   const keys = records.map((record) => sleepingRecordKey(record, windows))
   const asked = keys.filter((key): key is AgentProviderKey => key !== null)
-  const ids = asked.length > 0 ? await idsOfKeys(asked) : []
-  if (!ids) {
-    return undefined
-  }
+  const ids =
+    asked.length > 0
+      ? await idsOfKeys(asked, {
+          source: saved,
+          keys: () =>
+            Object.values(saved).flatMap((record) => sleepingRecordKey(record, windows) ?? [])
+        })
+      : []
   let next = 0
   return keys.map((key) => (key ? (ids[next++] ?? null) : null))
 }
