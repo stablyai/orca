@@ -73,6 +73,7 @@ describe('BrowserSessionRegistry', () => {
   let profileDirectory: string
 
   afterEach(() => {
+    setBrowserNetworkProxySettingsResolver(null)
     rmSync(profileDirectory, { recursive: true, force: true })
   })
 
