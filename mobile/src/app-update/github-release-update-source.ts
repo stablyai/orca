@@ -4,8 +4,11 @@ import type { AppUpdateCheckResult, AppUpdateSource } from './app-update-source'
 import { isNewerReleaseVersion } from './app-update-source'
 
 const REPO_API = 'https://api.github.com/repos/stablyai/orca'
-// Use tag refs: newest-first release/Atom windows can fill with desktop releases and hide mobile updates; mobile-android releases all carry prerelease flag.
-const TAG_PREFIX = 'mobile-android-v'
+// Use tag refs: newest-first release/Atom windows can fill with desktop releases and hide mobile updates; Android releases all carry prerelease flag.
+/** dev.orca.app releases: Google's Play-signed universal APK. */
+export const ANDROID_RELEASE_TAG_PREFIX = 'android-v'
+/** com.stably.orca.mobile releases, signed with the Expo debug key. */
+export const RETIRED_ANDROID_RELEASE_TAG_PREFIX = 'mobile-android-v'
 // Probe bounded older candidates: workflow tags before APK build, so failed build can leave unpublished tag.
 const MAX_RELEASE_PROBES = 3
 
@@ -77,10 +80,13 @@ export async function findNewestInstallableRelease(
   return null
 }
 
-export function createGithubReleaseUpdateSource(fetchImpl: Fetch): AppUpdateSource {
+export function createGithubReleaseUpdateSource(
+  fetchImpl: Fetch,
+  tagPrefix: string
+): AppUpdateSource {
   return {
     async check(installedVersion, signal): Promise<AppUpdateCheckResult> {
-      const release = await findNewestInstallableRelease(fetchImpl, TAG_PREFIX, signal, (version) =>
+      const release = await findNewestInstallableRelease(fetchImpl, tagPrefix, signal, (version) =>
         isNewerReleaseVersion(version, installedVersion)
       )
       return release
@@ -89,7 +95,3 @@ export function createGithubReleaseUpdateSource(fetchImpl: Fetch): AppUpdateSour
     }
   }
 }
-
-export const githubReleaseUpdateSource = createGithubReleaseUpdateSource((input, init) =>
-  fetch(input, init)
-)
