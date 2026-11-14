@@ -17,7 +17,7 @@ import {
   resolveFilesystemRouteForHost,
   resolveGitRouteForHost
 } from '../../providers/execution-host-provider-dispatch'
-import { createFolderWorktree, listRepoWorktrees } from '../catalog/repo-worktrees'
+import { listRepoWorktrees } from '../catalog/repo-worktrees'
 import { mergeWorktree } from '../../ipc/worktree-metadata-merge'
 import { getLocalProjectWorktreeGitOptions } from '../execution-host/project-runtime-git-options'
 import {
@@ -85,7 +85,7 @@ async function listWorktreesForSpaceScan(
   try {
     throwIfWorkspaceSpaceScanAborted(signal)
     if (isFolderRepo(repo)) {
-      return { ok: true, worktrees: [createFolderWorktree(repo)] }
+      return { ok: true, worktrees: [] }
     }
     // Resolve executionHostId too, or SSH-only rows can size a same-named local path.
     const route = resolveGitRouteForHost(getRepoExecutionHostId(repo))
