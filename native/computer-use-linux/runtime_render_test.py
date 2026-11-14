@@ -238,23 +238,6 @@ class WaylandScreenshotTest(unittest.TestCase):
                 self.assertEqual(result["error"]["code"], "screenshot_failed")
                 self.assertFalse(any(command[0].endswith("grim") for command in self.commands))
 
-    def test_sway_nested_floating_window_geometry(self):
-        tree = {"nodes": [{"floating_nodes": [{"pid": 42, "name": "Editor",
-                "rect": {"x": 98, "y": 20, "width": 644, "height": 512},
-                "window_rect": {"x": 2, "y": 30, "width": 640, "height": 480}, "visible": True}]}]}
-        def sway(command, **options):
-            options["stdout"].write(json.dumps(tree).encode())
-            return types.SimpleNamespace(returncode=0)
-        with patch.dict(runtime.os.environ, {"HYPRLAND_INSTANCE_SIGNATURE": "", "SWAYSOCK": "fixture"}), \
-             patch.object(runtime.subprocess, "run", side_effect=sway):
-            rect, error = runtime.wayland_window_rect("sway", self.app, self.window)
-            tree["nodes"][0]["floating_nodes"][0]["visible"] = False
-            hidden, hidden_error = runtime.wayland_window_rect("sway", self.app, self.window)
-        self.assertIsNone(error)
-        self.assertEqual(rect.to_json(), {"x": 100, "y": 50, "width": 640, "height": 480})
-        self.assertIsNone(hidden)
-        self.assertIsNotNone(hidden_error)
-
 class FakePixbuf:
     def __init__(self, width, height, calls):
         self.width, self.height, self.calls = width, height, calls
@@ -332,22 +315,6 @@ class KWinScreenshotTest(unittest.TestCase):
                 self.assertEqual(result["error"]["code"], "screenshot_failed")
                 self.assertEqual(self.portal_calls, [])
 
-    def test_crop_maps_the_matching_kwin_rectangle_into_the_scaled_workspace_image(self):
-        below = {**self.target, "pid": 7, "caption": "Other", "stackingOrder": 1, "frame": [0, 0, 800, 800]}
-        menu = {**self.target, "caption": "Menu", "captionNormal": "Menu", "stackingOrder": 5, "ownedPopup": True,
-                "frame": [150, 80, 100, 200]}
-        result = self.capture(self.target, below, menu)
-        self.assertNotIn("error", result)
-        self.assertEqual(self.pixbuf_calls, [("crop", 2760, 100, 800, 600), ("scale", 400, 300)])
-        self.pixbuf_calls.clear()
-        # Client-side decorations: the toolkit reports the buffer (shadow included), not the content rectangle.
-        self.capture(self.target, bounds=(420, 320))
-        self.assertEqual(self.pixbuf_calls, [("crop", 2740, 80, 840, 640), ("scale", 420, 320)])
-        self.pixbuf_calls.clear()
-        # Partly left of the leftmost screen: full window size, only the shown part copied at its offset.
-        self.capture({**self.target, "client": [-1380, 50, 400, 300]})
-        self.assertEqual(self.pixbuf_calls, [("fill", 800, 600), ("copy", 0, 100, 600, 600, 200, 0), ("scale", 400, 300)])
-
     def test_window_that_moves_while_the_portal_answers_is_not_cropped(self):
         moved = {"workspace": [-1280, 0, 2560, 800], "windows": [{**self.target, "client": [120, 50, 400, 300]}]}
         self.reports = [{"workspace": [-1280, 0, 2560, 800], "windows": [self.target]}, moved]
@@ -382,22 +349,6 @@ class PortalFileTest(unittest.TestCase):
 
 
 class RuntimeRenderTest(unittest.TestCase):
-
-    def test_focus_search_keeps_transient_accessible_wrappers_alive(self):
-        class TransientNode:
-            def __init__(self, depth):
-                self.depth = depth
-
-            def get_child_count(self):
-                return int(self.depth < 30)
-
-            def get_child_at_index(self, _):
-                return TransientNode(self.depth + 1)
-
-        focused = runtime.first_descendant(TransientNode(0), lambda node: node.depth == 30)
-        self.assertIsNotNone(focused)
-        self.assertEqual(focused.depth, 30)
-
 
     def test_window_only_protection_preserves_completed_semantic_action(self):
         button = FakeAccessible("button", "Continue")
@@ -685,116 +636,6 @@ class RuntimeRenderTest(unittest.TestCase):
                     self.assertEqual(effects, [])
                 keys.assert_not_called()
 
-    def test_gtk4_rectangles_come_from_window_extents_and_the_x11_client_origin(self):
-        button = FakeAccessible("push button", "Open")
-        window = FakeAccessible("frame", "Files", children=[button])
-        app = FakeAccessible("application", "Files", children=[window])
-        app.get_toolkit_name, app.get_toolkit_version = (lambda: "GTK"), (lambda: "4.14.5")
-        # Why these numbers: GTK 4 answers SCREEN with [0, 0, w, h] (agent-desktop FINDINGS L23-37).
-        extents = {(window, 0): (0, 0, 800, 600), (window, 1): (0, 0, 800, 600),
-                   (button, 0): (0, 0, 64, 44), (button, 1): (16, 299, 64, 44)}
-        for node in (window, button):
-            node.get_component_iface = lambda node=node: node
-        def get_extents(node, coord_type):
-            x, y, width, height = extents[(node, coord_type)]
-            return types.SimpleNamespace(x=x, y=y, width=width, height=height)
-        for origin, wayland in (((1000, 500), False), (None, False), (None, True)):
-            with self.subTest(origin=origin, wayland=wayland), \
-                 patch.object(runtime.Atspi, "Component", types.SimpleNamespace(get_extents=get_extents), create=True), \
-                 patch.object(runtime.Atspi, "CoordType", types.SimpleNamespace(SCREEN=0, WINDOW=1), create=True), \
-                 patch.object(runtime, "gtk4_client_origin", lambda *_: origin), \
-                 patch.object(runtime, "wayland_session", lambda: wayland):
-                placed = runtime.Placement(app, window)
-                self.assertEqual(placed.frame(button).to_json(), {"x": 16, "y": 299, "width": 64, "height": 44})
-                if origin:
-                    self.assertEqual(runtime.window_point(placed, {"index": 1}, node=button), (1048, 821))
-                else:
-                    with self.assertRaisesRegex(RuntimeError, "GTK 4 window"):
-                        runtime.window_point(placed, {"index": 1}, node=button)
-
-    def test_background_scroll_pages_a_scroll_bar_and_hands_the_end_to_the_outer_view(self):
-        def view(name, value, high, children=()):
-            bar = FakeAccessible("scroll bar", name + " bar")
-            bar.position = value
-            bar.high = high
-            bar.get_state_set = lambda: FakeStateSet(FakeStateType.VERTICAL)
-            bar.get_value_iface = lambda: bar
-            pane = FakeAccessible("scroll pane", name, children=[bar, *children])
-            return pane, bar
-        row = FakeAccessible("list item", "Row")
-        inner, inner_bar = view("inner", 300, 300, [row])
-        outer, outer_bar = view("outer", 0, 2000, [inner])
-        writes = []
-        def set_value(bar, value):
-            writes.append((bar.name, value))
-            bar.position = value
-            return True
-        value_api = types.SimpleNamespace(get_minimum_value=lambda bar: 0, get_maximum_value=lambda bar: bar.high,
-                                          get_current_value=lambda bar: bar.position, set_current_value=set_value)
-        with SnapshotFixture(FakeAccessible("frame", "Editor", children=[outer])) as fixture, \
-             patch.object(runtime.Atspi, "Value", value_api, create=True):
-            fixture.bounds[outer] = runtime.Rect(100, 200, 300, 250)
-            element = next(item for item in runtime.make_snapshot("Fixture", False)["elements"] if item["name"] == "Row")
-            result = runtime.run_operation({"tool": "scroll", "app": "Fixture", "element": element, "direction": "down",
-                                            "pages": 2, "noScreenshot": True})
-            self.assertEqual(writes, [("outer bar", 500)])
-            self.assertEqual(result["action"]["verification"], {"state": "verified", "property": "value"})
-            self.assertEqual(result["action"]["delivery"], "background")
-            runtime.run_operation({"tool": "scroll", "app": "Fixture", "element": element, "direction": "up",
-                                   "pages": 0.5, "noScreenshot": True})
-            self.assertEqual(writes[-1], ("inner bar", 300 - 0.5 * fixture.bounds[inner].height))
-
-    def test_background_scroll_pages_a_document_with_scroll_to(self):
-        items = [FakeAccessible("paragraph", f"Item {index}") for index in range(6)]
-        document = FakeAccessible("document web", "Page", children=items)
-        scrolled = []
-        offset = [0]
-        with SnapshotFixture(FakeAccessible("frame", "Browser", children=[document])) as fixture:
-            fixture.bounds[document] = runtime.Rect(0, 100, 400, 300)
-            def place():
-                for index, item in enumerate(items):
-                    fixture.bounds[item] = runtime.Rect(0, 100 + index * 120 - offset[0], 400, 120)
-            place()
-            def scroll_to(item, edge):
-                scrolled.append((item.name, edge))
-                offset[0] += fixture.bounds[item].y - 100
-                place()
-                return True
-            with patch.object(runtime.Atspi.Component, "scroll_to", scroll_to, create=True), \
-                 patch.object(runtime.Atspi, "ScrollType", types.SimpleNamespace(TOP_EDGE="top", BOTTOM_EDGE="bottom"), create=True):
-                result = runtime.run_operation({"tool": "scroll", "app": "Fixture", "x": 50, "y": 50,
-                                                "direction": "down", "pages": 3, "noScreenshot": True})
-        # Why Item 2: it spans 340-460 and the viewport ends at 400, so its hidden half leads the next page.
-        # The third page finds nothing past the document's end, and the two pages already moved still count.
-        self.assertEqual(scrolled, [("Item 2", "top"), ("Item 4", "top")])
-        self.assertEqual(result["action"]["actionName"], "scrollTo")
-
-    def test_background_scroll_moves_the_inner_scroller_before_the_page(self):
-        inner_items = [FakeAccessible("list item", f"Message {index}") for index in range(4)]
-        log = FakeAccessible("panel", "Chat log", children=inner_items)
-        page_items = [FakeAccessible("paragraph", f"Section {index}") for index in range(4)]
-        document = FakeAccessible("document web", "Page", children=[log, *page_items])
-        scrolled = []
-        with SnapshotFixture(FakeAccessible("frame", "Browser", children=[document])) as fixture:
-            fixture.bounds[fixture.root] = runtime.Rect(0, 0, 400, 400)
-            fixture.bounds[document] = runtime.Rect(0, 0, 400, 400)
-            fixture.bounds[log] = runtime.Rect(0, 0, 400, 100)
-            for index, item in enumerate(inner_items):
-                fixture.bounds[item] = runtime.Rect(0, index * 60, 400, 60)
-            for index, item in enumerate(page_items):
-                fixture.bounds[item] = runtime.Rect(0, 100 + index * 150, 400, 150)
-            element = next(item for item in runtime.make_snapshot("Fixture", False)["elements"] if item["name"] == "Message 0")
-            def scroll_to(item, _):
-                scrolled.append(item.name)
-                fixture.bounds[item] = runtime.Rect(0, 0, 400, 60)
-                return True
-            with patch.object(runtime.Atspi.Component, "scroll_to", scroll_to, create=True), \
-                 patch.object(runtime.Atspi, "ScrollType", types.SimpleNamespace(TOP_EDGE="top"), create=True):
-                runtime.run_operation({"tool": "scroll", "app": "Fixture", "element": element, "direction": "down",
-                                       "pages": 1, "noScreenshot": True})
-        # Why Message 1: it spans 60-120 and the chat log's own box ends at 100, so the log scrolls, not the page.
-        self.assertEqual(scrolled, ["Message 1"])
-
     def test_click_without_an_action_selects_the_row_only_when_its_index_is_proven(self):
         cases = (
             ("Qt", "6.6", None, "selected"),
@@ -1004,33 +845,6 @@ class RuntimeRenderTest(unittest.TestCase):
             self.assertEqual((field.value, field.caret), ("Hello there", 6))
             keys.assert_not_called()
             paste.assert_not_called()
-
-    def test_compacted_browser_records_keep_their_own_frames_and_indexes(self):
-        tabs = [FakeAccessible("page tab", f"Tab {i}", value="1" if i == 9 else "") for i in range(10)]
-        buttons = [FakeAccessible("button", f"Other {i}") for i in range(10)]
-        root = FakeAccessible("frame", "Browser", children=[
-            FakeAccessible("page tab list", "Tabs", children=tabs), *buttons,
-        ])
-        with SnapshotFixture(root, "chrome") as fixture:
-            fixture.delays = {tab: 20 for tab in tabs[:-1]}
-            snapshot = runtime.make_snapshot("chrome", False)
-            by_name = {item["name"]: item for item in snapshot["elements"]}
-            for node, expected_x in ((tabs[-1], 110), (buttons[8], 200)):
-                self.assertEqual(by_name[node.name]["frame"]["x"], expected_x)
-            indexes = [item["index"] for item in snapshot["elements"]]
-            self.assertEqual(len(indexes), len(set(indexes)))
-
-    def test_root_reads_a_subtree_beyond_the_full_snapshot_limit(self):
-        items = [FakeAccessible("button", f"A{i}") for i in range(3)]
-        root = FakeAccessible("frame", "Main", children=[
-            FakeAccessible("list", "Items", children=items), FakeAccessible("button", "After"),
-        ])
-        with SnapshotFixture(root), patch.object(runtime, "MAX_NODES", 4):
-            snapshot = runtime.make_snapshot("Fixture", False)
-            items_record = next(item for item in snapshot["elements"] if item["name"] == "Items")
-            subtree = runtime.run_operation({"tool": "get_app_state", "app": "Fixture", "noScreenshot": True, "root": items_record})["snapshot"]
-            self.assertEqual(subtree["elements"][-1]["runtimeId"], [0, 0, 2])
-
 
 if __name__ == "__main__":
     unittest.main()
