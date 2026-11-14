@@ -546,6 +546,12 @@
       "keywordEndOfFile": "파일 끝",
       "62aa3336d9": "마지막 줄바꿈 삽입"
     },
+    "editorGitChangeGutter": {
+      "title": "Git 변경 표시기",
+      "description": "마지막 커밋과 비교하여 추가, 수정, 삭제된 줄을 거터에 표시합니다. 기본적으로 꺼져 있습니다.",
+      "keywordGit": "git",
+      "keywordGutter": "거터"
+    },
     "repositoryFormatter": {
       "description": "저장 시 포맷에 이 프로젝트의 포맷터를 사용합니다.",
       "saveFailed": "포맷터 설정을 저장하지 못했습니다.",
@@ -22754,6 +22760,13 @@
         "viewHasNoProjects": "사용자 지정 보기에 프로젝트가 없습니다"
       }
     }
+  },
+  "editorGitChangePeek": {
+    "previous": "이전 변경",
+    "next": "다음 변경",
+    "copy": "원본 줄 복사",
+    "revert": "변경 되돌리기",
+    "close": "닫기"
   },
   "editorConflicts": {
     "kind": {

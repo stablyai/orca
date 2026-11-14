@@ -20,6 +20,7 @@ import { EditorWordWrapSetting } from './EditorWordWrapSetting'
 import { EditorFontFamilySetting } from './EditorFontFamilySetting'
 import { EditorFormatOnSaveSetting } from './EditorFormatOnSaveSetting'
 import { EditorInsertFinalNewlineSetting } from './EditorInsertFinalNewlineSetting'
+import { EditorGitChangeGutterSetting } from './EditorGitChangeGutterSetting'
 import { EditorTypographySettings } from './EditorTypographySettings'
 import {
   createAutoSaveDelayDraftState,
@@ -181,6 +182,7 @@ export function GeneralEditorSettingsSection({
             }
           />
         </SearchableSetting>
+        <EditorGitChangeGutterSetting settings={settings} updateSettings={updateSettings} />
       </SettingsGroup>
       <SettingsGroup title={t('settings.general.editorGroups.diffs', 'Diffs')}>
         <SearchableSetting

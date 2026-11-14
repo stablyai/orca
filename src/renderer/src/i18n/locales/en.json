@@ -1394,6 +1394,12 @@
       "keywordEndOfFile": "end of file",
       "62aa3336d9": "Insert final newline"
     },
+    "editorGitChangeGutter": {
+      "title": "Git change indicators",
+      "description": "Mark added, modified, and deleted lines in the gutter, compared with the last commit. Off by default.",
+      "keywordGit": "git",
+      "keywordGutter": "gutter"
+    },
     "repositoryFormatter": {
       "description": "Use this project’s formatter for Format on Save.",
       "saveFailed": "Could not save formatter settings.",
@@ -24993,6 +24999,13 @@
         "invalidCloudId": "The site did not report a valid Atlassian cloud ID."
       }
     }
+  },
+  "editorGitChangePeek": {
+    "previous": "Previous change",
+    "next": "Next change",
+    "copy": "Copy original lines",
+    "revert": "Revert change",
+    "close": "Close"
   },
   "editorConflicts": {
     "kind": {

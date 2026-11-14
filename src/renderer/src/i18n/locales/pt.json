@@ -1925,6 +1925,12 @@
       "keywordEndOfFile": "fim do arquivo",
       "62aa3336d9": "Inserir nova linha final"
     },
+    "editorGitChangeGutter": {
+      "title": "Indicadores de alterações do Git",
+      "description": "Marca na margem as linhas adicionadas, modificadas e excluídas em relação ao último commit. Desativado por padrão.",
+      "keywordGit": "git",
+      "keywordGutter": "margem"
+    },
     "repositoryFormatter": {
       "description": "Usa o formatador deste projeto para formatar ao salvar.",
       "saveFailed": "Não foi possível salvar as configurações do formatador.",
@@ -24009,6 +24015,13 @@
         "viewHasNoProjects": "A visualização personalizada não contém projetos"
       }
     }
+  },
+  "editorGitChangePeek": {
+    "previous": "Alteração anterior",
+    "next": "Próxima alteração",
+    "copy": "Copiar linhas originais",
+    "revert": "Reverter alteração",
+    "close": "Fechar"
   },
   "editorConflicts": {
     "kind": {

@@ -589,6 +589,12 @@
       "keywordEndOfFile": "文件末尾",
       "62aa3336d9": "插入末尾换行符"
     },
+    "editorGitChangeGutter": {
+      "title": "Git 更改指示器",
+      "description": "在行号边栏标记与上次提交相比新增、修改和删除的行。默认关闭。",
+      "keywordGit": "git",
+      "keywordGutter": "边栏"
+    },
     "repositoryFormatter": {
       "description": "保存时格式化使用此项目的格式化程序。",
       "saveFailed": "无法保存格式化程序设置。",
@@ -23102,6 +23108,13 @@
         "viewHasNoProjects": "自定义视图不包含项目"
       }
     }
+  },
+  "editorGitChangePeek": {
+    "previous": "上一处更改",
+    "next": "下一处更改",
+    "copy": "复制原始行",
+    "revert": "还原更改",
+    "close": "关闭"
   },
   "editorConflicts": {
     "kind": {

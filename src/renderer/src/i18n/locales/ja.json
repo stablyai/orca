@@ -546,6 +546,12 @@
       "keywordEndOfFile": "ファイルの末尾",
       "62aa3336d9": "末尾に改行を挿入"
     },
+    "editorGitChangeGutter": {
+      "title": "Git の変更インジケーター",
+      "description": "最後のコミットと比較して、追加・変更・削除された行をガターに表示します。デフォルトではオフです。",
+      "keywordGit": "git",
+      "keywordGutter": "ガター"
+    },
     "repositoryFormatter": {
       "description": "このプロジェクトのフォーマッターを保存時のフォーマットに使用します。",
       "saveFailed": "フォーマッターの設定を保存できませんでした。",
@@ -22762,6 +22768,13 @@
         "viewHasNoProjects": "カスタムビューにプロジェクトが含まれていません"
       }
     }
+  },
+  "editorGitChangePeek": {
+    "previous": "前の変更",
+    "next": "次の変更",
+    "copy": "元の行をコピー",
+    "revert": "変更を元に戻す",
+    "close": "閉じる"
   },
   "editorConflicts": {
     "kind": {

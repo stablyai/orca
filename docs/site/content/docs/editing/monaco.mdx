@@ -22,6 +22,12 @@ Enable **Insert Final Newline** under [Settings → General → Editor](/docs/se
 
 Toggle **Changes view mode** in any editor tab to flip the file into an in-tab HEAD-vs-working-tree diff without leaving your cursor position. Toggle again to return to the regular file view.
 
+## Git change indicators
+
+Enable **Git change indicators** under [Settings → General → Editor](/docs/settings) to mark lines that differ from the last commit in the file editor gutter: a bar beside added and modified lines, and a wedge where lines were deleted. Marks follow unsaved edits and refresh after commits, checkouts, and discards. It is off by default, and new files that are not committed yet show no marks.
+
+Click a mark to open a small popup with the lines from the last commit and the changed words highlighted, with buttons to step to the previous or next change, copy the original lines, or revert that change. `Esc` closes it.
+
 ## Word wrap
 
 File editors wrap long lines by default. Toggle **Word Wrap** from the editor tab's **⋯** menu, press `Alt+Z` (same as VS Code; remappable under [Settings → Shortcuts](/docs/settings)), or set the default under [Settings → General → Editor Word Wrap](/docs/settings). This setting is separate from **Diff Word Wrap**, which only affects diff editors.

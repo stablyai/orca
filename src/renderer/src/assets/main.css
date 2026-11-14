@@ -2905,6 +2905,70 @@ html.native-shell .app-layout {
   border-radius: 999px;
 }
 
+.monaco-editor .orca-git-change-gutter {
+  /* Wider than the visible 3px bar for a workable click target, and above the fold chevron that spans this lane. */
+  width: 6px !important;
+  z-index: 1;
+  margin-left: 3px;
+  box-sizing: border-box;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+}
+
+.monaco-editor .orca-git-change-gutter-added {
+  border-left-color: var(--git-decoration-added);
+}
+
+.monaco-editor .orca-git-change-gutter-modified {
+  border-left-color: var(--git-decoration-modified);
+}
+
+/* A deletion has no line of its own: draw a wedge on the boundary where the lines were. */
+.monaco-editor .orca-git-change-gutter-deleted::after,
+.monaco-editor .orca-git-change-gutter-deleted-top::after {
+  content: '';
+  position: absolute;
+  left: -3px;
+  bottom: -4px;
+  border-left: 5px solid var(--git-decoration-deleted);
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+}
+
+.monaco-editor .orca-git-change-gutter-deleted-top::after {
+  top: -4px;
+  bottom: auto;
+}
+
+.orca-git-change-peek-widget {
+  z-index: 10;
+  padding: 2px 0;
+}
+
+.orca-git-change-peek {
+  min-width: 360px;
+  /* The border sits on the code's left edge, so the original lines keep the code's own columns. */
+  margin-left: -1px;
+}
+
+.orca-git-change-peek-original {
+  max-width: 720px;
+  background: var(--diff-removed-background);
+}
+
+.orca-git-change-peek-original > pre {
+  font: inherit;
+  width: max-content;
+}
+
+.orca-git-change-peek-removed {
+  background: color-mix(in srgb, var(--diff-removed) 35%, transparent);
+}
+
+.monaco-editor .orca-git-change-peek-inserted {
+  background: color-mix(in srgb, var(--diff-added) 35%, transparent);
+}
+
 .monaco-editor .orca-conflict-margin {
   background: color-mix(in srgb, var(--destructive) 8%, transparent);
 }

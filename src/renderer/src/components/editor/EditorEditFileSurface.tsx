@@ -5,6 +5,7 @@ import type { PendingEditorReveal } from '@/store/slices/editor/types/pending-ed
 import type { GitDiffResult } from '../../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../shared/git/status/git-status-types'
 import { ChangesModeView } from './ChangesModeView'
+import { canUseChangesModeForFile } from './view-mode/editor-panel-file-mode'
 import { ConflictBanner, ConflictPlaceholderView } from './ConflictComponents'
 import {
   CsvViewer,
@@ -274,6 +275,12 @@ export function EditorEditFileSurface({
         worktreeId={activeFile.worktreeId}
         markdownAnnotationsEnabled={markdownAnnotationsEnabled && isMarkdown}
         conflictDecorationsEnabled={activeFile.conflict?.conflictStatus === 'unresolved'}
+        gitChangeGutterEligible={
+          canUseChangesModeForFile(activeFile) &&
+          activeFile.readOnly !== true &&
+          activeFile.liveTail !== true &&
+          activeFile.conflict?.conflictStatus !== 'unresolved'
+        }
         revealLine={
           matchesPendingEditorReveal(pendingEditorReveal, activeFile, viewStateScopeId)
             ? pendingEditorReveal.line
