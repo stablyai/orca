@@ -19508,7 +19508,8 @@
         "unconfirmedDetail": "채팅이 열렸을 수 있습니다. 다시 분기하기 전에 세션 기록을 확인하세요.",
         "failed": "{{agent}}이(가) 이 채팅을 분기하지 못했습니다",
         "hostUnsupported": "이 호스트에서 이전 버전의 Orca가 실행 중입니다. 호스트의 Orca를 업데이트하고 다시 시도하세요.",
-        "failedDetail": "채팅은 변경되지 않았습니다. 다시 시도하세요."
+        "failedDetail": "채팅은 변경되지 않았습니다. 다시 시도하세요.",
+        "commandWorking": "{{agent}}이(가) 응답하는 동안에는 분기할 수 없습니다. 응답이 끝나면 /fork를 다시 실행하세요."
       },
       "cardKindHidden": {
         "description": "다음에서 언제든 변경할 수 있습니다:",

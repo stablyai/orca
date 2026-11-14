@@ -21532,7 +21532,7 @@
         "hostUnsupported": "This host runs an older Orca. Update Orca on the host, then try again.",
         "failedDetail": "Your chat is unchanged. Try again.",
         "commandDescription": "Fork this chat from its latest response",
-        "commandWorking": "Wait for the response to finish, then fork.",
+        "commandWorking": "Can’t fork while {{agent}} is replying. Run /fork again when it finishes.",
         "commandNothing": "There’s no response to fork yet.",
         "commandTakesNoText": "Send /fork on its own, then write in the new chat."
       },
