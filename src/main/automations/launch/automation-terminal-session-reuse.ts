@@ -2,6 +2,7 @@ import type { Automation } from '../../../shared/automations/automation-definiti
 import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import {
   findReusableAutomationRun,
+  isIdleAgentOf,
   latestAutomationSessionRun
 } from '../../../shared/automations/history/automation-session-reuse'
 import { parsePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
@@ -44,6 +45,20 @@ export async function sendToReusableSession(
   if (!previous) {
     return null
   }
+  const agentStatusForPane = (paneKey: string) =>
+    runtime
+      .getAgentStatusRowsForPane(paneKey)
+      .filter((row) => !row.providerSessionOnly)
+      .toSorted((left, right) => right.receivedAt - left.receivedAt)[0]
+  // Link a refused run to its kept pane without claiming an unverified PTY.
+  const keptPaneRefusal = (message: string, paneKey: string) =>
+    new AutomationRunLaunchError(message, {
+      workspaceId: worktreeId,
+      workspaceDisplayName,
+      terminalSessionId: parsePaneKey(paneKey)?.tabId ?? previous.terminalSessionId,
+      terminalPaneKey: paneKey,
+      terminalPtyId: null
+    })
   let session = findReusableAutomationRun({
     automationId: automation.id,
     agentId: automation.agentId,
@@ -51,11 +66,7 @@ export async function sendToReusableSession(
     target,
     currentRunId: request.run.id,
     runs: [previous],
-    agentStatusForPane: (paneKey) =>
-      runtime
-        .getAgentStatusRowsForPane(paneKey)
-        .filter((row) => !row.providerSessionOnly)
-        .toSorted((left, right) => right.receivedAt - left.receivedAt)[0],
+    agentStatusForPane,
     liveSession: (previous) => {
       const handle = runOwnHandle(runtime, previous)
       const liveWorktreeId = handle ? runtime.getTerminalWorktreeIdForHandle(handle) : null
@@ -71,13 +82,14 @@ export async function sendToReusableSession(
   let resumed = false
   if (!session) {
     const recorded = await runtime.listRecordedAgentSessions(`id:${worktreeId}`)
-    const saved = recorded.sessions.find((entry) => entry.paneKey === previous.terminalPaneKey)
+    const paneKey = previous.terminalPaneKey!
+    const saved = recorded.sessions.find((entry) => entry.paneKey === paneKey)
     if (!saved) {
       // A closed pane has no saved conversation to resume; keep fresh-session compatibility.
-      if (!runtime.getTerminalHandleForPaneKey(previous.terminalPaneKey!)) {
+      if (!runtime.getTerminalHandleForPaneKey(paneKey)) {
         return null
       }
-      throw new AutomationRunLaunchError('The previous automation pane is not ready for reuse.')
+      throw keptPaneRefusal('The previous automation pane is not ready for reuse.', paneKey)
     }
     const restored = await runtime
       .resumeRecordedAgentSession(
@@ -86,15 +98,18 @@ export async function sendToReusableSession(
         { automatic: request.run.trigger === 'scheduled' }
       )
       .catch((error: unknown) => {
-        // Link the failed run to the kept pane; no PTY is claimed for it.
-        throw new AutomationRunLaunchError(error instanceof Error ? error.message : String(error), {
-          workspaceId: worktreeId,
-          workspaceDisplayName,
-          terminalSessionId: parsePaneKey(saved.paneKey)?.tabId ?? previous.terminalSessionId,
-          terminalPaneKey: saved.paneKey,
-          terminalPtyId: null
-        })
+        throw keptPaneRefusal(error instanceof Error ? error.message : String(error), saved.paneKey)
       })
+    if (restored.disposition === 'adopted') {
+      // An adopted conversation was already running; prompt it only when idle, as live reuse does.
+      const status = agentStatusForPane(restored.paneKey)
+      if (!status || !isIdleAgentOf(status, automation.agentId)) {
+        throw keptPaneRefusal(
+          'The original automation conversation is not idle; this prompt was not delivered.',
+          restored.paneKey
+        )
+      }
+    }
     session = {
       handle: restored.handle,
       previous: {

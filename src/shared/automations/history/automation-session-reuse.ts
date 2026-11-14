@@ -96,7 +96,7 @@ function isReusableRun(run: AutomationRun, worktreeId: string): run is ReusableA
   )
 }
 
-function isIdleAgentOf(
+export function isIdleAgentOf(
   status: { state: string; agentType?: AgentType },
   agentId: TuiAgent
 ): boolean {

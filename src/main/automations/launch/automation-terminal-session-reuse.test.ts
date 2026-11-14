@@ -10,26 +10,40 @@ vi.mock('../../runtime/rpc/methods/agent-launch/agent-launch-terminal-prompt', (
 
 const PANE = 'original-tab:11111111-1111-4111-8111-111111111111'
 
-function reuse({ restoreFails = false, deliveryFails = false } = {}) {
+function reuse({
+  restoreFails = false,
+  deliveryFails = false,
+  adoptedState = null as string | null,
+  recorded = true
+} = {}) {
+  deliver.mockClear()
   deliver.mockResolvedValue(!deliveryFails)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reuse path reads only the listed runtime ports.
   const runtime = {
-    getAgentStatusRowsForPane: () => [],
-    getTerminalHandleForPaneKey: () => null,
+    getAgentStatusRowsForPane: () =>
+      adoptedState ? [{ state: adoptedState, agentType: 'codex', receivedAt: 1 }] : [],
+    getTerminalHandleForPaneKey: () => (recorded ? null : 'term_original'),
     listRecordedAgentSessions: async () => ({
-      sessions: [
-        {
-          agent: 'codex',
-          paneKey: PANE,
-          providerSession: { key: 'session_id', id: 'original-conversation' }
-        }
-      ]
+      sessions: recorded
+        ? [
+            {
+              agent: 'codex',
+              paneKey: PANE,
+              providerSession: { key: 'session_id', id: 'original-conversation' }
+            }
+          ]
+        : []
     }),
     resumeRecordedAgentSession: async () => {
       if (restoreFails) {
         throw new Error('original conversation is held elsewhere')
       }
-      return { handle: 'term_resumed', paneKey: PANE, ptyId: 'new-pty', disposition: 'resumed' }
+      return {
+        handle: 'term_resumed',
+        paneKey: PANE,
+        ptyId: 'new-pty',
+        disposition: adoptedState ? 'adopted' : 'resumed'
+      }
     }
   } as unknown as OrcaRuntimeService
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the run's routing and terminal fields participate in selection.
@@ -88,6 +102,26 @@ describe('an automation whose original conversation slept', () => {
   it('retains the restored target when prompt delivery is unconfirmed', async () => {
     await expect(reuse({ deliveryFails: true })).rejects.toMatchObject({
       target: { terminalPaneKey: PANE, terminalPtyId: 'new-pty' }
+    })
+  })
+
+  it('refuses to prompt an adopted conversation until it is idle', async () => {
+    await expect(reuse({ adoptedState: 'working' })).rejects.toMatchObject({
+      message: 'The original automation conversation is not idle; this prompt was not delivered.',
+      target: { terminalSessionId: 'original-tab', terminalPaneKey: PANE, terminalPtyId: null }
+    })
+    expect(deliver).not.toHaveBeenCalled()
+    await expect(reuse({ adoptedState: 'done' })).resolves.toMatchObject({
+      terminalPaneKey: PANE,
+      terminalPtyId: 'new-pty'
+    })
+    expect(deliver).toHaveBeenCalledWith(expect.objectContaining({ freshLaunch: false }))
+  })
+
+  it('keeps the original pane on a run refused for an unrecorded live pane', async () => {
+    await expect(reuse({ recorded: false })).rejects.toMatchObject({
+      message: 'The previous automation pane is not ready for reuse.',
+      target: { terminalSessionId: 'original-tab', terminalPaneKey: PANE, terminalPtyId: null }
     })
   })
 })
