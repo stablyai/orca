@@ -1368,7 +1368,6 @@
       "src/main/daemon/emulation/testing/conpty-reflow-viewport.test.ts": 222,
       "src/main/daemon/executable-host/linux/testing/daemon-appimage-copy-host.electron.test.ts": 3292,
       "src/main/daemon/executable-host/linux/testing/daemon-appimage-launch.test.ts": 153,
-      "src/main/daemon/health/testing/daemon-async-io-probe.test.ts": 51,
       "src/main/daemon/observability/testing/daemon-audit-eligibility-event.test.ts": 896,
       "src/main/daemon/admission/testing/daemon-automatic-work-guard.test.ts": 240,
       "src/main/daemon/providers/lifecycle/testing/daemon-automatic-work-resume.test.ts": 880,
