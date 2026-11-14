@@ -23,6 +23,8 @@ import {
 } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { dispatchNativeChatStructuredComposerText } from './native-chat-structured-composer-dispatch'
+import { nativeChatShellCommand } from '../../../../../../shared/native-chat/input/native-chat-shell-command'
+import { runNativeChatShellDraft } from './native-chat-shell-command-run'
 import type { NativeChatComposerSendIntent } from './native-chat-composer-send-intent'
 import type { NativeChatStructuredComposerTransport } from './native-chat-structured-composer-transport'
 import type { NativeChatComposerImageAttachment } from '../../attachments/chips/native-chat-image-attachment'
@@ -78,6 +80,30 @@ export function useNativeChatStructuredComposerSend({
       // Picked commands must also wait for pending attachments to acquire paths.
       if (!structuredTransport || attachments.some((attachment) => attachment.pending)) {
         return false
+      }
+      // `!cmd` runs in a terminal of this workspace, as the TUI's bash mode does, never as a prompt.
+      const shellCommand = nativeChatShellCommand(text)
+      if (shellCommand !== null && structuredTransport.worktreeId) {
+        const { worktreeId } = structuredTransport
+        if (
+          !(await runNativeChatShellDraft(
+            structuredTransport,
+            worktreeId,
+            shellCommand,
+            attachments
+          ))
+        ) {
+          return false
+        }
+        updateNativeChatComposerDraft(
+          draftScopeKey,
+          { text: '', document: undefined, images: [] },
+          'immediate'
+        )
+        setDraft('')
+        setCaret(0)
+        clearSkillOrigin()
+        return true
       }
       if (!admitNativeChatPastedText(draftScopeKey, text, structuredTransport.onError)) {
         return false
