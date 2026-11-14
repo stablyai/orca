@@ -151,9 +151,9 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
     ...args: Parameters<PruneMobileSessionTabGroupLayoutMethods['toMobileSessionTabsFrame']>
   ): ReturnType<PruneMobileSessionTabGroupLayoutMethods['toMobileSessionTabsFrame']>
 
-  protected abstract toMobileSessionTabsFrames(
-    ...args: Parameters<PruneMobileSessionTabGroupLayoutMethods['toMobileSessionTabsFrames']>
-  ): ReturnType<PruneMobileSessionTabGroupLayoutMethods['toMobileSessionTabsFrames']>
+  protected abstract collectMobileSessionTabsFrames(
+    ...args: Parameters<PruneMobileSessionTabGroupLayoutMethods['collectMobileSessionTabsFrames']>
+  ): ReturnType<PruneMobileSessionTabGroupLayoutMethods['collectMobileSessionTabsFrames']>
 
   protected abstract waitForSessionTabsInventoryPublication(
     ...args: Parameters<
@@ -241,13 +241,12 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession()
     const ptyInventory = await this.refreshMobileSessionPtyInventory()
     this.restoreLivePairedRendererSessionOwnedMobileTerminals(null)
-    const snapshots = (
-      await this.toMobileSessionTabsFrames(
-        this.mobileSessionTabsByWorktree.values(),
-        options?.includeAgentSenders
-      )
-    ).map((frame) => this.projectMobileSessionTabsForClient(frame, clientNavigationId))
-    return { snapshots, ptyInventory, changeSequence: this.mobileSessionTabsChangeSequence }
+    const { snapshots, changeSequence } = await this.collectMobileSessionTabsFrames(
+      this.mobileSessionTabsByWorktree.values(),
+      options?.includeAgentSenders,
+      clientNavigationId
+    )
+    return { snapshots, ptyInventory, changeSequence }
   }
 
   async listAllMobileSessionTabsInventory(

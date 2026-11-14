@@ -105,11 +105,9 @@ export function createMobileSessionTabsDelivery(
   }
   return (...args): Promise<void> => {
     const [result, , navigation, candidates] = args
-    if (
-      !host
-        .listeners(result.worktree, navigation, candidates)
-        .some((subscription) => subscription.clientKind !== 'mobile')
-    ) {
+    const listeners = host.listeners(result.worktree, navigation, candidates)
+    args[3] = listeners
+    if (!listeners.some((subscription) => subscription.clientKind !== 'mobile')) {
       deliverNow(args, () => {
         throw new Error('Mobile frames do not contain sender associations')
       })

@@ -106,16 +106,17 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
     }
   }
 
-  protected async toMobileSessionTabsFrames(
+  protected async collectMobileSessionTabsFrames(
     snapshots: Iterable<RuntimeMobileSessionTabsSnapshot>,
-    includeAgentSenders = true
-  ): Promise<RuntimeMobileSessionTabsResult[]> {
-    const consume = (): RuntimeMobileSessionTabsResult[] => {
+    includeAgentSenders = true,
+    clientNavigationId?: string
+  ): Promise<{ snapshots: RuntimeMobileSessionTabsResult[]; changeSequence: number }> {
+    const consume = () => {
       let senderScope:
         | ReturnType<typeof this.agentProjections.senders.buildForFramePass>
         | undefined
       try {
-        return [...snapshots].map((snapshot) => {
+        const frames = [...snapshots].map((snapshot) => {
           const result = this.toMobileSessionTabsResult(snapshot)
           if (!includeAgentSenders) {
             return result
@@ -123,6 +124,12 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
           senderScope ??= this.agentProjections.senders.buildForFramePass()
           return { ...result, agentSenderAssociations: senderScope(snapshot.worktree) }
         })
+        return {
+          snapshots: frames.map((frame) =>
+            this.projectMobileSessionTabsForClient(frame, clientNavigationId)
+          ),
+          changeSequence: this.mobileSessionTabsChangeSequence
+        }
       } finally {
         if (senderScope) {
           this.releaseAgentSenderHistoryIfUnobserved()

@@ -162,9 +162,7 @@ describe('mobile relay host catalog', () => {
     })
     await expect(next).resolves.toMatchObject({ worktrees: [{ worktreeId: 'new-server-row' }] })
     answerOldFetch(psReply([{ worktreeId: 'old-server-row', hostId: 'local' }]))
-    await expect(rows).resolves.toEqual({
-      worktrees: [{ worktreeId: 'new-server-row', hostId: 'runtime:env' }]
-    })
+    await expect(rows).resolves.toEqual({ worktrees: null })
     await expect(hostCatalog.worktrees('runtime:env')).resolves.toMatchObject({
       worktrees: [{ worktreeId: 'new-server-row' }]
     })
