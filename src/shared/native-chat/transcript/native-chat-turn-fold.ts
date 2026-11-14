@@ -1,4 +1,4 @@
-// Derive settled-turn answers from the last assistant prose or system failure, plus the prose a Stop hook sent back; the journal has no answer marker.
+// Derive settled-turn answers from the last assistant prose or system failure, plus prose before a steer, Stop-hook send-back or another reply; the journal has no answer marker.
 // Earlier work/recovered errors fold behind that answer, while failed turns end visibly on their error.
 
 import { AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION } from '../../agent-session/agent-session-compaction'
@@ -31,8 +31,8 @@ export type NativeChatTurnFoldRow = {
   reportsFailure: boolean
   /** Plans and turn notices remain visible independently of the agent's answer. */
   explainsTurn: boolean
-  /** A Stop hook sent the agent back after it answered, so the prose before this row is an answer too. */
-  sendsBack: boolean
+  /** A person's steer or a Stop hook's send-back interrupts the turn, so the prose before this row is an answer too. */
+  endsAnswer: boolean
 }
 
 const rowFacts = new WeakMap<NativeChatMessage, NativeChatTurnFoldRow>()
@@ -91,10 +91,13 @@ function deriveTurnFoldRow(
       ) ||
       (message.blocks.some(isGeneratedImageOperation) &&
         message.blocks.some((block) => block.type === 'image-ref')),
-    sendsBack: message.blocks.some(
-      (block) =>
-        block.type === 'text' && block.presentation === AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION
-    )
+    // Messages another agent sent are work inside the turn, not a person's boundary.
+    endsAnswer:
+      (message.role === 'user' && message.from === undefined) ||
+      message.blocks.some(
+        (block) =>
+          block.type === 'text' && block.presentation === AGENT_SESSION_HOOK_SENT_BACK_PRESENTATION
+      )
   }
 }
 
@@ -110,20 +113,35 @@ export const NATIVE_CHAT_EMPTY_TURN_FOLD: NativeChatTurnFold = {
   foldableTurnKeys: new Set()
 }
 
-/** Last assistant prose/system failure per turn and before each send-back; no answer means fold all work. */
+/** Spawn rosters and turn notices report on the turn; they are not the agent talking. */
+function isReply(row: NativeChatTurnFoldRow): boolean {
+  return row.role === 'assistant' && row.rendersProse && !row.outlivesTurn && !row.explainsTurn
+}
+
+/** Last assistant prose/system failure per turn, before each steer or send-back, and before another reply; no answer means fold all work. */
 export function nativeChatTurnAnswerRows(
   rows: readonly NativeChatTurnFoldRow[]
 ): ReadonlySet<number> {
   const answers = new Set<number>()
   const latest = new Map<string, number>()
+  let previousDrawn: NativeChatTurnFoldRow | undefined
+  let previousDrawnIndex = -1
   for (const [index, row] of rows.entries()) {
     if (row.turnKey === undefined) {
       continue
     }
     const answer = latest.get(row.turnKey)
-    if (row.sendsBack && answer !== undefined) {
+    if (row.endsAnswer && answer !== undefined) {
       answers.add(answer)
       latest.delete(row.turnKey)
+    }
+    if (row.draws) {
+      // Back-to-back replies all stay visible; only a reply that work follows folds.
+      if (previousDrawn?.turnKey === row.turnKey && isReply(previousDrawn) && isReply(row)) {
+        answers.add(previousDrawnIndex)
+      }
+      previousDrawn = row
+      previousDrawnIndex = index
     }
     const isCandidate =
       row.rendersProse &&
