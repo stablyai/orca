@@ -22,6 +22,7 @@ describe('supervised pairing redaction', () => {
     const redact = createPairingRedactor()
     const kept = READY.map(redact).filter((line) => line !== null)
     expect(kept.join('\n')).not.toContain('secret')
+    expect(kept.join('\n')).not.toContain('█')
   })
 
   it('blanks the pairing offer in the JSON readiness line', () => {

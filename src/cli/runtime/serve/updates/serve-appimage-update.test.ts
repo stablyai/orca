@@ -78,11 +78,13 @@ describe('supervised serve and a replaced AppImage', () => {
   it('watches the AppImage a mounted supervisor runs from', async () => {
     const { appImagePath, root } = await makeRunningGeneration()
     const mount = join(root, '.mount_Orca')
-    resolveAppImageBuildWatch(
-      join(mount, 'orca-ide'),
-      { APPIMAGE: appImagePath, APPDIR: mount },
-      'linux'
-    )
+    expect(
+      resolveAppImageBuildWatch(
+        join(mount, 'orca-ide'),
+        { APPIMAGE: appImagePath, APPDIR: mount },
+        'linux'
+      )
+    ).toMatchObject({ appImagePath })
     expect(
       resolveAppImageBuildWatch(
         '/opt/Orca/orca-ide',
