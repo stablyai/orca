@@ -23,14 +23,22 @@ afterEach(async () => {
 })
 
 it.skipIf(process.platform === 'win32').each([
-  ['13.5', 'node', true],
-  ['13.4', 'electron', true],
-  ['27.2', 'node', true],
-  ['unknown', 'electron', true],
-  ['13.5', 'electron', false]
+  ['13.5', 'node', true, ['status', '--json']],
+  ['13.4', 'electron', true, ['status', '--json']],
+  ['27.2', 'node', true, ['status', '--json']],
+  ['unknown', 'electron', true, ['status', '--json']],
+  ['13.5', 'electron', false, ['status', '--json']],
+  ['13.5', 'electron', true, ['open', '--json']],
+  ['13.5', 'electron', true, ['serve', '--port', '1']],
+  ['13.5', 'electron', true, ['profile', 'state', 'rollback']],
+  ['13.5', 'electron', true, ['--json', 'status']],
+  ['13.5', 'electron', true, ['--environment', 'local', 'open']],
+  ['13.5', 'node', true, ['--help']],
+  ['13.5', 'node', true, ['--version']],
+  ['13.5', 'node', true, []]
 ] as const)(
-  'runs the packaged CLI on %s with %s (helper executable: %s)',
-  async (version, runtime, executable) => {
+  'runs the packaged CLI on %s with %s (helper executable: %s, args: %j)',
+  async (version, runtime, executable, args) => {
     root = await realpath(await mkdtemp(join(tmpdir(), 'orca-mac-cli-')))
     const contents = join(root, 'Test.app', 'Contents')
     const bin = join(contents, 'Resources', 'bin')
@@ -61,11 +69,11 @@ it.skipIf(process.platform === 'win32').each([
     ]) {
       await writeFile(
         path,
-        `#!/bin/sh\nprintf '%s\\n' '${name}' "$@" "NODE_OPTIONS:\${NODE_OPTIONS-unset}" "ORCA_NODE_OPTIONS:\${ORCA_NODE_OPTIONS-unset}"\n`
+        `#!/bin/sh\nprintf '%s\\n' '${name}' "$@" "NODE_OPTIONS:\${NODE_OPTIONS-unset}" "ORCA_NODE_OPTIONS:\${ORCA_NODE_OPTIONS-unset}" "ELECTRON:\${ORCA_CLI_ELECTRON_EXECUTABLE-unset}"\n`
       )
       await chmod(path, name === 'node' && !executable ? 0o644 : 0o755)
     }
-    const result = await run('/bin/bash', [launcher, 'status', '--json'], {
+    const result = await run('/bin/bash', [launcher, ...args], {
       env: {
         PATH: '/usr/bin:/bin',
         HOME: root,
@@ -76,10 +84,10 @@ it.skipIf(process.platform === 'win32').each([
     expect(result.stdout.split('\n')).toEqual([
       runtime,
       join(contents, 'Resources', 'app.asar.unpacked', 'out', 'cli', 'index.js'),
-      'status',
-      '--json',
+      ...args,
       'NODE_OPTIONS:unset',
       'ORCA_NODE_OPTIONS:--max-old-space-size=2048',
+      `ELECTRON:${runtime === 'node' ? join(contents, 'MacOS', 'Orca') : 'unset'}`,
       ''
     ])
   }

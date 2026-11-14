@@ -27,6 +27,14 @@ export ORCA_NODE_REPL_EXTERNAL_MODULE="${NODE_REPL_EXTERNAL_MODULE-}"
 unset NODE_OPTIONS
 unset NODE_REPL_EXTERNAL_MODULE
 
+case "${1-}" in
+	open|serve|profile|-*)
+		if [ "$#" -ne 1 ] || [[ $1 != --version && $1 != -v && $1 != --help ]]; then
+			ELECTRON_RUN_AS_NODE=1 exec "$ELECTRON" "$CLI" "$@"
+		fi
+		;;
+esac
+
 function plist_version() {
 	local file=$1 key=$2 line found=0 remaining=256
 	REPLY=
