@@ -8,6 +8,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { sessionSearchScopeCatalogFromStore } from '../../ai-vault-search/scope/session-search-store-scope-catalog'
 import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
 import { app } from 'electron'
+import { chatForkTransferStore } from '../../ai-vault/fork-transfer/chat-fork-transfer-store'
 import { translateMain } from '../../i18n/main-i18n'
 import { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { getLocalPtyProvider } from '../../ipc/pty/provider/registry'
@@ -155,6 +156,10 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     getScopeCatalog: () => sessionSearchScopeCatalogFromStore(store, LOCAL_EXECUTION_HOST_ID)
   })
   app.once('will-quit', () => sessionSearch?.dispose())
+  // Staged fork transcripts hold whole chats; none outlives the run that staged it.
+  const forkTransfers = chatForkTransferStore()
+  void forkTransfers.prepare().catch(() => undefined)
+  app.once('will-quit', () => forkTransfers.dispose())
   // Desktop and headless hosts each evaluate their own panes' rules.
   startAgentStateRulesLiveUpdates(store, (rules) =>
     recordDurableCrashBreadcrumb('agent_state_rules_active', rules)
