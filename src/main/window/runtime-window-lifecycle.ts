@@ -15,6 +15,7 @@ import { createRuntimeRendererNotificationSender } from './renderer-relays/runti
 import { requestSessionTabCloseFromRenderer } from './renderer-relays/session-tab-close-request-relay'
 import { requestTerminalPaneMoveFromRenderer } from './renderer-relays/terminal-pane-move-request-relay'
 import { revealTerminalPaneInWindow } from './renderer-relays/terminal-pane-reveal-relay'
+import { scrollSessionTabInWindow } from './renderer-relays/session-tab-scroll-relay'
 import { requestTerminalTabCloseFromRenderer } from './renderer-relays/terminal-tab-close-request-relay'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
 import type { AgentListPublication } from '../../shared/agent-status/presentation/agent-list-status'
@@ -186,6 +187,7 @@ export function registerRuntimeWindowLifecycle(
     focusTerminal: (tabId, worktreeId, leafId) =>
       send('ui:focusTerminal', { tabId, worktreeId, leafId }),
     revealTerminalPane: (target) => revealTerminalPaneInWindow(mainWindow, target),
+    scrollSessionTab: (target) => scrollSessionTabInWindow(mainWindow, target),
     focusEditorTab: (tabId, worktreeId, options) =>
       send('ui:focusEditorTab', { tabId, worktreeId, ...options }),
     closeSessionTab: (tabId, worktreeId) =>

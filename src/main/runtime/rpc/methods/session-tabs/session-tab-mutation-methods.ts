@@ -13,6 +13,7 @@ import {
   ActivateTab,
   MovePaneToNewTab,
   MoveTab,
+  ScrollTab,
   SetTabProps,
   UpdatePaneLayout
 } from '../../../../../shared/rpc-contract/session-tabs/session-tabs-schemas-params'
@@ -47,6 +48,28 @@ export const SESSION_TAB_MUTATION_METHODS = [
       return result.startupCwdFallback
         ? { ...projected, startupCwdFallback: result.startupCwdFallback }
         : projected
+    }
+  }),
+  defineMethod({
+    name: 'session.tabs.scroll',
+    permission: 'workspace',
+    params: ScrollTab,
+    handler: async (params, { runtime, clientKind }) => {
+      // Scrolls this machine's window, so only local callers (CLI, plugins, local tools) may drive it.
+      if (clientKind !== undefined) {
+        throw Object.assign(
+          new Error('Scrolling a tab is available only to callers on this machine.'),
+          {
+            code: 'forbidden'
+          }
+        )
+      }
+      return runtime.scrollSessionTab(
+        params.worktree,
+        params.tabId,
+        params.leafId ?? null,
+        params.deltaY
+      )
     }
   }),
   defineMethod({

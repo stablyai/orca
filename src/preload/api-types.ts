@@ -71,6 +71,7 @@ import type {
   TelemetryApi
 } from './api/diagnostics/telemetry-api'
 import type { UiCommandEventApi } from './api/window-ui/ui-command-event-api'
+import type { UiSessionTabScrollApi } from './api/window-ui/ui-bridge-session-tab-scroll'
 import type { UiWindowApi } from './api/window-ui/ui-window-api'
 import type { UpdaterApi } from './api/updater/updater-api'
 import type { WorkspaceCleanupApi, WorkspaceSpaceApi } from './api/workspaces/workspace-cleanup-api'
@@ -161,7 +162,7 @@ export type PreloadApi = {
   nativeChat: NativeChatApi
   fs: FilesystemApi['fs']
   git: Merged<GitInspectionApi & GitOperationApi>
-  ui: Merged<UiCommandEventApi & UiWindowApi>
+  ui: Merged<UiCommandEventApi & UiWindowApi & UiSessionTabScrollApi>
   runtime: RuntimeApi['runtime']
   runtimeEnvironments: RuntimeApi['runtimeEnvironments']
   rateLimits: RateLimitsApi
