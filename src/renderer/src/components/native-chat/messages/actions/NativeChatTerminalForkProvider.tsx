@@ -5,6 +5,8 @@ import { useNativeChatWorktreeForkRequest } from './native-chat-worktree-fork-re
 import { useNativeChatTerminalFork } from './use-native-chat-terminal-fork'
 import { useNativeChatTabOwnerWorktreeId } from '@/components/native-chat/pane/ownership/use-native-chat-tab-owner'
 import { useWorktreeRuntimeTarget } from '@/runtime/rpc/targets/use-worktree-runtime-target'
+import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
+import { AI_VAULT_TERMINAL_FORK_CUT_CAPABILITY } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import { NativeChatSubagentTranscripts } from '../../subagents/NativeChatSubagentTranscripts'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 
@@ -26,11 +28,16 @@ export function NativeChatTerminalForkProvider({
 }): React.JSX.Element {
   const worktreeId = useNativeChatTabOwnerWorktreeId(terminalTabId)
   const target = useWorktreeRuntimeTarget(worktreeId)
+  const cutHost = useStructuredAgentSessionHostCapabilityState(
+    target ?? { kind: 'local' },
+    AI_VAULT_TERMINAL_FORK_CUT_CAPABILITY
+  )
   const fork = useNativeChatTerminalFork({
     agent,
     source:
       sessionId && transcriptPath && worktreeId ? { sessionId, transcriptPath, worktreeId } : null,
-    messages
+    messages,
+    cutHost
   })
   useNativeChatWorktreeForkRequest(terminalTabId, fork?.openWorktreeForkLatest)
   return (

@@ -4,6 +4,7 @@ import {
 } from '../../../../../../shared/native-chat/terminal-fork-point'
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
+import type { StructuredAgentSessionHostCapabilityState } from '../../../../../../shared/agent-session/structured-agent-session-host-capability'
 import { isRootAgentJournalItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-producer'
 import type { NativeChatMessageSlot } from '../../conversation/slots/native-chat-transcript-slots'
 import type {
@@ -49,11 +50,13 @@ async function runWhilePending<T>(
 }
 
 /** Fork for a terminal Claude chat: the host cuts a copy of its conversation at a reply and Claude
- *  resumes it in a new tab or a new worktree. Absent for other agents or without a transcript. */
+ *  resumes it in a new tab or a new worktree. Absent for other agents, without a transcript, or on a
+ *  host that can't cut (`cutHost`); drawn disabled while that is unknown. */
 export function useNativeChatTerminalFork(input: {
   agent: string
   source: NativeChatTerminalForkSource | null
   messages: readonly NativeChatMessage[]
+  cutHost: StructuredAgentSessionHostCapabilityState
 }): NativeChatPaneFork | undefined {
   const latest = useRef(input)
   useLayoutEffect(() => {
@@ -68,8 +71,8 @@ export function useNativeChatTerminalFork(input: {
       destination?: NativeChatForkDestination,
       draft?: string
     ) => {
-      const { source } = latest.current
-      if (inFlight.current || !source) {
+      const { source, cutHost } = latest.current
+      if (inFlight.current || !source || cutHost !== 'supported') {
         return undefined
       }
       return runWhilePending(inFlight, setPendingItemId, throughItemId, () =>
@@ -97,9 +100,10 @@ export function useNativeChatTerminalFork(input: {
   const { openWorktreeFork, openWorktreeForkLatest, worktreeForkDialog } =
     useNativeChatWorktreeForkDialog(inFlight, latestForkItemId)
   const worktreeOffered = useNativeChatWorktreeForkOffered(input.source?.worktreeId ?? '')
+  const cutKnown = input.cutHost === 'supported'
   const rowAction = useMemo<NativeChatForkSurface['rowAction']>(
     () => ({
-      support: { kind: 'known', fork: 'checkpoint' },
+      support: cutKnown ? { kind: 'known', fork: 'checkpoint' } : { kind: 'unknown' },
       pendingItemId,
       request,
       forkPointBefore,
@@ -108,9 +112,10 @@ export function useNativeChatTerminalFork(input: {
       openWorktreeFork,
       worktreeForkOffered: worktreeOffered
     }),
-    [forkPointBefore, openWorktreeFork, pendingItemId, request, worktreeOffered]
+    [cutKnown, forkPointBefore, openWorktreeFork, pendingItemId, request, worktreeOffered]
   )
-  const enabled = input.agent === 'claude' && input.source !== null
+  const enabled =
+    input.agent === 'claude' && input.source !== null && input.cutHost !== 'unsupported'
   return useMemo(
     () =>
       enabled
