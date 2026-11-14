@@ -20018,7 +20018,8 @@
         "unconfirmedDetail": "Es posible que se haya abierto. Revisa el historial de sesiones antes de volver a intentarlo.",
         "failed": "{{agent}} no pudo crear una rama de este chat",
         "hostUnsupported": "Este host ejecuta una versión anterior de Orca. Actualiza Orca en el host y vuelve a intentarlo.",
-        "failedDetail": "Tu chat no ha cambiado. Inténtalo de nuevo."
+        "failedDetail": "Tu chat no ha cambiado. Inténtalo de nuevo.",
+        "commandWorking": "No se puede crear una rama mientras {{agent}} responde. Vuelve a ejecutar /fork cuando termine."
       },
       "cardKindHidden": {
         "description": "Puedes cambiar esto en cualquier momento en",

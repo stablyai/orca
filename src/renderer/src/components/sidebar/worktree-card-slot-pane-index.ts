@@ -187,8 +187,3 @@ export function createFreshnessDeadlines() {
     }
   }
 }
-
-export function resetSlotPaneIndexForTests(): void {
-  displayersByPane.clear()
-  panesByIdentity.clear()
-}

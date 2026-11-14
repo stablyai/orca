@@ -1,3 +1,4 @@
+import { reenterPackagedElectron } from '../runtime/packaged-cli-interpreter'
 import { z } from 'zod'
 import type { CommandHandler } from '../dispatch/dispatch'
 import { printResult } from '../output/command-result-output'
@@ -119,6 +120,7 @@ export const PROFILE_STATE_HANDLERS: Record<string, CommandHandler> = {
     rejectProfileStateRemoteSelection(flags)
     const selector = parseSelector(flags)
     const profileId = parseProfileId(flags)
+    reenterPackagedElectron()
     const userDataPath = getDefaultUserDataPath()
     let result: ProfileStateRollbackResult
     if (canLaunchProfileStateRecovery()) {

@@ -55,9 +55,13 @@ vi.mock('child_process', async () => {
 
 import { main } from './index'
 import { RuntimeClientError, RuntimeRpcFailureError } from './runtime/types'
-import { queueFixtures } from './runtime/fixtures/runtime-rpc-fixtures'
+import { okFixture, queueFixtures } from './runtime/fixtures/runtime-rpc-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 import { agentLaunchHostFixture } from './agents/agent-launch-test-fixtures'
+import {
+  AGENT_LAUNCH_PI_MODEL_RUNTIME_CAPABILITY,
+  AGENT_LAUNCH_RUNTIME_CAPABILITIES
+} from '../shared/agent-launch/contracts/agent-launch-runtime-capability'
 
 const WORKTREE_ID = 'repo-1::/tmp/repo'
 const ORIGINAL_EXIT_CODE = process.exitCode
@@ -156,5 +160,29 @@ describe('orca cli agent launch', () => {
     expect(launchCalls()).toEqual([
       ['agent.launchReplay', expect.objectContaining({ operationId })]
     ])
+  })
+
+  it('refuses a Pi model on a host that would start Pi on its default model', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_status', {
+        capabilities: AGENT_LAUNCH_RUNTIME_CAPABILITIES.filter(
+          (capability) => capability !== AGENT_LAUNCH_PI_MODEL_RUNTIME_CAPABILITY
+        )
+      })
+    )
+    const output = await runRefused([
+      'agent',
+      'launch',
+      '--agent',
+      'pi',
+      '--model',
+      'anthropic/claude-sonnet-4-5',
+      '--worktree',
+      `id:${WORKTREE_ID}`,
+      '--json'
+    ])
+    expect(JSON.parse(output).error.code).toBe('incompatible_runtime')
+    expect(launchCalls()).toEqual([])
   })
 })

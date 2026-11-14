@@ -2682,9 +2682,9 @@
         "unreadableSkillSource": "A skill folder did not respond, so this status may be incomplete."
       },
       "useMacosTccPromptNotice": {
-        "titleOne": "macOS just interrupted an agent",
-        "titleMany": "macOS interrupted your agents {{count}}×",
-        "subtitle": "Full Disk Access stops these file prompts.",
+        "titleOne": "macOS just showed a file prompt",
+        "titleMany": "macOS showed {{count}} file prompts",
+        "subtitle": "Full Disk Access stops these prompts.",
         "enable": "Turn on Full Disk Access",
         "close": "Close",
         "dismiss": "Don't show again"
@@ -14817,11 +14817,6 @@
             "locallyResolvedConflictOfKind": "Conflict resolved locally ({{kind}})",
             "locallyResolvedConflict": "Conflict resolved locally",
             "pushesToForkTarget": "Pushes to fork {{target}}",
-            "mergedReviewUncommitted_one": "{{review}} is merged, but this workspace has {{count}} uncommitted change that is not in it.",
-            "mergedReviewUncommitted_other": "{{review}} is merged, but this workspace has {{count}} uncommitted changes that are not in it.",
-            "mergedReviewHeadMoved": "{{review}} is merged, but Orca could not confirm that it includes this branch’s current commits.",
-            "mergedReviewNothingLeft": "{{review}} is merged and includes this branch’s committed changes.",
-            "mergedReviewSafeToDelete": "{{review}} is merged and includes this branch’s committed changes. Ignored files may still be lost when deleting this workspace.",
             "abortRebaseConfirmTitle": "Abort rebase?",
             "abortMergeConfirmTitle": "Abort merge?",
             "abortRebaseConfirmDescription": "This cancels the rebase in progress and can discard conflict resolutions made during this rebase.",
@@ -21532,7 +21527,7 @@
         "hostUnsupported": "This host runs an older Orca. Update Orca on the host, then try again.",
         "failedDetail": "Your chat is unchanged. Try again.",
         "commandDescription": "Fork this chat from its latest response",
-        "commandWorking": "Wait for the response to finish, then fork.",
+        "commandWorking": "Can’t fork while {{agent}} is replying. Run /fork again when it finishes.",
         "commandNothing": "There’s no response to fork yet.",
         "commandTakesNoText": "Send /fork on its own, then write in the new chat."
       },

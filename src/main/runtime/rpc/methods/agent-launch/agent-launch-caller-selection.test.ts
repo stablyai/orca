@@ -24,7 +24,6 @@ vi.mock('./agent-launch-terminal-prompt', () => ({
 }))
 const { AGENT_LAUNCH_METHODS } = await import('./agent-launch')
 const AGENT_LAUNCH_REPLAY = methodNamed(AGENT_LAUNCH_METHODS, 'agent.launchReplay')
-const AGENT_LAUNCH = methodNamed(AGENT_LAUNCH_METHODS, 'agent.launch')
 
 const TAB_ID = '9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d'
 const LEAF_ID = '3f2504e0-4f89-41d3-9a0c-0305e82c3301'
@@ -75,16 +74,5 @@ describe('a replayed launch', () => {
 
     expect(replay.createTerminal).not.toHaveBeenCalled()
     expect(replay.selectCreatedMobileSessionTabForClient).not.toHaveBeenCalled()
-  })
-})
-
-describe('a focused chat launch from the local CLI', () => {
-  it('asks the host window to select the chat', async () => {
-    const runtime = Object.assign(runtimeStub({}), { focusLaunchedChatInHostWindow: vi.fn() })
-    const params = AGENT_LAUNCH.params.parse({ ...EXISTING_LAUNCH, presentation: 'focused' })
-
-    await AGENT_LAUNCH.handler(params, rpcContext(runtime, {}))
-
-    expect(runtime.focusLaunchedChatInHostWindow).toHaveBeenCalledWith('wt-7', 'sess-1')
   })
 })

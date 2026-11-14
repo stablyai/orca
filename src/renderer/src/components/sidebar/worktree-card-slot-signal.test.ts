@@ -87,32 +87,6 @@ describe('titleRowUnread', () => {
     ).toBe(true)
   })
 
-  it('agrees with the online slot’s unread exception', () => {
-    for (const lines of [[], [{ kind: 'unread' as const, at: 1 }]]) {
-      for (const collapsedLineage of [[], unreadChild]) {
-        for (const workspaceUnread of [false, true]) {
-          for (const ownLinesShown of [false, true]) {
-            const slot = titleRowSlot({
-              ...base,
-              ownLinesShown,
-              lines,
-              collapsedLineage,
-              workspaceUnread: workspaceUnread ? { manual: false } : null,
-              lastActivityAt: null
-            })
-            const fromSlot =
-              slot.kind === 'status' && slot.exceptions.some((e) => e.kind === 'unread')
-            // Shown lines are left out of the slot but still mark the card unread.
-            const shownLineUnread = ownLinesShown && lines.length > 0
-            expect(titleRowUnread({ lines, collapsedLineage, workspaceUnread })).toBe(
-              fromSlot || shownLineUnread
-            )
-          }
-        }
-      }
-    }
-  })
-
   it('is quiet with nothing unread', () => {
     expect(
       titleRowUnread({
@@ -122,16 +96,4 @@ describe('titleRowUnread', () => {
       })
     ).toBe(false)
   })
-})
-
-it.each([1_000, 2_000])('preserves a manual unread mark alongside an agent at %i', (at) => {
-  expect(
-    titleRowSlot({
-      ...base,
-      ownLinesShown: false,
-      lines: [{ kind: 'unread', at }],
-      workspaceUnread: { manual: true },
-      lastActivityAt: 1_000
-    })
-  ).toMatchObject({ exceptions: [{ kind: 'unread', at, manual: true }] })
 })

@@ -196,7 +196,7 @@ export class PRRefreshQueueDrainer {
             next.bypassBackgroundBudget !== true &&
             isBudgetedBackground(next.reason)
           ) {
-            this.pacing.noteBackgroundStart(next)
+            this.pacing.noteBackgroundStart()
             this.watchJobs.noteBudgetedStart(next)
           }
           if (next.watch && usesActiveRefreshPacing(next)) {
