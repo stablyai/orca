@@ -1,3 +1,4 @@
+import { linkRecordWrite } from '../../keyed-record-transitions'
 import type {
   DropAgentStatusByTabPrefixOptions,
   DropAgentStatusOptions
@@ -22,7 +23,7 @@ function removeAcknowledgement(
   }
   const next = { ...acknowledgements }
   delete next[paneKey]
-  return next
+  return linkRecordWrite(next, acknowledgements, [paneKey])
 }
 
 export function createAgentStatusDropActions(
