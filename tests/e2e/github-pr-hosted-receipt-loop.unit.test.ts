@@ -365,7 +365,7 @@ it('holds a return under Minimal until the host’s real Retry-After on the requ
   try {
     // Shown at 61 s with data a Default interval old, it is read at once; GitHub answers with a
     // secondary rate limit and a 300 s Retry-After, while the primary quota stays healthy.
-    await vi.advanceTimersByTimeAsync(61_000 - Date.now())
+    await vi.advanceTimersByTimeAsync(60_000)
     expect(getVisibleHostedReviewRefreshTargets(store.getState(), store.getState)).toMatchObject([
       { selected: true, cadence: 'minimal', intervalMs: 600_000, foregroundIntervalMs: 60_000 }
     ])
@@ -384,11 +384,11 @@ it('holds a return under Minimal until the host’s real Retry-After on the requ
     // Hidden, then back at 122 s: Default would retry the failure from 121 s, but the host holds
     // this request until 361 s, so neither the return nor anything else reads it sooner.
     scheduler.setVisible(false)
-    await vi.advanceTimersByTimeAsync(122_000 - Date.now())
+    await vi.advanceTimersByTimeAsync(61_000)
     scheduler.setVisible(true)
     await vi.advanceTimersByTimeAsync(0)
     expect(reasons).toEqual(['active'])
-    await vi.advanceTimersByTimeAsync(360_999 - Date.now())
+    await vi.advanceTimersByTimeAsync(238_999)
     expect(reasons).toEqual(['active'])
     expect(mocks.resolve).toHaveBeenCalledTimes(2)
     expect(observed).toHaveLength(observedAfterFailure)
