@@ -22982,6 +22982,7 @@
       "voiceDictation": "Dictado",
       "sidebarExplorerToggle": "Mostrar explorador",
       "sidebarFocusWorktreeList": "Enfocar la lista de worktrees",
+      "sidebarActivityToggle": "Toggle activity view",
       "tabNewTerminal": "Nueva pestaña de terminal",
       "tabNewAgent": "Nueva pestaña de agente (agente predeterminado)",
       "tabNewBrowser": "Nueva pestaña del navegador",

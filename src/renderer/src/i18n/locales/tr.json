@@ -22585,6 +22585,7 @@
       "voiceDictation": "Dikte",
       "sidebarExplorerToggle": "Gezgin bölümünü göster",
       "sidebarFocusWorktreeList": "Worktree listesine odaklan",
+      "sidebarActivityToggle": "Toggle activity view",
       "tabNewTerminal": "Yeni terminal sekmesi",
       "tabNewAgent": "Yeni ajan sekmesi (varsayılan ajan)",
       "tabNewBrowser": "Yeni tarayıcı sekmesi",

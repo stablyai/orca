@@ -5,6 +5,38 @@ const WINDOWS_LINUX_TOGGLE_BINDINGS = ['Mod+Shift+F11', 'Mod+Shift+J']
 
 export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
   {
+    id: 'terminal.focusPreviousPane',
+    title: 'Focus previous pane',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'pane', 'focus', 'previous'],
+    defaultBindings: platformBindings(['Mod+BracketLeft'])
+  },
+  {
+    id: 'terminal.equalizePaneSizes',
+    title: 'Equalize pane sizes',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'pane', 'split', 'equalize', 'resize', 'balance', 'size'],
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'terminal.expandPane',
+    title: 'Expand / collapse pane',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'pane', 'expand', 'collapse'],
+    defaultBindings: platformBindings(['Mod+Shift+Enter'])
+  },
+  {
+    id: 'terminal.setTitle',
+    title: 'Set Title…',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'terminal', 'pane', 'set title', 'title', 'rename'],
+    defaultBindings: platformBindings([])
+  },
+  {
     id: 'sidebar.projects.toggleCollapse',
     title: 'Collapse / Expand All Projects',
     group: 'Global',

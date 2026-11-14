@@ -22313,6 +22313,7 @@
       "voiceDictation": "ディクテーション",
       "sidebarExplorerToggle": "エクスプローラを表示",
       "sidebarFocusWorktreeList": "ワークツリーリストにフォーカス",
+      "sidebarActivityToggle": "Toggle activity view",
       "tabNewTerminal": "新規ターミナルタブ",
       "tabNewAgent": "新規 Agent タブ（デフォルト Agent）",
       "tabNewBrowser": "新規ブラウザタブ",

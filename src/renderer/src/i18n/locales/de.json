@@ -22772,6 +22772,7 @@
       "voiceDictation": "Diktieren",
       "sidebarExplorerToggle": "Datei-Explorer anzeigen",
       "sidebarFocusWorktreeList": "Worktree-Liste fokussieren",
+      "sidebarActivityToggle": "Toggle activity view",
       "tabNewTerminal": "Neuen Terminal-Tab öffnen",
       "tabNewAgent": "Neuen Agenten-Tab öffnen (Standardagent)",
       "tabNewBrowser": "Neuen Browser-Tab öffnen",

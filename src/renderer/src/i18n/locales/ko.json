@@ -22305,6 +22305,7 @@
       "voiceDictation": "받아쓰기",
       "sidebarExplorerToggle": "탐색기 표시",
       "sidebarFocusWorktreeList": "워크트리 목록에 포커스",
+      "sidebarActivityToggle": "Toggle activity view",
       "tabNewTerminal": "새 터미널 탭",
       "tabNewAgent": "새 에이전트 탭(기본 에이전트)",
       "tabNewBrowser": "새 브라우저 탭",

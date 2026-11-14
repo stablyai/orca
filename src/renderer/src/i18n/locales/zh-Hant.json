@@ -22280,6 +22280,7 @@
       "voiceDictation": "聽寫",
       "sidebarExplorerToggle": "顯示檔案總管",
       "sidebarFocusWorktreeList": "將焦點移至工作樹清單",
+      "sidebarActivityToggle": "Toggle activity view",
       "tabNewTerminal": "新增終端機分頁",
       "tabNewAgent": "新增代理程式分頁（預設代理程式）",
       "tabNewBrowser": "新增瀏覽器分頁",

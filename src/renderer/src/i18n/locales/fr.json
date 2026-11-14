@@ -23005,6 +23005,7 @@
       "voiceDictation": "Dictée",
       "sidebarExplorerToggle": "Afficher l'explorateur",
       "sidebarFocusWorktreeList": "Placer le focus sur la liste des worktrees",
+      "sidebarActivityToggle": "Toggle activity view",
       "tabNewTerminal": "Nouvel onglet de terminal",
       "tabNewAgent": "Nouvel onglet d'agent (agent par défaut)",
       "tabNewBrowser": "Nouvel onglet de navigateur",

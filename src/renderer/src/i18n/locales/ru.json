@@ -23339,6 +23339,7 @@
       "newAgentTab": "Создать вкладку {{agent}}",
       "sidebarExplorerToggle": "Показать проводник",
       "sidebarFocusWorktreeList": "Перейти к списку рабочих деревьев",
+      "sidebarActivityToggle": "Toggle activity view",
       "tabClose": "Закрыть активную вкладку",
       "tabCloseAll": "Закрыть все вкладки редактора",
       "tabNewAgent": "Создать вкладку агента (агент по умолчанию)",

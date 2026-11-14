@@ -22723,6 +22723,7 @@
       "voiceDictation": "听写",
       "sidebarExplorerToggle": "显示资源管理器",
       "sidebarFocusWorktreeList": "聚焦工作树列表",
+      "sidebarActivityToggle": "Toggle activity view",
       "tabNewTerminal": "新建终端标签页",
       "tabNewAgent": "新建智能体标签页（默认智能体）",
       "tabNewBrowser": "新建浏览器标签页",
