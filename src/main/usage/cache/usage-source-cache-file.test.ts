@@ -102,6 +102,20 @@ describe('usage source cache file', () => {
     }
   })
 
+  it('drops entries that are not records so one bad entry cannot fail every later scan', async () => {
+    const ref = {
+      path: join(directory, 'sources.json'),
+      schemaVersion: 7,
+      worktreeFingerprint: 'w',
+      reuse: true
+    }
+    writeFileSync(
+      ref.path,
+      '{"schemaVersion":7,"worktreeFingerprint":"w","sources":[null,7,["a.jsonl"],{"path":"a.jsonl"}]}'
+    )
+    expect(await readUsageSourceCache(ref)).toEqual([{ path: 'a.jsonl' }])
+  })
+
   it('keeps the prior cache and removes the partial temp when encoding fails after writing', async () => {
     const ref = {
       path: join(directory, 'sources.json'),
