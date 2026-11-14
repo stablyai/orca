@@ -6,11 +6,11 @@ import { isRetainedProgramResult } from '@/lib/program-status/row'
 export function dismissRetainedProgramResult(
   paneKey: string,
   state: {
-    agentStatusByPaneKey: Readonly<Record<string, AgentStatusEntry | undefined>>
+    agentStatusByPaneKey: ReadonlyMap<string, AgentStatusEntry>
     dropAgentStatus: (paneKey: string) => void
   }
 ): void {
-  const current = state.agentStatusByPaneKey[paneKey]
+  const current = state.agentStatusByPaneKey.get(paneKey)
   if (current && isRetainedProgramResult(current)) {
     state.dropAgentStatus(paneKey)
   }

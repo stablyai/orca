@@ -19,14 +19,17 @@ export function agentHookRuntimeDeps(
     getAgentStatusSnapshot: () =>
       server.getStatusSnapshot().filter((entry) => entry.providerSessionOnly !== true),
     getAgentStatusSnapshotForPane: (paneKey) => server.getStatusSnapshotForPane(paneKey),
-    getPublicAgentStatusSnapshotForPane: (paneKey) =>
-      server.getPublicStatusSnapshotForPane(paneKey),
+    getPublicAgentStatusSnapshotForPane: (paneKey: string, terminalHandle?: string | null) =>
+      server.getPublicStatusSnapshotForPane(paneKey, terminalHandle),
     // Include resume identities so mobile can locate provider transcripts, including Pi sessions.
     getAgentProviderSessionSnapshot: (tabId) =>
       tabId === undefined
         ? server.getStatusSnapshot()
         : server.getProviderSessionSourceRowsForTab(tabId),
-    getAgentProviderSessionRowsForPane: (paneKey) => server.getStatusSnapshotForPane(paneKey),
+    getAgentProviderSessionRowsForPane: (paneKey: string, terminalHandle?: string | null) =>
+      server.getStatusRowsForPaneOrHandle(paneKey, terminalHandle),
+    getAgentProviderSessionRowsForSession: (agent, session) =>
+      server.getProviderSessionSourceRowsForSession(agent, session),
     getAcceptedAgentReply: (paneKey, leadTurnKey) => server.getAcceptedReply(paneKey, leadTurnKey),
     subscribeAgentStatusRowChanges: (listener) =>
       server.subscribeStatusRowMutations(({ before, after }) => {
@@ -36,7 +39,25 @@ export function agentHookRuntimeDeps(
         }
       }),
     subscribeAgentProviderSessionChanges: (listener) =>
-      server.subscribeProviderSessionChanges(listener),
+      server.subscribeStatusRowMutations(({ before, after }) => {
+        const paneKey = after?.paneKey ?? before?.paneKey
+        if (
+          !paneKey ||
+          (before?.providerSession?.id === after?.providerSession?.id &&
+            before?.providerSession?.key === after?.providerSession?.key &&
+            before?.agentType === after?.agentType &&
+            before?.providerSession?.transcriptPath === after?.providerSession?.transcriptPath)
+        ) {
+          return
+        }
+        listener(
+          server
+            .getStatusSnapshotForPane(paneKey)
+            .flatMap((row) =>
+              row.providerSession ? [{ paneKey, sessionId: row.providerSession.id }] : []
+            )
+        )
+      }),
     // Use identity captured at observation; resolving now could attribute cached rows to a new process.
     readObservedAgentStatusPaneIdentity: (paneKey) => observedPaneIdentities.read(paneKey),
     // Structured chats publish here directly because they have no hooks.
@@ -55,8 +76,15 @@ export function agentHookRuntimeDeps(
       exitedSince === undefined
         ? server.checkAgentPresence(paneKey)
         : server.checkAgentPresenceSince(paneKey, exitedSince),
-    reconcileAgentStatusForEndedProcess: (paneKeys) =>
-      server.reconcileEndedProcessForPaneKeys(paneKeys),
+    reconcileAgentStatusForEndedProcess: (paneKeys, sleep) => {
+      const keys = [...paneKeys]
+      if (sleep) {
+        for (const paneKey of keys) {
+          server.settleTerminalPaneSleep(paneKey, sleep.ptyId, sleep.incarnationId)
+        }
+      }
+      server.reconcileEndedProcessForPaneKeys(keys)
+    },
     forgetHookAgentExit: (paneKeys) => {
       for (const paneKey of paneKeys) {
         server.forgetAgentExit(paneKey)

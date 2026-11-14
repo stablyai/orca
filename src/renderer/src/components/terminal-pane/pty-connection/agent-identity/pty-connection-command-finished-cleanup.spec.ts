@@ -337,10 +337,14 @@ export function registerPtyConnectionCommandFinishedCleanupTests(): void {
       const realStore = createCommandFinishedStatusStore()
       const row = realStore.acceptWorkingClaudeStatus(paneKey)
       expect(row).toBeDefined()
-      mockStoreState.agentStatusByPaneKey[paneKey] = row
+      mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+        [paneKey, row]
+      ])
       // Mirror both real dismissal and teardown to exercise drop-before-reconcile ordering.
       mockStoreState.dropAgentStatus.mockImplementation((key: string) => {
-        delete mockStoreState.agentStatusByPaneKey[key]
+        mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+          [key, null]
+        ])
         realStore.dropAgentStatus(key)
       })
 

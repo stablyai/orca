@@ -1,3 +1,5 @@
+import { AcceptedAgentStatuses } from './accepted-agent-statuses'
+import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { recordDraft, replaceRecordEntries } from '@/store/keyed-record-transitions'
 export const RECENTLY_CLOSED_AGENT_STATUS_TAB_IDS_MAX = 1024
 export const RECENTLY_RETIRED_AGENT_STATUS_PANE_KEYS_MAX = 1024
@@ -74,26 +76,60 @@ export function boundRecentlyRetiredAgentStatusPaneKeys(
   )
 }
 
+export function movePaneKeyedRecord(
+  record: AcceptedAgentStatuses,
+  fromPaneKey: string,
+  toPaneKey: string,
+  transform?: (value: AgentStatusEntry) => AgentStatusEntry
+): AcceptedAgentStatuses
 export function movePaneKeyedRecord<T>(
   record: Record<string, T>,
   fromPaneKey: string,
   toPaneKey: string,
-  transform: (value: T) => T = (value) => value
-): Record<string, T> {
+  transform?: (value: T) => T
+): Record<string, T>
+export function movePaneKeyedRecord<T>(
+  record: Record<string, T> | AcceptedAgentStatuses,
+  fromPaneKey: string,
+  toPaneKey: string,
+  transform: (value: T | AgentStatusEntry) => T | AgentStatusEntry = (value) => value
+): Record<string, T> | AcceptedAgentStatuses {
+  if (record instanceof AcceptedAgentStatuses) {
+    const value = record.get(fromPaneKey)
+    return !value || fromPaneKey === toPaneKey
+      ? record
+      : record.replace([
+          [fromPaneKey, null],
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the accepted-owner overload requires an AgentStatusEntry-preserving transform.
+          [toPaneKey, transform(value) as AgentStatusEntry]
+        ])
+  }
   const value = record[fromPaneKey]
   if (value === undefined || fromPaneKey === toPaneKey) {
     return record
   }
   const draft = recordDraft(record)
   draft.delete(fromPaneKey)
-  draft.set(toPaneKey, transform(value))
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the Record overload requires a transform preserving its value type T.
+  draft.set(toPaneKey, transform(value) as T)
   return draft.finish()
 }
 
+export function removePaneKeys(
+  record: AcceptedAgentStatuses,
+  paneKeys: ReadonlySet<string>
+): AcceptedAgentStatuses
 export function removePaneKeys<T>(
   record: Record<string, T>,
   paneKeys: ReadonlySet<string>
-): Record<string, T> {
+): Record<string, T>
+export function removePaneKeys<T>(
+  record: Record<string, T> | AcceptedAgentStatuses,
+  paneKeys: ReadonlySet<string>
+): Record<string, T> | AcceptedAgentStatuses {
+  if (record instanceof AcceptedAgentStatuses) {
+    return record.replace(Array.from(paneKeys, (key) => [key, null] as const))
+  }
   // Probe requested own enumerable keys and clone on first match. Retirement touches many usually-empty records; retain no-op identity and exclude inherited toString/__proto__.
   const deletions: [string, null][] = []
   for (const key of paneKeys) {

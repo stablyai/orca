@@ -112,7 +112,7 @@ function applyChangedHostSnapshot(
 }
 
 function mirroredRowIsFreshAt(store: TestStore, clientNow: number): boolean {
-  const row = store.getState().agentStatusByPaneKey[MIRROR_PANE_KEY]
+  const row = store.getState().agentStatusByPaneKey.get(MIRROR_PANE_KEY)!
   expect(row, 'the mirrored row must exist for freshness to mean anything').toBeDefined()
   return isAgentStatusFresh(row, clientNow, AGENT_STATUS_STALE_AFTER_MS)
 }

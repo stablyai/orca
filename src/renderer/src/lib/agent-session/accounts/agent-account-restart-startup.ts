@@ -54,7 +54,7 @@ export function resolveAgentAccountRestartResumeStartup(
 ): AgentAccountRestartStartup | null {
   const state = useAppStore.getState()
   const paneKey = makePaneKey(args.tabId, args.leafId)
-  const entry = state.agentStatusByPaneKey[paneKey]
+  const entry = state.agentStatusByPaneKey.get(paneKey)
   const sleeping = state.sleepingAgentSessionsByPaneKey[paneKey]
   const agentType = entry?.agentType ?? sleeping?.agent
   if (agentType !== agent) {

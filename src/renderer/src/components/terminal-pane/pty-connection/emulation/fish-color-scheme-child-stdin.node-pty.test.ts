@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 /** Verify real fish child stdin stays free of unsolicited CSI ?997 replies after DECSET 2031 withdrawal; rendered output alone misses consumed bytes. */
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -290,7 +291,7 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
       consumePendingColdRestore: vi.fn(() => null),
       consumePendingSnapshot: vi.fn(() => null),
       runtimePaneTitlesByTabId: {},
-      agentStatusByPaneKey: {},
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
 
       paneForegroundAgentByPaneKey: {},
       sleepingAgentSessionsByPaneKey: {},
@@ -304,6 +305,7 @@ describe('fish never receives a color-scheme report it did not query (#9993)', (
       recordTerminalInput: vi.fn(),
       setAgentStatus: vi.fn(),
       removeAgentStatus: vi.fn(),
+      retireAgentStatusProcess: vi.fn(),
       dropAgentStatus: vi.fn(),
       retireAgentPaneAuthority: vi.fn(),
       setPaneForegroundAgent: vi.fn(),

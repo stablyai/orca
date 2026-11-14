@@ -35,7 +35,7 @@ export function registerAgentStatusNestedResumeTests(): void {
           )
         const record = sleepingRecordFromEntry({
           state: store.getState(),
-          entry: store.getState().agentStatusByPaneKey[PANE],
+          entry: store.getState().agentStatusByPaneKey.get(PANE)!,
           worktreeId: 'wt-1',
           capturedAt: Date.now()
         })

@@ -1,3 +1,5 @@
+import type { RuntimeTerminalSummary } from '../../../src/shared/runtime-types'
+import { makePaneKey } from '../../../src/shared/workspace-layout/stable-pane-id'
 import type { Page } from '@stablyai/playwright-test'
 
 export type PaneIdentitySnapshot = {
@@ -108,4 +110,50 @@ export async function readPaneIdentitySnapshot(page: Page): Promise<PaneIdentity
       ptyIdsByLeafId: store.getState().terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {}
     }
   }, tabId)
+}
+
+export type TerminalIdentity = Pick<
+  RuntimeTerminalSummary,
+  'handle' | 'incarnationId' | 'leafId' | 'ptyId' | 'tabId'
+>
+
+export function terminalIdentity(terminal: RuntimeTerminalSummary): TerminalIdentity {
+  const { handle, incarnationId, leafId, ptyId, tabId } = terminal
+  return { handle, incarnationId, leafId, ptyId, tabId }
+}
+
+export function liveTerminalIdentity(terminal: RuntimeTerminalSummary) {
+  return {
+    ...terminalIdentity(terminal),
+    connected: terminal.connected,
+    writable: terminal.writable
+  }
+}
+
+export function runtimeTerminalPaneKeys(
+  originals: readonly RuntimeTerminalSummary[],
+  agentHandle: string | null,
+  canaryHandle: string
+): string[] {
+  try {
+    return originals.map(({ leafId, tabId }) => makePaneKey(tabId, leafId))
+  } catch (error) {
+    const identities = originals.map((terminal) => ({
+      handle: terminal.handle,
+      ptyId: terminal.ptyId ?? null,
+      incarnationId: terminal.incarnationId ?? null,
+      tabId: terminal.tabId ?? null,
+      leafId: terminal.leafId ?? null,
+      orphaned: terminal.orphaned ?? null,
+      recordedPaneKey: terminal.recordedPaneKey ?? null
+    }))
+    throw new Error(
+      `Runtime terminal inventory has an invalid pane identity: ${JSON.stringify({
+        identities,
+        agentHandle,
+        canaryHandle
+      })}`,
+      { cause: error }
+    )
+  }
 }

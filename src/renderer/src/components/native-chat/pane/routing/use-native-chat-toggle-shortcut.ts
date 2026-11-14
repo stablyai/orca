@@ -33,17 +33,17 @@ export function resolveNativeChatToggleShortcutDetectedAgent({
 }: {
   terminalTabId: string
   terminalLayout?: TerminalLayoutSnapshot | null
-  agentStatusByPaneKey: Record<string, { agentType?: AgentType }>
+  agentStatusByPaneKey: ReadonlyMap<string, { agentType?: AgentType }>
 }): AgentType | null {
   const activeLeafId = resolveNativeChatActiveLayoutLeafId(terminalLayout)
   if (activeLeafId) {
-    return agentStatusByPaneKey[`${terminalTabId}:${activeLeafId}`]?.agentType ?? null
+    return agentStatusByPaneKey.get(`${terminalTabId}:${activeLeafId}`)?.agentType ?? null
   }
   if (!isNativeChatTabWideFallbackSafe(terminalLayout)) {
     return null
   }
   return (
-    Object.entries(agentStatusByPaneKey).find(([paneKey]) =>
+    Array.from(agentStatusByPaneKey.entries()).find(([paneKey]) =>
       paneKey.startsWith(`${terminalTabId}:`)
     )?.[1].agentType ?? null
   )

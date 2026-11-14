@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -71,20 +72,23 @@ function seedOpenPane(knownLocalRepo: boolean): void {
           }
         ]
       : [],
-    agentStatusByPaneKey: {
-      [paneKey]: {
-        state: 'working',
-        prompt: 'Original prompt',
-        updatedAt: 1,
-        stateStartedAt: 1,
-        agentType: 'claude',
+    agentStatusByPaneKey: acceptedAgentStatuses([
+      [
         paneKey,
-        tabId: 'tab-1',
-        worktreeId: WORKTREE_ID,
-        stateHistory: [],
-        providerSession: { key: 'session_id', id: 'claude-1' }
-      }
-    },
+        {
+          state: 'working',
+          prompt: 'Original prompt',
+          updatedAt: 1,
+          stateStartedAt: 1,
+          agentType: 'claude',
+          paneKey,
+          tabId: 'tab-1',
+          worktreeId: WORKTREE_ID,
+          stateHistory: [],
+          providerSession: { key: 'session_id', id: 'claude-1' }
+        }
+      ]
+    ]),
     terminalLayoutsByTabId: {
       'tab-1': {
         root: { type: 'leaf', leafId: LEAF_ID },

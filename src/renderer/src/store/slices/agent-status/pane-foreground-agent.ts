@@ -1,3 +1,4 @@
+import { replaceRecordEntries } from '../../keyed-record-transitions'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
 import type { TerminalAgent } from '../../../../../shared/agent-status/identity/terminal-agent'
@@ -55,7 +56,10 @@ export const createPaneForegroundAgentSlice: StateCreator<
         return s
       }
       return {
-        paneForegroundAgentByPaneKey: { ...s.paneForegroundAgentByPaneKey, [paneKey]: entry }
+        paneForegroundAgentByPaneKey: replaceRecordEntries<PaneForegroundAgentEntry>(
+          s.paneForegroundAgentByPaneKey,
+          [[paneKey, entry]]
+        )
       }
     })
   },
@@ -64,8 +68,9 @@ export const createPaneForegroundAgentSlice: StateCreator<
       if (!(paneKey in s.paneForegroundAgentByPaneKey)) {
         return s
       }
-      const next = { ...s.paneForegroundAgentByPaneKey }
-      delete next[paneKey]
+      const next = replaceRecordEntries<PaneForegroundAgentEntry>(s.paneForegroundAgentByPaneKey, [
+        [paneKey, null]
+      ])
       return { paneForegroundAgentByPaneKey: next }
     })
   },
@@ -101,9 +106,9 @@ export function buildPaneForegroundAgentTabPrefixClearPatch(
   if (staleKeys.length === 0) {
     return null
   }
-  const next = { ...entries }
-  for (const paneKey of staleKeys) {
-    delete next[paneKey]
-  }
+  const next = replaceRecordEntries<PaneForegroundAgentEntry>(
+    entries,
+    staleKeys.map((key) => [key, null] as const)
+  )
   return { paneForegroundAgentByPaneKey: next }
 }

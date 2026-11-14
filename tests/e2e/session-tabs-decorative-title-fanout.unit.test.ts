@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   RuntimeMobileSessionTabsResult,
@@ -43,7 +44,7 @@ function makeViewerState(): WebSessionTabsSyncState {
     activeTabType: 'terminal',
     activeTabTypeByWorktree: {},
     activeWorktreeId: 'workspace-0',
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     agentStatusEpoch: 0,
     browserCertificateFailuresByPageId: {},
     browserPagesByWorkspace: {},
@@ -184,7 +185,7 @@ describe('real PTY decorative session-tabs fanout', () => {
     expect(titleOnlyStatus?.updatedAt).toBeGreaterThan(refreshedStatus!.updatedAt)
     expect(titleOnlyStatus?.stateStartedAt).toBe(initialStatus?.stateStartedAt)
     expect(Date.now() - initialStatus!.updatedAt).toBeGreaterThan(AGENT_STATUS_STALE_AFTER_MS)
-    const viewerStatus = Object.values(viewerState.agentStatusByPaneKey)[0]
+    const viewerStatus = Array.from(viewerState.agentStatusByPaneKey.values())[0]
     expect(viewerStatus?.prompt).toBe('')
     expect(isAgentStatusFresh(viewerStatus!, Date.now(), AGENT_STATUS_STALE_AFTER_MS)).toBe(true)
     unsubscribe()

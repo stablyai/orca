@@ -153,6 +153,9 @@ export function sanitizeHydratedEntry(
   const hostTurn = readHostTurnRecord(record.hostTurn)
   return {
     paneKey,
+    ...(payload.state === 'done' && payload.sessionBoundary !== true && !providerSessionOnly
+      ? { paneSleep: readPaneSleep(record.paneSleep) }
+      : {}),
     agentPresence: readAgentProcessPresence(record.agentPresence),
     source,
     tabId: typeof tabId === 'string' ? tabId : undefined,
@@ -263,3 +266,4 @@ export function authorityCommitmentsMatch(
     left.worktreeId === right.worktreeId
   )
 }
+import { readPaneSleep } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'

@@ -42,20 +42,22 @@ export function installPaneAgentCompletion(session: ConnectPanePtySession): void
       if (hookLaneOwnsAgentTurnEnds(session.cacheKey, session.transport.getPtyId(), exited.agent)) {
         return true
       }
-      const currentStatus = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+      const currentStatus = useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)
       const currentAgentForReplacement = resolveCompatibleAgentTypeForOwner(
         currentStatus?.agentType,
         replacement.agent
       )
       return (
-        isFreshNonDoneAgentStatus(currentStatus) && currentAgentForReplacement === replacement.agent
+        currentStatus !== undefined &&
+        isFreshNonDoneAgentStatus(currentStatus) &&
+        currentAgentForReplacement === replacement.agent
       )
     },
     shouldSuppressConfirmedProcessExitCompletion: (exited) => {
       if (hookLaneOwnsAgentTurnEnds(session.cacheKey, session.transport.getPtyId(), exited.agent)) {
         return true
       }
-      const currentStatus = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+      const currentStatus = useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)
       const currentAgentForExited = resolveCompatibleAgentTypeForOwner(
         currentStatus?.agentType,
         exited.agent
@@ -63,6 +65,7 @@ export function installPaneAgentCompletion(session: ConnectPanePtySession): void
       // Why: a replacement hook can lead process visibility by one cadence;
       // only a different known active owner can veto confirmed old-process exit.
       return Boolean(
+        currentStatus !== undefined &&
         isFreshNonDoneAgentStatus(currentStatus) &&
         currentStatus.agentType &&
         currentStatus.agentType !== 'unknown' &&
@@ -82,7 +85,7 @@ export function installPaneAgentCompletion(session: ConnectPanePtySession): void
       if (meta?.terminalIdleConfirmed === true) {
         // Why: an agent can crash before its done hook; confirmed process death
         // must still restore cursor and native Windows Kitty keyboard modes.
-        const currentAgentStatus = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+        const currentAgentStatus = useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)
         if (!isFreshNonDoneAgentStatus(currentAgentStatus)) {
           session.setFocusReportSuppressionForAgentCompletion(title, meta.agentStatus?.agentType)
         }

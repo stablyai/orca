@@ -35,7 +35,7 @@ describe('worktree agent status cleanup', () => {
 
     store.getState().dropAgentStatusByWorktree('wt-a')
 
-    expect(store.getState().agentStatusByPaneKey[paneKey]).toBeUndefined()
+    expect(store.getState().agentStatusByPaneKey.get(paneKey)).toBeUndefined()
     expect(store.getState().acknowledgedAgentsByPaneKey[paneKey]).toBeUndefined()
   })
 })

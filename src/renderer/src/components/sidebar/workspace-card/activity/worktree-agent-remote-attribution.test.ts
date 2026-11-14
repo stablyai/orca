@@ -1,3 +1,5 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
@@ -67,24 +69,28 @@ describe('remote completed sidebar rows before tab hydration', () => {
       NOW
     )
     const unknown = status(toWebTerminalSurfaceTabId('unknown-owner'), worktreeId)
-    const beforeTabs = makeState({
-      agentStatusByPaneKey: {
-        ...owner.agentStatusByPaneKey,
-        ...sibling.agentStatusByPaneKey,
-        ...otherWorkspace.agentStatusByPaneKey,
-        [unknown.paneKey]: unknown
-      }
-    })
-    const removed = {
-      ...beforeTabs,
-      ...applyWebSessionTabsSnapshot(
+    const store = createTestStore()
+    store.setState(
+      makeState({
+        agentStatusByPaneKey: acceptedAgentStatuses([
+          ...(owner.agentStatusByPaneKey ?? acceptedAgentStatuses()),
+          ...(sibling.agentStatusByPaneKey ?? acceptedAgentStatuses()),
+          ...(otherWorkspace.agentStatusByPaneKey ?? acceptedAgentStatuses()),
+          [unknown.paneKey, unknown] as const
+        ])
+      })
+    )
+    const beforeTabs = store.getState()
+    store.setState(
+      applyWebSessionTabsSnapshot(
         beforeTabs,
         makeSnapshot([], { worktree: worktreeId, snapshotVersion: 2 }),
         ENV,
         NOW + 1
       )
-    }
-    expect(Object.keys(removed.agentStatusByPaneKey).sort()).toEqual(
+    )
+    const removed = store.getState()
+    expect(Array.from(removed.agentStatusByPaneKey.keys()).sort()).toEqual(
       [
         makePaneKey(toWebTerminalSurfaceTabId('sibling'), LEAF_ID),
         makePaneKey(toWebTerminalSurfaceTabId('other-workspace'), LEAF_ID),

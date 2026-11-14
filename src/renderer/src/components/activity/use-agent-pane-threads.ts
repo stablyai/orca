@@ -63,7 +63,7 @@ export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: bool
       if (
         badgeOnly &&
         Object.keys(storeData.migrationUnsupportedByPtyId).length === 0 &&
-        !Object.values(storeData.agentStatusByPaneKey).some((entry) =>
+        !Array.from(storeData.agentStatusByPaneKey.values()).some((entry) =>
           freshActivityLiveAgentState(entry, now)
         )
       ) {

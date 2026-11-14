@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses, type AcceptedAgentStatuses } from './accepted-agent-statuses'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/contracts/agent-status-freshness'
@@ -18,8 +19,8 @@ function doneEntry(overrides: Partial<AgentStatusEntry> = {}): AgentStatusEntry 
   }
 }
 
-function statusEntries(entries: AgentStatusEntry[]): Record<string, AgentStatusEntry> {
-  return Object.fromEntries(entries.map((entry, index) => [`${entry.paneKey}#${index}`, entry]))
+function statusEntries(entries: AgentStatusEntry[]): AcceptedAgentStatuses {
+  return acceptedAgentStatuses(entries.map((entry, index) => [`${entry.paneKey}#${index}`, entry]))
 }
 
 function setup(entries: AgentStatusEntry[]) {
@@ -82,12 +83,12 @@ describe('freshness scheduler completion deadlines', () => {
     vi.setSystemTime(NOW)
     let scheduler!: ReturnType<typeof createFreshnessScheduler>
     let firstRead = true
-    const getStatusEntries = vi.fn((): Record<string, AgentStatusEntry> => {
+    const getStatusEntries = vi.fn((): AcceptedAgentStatuses => {
       if (firstRead) {
         firstRead = false
         scheduler.scheduleDeferred()
       }
-      return {}
+      return acceptedAgentStatuses()
     })
     scheduler = createFreshnessScheduler({ getStatusEntries, bumpEpochs: vi.fn() })
 

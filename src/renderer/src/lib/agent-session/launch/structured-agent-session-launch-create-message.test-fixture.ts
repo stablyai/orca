@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 import { vi, type Mock } from 'vitest'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
@@ -102,7 +103,7 @@ vi.mock('../../../store/index', () => {
     runtimeEnvironmentCatalogHydrated: true,
     settings: mocks.settings,
     unifiedTabsByWorktree: { 'workspace-1': mocks.tabs },
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     runtimeStatusByEnvironmentId: mocks.runtimeStatusByEnvironmentId,
     groupsByWorktree: {},
     seedNativeChatLaunchDraft: vi.fn(),

@@ -30,7 +30,7 @@ describe('the main agent fact on a renderer status entry', () => {
       toolName: 'Bash',
       observation: osc(1)
     })
-    expect(store.getState().agentStatusByPaneKey[PANE].mainAgent).toEqual(mainAgent)
+    expect(store.getState().agentStatusByPaneKey.get(PANE)!.mainAgent).toEqual(mainAgent)
 
     store.getState().setAgentStatus(PANE, {
       state: 'done',
@@ -38,7 +38,7 @@ describe('the main agent fact on a renderer status entry', () => {
       agentType: 'claude',
       observation: osc(2)
     })
-    expect(store.getState().agentStatusByPaneKey[PANE].mainAgent).toBeUndefined()
+    expect(store.getState().agentStatusByPaneKey.get(PANE)!.mainAgent).toBeUndefined()
   })
 })
 
@@ -56,7 +56,7 @@ describe('session-boundary done semantics (STA-3386)', () => {
 
     // Why: OSC 9999 repaints and reconnect replays re-deliver a metadata-less done.
     store.getState().setAgentStatus(PANE, { state: 'done', prompt: '', agentType: 'claude' })
-    expect(store.getState().agentStatusByPaneKey[PANE].sessionBoundary).toBe(true)
+    expect(store.getState().agentStatusByPaneKey.get(PANE)!.sessionBoundary).toBe(true)
 
     // Why: an assistant message proves a REAL completion — the flag must not suppress it.
     store.getState().setAgentStatus(PANE, {
@@ -65,6 +65,6 @@ describe('session-boundary done semantics (STA-3386)', () => {
       agentType: 'claude',
       lastAssistantMessage: 'Done.'
     })
-    expect(store.getState().agentStatusByPaneKey[PANE].sessionBoundary).toBeUndefined()
+    expect(store.getState().agentStatusByPaneKey.get(PANE)!.sessionBoundary).toBeUndefined()
   })
 })

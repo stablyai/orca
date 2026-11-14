@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type * as RuntimeCapabilityProofModule from '@/runtime/rpc/compatibility/runtime-capability-proof'
 // @vitest-environment happy-dom
 
@@ -80,9 +81,9 @@ function feed(index = 0): { target: unknown; emit: (event: AgentSessionStatusEve
 }
 
 function statusFor(tabId: string, sessionId: string) {
-  return useAppStore.getState().agentStatusByPaneKey[
-    structuredAgentSessionPaneKey(tabId, sessionId)
-  ]
+  return useAppStore
+    .getState()
+    .agentStatusByPaneKey.get(structuredAgentSessionPaneKey(tabId, sessionId))
 }
 
 // Real tab actions annotate their writes, so these reach the bridge's addressed reconciliation.
@@ -93,7 +94,7 @@ describe('StructuredAgentSessionStatusBridge with tab actions', () => {
     mocks.subscribeStatus.mockResolvedValue({ unsubscribe: mocks.unsubscribe })
     mocks.supportsCapability.mockResolvedValue(true)
     mocks.store?.setState({
-      agentStatusByPaneKey: {},
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
       structuredChatSleptAtByPaneKey: {},
       structuredSessionLaunchDirectoryByTabId: {},
       unifiedTabsByWorktree: {},
@@ -150,7 +151,7 @@ describe('StructuredAgentSessionStatusBridge with tab actions', () => {
     expect(feed(1).target).toEqual({ kind: 'environment', environmentId: 'env-1' })
     act(() => feed(1).emit({ type: 'snapshot', sessions: [summary({ updatedAt: 20 })] }))
     act(() => feed().emit({ type: 'status', session: summary({ updatedAt: 30 }) }))
-    expect(Object.keys(useAppStore.getState().agentStatusByPaneKey)).toEqual([
+    expect(Array.from(useAppStore.getState().agentStatusByPaneKey.keys())).toEqual([
       structuredAgentSessionPaneKey('chat-1', 'session-1')
     ])
     expect(statusFor('chat-1', 'session-1')?.updatedAt).toBe(20)

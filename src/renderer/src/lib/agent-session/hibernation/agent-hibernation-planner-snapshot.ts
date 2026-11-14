@@ -18,7 +18,7 @@ export type AgentHibernationPlannerSnapshot = {
   runtimeLivenessRequiredWorktreeIds?: string[]
   /** Driven by a phone; this window's own view is foregroundTerminalTabIds. */
   inUsePtyIds: string[]
-  agentStatusByPaneKey: Record<string, AgentStatusEntry | undefined>
+  agentStatusByPaneKey: ReadonlyMap<string, AgentStatusEntry | undefined>
   sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord | undefined>
   lastTerminalInputAtByPaneKey: Record<string, number | undefined>
   /** Per worktree, keyed by its host's PTY id: shown on a paired client or phone, and input from any client.

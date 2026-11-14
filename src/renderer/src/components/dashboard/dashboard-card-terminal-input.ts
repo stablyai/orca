@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type { AppState } from '@/store/types'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -34,6 +35,7 @@ export type DashboardCardTerminalInputState = Pick<
   | 'agentLaunchConfigByPaneKey'
 >
 
+const EMPTY_STATUSES = acceptedAgentStatuses()
 const EMPTY_RECORD = {} as Record<string, never>
 
 /** Missing store slices fall back per card instead of throwing and blanking the whole board. */
@@ -56,7 +58,7 @@ function withHydratedSlices(
     runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated ?? false,
     removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds ?? new Set(),
     paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey ?? EMPTY_RECORD,
-    agentStatusByPaneKey: state.agentStatusByPaneKey ?? EMPTY_RECORD,
+    agentStatusByPaneKey: state.agentStatusByPaneKey ?? EMPTY_STATUSES,
     agentLaunchConfigByPaneKey: state.agentLaunchConfigByPaneKey ?? EMPTY_RECORD
   }
 }
@@ -118,7 +120,7 @@ export function resolveDashboardCardTerminalInput(
     isWindowsClient: args.clientPlatform === 'win32',
     hostPlatform,
     foregroundAgent: state.paneForegroundAgentByPaneKey[args.paneKey]?.agent,
-    entry: state.agentStatusByPaneKey[args.paneKey]
+    entry: state.agentStatusByPaneKey.get(args.paneKey)
   })
   return {
     hostPlatform,

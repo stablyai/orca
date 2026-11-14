@@ -107,7 +107,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
       try {
         if (!payload.runtimeFed) {
           const viewShown = ORCA_LAYOUT_OWNER_IS_MAIN && visibleRendererPtys.has(payload.id)
-          clearProviderPtyState(payload.id)
+          clearProviderPtyState(payload.id, { exitProven: true })
           ptyOwnership.delete(payload.id)
           if (syntheticExit) {
             session.runtime?.markPtyStopRequested(payload.id)

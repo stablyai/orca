@@ -42,7 +42,7 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
         { updatedAt: 1_100, stateStartedAt: 1_100 }
       )
 
-      const entry = store.getState().agentStatusByPaneKey['tab-1:1']
+      const entry = store.getState().agentStatusByPaneKey.get('tab-1:1')!
       expect(entry).toMatchObject({
         state: 'working',
         prompt: 'parent codex',
@@ -85,12 +85,14 @@ export function registerAgentStatusToolAssistantFieldsTests(): void {
           { updatedAt: 1_100, stateStartedAt: 1_100 }
         )
 
-      expect(store.getState().agentStatusByPaneKey['tab-1:1']).toMatchObject({
+      expect(store.getState().agentStatusByPaneKey.get('tab-1:1')).toMatchObject({
         state: 'done',
         prompt: 'live claude turn',
         agentType: 'claude'
       })
-      expect(store.getState().agentStatusByPaneKey['tab-1:1'].restoredUnconfirmed).toBeUndefined()
+      expect(
+        store.getState().agentStatusByPaneKey.get('tab-1:1')!.restoredUnconfirmed
+      ).toBeUndefined()
     })
   })
 }

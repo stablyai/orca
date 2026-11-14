@@ -1,3 +1,4 @@
+import type * as AgentStatusBridge from './agent-status-bridge-types'
 import { isWslHookRelayConnectionId } from '../../../../shared/wsl-hook-relay-contract'
 import { AgentHookAttributionDiagnostics } from '../../../../shared/agent-hook-listener/state/agent-hook-attribution-diagnostics'
 import { pickHostTurnEnd } from '../../../../shared/agent-status/contracts/agent-status-types'
@@ -25,11 +26,6 @@ import {
   resolvePaneKeyFromRoutingIndex,
   resolveWorktreeConnectionFromRoutingIndex
 } from './agent-status-pane-routing-index'
-import type {
-  AgentStatusApplyOptions,
-  AgentStatusApplyResult,
-  PendingAgentStatusEvent
-} from './agent-status-bridge-types'
 import {
   normalizeAgentStatusEvent,
   normalizeAgentStatusMetadata
@@ -40,21 +36,22 @@ import {
   foldProgramStatusIntoPendingRows
 } from './agent-status-partial-updates'
 
-export function createAgentStatusEventApplicator(args: {
-  pendingAgentStatusEvents: PendingAgentStatusEvent[]
-  transientClearWatermarkByConnectionId: Map<string, number>
-  enqueuePendingAgentStatus: (data: AgentStatusIpcPayload, options?: { replay?: boolean }) => void
-}): (data: AgentStatusIpcPayload, options?: AgentStatusApplyOptions) => AgentStatusApplyResult {
+export function createAgentStatusEventApplicator(
+  args: AgentStatusBridge.AgentStatusEventApplicatorArgs
+): (
+  data: AgentStatusIpcPayload,
+  options?: AgentStatusBridge.AgentStatusApplyOptions
+) => AgentStatusBridge.AgentStatusApplyResult {
   const {
     pendingAgentStatusEvents,
     transientClearWatermarkByConnectionId,
     enqueuePendingAgentStatus
   } = args
   const attributionDiagnostics = new AgentHookAttributionDiagnostics()
-  const applyAgentStatus = (
+  return (
     data: AgentStatusIpcPayload,
-    options?: AgentStatusApplyOptions
-  ): AgentStatusApplyResult => {
+    options?: AgentStatusBridge.AgentStatusApplyOptions
+  ): AgentStatusBridge.AgentStatusApplyResult => {
     const store = options?.batch?.transaction.getState() ?? useAppStore.getState()
     if (!store.workspaceSessionReady) {
       return 'dropped'
@@ -71,7 +68,6 @@ export function createAgentStatusEventApplicator(args: {
       return 'dropped'
     }
     const programStatus = normalizeProgramStatusFacet(data.programStatus) ?? null
-    // Reuse first-match pane ownership without rescanning every worktree per event.
     const routingIndex = options?.batch?.routingIndex ?? createAgentStatusPaneRoutingIndex(store)
     let {
       exists,
@@ -154,7 +150,11 @@ export function createAgentStatusEventApplicator(args: {
       typeof data.connectionId === 'string'
         ? transientClearWatermarkByConnectionId.get(data.connectionId)
         : undefined
-    if (transientClearWatermark !== undefined && data.receivedAt <= transientClearWatermark) {
+    if (
+      !data.paneSleep &&
+      transientClearWatermark !== undefined &&
+      data.receivedAt <= transientClearWatermark
+    ) {
       return 'dropped'
     }
     const canAcceptPendingRemoteOwnership =
@@ -170,7 +170,7 @@ export function createAgentStatusEventApplicator(args: {
     ) {
       return 'dropped'
     }
-    const existingStatus = store.agentStatusByPaneKey[paneKey]
+    const existingStatus = store.agentStatusByPaneKey.get(paneKey)
     if (indexedPaneExists) {
       attributionDiagnostics.resolved({
         paneKey,
@@ -213,7 +213,11 @@ export function createAgentStatusEventApplicator(args: {
       ? { ...statusPayloadWithProvenance, observation: data.observation }
       : statusPayloadWithProvenance
     // Why null: main stitches the pane's current facet onto every publish, so absence means cleared.
-    const statusPayloadWithProgramStatus = { ...statusPayloadWithObservation, programStatus }
+    const statusPayloadWithProgramStatus = {
+      ...statusPayloadWithObservation,
+      programStatus,
+      ...(data.paneSleep ? { paneSleep: data.paneSleep } : {})
+    }
     if (
       existingStatus &&
       isInheritedFromActivePane(existingStatus, data, statusPayload.agentType, {
@@ -299,6 +303,4 @@ export function createAgentStatusEventApplicator(args: {
     }
     return 'applied'
   }
-
-  return applyAgentStatus
 }

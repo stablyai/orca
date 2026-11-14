@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from './accepted-agent-statuses'
 import { agentSenderPublicationPatch } from '@/runtime/native-chat/agent-senders/agent-sender-publication-patch'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
@@ -65,7 +66,7 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
       }),
     subscribeAgentStatusChanges: runtime.subscribeAgentStatusChanges,
     updateAgentStatusState: runtime.set,
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(),
     agentConversationsByPaneKey: {},
     runtimeAgentOrchestrationByPaneKey: {},
     migrationUnsupportedByPtyId: {},

@@ -97,7 +97,7 @@ export function prepareAgentSessionForkFromPane({
 }: ForkAgentSessionFromPaneArgs): PreparedAgentSessionFork | null {
   const paneKey = makePaneKey(tabId, pane.leafId)
   const state = useAppStore.getState()
-  const sourceAgent = resolveTuiAgent(state.agentStatusByPaneKey[paneKey]?.agentType)
+  const sourceAgent = resolveTuiAgent(state.agentStatusByPaneKey.get(paneKey)?.agentType)
   const tabAgent = resolveTuiAgent(
     state.tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)?.launchAgent
   )

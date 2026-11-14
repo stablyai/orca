@@ -58,6 +58,7 @@ import {
   AgentStatusObservedPaneIdentities,
   recordObservedAgentStatusPaneIdentity
 } from '../../runtime/terminal/identity/agent-status-observed-pane-identity'
+import { bindTerminalPaneStatusLifecycle } from '../../ipc/pty/pane/terminal-pane-status-lifecycle'
 import { startAgentStateRulesLiveUpdates } from '../../runtime/agent-state-rules/agent-state-rules-live-update'
 import { recordDurableCrashBreadcrumb } from '../../crash-reporting/breadcrumbs/durable-crash-breadcrumb'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
@@ -104,7 +105,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     attestAgentHookCompatibilityAuthority: (candidate) =>
       agentHookServer.attestCompatibilityAuthority(candidate),
     retireAgentHookCompatibilityAuthority: (paneKey) =>
-      agentHookServer.retirePaneAuthority(paneKey),
+      agentHookServer.retireProcessAuthority(paneKey),
     canRecoverPersistentLocalPtys: () => getDaemonProvider() !== null,
     // Resolve per call: the RPC server/device registry is constructed later with this runtime.
     getPairedDeviceName: (pairedDeviceId) =>
@@ -163,6 +164,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   // Each host titles its own workspaces' untitled GitHub issue links once, when they are linked.
   const disposeIssueLinkTitleFill = wireGitHubIssueLinkTitleFill(store, runtime)
   app.once('will-quit', disposeIssueLinkTitleFill)
+  bindTerminalPaneStatusLifecycle(runtime, store)
   state.runtime = runtime
   // Opening a recipe VM's workspace from a client wakes the VM through the runtime's one owner.
   registerRecipeVmWaker({

@@ -54,7 +54,6 @@ export const CARD_ACTIVITY_PARTS = {
     <WorktreeCardAgents
       worktreeId={card.worktree.id}
       executionHostId={card.worktree.hostId}
-      agents={card.inlineAgentRows}
       // Why: counterbalance the card stack gap so agents right after the title read as one group.
       className={props.tight === true ? '-mt-1' : 'mt-0'}
     />

@@ -75,7 +75,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     }
     if (!captured && startup.useLiveEntry) {
       const expected = startup.resumeSource?.expectedStatus
-      const current = state.agentStatusByPaneKey[session.cacheKey]
+      const current = state.agentStatusByPaneKey.get(session.cacheKey)
       if (
         !expected ||
         current?.updatedAt !== expected.receivedAt ||

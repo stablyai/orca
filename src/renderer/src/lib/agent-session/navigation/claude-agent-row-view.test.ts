@@ -7,7 +7,7 @@ import { useNativeChatOpenSubagent } from '@/components/native-chat/subagents/na
 import { viewClaudeAgentFromRow } from './claude-agent-row-view'
 
 vi.mock('@/store/index', () => ({
-  useAppStore: { getState: () => ({ agentStatusByPaneKey: {} }) }
+  useAppStore: { getState: () => ({ agentStatusByPaneKey: new Map() }) }
 }))
 
 function childRow(agentType: string): DashboardAgentRow {

@@ -220,17 +220,11 @@ export function getLegacyStatusListingOrder(
   return legacyStatusAdapter(state).listingOrder(paneKey)
 }
 
-export function clearPaneCacheState(state: HookListenerState, paneKey: string): void {
+export function clearPaneProcessCacheState(state: HookListenerState, paneKey: string): void {
   deletePaneScopedCacheEntry(state.lastPromptByPaneKey, paneKey)
   deletePaneScopedCacheEntry(state.lastToolByPaneKey, paneKey)
   deletePaneScopedCacheEntry(state.jcodeTurnPromptByPaneKey, paneKey)
   deletePaneScopedCacheEntry(state.jcodeHelperPermissionWaitByPaneKey, paneKey)
-  deleteLegacyAgentStatus(state, paneKey)
-  for (const key of state.lastStatusByPaneKey.keys()) {
-    if (key.startsWith(`${paneKey}\0`)) {
-      deleteLegacyAgentStatus(state, key)
-    }
-  }
   deletePaneScopedCacheEntry(state.antigravityCompletedTranscriptByPaneKey, paneKey)
   deletePaneScopedCacheEntry(state.antigravityChildWorkByPaneKey, paneKey)
   deletePaneScopedSetEntry(state.ampCompletedCacheKeys, paneKey)
@@ -256,8 +250,22 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   unbindOpenCodeSessionsOfPane(state, paneKey)
   deletePaneScopedCacheEntry(state.lastLaunchTokenByPaneKey, paneKey)
   state.hermesTurnByPaneKey.delete(paneKey)
-  // A disposed pane's unfinished evidence and exit intent die with it.
+  // Unfinished evidence and exit intent belong to the ended process.
   deletePaneScopedCacheEntry(state.hookRootAttempts, paneKey)
+}
+
+export function clearPaneCacheState(state: HookListenerState, paneKey: string): void {
+  clearPaneProcessCacheState(state, paneKey)
+  clearPaneStatusCacheState(state, paneKey)
+}
+
+export function clearPaneStatusCacheState(state: HookListenerState, paneKey: string): void {
+  deleteLegacyAgentStatus(state, paneKey)
+  for (const key of state.lastStatusByPaneKey.keys()) {
+    if (key.startsWith(`${paneKey}\0`)) {
+      deleteLegacyAgentStatus(state, key)
+    }
+  }
 }
 
 export function movePaneCacheState(

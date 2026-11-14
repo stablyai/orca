@@ -190,7 +190,7 @@ export function findAiVaultSessionLiveState(
 ): AgentDotState | null {
   const promptMatchedStates: AgentDotState[] = []
 
-  for (const entry of Object.values(state.agentStatusByPaneKey)) {
+  for (const entry of Array.from(state.agentStatusByPaneKey.values())) {
     if (!agentMatches(session, entry.agentType)) {
       continue
     }
@@ -211,7 +211,7 @@ export function findOriginalAiVaultSessionPane(
 ): AiVaultOriginalPaneTarget | null {
   const promptMatchedTargets: AiVaultOriginalPaneTarget[] = []
 
-  for (const entry of Object.values(state.agentStatusByPaneKey)) {
+  for (const entry of Array.from(state.agentStatusByPaneKey.values())) {
     if (
       agentMatches(session, entry.agentType) &&
       providerSessionMatches(session, entry.providerSession?.id)
@@ -245,7 +245,7 @@ export function findOriginalAiVaultSessionPane(
 
   for (const conversation of Object.values(state.agentConversationsByPaneKey)) {
     if (
-      state.agentStatusByPaneKey[conversation.paneKey] ||
+      state.agentStatusByPaneKey.get(conversation.paneKey) ||
       !agentMatches(session, conversation.agent) ||
       !agentPaneConversationForEntry(state, { ...conversation, agentType: conversation.agent })
     ) {

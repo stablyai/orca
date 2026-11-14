@@ -27,7 +27,7 @@ export function installPaneTitleObservation(session: ConnectPanePtySession): voi
     session.deps.setRuntimePaneTitle(session.deps.tabId, session.pane.id, paneTitle)
     // Stale expiry updates display without feeding completion; silence mid-task is not observed idle.
     if (!meta?.staleWorkingTitleClear && session.syncAgentTaskCompleteTrackingEnabled()) {
-      const activeHookStatus = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+      const activeHookStatus = useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)
       if (!session.shouldSuppressTitleCompletionForFreshHook(decision.rawTitle, activeHookStatus)) {
         // Hooks retain active-turn authority while display titles change; stale idle frames cannot precede hook done.
         session.agentCompletionCoordinator.observeTitle(decision.rawTitle)

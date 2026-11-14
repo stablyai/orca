@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import 'zustand/shallow'
@@ -35,7 +36,7 @@ function makeState(overrides: Partial<WebSessionTabsSyncState> = {}): WebSession
     activeTabType: 'terminal',
     activeTabTypeByWorktree: {},
     activeWorktreeId: null,
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     agentStatusEpoch: 0,
     browserCertificateFailuresByPageId: {},
     browserPagesByWorkspace: {},

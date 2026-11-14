@@ -14,7 +14,7 @@ export function hookLaneTurnEndEvidence(
   agent: TerminalAgent | null
 ): 'identified' | 'ambiguous' | null {
   const { agentStatusByPaneKey, settings } = useAppStore.getState()
-  const row = agentStatusByPaneKey[paneKey]
+  const row = agentStatusByPaneKey.get(paneKey)
   const owner = row?.agentType
   const evidence = hookTurnEndEvidence(ptyId, row)
   // Title authority remains for unfinished turns and agents whose hooks were uninstalled.

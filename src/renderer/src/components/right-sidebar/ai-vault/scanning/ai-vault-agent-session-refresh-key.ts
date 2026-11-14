@@ -2,7 +2,9 @@
 let agentSessionIdsKeyBySnapshot = new WeakMap<object, string>()
 
 export function getAgentSessionIdsKey(
-  agentStatusByPaneKey: Record<string, { providerSession?: { id?: string } | null }> | undefined
+  agentStatusByPaneKey:
+    | ReadonlyMap<string, { providerSession?: { id?: string } | null }>
+    | undefined
 ): string {
   if (!agentStatusByPaneKey) {
     return ''
@@ -12,7 +14,7 @@ export function getAgentSessionIdsKey(
     return cached
   }
   const ids: string[] = []
-  for (const entry of Object.values(agentStatusByPaneKey)) {
+  for (const entry of Array.from(agentStatusByPaneKey.values())) {
     if (entry.providerSession?.id) {
       ids.push(entry.providerSession.id)
     }

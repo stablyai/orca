@@ -1,3 +1,4 @@
+import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
 import { useCallback, useSyncExternalStore } from 'react'
 import type { DashboardAgentRow } from './useDashboardData'
 import { useFocusedAgentPaneKey } from '@/components/sidebar/workspace-card/activity/focused-agent-row-highlight'
@@ -12,7 +13,7 @@ import {
 export function useClaudeAgentRowView(agent: DashboardAgentRow) {
   const paneKey = agent.activationPaneKey ?? agent.paneKey
   const focused = useFocusedAgentPaneKey(agent.tab.worktreeId) === paneKey
-  const parent = useAppStore((state) => state.agentStatusByPaneKey[paneKey]) ?? agent.entry
+  const parent = useAgentStatus(paneKey) ?? agent.entry
   const environmentId = useAppStore((state) =>
     runtimeEnvironmentIdOrLocalUnlessTwin(state, agent.tab.worktreeId)
   )

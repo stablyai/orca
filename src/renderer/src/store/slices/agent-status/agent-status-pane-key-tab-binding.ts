@@ -88,7 +88,14 @@ export function findCompletedOrphanPaneKeysForTabClose(
     openTabIds.add(tab.id)
   }
   const paneKeys: string[] = []
-  for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
+  for (const paneKey of new Set([
+    ...state.agentStatusByPaneKey.projection.orphanKeys(worktreeId),
+    ...state.agentStatusByPaneKey.stagedKeys()
+  ])) {
+    const entry = state.agentStatusByPaneKey.get(paneKey)
+    if (!entry) {
+      continue
+    }
     if (paneKey.startsWith(prefix) || entry.state !== 'done' || entry.worktreeId !== worktreeId) {
       continue
     }

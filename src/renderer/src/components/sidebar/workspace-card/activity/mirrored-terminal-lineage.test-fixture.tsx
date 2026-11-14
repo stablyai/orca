@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { act } from 'react'
 import { expect, vi } from 'vitest'
 import type { RuntimeAgentLineageTestModule } from '../../../../../../shared/runtime-agent-lineage-consumer.test-fixture'
@@ -35,10 +36,6 @@ export async function verifyMirroredTerminalLineage(
   const { makeUnifiedTab } = await import('@/store/slices/tabs/tab-group.test-fixture'),
     { makeWorktree } = await import('@/store/slices/worktrees/worktree.test-fixture'),
     { TEST_REPO } = await import('@/store/repos/repo.test-fixture')
-  const { selectDashboardOrchestration } =
-    await import('@/components/dashboard/dashboard-orchestration-selection')
-  const { selectWorktreeAgentRowsCached } =
-    await import('@/components/dashboard/worktree-agent-rows-cache')
   const { buildActivityEvents } = await import('@/components/activity/activity-event-builder')
   const { buildMirroredAgentTabs } =
     await import('@/runtime/web-session-tabs-sync/terminal-surfaces')
@@ -115,7 +112,7 @@ export async function verifyMirroredTerminalLineage(
       tabsByWorktree: { 'folder-a': [tab] },
       unifiedTabsByWorktree: {},
       ptyIdsByTabId: {},
-      agentStatusByPaneKey: {},
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
 
       runtimeAgentOrchestrationByPaneKey: {}
     })
@@ -148,7 +145,7 @@ export async function verifyMirroredTerminalLineage(
       throw new Error('Missing mirrored terminal status')
     }
     patch(produced)
-    expect(useAppStore.getState().agentStatusByPaneKey[worker].connectionId).toBe('paired')
+    expect(useAppStore.getState().agentStatusByPaneKey.get(worker)!.connectionId).toBe('paired')
     // Status before graph: the missing parent stays rooted, then tab hydration alone joins it.
     expect(selectVisibleAgentOrchestration(useAppStore.getState())[worker]?.parentPaneKey).not.toBe(
       actualParent
@@ -179,20 +176,12 @@ export async function verifyMirroredTerminalLineage(
       expect(getRows().map((row) => row.lineage?.depth)).toEqual([0, 1])
       expect(getRows()[1].entry.orchestration?.parentPaneKey).toBe(parent)
       expect(
-        useAppStore.getState().agentStatusByPaneKey[worker]?.orchestration?.parentPaneKey ??
+        useAppStore.getState().agentStatusByPaneKey.get(worker)?.orchestration?.parentPaneKey ??
           context.parentPaneKey
       ).toBe(canonicalChatRow(LINEAGE_PARENT))
       const state = useAppStore.getState()
-      const orchestration =
-        selectDashboardOrchestration(state, [{ worktree }]).singletonOrchestration ?? {}
-      const dashboard = selectWorktreeAgentRowsCached({
-        state,
-        worktreeId: 'folder-a',
-        orchestration,
-        now: Date.now(),
-        generation: 1
-      })
-      expect(dashboard.map((row) => [row.paneKey, row.lineage.depth])).toEqual([
+      const dashboard = state.agentStatusByPaneKey.projection.list('folder-a')
+      expect(dashboard.map((row) => [row.paneKey, row.lineage?.depth])).toEqual([
         [parent, 0],
         [worker, 1]
       ])
@@ -210,21 +199,24 @@ export async function verifyMirroredTerminalLineage(
     assertNested()
     // A host-supplied legacy connection spelling does not override actual producer proof.
     patch({
-      agentStatusByPaneKey: {
+      agentStatusByPaneKey: acceptedAgentStatuses([
         ...useAppStore.getState().agentStatusByPaneKey,
-        [worker]: {
-          ...useAppStore.getState().agentStatusByPaneKey[worker],
-          connectionId: 'ssh-legacy'
-        }
-      }
+        [
+          worker,
+          {
+            ...useAppStore.getState().agentStatusByPaneKey.get(worker)!,
+            connectionId: 'ssh-legacy'
+          }
+        ] satisfies [string, AgentStatusEntry]
+      ])
     })
     assertNested()
-    const canonical = useAppStore.getState().agentStatusByPaneKey[worker]
+    const canonical = useAppStore.getState().agentStatusByPaneKey.get(worker)!
     // Graph before parent hydration; matching task/Dispatch producer remains valid with nonempty connectionId.
-    const parentEntry = useAppStore.getState().agentStatusByPaneKey[actualParent]
+    const parentEntry = useAppStore.getState().agentStatusByPaneKey.get(actualParent)!
     patch({
       unifiedTabsByWorktree: { 'folder-a': [terminal] },
-      agentStatusByPaneKey: { [worker]: canonical }
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [worker]: canonical }))
     })
     act(() =>
       useAppStore
@@ -237,7 +229,9 @@ export async function verifyMirroredTerminalLineage(
     expect(getRows().find((row) => row.paneKey === worker)?.lineage?.depth).toBe(0)
     patch({
       unifiedTabsByWorktree: { 'folder-a': [native, terminal] },
-      agentStatusByPaneKey: { [worker]: canonical, [actualParent]: parentEntry }
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({ [worker]: canonical, [actualParent]: parentEntry })
+      )
     })
     assertNested()
     act(() => useAppStore.getState().setRuntimeAgentOrchestrationByPaneKey({}))
@@ -271,10 +265,12 @@ export async function verifyMirroredTerminalLineage(
       unifiedTabsByWorktree: {
         'folder-a': [{ ...native, executionHostId: 'local' }, terminal]
       },
-      agentStatusByPaneKey: {
-        [renamedParent]: useAppStore.getState().agentStatusByPaneKey[renamedParent],
-        [worker]: canonical
-      }
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [renamedParent]: useAppStore.getState().agentStatusByPaneKey.get(renamedParent)!,
+          [worker]: canonical
+        })
+      )
     })
     act(() =>
       useAppStore
@@ -297,10 +293,10 @@ export async function verifyMirroredTerminalLineage(
       unifiedTabsByWorktree: {
         'folder-a': [{ ...native, executionHostId: 'local' }]
       },
-      agentStatusByPaneKey: {
+      agentStatusByPaneKey: acceptedAgentStatuses([
         ...useAppStore.getState().agentStatusByPaneKey,
-        [worker]: { ...canonical, connectionId: undefined }
-      }
+        [worker, { ...canonical, connectionId: undefined }] satisfies [string, AgentStatusEntry]
+      ])
     })
     expect(getRows().find((row) => row.paneKey === worker)?.lineage?.depth).toBe(0)
   } finally {

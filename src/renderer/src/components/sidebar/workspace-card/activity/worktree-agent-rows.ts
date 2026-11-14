@@ -88,6 +88,32 @@ function markCompletedWorkerParentPaneKeysSeen(args: {
   }
 }
 
+export function buildExplicitWorktreeAgentRows(
+  entry: AgentStatusEntry,
+  tab: TerminalTab,
+  now: number,
+  hasLivePty: boolean,
+  orchestration?: Record<string, AgentStatusOrchestrationContext>
+): DashboardAgentRow[] {
+  const rowEntry = entryWithRuntimeOrchestration(entry, orchestration)
+  return [
+    {
+      paneKey: rowEntry.paneKey,
+      entry: rowEntry,
+      tab,
+      agentType: resolveRowAgentType(rowEntry, tab),
+      rowSource: 'live',
+      state: resolveAgentRowState(rowEntry, now, hasLivePty),
+      startedAt: effectiveWorktreeAgentRowStartedAt(rowEntry)
+    },
+    ...buildSubagentChildRows({
+      parentEntry: rowEntry,
+      tab,
+      parentIsFresh: isAgentStatusFresh(rowEntry, now, AGENT_STATUS_STALE_AFTER_MS)
+    })
+  ]
+}
+
 export function buildWorktreeAgentRows(args: {
   tabs: TerminalTab[]
   representedTabs?: ReadonlyMap<string, Tab>

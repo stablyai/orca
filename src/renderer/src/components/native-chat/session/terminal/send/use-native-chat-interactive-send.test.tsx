@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -64,7 +65,9 @@ describe('useNativeChatInteractiveSend Stop interrupt inference', () => {
     async (accepted, inferences) => {
       const startedAt = 10_000
       useAppStore.setState({
-        agentStatusByPaneKey: { [PANE_KEY]: workingStatus('run sleep 60', startedAt) }
+        agentStatusByPaneKey: acceptedAgentStatuses([
+          [PANE_KEY, workingStatus('run sleep 60', startedAt)]
+        ])
       })
       mocks.sendRuntimePtyInputVerified.mockResolvedValueOnce(accepted)
       const { result } = renderHook(() =>
@@ -99,7 +102,9 @@ describe('useNativeChatInteractiveSend Stop interrupt inference', () => {
   it('infers a Stop from the status before its Escape, not a turn that began mid-send', async () => {
     const startedAt = 10_000
     useAppStore.setState({
-      agentStatusByPaneKey: { [PANE_KEY]: workingStatus('run sleep 60', startedAt) }
+      agentStatusByPaneKey: acceptedAgentStatuses([
+        [PANE_KEY, workingStatus('run sleep 60', startedAt)]
+      ])
     })
     let accept: (accepted: boolean) => void = () => {}
     mocks.sendRuntimePtyInputVerified.mockReturnValueOnce(
@@ -113,7 +118,9 @@ describe('useNativeChatInteractiveSend Stop interrupt inference', () => {
 
     act(() => result.current.cancel())
     useAppStore.setState({
-      agentStatusByPaneKey: { [PANE_KEY]: workingStatus('next prompt', startedAt + 1) }
+      agentStatusByPaneKey: acceptedAgentStatuses([
+        [PANE_KEY, workingStatus('next prompt', startedAt + 1)]
+      ])
     })
     await act(async () => accept(true))
     await act(async () => {

@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -51,7 +52,7 @@ beforeEach(() => {
     terminalLayoutsByTabId: {
       'away-tab': { root: { type: 'leaf', leafId: leaf }, activeLeafId: leaf, expandedLeafId: null }
     },
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
 
     acknowledgedAgentsByPaneKey: {},
     unreadAgentCompletionPanes: {},

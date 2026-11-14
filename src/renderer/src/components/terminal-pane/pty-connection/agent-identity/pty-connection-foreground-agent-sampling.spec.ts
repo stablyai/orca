@@ -237,10 +237,20 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
           routingTrusted: true,
           shellForeground: false
         }
-        mockStoreState.agentStatusByPaneKey[cacheKey] = {
-          state: 'working',
-          agentType: 'droid'
-        }
+        mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+          [
+            cacheKey,
+            {
+              paneKey: cacheKey,
+              prompt: '',
+              updatedAt: Date.now(),
+              stateStartedAt: Date.now(),
+              stateHistory: [],
+              state: 'working',
+              agentType: 'droid'
+            }
+          ]
+        ])
         vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('droid')
 
         binding.requestWindowsShiftEnterReconfirmation()
@@ -297,10 +307,20 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
           routingTrusted: true,
           shellForeground: false
         }
-        mockStoreState.agentStatusByPaneKey[cacheKey] = {
-          state: 'working',
-          agentType: 'pi'
-        }
+        mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+          [
+            cacheKey,
+            {
+              paneKey: cacheKey,
+              prompt: '',
+              updatedAt: Date.now(),
+              stateStartedAt: Date.now(),
+              stateHistory: [],
+              state: 'working',
+              agentType: 'pi'
+            }
+          ]
+        ])
         vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('cmd.exe')
 
         binding.sampleForegroundAgentOnFocus()

@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 
 import { act, cleanup, renderHook } from '@testing-library/react'
@@ -71,7 +72,7 @@ describe('useReadOnScreenAttention focus-group transitions', () => {
       },
       unreadAgentCompletionPanes: { [CHAT_SUBJECT]: 'agent-completion' },
       unreadTerminalTabs: {},
-      agentStatusByPaneKey: {},
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
 
       acknowledgedAgentsByPaneKey: {}
     })

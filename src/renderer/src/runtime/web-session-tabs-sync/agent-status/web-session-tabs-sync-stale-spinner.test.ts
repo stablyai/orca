@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTerminalClientTab } from '../../../../../shared/runtime-mobile-session-tab-contracts'
 
@@ -61,7 +62,7 @@ function restoredState(): WebSessionTabsSyncState & {
     ...initial,
     ...applyWebSessionTabsSnapshot(initial, makeSnapshot([hostPane('working')]), ENV, NOW)
   }
-  const row = state.agentStatusByPaneKey[PANE_KEY]
+  const row = state.agentStatusByPaneKey.get(PANE_KEY)
   if (!row) {
     throw new Error('Missing mirrored status')
   }
@@ -69,9 +70,11 @@ function restoredState(): WebSessionTabsSyncState & {
     ...state,
     activeWorktreeId: 'another-workspace',
     runtimePaneTitlesByTabId: { [TAB_ID]: { 1: '⠋ Pi - saved session' } },
-    agentStatusByPaneKey: {
-      [PANE_KEY]: { ...row, mirroredEvidenceReceivedAt: NOW - 55 * 60 * 60 * 1000 }
-    }
+    agentStatusByPaneKey: acceptedAgentStatuses(
+      Object.entries({
+        [PANE_KEY]: { ...row, mirroredEvidenceReceivedAt: NOW - 55 * 60 * 60 * 1000 }
+      })
+    )
   }
 }
 
@@ -100,7 +103,7 @@ describe('remote completion repairs saved spinner titles', () => {
     }
     expect(updated.runtimePaneTitlesByTabId[TAB_ID]).toEqual({ 1: 'Pi ready' })
     expect(state.runtimePaneTitlesByTabId[TAB_ID]).toEqual({ 1: '⠋ Pi - saved session' })
-    expect(updated.agentStatusByPaneKey[PANE_KEY]?.state).toBe('done')
+    expect(updated.agentStatusByPaneKey.get(PANE_KEY)?.state).toBe('done')
     const tab = updated.tabsByWorktree[WT]?.[0]
     if (!tab) {
       throw new Error('Missing mirrored tab')
@@ -152,4 +155,39 @@ describe('remote completion repairs saved spinner titles', () => {
       })
     ).toBe('working')
   })
+})
+
+it('keeps a received sleeping Done through a same-pane omission, then honors exact retraction', () => {
+  const source = hostPane()
+  source.agentStatus!.paneSleep = { ptyId: 'slept-pty', incarnationId: 'birth' }
+  let state = makeState()
+  state = { ...state, ...applyWebSessionTabsSnapshot(state, makeSnapshot([source]), ENV, NOW) }
+  expect(state.agentStatusByPaneKey.get(PANE_KEY)).toMatchObject({
+    state: 'done',
+    paneSleep: { ptyId: 'slept-pty' }
+  })
+  const withoutStatus = { ...source, agentStatus: undefined }
+  state = {
+    ...state,
+    ...applyWebSessionTabsSnapshot(
+      state,
+      makeSnapshot([withoutStatus], { snapshotVersion: 2 }),
+      ENV,
+      NOW + 60 * 60 * 1000
+    )
+  }
+  expect(state.agentStatusByPaneKey.get(PANE_KEY)).toMatchObject({
+    state: 'done',
+    paneSleep: { ptyId: 'slept-pty' }
+  })
+  state = {
+    ...state,
+    ...applyWebSessionTabsSnapshot(
+      state,
+      makeSnapshot([], { snapshotVersion: 3 }),
+      ENV,
+      NOW + 60 * 60 * 1000
+    )
+  }
+  expect(state.agentStatusByPaneKey.get(PANE_KEY)).toBeUndefined()
 })

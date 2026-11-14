@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resetAgentPaneAuthorityAliasesForTests } from './agent-pane-authority'
 import { wslHookRelayConnectionId } from '../../../../../shared/wsl-hook-relay-contract'
@@ -43,7 +44,7 @@ function fixture(agentType = 'pi') {
   const rows = () =>
     buildWorktreeAgentRows({
       tabs: [],
-      entries: Object.values(store.getState().agentStatusByPaneKey),
+      entries: Array.from(store.getState().agentStatusByPaneKey.values()),
       now: 1_000_000
     })
   return { store, write, rows }
@@ -54,7 +55,7 @@ describe('observed agent session row origin', () => {
     const { store, write, rows } = fixture('claude')
     let client = makeState()
     const publish = (version: number) => {
-      const tabs = Object.values(store.getState().agentStatusByPaneKey).map((entry) => {
+      const tabs = Array.from(store.getState().agentStatusByPaneKey.values()).map((entry) => {
         const parsed = parsePaneKey(entry.paneKey)
         if (!parsed) {
           throw new Error('Expected a terminal pane key')
@@ -82,7 +83,7 @@ describe('observed agent session row origin', () => {
       }
       return buildWorktreeAgentRows({
         tabs: client.tabsByWorktree['wt-order'] ?? [],
-        entries: Object.values(client.agentStatusByPaneKey),
+        entries: Array.from(client.agentStatusByPaneKey.values()),
         now: 1_000_000 + version
       })
     }
@@ -103,7 +104,7 @@ describe('observed agent session row origin', () => {
       turnStartedAt: 1000,
       evidenceObservedAt: 6000
     })
-    expect(store.getState().agentStatusByPaneKey[pane]).toMatchObject({
+    expect(store.getState().agentStatusByPaneKey.get(pane)).toMatchObject({
       stateStartedAt: 1000,
       firstStateStartedAt: 6000,
       updatedAt: 7000,
@@ -133,9 +134,9 @@ describe('observed agent session row origin', () => {
       for (let i = 0; i < AGENT_STATE_HISTORY_MAX + 2; i++) {
         write(3000 + i * 1000, i % 2 ? 'working' : 'done', 'same-session')
       }
-      expect(store.getState().agentStatusByPaneKey[pane].stateHistory[0].startedAt).toBeGreaterThan(
-        2000
-      )
+      expect(
+        store.getState().agentStatusByPaneKey.get(pane)!.stateHistory[0].startedAt
+      ).toBeGreaterThan(2000)
       expect(rows().map((row) => row.paneKey)).toEqual(before)
     }
   )
@@ -198,15 +199,15 @@ it('keeps the first session clock across transient SSH loss and provider-less re
   publish(5000, 'done', 'A')
   store.getState().removeAgentStatus(pane)
   publish(6000, 'done')
-  expect(store.getState().agentStatusByPaneKey[pane].firstStateStartedAt).toBe(1000)
+  expect(store.getState().agentStatusByPaneKey.get(pane)!.firstStateStartedAt).toBe(1000)
   expect(store.getState().agentConversationsByPaneKey[pane].providerSession?.id).toBe('A')
   const conversations = store.getState().agentConversationsByPaneKey
   publish(7000, 'done', 'A')
-  expect(store.getState().agentStatusByPaneKey[pane].firstStateStartedAt).toBe(1000)
+  expect(store.getState().agentStatusByPaneKey.get(pane)!.firstStateStartedAt).toBe(1000)
   expect(store.getState().agentConversationsByPaneKey).toBe(conversations)
   store.getState().removeAgentStatus(pane)
   publish(8000, 'working', 'B')
-  expect(store.getState().agentStatusByPaneKey[pane].firstStateStartedAt).toBe(8000)
+  expect(store.getState().agentStatusByPaneKey.get(pane)!.firstStateStartedAt).toBe(8000)
 })
 
 it.each([false, true])(
@@ -264,21 +265,21 @@ it.each([false, true])(
           1_000_000 + version
         )
       }
-      return Object.values(client.agentStatusByPaneKey)[0]
+      return Array.from(client.agentStatusByPaneKey.values())[0]
     }
     const initial = publish(1, 1000, 'working', 'A')
     expect(initial.firstStateStartedAt).toBe(1000)
     expect(publish(2, 5000, 'done', 'A').firstStateStartedAt).toBe(1000)
-    client = { ...client, agentStatusByPaneKey: {} }
+    client = { ...client, agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})) }
     expect(publish(3, 6000, 'done').firstStateStartedAt).toBe(1000)
     expect(client.agentConversationsByPaneKey?.[initial.paneKey].providerSession?.id).toBe('A')
     const conversations = client.agentConversationsByPaneKey
     publish(4, 7000, 'done', 'A')
     expect(client.agentConversationsByPaneKey).toBe(conversations)
-    client = { ...client, agentStatusByPaneKey: {} }
+    client = { ...client, agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})) }
     if (stamped) {
       publish(5, 7500, 'working')
-      client = { ...client, agentStatusByPaneKey: {} }
+      client = { ...client, agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})) }
     }
     expect(publish(6, 8000, 'working').firstStateStartedAt).toBe(8000)
     expect(client.agentConversationsByPaneKey?.[initial.paneKey].providerSession).toBeUndefined()
@@ -300,7 +301,7 @@ it('does not give an unidentified successor the previous conversation clock or p
       { updatedAt: 8000, stateStartedAt: 8000, turnStartedAt: 8000 },
       { worktreeId: 'wt-order' }
     )
-  expect(store.getState().agentStatusByPaneKey[pane].firstStateStartedAt).toBe(8000)
+  expect(store.getState().agentStatusByPaneKey.get(pane)!.firstStateStartedAt).toBe(8000)
   expect(store.getState().agentConversationsByPaneKey[pane].providerSession).toBeUndefined()
   expect(store.getState().agentConversationsByPaneKey[pane].promptCandidates).toEqual(['next task'])
 })
@@ -312,18 +313,18 @@ it('keeps identity through stale phase replay and equal pings, but follows expli
   store.getState().removeAgentStatus(pane)
   write(6000, 'working', undefined, { isReplay: true, stateStartedAt: 1000, turnStartedAt: 1000 })
   expect(store.getState().agentConversationsByPaneKey[pane].providerSession?.id).toBe('A')
-  expect(store.getState().agentStatusByPaneKey[pane].firstStateStartedAt).toBe(1000)
+  expect(store.getState().agentStatusByPaneKey.get(pane)!.firstStateStartedAt).toBe(1000)
   const previous = store.getState().agentConversationsByPaneKey
   write(6500, 'working', undefined, { isReplay: true, stateStartedAt: 1000, turnStartedAt: 1000 })
   expect(store.getState().agentConversationsByPaneKey).toBe(previous)
   store.getState().recordAgentProviderSession(pane, 'claude', { key: 'session_id', id: 'A' })
   expect(store.getState().agentConversationsByPaneKey).toBe(previous)
   write(8000, 'working', 'A', { stateStartedAt: 8000, turnStartedAt: 8000 })
-  expect(store.getState().agentStatusByPaneKey[pane].firstStateStartedAt).toBe(1000)
+  expect(store.getState().agentStatusByPaneKey.get(pane)!.firstStateStartedAt).toBe(1000)
   store.getState().removeAgentStatus(pane)
   write(10000, 'working', undefined, { isReplay: true, stateStartedAt: 8000, turnStartedAt: 10000 })
   expect(store.getState().agentConversationsByPaneKey[pane].providerSession).toBeUndefined()
-  expect(store.getState().agentStatusByPaneKey[pane].firstStateStartedAt).toBe(10000)
+  expect(store.getState().agentStatusByPaneKey.get(pane)!.firstStateStartedAt).toBe(10000)
 })
 
 it('keeps displaced prompt candidates out when an older phase is replayed', () => {
@@ -401,7 +402,7 @@ it('keeps Command Code prompt boundaries case-sensitive after live removal', () 
       { worktreeId: 'wt-order' }
     )
   expect(store.getState().agentConversationsByPaneKey[pane].providerSession).toBeUndefined()
-  expect(store.getState().agentStatusByPaneKey[pane].firstStateStartedAt).toBe(2000)
+  expect(store.getState().agentStatusByPaneKey.get(pane)!.firstStateStartedAt).toBe(2000)
 })
 
 it.each([100, 1000])('keeps conversation updates atomic with %s unplaced conversations', (size) => {

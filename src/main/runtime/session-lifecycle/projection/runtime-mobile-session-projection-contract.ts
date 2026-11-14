@@ -32,7 +32,7 @@ export type RuntimeMobileSessionProjectionHost = {
   ): boolean
   getProviderSessionRows(paneKey: string): AgentStatusIpcPayload[] | undefined
   getProviderSessionSnapshot(): AgentStatusIpcPayload[]
-  getStatusSnapshot(): AgentStatusIpcPayload[]
+  getStatusRows(paneKey: string, terminalHandle: string | null): AgentStatusIpcPayload[]
   getLeafKey(tabId: string, leafId: string): string
   findPty(
     worktreeId: string,

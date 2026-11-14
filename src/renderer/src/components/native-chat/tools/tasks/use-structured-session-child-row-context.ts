@@ -1,3 +1,4 @@
+import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
 import { useMemo } from 'react'
 import {
   agentChildRowContextForParent,
@@ -9,8 +10,6 @@ import {
 } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { useNow } from '@/hooks/use-now'
-
-import { useAppStore } from '@/store'
 
 /** The verdict a session's status row gives its children, exactly as the sidebar derives it. */
 export function structuredSessionChildRowContext(
@@ -27,7 +26,7 @@ export function structuredSessionChildRowContext(
 export function useStructuredSessionChildRowContext(
   paneKey: string
 ): AgentChildRowContext | undefined {
-  const parent = useAppStore((state) => state.agentStatusByPaneKey[paneKey])
+  const parent = useAgentStatus(paneKey)
   // The freshness window is thirty minutes; a coarse shared tick is well inside its precision.
   const now = useNow(30_000, parent !== undefined)
   const context = parent ? structuredSessionChildRowContext(parent, now) : undefined

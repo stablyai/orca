@@ -50,6 +50,7 @@ export type AgentStatusOrchestrationContext = {
 }
 
 export type AgentStatusEntry = {
+  paneSleep?: { ptyId: string; incarnationId?: string }
   /** Renderer-local status-feed confirmation for children; absent on hook rows. */
   subagentObservation?: 'live' | 'unverifiable'
   state: AgentStatusState

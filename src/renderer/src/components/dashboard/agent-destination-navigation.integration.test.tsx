@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 // @vitest-environment happy-dom
 
@@ -9,6 +10,7 @@ import {
   makeCreatedAgentWorktree,
   seedAlreadyActiveWorktree
 } from '@/lib/workspace/activation/worktree-activation-created-agent.test-fixture'
+import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { Tab } from '../../../../shared/tab-types'
@@ -20,7 +22,6 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { buildDashboardSnapshot } from './build-dashboard-snapshot'
 import { revealDashboardAgent } from './reveal-dashboard-agent'
 import { activateWorktreeAgentPane } from '../sidebar/workspace-card/activity/use-worktree-agent-activation'
-import { structuredAgentSessionPaneKey } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
 const effects = vi.hoisted(() => ({
   rpc: vi.fn(async () => ({ ok: true })),
@@ -81,7 +82,9 @@ describe('Dashboard and sidebar destination contract', () => {
       const seeded = useAppStore.getState()
       const terminal = { ...seeded.tabsByWorktree[worktree.id][0], executionHostId: owner }
       const tabId = native ? 'native-B' : terminal.id
-      const paneKey = makePaneKey(tabId, LEAF)
+      const paneKey = native
+        ? structuredAgentSessionPaneKey(tabId, 'session-B')
+        : makePaneKey(tabId, LEAF)
       const group = seeded.groupsByWorktree[worktree.id][0]
       const nativeTab: Tab = {
         id: tabId,
@@ -151,20 +154,39 @@ describe('Dashboard and sidebar destination contract', () => {
                 expandedLeafId: null
               }
             },
-        agentStatusByPaneKey: {
-          [paneKey]: {
-            paneKey,
-            tabId,
-            worktreeId: worktree.id,
-            state: 'done',
-            agentType: 'codex',
-            prompt: 'Open this conversation',
-            updatedAt: NOW,
-            stateStartedAt: NOW,
-            stateHistory: []
-          }
-        }
+        agentStatusByPaneKey: acceptedAgentStatuses(
+          Object.entries({
+            [paneKey]: {
+              paneKey,
+              tabId,
+              worktreeId: worktree.id,
+              state: 'done',
+              agentType: 'codex',
+              prompt: 'Open this conversation',
+              updatedAt: NOW,
+              stateStartedAt: NOW,
+              stateHistory: []
+            }
+          })
+        )
       })
+
+      if (native) {
+        const unified = useAppStore.getState().unifiedTabsByWorktree
+        useAppStore.setState({
+          unifiedTabsByWorktree: {
+            [worktree.id]: unified[worktree.id].filter((tab) => tab.id !== tabId)
+          }
+        })
+        expect(useAppStore.getState().agentStatusByPaneKey.projection.list(worktree.id)).toEqual([])
+        useAppStore.setState({ unifiedTabsByWorktree: unified })
+        expect(
+          useAppStore
+            .getState()
+            .agentStatusByPaneKey.projection.list(worktree.id)
+            .map((row) => row.paneKey)
+        ).toEqual([paneKey])
+      }
 
       const snapshot = buildDashboardSnapshot(
         { ...useAppStore.getState(), chatNames: new Map() },

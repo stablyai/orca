@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WorktreeMetaPersistModule from '../worktrees/metadata/worktree-meta-persist'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
@@ -58,7 +59,9 @@ function finishedAgentOffScreen(store: AttentionStore): PaneTarget {
     tabId: pane.tabId,
     worktreeId: WS_A
   }
-  store.setState({ agentStatusByPaneKey: { [pane.paneKey]: entry } })
+  store.setState({
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({ [pane.paneKey]: entry }))
+  })
   completeAgentTurn(store, pane)
   return pane
 }
@@ -139,19 +142,21 @@ describe('explicit workspace and agent reads', () => {
           ptyIdsByLeafId: {}
         }
       },
-      agentStatusByPaneKey: {
-        [remote.paneKey]: {
-          paneKey: remote.paneKey,
-          tabId: 'remote',
-          prompt: 'Remote result',
-          worktreeId: WS_A,
-          state: 'done',
-          agentType: 'claude',
-          updatedAt: 900,
-          stateStartedAt: 900,
-          stateHistory: []
-        }
-      },
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [remote.paneKey]: {
+            paneKey: remote.paneKey,
+            tabId: 'remote',
+            prompt: 'Remote result',
+            worktreeId: WS_A,
+            state: 'done',
+            agentType: 'claude',
+            updatedAt: 900,
+            stateStartedAt: 900,
+            stateHistory: []
+          }
+        })
+      ),
       unreadTerminalTabs: { local: 'terminal-bell', remote: 'terminal-bell' },
       unreadTerminalPanes: { [local.paneKey]: 'terminal-bell', [remote.paneKey]: 'terminal-bell' },
       unreadAgentCompletionPanes: {
@@ -228,18 +233,20 @@ describe('explicit workspace and agent reads', () => {
       },
       activeWorktreeId: WS_A,
       activeWorkspaceExecutionHostId: 'local',
-      agentStatusByPaneKey: {
-        [remote.paneKey]: {
-          paneKey: remote.paneKey,
-          state: 'done',
-          agentType: 'claude',
-          prompt: '',
-          updatedAt: 900,
-          stateStartedAt: 900,
-          stateHistory: [],
-          terminalHandle: 'remote:box@@pty'
-        }
-      },
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [remote.paneKey]: {
+            paneKey: remote.paneKey,
+            state: 'done',
+            agentType: 'claude',
+            prompt: '',
+            updatedAt: 900,
+            stateStartedAt: 900,
+            stateHistory: [],
+            terminalHandle: 'remote:box@@pty'
+          }
+        })
+      ),
       tabsByWorktree: {
         [WS_A]: [makeTab({ id: 'remote', worktreeId: WS_A, ptyId: 'remote:box@@pty' })]
       },
@@ -317,15 +324,17 @@ describe('explicit workspace and agent reads', () => {
   it('reads only the selected host, including agents awaiting tab hydration', () => {
     const { store } = createAttentionStore({ windowOnScreen: false })
     const local = finishedAgentOffScreen(store)
-    const entry = store.getState().agentStatusByPaneKey[local.paneKey]!
+    const entry = store.getState().agentStatusByPaneKey.get(local.paneKey)!
     const sshKey = `ssh-agent:11111111-1111-4111-8111-111111111111`
     const runtimeKey = `runtime-agent:11111111-1111-4111-8111-111111111111`
     store.setState({
-      agentStatusByPaneKey: {
-        [local.paneKey]: entry,
-        [sshKey]: { ...entry, paneKey: sshKey, connectionId: 'server' },
-        [runtimeKey]: { ...entry, paneKey: runtimeKey, terminalHandle: 'remote:box@@live' }
-      }
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [local.paneKey]: entry,
+          [sshKey]: { ...entry, paneKey: sshKey, connectionId: 'server' },
+          [runtimeKey]: { ...entry, paneKey: runtimeKey, terminalHandle: 'remote:box@@live' }
+        })
+      )
     })
     const panes = [local, { paneKey: sshKey }, { paneKey: runtimeKey }]
     expect(selectAgentRowsUnread(store.getState(), panes)).toEqual([true, true, true])
@@ -341,7 +350,7 @@ describe('explicit workspace and agent reads', () => {
   it('reads marker-free terminal and structured agents through tab ownership despite missing or stale workspace stamps', () => {
     const { store } = createAttentionStore({ windowOnScreen: false })
     const pane = finishedAgentOffScreen(store)
-    const entry = store.getState().agentStatusByPaneKey[pane.paneKey]!
+    const entry = store.getState().agentStatusByPaneKey.get(pane.paneKey)!
     const stalePane = addLiveTerminalTab(store, WS_A, 'stale-workspace-tab')
     const native = makeUnifiedTab({
       id: 'native',
@@ -359,15 +368,17 @@ describe('explicit workspace and agent reads', () => {
         ...store.getState().unifiedTabsByWorktree,
         [WS_A]: [...store.getState().unifiedTabsByWorktree[WS_A]!, native]
       },
-      agentStatusByPaneKey: {
-        [pane.paneKey]: { ...entry, worktreeId: undefined },
-        [stalePane.paneKey]: {
-          ...entry,
-          paneKey: stalePane.paneKey,
-          worktreeId: 'stale-workspace'
-        },
-        [nativeKey]: { ...entry, paneKey: nativeKey, worktreeId: undefined }
-      }
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [pane.paneKey]: { ...entry, worktreeId: undefined },
+          [stalePane.paneKey]: {
+            ...entry,
+            paneKey: stalePane.paneKey,
+            worktreeId: 'stale-workspace'
+          },
+          [nativeKey]: { ...entry, paneKey: nativeKey, worktreeId: undefined }
+        })
+      )
     })
     const panes = [pane, stalePane, { paneKey: nativeKey }]
     expect(selectAgentRowsUnread(store.getState(), panes)).toEqual([true, true, true])
@@ -392,18 +403,20 @@ describe('explicit workspace and agent reads', () => {
       runtimeEnvironments: [publicRuntimeEnvironment({ id: 'box' })],
       repos: store.getState().repos.map((repo) => ({ ...repo, executionHostId: 'runtime:box' })),
       unifiedTabsByWorktree: { [WS_A]: [native] },
-      agentStatusByPaneKey: {
-        [paneKey]: {
-          paneKey,
-          worktreeId: WS_A,
-          agentType: 'claude',
-          state: 'done',
-          prompt: '',
-          updatedAt: 900,
-          stateStartedAt: 900,
-          stateHistory: []
-        }
-      }
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [paneKey]: {
+            paneKey,
+            worktreeId: WS_A,
+            agentType: 'claude',
+            state: 'done',
+            prompt: '',
+            updatedAt: 900,
+            stateStartedAt: 900,
+            stateHistory: []
+          }
+        })
+      )
     })
     store.getState().setWorkspaceUnreadByUser(WS_A, false, 'local')
     expect(selectAgentRowsUnread(store.getState(), [{ paneKey }])).toEqual([true])
@@ -414,7 +427,7 @@ describe('explicit workspace and agent reads', () => {
   it('Mark read on an SSH workspace reads its paired chat and preserves another runtime', () => {
     const { store } = createAttentionStore({ windowOnScreen: false })
     const terminal = finishedAgentOffScreen(store)
-    const entry = store.getState().agentStatusByPaneKey[terminal.paneKey]!
+    const entry = store.getState().agentStatusByPaneKey.get(terminal.paneKey)!
     const chats = ['box', 'other'].map((host) =>
       makeUnifiedTab({
         id: `native-${host}`,
@@ -440,8 +453,8 @@ describe('explicit workspace and agent reads', () => {
         ]
       },
       unifiedTabsByWorktree: { [WS_A]: chats },
-      agentStatusByPaneKey: Object.fromEntries(
-        keys.map((paneKey) => [paneKey, { ...entry, paneKey }])
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        keys.map((paneKey) => [paneKey, { ...entry, paneKey }] as const)
       ),
       unreadAgentCompletionPanes: Object.fromEntries(
         keys.map((paneKey) => [paneKey, 'agent-completion'])

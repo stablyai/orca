@@ -58,7 +58,7 @@ export function createAgentStatusProviderSessionActions(
       settleAttentionRemovedBy(set, get, () =>
         set((s, changedPaneKeys) => {
           const existingRecord = s.sleepingAgentSessionsByPaneKey[paneKey]
-          const existingStatus = s.agentStatusByPaneKey[paneKey]
+          const existingStatus = s.agentStatusByPaneKey.get(paneKey)
           if (
             (existingStatus && updatedAt < existingStatus.updatedAt) ||
             (existingRecord && updatedAt < existingRecord.updatedAt)
@@ -130,11 +130,10 @@ export function createAgentStatusProviderSessionActions(
           }
           removedLiveStatus = existingStatus !== undefined
           const nextLive = removedLiveStatus
-            ? { ...s.agentStatusByPaneKey }
+            ? s.agentStatusByPaneKey.replace([[paneKey, null]])
             : s.agentStatusByPaneKey
           if (removedLiveStatus) {
             changedPaneKeys.add(paneKey)
-            delete nextLive[paneKey]
           }
           const retiredPaneKeys = new Set([paneKey])
           // Identity mismatch clears sleeping launch config; clear registry too or returning old identity reuses stale args/env.

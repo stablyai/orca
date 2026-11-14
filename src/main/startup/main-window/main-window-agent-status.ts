@@ -37,6 +37,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       structuredHost,
       programStatus,
       programStatusOnly,
+      paneSleep,
       agentIdentity,
       identityOnly,
       agentPresence
@@ -96,6 +97,7 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
         ...(orchestration ? { orchestration } : {}),
         ...(programStatus ? { programStatus } : {}),
         ...(programStatusOnly === true ? { programStatusOnly: true } : {}),
+        ...(paneSleep ? { paneSleep } : {}),
         ...(agentPresence?.session && !agentPresence.ended
           ? { paneOwner: { agent: agentPresence.agent, session: agentPresence.session } }
           : {}),

@@ -74,7 +74,7 @@ async function isClaudeInForeground(
 
 /** Whether the pane's Claude is mid-turn; a restart during a permission prompt or question drops it. */
 export function isClaudePaneMidTurn(state: AppState, paneKey: string): boolean {
-  const entry = state.agentStatusByPaneKey[paneKey]
+  const entry = state.agentStatusByPaneKey.get(paneKey)
   return entry?.agentType === 'claude' && entry.state !== 'done'
 }
 
@@ -114,7 +114,7 @@ function* localClaudePanes(
         ) {
           continue
         }
-        const entry = state.agentStatusByPaneKey[makePaneKey(tab.id, leafId)]
+        const entry = state.agentStatusByPaneKey.get(makePaneKey(tab.id, leafId))
         if (entry?.agentType !== 'claude' || entry.structuredHostOwned) {
           continue
         }

@@ -233,7 +233,7 @@ test('a managed terminal reports agent status from hooks and from Pi-style title
         () =>
           page.evaluate(
             (prompt) =>
-              Object.values(window.__store?.getState().agentStatusByPaneKey ?? {}).some(
+              Array.from(window.__store?.getState().agentStatusByPaneKey?.values() ?? []).some(
                 (entry) =>
                   entry.prompt === prompt &&
                   entry.agentType === 'codex' &&

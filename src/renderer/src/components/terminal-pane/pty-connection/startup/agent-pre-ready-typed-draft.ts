@@ -93,7 +93,7 @@ export function installAgentPreReadyTypedDraft(session: ConnectPanePtySession): 
       phase = 'closed'
       return
     }
-    const status = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]?.state
+    const status = useAppStore.getState().agentStatusByPaneKey.get(session.cacheKey)?.state
     // Why drop: the user is already driving the screen, or a prompt is waiting on an answer.
     if (liveInputSinceBind || status === 'blocked' || status === 'waiting') {
       dropDraft(draftAgent)

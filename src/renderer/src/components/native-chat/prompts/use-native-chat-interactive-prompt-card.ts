@@ -1,3 +1,4 @@
+import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
 import { asyncQuestionSourceScope } from '../../../../../shared/native-chat/input/native-chat-ask'
 import { useNativeChatAsyncQuestions } from './use-native-chat-async-questions'
 import { useNativeChatPromptCardPresentation } from './use-native-chat-prompt-card-presentation'
@@ -21,15 +22,13 @@ export function useNativeChatInteractivePromptCard({
   transcriptSettled: boolean
   transcriptAsk?: AskPrompt | null
 }): InteractivePromptCard {
-  const interactivePrompt = useAppStore(
-    (s) => s.agentStatusByPaneKey[paneKey]?.interactivePrompt ?? null
-  )
+  const interactivePrompt = useAgentStatus(paneKey)?.interactivePrompt ?? null
   // Read toolName only beside a prompt for parser dispatch; ordinary tool changes would rerender the whole pane.
   const interactiveToolName = useAppStore((s) => {
-    const entry = s.agentStatusByPaneKey[paneKey]
+    const entry = s.agentStatusByPaneKey.get(paneKey)
     return entry?.interactivePrompt ? (entry.toolName ?? null) : null
   })
-  const agent = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.agentType)
+  const agent = useAgentStatus(paneKey)?.agentType
   return useMemo(
     () =>
       resolveNativeChatInteractivePromptCard({

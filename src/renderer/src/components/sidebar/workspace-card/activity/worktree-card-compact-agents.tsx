@@ -1,3 +1,5 @@
+import type { AgentGroupSummary } from '@/store/slices/agent-status/agent-row-display-index'
+import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import React, { useCallback, useRef } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
@@ -6,6 +8,9 @@ import { AgentTypeIcon } from '@/components/agent/icons/agent-type-icon'
 import { cn } from '@/lib/class-names'
 import {
   buildSummaryAgentGroups,
+  formatAllAgentsInState,
+  formatStateCount,
+  formatSummaryStateLabel,
   selectSummaryGroupIconAgents,
   summarizeAgentIdentities,
   summarizeAgents
@@ -22,7 +27,8 @@ function stopActivationKeyPropagation(e: React.KeyboardEvent): void {
 }
 
 type CompactAgentSummaryButtonProps = {
-  agents: DashboardAgentRowData[]
+  agents?: DashboardAgentRowData[]
+  groups?: readonly AgentGroupSummary[]
   subjectLabel: string
   expanded: boolean
   onToggle: () => void
@@ -73,20 +79,38 @@ export function CompactAgentExpansion({
   )
 }
 
+const EMPTY_AGENTS: NonNullable<CompactAgentSummaryButtonProps['agents']> = []
+
 export function CompactAgentSummaryButton({
-  agents,
+  agents = EMPTY_AGENTS,
+  groups: precomputedGroups,
   subjectLabel,
   expanded,
   onToggle,
   unreadByPaneKey
 }: CompactAgentSummaryButtonProps): React.JSX.Element {
   const t = useTranslate()
-  const summary = summarizeAgents(agents, subjectLabel, t)
-  const groups = buildSummaryAgentGroups(
-    agents,
-    unreadByPaneKey ? (agent) => unreadByPaneKey[agent.paneKey] ?? false : undefined
-  )
-  const unreadCount = groups.find((group) => group.unread)?.agents.length ?? 0
+  const groups: readonly (AgentGroupSummary & { unread?: boolean })[] =
+    precomputedGroups ??
+    buildSummaryAgentGroups(
+      agents,
+      unreadByPaneKey ? (agent) => unreadByPaneKey[agent.paneKey] ?? false : undefined
+    ).map((group) => ({
+      state: group.state,
+      unread: group.unread,
+      count: group.agents.length,
+      icons: selectSummaryGroupIconAgents(group.agents, 3),
+      identities: []
+    }))
+  const summary = !precomputedGroups
+    ? summarizeAgents(agents, subjectLabel, t)
+    : groups.length === 1
+      ? formatAllAgentsInState(groups[0].state, groups[0].count, t)
+      : t('sidebar.agentSummary.mixedStates', '{{subject}}: {{states}}', {
+          subject: subjectLabel,
+          states: groups.map((group) => formatStateCount(group.state, group.count, t)).join(', ')
+        })
+  const unreadCount = groups.find((group) => group.unread)?.count ?? 0
   const unreadSummary =
     unreadCount > 0
       ? t('auto.components.activity.ActivityTitlebarControls.unreadCount', '{{count}} unread', {
@@ -97,8 +121,21 @@ export function CompactAgentSummaryButton({
   const visibleGroups = groups.slice(0, 3)
   const hiddenGroupAgentCount = groups
     .slice(visibleGroups.length)
-    .reduce((count, group) => count + group.agents.length, 0)
-  const agentIdentitySummary = summarizeAgentIdentities(agents, t)
+    .reduce((count, group) => count + group.count, 0)
+  const agentIdentitySummary = !precomputedGroups
+    ? summarizeAgentIdentities(agents, t)
+    : groups
+        .flatMap((group) =>
+          group.identities.flatMap((identity) =>
+            Array.from({ length: identity.count }, () =>
+              t('sidebar.agentSummary.agentIdentityState', '{{agent}} {{status}}', {
+                agent: formatAgentTypeLabel(identity.agentType),
+                status: formatSummaryStateLabel(group.state, t)
+              })
+            )
+          )
+        )
+        .join('; ')
   const stopPointerPropagation = useCallback((e: React.SyntheticEvent) => {
     e.stopPropagation()
   }, [])
@@ -156,8 +193,8 @@ export function CompactAgentSummaryButton({
         <>
           <span className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden" aria-hidden>
             {visibleGroups.map((group) => {
-              const iconAgents = selectSummaryGroupIconAgents(group.agents, 3)
-              const hiddenIconCount = Math.max(0, group.agents.length - iconAgents.length)
+              const iconAgents = group.icons
+              const hiddenIconCount = Math.max(0, group.count - iconAgents.length)
               return (
                 <span
                   key={group.unread ? 'unread' : group.state}

@@ -58,7 +58,7 @@ export function openNativeChatTranscript(
   requestedPath: string | undefined,
   wake: boolean
 ): { transcriptPath: string | undefined; waking: Promise<void> | null } {
-  const statusRows = agentHookServer.getStatusSnapshot()
+  const statusRows = agentHookServer.getProviderSessionSourceRowsForSessionId(sessionId)
   const transcriptPath = nativeChatTranscriptPathOnExecutionHost(
     statusRows,
     sessionId,

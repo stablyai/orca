@@ -197,7 +197,7 @@ export function seedWorkspaces(seeds: readonly WorkspaceSeed[], now: number): vo
     tabsByWorktree: { ...state.tabsByWorktree, ...tabsByWorktree },
     unifiedTabsByWorktree: { ...state.unifiedTabsByWorktree, ...unifiedTabsByWorktree },
     ptyIdsByTabId: { ...state.ptyIdsByTabId, ...ptyIdsByTabId },
-    agentStatusByPaneKey: { ...state.agentStatusByPaneKey, ...agentStatusByPaneKey },
+    agentStatusByPaneKey: state.agentStatusByPaneKey.replace(Object.entries(agentStatusByPaneKey)),
     acknowledgedAgentsByPaneKey: { ...state.acknowledgedAgentsByPaneKey, ...acknowledged },
     agentStatusEpoch: state.agentStatusEpoch + 1,
     unreadAgentCompletionPanes: {

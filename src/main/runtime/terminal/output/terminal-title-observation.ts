@@ -311,11 +311,8 @@ export abstract class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWit
       return
     }
     this.terminalSideEffectConsumerAvailable = nextAvailable
-    for (const [ptyId, entry] of this.ptyTitleTrackersByPtyId) {
+    for (const entry of this.ptyTitleTrackersByPtyId.values()) {
       entry.tracker.setTransientSideEffectScanningEnabled(nextAvailable)
-      entry.commandCodeDetector = nextAvailable
-        ? this.createTerminalSideEffectCommandCodeDetector(ptyId)
-        : null
     }
   }
 }

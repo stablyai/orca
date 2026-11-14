@@ -1,3 +1,9 @@
+import {
+  acceptedAgentStatuses,
+  type AcceptedAgentStatuses
+} from '@/store/slices/agent-status/accepted-agent-statuses'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
+import type { AppState } from '@/store/types'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
@@ -22,9 +28,9 @@ type MockState = {
   terminalLayoutsByTabId: Record<string, TerminalLayoutSnapshot>
   ptyIdsByTabId: Record<string, string[]>
   agentStatusEpoch: number
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  agentStatusByPaneKey: AcceptedAgentStatuses
   runtimeAgentOrchestrationByPaneKey: Record<string, NonNullable<AgentStatusEntry['orchestration']>>
-  migrationUnsupportedByPtyId: Record<string, never>
+  migrationUnsupportedByPtyId: AppState['migrationUnsupportedByPtyId']
   unifiedTabsByWorktree: Record<string, Tab[]>
   structuredChatSleptAtByPaneKey: Record<string, number | null>
   wslHostStatuses?: Record<string, { state: string; distro: string }>
@@ -94,7 +100,7 @@ describe('useWorktreeActivityStatus', () => {
       terminalLayoutsByTabId: {},
       ptyIdsByTabId: {},
       agentStatusEpoch: 0,
-      agentStatusByPaneKey: {},
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
       runtimeAgentOrchestrationByPaneKey: {},
       migrationUnsupportedByPtyId: {},
 
@@ -172,16 +178,27 @@ describe('useWorktreeActivityStatus', () => {
         }
       },
       agentStatusEpoch: 1,
-      agentStatusByPaneKey: {
-        [childPaneKey]: makeAgentStatusEntry({
-          paneKey: childPaneKey,
-          state: 'done',
-          worktreeId,
-          parentPaneKey
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [childPaneKey]: makeAgentStatusEntry({
+            paneKey: childPaneKey,
+            state: 'done',
+            worktreeId,
+            parentPaneKey
+          })
         })
-      }
+      )
     }
 
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: mockState.tabsByWorktree,
+      ptyIdsByTabId: mockState.ptyIdsByTabId,
+      runtimePaneTitlesByTabId: mockState.runtimePaneTitlesByTabId,
+      terminalLayoutsByTabId: mockState.terminalLayoutsByTabId,
+      agentStatusByPaneKey: mockState.agentStatusByPaneKey
+    })
+    mockState = store.getState()
     expect(renderToStaticMarkup(<StatusProbe worktreeId={worktreeId} />)).toBe('<span>done</span>')
   })
 })

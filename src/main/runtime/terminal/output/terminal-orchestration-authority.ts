@@ -106,10 +106,8 @@ export abstract class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends O
   protected collectAgentStatusPaneKeysForPty(ptyId: string): Set<string> {
     const paneKeys = this.collectPaneKeysForPty(ptyId)
     const terminalHandles = new Set(this.getExistingTerminalHandlesForPtyId(ptyId))
-    // The provider-session snapshot is the unfiltered store view, so certified exit can also
-    // retire a dismissed row's identity-only remnant after its pane binding moved.
-    for (const row of this.getAgentProviderSessionSnapshotFn?.() ?? []) {
-      if (row.terminalHandle && terminalHandles.has(row.terminalHandle)) {
+    for (const handle of terminalHandles) {
+      for (const row of this.getAgentProviderSessionRowsForPaneFn?.('', handle) ?? []) {
         paneKeys.add(row.paneKey)
       }
     }

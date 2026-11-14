@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { getStateMock, inspectRuntimeTerminalProcessMock } = vi.hoisted(() => ({
@@ -27,7 +28,7 @@ function setState(overrides: Record<string, unknown> = {}): void {
     settings: { activeRuntimeEnvironmentId: null },
     ptyIdsByTabId: { 'tab-1': ['pty-a'] },
     terminalLayoutsByTabId: { 'tab-1': { ptyIdsByLeafId: { [LEAF_A]: 'pty-a' } } },
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     ...overrides
   })
 }
@@ -136,7 +137,19 @@ describe('guardRunningTerminalClose', () => {
       terminalLayoutsByTabId: {
         'tab-1': { ptyIdsByLeafId: { [LEAF_A]: 'pty-a', [LEAF_B]: 'pty-b' } }
       },
-      agentStatusByPaneKey: { [`tab-1:${LEAF_B}`]: { agentType: 'claude' } }
+      agentStatusByPaneKey: acceptedAgentStatuses(
+        Object.entries({
+          [`tab-1:${LEAF_B}`]: {
+            paneKey: `tab-1:${LEAF_B}`,
+            agentType: 'claude',
+            state: 'working',
+            prompt: '',
+            stateHistory: [],
+            updatedAt: 0,
+            stateStartedAt: 0
+          }
+        })
+      )
     })
     inspectRuntimeTerminalProcessMock.mockImplementation(async (ptyId: string) => ({
       foregroundProcess: ptyId === 'pty-b' ? 'claude' : 'zsh',

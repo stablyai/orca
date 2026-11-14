@@ -156,7 +156,7 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
       ptyId: 'pty-opencode-reuse',
       // OpenCode remains foreground when an internal TUI command completes.
       getForegroundProcess: async () => 'opencode',
-      retireAgentHookCompatibilityAuthority: (paneKey) => server.retirePaneAuthority(paneKey),
+      retireAgentHookCompatibilityAuthority: (paneKey) => server.retireProcessAuthority(paneKey),
       attestAgentHookCompatibilityAuthority: (candidate) =>
         server.attestCompatibilityAuthority(candidate)
     })
@@ -214,7 +214,7 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
     const pane = await launchOpenCodePane({
       ptyId: 'pty-opencode-session-boundary',
       getForegroundProcess: () => foreground,
-      retireAgentHookCompatibilityAuthority: (paneKey) => server.retirePaneAuthority(paneKey),
+      retireAgentHookCompatibilityAuthority: (paneKey) => server.retireProcessAuthority(paneKey),
       attestAgentHookCompatibilityAuthority: (candidate) =>
         server.attestCompatibilityAuthority(candidate)
     })
@@ -256,53 +256,95 @@ describe('OpenCode finished-session launch authority (STA-4557)', () => {
     expect(attestCurrent()).toBeNull()
   })
 
-  it('does not rehydrate a finished session token as restored authority after a restart', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-sta4557-'))
-    tempDirs.push(userDataPath)
-    const first = new AgentHookServer()
-    servers.push(first)
-    await first.start({ env: 'production', userDataPath })
-    const pane = await launchOpenCodePane({
-      ptyId: 'pty-opencode-restart',
-      getForegroundProcess: async () => 'opencode',
-      retireAgentHookCompatibilityAuthority: (paneKey) => first.retirePaneAuthority(paneKey)
-    })
-    const hookEnv = first.buildPtyEnv()
-    await fetch(`http://127.0.0.1:${hookEnv.ORCA_AGENT_HOOK_PORT}/hook/opencode`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Orca-Agent-Hook-Token': hookEnv.ORCA_AGENT_HOOK_TOKEN
-      },
-      body: JSON.stringify({
-        paneKey: pane.paneKey,
-        launchToken: pane.launchToken,
-        tabId: pane.tabId,
-        worktreeId: 'wt-opencode',
-        env: 'production',
-        payload: { hook_event_name: 'SessionStart', sessionID: 'session-1' }
+  it.each([false, true])(
+    'does not rehydrate a finished session token after restart (stopping=%s)',
+    async (stopping) => {
+      const userDataPath = mkdtempSync(join(tmpdir(), 'orca-sta4557-'))
+      tempDirs.push(userDataPath)
+      const first = new AgentHookServer()
+      servers.push(first)
+      await first.start({ env: 'production', userDataPath })
+      const pane = await launchOpenCodePane({
+        ptyId: 'pty-opencode-restart',
+        getForegroundProcess: async () => 'opencode',
+        retireAgentHookCompatibilityAuthority: (paneKey) => first.retireProcessAuthority(paneKey)
       })
-    })
+      const hookEnv = first.buildPtyEnv()
+      const post = (event: string) =>
+        fetch(`http://127.0.0.1:${hookEnv.ORCA_AGENT_HOOK_PORT}/hook/opencode`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Orca-Agent-Hook-Token': hookEnv.ORCA_AGENT_HOOK_TOKEN
+          },
+          body: JSON.stringify({
+            paneKey: pane.paneKey,
+            launchToken: pane.launchToken,
+            tabId: pane.tabId,
+            worktreeId: 'wt-opencode',
+            env: 'production',
+            payload: { hook_event_name: event, sessionID: 'session-1' }
+          })
+        })
 
-    pane.runtime.onPtyData(pane.ptyId, '\x1b]133;D;0\x07', 100)
-    await settle()
-    first.flushStatusPersistSync()
-    first.stop()
-
-    const restarted = new AgentHookServer()
-    servers.push(restarted)
-    await restarted.start({ env: 'production', userDataPath })
-
-    // Restart retains token in PTY env but loses pty.launchToken; persisted commitment is the only authority proof.
-    expect(
-      restarted.attestCompatibilityAuthority({
+      expect((await post('SessionStart')).status).toBe(204)
+      const authority = {
         paneKey: pane.paneKey,
         launchTokenHash: createHash('sha256').update(pane.launchToken).digest('hex'),
-        connectionId: null,
-        terminalProvenance: 'restored'
+        connectionId: null
+      }
+      expect(
+        first.attestCompatibilityAuthority({ ...authority, terminalProvenance: 'current_runtime' })
+      ).not.toBeNull()
+      if (stopping) {
+        expect((await post('SessionIdle')).status).toBe(204)
+      }
+      const before = first.getStatusSnapshotForPane(pane.paneKey)[0]
+      first.setTerminalPaneLifecycle({
+        ownsProcess: (key, id, incarnation) =>
+          key === pane.paneKey && id === pane.ptyId && incarnation === 'incarnation-1',
+        isStopping: () =>
+          pane.runtime.intentionalPtyStops
+            .claimExit(pane.ptyId, 'incarnation-1')
+            .includes('reversible'),
+        isReversibleStop: (id, incarnation) =>
+          pane.runtime.intentionalPtyStops.claimExit(id, incarnation).includes('reversible'),
+        isPlaced: () => true
       })
-    ).toBeNull()
-  })
+      const finishStop = stopping
+        ? pane.runtime.intentionalPtyStops.mark(pane.ptyId, 'reversible', 'incarnation-1')
+        : undefined
+
+      pane.runtime.onPtyData(pane.ptyId, '\x1b]133;D;0\x07', 100)
+      await settle()
+      if (stopping) {
+        expect(first.getStatusSnapshotForPane(pane.paneKey)[0]).toMatchObject({
+          state: 'done',
+          receivedAt: before.receivedAt,
+          stateStartedAt: before.stateStartedAt
+        })
+        expect(first.getStatusSnapshotForPane(pane.paneKey)[0].paneSleep).toBeUndefined()
+      }
+      expect(
+        first.attestCompatibilityAuthority({ ...authority, terminalProvenance: 'current_runtime' })
+      ).toBeNull()
+      first.flushStatusPersistSync()
+      finishStop?.(true)
+      first.stop()
+
+      const restarted = new AgentHookServer()
+      servers.push(restarted)
+      await restarted.start({ env: 'production', userDataPath })
+
+      // Restart retains token in PTY env but loses pty.launchToken; persisted commitment is the only authority proof.
+      expect(
+        restarted.attestCompatibilityAuthority({
+          ...authority,
+          terminalProvenance: 'restored'
+        })
+      ).toBeNull()
+    }
+  )
 })
 
 it.each([false, true])(

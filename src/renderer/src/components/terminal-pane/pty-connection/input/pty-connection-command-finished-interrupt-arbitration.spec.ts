@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { bindPtyConnectionTestMocks } from '../test-fixtures/pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
@@ -83,37 +84,44 @@ export function registerPtyConnectionCommandFinishedInterruptArbitrationTests():
         const paneKey = makePaneKey('tab-1', LEAF_1)
         mockStoreState = {
           ...mockStoreState,
-          agentStatusByPaneKey: {
-            [paneKey]: {
-              paneKey,
-              state: 'working',
-              prompt: 'stop quickly',
-              updatedAt: 1_000,
-              stateStartedAt: 900,
-              agentType,
-              terminalTitle: agentType,
-              stateHistory: []
-            }
-          }
-        }
-        vi.mocked(window.api.agentStatus.inferInterrupt).mockImplementation(async () => {
-          mockStoreState.agentStatusByPaneKey[paneKey] = {
-            paneKey,
-            state: 'done',
-            prompt: 'stop quickly',
-            updatedAt: 1_100,
-            stateStartedAt: 1_100,
-            agentType,
-            terminalTitle: agentType,
-            interrupted: true,
-            stateHistory: [
-              {
+          agentStatusByPaneKey: acceptedAgentStatuses(
+            Object.entries({
+              [paneKey]: {
+                paneKey,
                 state: 'working',
                 prompt: 'stop quickly',
-                startedAt: 900
+                updatedAt: 1_000,
+                stateStartedAt: 900,
+                agentType,
+                terminalTitle: agentType,
+                stateHistory: []
+              }
+            })
+          )
+        }
+        vi.mocked(window.api.agentStatus.inferInterrupt).mockImplementation(async () => {
+          mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+            [
+              paneKey,
+              {
+                paneKey,
+                state: 'done',
+                prompt: 'stop quickly',
+                updatedAt: 1_100,
+                stateStartedAt: 1_100,
+                agentType,
+                terminalTitle: agentType,
+                interrupted: true,
+                stateHistory: [
+                  {
+                    state: 'working',
+                    prompt: 'stop quickly',
+                    startedAt: 900
+                  }
+                ]
               }
             ]
-          }
+          ])
           return true
         })
         const terminalTarget = createKeyboardEventTarget()
@@ -145,7 +153,9 @@ export function registerPtyConnectionCommandFinishedInterruptArbitrationTests():
         expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
         expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
 
-        delete mockStoreState.agentStatusByPaneKey[paneKey]
+        mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
+          [paneKey, null]
+        ])
         writeAccepted.resolve(true)
         await flushAsyncTicks()
 

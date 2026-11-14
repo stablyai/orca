@@ -1,4 +1,5 @@
 import type { AppState } from '@/store/types'
+import type { AgentStatusProjection } from '@/store/slices/agent-status/agent-status-projection'
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
@@ -29,6 +30,8 @@ export type SlotSnapshot = {
   /** Workspace selection, settings and catalog: only consulted for chats with no stamped host. */
   owner: readonly unknown[]
   live: AppState['agentStatusByPaneKey']
+  /** Accepted panes whose status changed since `previous`; null when any may have. */
+  liveChanges: ReadonlySet<string> | null
   acknowledgements: AppState['acknowledgedAgentsByPaneKey']
   titles: AppState['runtimePaneTitlesByTabId']
   epoch: number
@@ -49,6 +52,34 @@ const JOURNAL_LENGTH = 16
 let current: SlotSnapshot | undefined
 const freshnessDeadlines = createFreshnessDeadlines()
 
+// Accepted rows are one keyed owner, so their changes come from its change feed, not a diff.
+const LIVE_CHANGE_LIMIT = 4096
+let watchedLive: AgentStatusProjection | undefined
+let stopWatchingLive: (() => void) | undefined
+let liveChanges: Set<string> | null = null
+
+function takeLiveChanges(live: AppState['agentStatusByPaneKey']): Set<string> | null {
+  if (watchedLive !== live.projection) {
+    stopWatchingLive?.()
+    watchedLive = live.projection
+    liveChanges = new Set()
+    stopWatchingLive = live.subscribeChanges((keys) => {
+      const changes = liveChanges
+      if (!keys || !changes || changes.size + keys.size > LIVE_CHANGE_LIMIT) {
+        liveChanges = null
+        return
+      }
+      keys.forEach((key) => changes.add(key))
+    })
+    return null
+  }
+  // Store subscribers run before the write's keys reach change listeners; read those directly.
+  const pending = live.projection.pendingChangedKeys()
+  const taken = liveChanges && pending ? new Set([...liveChanges, ...pending]) : null
+  liveChanges = new Set()
+  return taken
+}
+
 export function slotSnapshot(state: AppState): SlotSnapshot {
   const inputs = worktreeAgentProjectionInputs(state)
   if (!current || !sameInputs(inputs, current.inputs)) {
@@ -68,6 +99,7 @@ export function slotSnapshot(state: AppState): SlotSnapshot {
       worktrees: selectWorktreesByRepo(state),
       owner: structuredAgentSessionOwnerInputs(state),
       live: state.agentStatusByPaneKey,
+      liveChanges: takeLiveChanges(state.agentStatusByPaneKey),
       acknowledgements: state.acknowledgedAgentsByPaneKey,
       titles: state.runtimePaneTitlesByTabId,
       epoch: state.agentStatusEpoch,
@@ -78,15 +110,19 @@ export function slotSnapshot(state: AppState): SlotSnapshot {
     if (previous) {
       next.changedFromPrevious = changedBetween(state, previous, next)
     } else {
-      freshnessDeadlines.clear()
-      for (const paneKey in next.live) {
-        freshnessDeadlines.set(paneKey, next.live[paneKey], next.at)
-      }
+      seedFreshnessDeadlines(next)
     }
     trimJournal(next)
     current = next
   }
   return current
+}
+
+function seedFreshnessDeadlines(snapshot: SlotSnapshot): void {
+  freshnessDeadlines.clear()
+  for (const [paneKey, entry] of snapshot.live) {
+    freshnessDeadlines.set(paneKey, entry, snapshot.at)
+  }
 }
 
 function trimJournal(latest: SlotSnapshot): void {
@@ -207,25 +243,32 @@ function changedBetween(
     if (chat) {
       result.add(chat.worktreeId)
     }
-    for (const entry of [before.live[paneKey], after.live[paneKey]]) {
-      const owner = entry && liveEntryWorktreeId(paneKey, entry, liveTabOwners, represented)
-      if (owner) {
-        result.add(owner)
-      }
+    // A pane's previous owner is reached through the slots that displayed it.
+    const entry = after.live.get(paneKey)
+    const owner = entry && liveEntryWorktreeId(paneKey, entry, liveTabOwners, represented)
+    if (owner) {
+      result.add(owner)
     }
   }
 
   // Freshness bookkeeping follows every step, even one that re-checks every slot.
-  forEachChangedKey(before.live, after.live, (paneKey) => {
-    freshnessDeadlines.set(paneKey, after.live[paneKey], after.at)
-  })
+  if (after.liveChanges) {
+    after.liveChanges.forEach((paneKey) => {
+      freshnessDeadlines.set(paneKey, after.live.get(paneKey), after.at)
+    })
+  } else {
+    seedFreshnessDeadlines(after)
+  }
   const expired: string[] = []
   if (before.at !== after.at) {
     // Only entries whose stale deadline fell between the two clock samples flip.
     freshnessDeadlines.expire(after.at, (paneKey) => expired.push(paneKey))
   }
 
-  if (!addChangedLayoutWorkspaces(result, before.layout, after.layout, tabOwners, includePane)) {
+  if (
+    !after.liveChanges ||
+    !addChangedLayoutWorkspaces(result, before.layout, after.layout, tabOwners, includePane)
+  ) {
     return null
   }
   addChangedOrchestrationWorkspaces(result, before.orchestration, after.orchestration)
@@ -241,7 +284,7 @@ function changedBetween(
       result.add(owner)
     }
   })
-  forEachChangedKey(before.live, after.live, includePane)
+  after.liveChanges.forEach(includePane)
   expired.forEach(includePane)
   forEachChangedKey(before.acknowledgements, after.acknowledgements, includePane)
   return result

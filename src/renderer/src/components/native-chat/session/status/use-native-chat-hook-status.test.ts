@@ -15,7 +15,7 @@ import { useNativeChatTerminalTurnTiming } from '../../conversation/turns/use-na
 
 afterEach(() => {
   cleanup()
-  for (const key of Object.keys(useAppStore.getState().agentStatusByPaneKey)) {
+  for (const key of Array.from(useAppStore.getState().agentStatusByPaneKey.keys())) {
     useAppStore.getState().removeAgentStatus(key)
   }
   vi.useRealTimers()
@@ -37,12 +37,26 @@ it('preserves its pane status across another pane update and observes its own st
       { updatedAt: start, evidenceObservedAt: start, turnStartedAt: start }
     )
   }
-  const status = renderHook(() => useNativeChatHookStatus('own:1'))
-  const timing = renderHook(() => useNativeChatTerminalTurnTiming('own:1', messages, false))
+  let statusRenders = 0
+  let timingRenders = 0
+  const status = renderHook(() => {
+    statusRenders++
+    return useNativeChatHookStatus('own:1')
+  })
+  const timing = renderHook(() => {
+    timingRenders++
+    return useNativeChatTerminalTurnTiming('own:1', messages, false)
+  })
+  statusRenders = 0
+  timingRenders = 0
   act(() => {
     store.setAgentStatus('other:1', { state: 'done', prompt: 'task' })
-    useAppStore.setState((state) => ({ agentStatusEpoch: state.agentStatusEpoch + 1 }))
   })
+  expect(statusRenders).toBe(0)
+  expect(timingRenders).toBe(0)
+  act(() => useAppStore.setState((state) => ({ agentStatusEpoch: state.agentStatusEpoch + 1 })))
+  expect(statusRenders).toBe(0)
+  expect(timingRenders).toBe(0)
   expect(status.result.current[0]).toBe('working')
   act(() => {
     vi.setSystemTime(start + 5_000)
@@ -56,12 +70,12 @@ it('preserves its pane status across another pane update and observes its own st
     workedSeconds: 5
   })
   act(() => store.setAgentStatus('own:1', { state: 'working', prompt: 'next task' }))
-  const entry = useAppStore.getState().agentStatusByPaneKey['own:1']
+  const entry = useAppStore.getState().agentStatusByPaneKey.get('own:1')
   await act(async () => {
     await new Promise<void>((resolve) => queueMicrotask(resolve))
     vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS + 1)
   })
-  expect(useAppStore.getState().agentStatusByPaneKey['own:1']).toBe(entry)
+  expect(useAppStore.getState().agentStatusByPaneKey.get('own:1')).toBe(entry)
   expect(status.result.current[0]).toBeNull()
   expect(timing.result.current.settledTurns.get('turn')).toBeNull()
 })

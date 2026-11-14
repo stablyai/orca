@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { bindPtyConnectionTestMocks } from '../test-fixtures/pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
@@ -83,7 +84,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
             ptyIdsByLeafId: { [LEAF_2]: staleSessionId }
           }
         },
-        agentStatusByPaneKey: {},
+        agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
         sleepingAgentSessionsByPaneKey: {
           [paneKey]: {
             paneKey,
@@ -97,7 +98,7 @@ export function registerPtyConnectionSleepingResumeBannerTests(): void {
             updatedAt: 1
           }
         }
-      } as StoreState
+      } satisfies StoreState
 
       const deps = createDeps({
         restoredLeafId: LEAF_2,

@@ -65,19 +65,9 @@ function relevantRecordEqual<T extends object>(
 }
 
 function agentRecordsEqual(current: AppState, previous: AppState): boolean {
-  const relevantStatus = (entry: AppState['agentStatusByPaneKey'][string]): boolean =>
-    isAiVaultTitleAgent(entry.agentType) && Boolean(entry.providerSession?.id)
-  const statusEqual = relevantRecordEqual(
-    current.agentStatusByPaneKey,
-    previous.agentStatusByPaneKey,
-    relevantStatus,
-    (left, right) =>
-      left.agentType === right.agentType &&
-      left.paneKey === right.paneKey &&
-      left.tabId === right.tabId &&
-      left.worktreeId === right.worktreeId &&
-      providerSessionEqual(left.providerSession, right.providerSession)
-  )
+  const statusEqual =
+    current.agentStatusByPaneKey.sharesOwner(previous.agentStatusByPaneKey) &&
+    current.agentStatusByPaneKey.titleRevision === previous.agentStatusByPaneKey.titleRevision
   if (!statusEqual) {
     return false
   }
@@ -166,7 +156,8 @@ let cachedRequestWorktreeIds: { inputs: RequestWorktreeIdsInputs; worktreeIds: s
 
 function requestInputsMatch(inputs: RequestWorktreeIdsInputs, state: AppState): boolean {
   return (
-    inputs.agentStatusByPaneKey === state.agentStatusByPaneKey &&
+    inputs.agentStatusByPaneKey.sharesOwner(state.agentStatusByPaneKey) &&
+    inputs.agentStatusByPaneKey.titleRevision === state.agentStatusByPaneKey.titleRevision &&
     inputs.agentConversationsByPaneKey === state.agentConversationsByPaneKey &&
     inputs.sleepingAgentSessionsByPaneKey === state.sleepingAgentSessionsByPaneKey &&
     inputs.tabsByWorktree === state.tabsByWorktree &&

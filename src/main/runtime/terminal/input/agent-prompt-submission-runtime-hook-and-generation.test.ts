@@ -71,21 +71,23 @@ describe('agent prompt submission runtime hook and generation cases', () => {
   }> {
     let handle = ''
     const writes: string[] = []
+    const rows = () => [
+      {
+        paneKey: 'prompt-pane',
+        terminalHandle: handle,
+        state: hook.state,
+        prompt: '',
+        agentType: launchAgent,
+        connectionId: null,
+        // receivedAt changes even on same-state tool pings.
+        receivedAt: Date.now(),
+        stateStartedAt: hook.stateStartedAt,
+        ...(hook.mainAgent ? { mainAgent: { ...hook.mainAgent } } : {})
+      }
+    ]
     const runtime = new OrcaRuntimeService(makeStore() as never, undefined, {
-      getAgentStatusSnapshot: () => [
-        {
-          paneKey: 'prompt-pane',
-          terminalHandle: handle,
-          state: hook.state,
-          prompt: '',
-          agentType: launchAgent,
-          connectionId: null,
-          // receivedAt changes even on same-state tool pings.
-          receivedAt: Date.now(),
-          stateStartedAt: hook.stateStartedAt,
-          ...(hook.mainAgent ? { mainAgent: { ...hook.mainAgent } } : {})
-        }
-      ]
+      getAgentStatusSnapshot: rows,
+      getPublicAgentStatusSnapshotForPane: rows
     })
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-prompt' }),

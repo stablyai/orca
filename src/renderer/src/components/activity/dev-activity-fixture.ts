@@ -63,7 +63,7 @@ function fixtureTab(id: string, title: string, sortOrder: number): TerminalTab {
 /** Populate a fresh development profile with representative activity rows. */
 export function seedDevActivityFixture(): void {
   const state = useAppStore.getState()
-  if (state.repos.length > 0 || Object.keys(state.agentStatusByPaneKey).length > 0) {
+  if (state.repos.length > 0 || Array.from(state.agentStatusByPaneKey.keys()).length > 0) {
     return
   }
 

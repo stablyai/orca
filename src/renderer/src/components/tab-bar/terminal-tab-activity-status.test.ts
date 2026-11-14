@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
@@ -53,7 +54,9 @@ describe('resolveTerminalTabActivityStatus', () => {
   it('de-spins a stale working tab on an epoch bump without a new map reference', () => {
     // Freshness epochs can stale a row without replacing its map; invalidate cached flags so abandoned tabs stop spinning.
     const working = entry(FIRST_LEAF_ID, 'working')
-    const agentStatusByPaneKey = { [working.paneKey]: working }
+    const agentStatusByPaneKey = acceptedAgentStatuses(
+      Object.entries({ [working.paneKey]: working })
+    )
     expect(
       resolveTerminalTabActivityStatus({
         tab: TAB,

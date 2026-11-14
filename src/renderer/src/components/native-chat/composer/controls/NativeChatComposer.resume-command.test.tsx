@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 
 // @vitest-environment happy-dom
@@ -50,7 +51,7 @@ vi.mock('../../../../store/index', () => {
   const state = {
     dictationState: 'idle',
     settings: { voice: { enabled: false }, nativeChatSessionOptions: {} },
-    agentStatusByPaneKey: {},
+    agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
     activeWorktreeId: 'wt-1',
     activeWorkspaceExecutionHostId: 'ssh:box',
     tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },

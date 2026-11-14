@@ -68,7 +68,7 @@ describe('a finished Claude turn retains its live status timing', () => {
         ROUTING
       )
     const state = store.getState()
-    expect(state.agentStatusByPaneKey[PANE]?.updatedAt).toBe(NOW - 1_000)
-    expect(state.agentStatusByPaneKey[PANE]?.stateStartedAt).toBe(DONE_AT)
+    expect(state.agentStatusByPaneKey.get(PANE)?.updatedAt).toBe(NOW - 1_000)
+    expect(state.agentStatusByPaneKey.get(PANE)?.stateStartedAt).toBe(DONE_AT)
   })
 })

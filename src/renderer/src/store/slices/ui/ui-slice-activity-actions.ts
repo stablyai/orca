@@ -1,5 +1,6 @@
 import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
 import { emitAgentSubjectReads } from '@/attention/agent-subject-read-actions'
+import { linkRecordWrite } from '@/store/keyed-record-transitions'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import {
   collectAcknowledgedAgentNotificationId,
@@ -40,7 +41,7 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
           }
           const prev = s.acknowledgedAgentsByPaneKey[key] ?? 0
           let stamp = now
-          const liveEntry = s.agentStatusByPaneKey?.[key]
+          const liveEntry = s.agentStatusByPaneKey.get(key)
           if (liveEntry) {
             collectAcknowledgedAgentNotificationId({
               state: s,
@@ -73,7 +74,16 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
           return s
         }
         return {
-          ...(next ? { acknowledgedAgentsByPaneKey: next } : {}),
+          ...(next
+            ? {
+                // Card unread readers skip acknowledgements of panes they do not show.
+                acknowledgedAgentsByPaneKey: linkRecordWrite(
+                  next,
+                  s.acknowledgedAgentsByPaneKey,
+                  paneKeys
+                )
+              }
+            : {}),
           ...(nextUnreadCompletions ? { unreadAgentCompletionPanes: nextUnreadCompletions } : {}),
           ...(nextManual ? { manuallyUnreadTurnsByPaneKey: nextManual } : {})
         }
@@ -95,7 +105,7 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
             next ??= { ...s.acknowledgedAgentsByPaneKey }
             delete next[key]
           }
-          const turnTimestamp = s.agentStatusByPaneKey?.[key]?.stateStartedAt
+          const turnTimestamp = s.agentStatusByPaneKey.get(key)?.stateStartedAt
           if (
             turnTimestamp !== undefined &&
             s.manuallyUnreadTurnsByPaneKey[key] !== turnTimestamp
@@ -108,7 +118,16 @@ export function createUiActivityActions(set: UISliceSet, _get: UISliceGet): Acti
           return s
         }
         return {
-          ...(next ? { acknowledgedAgentsByPaneKey: next } : {}),
+          ...(next
+            ? {
+                // Card unread readers skip acknowledgements of panes they do not show.
+                acknowledgedAgentsByPaneKey: linkRecordWrite(
+                  next,
+                  s.acknowledgedAgentsByPaneKey,
+                  paneKeys
+                )
+              }
+            : {}),
           ...(nextManual ? { manuallyUnreadTurnsByPaneKey: nextManual } : {})
         }
       }),

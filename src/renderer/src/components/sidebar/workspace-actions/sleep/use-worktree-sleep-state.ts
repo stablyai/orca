@@ -16,7 +16,7 @@ type TabLike = { id: string }
 
 // Partial store mocks may omit slices; shared predicates treat absence as empty.
 type SleepStateInput = {
-  agentStatusByPaneKey?: Record<string, AgentStatusEntry> | null
+  agentStatusByPaneKey?: ReadonlyMap<string, AgentStatusEntry> | null
   agentStatusEpoch?: number
   tabsByWorktree?: Record<string, readonly TabLike[]> | null
   ptyIdsByTabId?: Record<string, string[]> | null

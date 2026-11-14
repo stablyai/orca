@@ -1,306 +1,390 @@
-import React, { useCallback, useLayoutEffect, useRef } from 'react'
+import type { BranchContext } from './worktree-agent-branch-context'
+import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
+import { useShallow } from 'zustand/react/shallow'
+import { useAppStore } from '@/store/index'
 import DashboardAgentRow from '@/components/dashboard/DashboardAgentRow'
 import { useNow } from '@/hooks/use-now'
-import { useWorktreeAgentRows } from './useWorktreeAgentRows'
-import { cn } from '@/lib/class-names'
-import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
+import { deriveRunningAgentSendTargets } from '@/lib/agent-session/messaging/running-agent-targets'
+import {
+  selectSendTargetControlInputs,
+  selectSendTargetInputs
+} from './worktree-card-send-target-inputs'
+import { useAgentPresentation, useWorktreeAgentRow } from './useWorktreeAgentRows'
+import { useHostRootKeys } from './use-worktree-agent-host-roots'
+import { KeyedSummary } from './worktree-card-agent-keyed-summary'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { CompactAgentExpansion, CompactAgentSummaryButton } from './worktree-card-compact-agents'
+import { useWorktreeAgentDisplay } from './use-worktree-agent-display'
+import { cn } from '@/lib/class-names'
+import { recomputeOn } from '@/lib/recompute-on'
+import { useFocusedAgentPaneKey } from './focused-agent-row-highlight'
+import { CompactAgentExpansion } from './worktree-card-compact-agents'
 import { CompactAgentRow } from './worktree-card-compact-agent-row'
 import { revealCompactAgentCard } from '../../worktree-list/navigation/worktree-sidebar-reveal'
+import { useWorktreeAgentExpansionState } from './worktree-card-agents-expansion-state'
 import { useTranslate } from '@/i18n/use-translate'
+import { agentSendDisabledReasonLabel } from '@/lib/agent-session/messaging/agent-send-disabled-reason-label'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import { useWorktreeAgentActivation } from './use-worktree-agent-activation'
 import { opensClaudeParentConversation } from '@/lib/agent-session/navigation/claude-agent-row-view'
-import { ChildAgentsWithIdleGroup } from './worktree-card-idle-child-agents'
-import { useWorktreeAgentListModel } from './use-worktree-agent-list-model'
+import { IdleChildAgentGroupRow } from './worktree-card-idle-child-agents'
+import type { AgentChildren } from '@/store/slices/agent-status/agent-row-display-index'
+import type { DashboardAgentRow as AgentRow } from '@/components/dashboard/useDashboardData'
 
+const stopBubble = (event: React.SyntheticEvent) => event.stopPropagation()
 type Props = {
   worktreeId: string
   /** The card's host; local and remote copies can share a workspace ID, so activation must name it. */
   executionHostId?: ExecutionHostId
-  agents?: DashboardAgentRowData[]
   className?: string
 }
 
-const WorktreeCardAgents = React.memo(function WorktreeCardAgents({
+export default React.memo(function WorktreeCardAgents({
   worktreeId,
   executionHostId,
-  agents: precomputedAgents,
   className
 }: Props) {
-  useUiLanguageRevision()
-  const selectedAgents = useWorktreeAgentRows(
-    worktreeId,
-    precomputedAgents === undefined,
-    executionHostId
+  const allRoots = useAgentPresentation(
+    `roots\0${worktreeId}`,
+    useCallback((p) => p.display.roots(worktreeId), [worktreeId])
   )
-  const agents = precomputedAgents ?? selectedAgents
-  if (agents.length === 0) {
-    return null
-  }
-  // Only non-empty bodies mount the 30s clock, avoiding timer cost for idle worktrees.
-  return (
+  const roots = useHostRootKeys(worktreeId, executionHostId, allRoots)
+  return roots.length ? (
     <WorktreeCardAgentsBody
       worktreeId={worktreeId}
       executionHostId={executionHostId}
-      agents={agents}
+      roots={roots}
+      hostFiltered={roots !== allRoots}
       className={className}
     />
-  )
+  ) : null
 })
 
-type BodyProps = {
-  worktreeId: string
-  executionHostId?: ExecutionHostId
-  agents: DashboardAgentRowData[]
-  className?: string
-}
-
-const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
+function WorktreeCardAgentsBody({
   worktreeId,
   executionHostId,
-  agents,
+  roots,
+  hostFiltered,
   className
-}: BodyProps) {
-  const t = useTranslate()
-  const {
-    agentActivityDisplayMode,
-    showAgentModels,
-    unvisitedByPaneKey,
-    handleDismissAgent,
-    isAgentSendTargetModeActive,
-    sendTargetFor,
-    handleSendTargetClick,
-    handleActivateAgentTab,
-    rootAgents,
-    childrenByParentPaneKey,
-    hasLineage,
-    collapsedChildAgentSignalStates,
-    expandedIdleChildGroups,
-    compactRootListExpanded,
-    toggleCompactRootList,
-    toggleLineageParent,
-    toggleIdleChildGroup,
-    isLineageExpanded,
-    isFocusedOrHidesFocus
-  } = useWorktreeAgentListModel(worktreeId, agents, executionHostId)
-  const compactAgentListRootRef = useRef<HTMLDivElement | null>(null)
+}: Props & { roots: readonly string[]; hostFiltered: boolean }) {
+  const t = useTranslate(),
+    languageRevision = useUiLanguageRevision()
+  const display = useWorktreeAgentDisplay()
+  const expansion = useWorktreeAgentExpansionState(worktreeId, executionHostId)
+  const focusedPaneKey = useFocusedAgentPaneKey(worktreeId)
+  const onActivate = useWorktreeAgentActivation(worktreeId, executionHostId)
+  const onDismiss = useAppStore((s) => s.dropAgentStatus)
+  const send = useAppStore((s) => s.sendPromptToSidebarAgentTarget)
+  const control = useAppStore(useShallow((s) => selectSendTargetControlInputs(s, worktreeId)))
+  const inputs = useAppStore(useShallow((s) => selectSendTargetInputs(s, worktreeId)))
+  const targets = useMemo(
+    () =>
+      recomputeOn([languageRevision], () => {
+        if (!control.targetMode) {
+          return null
+        }
+        return new Map(
+          deriveRunningAgentSendTargets(inputs, worktreeId).map((target) => [
+            target.paneKey,
+            control.targetMode?.status === 'sending' &&
+            control.targetMode.sendingPaneKey === target.paneKey
+              ? {
+                  status: 'sending' as const,
+                  disabledReason: t(
+                    'auto.components.sidebar.WorktreeCardAgents.sendingTarget',
+                    'Sending...'
+                  )
+                }
+              : {
+                  status: target.status,
+                  ...(target.disabledReason
+                    ? { disabledReason: agentSendDisabledReasonLabel(target.disabledReason) }
+                    : {})
+                }
+          ])
+        )
+      }),
+    [control, inputs, worktreeId, t, languageRevision]
+  )
+  const onSend = useCallback(
+    (key: string) => {
+      void send(key)
+    },
+    [send]
+  )
+  const { toggleLineageParent: toggleLineage, toggleIdleChildGroup: toggleIdle } = expansion
   const now = useNow(30_000)
-
-  // Reveal only user expansion; restoring cached expansion on remount must not scroll again.
-  const previousCompactExpandedRef = useRef(compactRootListExpanded)
+  const context = useMemo(
+    () => ({
+      worktreeId,
+      agentActivityDisplayMode: display.agentActivityDisplayMode,
+      showAgentModels: display.showAgentModels,
+      expansion,
+      focusedPaneKey,
+      onActivate,
+      onDismiss,
+      targets,
+      onSend,
+      toggleLineage,
+      toggleIdle,
+      now
+    }),
+    [
+      worktreeId,
+      display.agentActivityDisplayMode,
+      display.showAgentModels,
+      expansion,
+      focusedPaneKey,
+      onActivate,
+      onDismiss,
+      targets,
+      onSend,
+      toggleLineage,
+      toggleIdle,
+      now
+    ]
+  )
+  const compact = display.agentActivityDisplayMode === 'compact',
+    summary = compact && roots.length > 1 && !targets
+  const rootRef = useRef<HTMLDivElement | null>(null),
+    previousExpanded = useRef(expansion.compactRootListExpanded)
   useLayoutEffect(() => {
-    const wasExpanded = previousCompactExpandedRef.current
-    previousCompactExpandedRef.current = compactRootListExpanded
-    if (!wasExpanded && compactRootListExpanded && agentActivityDisplayMode === 'compact') {
+    const wasExpanded = previousExpanded.current
+    previousExpanded.current = expansion.compactRootListExpanded
+    if (!wasExpanded && expansion.compactRootListExpanded && compact) {
       // Defer reveal one frame to avoid synchronous sidebar layout during the opening animation.
-      const handle = requestAnimationFrame(() => {
-        revealCompactAgentCard(compactAgentListRootRef.current)
-      })
+      const handle = requestAnimationFrame(() => revealCompactAgentCard(rootRef.current))
       return () => cancelAnimationFrame(handle)
     }
     return undefined
-  }, [agentActivityDisplayMode, compactRootListExpanded])
-
-  const renderChildAgents = (
-    parent: DashboardAgentRowData,
-    childAgents: DashboardAgentRowData[],
-    renderChild: (childAgent: DashboardAgentRowData, idleGroupExpanded: boolean) => React.ReactNode
-  ): React.ReactNode => (
-    <ChildAgentsWithIdleGroup
-      childAgents={childAgents}
-      // Picking shows every child flat; folding would hide send targets.
-      flat={isAgentSendTargetModeActive}
-      idleExpanded={expandedIdleChildGroups.has(parent.paneKey)}
-      onToggleIdle={() => toggleIdleChildGroup(parent.paneKey)}
-      layout={agentActivityDisplayMode === 'compact' ? 'compact' : 'full'}
-      ariaLevel={(parent.lineage?.depth ?? 0) + 2}
-      renderChild={renderChild}
-    />
-  )
-
-  const stopBubble = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
-  }, [])
-
-  const renderAgentBranch = (
-    agent: DashboardAgentRowData,
-    ancestorPaneKeys: ReadonlySet<string> = new Set()
-  ): React.ReactNode => {
-    if (ancestorPaneKeys.has(agent.paneKey)) {
-      // External lineage metadata may cycle; reject repeated ancestors before recursion.
-      return null
-    }
-    const childAgents = childrenByParentPaneKey.get(agent.paneKey) ?? []
-    const hasChildAgents = childAgents.length > 0
-    const expanded = isLineageExpanded(agent.paneKey)
-    // Picker mode forces children open; a toggle there would silently flip stored state.
-    const canToggle = hasChildAgents && !isAgentSendTargetModeActive
-    const sendTarget = sendTargetFor(agent.paneKey)
-    const descendantAncestorPaneKeys = new Set(ancestorPaneKeys)
-    descendantAncestorPaneKeys.add(agent.paneKey)
-    return (
-      <React.Fragment key={agent.paneKey}>
-        <DashboardAgentRow
-          agent={agent}
-          showModel={showAgentModels}
-          onDismiss={handleDismissAgent}
-          onActivate={handleActivateAgentTab}
-          now={now}
-          // Keep rows bold until visiting the tab auto-acknowledges attention.
-          isUnvisited={unvisitedByPaneKey[agent.paneKey] ?? false}
-          // Use the smaller dot so dense inline rows do not read it as a second identity icon.
-          stateDotSize="sm"
-          // Row clicks already navigate to the agent, so a second expand glyph is redundant.
-          hideExpand
-          childAgentCount={hasChildAgents ? childAgents.length : undefined}
-          childAgentsExpanded={expanded}
-          collapsedChildAgentsState={
-            hasChildAgents && !expanded
-              ? collapsedChildAgentSignalStates.get(agent.paneKey)
-              : undefined
-          }
-          onToggleChildAgents={canToggle ? () => toggleLineageParent(agent.paneKey) : undefined}
-          isFocusedPane={isFocusedOrHidesFocus(agent.paneKey, expanded)}
-          sendTargetStatus={sendTarget?.status}
-          sendTargetDisabledReason={sendTarget?.disabledReason}
-          onSendTargetClick={isAgentSendTargetModeActive ? handleSendTargetClick : undefined}
-          // Chevron/indent already show hierarchy; fixed-offset connectors misalign into floating fragments.
-          hideLineageConnectors
-        />
-        {hasChildAgents && expanded ? (
-          <div className="worktree-agent-lineage-children">
-            {renderChildAgents(agent, childAgents, (childAgent) =>
-              renderAgentBranch(childAgent, descendantAncestorPaneKeys)
-            )}
-          </div>
-        ) : null}
-      </React.Fragment>
-    )
-  }
-
-  const renderCompactAgentBranch = (
-    agent: DashboardAgentRowData,
-    ancestorPaneKeys: ReadonlySet<string> = new Set(),
-    cacheTimerActive = true
-  ): React.ReactNode => {
-    if (ancestorPaneKeys.has(agent.paneKey)) {
-      return null
-    }
-    const childAgents = childrenByParentPaneKey.get(agent.paneKey) ?? []
-    const hasChildAgents = childAgents.length > 0
-    const expanded = isLineageExpanded(agent.paneKey)
-    // Picker mode forces children open; a toggle there would silently flip stored state.
-    const canToggle = hasChildAgents && !isAgentSendTargetModeActive
-    const sendTarget = sendTargetFor(agent.paneKey)
-    const descendantAncestorPaneKeys = new Set(ancestorPaneKeys)
-    descendantAncestorPaneKeys.add(agent.paneKey)
-    return (
-      <div key={agent.paneKey} className={cn('min-w-0', ancestorPaneKeys.size === 0 && 'ms-2')}>
-        <CompactAgentRow
-          agent={agent}
-          showModel={showAgentModels}
-          now={now}
-          parentConversationDescription={
-            opensClaudeParentConversation(agent)
-              ? t('auto.lib.claudeAgentRowView.openParentConversation', 'Open parent conversation')
-              : undefined
-          }
-          isUnvisited={unvisitedByPaneKey[agent.paneKey] ?? false}
-          onActivate={handleActivateAgentTab}
-          sendTargetStatus={sendTarget?.status}
-          sendTargetDisabledReason={sendTarget?.disabledReason}
-          onSendTargetClick={isAgentSendTargetModeActive ? handleSendTargetClick : undefined}
-          childAgentCount={hasChildAgents ? childAgents.length : undefined}
-          childAgentsExpanded={expanded}
-          collapsedChildAgentsState={
-            hasChildAgents && !expanded
-              ? collapsedChildAgentSignalStates.get(agent.paneKey)
-              : undefined
-          }
-          onToggleChildAgents={canToggle ? () => toggleLineageParent(agent.paneKey) : undefined}
-          isFocusedPane={isFocusedOrHidesFocus(agent.paneKey, expanded)}
-          cacheTimerActive={cacheTimerActive}
-        />
-        {hasChildAgents ? (
-          <CompactAgentExpansion expanded={expanded}>
-            <div className="worktree-agent-lineage-children flex flex-col gap-0.5">
-              {renderChildAgents(agent, childAgents, (childAgent, idleGroupExpanded) =>
-                renderCompactAgentBranch(
-                  childAgent,
-                  descendantAncestorPaneKeys,
-                  cacheTimerActive && expanded && idleGroupExpanded
-                )
-              )}
-            </div>
-          </CompactAgentExpansion>
-        ) : null}
-      </div>
-    )
-  }
-
-  if (agentActivityDisplayMode === 'compact') {
-    const summaryAgents = hasLineage ? rootAgents : agents
-    // Collapse compact multi-agent lists except when their rows are the send-target picker.
-    const shouldUseSummaryRow = summaryAgents.length > 1 && !isAgentSendTargetModeActive
-    const subjectLabel = t('sidebar.agentSummary.agentCount', '{{count}} agents', {
-      count: hasLineage ? rootAgents.length : agents.length,
-      defaultValue_one: '{{count}} agent'
-    })
-
-    return (
-      <div
-        ref={compactAgentListRootRef}
-        className={cn('flex flex-col mt-1 gap-0.5', className)}
-        onClick={stopBubble}
-        onDoubleClick={stopBubble}
-        onMouseDown={stopBubble}
-        onPointerDown={stopBubble}
-        role={hasLineage ? 'tree' : 'group'}
-        aria-label={t('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents')}
-        data-compact-agent-list="true"
-      >
-        {agents.length === 0 ? null : shouldUseSummaryRow ? (
-          <div
-            className={cn(
-              'compact-agent-summary-panel',
-              compactRootListExpanded && 'compact-agent-summary-panel-expanded'
-            )}
-          >
-            <CompactAgentSummaryButton
-              agents={summaryAgents}
-              subjectLabel={subjectLabel}
-              expanded={compactRootListExpanded}
-              onToggle={toggleCompactRootList}
-              unreadByPaneKey={unvisitedByPaneKey}
-            />
-            <CompactAgentExpansion expanded={compactRootListExpanded}>
-              {rootAgents.map((rootAgent) =>
-                renderCompactAgentBranch(rootAgent, new Set(), compactRootListExpanded)
-              )}
-            </CompactAgentExpansion>
-          </div>
-        ) : (
-          rootAgents.map((rootAgent) => renderCompactAgentBranch(rootAgent))
-        )}
-      </div>
-    )
-  }
-
+  }, [compact, expansion.compactRootListExpanded])
   return (
-    // Gutter clicks must not bubble into card activation or metadata editing.
     <div
-      className={cn('flex flex-col mt-1', className)}
+      ref={rootRef}
+      className={cn(compact ? 'flex flex-col mt-1 gap-0.5' : 'flex flex-col mt-1', className)}
       onClick={stopBubble}
       onDoubleClick={stopBubble}
       onMouseDown={stopBubble}
       onPointerDown={stopBubble}
-      role={hasLineage ? 'tree' : 'group'}
+      role="tree"
       aria-label={t('auto.components.sidebar.WorktreeCardAgents.1b0a156717', 'Agents')}
+      data-compact-agent-list={compact || undefined}
     >
-      {rootAgents.map((rootAgent) => renderAgentBranch(rootAgent))}
+      {summary ? (
+        <div
+          className={cn(
+            'compact-agent-summary-panel',
+            expansion.compactRootListExpanded && 'compact-agent-summary-panel-expanded'
+          )}
+        >
+          <KeyedSummary
+            worktreeId={worktreeId}
+            roots={roots}
+            hostFiltered={hostFiltered}
+            expanded={expansion.compactRootListExpanded}
+            onToggle={expansion.toggleCompactRootList}
+          />
+          <CompactAgentExpansion expanded={expansion.compactRootListExpanded}>
+            <AgentBranches
+              keysToRender={roots}
+              context={context}
+              timerActive={expansion.compactRootListExpanded}
+              root
+            />
+          </CompactAgentExpansion>
+        </div>
+      ) : (
+        <AgentBranches keysToRender={roots} context={context} timerActive root />
+      )}
+    </div>
+  )
+}
+const AgentBranches = React.memo(function AgentBranches({
+  keysToRender,
+  context,
+  timerActive,
+  root = false
+}: {
+  keysToRender: readonly string[]
+  context: BranchContext
+  timerActive: boolean
+  root?: boolean
+}) {
+  return (
+    <>
+      {keysToRender.map((key) => (
+        <AgentBranch
+          key={key}
+          paneKey={key}
+          context={context}
+          timerActive={timerActive}
+          root={root}
+        />
+      ))}
+    </>
+  )
+})
+const AgentBranch = React.memo(function AgentBranch({
+  paneKey,
+  context,
+  timerActive,
+  root
+}: {
+  paneKey: string
+  context: BranchContext
+  timerActive: boolean
+  root: boolean
+}) {
+  const row = useWorktreeAgentRow(paneKey)
+  const children = useAgentPresentation(
+    `children\0${paneKey}`,
+    useCallback((p) => p.display.children(paneKey), [paneKey])
+  )
+  const focusedDescendant = useAgentPresentation(
+    `children\0${paneKey}`,
+    useCallback(
+      (p) => {
+        const seen = new Set<string>()
+        for (
+          let key = context.focusedPaneKey;
+          key && !seen.has(key);
+          key = p.row(key)?.lineage?.parentPaneKey ?? null
+        ) {
+          if (key === paneKey) {
+            return true
+          }
+          seen.add(key)
+        }
+        return false
+      },
+      [context.focusedPaneKey, paneKey]
+    )
+  )
+  const acknowledgedAt = useAppStore((s) => s.acknowledgedAgentsByPaneKey[paneKey] ?? 0)
+  const t = useTranslate()
+  if (!row) {
+    return null
+  }
+  const compact = context.agentActivityDisplayMode === 'compact',
+    expanded = Boolean(context.targets) || context.expansion.expandedLineageParents.has(paneKey)
+  const hasChildren = children.keys.length > 0,
+    idleExpanded = context.expansion.expandedIdleChildGroups.has(paneKey)
+  const target = context.targets
+    ? (context.targets.get(paneKey) ?? {
+        status: 'disabled' as const,
+        disabledReason: t(
+          'auto.components.sidebar.WorktreeCardAgents.agentUnavailable',
+          'Agent is not available'
+        )
+      })
+    : undefined
+  const common = {
+    agent: row,
+    showModel: context.showAgentModels,
+    now: context.now,
+    isUnvisited: row.rowSource === 'live' && acknowledgedAt < row.entry.stateStartedAt,
+    onActivate: context.onActivate,
+    childAgentCount: hasChildren ? children.keys.length : undefined,
+    childAgentsExpanded: expanded,
+    collapsedChildAgentsState: hasChildren && !expanded ? children.signal : undefined,
+    onToggleChildAgents:
+      hasChildren && !context.targets ? () => context.toggleLineage(paneKey) : undefined,
+    isFocusedPane: paneKey === context.focusedPaneKey || (!expanded && focusedDescendant),
+    sendTargetStatus: target?.status,
+    sendTargetDisabledReason: target?.disabledReason,
+    onSendTargetClick: context.targets ? context.onSend : undefined
+  }
+  const childList = (
+    <AgentBranchChildren
+      row={row}
+      childState={children}
+      context={context}
+      timerActive={timerActive && expanded}
+      idleExpanded={idleExpanded}
+    />
+  )
+  return (
+    <div className={compact ? cn('min-w-0', root && 'ms-2') : undefined}>
+      {compact ? (
+        <CompactAgentRow
+          {...common}
+          parentConversationDescription={
+            opensClaudeParentConversation(row)
+              ? t('auto.lib.claudeAgentRowView.openParentConversation', 'Open parent conversation')
+              : undefined
+          }
+          cacheTimerActive={timerActive}
+        />
+      ) : (
+        <DashboardAgentRow
+          {...common}
+          onDismiss={context.onDismiss}
+          stateDotSize="sm"
+          hideExpand
+          hideLineageConnectors
+        />
+      )}
+      {hasChildren ? (
+        compact ? (
+          <CompactAgentExpansion expanded={expanded}>
+            <div className="worktree-agent-lineage-children flex flex-col gap-0.5">{childList}</div>
+          </CompactAgentExpansion>
+        ) : expanded ? (
+          <div className="worktree-agent-lineage-children">{childList}</div>
+        ) : null
+      ) : null}
     </div>
   )
 })
-
-export default WorktreeCardAgents
+const AgentBranchChildren = React.memo(
+  function AgentBranchChildren({
+    row,
+    childState: children,
+    context,
+    timerActive,
+    idleExpanded
+  }: {
+    row: AgentRow
+    childState: AgentChildren
+    context: BranchContext
+    timerActive: boolean
+    idleExpanded: boolean
+  }) {
+    const compact = context.agentActivityDisplayMode === 'compact',
+      active = context.targets ? children.keys : children.active,
+      idle = context.targets ? [] : children.idle
+    return (
+      <>
+        <AgentBranches keysToRender={active} context={context} timerActive={timerActive} />
+        {idle.length > 0 ? (
+          <>
+            <IdleChildAgentGroupRow
+              count={idle.length}
+              expanded={idleExpanded}
+              onToggle={() => context.toggleIdle(row.paneKey)}
+              layout={compact ? 'compact' : 'full'}
+              ariaLevel={(row.lineage?.depth ?? 0) + 2}
+            />
+            {compact ? (
+              <CompactAgentExpansion expanded={idleExpanded}>
+                <AgentBranches
+                  keysToRender={idle}
+                  context={context}
+                  timerActive={timerActive && idleExpanded}
+                />
+              </CompactAgentExpansion>
+            ) : idleExpanded ? (
+              <AgentBranches keysToRender={idle} context={context} timerActive={timerActive} />
+            ) : null}
+          </>
+        ) : null}
+      </>
+    )
+  },
+  (before, after) =>
+    before.row.paneKey === after.row.paneKey &&
+    before.row.lineage === after.row.lineage &&
+    before.childState === after.childState &&
+    before.context === after.context &&
+    before.timerActive === after.timerActive &&
+    before.idleExpanded === after.idleExpanded
+)

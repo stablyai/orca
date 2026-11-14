@@ -1,16 +1,25 @@
+import {
+  acceptedAgentStatuses,
+  AcceptedAgentStatuses
+} from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
-import { act } from 'react'
+import { act, Profiler } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 
 import { makeTab } from '@/store/terminals/testing/terminal-tab.test-fixture'
-import type { AppState } from '@/store/types'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
+import { useWorktreeActivityStatus } from './use-worktree-activity-status'
+import { useWorktreeActivityStatuses } from './use-worktree-activity-statuses'
 import { useWorktreeAgentRows } from './useWorktreeAgentRows'
+import WorktreeCardAgents from './WorktreeCardAgents'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { AgentStatusProjection } from '@/store/slices/agent-status/agent-status-projection'
+import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 
 Reflect.set(globalThis, 'IS_REACT_ACT_ENVIRONMENT', true)
 
@@ -44,9 +53,6 @@ function entry(key: string, worktreeId: string): AgentStatusEntry {
     stateHistory: []
   }
 }
-function patch(update: Partial<AppState>) {
-  act(() => useAppStore.setState(update))
-}
 
 beforeEach(() => {
   vi.useFakeTimers()
@@ -57,10 +63,12 @@ beforeEach(() => {
       'ssh-b': [makeTab({ id: 'tab-b', worktreeId: 'ssh-b' })]
     },
     unifiedTabsByWorktree: {},
-    agentStatusByPaneKey: {
-      [KEY_A]: entry(KEY_A, 'folder-a'),
-      [KEY_B]: { ...entry(KEY_B, 'ssh-b'), connectionId: 'ssh:host' }
-    },
+    agentStatusByPaneKey: acceptedAgentStatuses(
+      Object.entries({
+        [KEY_A]: entry(KEY_A, 'folder-a'),
+        [KEY_B]: { ...entry(KEY_B, 'ssh-b'), connectionId: 'ssh:host' }
+      })
+    ),
     migrationUnsupportedByPtyId: {},
     runtimePaneTitlesByTabId: {},
     ptyIdsByTabId: {},
@@ -99,11 +107,11 @@ describe('mounted worktree agent row subscriptions', () => {
     expect(rows[0].state).toBe('blocked')
   })
 
-  it('decays on an epoch-only freshness tick', () => {
+  it('decays when its live status expires', () => {
     act(() => root.render(<Probe />))
     expect(rows[0].state).toBe('working')
-    vi.setSystemTime(Date.now() + AGENT_STATUS_STALE_AFTER_MS + 1)
-    patch({ agentStatusEpoch: useAppStore.getState().agentStatusEpoch + 1 })
+    act(() => useAppStore.getState().scheduleAgentStatusFreshness())
+    act(() => vi.advanceTimersByTime(AGENT_STATUS_STALE_AFTER_MS + 1))
     expect(rows[0].state).toBe('idle')
   })
 })
@@ -112,9 +120,15 @@ it.each([100, 1000])(
   'keeps unrelated mounted rows stable after equal replay then membership changes (%i workspaces)',
   (count) => {
     const ids = Array.from({ length: count }, (_, i) => `fleet-${i}`)
-    const updates = ids.map((worktreeId) => ({
+    const updates = ids.map((worktreeId, index) => ({
       paneKey: makePaneKey(`tab-${worktreeId}`, LEAF),
-      payload: { state: 'working' as const, agentType: 'claude', prompt: worktreeId },
+      payload: {
+        state: index % 2 ? ('done' as const) : ('working' as const),
+        agentType: 'claude',
+        prompt: worktreeId,
+        ...(index % 2 ? { paneSleep: { ptyId: `pty-${worktreeId}` } } : {})
+      },
+      metadata: { providerSession: { key: 'session_id' as const, id: `session-${worktreeId}` } },
       timing: { updatedAt: 2_000_000, stateStartedAt: 2_000_000 },
       routing: { tabId: `tab-${worktreeId}`, worktreeId }
     }))
@@ -138,7 +152,7 @@ it.each([100, 1000])(
           }
         ])
       ),
-      agentStatusByPaneKey: {},
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
       agentConversationsByPaneKey: {}
     })
     useAppStore.getState().setAgentStatuses(updates)
@@ -155,11 +169,18 @@ it.each([100, 1000])(
     act(() =>
       useAppStore.getState().setAgentStatuses(
         updates.map((update) => ({
-          ...update,
+          ...structuredClone(update),
           timing: { ...update.timing, isReplay: true }
         }))
       )
     )
+    for (const id of ids) {
+      expect(outputs.get(id)).toBe(before.get(id))
+      expect(renders.get(id)).toBe(rendered.get(id))
+    }
+    expect(
+      useAppStore.getState().agentStatusByPaneKey.get(updates[0].paneKey)?.acceptedStatusSeq
+    ).toBe(2)
     const target = ids[0]
     const addedPane = makePaneKey(`tab-${target}`, '22222222-2222-4222-8222-222222222222')
     act(() =>
@@ -180,5 +201,169 @@ it.each([100, 1000])(
       expect(outputs.get(id)).toBe(before.get(id))
       expect(renders.get(id)).toBe(rendered.get(id))
     }
+  }
+)
+
+it('updates mounted card status when Done membership moves without a flag change', () => {
+  const sibling = makePaneKey('tab-sibling', LEAF)
+  const doneA = { ...entry(KEY_A, 'folder-a'), state: 'done' as const }
+  const doneB = { ...entry(sibling, 'folder-a'), state: 'done' as const }
+  const state = useAppStore.getState()
+  const remote = state.agentStatusByPaneKey.get(KEY_B)!
+  const paneLayout = {
+    root: { type: 'leaf' as const, leafId: LEAF },
+    activeLeafId: LEAF,
+    expandedLeafId: null
+  }
+  useAppStore.setState({
+    tabsByWorktree: {
+      ...state.tabsByWorktree,
+      'folder-a': [
+        state.tabsByWorktree['folder-a'][0],
+        makeTab({ id: 'tab-sibling', worktreeId: 'folder-a' })
+      ]
+    },
+    ptyIdsByTabId: { 'tab-a': ['pty-a'], 'tab-sibling': ['pty-sibling'] },
+    runtimePaneTitlesByTabId: { 'tab-a': { 1: '⠋ Codex' }, 'tab-sibling': { 1: 'bash' } },
+    terminalLayoutsByTabId: { 'tab-a': paneLayout, 'tab-sibling': paneLayout },
+    agentStatusByPaneKey: acceptedAgentStatuses([
+      [KEY_A, doneA],
+      [KEY_B, remote]
+    ])
+  })
+  const outputs = new Map<string, string[]>()
+  const renders = new Map<string, number>()
+  function ActivityProbe({ id }: { id: string }) {
+    const single = useWorktreeActivityStatus(id)
+    const plural = useWorktreeActivityStatuses([id]).get(id)!
+    outputs.set(id, [single, plural])
+    renders.set(id, (renders.get(id) ?? 0) + 1)
+    return null
+  }
+  act(() =>
+    root.render(
+      <>
+        <ActivityProbe id="folder-a" />
+        <ActivityProbe id="ssh-b" />
+      </>
+    )
+  )
+  expect(outputs.get('folder-a')).toEqual(['done', 'done'])
+  const unrelatedRenders = renders.get('ssh-b')
+  act(() =>
+    useAppStore.setState((current) => ({
+      agentStatusByPaneKey: current.agentStatusByPaneKey.replace([
+        [KEY_A, null],
+        [sibling, doneB]
+      ])
+    }))
+  )
+  expect(outputs.get('folder-a')).toEqual(['working', 'working'])
+  expect(renders.get('ssh-b')).toBe(unrelatedRenders)
+  act(() =>
+    useAppStore.setState((current) => ({
+      agentStatusByPaneKey: current.agentStatusByPaneKey.replace([
+        [sibling, null],
+        [KEY_A, doneA]
+      ])
+    }))
+  )
+  expect(outputs.get('folder-a')).toEqual(['done', 'done'])
+  expect(renders.get('ssh-b')).toBe(unrelatedRenders)
+})
+
+it.each([100, 1000])(
+  "host-scoped compact card skips its %i sleeping roots on other workspaces' writes",
+  (count) => {
+    const roots = Array.from({ length: count }, (_, i) => makePaneKey(`tab-wide-${i}`, LEAF))
+    const rootKeys = new Set<string>(roots)
+    const other = makePaneKey('tab-other', LEAF)
+    const tabOf = (paneKey: string) => paneKey.slice(0, paneKey.indexOf(':'))
+    const update = (paneKey: string, worktreeId: string) => ({
+      paneKey,
+      payload: {
+        state: 'done' as const,
+        agentType: 'claude',
+        prompt: worktreeId,
+        paneSleep: { ptyId: `pty-${tabOf(paneKey)}` }
+      },
+      metadata: { providerSession: { key: 'session_id' as const, id: `session-${paneKey}` } },
+      timing: { updatedAt: 2_000_000, stateStartedAt: 2_000_000 },
+      routing: { tabId: tabOf(paneKey), worktreeId }
+    })
+    useAppStore.setState({
+      agentActivityDisplayMode: 'compact',
+      tabsByWorktree: {
+        wide: roots.map((key) => makeTab({ id: tabOf(key), worktreeId: 'wide' })),
+        other: [makeTab({ id: 'tab-other', worktreeId: 'other' })]
+      },
+      ptyIdsByTabId: {},
+      agentStatusByPaneKey: acceptedAgentStatuses(),
+      acknowledgedAgentsByPaneKey: Object.fromEntries(roots.map((key) => [key, 2_000_000]))
+    })
+    useAppStore.getState().setAgentStatuses([
+      ...roots.map((key) => update(key, 'wide')),
+      {
+        ...update(other, 'other'),
+        payload: { state: 'working' as const, agentType: 'claude', prompt: 'other' }
+      }
+    ])
+    let commits = 0
+    act(() =>
+      root.render(
+        <TooltipProvider>
+          <Profiler id="wide" onRender={() => commits++}>
+            <WorktreeCardAgents worktreeId="wide" executionHostId="local" />
+          </Profiler>
+        </TooltipProvider>
+      )
+    )
+    const label = () =>
+      container.querySelector('.compact-agent-summary-button')!.getAttribute('aria-label')!
+    expect(label()).toContain(String(count))
+    expect(label()).not.toContain('unread')
+    const committed = commits
+    // Upstream addressed reads of this card's roots are counted apart from its renders.
+    const statusReads = vi.spyOn(AcceptedAgentStatuses.prototype, 'get')
+    const rowReads = vi.spyOn(AgentStatusProjection.prototype, 'row')
+    const rootReads = () =>
+      [...statusReads.mock.calls, ...rowReads.mock.calls].filter(([key]) => rootKeys.has(key))
+        .length
+    act(() =>
+      useAppStore
+        .getState()
+        .setAgentStatus(
+          other,
+          { state: 'done', agentType: 'claude', prompt: 'other finished' },
+          undefined,
+          { updatedAt: 2_000_001, stateStartedAt: 2_000_001 },
+          { tabId: 'tab-other', worktreeId: 'other' }
+        )
+    )
+    act(() =>
+      useAppStore.setState((s) => ({
+        ptyIdsByTabId: replaceRecordEntries(s.ptyIdsByTabId, [['tab-other', ['pty-other']]])
+      }))
+    )
+    act(() => useAppStore.getState().acknowledgeAgents([other]))
+    act(() => useAppStore.getState().dropAgentStatus(other))
+    act(() => useAppStore.getState().setAgentStatuses([update(other, 'other')]))
+    act(() => useAppStore.getState().acknowledgeAgents([other]))
+    act(() => useAppStore.getState().dropAgentStatusByTabPrefix('tab-other'))
+    expect(rootReads()).toBe(0)
+    expect(commits).toBe(committed)
+    statusReads.mockRestore()
+    rowReads.mockRestore()
+
+    act(() => useAppStore.getState().unacknowledgeAgents([roots[0]]))
+    expect(label()).toContain('1 unread')
+    expect(label()).not.toContain(String(count - 1))
+    act(() =>
+      useAppStore.setState((s) => ({
+        ptyIdsByTabId: replaceRecordEntries(s.ptyIdsByTabId, [['tab-wide-1', ['ssh:remote@@pty']]])
+      }))
+    )
+    expect(label()).toContain(String(count - 1))
+    expect(label()).toContain('1 unread')
   }
 )

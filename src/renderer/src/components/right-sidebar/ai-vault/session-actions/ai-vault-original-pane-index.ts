@@ -1,3 +1,4 @@
+import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { agentRowDisplayDotState } from '@/lib/agent-status/presentation/agent-row-dot-state'
 import { agentPaneConversationForEntry } from '@/store/slices/agent-status/agent-pane-conversation'
 import type { AgentDotState } from '@/components/AgentStateDot'
@@ -9,7 +10,7 @@ import {
   type AiVaultOriginalPaneTarget
 } from './ai-vault-original-pane'
 
-type LiveEntry = NonNullable<OriginalPaneState['agentStatusByPaneKey'][string]>
+type LiveEntry = NonNullable<NonNullable<ReturnType<AcceptedAgentStatuses['get']>>>
 type ConversationEntry = NonNullable<OriginalPaneState['agentConversationsByPaneKey'][string]>
 type SleepingEntry = NonNullable<OriginalPaneState['sleepingAgentSessionsByPaneKey'][string]>
 
@@ -46,7 +47,7 @@ export function buildAiVaultOriginalPaneIndex(state: OriginalPaneState): AiVault
   const conversationsWithoutProviderByAgent: AgentIndex<ConversationEntry> = new Map()
   const sleepingByProvider: ProviderIndex<SleepingEntry> = new Map()
 
-  for (const entry of Object.values(state.agentStatusByPaneKey)) {
+  for (const entry of Array.from(state.agentStatusByPaneKey.values())) {
     if (!entry?.agentType) {
       continue
     }
@@ -58,7 +59,7 @@ export function buildAiVaultOriginalPaneIndex(state: OriginalPaneState): AiVault
   }
   for (const conversation of Object.values(state.agentConversationsByPaneKey)) {
     if (
-      state.agentStatusByPaneKey[conversation.paneKey] ||
+      state.agentStatusByPaneKey.get(conversation.paneKey) ||
       !agentPaneConversationForEntry(state, { ...conversation, agentType: conversation.agent })
     ) {
       continue

@@ -66,7 +66,7 @@ it.each([
           ? undefined
           : { providerSession: { key: 'session_id', id: incomingId } }
       )
-    const row = store.getState().agentStatusByPaneKey[paneKey]
+    const row = store.getState().agentStatusByPaneKey.get(paneKey)
     if (keepsTurn) {
       expect(row).toMatchObject({
         turnStartedAt: 1_000,
@@ -92,7 +92,7 @@ it.each([
       undefined,
       { providerSession: { key: 'session_id', id: 'root-c' } }
     )
-    expect(store.getState().agentStatusByPaneKey[paneKey]).toMatchObject({
+    expect(store.getState().agentStatusByPaneKey.get(paneKey)).toMatchObject({
       turnStartedAt: 4_000,
       turnEndedAt: 5_000,
       turnEndDisposition: 'identified'
@@ -116,9 +116,9 @@ it('drops a host-assigned agent id when a failed commit leaves a new Pi transcri
       }
     )
   report(1_000, '/a.jsonl', 'pi_identity_one')
-  expect(store.getState().agentStatusByPaneKey[paneKey]?.orcaSessionId).toBe('pi_identity_one')
+  expect(store.getState().agentStatusByPaneKey.get(paneKey)?.orcaSessionId).toBe('pi_identity_one')
   report(2_000, '/b.jsonl')
-  expect(store.getState().agentStatusByPaneKey[paneKey]?.orcaSessionId).toBeUndefined()
+  expect(store.getState().agentStatusByPaneKey.get(paneKey)?.orcaSessionId).toBeUndefined()
 })
 
 it('offers Copy Orca Session ID wherever the host stamped the field, even before it named the agent', () => {

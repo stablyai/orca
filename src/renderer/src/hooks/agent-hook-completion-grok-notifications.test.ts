@@ -1,3 +1,7 @@
+import {
+  acceptedAgentStatuses,
+  type AcceptedAgentStatuses
+} from '@/store/slices/agent-status/accepted-agent-statuses'
 import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
@@ -39,7 +43,7 @@ type MockStoreState = {
   tabsByWorktree: Record<string, { id: string; ptyId?: string | null }[]>
   terminalLayoutsByTabId: Record<string, unknown>
   agentLaunchConfigByPaneKey: Record<string, unknown>
-  agentStatusByPaneKey: Record<string, unknown>
+  agentStatusByPaneKey: AcceptedAgentStatuses
   getAgentLaunchConfigForStatusEntry: () => undefined
 }
 
@@ -74,7 +78,7 @@ describe('Grok hook completion notifications', () => {
       tabsByWorktree: { [WORKTREE_ID]: [{ id: 'tab-1', ptyId: 'pty-1' }] },
       terminalLayoutsByTabId: {},
       agentLaunchConfigByPaneKey: {},
-      agentStatusByPaneKey: {},
+      agentStatusByPaneKey: acceptedAgentStatuses(Object.entries({})),
       getAgentLaunchConfigForStatusEntry: () => undefined
     }
   })

@@ -1,3 +1,4 @@
+import type { AcceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { parseAgentStatusPaneIdentity } from '../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import { tabHasLivePty } from '../../../../shared/tab-has-live-pty'
@@ -31,7 +32,7 @@ import type { Translate } from '@/i18n/use-translate'
 
 export type BuildActivityEventsArgs = {
   chatNames: StructuredChatTabNames
-  agentStatusByPaneKey: Record<string, AgentStatusEntry>
+  agentStatusByPaneKey: AcceptedAgentStatuses
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
   migrationUnsupportedByPtyId?: Record<string, MigrationUnsupportedPtyEntry>
   tabsByWorktree: Record<string, TerminalTab[]>
@@ -76,7 +77,7 @@ export function buildActivityEvents(
     }
   }
 
-  for (const [paneKey, entry] of Object.entries(args.agentStatusByPaneKey)) {
+  for (const [paneKey, entry] of Array.from(args.agentStatusByPaneKey.entries())) {
     const parsed = parseAgentStatusPaneIdentity(
       paneKey,
       args.unifiedTabsByWorktree

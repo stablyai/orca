@@ -41,12 +41,12 @@ async function pinStalePublishedTitle(page: Page, webTabId: string): Promise<JSH
     }
     const before = store.getState()
     const pinnedTitle = before.runtimePaneTitlesByTabId[id]?.[paneId]
-    const pinnedStatus = Object.entries(before.agentStatusByPaneKey).filter(([key]) =>
+    const pinnedStatus = Array.from(before.agentStatusByPaneKey.entries()).filter(([key]) =>
       key.startsWith(`${id}:`)
     )
     const pin = (): void => {
       const state = store.getState()
-      const statusKeys = Object.keys(state.agentStatusByPaneKey).filter((key) =>
+      const statusKeys = Array.from(state.agentStatusByPaneKey.keys()).filter((key) =>
         key.startsWith(`${id}:`)
       )
       if (
@@ -55,9 +55,9 @@ async function pinStalePublishedTitle(page: Page, webTabId: string): Promise<JSH
       ) {
         return
       }
-      const agentStatusByPaneKey = { ...state.agentStatusByPaneKey }
+      let agentStatusByPaneKey = state.agentStatusByPaneKey
       for (const key of statusKeys) {
-        delete agentStatusByPaneKey[key]
+        agentStatusByPaneKey = agentStatusByPaneKey.replace([[key, null]])
       }
       store.setState({
         agentStatusByPaneKey,
@@ -74,10 +74,7 @@ async function pinStalePublishedTitle(page: Page, webTabId: string): Promise<JSH
       unsubscribe()
       const state = store.getState()
       store.setState({
-        agentStatusByPaneKey: {
-          ...state.agentStatusByPaneKey,
-          ...Object.fromEntries(pinnedStatus)
-        },
+        agentStatusByPaneKey: state.agentStatusByPaneKey.replace(pinnedStatus),
         runtimePaneTitlesByTabId: {
           ...state.runtimePaneTitlesByTabId,
           [id]: { ...state.runtimePaneTitlesByTabId[id], [paneId]: pinnedTitle ?? '' }

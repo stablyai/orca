@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 // @vitest-environment happy-dom
 
 import { act } from 'react'
@@ -160,7 +161,7 @@ async function renderPalette(overrides: Partial<AppState>): Promise<void> {
     alwaysShowDefaultBranchWorkspace: true,
     lastVisitedAtByWorktreeId: {},
     ...overrides
-  } as Partial<AppState>)
+  })
 
   await act(async () => {
     testRoot.render(<WorktreeJumpPalette />)
@@ -267,7 +268,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getTabRowIds()).toEqual(['tab-beta'])
 
     await act(async () => {
-      useAppStore.setState({ unreadTerminalTabs: { 'term-alpha': true } } as Partial<AppState>)
+      useAppStore.setState({ unreadTerminalTabs: { 'term-alpha': true } })
     })
     await flushEffects()
 
@@ -292,10 +293,16 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     await act(async () => {
       useAppStore.setState({
         unreadTerminalTabs: {},
-        agentStatusByPaneKey: {
-          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'working', Date.now())
-        }
-      } as Partial<AppState>)
+        agentStatusByPaneKey: acceptedAgentStatuses(
+          Object.entries({
+            [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry(
+              'term-alpha',
+              'working',
+              Date.now()
+            )
+          })
+        )
+      })
     })
     await flushEffects()
 

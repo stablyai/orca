@@ -1,3 +1,4 @@
+import { acceptedAgentStatuses } from '@/store/slices/agent-status/accepted-agent-statuses'
 import { applyProviderSessionOnlyUpdate } from '@/hooks/ipc-events/agent-status-partial-updates'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
@@ -59,7 +60,7 @@ const WORKTREE_ID = 'repo-1::/repo/wt'
 const SIBLING_ID = 'repo-1::/repo/sibling'
 
 function makeState(
-  agentStatusByPaneKey: AppState['agentStatusByPaneKey'] = {},
+  agentStatusByPaneKey: AppState['agentStatusByPaneKey'] = acceptedAgentStatuses(),
   repo: Partial<ReturnType<typeof makeRepo>> = {}
 ): AppState {
   useAppStore.setState(useAppStore.getInitialState(), true)
@@ -127,7 +128,7 @@ describe('one pane of a terminal tab', () => {
         }
       })
       const state = useAppStore.getState()
-      expect(state.agentStatusByPaneKey).toEqual({})
+      expect(state.agentStatusByPaneKey.size).toBe(0)
       expect(
         resolveCliChatResumeSource(state, {
           tab: { id: 'term-1', worktreeId: WORKTREE_ID },
