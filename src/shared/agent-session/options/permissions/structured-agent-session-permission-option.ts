@@ -75,16 +75,20 @@ export function structuredAgentSessionPermissionDescriptor(state: {
     return null
   }
   const current = state.permissionMode ?? undefined
-  const reported = support.modes.find((mode) => mode === current)
-  const label = own
-    ? "Agent's own settings"
-    : reported
-      ? MODE_COPY[reported].label
-      : current === 'plan'
-        ? 'Plan mode'
-        : current === 'read-only'
-          ? 'Read only'
-          : (current ?? 'Permissions')
+  // Own delegates to the agent, so show the mode it reports running in; the saved choice stays Own.
+  const reportedValue = own ? (state.reportedPermissionMode ?? undefined) : undefined
+  const shown = reportedValue ?? current
+  const known = support.modes.find((mode) => mode === shown)
+  const label =
+    own && reportedValue === undefined
+      ? "Agent's own settings"
+      : known
+        ? MODE_COPY[known].label
+        : shown === 'plan'
+          ? 'Plan mode'
+          : shown === 'read-only'
+            ? 'Read only'
+            : (shown ?? 'Permissions')
   // A pick the running child has not applied yet takes effect with the next message. Hosts
   // without a running report only prove Claude's, which applies a pick by restarting.
   const running =
@@ -99,6 +103,7 @@ export function structuredAgentSessionPermissionDescriptor(state: {
     kind: {
       type: 'select',
       currentValue: current,
+      ...(reportedValue !== undefined ? { reportedValue } : {}),
       choices: support.modes.map((value) => ({
         value,
         ...agentChatPermissionModeCopy(state.record.agent, value)
