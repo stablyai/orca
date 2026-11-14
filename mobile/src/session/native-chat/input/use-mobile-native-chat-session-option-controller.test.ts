@@ -23,7 +23,7 @@ describe('useMobileNativeChatSessionOptionController on a structured chat', () =
   })
 
   it('applies a fresh-terminal pick across pending renders and first session metadata, and reports refusal', async () => {
-    let tab: MobileSessionTab = {
+    let tab: Extract<MobileSessionTab, { type: 'terminal' }> = {
       type: 'terminal',
       id: 'claude-tab',
       terminal: 'claude-handle',
