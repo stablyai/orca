@@ -43,9 +43,9 @@ export function useTerminalPaneController(props: TerminalPaneProps) {
   const reconciliation = Object.assign(mounted, useTerminalPaneReconciliation(mounted))
   useLayoutOwnerPaneTreeWhenMain(mounted)
   useTerminalPaneGlobalListeners(reconciliation)
-  useTerminalPanePasteListeners(reconciliation)
-  useTerminalPaneTitleEffects(reconciliation)
-  const context = Object.assign(reconciliation, useTerminalPaneContextActions(reconciliation))
+  const paste = Object.assign(reconciliation, useTerminalPanePasteListeners(reconciliation))
+  useTerminalPaneTitleEffects(paste)
+  const context = Object.assign(paste, useTerminalPaneContextActions(paste))
   const mobile = Object.assign(context, useTerminalPaneMobileActions(context))
   return Object.assign(mobile, useTerminalPaneProjection(mobile))
 }

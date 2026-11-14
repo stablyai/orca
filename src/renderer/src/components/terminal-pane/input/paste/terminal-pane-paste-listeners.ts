@@ -10,6 +10,7 @@ import {
 } from '../../clipboard/terminal-clipboard-event-paste'
 import { assertClipboardTextWithinLimitWithYield } from '../../../../../../shared/clipboard-text'
 import { pasteTerminalClipboard } from '../../clipboard/terminal-clipboard-paste'
+import type { ClipboardImageUploadToken } from './clipboard-image-paste-enter-hold'
 import { APP_MENU_PASTE_EVENT } from '@/lib/clipboard/menu/app-menu-paste'
 import {
   APP_MENU_SELECTION_ACTION_EVENT,
@@ -40,6 +41,7 @@ export function registerTerminalPanePasteListeners({
 }): () => void {
   const { keybindings, managerRef, paneTransportsRef, setTerminalError, worktreeId } = controller
   const {
+    clipboardImageEnterHold,
     createPaneClipboardCopiedFiles,
     executePanePasteText,
     pasteFromClipboard,
@@ -185,6 +187,8 @@ export function registerTerminalPanePasteListeners({
       worktreeId,
       paneTransportsRef.current.get(pane.id)
     )
+    // Only the operation that started an image upload may settle it; text pastes leave the hold alone.
+    let uploadToken: ClipboardImageUploadToken | null = null
     void pasteTerminalClipboard({
       readClipboardText: window.api.ui.readClipboardText,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
@@ -196,8 +200,25 @@ export function registerTerminalPanePasteListeners({
         executePanePasteText(pane, 'app-menu', activeElementAtDispatch, text, options),
       onTextPasteError: () =>
         setTerminalError('Paste failed: clipboard text is too large for a safe terminal paste.'),
-      onImagePasteError: (error) => setTerminalError(formatClipboardImagePasteError(error))
-    }).catch(() => setTerminalError('Paste failed.'))
+      onImagePasteError: (error) => setTerminalError(formatClipboardImagePasteError(error)),
+      onImagePasteUploadStart: () => {
+        uploadToken = clipboardImageEnterHold.noteImageUploadStart(pane.id)
+      }
+    })
+      .then((result) => {
+        if (uploadToken) {
+          clipboardImageEnterHold.settleImageUpload(
+            uploadToken,
+            result.status === 'pasted' && result.kind === 'image-path'
+          )
+        }
+      })
+      .catch(() => {
+        if (uploadToken) {
+          clipboardImageEnterHold.settleImageUpload(uploadToken, false)
+        }
+        setTerminalError('Paste failed.')
+      })
   }
 
   const onAppMenuSelectionAction = (event: Event): void => {
@@ -235,6 +256,7 @@ export function registerTerminalPanePasteListeners({
   }
 
   container.addEventListener('keydown', onKeyPaste, { capture: true })
+  container.addEventListener('keydown', clipboardImageEnterHold.handleKeyDown, { capture: true })
   container.addEventListener('paste', onPaste, { capture: true })
   window.addEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
   window.addEventListener(APP_MENU_SELECTION_ACTION_EVENT, onAppMenuSelectionAction)
@@ -242,7 +264,12 @@ export function registerTerminalPanePasteListeners({
     if (pasteSuppressionTimerId !== null) {
       window.clearTimeout(pasteSuppressionTimerId)
     }
+    // A remount reuses pane ids; pending state must not reach the new panes.
+    clipboardImageEnterHold.dispose()
     container.removeEventListener('keydown', onKeyPaste, { capture: true })
+    container.removeEventListener('keydown', clipboardImageEnterHold.handleKeyDown, {
+      capture: true
+    })
     container.removeEventListener('paste', onPaste, { capture: true })
     window.removeEventListener(APP_MENU_PASTE_EVENT, onAppMenuPaste)
     window.removeEventListener(APP_MENU_SELECTION_ACTION_EVENT, onAppMenuSelectionAction)
