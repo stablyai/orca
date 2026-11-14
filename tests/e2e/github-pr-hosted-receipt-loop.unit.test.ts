@@ -282,3 +282,125 @@ it('applies data-bearing retry replies to both clients and sends selection after
     }
   }
 })
+
+it('holds a return under Minimal until the host’s real Retry-After on the request, then reads once', async () => {
+  const {
+    createTestStore,
+    makePRRefreshWorktree,
+    resetRemoteRuntimeMocks,
+    runtimeEnvironmentCall
+  } = await import('../../src/renderer/src/store/github/github-slice-test-harness')
+  const { getVisibleHostedReviewRefreshTargets } =
+    await import('../../src/renderer/src/store/slices/hosted-review/refresh/visible-hosted-review-refresh-targets')
+  const { createVisibleHostedReviewRefreshScheduler } =
+    await import('../../src/renderer/src/store/slices/hosted-review/refresh/visible-hosted-review-refresh-scheduler')
+  const { PrForBranch } =
+    await import('../../src/shared/rpc-contract/github/github-pull-request-params')
+  const policy = await import('../../src/shared/review-refresh-policy')
+  const coordinator =
+    await import('../../src/main/github/pull-requests/refresh/pr-refresh-coordinator')
+  const seed = await commands.getRepoPRForBranch(
+    'repo',
+    'held',
+    12,
+    null,
+    false,
+    'head-a',
+    'active'
+  )
+  if (!('kind' in seed) || seed.kind !== 'found') {
+    throw new Error('expected the initial PR')
+  }
+  resetRemoteRuntimeMocks()
+  const store = createTestStore()
+  store.setState({
+    repos: [
+      {
+        id: 'repo',
+        path: '/repo',
+        kind: 'git',
+        executionHostId: 'runtime:env-1',
+        displayName: 'repo',
+        badgeColor: 'blue',
+        addedAt: 0
+      }
+    ],
+    worktreesByRepo: {
+      repo: [
+        makePRRefreshWorktree({
+          id: 'held-worktree',
+          repoId: 'repo',
+          branch: 'held',
+          head: 'head-a',
+          linkedPR: 12,
+          hostId: 'runtime:env-1',
+          runtimeOwnerEnvironmentId: 'env-1'
+        })
+      ]
+    },
+    detectedWorktreesByRepo: {},
+    activeWorktreeId: 'held-worktree',
+    activeWorkspaceExecutionHostId: 'runtime:env-1',
+    visibleReviewWorktreeIds: ['held-worktree'],
+    prCache: { 'runtime:env-1::repo::held': { data: seed.pr, fetchedAt: 1_000 } }
+  })
+  // The host runs Minimal: its timer reads every 600 s, Default would every 60 s.
+  policy.setPRAutoRefreshCadenceForHost('env-1', 'minimal')
+  const reasons: string[] = []
+  runtimeEnvironmentCall.mockImplementation(async (args) => {
+    if (args.method !== 'github.prForBranch') {
+      throw new Error('unexpected fixture RPC')
+    }
+    reasons.push(PrForBranch.parse(args.params).reason ?? 'missing')
+    return { id: 'rpc', ok: true, result: await rpcRead(args.params) }
+  })
+  const observed: string[] = []
+  const removeObserver = coordinator.addPRRefreshOutcomeObserver((_candidate, outcome) =>
+    observed.push(outcome.kind)
+  )
+  const scheduler = createVisibleHostedReviewRefreshScheduler()
+  const update = () =>
+    scheduler.update(getVisibleHostedReviewRefreshTargets(store.getState(), store.getState))
+  const unsubscribe = store.subscribe(update)
+  try {
+    // Shown at 61 s with data a Default interval old, it is read at once; GitHub answers with a
+    // secondary rate limit and a 300 s Retry-After, while the primary quota stays healthy.
+    await vi.advanceTimersByTimeAsync(61_000 - Date.now())
+    expect(getVisibleHostedReviewRefreshTargets(store.getState(), store.getState)).toMatchObject([
+      { selected: true, cadence: 'minimal', intervalMs: 600_000, foregroundIntervalMs: 60_000 }
+    ])
+    mocks.resolve.mockRejectedValueOnce(
+      Object.assign(new Error('gh: HTTP 429'), {
+        stderr: 'HTTP 429: You have exceeded a secondary rate limit.\nRetry-After: 300'
+      })
+    )
+    update()
+    scheduler.setVisible(true)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(reasons).toEqual(['active'])
+    expect(mocks.resolve).toHaveBeenCalledTimes(2)
+    const observedAfterFailure = observed.length
+
+    // Hidden, then back at 122 s: Default would retry the failure from 121 s, but the host holds
+    // this request until 361 s, so neither the return nor anything else reads it sooner.
+    scheduler.setVisible(false)
+    await vi.advanceTimersByTimeAsync(122_000 - Date.now())
+    scheduler.setVisible(true)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(reasons).toEqual(['active'])
+    await vi.advanceTimersByTimeAsync(360_999 - Date.now())
+    expect(reasons).toEqual(['active'])
+    expect(mocks.resolve).toHaveBeenCalledTimes(2)
+    expect(observed).toHaveLength(observedAfterFailure)
+
+    // The owed return reads once, as soon as the hold ends.
+    await vi.advanceTimersByTimeAsync(1)
+    expect(reasons).toEqual(['active', 'active'])
+    expect(mocks.resolve).toHaveBeenCalledTimes(3)
+  } finally {
+    removeObserver()
+    unsubscribe()
+    scheduler.dispose()
+    policy._resetPRAutoRefreshCadencesForTests()
+  }
+})

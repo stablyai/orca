@@ -21,7 +21,8 @@ export type VisibleHostedReviewRefreshTarget = {
 
 export type VisibleHostedReviewRefreshResult =
   | boolean
-  | { succeeded: boolean; retryAfterMs?: number }
+  // retryDisabledUntil: the host's own hold on this request after a failed read (a Retry-After).
+  | { succeeded: boolean; retryAfterMs?: number; retryDisabledUntil?: number }
 
 type Entry = {
   target: VisibleHostedReviewRefreshTarget
@@ -32,7 +33,12 @@ type Entry = {
   retryAt: number | null
   discovery: boolean
   deferredUntil: number | null
+  /** The provider's hold on the current request: nothing reads it sooner, whatever earned it. */
+  heldUntil: number | null
 }
+
+// A newer result or another request identity ends the failure, its retry and its provider hold.
+const NO_FAILURE = { failures: 0, failedAt: null, retryAt: null, heldUntil: null } as const
 
 /** The target's interval under the Default cadence (its own interval when it gives none). */
 function defaultIntervalMs(target: VisibleHostedReviewRefreshTarget): number | null {
@@ -82,13 +88,11 @@ export function createVisibleHostedReviewRefreshScheduler() {
   let disposed = false
 
   const clearTimer = (): void => {
-    if (timer !== null) {
-      clearTimeout(timer)
-    }
+    clearTimeout(timer ?? undefined)
     timer = null
   }
 
-  const dueAt = (entry: Entry): number => {
+  const plannedAt = (entry: Entry): number => {
     const cooldown = entry.lastAttemptAt + REVIEW_REFRESH_COOLDOWN_MS
     if (entry.deferredUntil !== null && !entry.discovery) {
       return Math.max(cooldown, entry.deferredUntil)
@@ -108,6 +112,9 @@ export function createVisibleHostedReviewRefreshScheduler() {
     return Math.max(cooldown, anchor + entry.target.intervalMs)
   }
 
+  // The plan only ever waits longer for a provider hold, and a hold alone never plans a read.
+  const dueAt = (entry: Entry): number => Math.max(plannedAt(entry), entry.heldUntil ?? -Infinity)
+
   const remember = (key: string, entry: Entry): void => {
     recent.delete(key)
     recent.set(key, entry)
@@ -125,7 +132,8 @@ export function createVisibleHostedReviewRefreshScheduler() {
     target: VisibleHostedReviewRefreshTarget,
     result: VisibleHostedReviewRefreshResult
   ): void => {
-    const succeeded = typeof result === 'boolean' ? result : result.succeeded
+    const reply: Exclude<VisibleHostedReviewRefreshResult, boolean> =
+      typeof result === 'boolean' ? { succeeded: result } : result
     const cancelled = inFlight.get(key)?.controller.signal.aborted
     inFlight.get(key)?.controller.abort()
     inFlight.delete(key)
@@ -139,19 +147,21 @@ export function createVisibleHostedReviewRefreshScheduler() {
         entry.deferredUntil = null
       } else {
         entry.discovery = false
-        entry.failures = succeeded ? 0 : entry.failures + 1
-        const retry = typeof result === 'boolean' ? undefined : result.retryAfterMs
+        entry.failures = reply.succeeded ? 0 : entry.failures + 1
+        const retry = reply.retryAfterMs
         // Read against the current target, so a reply arriving after Off was chosen arms nothing.
         entry.deferredUntil =
-          succeeded &&
+          reply.succeeded &&
           entry.target.cadence !== 'off' &&
           retry !== undefined &&
           Number.isFinite(retry) &&
           retry >= 0
             ? Date.now() + Math.max(REVIEW_REFRESH_COOLDOWN_MS, retry)
             : null
-        entry.failedAt = succeeded ? null : Date.now()
+        entry.failedAt = reply.succeeded ? null : Date.now()
         entry.retryAt = retryAtFor(entry)
+        const hold = reply.succeeded ? undefined : reply.retryDisabledUntil
+        entry.heldUntil = hold !== undefined && Number.isFinite(hold) ? hold : null
       }
     }
     reconcile()
@@ -240,6 +250,7 @@ export function createVisibleHostedReviewRefreshScheduler() {
             failures: preserveFailure ? previous.failures : 0,
             failedAt: preserveFailure ? previous.failedAt : null,
             retryAt: null,
+            heldUntil: preserveFailure ? previous.heldUntil : null,
             // First shown: data older than Default's interval is read now, whatever the cadence.
             discovery:
               changed ||
@@ -257,19 +268,13 @@ export function createVisibleHostedReviewRefreshScheduler() {
         if (discoveryIdentityChanged(entry.target, target)) {
           entry.discovery = true
           entry.deferredUntil = null
-          entry.failures = 0
-          entry.failedAt = null
-          entry.retryAt = null
+          Object.assign(entry, NO_FAILURE)
         } else if (
           (target.fetchedAt ?? -Infinity) > (entry.target.fetchedAt ?? -Infinity) &&
           (!inFlight.has(target.key) ||
             !discoveryIdentityChanged(inFlight.get(target.key)?.target ?? target, target))
         ) {
-          entry.failures = 0
-          entry.failedAt = null
-          entry.retryAt = null
-          entry.discovery = false
-          entry.deferredUntil = null
+          Object.assign(entry, NO_FAILURE, { discovery: false, deferredUntil: null })
         }
         entry.target = target
         // The owning host's cadence changed: a retry armed under the old cadence is dropped under

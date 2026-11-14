@@ -235,9 +235,12 @@ export function getVisibleHostedReviewRefreshTargets(
             }))
         const after = getState()
         if (runtime && outcome) {
+          const failed = 'kind' in outcome && outcome.kind === 'upstream-error' ? outcome : null
           return {
-            succeeded: !('kind' in outcome) || outcome.kind !== 'upstream-error',
-            retryAfterMs: outcome.revalidation?.retryAfterMs
+            succeeded: !failed,
+            retryAfterMs: outcome.revalidation?.retryAfterMs,
+            // The host's Retry-After for this request: no automatic read or return goes sooner.
+            retryDisabledUntil: failed?.retryDisabledUntil
           }
         }
         const afterFetchedAt = knownGitHub

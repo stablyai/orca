@@ -536,13 +536,22 @@ it('an action that waited for quota keeps its turn when another worktree of its 
     cachedPRState: 'open' as const,
     cachedChecksStatus: 'pending' as const
   }
-  // At 2 s a push of X is read; while quota is checked, worktree Y on the same PR is first shown.
+  // X is pushed at 2 s; its read is due after the push delay, at 4.5 s, and waits for quota.
   await vi.advanceTimersByTimeAsync(1_000)
   const quota = Promise.withResolvers<number | null>()
-  provider.gate.mockReturnValueOnce(quota.promise)
+  let waitingForQuota = false
+  provider.gate.mockImplementationOnce(() => {
+    waitingForQuota = true
+    return quota.promise
+  })
   coordinator.enqueuePRRefresh(shownX, 'post-push', 80, 1)
-  await vi.advanceTimersByTimeAsync(0)
-  coordinator.reportVisiblePRRefreshCandidates([shownX, row('y')], 2, 1)
+  await vi.advanceTimersByTimeAsync(4_500 - Date.now())
+  expect(waitingForQuota).toBe(true)
+  // Meanwhile a second window first shows worktree Y on the same PR, which queues its own read;
+  // X stays shown in the first window.
+  coordinator.reportVisiblePRRefreshCandidates([row('y')], 1, 2)
+  // Y's own entry is the only queued work while X is out of the queue waiting.
+  expect(coordinator._getPRRefreshQueueSizeForTests()).toBe(1)
   await vi.advanceTimersByTimeAsync(1_000)
   quota.resolve(22_000)
   provider.resolve.mockImplementation(async () => found('pushed'))
