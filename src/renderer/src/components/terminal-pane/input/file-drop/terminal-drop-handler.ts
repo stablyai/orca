@@ -19,6 +19,7 @@ import { showTerminalDropWriteFailure } from './terminal-drop-write-failure'
 import type { TerminalDropWriteFailureReason } from './terminal-drop-write-failure'
 import { getTerminalInternalFileDropRejectionMessage } from './terminal-drop-internal-rejection-message'
 import { resolveTerminalDropWorktreePath } from './terminal-drop-worktree-path'
+import { paneHasTerminalCopyMode } from '../../copy-mode/terminal-copy-mode-pane'
 import './terminal-native-file-drop-destination'
 import type { NativeTerminalFileDropArgs } from './terminal-native-file-drop-destination'
 
@@ -29,7 +30,10 @@ type InternalArgs = Omit<NativeTerminalFileDropArgs, 'paths' | 'pane'> & {
 }
 
 export type InternalTerminalFileDropResult =
-  | { status: 'ignored'; reason: 'empty' | 'no-pane' | 'no-transport' | 'worktree-unavailable' }
+  | {
+      status: 'ignored'
+      reason: 'empty' | 'no-pane' | 'copy-mode' | 'no-transport' | 'worktree-unavailable'
+    }
   | {
       status: 'cancelled'
       reason: TerminalDropWriteFailureReason
@@ -62,6 +66,9 @@ export async function handleInternalTerminalFileDrop({
   const pane = resolveInternalTerminalDropPane(manager, dropTarget, paneLeafId)
   if (!pane) {
     return { status: 'ignored', reason: 'no-pane' }
+  }
+  if (paneHasTerminalCopyMode(pane)) {
+    return { status: 'ignored', reason: 'copy-mode' }
   }
   const transport = paneTransports.get(pane.id)
   if (!transport) {

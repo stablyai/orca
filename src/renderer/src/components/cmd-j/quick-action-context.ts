@@ -1,3 +1,5 @@
+import { useAppStore } from '@/store'
+import { resolveTerminalCopyModeTarget } from '@/components/terminal-pane/copy-mode/terminal-copy-mode-targets'
 import { translate } from '@/i18n/i18n'
 import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import { getClientCreationActionPolicy } from '@/lib/workspace/creation/surface-policy/client-creation-action-policy'
@@ -19,6 +21,7 @@ export type CmdJUnavailableReason =
   | 'ssh-disconnected'
   | 'no-active-group'
   | 'no-active-chat'
+  | 'no-active-terminal'
   | 'client-action-unsupported'
 
 export type CmdJQuickActionAvailability =
@@ -46,6 +49,8 @@ export type CmdJQuickActionContext = {
   openCreateWorkspace: () => void
   deleteActiveWorkspace: () => void
   openAddQuickCommand: () => void
+  canEnterCopyMode?: boolean
+  enterCopyMode?: () => boolean
   canSplitActiveChat?: boolean
   splitActiveChat?: (direction: NativeChatSplitDirection) => boolean
 }
@@ -201,6 +206,14 @@ export function buildCmdJQuickActionContext(args: {
     openCreateWorkspace: args.openCreateWorkspace,
     deleteActiveWorkspace: args.deleteActiveWorkspace,
     openAddQuickCommand: args.openAddQuickCommand,
+    canEnterCopyMode:
+      resolveTerminalCopyModeTarget(args.state, activeWorktreeId, activeGroupId) !== null,
+    enterCopyMode: () =>
+      resolveTerminalCopyModeTarget(
+        useAppStore.getState(),
+        activeWorktreeId,
+        activeGroupId
+      )?.enter() ?? false,
     canSplitActiveChat: canRunNativeChatSplitTarget(args.state, activeChatTarget),
     splitActiveChat: (direction) =>
       runActiveNativeChatSplit(activeWorktreeId, activeGroupId, direction)
@@ -236,6 +249,12 @@ export function getUnavailableQuickActionMessage(
       return translate(
         'auto.components.cmdJ.quickActionUnavailable.noTabGroup',
         'Can’t run “{{action}}” — no tab group is available.',
+        options
+      )
+    case 'no-active-terminal':
+      return translate(
+        'auto.components.cmdJ.quickActionUnavailable.noActiveTerminal',
+        'Can’t run “{{action}}” — no terminal pane is active.',
         options
       )
     case 'no-active-chat':

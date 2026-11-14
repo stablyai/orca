@@ -17,8 +17,10 @@ type XtermRendererInternals = {
 
 // 'released': the hidden backing was collapsed and its reveal restore resizes at the current DPR, so callers treat it as current.
 export type PaneWebglCanvasDprRepairState = 'current' | 'deferred' | 'released' | 'repaired'
+// String ids label detached terminals (copy-mode snapshots) so diagnostics never alias a live pane.
+type WebglCanvasDprRepairTarget = Pick<ManagedPane, 'terminal'> & { id: ManagedPane['id'] | string }
 
-function getXtermRenderer(pane: ManagedPane): XtermRendererInternals | undefined {
+function getXtermRenderer(pane: Pick<ManagedPane, 'terminal'>): XtermRendererInternals | undefined {
   return (
     pane.terminal as unknown as {
       _core?: { _renderService?: { _renderer?: { value?: XtermRendererInternals } } }
@@ -26,7 +28,9 @@ function getXtermRenderer(pane: ManagedPane): XtermRendererInternals | undefined
   )._core?._renderService?._renderer?.value
 }
 
-export function repairPaneWebglCanvasDpr(pane: ManagedPane): PaneWebglCanvasDprRepairState {
+export function repairPaneWebglCanvasDpr(
+  pane: WebglCanvasDprRepairTarget
+): PaneWebglCanvasDprRepairState {
   const renderer = getXtermRenderer(pane)
   const canvas = renderer?._canvas ?? renderer?._gl?.canvas
   if (!renderer || !canvas) {
@@ -81,7 +85,7 @@ export function repairPaneWebglCanvasDpr(pane: ManagedPane): PaneWebglCanvasDprR
   return 'repaired'
 }
 
-export function repairPaneWebglCanvasDprMismatch(pane: ManagedPane): boolean {
+export function repairPaneWebglCanvasDprMismatch(pane: WebglCanvasDprRepairTarget): boolean {
   return repairPaneWebglCanvasDpr(pane) === 'repaired'
 }
 
