@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import './runtime-test-module-registration.spec'
 import { OrcaRuntimeService } from '../orca-runtime'
@@ -5,6 +8,8 @@ import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
 import { resolveWorktreeScanCacheTtlMs } from '../workspaces/catalog/runtime-worktree-scan-cache'
 import { store } from './orca-runtime-test-fixtures.spec'
 import { bumpLocalWorktreeScanGeneration } from '../../workspaces/catalog/local-worktree-scan-generation'
+import { setWorktreeCatalogWatchEpochReader } from '../../ipc/worktrees/listing/worktree-catalog-watch-epoch'
+import { WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS } from '../workspaces/catalog/worktree-scan-admin-budget'
 
 describe('resolveWorktreeScanCacheTtlMs', () => {
   const BASE_TTL_MS = 30_000
@@ -65,6 +70,62 @@ describe('resolveWorktreeScanCacheTtlMs', () => {
       expect(scanCallsFor(scratchPath)).toBe(2)
     } finally {
       vi.useRealTimers()
+    }
+  })
+
+  it('keeps a watched repo scan past the base TTL until its catalog watch reports a change', async () => {
+    // Paths inside a fresh non-Git directory keep real fingerprint probes from proving a match.
+    const root = mkdtempSync(join(tmpdir(), 'o-wsc-'))
+    const watchedPath = join(root, 'watched')
+    const unwatchedPath = join(root, 'unwatched')
+    vi.useFakeTimers({ toFake: ['Date'] })
+    let watchEpoch = 1
+    setWorktreeCatalogWatchEpochReader((repoId) => (repoId === 'repo-1' ? watchEpoch : null))
+    vi.mocked(listWorktrees).mockClear()
+    try {
+      const runtime = new OrcaRuntimeService({
+        ...store,
+        getRepos: () => [
+          { id: 'repo-1', path: watchedPath, displayName: 'repo', badgeColor: 'blue', addedAt: 1 },
+          {
+            id: 'repo-2',
+            path: unwatchedPath,
+            displayName: 'repo-2',
+            badgeColor: 'blue',
+            addedAt: 1
+          }
+        ]
+      } as never)
+      const internals = runtime as unknown as { listResolvedWorktrees: () => Promise<unknown> }
+      const probes: { size: number } = runtime['worktreeAdminFingerprintProbes']
+      const listSettled = async (): Promise<void> => {
+        await internals.listResolvedWorktrees()
+        for (let attempt = 0; attempt < 400 && probes.size > 0; attempt += 1) {
+          await new Promise((resolve) => setTimeout(resolve, 5))
+        }
+        expect(probes.size).toBe(0)
+      }
+      const scanCallsFor = (path: string): number =>
+        vi.mocked(listWorktrees).mock.calls.filter((call) => call[0] === path).length
+
+      await listSettled()
+      vi.advanceTimersByTime(BASE_TTL_MS + 1_000)
+      await listSettled()
+      expect(scanCallsFor(watchedPath)).toBe(1)
+      expect(scanCallsFor(unwatchedPath)).toBe(2)
+
+      watchEpoch = 2
+      vi.advanceTimersByTime(BASE_TTL_MS + 1_000)
+      await listSettled()
+      expect(scanCallsFor(watchedPath)).toBe(2)
+
+      vi.advanceTimersByTime(WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS)
+      await listSettled()
+      expect(scanCallsFor(watchedPath)).toBe(3)
+    } finally {
+      setWorktreeCatalogWatchEpochReader(null)
+      vi.useRealTimers()
+      rmSync(root, { recursive: true, force: true })
     }
   })
 

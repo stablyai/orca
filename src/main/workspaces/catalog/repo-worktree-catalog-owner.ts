@@ -128,6 +128,7 @@ function startFlight(
   const revision = entry.revision
   const generation = getLocalWorktreeScanGeneration(entry.repoId)
   const startedAt = Date.now()
+  const catalogWatchEpoch = requirement.verifier?.watchEpoch?.() ?? null
   const probe = pendingProbe ?? requirement.verifier?.probe() ?? null
   const adminFingerprint = probe && probe !== 'in-flight' ? probe : null
   const witness = plan.captureWitness?.()
@@ -152,7 +153,8 @@ function startFlight(
           adminFingerprint,
           startedBy: requirement.kind,
           witness,
-          confirmedAt: startedAt
+          confirmedAt: startedAt,
+          catalogWatchEpoch
         }
         entryByObservation.set(observation, entry)
         if (entry.flight === flight) {
@@ -244,6 +246,9 @@ export async function readWorktreeCatalog(
         const verification = await verify(success, requirement.verifier, now)
         if (verification.reuse && entry.success === success && isCurrent(entry, success)) {
           success.confirmedAt = Math.max(success.confirmedAt, Date.now())
+          if (verification.provenAtWatchEpoch !== undefined) {
+            success.catalogWatchEpoch = verification.provenAtWatchEpoch
+          }
           return { observation: success, superseded: false }
         }
         pendingProbe = verification.reuse ? null : verification.probe
