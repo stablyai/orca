@@ -65,10 +65,6 @@ export function registerBrowserClientPageMetadataTransport(
   }
 }
 
-export function resetBrowserClientPageMetadataTransports(): void {
-  transportsByEnvironmentId.clear()
-}
-
 export function publishBrowserClientPageMetadata(
   environmentId: string,
   params: unknown

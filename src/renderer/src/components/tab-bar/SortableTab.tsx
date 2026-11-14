@@ -39,6 +39,7 @@ import type { NativeChatTabSession } from './tab-session-history-switch'
 import type { StructuredChatTabNamingFailure } from '@/runtime/native-chat/naming/structured-conversation-name'
 import { useNativeChatNamingFailure } from './use-native-chat-naming-failure'
 import { NativeChatNamingErrorBlock, NativeChatNamingFailedDialog } from './NativeChatNamingFailure'
+import { ForkMarkedName } from '../native-chat/fork/ForkMarkedName'
 
 /** What the strip draws for a terminal or native chat tab; never a source of agent identity. */
 type SortableTabModel = Pick<
@@ -79,6 +80,8 @@ export type SortableTabProps = {
   nativeChat?: NativeChatTabSession
   /** A native chat whose generated name failed, unless the user named the tab. */
   namingFailure?: StructuredChatTabNamingFailure | null
+  /** A forked chat: the title carries the fork mark; the hover card names the source. */
+  fork?: { describeSource: () => string; markedTitle: string }
 }
 
 export default function SortableTab({
@@ -110,7 +113,8 @@ export default function SortableTab({
   onToggleViewMode,
   canSplitTerminal = true,
   nativeChat,
-  namingFailure
+  namingFailure,
+  fork
 }: SortableTabProps): React.JSX.Element {
   const t = useTranslate()
   const naming = useNativeChatNamingFailure(namingFailure)
@@ -200,6 +204,7 @@ export default function SortableTab({
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
   const slotProps = useTabStripSlotProps(tab.id, isActive, 'terminal')
   const tabTitle = tab.customTitle ?? tab.title
+  const titleNode = fork ? <ForkMarkedName name={displayTitle} narrowIcon /> : displayTitle
   const tabRoot = (
     <div
       ref={setNodeRef}
@@ -212,7 +217,7 @@ export default function SortableTab({
       data-agent-activity-status={activityStatus}
       {...attributes}
       {...dragListeners}
-      className={`w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`${fork ? '@container/tab ' : ''}w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onDoubleClick={(e) => {
         if (isEditing) {
           return
@@ -285,7 +290,7 @@ export default function SortableTab({
           spellCheck={false}
         />
       ) : (
-        <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{displayTitle}</span>
+        <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{titleNode}</span>
       )}
       {tab.color && !isEditing && (
         <span
@@ -320,7 +325,7 @@ export default function SortableTab({
           }`}
           // Why: stable accessible name lets E2E drive the real close path instead of calling the store.
           aria-label={t('auto.components.tab.bar.SortableTab.6df69d9388', 'Close tab {{value0}}', {
-            value0: tabTitle
+            value0: fork?.markedTitle ?? tabTitle
           })}
           type="button"
           data-tab-close-button="true"
@@ -365,6 +370,7 @@ export default function SortableTab({
           ) : (
             <TabHoverCard
               title={displayTitle}
+              {...(fork && { description: fork.describeSource, showWhenUnclipped: true })}
               programName={
                 tabAgent
                   ? getAgentLabel(tabAgent)

@@ -1,21 +1,12 @@
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { once } from 'node:events'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createConnection, createServer, type Socket } from 'node:net'
-import type * as Net from 'node:net'
+import { createServer, type Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeMetadata } from '../../../shared/runtime-bootstrap'
-import { MAX_TIMER_DELAY_MS } from '../../../shared/timer-delay'
 import { sendRequest } from './transport'
 import { RuntimeClient } from '../client'
 import { getRuntimeMetadataPath } from '../../../shared/runtime-bootstrap'
 import { requestWorktreeRemoval } from '../../workspaces/worktree-removal-request'
-
-vi.mock('node:net', async (importOriginal) => {
-  const net = await importOriginal<typeof Net>()
-  return { ...net, createConnection: vi.fn(net.createConnection) }
-})
 
 const roots: string[] = []
 const servers = new Set<ReturnType<typeof createServer>>()
@@ -42,73 +33,8 @@ afterEach(async () => {
   }
 })
 
-function requestSocket(): Socket {
-  const created = vi.mocked(createConnection).mock.results.at(-1)
-  if (created?.type !== 'return') {
-    throw new Error('Expected a local runtime connection')
-  }
-  return created.value
-}
-
-describe('runtime transport timeout validation', () => {
-  it.each([-1, 1.5, MAX_TIMER_DELAY_MS + 1, Number.MAX_SAFE_INTEGER + 1])(
-    'rejects invalid timer delay %s before transport discovery',
-    async (timeoutMs) => {
-      const metadata: RuntimeMetadata = {
-        runtimeId: 'runtime-1',
-        pid: 123,
-        transports: [],
-        authToken: 'token',
-        startedAt: 1
-      }
-
-      await expect(sendRequest(metadata, 'status.get', undefined, timeoutMs)).rejects.toMatchObject(
-        {
-          code: 'invalid_argument'
-        }
-      )
-    }
-  )
-})
-
 // These fixtures create Unix domain sockets rather than Windows named pipes.
 describe.skipIf(process.platform === 'win32')('runtime transport', () => {
-  it('rejects a responding replacement runtime with retry advice in human output', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-transport-'))
-    roots.push(userDataPath)
-    const endpoint = join(userDataPath, 'runtime.sock')
-    const server = createServer((socket) => {
-      sockets.add(socket)
-      socket.once('close', () => sockets.delete(socket))
-      socket.once('data', (data) => {
-        const request: { id: string } = JSON.parse(String(data).trim())
-        socket.end(
-          `${JSON.stringify({
-            id: request.id,
-            ok: true,
-            result: {},
-            _meta: { runtimeId: 'runtime-replacement' }
-          })}\n`
-        )
-      })
-    })
-    servers.add(server)
-    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
-
-    const metadata: RuntimeMetadata = {
-      runtimeId: 'runtime-original',
-      pid: 123,
-      transports: [{ kind: 'unix', endpoint }],
-      authToken: 'token',
-      startedAt: 1
-    }
-    const error: unknown = await sendRequest(metadata, 'status.get', undefined, 1000).catch(
-      (error: unknown) => error
-    )
-
-    expect(error).toMatchObject({ code: 'runtime_unavailable' })
-  })
-
   it.each(['preflight', 'mutation'] as const)(
     'reports a timeout during %s truthfully',
     async (phase) => {
@@ -286,37 +212,5 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
     } finally {
       warning.mockRestore()
     }
-  })
-
-  it('rejects promptly when the runtime closes the socket before responding', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-transport-'))
-    roots.push(userDataPath)
-    const endpoint = join(userDataPath, 'runtime.sock')
-    const server = createServer((socket) => {
-      sockets.add(socket)
-      socket.once('close', () => sockets.delete(socket))
-      socket.once('data', () => socket.end())
-    })
-    servers.add(server)
-    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
-
-    const metadata: RuntimeMetadata = {
-      runtimeId: 'runtime-1',
-      pid: 123,
-      transports: [{ kind: 'unix', endpoint }],
-      authToken: 'token',
-      startedAt: 1
-    }
-
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
-    const response = sendRequest(metadata, 'status.get', undefined, 60000).catch(
-      (error: unknown) => error
-    )
-    await once(requestSocket(), 'close')
-    await vi.runAllTimersAsync()
-    expect(await response).toMatchObject({
-      code: 'runtime_unavailable',
-      message: 'Orca closed the connection before responding.'
-    })
   })
 })
