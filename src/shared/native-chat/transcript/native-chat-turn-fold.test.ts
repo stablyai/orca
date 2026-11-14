@@ -16,7 +16,7 @@ function row(overrides: Partial<NativeChatTurnFoldRow> = {}): NativeChatTurnFold
     outlivesTurn: false,
     reportsFailure: false,
     explainsTurn: false,
-    sendsBack: false,
+    endsAnswer: false,
     ...overrides
   }
 }
@@ -113,10 +113,10 @@ describe('nativeChatTurnFold', () => {
   it('folds each settled turn to its own answer and leaves a running turn alone', () => {
     const rows = [
       row({ turnKey: 'turn-1', role: 'user' }),
-      row({ turnKey: 'turn-1' }),
+      row({ turnKey: 'turn-1', rendersProse: false }),
       row({ turnKey: 'turn-1' }),
       row({ turnKey: 'turn-2', role: 'user' }),
-      row({ turnKey: 'turn-2' }),
+      row({ turnKey: 'turn-2', rendersProse: false }),
       row({ turnKey: 'turn-2' })
     ]
     const { foldedRows } = nativeChatTurnFold({
@@ -146,6 +146,35 @@ describe('nativeChatTurnFold', () => {
       expandedTurnKeys: NONE
     })
     expect([...foldedRows].sort()).toEqual([1, 2])
+  })
+
+  it('keeps the reply a steer interrupted, but not one before another agent’s message', () => {
+    const steer = message('steer', 'user', 'Also, which branch are you on?')
+    const agentNote: NativeChatMessage = {
+      ...message('note', 'user', 'Worker finished.'),
+      from: { kind: 'agent', senders: [], orchestration: null }
+    }
+    const ack = message('ack', 'assistant', 'On main; continuing.')
+    const messages = [PROMPT, PREAMBLE, WORK, steer, ack, agentNote, WORK, ANSWER]
+    const rows = messages.map((item) => nativeChatTurnFoldRow(item, 'turn-1', false))
+    const { foldedRows } = nativeChatTurnFold({
+      rows,
+      settledTurnKeys: SETTLED,
+      expandedTurnKeys: NONE
+    })
+    expect([...nativeChatTurnAnswerRows(rows)]).toEqual([1, 7])
+    expect([...foldedRows]).toEqual([2, 4, 6])
+  })
+
+  it('keeps replies that directly follow each other, folding only the one before work', () => {
+    const rows = [row({ role: 'user' }), row(), row(), row({ rendersProse: false }), row()]
+    const { foldedRows } = nativeChatTurnFold({
+      rows,
+      settledTurnKeys: SETTLED,
+      expandedTurnKeys: NONE
+    })
+    expect([...nativeChatTurnAnswerRows(rows)]).toEqual([1, 4])
+    expect([...foldedRows]).toEqual([2, 3])
   })
 
   it('never folds a compaction report, and keeps the last prose as the answer', () => {
