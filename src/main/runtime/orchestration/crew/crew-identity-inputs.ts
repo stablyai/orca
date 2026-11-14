@@ -1,4 +1,4 @@
-import type { CrewReadDependencies } from './crew-read-model'
+import type { CrewReadDependencies } from './crew-read-dependencies'
 
 /** Capture each runtime identity fact once in the host input generation, including absent facts. */
 export function captureCrewIdentityInputs(deps: CrewReadDependencies): CrewReadDependencies {

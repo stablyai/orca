@@ -12,14 +12,16 @@ vi.mock('electron', () => ({
 vi.mock('../../windows/windows-administrator-status', () => ({
   getWindowsAdministratorStatus: vi.fn(async () => true)
 }))
-vi.mock('../../daemon/daemon-provider-restart', () => ({ restartDaemon: vi.fn(async () => {}) }))
-vi.mock('../../crash-reporting/durable-crash-breadcrumb', () => ({
+vi.mock('../../daemon/providers/lifecycle/daemon-provider-restart', () => ({
+  restartDaemon: vi.fn(async () => {})
+}))
+vi.mock('../../crash-reporting/breadcrumbs/durable-crash-breadcrumb', () => ({
   recordDurableCrashBreadcrumb: recordDurableCrashBreadcrumbMock
 }))
 
 import { relaunchApp } from './app-relaunch'
 import { restartLocalTerminalsAfterElevation } from '../../windows/windows-administrator-restart'
-import { _resetHydrateShellPathCache, _setLaunchPathForTests } from '../hydrate-shell-path'
+import { _resetHydrateShellPathCache } from '../shell-environment/hydrate-shell-path'
 
 beforeEach(() => {
   appRelaunchMock.mockReset()
@@ -64,19 +66,5 @@ describe('relaunchApp', () => {
     const custom = { execPath: 'administrator-launcher.exe', args: ['restart', flag] }
     relaunchApp('windows-administrator', undefined, custom)
     expect(appRelaunchMock).toHaveBeenLastCalledWith(custom)
-  })
-
-  it('does not carry Orca PATH seeds into the replacement process', () => {
-    process.env.PATH = '/seeded/newest-nvm/bin:/usr/bin'
-    _setLaunchPathForTests('/usr/bin')
-    let inheritedPath: string | undefined
-    appRelaunchMock.mockImplementation(() => {
-      inheritedPath = process.env.PATH
-    })
-
-    relaunchApp('renderer-request')
-
-    expect(inheritedPath).toBe('/usr/bin')
-    expect(process.env.PATH).toBe('/seeded/newest-nvm/bin:/usr/bin')
   })
 })

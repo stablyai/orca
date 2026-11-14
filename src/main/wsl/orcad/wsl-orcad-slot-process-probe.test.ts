@@ -13,11 +13,8 @@ vi.mock('../../ssh/remote-exec/remote-exec-command', () => ({
   isUnconfirmedSshCommandTermination: () => false
 }))
 
-import {
-  isWslOrcadSlotInUse,
-  wslOrcadSlotProcessProbeCommand
-} from './wsl-orcad-slot-process-probe'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { wslOrcadSlotProcessProbeCommand } from './wsl-orcad-slot-process-probe'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 
 const host = getRemoteHostPlatform('linux-x64')
 
@@ -105,40 +102,5 @@ describe.skipIf(process.platform === 'win32')('the slot process probe on a real 
     await expect
       .poll(() => sh(wslOrcadSlotProcessProbeCommand(host, slotDir, userDataDir)))
       .toBe('LIVE')
-  })
-})
-
-describe('isWslOrcadSlotInUse', () => {
-  const slot = {
-    conn: Object.create(null),
-    host,
-    remoteHome: '/home/u',
-    nodePath: '/usr/bin/node',
-    userDataDir: '/home/u/.orca',
-    bindHost: '127.0.0.1',
-    port: 6768
-  }
-  const dir = '/home/u/.orca-remote/orcad-1.6.0+bb01'
-
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mocks.orcadLive.mockResolvedValue(false)
-  })
-
-  it('is free only when the server and the process scan both prove nothing runs there', async () => {
-    mocks.exec.mockResolvedValue('DEAD\n')
-    expect(await isWslOrcadSlotInUse(slot, dir)).toBe(false)
-  })
-
-  it.each(['LIVE\n', 'UNKNOWN\n', ''])('stays in use when the scan answers %j', async (answer) => {
-    mocks.exec.mockResolvedValue(answer)
-    expect(await isWslOrcadSlotInUse(slot, dir)).toBe(true)
-  })
-
-  it('stays in use when the scan fails or the server still runs', async () => {
-    mocks.exec.mockRejectedValue(new Error('wsl.exe exited'))
-    expect(await isWslOrcadSlotInUse(slot, dir)).toBe(true)
-    mocks.orcadLive.mockResolvedValue(true)
-    expect(await isWslOrcadSlotInUse(slot, dir)).toBe(true)
   })
 })

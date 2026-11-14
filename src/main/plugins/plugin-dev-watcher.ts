@@ -4,8 +4,8 @@ import { basename, dirname, resolve } from 'node:path'
 import { subscribeViaWatcherProcess } from '../ipc/filesystem/watcher-process/parcel-watcher-process'
 import type { WatcherProcessSubscribeOptions } from '../ipc/filesystem/watcher-process/parcel-watcher-process-protocol'
 import type { WatcherProcessSubscription } from '../ipc/filesystem/watcher-process/parcel-watcher-process-subscription'
-import { resolveWatcherRootPaths } from '../ipc/filesystem/watcher-process/watcher-event-root-path-rewrite'
-import { watcherDirectoryIdentity } from '../ipc/filesystem/watcher-process/watcher-directory-identity'
+import { resolveWatcherRootPaths } from '../ipc/filesystem/watcher-process/root-paths/watcher-event-root-path-rewrite'
+import { watcherDirectoryIdentity } from '../ipc/filesystem/watcher-process/root-paths/watcher-directory-identity'
 import { bumpPluginDevRevision, recordPluginDevEdit } from './plugin-dev-revision'
 import { isIgnoredPluginDevPath, pluginDevWatchIgnoreOptions } from './plugin-dev-watcher-ignore'
 
@@ -22,6 +22,8 @@ function addPluginRootParent(parentNames: Map<string, Set<string>>, root: string
 }
 
 type PluginRootBinding = { physicalRoot: string; identity: string | null }
+type PluginDevWatcherRecovery = 'interruption' | 'overflow' | 'root'
+type PluginDevWatcherError = (retry?: boolean, recovery?: PluginDevWatcherRecovery) => void
 
 function pluginRootBinding(physicalRoot: string, entry: BigIntStats): PluginRootBinding | null {
   return entry.isDirectory() ? { physicalRoot, identity: watcherDirectoryIdentity(entry) } : null
@@ -56,7 +58,7 @@ export class PluginDevWatcher {
   start(
     devPaths: readonly string[],
     refresh: () => void,
-    onWatcherError?: (retry?: boolean) => void
+    onWatcherError?: PluginDevWatcherError
   ): void {
     this.stopSubscriptions()
     const requestedRoots = new Set(devPaths.map((path) => resolve(path)))
@@ -162,7 +164,7 @@ export class PluginDevWatcher {
     options: WatcherProcessSubscribeOptions,
     parent: boolean,
     refresh: () => void,
-    onWatcherError?: (retry?: boolean) => void
+    onWatcherError?: PluginDevWatcherError
   ): void {
     const generation = this.generation
     const retrySetupFailure = parent
@@ -171,17 +173,17 @@ export class PluginDevWatcher {
     let subscription: WatcherProcessSubscription | null = null
     let closed = false
     const isActive = (): boolean => generation === this.generation && !closed
-    const requestRetry = (): void => {
+    const requestRetry = (recovery?: PluginDevWatcherRecovery): void => {
       if (isActive()) {
-        onWatcherError?.()
+        onWatcherError?.(true, recovery)
         this.scheduleRefresh(refresh)
       }
     }
-    const fail = (): void => {
+    const fail = (recovery?: PluginDevWatcherRecovery): void => {
       if (!isActive()) {
         return
       }
-      requestRetry()
+      requestRetry(recovery)
       closed = true
       if (subscription) {
         this.removeSubscription(subscription)
@@ -203,11 +205,13 @@ export class PluginDevWatcher {
         ) {
           return
         }
-        if (error || events.some((event) => event.type === 'delete' && event.path === path)) {
+        if (error) {
           fail()
+        } else if (events.some((event) => event.type === 'delete' && event.path === path)) {
+          fail('root')
         } else if (parent) {
           // Root replacement stops recursive watching without reporting an error.
-          requestRetry()
+          requestRetry('root')
         } else {
           // Open guests of this dev plugin remount on their next entry read.
           recordPluginDevEdit(
@@ -219,7 +223,11 @@ export class PluginDevWatcher {
         }
       },
       options,
-      { onInterruption: requestRetry, onOverflow: requestRetry, onTerminalError: fail }
+      {
+        onInterruption: () => requestRetry('interruption'),
+        onOverflow: () => requestRetry('overflow'),
+        onTerminalError: () => fail()
+      }
     )
       .then((created) => {
         subscription = created

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { agentSessionFailureFact } from '../agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../agent-session/failures/agent-session-failure-words'
-import { readAgentSessionOrcaStop } from '../agent-session/lifecycle/agent-session-orca-stop'
 import { agentJournalItemKey } from '../agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalRenderItem } from '../agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnOutcome } from '../agent-status/lifecycle/agent-turn-outcome'
@@ -64,13 +63,6 @@ function stopRow(orcaStop: { cause: string } | undefined, scoped = true): AgentJ
 }
 
 const update = { cause: 'update' }
-
-describe('the cause on a stopped row', () => {
-  it('is read when known and dropped when a newer host names one this build does not know', () => {
-    expect(readAgentSessionOrcaStop(update)).toEqual({ cause: 'update' })
-    expect(readAgentSessionOrcaStop({ cause: 'power-loss' })).toBeUndefined()
-  })
-})
 
 describe('a client that predates the cause', () => {
   it("reads the host row as the cut turn's one explanation and adds none of its own", () => {

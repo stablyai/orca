@@ -4,9 +4,9 @@ import {
   acquireJiraImageUrl,
   hasCachedJiraImage,
   onJiraImageCacheInvalidated
-} from '@/runtime/runtime-jira-image-cache'
-import { jiraImageProtocolUrl } from '@/runtime/runtime-jira-image-client'
-import { translate } from '@/i18n/i18n'
+} from '@/runtime/jira/runtime-jira-image-cache'
+import { jiraImageProtocolUrl } from '@/runtime/jira/runtime-jira-image-client'
+import { useTranslate } from '@/i18n/use-translate'
 import { ExpandableMarkdownImage } from './sidebar/MarkdownImageLightbox'
 
 type JiraAttachmentImageProps = {
@@ -27,6 +27,7 @@ function ResolvedJiraAttachmentImage({
   alt,
   compact
 }: JiraAttachmentImageProps): React.JSX.Element {
+  const t = useTranslate()
   const [resolved, setResolved] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
   const [generation, setGeneration] = useState(0)
@@ -78,11 +79,7 @@ function ResolvedJiraAttachmentImage({
     }
   }, [generation, localProtocol, reference, target])
   if (!src || failed) {
-    return (
-      <span>
-        {alt || translate('auto.components.sidebar.MarkdownImageLightbox.image', 'Image')}
-      </span>
-    )
+    return <span>{alt || t('auto.components.sidebar.MarkdownImageLightbox.image', 'Image')}</span>
   }
   return (
     <ExpandableMarkdownImage

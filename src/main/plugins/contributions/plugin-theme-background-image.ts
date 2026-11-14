@@ -10,10 +10,10 @@ import {
 } from '../plugin-artifact-validation'
 import type { ValidDiscoveredPlugin } from '../plugin-discovery'
 
-const THEME_BACKGROUND_SLOT = /^theme-(0|[1-9]\d{0,2})$/
+const THEME_BACKGROUND_SLOT = /^theme-(0|[1-9]\d{0,2})(-video)?$/
 
-/** The renderer-facing image. Bytes are checked when served, not here: registering every theme of
- *  every plugin would otherwise read up to 2 MB per theme that nobody may select. */
+/** The renderer-facing image and video. Bytes are checked when served, not here: registering every
+ *  theme of every plugin would otherwise read megabytes per theme that nobody may select. */
 export function resolvePluginThemeBackground(
   plugin: ValidDiscoveredPlugin,
   themeIndex: number,
@@ -23,20 +23,23 @@ export function resolvePluginThemeBackground(
   if (!background || !contentHash || themeIndex < 0) {
     return undefined
   }
+  const url = (slot: string) => pluginInstalledImageUrl(plugin.pluginKey, contentHash, slot)
   return {
-    url: pluginInstalledImageUrl(plugin.pluginKey, contentHash, `theme-${themeIndex}`),
+    url: url(`theme-${themeIndex}`),
+    ...(background.videoPath ? { videoUrl: url(`theme-${themeIndex}-video`) } : {}),
     opacity: background.opacity,
     size: background.size,
     position: background.position
   }
 }
 
-/** The image path behind a `theme-<index>` URL slot, re-read from the theme file on each request. */
-export async function pluginThemeBackgroundPath(
+/** The file behind a `theme-<index>` (image) or `theme-<index>-video` URL slot, re-read from the
+ *  theme file on each request. */
+export async function pluginThemeBackgroundFile(
   plugin: ValidDiscoveredPlugin,
   slot: string
-): Promise<string | null> {
-  const index = THEME_BACKGROUND_SLOT.exec(slot)?.[1]
+): Promise<{ video: boolean; path: string } | null> {
+  const [, index, video] = THEME_BACKGROUND_SLOT.exec(slot) ?? []
   const contribution =
     index === undefined ? undefined : plugin.manifest.contributes.themes[Number(index)]
   if (!contribution) {
@@ -47,5 +50,7 @@ export async function pluginThemeBackgroundPath(
     contribution.path,
     PLUGIN_THEME_MAX_BYTES
   )
-  return parsePluginAppThemeArtifact(text).background?.path ?? null
+  const background = parsePluginAppThemeArtifact(text).background
+  const path = video ? background?.videoPath : background?.path
+  return path ? { video: video !== undefined, path } : null
 }

@@ -1,23 +1,37 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { FlatList, Platform, Pressable, Text, View } from 'react-native'
+import {
+  FlatList,
+  Platform,
+  Pressable,
+  Text,
+  View,
+  type HostInstance,
+  type ViewStyle
+} from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
-import { ChevronsUpDown } from 'lucide-react-native'
+import { UnfoldVertical } from 'lucide-react-native'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { DIFF_LINE_ID_PREFIX, MobileDiffReviewLine } from './MobileDiffReviewLine'
-import type { ReviewDiffLine } from '../session/mobile-diff-review-screen-model'
+import {
+  DIFF_LINE_ID_PREFIX,
+  MobileDiffReviewCharWidthProbe,
+  MobileDiffReviewLine,
+  mobileDiffReviewGutterWidth,
+  mobileDiffReviewNumberWidth
+} from './MobileDiffReviewLine'
+import type { ReviewDiffLine } from '../source-control/review/mobile-diff-review-screen-model'
 import {
   buildMobileDiffReviewRows,
   type MobileDiffReviewRow
-} from '../session/mobile-diff-review-rows'
+} from '../source-control/review/mobile-diff-review-rows'
 import { colors } from '../theme/mobile-theme'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
-import type { MobileDiffReviewThread } from '../session/mobile-diff-review-github'
+import type { MobileDiffReviewThread } from '../source-control/review/mobile-diff-review-github'
 import type { PRCommentCardActions } from './pr-sidebar/PRCommentCard'
 import { CommentGroupView } from './pr-sidebar/PRCommentsSection'
 import { useNow } from '../hooks/use-now'
-import { triggerSelection } from '../platform/haptics'
+import { triggerSelection } from '../platform/haptics/haptics'
 
 const NO_OPENED_LINES: ReadonlySet<number> = new Set()
 
@@ -25,6 +39,18 @@ const RANGE_PICK_LONG_PRESS_MS = 350
 const MAX_SCROLL_ATTEMPTS = 10
 const NO_LINE_NOTES: readonly DiffComment[] = []
 const SCROLL_RETRY_MS = 100
+// The page's default tab-size, so a tabbed line's width matches what it draws.
+const TAB_COLUMNS = 8
+const CODE_END_PADDING = 10
+const NOTES_WIDTH = 40
+
+function lineColumns(text: string): number {
+  let columns = 0
+  for (const char of text) {
+    columns = char === '\t' ? (Math.floor(columns / TAB_COLUMNS) + 1) * TAB_COLUMNS : columns + 1
+  }
+  return columns
+}
 
 export type LineRange = { startLine: number; line: number }
 
@@ -77,6 +103,44 @@ export function MobileDiffReviewLines({
     setOpened({ lines, indexes: next })
   }
 
+  // Long lines run on one line and the whole file scrolls sideways, so every row is as wide as the longest.
+  const [charWidth, setCharWidth] = useState(0)
+  const [viewportWidth, setViewportWidth] = useState(0)
+  const { numberWidth, codeColumns } = useMemo(() => {
+    let digits = 1
+    let columns = 0
+    for (const line of lines) {
+      digits = Math.max(digits, String(line.newLineNumber ?? line.oldLineNumber ?? '').length)
+      columns = Math.max(columns, lineColumns(line.text))
+    }
+    return { numberWidth: mobileDiffReviewNumberWidth(digits, charWidth), codeColumns: columns }
+  }, [charWidth, lines])
+  const gutterWidth = mobileDiffReviewGutterWidth(numberWidth)
+  const rowFrame: ViewStyle =
+    Platform.OS === 'web' && charWidth > 0
+      ? {
+          width: Math.max(
+            viewportWidth,
+            Math.ceil(
+              gutterWidth +
+                codeColumns * charWidth +
+                CODE_END_PADDING +
+                (commentsByLine.size > 0 ? NOTES_WIDTH : 0)
+            )
+          )
+        }
+      : {}
+  // Folds, threads and the footer hold still in the viewport while the code slides under them.
+  const viewportRow: ViewStyle =
+    Platform.OS === 'web' && viewportWidth > 0
+      ? {
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: RN Web renders CSS sticky; this branch never reaches native.
+          position: 'sticky' as ViewStyle['position'],
+          left: 0,
+          width: viewportWidth
+        }
+      : {}
+
   const listRef = useRef<FlatList<MobileDiffReviewRow<ReviewDiffLine>>>(null)
   const scrollFailedRef = useRef(false)
   const [scrollAttempt, setScrollAttempt] = useState(0)
@@ -121,7 +185,7 @@ export function MobileDiffReviewLines({
   // The release that ends a pick also reaches the starting row as a tap; that tap must not replace the range.
   const pickConsumedTapRef = useRef(false)
   // Browsers decide on the first touchmove whether to scroll; once a pick is live, claim it so the drag isn't cancelled.
-  const frameRef = useRef<View>(null)
+  const frameRef = useRef<HostInstance>(null)
   useEffect(() => {
     const node: unknown = frameRef.current
     if (Platform.OS !== 'web' || !(node instanceof EventTarget)) {
@@ -204,10 +268,16 @@ export function MobileDiffReviewLines({
 
   return (
     <GestureDetector gesture={pick}>
-      <View ref={frameRef} style={styles.diffListFrame}>
+      <View
+        ref={frameRef}
+        style={styles.diffListFrame}
+        onLayout={(event) => setViewportWidth(event.nativeEvent.layout.width)}
+      >
+        <MobileDiffReviewCharWidthProbe onCharWidth={setCharWidth} />
         <FlatList<MobileDiffReviewRow<ReviewDiffLine>>
           ref={listRef}
           data={rows}
+          style={styles.diffList}
           // The list holds still while lines are being picked, so the drag selects instead of scrolling.
           scrollEnabled={dragRange === null}
           onScrollToIndexFailed={(info) => {
@@ -218,63 +288,80 @@ export function MobileDiffReviewLines({
             })
           }}
           keyExtractor={(row) => row.key}
-          renderItem={({ item: row }) =>
-            row.kind === 'fold' ? (
-              <Pressable
-                style={({ pressed }) => [styles.foldRow, pressed && styles.buttonPressed]}
-                onPress={() => openFold(row.startIndex, row.endIndex)}
-                accessibilityRole="button"
-                accessibilityLabel={t(
-                  'components.diffReviewBody.showUnchangedLines',
-                  'Show {{count}} unchanged lines',
-                  { count: row.hiddenCount }
-                )}
-              >
-                <ChevronsUpDown size={13} color={colors.textMuted} strokeWidth={2.2} />
-                <Text style={styles.foldText}>
-                  {row.hiddenCount === 1
-                    ? t(
-                        'components.diffReviewBody.unchangedLines_one',
-                        '{{count}} unchanged line',
-                        {
-                          count: row.hiddenCount
-                        }
-                      )
-                    : t(
-                        'components.diffReviewBody.unchangedLines_other',
-                        '{{count}} unchanged lines',
-                        { count: row.hiddenCount }
-                      )}
-                </Text>
-              </Pressable>
-            ) : row.kind === 'thread' ? (
-              <View style={styles.threadRow}>
-                <CommentGroupView group={row.thread} actions={threadActions} now={now} />
-              </View>
-            ) : (
-              <MobileDiffReviewLine
-                line={row.line}
-                comments={commentsByLine.get(row.line.newLineNumber ?? -1) ?? NO_LINE_NOTES}
-                staleCommentIds={staleCommentIds}
-                selected={
-                  highlighted !== null &&
-                  row.line.kind !== 'delete' &&
-                  row.line.newLineNumber !== undefined &&
-                  row.line.newLineNumber >= highlighted.startLine &&
-                  row.line.newLineNumber <= highlighted.line
-                }
-                {...(onPickLines ? { onAddNote: pickOneLine } : {})}
-                onEditNote={onEditNote}
-              />
-            )
-          }
-          contentContainerStyle={styles.diffList}
+          renderItem={({ item: row }) => (
+            <View style={rowFrame}>
+              {row.kind === 'fold' ? (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.foldRow,
+                    viewportRow,
+                    pressed && styles.buttonPressed
+                  ]}
+                  onPress={() => openFold(row.startIndex, row.endIndex)}
+                  accessibilityRole="button"
+                  accessibilityLabel={t(
+                    'components.diffReviewBody.showUnchangedLines',
+                    'Show {{count}} unchanged lines',
+                    { count: row.hiddenCount }
+                  )}
+                >
+                  <View style={[styles.foldIcon, { width: gutterWidth }]}>
+                    <UnfoldVertical size={14} color={colors.diffFoldText} strokeWidth={2} />
+                  </View>
+                  <View style={styles.foldBody}>
+                    <Text style={styles.foldText}>
+                      {row.hiddenCount === 1
+                        ? t(
+                            'components.diffReviewBody.unchangedLines_one',
+                            '{{count}} unchanged line',
+                            {
+                              count: row.hiddenCount
+                            }
+                          )
+                        : t(
+                            'components.diffReviewBody.unchangedLines_other',
+                            '{{count}} unchanged lines',
+                            { count: row.hiddenCount }
+                          )}
+                    </Text>
+                    {row.enclosingLine ? (
+                      <Text style={styles.foldContext} numberOfLines={1}>
+                        {row.enclosingLine}
+                      </Text>
+                    ) : null}
+                  </View>
+                </Pressable>
+              ) : row.kind === 'thread' ? (
+                <View style={[styles.threadRow, viewportRow]}>
+                  <CommentGroupView group={row.thread} actions={threadActions} now={now} />
+                </View>
+              ) : (
+                <MobileDiffReviewLine
+                  line={row.line}
+                  comments={commentsByLine.get(row.line.newLineNumber ?? -1) ?? NO_LINE_NOTES}
+                  staleCommentIds={staleCommentIds}
+                  numberWidth={numberWidth}
+                  selected={
+                    highlighted !== null &&
+                    row.line.kind !== 'delete' &&
+                    row.line.newLineNumber !== undefined &&
+                    row.line.newLineNumber >= highlighted.startLine &&
+                    row.line.newLineNumber <= highlighted.line
+                  }
+                  {...(onPickLines ? { onAddNote: pickOneLine } : {})}
+                  onEditNote={onEditNote}
+                />
+              )}
+            </View>
+          )}
+          contentContainerStyle={styles.diffListContent}
+          ListFooterComponentStyle={rowFrame}
           ListFooterComponent={
             truncated ? (
-              <Text style={styles.truncatedText}>
+              <Text style={[styles.truncatedText, viewportRow]}>
                 {t('components.diffReviewBody.diffTruncated', 'Diff truncated for mobile preview.')}
               </Text>
-            ) : null
+            ) : undefined
           }
         />
       </View>

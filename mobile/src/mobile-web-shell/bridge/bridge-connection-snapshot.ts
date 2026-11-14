@@ -1,9 +1,9 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { salvagedOptional } from '../../../../src/shared/zod-salvage'
-import type { RelayHostReachability } from '../../transport/relay-host-reachability'
-import type { RpcClient } from '../../transport/rpc-client'
-import type { MobileConnectionPath } from '../../transport/stable-logical-rpc-client'
-import type { ConnectionState } from '../../transport/types'
+import type { RelayHostReachability } from '../../transport/relay/relay-host-reachability'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { MobileConnectionPath } from '../../transport/connection/stable-logical-rpc-client'
+import type { ConnectionState } from '../../transport/connection/connection-state'
 
 export const BRIDGE_CONNECTION_STATES = [
   'connecting',

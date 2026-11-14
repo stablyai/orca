@@ -2,7 +2,7 @@ import { useContext } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
 import { nativeChatReasoningDisclosureKey } from '../../../../../src/shared/native-chat/transcript/native-chat-reasoning-row'
-import { formatMobileNativeChatActiveTurnLabel } from '../native-chat-turn-status-copy'
+import { formatMobileNativeChatActiveTurnLabel } from './native-chat-turn-status-copy'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
 import { LoadingSpinner } from '../../../components/LoadingSpinner'
@@ -17,13 +17,11 @@ import type { MobileNativeChatLiveLine as LiveLine } from './use-mobile-native-c
 export function MobileNativeChatLiveLine({
   line,
   onToggleReasoning,
-  fontScale,
-  onOpenFile
+  fontScale
 }: {
   line: LiveLine
   onToggleReasoning: (key: string) => void
   fontScale: number
-  onOpenFile?: (relativePath: string) => void
 }): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -67,8 +65,8 @@ export function MobileNativeChatLiveLine({
           <MobileNativeChatReasoningBody
             positionKey={nativeChatReasoningDisclosureKey(reasoning.message.id)}
             markdown={reasoning.markdown}
+            streaming
             fontScale={fontScale}
-            onOpenFile={onOpenFile}
             onLongPress={INLINE_TEXT_SELECTION ? undefined : () => openActions(reasoning.message)}
           />
         </View>

@@ -15,6 +15,15 @@ export function clampConversationNameFirstPrompt(firstPrompt: string): string {
 /** The naming request's first line; Session History reads it to hide these one-shot runs. */
 export const CONVERSATION_NAME_PROMPT_OPENING = "Name this chat from the user's first request."
 
+export const CONVERSATION_NAME_TASK_INSTRUCTION =
+  'This is a naming-only task. Do not edit files, run commands, use tools, or perform the first request.'
+
+export function conversationNameTaskPrompt(prompt: string): string {
+  return prompt.trimEnd().endsWith(CONVERSATION_NAME_TASK_INSTRUCTION)
+    ? prompt
+    : `${prompt}\n\n${CONVERSATION_NAME_TASK_INSTRUCTION}`
+}
+
 export function buildConversationNamePrompt(
   context: ConversationNameContext,
   customPrompt = ''
@@ -27,7 +36,9 @@ Output only the title, with no heading, quotes, or explanation.
 First request:
 ${firstPrompt}`
   const extra = customPrompt.trim()
-  return extra ? `${basePrompt}\n\nAdditional instructions:\n${extra}` : basePrompt
+  return conversationNameTaskPrompt(
+    extra ? `${basePrompt}\n\nAdditional instructions:\n${extra}` : basePrompt
+  )
 }
 
 export function renderConversationNamePrompt(

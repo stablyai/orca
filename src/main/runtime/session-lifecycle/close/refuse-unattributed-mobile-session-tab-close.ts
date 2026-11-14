@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithResumeAgentSessionInWorkspace } from '../projection/resume-agent-session-in-workspace'
-import type { RuntimeMobileSessionTabCloseResult } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabCloseResult } from '../../../../shared/runtime-session-contracts'
 
 export abstract class OrcaRuntimeWithRefuseUnattributedMobileSessionTabClose extends OrcaRuntimeWithResumeAgentSessionInWorkspace {
   async refuseUnattributedMobileSessionTabClose(

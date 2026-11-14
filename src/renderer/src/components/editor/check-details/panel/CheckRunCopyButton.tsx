@@ -1,8 +1,8 @@
 import React from 'react'
 import { Check, Copy } from 'lucide-react'
-import { useClipboardTextCopyFeedback } from '@/hooks/use-clipboard-text-copy-feedback'
-import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useClipboardTextCopyFeedback } from '@/hooks/clipboard/use-clipboard-text-copy-feedback'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 
@@ -13,15 +13,16 @@ export function CheckRunCopyButton({
   text: string
   label: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const { canCopy, copyText, status } = useClipboardTextCopyFeedback(text)
   const accessibleLabel =
     status === 'copied'
-      ? translate('auto.components.editor.CheckRunCopyButton.copied', 'Copied')
+      ? t('auto.components.editor.CheckRunCopyButton.copied', 'Copied')
       : status === 'failed'
-        ? translate('auto.components.editor.CheckRunCopyButton.failed', "Couldn't copy")
+        ? t('auto.components.editor.CheckRunCopyButton.failed', "Couldn't copy")
         : canCopy
           ? label
-          : translate('auto.components.editor.CheckRunCopyButton.empty', 'Nothing to copy')
+          : t('auto.components.editor.CheckRunCopyButton.empty', 'Nothing to copy')
 
   return (
     <Tooltip>

@@ -11,7 +11,7 @@ export type GitConflictKind =
 
 export type GitConflictResolutionStatus = 'unresolved' | 'resolved_locally'
 export type GitConflictStatusSource = 'git' | 'session'
-export type GitConflictOperation = 'merge' | 'rebase' | 'cherry-pick' | 'unknown'
+export type GitConflictOperation = 'merge' | 'rebase' | 'cherry-pick' | 'revert' | 'unknown'
 export type GitSubmoduleStatus = {
   commitChanged: boolean
   trackedChanges: boolean

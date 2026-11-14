@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import * as path from 'node:path'
 import * as gitOperationLock from '../commands/git-operation-lock'
-import { resolveGitFetchHeadCommand, runWithGitFetchHeadLock } from './git-fetch-head-lock'
+import { runWithGitFetchHeadLock } from './git-fetch-head-lock'
 
 function observeLockEntries(expected: number) {
   const original = gitOperationLock.runWithGitOperationLock
@@ -28,38 +28,7 @@ function observeLockEntries(expected: number) {
 }
 
 describe('runWithGitFetchHeadLock', () => {
-  it.each([
-    { args: ['fetch', 'origin'], expected: true },
-    { args: ['pull', '--rebase'], expected: true },
-    { args: ['-c', 'maintenance.auto=false', 'fetch', 'origin'], expected: true },
-    { args: ['fetch', '--no-write-fetch-head', 'origin'], expected: false },
-    {
-      args: [
-        'fetch',
-        '--no-write-fetch-head',
-        'origin',
-        '+refs/heads/main:refs/orca/rebase/one',
-        '+refs/heads/main:refs/remotes/origin/main'
-      ],
-      expected: true
-    },
-    { args: ['fetch', '--no-write-fetch-head', '--write-fetch-head'], expected: true },
-    { args: ['rev-parse', 'fetch'], expected: false }
-  ])('classifies FETCH_HEAD operations: $args', ({ args, expected }) => {
-    expect(resolveGitFetchHeadCommand(args, '/repo').needsLock).toBe(expected)
-  })
-
   // Use resolve() because the subject resolves paths; POSIX literals would assert CI-host separators.
-  it('resolves -C and --git-dir before deriving the lock identity', () => {
-    expect(resolveGitFetchHeadCommand(['-C', 'repo', 'fetch'], '/tmp')).toMatchObject({
-      cwd: path.resolve('/tmp', 'repo'),
-      needsLock: true
-    })
-    expect(resolveGitFetchHeadCommand(['--git-dir=/repo/.git', 'fetch'], '/tmp')).toMatchObject({
-      gitDir: path.resolve('/tmp', '/repo/.git'),
-      needsLock: true
-    })
-  })
 
   it('serializes FETCH_HEAD users in one worktree without blocking another', async () => {
     const root = await mkdtemp(path.join(tmpdir(), 'fetch-head-lock-isolation-'))

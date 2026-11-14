@@ -2,11 +2,11 @@
 import { vi } from 'vitest'
 import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store/types'
-import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../../../../shared/file-write/disk-baseline-signature'
 import {
   compareDiskWritePrecondition,
   type FileWriteDiskPrecondition
-} from '../../../../../../shared/file-write-disk-precondition'
+} from '../../../../../../shared/file-write/file-write-disk-precondition'
 
 export const GUARDED_PATH = '/repo/file.ts'
 

@@ -1,0 +1,117 @@
+import { pickTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
+import { newAgentLaunchesMayOpenChats } from '@/runtime/native-chat/local-sessions/local-structured-chats'
+import { acquireAgentLaunchChoices } from '../../../agent-session/launch/inventory/host-chat-program-acquisition'
+import { useAppStore } from '@/store/index'
+import type { AppState } from '@/store/types'
+import {
+  getAgentDetectionTargetKeyForWorktree,
+  parseAgentDetectionTargetKey
+} from '@/hooks/useAgentDetectionTarget'
+import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
+import {
+  ensureDetectedAgentsForTarget,
+  readDetectedAgentsForTarget
+} from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
+import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'
+import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import {
+  chosenAgentChatUnlearned,
+  agentChoiceOpensAsChat
+} from '@/lib/agent-session/launch/inventory/host-chat-program'
+import { planAgentSessionLaunch } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
+
+import { createNonSecureContextUuid } from '../../../../../../shared/non-secure-context-uuid'
+import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
+import { readAgentLaunchPreferencesForWorktree } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
+import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
+
+type DefaultChatHost = { target: AgentDetectionTarget; preferences: AgentLaunchPreferences }
+
+/** Share the host between wait/open; undefined means the workspace opens a shell regardless of agent inventory. */
+function defaultChatHost(state: AppState, worktreeId: string): DefaultChatHost | undefined {
+  // Why the owner's copy: a paired host keeps its own default agent.
+  const preferences = readAgentLaunchPreferencesForWorktree(state, worktreeId)
+  const chosen = preferences.defaultTuiAgent
+  // Why: only a saved agent asks for a chat here; Auto must not turn catalog order into a launch (#36594).
+  if (!chosen || chosen === 'blank' || !newAgentLaunchesMayOpenChats(state.settings)) {
+    return undefined
+  }
+  // Why: an unresolved owner is an unknown host, not the local machine.
+  const target = parseAgentDetectionTargetKey(
+    getAgentDetectionTargetKeyForWorktree(state, worktreeId)
+  )
+  return target && { target, preferences }
+}
+
+export function emptyWorkspaceDefaultChatAwaitsDetection(worktreeId: string): boolean {
+  const state = useAppStore.getState()
+  const host = defaultChatHost(state, worktreeId)
+  const detected = host && readDetectedAgentsForTarget(state, host.target)
+  const workspace = worktreeLaunchWorkspace(worktreeId)
+  return (
+    detected === null ||
+    (!!detected &&
+      chosenAgentChatUnlearned(state, host?.preferences.defaultTuiAgent, detected, workspace))
+  )
+}
+
+export async function loadEmptyWorkspaceDefaultChatDetection(worktreeId: string): Promise<void> {
+  const state = useAppStore.getState()
+  const host = defaultChatHost(state, worktreeId)
+  if (!host) {
+    return
+  }
+  await acquireAgentLaunchChoices(
+    worktreeLaunchWorkspace(worktreeId),
+    () => ensureDetectedAgentsForTarget(state, host.target),
+    undefined,
+    true
+  ).catch(() => undefined)
+}
+
+/** Open the configured default chat for an empty workspace; null or host decline seeds a shell, never an unrequested agent TUI. */
+export function openDefaultAgentChatInEmptyWorkspace(
+  worktreeId: string,
+  seedShell: () => boolean,
+  initialCwd?: string
+): { primaryTabId: string | null } | null {
+  const state = useAppStore.getState()
+  const host = defaultChatHost(state, worktreeId)
+  if (!host) {
+    return null
+  }
+  const detected = readDetectedAgentsForTarget(state, host.target)
+  const agent = pickTuiAgent(
+    host.preferences.defaultTuiAgent,
+    detected ?? [],
+    host.preferences.disabledTuiAgents,
+    (chosen) => agentChoiceOpensAsChat(state, chosen, worktreeLaunchWorkspace(worktreeId), detected)
+  )
+  if (!agent) {
+    return null
+  }
+  // No user gesture: opening this empty workspace is the one action this chat serves.
+  const agentSessionLaunchPlan = planAgentSessionLaunch(state, {
+    requestId: createNonSecureContextUuid(),
+    agent,
+    workspace: { kind: workspaceKindForWorktreeId(worktreeId), worktreeId },
+    tuiCustomization: { cwd: initialCwd }
+  })
+  // Why: an agent that can only open as a TUI here would replace the shell with a process nobody asked for.
+  if (agentSessionLaunchPlan.route === 'terminal-tui') {
+    return null
+  }
+  const result = launchAgentInNewTabWithOutcome({
+    agent,
+    worktreeId,
+    initialCwd,
+    launchSource: 'unknown',
+    agentSessionLaunchPlan,
+    pendingActivationSpawn: true,
+    onStructuredHostDeclined: () => ({ opened: seedShell() })
+  })
+  if (!result || 'refused' in result) {
+    return null
+  }
+  return { primaryTabId: result.surface.kind === 'host-published' ? null : result.surface.tabId }
+}

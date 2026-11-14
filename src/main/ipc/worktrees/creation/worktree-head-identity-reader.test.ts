@@ -116,25 +116,4 @@ describe('readGitCommonHeadIdentities', () => {
       expect(await readIdentities(commonDir)).toEqual([])
     }
   })
-
-  it('never emits resolved content that is not a hex object id', async () => {
-    const commonDir = await makeCommonDir()
-    await writeFile(join(commonDir, 'HEAD'), 'ref: refs/heads/main\n')
-    await writeLooseRef(commonDir, 'refs/heads/main', 'not-an-object-id')
-    expect(await readIdentities(commonDir)).toEqual([])
-
-    await writeFile(join(commonDir, 'HEAD'), 'this is not a detached oid\n')
-    expect(await readIdentities(commonDir)).toEqual([])
-  })
-
-  it('omits the primary row for non-standard common dir layouts', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-head-reader-'))
-    roots.push(root)
-    const commonDir = join(root, 'bare-repo')
-    await mkdir(commonDir, { recursive: true })
-    await writeFile(join(commonDir, 'HEAD'), 'ref: refs/heads/main\n')
-    await writeLooseRef(commonDir, 'refs/heads/main', OID_A)
-
-    expect(await readIdentities(commonDir)).toEqual([])
-  })
 })

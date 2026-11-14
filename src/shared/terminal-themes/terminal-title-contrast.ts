@@ -1,3 +1,5 @@
+import type { Rgba } from '../color/rgba-contrast'
+
 type RgbaColor = { r: number; g: number; b: number; a: number }
 
 const APP_SURFACE_COLORS: Record<'dark' | 'light', RgbaColor> = {
@@ -50,6 +52,12 @@ function compositeTerminalBackground(
   const alpha = clampNumber(color.a * (options.backgroundOpacity ?? 1), 0, 1)
   const appSurface = APP_SURFACE_COLORS[options.appSurface ?? 'dark']
   return alpha < 1 ? compositeRgb(color, appSurface, alpha) : { ...color, a: 1 }
+}
+
+/** A hex, rgb()/rgba() or basic named color as channels; null when it is none of those. */
+export function parseTerminalColor(color: string | undefined): Rgba | null {
+  const parsed = parseCssRgbColor(color)
+  return parsed ? [parsed.r, parsed.g, parsed.b, parsed.a] : null
 }
 
 function parseCssRgbColor(color: string | undefined): RgbaColor | null {

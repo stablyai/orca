@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 const cancelHost = vi.hoisted(() => vi.fn(async () => true))
-vi.mock('@/runtime/runtime-host-account-sign-in-client', () => ({
+vi.mock('@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client', () => ({
   cancelHostAccountSignIn: cancelHost,
   isLostHostAnswer: () => false
 }))

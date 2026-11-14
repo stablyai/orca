@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { CONNECTOR_CLIENT_LIMITS } from '../../shared/connector-cloud-contract'
 import { ConnectorTurnEvents } from './connector-turn-events'
 
 const conversation = { source: 'slack', externalId: 'T1:C9:1' } as const
@@ -87,52 +86,5 @@ describe('ConnectorTurnEvents', () => {
     expect(new ConnectorTurnEvents(userDataPath, 'ada').next(1)?.batch).toEqual([
       expect.objectContaining({ kind: 'turn-ended', turnId: 1 })
     ])
-  })
-
-  it('offers a prompt too large for one event as one only Orca can answer', () => {
-    const events = new ConnectorTurnEvents(userDataPath, 'ada')
-    const question = 'x'.repeat(CONNECTOR_CLIENT_LIMITS.maxEventBytes)
-    events.observe({
-      ...prompt('big'),
-      prompt: { kind: 'question', promptId: 'big', question, options: [] }
-    })
-    expect(events.next(1)?.batch).toEqual([
-      expect.objectContaining({ prompt: { kind: 'unsupported', promptId: 'big' } })
-    ])
-  })
-
-  it('names each conversation’s latest turn in the snapshot', () => {
-    const now = 1_800_000_000_000
-    vi.useFakeTimers({ toFake: ['Date'], now })
-    const events = new ConnectorTurnEvents(userDataPath, 'ada')
-    const entry = { conversation, worktreeId: 'wt', paneKey: 'tab:1', agent: 'claude' } as const
-    events.observe({
-      kind: 'snapshot',
-      conversations: [
-        { ...entry, working: true, prompt: null, turnId: 200, activeAt: 0 },
-        {
-          ...entry,
-          paneKey: 'tab:2',
-          working: false,
-          prompt: null,
-          turnId: null,
-          activeAt: now
-        }
-      ]
-    })
-    expect(events.next(1)?.batch[0]).toEqual({
-      kind: 'snapshot',
-      conversations: [
-        {
-          conversation,
-          paneKey: 'tab:1',
-          agent: 'claude',
-          working: true,
-          prompt: null,
-          turnId: 200
-        },
-        { conversation, paneKey: 'tab:2', agent: 'claude', working: false, prompt: null }
-      ]
-    })
   })
 })

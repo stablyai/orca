@@ -3,23 +3,27 @@ import {
   emptyCrew,
   type OrchestrationCrewSnapshot,
   type OrchestrationCrewRow
-} from '../../../../shared/orchestration-crew'
+} from '../../../../shared/orchestration/orchestration-crew'
 import { parseOrcaSessionAddress } from '../../../../shared/orca-session-address'
-import { isPublicOrchestrationAddress } from '../../../../shared/orchestration-agent-reference'
-import { createLineageRunningSessionResolver } from '../structured-session-lineage'
+import { isPublicOrchestrationAddress } from '../../../../shared/orchestration/mailbox/orchestration-agent-reference'
+import { createLineageRunningSessionResolver } from '../addressing/session-lineage/structured-session-lineage'
 import { crewDisplayName, crewTaskDisplay } from './crew-rules'
 import type { CrewAssignmentRow } from './crew-query'
 
 import type { Party } from './crew-parties'
 import { crewParentRelations } from './crew-parent-relations'
 import { createCrewHostDerivation } from './crew-host-derivation'
-import { statusForFleetWorker } from '../../../../shared/orchestration-fleet-status-index'
-import { projectLiveness } from '../../../../shared/orchestration-fleet-worker-projection'
-import { federatedMessageNamesOnlyHome } from '../dispatch-report-mailbox'
-import { workerReportRefusal } from '../worker-report-admission'
+import { statusForFleetWorker } from '../../../../shared/orchestration/fleet/orchestration-fleet-status-index'
+import {
+  projectLiveness,
+  sessionActivityEvidence
+} from '../../../../shared/orchestration/fleet/orchestration-fleet-worker-projection'
+import { createSessionWorkerLivenessReader } from '../workers/lifecycle/session-worker-liveness'
+import { isStructuredWorkerHandle } from '../../../../shared/orchestration/workers/structured-worker-handle'
+import { federatedMessageNamesOnlyHome } from '../workers/reports/dispatch-report-mailbox'
+import { workerReportRefusal } from '../workers/reports/worker-report-admission'
 import { isEquivalentPaneKey } from '../db/pane-key-match'
 import type { CrewReadDependencies } from './crew-read-dependencies'
-export type { CrewReadDependencies, CrewIdentityRead } from './crew-read-dependencies'
 
 function preview(body: string): string {
   // One extra UTF-16 unit distinguishes a full ASCII preview from a longer body.
@@ -35,7 +39,7 @@ function preview(body: string): string {
 export function buildCrewSnapshot(
   address: string,
   deps: CrewReadDependencies,
-  host = createCrewHostDerivation(deps, deps.now ?? Date.now())
+  host = createCrewHostDerivation(deps)
 ): OrchestrationCrewSnapshot {
   deps = { ...host.deps, now: deps.now }
   const db = deps.db
@@ -51,6 +55,7 @@ export function buildCrewSnapshot(
   const { party, alias, addressOf, getParty, aliasesFor } = registry
   const records = host.deps.records
   const runningSession = createLineageRunningSessionResolver(records)
+  const observeSession = createSessionWorkerLivenessReader(db, host.deps.statuses, records)
   const hydrate = (addresses: string[], panes: string[] = []) => {
     const provenance = host.sourceInputs.provenance(addresses, panes)
     for (const family of [provenance.local, provenance.remote]) {
@@ -150,8 +155,13 @@ export function buildCrewSnapshot(
           evidence.binding.terminalHandle === target.terminalHandle &&
           evidence.binding.paneKey === target.paneKey &&
           (evidence.binding.kind !== 'worker' || evidence.binding.dispatchId === assignment?.id)))
-    const fresh =
-      bound && projectLiveness({ resource: null }, evidence, now).verdict === 'live'
+    // Chats keep their own status row: their reach check queries SQLite on every Crew rebuild.
+    const session = isStructuredWorkerHandle(worker?.agentTerminalHandle)
+      ? observeSession(worker!)
+      : undefined
+    const fresh = session
+      ? sessionActivityEvidence(session)
+      : bound && projectLiveness({ resource: null }, evidence, now).verdict === 'live'
         ? evidence
         : undefined
     const row: OrchestrationCrewRow = {
@@ -195,11 +205,18 @@ export function buildCrewSnapshot(
     return row
   }
   const snapshot = emptyCrew('ok')
+  const approvals = Map.groupBy(
+    host.sourceInputs.approvals(selfAliases()),
+    ({ approval }) => approval.worker.dispatchId
+  )
   for (const { assignment, worker, parent } of host.relations.get(self.address) ?? []) {
     if (parent.address === self.address) {
-      snapshot.sections.managing.push(
-        decorate(worker, 'worker', assignment, `dispatch:${assignment.id}`)
-      )
+      const row = decorate(worker, 'worker', assignment, `dispatch:${assignment.id}`)
+      const own = approvals.get(assignment.id)
+      if (own) {
+        row.approvals = own
+      }
+      snapshot.sections.managing.push(row)
     }
   }
   const parents = host.sourceInputs.parentInputs(selfAliases(), self.paneKey ? [self.paneKey] : [])

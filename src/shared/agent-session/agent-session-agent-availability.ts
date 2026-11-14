@@ -15,8 +15,8 @@ export const AGENT_SESSION_AVAILABILITY_METHOD = 'agentSession.subscribeAvailabi
  *  download it; `unknown` depends on the workspace or could not be read. Older hosts omit it. */
 export type AgentSessionChatProgram = 'available' | 'installable' | 'missing' | 'unknown'
 
-/** `refused` carries the reason (`agent`: this host cannot run its chat); `unknown` is a check that
- *  could not answer, which is never a refusal. */
+/** `refused` carries the reason (`agent`: this host cannot run its chat; `windows`: the agent has
+ *  no chat on a Windows host); `unknown` is a check that could not answer, never a refusal. */
 export type AgentSessionAgentAvailability = (
   | { agent: string; state: 'available' }
   | { agent: string; state: 'refused'; reason?: string }

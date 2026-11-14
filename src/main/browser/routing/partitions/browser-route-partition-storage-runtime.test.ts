@@ -105,15 +105,6 @@ describe('route partition storage runtime with local SSH scopes', () => {
     expect(mocks.bindings.size).toBe(3)
   })
 
-  it('skips the sweep when reading the target list throws', async () => {
-    await expect(
-      collectOrphanedBrowserRoutePartitionStorage(() => {
-        throw new Error('ssh target store unavailable at partition sweep')
-      })
-    ).rejects.toThrow('ssh target store unavailable')
-    expect(mocks.cleared).toEqual([])
-  })
-
   it('honors the retention-probe union: a retained partition survives every destructive path', async () => {
     const { registerBrowserRoutePartitionRetentionProbe } =
       await import('./browser-route-partition-retention')

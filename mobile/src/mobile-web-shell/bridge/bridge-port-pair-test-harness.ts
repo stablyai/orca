@@ -1,4 +1,5 @@
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { createFakeRpcClient, type FakeRpcClient } from '../bridge-host-test-fakes'
 import { createBridgeHost, type BridgeHostDiagnostic } from '../bridge-host'
 import type { BridgeNavigateBackOutcome } from '../bridge-host-contract'
 import { BRIDGE_MAX_PENDING_REQUESTS } from './bridge-caps'
@@ -23,7 +24,6 @@ export type {
   BridgePortObservation
 } from './bridge-port-pair-contract'
 import { createLane, readAll, defaultVerbAnswer, neutralObservation } from './bridge-port-lane'
-export { createFakeBridgePortPair, disposeBridgePortPair } from './bridge-port-pair-lifecycle'
 
 export const PORT_PAIR_CLIENT_IDENTITY = 'device-token-a'
 
@@ -79,6 +79,7 @@ export function createBridgePortPair<TRpc extends RpcClient>(
       options.clientIdentity === undefined ? PORT_PAIR_CLIENT_IDENTITY : options.clientIdentity,
     pageRoutes: options.pageRoutes ?? ['/h/[hostId]'],
     routeGrants: options.routeGrants ?? MOBILE_WEB_SHELL_GRANTS,
+    ...(options.pageRouteGrants === undefined ? {} : { pageRouteGrants: options.pageRouteGrants }),
     ...(options.ownsHostArea === undefined ? {} : { ownsHostArea: options.ownsHostArea }),
     sessionEstablished: options.sessionEstablished ?? false,
     onNavigate: (href) => navigations.push(href),
@@ -216,4 +217,35 @@ export async function fillFreeDesktopSlots(pair: BridgePortPair): Promise<number
     }
   }
   return BRIDGE_MAX_PENDING_REQUESTS + 1
+}
+
+export function createFakeBridgePortPair(
+  options: Omit<BridgePortPairOptions<FakeRpcClient>, 'rpc'> & { rpc?: FakeRpcClient } = {}
+): BridgePortPair<FakeRpcClient> {
+  return createBridgePortPair({ ...options, rpc: options.rpc ?? createFakeRpcClient() })
+}
+
+// Attempt each already-owned teardown phase even when an earlier original close throws.
+export async function disposeBridgePortPair(
+  pair: Pick<BridgePortPair<RpcClient>, 'client' | 'host' | 'flush'>
+): Promise<void> {
+  const errors: unknown[] = []
+  // Async wrappers turn a synchronous close/dispose throw into a rejection the same catch records.
+  for (const cleanup of [
+    async () => pair.client.close(),
+    async () => pair.host.dispose(),
+    () => pair.flush()
+  ]) {
+    try {
+      await cleanup()
+    } catch (error) {
+      errors.push(error)
+    }
+  }
+  if (errors.length === 1) {
+    throw errors[0]
+  }
+  if (errors.length) {
+    throw new AggregateError(errors, 'Bridge pair teardown failed')
+  }
 }

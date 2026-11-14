@@ -1,5 +1,5 @@
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
-import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
+import { isAgentStatusFresh } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 
 export type PetAnimationName =
   | 'idle'
@@ -46,7 +46,7 @@ function agentStateAnimation(
   let hasDone = false
 
   for (const entry of entries) {
-    if (!isExplicitAgentStatusFresh(entry, now, staleAfterMs)) {
+    if (!isAgentStatusFresh(entry, now, staleAfterMs)) {
       continue
     }
     if (entry.state === 'blocked' || entry.state === 'waiting') {

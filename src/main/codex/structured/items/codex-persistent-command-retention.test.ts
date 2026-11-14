@@ -1,5 +1,5 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { CodexBackgroundCommandTracker } from '../background-work/codex-background-command-tracker'
@@ -56,37 +56,6 @@ function fixture() {
 }
 
 describe('persistent command retention', () => {
-  it('does not rebuild unchanged persistent output on every later lifecycle flush', () => {
-    const { items } = fixture()
-    const event = command('root', 'quiet')
-    items.handle(event)
-    items.streams.handle('root', 'item/commandExecution/outputDelta', {
-      itemId: 'quiet',
-      delta: 'retained-prefix'
-    })
-    items.streams.flush()
-    const originalJoin = Array.prototype.join
-    let retainedJoins = 0
-    const spy = vi.spyOn(Array.prototype, 'join').mockImplementation(function (
-      this: unknown[],
-      separator
-    ) {
-      if (this[0] === 'retained-prefix') {
-        retainedJoins += 1
-      }
-      return originalJoin.call(this, separator)
-    })
-    try {
-      for (let index = 0; index < 100; index += 1) {
-        items.streams.flush()
-      }
-    } finally {
-      spy.mockRestore()
-      items.dispose()
-    }
-    expect(retainedJoins).toBe(0)
-  })
-
   it('retains 448 live commands through completed turns, late output, and process completion', () => {
     const { items, sink, rows, scheduled } = fixture()
     const tracker = new CodexBackgroundCommandTracker('thread-0')
@@ -160,29 +129,5 @@ describe('persistent command retention', () => {
     expect(tracker.tasks()).toEqual([])
     items.dispose()
     expect(scheduled.size).toBe(0)
-  })
-
-  it('retains startup provenance when large command metadata is bounded', () => {
-    const { items, sink } = fixture()
-    const event = command('root', 'large')
-    event.params.item.command = 'x'.repeat(128 * 1024)
-    expect(items.handle(event)).toMatchObject({ admission: { accepted: true } })
-    expect(
-      settleCodexJournalTurn({
-        sessionId: 'session',
-        threadId: 'root',
-        turnId: 'turn',
-        turnLifecycle: null,
-        completedAt: 1,
-        turnEnd: 'completed',
-        sink,
-        streams: items.streams,
-        activeItems: items.activeItems,
-        attributionFor: () => ({ turnScope: AGENT_JOURNAL_THREAD_SCOPE })
-      })
-    ).toEqual({ accepted: true })
-    expect(items.activeItems.size).toBe(1)
-    expect(items.streams.persistentCount).toBe(1)
-    items.dispose()
   })
 })

@@ -1,17 +1,17 @@
 // Use a real editor slice and isolated window/filesystem bridge across autosave suites.
 import { vi } from 'vitest'
 import { createStore, type StoreApi } from 'zustand/vanilla'
-import '@/store/slices/editor'
+
 import { createEditorSlice } from '@/store/slices/editor/create-editor-slice'
-import { withEditorBufferRecords } from '@/store/editor-buffer-record-lifecycle'
+import { withEditorBufferRecords } from '@/store/slices/editor/buffers/editor-buffer-record-lifecycle'
 import type { AppState } from '@/store/types'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
-import { emptyTabLayoutState } from '@/store/slices/editor-slice-test-harness'
-import { getDiskBaselineSignature } from '../../../../../shared/disk-baseline-signature'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { emptyTabLayoutState } from '@/store/slices/editor/editor-slice-test-harness'
+import { getDiskBaselineSignature } from '../../../../../shared/file-write/disk-baseline-signature'
 import {
   compareDiskWritePrecondition,
   type FileWriteDiskPrecondition
-} from '../../../../../shared/file-write-disk-precondition'
+} from '../../../../../shared/file-write/file-write-disk-precondition'
 
 export type FakeEditorDisk = {
   files: Map<string, string>

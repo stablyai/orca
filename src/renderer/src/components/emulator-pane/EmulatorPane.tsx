@@ -1,3 +1,4 @@
+import { emulatorOpeningMessage } from './emulator-opening-message'
 import type { Tab } from '../../../../shared/tab-types'
 import { EmulatorPaneToolbar } from './emulator-pane-toolbar'
 import { EmulatorDeviceFrame } from './emulator-device-frame'
@@ -5,7 +6,7 @@ import { MobileEmulatorAgentSetupGuideLayer } from './MobileEmulatorAgentSetupGu
 import { useEmulatorPaneSession } from './use-emulator-pane-session'
 import { scrcpyDeviceIdFromStreamUrl } from './emulator-scrcpy-stream-url'
 import { useEmulatorInputCheck } from './use-emulator-input-check'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 type EmulatorPaneProps = {
@@ -16,6 +17,7 @@ type EmulatorPaneProps = {
 }
 
 export default function EmulatorPane({ tab, worktreeId, isActive = true }: EmulatorPaneProps) {
+  const t = useTranslate()
   useUiLanguageRevision()
   const {
     devices,
@@ -23,6 +25,7 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
     setSelectedUdid,
     loading,
     error,
+    selectionRequired,
     attach,
     markStreamLost,
     shutdown,
@@ -31,6 +34,7 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
     sendGesture,
     sendRotate,
     displayName,
+    deviceId,
     previewUrl,
     wsUrl,
     streamKey,
@@ -69,6 +73,11 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
         onRotate={() => void sendRotate()}
       />
 
+      {selectionRequired && (
+        <p role="status" className="border-b border-border px-3 py-2 text-xs text-muted-foreground">
+          {emulatorOpeningMessage(selectionRequired, t)}
+        </p>
+      )}
       {visibleError ? (
         <div className="border-b border-border bg-destructive/10 px-3 py-2 text-xs text-destructive">
           {visibleError}
@@ -85,13 +94,11 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
         <MobileEmulatorAgentSetupGuideLayer isActive={isActive}>
           {!isLive && !loading ? (
             <p className="mb-4 text-center text-xs text-muted-foreground">
-              {translate(
-                'auto.components.emulator.pane.EmulatorPane.59b08fa031',
-                'No emulator connected'
-              )}
+              {t('auto.components.emulator.pane.EmulatorPane.59b08fa031', 'No emulator connected')}
             </p>
           ) : null}
           <EmulatorDeviceFrame
+            deviceId={deviceId}
             previewUrl={previewUrl}
             wsUrl={wsUrl}
             streamKey={streamKey}

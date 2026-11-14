@@ -2,7 +2,10 @@
 
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentType } from '../../../shared/agent-status/contracts/agent-status-types'
-import { boundPayload, digestPayload } from '../agent-session-journal/journal-payload-bounds'
+import {
+  boundPayload,
+  digestPayload
+} from '../agent-session-journal/item-lifecycle/journal-payload-bounds'
 
 /** Minted keys are acquisition-unique and need no provider namespace. */
 export type ProviderTimelineKey = { source: 'provider' | 'minted'; value: string }
@@ -61,6 +64,12 @@ export function spellProviderTimelineKey(
   return key.source === 'provider'
     ? `p:${providerTimelineKeyPart(namespace)}:${scope}${providerTimelineKeyPart(key.value)}`
     : `m:${providerTimelineKeyPart(key.value)}`
+}
+
+/** Read the encoded provider key from the exact turn spelling; never decode bounded IDs. */
+export function providerTimelineTurnKeyPart(turnId: string): string | null {
+  const parts = turnId.split(':')
+  return parts.length === 3 && parts[0] === 'p' ? parts[2]! : null
 }
 
 export function isProviderTimelineTurnInNamespace(turnId: string, namespace: string): boolean {

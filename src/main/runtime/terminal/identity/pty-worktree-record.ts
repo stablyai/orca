@@ -1,14 +1,14 @@
-import { RuntimeWorkspaceRepoScanRefresh } from '../../workspaces/workspace-repo-scan-refresh'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import { RuntimeWorkspaceRepoScanRefresh } from '../../workspaces/catalog/workspace-repo-scan-refresh'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { cloneAgentSessionOwnerBinding } from '../../../../shared/claimed-agent-pty-owner-snapshot'
 import { advertisedUrlWatcher } from '../../../ports/advertised-url-watcher'
-import { maxTimestamp } from '../../runtime-worktree-status-projection'
-import type { RuntimeSyncedLeaf } from '../../../../shared/runtime-types'
+import { maxTimestamp } from '../../workspaces/process-listing/runtime-worktree-status-projection'
+import type { RuntimeSyncedLeaf } from '../../../../shared/runtime-session-contracts'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import { inferWorktreeIdFromPtyId } from '../../runtime-worktree-path-identity'
+import { inferWorktreeIdFromPtyId } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
   mainDecidesLeafLiveness,
@@ -19,7 +19,7 @@ import {
 import {
   recordPtySurfaceClaim,
   SURFACE_CLAIM_WITHOUT_STANDING
-} from '../../pty-recorded-surface-topology'
+} from '../surface/pty-recorded-surface-topology'
 import { followExportedPaneKeys } from './exported-pane-key-follow'
 
 export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceRepoScanRefresh {
@@ -69,6 +69,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
         | 'wslDistro'
         | 'incarnationId'
         | 'agentSessionOwners'
+        | 'worktreeInferredFromCwd'
       >
     > = {}
   ): RuntimePtyWorktreeRecord {
@@ -95,6 +96,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
         ptyId,
         incarnationId: state.incarnationId ?? null,
         worktreeId,
+        ...(state.worktreeInferredFromCwd ? { worktreeInferredFromCwd: true } : {}),
         connectionId,
         runtimeSessionOwned: state.runtimeSessionOwned ?? false,
         isWsl: state.isWsl ?? null,
@@ -132,7 +134,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
         managementTitle: null,
         managementTitleAt: null,
         controllerTitle: null,
-        title: state.title ?? null,
+        title: state.title || null,
         titleUpdatedAt: titleObservedAt,
         titleObservedAtEpochMs: titleObservedAt !== null ? Date.now() : null,
         lastOutputAt: state.lastOutputAt ?? null,
@@ -165,7 +167,7 @@ export abstract class OrcaRuntimeWithRecordPtyWorktree extends RuntimeWorkspaceR
       return pty
     }
 
-    this.terminalIdentity.setPtyWorktreeId(pty, worktreeId)
+    this.terminalIdentity.setPtyWorktree(pty, worktreeId, state.worktreeInferredFromCwd === true)
     if (
       state.incarnationId !== undefined &&
       pty.incarnationId !== null &&

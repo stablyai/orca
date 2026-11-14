@@ -1,0 +1,130 @@
+import { useAppStateView } from '@/store/retained-views/app-state-view'
+import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'
+import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
+import { useMemo } from 'react'
+import { isCustomAgentId } from '../../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
+import { pickSourceControlLaunchAgent } from '../../../../../../shared/source-control/ai/source-control-launch-agent-selection'
+import type { SelectedSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
+import type { Repo } from '../../../../../../shared/repo-types'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import { isTuiAgentEnabled } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
+import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
+import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
+import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
+import {
+  sourceControlRepoAgentRows,
+  sourceControlAgentPickerSelection,
+  type SourceControlAgentRows
+} from '@/lib/source-control/ai/source-control-agent-picker'
+import { isSourceControlAgentDetectedAndEnabled } from './source-control-agent-action-dialog-support'
+
+const NO_AGENTS: TuiAgent[] = []
+// Why: a launch named by neither workspace nor project runs on this machine, as it always has.
+const NO_PROJECT_ROWS: SourceControlAgentRows = {
+  target: { workspace: { kind: 'git-worktree' } },
+  detectionTarget: { kind: 'local' }
+}
+
+/**
+ * The agent, route and rows a Source Control dialog starts with, from the one host observation the
+ * "+" menu reads: the workspace's host, or the repo's host for a workspace not created yet.
+ */
+export function useSourceControlActionAgentChoice(args: {
+  open: boolean
+  worktreeId?: string | null
+  repoId?: string | null
+  repo: Pick<Repo, 'id' | 'kind' | 'connectionId' | 'executionHostId'> | null
+  recipe: SelectedSourceControlActionRecipe
+  /** This open's deliberate pick; absent replays the saved recipe. */
+  livePick: AgentLaunchSurface | undefined
+  terminalOnly?: boolean
+}) {
+  const store = useAppStateView()
+  const { recipe } = args
+  const worktreeDetectionTarget = useAgentDetectionTargetForWorktree(args.worktreeId ?? null)
+  const rows = useMemo(
+    () =>
+      args.worktreeId
+        ? { target: args.worktreeId, detectionTarget: worktreeDetectionTarget }
+        : args.repoId
+          ? sourceControlRepoAgentRows(args.repo)
+          : NO_PROJECT_ROWS,
+    [args.worktreeId, args.repoId, args.repo, worktreeDetectionTarget]
+  )
+  const observation = useAgentMenuObservation(rows.target, args.open, rows.detectionTarget, {
+    wakeOnOpen: true
+  })
+  const { detectedIds, detectionFailed, needsServerUpdate } = observation.detection
+  const detectedAgents = args.terminalOnly
+    ? (detectedIds ?? NO_AGENTS)
+    : observation.model.state === 'settled'
+      ? [
+          ...new Set(
+            observation.model.rows
+              .filter((row) => row.kind !== 'chat-unavailable')
+              .map((row) => row.agent)
+          )
+        ]
+      : (detectedIds ?? NO_AGENTS)
+  const detecting = detectedIds === null && !detectionFailed && !needsServerUpdate
+  const { preferences } = observation
+  const disabledAgents = preferences.disabledTuiAgents
+  const selectedAgent =
+    recipe.agentId && !isCustomAgentId(recipe.agentId)
+      ? recipe.agentId
+      : pickSourceControlLaunchAgent({
+          defaultAgent: preferences.defaultTuiAgent,
+          detectedAgents: detectedIds ?? NO_AGENTS,
+          disabledAgents,
+          chosenOpensAsChat: (agent) =>
+            !args.terminalOnly &&
+            observation.model.state === 'settled' &&
+            observation.model.rows.some((row) => row.kind === 'chat' && row.agent === agent)
+        })
+  const savedSurface = recipe.agentId === selectedAgent ? recipe.surface : undefined
+  const liveSurface = args.terminalOnly ? 'terminal' : (args.livePick ?? savedSurface)
+  const selection = observation.selectionFor(
+    selectedAgent,
+    args.terminalOnly
+      ? 'terminal'
+      : (args.livePick ?? (savedSurface === 'terminal' ? 'terminal' : undefined)),
+    !args.terminalOnly && savedSurface === 'chat' ? 'chat' : undefined
+  )
+  const enabledDetectedAgents = detectedAgents.filter((agent) =>
+    isTuiAgentEnabled(agent, disabledAgents)
+  )
+  const selectedAgentUnavailable =
+    !detecting &&
+    Boolean(
+      selectedAgent &&
+      !isSourceControlAgentDetectedAndEnabled(selectedAgent, detectedAgents, disabledAgents)
+    )
+  const route = buildAgentLaunchRouteInput(store.getState(), {
+    agent: selectedAgent ?? 'claude',
+    workspace: args.worktreeId
+      ? { worktreeId: args.worktreeId, kind: workspaceKindForWorktreeId(args.worktreeId) }
+      : typeof rows.target === 'string'
+        ? { worktreeId: rows.target, kind: workspaceKindForWorktreeId(rows.target) }
+        : rows.target.workspace
+  })
+  return {
+    observation,
+    canSaveSurface:
+      route.hostCapabilities?.includes(AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY) === true,
+    detectedAgents,
+    detecting,
+    selectedAgent,
+    liveSurface,
+    selection,
+    pickerSelection: sourceControlAgentPickerSelection(observation.model, selection),
+    selectedAgentUnavailable,
+    hasEnabledAgents: enabledDetectedAgents.length > 0,
+    agentOptions: getAgentCatalog().filter(
+      (entry) => enabledDetectedAgents.includes(entry.id) || entry.id === selectedAgent
+    ),
+    // Why the captured route, not `selection.cli`: plain mode labels no row "(CLI)" yet applies them.
+    launchAppliesAgentArgs: selection.choice?.route !== 'structured-native-chat'
+  }
+}

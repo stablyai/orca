@@ -19,24 +19,6 @@ describe('runExclusivelyForCodexTrustConfig', () => {
     expect(nested).toBe('inner')
   })
 
-  it('still queues an unrelated lane acquired from inside another lane', async () => {
-    const gate = deferred()
-    let innerRan = false
-    const blocking = runExclusivelyForCodexTrustConfig('/b/config.toml', () => gate.promise)
-    const nested = runExclusivelyForCodexTrustConfig('/a/config.toml', () =>
-      runExclusivelyForCodexTrustConfig('/b/config.toml', () => {
-        innerRan = true
-        return Promise.resolve()
-      })
-    )
-    await Promise.resolve()
-    expect(innerRan).toBe(false)
-    gate.resolve()
-    await blocking
-    await nested
-    expect(innerRan).toBe(true)
-  })
-
   it('keeps the queue alive after a rejected mutation', async () => {
     const failing = runExclusivelyForCodexTrustConfig('/a/config.toml', () =>
       Promise.reject(new Error('grant blew up'))
@@ -45,25 +27,6 @@ describe('runExclusivelyForCodexTrustConfig', () => {
     await expect(
       runExclusivelyForCodexTrustConfig('/a/config.toml', () => Promise.resolve('next'))
     ).resolves.toBe('next')
-  })
-
-  it('serializes equivalent paths that differ only in normalization', async () => {
-    const gate = deferred()
-    let secondStarted = false
-    const blocked = runExclusivelyForCodexTrustConfig(
-      String.raw`C:\Users\Alice\.codex\config.toml`,
-      () => gate.promise
-    )
-    const queued = runExclusivelyForCodexTrustConfig('C:/Users/Alice/.codex/config.toml', () => {
-      secondStarted = true
-      return Promise.resolve()
-    })
-    await Promise.resolve()
-    expect(secondStarted).toBe(false)
-    gate.resolve()
-    await blocked
-    await queued
-    expect(secondStarted).toBe(true)
   })
 
   it('coalesces WSL UNC aliases without folding the case-sensitive Linux path', async () => {

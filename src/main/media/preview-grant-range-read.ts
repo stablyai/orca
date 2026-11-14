@@ -1,7 +1,8 @@
 import { openLocalPreviewGrantFile } from './local-preview-grant-file'
 import {
   previewGrantForSender,
-  remoteSnapshot,
+  remotePreviewReader,
+  remotePreviewVersion,
   revokeGrant,
   type PreviewSender
 } from './preview-grant-registry'
@@ -40,12 +41,14 @@ export async function readPreviewGrantRange(
   }
   const { token, grant } = found
   if ('remote' in grant.target) {
-    const remote = grant.target.remote
     // A closed window stops its remote chunk reads instead of draining them.
     const lifetime = abortWhenRendererGone(sender)
     try {
-      const { size } = await remoteSnapshot(grant, remote)
-      return await readRemotePreviewRange(remote, offset, length, size, lifetime.signal)
+      const version = await remotePreviewVersion(grant)
+      const read = remotePreviewReader(grant, version)
+      return await read((remote) =>
+        readRemotePreviewRange(remote, offset, length, version.snapshot.size, lifetime.signal)
+      )
     } catch (error) {
       if (error instanceof RemotePreviewPairingChangedError) {
         revokeGrant(token)

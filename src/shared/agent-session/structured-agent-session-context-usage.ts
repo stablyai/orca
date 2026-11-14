@@ -8,6 +8,7 @@ import {
   type AgentSessionContextWindow
 } from './agent-session-context-usage'
 import type { AgentJournalRenderItem } from './journal/agent-session-journal-types'
+import type { AgentSessionOptionsResult } from './options/agent-session-options-result'
 import { readAgentJournalTurn } from './lifecycle/agent-session-turn-record'
 import {
   isAgentSessionContextClear,
@@ -71,6 +72,21 @@ export function selectStructuredAgentContextUsage(
   )
   const fallback = clearedSequence > minimumSequence ? undefined : wholeJournal
   return summarizeStructuredAgentContextFacts({ ...fallback, ...loaded })
+}
+
+/** Fill missing loaded-window facts from the host's whole-journal answer; a floor from another epoch is ignored. */
+export function selectStructuredAgentSessionContextUsage(
+  journalItems: readonly AgentJournalRenderItem[],
+  support: AgentSessionOptionsResult['contextUsage'],
+  journalEpoch?: string | null
+): StructuredAgentContextUsage | null {
+  return selectStructuredAgentContextUsage(
+    journalItems,
+    support?.current,
+    support?.contextFloor && (!journalEpoch || support.contextFloor.epoch === journalEpoch)
+      ? support.contextFloor.sequence
+      : 0
+  )
 }
 
 function summarizeStructuredAgentContextFacts({

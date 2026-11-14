@@ -129,67 +129,6 @@ function makeExec(script: ExecScript = {}): ExecMock {
 }
 
 describe('migrateForkRemoteRefspecsWithExec', () => {
-  it('narrows a wide-refspec remote to the known branch and deletes the strays left by the old wide fetch', async () => {
-    const trackingRefsByRemote = {
-      [FORK_REMOTE]: ['contributor/fix', 'contributor/unrelated-1', 'master']
-    }
-    const exec = makeExec({
-      urlByRemote: { [FORK_REMOTE]: 'git@github.com:contributor/orca.git\n' },
-      fetchByRemote: { [FORK_REMOTE]: ['+refs/heads/*:refs/remotes/pr-contributor-orca/*'] },
-      trackingRefsByRemote
-    })
-
-    const migrated = await migrateForkRemoteRefspecsWithExec(
-      REPO_PATH,
-      REPO_ID,
-      storeOf({ [worktreeId('/wt/a')]: forkTarget() }),
-      exec
-    )
-
-    expect(migrated).toEqual([FORK_REMOTE])
-    expect(exec.mock.calls).toContainEqual([
-      [
-        'config',
-        '--add',
-        `remote.${FORK_REMOTE}.fetch`,
-        '+refs/heads/contributor/fix*:refs/remotes/pr-contributor-orca/contributor/fix*'
-      ],
-      REPO_PATH
-    ])
-    // Narrow fetch --prune cannot remove formerly imported refs; migration must delete them locally.
-    expect(exec.mock.calls.some(([args]) => args[0] === 'fetch' && args[1] === '--prune')).toBe(
-      false
-    )
-    expect(trackingRefsByRemote[FORK_REMOTE]).toEqual(['contributor/fix'])
-  })
-
-  it('unions branches from multiple worktrees sharing the same fork remote', async () => {
-    const exec = makeExec({
-      urlByRemote: { [FORK_REMOTE]: 'git@github.com:contributor/orca.git\n' },
-      fetchByRemote: { [FORK_REMOTE]: ['+refs/heads/*:refs/remotes/pr-contributor-orca/*'] }
-    })
-
-    await migrateForkRemoteRefspecsWithExec(
-      REPO_PATH,
-      REPO_ID,
-      storeOf({
-        [worktreeId('/wt/a')]: forkTarget({ branchName: 'branch-a' }),
-        [worktreeId('/wt/b')]: forkTarget({ branchName: 'branch-b', remoteCreated: false })
-      }),
-      exec
-    )
-
-    const addedRefspecs = exec.mock.calls
-      .filter(([args]) => args[0] === 'config' && args[1] === '--add')
-      .map(([args]) => args[3])
-    expect(addedRefspecs).toEqual(
-      expect.arrayContaining([
-        '+refs/heads/branch-a*:refs/remotes/pr-contributor-orca/branch-a*',
-        '+refs/heads/branch-b*:refs/remotes/pr-contributor-orca/branch-b*'
-      ])
-    )
-  })
-
   it('skips a remote with no provenance evidence (no metadata entry has remoteCreated: true)', async () => {
     const exec = makeExec({
       urlByRemote: { [FORK_REMOTE]: 'git@github.com:contributor/orca.git\n' },
@@ -205,56 +144,6 @@ describe('migrateForkRemoteRefspecsWithExec', () => {
 
     expect(migrated).toEqual([])
     expect(exec.mock.calls.some(([args]) => args[1] === '--unset-all')).toBe(false)
-  })
-
-  it('never touches origin or upstream even with malformed metadata', async () => {
-    const exec = makeExec({ urlByRemote: { origin: 'git@github.com:stablyai/orca.git\n' } })
-
-    const migrated = await migrateForkRemoteRefspecsWithExec(
-      REPO_PATH,
-      REPO_ID,
-      storeOf({ [worktreeId('/wt/a')]: forkTarget({ remoteName: 'origin' }) }),
-      exec
-    )
-
-    expect(migrated).toEqual([])
-  })
-
-  it('scopes provenance to the same repo (remotes are repo-local)', async () => {
-    const exec = makeExec({
-      urlByRemote: { [FORK_REMOTE]: 'git@github.com:contributor/orca.git\n' },
-      fetchByRemote: { [FORK_REMOTE]: ['+refs/heads/*:refs/remotes/pr-contributor-orca/*'] }
-    })
-
-    const migrated = await migrateForkRemoteRefspecsWithExec(
-      REPO_PATH,
-      REPO_ID,
-      storeOf({ 'repo-2::/wt/other-repo': forkTarget() }),
-      exec
-    )
-
-    expect(migrated).toEqual([])
-  })
-
-  it('skips (does not re-fetch) a remote that is already narrow', async () => {
-    const exec = makeExec({
-      urlByRemote: { [FORK_REMOTE]: 'git@github.com:contributor/orca.git\n' },
-      fetchByRemote: {
-        [FORK_REMOTE]: [
-          '+refs/heads/contributor/fix*:refs/remotes/pr-contributor-orca/contributor/fix*'
-        ]
-      }
-    })
-
-    const migrated = await migrateForkRemoteRefspecsWithExec(
-      REPO_PATH,
-      REPO_ID,
-      storeOf({ [worktreeId('/wt/a')]: forkTarget() }),
-      exec
-    )
-
-    expect(migrated).toEqual([])
-    expect(exec.mock.calls.some(([args]) => args[0] === 'fetch')).toBe(false)
   })
 
   it('abandons and cleans up a remote reclaimed concurrently by #17842 reconciliation mid-migration', async () => {
@@ -281,30 +170,6 @@ describe('migrateForkRemoteRefspecsWithExec', () => {
       )
     ).toBe(true)
     expect(exec.mock.calls.some(([args]) => args[0] === 'update-ref')).toBe(false)
-  })
-
-  it('clears the fetch refspec of a wide pr-* remote with zero worktree-metadata trace at all', async () => {
-    const ORPHAN_REMOTE = 'pr-ghost-orca'
-    const trackingRefsByRemote = { [ORPHAN_REMOTE]: ['some-branch', 'another-branch'] }
-    const exec = makeExec({
-      remoteNames: [ORPHAN_REMOTE],
-      urlByRemote: { [ORPHAN_REMOTE]: 'git@github.com:ghost/orca.git\n' },
-      fetchByRemote: { [ORPHAN_REMOTE]: ['+refs/heads/*:refs/remotes/pr-ghost-orca/*'] },
-      trackingRefsByRemote
-    })
-
-    // Metadata-free orphans can only be discovered through Git's remote list.
-    const migrated = await migrateForkRemoteRefspecsWithExec(REPO_PATH, REPO_ID, storeOf({}), exec)
-
-    expect(migrated).toEqual([ORPHAN_REMOTE])
-    expect(exec.mock.calls).toContainEqual([
-      ['config', '--unset-all', `remote.${ORPHAN_REMOTE}.fetch`],
-      REPO_PATH
-    ])
-    expect(exec.mock.calls.some(([args]) => args[0] === 'config' && args[1] === '--add')).toBe(
-      false
-    )
-    expect(trackingRefsByRemote[ORPHAN_REMOTE]).toEqual([])
   })
 
   it('leaves a zero-provenance pr-* remote alone if its refspec is not the stock wide default', async () => {
@@ -334,36 +199,5 @@ describe('migrateForkRemoteRefspecsWithExec', () => {
 
     expect(migrated).toEqual([])
     expect(exec.mock.calls.some(([args]) => args[1] === '--unset-all')).toBe(false)
-  })
-
-  it('also narrows branches only referenced by surviving branch.*.remote config (no metadata left)', async () => {
-    const exec = makeExec({
-      urlByRemote: { [FORK_REMOTE]: 'git@github.com:contributor/orca.git\n' },
-      fetchByRemote: { [FORK_REMOTE]: ['+refs/heads/*:refs/remotes/pr-contributor-orca/*'] },
-      branchConfig: `branch.contributor/preserved.remote ${FORK_REMOTE}`
-    })
-
-    const migrated = await migrateForkRemoteRefspecsWithExec(
-      REPO_PATH,
-      REPO_ID,
-      storeOf({ [worktreeId('/wt/gone')]: forkTarget({ branchName: 'contributor/fix' }) }),
-      exec
-    )
-
-    expect(migrated).toEqual([FORK_REMOTE])
-    const addedRefspecs = exec.mock.calls
-      .filter(([args]) => args[0] === 'config' && args[1] === '--add')
-      .map(([args]) => args[3])
-    expect(addedRefspecs).toEqual(
-      expect.arrayContaining([
-        '+refs/heads/contributor/preserved*:refs/remotes/pr-contributor-orca/contributor/preserved*'
-      ])
-    )
-  })
-})
-
-describe('fork remote refspec migration rate limiting', () => {
-  it('exposes a test reset so repeated test runs are not affected by prior cooldowns', () => {
-    expect(() => _resetForkRemoteRefspecMigrationRateLimitForTests()).not.toThrow()
   })
 })

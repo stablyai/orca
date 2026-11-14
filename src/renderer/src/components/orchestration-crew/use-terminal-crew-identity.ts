@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
-import { getKnownExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { resolveTerminalHandleForPane } from '../terminal-pane/terminal-handle-copy'
+import { resolveTerminalHandleForPane } from '../terminal-pane/clipboard/terminal-handle-copy'
 
 /** One boundary from the pane's actual host/binding to a public crew party. */
 export function useTerminalCrewIdentity(

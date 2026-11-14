@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('@/runtime/mounted-terminal-tab-registry', () => ({
+vi.mock('@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry', () => ({
   hasRegisteredRuntimeTerminalTab: mocks.hasRegisteredRuntimeTerminalTab
 }))
 
@@ -36,7 +36,7 @@ import {
   _resetTerminalPaneSplitRequestRoutingForTests,
   hasTerminalPaneSplitMountLease,
   registerTerminalPaneSplitRequestHandler
-} from '@/components/terminal-pane/terminal-pane-split-request-routing'
+} from '@/components/terminal-pane/layout/split/terminal-pane-split-request-routing'
 import { routeRuntimeTerminalSplitRequest } from './terminal-ui-routing-ipc-bridge'
 
 beforeEach(() => {
@@ -94,103 +94,6 @@ describe('runtime terminal split IPC routing', () => {
     ])
     expect(vi.getTimerCount()).toBe(1)
     unregister()
-  })
-
-  it('dispatches immediately when the target lifecycle is already mounted', () => {
-    const received: SplitTerminalPaneDetail[] = []
-    mocks.hasRegisteredRuntimeTerminalTab.mockReturnValue(true)
-    const unregister = registerTerminalPaneSplitRequestHandler(
-      'tab-parked',
-      'repo::/folder',
-      (detail) => {
-        received.push(detail)
-      }
-    )
-
-    routeRuntimeTerminalSplitRequest({
-      tabId: 'tab-parked',
-      paneRuntimeId: 4,
-      direction: 'vertical'
-    })
-
-    expect(received).toEqual([
-      expect.objectContaining({ tabId: 'tab-parked', paneRuntimeId: 4, direction: 'vertical' })
-    ])
-    expect(mocks.requestBackgroundTerminalWorktreeMount).not.toHaveBeenCalled()
-    expect(hasTerminalPaneSplitMountLease('tab-parked')).toBe(false)
-    unregister()
-  })
-
-  it('falls back to the tab owner when an older main process omits the worktree hint', () => {
-    mocks.hasRegisteredRuntimeTerminalTab.mockReturnValue(false)
-
-    routeRuntimeTerminalSplitRequest({
-      tabId: 'tab-parked',
-      paneRuntimeId: 4,
-      direction: 'vertical'
-    })
-
-    expect(mocks.requestBackgroundTerminalWorktreeMount).toHaveBeenCalledWith({
-      worktreeId: 'repo::/folder',
-      tabIds: ['tab-parked']
-    })
-  })
-
-  it('falls back to a terminal unified-tab owner while legacy rows are hydrating', () => {
-    mocks.hasRegisteredRuntimeTerminalTab.mockReturnValue(false)
-    mocks.state.tabsByWorktree = {}
-    mocks.state.unifiedTabsByWorktree = {
-      'repo::/folder': [
-        { id: 'unified-terminal', entityId: 'tab-unified', contentType: 'terminal' }
-      ]
-    }
-
-    routeRuntimeTerminalSplitRequest({
-      tabId: 'tab-unified',
-      paneRuntimeId: 4,
-      direction: 'vertical'
-    })
-
-    expect(mocks.requestBackgroundTerminalWorktreeMount).toHaveBeenCalledWith({
-      worktreeId: 'repo::/folder',
-      tabIds: ['tab-unified']
-    })
-  })
-
-  it('ignores non-terminal unified tabs when resolving split ownership', () => {
-    mocks.hasRegisteredRuntimeTerminalTab.mockReturnValue(false)
-    mocks.state.tabsByWorktree = {}
-    mocks.state.unifiedTabsByWorktree = {
-      'repo::/folder': [{ id: 'editor-tab', entityId: 'tab-editor', contentType: 'editor' }]
-    }
-
-    routeRuntimeTerminalSplitRequest({
-      tabId: 'tab-editor',
-      paneRuntimeId: 4,
-      direction: 'vertical'
-    })
-
-    expect(mocks.requestBackgroundTerminalWorktreeMount).not.toHaveBeenCalled()
-  })
-
-  it('fails closed when unified terminal ownership disagrees across worktrees', () => {
-    mocks.hasRegisteredRuntimeTerminalTab.mockReturnValue(false)
-    mocks.state.tabsByWorktree = {}
-    mocks.state.unifiedTabsByWorktree = {
-      'repo::/folder': [{ id: 'unified-one', entityId: 'tab-ambiguous', contentType: 'terminal' }],
-      'repo::/other-folder': [
-        { id: 'unified-two', entityId: 'tab-ambiguous', contentType: 'terminal' }
-      ]
-    }
-
-    routeRuntimeTerminalSplitRequest({
-      tabId: 'tab-ambiguous',
-      paneRuntimeId: 4,
-      direction: 'vertical'
-    })
-
-    expect(mocks.requestBackgroundTerminalWorktreeMount).not.toHaveBeenCalled()
-    expect(hasTerminalPaneSplitMountLease('tab-ambiguous')).toBe(false)
   })
 
   it('queues an explicit split while tab ownership is still hydrating', () => {

@@ -1,12 +1,12 @@
 import React, { useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import type {
   GitHubProjectField,
   GitHubProjectFieldMutationValue,
   GitHubProjectRow
-} from '../../../../shared/github/project-types'
+} from '../../../../shared/github/projects/project-types'
 import { chipStyle, colorHex, singleSelectChipColors } from './project-cell-chip-colors'
 import { EmptyProjectCell } from './ProjectCellValueEditors'
 
@@ -23,6 +23,7 @@ export function ProjectSingleSelectCell({
   editable,
   onEditField
 }: SelectionEditorProps): React.JSX.Element {
+  const t = useTranslate()
   const value = row.fieldValuesByFieldId[field.id]
   const [open, setOpen] = useState(false)
   const options = field.kind === 'single-select' ? field.options : []
@@ -51,7 +52,7 @@ export function ProjectSingleSelectCell({
         >
           {label ?? (
             <EmptyProjectCell
-              label={translate('auto.components.github.project.ProjectCell.e369bf4fec', 'Select')}
+              label={t('auto.components.github.project.ProjectCell.e369bf4fec', 'Select')}
             />
           )}
         </button>
@@ -91,6 +92,7 @@ export function ProjectIterationCell({
   editable,
   onEditField
 }: SelectionEditorProps): React.JSX.Element {
+  const t = useTranslate()
   const value = row.fieldValuesByFieldId[field.id]
   const [open, setOpen] = useState(false)
   const iterations = field.kind === 'iteration' ? field.iterations : []
@@ -117,22 +119,19 @@ export function ProjectIterationCell({
         >
           {label ?? (
             <EmptyProjectCell
-              label={translate('auto.components.github.project.ProjectCell.e369bf4fec', 'Select')}
+              label={t('auto.components.github.project.ProjectCell.e369bf4fec', 'Select')}
             />
           )}
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1">
         <IterationGroup
-          label={translate('auto.components.github.project.ProjectCell.e17bb96881', 'Completed')}
+          label={t('auto.components.github.project.ProjectCell.e17bb96881', 'Completed')}
           iterations={iterations.filter((iteration) => iteration.completed)}
           onPick={pick}
         />
         <IterationGroup
-          label={translate(
-            'auto.components.github.project.ProjectCell.191905e20e',
-            'Current & upcoming'
-          )}
+          label={t('auto.components.github.project.ProjectCell.191905e20e', 'Current & upcoming')}
           iterations={iterations.filter((iteration) => !iteration.completed)}
           onPick={pick}
         />
@@ -182,13 +181,14 @@ function IterationGroup({
 }
 
 function ClearSelectionButton({ onClick }: { onClick: () => void }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <button
       type="button"
       className="mt-1 w-full rounded px-2 py-1 text-left text-xs text-muted-foreground hover:bg-muted/50"
       onClick={onClick}
     >
-      {translate('auto.components.github.project.ProjectCell.ebde486e3c', 'Clear')}
+      {t('auto.components.github.project.ProjectCell.ebde486e3c', 'Clear')}
     </button>
   )
 }

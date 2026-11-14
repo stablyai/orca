@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { parseAgentSessionFile } from '../session-scanner-agent-parser'
+import { parseAgentSessionFile } from '../parsing/session-scanner-agent-parser'
 import {
   CODEX_FIXTURE_SESSION_ID,
   codexFixture
@@ -61,6 +61,7 @@ describe('codex-specific resume behavior', () => {
       process.platform
     )
     expect(seeded?.title).toBe('codex seed question')
+    expect(seeded?.titleKind).toBe('fallback')
 
     // Index titles arrive independently of transcript writes.
     await writeFile(
@@ -75,6 +76,7 @@ describe('codex-specific resume behavior', () => {
     )
     expect(stats.reused).toBe(1)
     expect(renamed?.title).toBe('Indexed thread title')
+    expect(renamed?.titleKind).toBe('named')
     expect(renamed).toEqual(
       await parseAgentSessionFile(await candidateFor('codex', path, codexHome), process.platform)
     )

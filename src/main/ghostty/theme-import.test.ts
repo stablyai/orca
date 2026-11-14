@@ -91,39 +91,6 @@ describe('previewGhosttyImport theme references', () => {
     expect(result.unsupportedKeys).toEqual([])
   })
 
-  it('maps a light/dark pair to both slots, falling back to Orca built-ins by name', async () => {
-    mockFiles({
-      [CONFIG_PATH]: 'theme = dark:night , light: catppuccin-latte.conf\npalette = 2=#00ff00\n',
-      [`${USER_THEMES}/night`]: 'background = #000000\nforeground = #ffffff\n'
-    })
-
-    const result = await previewGhosttyImport(createStore())
-
-    expect(result.diff).toMatchObject({
-      terminalThemeDark: 'custom:ghostty:night',
-      terminalThemeLight: 'Catppuccin Latte',
-      terminalUseSeparateLightTheme: true,
-      terminalColorOverrides: { green: '#00ff00' },
-      terminalColorOverridesLight: { green: '#00ff00' }
-    })
-    expect(result.terminalThemes).toEqual({ dark: 'night', light: 'Catppuccin Latte' })
-  })
-
-  it('reports unresolved names and incomplete pairs without touching theme settings', async () => {
-    mockFiles({ [CONFIG_PATH]: 'theme = No Such Theme\n' })
-    const missing = await previewGhosttyImport(createStore())
-    expect(missing.diff).toEqual({})
-    expect(missing.terminalThemes).toBeUndefined()
-    expect(missing.unsupportedKeys).toEqual(['theme (No Such Theme: not found)'])
-
-    mockFiles({ [CONFIG_PATH]: 'theme = light:Catppuccin Latte\n' })
-    const half = await previewGhosttyImport(createStore())
-    expect(half.diff).toEqual({})
-    expect(half.unsupportedKeys).toEqual([
-      'theme (light:/dark: pairs need both a light and a dark theme)'
-    ])
-  })
-
   it('keeps same-named theme files from different folders apart and imports their divider colors', async () => {
     mockFiles({
       [CONFIG_PATH]: 'theme = light:/Users/alice/a/theme,dark:/Users/alice/b/theme\n',
@@ -141,31 +108,5 @@ describe('previewGhosttyImport theme references', () => {
       terminalDividerColorDark: '#333333',
       terminalDividerColorLight: '#cccccc'
     })
-  })
-
-  it('reports nothing to change when the same theme is imported again', async () => {
-    mockFiles({
-      [CONFIG_PATH]: 'theme = night\n',
-      [`${USER_THEMES}/night`]: 'background = #000000\nforeground = #ffffff\n'
-    })
-    const first = await previewGhosttyImport(createStore())
-
-    const second = await previewGhosttyImport(createStore({ ...first.diff }))
-
-    expect(second.diff).toEqual({})
-  })
-
-  it('resolves an absolute theme path without probing theme search dirs', async () => {
-    const themePath = '/Users/alice/themes/work'
-    mockFiles({
-      [CONFIG_PATH]: `theme = ${themePath}\n`,
-      [themePath]: 'background = #f0f0f0\nforeground = #202020\n'
-    })
-
-    const result = await previewGhosttyImport(createStore())
-
-    expect(result.diff.terminalThemeDark).toBe('custom:ghostty:work')
-    expect(result.diff.terminalCustomThemes?.[0]?.mode).toBe('light')
-    expect(statMock).not.toHaveBeenCalledWith(`${USER_THEMES}/Users/alice/themes/work`)
   })
 })

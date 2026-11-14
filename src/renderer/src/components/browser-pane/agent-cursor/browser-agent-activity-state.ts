@@ -8,15 +8,15 @@ type BrowserAgentCursorSink = {
   setActive: (active: boolean) => void
 }
 
-/** The page an agent in a worktree last drove; `revision` orders it against other activity. */
-type BrowserAgentActivityMark = { pageId: string; revision: number }
-
 const activePageIds = new Set<string>()
-const lastActivityByWorktree = new Map<string, BrowserAgentActivityMark>()
+/** The SSH host driving a page through the desktop browser bridge, by its label. */
+const controllerHostByPage = new Map<string, string>()
+/** Activity no chat claimed: older CLIs, remote hosts and terminal agents. */
+const lastUnclaimedPageIdByWorktree = new Map<string, string>()
+const lastPageIdByChatSession = new Map<string, string>()
 const lastCursorByPage = new Map<string, BrowserAgentCursorEvent>()
 const sinksByPage = new Map<string, BrowserAgentCursorSink>()
 const listeners = new Set<() => void>()
-let revision = 0
 
 function notify(): void {
   for (const listener of listeners) {
@@ -34,16 +34,25 @@ function subscribe(listener: () => void): () => void {
 export function setBrowserAgentPageActive(
   browserPageId: string,
   active: boolean,
-  worktreeId: string | null
+  worktreeId: string | null,
+  controllerHostLabel?: string,
+  agentSessionId?: string
 ): void {
   if (active) {
-    revision += 1
     activePageIds.add(browserPageId)
-    if (worktreeId) {
-      lastActivityByWorktree.set(worktreeId, { pageId: browserPageId, revision })
+    if (controllerHostLabel) {
+      controllerHostByPage.set(browserPageId, controllerHostLabel)
+    } else {
+      controllerHostByPage.delete(browserPageId)
+    }
+    if (agentSessionId) {
+      lastPageIdByChatSession.set(agentSessionId, browserPageId)
+    } else if (worktreeId) {
+      lastUnclaimedPageIdByWorktree.set(worktreeId, browserPageId)
     }
   } else {
     activePageIds.delete(browserPageId)
+    controllerHostByPage.delete(browserPageId)
     lastCursorByPage.delete(browserPageId)
   }
   sinksByPage.get(browserPageId)?.setActive(active)
@@ -75,11 +84,6 @@ export function attachBrowserAgentCursorSink(
   }
 }
 
-/** Activity that arrives later than this revision happened after the caller looked. */
-export function getBrowserAgentActivityRevision(): number {
-  return revision
-}
-
 export function useBrowserAgentDrivesAnyPage(
   browserPageIds: readonly (string | null | undefined)[]
 ): boolean {
@@ -87,11 +91,31 @@ export function useBrowserAgentDrivesAnyPage(
   return useSyncExternalStore(subscribe, drives, drives)
 }
 
-/** What an agent in this worktree drove most recently, while this window has been open. */
-export function useLastBrowserAgentActivity(
-  worktreeId: string | null
-): BrowserAgentActivityMark | null {
-  const read = (): BrowserAgentActivityMark | null =>
-    worktreeId ? (lastActivityByWorktree.get(worktreeId) ?? null) : null
+/** The SSH host controlling any of these pages, or null when none is (or a local agent is). */
+export function useBrowserAgentControllerHost(
+  browserPageIds: readonly (string | null | undefined)[]
+): string | null {
+  const read = (): string | null => {
+    for (const id of browserPageIds) {
+      const host = id != null && activePageIds.has(id) ? controllerHostByPage.get(id) : undefined
+      if (host) {
+        return host
+      }
+    }
+    return null
+  }
+  return useSyncExternalStore(subscribe, read, read)
+}
+
+/** The page this chat's agent drove most recently; until it has claimed any, what an unclaimed agent in its worktree drove. */
+export function useLastBrowserAgentPageId(
+  worktreeId: string | null,
+  chatSessionId: string | null
+): string | null {
+  // A chat that claimed activity names itself on this host, so unclaimed activity is another agent's.
+  const read = (): string | null =>
+    (chatSessionId ? lastPageIdByChatSession.get(chatSessionId) : undefined) ??
+    (worktreeId ? lastUnclaimedPageIdByWorktree.get(worktreeId) : undefined) ??
+    null
   return useSyncExternalStore(subscribe, read, read)
 }

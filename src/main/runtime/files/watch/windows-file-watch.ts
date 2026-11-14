@@ -1,8 +1,8 @@
-import type { FsChangeEvent } from '../../../../shared/filesystem-entry-types'
+import type { FsChangeEvent } from '../../../../shared/file-watch/filesystem-change-event'
 import { PhysicalExitTracker } from '../../../../shared/physical-exit-tracker'
 import { watch as watchFs } from 'node:fs'
 import { WatcherProcessFailure } from '../../../ipc/filesystem/watcher-process/parcel-watcher-process-failure'
-import { watchBatchFlushDelayMs } from '../../../../shared/filesystem-watch-batch-window'
+import { watchBatchFlushDelayMs } from '../../../../shared/file-watch/filesystem-watch-batch-window'
 import { WATCHER_IGNORE_DIRS } from '../../../ipc/filesystem/watchers/filesystem-watcher-ignore'
 
 const ignoredWatchDirectories = new Set(WATCHER_IGNORE_DIRS)

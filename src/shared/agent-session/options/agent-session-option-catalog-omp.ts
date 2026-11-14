@@ -1,10 +1,41 @@
 import { agentChoiceCliApply } from '../../agent-launch/choices/agent-choice-cli-apply'
-import type { AgentSessionOptionCatalog, CatalogModel } from './agent-session-option-catalog-types'
+import type {
+  AgentSessionOptionCatalog,
+  CatalogModel,
+  CatalogOption
+} from './agent-session-option-catalog-types'
 import { parseOmpModelList } from '../../omp-model-list-probe'
 
 /** Private enrichment-gate parser with option-free rows; actual probes parse through agent-model-probe-spec.ts. */
 function parseOmpCatalogModels(stdout: string): CatalogModel[] {
   return parseOmpModelList(stdout).map((model) => ({ ...model, options: [] }))
+}
+
+// Every level `omp --thinking` accepts.
+const OMP_THINKING: CatalogOption = {
+  id: 'effort',
+  label: 'Thinking',
+  category: 'thought_level',
+  kind: {
+    type: 'select',
+    choices: [
+      { value: 'off', label: 'Off' },
+      { value: 'minimal', label: 'Minimal' },
+      { value: 'low', label: 'Low' },
+      { value: 'medium', label: 'Medium' },
+      { value: 'high', label: 'High' },
+      { value: 'xhigh', label: 'Extra high' },
+      { value: 'max', label: 'Max' },
+      { value: 'auto', label: 'Auto' }
+    ],
+    // OMP's own config decides the level when none is sent; no listed choice stands for it.
+    defaultValue: ''
+  },
+  apply: agentChoiceCliApply(
+    'omp',
+    [{ kind: 'value', names: ['--thinking'], lift: 'separate-and-long-equals' }],
+    '--thinking'
+  )
 }
 
 export const OMP_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
@@ -28,5 +59,6 @@ export const OMP_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   },
   // Saved model IDs remain launch selections even when discovery no longer lists them.
   discoveredModelsAreAuthoritative: true,
+  unknownModelOptions: [OMP_THINKING],
   listModels: { command: 'omp models --json', parse: parseOmpCatalogModels }
 }

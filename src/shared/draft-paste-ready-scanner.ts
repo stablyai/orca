@@ -1,3 +1,5 @@
+// OpenCode show-cursor follows composer mount ~2s after paste mode; mimo-code shares this signal.
+import { CURSOR_SHOW_SEQUENCE as DECTCEM_SHOW_CURSOR } from './terminal/protocol/escape/terminal-cursor-restore'
 import type {
   DraftPasteReadySignal,
   TuiAgentConfig
@@ -8,8 +10,6 @@ import { createCodexComposerReadyScanner } from './codex-composer-ready-scanner'
 // Paste mode precedes composer readiness; per-agent markers avoid guessing from output silence.
 const DECSET_BRACKETED_PASTE = '\x1b[?2004h'
 const DECRST_BRACKETED_PASTE = '\x1b[?2004l'
-// OpenCode show-cursor follows composer mount ~2s after paste mode; do not race slow startup with a quiet timer. mimo-code shares this signal.
-const DECTCEM_SHOW_CURSOR = '\x1b[?25h'
 // Grok ❯ also appears in shell prompts: require alt screen. Legacy Windows > is too generic, so retain quiet/timeout fallback.
 const GROK_COMPOSER_PROMPT = '❯'
 // ZCode’s locale-independent round composer corner differs from square modal corners; anchor alt screen because powerline shell prompts also draw ╭.
@@ -22,6 +22,14 @@ const CLAUDE_COMPOSER_PROMPT = '❯\u00a0'
 // only while idle at its prompt, where a `❯` + NBSP glyph is unlikely.
 const DECSET_COLOR_PALETTE_UPDATES = '\x1b[?2031h'
 const DECRST_COLOR_PALETTE_UPDATES = '\x1b[?2031l'
+const SGR_RUN = '(?:\\x1b\\[[0-9;:]*m)*'
+// agy's hint row, or its rule / `>` / rule composer rows, which a custom statusLine keeps after replacing the hint (#38930).
+const ANTIGRAVITY_COMPOSER_READY = new RegExp(
+  `\\? for shortcuts|─{8}${SGR_RUN}\\r?\\n${SGR_RUN}>(?:\\s+[A-Za-z][A-Za-z-]*\\s+mode:[^\\n]*)?${SGR_RUN}\\r?\\n${SGR_RUN}─{8}`
+)
+// Copilot's composer row: a rule then `❯` at column 1. Its trust menu draws `❯ 1. Yes` inside a box, never after a rule row.
+// Evidence: Copilot CLI 1.0.107 draws this at ~1.2-2.4s, then animates its loading spinner and mascot past 4s.
+const COPILOT_COMPOSER_READY = new RegExp(`─{8}${SGR_RUN}\\r*\\n${SGR_RUN}❯`)
 const DECSET_ALT_SCREEN = '\x1b[?1049h'
 const DECRST_ALT_SCREEN = '\x1b[?1049l'
 
@@ -31,7 +39,7 @@ type DraftPasteReadySignalSpec = {
   /** Bytes that revoke `markerAnchor` again, for anchors that describe a mode the agent can leave. */
   markerAnchorEnd: string | null
   /** Composer-ready marker, or null for signals that only use the quiet window. */
-  marker: string | null
+  marker: string | RegExp | null
   /** Bytes that arm the quiet-window fallback, or null when the signal has none. */
   quietAnchor: string | null
 }
@@ -84,6 +92,22 @@ const DRAFT_PASTE_READY_SIGNALS: Record<SingleSignal, DraftPasteReadySignalSpec>
     markerAnchorEnd: DECRST_ALT_SCREEN,
     marker: ZCODE_COMPOSER_BOX_CORNER,
     // ZCode banner animates indefinitely; keep quiet fallback for inline builds whose alt-screen marker never arms.
+    quietAnchor: DECSET_BRACKETED_PASTE
+  },
+  // agy's composer; its trust dialog, sign-in menu and a shell prompt never draw it. No quiet fallback:
+  // the shell prompt's 2004h would arm it before agy starts. Evidence: agy 1.2.14 and 1.5.2 startups.
+  'antigravity-composer-prompt': {
+    markerAnchor: DECSET_BRACKETED_PASTE,
+    markerAnchorEnd: DECRST_BRACKETED_PASTE,
+    marker: ANTIGRAVITY_COMPOSER_READY,
+    quietAnchor: null
+  },
+  // Its loading spinner and mascot keep the quiet window from settling for seconds after the composer accepts paste.
+  'copilot-composer-prompt': {
+    markerAnchor: DECSET_ALT_SCREEN,
+    markerAnchorEnd: DECRST_ALT_SCREEN,
+    marker: COPILOT_COMPOSER_READY,
+    // Keep the quiet fallback for a build or platform whose composer row differs.
     quietAnchor: DECSET_BRACKETED_PASTE
   },
   'render-quiet-after-bracketed-paste': {
@@ -182,7 +206,7 @@ function createSingleSignalScanner(readySignal: SingleSignal): {
       const segmentStart = Math.max(cursor, carriedLength)
       const segment =
         leaveIndex === -1 ? window.slice(segmentStart) : window.slice(segmentStart, leaveIndex)
-      if ((postAnchorRecent + segment).includes(signalMarker ?? '')) {
+      if (signalMarker !== null && containsMarker(postAnchorRecent + segment, signalMarker)) {
         return true
       }
       if (leaveIndex === -1) {
@@ -217,13 +241,13 @@ function createSingleSignalScanner(readySignal: SingleSignal): {
           if (anchorIndex !== -1) {
             sawMarkerAnchor = true
             const postAnchorChunk = combined.slice(anchorIndex + markerAnchor.length)
-            if (postAnchorChunk.includes(signalMarker)) {
+            if (containsMarker(postAnchorChunk, signalMarker)) {
               return { ready: true, armQuietTimer: false }
             }
             postAnchorRecent = postAnchorChunk.slice(-512)
           }
         } else {
-          if (data.includes(signalMarker) || (postAnchorRecent + data).includes(signalMarker)) {
+          if (containsMarker(postAnchorRecent + data, signalMarker)) {
             return { ready: true, armQuietTimer: false }
           }
           postAnchorRecent = (postAnchorRecent + data).slice(-512)
@@ -233,4 +257,8 @@ function createSingleSignalScanner(readySignal: SingleSignal): {
       return { ready: false, armQuietTimer: sawQuietAnchor }
     }
   }
+}
+
+function containsMarker(text: string, marker: string | RegExp): boolean {
+  return typeof marker === 'string' ? text.includes(marker) : marker.test(text)
 }

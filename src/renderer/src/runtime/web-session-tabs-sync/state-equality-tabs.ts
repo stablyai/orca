@@ -10,6 +10,7 @@ import {
   sameRuntimeBrowserPlacement
 } from '../../../../shared/runtime-browser-placement'
 import { sameStringArray } from './state-equality-core'
+import { sameAiVaultSessionTitle } from '../../../../shared/ai-vault/contracts/ai-vault-session-title'
 
 export function terminalTabEqual(a: TerminalTab, b: TerminalTab): boolean {
   return (
@@ -21,9 +22,8 @@ export function terminalTabEqual(a: TerminalTab, b: TerminalTab): boolean {
     a.quickCommandLabel === b.quickCommandLabel &&
     a.startupCwd === b.startupCwd &&
     a.generatedTitle === b.generatedTitle &&
-    a.aiVaultTitle?.agent === b.aiVaultTitle?.agent &&
-    a.aiVaultTitle?.sessionId === b.aiVaultTitle?.sessionId &&
-    a.aiVaultTitle?.title === b.aiVaultTitle?.title &&
+    sameAiVaultSessionTitle(a.aiVaultTitle, b.aiVaultTitle) &&
+    a.sessionTitleFromHost === b.sessionTitleFromHost &&
     a.customTitle === b.customTitle &&
     a.color === b.color &&
     a.sortOrder === b.sortOrder &&

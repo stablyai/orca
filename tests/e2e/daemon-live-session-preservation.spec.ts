@@ -13,7 +13,7 @@ import {
 } from './helpers/terminal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-restart'
-import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
+import { PROTOCOL_VERSION } from '../../src/main/daemon/protocol/daemon-protocol-version'
 import { PTY_SESSION_ID_SEPARATOR } from '../../src/shared/terminal/pty/lifecycle/pty-session-id-format'
 
 function daemonPidPath(userDataDir: string): string {

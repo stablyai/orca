@@ -8,10 +8,7 @@ import { buildPosixStdoutFence } from '../../../shared/posix-stdout-fence'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { buildWslExecArgs } from '../../../shared/wsl-login-shell-command'
 import { wslUncPathToLinux } from '../../../shared/wsl-paths'
-import {
-  parseWindowsDriveMountInfo,
-  type WindowsDriveMount
-} from '../../runtime/wsl-guest-drive-mountinfo'
+import { parseWindowsDriveMountInfo, type WindowsDriveMount } from './wsl-guest-drive-mountinfo'
 import { resolveWslInteropSpawnCwd } from '../execution/wsl-interop-spawn-directory'
 import { resolveWslExecutablePath } from '../execution/wsl-executable-path'
 

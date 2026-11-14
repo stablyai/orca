@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { Session } from '../../src/main/daemon/session'
-import { inspectTerminalHostProcess } from '../../src/main/daemon/terminal-host-process-inspection'
+import { Session } from '../../src/main/daemon/sessions/session'
+import { inspectTerminalHostProcess } from '../../src/main/daemon/terminal-host/terminal-host-process-inspection'
 import type * as SnapshotReader from '../../src/shared/process-table-snapshot-reader'
 import type { ProcessTableRow } from '../../src/shared/process-table-snapshot'
 import { probePtyRunningWorkWithInspection } from '../../src/shared/terminal/pty/lifecycle/pty-running-work-probe'

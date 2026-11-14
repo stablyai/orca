@@ -1,19 +1,22 @@
 import {
   BrowserNetworkTunnelOpcode,
-  decodeBrowserNetworkTunnelFrame,
   encodeBrowserNetworkTunnelOpen,
-  encodeBrowserNetworkTunnelWindowUpdate,
   type BrowserNetworkTunnelFrame,
   type BrowserNetworkTunnelOpen
-} from '../../../../shared/browser-network-tunnel-protocol'
+} from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
+import { BrowserNetworkTunnelConnectionCredit } from './browser-network-tunnel-connection-credit'
 import { BrowserNetworkTunnelFrameSender } from './browser-network-tunnel-frame-sender'
-import { handleBrowserNetworkTunnelHeartbeat } from './browser-network-tunnel-heartbeat'
+import {
+  receiveBrowserNetworkTunnelFrame,
+  type BrowserNetworkTunnelFrameReceiver
+} from './browser-network-tunnel-frame-receiver'
 import type { BrowserNetworkTunnelOutboundMemoryLease } from './browser-network-tunnel-outbound-memory-budget'
 import {
-  BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
+  BROWSER_NETWORK_TUNNEL_LEGACY_FLOW_CONTROL,
   BROWSER_NETWORK_TUNNEL_MAX_STREAM_IDS,
   BROWSER_NETWORK_TUNNEL_MAX_STREAMS,
-  validateBrowserNetworkTunnelGeneration
+  validateBrowserNetworkTunnelGeneration,
+  type BrowserNetworkTunnelFlowControl
 } from './browser-network-tunnel-stream-state'
 import {
   flushBrowserNetworkSourceWrites,
@@ -26,7 +29,7 @@ import {
 import type { BrowserNetworkTunnelDuplex } from './browser-network-tunnel-duplex'
 import {
   beginBrowserNetworkSourceRead,
-  grantBrowserNetworkSourceReceiveCredit,
+  replenishBrowserNetworkSourceReceiveCredit,
   settleBrowserNetworkSourceData
 } from './browser-network-tunnel-source-receive-flow'
 import { retireBrowserNetworkTunnelClientStream } from './browser-network-tunnel-client-retirement'
@@ -37,14 +40,17 @@ type BrowserNetworkTunnelClientOptions = {
   sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean
   outboundMemory?: Pick<BrowserNetworkTunnelOutboundMemoryLease, 'claimApplicationBytes'>
   maxStreamIds?: number
+  flowControl?: BrowserNetworkTunnelFlowControl
   onClosed?: (error: Error) => void
+  now?: () => number
 }
 
 export class BrowserNetworkTunnelClient {
-  private readonly tunnelGeneration: number
   private readonly frameSender: BrowserNetworkTunnelFrameSender
   private readonly outboundMemory: BrowserNetworkTunnelClientOptions['outboundMemory']
   private readonly maxStreamIds: number
+  private readonly flowControl: BrowserNetworkTunnelFlowControl
+  private readonly frameReceiver: BrowserNetworkTunnelFrameReceiver
   private readonly onClosed: BrowserNetworkTunnelClientOptions['onClosed']
   private readonly streams = new Map<number, BrowserNetworkTunnelClientStream>()
   private nextStreamId = 1
@@ -52,9 +58,9 @@ export class BrowserNetworkTunnelClient {
 
   constructor(options: BrowserNetworkTunnelClientOptions) {
     validateBrowserNetworkTunnelGeneration(options.tunnelGeneration)
-    this.tunnelGeneration = options.tunnelGeneration
     this.outboundMemory = options.outboundMemory
     this.onClosed = options.onClosed
+    this.flowControl = options.flowControl ?? BROWSER_NETWORK_TUNNEL_LEGACY_FLOW_CONTROL
     this.maxStreamIds = options.maxStreamIds ?? BROWSER_NETWORK_TUNNEL_MAX_STREAM_IDS
     if (
       !Number.isSafeInteger(this.maxStreamIds) ||
@@ -69,10 +75,21 @@ export class BrowserNetworkTunnelClient {
       () => this.close(new Error('Browser tunnel transport rejected a frame')),
       () => !this.closed
     )
+    this.frameReceiver = {
+      tunnelGeneration: options.tunnelGeneration,
+      frameSender: this.frameSender,
+      connectionCredit: new BrowserNetworkTunnelConnectionCredit(
+        this.flowControl,
+        'client',
+        options.now
+      ),
+      dispatch: (frame) => this.dispatchFrame(frame),
+      fail: (error) => this.close(error)
+    }
   }
 
   get generation(): number {
-    return this.tunnelGeneration
+    return this.frameReceiver.tunnelGeneration
   }
 
   get streamIdsExhausted(): boolean {
@@ -96,15 +113,19 @@ export class BrowserNetworkTunnelClient {
       return Promise.reject(error)
     }
     const id = this.nextStreamId++
-    const { stream, opening } = createBrowserNetworkTunnelClientStream(id, {
-      writeBytes: (bytes, callback) => this.writeStream(id, bytes, callback),
-      requestRead: () => this.readStream(id),
-      consumeReadBytes: (bytes) => this.consumeStreamBytes(id, bytes),
-      finishWrite: (callback) => this.endStream(id, callback),
-      destroyStream: (error, callback) => this.destroyStream(id, error, callback),
-      onConnectTimeout: (timedOutStream) =>
-        this.failStream(timedOutStream, new Error('Browser tunnel destination connect timed out'))
-    })
+    const { stream, opening } = createBrowserNetworkTunnelClientStream(
+      id,
+      this.flowControl.streamWindowBytes,
+      {
+        writeBytes: (bytes, callback) => this.writeStream(id, bytes, callback),
+        requestRead: () => this.readStream(id),
+        consumeReadBytes: (bytes) => this.consumeStreamBytes(id, bytes),
+        finishWrite: (callback) => this.endStream(id, callback),
+        destroyStream: (error, callback) => this.destroyStream(id, error, callback),
+        onConnectTimeout: (timedOutStream) =>
+          this.failStream(timedOutStream, new Error('Browser tunnel destination connect timed out'))
+      }
+    )
     this.streams.set(id, stream)
     if (!this.frameSender.send(BrowserNetworkTunnelOpcode.Open, id, openPayload)) {
       this.close(new Error('Browser tunnel transport rejected an open frame'))
@@ -113,20 +134,12 @@ export class BrowserNetworkTunnelClient {
   }
 
   handleBinary(bytes: Uint8Array<ArrayBufferLike>): void {
-    if (this.closed) {
-      return
+    if (!this.closed) {
+      receiveBrowserNetworkTunnelFrame(bytes, this.frameReceiver)
     }
-    const frame = decodeBrowserNetworkTunnelFrame(bytes)
-    if (!frame) {
-      this.close(new Error('Browser tunnel received an invalid frame'))
-      return
-    }
-    if (frame.tunnelGeneration !== this.tunnelGeneration) {
-      return
-    }
-    if (handleBrowserNetworkTunnelHeartbeat(frame, this.frameSender)) {
-      return
-    }
+  }
+
+  private dispatchFrame(frame: BrowserNetworkTunnelFrame): void {
     const stream = this.streams.get(frame.streamId)
     if (!stream) {
       if (frame.streamId < this.nextStreamId) {
@@ -190,6 +203,8 @@ export class BrowserNetworkTunnelClient {
   private flushStreamWrites(stream: BrowserNetworkTunnelClientStream): void {
     const flushed = flushBrowserNetworkSourceWrites(
       stream,
+      this.frameReceiver.connectionCredit,
+      () => this.flushStreamWrites(stream),
       (payload) =>
         this.isCurrent(stream) &&
         this.frameSender.send(BrowserNetworkTunnelOpcode.Data, stream.id, payload)
@@ -232,23 +247,13 @@ export class BrowserNetworkTunnelClient {
     if (!this.isCurrent(stream) || stream.remoteClosed || bytes === 0) {
       return
     }
-    if (
-      !grantBrowserNetworkSourceReceiveCredit(
-        stream,
-        bytes,
-        BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
-      )
-    ) {
+    const connection = this.frameReceiver.connectionCredit
+    const credit = replenishBrowserNetworkSourceReceiveCredit(stream, bytes, connection)
+    if (credit === null) {
       this.close(new Error('Browser tunnel receive credit overflow'))
       return
     }
-    if (
-      !this.frameSender.send(
-        BrowserNetworkTunnelOpcode.WindowUpdate,
-        stream.id,
-        encodeBrowserNetworkTunnelWindowUpdate(bytes)
-      )
-    ) {
+    if (!this.frameSender.sendWindowUpdate(stream.id, credit)) {
       this.close(new Error('Browser tunnel transport rejected receive credit'))
     }
   }
@@ -295,6 +300,7 @@ export class BrowserNetworkTunnelClient {
     error?: Error,
     destroySocket = true
   ): void {
+    this.frameReceiver.connectionCredit.forget(stream)
     retireBrowserNetworkTunnelClientStream(stream, {
       error,
       destroySocket,

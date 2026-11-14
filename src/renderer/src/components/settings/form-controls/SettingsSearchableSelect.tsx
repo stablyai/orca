@@ -4,8 +4,9 @@ import { Check, ChevronsUpDown } from 'lucide-react'
 import { Button } from '../../ui/button'
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from '../../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover'
-import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
+import { cn } from '@/lib/class-names'
+import { useTranslate } from '@/i18n/use-translate'
 import { filterSearchableSelectGroups } from './settings-form-option-filter'
 
 export type SettingsSearchableSelectOption = {
@@ -16,6 +17,7 @@ export type SettingsSearchableSelectOption = {
   detail?: React.ReactNode
   keywords?: readonly string[]
   disabled?: boolean
+  action?: Omit<SettingsSearchableSelectAction, 'key'>
 }
 
 export type SettingsSearchableSelectGroup = {
@@ -37,8 +39,17 @@ type SettingsSearchableSelectProps = {
   groups: readonly SettingsSearchableSelectGroup[]
   onValueChange: (value: string) => void
   searchPlaceholder: string
+  compact?: boolean
+  /** Size the trigger to its value like the plain settings selects, instead of a fixed 220px. */
+  fitValue?: boolean
   emptyText?: string
+  open?: boolean
+  disabled?: boolean
   onOpenChange?: (open: boolean) => void
+  query?: string
+  onQueryChange?: (query: string) => void
+  /** Reapplying a theme can clear its custom color overrides. */
+  allowReselect?: boolean
   /** Non-selectable rows after the options, e.g. a loading indicator. */
   status?: React.ReactNode
   /** Footer rows that run a command instead of picking a value. */
@@ -46,19 +57,42 @@ type SettingsSearchableSelectProps = {
 }
 
 /** A searchable settings dropdown that matches the New Worktree dialog pickers. */
-export function SettingsSearchableSelect({
+export function SettingsSearchableSelect(props: SettingsSearchableSelectProps): React.JSX.Element {
+  return (
+    <SettingsSearchableSelectControl key={props.disabled ? 'disabled' : 'enabled'} {...props} />
+  )
+}
+
+function SettingsSearchableSelectControl({
   ariaLabel,
   value,
   groups,
   onValueChange,
   searchPlaceholder,
   emptyText,
+  compact = false,
+  fitValue = false,
+  open: controlledOpen,
+  disabled = false,
   onOpenChange,
+  query: controlledQuery,
+  onQueryChange,
+  allowReselect = false,
   status,
   actions
 }: SettingsSearchableSelectProps): React.JSX.Element {
-  const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
+  const t = useTranslate()
+  const [internalOpen, setOpen] = useState(false)
+  const [internalQuery, setInternalQuery] = useState('')
+  const open = controlledOpen ?? internalOpen
+  const query = controlledQuery ?? internalQuery
+  const setQuery = useCallback(
+    (next: string) => {
+      setInternalQuery(next)
+      onQueryChange?.(next)
+    },
+    [onQueryChange]
+  )
   const [commandSelection, setCommandSelection] = useState<{
     value: string
     selectedValue: string
@@ -87,12 +121,13 @@ export function SettingsSearchableSelect({
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
-      setOpen(next)
+      const nextOpen = next && !disabled
+      setOpen(nextOpen)
       setQuery('')
       setCommandSelection({ value, selectedValue: value, query: '' })
-      onOpenChange?.(next)
+      onOpenChange?.(nextOpen)
     },
-    [onOpenChange, value]
+    [disabled, onOpenChange, setQuery, value]
   )
 
   const close = (): void => handleOpenChange(false)
@@ -119,17 +154,24 @@ export function SettingsSearchableSelect({
   }
 
   return (
-    <Popover open={open} onOpenChange={handleOpenChange}>
+    <Popover open={open && !disabled} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
           type="button"
-          variant="outline"
+          variant={compact ? 'ghost' : 'outline'}
           size="sm"
           role="combobox"
-          aria-expanded={open}
+          aria-expanded={open && !disabled}
           aria-label={ariaLabel}
+          disabled={disabled}
           onKeyDown={handleTriggerKeyDown}
-          className="min-w-[220px] justify-between"
+          className={
+            compact
+              ? 'w-auto min-w-0 max-w-56 justify-between'
+              : fitValue
+                ? 'min-w-32 justify-between'
+                : 'min-w-[220px] justify-between'
+          }
         >
           <span className="inline-flex min-w-0 flex-1 items-center gap-2">
             {selected?.icon}
@@ -159,7 +201,7 @@ export function SettingsSearchableSelect({
             setCommandSelection({ value: next, selectedValue: value, query })
           }
           className="min-h-0 flex-1"
-          label={ariaLabel}
+          label={searchPlaceholder}
         >
           <CommandInput
             ref={inputRef}
@@ -173,41 +215,68 @@ export function SettingsSearchableSelect({
             {visibleGroups.length === 0 && !status ? (
               <div className="py-6 text-center text-sm text-muted-foreground">
                 {emptyText ??
-                  translate(
-                    'auto.components.settings.SettingsSearchableSelect.noMatches',
-                    'No matches.'
-                  )}
+                  t('auto.components.settings.SettingsSearchableSelect.noMatches', 'No matches.')}
               </div>
             ) : null}
             {visibleGroups.map((group) => (
               <CommandGroup key={group.key} heading={group.heading}>
                 {group.options.map((option) => (
-                  <CommandItem
-                    key={option.value}
-                    value={option.value}
-                    disabled={option.disabled}
-                    data-checked={option.value === value}
-                    onSelect={() => {
-                      close()
-                      if (option.value !== value) {
-                        onValueChange(option.value)
-                      }
-                    }}
-                  >
-                    <Check
-                      className={cn(
-                        'size-4 shrink-0',
-                        option.value === value ? 'opacity-100' : 'opacity-0'
-                      )}
-                    />
-                    {option.icon}
-                    <span className="min-w-0 truncate">{option.label}</span>
-                    {option.detail ? (
-                      <span className="ml-auto flex shrink-0 items-center text-xs text-muted-foreground">
-                        {option.detail}
-                      </span>
+                  <div key={option.value} className="flex items-center gap-1">
+                    <CommandItem
+                      value={option.value}
+                      disabled={option.disabled}
+                      data-checked={option.value === value}
+                      className="min-w-0 flex-1"
+                      onSelect={() => {
+                        close()
+                        if (allowReselect || option.value !== value) {
+                          onValueChange(option.value)
+                        }
+                      }}
+                    >
+                      <Check
+                        className={cn(
+                          'size-4 shrink-0',
+                          option.value === value ? 'opacity-100' : 'opacity-0'
+                        )}
+                      />
+                      {option.icon}
+                      <span className="min-w-0 truncate">{option.label}</span>
+                      {option.detail ? (
+                        <span className="ml-auto flex shrink-0 items-center text-xs text-muted-foreground">
+                          {option.detail}
+                        </span>
+                      ) : null}
+                    </CommandItem>
+                    {option.action ? (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            className="mr-1 shrink-0"
+                            aria-label={option.action.label}
+                            disabled={option.disabled}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.stopPropagation()
+                              }
+                            }}
+                            onClick={() => {
+                              option.action?.onSelect()
+                              inputRef.current?.focus()
+                            }}
+                          >
+                            {option.action.icon}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top" sideOffset={4}>
+                          {option.action.label}
+                        </TooltipContent>
+                      </Tooltip>
                     ) : null}
-                  </CommandItem>
+                  </div>
                 ))}
               </CommandGroup>
             ))}

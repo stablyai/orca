@@ -1,16 +1,16 @@
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { getLocalPtyProvider } from '../../pty/provider/registry'
 import { clearProviderPtyState } from '../../pty/provider/state-cleanup'
-import { killAllProcessesForWorktree } from '../../../runtime/worktree-teardown'
+import { killAllProcessesForWorktree } from '../../../runtime/workspaces/removal/worktree-teardown'
 import type { Store } from '../../../persistence/loading-store/store'
-import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+
 import type { Repo } from '../../../../shared/repo-types'
 import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../../workspaces/removal/worktree-removal-repo-owner'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
-import { agentHookServer } from '../../../agent-hooks/server'
+import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { removeWorktreeMetaRow } from '../../../persistence/host-qualified-worktree-meta'
-import { pruneWorktreePRRefreshAliases } from '../../../github/pr-refresh-coordinator'
+import { pruneWorktreePRRefreshAliases } from '../../../github/pull-requests/refresh/pr-refresh-coordinator'
 import {
   dropRemovedWorktreeProcessState,
   pruneRemovedWorktreeSnapshots

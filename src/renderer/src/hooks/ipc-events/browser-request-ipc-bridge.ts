@@ -1,10 +1,6 @@
 import { destroyPersistentWebview } from '@/components/browser-pane/host-guest/webview-registry'
-import {
-  guardPinnedTabClose,
-  isUnifiedTabPinned,
-  resolvePinnedTabLabel
-} from '../../store/pinned-tab-close-guard'
 import { translate } from '@/i18n/i18n'
+import { closeBrowserTabWithReply } from './browser-tab-close-with-reply'
 import { useAppStore } from '../../store'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
 import {
@@ -209,28 +205,8 @@ export function registerBrowserRequestIpcBridge(unsubs: (() => void)[]): void {
             )
           })
         }
-        const replyPinnedBrowserCloseCanceled = (tabId: string): void => {
-          window.api.ui.replyTabClose({
-            requestId: data.requestId,
-            error: translate(
-              'auto.hooks.useIpcEvents.2f6637fe6c',
-              'Browser tab {{value0}} is pinned',
-              { value0: tabId }
-            )
-          })
-        }
-        const closeBrowserWorkspaceWithReply = (worktreeId: string, workspaceId: string): void => {
-          const currentStore = useAppStore.getState()
-          guardPinnedTabClose({
-            isPinned: isUnifiedTabPinned(currentStore, worktreeId, workspaceId),
-            tabLabel: resolvePinnedTabLabel(currentStore, worktreeId, workspaceId),
-            onClose: () => {
-              useAppStore.getState().closeBrowserTab(workspaceId)
-              window.api.ui.replyTabClose({ requestId: data.requestId })
-            },
-            onCancel: () => replyPinnedBrowserCloseCanceled(workspaceId)
-          })
-        }
+        const closeWithReply = (worktreeId: string, workspaceId: string, pageId?: string): void =>
+          closeBrowserTabWithReply({ requestId: data.requestId, worktreeId, workspaceId, pageId })
         const tabToClose =
           explicitTargetId ??
           (data.worktreeId
@@ -273,11 +249,15 @@ export function registerBrowserRequestIpcBridge(unsubs: (() => void)[]): void {
               replyBrowserTabNotFound(tabToClose)
               return
             }
+            if (owningWorktreeId) {
+              closeWithReply(
+                owningWorktreeId,
+                workspaceId,
+                pages.length > 1 ? tabToClose : undefined
+              )
+              return
+            }
             if (pages.length <= 1) {
-              if (owningWorktreeId) {
-                closeBrowserWorkspaceWithReply(owningWorktreeId, workspaceId)
-                return
-              }
               store.closeBrowserTab(workspaceId)
             } else {
               store.closeBrowserPage(tabToClose)
@@ -295,7 +275,7 @@ export function registerBrowserRequestIpcBridge(unsubs: (() => void)[]): void {
             replyBrowserTabNotFound(tabToClose)
             return
           }
-          closeBrowserWorkspaceWithReply(owningWorktreeId, tabToClose)
+          closeWithReply(owningWorktreeId, tabToClose)
           return
         }
         if (explicitTargetId) {

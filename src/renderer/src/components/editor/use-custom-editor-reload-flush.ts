@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { PluginFrameEntryState } from '../right-sidebar/use-plugin-frame-entry'
+import type { PluginFrameEntryState } from '../plugins/frames/use-plugin-frame-entry'
 
 type ReadyEntry = Extract<PluginFrameEntryState, { status: 'ready' }>
 

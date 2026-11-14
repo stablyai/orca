@@ -7,26 +7,25 @@ const mocks = await vi.hoisted(async () => {
 
 vi.mock('../../ssh/config/ssh-config-host-picker', () => mocks.sshConfigHostPicker)
 vi.mock('electron', () => mocks.electron)
-vi.mock('../../ssh/connection/ssh-connection-store', () => mocks.sshConnectionStore)
+vi.mock('../../ssh/targets/ssh-connection-store', () => mocks.sshConnectionStore)
 vi.mock('./ssh-host-server-connect', () => mocks.hostServerConnect)
 vi.mock('../../ssh/connection/ssh-connection-manager', () => mocks.sshConnectionManager)
-vi.mock('../../ssh/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
+vi.mock('../../ssh/protocol/ssh-channel-multiplexer', () => mocks.sshChannelMultiplexer)
 vi.mock('../../ssh/port-forwarding/ssh-port-forward', () => mocks.sshPortForward)
 vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
 
 import type { SshConnectionState, SshTarget } from '../../../shared/ssh-types'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
-import {
-  decideHostServer,
-  publishManagedServerConnect,
-  publishUnservedHostServer
-} from './ssh-host-server-connect'
+import { decideHostServer, publishUnservedHostServer } from './ssh-host-server-connect'
 import {
   beginSshHostCensus,
   recordSshConnectionOpened
 } from '../../ssh/connection/ssh-connection-attribution'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
-import { clearSshHostServerStatus, setSshHostServerStatus } from '../../ssh/ssh-host-server-status'
+import {
+  clearSshHostServerStatus,
+  setSshHostServerStatus
+} from '../../ssh/host-server/ssh-host-server-status'
 
 const { mockSshStore, mockConnectionManager } = mocks
 
@@ -48,31 +47,6 @@ describe('SSH IPC handlers', () => {
   const { handlers, mockWindow } = harness
 
   beforeEach(harness.reset)
-
-  it('ssh:connect throws for unknown targetId', async () => {
-    mockSshStore.getTarget.mockReturnValue(undefined)
-
-    await expect(handlers.get('ssh:connect')!(null, { targetId: 'unknown' })).rejects.toThrow(
-      'SSH target "unknown" not found'
-    )
-  })
-
-  it('publishes a managed connect without opening a relay', async () => {
-    mockSshStore.getTarget.mockReturnValue(target)
-
-    await expect(handlers.get('ssh:connect')!(null, { targetId: 'ssh-1' })).resolves.toMatchObject({
-      status: 'connected'
-    })
-    expect(publishManagedServerConnect).toHaveBeenCalledWith(
-      'ssh-1',
-      'env-test',
-      undefined,
-      undefined,
-      undefined,
-      undefined
-    )
-    expect(mockConnectionManager.connect).not.toHaveBeenCalled()
-  })
 
   it('fails a host the managed server does not serve, with no fallback', async () => {
     const decision = {

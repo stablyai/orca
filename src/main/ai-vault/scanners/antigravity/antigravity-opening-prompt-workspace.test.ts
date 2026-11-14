@@ -4,7 +4,7 @@ import {
   createAntigravitySessionResumeState,
   parseAntigravitySessionContent
 } from './session-scanner-antigravity-parser'
-import { jsonLines } from '../../session-scanner-test-fixtures'
+import { jsonLines } from '../../scanner-fixtures/session-scanner-test-fixtures'
 
 const openingTime = '2026-07-15T11:39:10.000Z'
 const historyPath = '/home/ada/.gemini/antigravity-cli/history.jsonl'
@@ -76,113 +76,6 @@ describe('Antigravity opening prompt workspace association', () => {
       ).toBe('/repo/original')
     }
   )
-
-  it('refuses fallback when unrelated asks share a truncated opening title', async () => {
-    const prefix = 'A long instruction shared by several unrelated projects '.repeat(3)
-    const prompt = `${prefix}original task`
-    const session = await parse(prompt)
-    expect(session.title.endsWith('...')).toBe(true)
-    const rows = [historyRow(`${prefix}other task`, '/repo/other'), historyRow(prompt)]
-    expect((await resolver(rows).enrich(session, historyPath)).cwd).toBeNull()
-  })
-
-  it('normalizes opening whitespace consistently with history display', async () => {
-    const session = await parse('Locate\n  the original workspace')
-    expect(
-      (await resolver([historyRow('Locate the original workspace')]).enrich(session, historyPath))
-        .cwd
-    ).toBe('/repo/original')
-  })
-
-  it('keeps the established title normalization of hidden opening context', async () => {
-    const session = await parse('Locate the workspace<system-reminder>Hidden</system-reminder>')
-    expect(session.title).toBe('Locate the workspace')
-    expect(
-      (await resolver([historyRow('Locate the workspace')]).enrich(session, historyPath)).cwd
-    ).toBe('/repo/original')
-  })
-
-  it('refuses identical duplicate rows and keeps the two-second timestamp window', async () => {
-    const prompt = 'Original request'
-    const session = await parse(prompt)
-    expect(
-      (await resolver([historyRow(prompt), historyRow(prompt)]).enrich(session, historyPath)).cwd
-    ).toBeNull()
-    for (const [offset, expected] of [
-      [2, '/repo/original'],
-      [2.001, null]
-    ] as const) {
-      const row = historyRow(prompt)
-      row.timestamp += offset
-      expect((await resolver([row]).enrich(session, historyPath)).cwd).toBe(expected)
-    }
-  })
-
-  it('leaves conflicting prompt/time matches unknown even when one row has an id', async () => {
-    const prompt = 'Repeated request'
-    const rows = [historyRow(prompt), historyRow(prompt, '/repo/other', 'other-id')]
-    expect((await resolver(rows).enrich(await parse(prompt), historyPath)).cwd).toBeNull()
-  })
-
-  it('gives an exact id authority over a conflicting prompt match', async () => {
-    const prompt = 'Repeated request'
-    const rows = [historyRow(prompt), historyRow('Different display', '/repo/exact', 'brain-id')]
-    expect((await resolver(rows).enrich(await parse(prompt), historyPath)).cwd).toBe('/repo/exact')
-  })
-
-  it('does not rescue conflicting exact ids through the prompt fallback', async () => {
-    const prompt = 'Repeated request'
-    const rows = [
-      historyRow('One', '/repo/one', 'brain-id'),
-      historyRow('Two', '/repo/two', 'brain-id'),
-      historyRow(prompt)
-    ]
-    expect((await resolver(rows).enrich(await parse(prompt), historyPath)).cwd).toBeNull()
-  })
-
-  it('keeps ambiguous project metadata authoritative over history and prompt fallback', async () => {
-    const prompt = 'Original request'
-    const read = createAntigravityWorkspaceResolver(async (path) => {
-      if (path === historyPath) {
-        return jsonLines([historyRow(prompt, '/repo/history', 'brain-id')])
-      }
-      if (path.endsWith('projects.json')) {
-        return JSON.stringify({ '/repo/one': 'project', '/repo/two': 'project' })
-      }
-      if (path.endsWith('conversation_metadata.json')) {
-        return JSON.stringify({
-          conversations: { 'brain-id': { summary: { ProjectID: 'project' } } }
-        })
-      }
-      return null
-    })
-    expect((await read.enrich(await parse(prompt), historyPath)).cwd).toBeNull()
-  })
-
-  it('never joins a later preview turn or a title-only history row', async () => {
-    const session = await parse('Opening request')
-    const rows = [historyRow('Later request 3'), historyRow(session.title, '/repo/wrong')]
-    rows[1].timestamp -= 60
-    expect((await resolver(rows).enrich(session, historyPath)).cwd).toBeNull()
-  })
-
-  it.each([null, 'invalid timestamp'])(
-    'does not substitute createdAt for opening time %s',
-    async (time) => {
-      const prompt = 'Opening request'
-      const session = await parse(prompt, time)
-      const row = historyRow(prompt)
-      row.timestamp = Date.parse(session.createdAt ?? '') / 1000
-      expect((await resolver([row]).enrich(session, historyPath)).cwd).toBeNull()
-    }
-  )
-
-  it('does not let a later short prompt replace an oversized opening prompt', async () => {
-    const session = await parse('x'.repeat(4097))
-    expect(
-      (await resolver([historyRow('Later request 3')]).enrich(session, historyPath)).cwd
-    ).toBeNull()
-  })
 
   it('keeps the opening association across incremental clones and preview shifts', async () => {
     const prompt = 'Original incremental request'

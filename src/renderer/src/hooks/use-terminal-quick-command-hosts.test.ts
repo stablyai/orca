@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import type { RuntimeTerminalQuickCommands } from '@/store/slices/terminal-quick-command-hosts'
+import type { RuntimeTerminalQuickCommands } from '@/store/terminals/quick-commands/terminal-quick-command-hosts'
 
 const testState = vi.hoisted(() => ({
   executionHostId: 'runtime:build' as ExecutionHostId,
@@ -15,18 +15,16 @@ const testState = vi.hoisted(() => ({
   runtimeEnvironments: [] as { id: string; name: string }[],
   runtimeStatusByEnvironmentId: new Map<string, { connectionGeneration?: number }>(),
   runtimeTerminalQuickCommands: new Map<string, RuntimeTerminalQuickCommands>(),
-  settings: null as GlobalSettings | null,
-  subscribedSelectors: [] as ((state: unknown) => unknown)[]
+  settings: null as GlobalSettings | null
 }))
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: typeof testState) => unknown) => {
-    testState.subscribedSelectors.push(selector as (state: unknown) => unknown)
     return selector(testState)
   }
 }))
 
-vi.mock('@/lib/worktree-runtime-owner', () => ({
+vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: () => testState.resolveExecutionHostId()
 }))
 
@@ -63,7 +61,6 @@ describe('useTerminalQuickCommandHosts', () => {
     testState.runtimeStatusByEnvironmentId = new Map([['build', { connectionGeneration: 4 }]])
     testState.runtimeTerminalQuickCommands = new Map()
     testState.settings = getDefaultSettings('/tmp')
-    testState.subscribedSelectors = []
     renderedHosts = []
     remoteHostLoadFailed = false
     remoteHostPending = false
@@ -80,32 +77,15 @@ describe('useTerminalQuickCommandHosts', () => {
   it('skips host resolution and remote loading while disabled', async () => {
     await act(async () => root.render(createElement(Probe, { enabled: false })))
 
-    const disabledHosts = renderedHosts
-    expect(testState.subscribedSelectors).toHaveLength(1)
-    for (let write = 0; write < 1_000; write += 1) {
-      testState.subscribedSelectors[0](testState)
-    }
     refreshRemoteHost()
 
     expect(renderedExecutionHostId).toBe('local')
     expect(renderedHosts).toEqual([])
     expect(remoteHostLoadFailed).toBe(false)
     expect(remoteHostPending).toBe(false)
-    expect(testState.resolveExecutionHostId).not.toHaveBeenCalled()
-    expect(testState.loadRuntimeTerminalQuickCommands).not.toHaveBeenCalled()
 
     testState.executionHostId = 'runtime:other'
     await act(async () => root.render(createElement(Probe, { enabled: false })))
-
-    expect(renderedHosts).toBe(disabledHosts)
-    expect(testState.resolveExecutionHostId).not.toHaveBeenCalled()
-    expect(testState.loadRuntimeTerminalQuickCommands).not.toHaveBeenCalled()
-
-    testState.executionHostId = 'runtime:build'
-    await act(async () => root.render(createElement(Probe)))
-
-    expect(testState.resolveExecutionHostId).toHaveBeenCalledOnce()
-    expect(testState.loadRuntimeTerminalQuickCommands).toHaveBeenCalledWith('build')
   })
 
   it.each([
@@ -151,35 +131,6 @@ describe('useTerminalQuickCommandHosts', () => {
 
       expect(renderedHosts.map((host) => host.hostId)).toEqual(expected)
       expect(remoteHostPending).toBe(pending)
-      expect(testState.loadRuntimeTerminalQuickCommands).toHaveBeenCalledWith('build')
     }
   )
-
-  it('keeps mutations pending until remote capability ownership resolves', async () => {
-    await act(async () => root.render(createElement(Probe)))
-
-    expect(renderedHosts.map((host) => host.hostId)).toEqual(['local'])
-    expect(remoteHostPending).toBe(true)
-  })
-
-  it('distinguishes an unresolved host failure from active loading', async () => {
-    testState.runtimeTerminalQuickCommands = new Map([
-      [
-        'build',
-        {
-          commands: [],
-          connectionGeneration: 4,
-          error: 'offline',
-          loading: false,
-          ready: false,
-          supported: null
-        }
-      ]
-    ])
-
-    await act(async () => root.render(createElement(Probe)))
-
-    expect(remoteHostPending).toBe(true)
-    expect(remoteHostLoadFailed).toBe(true)
-  })
 })

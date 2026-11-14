@@ -6,14 +6,14 @@ import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import type { editor } from 'monaco-editor'
 import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store/types'
-import { editorModelRegistry } from '@/lib/editor-model-registry'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { editorModelRegistry } from '@/lib/editor/monaco/editor-model-registry'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { createEditorStore } from '../../autosave/editor-autosave-controller-test-fixture'
 import { editorTabModelUri } from '../../save/queue/editor-save-disk-precondition'
 import { useEditorContentChangeHandler } from './use-editor-content-change-handler'
 import { useMonacoContentSyncBridge } from '../../use-monaco-content-sync-bridge'
 import type { FileContent } from '../../editor-panel-content-types'
-import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../../../../shared/file-write/disk-baseline-signature'
 
 const storeRef = vi.hoisted((): { current: StoreApi<AppState> | null } => ({ current: null }))
 vi.mock('@/store/index', () => {

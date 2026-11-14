@@ -3,7 +3,7 @@
 
 import { beforeAll, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { projectSessionTabAgentStatus } from '../../../src/main/runtime/rpc/methods/session-tab-agent-status-projection'
+import { projectSessionTabAgentStatus } from '../../../src/main/runtime/rpc/methods/session-tabs/session-tab-agent-status-projection'
 import '../../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import '../../../src/shared/agent-session/lifecycle/agent-session-record-stored-form'
 import '../../../src/shared/agent-session/lifecycle/agent-session-record'

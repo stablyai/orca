@@ -1,6 +1,6 @@
-import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
+import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import { requireGitOwnerTarget } from '../../worktree-git-owner-target'
+import { requireGitOwnerTarget } from '../sync/worktree-git-owner-target'
 import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
 import type { GitPushTarget } from '../../../../../../shared/worktree/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'

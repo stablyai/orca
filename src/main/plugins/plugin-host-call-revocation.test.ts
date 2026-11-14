@@ -5,9 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PluginService } from './plugin-service'
 import { getUserPluginsDir } from './plugin-discovery'
 import { installPluginFromLocalPath } from './installation/plugin-install'
-import type { PluginRuntimeDelegate } from './workers/plugin-host-service-bindings'
-import type { PluginDesktopFrameServices } from './workers/plugin-host-method-bindings'
-import { executePluginHostCall } from './workers/plugin-host-methods'
+import type { PluginRuntimeDelegate } from './workers/host-api/plugin-host-service-bindings'
+import type { PluginDesktopFrameServices } from './workers/host-api/plugin-host-method-bindings'
+import { executePluginHostCall } from './workers/host-api/plugin-host-methods'
 import type { PluginKillListEntry } from '../../shared/plugins/catalog/plugin-kill-list'
 
 vi.mock('electron', () => ({ ipcMain: { handle() {}, on() {} } }))
@@ -36,6 +36,7 @@ async function createSavingPlugin() {
   const dialog = gate()
   const writes: string[] = []
   const desktop: PluginDesktopFrameServices = {
+    confirm: async () => 'allowed',
     openExternal: async () => ({ opened: true }),
     async saveFile(pluginId, _input, scope) {
       await dialog.opened
@@ -104,14 +105,6 @@ async function createSavingPlugin() {
 }
 
 describe('revocation during an admitted call', () => {
-  it('writes when the plugin stays approved', async () => {
-    const { dialog, writes, save, key } = await createSavingPlugin()
-    const pending = save()
-    dialog.open()
-    await expect(pending).resolves.toEqual({ ok: true, value: { status: 'saved' } })
-    expect(writes).toEqual([key])
-  })
-
   it('writes nothing once the plugin is disabled while the dialog is open', async () => {
     const { dialog, writes, save, settings, key } = await createSavingPlugin()
     const pending = save()

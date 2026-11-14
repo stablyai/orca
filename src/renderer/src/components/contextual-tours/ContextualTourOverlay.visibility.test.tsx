@@ -2,12 +2,15 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ContextualTourOverlay } from './ContextualTourOverlay'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+
 import { useAppStore } from '@/store'
+
+import { useContextualTour } from './use-contextual-tour'
 
 let container: HTMLDivElement
 let root: Root
+const initialState = useAppStore.getState()
 
 function tourTarget(name: string, top: number): { moveTo: (top: number) => void } {
   let currentTop = top
@@ -48,11 +51,8 @@ async function setDocumentVisibility(state: 'visible' | 'hidden'): Promise<void>
   })
 }
 
-function ringsTop(): string | undefined {
-  return container.querySelector<HTMLElement>('[data-contextual-tour-target-rings]')?.style.top
-}
-
 beforeEach(async () => {
+  useAppStore.setState(initialState, true)
   vi.useFakeTimers({
     toFake: [
       'setTimeout',
@@ -78,40 +78,39 @@ afterEach(async () => {
   container.remove()
   document.querySelectorAll('[data-contextual-tour-target]').forEach((node) => node.remove())
   await setDocumentVisibility('visible')
-  useAppStore.setState({ activeContextualTourId: null, activeContextualTourStepIndex: 0 })
+  useAppStore.setState(initialState, true)
   vi.useRealTimers()
 })
 
-describe('ContextualTourOverlay full-pass interval visibility gate', () => {
-  it('pauses the 500ms full pass while hidden and re-measures on return', async () => {
-    const target = tourTarget('workspace-create-control', 300)
-    useAppStore.setState({
-      activeContextualTourId: 'workspace-agent-sessions',
-      activeContextualTourStepIndex: 1,
-      activeModal: 'none',
-      contextualToursOnboardingVisible: false,
-      contextualToursBlockingSurfaceVisible: false,
-      activeContextualTourSuppressed: false
-    })
-    act(() => {
-      root.render(<ContextualTourOverlay />)
-    })
-    await settle(50)
-    expect(ringsTop()).toBe('300px')
-
-    // Baseline: while visible, the periodic full pass follows a silent move.
-    target.moveTo(640)
-    await settle(700)
-    expect(ringsTop()).toBe('640px')
-
-    await setDocumentVisibility('hidden')
-    target.moveTo(900)
-    await settle(1_500)
-    expect(ringsTop()).toBe('640px')
-
-    // Returning runs the pass immediately, so the overlay is never left stale.
-    await setDocumentVisibility('visible')
-    await settle(50)
-    expect(ringsTop()).toBe('900px')
+function PendingTourSource({ persisted }: { persisted: Promise<void> }) {
+  useContextualTour('tasks', true, 'tasks_open', {
+    recordFeatureInteraction: false,
+    featureInteractionPersisted: persisted
   })
+  return null
+}
+
+it('does not start a tour after its source unmounts between persistence and the queued request', async () => {
+  let resolvePersisted!: () => void
+  const persisted = new Promise<void>((resolve) => {
+    resolvePersisted = resolve
+  })
+  tourTarget('tasks-source-filters', 50)
+  useAppStore.setState({
+    persistedUIReady: true,
+    contextualToursAutoEligible: true,
+    contextualToursSeenIds: [],
+    activeContextualTourId: null,
+    activeModal: 'none',
+    contextualToursOnboardingVisible: false,
+    contextualToursBlockingSurfaceVisible: false
+  })
+  act(() => root.render(<PendingTourSource persisted={persisted} />))
+
+  resolvePersisted()
+  await Promise.resolve()
+  act(() => root.unmount())
+  await settle(50)
+
+  expect(useAppStore.getState().activeContextualTourId).toBeNull()
 })

@@ -3,7 +3,7 @@ import { decideAgentLaunchIntentMode } from './agent-launch-intent-mode'
 /** Structured launches create the workspace without an agent, then ask its host for chat support.
  * The host needs the created workspace to answer; a definitive refusal starts a terminal agent. */
 
-import { assertAgentPromptRequestActive } from '../runtime/orca-runtime-core'
+import { assertAgentPromptRequestActive } from '../runtime/terminal/input/agent-prompt-signals'
 import { parsePaneKey } from '../../shared/workspace-layout/stable-pane-id'
 import {
   type AgentLaunchResult,
@@ -50,11 +50,24 @@ import {
   recoverCreatedWorkspace
 } from './agent-launch-created-workspace'
 
+import { opening, type AgentLaunchOpening } from './agent-launch-opening'
+
 export type { AgentLaunchExecution } from './agent-launch-execution'
 
 export async function executeAgentLaunch(
   execution: AgentLaunchExecution
 ): Promise<AgentLaunchResult> {
+  const settled = await (await openAgentLaunch(execution)).settlement
+  if (settled.status === 'rejected') {
+    throw settled.reason
+  }
+  return settled.value
+}
+
+/** Resolve once the surface is published; prompt delivery continues in `settlement`. */
+export async function openAgentLaunch(
+  execution: AgentLaunchExecution
+): Promise<AgentLaunchOpening> {
   const { intent, runtime } = execution
   const vocabulary = execution.vocabulary ?? DEFAULT_LAUNCH_VOCABULARY
   const preflight = execution.decidedMode ?? decideAgentLaunchIntentMode(execution)
@@ -64,7 +77,8 @@ export async function executeAgentLaunch(
   if (execution.promptPolicy === 'legacy-host') {
     assertLegacyHostTarget(execution)
     const placed = await resolveWorkspace(execution, preflight)
-    return published(execution, legacyHostCreateResult(execution, placed, preflight))
+    const surface = published(execution, legacyHostCreateResult(execution, placed, preflight))
+    return opening(surface, async () => surface)
   }
 
   // A reused process cannot accept new argv; deliver through its PTY.
@@ -75,19 +89,19 @@ export async function executeAgentLaunch(
       receipt: preflight,
       ...promptReceipt(intent, settledAtCreation(intent, {}))
     })
-    return {
+    const { handle } = intent.reuseTerminal
+    return opening(reused, async () => ({
       ...reused,
       ...promptReceipt(
         intent,
-        await deliverTerminalLaunchPrompt(execution, intent.reuseTerminal.handle, {
-          freshLaunch: false
-        })
+        await deliverTerminalLaunchPrompt(execution, handle, { freshLaunch: false })
       )
-    }
+    }))
   }
 
   const launch =
-    intent.target.kind === 'create-worktree' && preflight.mode === 'structured'
+    (intent.target.kind === 'create-worktree' && preflight.mode === 'structured') ||
+    intent.target.kind === 'create-folder-workspace'
       ? beginCreatedWorkspaceLaunch(runtime, intent.agent)
       : undefined
   let placed: Awaited<ReturnType<typeof resolveWorkspace>> | undefined
@@ -109,18 +123,23 @@ export async function executeAgentLaunch(
       })
       surfacePublished = true
       launch?.release()
-      return {
-        ...startup,
-        ...promptReceipt(
-          intent,
-          placed.promptRodeLaunchCommand
-            ? HANDED_TO_TERMINAL
-            : await deliverTerminalLaunchPrompt(execution, placed.startupTerminalHandle, {
-                freshLaunch: true,
-                terminalCreation: placed.startupTerminalCreation
-              })
-        )
-      }
+      const { startupTerminalHandle, startupTerminalCreation, promptRodeLaunchCommand } = placed
+      return opening(
+        startup,
+        async () => ({
+          ...startup,
+          ...promptReceipt(
+            intent,
+            promptRodeLaunchCommand
+              ? HANDED_TO_TERMINAL
+              : await deliverTerminalLaunchPrompt(execution, startupTerminalHandle, {
+                  freshLaunch: true,
+                  terminalCreation: startupTerminalCreation
+                })
+          )
+        }),
+        startupTerminalCreation
+      )
     }
 
     // Recover a created workspace on cancellation before an agent exists.
@@ -175,10 +194,14 @@ export async function executeAgentLaunch(
     })
     surfacePublished = true
     launch?.release()
-    return {
-      ...surface,
-      ...promptReceipt(intent, await settleLaunchPromptDisposal(execution, created))
-    }
+    return opening(
+      surface,
+      async () => ({
+        ...surface,
+        ...promptReceipt(intent, await settleLaunchPromptDisposal(execution, created))
+      }),
+      created.terminalCreation
+    )
   } catch (error) {
     const createdWorktreeId = recoverableWorktreeId ?? launch?.createdWorktreeId()
     if (!surfacePublished && intent.target.kind !== 'existing' && createdWorktreeId) {
@@ -211,14 +234,14 @@ async function resolveWorkspace(
     throw new Error('agent_launch_workspace_factory_required')
   }
   execution.onStage?.('worktree_create')
-  if (intent.target.kind === 'create-folder-workspace') {
-    if (!workspaces.createFolderWorkspace) {
-      throw new Error('agent_launch_workspace_factory_required')
-    }
-    const created = await workspaces.createFolderWorkspace({ create: intent.target.create })
-    return { ...created, startupTerminalHandle: undefined }
+  const createWorkspace =
+    intent.target.kind === 'create-folder-workspace'
+      ? workspaces.createFolderWorkspace?.bind(workspaces)
+      : workspaces.createWorktree.bind(workspaces)
+  if (!createWorkspace) {
+    throw new Error('agent_launch_workspace_factory_required')
   }
-  const created = await workspaces.createWorktree({
+  const created = await createWorkspace({
     // Reserved fields must come from the launch intent, not a stale create payload.
     create: withoutReservedAgentCreateFields(intent.target.create),
     ...(onWorkspaceCreated ? { onWorkspaceCreated } : {}),

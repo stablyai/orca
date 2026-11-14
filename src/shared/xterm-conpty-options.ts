@@ -33,3 +33,13 @@ export function windowsPtyForOwnerBackend(
     ? undefined
     : buildXtermConptyOptions(parseWindowsBuildNumber(osRelease))
 }
+
+/** Every PTY a Windows machine owns is ConPTY, WSL shells included; osRelease must be that machine's. */
+export function windowsPtyForOwnerMachine(
+  platform: NodeJS.Platform | null | undefined,
+  osRelease?: string | null
+): XtermConptyOptions | undefined {
+  return platform === 'win32'
+    ? buildXtermConptyOptions(parseWindowsBuildNumber(osRelease))
+    : undefined
+}

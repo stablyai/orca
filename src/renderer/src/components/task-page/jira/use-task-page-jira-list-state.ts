@@ -1,7 +1,7 @@
-import { useTaskPageJiraQuickFilters } from './use-task-page-jira-quick-filters'
-import type { JiraStatusCatalogItem } from './task-page-jira-status-catalog'
-import { useTaskPageJiraSavedFilters } from './use-task-page-jira-saved-filters'
-import { useTaskPageJiraFavouriteFilters } from './use-task-page-jira-favourite-filters'
+import { useTaskPageJiraQuickFilters } from './filters/use-task-page-jira-quick-filters'
+import type { JiraStatusCatalogItem } from './filters/task-page-jira-status-catalog'
+import { useTaskPageJiraSavedFilters } from './filters/use-task-page-jira-saved-filters'
+import { useTaskPageJiraFavouriteFilters } from './filters/use-task-page-jira-favourite-filters'
 import type { JiraFavouriteFilter } from '../../../../../shared/jira/jira-favourite-filters'
 import type { JiraSavedFilter } from '../../../../../shared/jira/jira-saved-filters'
 import type { TaskPageLinearViewStateModel } from '../linear/use-task-page-linear-view-state'
@@ -11,15 +11,15 @@ import type {
   JiraProjectStatusOrder,
   JiraPriority
 } from '../../../../../shared/jira/jira-types'
-import type { TaskPageJiraLoadError } from '@/components/task-page/jira/task-page-jira-load-state'
-import type { TaskPageJiraJqlRejection } from '@/components/task-page/jira/task-page-jira-search'
+import type { TaskPageJiraLoadError } from '@/components/task-page/jira/listing/task-page-jira-load-state'
+import type { TaskPageJiraJqlRejection } from '@/components/task-page/jira/listing/task-page-jira-search'
 import type { JiraPresetId } from '@/components/task-page/task-page-localized-options'
 import type {
   JiraIssueSortColumn,
   JiraIssueSortDirection,
   JiraPrioritiesBySite
 } from '../../jira-issue-sorter'
-import { jiraListPrioritiesForTarget } from '@/runtime/runtime-jira-detail-client'
+import { jiraListPrioritiesForTarget } from '@/runtime/jira/runtime-jira-detail-client'
 import { loadJiraLinkedView, saveJiraLinkedView } from '../../jira-linked-view-storage'
 import { loadJiraViewMode, saveJiraViewMode, type JiraViewMode } from '../../jira-view-mode-storage'
 import {
@@ -32,10 +32,10 @@ import {
 import {
   ipcOrRuntimeTargetForHostId,
   runtimeTargetEnvironmentId
-} from '@/runtime/runtime-client-target'
-import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'
-import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
-import { useTaskPageJiraProjectScope } from './use-task-page-jira-project-scope'
+} from '@/runtime/rpc/targets/runtime-client-target'
+import { getEnvironmentRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
+import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
+import { useTaskPageJiraProjectScope } from './filters/use-task-page-jira-project-scope'
 const EMPTY_JIRA_PRIORITIES: JiraPrioritiesBySite = new Map()
 
 export function useTaskPageJiraListState(model: TaskPageLinearViewStateModel) {

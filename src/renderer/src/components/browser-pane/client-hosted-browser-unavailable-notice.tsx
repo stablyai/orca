@@ -1,10 +1,10 @@
 import { useEffect } from 'react'
 import { Globe } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { readBrowserClientHostId } from '@/runtime/browser-client-host-identity'
-import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
-import { ensureBrowserClientHostOnRuntimeContact } from '@/runtime/restored-client-hosted-browser-host-attach'
+import { readBrowserClientHostId } from '@/runtime/browser/client-hosting/browser-client-host-identity'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
+import { ensureBrowserClientHostOnRuntimeContact } from '@/runtime/browser/client-hosting/restored-client-hosted-browser-host-attach'
 import {
   isRuntimeHostContactRevokedVerdict,
   runtimeHostContactForEntry
@@ -13,20 +13,22 @@ import {
   ReopenBrowserPageOnServerButton,
   reopenOnServerCaveat
 } from './ReopenBrowserPageOnServerButton'
-import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import '../../../../shared/protocol-version'
+import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../shared/browser/runtime/browser-runtime-capabilities'
 
 /** No guest exists here to retry; offer reopening on a capable server when hosting is unavailable or belongs to another desktop. */
 export function ClientHostedBrowserUnavailableNotice({
   runtimeEnvironmentId,
   worktreeId,
-  lastCommittedUrl,
+  reopenUrl,
   placementHostClientId
 }: {
   runtimeEnvironmentId: string
   worktreeId: string
-  lastCommittedUrl: string
+  reopenUrl: string
   placementHostClientId: string | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const offlineHostName = useAppStore((s) => {
     const entry = s.runtimeStatusByEnvironmentId.get(runtimeEnvironmentId)
     const state = runtimeHostConnectionStateForEntry(entry)
@@ -57,17 +59,17 @@ export function ClientHostedBrowserUnavailableNotice({
     }
   }, [onOtherDesktop, runtimeEnvironmentId])
   const description = onOtherDesktop
-    ? translate(
+    ? t(
         'browser.clientHosted.unavailableOtherDesktopDescription',
         'This page is open on another desktop.'
       )
     : offlineHostName
-      ? translate(
+      ? t(
           'browser.clientHosted.unavailableHostOfflineDescription',
           '{{host}} is offline. This page will reload here once it reconnects.',
           { host: offlineHostName }
         )
-      : translate(
+      : t(
           'browser.clientHosted.unavailableDescription',
           "This page isn't available on this desktop right now."
         )
@@ -76,16 +78,16 @@ export function ClientHostedBrowserUnavailableNotice({
       <div className="flex max-w-sm flex-col items-center gap-2">
         <Globe className="size-5 text-muted-foreground" />
         <div className="text-sm font-medium text-foreground">
-          {translate('browser.clientHosted.unavailableTitle', 'Client-hosted browser unavailable')}
+          {t('browser.clientHosted.unavailableTitle', 'Client-hosted browser unavailable')}
         </div>
         <div className="text-xs leading-5 text-muted-foreground">{description}</div>
         {runtimeCanHostPage ? (
           <>
-            <div className="text-xs leading-5 text-muted-foreground">{reopenOnServerCaveat()}</div>
+            <div className="text-xs leading-5 text-muted-foreground">{reopenOnServerCaveat(t)}</div>
             <ReopenBrowserPageOnServerButton
               environmentId={runtimeEnvironmentId}
               worktreeId={worktreeId}
-              lastCommittedUrl={lastCommittedUrl}
+              reopenUrl={reopenUrl}
             />
           </>
         ) : null}

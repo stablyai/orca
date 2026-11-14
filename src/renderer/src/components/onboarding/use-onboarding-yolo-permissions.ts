@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
-function savedYoloPermissions(settings: GlobalSettings | null | undefined): boolean {
+export function savedYoloPermissions(settings: GlobalSettings | null | undefined): boolean {
   const choice = settings?.agentPermissionDefault ?? 'full-access'
   return choice === 'full-access' || choice === 'auto'
 }

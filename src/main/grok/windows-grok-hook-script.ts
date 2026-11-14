@@ -1,5 +1,5 @@
-import { buildWindowsAgentHookPostCommand } from '../agent-hooks/installer-utils'
-import { buildWindowsHookEnvironmentGuardLines } from '../agent-hooks/hook-stdin-contract'
+import { buildWindowsAgentHookPostCommand } from '../agent-hooks/installation/commands/windows-agent-hook-post-command'
+import { buildWindowsHookEnvironmentGuardLines } from '../agent-hooks/installation/scripts/hook-stdin-contract'
 
 /** Matches the envelope length cap used by the POSIX grok-hook branch. */
 export const GROK_HOME_ENVELOPE_MAX_LENGTH = 4096

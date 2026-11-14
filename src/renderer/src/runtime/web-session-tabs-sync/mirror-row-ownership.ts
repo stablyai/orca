@@ -3,8 +3,10 @@
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Tab } from '../../../../shared/tab-types'
+import type { BrowserPage } from '../../../../shared/browser-workspace-types'
+import { getBrowserPageRemoteOwnerEnvironmentId } from '../browser/ownership/remote-browser-tab-ownership'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
-import { getRemoteRuntimePtyEnvironmentId } from '../runtime-terminal-stream'
+import { getRemoteRuntimePtyEnvironmentId } from '../hosted-terminals/identity/remote-runtime-pty-owner'
 import type { WebSessionTabsSyncState } from './state'
 import { environmentIdsMirroringLocalTab } from './tracking-mappings'
 
@@ -70,4 +72,14 @@ export function isAgentSessionTabOfAnotherHost(
     host?.kind === 'local' ||
     (host?.kind === 'runtime' && isLiveEnvironment(state, host.environmentId))
   )
+}
+
+/** This desktop's own page or a live other runtime's; a removed runtime's page is free to reclaim (#38136). */
+export function isBrowserPageOfAnotherHost(
+  state: MirrorRowOwnershipState,
+  page: Pick<BrowserPage, 'id' | 'browserRuntimeEnvironmentId'>,
+  environmentId: string
+): boolean {
+  const owner = getBrowserPageRemoteOwnerEnvironmentId(state, page)
+  return owner === null || (owner !== environmentId && isLiveEnvironment(state, owner))
 }

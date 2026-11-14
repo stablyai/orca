@@ -15,7 +15,9 @@ import { findInNativeChatTurn, latestNativeChatTurnSinceRequest } from './native
 export const NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE = 'Continue where you left off.'
 
 /** The limit a row reports, when it is a usage-limit row. */
-function usageLimitOfRow(item: AgentJournalRenderItem): AgentSessionUsageLimit | null {
+export function nativeChatUsageLimitOfRow(
+  item: AgentJournalRenderItem
+): AgentSessionUsageLimit | null {
   if (!isRootAgentJournalItem(item) || item.body.kind !== 'status') {
     return null
   }
@@ -56,7 +58,7 @@ export function latestNativeChatUsageLimitCut(
   if (!latest || latest.verdict !== 'failure') {
     return null
   }
-  const limit = findInNativeChatTurn(items, latest.turnItem.itemId, usageLimitOfRow)
+  const limit = findInNativeChatTurn(items, latest.turnItem.itemId, nativeChatUsageLimitOfRow)
   if (limit === null) {
     return null
   }

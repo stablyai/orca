@@ -13,6 +13,8 @@ export function createPtyApi(): NonNullable<Partial<PreloadApi>['pty']> {
     writeAccepted: () => Promise.resolve(false),
     resize: () => {},
     claimViewport: () => {},
+    // Web clients have no local PTYs; runtime attention arrives through terminal.list.
+    getTerminalAttention: () => Promise.resolve({}),
     reportGeometry: () => {},
     signal: () => {},
     // Web panes clear the host buffer via the terminal.clearBuffer runtime RPC.
@@ -186,6 +188,7 @@ export function createSshApi(): NonNullable<Partial<PreloadApi>['ssh']> {
         error: translate('auto.web.web.preload.api.31bfe8ae1a', 'Unavailable in the web client.')
       }),
     onStateChanged: () => noopUnsubscribe,
+    onTargetRemoved: () => noopUnsubscribe,
     addPortForward: () =>
       Promise.reject(new Error('SSH port forwarding is unavailable in the web client.')),
     updatePortForward: () =>

@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import type { Plugin } from 'vite'
-import { retainViteCache } from '../scripts/vite-cache-activity.mjs'
+import { retainViteCache } from '../scripts/worktree-storage/vite-cache-activity.mjs'
 
 export function createViteCacheRetentionPlugin(cacheRoot = resolve('.cache/vite')): Plugin {
   return {

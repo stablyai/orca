@@ -1,5 +1,5 @@
 import type { RuntimeSessionTabCloseReason } from '../../../shared/runtime-session-contracts'
-import type { StructuredAgentSessionCloseCause } from '../../native-chat/agent-session-wire/structured-agent-session-host-lifetime'
+import type { StructuredAgentSessionCloseCause } from '../../native-chat/agent-session-wire/termination/structured-agent-session-host-lifetime'
 
 /** Missing reason means an older client's user close; lifecycle echoes do not represent user intent. */
 export function structuredAgentSessionTabCloseCause(

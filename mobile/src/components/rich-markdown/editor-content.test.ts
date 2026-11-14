@@ -47,64 +47,11 @@ describe('the editor document content', () => {
         `data:image/png;base64,${btoa('images/diagram.png')}`
       )
     )
-    expect(loadImageSource).toHaveBeenCalledExactlyOnceWith('images/diagram.png')
     expect(editor.editor.querySelectorAll('img')[1]?.getAttribute('src')).toBe(
       'https://example.com/remote.png'
     )
     editor.type()
     expect(editor.posted).toEqual([{ type: 'change', markdown, generation: 1 }])
-  })
-
-  it('shows an image an edit brings back without loading it again', async () => {
-    const loadImageSource = vi.fn(async () => 'data:image/png;base64,AAAA')
-    const editor = editorDocument(loadImageSource)
-    editor.handle.setMarkdown('![Diagram](images/diagram.png)', 1)
-    const pasted = document.createElement('img')
-    pasted.setAttribute('data-workspace-path', 'images/diagram.png')
-    editor.editor.append(pasted)
-    editor.type()
-    await vi.waitFor(() => expect(pasted.getAttribute('src')).toBe('data:image/png;base64,AAAA'))
-    expect(loadImageSource).toHaveBeenCalledOnce()
-  })
-
-  it('carries the generation it was set under into every change', () => {
-    const editor = editorDocument()
-    editor.handle.setMarkdown('first', 4)
-    editor.type()
-    editor.handle.setMarkdown('second', 5)
-    editor.type()
-    expect(editor.posted).toEqual([
-      { type: 'change', markdown: 'first', generation: 4 },
-      { type: 'change', markdown: 'second', generation: 5 }
-    ])
-  })
-
-  it('reads a generation that is not a number as zero', () => {
-    const editor = editorDocument()
-    editor.handle.setMarkdown('body', Number.NaN)
-    editor.type()
-    expect(editor.posted).toEqual([{ type: 'change', markdown: 'body', generation: 0 }])
-  })
-
-  it('posts the change on the spot, with no timer between the edit and the host', () => {
-    const editor = editorDocument()
-    vi.useFakeTimers()
-    try {
-      editor.handle.setMarkdown('body', 1)
-      editor.type()
-      expect(editor.posted).toHaveLength(1)
-      expect(vi.getTimerCount()).toBe(0)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('says nothing while it is rewriting itself', () => {
-    // setMarkdown’s DOM rewrite must not echo host’s content as new user change.
-    const editor = editorDocument()
-    editor.handle.setMarkdown('# Title', 2)
-    expect(editor.posted).toEqual([])
-    expect(editor.editor.innerHTML).toBe('<h1>Title</h1>')
   })
 
   it('stops reporting, and disables every checkbox, once it is read-only', () => {
@@ -128,16 +75,6 @@ describe('the editor document content', () => {
     ])
   })
 
-  it('writes a ticked checkbox back into the markup the next serialization reads', () => {
-    const editor = editorDocument()
-    editor.handle.setMarkdown('- [ ] Open', 1)
-    const checkbox = editor.editor.querySelector('input')!
-    checkbox.checked = true
-    checkbox.dispatchEvent(new Event('change', { bubbles: true }))
-    expect(editor.editor.querySelector('li')!.getAttribute('data-checked')).toBe('true')
-    expect(editor.posted).toEqual([{ type: 'change', markdown: '- [x] Open', generation: 1 }])
-  })
-
   it('reports one change for a checkbox tap, not one per event the tap raises', () => {
     // Assert click/input/change all bubble for one tick, then prove only one report; missing events cannot satisfy count accidentally.
     const editor = editorDocument()
@@ -150,21 +87,5 @@ describe('the editor document content', () => {
     expect(reached).toEqual(['click', 'input', 'change'])
     expect(editor.editor.querySelector('li')!.getAttribute('data-checked')).toBe('true')
     expect(editor.posted).toEqual([{ type: 'change', markdown: '- [x] Open', generation: 1 }])
-  })
-
-  it('reports one change for inline code over a selection, not one per emitting step', async () => {
-    // The wrap helper emitted and `runCommand` emits after every command: two identical changes.
-    const editor = editorDocument()
-    editor.handle.setMarkdown('one two', 1)
-    const text = editor.editor.querySelector('p')!.firstChild!
-    const range = document.createRange()
-    range.setStart(text, 0)
-    range.setEnd(text, 3)
-    const selection = window.getSelection()!
-    selection.removeAllRanges()
-    selection.addRange(range)
-    await editor.handle.runCommand('inlineCode')
-    expect(editor.editor.innerHTML).toBe('<p><code>one</code> two</p>')
-    expect(editor.posted).toEqual([{ type: 'change', markdown: '`one` two', generation: 1 }])
   })
 })

@@ -1,5 +1,6 @@
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { SettingsSearchEntry } from '../search/settings-search'
 
 export const getPluginsPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
@@ -20,11 +21,11 @@ export const getPluginsPaneSearchEntries = createLocalizedCatalog((): SettingsSe
   }
 ])
 
-export function getPluginsSectionPresentation() {
+export function getPluginsSectionPresentation(t: Translate = translate) {
   return {
-    title: translate('auto.components.settings.PluginsSettingsSection.title', 'Plugins'),
-    badge: translate('auto.components.settings.PluginsSettingsSection.alpha', 'Alpha'),
-    description: translate(
+    title: t('auto.components.settings.PluginsSettingsSection.title', 'Plugins'),
+    badge: t('auto.components.settings.PluginsSettingsSection.alpha', 'Alpha'),
+    description: t(
       'auto.components.settings.PluginsSettingsSection.description',
       'Themes, languages, commands, and more.'
     ),

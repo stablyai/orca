@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export type SettingOwnership =
   | 'client-default'
@@ -13,58 +14,58 @@ type SettingOwnershipSummary = {
   description: string
 }
 
-function buildSummaries(): Record<string, SettingOwnershipSummary> {
+function buildSummaries(t: Translate = translate): Record<string, SettingOwnershipSummary> {
   return {
     sourceControlAiDefaults: {
       ownership: 'client-default',
-      label: translate('auto.components.settings.settingOwnership.clientDefault', 'Client default'),
-      description: translate(
+      label: t('auto.components.settings.settingOwnership.clientDefault', 'Client default'),
+      description: t(
         'auto.components.settings.settingOwnership.sourceControlAiDefaults',
         'Recipes, prompts, and hosted-review defaults are shared by this client; model choices and discovery stay scoped to the host where the agent runs.'
       )
     },
     repositorySourceControlAi: {
       ownership: 'project-host-setup',
-      label: translate(
+      label: t(
         'auto.components.settings.settingOwnership.projectOnThisHost',
         'Project on this host'
       ),
-      description: translate(
+      description: t(
         'auto.components.settings.settingOwnership.repositorySourceControlAi',
         'These overrides apply to this project setup and inherit the client Source Control AI defaults until customized.'
       )
     },
     agentLaunchDefaults: {
       ownership: 'host-collection',
-      label: translate('auto.components.settings.settingOwnership.providerHost', 'Provider host'),
-      description: translate(
+      label: t('auto.components.settings.settingOwnership.providerHost', 'Provider host'),
+      description: t(
         'auto.components.settings.settingOwnership.agentLaunchDefaults',
         'Default agent, command overrides, CLI arguments, and launch environment are saved on the selected host.'
       )
     },
     terminalQuickCommands: {
       ownership: 'host-collection',
-      label: translate(
+      label: t(
         'auto.components.settings.settingOwnership.hostCollectionProjectScopes',
         'Host collection + project scopes'
       ),
-      description: translate(
+      description: t(
         'auto.components.settings.settingOwnership.terminalQuickCommandHostCollections',
         'Commands are saved on the selected Orca host, then scoped globally or to a project setup. Commands from this device also remain available in remote workspaces.'
       )
     },
     workspaceDirectory: {
       ownership: 'host-override',
-      label: translate('auto.components.settings.settingOwnership.hostOverride', 'Host override'),
-      description: translate(
+      label: t('auto.components.settings.settingOwnership.hostOverride', 'Host override'),
+      description: t(
         'auto.components.settings.settingOwnership.workspaceDirectory',
         'The client default is inherited until a host needs its own worktree directory.'
       )
     },
     providerAccounts: {
       ownership: 'provider-host',
-      label: translate('auto.components.settings.settingOwnership.providerHost', 'Provider host'),
-      description: translate(
+      label: t('auto.components.settings.settingOwnership.providerHost', 'Provider host'),
+      description: t(
         'auto.components.settings.settingOwnership.providerAccounts',
         'Credentials and account checks belong to the local client or selected remote server that owns the provider integration.'
       )
@@ -83,6 +84,9 @@ const SUMMARY_KEYS = [
 
 export type SettingOwnershipKey = (typeof SUMMARY_KEYS)[number]
 
-export function getSettingOwnershipSummary(key: SettingOwnershipKey): SettingOwnershipSummary {
-  return buildSummaries()[key]
+export function getSettingOwnershipSummary(
+  key: SettingOwnershipKey,
+  t?: Translate
+): SettingOwnershipSummary {
+  return buildSummaries(t)[key]
 }

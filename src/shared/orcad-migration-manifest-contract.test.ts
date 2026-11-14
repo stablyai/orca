@@ -110,14 +110,6 @@ describe('orcad migration manifest contract', () => {
   })
 
   // Retired draft-blob field from development builds; no released desktop sent it.
-  it('accepts and drops the retired editorDraftsBlob declaration', () => {
-    const dormantState = {
-      ...dormantLineage('folder:folder-1', 'worktree:repo-1::/srv/repo-1'),
-      editorDraftsBlob: { sha256: digest, byteLength: 4, entries: [] }
-    }
-    const parsed = parseOrcadMigrationManifest(manifest({ dormantState }))
-    expect(parsed.payload.dormantState).not.toHaveProperty('editorDraftsBlob')
-  })
 
   it('rejects a malformed workspace key rather than treating it as a worktree id', () => {
     expect(() =>
@@ -125,5 +117,125 @@ describe('orcad migration manifest contract', () => {
         manifest({ dormantState: dormantLineage('folder:', 'folder:folder-1') })
       )
     ).toThrow('orcad_migration_dormant_lineage_workspace_key_invalid')
+  })
+
+  it('preserves authored automation setup and canonicalizes a legacy setup projection on import', () => {
+    const automation = {
+      id: 'automation-1',
+      name: 'Nightly checks',
+      prompt: 'Run tests',
+      precheck: null,
+      agentId: 'codex',
+      surface: 'chat',
+      launchPreferences: { model: null, options: { effort: 'high', speed: 'fast' } },
+      agentArgs: '--search --add-dir docs',
+      runContext: {
+        kind: 'workspace-run',
+        projectId: 'repo:repo-1',
+        hostId: 'local',
+        projectHostSetupId: 'repo-1',
+        repoId: 'repo-1',
+        path: '/srv/repo-1'
+      },
+      sourceContext: null,
+      projectId: 'repo-1',
+      executionTargetType: 'local',
+      executionTargetId: 'local',
+      schedulerOwner: 'remote_host_service',
+      workspaceMode: 'new_per_run',
+      workspaceId: null,
+      baseBranch: 'main',
+      reuseSession: false,
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY',
+      dtstart: 1,
+      enabled: false,
+      nextRunAt: 2,
+      missedRunPolicy: 'run_once_within_grace',
+      missedRunGraceMinutes: 60,
+      createdAt: 1,
+      updatedAt: 2
+    }
+    const dormantState = {
+      version: 1,
+      worktreeMeta: [],
+      worktreeLineage: [],
+      workspaceLineage: [],
+      sparsePresets: [],
+      retiredWorktreeNames: [],
+      retiredWorktreeNamespaces: [],
+      automations: [automation],
+      automationRuns: []
+    }
+    const imported = parseOrcadMigrationManifest(manifest({ dormantState })).payload.dormantState
+      ?.automations?.[0]
+    expect(imported).toMatchObject({
+      surface: 'chat',
+      launchPreferences: { model: null, options: { effort: 'high', speed: 'fast' } },
+      agentArgs: '--search --add-dir docs'
+    })
+    const legacyProjection = parseOrcadMigrationManifest(
+      manifest({
+        dormantState: {
+          ...dormantState,
+          automations: [
+            {
+              ...automation,
+              launchSetup: { surface: 'chat', agentArgs: null, launchPreferences: { model: null } }
+            }
+          ]
+        }
+      })
+    ).payload.dormantState?.automations?.[0]
+    expect(legacyProjection).toMatchObject({
+      surface: 'chat',
+      agentArgs: null,
+      launchPreferences: { model: null }
+    })
+    expect(legacyProjection).not.toHaveProperty('launchSetup')
+
+    for (const [reuseSession, extraAgentArgs] of [
+      [true, '--model opus'],
+      [false, '--legacy-dormant-text']
+    ] as const) {
+      const nestedChat = parseOrcadMigrationManifest(
+        manifest({
+          dormantState: {
+            ...dormantState,
+            automations: [
+              {
+                ...automation,
+                agentId: 'claude',
+                surface: undefined,
+                launchPreferences: undefined,
+                agentArgs: undefined,
+                reuseSession,
+                launchSetup: { surface: 'chat', extraAgentArgs }
+              }
+            ]
+          }
+        })
+      ).payload.dormantState?.automations?.[0]
+      expect(nestedChat).toMatchObject({ surface: 'chat', reuseSession, extraAgentArgs })
+      expect(nestedChat).not.toHaveProperty('launchSetup')
+    }
+    expect(() =>
+      parseOrcadMigrationManifest(
+        manifest({
+          dormantState: {
+            ...dormantState,
+            automations: [
+              {
+                ...automation,
+                agentId: 'claude',
+                launchPreferences: undefined,
+                agentArgs: undefined,
+                launchSetup: { surface: 'terminal', extraAgentArgs: '--resume x' }
+              }
+            ]
+          }
+        })
+      )
+    ).toThrow('orcad_migration_dormant_automation_extra_agent_args_invalid')
   })
 })

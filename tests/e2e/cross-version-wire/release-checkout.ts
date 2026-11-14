@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
-import { selectLatestStableReleaseTag } from '../../../config/scripts/stable-release-tags.mjs'
+import { selectLatestStableReleaseTag } from '../../../config/scripts/release/versioning/stable-release-tags.mjs'
 import {
   populateReleaseCheckoutSource,
   resolveSharedReleaseCacheRoot

@@ -1,15 +1,23 @@
 import { ipcMain } from 'electron'
 import type { GitLabIssueUpdate, GitLabWorkItem } from '../../../shared/gitlab-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { Store } from '../../persistence/loading-store/store'
 import {
   normalizeGitLabIssueAssignee,
   normalizeGitLabIssueListState,
   normalizeGitLabPositiveInteger
-} from '../../gitlab/gitlab-preload-args'
-import { addIssueComment, createIssue, getIssue, listIssues } from '../../gitlab/issues'
-import { listAssignableUsers, listLabels } from '../../gitlab/project-label-and-member-lookup'
-import { updateIssue } from '../../gitlab/issue-update'
+} from '../../gitlab/requests/gitlab-preload-args'
+import {
+  addIssueComment,
+  createIssue,
+  getIssue,
+  listIssues
+} from '../../gitlab/issues/gitlab-issue-queries'
+import {
+  listAssignableUsers,
+  listLabels
+} from '../../gitlab/projects/project-label-and-member-lookup'
+import { updateIssue } from '../../gitlab/issues/issue-update'
 
 import {
   type GitLabRepoSelectorArgs,

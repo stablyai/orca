@@ -3,7 +3,7 @@ import type {
   LegacyCompatibilityPrincipalRow,
   LegacyPrincipalRole,
   LegacyOperationReceiptRow
-} from '../../types'
+} from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { exposeMessageTimestamps } from '../utc-timestamp'
 import type { OrchestrationDb } from '../orchestration-db'

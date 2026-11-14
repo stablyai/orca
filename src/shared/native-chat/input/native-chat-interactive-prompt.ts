@@ -1,4 +1,9 @@
-import { parseNativeChatApprovalEnvelope } from './native-chat-approval-envelope'
+import {
+  parseNativeChatApprovalEnvelope,
+  parseNativeChatFolderTrustEnvelope,
+  parseNativeChatStartupMenuEnvelope
+} from './native-chat-approval-envelope'
+import { formatAgentTypeLabel } from '../../agent-status/presentation/agent-type-label'
 import type {
   AgentJournalApprovalItem,
   AgentJournalApprovalSubject
@@ -17,6 +22,13 @@ export type ChatApproval = {
   subject?: AgentJournalApprovalSubject
   detail?: string
   options: { label: string; send: string }[]
+  /**
+   * The screen-read startup dialog envelope this card answers. It can't collapse (a freed composer's
+   * Return would answer the dialog), and the host writes a choice only while its screen still reads as it.
+   */
+  startupDialog?: string
+  /** No option is styled as the default: the agent's own consent choices are shown as equals. */
+  neutralOptions?: true
 }
 
 /** A journal approval prompt as its card reads it; each option sends its id. */
@@ -44,7 +56,12 @@ export const NATIVE_CHAT_APPROVAL_COPY = {
   allow: 'Allow',
   deny: 'Deny',
   planReviewTitle: 'Review proposed plan',
-  planRefineHint: 'Refine plan closes the review so you can send what to change.'
+  planRefineHint: 'Refine plan closes the review so you can send what to change.',
+  folderTrustTitle: 'Trust this folder?',
+  folderTrustHint: 'The agent asks before it can read, edit and run files in this folder.',
+  trustFolder: 'Trust folder',
+  exit: 'Exit',
+  startupMenuTitle: '{{value0}} is waiting for a choice in the terminal'
 } as const
 
 export type NativeChatApprovalSay = (
@@ -70,6 +87,31 @@ export function parseApprovalFromStatus(
       description: say('planRefineHint'),
       subject: { kind: 'plan', text: planReview.plan },
       options: planReview.options
+    }
+  }
+  const folderTrust = parseNativeChatFolderTrustEnvelope(interactivePrompt)
+  if (folderTrust) {
+    return {
+      startupDialog: interactivePrompt!,
+      title: say('folderTrustTitle'),
+      description: say('folderTrustHint'),
+      options: [
+        ...(folderTrust.trustSend
+          ? [{ label: say('trustFolder'), send: folderTrust.trustSend }]
+          : []),
+        { label: say('exit'), send: folderTrust.exitSend }
+      ]
+    }
+  }
+  const startupMenu = parseNativeChatStartupMenuEnvelope(interactivePrompt)
+  if (startupMenu) {
+    // Labels are the menu's own rows; with none the card only locks Send and opens the terminal.
+    return {
+      startupDialog: interactivePrompt!,
+      neutralOptions: true,
+      title: say('startupMenuTitle', { value0: formatAgentTypeLabel(agent) }),
+      ...(startupMenu.description ? { description: startupMenu.description } : {}),
+      options: startupMenu.choices
     }
   }
   const envelope = parseNativeChatApprovalEnvelope(interactivePrompt, agent)
@@ -100,6 +142,20 @@ export function parseInteractivePrompt(
   return approval ? { kind: 'approval', approval } : null
 }
 
+/** One line naming what the agent waits on (a status pill's text), never the raw envelope JSON. */
+export function interactivePromptLabel(
+  interactivePrompt: string | undefined | null,
+  toolName?: string,
+  agent?: string,
+  say?: NativeChatApprovalSay
+): string | undefined {
+  const card = parseInteractivePrompt(interactivePrompt, toolName, agent, say)
+  if (card?.kind === 'approval') {
+    return card.approval.title
+  }
+  return card?.prompt.questions[0]?.question || undefined
+}
+
 /** A live approval wins, then the live or unresolved transcript ask, so a parked selector cannot consume the next message as its answer. */
 export function resolveNativeChatInteractivePromptCard(args: {
   interactivePrompt: string | undefined | null
@@ -120,8 +176,10 @@ export function resolveNativeChatInteractivePromptCard(args: {
   if (statusCard?.kind === 'approval') {
     return statusCard
   }
+  // Codex's async questions come from the transcript, which knows which ones were answered.
+  const liveAsk = statusCard?.prompt.replyAsMessage ? null : (statusCard?.prompt ?? null)
   const prompt = resolveNativeChatAsk({
-    liveAsk: statusCard?.prompt ?? null,
+    liveAsk,
     messages: args.messages,
     transcriptSettled: args.transcriptSettled,
     transcriptAsk: args.transcriptAsk

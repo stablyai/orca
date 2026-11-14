@@ -8,7 +8,7 @@ import type { AgentLaunchPlacementReceipt } from '../../../shared/agent-launch/c
 import type { AgentLaunchPaneAddress } from '../../../shared/agent-launch/contracts/agent-launch-pane-verdict'
 import { parseExecutionHostId } from '../../../shared/execution-host'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import type { RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
 import type { TerminalIdentityReadContext } from '../terminal/query/terminal-identity-read-context'
 
 /** Where the tab landed against where the launch asked for it, as the window reports it. */

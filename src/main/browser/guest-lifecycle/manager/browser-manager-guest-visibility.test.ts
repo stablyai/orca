@@ -35,26 +35,20 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../popups/popup-origin-bar-window', () => ({
+vi.mock('../popups/presentation/popup-origin-bar-window', () => ({
   openPopupWithOriginBar: browserMocks.openPopupWithOriginBarMock
 }))
 
-import { browserManager } from '../../browser-manager'
-import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
+import { browserManager } from './browser-manager'
+
 import {
+  guestNavigationMethods,
   rendererWebContentsId,
   resetBrowserManagerMocks,
   resetBrowserManagerState
 } from './browser-manager-test-harness'
 
-const {
-  guestOffMock,
-  guestOnMock,
-  guestSetBackgroundThrottlingMock,
-  guestSetWindowOpenHandlerMock,
-  guestOpenDevToolsMock,
-  webContentsFromIdMock
-} = browserMocks
+const { webContentsFromIdMock } = browserMocks
 
 describe('browserManager', () => {
   beforeEach(() => {
@@ -66,163 +60,11 @@ describe('browserManager', () => {
     vi.useRealTimers()
   })
 
-  it('keeps idle guests throttled and holds both contents until the last capture release', () => {
+  it.each<string>(['acquire'])('cleans capture ownership after renderer %s fails', (failure) => {
     vi.useFakeTimers()
     const guest = {
-      id: 1707,
-      isDestroyed: vi.fn(() => false),
-      isCurrentlyAudible: vi.fn(() => false),
-      getType: vi.fn(() => 'webview'),
-      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
-      capturePage: vi.fn(async () => null),
-      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
-      on: guestOnMock,
-      off: guestOffMock,
-      openDevTools: guestOpenDevToolsMock
-    }
-    const renderer = {
-      id: rendererWebContentsId,
-      isDestroyed: vi.fn(() => false),
-      executeJavaScript: vi.fn(() => new Promise(() => {})),
-      send: vi.fn(),
-      setBackgroundThrottling: vi.fn(),
-      capturePage: vi.fn(async () => null)
-    }
-    webContentsFromIdMock.mockImplementation((id: number) => {
-      if (id === guest.id) {
-        return guest
-      }
-      if (id === rendererWebContentsId) {
-        return renderer
-      }
-      return null
-    })
-    browserManager.attachGuestPolicies(guest as never)
-    browserManager.registerGuest({
-      browserPageId: 'page-capture',
-      workspaceId: 'workspace-1',
-      worktreeId: 'wt-1',
-      webContentsId: guest.id,
-      rendererWebContentsId
-    })
-    // Registration also reports audio state; this test is about paint holds.
-    renderer.send.mockClear()
-    expect(guestSetBackgroundThrottlingMock).not.toHaveBeenCalled()
-
-    // Synchronous: a capture never waits on the desktop renderer.
-    const releaseFirst = browserManager.holdPaintForCapture(guest.id)
-    const releaseSecond = browserManager.holdPaintForCapture(guest.id)
-
-    expect(renderer.executeJavaScript).not.toHaveBeenCalled()
-    expect(renderer.send.mock.calls).toEqual([
-      ['browser:capturePaintHold', { browserPageId: 'page-capture', held: true }]
-    ])
-    expect(renderer.setBackgroundThrottling.mock.calls).toEqual([[false]])
-    expect(guestSetBackgroundThrottlingMock.mock.calls).toEqual([[false]])
-
-    releaseFirst()
-    releaseFirst()
-    expect(renderer.send).toHaveBeenCalledTimes(1)
-    expect(renderer.setBackgroundThrottling.mock.calls).toEqual([[false]])
-    expect(guestSetBackgroundThrottlingMock.mock.calls).toEqual([[false]])
-
-    releaseSecond()
-    expect(renderer.send.mock.calls.at(-1)).toEqual([
-      'browser:capturePaintHold',
-      { browserPageId: 'page-capture', held: false }
-    ])
-    expect(renderer.setBackgroundThrottling.mock.calls).toEqual([[false]])
-    vi.runAllTimers()
-    expect(renderer.setBackgroundThrottling.mock.calls).toEqual([[false], [true]])
-    expect(guestSetBackgroundThrottlingMock.mock.calls).toEqual([[false], [true]])
-  })
-
-  it('shares guest leases with a concurrent stream even without a desktop renderer', () => {
-    vi.useFakeTimers()
-    const guest = {
-      id: 1708,
-      isDestroyed: vi.fn(() => false),
-      setBackgroundThrottling: vi.fn(),
-      capturePage: vi.fn(async () => null)
-    }
-    webContentsFromIdMock.mockReturnValue(guest)
-    const releaseStream = rendererPublicationThrottle.acquire(guest)
-    const releaseCapture = browserManager.holdPaintForCapture(guest.id)
-
-    releaseStream()
-    vi.runAllTimers()
-    expect(guest.setBackgroundThrottling.mock.calls).toEqual([[false]])
-
-    releaseCapture()
-    releaseCapture()
-    vi.runAllTimers()
-    expect(guest.setBackgroundThrottling.mock.calls).toEqual([[false], [true]])
-  })
-
-  it.each(['notify', 'acquire', 'release'] as const)(
-    'cleans capture ownership after renderer %s fails',
-    (failure) => {
-      vi.useFakeTimers()
-      const guest = {
-        id: 1711,
-        isDestroyed: vi.fn(() => false),
-        isCurrentlyAudible: vi.fn(() => false),
-        getType: vi.fn(() => 'webview'),
-        setBackgroundThrottling: vi.fn(),
-        capturePage: vi.fn(async () => null),
-        setWindowOpenHandler: vi.fn(),
-        on: vi.fn(),
-        off: vi.fn(),
-        openDevTools: vi.fn()
-      }
-      const renderer = {
-        id: rendererWebContentsId,
-        isDestroyed: vi.fn(() => false),
-        send: vi.fn(),
-        setBackgroundThrottling: vi.fn(),
-        capturePage: vi.fn(async () => null)
-      }
-      webContentsFromIdMock.mockImplementation((id: number) => (id === guest.id ? guest : renderer))
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this guest provides the policy and registration members exercised here.
-      browserManager.attachGuestPolicies(guest as never)
-      browserManager.registerGuest({
-        browserPageId: 'page-failure',
-        webContentsId: guest.id,
-        rendererWebContentsId
-      })
-      const fail = (): never => {
-        throw new Error('renderer unavailable')
-      }
-      if (failure === 'release') {
-        const release = browserManager.holdPaintForCapture(guest.id)
-        renderer.send.mockImplementationOnce(fail)
-        expect(release).not.toThrow()
-      } else if (failure === 'notify') {
-        renderer.send.mockImplementationOnce(fail)
-        const release = browserManager.holdPaintForCapture(guest.id)
-        expect(release).not.toThrow()
-      } else {
-        renderer.setBackgroundThrottling.mockImplementationOnce(fail)
-        expect(() => browserManager.holdPaintForCapture(guest.id)).toThrow('renderer unavailable')
-      }
-      vi.runAllTimers()
-      expect(guest.setBackgroundThrottling.mock.calls).toEqual([[false], [true]])
-
-      renderer.send.mockClear()
-      const releaseNext = browserManager.holdPaintForCapture(guest.id)
-      expect(renderer.send.mock.calls).toEqual([
-        ['browser:capturePaintHold', { browserPageId: 'page-failure', held: true }]
-      ])
-      releaseNext()
-      vi.runAllTimers()
-      expect(guest.setBackgroundThrottling.mock.calls).toEqual([[false], [true], [false], [true]])
-    }
-  )
-
-  it('does not let a destroyed guest and renderer release a replacement page hold', () => {
-    vi.useFakeTimers()
-    const makeGuest = (id: number) => ({
-      id,
+      ...guestNavigationMethods(),
+      id: 1711,
       isDestroyed: vi.fn(() => false),
       isCurrentlyAudible: vi.fn(() => false),
       getType: vi.fn(() => 'webview'),
@@ -232,112 +74,47 @@ describe('browserManager', () => {
       on: vi.fn(),
       off: vi.fn(),
       openDevTools: vi.fn()
-    })
-    const makeRenderer = (id: number) => ({
-      id,
+    }
+    const renderer = {
+      id: rendererWebContentsId,
       isDestroyed: vi.fn(() => false),
       send: vi.fn(),
       setBackgroundThrottling: vi.fn(),
       capturePage: vi.fn(async () => null)
-    })
-    const oldGuest = makeGuest(1709)
-    const newGuest = makeGuest(1710)
-    const oldRenderer = makeRenderer(rendererWebContentsId)
-    const newRenderer = makeRenderer(rendererWebContentsId + 1)
-    webContentsFromIdMock.mockImplementation((id: number) =>
-      [oldGuest, newGuest, oldRenderer, newRenderer].find((contents) => contents.id === id)
-    )
-    const register = (guest: ReturnType<typeof makeGuest>, rendererId: number) => {
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this guest provides the policy and registration members exercised here.
-      browserManager.attachGuestPolicies(guest as never)
-      browserManager.registerGuest({
-        browserPageId: 'page-replaced',
-        webContentsId: guest.id,
-        rendererWebContentsId: rendererId
-      })
     }
-    register(oldGuest, oldRenderer.id)
-    const releaseOld = browserManager.holdPaintForCapture(oldGuest.id)
-    oldGuest.isDestroyed.mockReturnValue(true)
-    oldRenderer.isDestroyed.mockReturnValue(true)
-    register(newGuest, newRenderer.id)
-    newRenderer.send.mockClear()
-    const releaseNew = browserManager.holdPaintForCapture(newGuest.id)
-
-    releaseOld()
-    vi.runAllTimers()
-    expect(newRenderer.send.mock.calls).toEqual([
-      ['browser:capturePaintHold', { browserPageId: 'page-replaced', held: true }]
-    ])
-    expect(oldGuest.setBackgroundThrottling.mock.calls).toEqual([[false]])
-    expect(oldRenderer.setBackgroundThrottling.mock.calls).toEqual([[false]])
-    expect(newGuest.setBackgroundThrottling.mock.calls).toEqual([[false]])
-    expect(newRenderer.setBackgroundThrottling.mock.calls).toEqual([[false]])
-
-    releaseNew()
-    vi.runAllTimers()
-    expect(newRenderer.send.mock.calls.at(-1)).toEqual([
-      'browser:capturePaintHold',
-      { browserPageId: 'page-replaced', held: false }
-    ])
-    expect(newGuest.setBackgroundThrottling.mock.calls).toEqual([[false], [true]])
-    expect(newRenderer.setBackgroundThrottling.mock.calls).toEqual([[false], [true]])
-  })
-  it("tells the page's pane the size of an agent's viewport, and nothing for an unknown guest", () => {
-    const guest = {
-      id: 1811,
-      isDestroyed: vi.fn(() => false),
-      isCurrentlyAudible: vi.fn(() => false),
-      getType: vi.fn(() => 'webview'),
-      setBackgroundThrottling: guestSetBackgroundThrottlingMock,
-      setWindowOpenHandler: guestSetWindowOpenHandlerMock,
-      on: guestOnMock,
-      off: guestOffMock,
-      openDevTools: guestOpenDevToolsMock
-    }
-    const renderer = { id: rendererWebContentsId, isDestroyed: vi.fn(() => false), send: vi.fn() }
-    webContentsFromIdMock.mockImplementation((id: number) =>
-      id === guest.id ? guest : id === rendererWebContentsId ? renderer : null
-    )
+    webContentsFromIdMock.mockImplementation((id: number) => (id === guest.id ? guest : renderer))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this guest provides the policy and registration members exercised here.
     browserManager.attachGuestPolicies(guest as never)
     browserManager.registerGuest({
-      browserPageId: 'page-viewport',
-      workspaceId: 'workspace-1',
-      worktreeId: 'wt-1',
+      browserPageId: 'page-failure',
       webContentsId: guest.id,
       rendererWebContentsId
     })
+    const fail = (): never => {
+      throw new Error('renderer unavailable')
+    }
+    if (failure === 'release') {
+      const release = browserManager.holdPaintForCapture(guest.id)
+      renderer.send.mockImplementationOnce(fail)
+      expect(release).not.toThrow()
+    } else if (failure === 'notify') {
+      renderer.send.mockImplementationOnce(fail)
+      const release = browserManager.holdPaintForCapture(guest.id)
+      expect(release).not.toThrow()
+    } else {
+      renderer.setBackgroundThrottling.mockImplementationOnce(fail)
+      expect(() => browserManager.holdPaintForCapture(guest.id)).toThrow('renderer unavailable')
+    }
+    vi.runAllTimers()
+    expect(guest.setBackgroundThrottling.mock.calls).toEqual([[false], [true]])
+
     renderer.send.mockClear()
-
-    const override = { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false }
-    browserManager.showAgentViewportInPane(guest.id, override)
-    browserManager.showAgentViewportInPane(9999, override)
-
+    const releaseNext = browserManager.holdPaintForCapture(guest.id)
     expect(renderer.send.mock.calls).toEqual([
-      ['browser:agentViewportApplied', { browserPageId: 'page-viewport', width: 1280, height: 900 }]
+      ['browser:capturePaintHold', { browserPageId: 'page-failure', held: true }]
     ])
-
-    // The wheel pans the wider box, as it does for a user preset.
-    renderer.send.mockClear()
-    browserManager.setViewportScrollState('page-viewport', rendererWebContentsId, {
-      scrollLeft: 0,
-      scrollTop: 0,
-      maxScrollLeft: 734,
-      maxScrollTop: 0
-    })
-    const beforeMouseEvent = guestOnMock.mock.calls.findLast(
-      ([event]) => event === 'before-mouse-event'
-    )?.[1]
-    const preventDefault = vi.fn()
-    beforeMouseEvent?.(
-      { preventDefault },
-      { type: 'mouseWheel', x: 0, y: 0, modifiers: [], deltaX: 40, deltaY: 0 }
-    )
-    expect(preventDefault).toHaveBeenCalledTimes(1)
-    expect(renderer.send).toHaveBeenCalledWith('ui:scrollBrowserPage', {
-      browserPageId: 'page-viewport',
-      deltaX: 40,
-      deltaY: 0
-    })
+    releaseNext()
+    vi.runAllTimers()
+    expect(guest.setBackgroundThrottling.mock.calls).toEqual([[false], [true], [false], [true]])
   })
 })

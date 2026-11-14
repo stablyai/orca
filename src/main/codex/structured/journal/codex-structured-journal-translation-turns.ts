@@ -12,9 +12,9 @@ import { resolveAgentJournalTurnRowWrite } from '../../../native-chat/agent-sess
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
-} from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { StructuredAgentSessionRevisionJournal } from '../../../native-chat/agent-session-wire/structured-agent-session-journal-views'
-import { estimateStructuredAgentSessionItemBytes } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink-estimate'
+} from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionRevisionJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
+import { estimateStructuredAgentSessionItemBytes } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink-estimate'
 
 const ADMITTED: StructuredAgentSessionSinkAdmission = { accepted: true }
 

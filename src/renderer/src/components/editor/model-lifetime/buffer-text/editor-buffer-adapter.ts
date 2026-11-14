@@ -1,6 +1,9 @@
 import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { editorModelRegistry, type EditorModelRegistryBridge } from '@/lib/editor-model-registry'
+import {
+  editorModelRegistry,
+  type EditorModelRegistryBridge
+} from '@/lib/editor/monaco/editor-model-registry'
 import { editorBufferSiblingViewIds } from '@/store/slices/editor/buffers/editor-buffer-views'
 import {
   editorModelSiblingTabs,

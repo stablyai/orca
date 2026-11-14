@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type {
   AgentPickerEntry,
   AgentPickerSurface
@@ -18,11 +18,12 @@ export function AgentLaunchSetupActions({
   surface: AgentPickerSurface
   onUse: (surface: AgentPickerSurface) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex items-center justify-end gap-2 border-t border-border px-2.5 py-2">
       {entry.textGeneration ? (
         <Button type="button" size="xs" disabled={disabled} onClick={() => onUse(surface)}>
-          {translate('agentPicker.use', 'Use')}
+          {t('agentPicker.use', 'Use')}
         </Button>
       ) : (
         <AgentLaunchSurfaceButtons

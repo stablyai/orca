@@ -273,6 +273,11 @@ export async function installStagedPluginTree(input: {
     pluginKey,
     version: manifest.version,
     source: input.source,
+    ...(input.source.kind === 'marketplace' &&
+    !input.release?.sourceUnavailable &&
+    input.release?.repository
+      ? { authorRepository: input.release.repository }
+      : {}),
     resolvedCommit: input.resolvedCommit,
     contentHash: sourceInspection.contentHash,
     consentFingerprint,

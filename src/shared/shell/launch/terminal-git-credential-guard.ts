@@ -1,8 +1,6 @@
 import { recognizeAgentLaunchCommand } from '../../agent-launch/startup/agent-command-line-intent'
 import { gitCredentialPromptGuardEnv } from '../../git/commands/git-credential-prompt-env'
 
-const GIT_CONFIG_PROTOCOL_KEY_RE = /^GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)$/
-
 export const TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV =
   'ORCA_INTERNAL_TERMINAL_GIT_CREDENTIAL_GUARD_POLICY'
 
@@ -13,7 +11,7 @@ export function applyTerminalGitCredentialPromptGuard(
     launchCommand?: string | null
     isUnattended?: boolean
     platform?: NodeJS.Platform
-    /** A detached host appends indexed config after its authoritative env merge. */
+    /** A detached host reapplies the guard after its authoritative env merge. */
     deferGitConfigGuardToHost?: boolean
   }
 ): boolean {
@@ -37,10 +35,10 @@ export function applyTerminalGitCredentialPromptGuard(
     return true
   }
 
-  // The daemon must append indexed config after merging inherited env; send only the policy and scalar guards.
+  // The daemon reapplies the guard after merging inherited env; send the policy and scalar guards.
   env[TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV] = 'guard'
   for (const [key, value] of Object.entries(guarded)) {
-    if (typeof value !== 'string' || GIT_CONFIG_PROTOCOL_KEY_RE.test(key)) {
+    if (typeof value !== 'string') {
       continue
     }
     if (key === 'WSLENV') {

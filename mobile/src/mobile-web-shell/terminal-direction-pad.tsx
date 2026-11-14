@@ -12,7 +12,7 @@ import {
   createTerminalAccessoryRepeatController,
   TERMINAL_ACCESSORY_REPEAT_DELAY_MS,
   TERMINAL_ACCESSORY_REPEAT_INTERVAL_MS
-} from '../terminal/terminal-accessory-repeat'
+} from '../terminal/key-input/terminal-accessory-repeat'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'

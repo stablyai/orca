@@ -56,6 +56,49 @@ export class StatusPorcelainParser {
     return false
   }
 
+  /** `? dir/` rows a configured-mode (non `-uall`) scan collapsed; nested repositories also end in `/`. */
+  untrackedDirectoryPaths(): string[] {
+    return this.entries
+      .filter((entry) => entry.area === 'untracked' && entry.path.endsWith('/'))
+      .map((entry) => entry.path)
+  }
+
+  /** Splice listed files over their `? dir/` rows, then reapply the cap as `-uall` streaming would. Returns true past the limit. */
+  expandUntrackedDirectories(
+    filesByDirectory: ReadonlyMap<string, readonly string[]>,
+    limit: number
+  ): boolean {
+    const records: StatusPorcelainRecord[] = []
+    for (const record of this.statusRecords) {
+      const files =
+        record.type === 'entry' && record.entry.area === 'untracked'
+          ? filesByDirectory.get(record.entry.path)
+          : undefined
+      if (!files) {
+        records.push(record)
+        continue
+      }
+      for (const path of files) {
+        records.push({ type: 'entry', entry: { path, status: 'untracked', area: 'untracked' } })
+      }
+    }
+    // Untracked rows follow every changed row and count one each, so -uall stops at exactly limit + 1.
+    const exceeded = limit !== 0 && records.length > limit
+    if (exceeded) {
+      records.length = limit + 1
+    }
+    this.statusRecords.length = 0
+    this.entries.length = 0
+    for (const record of records) {
+      this.statusRecords.push(record)
+      if (record.type === 'entry') {
+        this.entries.push(record.entry)
+      }
+    }
+    this.count = records.length
+    return exceeded
+  }
+
   /** Flush a final line with no trailing newline (e.g. when git exits). */
   finish(): void {
     if (this.carry.length > 0) {

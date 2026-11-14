@@ -48,9 +48,9 @@ import {
   type AgentSessionAccountHome
 } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { assertReservedTabUnheld } from '../agent-session-tab-table'
-export { assertReservedTabUnheld } from '../agent-session-tab-table'
 
 export type AgentSessionReserveRequest = {
+  forkedFrom?: AgentSessionRecord['forkedFrom']
   /** Host-resolved floating directory committed with the first owner reservation. */
   launchDirectory?: string
   sessionId: string
@@ -69,6 +69,8 @@ export type AgentSessionReserveRequest = {
   surfaceTabId?: string
   /** Seed an adopted handle to resume its conversation; absent means a fresh provider conversation. */
   adoptedHandleLink?: AgentSessionProviderHandleLink
+  /** Only an adopting create is named before its first message. */
+  conversationName?: string
   /** Null when the session does not exist yet; otherwise the fence the caller last observed. */
   expectedFence: number | null
   /** A supplier is invoked only when this operation wins a new reservation. */

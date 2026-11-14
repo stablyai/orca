@@ -1,5 +1,5 @@
 import type { EventEmitter } from 'node:events'
-import type { WindowsProcessEvidence } from '../../daemon/daemon-incarnation-evidence-types'
+import type { WindowsProcessEvidence } from '../../daemon/endpoint/identity/daemon-incarnation-evidence-types'
 import type { WslDistroHolderRecord } from './wsl-distro-holder-record'
 
 /** Holder liveness, in the execution-host vocabulary: lookup failure is never `exited`. */

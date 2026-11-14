@@ -151,7 +151,8 @@ describe('completed context clear projections', () => {
     const rows = [user, clear, row(7, { kind: 'turn', turnId: 'new-turn', state: 'running' })]
     expect(agentSessionCurrentContextRows(rows, [oldSend, boundarySend, currentSend])).toEqual({
       items: [rows[2]],
-      submissions: [currentSend]
+      submissions: [currentSend],
+      sequence: clear.sequence
     })
     expect(activeStructuredAgentSessionTurnId(rows)).toBe('new-turn')
     expect(owesStructuredAgentSessionWork(rows, [oldSend, currentSend], 3)).toBe(true)

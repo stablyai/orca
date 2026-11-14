@@ -4,18 +4,20 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
+import { githubCommentImageUploadAddress } from '@/components/github/github-comment-image-upload-address'
 import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
-} from '@/lib/comment-body-submit-state'
+} from '@/lib/source-control/review/comments/comment-body-submit-state'
 import { addIssueCommentForRepo } from '@/components/github/github-work-item-comment-mutations'
-import type { PRComment } from '../../../../../shared/github/comment-types'
-import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { translate } from '@/i18n/i18n'
-import { codeHostErrorText } from '@/lib/code-host-error-copy'
+import { useTranslate } from '@/i18n/use-translate'
+import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 export function GHCommentComposer({
   className,
@@ -36,11 +38,16 @@ export function GHCommentComposer({
   prRepo?: GitHubOwnerRepo | null
   onCommentAdded: (comment: PRComment) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [body, setBody] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const mountedRef = useMountedRef()
 
   const handleSubmit = useCallback(async () => {
+    if (uploading) {
+      return
+    }
     const bodyState = getCommentBodySubmitState(body)
     if (bodyState.status === 'empty') {
       return
@@ -95,6 +102,7 @@ export function GHCommentComposer({
     }
   }, [
     body,
+    uploading,
     mountedRef,
     repoPath,
     repoId,
@@ -109,9 +117,17 @@ export function GHCommentComposer({
   return (
     <div className={cn('relative', className)}>
       <GitHubMarkdownComposer
+        imageUploadAddress={githubCommentImageUploadAddress({
+          repoPath,
+          repoId,
+          sourceContext,
+          type: itemType,
+          prRepo
+        })}
+        onImageUploadPendingChange={setUploading}
         value={body}
         onChange={setBody}
-        placeholder={translate('auto.components.GitHubItemDialog.c5c117270e', 'Add a comment…')}
+        placeholder={t('auto.components.GitHubItemDialog.c5c117270e', 'Add a comment…')}
         disabled={submitting}
         minHeightClassName="min-h-28 pb-14 pr-14"
         className="w-full"
@@ -123,9 +139,9 @@ export function GHCommentComposer({
             type="button"
             size="icon-sm"
             onClick={handleSubmit}
-            disabled={!canSubmitComment || submitting}
+            disabled={!canSubmitComment || submitting || uploading}
             className="absolute bottom-3 right-3 shadow-sm"
-            aria-label={translate('auto.components.GitHubItemDialog.0a73f59e85', 'Send comment')}
+            aria-label={t('auto.components.GitHubItemDialog.0a73f59e85', 'Send comment')}
           >
             {submitting ? (
               <LoaderCircle className="size-4 animate-spin" />
@@ -135,7 +151,7 @@ export function GHCommentComposer({
           </Button>
         </TooltipTrigger>
         <TooltipContent>
-          {translate('auto.components.GitHubItemDialog.0a73f59e85', 'Send comment')}
+          {t('auto.components.GitHubItemDialog.0a73f59e85', 'Send comment')}
         </TooltipContent>
       </Tooltip>
     </div>

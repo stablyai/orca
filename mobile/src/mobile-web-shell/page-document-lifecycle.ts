@@ -38,11 +38,9 @@ export function reducePageDocumentLifecycle(
           )
         : step(session, {})
     case 'document-started':
-      // Reset paint/claims and advance flow: the new document inherits neither proof of rendering nor the previous document’s deadlines.
+      // Reset paint/claims; re-arming the one live deadline retires the previous document's. Keep the flow: activation's update check is still in flight.
       return session.state.kind === 'ready'
-        ? step(session, { ...CLEAR_PAGE_DOCUMENT_STATE, flow: session.flow + 1 }, [
-            AWAIT_DOCUMENT_LOAD
-          ])
+        ? step(session, CLEAR_PAGE_DOCUMENT_STATE, [AWAIT_DOCUMENT_LOAD])
         : step(session, {})
     case 'document-loaded':
       // Ready and document-loaded can arrive in either order; arm the ready wait only if still needed.

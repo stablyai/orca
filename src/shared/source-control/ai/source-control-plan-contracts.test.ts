@@ -1,6 +1,0 @@
-import './omp-source-control-discovery.spec'
-import './source-control-ai-policy-regression.spec'
-import './generation/commit-message-omp.spec'
-import './antigravity-source-control.spec'
-import './conversation-name-action.spec'
-import './recipes/source-control-ai-action-variables.spec'

@@ -12,8 +12,11 @@ export function performContextualTourStepAction(args: {
   openTaskPage: () => void
   openModal: (modal: 'setup-guide', data?: Record<string, unknown>) => void
   openClientHostedBrowserSettings: () => void
+  openChromeWebStore: () => Promise<boolean>
+  reportChromeWebStoreOpenFailure: () => void
   openWorkspaceComposer: () => void
   dispatchTerminalPaneSplit: (detail: RequestActiveTerminalPaneSplitDetail) => void
+  splitActiveChat: () => void
   schedule: (callback: () => void) => void
 }): void {
   const advanceOrFinish = (): void => {
@@ -35,6 +38,9 @@ export function performContextualTourStepAction(args: {
       if (args.activeTabId) {
         args.dispatchTerminalPaneSplit({ tabId: args.activeTabId, direction: 'vertical' })
       }
+      return
+    case 'split-chat-pane':
+      args.splitActiveChat()
       return
     case 'create-worktree':
       // Detach before composer handoff; the tour cancels over modals and source unmount must not record stray suppression.
@@ -64,5 +70,14 @@ export function performContextualTourStepAction(args: {
       args.schedule(() => {
         args.openClientHostedBrowserSettings()
       })
+      return
+    case 'open-chrome-web-store':
+      void args.openChromeWebStore().then((opened) => {
+        if (opened) {
+          args.finishTour()
+        } else {
+          args.reportChromeWebStoreOpenFailure()
+        }
+      }, args.reportChromeWebStoreOpenFailure)
   }
 }

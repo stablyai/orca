@@ -4,18 +4,18 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 
 export const bottomDrawerStyles = themedStyleSheet(() => ({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 1000
   },
   root: {
     flex: 1
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(0,0,0,0.55)'
   },
   backdropPressable: {
-    ...StyleSheet.absoluteFillObject
+    ...StyleSheet.absoluteFill
   },
   anchor: {
     flex: 1,
@@ -58,7 +58,9 @@ export const bottomDrawerStyles = themedStyleSheet(() => ({
     paddingTop: spacing.sm,
     paddingBottom: spacing.md
   },
+  // Gives up height to the sheet's cap so a list the sheet scrolls itself shrinks instead of clipping.
   staticContent: {
+    flexShrink: 1,
     minHeight: 0
   },
   staticContentFill: {

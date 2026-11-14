@@ -62,6 +62,10 @@ export function normalizeCompatibleLifecycleEvent(
   if (source === 'codebuddy' && eventName === 'SessionStart') {
     return null
   }
+  // CodeBuddy also fires PermissionRequest before auto-review allows; real prompts send Notification.
+  if (source === 'codebuddy' && eventName === 'PermissionRequest') {
+    return null
+  }
   const stateName =
     source === 'codebuddy' && eventName === 'PreToolUse'
       ? 'working'

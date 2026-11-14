@@ -1,11 +1,11 @@
 import { readFile, stat } from 'node:fs/promises'
-import { buildImageDataUri } from '../../shared/image-data-uri'
+import { buildImageDataUri } from '../../shared/file-preview/image-data-uri'
 import { MAX_REPO_ICON_UPLOAD_BYTES, type RepoIcon } from '../../shared/repo-icon'
 import type { ExecutionHostFilesystemRoute } from '../providers/execution-host-provider-dispatch'
-import { detectImageFileSignature } from '../media/image-file-signature'
+import { detectImageFileSignature } from '../../shared/image-file-signature'
 import { extractIconHref } from './repo-icon-source-href'
 import { iconHrefCandidates } from './repo-icon-href-candidates'
-import { joinWorktreeRelativePath } from '../runtime/runtime-relative-paths'
+import { joinWorktreeRelativePath } from '../runtime/files/paths/runtime-relative-paths'
 
 // Keep add-repo probes limited to conventional paths.
 const REPO_ICON_FILE_STEMS = [

@@ -1,9 +1,13 @@
-import type { MessageRow } from '../../../../orchestration/types'
+import type { MessageRow } from '../../../../orchestration/db/orchestration-records'
 import type { MailboxDeliveryBatch } from '../../../../orchestration/db/messages/role-mailbox-delivery'
-import { formatMessageBanner } from '../../../../orchestration/formatter'
+import { formatMessageBanner } from '../../../../orchestration/mailbox/formatting/message-formatting'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
+import { completionReportFollowUp } from '../../../../orchestration/workers/reports/report-follow-up-action'
+import { getMessagesByIds } from '../../../../orchestration/db/messages/messages-by-id'
 
 // Hide read/sequence, pointer_* and sender_pane_key: they are runtime delivery plumbing, not caller mailbox truth.
 const INTERNAL_MESSAGE_COLUMNS = [
+  'answer_sender_snapshot',
   'read',
   'sequence',
   'sender_pane_key',
@@ -72,6 +76,48 @@ export function handsOverBatch(result: unknown): boolean {
     'deliveryAcknowledged' in result &&
     result.deliveryAcknowledged === true
   )
+}
+
+/** Adds each finished completion report's follow-up action, so every check view offers the same one. */
+export function withReportFollowUps<T>(db: OrchestrationDb, result: T): T {
+  if (typeof result !== 'object' || result === null || !('messages' in result)) {
+    return result
+  }
+  const { messages } = result
+  if (!Array.isArray(messages) || !messages.some((message) => message?.type === 'worker_done')) {
+    return result
+  }
+  const formatted = 'formatted' in result && typeof result.formatted === 'string'
+  let changed = false
+  const lineageCache = new Map()
+  const stored = getMessagesByIds(
+    db,
+    messages
+      .filter((message: MailboxMessageReceipt) => formatted || message.type === 'worker_done')
+      .map((message: MailboxMessageReceipt) => message.id)
+  )
+  const rows = messages.map((message: MailboxMessageReceipt) => {
+    const row = stored.get(message.id)
+    const followUp = row ? completionReportFollowUp(db, row, lineageCache) : undefined
+    changed ||= followUp !== undefined
+    return { message, row, followUp }
+  })
+  if (!changed) {
+    return result
+  }
+  return {
+    ...result,
+    messages: rows.map(({ message, followUp }) =>
+      followUp ? { ...message, follow_up: followUp } : message
+    ),
+    ...(formatted
+      ? {
+          formatted: rows
+            .flatMap(({ row, followUp }) => (row ? [formatMessageBanner(row, { followUp })] : []))
+            .join('\n\n')
+        }
+      : {})
+  }
 }
 
 /** The mailboxes a consuming check took mail from: its messages' own, and the one an acknowledgement

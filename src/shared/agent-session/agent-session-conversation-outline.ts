@@ -1,4 +1,4 @@
-// Project every journal user row, including unloaded pages, with the transcript projection so rail identity, order and preview cannot disagree.
+// Project every human-authored journal user row, including unloaded pages, with the transcript projection so rail identity, order and preview cannot disagree.
 
 import type { AgentJournalCursor } from './journal/agent-session-journal-identity'
 import type {
@@ -10,6 +10,7 @@ import {
   deriveNativeChatRowContent,
   nativeChatRowRendersContent
 } from '../native-chat/transcript/native-chat-row-content'
+import { withoutSentImagePromptMarkers } from '../native-chat/transcript/native-chat-image-transcript-markers'
 import { iterateProcessOutputLines } from '../process-output-field-scanner'
 import { agentJournalSubmissionKey } from './journal/agent-session-journal-item-key'
 import { dispatchWasWithdrawn } from './requests/structured-agent-session-dispatch-rejection'
@@ -35,7 +36,9 @@ export type AgentSessionConversationOutlineEntry = {
 
 export type AgentSessionConversationOutline = {
   sessionId: string
-  /** Journal position the outline is current through: every user message created
+  /** Absent on older hosts whose outlines can include agent-authored turn inputs. */
+  humanMessagesOnly?: true
+  /** Journal position the outline is current through: every human-authored message created
    *  at or before `cursor.sequence` is listed, unless `omittedEntries` says otherwise. */
   cursor: AgentJournalCursor
   entries: AgentSessionConversationOutlineEntry[]
@@ -49,18 +52,18 @@ const previews = new WeakMap<readonly NativeChatBlock[], NativeChatUserMessagePr
 
 /** Share preview formatting between loaded transcript rows and outline entries. */
 export function nativeChatUserMessagePreview(
-  blocks: readonly NativeChatBlock[]
+  message: Pick<NativeChatMessage, 'role' | 'blocks'>
 ): NativeChatUserMessagePreview {
-  const cached = previews.get(blocks)
+  const cached = previews.get(message.blocks)
   if (cached) {
     return cached
   }
-  const content = deriveNativeChatRowContent(blocks)
+  const content = deriveNativeChatRowContent(withoutSentImagePromptMarkers(message))
   const preview = {
     text: content.markdown.replace(/\s+/g, ' ').trim(),
     imageCount: content.prose.filter((block) => block.type === 'image-ref').length
   }
-  previews.set(blocks, preview)
+  previews.set(message.blocks, preview)
   return preview
 }
 
@@ -176,11 +179,12 @@ export function projectAgentSessionConversationOutline(
       sequence === undefined ||
       stopped.has(message.id) ||
       message.role !== 'user' ||
+      message.from !== undefined ||
       !nativeChatRowRendersContent(message.blocks)
     ) {
       continue
     }
-    const preview = nativeChatUserMessagePreview(message.blocks)
+    const preview = nativeChatUserMessagePreview(message)
     const turnKey = turnKeys[index]
     const reply = turnKey === undefined ? undefined : replies.get(turnKey)
     entries.push({

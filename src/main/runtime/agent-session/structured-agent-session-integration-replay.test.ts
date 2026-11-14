@@ -2,7 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { createTrackedJournalOpener } from '../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type * as JournalStoreFactory from '../../native-chat/agent-session-journal/journal-store-factory'
 import {
   ensureStructuredAgentSessionHost,
@@ -14,7 +14,7 @@ import {
   THREAD,
   TURN,
   type StructuredCodexRpcHarness
-} from '../structured-codex-session-rpc-test-harness'
+} from '../rpc/methods/structured-sessions/structured-codex-session-rpc-test-harness'
 import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 const { journalOpenHold } = vi.hoisted(() => {

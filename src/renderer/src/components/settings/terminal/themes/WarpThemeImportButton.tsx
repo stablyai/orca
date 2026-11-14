@@ -1,7 +1,7 @@
 import { Button } from '../../../ui/button'
 import { WarpIcon } from '../../../icons/WarpIcon'
 import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 // Place Warp import with terminal themes, the only output it produces.
 export function WarpThemeImportButton({
@@ -9,6 +9,7 @@ export function WarpThemeImportButton({
 }: {
   warpThemes: UseWarpThemeImportReturn
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Button
       variant="outline"
@@ -17,7 +18,7 @@ export function WarpThemeImportButton({
       onClick={() => void warpThemes.handleClick()}
     >
       <WarpIcon className="size-4" />
-      {translate('auto.components.settings.WarpThemeImportModal.title', 'Import from Warp')}
+      {t('auto.components.settings.WarpThemeImportModal.title', 'Import from Warp')}
     </Button>
   )
 }

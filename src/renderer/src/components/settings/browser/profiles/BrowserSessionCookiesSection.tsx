@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { BrowserProfileRow, type BrowserProfileRowProps } from './BrowserProfileRow'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { translateSearchKeyword } from '../../search/settings-search-keywords'
 
 type BrowserSessionHostOption = {
@@ -43,6 +43,7 @@ export function BrowserSessionCookiesSection({
   onSelectDefaultProfile,
   onSelectProfile
 }: BrowserSessionCookiesSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const activeProfile = [defaultProfile, ...nonDefaultProfiles].find(
     (profile) => profile?.id === activeProfileId
   )
@@ -55,14 +56,24 @@ export function BrowserSessionCookiesSection({
   return (
     <SearchableSetting
       id="browser-session-cookies"
-      title={translate('auto.components.settings.BrowserPane.113cd2dc9b', 'Session & Cookies')}
-      description={translate(
+      title={t('auto.components.settings.BrowserPane.bc44903d30', 'Session & cookies')}
+      description={t(
         'auto.components.settings.BrowserPane.aa1074bfe9',
         'Manage browser profiles and import cookies from Chrome, Edge, Comet, or other browsers.'
       )}
       keywords={[
-        ...translateSearchKeyword('auto.components.settings.browser.search.8a489aab8d', 'google'),
-        ...translateSearchKeyword('browser.googleCookieClear.signInKeyword', 'sign-in'),
+        ...translateSearchKeyword(
+          'auto.components.settings.browser.search.8a489aab8d',
+          'google',
+          undefined,
+          t
+        ),
+        ...translateSearchKeyword(
+          'browser.googleCookieClear.signInKeyword',
+          'sign-in',
+          undefined,
+          t
+        ),
         'cookies',
         'session',
         'import',
@@ -73,37 +84,38 @@ export function BrowserSessionCookiesSection({
         'arc',
         'profile'
       ]}
-      className="space-y-3 py-2"
+      className="space-y-3 py-3"
     >
       <div className="flex items-center justify-between gap-3">
         <div className="space-y-0.5">
-          <Label>
-            {translate('auto.components.settings.BrowserPane.2d66a6efb5', 'Session & Cookies')}
-          </Label>
+          <Label>{t('auto.components.settings.BrowserPane.ddd634b250', 'Session & cookies')}</Label>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.BrowserPane.cd47bc9622',
               'Select a default profile for new browser tabs. Import cookies and switch profiles per-tab via the'
             )}{' '}
             <strong>···</strong>{' '}
-            {translate('auto.components.settings.BrowserPane.e4aaf8051b', 'toolbar menu.')}
+            {t('auto.components.settings.BrowserPane.e4aaf8051b', 'toolbar menu.')}
           </p>
         </div>
         <Button variant="outline" size="xs" onClick={onAddProfile} className="shrink-0 gap-1.5">
           <Plus className="size-3" />
-          {translate('auto.components.settings.BrowserPane.6f2584b39e', 'Add Profile')}
+          {t('auto.components.settings.BrowserPane.549f28cf10', 'Add profile')}
         </Button>
       </div>
 
       {hostOptions.length > 1 ? (
-        <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2">
+        <div
+          data-settings-row=""
+          className="flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2"
+        >
           <div className="min-w-0 space-y-0.5">
             <Label className="text-xs">
-              {translate('auto.components.settings.BrowserPane.5e19a692f7', 'Host')}
+              {t('auto.components.settings.BrowserPane.5e19a692f7', 'Host')}
             </Label>
             <p className="truncate text-[11px] text-muted-foreground">
               {selectedHost?.detail ??
-                translate(
+                t(
                   'auto.components.settings.BrowserPane.6480776a03',
                   'Browser profiles for the selected host.'
                 )}
@@ -134,7 +146,7 @@ export function BrowserSessionCookiesSection({
               id: 'default',
               scope: 'default',
               partition: '',
-              label: translate('auto.components.settings.BrowserPane.4399c77caa', 'Default'),
+              label: t('auto.components.settings.BrowserPane.4399c77caa', 'Default'),
               source: null
             }
           }
@@ -157,16 +169,16 @@ export function BrowserSessionCookiesSection({
       </div>
       <div className="flex items-center justify-between gap-3 pt-3">
         <div className="min-w-0 space-y-0.5">
-          <Label>{translate('browser.googleCookieClear.heading', 'Google Cookies')}</Label>
+          <Label>{t('browser.googleCookieClear.fe3f6e1721', 'Google cookies')}</Label>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'browser.googleCookieClear.explanation',
               "Google ties its sign-ins to the browser they were made in, so Orca doesn't import Google cookies from other browsers. If Google is stuck on the wrong account or keeps signing you out, clear Google cookies from the active profile, then sign in to Google again in Orca. Other sites stay signed in."
             )}
           </p>
           {googleCookieClear.available === false ? (
             <p className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'browser.googleCookieClear.unavailable',
                 'Unavailable for this profile on the selected host.'
               )}
@@ -180,7 +192,7 @@ export function BrowserSessionCookiesSection({
           disabled={!googleCookieClear.available || googleCookieClear.busy}
           onClick={() => void googleCookieClear.onClick()}
         >
-          {translate('browser.googleCookieClear.action', 'Clear Google cookies…')}
+          {t('browser.googleCookieClear.action', 'Clear Google cookies…')}
         </Button>
       </div>
     </SearchableSetting>

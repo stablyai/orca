@@ -8,7 +8,7 @@ import {
   sourceControlPickerDraft,
   applySourceControlPickerDraft,
   sameSourceControlSetupSelection
-} from '../../../lib/source-control-agent-launch-picker'
+} from '../../../lib/source-control/ai/source-control-agent-launch-picker'
 import {
   canonicalSourceControlActionSelection,
   pickSourceControlActionAgent,
@@ -20,12 +20,12 @@ import {
   sourceControlRepoAgentRows,
   savedSurfaceForPick,
   type SourceControlAgentRows
-} from '@/lib/source-control-agent-picker'
-import { buildAgentLaunchRouteInput } from '@/lib/agent-launch-route-input'
+} from '@/lib/source-control/ai/source-control-agent-picker'
+import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY } from '../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import type { SourceControlActionRecipe } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** The shared surface rows configure a recipe here; they never start an agent. */
 type PickerProps = {
@@ -43,17 +43,7 @@ type PickerProps = {
   onPick: (agent: TuiAgent | null, choice: Pick<SourceControlActionRecipe, 'surface'>) => void
 }
 
-export function SourceControlActionAgentPicker(
-  props: PickerProps | { text: ComponentProps<typeof AgentLaunchPicker> }
-) {
-  return 'text' in props ? (
-    <AgentLaunchPicker {...props.text} />
-  ) : (
-    <ObservedSourceControlActionAgentPicker {...props} />
-  )
-}
-
-function ObservedSourceControlActionAgentPicker(props: PickerProps) {
+export function SourceControlActionAgentPicker(props: PickerProps) {
   const repo = useAppStore((state) => state.repos.find((repo) => repo.id === props.repoId) ?? null)
   const rows = props.repoId
     ? sourceControlRepoAgentRows(repo)
@@ -160,6 +150,7 @@ const SelectedSourceControlActionAgentPicker = memo(
     onSelection: ComponentProps<typeof AgentLaunchPicker>['onPick']
     onDefault: () => void
   }) {
+    const t = useTranslate()
     useUiLanguageRevision()
     const selection =
       props.selection ??
@@ -172,7 +163,7 @@ const SelectedSourceControlActionAgentPicker = memo(
         agent={props.agent}
         cli={props.cli}
         disabled={props.disabled}
-        emptyLabel={translate(
+        emptyLabel={t(
           'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
           'Use default agent'
         )}
@@ -187,7 +178,7 @@ const SelectedSourceControlActionAgentPicker = memo(
         onPick={onSelection}
       >
         <DropdownMenuItem onSelect={onDefault}>
-          {translate(
+          {t(
             'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
             'Use default agent'
           )}

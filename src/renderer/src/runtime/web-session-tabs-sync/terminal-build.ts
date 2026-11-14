@@ -3,13 +3,14 @@ import type {
   TerminalLayoutSnapshot,
   TerminalTab
 } from '../../../../shared/workspace-layout/terminal-tab-types'
-import { normalizeTerminalLayoutPtyOwnership } from '../../../../shared/workspace-layout/terminal-layout-pty-ownership'
+import { normalizeTerminalLayoutPtyOwnership } from '../../../../shared/workspace-layout/terminal-topology/terminal-layout-pty-ownership'
 import { resolvePaneAgentOwnerRecord } from '../../../../shared/agent-status/identity/pane-agent-owner'
 import { normalizeCompatibleAgentTitleForOwner } from '../../../../shared/agent-status/title/agent-title-owner'
-import { getRemoteRuntimePtyEnvironmentId } from '../runtime-terminal-stream'
+import { getRemoteRuntimePtyEnvironmentId } from '../hosted-terminals/identity/remote-runtime-pty-owner'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
-import type { MirroredTerminalTab, TerminalSurface, ReadyTerminalSurface } from './state'
+import type { MirroredTerminalTab, ReadyTerminalSurface } from './state'
+import type { RuntimeMobileSessionTerminalClientTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 import { chooseRemoteTerminalLayout, isTerminalSurfaceTab } from './terminal-surfaces'
 
 function pendingBindingBelongsToEnvironment(
@@ -25,7 +26,7 @@ function pendingBindingBelongsToEnvironment(
 
 /** Keep a known pane binding while the host briefly publishes its surface as pending. */
 function retainPendingTerminalBindings(
-  surfaces: readonly TerminalSurface[],
+  surfaces: readonly RuntimeMobileSessionTerminalClientTab[],
   existingLayout: TerminalLayoutSnapshot | undefined,
   ptyIdsByLeafId: Record<string, string>,
   environmentId: string,
@@ -67,7 +68,7 @@ export function buildMirroredTerminalTabs(
   focusTarget?: { parentTabId: string; leafId: string },
   terminalPtyMode: 'local' | 'remote' = 'remote'
 ): MirroredTerminalTab[] {
-  const groups = new Map<string, TerminalSurface[]>()
+  const groups = new Map<string, RuntimeMobileSessionTerminalClientTab[]>()
   for (const tab of snapshot.tabs.filter(isTerminalSurfaceTab)) {
     const group = groups.get(tab.parentTabId) ?? []
     group.push(tab)
@@ -114,7 +115,9 @@ export function buildMirroredTerminalTabs(
     const ptyIds = layoutPtyEntries
       .map(([, ptyId]) => ptyId)
       .filter((ptyId) => livePtyIds.has(ptyId))
-    let retainedSurfaceByPrunedLeafId: Map<string, TerminalSurface> | undefined
+    let retainedSurfaceByPrunedLeafId:
+      | Map<string, RuntimeMobileSessionTerminalClientTab>
+      | undefined
     if (layoutPtyEntries.length < Object.keys(ptyIdsByLeafId).length) {
       const retainedLeafIdByPtyId = new Map(
         layoutPtyEntries.map(([leafId, ptyId]) => [ptyId, leafId])
@@ -145,11 +148,22 @@ export function buildMirroredTerminalTabs(
       surfaces
         .map((surface) => existingById.get(toWebTerminalSurfaceTabId(surface.id)))
         .find((tab): tab is TerminalTab => Boolean(tab))
+    // A host window that resolves the session name is its only writer (null clears); a headless or older host's name is a saved cache, so the client resolves its own.
+    const hostResolvesSessionTitle = activeSurface.resolvesSessionTitle === true
+    const sessionTitle = hostResolvesSessionTitle
+      ? activeSurface.aiVaultTitle?.title.trim()
+        ? activeSurface.aiVaultTitle
+        : null
+      : existing?.aiVaultTitle
+    // The host's titles rank its session names in, so when it clears a name none of the retained ones is a safe placeholder.
+    const sessionNameCleared = hostResolvesSessionTitle && !sessionTitle && !!existing?.aiVaultTitle
     // Idle headless panes publish default Terminal; retain known title until a ready surface supplies one.
     const hostTitle = activeSurface.title.trim() || surfaces[0]?.title.trim() || ''
     const hostTitleIsPlaceholder =
       hostTitle === '' || (activeSurface.status === 'pending-handle' && hostTitle === 'Terminal')
-    const retainedTitle = existing?.title?.trim() || existing?.defaultTitle?.trim() || ''
+    const retainedTitle = sessionNameCleared
+      ? ''
+      : existing?.title?.trim() || existing?.defaultTitle?.trim() || ''
     const title = normalizeCompatibleAgentTitleForOwner(
       (hostTitleIsPlaceholder ? retainedTitle || hostTitle : hostTitle) || 'Terminal',
       ownerRecord?.agent,
@@ -180,7 +194,8 @@ export function buildMirroredTerminalTabs(
         defaultTitle: existing?.defaultTitle ?? title,
         // Host omits generated titles; retain client agent-prompt labels across rebuilds.
         ...(existing?.generatedTitle ? { generatedTitle: existing.generatedTitle } : {}),
-        ...(existing?.aiVaultTitle ? { aiVaultTitle: existing.aiVaultTitle } : {}),
+        ...(sessionTitle ? { aiVaultTitle: sessionTitle } : {}),
+        ...(hostResolvesSessionTitle ? { sessionTitleFromHost: true as const } : {}),
         // Host omits client recovery ledger; preserve it or every snapshot rearms remount allowance (b5cfc6ca).
         ...(existing?.recovery ? { recovery: existing.recovery } : {}),
         ...(quickCommandLabel ? { quickCommandLabel } : {}),

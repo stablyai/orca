@@ -1,15 +1,16 @@
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import { switchToPluginLanguage } from '../page/PluginContributionActionLanguage'
 import { applyPluginThemesNow } from '../state/plugin-theme-apply'
 import type { PluginInUse } from '../state/use-plugin-in-use'
 
-function inUseLabel(slot: 'light' | 'dark' | null): string {
+function inUseLabel(slot: 'light' | 'dark' | null, t: Translate = translate): string {
   return slot === 'dark'
-    ? translate('auto.components.settings.PluginInUseAction.inUseDark', 'In use · Dark')
+    ? t('auto.components.settings.PluginInUseAction.inUseDark', 'In use · Dark')
     : slot === 'light'
-      ? translate('auto.components.settings.PluginInUseAction.inUseLight', 'In use · Light')
-      : translate('auto.components.settings.PluginInUseAction.inUse', 'In use')
+      ? t('auto.components.settings.PluginInUseAction.inUseLight', 'In use · Light')
+      : t('auto.components.settings.PluginInUseAction.inUse', 'In use')
 }
 
 /** "In use" when a plugin's theme, icon theme or language is the active one, else "Use". */
@@ -24,6 +25,7 @@ export function PluginInUseAction({
   inUse: PluginInUse
   size?: 'xs' | 'sm'
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (!inUse) {
     return null
   }
@@ -31,7 +33,7 @@ export function PluginInUseAction({
     return (
       <span className="inline-flex items-center gap-1.5 text-xs whitespace-nowrap text-muted-foreground">
         <span aria-hidden="true" className="size-1.5 rounded-full bg-status-success" />
-        {inUseLabel(inUse.slot)}
+        {inUseLabel(inUse.slot, t)}
       </span>
     )
   }
@@ -40,16 +42,12 @@ export function PluginInUseAction({
     <Button
       variant="outline"
       size={size}
-      aria-label={translate(
-        'auto.components.settings.PluginInUseAction.useName',
-        'Use {{value0}}',
-        {
-          value0: name
-        }
-      )}
+      aria-label={t('auto.components.settings.PluginInUseAction.useName', 'Use {{value0}}', {
+        value0: name
+      })}
       onClick={() => void (pack ? switchToPluginLanguage(pack) : applyPluginThemesNow(pluginKey))}
     >
-      {translate('auto.components.settings.PluginInUseAction.use', 'Use')}
+      {t('auto.components.settings.PluginInUseAction.use', 'Use')}
     </Button>
   )
 }

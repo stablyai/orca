@@ -1,6 +1,6 @@
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import { runWithGitReadCacheInvalidation } from '../../source-control/git-read-cache-invalidation'
-import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/wsl-linked-worktree-git-routing'
+import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/host-routing/wsl-linked-worktree-git-routing'
 import { bumpWorktreeScanGeneration } from '../catalog/worktree-scan-cache'
 import { invalidateSparseCheckoutState } from '../sparse-checkout/worktree-sparse-checkout-cache'
 

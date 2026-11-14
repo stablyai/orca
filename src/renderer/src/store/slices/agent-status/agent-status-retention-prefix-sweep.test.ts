@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { AppState } from '../../types'
 
-import { createTestStore } from '../store-test-helpers'
-import '../store-session-test-harness'
+import { createTestStore } from '../../testing/app-store-test-fixture'
+import '../../../i18n/i18n'
 
 describe('agent status retention + prefix sweep', () => {
   // Use fake timers: setAgentStatus schedules a real 30-minute timer through queueMicrotask.

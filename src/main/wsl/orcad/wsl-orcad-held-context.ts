@@ -1,12 +1,12 @@
 import { resolveOrcadRemoteContext } from '../../managed-server/install/orcad-remote-context'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import {
   remoteHostPlatformFromUnameProbe,
   UNAME_PLATFORM_PROBE_COMMAND,
   UNAME_PLATFORM_PROBE_MARKER
-} from '../../ssh/ssh-remote-platform-detection'
-import type { RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+} from '../../ssh/remote-host/ssh-remote-platform-detection'
+import type { RemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 import { LINUX_LIBC_FIRST_PROBE } from '../../node-runtime/linux-libc-probe'
 import type { WslDistroHolder } from '../discovery/wsl-distro-holder-types'
 import { refuseMissingWslDistro, WslDistroVersion1Error } from '../discovery/wsl-distro-unsupported'

@@ -1,14 +1,15 @@
-import { resolveQualifiedFolderWorkspaceResult } from '../../../shared/folder-workspaces/folder-workspace-execution-host'
+import type { BrowserWindow } from 'electron'
+import { getRuntimeDesktopSurface } from '../construction/runtime-desktop-surface'
 import {
   getRepoExecutionHostId,
   getRepoSshConnectionId,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { WORKSPACE_ON_OTHER_RUNTIME } from '../../../shared/protocol-version'
+import { WORKSPACE_ON_OTHER_RUNTIME } from '../../../shared/preflight-runtime-capabilities'
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree as ResolveBrowserNetworkExecutionHostForWorktreeMethods } from '../terminal/launch/terminal-workspace-scope'
 import { OrcaRuntimeWithHasTerminalsForWorktree } from './session-graph-reload-lifecycle'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
@@ -23,32 +24,32 @@ import {
   wslDistroForPath
 } from '../../wsl/filesystem/wsl-unc-access-gate'
 import { wslDistroHoldMessage } from '../../../shared/wsl-distro-stopped-hold'
-import type { TerminalWorkspaceLaunchScope } from '../runtime-legacy-worker-terminal-recovery-types'
+import type { TerminalWorkspaceLaunchScope } from '../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
-import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
-import type { BrowserExecutionHostKeyResolution } from '../runtime-browser-client-page-adoption'
-import { browserNetworkExecutionHostKey } from '../../browser/network/execution-routes/browser-network-execution-route'
-
 import {
-  type ClientHostedBrowserRpcRoute,
-  routeRuntimeBrowserClientAutomation
-} from '../runtime-browser-client-automation'
-import { getRuntimeBrowserPageRegistry } from '../runtime-browser-page-registry'
-import { getBrowserHostLeaseRegistry } from '../browser-host/browser-host-lease-registry-instance'
-import {
-  routeDesktopBrowserBridgeRpc,
-  type DesktopBrowserBridgeRoute
-} from '../desktop-browser-bridge/desktop-browser-bridge-route'
-import {
-  getDesktopBrowserBridgeRegistry,
-  isDesktopBrowserBridgeHostEnabled
-} from '../desktop-browser-bridge/desktop-browser-bridge-registry'
-import { runtimeBrowserCommandsFactoryIsAvailable } from '../runtime-browser-commands-factory'
-import { hasPairedPageHost } from '../browser/browser-client-page-opening'
-import { resolveRemoteCliBrowserScopeSelector } from '../desktop-browser-bridge/remote-cli-browser-scope'
-import type { RpcContext } from '../rpc/core'
+  folderCatalogOf,
+  resolveKeyedFolderWorkspace,
+  type WorkspaceSelectorOptions
+} from '../workspaces/catalog/workspace-selector-candidates'
+import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
 
 export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extends OrcaRuntimeWithHasTerminalsForWorktree {
+  getAuthoritativeWindow(missingWindowMessage = 'No renderer window available'): BrowserWindow {
+    const win = this.getAvailableAuthoritativeWindow()
+    if (!win || win.isDestroyed()) {
+      throw new Error(missingWindowMessage)
+    }
+    return win
+  }
+
+  protected getAvailableAuthoritativeWindow(): BrowserWindow | null {
+    if (this.authoritativeWindowId === null) {
+      return null
+    }
+    const win = getRuntimeDesktopSurface().findWindowById(this.authoritativeWindowId)
+    return win && !win.isDestroyed() ? win : null
+  }
+
   protected abstract resolveBrowserNetworkExecutionHostForWorktree(
     ...args: Parameters<
       ResolveBrowserNetworkExecutionHostForWorktreeMethods['resolveBrowserNetworkExecutionHostForWorktree']
@@ -71,7 +72,7 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     this.terminalIdentity.clearHandles()
     this.terminalIdentity.clearLeafBindings()
     this.clearPtyIncarnationHandles()
-    this.rejectAllWaiters('terminal_handle_stale')
+    this.terminalWaiters.rejectAll('terminal_handle_stale')
     this.refreshWritableFlags()
   }
 
@@ -91,13 +92,18 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     this.terminalIdentity.clearHandles()
     this.terminalIdentity.clearLeafBindings()
     this.clearPtyIncarnationHandles()
-    this.rejectAllWaiters('terminal_handle_stale')
+    this.terminalWaiters.rejectAll('terminal_handle_stale')
     this.refreshWritableFlags()
     this.markSessionTabsInventoryPublished()
     if (ORCA_LAYOUT_OWNER_IS_MAIN) {
       this.headlessGraphFallbackAvailable = true
       startedMainTerminalSurfaces(this)?.republish({ force: true })
     }
+  }
+
+  /** A reloading graph keeps main-created tabs; only an unavailable one cannot hold a run terminal. */
+  canOpenRunTerminals(): boolean {
+    return this.graphStatus !== 'unavailable'
   }
 
   assertGraphReady(): void {
@@ -113,6 +119,20 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
 
   protected assertStableReadyGraph(expectedGraphEpoch: number): void {
     if (this.graphStatus !== 'ready' || this.rendererGraphEpoch !== expectedGraphEpoch) {
+      throw new Error('runtime_unavailable')
+    }
+  }
+
+  /** Null when no window is attached: there is no renderer to fence. A booting or reloading one throws. */
+  protected captureRendererGraphFence(): number | null {
+    return this.authoritativeWindowId === null ? null : this.captureReadyGraphEpoch()
+  }
+
+  protected assertRendererGraphFence(fence: number | null): void {
+    if (fence !== null) {
+      this.assertStableReadyGraph(fence)
+    } else if (this.authoritativeWindowId !== null) {
+      // A window attached mid-operation; its renderer owns the graph again.
       throw new Error('runtime_unavailable')
     }
   }
@@ -182,44 +202,31 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     selector: string,
     requiredHostId?: ExecutionHostId
   ): FolderWorkspace | null {
-    const workspaceSelector = selector.startsWith('id:') ? selector.slice(3) : selector
-    const parsed = parseWorkspaceKey(workspaceSelector)
-    if (parsed?.type !== 'folder') {
-      return null
-    }
-    const result = resolveQualifiedFolderWorkspaceResult(
-      {
-        folderWorkspaces: this.store?.getFolderWorkspaces?.() ?? [],
-        projectGroups: this.store?.getProjectGroups?.() ?? [],
-        repos: this.store?.getRepos() ?? []
-      },
-      parsed.folderWorkspaceId,
-      requiredHostId
-    )
-    if (result.kind !== 'selected') {
-      throw new Error(result.kind === 'missing' ? 'selector_not_found' : 'selector_ambiguous')
-    }
-    const selected = result.value
-    return {
-      ...selected.workspace,
-      executionHostId: selected.hostId,
-      connectionId: selected.connectionId
-    }
+    return resolveKeyedFolderWorkspace(folderCatalogOf(this.store), selector, requiredHostId)
   }
 
   /** Folder workspaces first, then Git worktrees; project-group folders have no repo row (STA-12562). Launching needs the folder on disk; teardown must not. */
   protected async resolveWorkspaceSelector(
     selector: string,
-    options: { requireUsableFolderPath?: boolean; requiredHostId?: ExecutionHostId } = {}
+    options: WorkspaceSelectorOptions = {}
   ): Promise<ResolvedWorktree> {
-    const selectedFolder = this.resolveFolderWorkspaceSelector(selector, options.requiredHostId)
+    const candidate = await this.resolveWorkspaceCandidate(selector, options)
+    if (candidate.kind === 'worktree') {
+      return candidate.worktree
+    }
     const folderWorkspace = options.requireUsableFolderPath
-      ? (await this.resolveFolderWorkspaceLaunchScope(selector, {}, selectedFolder ?? undefined))
-          ?.folderWorkspace
-      : selectedFolder
-    return folderWorkspace
-      ? this.folderWorkspaceToResolvedWorktree(folderWorkspace)
-      : this.resolveGitWorktreeSelector(selector, options.requiredHostId)
+      ? (
+          await this.resolveFolderWorkspaceLaunchScope(
+            folderWorkspaceKey(candidate.folder.id),
+            {},
+            candidate.folder
+          )
+        )?.folderWorkspace
+      : candidate.folder
+    if (!folderWorkspace) {
+      throw new Error('selector_not_found')
+    }
+    return this.folderWorkspaceToResolvedWorktree(folderWorkspace)
   }
 
   protected async resolveEmulatorWorkspaceId(selector: string): Promise<string> {
@@ -245,64 +252,29 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
 
   /** Reconcile client-hosted pages per paired device; one attached client cannot account for another's pages. */
   markClientHostedPagesReconciled(pairedDeviceId: string): void {
-    this.clientHostedPageReconciliation.markReconciled(pairedDeviceId)
-  }
-
-  /** Resolve the current host key; native/WSL runtime ids and SSH provider epochs expire on restart. Missing workspaces are gone; reconnect/repair is temporary and never authorizes page retirement. */
-  async resolveBrowserExecutionHostKeyForWorkspace(
-    workspaceId: string
-  ): Promise<BrowserExecutionHostKeyResolution> {
-    let worktree: ResolvedWorktree
-    try {
-      worktree = await this.resolveBrowserWorkspace(`id:${workspaceId}`)
-    } catch {
-      return { status: 'workspace-gone' }
+    const held = this.clientHostedPageReconciliation.markReconciled(pairedDeviceId)
+    if (!held?.size) {
+      return
     }
-    try {
-      return {
-        status: 'resolved',
-        executionHostKey: browserNetworkExecutionHostKey(
-          await this.resolveBrowserNetworkExecutionHostForWorktree(worktree)
-        )
+    const candidates = this.selectMobileSessionTabsListeners(undefined, pairedDeviceId)
+    if (candidates.length === 0) {
+      return
+    }
+    const deliver = this.createMobileSessionTabsDelivery()
+    for (const worktree of held) {
+      const selected = this.selectMobileSessionTabsListeners(worktree, pairedDeviceId, candidates)
+      if (selected.length === 0) {
+        continue
       }
-    } catch {
-      return { status: 'unavailable' }
+      deliver(
+        this.getMobileSessionTabsForWorktree(worktree, pairedDeviceId, {
+          includeAgentSenders: false
+        }),
+        ++this.mobileSessionTabsChangeSequence,
+        pairedDeviceId,
+        selected,
+        'reconciliation'
+      )
     }
-  }
-
-  routeClientHostedBrowserRpc(
-    method: string,
-    params: unknown
-  ): Promise<ClientHostedBrowserRpcRoute> {
-    return routeRuntimeBrowserClientAutomation({
-      method,
-      params,
-      pages: getRuntimeBrowserPageRegistry(this),
-      leases: getBrowserHostLeaseRegistry(this),
-      resolveWorkspace: (selector) =>
-        resolveRemoteCliBrowserScopeSelector(selector) ?? this.resolveBrowserWorkspace(selector)
-    })
-  }
-
-  /** On orcad, sends this host's CLI browser commands to the desktop that opted in to serve them. */
-  routeDesktopBrowserBridgeRpc(
-    method: string,
-    params: unknown,
-    context: Pick<RpcContext, 'caller' | 'signal'>
-  ): Promise<DesktopBrowserBridgeRoute> {
-    return routeDesktopBrowserBridgeRpc({
-      method,
-      params,
-      caller: context.caller,
-      signal: context.signal,
-      hostEnabled: isDesktopBrowserBridgeHostEnabled(),
-      registry: getDesktopBrowserBridgeRegistry(this),
-      // This runtime lists/retires desktop-hosted pages even while their desktop is gone, so those commands need no bridge.
-      localBrowserAvailable:
-        runtimeBrowserCommandsFactoryIsAvailable() ||
-        getRuntimeBrowserPageRegistry(this).listPages().length > 0 ||
-        hasPairedPageHost({ getBrowserHostLeaseRegistry: () => getBrowserHostLeaseRegistry(this) }),
-      resolveWorkspace: (selector) => this.resolveBrowserWorkspace(selector)
-    })
   }
 }

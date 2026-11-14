@@ -25,7 +25,7 @@ test('preserves highlighted editor text across worktree tab switches', async ({
   const explorer = orcaPage.locator('[data-orca-explorer-shell]')
   const rowNamed = (name: string) =>
     explorer.locator('[data-file-explorer-row]').filter({
-      has: orcaPage.locator('[data-file-explorer-row-name]').getByText(name, { exact: true })
+      has: orcaPage.getByText(name, { exact: true })
     })
 
   await rowNamed('package.json').dblclick()

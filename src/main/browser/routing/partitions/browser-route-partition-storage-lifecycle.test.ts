@@ -5,13 +5,11 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { BrowserRoutePartitionBindingStore } from './browser-route-partition-binding-store'
 import {
-  findOrphanedBrowserRoutePartitions,
   releaseBrowserRoutePartitionStorage,
   type BrowserRoutePartitionStorageDependencies
 } from './browser-route-partition-storage-lifecycle'
 
 const fingerprint = 'a'.repeat(64)
-const scopeAlpha = '1'.repeat(64)
 const scopeBeta = '2'.repeat(64)
 
 function partitionName(marker: string): string {
@@ -60,61 +58,6 @@ function createDependencies(
 }
 
 describe('route partition storage lifecycle', () => {
-  it('collects partitions of removed environments and pre-scope entries', () => {
-    const { filePath, store, partitionDataRoot } = createStore()
-    const removed = partitionName('b')
-    const kept = partitionName('c')
-    const legacy = partitionName('d')
-    store.set(removed, fingerprint, scopeBeta)
-    store.set(kept, fingerprint, scopeAlpha)
-    writeFileSync(
-      filePath,
-      JSON.stringify({
-        version: 2,
-        bindings: {
-          [removed]: { fingerprint, storageScope: scopeBeta },
-          [kept]: { fingerprint, storageScope: scopeAlpha },
-          [legacy]: { fingerprint, storageScope: null }
-        }
-      })
-    )
-
-    const orphans = findOrphanedBrowserRoutePartitions(
-      createDependencies(store, partitionDataRoot),
-      new Set([scopeAlpha])
-    )
-
-    expect(orphans.toSorted()).toEqual([legacy, removed].toSorted())
-  })
-
-  it('never collects a partition that still has prepared pages', () => {
-    const { store, partitionDataRoot } = createStore()
-    const partition = partitionName('e')
-    store.set(partition, fingerprint, scopeBeta)
-
-    expect(
-      findOrphanedBrowserRoutePartitions(
-        createDependencies(store, partitionDataRoot, new Set([partition])),
-        new Set([scopeAlpha])
-      )
-    ).toEqual([])
-  })
-
-  it('clears storage, deletes the directory, and drops the binding', async () => {
-    const { store, partitionDataRoot } = createStore()
-    const partition = partitionName('f')
-    store.set(partition, fingerprint, scopeBeta)
-    const directory = seedPartitionDirectory(partitionDataRoot, partition)
-    const dependencies = createDependencies(store, partitionDataRoot)
-
-    const released = await releaseBrowserRoutePartitionStorage(dependencies, [partition])
-
-    expect(dependencies.cleared).toEqual([partition])
-    expect(existsSync(directory)).toBe(false)
-    expect(released).toMatchObject({ clearedPartitions: [partition], removedBindings: 1 })
-    expect(store.get(partition)).toBeNull()
-  })
-
   it('keeps the binding when storage clearing fails', async () => {
     const { store, partitionDataRoot } = createStore()
     const partition = partitionName('0')

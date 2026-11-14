@@ -1,11 +1,12 @@
+import { issueBrowserGuestNavigation } from '../host-guest/browser-guest-metadata-cache'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+import '../../../../../shared/constants'
 import {
   normalizeBrowserNavigationUrl,
   normalizeExternalBrowserUrl,
   redactKagiSessionToken
 } from '../../../../../shared/browser-url'
-import { isBlankBrowserUrl } from '@/lib/browser-palette-search'
+import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
 import { browserFileUrlToAbsolutePath } from './browser-artifact-upload'
 import type { BrowserTabPageState } from './browser-page-types'
 
@@ -24,18 +25,7 @@ export function toDisplayUrl(url: string): string {
   return isBlankBrowserUrl(url) ? '' : redactKagiSessionToken(url)
 }
 
-export function getBrowserDisplayTitle(title: string | null | undefined, url: string): string {
-  if (
-    url === 'about:blank' ||
-    url === ORCA_BROWSER_BLANK_URL ||
-    title === 'about:blank' ||
-    title === ORCA_BROWSER_BLANK_URL ||
-    !title
-  ) {
-    return 'New Tab'
-  }
-  return title
-}
+export { getBrowserDisplayTitle } from '../../../../../shared/browser/browser-display-title'
 
 export function isChromiumErrorPage(url: string): boolean {
   return url.startsWith('chrome-error://')
@@ -71,5 +61,7 @@ export function retryBrowserTabLoad(
     loading: true,
     title: retryUrl
   })
-  webview.src = retryUrl
+  issueBrowserGuestNavigation(webview, () => {
+    webview.src = retryUrl
+  })
 }

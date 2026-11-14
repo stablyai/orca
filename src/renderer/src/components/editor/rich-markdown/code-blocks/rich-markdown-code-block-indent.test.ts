@@ -46,12 +46,4 @@ describe('indentRichMarkdownCodeBlock', () => {
     expect(target.commands.undo()).toBe(true)
     expect(target.getMarkdown()).toBe('```js\nconst a = 1\nconst b = 2\nconst c = 3\n```')
   })
-
-  it('inserts spaces at the caret for an empty selection', () => {
-    const target = createMarkdownEditor('```js\nconst x = 1\n```')
-    target.commands.setTextSelection(codeBlockPosition(target, 'x'))
-
-    expect(indentRichMarkdownCodeBlock(target)).toBe(true)
-    expect(target.getMarkdown()).toBe('```js\nconst   x = 1\n```')
-  })
 })

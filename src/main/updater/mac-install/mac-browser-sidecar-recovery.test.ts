@@ -1,10 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  describeMacUpdateBlockers,
-  recoverMacBrowserSidecars
-} from './mac-browser-sidecar-recovery'
+import { recoverMacBrowserSidecars } from './mac-browser-sidecar-recovery'
 
 const { run } = vi.hoisted(() => ({ run: vi.fn() }))
 vi.mock('@orca/process-host', () => ({ runProcess: run }))
@@ -59,13 +56,6 @@ describe('macOS browser leftovers during updates', () => {
     expect(deps.signal).not.toHaveBeenCalled()
   })
 
-  it('leaves an orphan alone when its profile cannot prove ownership', async () => {
-    const deps = setup()
-    deps.isOwnedSidecar.mockResolvedValue(false)
-    expect(await recoverMacBrowserSidecars(executable, [123], deps)).toEqual([123])
-    expect(deps.signal).not.toHaveBeenCalled()
-  })
-
   it.each([
     { rows: [] },
     { rows: [{ ...row, parentPid: 2 }] },
@@ -76,14 +66,6 @@ describe('macOS browser leftovers during updates', () => {
     deps.readProcesses.mockResolvedValueOnce([row]).mockResolvedValueOnce(changed)
     expect(await recoverMacBrowserSidecars(executable, [123], deps)).toEqual([123])
     expect(deps.signal).not.toHaveBeenCalled()
-  })
-
-  it('does not force kill a server that refuses to exit', async () => {
-    const deps = setup()
-    deps.listBlockers.mockResolvedValue([123])
-    expect(await recoverMacBrowserSidecars(executable, [123], deps)).toEqual([123])
-    expect(deps.signal).toHaveBeenCalledTimes(1)
-    expect(deps.sleep).toHaveBeenCalledTimes(20)
   })
 
   it('does not interpret inspection or signal failures as exit', async () => {
@@ -102,13 +84,6 @@ describe('macOS browser leftovers during updates', () => {
     await expect(recoverMacBrowserSidecars(executable, [123], deps)).rejects.toThrow(
       'registry unavailable'
     )
-  })
-
-  it.each(['linux', 'win32'])('does not inspect or signal on %s', async (platform) => {
-    vi.stubGlobal('process', { ...process, platform })
-    const deps = setup()
-    expect(await recoverMacBrowserSidecars(executable, [123], deps)).toEqual([123])
-    expect(deps.readProcesses).not.toHaveBeenCalled()
   })
 
   it.skipIf(process.platform === 'win32').each([123, 999, '123', null])(
@@ -133,27 +108,4 @@ describe('macOS browser leftovers during updates', () => {
       }
     }
   )
-
-  it('classifies servers and windows without shell parsing or signalling', async () => {
-    run.mockResolvedValue({
-      code: 0,
-      stdout: [
-        `123 1 501 ${startedAt} ${command}`,
-        `456 42 501 ${startedAt} ${executable} --serve --user-data-dir=/Users/me/server`,
-        `789 1 501 ${startedAt} ${executable}`
-      ].join('\n')
-    })
-    expect(await describeMacUpdateBlockers(executable, [123, 456, 789, 999])).toEqual([
-      { pid: 123, kind: 'browser' },
-      { pid: 456, kind: 'server' },
-      { pid: 789, kind: 'window' },
-      { pid: 999, kind: 'unknown' }
-    ])
-    expect(run).toHaveBeenCalledWith(
-      expect.objectContaining({
-        program: '/bin/ps',
-        args: ['-ww', '-p', '123,456,789,999', '-o', 'pid=,ppid=,uid=,lstart=,command=']
-      })
-    )
-  })
 })

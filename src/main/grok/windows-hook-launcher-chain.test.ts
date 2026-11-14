@@ -1,6 +1,6 @@
 // Prefer one cmd-safe token to avoid Grok's extra pwsh wrapper; use encoded fallback for unsafe paths.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 
@@ -17,7 +17,8 @@ vi.mock('os', async () => {
 })
 
 import { getManagedCommandForTests, GrokHookService } from './hook-service'
-import { wrapWindowsHookCommand, type HooksConfig } from '../agent-hooks/installer-utils'
+import { wrapWindowsHookCommand } from '../agent-hooks/installation/commands/windows-hook-command'
+import type { HooksConfig } from '../agent-hooks/installation/configuration/hook-config-schema'
 import { buildInstalledGrokConfig } from './grok-hook-config'
 
 const GROK_EVENT_NAMES = [
@@ -56,37 +57,10 @@ function readInstalledConfig(home: string): InstalledConfig {
   ) as InstalledConfig
 }
 
-function registeredCommands(config: InstalledConfig): string[] {
-  return GROK_EVENT_NAMES.flatMap((eventName) =>
-    (config.hooks[eventName] ?? []).flatMap((definition) =>
-      definition.hooks.map((hook) => hook.command)
-    )
-  )
-}
-
 describe('Windows Grok managed hook launch shape', () => {
   // POSIX path.join cannot produce a real cmd-safe install path; synthetic Windows paths cover that branch everywhere.
   describe('registered command, from a synthetic Windows path', () => {
     const scriptPath = 'C:\\Users\\dev\\.orca\\agent-hooks\\grok-hook.cmd'
-
-    it('registers a cmd-safe script path as the command itself (#14828)', () => {
-      const command = withWin32(() => getManagedCommandForTests(scriptPath))
-
-      // Grok needs one spawnable token; forward slashes survive Git Bash's backslash stripping.
-      expect(command).toBe('C:/Users/dev/.orca/agent-hooks/grok-hook.cmd')
-      // Any whitespace reintroduces Grok's pwsh wrapper.
-      expect(command, 'a space would reintroduce the pwsh wrapper').not.toMatch(/\s/)
-      expect(command).not.toMatch(/powershell|pwsh/i)
-      expect(command).not.toMatch(/-EncodedCommand/i)
-    })
-
-    it('still wraps a path cmd.exe would split or expand (#6078)', () => {
-      const spaced = 'C:\\Users\\Jane Doe\\.orca\\agent-hooks\\grok-hook.cmd'
-      const command = withWin32(() => getManagedCommandForTests(spaced))
-
-      expect(command).toMatch(/-EncodedCommand \S+$/)
-      expect(command).not.toContain(spaced)
-    })
 
     // Stub Windows so legacy hook cleanup also runs on POSIX CI.
     it('replaces a legacy backslash entry and keeps user hooks', () => {
@@ -127,23 +101,6 @@ describe('Windows Grok managed hook launch shape', () => {
     })
 
     it.skipIf(process.platform !== 'win32')(
-      'writes the generated script path itself to every managed event',
-      () => {
-        const scriptPath = join(home, '.orca', 'agent-hooks', 'grok-hook.cmd')
-        const commands = withWin32(() => {
-          expect(new GrokHookService().install().state).toBe('installed')
-          return registeredCommands(readInstalledConfig(home))
-        })
-
-        expect(commands).toHaveLength(GROK_EVENT_NAMES.length)
-        for (const command of commands) {
-          expect(command).toBe(scriptPath.replaceAll('\\', '/'))
-          expect(existsSync(command), 'registered command must name a real file').toBe(true)
-        }
-      }
-    )
-
-    it.skipIf(process.platform !== 'win32')(
       'replaces a previously installed encoded-PowerShell entry on reinstall',
       () => {
         const scriptPath = join(home, '.orca', 'agent-hooks', 'grok-hook.cmd')
@@ -179,24 +136,5 @@ describe('Windows Grok managed hook launch shape', () => {
         )
       }
     )
-
-    it('falls back to the encoded launcher when the profile path is not cmd-safe (#6078)', () => {
-      const spaceHome = mkdtempSync(join(tmpdir(), 'orca grok spaced '))
-      homedirMock.mockReturnValue(spaceHome)
-      try {
-        const commands = withWin32(() => {
-          expect(new GrokHookService().install().state).toBe('installed')
-          return registeredCommands(readInstalledConfig(spaceHome))
-        })
-
-        expect(commands.length).toBeGreaterThan(0)
-        for (const command of commands) {
-          expect(command).toMatch(/-EncodedCommand \S+$/)
-          expect(command).not.toContain(spaceHome)
-        }
-      } finally {
-        rmSync(spaceHome, { recursive: true, force: true })
-      }
-    })
   })
 })

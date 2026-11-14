@@ -1,9 +1,10 @@
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
-import type { GlobalWindowsRuntimeDefault } from '../../../../../../shared/project-execution-runtime'
-import { normalizeGlobalWindowsRuntimeDefault } from '../../../../../../shared/project-execution-runtime'
+import type { GlobalWindowsRuntimeDefault } from '../../../../../../shared/execution-host/project-runtime-preference'
+import { normalizeGlobalWindowsRuntimeDefault } from '../../../../../../shared/execution-host/project-runtime-preference'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select'
 import { SettingsRow, SettingsSegmentedControl } from '../../form-controls/SettingsFormControls'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 type DefaultRuntimeSegment = GlobalWindowsRuntimeDefault['kind']
 
@@ -26,6 +27,7 @@ export function DefaultWindowsProjectRuntimeSetting({
   wslDistros,
   wslCapabilitiesLoading
 }: DefaultWindowsProjectRuntimeSettingProps): React.JSX.Element | null {
+  const t = useTranslate()
   if (!wslSupportedPlatform) {
     return null
   }
@@ -48,7 +50,7 @@ export function DefaultWindowsProjectRuntimeSetting({
   return (
     <section className="space-y-3">
       <SettingsRow
-        label={translate(
+        label={t(
           'auto.components.settings.DefaultWindowsProjectRuntimeSetting.defaultRuntime',
           'Default project runtime'
         )}
@@ -56,12 +58,13 @@ export function DefaultWindowsProjectRuntimeSetting({
         description={getDefaultRuntimeDescription(
           defaultRuntime,
           wslAvailable,
-          wslCapabilitiesLoading
+          wslCapabilitiesLoading,
+          t
         )}
         control={
           <div className="flex w-52 flex-col items-stretch gap-2">
             <SettingsSegmentedControl<DefaultRuntimeSegment>
-              ariaLabel={translate(
+              ariaLabel={t(
                 'auto.components.settings.DefaultWindowsProjectRuntimeSetting.defaultRuntime',
                 'Default project runtime'
               )}
@@ -71,14 +74,14 @@ export function DefaultWindowsProjectRuntimeSetting({
               options={[
                 {
                   value: 'windows-host',
-                  label: translate(
+                  label: t(
                     'auto.components.settings.DefaultWindowsProjectRuntimeSetting.windows',
                     'Windows'
                   )
                 },
                 {
                   value: 'wsl',
-                  label: translate(
+                  label: t(
                     'auto.components.settings.DefaultWindowsProjectRuntimeSetting.wsl',
                     'WSL'
                   ),
@@ -100,7 +103,7 @@ export function DefaultWindowsProjectRuntimeSetting({
               >
                 <SelectTrigger size="sm" className="w-full min-w-52">
                   <SelectValue
-                    placeholder={translate(
+                    placeholder={t(
                       'auto.components.settings.DefaultWindowsProjectRuntimeSetting.selectDistro',
                       'Select distro'
                     )}
@@ -109,7 +112,7 @@ export function DefaultWindowsProjectRuntimeSetting({
                 <SelectContent>
                   {!defaultRuntime.distro ? (
                     <SelectItem value={NO_DISTRO_VALUE}>
-                      {translate(
+                      {t(
                         'auto.components.settings.DefaultWindowsProjectRuntimeSetting.selectDistro',
                         'Select distro'
                       )}
@@ -158,27 +161,28 @@ function getVisibleDistroOptions(
 function getDefaultRuntimeDescription(
   defaultRuntime: GlobalWindowsRuntimeDefault,
   wslAvailable: boolean,
-  wslCapabilitiesLoading: boolean
+  wslCapabilitiesLoading: boolean,
+  t: Translate = translate
 ): string {
   if (defaultRuntime.kind === 'windows-host') {
-    return translate(
+    return t(
       'auto.components.settings.DefaultWindowsProjectRuntimeSetting.windowsDescription',
       'Projects inherit Windows unless a project overrides it.'
     )
   }
   if (!wslAvailable && !wslCapabilitiesLoading) {
-    return translate(
+    return t(
       'auto.components.settings.DefaultWindowsProjectRuntimeSetting.wslUnavailable',
       'WSL is not available. Projects that inherit WSL will need repair.'
     )
   }
   if (!defaultRuntime.distro) {
-    return translate(
+    return t(
       'auto.components.settings.DefaultWindowsProjectRuntimeSetting.distroRequired',
       'Choose a WSL distro before projects can inherit WSL.'
     )
   }
-  return translate(
+  return t(
     'auto.components.settings.DefaultWindowsProjectRuntimeSetting.wslDescription',
     'Projects inherit {{value0}} via WSL unless a project overrides it.',
     { value0: defaultRuntime.distro }

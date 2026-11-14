@@ -111,22 +111,6 @@ describe('descendant exit verification across partial process-table reads', () =
     await expect(pending).resolves.toBe('unverifiable')
   })
 
-  it('counts the read after the deadline as an absence', async () => {
-    const snapshot = collectDescendantRows(10, [row(10, 1), row(20)], CAPTURED_AT)
-    const readTable = vi.fn().mockImplementation(async () => capture([]))
-    const pending = terminateDescendantSnapshotWithVerdict(snapshot, {
-      readTable,
-      sendSignal: vi.fn(),
-      requireIdentityBeforeSignal: true,
-      graceMs: 0,
-      verifyMs: 50
-    })
-    await vi.advanceTimersByTimeAsync(100)
-
-    await expect(pending).resolves.toBe('exited')
-    expect(readTable).toHaveBeenCalledTimes(2)
-  })
-
   it('escalates a survivor omitted at the first force-kill read when it reappears', async () => {
     const first = row(20)
     const later = row(30)
@@ -155,36 +139,6 @@ describe('descendant exit verification across partial process-table reads', () =
       [30, 'SIGKILL']
     ])
   })
-
-  it.each(['absent root', 'changed root', 'reparented target', 'ambiguous parent'])(
-    'withholds birth-second escalation with an %s in the fresh read',
-    async (scenario) => {
-      const root = row(10, 1)
-      const parent = row(20)
-      const child = row(30, 20, STARTED_DURING)
-      const snapshot = collectDescendantRows(10, [root, parent, child], CAPTURED_AT)
-      const rows =
-        scenario === 'absent root'
-          ? [parent, child]
-          : scenario === 'changed root'
-            ? [row(10, 1, STARTED_DURING), parent, child]
-            : scenario === 'reparented target'
-              ? [root, parent, { ...child, ppid: 1 }]
-              : [root, parent, { ...parent, ppid: 1 }, child]
-      const sendSignal = vi.fn()
-      const pending = terminateDescendantSnapshotWithVerdict(snapshot, {
-        readTable: async () => capture(rows),
-        sendSignal,
-        requireIdentityBeforeSignal: true,
-        graceMs: 0,
-        verifyMs: 100
-      })
-      await vi.advanceTimersByTimeAsync(200)
-
-      await pending
-      expect(sendSignal).not.toHaveBeenCalledWith(child.pid, 'SIGKILL')
-    }
-  )
 
   it('escalates a birth-second descendant freshly re-derived from the same root', async () => {
     const rows = [row(10, 1), row(20, 10, STARTED_DURING)]

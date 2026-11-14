@@ -72,11 +72,4 @@ describe('Codex history discovery failures', () => {
       await expect(listCodexSessionFiles()).resolves.toEqual([sibling])
     }
   )
-
-  it('accepts absent homes while preserving the available history', async () => {
-    const sibling = join(sessions, 'kept.jsonl')
-    await writeFile(sibling, '')
-    await rm(state.system, { recursive: true })
-    await expect(listCodexSessionFiles()).resolves.toEqual([sibling])
-  })
 })

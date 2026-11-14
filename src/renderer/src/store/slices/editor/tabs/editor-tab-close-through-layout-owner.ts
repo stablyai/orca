@@ -1,13 +1,13 @@
 // Main closes orphaned editor tabs in layout-owner builds; single-tab close uses closeContentTabThroughLayoutOwner.
 
-import { sendLayoutApply } from '@/runtime/layout-apply-send'
+import { sendLayoutApply } from '@/runtime/workspace-layout/commands/layout-apply-send'
 import {
   afterPendingTabs,
   hasPendingEntityTab,
   isTabClosePending,
   markPendingCloseCleansFile,
   pendingCloseCleansFile
-} from '@/runtime/layout-owner-pending-tabs'
+} from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import type { AppState } from '../../../types'
 import type { OpenFile } from '../types/open-file'
 import { isEditorTabContentType } from './editor-tab-content-type'
@@ -25,16 +25,16 @@ export function closeFileTabsThroughLayoutOwner(
   }
   for (const tabId of tabIds) {
     if (!isTabClosePending(tabId)) {
-      get().closeUnifiedTab(tabId)
+      get().closeUnifiedTab(tabId, { editorRetirementHandled: true })
     }
   }
   tabIds.forEach(markPendingCloseCleansFile)
   afterPendingTabs(tabIds, (outcomes) => {
     const reopened =
-      hasPendingEntityTab(file.worktreeId, file.fileId) ||
-      (get().unifiedTabsByWorktree[file.worktreeId] ?? []).some(
-        (tab) => tab.entityId === file.fileId
-      )
+      hasPendingEntityTab(null, file.fileId) ||
+      Object.values(get().unifiedTabsByWorktree)
+        .flat()
+        .some((tab) => tab.entityId === file.fileId)
     if (outcomes.every((outcome) => outcome !== null) && !reopened) {
       cleanUp()
     }

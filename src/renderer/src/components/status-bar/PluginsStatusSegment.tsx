@@ -2,12 +2,13 @@ import { Blocks } from 'lucide-react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
-import { togglePluginsSettings } from '@/lib/open-plugins-settings'
-import { translate } from '@/i18n/i18n'
+import { togglePluginsSettings } from '@/components/settings/navigation/open-plugins-settings'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function PluginsStatusSegment(): React.JSX.Element {
+  const t = useTranslate()
   const shortcut = useShortcutKeyComboDetails('view.plugins')
-  const label = translate('auto.components.settings.PluginsSettingsSection.title', 'Plugins')
+  const label = t('auto.components.settings.PluginsSettingsSection.title', 'Plugins')
 
   return (
     <Tooltip>

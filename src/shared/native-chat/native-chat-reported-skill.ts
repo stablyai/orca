@@ -17,10 +17,32 @@ export function locatedPickerSkill(
     name: skill.name,
     token: `${skillSigil}${skill.name}`,
     description: description ? stripUnsafeDisplayCharacters(description).slice(0, 240) : null,
+    ...argumentHintCopy(skill),
     sources: scanned ? [{ sourceKind: scanned.sourceKind, skillFilePath: path }] : [],
     path,
     ...(duplicate ? { location: stripUnsafeDisplayCharacters(path).slice(0, 4096) } : {})
   }
+}
+
+type ReportedSkillCopy = Pick<NativeChatSessionSkill, 'description' | 'argumentHint'>
+
+function argumentHintCopy(reported: ReportedSkillCopy | undefined): { argumentHint?: string } {
+  const hint = reported?.argumentHint
+    ? stripUnsafeDisplayCharacters(reported.argumentHint).slice(0, 80)
+    : ''
+  return hint ? { argumentHint: hint } : {}
+}
+
+export function withReportedSkillCopy(
+  skill: Extract<NativeChatPickerItem, { kind: 'skill' }>,
+  reported: ReportedSkillCopy | undefined
+): Extract<NativeChatPickerItem, { kind: 'skill' }> {
+  const description =
+    skill.description ??
+    (reported?.description
+      ? stripUnsafeDisplayCharacters(reported.description).slice(0, 240)
+      : null)
+  return { ...skill, description, ...argumentHintCopy(reported) }
 }
 
 // Names are inserted PTY tokens, never visual prefixes. CSS truncates display; reject unsafe lengths without slicing tokens.

@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { waitForStructuredAgentSessionRecovery } from './structured-agent-session-runtime'
-import { createScriptedClaudeRuntime } from '../structured-claude-scripted-runtime-test-support'
+import { createScriptedClaudeRuntime } from './installation/structured-claude-scripted-runtime-test-support'
 
 const STALLED = 'claude-started-stalled'
 const HEALTHY = 'claude-started-healthy'

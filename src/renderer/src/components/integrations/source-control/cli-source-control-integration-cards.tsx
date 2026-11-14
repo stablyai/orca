@@ -13,29 +13,31 @@ import { getProviderAccountScope } from '../../provider-accounts/provider-accoun
 import { ProviderHostScopeControl } from '../../provider-accounts/ProviderHostScopeControl'
 import { usePreflightCardStatuses } from './source-control-preflight-card-status'
 import { translate } from '@/i18n/i18n'
-import { openAppHttpLink } from '@/lib/app-http-link-open'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 function integrationStatusLabel(
-  status: 'connected' | 'unavailable' | 'not-installed' | 'not-authenticated' | 'checking'
+  status: 'connected' | 'unavailable' | 'not-installed' | 'not-authenticated' | 'checking',
+  t: Translate = translate
 ): string {
   switch (status) {
     case 'connected':
-      return translate(
+      return t(
         'auto.components.settings.cli.source.control.integration.cards.statusConnected',
         'Connected'
       )
     case 'unavailable':
-      return translate(
+      return t(
         'auto.components.settings.cli.source.control.integration.cards.statusUnavailable',
         'Unavailable'
       )
     case 'not-installed':
-      return translate(
+      return t(
         'auto.components.settings.cli.source.control.integration.cards.statusNotInstalled',
         'Not installed'
       )
     case 'not-authenticated':
-      return translate(
+      return t(
         'auto.components.settings.cli.source.control.integration.cards.statusNotAuthenticated',
         'Not authenticated'
       )
@@ -49,14 +51,15 @@ function ProviderAccountScopeDetails({
 }: {
   children?: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const settings = useAppStore((s) => s.settings)
-  const accountScope = getProviderAccountScope(settings)
+  const accountScope = getProviderAccountScope(settings, t)
   const subordinateRowClass = useIntegrationSubordinateRowClass('text-xs')
 
   return (
     <IntegrationCardDetails>
       <ProviderHostScopeControl
-        labelPrefix={translate(
+        labelPrefix={t(
           'auto.components.settings.cli.source.control.integration.cards.account_scope_prefix',
           'Account scope'
         )}
@@ -69,6 +72,7 @@ function ProviderAccountScopeDetails({
 }
 
 export function GitHubIntegrationCard(): React.JSX.Element {
+  const t = useTranslate()
   const { statuses, unavailable, refresh } = usePreflightCardStatuses('gh')
   const status = unavailable ? 'unavailable' : statuses.ghStatus
   const connected = status === 'connected'
@@ -80,38 +84,32 @@ export function GitHubIntegrationCard(): React.JSX.Element {
       name="GitHub"
       description={
         <>
-          {translate(
+          {t(
             'auto.components.settings.cli.source.control.integration.cards.b4d900e7f1',
             'Pull requests, issues, and checks via the'
           )}{' '}
           <span className="font-mono text-[11px]">
-            {translate(
-              'auto.components.settings.cli.source.control.integration.cards.6b2cfb52b4',
-              'gh'
-            )}
+            {t('auto.components.settings.cli.source.control.integration.cards.6b2cfb52b4', 'gh')}
           </span>{' '}
-          {translate(
-            'auto.components.settings.cli.source.control.integration.cards.a47f71e357',
-            'CLI.'
-          )}
+          {t('auto.components.settings.cli.source.control.integration.cards.a47f71e357', 'CLI.')}
         </>
       }
       checking={status === 'checking'}
       statusTone={connected ? 'connected' : 'attention'}
-      statusLabel={integrationStatusLabel(status)}
+      statusLabel={integrationStatusLabel(status, t)}
     >
       <ProviderAccountScopeDetails>
         {status !== 'checking' && !connected ? (
           status === 'unavailable' ? (
             <>
               <p className="text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.cli.source.control.integration.cards.6f30fc4216',
                   'GitHub CLI status is not available in this runtime yet.'
                 )}
               </p>
               <Button variant="ghost" size="sm" onClick={refresh}>
-                {translate(
+                {t(
                   'auto.components.settings.cli.source.control.integration.cards.d5b3be8ecd',
                   'Re-check'
                 )}
@@ -120,7 +118,7 @@ export function GitHubIntegrationCard(): React.JSX.Element {
           ) : status === 'not-installed' ? (
             <>
               <p className="text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.cli.source.control.integration.cards.23cb5a0dee',
                   'Install the GitHub CLI to enable pull requests, issues, and checks.'
                 )}
@@ -132,13 +130,13 @@ export function GitHubIntegrationCard(): React.JSX.Element {
                   onClick={(event) => openAppHttpLink('https://cli.github.com', { event })}
                 >
                   <ExternalLink className="size-3.5 mr-1.5" />
-                  {translate(
+                  {t(
                     'auto.components.settings.cli.source.control.integration.cards.7755c28af5',
                     'Install GitHub CLI'
                   )}
                 </Button>
                 <Button variant="ghost" size="sm" onClick={refresh}>
-                  {translate(
+                  {t(
                     'auto.components.settings.cli.source.control.integration.cards.d5b3be8ecd',
                     'Re-check'
                   )}
@@ -148,14 +146,14 @@ export function GitHubIntegrationCard(): React.JSX.Element {
           ) : (
             <>
               <p className="text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.cli.source.control.integration.cards.2e44dda68a',
                   'The GitHub CLI is installed but not authenticated. Run this command in a terminal:'
                 )}
               </p>
               <div className={commandRowClass}>
                 <Terminal className="size-3.5 shrink-0 text-muted-foreground" />
-                {translate(
+                {t(
                   'auto.components.settings.cli.source.control.integration.cards.8d90249d22',
                   'gh auth login'
                 )}
@@ -169,13 +167,13 @@ export function GitHubIntegrationCard(): React.JSX.Element {
                   }
                 >
                   <ExternalLink className="size-3.5 mr-1.5" />
-                  {translate(
+                  {t(
                     'auto.components.settings.cli.source.control.integration.cards.8cbc39f862',
                     'Learn more'
                   )}
                 </Button>
                 <Button variant="ghost" size="sm" onClick={refresh}>
-                  {translate(
+                  {t(
                     'auto.components.settings.cli.source.control.integration.cards.d5b3be8ecd',
                     'Re-check'
                   )}
@@ -190,6 +188,7 @@ export function GitHubIntegrationCard(): React.JSX.Element {
 }
 
 export function GitLabIntegrationCard(): React.JSX.Element {
+  const t = useTranslate()
   const { statuses, unavailable, refresh } = usePreflightCardStatuses('glab')
   const status = unavailable ? 'unavailable' : statuses.glabStatus
   const connected = status === 'connected'
@@ -201,38 +200,32 @@ export function GitLabIntegrationCard(): React.JSX.Element {
       name="GitLab"
       description={
         <>
-          {translate(
+          {t(
             'auto.components.settings.cli.source.control.integration.cards.1f2b347bd3',
             'Merge requests, issues, todos, and pipelines via the'
           )}{' '}
           <span className="font-mono text-[11px]">
-            {translate(
-              'auto.components.settings.cli.source.control.integration.cards.2a6b359e75',
-              'glab'
-            )}
+            {t('auto.components.settings.cli.source.control.integration.cards.2a6b359e75', 'glab')}
           </span>{' '}
-          {translate(
-            'auto.components.settings.cli.source.control.integration.cards.a47f71e357',
-            'CLI.'
-          )}
+          {t('auto.components.settings.cli.source.control.integration.cards.a47f71e357', 'CLI.')}
         </>
       }
       checking={status === 'checking'}
       statusTone={connected ? 'connected' : 'attention'}
-      statusLabel={integrationStatusLabel(status)}
+      statusLabel={integrationStatusLabel(status, t)}
     >
       <ProviderAccountScopeDetails>
         {status !== 'checking' && !connected ? (
           status === 'unavailable' ? (
             <>
               <p className="text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.cli.source.control.integration.cards.faddeb763d',
                   'GitLab CLI status is not available in this runtime yet.'
                 )}
               </p>
               <Button variant="ghost" size="sm" onClick={refresh}>
-                {translate(
+                {t(
                   'auto.components.settings.cli.source.control.integration.cards.d5b3be8ecd',
                   'Re-check'
                 )}
@@ -241,7 +234,7 @@ export function GitLabIntegrationCard(): React.JSX.Element {
           ) : status === 'not-installed' ? (
             <>
               <p className="text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.cli.source.control.integration.cards.b56fd5676a',
                   'Install the GitLab CLI to enable merge requests, issues, and pipelines.'
                 )}
@@ -255,13 +248,13 @@ export function GitLabIntegrationCard(): React.JSX.Element {
                   }
                 >
                   <ExternalLink className="size-3.5 mr-1.5" />
-                  {translate(
+                  {t(
                     'auto.components.settings.cli.source.control.integration.cards.54a640af7a',
                     'Install GitLab CLI'
                   )}
                 </Button>
                 <Button variant="ghost" size="sm" onClick={refresh}>
-                  {translate(
+                  {t(
                     'auto.components.settings.cli.source.control.integration.cards.d5b3be8ecd',
                     'Re-check'
                   )}
@@ -271,14 +264,14 @@ export function GitLabIntegrationCard(): React.JSX.Element {
           ) : (
             <>
               <p className="text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.cli.source.control.integration.cards.4be0616873',
                   'The GitLab CLI is installed but not authenticated. Run this command in a terminal:'
                 )}
               </p>
               <div className={commandRowClass}>
                 <Terminal className="size-3.5 shrink-0 text-muted-foreground" />
-                {translate(
+                {t(
                   'auto.components.settings.cli.source.control.integration.cards.707180d09c',
                   'glab auth login'
                 )}
@@ -295,13 +288,13 @@ export function GitLabIntegrationCard(): React.JSX.Element {
                   }
                 >
                   <ExternalLink className="size-3.5 mr-1.5" />
-                  {translate(
+                  {t(
                     'auto.components.settings.cli.source.control.integration.cards.8cbc39f862',
                     'Learn more'
                   )}
                 </Button>
                 <Button variant="ghost" size="sm" onClick={refresh}>
-                  {translate(
+                  {t(
                     'auto.components.settings.cli.source.control.integration.cards.d5b3be8ecd',
                     'Re-check'
                   )}

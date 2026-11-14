@@ -8,12 +8,15 @@ import {
   readSync,
   readdirSync,
   statSync,
+  unlinkSync,
   writeSync
 } from 'node:fs'
 import { join } from 'node:path'
 
 export const AGENT_HOOK_SPOOL_MAX_FILES = 1024
 export const AGENT_HOOK_SPOOL_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+/** Beside the endpoint file; POSIX hooks keep one packed metadata header per pane in it. */
+export const AGENT_HOOK_METADATA_CACHE_DIR = 'hook-metadata'
 
 export type SpoolRecord = {
   paneKey: string
@@ -160,9 +163,31 @@ function matchesLaunchToken(
   return !expected || launchTokenHash(record.launchToken) === expected
 }
 
+// Age is since the hook last wrote the file; pruning a live pane's file only costs it one repack.
+function pruneHookMetadataCache(endpointDir: string, now: number): void {
+  const dir = join(endpointDir, AGENT_HOOK_METADATA_CACHE_DIR)
+  let names: string[]
+  try {
+    names = readdirSync(dir)
+  } catch {
+    return
+  }
+  for (const name of names) {
+    const path = join(dir, name)
+    try {
+      if (statSync(path).mtimeMs < now - AGENT_HOOK_SPOOL_MAX_AGE_MS) {
+        unlinkSync(path)
+      }
+    } catch {
+      // A hook may have replaced or removed the file meanwhile.
+    }
+  }
+}
+
 /** Await each admission before consuming a file so owner probes preserve replay order and retry. */
 export async function drainAgentHookSpoolAsync(options: SpoolDrainOptions): Promise<number> {
   const now = options.now ?? Date.now()
+  pruneHookMetadataCache(options.endpointDir, now)
   let drained = 0
   for (const candidate of spoolCandidates(options.endpointDir)) {
     const { records, consumed } = readSpoolFile(candidate.path, now)

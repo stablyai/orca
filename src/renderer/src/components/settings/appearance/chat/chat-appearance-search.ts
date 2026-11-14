@@ -1,15 +1,16 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translateSearchKeyword } from '../../search/settings-search-keywords'
 import type { SettingsSearchEntry } from '../../search/settings-search'
 import { formatPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 
-export function chatTerminalControlledHint(): string {
-  return translate('settings.appearance.chat.terminalControlledHint', 'Set by terminal interface.')
+export function chatTerminalControlledHint(t: Translate = translate): string {
+  return t('settings.appearance.chat.terminalControlledHint', 'Set by terminal interface.')
 }
 
-export function chatTerminalControlledTooltip(): string {
-  return translate(
+export function chatTerminalControlledTooltip(t: Translate = translate): string {
+  return t(
     'settings.appearance.chat.terminalControlledTooltip',
     'Matching your terminal interface. Turn off Match terminal interface to change this.'
   )
@@ -98,13 +99,16 @@ const getChatAppearanceCatalog = createLocalizedCatalog(
     }) satisfies Record<string, SettingsSearchEntry>
 )
 
-export function getChatAppearanceEntriesByKey(shortcuts?: { increase: string; decrease: string }) {
+export function getChatAppearanceEntriesByKey(
+  shortcuts?: { increase: string; decrease: string },
+  t: Translate = translate
+) {
   const entries = getChatAppearanceCatalog()
   return {
     ...entries,
     textSize: {
       ...entries.textSize,
-      description: translate(
+      description: t(
         'settings.appearance.chat.textSizeDescription',
         'Messages, tool activity and the message box. {{increase}} / {{decrease}} in a chat change this too.',
         {
@@ -116,21 +120,21 @@ export function getChatAppearanceEntriesByKey(shortcuts?: { increase: string; de
   }
 }
 
-export function getChatAppearanceSearchEntries(): SettingsSearchEntry[] {
+export function getChatAppearanceSearchEntries(t: Translate = translate): SettingsSearchEntry[] {
   return [
-    { title: translate('auto.components.settings.Settings.2b4474780a', 'Appearance') },
-    ...Object.values(getChatAppearanceEntriesByKey()),
+    { title: t('auto.components.settings.Settings.2b4474780a', 'Appearance') },
+    ...Object.values(getChatAppearanceEntriesByKey(undefined, t)),
     ...getChatContrastSearchEntries()
   ]
 }
 
-export function getChatWidthOptions() {
+export function getChatWidthOptions(t: Translate = translate) {
   return [
     {
       value: 'comfortable',
-      label: translate('settings.appearance.chat.comfortable', 'Comfortable')
+      label: t('settings.appearance.chat.comfortable', 'Comfortable')
     },
-    { value: 'wide', label: translate('settings.appearance.chat.wide', 'Wide') },
-    { value: 'full', label: translate('settings.appearance.chat.full', 'Full') }
+    { value: 'wide', label: t('settings.appearance.chat.wide', 'Wide') },
+    { value: 'full', label: t('settings.appearance.chat.full', 'Full') }
   ] as const
 }

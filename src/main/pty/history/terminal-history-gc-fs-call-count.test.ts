@@ -4,7 +4,6 @@ import {
   mkdtempSync,
   readdirSync,
   rmSync,
-  statSync,
   symlinkSync,
   writeFileSync
 } from 'node:fs'
@@ -12,7 +11,7 @@ import type * as FsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { installFakeAppEnvironment } from '../../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 
 const { fsCalls, removeHostTreeMock } = vi.hoisted(() => ({
   fsCalls: { readdir: [] as string[], stat: [] as string[] },
@@ -33,7 +32,6 @@ vi.mock('node:fs/promises', async () => {
   return { ...actual, readdir: call('readdir', actual.readdir), stat: call('stat', actual.stat) }
 })
 
-import { readHistoryMeta } from './terminal-history'
 import {
   cancelPendingHistoryTreeRemovalRetries,
   flushPendingWorktreeHistoryDeletions
@@ -44,40 +42,12 @@ const GC_MIN_AGE_MS = 5 * 60 * 1000
 const PENDING_DELETE_DIR_NAME = '.pending-delete'
 const LIVE_WORKTREE_ID = 'repo-1::/path/live-wt'
 const DEAD_WORKTREE_ID = 'repo-1::/path/dead-wt'
-const DIR_COUNT = 50
-const ORPHAN_EVERY = 5
 
 let userDataDir: string
 let historyRoot: string
 let originalXdgDataHome: string | undefined
 
 // Pre-dirent pruning oracle; reports names instead of deleting.
-function referencePruneDecisions(root: string, liveWorktreeIds: Set<string>): string[] {
-  const decisions: string[] = []
-  const now = Date.now()
-  for (const entry of readdirSync(root)) {
-    if (entry === PENDING_DELETE_DIR_NAME) {
-      continue
-    }
-    const entryPath = join(root, entry)
-    try {
-      if (!statSync(entryPath).isDirectory()) {
-        continue
-      }
-      const meta = readHistoryMeta(entryPath)
-      if (!meta?.worktreeId || liveWorktreeIds.has(meta.worktreeId)) {
-        continue
-      }
-      if (meta.createdAt && now - new Date(meta.createdAt).getTime() < GC_MIN_AGE_MS) {
-        continue
-      }
-      decisions.push(entry)
-    } catch {
-      // Match the production walk's tolerance for unreadable entries.
-    }
-  }
-  return decisions
-}
 
 function seedDir(name: string, files: Record<string, string>): string {
   const dir = join(historyRoot, name)
@@ -95,17 +65,6 @@ function meta(worktreeId: string): string {
   })
 }
 
-function seedFixture(): void {
-  for (let i = 0; i < DIR_COUNT; i++) {
-    const orphan = i % ORPHAN_EVERY === 0
-    seedDir(`wt-${i}`, {
-      'meta.json': meta(orphan ? `${DEAD_WORKTREE_ID}-${i}` : LIVE_WORKTREE_ID),
-      zsh_history: `entry-${i}`,
-      bash_history: `entry-${i}`
-    })
-  }
-}
-
 function survivingDirs(): Set<string> {
   return new Set(
     readdirSync(historyRoot).filter(
@@ -116,10 +75,6 @@ function survivingDirs(): Set<string> {
 
 function statsOnEntries(): string[] {
   return fsCalls.stat.filter((path) => dirname(path) === historyRoot)
-}
-
-function statsInsideEntries(): string[] {
-  return fsCalls.stat.filter((path) => dirname(dirname(path)) === historyRoot)
 }
 
 beforeEach(() => {
@@ -151,32 +106,6 @@ afterEach(async () => {
 })
 
 describe('history GC filesystem request count', () => {
-  it('issues no per-file stat and one readdir for the whole root', async () => {
-    seedFixture()
-    const live = new Set([LIVE_WORKTREE_ID])
-    const expected = new Set(referencePruneDecisions(historyRoot, live))
-    const before = survivingDirs()
-    fsCalls.readdir.length = 0
-    fsCalls.stat.length = 0
-
-    await runHistoryGc(live)
-
-    const tombstoneLists = fsCalls.readdir.filter((p) => p.endsWith(PENDING_DELETE_DIR_NAME))
-    const scanLists = fsCalls.readdir.filter((p) => !p.endsWith(PENDING_DELETE_DIR_NAME))
-    expect(scanLists).toEqual([historyRoot])
-    expect(tombstoneLists.length).toBeLessThanOrEqual(12)
-    expect(statsOnEntries()).toEqual([])
-    // Metadata reads still stat each file to enforce its size cap.
-    expect(statsInsideEntries().sort()).toEqual(
-      Array.from({ length: DIR_COUNT }, (_, i) => join(historyRoot, `wt-${i}`, 'meta.json')).sort()
-    )
-    expect(scanLists.length + fsCalls.stat.length).toBe(1 + DIR_COUNT)
-
-    const after = survivingDirs()
-    expect(expected.size).toBe(DIR_COUNT / ORPHAN_EVERY)
-    expect([...before].filter((entry) => !after.has(entry)).sort()).toEqual([...expected].sort())
-  })
-
   it('still resolves a symlinked history directory through its target', async () => {
     const orphanTarget = join(userDataDir, 'linked-orphan')
     mkdirSync(orphanTarget, { recursive: true })

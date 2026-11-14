@@ -1,8 +1,8 @@
-import '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import {
   AgentSessionAcquisitionExitUnprovenError,
   AgentSessionAcquisitionRootExitObservedError
-} from '../../../native-chat/agent-session-wire/structured-agent-session-acquisition-errors'
+} from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
 import { isCodexAppServerHandshakeExitUnprovenError } from '../../app-server/codex-app-server-handshake-exit-proof'
 import {
   cancelCodexAcquisitionAttempt,

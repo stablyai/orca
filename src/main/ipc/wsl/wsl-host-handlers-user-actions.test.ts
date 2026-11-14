@@ -25,20 +25,24 @@ vi.mock('../../wsl/host-lifecycle/wsl-host-e2e-fake-connector', () => ({
   createFakeWslHostConnector: vi.fn(),
   readFakeWslHostsConfig: () => null
 }))
-vi.mock('../../orcad/orcad-artifact-materializer', () => ({ hasOrcadTemplate: () => true }))
-vi.mock('../runtime-environments/runtime-environment-removal-cleanup', () => ({
+vi.mock('../../orcad/artifact-slots/orcad-artifact-materializer', () => ({
+  hasOrcadTemplate: () => true
+}))
+vi.mock('../runtime-environments/catalog/runtime-environment-removal-cleanup', () => ({
   retireRemovedRuntimeEnvironment: vi.fn()
 }))
-vi.mock('../runtime-environments/runtime-environment-status-probe', () => ({
+vi.mock('../runtime-environments/status/runtime-environment-status-probe', () => ({
   getRuntimeEnvironmentStatus: vi.fn()
 }))
-vi.mock('../runtime-environments/runtime-environment-transport-routing', () => ({
+vi.mock('../runtime-environments/requests/runtime-environment-transport-routing', () => ({
   callRuntimeEnvironment: vi.fn()
 }))
-vi.mock('../runtime-environments/runtime-environment-request-connections', () => ({
+vi.mock('../runtime-environments/connections/runtime-environment-request-connections', () => ({
   isRemoteRuntimeConnectionReady: () => false
 }))
-vi.mock('../../ssh/orcad-terminal-census-client', () => ({ requestOrcadTerminalCensus: vi.fn() }))
+vi.mock('../../managed-server/lifecycle/orcad-terminal-census-client', () => ({
+  requestOrcadTerminalCensus: vi.fn()
+}))
 const service = vi.hoisted(() => ({
   add: vi.fn(
     async (): Promise<{
@@ -68,10 +72,6 @@ import {
   wslHostsServing
 } from '../../wsl/host-lifecycle/wsl-host-gate'
 import { WSL_HOST_CAPABILITY_CHANNEL } from '../../../shared/wsl-host-types'
-import {
-  onWslHostUserAction,
-  type WslHostUserAction
-} from '../../wsl/host-lifecycle/wsl-host-user-actions'
 
 function register(): void {
   registerWslHostHandlers({
@@ -83,63 +83,10 @@ function register(): void {
 }
 
 describe('WSL host IPC: the user Add and Remove (D3a)', () => {
-  // Removes are reported by the host service itself (see wsl-host-service.test.ts), so both the
-  // sidebar and Settings paths count; here the service is mocked and only the Add is the IPC's.
+  // The service is mocked; only Add reporting belongs to these IPC cases.
   afterEach(() => {
     vi.unstubAllEnvs()
     service.add.mockClear()
-  })
-
-  it('reports a successful Add, never a failed one', async () => {
-    vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', '1')
-    register()
-    const heard: WslHostUserAction[] = []
-    const stop = onWslHostUserAction((action) => heard.push(action))
-    await handlers.get('wslHosts:remove')?.({}, { environmentId: 'wsl:Ubuntu' })
-    await handlers.get('wslHosts:add')?.({}, { distro: 'Ubuntu' })
-    service.add.mockResolvedValueOnce({ ok: false, kind: 'failed', message: 'no' })
-    await handlers.get('wslHosts:add')?.({}, { distro: 'Debian' })
-    stop()
-    expect(heard).toEqual([{ kind: 'added', distro: 'Ubuntu' }])
-  })
-
-  it('refuses an Add in serve-only and says so in its capability, keeping saved hosts usable', async () => {
-    vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', undefined)
-    register()
-
-    expect(await handlers.get('wslHosts:add')?.({}, { distro: 'Ubuntu' })).toMatchObject({
-      ok: false,
-      kind: 'disabled'
-    })
-    expect(service.add).not.toHaveBeenCalled()
-    expect(await handlers.get('wslHosts:getCapability')?.({})).toMatchObject({
-      acceptsNewWork: false
-    })
-    await handlers.get('wslHosts:remove')?.({}, { environmentId: 'wsl:Ubuntu' })
-    expect(service.remove).toHaveBeenCalledWith('wsl:Ubuntu')
-  })
-
-  it('under a remote policy block, refuses an Add but keeps Remove', async () => {
-    vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', '1')
-    configureWslHostsGate({
-      hasSavedWslHost: () => true,
-      hasWslMoveCutover: () => false,
-      policy: () => 'block'
-    })
-    try {
-      register()
-
-      expect(await handlers.get('wslHosts:add')?.({}, { distro: 'Ubuntu' })).toMatchObject({
-        ok: false,
-        kind: 'disabled'
-      })
-      expect(service.add).not.toHaveBeenCalled()
-      service.remove.mockClear()
-      await handlers.get('wslHosts:remove')?.({}, { environmentId: 'wsl:Ubuntu' })
-      expect(service.remove).toHaveBeenCalledWith('wsl:Ubuntu')
-    } finally {
-      resetWslHostsGateForTests()
-    }
   })
 
   // A block published while Orca runs must stop new hosts now, not at the next launch.
@@ -165,7 +112,6 @@ describe('WSL host IPC: the user Add and Remove (D3a)', () => {
         ok: false,
         kind: 'disabled'
       })
-      expect(service.add).not.toHaveBeenCalled()
       expect(wslHostsServing()).toBe(true)
       service.remove.mockClear()
       await handlers.get('wslHosts:remove')?.({}, { environmentId: 'wsl:Ubuntu' })

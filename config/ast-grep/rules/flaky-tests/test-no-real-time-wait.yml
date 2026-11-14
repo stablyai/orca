@@ -1,4 +1,4 @@
-# Ratcheted by config/scripts/check-flaky-test-pattern-ratchet.mjs; info severity keeps
+# Ratcheted by config/scripts/static-analysis/ratchets/test-quality/check-flaky-test-pattern-ratchet.mjs; info severity keeps
 # `pnpm lint:ast-grep` quiet about the grandfathered baseline.
 # The TSX document below mirrors the TypeScript one; keep them in sync.
 id: test-no-real-time-wait

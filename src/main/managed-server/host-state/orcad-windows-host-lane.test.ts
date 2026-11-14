@@ -11,21 +11,21 @@ import {
   installHostileHostAppEnvironment
 } from '../../ssh/hostile-host-test-support/ssh-hostile-host-test-harness'
 import { resolveOrcadRemoteContext } from '../install/orcad-remote-context'
-import { proveWindowsStdioBridge } from '../../ssh/orcad-windows-stdio-bridge-test-cell'
-import { deployOrcad } from '../../ssh/orcad-remote-deploy'
+import { proveWindowsStdioBridge } from '../lifecycle/testing/orcad-windows-stdio-bridge-test-cell'
+import { deployOrcad } from '../install/orcad-remote-deploy'
 import { orcadLivenessProbeCommand, parseOrcadLiveness } from '../install/orcad-remote-launch'
-import { orcadSlotDir, type OrcadSlotOptions } from '../../ssh/orcad-recovery-slot'
+import { orcadSlotDir, type OrcadSlotOptions } from '../activation/orcad-recovery-slot'
 import { decommissionRemoteOrcad } from '../install/orcad-remote-decommission'
 import { readOrcadActivationRecord } from '../activation/orcad-activation-record-store'
 import { gcOldOrcadVersions } from '../install/orcad-remote-gc'
 import { execOrcadRemote } from '../install/orcad-remote-runtime-control'
 import { orcadWindowsNodeCommandLine } from '../install/orcad-remote-windows-node'
-import { joinRemotePath } from '../../ssh/ssh-remote-platform'
+import { joinRemotePath } from '../../ssh/remote-host/ssh-remote-platform'
 import {
   isWindowsOrcadCellId,
   readWindowsHostCellDescriptor,
   windowsHostSshTarget
-} from '../../ssh/ssh-windows-host-cells'
+} from '../../ssh/hostile-host-test-support/ssh-windows-host-cells'
 
 const RUN = process.env.ORCA_RUN_SSH_WINDOWS_HOST === '1'
 const CELL_TIMEOUT_MS = 20 * 60_000

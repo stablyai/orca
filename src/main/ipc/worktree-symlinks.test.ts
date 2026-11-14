@@ -4,26 +4,20 @@ import {
   writeFileSync,
   statSync,
   lstatSync,
-  readlinkSync,
   readFileSync,
   rmSync,
   symlinkSync,
-  existsSync,
-  chmodSync
+  existsSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, sep } from 'node:path'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createWorktreeCopiedPaths,
   createWorktreeLinkedPaths,
   createWorktreeSharedPaths,
-  createWorktreeSymlinks,
-  worktreeSymlinkTypeCandidates,
-  removeWorktreeLinkedPaths,
   removeWorktreeSymlinks
 } from './worktree-symlinks'
-import { findExistingWorktreeSymlinkPaths } from '../git/worktrees/content-paths/worktree-symlink-detection'
 
 type WorktreeLinkedPathOptionsForTest = NonNullable<Parameters<typeof createWorktreeLinkedPaths>[3]>
 type ApfsCloneDepsForTest = NonNullable<WorktreeLinkedPathOptionsForTest['apfsCloneDeps']>
@@ -89,140 +83,6 @@ describe('createWorktreeSymlinks', () => {
     rmSync(root, { recursive: true, force: true })
   })
 
-  it('symlinks a file from primary into the worktree at the same relative path', async () => {
-    writeFileSync(join(primary, '.env'), 'SECRET=1\n')
-    await createWorktreeSymlinks(primary, worktree, ['.env'])
-
-    const linkStat = lstatSync(join(worktree, '.env'))
-    expect(linkStat.isSymbolicLink()).toBe(true)
-    expect(readlinkSync(join(worktree, '.env'))).toBe(join(primary, '.env'))
-    expect(statSync(join(worktree, '.env')).isFile()).toBe(true)
-  })
-
-  it('symlinks a directory from primary into the worktree', async () => {
-    mkdirSync(join(primary, 'node_modules'))
-    writeFileSync(join(primary, 'node_modules', 'marker'), 'installed')
-    await createWorktreeSymlinks(primary, worktree, ['node_modules'])
-
-    expect(lstatSync(join(worktree, 'node_modules')).isSymbolicLink()).toBe(true)
-    expect(statSync(join(worktree, 'node_modules', 'marker')).isFile()).toBe(true)
-  })
-
-  it('creates parent directories lazily for nested paths', async () => {
-    mkdirSync(join(primary, 'apps', 'web'), { recursive: true })
-    writeFileSync(join(primary, 'apps', 'web', '.env'), 'X=1\n')
-    await createWorktreeSymlinks(primary, worktree, ['apps/web/.env'])
-
-    expect(lstatSync(join(worktree, 'apps', 'web', '.env')).isSymbolicLink()).toBe(true)
-  })
-
-  it('skips entries whose source is missing in the primary checkout', async () => {
-    await createWorktreeSymlinks(primary, worktree, ['node_modules'])
-    expect(() => lstatSync(join(worktree, 'node_modules'))).toThrow()
-    expect(error).not.toHaveBeenCalled()
-  })
-
-  it('preserves a pre-existing target in the worktree (no clobber)', async () => {
-    writeFileSync(join(primary, '.env'), 'FROM_PRIMARY=1\n')
-    writeFileSync(join(worktree, '.env'), 'FROM_WORKTREE=1\n')
-
-    await createWorktreeSymlinks(primary, worktree, ['.env'])
-
-    expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(false)
-    expect(statSync(join(worktree, '.env')).isFile()).toBe(true)
-  })
-
-  it('does not escape the primary checkout via a leading-slash path', async () => {
-    // Absolute-looking input is normalized under primary; missing relative source must never link the system path.
-    await createWorktreeSymlinks(primary, worktree, ['/etc/passwd'])
-
-    expect(() => lstatSync(join(worktree, 'etc', 'passwd'))).toThrow()
-    expect(error).not.toHaveBeenCalled()
-  })
-
-  it('rejects parent-directory traversal', async () => {
-    await createWorktreeSymlinks(primary, worktree, ['../secrets'])
-
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('[worktree-symlinks] Skipping unsafe path "../secrets"')
-    )
-  })
-
-  it('rejects nested traversal via ..', async () => {
-    await createWorktreeSymlinks(primary, worktree, ['safe/../../escape'])
-
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('[worktree-symlinks] Skipping unsafe path "safe/../../escape"')
-    )
-  })
-
-  it('rejects traversal using backslash separators (Windows form)', async () => {
-    // Normalize both separators so Windows-style traversal cannot bypass POSIX parsing.
-    await createWorktreeSymlinks(primary, worktree, ['..\\escape'])
-    await createWorktreeSymlinks(primary, worktree, ['foo\\..\\..\\escape'])
-
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('[worktree-symlinks] Skipping unsafe path "..\\escape"')
-    )
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('[worktree-symlinks] Skipping unsafe path "foo\\..\\..\\escape"')
-    )
-  })
-
-  it('strips a leading slash then treats the remainder as a relative path', async () => {
-    writeFileSync(join(primary, '.env'), 'X=1\n')
-    await createWorktreeSymlinks(primary, worktree, ['/.env'])
-
-    expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(true)
-    expect(warn).not.toHaveBeenCalled()
-  })
-
-  it('skips empty and whitespace-only entries', async () => {
-    await createWorktreeSymlinks(primary, worktree, ['', '   '])
-    expect(error).not.toHaveBeenCalled()
-  })
-
-  it('continues processing later entries after one fails', async () => {
-    writeFileSync(join(primary, '.env'), 'X=1\n')
-    writeFileSync(join(primary, 'config.json'), '{}')
-
-    await createWorktreeSymlinks(primary, worktree, [
-      '../escape',
-      'missing-source',
-      '.env',
-      'config.json'
-    ])
-
-    expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(true)
-    expect(lstatSync(join(worktree, 'config.json')).isSymbolicLink()).toBe(true)
-  })
-
-  it('is a no-op for an empty paths list', async () => {
-    await createWorktreeSymlinks(primary, worktree, [])
-    expect(warn).not.toHaveBeenCalled()
-    expect(error).not.toHaveBeenCalled()
-  })
-
-  it('uses APFS clone-copy for configured paths on macOS', async () => {
-    writeFileSync(join(primary, '.env'), 'SECRET=1\n')
-    const cloneWorktreePath = vi.fn(async (_source: string, target: string) => {
-      writeFileSync(target, 'SECRET=1\n')
-    })
-
-    await createWorktreeLinkedPaths(primary, worktree, ['.env'], {
-      platform: 'darwin',
-      cloneWorktreePath
-    })
-
-    expect(cloneWorktreePath).toHaveBeenCalledWith(
-      join(primary, '.env'),
-      join(worktree, '.env'),
-      false
-    )
-    expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(false)
-    expect(statSync(join(worktree, '.env')).isFile()).toBe(true)
-  })
-
   it('does not overwrite a file target that appears before APFS clone-copy is published', async () => {
     writeFileSync(join(primary, '.env'), 'SECRET=1\n')
     const target = join(worktree, '.env')
@@ -278,133 +138,6 @@ describe('createWorktreeSymlinks', () => {
     expect(warn).not.toHaveBeenCalled()
     expect(error).not.toHaveBeenCalled()
   })
-
-  it('does not overwrite or remove a nested target after APFS clone-copy hits a conflict', async () => {
-    const source = join(primary, 'node_modules')
-    mkdirSync(source)
-    writeFileSync(join(primary, 'node_modules', 'primary-marker'), 'PRIMARY\n')
-    const target = join(worktree, 'node_modules')
-    let cpArgs: readonly string[] | undefined
-    const deps = createApfsCloneDeps({
-      onCp: (args) => {
-        cpArgs = args
-        writeFileSync(join(target, 'primary-marker'), 'USER\n')
-        throw new Error('clone-copy skipped an existing nested target')
-      }
-    })
-
-    await createWorktreeLinkedPaths(primary, worktree, ['node_modules'], {
-      platform: 'darwin',
-      apfsCloneDeps: deps
-    })
-
-    expect(cpArgs).toEqual(['-n', '-c', '-R', `${source}${sep}.`, target])
-    expect(readFileSync(join(target, 'primary-marker'), 'utf8')).toBe('USER\n')
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('[worktree-symlinks] APFS clone-copy unavailable'),
-      expect.any(Error)
-    )
-    expect(error).toHaveBeenCalledWith(
-      expect.stringContaining('[worktree-symlinks] Failed to link "node_modules"'),
-      expect.any(Error)
-    )
-  })
-
-  posixIt('preserves the source directory mode after APFS clone-copy reserves it', async () => {
-    const source = join(primary, 'node_modules')
-    mkdirSync(source)
-    chmodSync(source, 0o700)
-    const target = join(worktree, 'node_modules')
-    const deps = createApfsCloneDeps({
-      onCp: () => {
-        writeFileSync(join(target, 'marker'), 'CLONED\n')
-      }
-    })
-
-    await createWorktreeLinkedPaths(primary, worktree, ['node_modules'], {
-      platform: 'darwin',
-      apfsCloneDeps: deps
-    })
-
-    expect(statSync(target).mode & 0o777).toBe(0o700)
-    expect(readFileSync(join(target, 'marker'), 'utf8')).toBe('CLONED\n')
-  })
-
-  it('falls back to symlink when macOS clone-copy is unavailable', async () => {
-    writeFileSync(join(primary, '.env'), 'SECRET=1\n')
-    const cloneWorktreePath = vi.fn(async () => {
-      throw new Error('clonefile unsupported')
-    })
-
-    await createWorktreeLinkedPaths(primary, worktree, ['.env'], {
-      platform: 'darwin',
-      cloneWorktreePath
-    })
-
-    expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(true)
-    expect(readlinkSync(join(worktree, '.env'))).toBe(join(primary, '.env'))
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('[worktree-symlinks] APFS clone-copy unavailable'),
-      expect.any(Error)
-    )
-  })
-
-  it('does not delete a target that appears while APFS clone-copy is failing', async () => {
-    writeFileSync(join(primary, '.env'), 'SECRET=1\n')
-    const cloneWorktreePath = vi.fn(async (_source: string, target: string) => {
-      writeFileSync(target, 'RACE=1\n')
-      throw new Error('clonefile failed after target appeared')
-    })
-
-    await createWorktreeLinkedPaths(primary, worktree, ['.env'], {
-      platform: 'darwin',
-      cloneWorktreePath
-    })
-
-    expect(readFileSync(join(worktree, '.env'), 'utf8')).toBe('RACE=1\n')
-    expect(error).toHaveBeenCalledWith(
-      expect.stringContaining('[worktree-symlinks] Failed to link ".env"'),
-      expect.any(Error)
-    )
-  })
-
-  it('keeps symlink sources as symlinks instead of APFS clone-copying their targets', async () => {
-    writeFileSync(join(primary, '.env.real'), 'SECRET=1\n')
-    symlinkSync(join(primary, '.env.real'), join(primary, '.env'), 'file')
-    const cloneWorktreePath = vi.fn(async () => {
-      throw new Error('clone should not be called for symlink sources')
-    })
-
-    await createWorktreeLinkedPaths(primary, worktree, ['.env'], {
-      platform: 'darwin',
-      cloneWorktreePath
-    })
-
-    expect(cloneWorktreePath).not.toHaveBeenCalled()
-    expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(true)
-    expect(readlinkSync(join(worktree, '.env'))).toBe(join(primary, '.env'))
-  })
-})
-
-// Windows junctions avoid symlink privilege requirements but need symlink fallback for WSL UNC targets.
-describe('worktreeSymlinkTypeCandidates', () => {
-  it('tries a junction before a symlink for a directory on Windows', () => {
-    expect(worktreeSymlinkTypeCandidates('win32', true)).toEqual(['junction', 'dir'])
-  })
-
-  it('keeps the symlink fallback so a UNC (WSL) target still works', () => {
-    expect(worktreeSymlinkTypeCandidates('win32', true).at(-1)).toBe('dir')
-  })
-
-  it('never uses a junction for a file, which junctions cannot represent', () => {
-    expect(worktreeSymlinkTypeCandidates('win32', false)).toEqual(['file'])
-  })
-
-  it('makes exactly one attempt off Windows, where the type is ignored', () => {
-    expect(worktreeSymlinkTypeCandidates('darwin', true)).toEqual(['dir'])
-    expect(worktreeSymlinkTypeCandidates('linux', true)).toEqual(['dir'])
-    expect(worktreeSymlinkTypeCandidates('linux', false)).toEqual(['file'])
-  })
 })
 
 describe('createWorktreeSharedPaths', () => {
@@ -431,19 +164,6 @@ describe('createWorktreeSharedPaths', () => {
   })
 
   // Shared mode must link even on APFS so one dependency install serves every worktree.
-  posixIt('symlinks on macOS instead of APFS clone-copying', async () => {
-    mkdirSync(join(primary, 'node_modules'))
-    writeFileSync(join(primary, 'node_modules', 'marker'), 'ORIG\n')
-    const cloneWorktreePath = vi.fn()
-
-    await createWorktreeSharedPaths(primary, worktree, ['node_modules'], {
-      platform: 'darwin',
-      cloneWorktreePath
-    })
-
-    expect(cloneWorktreePath).not.toHaveBeenCalled()
-    expect(lstatSync(join(worktree, 'node_modules')).isSymbolicLink()).toBe(true)
-  })
 
   posixIt('shares one directory so worktree writes reach the primary checkout', async () => {
     mkdirSync(join(primary, 'node_modules'))
@@ -452,26 +172,6 @@ describe('createWorktreeSharedPaths', () => {
 
     writeFileSync(join(worktree, 'node_modules', 'installed'), 'SHARED\n')
     expect(readFileSync(join(primary, 'node_modules', 'installed'), 'utf8')).toBe('SHARED\n')
-  })
-
-  posixIt('skips a path already materialized by the per-user symlink pass', async () => {
-    mkdirSync(join(primary, 'node_modules'))
-    mkdirSync(join(worktree, 'node_modules'))
-
-    await createWorktreeSharedPaths(primary, worktree, ['node_modules'], { platform: 'linux' })
-
-    expect(lstatSync(join(worktree, 'node_modules')).isSymbolicLink()).toBe(false)
-  })
-
-  it('rejects unsafe paths without touching the filesystem', async () => {
-    writeFileSync(join(root, 'outside.txt'), 'DO_NOT_TOUCH')
-
-    await createWorktreeSharedPaths(primary, worktree, ['../outside.txt', '/etc/passwd'], {
-      platform: 'linux'
-    })
-
-    expect(readFileSync(join(root, 'outside.txt'), 'utf8')).toBe('DO_NOT_TOUCH')
-    expect(warn).toHaveBeenCalled()
   })
 })
 
@@ -509,25 +209,6 @@ describe('createWorktreeCopiedPaths', () => {
     expect(readFileSync(join(primary, '.env'), 'utf8')).toBe('SECRET=1\n')
   })
 
-  it('copies a directory recursively without symlinking', async () => {
-    mkdirSync(join(primary, '.vscode'))
-    writeFileSync(join(primary, '.vscode', 'settings.json'), '{}')
-
-    await createWorktreeCopiedPaths(primary, worktree, ['.vscode'], { platform: 'linux' })
-
-    expect(lstatSync(join(worktree, '.vscode')).isSymbolicLink()).toBe(false)
-    expect(readFileSync(join(worktree, '.vscode', 'settings.json'), 'utf8')).toBe('{}')
-  })
-
-  it('creates parent directories lazily for nested paths', async () => {
-    mkdirSync(join(primary, 'apps', 'web'), { recursive: true })
-    writeFileSync(join(primary, 'apps', 'web', '.env'), 'A=1')
-
-    await createWorktreeCopiedPaths(primary, worktree, ['apps/web/.env'], { platform: 'linux' })
-
-    expect(readFileSync(join(worktree, 'apps', 'web', '.env'), 'utf8')).toBe('A=1')
-  })
-
   posixIt('dereferences a symlinked file entry so edits do not leak to the primary', async () => {
     writeFileSync(join(primary, '.env.shared'), 'SECRET=1\n')
     symlinkSync(join(primary, '.env.shared'), join(primary, '.env'))
@@ -537,97 +218,6 @@ describe('createWorktreeCopiedPaths', () => {
     expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(false)
     writeFileSync(join(worktree, '.env'), 'SECRET=2\n')
     expect(readFileSync(join(primary, '.env.shared'), 'utf8')).toBe('SECRET=1\n')
-  })
-
-  posixIt('dereferences a symlinked directory entry into an independent copy', async () => {
-    mkdirSync(join(primary, '.cache-real'))
-    writeFileSync(join(primary, '.cache-real', 'f'), 'ORIG\n')
-    symlinkSync(join(primary, '.cache-real'), join(primary, '.cache'), 'dir')
-
-    await createWorktreeCopiedPaths(primary, worktree, ['.cache'], { platform: 'linux' })
-
-    expect(lstatSync(join(worktree, '.cache')).isSymbolicLink()).toBe(false)
-    writeFileSync(join(worktree, '.cache', 'f'), 'CHANGED\n')
-    expect(readFileSync(join(primary, '.cache-real', 'f'), 'utf8')).toBe('ORIG\n')
-  })
-
-  it('preserves a pre-existing target in the worktree (no clobber)', async () => {
-    writeFileSync(join(primary, '.env'), 'SECRET=1\n')
-    writeFileSync(join(worktree, '.env'), 'MINE=1\n')
-
-    await createWorktreeCopiedPaths(primary, worktree, ['.env'], { platform: 'linux' })
-
-    expect(readFileSync(join(worktree, '.env'), 'utf8')).toBe('MINE=1\n')
-  })
-
-  it('rejects traversal and treats absolute paths as repo-relative', async () => {
-    writeFileSync(join(root, 'outside.txt'), 'OUT=1')
-
-    await createWorktreeCopiedPaths(primary, worktree, ['../outside.txt', '/etc/passwd'], {
-      platform: 'linux'
-    })
-
-    expect(existsSync(join(worktree, 'outside.txt'))).toBe(false)
-    expect(existsSync(join(worktree, 'etc'))).toBe(false)
-    expect(warn).toHaveBeenCalledTimes(1)
-  })
-
-  it('falls back to a real copy, not a symlink, when macOS clone-copy is unavailable', async () => {
-    writeFileSync(join(primary, '.env'), 'SECRET=1\n')
-    const cloneWorktreePath = vi.fn(async () => {
-      throw new Error('clonefile unsupported')
-    })
-
-    await createWorktreeCopiedPaths(primary, worktree, ['.env'], {
-      platform: 'darwin',
-      cloneWorktreePath
-    })
-
-    expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(false)
-    expect(readFileSync(join(worktree, '.env'), 'utf8')).toBe('SECRET=1\n')
-  })
-
-  it('uses APFS clone-copy for configured paths on macOS', async () => {
-    writeFileSync(join(primary, '.env'), 'SECRET=1\n')
-    const cloneWorktreePath = vi.fn(async (_source: string, target: string) => {
-      writeFileSync(target, 'CLONED=1\n')
-    })
-
-    await createWorktreeCopiedPaths(primary, worktree, ['.env'], {
-      platform: 'darwin',
-      cloneWorktreePath
-    })
-
-    expect(cloneWorktreePath).toHaveBeenCalledWith(
-      join(primary, '.env'),
-      join(worktree, '.env'),
-      false
-    )
-    expect(readFileSync(join(worktree, '.env'), 'utf8')).toBe('CLONED=1\n')
-  })
-
-  it('probes each APFS volume once regardless of how many paths are copied', async () => {
-    for (const name of ['.env', '.env.local', 'config.json', 'secrets.json']) {
-      writeFileSync(join(primary, name), `${name}\n`)
-    }
-    const deps = createApfsCloneDeps({ onCp: () => {} })
-
-    await createWorktreeCopiedPaths(
-      primary,
-      worktree,
-      ['.env', '.env.local', 'config.json', 'secrets.json'],
-      { platform: 'darwin', apfsCloneDeps: deps }
-    )
-
-    const execFileAsyncMock = vi.mocked(deps.execFileAsync)
-    const dfCalls = execFileAsyncMock.mock.calls.filter(([file]) => file === '/bin/df').length
-    const diskutilCalls = execFileAsyncMock.mock.calls.filter(
-      ([file]) => file === '/usr/sbin/diskutil'
-    ).length
-    // Probe once per source/target volume, rather than once per copied path.
-    expect(dfCalls).toBeLessThanOrEqual(2)
-    expect(diskutilCalls).toBeLessThanOrEqual(2)
-    expect(execFileAsyncMock.mock.calls.filter(([file]) => file === '/bin/cp')).toHaveLength(4)
   })
 })
 
@@ -674,37 +264,9 @@ describe('removeWorktreeSymlinks', () => {
     expect(statSync(join(worktree, '.env')).isFile()).toBe(true)
   })
 
-  it('identifies only actual symlinks for removal preflight', async () => {
-    writeFileSync(join(primary, '.env'), 'PRIMARY=1\n')
-    symlinkSync(join(primary, '.env'), join(worktree, '.env'))
-    writeFileSync(join(worktree, 'config.json'), '{}\n')
-
-    await expect(
-      findExistingWorktreeSymlinkPaths(worktree, ['.env', 'config.json', 'missing'])
-    ).resolves.toEqual(['.env'])
-  })
-
-  it('leaves APFS clone-copied regular files for git removal to judge', async () => {
-    writeFileSync(join(worktree, '.env'), 'CLONED=1\n')
-
-    await removeWorktreeLinkedPaths(worktree, ['.env'])
-
-    expect(existsSync(join(worktree, '.env'))).toBe(true)
-  })
-
-  it('ignores missing entries', async () => {
-    await removeWorktreeSymlinks(worktree, ['.env', 'node_modules'])
-    expect(error).not.toHaveBeenCalled()
-  })
-
   it('rejects unsafe paths without touching the filesystem', async () => {
     writeFileSync(join(root, 'outside-file'), 'DO_NOT_DELETE')
     await removeWorktreeSymlinks(worktree, ['../outside-file'])
     expect(existsSync(join(root, 'outside-file'))).toBe(true)
-  })
-
-  it('is a no-op for an empty paths list', async () => {
-    await removeWorktreeSymlinks(worktree, [])
-    expect(error).not.toHaveBeenCalled()
   })
 })

@@ -1,12 +1,17 @@
 import type { AppState } from '@/store/types'
-import { getIndexedAllWorktrees, getIndexedRepoMap } from '@/store/worktree-repo-index'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { getIndexedRepoMap } from '@/store/repos/repository-catalog-index'
 import { ALL_EXECUTION_HOSTS_SCOPE } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { sidebarHasActiveFilters } from '@/components/sidebar/sidebar-filter-actions'
-import { computeVisibleWorktreeIds } from '@/components/sidebar/compute-visible-worktrees'
-import { buildVisibleWorktreeOptionsFromState } from '@/components/sidebar/visible-worktree-options-from-state'
+import { sidebarHasActiveFilters } from '@/components/sidebar/worktree-list/controls/sidebar-filter-actions'
+import { computeVisibleWorktreeIds } from '@/components/sidebar/worktree-list/listing/compute-visible-worktrees'
+import { buildVisibleWorktreeOptionsFromState } from '@/components/sidebar/worktree-list/listing/visible-worktree-options-from-state'
+import { NO_HIDDEN_PROJECTS } from '../../../shared/hidden-projects'
 import { isFolderWorkspaceFromOtherDevice } from '../../../shared/workspace-creator-visibility'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 /** Apply sidebar kind filters with project/host filters lifted so lineage and host twins follow sidebar visibility. Muting suppresses unread/banner/sound/push.
  * Fail open until settings/UI and terminal reconnect hydrate, or when the workspace is unknown; restored rows otherwise look asleep. */
@@ -42,6 +47,8 @@ export function isWorkspaceNotificationMutedBySidebarFilters(
   // Use the full sidebar pass (~0.2–0.3ms/1,000 workspaces) to preserve every rule that adds rows back.
   const visibleIds = computeVisibleWorktreeIds(selectWorktreesByRepo(state), [], {
     ...inputs,
+    // Hiding a project is a view choice, never a mute: its workspaces notify as if listed.
+    hiddenProjects: NO_HIDDEN_PROJECTS,
     filterRepoIds: [],
     workspaceHostScope: ALL_EXECUTION_HOSTS_SCOPE,
     visibleWorkspaceHostIds: null

@@ -7,12 +7,12 @@
 import {
   prepareProfileProjectDomainChanges,
   type ProfileProjectDomainChanges
-} from '../../orca-profiles/profile-project-domain-changes'
+} from '../../orca-profiles/project-transfer/profile-project-domain-changes'
 import {
   readProfileProjectTransferState,
   writeProfileProjectDomainChanges
-} from '../../orca-profiles/profile-project-domain-state'
-import { migrateProfileProjectTransferParticipant } from '../../orca-profiles/profile-project-transfer-migration'
+} from '../../orca-profiles/project-transfer/profile-project-domain-state'
+import { migrateProfileProjectTransferParticipant } from '../../orca-profiles/project-transfer/profile-project-transfer-migration'
 import {
   listWslDriveUncConversionsForProfile,
   removeWslDriveUncConversion,
@@ -27,7 +27,7 @@ import { wslHostsGateOpen } from '../host-lifecycle/wsl-host-gate'
 import { isWslDriveUncConversionComplete } from './wsl-drive-unc-conversion-renderer'
 import { getHistoryRoot, listWslHistoryRoots } from '../../pty/history/terminal-history-paths'
 import { orchestrationDbFile } from '../../runtime/orchestration/db/orchestration-db-file'
-import { journalDatabasePath } from '../../native-chat/agent-session-journal/journal-host-database'
+import { journalDatabasePath } from '../../native-chat/agent-session-journal/database/journal-host-database'
 import { rewriteWslDriveUncState } from './wsl-drive-unc-state-rewrite'
 import { WSL_DRIVE_UNC_STATE_DISPOSITIONS } from '../../../shared/wsl-drive-unc-state-dispositions'
 

@@ -1,6 +1,6 @@
 import { join, posix as pathPosix } from 'node:path'
 import { resolveKiroHomeDir } from '../../shared/kiro-home'
-import { isPlainObject } from '../agent-hooks/installer-utils'
+import { isPlainObject } from '../agent-hooks/installation/configuration/hooks-json-read'
 import {
   buildKiroListHook,
   getKiroManagedCommandMatcher,

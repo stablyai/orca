@@ -2,20 +2,14 @@ import type { StructuredAgentSessionOptionState } from './structured-agent-sessi
 
 /** Runtime reports describe the process whose options answer carried them; a newer fence has none until it answers. */
 export function structuredAgentSessionReportsAtFence<
-  T extends Pick<
-    StructuredAgentSessionOptionState,
-    'reportedPermissionMode' | 'reportedModel' | 'reportedEffort'
-  >
+  T extends Pick<StructuredAgentSessionOptionState, 'reportedPermissionMode' | 'reportedEffort'>
 >(state: T, answeredFence: number | null | undefined, fence: number | null): T {
   return answeredFence === fence ||
-    (state.reportedPermissionMode === undefined &&
-      state.reportedModel === undefined &&
-      state.reportedEffort === undefined)
+    (state.reportedPermissionMode === undefined && state.reportedEffort === undefined)
     ? state
     : {
         ...state,
         reportedPermissionMode: undefined,
-        reportedModel: undefined,
         reportedEffort: undefined
       }
 }

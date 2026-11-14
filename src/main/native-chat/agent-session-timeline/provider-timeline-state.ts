@@ -5,8 +5,8 @@ import {
   type AgentJournalTurnLifecycle
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalTurnScope } from '../../../shared/agent-session/journal/agent-session-journal-turn-scope'
-import { requiresTerminalSettlement } from '../agent-session-journal/journal-terminal-settlement'
-import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/structured-agent-session-transition'
+import { requiresTerminalSettlement } from '../agent-session-journal/item-lifecycle/journal-terminal-settlement'
+import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/journal-ingress/structured-agent-session-transition'
 import type { ProviderTimelineRowId, ProviderTimelineTurnRef } from './provider-timeline-rows'
 
 /** Bound duplicate-close memory; older rows defer to the journal. */
@@ -35,9 +35,8 @@ export type ProviderTimelineOpenItem = {
   /** Request rows are chosen later by their queued write. */
   row: ProviderTimelineRowId | null
   turnItemId: string | null
-  bytes: number
-  /** Closed items hold no budget; reopen permits new work. */
-  closed: boolean
+  /** Requests whose live exchange settles them, not their turn's end. */
+  outlivesTurn?: true
 }
 
 export class ProviderTimelineState {
@@ -50,6 +49,8 @@ export class ProviderTimelineState {
   inputs: ProviderTimelinePendingInput[] = []
   /** Items use row IDs; requests use request:key across incarnations. */
   items = new Map<string, ProviderTimelineOpenItem>()
+  /** Closed history never requires traversing the live population. */
+  readonly closedItems = new Map<string, string | null>()
   /** Advance only on admission. */
   serial = 0
 
@@ -70,7 +71,7 @@ export class ProviderTimelineState {
   /** Read any writer’s settlement; queued writes without rows remain open. */
   settledInJournal(key: string, journal: StructuredAgentSessionTransitionJournal): boolean {
     const entry = this.items.get(key)
-    if (!entry || entry.closed || !entry.row) {
+    if (!entry || !entry.row) {
       return false
     }
     const body = journal.itemBody(entry.row.itemId)
@@ -102,14 +103,17 @@ export class ProviderTimelineState {
 
   close(key: string, turnItemId: string | null): void {
     this.items.delete(key)
-    this.items.set(key, { kind: 'item', row: null, turnItemId, bytes: 0, closed: true })
-    const closed = [...this.items].filter(([, entry]) => entry.closed)
-    for (const [oldest] of closed.slice(0, Math.max(0, closed.length - MAX_CLOSED_ITEMS))) {
-      this.items.delete(oldest)
+    this.closedItems.delete(key)
+    this.closedItems.set(key, turnItemId)
+    if (this.closedItems.size > MAX_CLOSED_ITEMS) {
+      const oldest = this.closedItems.keys().next()
+      if (!oldest.done) {
+        this.closedItems.delete(oldest.value)
+      }
     }
   }
 
-  endTurn(turn: ProviderTimelineTurnRef): void {
+  endTurn(turn: ProviderTimelineTurnRef, journal?: StructuredAgentSessionTransitionJournal): void {
     if (this.open?.itemId === turn.itemId) {
       this.open = null
       this.latest = turn
@@ -117,7 +121,15 @@ export class ProviderTimelineState {
     if (this.stopped?.itemId === turn.itemId) {
       this.stopped = null
     }
-    this.forget(turn, () => true)
+    this.forget(turn, (entry) => !entry.outlivesTurn)
+    if (journal) {
+      this.forgetSettledRequests(journal)
+    }
+    for (const [key, turnItemId] of this.closedItems) {
+      if (turnItemId === turn.itemId) {
+        this.closedItems.delete(key)
+      }
+    }
   }
 
   /** Cancel prompts after external settlement; keep running work until the provider ends the turn. */
@@ -127,7 +139,27 @@ export class ProviderTimelineState {
       this.latest = turn
       this.stopped = turn
     }
-    this.forget(turn, (entry) => entry.kind === 'request')
+    this.forget(turn, (entry) => entry.kind === 'request' && !entry.outlivesTurn)
+  }
+
+  /** Kept requests leave once answered or withdrawn, so the kept set stays live-sized. */
+  private forgetSettledRequests(journal: StructuredAgentSessionTransitionJournal): void {
+    for (const [key, entry] of this.items) {
+      if (entry.outlivesTurn && this.settledInJournal(key, journal)) {
+        this.items.delete(key)
+      }
+    }
+  }
+
+  /** Rows a turn's end must leave pending. */
+  liveRequestRows(turnItemId: string): Set<string> {
+    const rows = new Set<string>()
+    for (const entry of this.items.values()) {
+      if (entry.outlivesTurn && entry.row && entry.turnItemId === turnItemId) {
+        rows.add(entry.row.itemId)
+      }
+    }
+    return rows
   }
 
   endSession(): void {
@@ -135,6 +167,7 @@ export class ProviderTimelineState {
     this.open = null
     this.stopped = null
     this.items.clear()
+    this.closedItems.clear()
   }
 
   private forget(

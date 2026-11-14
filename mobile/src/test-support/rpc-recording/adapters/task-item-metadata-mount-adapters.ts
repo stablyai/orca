@@ -1,3 +1,5 @@
+import type * as UseMobileTasksItemDetailMetadataEffectsModule from '../../../tasks/item-detail/use-mobile-tasks-item-detail-metadata-effects'
+import type * as UseMobileTasksListAndDetailEffectsModule from '../../../tasks/task-list/use-mobile-tasks-list-and-detail-effects'
 import { useTaskActionMountOwners, type TaskActionObservedField } from '../task-action-mount-owners'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
@@ -142,11 +144,10 @@ function mountModelHook<Actions>(
 export function taskItemMetadataMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {
-  const load = <T>(file: string): T => modules.load<T>(`mobile/src/tasks/${file}`)
   const itemMetadata: MountAdapter = (context) => {
-    const useEffects = load<
-      typeof import('../../../tasks/use-mobile-tasks-item-detail-metadata-effects')
-    >('use-mobile-tasks-item-detail-metadata-effects.tsx').useMobileTasksItemDetailMetadataEffects
+    const useEffects = modules.load<typeof UseMobileTasksItemDetailMetadataEffectsModule>(
+      'mobile/src/tasks/item-detail/use-mobile-tasks-item-detail-metadata-effects.tsx'
+    ).useMobileTasksItemDetailMetadataEffects
     return mountModelHook(modules, context, {
       useHook: (model) => useEffects(model),
       observedFields: [
@@ -183,9 +184,9 @@ export function taskItemMetadataMountAdapters(
     })
   }
   const linearTeamContext: MountAdapter = (context) => {
-    const useEffects = load<
-      typeof import('../../../tasks/use-mobile-tasks-list-and-detail-effects')
-    >('use-mobile-tasks-list-and-detail-effects.tsx').useMobileTasksListAndDetailEffects
+    const useEffects = modules.load<typeof UseMobileTasksListAndDetailEffectsModule>(
+      'mobile/src/tasks/task-list/use-mobile-tasks-list-and-detail-effects.tsx'
+    ).useMobileTasksListAndDetailEffects
     return mountModelHook(modules, context, {
       useHook: (model) => useEffects(model),
       fixture: {
@@ -213,6 +214,7 @@ export function taskItemMetadataMountAdapters(
         refreshJiraConnection: async () => {},
         query: '',
         refreshTasks: () => {},
+        repoListEnsureLoaded: async () => [HOSTED_REPO],
         selectGitHubProject: async () => {},
         showCreateTask: false,
         showGitHubProjectPicker: false,

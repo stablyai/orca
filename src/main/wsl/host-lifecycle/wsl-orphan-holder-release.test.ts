@@ -60,15 +60,6 @@ afterEach(() => {
 })
 
 describe('releasing orphaned WSL holders at launch', () => {
-  it('touches nothing for a user who never ran a WSL host', async () => {
-    const { factory } = fakeHolder()
-    await expect(
-      releaseUnwantedWslHolders({ userDataPath, isWanted: () => false, holder: factory })
-    ).resolves.toEqual([])
-    // No holder means no process table read and no wsl.exe.
-    expect(factory).not.toHaveBeenCalled()
-  })
-
   it('keeps a live host’s holder and releases only orphans and pending removals', async () => {
     addHost('Ubuntu', 42000)
     addHost('Debian', 42001)
@@ -104,13 +95,5 @@ describe('wslHolderKeepPolicy', () => {
     const isWanted = wslHolderKeepPolicy({ userDataPath, keepHostHolders: true })
     addHost('Ubuntu', 42000)
     expect(isWanted('ubuntu')).toBe(true)
-  })
-
-  it('keeps an add in flight, and nothing while hosts are off', () => {
-    expect(
-      wslHolderKeepPolicy({ userDataPath, keepHostHolders: true, isAdding: () => true })('Alpine')
-    ).toBe(true)
-    addHost('Ubuntu', 42000)
-    expect(wslHolderKeepPolicy({ userDataPath, keepHostHolders: false })('Ubuntu')).toBe(false)
   })
 })

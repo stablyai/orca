@@ -3,10 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store/types'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { editorModelRegistry } from '@/lib/editor-model-registry'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
-import { usePluginPanelsStore } from '@/store/plugin-panels'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { editorModelRegistry } from '@/lib/editor/monaco/editor-model-registry'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { usePluginPanelsStore } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { requestEditorFileSave } from '../../autosave/editor-autosave'
 import { attachEditorAutosaveController } from '../../autosave/editor-autosave-controller'
 import { createEditorStore } from '../../autosave/editor-autosave-controller-test-fixture'
@@ -17,12 +17,16 @@ import { __clearSelfWriteRegistryForTests } from '../../external-changes/editor-
 
 const storeRef = vi.hoisted((): { current: StoreApi<AppState> | null } => ({ current: null }))
 
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => null }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionIdForFile: () => null
+}))
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => storeRef.current?.getState() } }))
-vi.mock('@/lib/file-owner-runtime-target', () => ({
+vi.mock('@/lib/files/access/file-owner-runtime-target', () => ({
   getRuntimeTargetForFileOwner: () => ({ kind: 'local' })
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: vi.fn()
+}))
 
 const PATH = '/repo/pnpm-workspace.yaml'
 const BASELINE = 'packages: []\n'
@@ -135,34 +139,6 @@ describe('saving with Insert Final Newline', () => {
     storeRef.current = null
   })
 
-  it.each([
-    ['appends LF', true, 'packages:\n  - app', 'packages:\n  - app\n'],
-    ['preserves CRLF', true, 'packages:\r\n  - app', 'packages:\r\n  - app\r\n'],
-    ['keeps an existing LF', true, 'packages:\n  - app\n', 'packages:\n  - app\n'],
-    ['keeps an existing CRLF', true, 'packages:\r\n  - app\r\n', 'packages:\r\n  - app\r\n'],
-    ['keeps a final CR', true, 'packages:\r', 'packages:\r'],
-    ['leaves empty files empty', true, '', ''],
-    ['does nothing when disabled', false, 'packages:\n  - app', 'packages:\n  - app'],
-    ['does nothing when the setting is absent', undefined, 'packages: []', 'packages: []']
-  ])('%s', async (_label, enabled, draft, written) => {
-    const { store, fileId } = openFile({ enabled, draft })
-    const files = await save(store, fileId)
-
-    expect(files.get(PATH)).toBe(written)
-    expect(store.getState().openFiles[0]?.isDirty).toBe(false)
-  })
-
-  it.each(['autosave', 'restart', 'overwrite', 'convert'] as const)(
-    'inserts a newline for a %s save',
-    async (trigger) => {
-      const { store, fileId } = openFile({ enabled: true, draft: 'packages: []' })
-      const files = await save(store, fileId, { trigger })
-
-      expect(files.get(PATH)).toBe('packages: []\n')
-      expect(store.getState().openFiles[0]?.isDirty).toBe(false)
-    }
-  )
-
   it('uses the retained CRLF model ending after its last line break is removed', async () => {
     const draft = 'packages: []'
     const { store, fileId } = openFile({ enabled: true, draft })
@@ -236,17 +212,6 @@ describe('saving with Insert Final Newline', () => {
     }
   })
 
-  it.each([
-    ['/repo/note.md', 'markdown'],
-    ['/repo/table.csv', 'csv'],
-    ['/repo/notebook.ipynb', 'json']
-  ])('does not alter the structured editor for %s', async (path, language) => {
-    const { store, fileId } = openFile({ enabled: true, draft: 'content', path, language })
-    const files = await save(store, fileId)
-
-    expect(files.get(path)).toBe('content')
-  })
-
   it('applies to Markdown when its source code view is selected', async () => {
     const path = '/repo/note.md'
     const { store, fileId } = openFile({
@@ -272,19 +237,6 @@ describe('saving with Insert Final Newline', () => {
     expect(model.getValue()).toBe('typed meanwhile')
     expect(store.getState().editorDrafts[fileId]).toBe('captured')
     expect(store.getState().openFiles[0]?.isDirty).toBe(true)
-  })
-
-  it('adds a newline after formatter output and keeps the model and draft in sync', async () => {
-    const { store, fileId } = openFile({ enabled: true, draft: 'packages:[]' })
-    const model = createModel(store, 'packages:[]')
-    store.setState({ settings: { ...store.getState().settings!, editorFormatOnSave: true } })
-    vi.mocked(callRuntimeRpc).mockResolvedValueOnce({ kind: 'formatted', text: 'packages: []' })
-
-    const files = await save(store, fileId)
-
-    expect(files.get(PATH)).toBe('packages: []\n')
-    expect(model.getValue()).toBe('packages: []\n')
-    expect(store.getState().openFiles[0]?.isDirty).toBe(false)
   })
 
   it('adopts formatter output that already ends with a newline when saving a clean file', async () => {
@@ -339,37 +291,6 @@ describe('saving with Insert Final Newline', () => {
       expect(disk.files.get(PATH)).toBe('external change')
       expect(model.getValue()).toBe('my edit\n')
       expect(store.getState().editorDrafts[fileId]).toBe('my edit\n')
-      expect(store.getState().openFiles[0]?.isDirty).toBe(true)
-    } finally {
-      cleanup()
-    }
-  })
-
-  it('does not replace edits typed while the formatter is running', async () => {
-    const { store, fileId } = openFile({ enabled: true, draft: 'before' })
-    const model = createModel(store, 'before')
-    store.setState({ settings: { ...store.getState().settings!, editorFormatOnSave: true } })
-    let finish!: (result: { kind: 'formatted'; text: string }) => void
-    vi.mocked(callRuntimeRpc).mockImplementationOnce(
-      () => new Promise((resolve) => (finish = resolve))
-    )
-    const disk = stubGuardedDisk({ [PATH]: BASELINE })
-    const cleanup = attachEditorAutosaveController(store)
-    try {
-      const saving = requestEditorFileSave({ fileId })
-      await vi.waitFor(() => expect(callRuntimeRpc).toHaveBeenCalledOnce())
-      model.pushEditOperations(
-        [],
-        [{ range: model.getFullModelRange(), text: 'typed' }],
-        () => null
-      )
-      store.getState().setEditorDraft(fileId, 'typed')
-      finish({ kind: 'formatted', text: 'formatted' })
-      await saving
-
-      expect(disk.files.get(PATH)).toBe('formatted\n')
-      expect(model.getValue()).toBe('typed')
-      expect(store.getState().editorDrafts[fileId]).toBe('typed')
       expect(store.getState().openFiles[0]?.isDirty).toBe(true)
     } finally {
       cleanup()

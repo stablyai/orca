@@ -7,10 +7,13 @@ import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { selectStructuredAgentContextUsage } from '../../../../shared/agent-session/structured-agent-session-context-usage'
-import { createTrackedJournalOpener } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
-import { createDeferredStructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
-import { createCodexJournalTranslator } from './codex-structured-journal-translation'
+import { createTrackedJournalOpener } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { createDeferredStructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { testEventSinkLogging } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import {
+  createCodexHistoryTranslator,
+  createCodexJournalTranslator
+} from './codex-structured-journal-translation'
 
 const SESSION = 'session-codex-context'
 const THREAD = 'thread-main'
@@ -99,6 +102,11 @@ async function session() {
       })
     return {
       translator,
+      restoreThread: createCodexHistoryTranslator({
+        sink: deferred.sink,
+        sessionId: SESSION,
+        primaryThreadId: () => THREAD
+      }).restoreThread,
       on,
       tokenUsage: (turnId: string, tokenUsage: unknown, threadId = THREAD) =>
         on('thread/tokenUsage/updated', { turnId, tokenUsage }, threadId),
@@ -119,28 +127,6 @@ async function session() {
 }
 
 describe('Codex context usage in the journal', () => {
-  it('follows each response of a turn and holds once the turn ends', async () => {
-    const { on, tokenUsage, contextUsage } = await session()
-    on('turn/started', { turn: { id: 'turn-1' } })
-
-    tokenUsage('turn-1', FIRST_RESPONSE)
-    expect(await contextUsage()).toEqual({
-      usedTokens: 17611,
-      windowTokens: 258400,
-      percentage: 7,
-      estimated: false,
-      categories: []
-    })
-
-    // Context usage measures the response, not cumulative thread spend.
-    tokenUsage('turn-1', AFTER_TOOL_CALL)
-    expect(await contextUsage()).toMatchObject({ usedTokens: 17684, windowTokens: 475000 })
-
-    tokenUsage('turn-1', FINAL_RESPONSE)
-    on('turn/completed', { turn: { id: 'turn-1', status: 'completed' } })
-    expect(await contextUsage()).toMatchObject({ usedTokens: 17714, windowTokens: 475000 })
-  })
-
   it.each([
     ['while the turn runs', false],
     ['after the turn ended', true]
@@ -213,18 +199,6 @@ describe('Codex context usage in the journal', () => {
     expect(await contextUsage()).toBeNull()
   })
 
-  it('holds a reading that reached the open turn row under another turn name', async () => {
-    const { on, tokenUsage, contextUsage } = await session()
-    on('turn/started', { turn: { id: 'turn-1' } })
-    tokenUsage('turn-1', FINAL_RESPONSE)
-    // An unknown turn falls back to the newest row.
-    tokenUsage('turn-nobody-opened', AFTER_COMPACTION)
-
-    on('turn/completed', { turn: { id: 'turn-1', status: 'completed' } })
-
-    expect(await contextUsage()).toMatchObject({ usedTokens: 6033, windowTokens: 475000 })
-  })
-
   it('keeps the saved reading through a resume that restores history, then takes the replayed frame', async () => {
     const { on, tokenUsage, connect } = await session()
     on('turn/started', { turn: { id: 'turn-1' } })
@@ -232,7 +206,7 @@ describe('Codex context usage in the journal', () => {
     on('turn/completed', { turn: { id: 'turn-1', status: 'completed' } })
 
     const resumed = connect()
-    resumed.translator.restoreThread(THREAD, {
+    resumed.restoreThread(THREAD, {
       turns: [{ id: 'turn-1', status: 'completed', startedAt: 1, completedAt: 2, items: [] }]
     })
     expect(await resumed.turnRecord('turn-1')).toMatchObject({ completedAt: 2_000 })

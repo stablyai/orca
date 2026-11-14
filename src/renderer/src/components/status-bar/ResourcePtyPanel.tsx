@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useListMultiSelection } from '@/hooks/use-list-multi-selection'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import {
   buildResourcePtyRows,
   groupResourcePtyRows,
@@ -33,6 +33,8 @@ export function ResourcePtyPanel({
   projectGroups,
   runtimePaneTitlesByTabId
 }: Props) {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const getScope = useCallback(() => panelRef.current, [])
@@ -100,19 +102,15 @@ export function ResourcePtyPanel({
       <div className="shrink-0 space-y-2 border-b border-border px-3 py-2">
         <div className="text-xs text-muted-foreground">
           {inventory.observedAt === null
-            ? translate('resourceManager.pty.thisComputer', 'This computer')
-            : translate(
-                'resourceManager.pty.localOwnedCount',
-                '{{count}} Orca PTYs on this computer',
-                {
-                  count: sessions.length,
-                  defaultValue_one: '{{count}} Orca PTY on this computer'
-                }
-              )}
+            ? t('resourceManager.pty.thisComputer', 'This computer')
+            : t('resourceManager.pty.localOwnedCount', '{{count}} Orca PTYs on this computer', {
+                count: sessions.length,
+                defaultValue_one: '{{count}} Orca PTY on this computer'
+              })}
           {inventory.observedAt !== null && unbound > 0 && (
             <span>
               {' · '}
-              {translate('resourceManager.pty.withoutTab', '{{count}} without a tab', {
+              {t('resourceManager.pty.withoutTab', '{{count}} without a tab', {
                 count: unbound
               })}
             </span>
@@ -120,8 +118,8 @@ export function ResourcePtyPanel({
         </div>
         {inventory.observedAt !== null && (
           <div className="text-xs text-muted-foreground">
-            {translate('resourceManager.pty.observedTime', 'Last observed {{time}}', {
-              time: new Date(inventory.observedAt).toLocaleTimeString(getIntlLocale())
+            {t('resourceManager.pty.observedTime', 'Last observed {{time}}', {
+              time: new Date(inventory.observedAt).toLocaleTimeString(intlLocale)
             })}
           </div>
         )}
@@ -129,14 +127,14 @@ export function ResourcePtyPanel({
           <div className="flex items-center justify-between gap-2">
             <label className="flex items-center gap-2 text-xs">
               <Checkbox
-                aria-label={translate('resourceManager.pty.selectAll', 'Select all terminals')}
+                aria-label={t('resourceManager.pty.selectAll', 'Select all terminals')}
                 checked={
                   allSelected ? true : selection.selectedKeys.size > 0 ? 'indeterminate' : false
                 }
                 disabled={selectableRows.length === 0}
                 onCheckedChange={() => selection.setAllSelected(!allSelected)}
               />
-              {translate('resourceManager.pty.selectAllShort', 'Select all')}
+              {t('resourceManager.pty.selectAllShort', 'Select all')}
             </label>
             <Button
               variant="destructive"
@@ -157,7 +155,7 @@ export function ResourcePtyPanel({
                 void actions.endMany(selection.selectedItems)
               }}
             >
-              {translate('resourceManager.pty.endSelected', 'End selected ({{count}})', {
+              {t('resourceManager.pty.endSelected', 'End selected ({{count}})', {
                 count: selection.selectedItems.length
               })}
             </Button>
@@ -166,12 +164,12 @@ export function ResourcePtyPanel({
       </div>
       {inventory.sessionsError && (
         <div role="alert" className="shrink-0 px-3 py-2 text-xs text-destructive">
-          {translate(
+          {t(
             'resourceManager.pty.failed',
             'Unverifiable: local terminals could not be refreshed. Last-observed terminals are shown.'
           )}{' '}
           <Button variant="link" size="xs" onClick={() => void inventory.refreshSessions()}>
-            {translate('resourceManager.pty.retry', 'Retry')}
+            {t('resourceManager.pty.retry', 'Retry')}
           </Button>
         </div>
       )}
@@ -183,12 +181,12 @@ export function ResourcePtyPanel({
       >
         {inventory.observedAt === null && !inventory.sessionsError && (
           <p role="status" className="p-3 text-xs text-muted-foreground">
-            {translate('resourceManager.pty.loading', 'Loading terminals…')}
+            {t('resourceManager.pty.loading', 'Loading terminals…')}
           </p>
         )}
         {inventory.observedAt !== null && sessions.length === 0 && (
           <p className="p-3 text-xs text-muted-foreground">
-            {translate('resourceManager.pty.noLocalOrcaPtys', 'No local Orca PTYs')}
+            {t('resourceManager.pty.noLocalOrcaPtys', 'No local Orca PTYs')}
           </p>
         )}
         <ResourcePtyList

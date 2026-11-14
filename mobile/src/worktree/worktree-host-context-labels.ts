@@ -7,13 +7,10 @@ import {
 import {
   getHostContextLabel,
   getMixedHostContextLabels as getSharedMixedHostContextLabels
-} from '../../../src/shared/worktree/host-context-labels'
+} from '../../../src/shared/worktree/row-display/host-context-labels'
 import { composeWorktreeHostIdentity } from '../../../src/shared/worktree/host-qualified-identity'
-export {
-  buildHostLabelById,
-  getHostContextLabel
-} from '../../../src/shared/worktree/host-context-labels'
-import type { ExecutionHostHealth } from '../../../src/shared/execution-host-health'
+
+import type { ExecutionHostHealth } from '../../../src/shared/execution-host/execution-host-health'
 import type { Worktree, WorktreeHostContextView } from './workspace-list-types'
 import { getHostHealthBadgeLabel } from './worktree-host-health'
 

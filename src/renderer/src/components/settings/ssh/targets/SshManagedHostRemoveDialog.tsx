@@ -1,6 +1,6 @@
 import type { SshTarget } from '../../../../../../shared/ssh-types'
 import { useAppStore } from '@/store/index'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
 import {
   Dialog,
@@ -25,6 +25,7 @@ export function SshManagedHostRemoveDialog({
   label: string | null
   onClose: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const openManagedServers = (): void => {
     useAppStore
       .getState()
@@ -36,13 +37,13 @@ export function SshManagedHostRemoveDialog({
       <DialogContent className="max-w-sm sm:max-w-sm" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>
-            {translate(
-              'auto.components.settings.SshTargetDestructiveActions.4808966c41',
-              'Remove SSH Target'
+            {t(
+              'auto.components.settings.SshTargetDestructiveActions.916f480036',
+              'Remove SSH target'
             )}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.settings.sshManagedHostRemove.descriptionServerHost',
               'Orca runs on {{label}}. In Remote Orca Servers, open the ⋯ menu on {{label}} and choose Stop… to remove Orca from the host, or Forget… if the host is gone. Then you can remove this SSH host.',
               { label: label ?? '' }
@@ -51,12 +52,12 @@ export function SshManagedHostRemoveDialog({
         </DialogHeader>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            {translate('auto.components.settings.SshDestructiveActionDialog.895b216267', 'Cancel')}
+            {t('auto.components.settings.SshDestructiveActionDialog.895b216267', 'Cancel')}
           </Button>
           <Button onClick={openManagedServers}>
-            {translate(
-              'auto.components.settings.sshManagedHostRemove.openServers',
-              'Open Remote Orca Servers'
+            {t(
+              'auto.components.settings.sshManagedHostRemove.2ca95e9fd7',
+              'Open remote Orca servers'
             )}
           </Button>
         </DialogFooter>

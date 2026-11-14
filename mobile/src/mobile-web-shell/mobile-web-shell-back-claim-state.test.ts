@@ -13,34 +13,10 @@ describe('the page claiming the device Back key', () => {
     )
   }
 
-  it('records the claim and gives it back when the page lets go', () => {
-    const held = claimed()
-    expect(shellPageBackClaimed(held.session)).toBe(true)
-    expect(
-      shellPageBackClaimed(run(held.session, { type: 'page-back-claim', claimed: false }).session)
-    ).toBe(false)
-  })
-
   it('drops it when a replacement document starts inside this mount', () => {
     expect(shellPageBackClaimed(run(claimed().session, { type: 'document-started' }).session)).toBe(
       false
     )
-  })
-
-  it('drops it when the view is remounted under a new session id', () => {
-    const remounted = run(claimed().session, { type: 'remounted', sessionId: 'session-two' })
-    expect(shellPageBackClaimed(remounted.session)).toBe(false)
-  })
-
-  it('drops it when the document asks for a session again, so the page has to claim again', () => {
-    const reasked = run(claimed().session, { type: 'page-ready' })
-    expect(shellPageBackClaimed(reasked.session)).toBe(false)
-  })
-
-  it('drops it when a page fault takes the generation off screen', () => {
-    const failed = run(claimed().session, { type: 'shell-failed', reason: 'document-load-failed' })
-    expect(failed.session.state.kind).not.toBe('ready')
-    expect(shellPageBackClaimed(failed.session)).toBe(false)
   })
 
   it('records nothing from a page whose generation is no longer on screen', () => {

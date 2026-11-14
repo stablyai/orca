@@ -14,14 +14,14 @@ import type { AgentSessionRecordStore } from '../../../runtime/agent-session/rec
 import {
   agentSessionLeasePossiblyWriting,
   listStructuredProviderSessionOwnership
-} from '../../../native-chat/agent-session-wire/structured-provider-session-ownership'
-import { agentHookServer } from '../../../agent-hooks/server'
+} from '../../../native-chat/agent-session-wire/host/structured-provider-session-ownership'
+import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import {
   keysMayMatch,
   terminalConversationKey
-} from '../../../native-chat/structured-conversation-key'
+} from '../../../native-chat/conversation-adoption/structured-conversation-key'
 
 export type ResumeSpawnArgs = {
   connectionId?: string | null

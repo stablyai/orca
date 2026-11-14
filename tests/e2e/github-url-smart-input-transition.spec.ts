@@ -1,6 +1,6 @@
 import { openSidebarWorkspaceComposer } from './helpers/sidebar-project-dialog'
 import type { ElectronApplication, Locator, Page } from '@stablyai/playwright-test'
-import type { GitHubWorkItem } from '../../src/shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../src/shared/github/work-items/work-item-types'
 import type { GitLabWorkItem } from '../../src/shared/gitlab-types'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
@@ -230,8 +230,8 @@ async function installHeldGitLabLookup(
         gh: { installed: true, authenticated: true },
         glab: { installed: true, authenticated: true }
       }))
-      ipcMain.removeHandler('gitlab:listMRs')
-      ipcMain.handle('gitlab:listMRs', () => ({
+      ipcMain.removeHandler('gitlab:listWorkItems')
+      ipcMain.handle('gitlab:listWorkItems', () => ({
         items: [wrongItem],
         page: 1,
         perPage: 12,

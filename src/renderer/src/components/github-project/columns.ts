@@ -1,6 +1,9 @@
 import { translate } from '@/i18n/i18n'
 // Store per-device visibility locally without modifying GitHub’s field definition or syncing cosmetic settings.
-import type { GitHubProjectField, GitHubProjectView } from '../../../../shared/github/project-types'
+import type {
+  GitHubProjectField,
+  GitHubProjectView
+} from '../../../../shared/github/projects/project-types'
 
 export const TYPE_FIELD_ID = '__type__'
 export const TYPE_FIELD_DATA_TYPE = '__TYPE__'

@@ -3,6 +3,7 @@
 import type { Nodes, Root } from 'mdast'
 import type { Extension as FromMarkdownExtension } from 'mdast-util-from-markdown'
 import type { VFile } from 'vfile'
+import { isDisplayMathOpener } from '../../../../shared/markdown-math-rules'
 
 declare module 'vfile' {
   // oxlint-disable-next-line typescript/consistent-type-definitions -- Declaration merging extends upstream file metadata.
@@ -64,7 +65,7 @@ export const chatMathFromMarkdown: FromMarkdownExtension = {
         hChildren: [{ type: 'text', value: node.value }],
         mathSource: opener + value + (closed ? closer : ''),
         mathComplete: closed,
-        mathDisplay: opener !== '$' && opener !== '\\('
+        mathDisplay: isDisplayMathOpener(opener)
       }
       this.exit(token)
     }

@@ -62,6 +62,7 @@ async function runUpdate(options: {
   repositoryMoved?: boolean
   dev?: boolean
   disabledDuringInstall?: boolean
+  enableIfData?: boolean
 }) {
   const previous = discovered(options.before, 'sha-old', options.dev)
   const next = discovered(options.after, 'sha-new')
@@ -93,7 +94,8 @@ async function runUpdate(options: {
       }
       return installed()
     },
-    approve
+    approve,
+    ...(options.enableIfData ? { enableIfData: {} } : {})
   })
   return { outcome, approve, consents, next }
 

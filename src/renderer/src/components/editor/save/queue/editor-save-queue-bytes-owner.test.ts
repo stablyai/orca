@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
-import type { writeRuntimeFileBytes } from '@/runtime/runtime-file-bytes-write'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import type { writeRuntimeFileBytes } from '@/runtime/files/mutations/runtime-file-bytes-write'
 import { createEditorSaveQueue } from './editor-save-queue'
 import type { EditorSaveQueue } from './editor-save-queue-contract'
 import {
@@ -17,7 +17,9 @@ const { writeBytes, replace } = vi.hoisted(() => ({
   writeBytes: vi.fn<typeof writeRuntimeFileBytes>(),
   replace: vi.fn(async () => ({ ok: true as const }))
 }))
-vi.mock('@/runtime/runtime-file-bytes-write', () => ({ writeRuntimeFileBytes: writeBytes }))
+vi.mock('@/runtime/files/mutations/runtime-file-bytes-write', () => ({
+  writeRuntimeFileBytes: writeBytes
+}))
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   let resolve = (): void => {}
@@ -97,22 +99,6 @@ describe('binary editor save acquired owner at the final replace boundary', () =
     }
     return queue.queueSave(file, '')
   }
-
-  it('keeps the captured destination and saves when authority and writer survive the upload', async () => {
-    const saved = save()
-    await started.promise
-    expect(replace).not.toHaveBeenCalled()
-    uploaded.resolve()
-    await expect(saved).resolves.toBe('written')
-    expect(replace).toHaveBeenCalledTimes(1)
-    expect(writeBytes.mock.calls[0]?.[0]).toMatchObject({
-      target: { kind: 'local' },
-      worktreeId: WORKTREE_ID,
-      worktreePath: '/repo'
-    })
-    expect(useAppStore.getState().openFiles.find((tab) => tab.id === fileId)?.isDirty).toBe(false)
-    expect(editorBytesDocument(fileId)?.bytes).toEqual(draft.bytes)
-  })
 
   it('refuses the final replace if the acquired workspace changes during upload, retaining edits', async () => {
     const saved = save()

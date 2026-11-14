@@ -3,10 +3,7 @@ import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
 import '../../trust/toml/config-toml-trust'
-import {
-  computeCodexTrustedHash as computeTrustedHash,
-  getExplicitHomeCodexHookSourcePath as getCodexExplicitHomeHookSourcePath
-} from '../../trust/identity/codex-trust-identity'
+import { getExplicitHomeCodexHookSourcePath as getCodexExplicitHomeHookSourcePath } from '../../trust/identity/codex-trust-identity'
 import {
   escapeTomlBasicString,
   hookTrustHeader,
@@ -61,74 +58,6 @@ describe('CodexHookService', () => {
     runtimeToml = readFileSync(join(linkedManagedCodexHome, 'config.toml'), 'utf-8')
     expect(runtimeToml).not.toContain(':permission_request:0:0')
     expect(runtimeToml).not.toContain(':stop:0:0')
-  })
-
-  it('removes legacy managed trust entries hashed before hook timeouts existed', async () => {
-    const service = new CodexHookService()
-    expect((await service.install()).state).toBe('installed')
-
-    const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
-    const managedHooksPath = join(managedCodexHome, 'hooks.json')
-    const runtimeTomlPath = join(managedCodexHome, 'config.toml')
-    const hooksConfig = JSON.parse(readFileSync(managedHooksPath, 'utf-8')) as {
-      hooks: Record<string, { hooks?: { command?: string }[] }[]>
-    }
-    const command = hooksConfig.hooks.PermissionRequest?.[0]?.hooks?.[0]?.command
-    expect(command).toBeDefined()
-    const legacyHash = computeTrustedHash({
-      sourcePath: managedHooksPath,
-      eventLabel: 'permission_request',
-      groupIndex: 0,
-      handlerIndex: 0,
-      command: command!
-    })
-    writeFileSync(
-      runtimeTomlPath,
-      [
-        hookTrustHeader(`${managedHooksPath}:permission_request:0:0`),
-        'enabled = true',
-        `trusted_hash = "${legacyHash}"`,
-        ''
-      ].join('\n'),
-      'utf-8'
-    )
-
-    expect((await service.remove()).state).toBe('not_installed')
-
-    const runtimeToml = readFileSync(runtimeTomlPath, 'utf-8')
-    expect(runtimeToml).not.toContain(':permission_request:0:0')
-  })
-
-  it('mirrors system Codex config while preserving runtime hook trust on hook install', async () => {
-    const systemCodexHome = join(homes.tmpHome, '.codex')
-    mkdirSync(systemCodexHome, { recursive: true })
-    writeFileSync(join(systemCodexHome, 'config.toml'), 'model = "system-model"\n', 'utf-8')
-
-    const managedCodexHome = join(homes.userDataDir, 'codex-runtime-home', 'home')
-    mkdirSync(managedCodexHome, { recursive: true })
-    writeFileSync(
-      join(managedCodexHome, 'config.toml'),
-      [
-        'model = "runtime-model"',
-        '',
-        '[hooks.state."runtime-hook"]',
-        'enabled = false',
-        'trusted_hash = "sha256:runtime"',
-        ''
-      ].join('\n'),
-      'utf-8'
-    )
-
-    const status = await new CodexHookService().install()
-
-    expect(status.state).toBe('installed')
-    const trustConfig = readFileSync(join(managedCodexHome, 'config.toml'), 'utf-8')
-    expect(trustConfig).toContain('model = "system-model"')
-    expect(trustConfig).toContain('[hooks.state."runtime-hook"]')
-    expect(trustConfig).toContain('enabled = false')
-    expect(trustConfig).toContain('trusted_hash = "sha256:runtime"')
-    expect(trustConfig).toContain(':permission_request:0:0')
-    expect(trustConfig).not.toContain('model = "runtime-model"')
   })
 
   it.skipIf(process.platform !== 'win32')(

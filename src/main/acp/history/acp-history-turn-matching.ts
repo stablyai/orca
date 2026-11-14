@@ -73,7 +73,8 @@ export function matchAcpHistoryTurns(
   candidates: readonly AcpHistoryCandidate[],
   importedAt: number | null,
   requests: ReadonlySet<string>,
-  check: () => void
+  check: () => void,
+  covered?: ReadonlySet<string>
 ) {
   const natives = acpNativeTurns(scope, journal)
   const nativeIndex = new Map(natives.map((native, index) => [native.itemId, index]))
@@ -97,6 +98,10 @@ export function matchAcpHistoryTurns(
   const read = (key: string) => journal.items.get(key) ?? null
   for (const { source, items } of candidates) {
     check()
+    if (covered?.has(source.turn)) {
+      kind.set(source.turn, 'adopted')
+      continue
+    }
     const owners = new Set<number>()
     let heldTurn: AgentJournalRenderItem | undefined
     for (const candidate of items) {

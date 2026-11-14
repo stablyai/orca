@@ -1,4 +1,4 @@
-import type { HttpLinkAction } from '@/lib/http-link-destinations'
+import type { HttpLinkAction } from '@/lib/browser/navigation/http-link-destinations'
 
 export type LinkActionKind = 'url' | 'file' | 'workspace' | 'terminal' | 'task'
 

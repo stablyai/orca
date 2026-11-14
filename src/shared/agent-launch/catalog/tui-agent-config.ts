@@ -166,6 +166,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     promptInjectionMode: 'flag-prompt-interactive',
     // Antigravity trust is exact-path, so every child workspace can show a menu that consumes paste; pre-write trust (agent-trust-presets.ts).
     preflightTrust: 'antigravity',
+    // The shell's own 2004h armed the quiet window, so a slow agy start got the paste in cooked mode (#18088).
+    draftPasteReadySignal: 'antigravity-composer-prompt',
+    draftPasteReadyTimeoutMs: 20_000,
     // agy 1.2.x expands collapsed multiline pastes over seconds; byte ingest finishing does not prove submit readiness.
     submitLineSettleMsPerLine: 45
   },
@@ -279,7 +282,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Why: `--prompt` exits on completion (kills the hosted session); `-i/--interactive` keeps it interactive.
     promptInjectionMode: 'flag-interactive',
     // Why: first-launch trust menu swallows the bracketed paste; pre-write trust so it skips (see agent-trust-presets.ts).
-    preflightTrust: 'copilot'
+    preflightTrust: 'copilot',
+    draftPasteReadySignal: 'copilot-composer-prompt'
   },
   grok: {
     detectCmd: 'grok',

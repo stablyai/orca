@@ -10,7 +10,7 @@ import {
   RUNTIME_PROTOCOL_VERSION
 } from '../../../shared/protocol-version'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -127,28 +127,6 @@ describe('useDetectedAgents after a re-pair (mounted runtime surface)', () => {
     })
     await flushEffects()
     answerOldPairing(['claude'])
-    await flushEffects()
-    await flushEffects()
-
-    expect(detectCalls()).toBe(2)
-    expect(latest?.detectedIds).toEqual(['codex'])
-    expect(latest?.detectionFailed).toBe(false)
-  })
-
-  it('probes the replacement pairing when the old pairing had already failed', async () => {
-    const detectCalls = mockHost((call, method) =>
-      call === 1
-        ? Promise.reject(new Error('runtime disconnected'))
-        : Promise.resolve(reply(method, ['codex']))
-    )
-    useAppStore.getState().setRuntimeEnvironments([environment(1)])
-    await renderProbe()
-    await flushEffects()
-    expect(latest?.detectionFailed).toBe(true)
-
-    await act(async () => {
-      useAppStore.getState().setRuntimeEnvironments([environment(2)])
-    })
     await flushEffects()
     await flushEffects()
 

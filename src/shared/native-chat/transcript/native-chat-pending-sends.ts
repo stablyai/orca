@@ -1,5 +1,6 @@
 import { nativeChatContinuationSendText } from './native-chat-continuation-send'
-import type { NativeChatMessage } from '../native-chat-types'
+import { isImageRefBlock, type NativeChatMessage } from '../native-chat-types'
+import { normalizedNativeChatUserMessageText } from './native-chat-image-transcript-markers'
 import {
   advancedNativeChatUserContentCounts,
   advancedNativeChatUserRows,
@@ -9,6 +10,7 @@ import {
   nativeChatPendingMatchKey,
   nativeChatPendingMatchingAfter,
   nativeChatPendingOccurrence,
+  normalizeNativeChatPendingText,
   selectPendingIndicesRepresentedByUserRows,
   type NativeChatGluedUserRow,
   type NativeChatUserRow
@@ -21,6 +23,7 @@ export type NativeChatPendingSend = {
   id: string
   /** Definite send outcome; absent while the send is simply awaiting its transcript row. */
   delivery?: 'unconfirmed' | 'rejected'
+  recovery?: true
   /** When a write's acknowledgment was lost, so a remount keeps the original hold deadline. */
   writeUnconfirmedAt?: number
   text: string
@@ -39,6 +42,8 @@ export type NativeChatPendingSend = {
   matchingOccurrence?: number
   /** Shared time boundary when that message boundary is unavailable. */
   matchingAfterTimestamp?: number
+  /** Pathless image rows already claimed by pruned sends, so this send cannot reclaim them. */
+  claimedImageRowIds?: readonly string[]
 }
 
 function messagesAfterPendingBoundary(
@@ -131,6 +136,52 @@ function gluedCandidateRows(
   })
 }
 
+// Pathless image rows (Claude queued prompts) cannot name their send, so each is claimed once, oldest send first.
+// Failed or uncertain writes never claim one, so another send's image cannot hide them.
+function claimPathlessImageRow(
+  entry: NativeChatPendingSend,
+  allMessages: readonly NativeChatMessage[],
+  claimed: Set<string>,
+  advancedOnly: boolean
+): boolean {
+  const count = entry.imagePaths?.filter(Boolean).length ?? 0
+  if (
+    count === 0 ||
+    // Only a real row boundary or a proven-empty session; client-clock boundaries could bind old images.
+    (typeof entry.afterMessageId !== 'string' && !entry.afterEmptyTranscriptSessionId) ||
+    entry.delivery !== undefined ||
+    entry.writeUnconfirmedAt !== undefined ||
+    normalizeNativeChatPendingText(entry.text)
+  ) {
+    return false
+  }
+  const messages = messagesAfterPendingBoundary(allMessages, entry)
+  const lastNonUser = messages.findLastIndex((message) => message.role !== 'user')
+  const row = messages.find((message, index) => {
+    if (
+      message.role !== 'user' ||
+      claimed.has(message.id) ||
+      (advancedOnly && index > lastNonUser)
+    ) {
+      return false
+    }
+    const images = message.blocks.filter(isImageRefBlock)
+    return (
+      images.length === count &&
+      images.every((image) => !image.path) &&
+      !normalizedNativeChatUserMessageText(message)
+    )
+  })
+  if (row) {
+    claimed.add(row.id)
+  }
+  return Boolean(row)
+}
+
+function carriedImageRowClaims(pending: readonly NativeChatPendingSend[]): Set<string> {
+  return new Set(pending.flatMap((entry) => entry.claimedImageRowIds ?? []))
+}
+
 /** Keep echoes until a later non-user turn to avoid first-turn flashes during transient empty reads. */
 export function prunePendingSends<T extends NativeChatPendingSend>(
   pending: T[],
@@ -140,6 +191,8 @@ export function prunePendingSends<T extends NativeChatPendingSend>(
     return pending
   }
   const consumed = new Map<string, number>()
+  const claimedImageRows = carriedImageRowClaims(pending)
+  const carriedClaimCount = claimedImageRows.size
   const exactKeep = pending.map((entry) => {
     const contentKey = nativeChatPendingContentKey(entry)
     const key = nativeChatPendingMatchKey(entry)
@@ -151,7 +204,7 @@ export function prunePendingSends<T extends NativeChatPendingSend>(
     const used = consumed.get(key) ?? 0
     const occurrence = nativeChatPendingOccurrence(entry, used)
     consumed.set(key, Math.max(used, occurrence))
-    return occurrence > available
+    return occurrence > available && !claimPathlessImageRow(entry, messages, claimedImageRows, true)
   })
   // Lost Enter can glue sends into one transcript row; retire them after the assistant advances.
   const stillOpen = pending.filter((_, index) => exactKeep[index])
@@ -166,7 +219,15 @@ export function prunePendingSends<T extends NativeChatPendingSend>(
     const openIndex = stillOpen.indexOf(entry)
     return openIndex === -1 || !gluedRepresented.has(openIndex)
   })
-  return next.length === pending.length ? pending : next
+  if (next.length === pending.length) {
+    return pending
+  }
+  // Claims here retire their sends; hand them to the remaining image sends so none reuses the row.
+  return claimedImageRows.size === carriedClaimCount
+    ? next
+    : next.map((entry) =>
+        entry.imagePaths?.length ? { ...entry, claimedImageRowIds: [...claimedImageRows] } : entry
+      )
 }
 
 /** Sends whose transcript row has not landed yet; exact and glued matches both hide an echo. */
@@ -178,6 +239,7 @@ export function visibleNativeChatPendingSends<T extends NativeChatPendingSend>(
     return pending
   }
   const consumed = new Map<string, number>()
+  const claimedImageRows = carriedImageRowClaims(pending)
   const exactVisible = pending.map((entry) => {
     const contentKey = nativeChatPendingContentKey(entry)
     const key = nativeChatPendingMatchKey(entry)
@@ -189,7 +251,10 @@ export function visibleNativeChatPendingSends<T extends NativeChatPendingSend>(
     const used = consumed.get(key) ?? 0
     const occurrence = nativeChatPendingOccurrence(entry, used)
     consumed.set(key, Math.max(used, occurrence))
-    return occurrence > represented
+    return (
+      occurrence > represented &&
+      !claimPathlessImageRow(entry, existingMessages, claimedImageRows, false)
+    )
   })
   // Hide glued echoes once their user row exists, before assistant advancement permits pruning.
   const stillVisible = pending.filter((_, index) => exactVisible[index])

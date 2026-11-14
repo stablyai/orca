@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from 'vitest'
-import { structuredAgentSessionWorkingAtStop } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-working-at-teardown'
+import { structuredAgentSessionWorkingAtStop } from '../../../src/main/native-chat/agent-session-wire/termination/structured-agent-session-working-at-teardown'
 import {
   journal,
   NOW,
@@ -10,7 +10,7 @@ import {
   SESSION,
   TEARDOWN_CURRENT,
   turnItem
-} from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-restart-resume-test-harness'
+} from '../../../src/main/native-chat/agent-session-wire/recovery/testing/structured-agent-session-restart-resume-test-harness'
 import { AgentSessionRecoveryCapsule } from '../../../src/main/runtime/agent-session/records/agent-session-recovery-capsule'
 import { importReleaseCheckoutModule, materializeReleaseCheckout } from './release-checkout'
 import { prepareReleaseFixtures } from './release-fixture-setup'

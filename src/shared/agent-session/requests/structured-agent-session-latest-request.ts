@@ -17,9 +17,10 @@ import { classifyDispatchRejection } from './structured-agent-session-dispatch-r
 import { withoutNativeChatVisualDirectiveLines } from '../../native-chat/native-chat-visual-directive'
 import { isUnansweredStructuredAgentSessionDispatch } from './structured-agent-session-unanswered-dispatch'
 import {
+  commandTurnsOf,
   isStructuredAgentSessionCommandEntry,
   isStructuredAgentSessionCommandRow,
-  structuredAgentSessionCommandTurnItemIds
+  type AgentJournalBodyLookup
 } from '../structured-agent-session-command-entry'
 import type { NativeChatBlock } from '../../native-chat/native-chat-types'
 
@@ -52,10 +53,12 @@ export function isStructuredAgentSessionNonRequestRow(
 /** Skip accepted/unanswered sends and nonfailures (withdrawal/restart/close); null when no request has a verdict. */
 export function latestStructuredAgentSessionRequest(
   items: readonly AgentJournalRenderItem[],
-  submissions: readonly AgentJournalSubmission[]
+  submissions: readonly AgentJournalSubmission[],
+  /** With an indexed body read, only the turns this scan reaches are checked, not all history. */
+  bodyOf?: AgentJournalBodyLookup
 ): StructuredAgentSessionLatestRequest | null {
   const rejected = rejectedSubmissionsByItem(submissions)
-  const commandTurns = structuredAgentSessionCommandTurnItemIds(items)
+  const commandTurns = commandTurnsOf(items, bodyOf)
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
     // Commands retain the last real request’s verdict.
@@ -190,9 +193,10 @@ export function latestStructuredAgentSessionUserItem(
 
 /** Newest root-agent prose in the latest user turn; skip child/tool-only output and clear at the user boundary. */
 export function latestStructuredAgentSessionAssistantMessage(
-  items: readonly AgentJournalRenderItem[]
+  items: readonly AgentJournalRenderItem[],
+  bodyOf?: AgentJournalBodyLookup
 ): string {
-  const commandTurns = structuredAgentSessionCommandTurnItemIds(items)
+  const commandTurns = commandTurnsOf(items, bodyOf)
   for (let index = items.length - 1; index >= 0; index -= 1) {
     const item = items[index]
     const body = item?.body

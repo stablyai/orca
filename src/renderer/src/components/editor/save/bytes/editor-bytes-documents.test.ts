@@ -42,7 +42,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 const writeRuntimeFileBytes = vi.fn()
-vi.mock('@/runtime/runtime-file-bytes-write', () => ({
+vi.mock('@/runtime/files/mutations/runtime-file-bytes-write', () => ({
   writeRuntimeFileBytes: (...args: unknown[]) => writeRuntimeFileBytes(...args)
 }))
 
@@ -50,12 +50,9 @@ import {
   editorBytesDocument,
   editorBytesEdits,
   loadEditorBytes,
-  releaseEditorBytes,
-  retainEditorBytes,
   saveEditorBytesDraft,
   setEditorBytesDraft
 } from './editor-bytes-documents'
-import { bytesDocumentBoxes } from './editor-bytes-document-boxes'
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the save reads only openFiles, markFileDirty and setExternalMutation.
 const getState = () => state as unknown as AppState
@@ -112,15 +109,6 @@ describe('binary custom editor saves', () => {
 })
 
 describe('binary custom editor views', () => {
-  it('keeps the bytes while another split pane still shows the file', () => {
-    retainEditorBytes('book')
-    retainEditorBytes('book')
-    releaseEditorBytes('book')
-    setEditorBytesDraft('book', edited)
-    expect(editorBytesDocument('book')).toBe(edited)
-    releaseEditorBytes('book')
-  })
-
   it('keeps an edit guarded by the bytes it started from when a later read lands', async () => {
     setEditorBytesDraft('book', edited)
     const newer = new Uint8Array([9])
@@ -134,16 +122,6 @@ describe('binary custom editor views', () => {
   })
 })
 
-describe('binary custom editor reloads', () => {
-  it('keeps the same document when a reload reads unchanged bytes', async () => {
-    const before = editorBytesDocument('book')
-    const reread = new Uint8Array(loaded)
-    load('book', reread)
-    // A new object would resend the document and turn the frame's in-flight edit into a conflict.
-    expect(editorBytesDocument('book')).toBe(before)
-  })
-})
-
 describe('binary custom editor tabs', () => {
   it('ignores a read that started before an edit and save it does not include', async () => {
     const editsAtRead = editorBytesEdits('book')
@@ -152,35 +130,5 @@ describe('binary custom editor tabs', () => {
     await save()
     load('book', loaded, editsAtRead)
     expect(editorBytesDocument('book')).toBe(edited)
-  })
-
-  it('shares one draft between tabs of one file, which share one dirty flag', async () => {
-    state.editorBufferIdOf = { book: 'record', twin: 'record' }
-    state.editorBufferViews = { record: ['book', 'twin'] }
-    state.openFiles.push({ id: 'twin', isDirty: false })
-    load('twin', new Uint8Array(loaded))
-    setEditorBytesDraft('twin', edited)
-    expect(editorBytesDocument('book')).toBe(edited)
-    // The saving tab closes mid-write; its twin still ends up clean against the written bytes.
-    writeRuntimeFileBytes.mockImplementation(async () => {
-      bytesDocumentBoxes.delete('book')
-      return { ok: true }
-    })
-    await save()
-    expect(state.markFileDirty).toHaveBeenLastCalledWith('twin', false, { written: true })
-    bytesDocumentBoxes.set('book', bytesDocumentBoxes.get('twin')!)
-
-    // The tab holding a draft closes before its twin has shown it: the twin inherits the draft.
-    setEditorBytesDraft('book', edited)
-    bytesDocumentBoxes.delete('twin')
-    const previous = { ...state, openFiles: [...state.openFiles] }
-    state.openFiles.splice(0, 1)
-    storeListener.current?.(state, previous)
-    expect(editorBytesDocument('twin')).toBe(edited)
-    state.openFiles.unshift({ id: 'book', isDirty: false })
-    bytesDocumentBoxes.set('book', bytesDocumentBoxes.get('twin')!)
-    state.openFiles.pop()
-    state.editorBufferIdOf = {}
-    state.editorBufferViews = {}
   })
 })

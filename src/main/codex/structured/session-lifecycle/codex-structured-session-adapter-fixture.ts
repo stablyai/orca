@@ -1,8 +1,8 @@
 import type {
   StructuredAgentSessionAcquireInput,
   StructuredAgentSessionOptionsReportedEvent
-} from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import type { StructuredAgentSessionProviderOpenResult } from '../../../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
+} from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import type { StructuredAgentSessionProviderOpenResult } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionJournalIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type {
@@ -21,7 +21,7 @@ import type {
 } from './codex-structured-session-state'
 
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { withObservedProviderExit } from '../../../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import { withObservedProviderExit } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 
 const startLinks = new WeakMap<
   CodexStructuredSessionAdapter,

@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { OrcaRuntimeService, getDefaultWorkspaceSession } from '../orca-runtime-test-mocks.spec'
+import './runtime-test-module-registration.spec'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { electronMocks } from '../orca-runtime-test-mocks/setup.spec'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import {
@@ -8,7 +10,7 @@ import {
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession,
   store
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 function makeRecord(origin: SleepingAgentSessionRecord['origin']): SleepingAgentSessionRecord {
   return {

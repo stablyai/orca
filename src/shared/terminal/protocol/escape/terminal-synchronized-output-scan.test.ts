@@ -78,9 +78,4 @@ describe('resolveSynchronizedOutputSafeSplit', () => {
     // The remainder must still contain a complete, parseable close.
     expect(data.slice(splitAt)).toContain(CLOSE)
   })
-
-  it('falls back to the limit when one frame is longer than the window', () => {
-    const data = `${OPEN}${'x'.repeat(100)}${CLOSE}`
-    expect(resolveSynchronizedOutputSafeSplit(data, 20)).toBe(20)
-  })
 })

@@ -38,7 +38,16 @@ export type OrcaVmRecipe = {
   resume?: string
   destroy?: string
   destroyDisabled?: boolean
+  // Per-mode wall-clock limits; orca.yaml accepts one number for every mode or a per-mode map.
+  timeoutSeconds?: OrcaVmRecipeTimeoutSeconds
+  // Opt-in allowlist of Orca's environment variables the scripts receive (plus a safe base set).
+  // Omitted means scripts inherit the full environment.
+  passEnv?: string[]
 }
+
+export type OrcaVmRecipeLifecycleMode = 'create' | 'suspend' | 'resume' | 'destroy'
+
+export type OrcaVmRecipeTimeoutSeconds = Partial<Record<OrcaVmRecipeLifecycleMode, number>>
 
 export type OrcaVmRecipeDiagnostic = {
   index: number
@@ -61,6 +70,8 @@ export type RepoHookSettings = {
 export type PersistedTrustedOrcaHookEntry = {
   contentHash: string
   approvedAt: number
+  /** Earlier approvals, newest first, so switching between branches' scripts doesn't re-prompt. */
+  previousContentHashes?: string[]
 }
 
 export type PersistedTrustedOrcaHookRepo = {

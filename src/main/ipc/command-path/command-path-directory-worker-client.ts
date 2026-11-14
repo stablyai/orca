@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
-import { Worker } from 'node:worker_threads'
+import type { Worker } from 'node:worker_threads'
+import { spawnWorkerThread } from '../../worker-threads/worker-thread-spawn'
 import { LazyWorkerThreadHost } from '../../worker-threads/lazy-worker-thread-host'
 import type { WorkerThreadFactory } from '../../worker-threads/worker-thread-transport'
 import {
@@ -23,7 +24,7 @@ function createWorker(): Worker {
   if (!existsSync(workerPath)) {
     throw new Error(`Detection directory worker entry not found: ${workerPath}`)
   }
-  return new Worker(workerPath)
+  return spawnWorkerThread(workerPath)
 }
 
 /** fs.Dir can synchronously lstat unknown entry types, even during async iteration. */

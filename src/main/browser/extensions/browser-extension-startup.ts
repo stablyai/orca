@@ -10,14 +10,14 @@ import {
   isBrowserExtensionSupportEnabled,
   setBrowserExtensionSupportEnabled
 } from './browser-extension-support'
-import { browserSessionRegistry } from '../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
 import {
   attachBrowserExtensionsToProfileSession,
   detachBrowserExtensionsFromAllProfileSessions
 } from './profile-sessions/browser-extension-session-loader'
 import { notifyBrowserExtensionActionsChanged } from './actions/browser-extension-action-registry'
 import { registerBrowserExtensionNamespaces } from './register-browser-extension-namespaces'
-import { observeBrowserExtensionTabLifecycle } from './api/tabs-lifecycle'
+import { observeBrowserExtensionTabLifecycle } from './tabs-and-windows/browser-extension-tab-lifecycle'
 import { observeBrowserExtensionWebNavigation } from './api/web-navigation'
 import { observeBrowserExtensionCommands } from './api/commands'
 import { observeBrowserExtensionDnrContents } from './declarative-net-request/session/browser-extension-dnr-contents'
@@ -56,7 +56,7 @@ export function initializeBrowserExtensionSupport(options: {
 }
 
 /**
- * The experimental setting changed while Orca runs. Off unloads every profile's extensions and
+ * The extensions setting changed while Orca runs. Off unloads every profile's extensions and
  * keeps their data; on loads them into every open profile, as a launch would.
  */
 export function switchBrowserExtensionSupport(enabled: boolean): Promise<void> {

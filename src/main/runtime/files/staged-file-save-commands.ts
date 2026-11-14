@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import type {
   FileWriteDiskPrecondition,
   FileWriteResult
-} from '../../../shared/file-write-disk-precondition'
+} from '../../../shared/file-write/file-write-disk-precondition'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { resolveRuntimeAuthorizedPath } from './chat-scratch-file-root'
 import type { RuntimeFileCommandHost } from './file-command-host'

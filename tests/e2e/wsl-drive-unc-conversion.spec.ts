@@ -16,7 +16,7 @@ import {
   readPersistedProfileState
 } from './helpers/persisted-profile-state'
 import { waitForSessionReady } from './helpers/store'
-import { getHistorySessionDirName } from '../../src/main/daemon/history-paths'
+import { getHistorySessionDirName } from '../../src/main/daemon/history/storage/history-paths'
 import {
   listWslDriveUncConversions,
   writeWslDriveUncConversion

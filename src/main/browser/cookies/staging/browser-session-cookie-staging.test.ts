@@ -11,7 +11,7 @@ import { applyPendingBrowserCookieImports } from './browser-session-cookie-stagi
 import {
   loadBrowserSessionMeta,
   persistBrowserSessionMeta
-} from '../../sessions/browser-session-meta-store'
+} from '../../sessions/profiles/browser-session-meta-store'
 
 const defaultPartition = 'persist:orca-browser-default'
 const routePartition = `persist:orca-browser-v1-${'c'.repeat(64)}`

@@ -8,7 +8,7 @@ import type {
   ManagedRuntimeOperation
 } from '../../shared/managed-runtime-install'
 import type { MainHttpClient } from '../network/http-client'
-import { RevisionedState } from '../runtime/revisioned-state'
+import { RevisionedState } from '../runtime/events/revisioned-state'
 import {
   reclaimRuntimeReleases,
   resolveInstalledRuntimeRelease,

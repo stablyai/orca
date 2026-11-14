@@ -6,7 +6,7 @@ import type {
   BrowserPagePromptKind,
   BrowserPagePromptResponse,
   BrowserPagePromptResult
-} from '../../../../shared/browser-page-prompt'
+} from '../../../../shared/browser/prompts/browser-page-prompt'
 import { isBrowserPagePromptQuiet, quietBrowserPagePrompts } from './browser-page-prompt-quiet'
 
 export const BROWSER_PAGE_PROMPT_TIMEOUT_MS = 120_000

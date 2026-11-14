@@ -26,8 +26,8 @@ export default function LiveInputProbeRoute() {
   const [liveInputCapture, setLiveInputCapture] = useState('')
   const {
     clearPendingLiveInputCommit,
-    handleLiveInputAccessoryBytes,
     handleLiveInputChange,
+    handleLiveInputCompositionEnd,
     handleLiveInputKeyPress,
     handleLiveInputSubmit
   } = useTerminalLiveInputCommit({
@@ -43,7 +43,12 @@ export default function LiveInputProbeRoute() {
   const onSubmitEditing = useCallback(() => {
     void handleLiveInputSubmit()
   }, [handleLiveInputSubmit])
-  const bindLiveInputField = useTerminalTextFieldSubmitBinding(liveInputRef, onSubmitEditing)
+  const bindLiveInputField = useTerminalTextFieldSubmitBinding(
+    liveInputRef,
+    onSubmitEditing,
+    undefined,
+    handleLiveInputCompositionEnd
+  )
 
   // What use-mobile-session-startup.ts does on every session mount, in the same place.
   useEffect(() => {
@@ -52,25 +57,9 @@ export default function LiveInputProbeRoute() {
 
   useEffect(() => {
     globalThis.__orcaLiveInputProbe = {
-      type: (text) => {
-        handleLiveInputChange({ nativeEvent: { text } })
-      },
-      clear: () => {
-        clearPendingLiveInputCommit()
-      },
-      // What use-mobile-session-terminal-send-actions.ts does with the result: 'allow-raw' means
-      // the hook declined the input and the caller puts the bytes on the wire itself. Modelled
-      // here so the check can see a control sent twice, or not at all.
-      accessory: async (input) => {
-        const result = await handleLiveInputAccessoryBytes(input)
-        if (result.kind === 'allow-raw') {
-          await sendLiveTerminalInputRef.current(HANDLE, input.bytes)
-        }
-        return result
-      },
       sent: () => [...sentRef.current]
     }
-  }, [clearPendingLiveInputCommit, handleLiveInputAccessoryBytes, handleLiveInputChange])
+  }, [])
 
   return (
     <View testID="live-input-probe">

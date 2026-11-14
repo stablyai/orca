@@ -1,4 +1,5 @@
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import { recordBrowserInitializationReceipt } from './browser-initialization-presentation'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
 import {
   latestReceivedSessionTabsInventoryFrameByEnvironment,
   latestReceivedSessionTabsSnapshotByWorktree,
@@ -23,9 +24,9 @@ import {
   noteSessionTabsPublicationEpoch,
   recordReceivedWebSessionTabsEnvironmentFrame
 } from './publisher-identity-fences'
-import { hostSnapshotAffirmsWorktreeContents } from '../host-session-snapshot-authority'
-import { replayWebSessionClosesDueForSnapshot } from '../web-session-close-replay'
-import { appPairedTerminalTabCloseIntentStore } from '../paired-terminal-tab-close-intent-store'
+import { hostSnapshotAffirmsWorktreeContents } from './hydration/host-session-snapshot-authority'
+import { replayWebSessionClosesDueForSnapshot } from './closing/web-session-close-replay'
+import { appPairedTerminalTabCloseIntentStore } from './closing/paired-terminal-tab-close-intent-store'
 
 export function isSessionTabsListAllResult(value: unknown): value is SessionTabsListAllResult {
   return (
@@ -34,8 +35,6 @@ export function isSessionTabsListAllResult(value: unknown): value is SessionTabs
     Array.isArray((value as { snapshots?: unknown }).snapshots)
   )
 }
-
-export { sessionTabsFreshnessKey } from './state'
 
 export function advancesSessionTabsFreshness(
   snapshot: RuntimeMobileSessionTabsResult,
@@ -91,6 +90,7 @@ export function recordReceivedWebSessionTabsSnapshot(
   source: 'stream' | 'bootstrap' = 'stream'
 ): number {
   const frame = receivedFrame ?? nextReceivedSessionTabsFrame()
+  recordBrowserInitializationReceipt(environmentId, snapshot, frame)
   const key = sessionTabsFreshnessKey(environmentId, snapshot.worktree)
   const current = latestReceivedSessionTabsSnapshotByWorktree.get(key)
   // Bootstrap reserves before request; a later received stream makes its eventual response stale and unable to advance epoch history.

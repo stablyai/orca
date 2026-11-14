@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import type { Tab } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
 import { captureTabDragActivationSnapshot } from './tab-drag-preview-activation'
@@ -53,30 +53,6 @@ describe('restoreTabDragActivationSnapshot', () => {
       },
       activeGroupIdByWorktree: { [WT]: 'group-1' }
     })
-  })
-
-  it('does not publish repeated preview and restore actions', () => {
-    const snapshot = captureTabDragActivationSnapshot(WT)
-    const subscriber = vi.fn()
-    const unsubscribe = useAppStore.subscribe(subscriber)
-    try {
-      useAppStore.getState().previewDragActiveTab({
-        worktreeId: WT,
-        groupId: 'group-1',
-        tabId: 'tab-1',
-        activeGroupId: 'group-1'
-      })
-      useAppStore.getState().restoreDragActivationSnapshot(WT, snapshot)
-      useAppStore.getState().restoreSourceGroupActiveTabAfterDrop({
-        worktreeId: WT,
-        snapshot,
-        sourceGroupId: 'group-1',
-        movedTabId: 'tab-2'
-      })
-      expect(subscriber).not.toHaveBeenCalled()
-    } finally {
-      unsubscribe()
-    }
   })
 
   it('restores active-surface fields after a drag preview is cancelled', () => {

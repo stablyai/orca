@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
-import { isUnreadableError, writeSecureFile } from '../../shared/secure-file'
+import { isUnreadableError, writeSecureFile } from '../../shared/secure-storage/secure-file'
 import { isQualifiedPluginKey } from '../../shared/plugins/manifest/plugin-manifest'
 import {
   PLUGIN_STORAGE_KEY_LIMIT,

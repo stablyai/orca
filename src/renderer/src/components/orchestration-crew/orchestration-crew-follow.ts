@@ -3,7 +3,7 @@ import {
   getRuntimeEnvironmentRevision,
   onRuntimeEnvironmentRevisionsChanged,
   onRuntimeEnvironmentsRetired
-} from '@/runtime/runtime-environment-revision'
+} from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { SharedControlReconnectScheduler } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-reconnect'
 import {
   runtimeHostContactForEntry,

@@ -13,6 +13,8 @@ import os from 'node:os'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { test as base, expect } from './orca-app'
+import { waitForActiveWorktree, waitForSessionReady } from './store'
+import { buildFakeAgentCommandOverride } from './fake-agent-command-override'
 import { resolveCliCommand } from '../../../src/shared/node-cli-command-resolution'
 import { createStructuredAgentSessionId } from '../../../src/shared/agent-session/structured-agent-session-create'
 import {
@@ -106,4 +108,39 @@ export async function createChatOnHost(page: Page, worktreeId: string): Promise<
   )
   expect(reply, JSON.stringify(reply)).toMatchObject({ ok: true })
   return sessionId
+}
+
+/** Open a chat tab driven by the Claude stub and focus its composer. */
+export async function openStubChat(page: Page, claudeCommand: string) {
+  await waitForSessionReady(page)
+  const worktreeId = await waitForActiveWorktree(page)
+  await page.evaluate(async (command) => {
+    await window.__store?.getState().updateSettings({
+      nativeChatProviders: { claude: true, codex: true },
+      defaultTuiAgent: 'claude',
+      agentCmdOverrides: { claude: command }
+    })
+  }, buildFakeAgentCommandOverride(claudeCommand))
+  const sessionId = await createChatOnHost(page, worktreeId)
+  const readTabId = () =>
+    page.evaluate(
+      ({ worktreeId, sessionId }) =>
+        window.__store
+          ?.getState()
+          .unifiedTabsByWorktree[worktreeId]?.find((tab) => tab.entityId === sessionId)?.id,
+      { worktreeId, sessionId }
+    )
+  await expect.poll(readTabId, { timeout: 30_000 }).toBeTruthy()
+  const tab = page.locator(`[data-testid="sortable-tab"][data-tab-id="${await readTabId()}"]`)
+  await tab.click()
+  const chat = page.locator('[data-native-chat-root="true"]')
+  const composer = chat.getByRole('textbox')
+  await composer.click()
+  return {
+    tab,
+    composer,
+    send: chat.getByRole('button', { name: 'Send', exact: true }),
+    stop: chat.getByRole('button', { name: 'Stop the agent' }),
+    reply: chat.getByText('Stub reply.')
+  }
 }

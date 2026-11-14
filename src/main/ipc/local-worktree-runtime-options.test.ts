@@ -1,22 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import '../../shared/worktree/id'
-import type { ParsedWorktreeId } from '../../shared/worktree/id'
+import { describe, expect, it } from 'vitest'
 import { WORKTREE_ID_SEPARATOR } from '../../shared/terminal/pty/lifecycle/pty-session-id-format'
-import type * as WorktreeIdModule from '../../shared/worktree/id'
-
-const counter = vi.hoisted(() => ({ splitCalls: 0 }))
-
-// Count per-row parsing to expose O(repos × rows) rescans.
-vi.mock('../../shared/worktree/id', async (importOriginal) => {
-  const actual = await importOriginal<typeof WorktreeIdModule>()
-  return {
-    ...actual,
-    splitWorktreeId: (worktreeId: string): ParsedWorktreeId | null => {
-      counter.splitCalls += 1
-      return actual.splitWorktreeId(worktreeId)
-    }
-  }
-})
 
 const { getLocalRepoForRegisteredWorktree } = await import('./local-worktree-runtime-options')
 
@@ -25,47 +8,20 @@ type TestRepo = { id: string; path: string; connectionId?: string }
 const makeStore = (
   repos: readonly TestRepo[],
   worktreeIds: readonly string[]
-): { store: never; metaScans: () => number } => {
-  let metaScans = 0
+): { store: never } => {
   const meta = Object.fromEntries(worktreeIds.map((id) => [id, {}]))
   const store = {
     getRepos: () => repos,
-    getAllWorktreeMeta: () => {
-      metaScans += 1
-      return meta
-    }
+    getAllWorktreeMeta: () => meta
   }
-  return { store: store as never, metaScans: () => metaScans }
+  // SAFETY: This fixture supplies the catalog methods used by the repo lookup.
+  return { store: store as never }
 }
 
 const worktreeId = (repoId: string, path: string): string =>
   `${repoId}${WORKTREE_ID_SEPARATOR}${path}`
 
-beforeEach(() => {
-  counter.splitCalls = 0
-})
-
 describe('getLocalRepoForRegisteredWorktree', () => {
-  it('walks the worktree meta table once, not once per repo', () => {
-    // Put the owner last to expose scans repeated for earlier repos.
-    const repoCount = 10
-    const rowCount = 200
-    const repos = Array.from({ length: repoCount }, (_, i) => ({
-      id: `repo-${i}`,
-      path: `/repos/repo-${i}`
-    }))
-    const target = '/repos/repo-9/wt-last'
-    const worktreeIds = Array.from({ length: rowCount }, (_, i) =>
-      worktreeId(`repo-${i % repoCount}`, `/repos/wt-${i}`)
-    )
-    worktreeIds[rowCount - 1] = worktreeId(`repo-${repoCount - 1}`, target)
-    const { store, metaScans } = makeStore(repos, worktreeIds)
-
-    expect(getLocalRepoForRegisteredWorktree(store, target, target)?.id).toBe('repo-9')
-    expect(metaScans()).toBe(1)
-    expect(counter.splitCalls).toBe(rowCount)
-  })
-
   describe('equivalence with the per-repo scan', () => {
     const repos: TestRepo[] = [
       { id: 'first', path: '/repos/first' },

@@ -26,4 +26,25 @@ describe('nativeChatMessageCopyText', () => {
     )
     expect(nativeChatMessageCopyText({ role: 'user', blocks: [{ type: 'text', text }] })).toBe(text)
   })
+
+  it('omits sent [Image #N] markers from copied user messages while keeping code-quoted markers', () => {
+    expect(
+      nativeChatMessageCopyText({
+        role: 'user',
+        blocks: [
+          { type: 'text', text: '[Image #1] Compare `[Image #1]` with this' },
+          { type: 'image-ref', path: '/tmp/a.png' }
+        ]
+      })
+    ).toBe('Compare `[Image #1]` with this')
+    expect(
+      nativeChatMessageCopyText({
+        role: 'user',
+        blocks: [
+          { type: 'text', text: '[Image #1]' },
+          { type: 'image-ref', path: '/tmp/a.png' }
+        ]
+      })
+    ).toBe('')
+  })
 })

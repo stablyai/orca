@@ -36,7 +36,7 @@
     "parity": "Exact sessions, daily aggregates, and per-file projections in cold/changed phases across arms, excluding volatile stat values and additive generation/resume metadata.",
     "median": "Average of the middle two values for the ten samples; the temporary capture script's upper-middle summaries are retained separately.",
     "reproduction": [
-      "Use loadClaudeUsageBenchmarkScanner and measureClaudeUsageBenchmarkScan from config/scripts/claude-usage-benchmark-scanner.mjs in the combined Claude/shared-reader worktree.",
+      "Use loadClaudeUsageBenchmarkScanner and measureClaudeUsageBenchmarkScan from config/scripts/performance/claude-usage/claude-usage-benchmark-scanner.mjs in the combined Claude/shared-reader worktree.",
       "Load only the four baselineModules from baselineCommit into the before source-overlay map; load every other module once into a shared worktree-source map used by both arms.",
       "Create an isolated agent home containing 1,000 JSONL files, one keyed assistant usage row per file, with input_tokens=100 and output_tokens=10.",
       "Measure a cold scan, an unchanged scan from its cache, then append the same keyed row with input_tokens=200 and measure the changed scan. Exclude batched fixture writes from timers.",
@@ -47,7 +47,7 @@
   "captureScriptSha256": "d4bac98e4bd15f0ba4760646b9c63cd69160b4f5df7d09ae7b22b101ea0fc9c5",
   "captureScriptStatus": "Local measurement adapter reused the existing loader; no separate benchmark framework or production tool was added.",
   "toolingSha256": {
-    "config/scripts/claude-usage-benchmark-scanner.mjs": "ffb6e5defb921f2ab35726a716f5e731dec439ead53cc2f3a192c7bef4df45d3",
+    "config/scripts/performance/claude-usage/claude-usage-benchmark-scanner.mjs": "ffb6e5defb921f2ab35726a716f5e731dec439ead53cc2f3a192c7bef4df45d3",
     "config/scripts/counterbalanced-benchmark-schedule.mjs": "bc35b40e954fa7ddec0225ed375bd3b113c2e05b8554bc50734d14f89987294d"
   },
   "historyBytes": 307780,

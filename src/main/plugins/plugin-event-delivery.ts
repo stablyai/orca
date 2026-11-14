@@ -1,13 +1,13 @@
 import type { PluginEventName } from '../../shared/plugins/manifest/plugin-manifest'
 import type { PluginCapabilityKind } from '../../shared/plugins/capabilities/plugin-capabilities'
-import { PLUGIN_EVENT_CAPABILITY } from '../../shared/plugins/contributions/plugin-event-contribution'
+import { pluginEventCapabilityGranted } from '../../shared/plugins/contributions/plugin-event-contribution'
 import { PLUGIN_EVENT_PAYLOAD_SCHEMAS } from '../../shared/plugins/events/plugin-events'
 import {
   isInvalidDiscoveredPlugin,
   type DiscoveredPlugin,
   type ValidDiscoveredPlugin
 } from './plugin-discovery'
-import type { PluginWorkerHandle } from './workers/plugin-host-process'
+import type { PluginWorkerHandle } from './workers/parent-process/plugin-host-process-types'
 
 /** Whether an approved worker subscribes to `event` (open panels are asked separately). */
 export function pluginWorkersWantEvent(
@@ -57,7 +57,7 @@ export function pluginEventSkipReason(
   if (!plugin.manifest.contributes.events.some((subscription) => subscription.on === event)) {
     return 'not-subscribed'
   }
-  if (!context.grantedCapabilities(plugin.pluginKey)?.includes(PLUGIN_EVENT_CAPABILITY[event])) {
+  if (!pluginEventCapabilityGranted(event, context.grantedCapabilities(plugin.pluginKey))) {
     return 'not-granted'
   }
   return null

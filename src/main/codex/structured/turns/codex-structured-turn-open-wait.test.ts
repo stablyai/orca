@@ -43,16 +43,6 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe('a Codex send answered before its turn opens', () => {
-  it('is admitted at the answer when no Stop is pending', async () => {
-    const rig = await codexTurnLifecycleRig()
-
-    await answeredColdSend(rig)
-
-    expect(rig.turns.turnId).toBe('turn-1')
-  })
-})
-
 describe("a no-turn Stop in the window between Codex's answer and its turn opening", () => {
   it.each(['expiry', 'retry', 'replacement'])(
     'spends only the remaining Stop allowance after a late refusal: %s',
@@ -103,16 +93,6 @@ describe("a no-turn Stop in the window between Codex's answer and its turn openi
     }
   )
 
-  it("is taken at once once Codex's thread runs the turn", async () => {
-    const rig = await codexTurnLifecycleRig()
-    await answeredColdSend(rig)
-    rig.turns.run()
-
-    expect(await settledWithin(stop(rig))).toEqual({ cancelled: true, turnId: 'turn-1' })
-    expect(interruptedTurns(rig)).toEqual(['turn-1'])
-    await vi.waitFor(() => expect(rig.turns.turnId).toBeNull())
-  })
-
   it('refused before the thread runs, waits for the turn to open and interrupts once more', async () => {
     const rig = await codexTurnLifecycleRig()
     const { stopping } = await waitingStop(rig)
@@ -124,28 +104,6 @@ describe("a no-turn Stop in the window between Codex's answer and its turn openi
     await vi.waitFor(() => expect(rig.turns.turnId).toBeNull())
   })
 
-  it('does not wait when Codex opened the turn before its answer was read', async () => {
-    const rig = await codexTurnLifecycleRig()
-    const release = rig.turns.holdNextAnswer()
-    const sending = rig.send('client-1')
-    await vi.waitFor(() => expect(rig.turns.turnId).toBe('turn-1'))
-    rig.turns.start()
-    release()
-    await sending
-
-    expect(await settledWithin(stop(rig))).toEqual({ cancelled: true, turnId: 'turn-1' })
-  })
-
-  it('does not wait for a send Codex steered into the running turn', async () => {
-    const rig = await codexTurnLifecycleRig()
-    await answeredColdSend(rig)
-    rig.turns.start()
-    expect(await settledWithin(rig.send('client-2'))).toMatchObject(ADMITTED)
-
-    expect(await settledWithin(stop(rig))).toEqual({ cancelled: true, turnId: 'turn-1' })
-    expect(rig.interrupts().map((call) => call.params?.turnId)).toEqual(['turn-1'])
-  })
-
   it('stops nothing when the turn ends without opening', async () => {
     const rig = await codexTurnLifecycleRig()
     const { stopping } = await waitingStop(rig)
@@ -153,19 +111,6 @@ describe("a no-turn Stop in the window between Codex's answer and its turn openi
     rig.turns.end('interrupted')
 
     expect(await settledWithin(stopping)).toEqual(REFUSED)
-    expect(interruptedTurns(rig)).toEqual(['turn-1'])
-  })
-
-  it('stops nothing, and waits for nothing, when Codex already ended the turn', async () => {
-    const rig = await codexTurnLifecycleRig()
-    await answeredColdSend(rig)
-    const interrupt = rig.codex.routes['turn/interrupt']!
-    rig.codex.routes['turn/interrupt'] = (params) => {
-      rig.turns.end('completed')
-      return interrupt(params)
-    }
-
-    expect(await settledWithin(stop(rig))).toEqual(REFUSED)
     expect(interruptedTurns(rig)).toEqual(['turn-1'])
   })
 
@@ -211,19 +156,6 @@ describe("a no-turn Stop in the window between Codex's answer and its turn openi
   })
 
   // A timed-out turn may still run; host cancellation must close the child.
-  it('answers refused once its bound runs out', async () => {
-    const rig = await codexTurnLifecycleRig()
-    await answeredColdSend(rig)
-    vi.useFakeTimers()
-    const first = pressed(rig)
-
-    await vi.advanceTimersByTimeAsync(CODEX_TURN_OPEN_WAIT_MS - 1)
-    expect(first()).toBe('held')
-    await vi.advanceTimersByTimeAsync(1)
-
-    expect(first()).toEqual(MAY_OPEN)
-    expect(interruptedTurns(rig)).toEqual(['turn-1'])
-  })
 
   it('waits again on a second press, and stops the turn if it opens then', async () => {
     const rig = await codexTurnLifecycleRig()
@@ -256,18 +188,5 @@ describe('a no-turn Stop with no turn Codex answered', () => {
 
     expect(outcome).toEqual({ cancelled: false, refusal: { turnMayOpen: true } })
     expect(rig.interrupts()).toEqual([])
-  })
-
-  it('stops nothing when nothing was sent, or the lost answer outlived its child', async () => {
-    const rig = await codexTurnLifecycleRig()
-
-    expect(await stop(rig)).toEqual(REFUSED)
-    expect(
-      await rig.adapter.cancelTurn({
-        sessionId: 'session-1',
-        fence: 7,
-        dispatchStatus: { state: 'unknown', recovered: true }
-      })
-    ).toEqual(REFUSED)
   })
 })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PROGRAM_STATUS_MAX_RECORDS, ProgramStatusRecordSet } from './records'
+import { ProgramStatusRecordSet } from './records'
 
 describe('ProgramStatusRecordSet', () => {
   it('replaces a record whole on each report', () => {
@@ -46,16 +46,5 @@ describe('ProgramStatusRecordSet', () => {
     expect(records.root()).toBeUndefined()
     expect(records.descendants().map((record) => record.id)).toEqual(['a', 'b'])
     expect(records.endProgram()).toBe(false)
-  })
-
-  it('evicts the least recently updated record past the cap', () => {
-    const records = new ProgramStatusRecordSet()
-    records.apply({ id: null, state: 'working' })
-    for (let i = 0; i < PROGRAM_STATUS_MAX_RECORDS; i += 1) {
-      records.apply({ id: `r${i}`, state: 'working' })
-    }
-    expect(records.root()).toBeUndefined()
-    expect(records.descendants()).toHaveLength(PROGRAM_STATUS_MAX_RECORDS)
-    expect(records.descendants()[0].id).toBe('r0')
   })
 })

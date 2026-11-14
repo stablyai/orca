@@ -2,14 +2,14 @@ import type {
   StructuredAgentAdapterContext,
   StructuredAgentRuntimeAdapter,
   StructuredAgentRuntimeRegistration
-} from '../runtime/structured-agent-runtime-registration-types'
+} from '../runtime/agent-session/installation/structured-agent-runtime-registration-types'
 import {
   composeStructuredLaunch,
   structuredAgentLaunchSources
-} from '../runtime/structured-agent-launch-composition'
+} from '../runtime/agent-session/launch/structured-agent-launch-composition'
 import { PI_RPC_AGENT } from './rpc-agent-definition'
-import { piRpcLaunchPart } from './rpc-launch-resolution'
-import { PiRpcSessionAdapter } from './rpc-session-adapter'
+import { piRpcLaunchPart } from './rpc/launch/rpc-launch-resolution'
+import { PiRpcSessionAdapter } from './rpc/rpc-session-adapter'
 import { PI_RPC_RUNTIME_METADATA } from './rpc-runtime-metadata'
 import { reviseAgentSessionProviderResumePoint } from '../runtime/agent-session/ownership/agent-session-provider-handle-transition'
 
@@ -21,7 +21,7 @@ function createPiRpcAdapter(context: StructuredAgentAdapterContext): StructuredA
       composeStructuredLaunch(
         PI_RPC_AGENT,
         structuredAgentLaunchSources(context),
-        piRpcLaunchPart({})
+        piRpcLaunchPart({ logger: deps.logger })
       ),
     ...(deps.openPiConnection ? { openConnection: deps.openPiConnection } : {}),
     ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),

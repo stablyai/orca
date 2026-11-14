@@ -2,7 +2,7 @@ import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { isEditorContentUnchanged } from '../model-lifetime/buffer-text/editor-content-dirty-state'
-import { getDiskBaselineSignature } from '../../../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../../../shared/file-write/disk-baseline-signature'
 import type { FileContent } from '../editor-panel-content-types'
 import {
   editorModelSiblingTabs,

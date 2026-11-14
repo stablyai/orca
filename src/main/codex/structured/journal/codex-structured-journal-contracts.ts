@@ -4,13 +4,13 @@ import type {
   CodexDispatchEchoes,
   CodexDispatchRequestOrigin
 } from '../turns/codex-structured-dispatch-echo'
-import type { AgentSessionDeltaCoalescerDeps } from '../../../native-chat/agent-session-wire/agent-session-delta-coalescer'
-import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { AgentSessionDeltaCoalescerDeps } from '../../../native-chat/agent-session-wire/publication/subscribers/agent-session-delta-coalescer'
+import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import type { CodexStructuredSessionEvent } from '../session-lifecycle/codex-structured-session-state'
 import type { CodexSubagentExecutions } from '../background-work/codex-subagent-executions'
 import type { CodexThreadItem } from '../items/codex-thread-item-identity'
 import type { CodexHelperName } from '../items/codex-collab-agent-item-translation'
-import type { StructuredAgentSessionCommandRun } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionCommandRun } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 
 export type CodexActiveJournalItem = {
   threadId: string
@@ -43,7 +43,8 @@ export type CodexJournalTranslatorDeps = {
   /** Use the journal row identity so replay computes the same settlement key. */
   onUserMessageEcho?: (clientMessageId: string, identity: AgentJournalItemIdentity) => void
   primaryThreadId?: () => string | null
-  /** Submission origin for a dispatch still armed. */
+  /** Submission origin for one exact client message still awaiting its echo. */
+  dispatchEchoes?: CodexDispatchEchoes
   dispatchRequestOrigin?: (clientMessageId: string) => CodexDispatchRequestOrigin | null
   /** Armed send whose turn/start reply named this turn. */
   dispatchTurnOpener?: CodexDispatchEchoes['turnOpener']
@@ -62,12 +63,16 @@ export type CodexJournalTranslator = {
   /** The provider turn a Stop naming `turnId` interrupts; undefined while a command has none. */
   commandProviderTurnId: (turnId: string) => string | undefined
   cancelPrompt: (journalItemId: string) => CodexJournalTranslationAdmission
+  resolvePrompt: (journalItemId: string) => void
+  flush: () => void
+  dispose: () => void
+}
+
+export type CodexHistoryTranslator = {
   restoreThread: (
     threadId: string,
     thread: Record<string, unknown>
   ) => CodexJournalTranslationAdmission
-  resolvePrompt: (journalItemId: string) => void
-  flush: () => void
   dispose: () => void
 }
 

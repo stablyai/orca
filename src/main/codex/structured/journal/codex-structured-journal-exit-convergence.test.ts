@@ -13,16 +13,16 @@ import {
 import {
   closeTestJournalHostDatabase,
   createTrackedJournalOpener
-} from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+} from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store'
-import { createDeferredStructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { createDeferredStructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import {
   settleStructuredAgentSessionChildExit,
   type StructuredAgentSessionChildExitSession
-} from '../../../native-chat/agent-session-wire/structured-agent-session-child-exit'
-import type { StructuredAgentSessionEndedEvent } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { StructuredAgentSessionCurrentWork } from '../../../native-chat/agent-session-wire/structured-agent-session-current-work'
+} from '../../../native-chat/agent-session-wire/termination/structured-agent-session-child-exit'
+import type { StructuredAgentSessionEndedEvent } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { StructuredAgentSessionCurrentWork } from '../../../native-chat/agent-session-wire/observations/structured-agent-session-current-work'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
 import { handleCodexSessionExit } from '../session-lifecycle/codex-structured-session-close'
 import type {

@@ -3,7 +3,7 @@ import type { AgentDedicatedChoices } from '../choices/agent-launch-choices'
 
 export const TEXT_ACTION_DEFAULT_MODEL = '__text_action_default__'
 export type TextActionPickerCatalog = {
-  defaultLabel: string
+  defaultLabel?: string
   modelInArguments: boolean
   effortInArguments: boolean
   modelArgumentsUnrecognized: boolean

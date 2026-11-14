@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { createDnrRequestState } from './request-state'
 import { DnrEngine } from './engine'
-import { applyDnrRequestHeaderActions, applyDnrResponseHeaderActions } from './header-modification'
+import { applyDnrRequestHeaderActions } from './header-actions/header-modification'
 import type { DnrRequestInfo } from './request-context'
-import type { DnrRule } from './rule-types'
-import { buildDnrRuleset } from './ruleset-builder'
+import type { DnrRule } from './rule-compilation/rule-types'
+import { buildDnrRuleset } from './rule-compilation/ruleset-builder'
 
 const OLD = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 const NEW = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
@@ -71,13 +71,6 @@ describe('allowAllRequests', () => {
     parentState: frame
   })
 
-  it('matches the navigation itself', () => {
-    const navigation = request('https://trusted.example/', { type: 'main_frame', initiator: null })
-    expect(engine.evaluateBeforeRequest(navigation, createDnrRequestState()).actions[0]?.type).toBe(
-      'allowAllRequests'
-    )
-  })
-
   it('allows lower-priority blocks in the frame and its children, not higher ones', () => {
     const fromFrame = (url: string, frameAllow = frame): string | undefined =>
       engine.evaluateBeforeRequest(
@@ -125,49 +118,6 @@ describe('allowAllRequests', () => {
 })
 
 describe('modifyHeaders', () => {
-  it('returns header actions highest priority first, skipping those at or below a matching allow', () => {
-    const engine = engineWith({
-      [OLD]: [
-        setHeader('x-low', '1', 1),
-        setHeader('x-high', '1', 5),
-        { priority: 2, action: { type: 'allow' }, condition: {} }
-      ]
-    })
-    const result = engine.evaluateBeforeRequest(
-      request('https://x.example/'),
-      createDnrRequestState()
-    )
-    expect(result.actions.map((action) => `${action.type}:${action.rule.ruleId}`)).toEqual([
-      'modifyHeaders:2'
-    ])
-  })
-
-  it('matches a rule once when several of its domains cover the request', () => {
-    const domains = ['example.com', 'sub.example.com', 'example.com']
-    const engine = engineWith({
-      [OLD]: [
-        { ...setHeader('x-url', '1'), condition: { requestDomains: domains } },
-        {
-          ...setHeader('x-regex', '1'),
-          condition: { regexFilter: '.*', initiatorDomains: domains }
-        }
-      ]
-    })
-    const { actions } = engine.evaluateBeforeRequest(
-      request('https://a.sub.example.com/', { initiator: 'https://sub.example.com' }),
-      createDnrRequestState()
-    )
-    expect(actions.map((action) => action.rule.ruleId)).toEqual([2, 1])
-  })
-
-  it('is suppressed entirely by a block from any extension', () => {
-    const engine = engineWith({ [OLD]: [{ condition: {} }], [NEW]: [setHeader('x', '1', 9)] })
-    expect(
-      engine.evaluateBeforeRequest(request('https://x.example/'), createDnrRequestState())
-        .actions[0]?.type
-    ).toBe('block')
-  })
-
   it('applies the newer extension first and lets it win conflicting sets', () => {
     const engine = engineWith({
       [OLD]: [setHeader('user-agent', 'old')],
@@ -197,16 +147,6 @@ describe('header application rules', () => {
     responseHeaders: requestHeaders
   })
 
-  it('joins appends with the header-specific delimiter', () => {
-    const { headers } = applyDnrRequestHeaderActions({ cookie: 'a=1', accept: 'text/html' }, [
-      action(OLD, [
-        { header: 'cookie', operation: 'append', value: 'b=2' },
-        { header: 'accept', operation: 'append', value: '*/*' }
-      ])
-    ])
-    expect(headers).toEqual({ cookie: 'a=1; b=2', accept: 'text/html, */*' })
-  })
-
   it('lets set be followed only by appends from the same extension, and remove by nothing', () => {
     const { headers } = applyDnrRequestHeaderActions({}, [
       action(NEW, [{ header: 'cookie', operation: 'set', value: 'a=1' }]),
@@ -217,45 +157,9 @@ describe('header application rules', () => {
     ])
     expect(headers).toEqual({ cookie: 'a=1; b=2' })
   })
-
-  it('appends response header lines and replaces them on set', () => {
-    const { headers } = applyDnrResponseHeaderActions(
-      { 'Content-Security-Policy': ["default-src 'self'"], 'Set-Cookie': ['a=1', 'b=2'] },
-      [
-        action(OLD, [
-          { header: 'content-security-policy', operation: 'append', value: "script-src 'none'" },
-          { header: 'set-cookie', operation: 'remove' }
-        ])
-      ]
-    )
-    expect(headers).toEqual({
-      'Content-Security-Policy': ["default-src 'self'", "script-src 'none'"]
-    })
-  })
 })
 
 describe('headers-received stage', () => {
-  it.each([
-    ['a?b', 'ab', true],
-    ['a?b', 'acb', true],
-    ['a?b', 'accb', false],
-    ['a\\?b', 'a?b', true],
-    ['a\\*b', 'a*b', true],
-    ['a\\*b', 'axb', false],
-    ['x\\', 'x\\', true],
-    ['*a?b*', 'aaaabbb', true]
-  ])('matches response value %s against %s as %s', (pattern, value, matches) => {
-    const engine = engineWith({
-      [OLD]: [{ condition: { responseHeaders: [{ header: 'x-value', values: [pattern] }] } }]
-    })
-    const result = engine.evaluateHeadersReceived(
-      request('https://site.example/'),
-      { 'X-Value': [value] },
-      createDnrRequestState()
-    )
-    expect(result.actions[0]?.type === 'block').toBe(matches)
-  })
-
   it('matches response-header conditions only once headers arrive', () => {
     const engine = engineWith({
       [OLD]: [

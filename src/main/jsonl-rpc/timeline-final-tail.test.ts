@@ -9,9 +9,9 @@ import {
   NAMESPACE
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { providerTimelineSink } from '../native-chat/agent-session-timeline/provider-timeline-plan'
-import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import { evictStructuredAgentSession } from '../native-chat/agent-session-wire/structured-agent-session-eviction'
-import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import { evictStructuredAgentSession } from '../native-chat/agent-session-wire/termination/structured-agent-session-eviction'
+import { testEventSinkLogging } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import { JsonlRpcTimelineLane } from './timeline-lane'
 
 const cleanups: (() => void)[] = []

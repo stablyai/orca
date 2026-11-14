@@ -2,14 +2,14 @@ import type {
   BrowserCookieDeleteResult,
   BrowserCookieGetResult,
   BrowserCookieSetResult
-} from '../../shared/runtime-browser-contracts'
-import type { CommandHandler } from '../dispatch'
-import { printResult } from '../format'
+} from '../../shared/browser/runtime/runtime-browser-contracts'
+import type { CommandHandler } from '../dispatch/dispatch'
+import { printResult } from '../output/command-result-output'
 import {
   getOptionalStringFlag,
   getRequiredStringFlag,
   getRequiredStringFlagAllowingEmpty
-} from '../flags'
+} from '../arguments/flags'
 import { RuntimeClientError } from '../runtime/types'
 import { getBrowserCommandTarget } from './browser-command-target'
 
@@ -89,6 +89,8 @@ export const BROWSER_COOKIE_HANDLERS: Record<string, CommandHandler> = {
     }
     Object.assign(params, await getBrowserCommandTarget(flags, cwd, client))
     const result = await client.call<BrowserCookieDeleteResult>('browser.cookie.delete', params)
-    printResult(result, json, () => `Cookie "${name}" deleted`)
+    printResult(result, json, (v) =>
+      v.deleted === false ? `No cookie "${name}" found` : `Cookie "${name}" deleted`
+    )
   }
 }

@@ -5,7 +5,7 @@ import {
   getChromeExtensionOrigin,
   parseChromeExtensionUrl
 } from '../../../../shared/browser/extensions/browser-extension-url'
-import { isBackgroundLaunch } from '../../../window/foreground-activation-policy'
+import { isBackgroundLaunch } from '../../../window/activation/foreground-activation-policy'
 import { emitBrowserExtensionEvent } from '../api-runtime/browser-extension-api-host'
 import { resolveInsideExtensionDirectory } from '../installation/browser-extension-manifest'
 import {
@@ -14,7 +14,7 @@ import {
   registerBrowserExtensionNamespace,
   type BrowserExtensionCaller
 } from '../api-runtime/browser-extension-namespace-registry'
-import { noteBrowserExtensionUserGesture } from './permissions'
+import { noteBrowserExtensionUserGesture } from '../permissions/browser-extension-user-gesture'
 
 const optionsSchema = z
   .object({

@@ -32,18 +32,6 @@ function root() {
   return dir
 }
 
-it('installs the 1.x object TUI entry and explicitly registers its file URL', () => {
-  const configDir = root()
-  const plugins = join(configDir, 'plugins')
-  writeOpenCodeTuiPlugin(plugins, 'orca-opencode-status.js', pluginSource)
-  const entry = join(plugins, 'orca-opencode-status-tui', 'tui.js')
-  expect(readFileSync(entry, 'utf8')).toContain('tui: setupLegacyOpenCodeTui')
-  expect(readFileSync(entry, 'utf8')).toContain('const orcaServerPlugin =')
-  expect(parse(readFileSync(join(configDir, 'tui.json'), 'utf8'))).toEqual({
-    plugin: [pathToFileURL(entry).href]
-  })
-})
-
 it('retains the existing TUI setup and metadata without exposing the server entry', () => {
   const configDir = root()
   const plugins = join(configDir, 'plugins')

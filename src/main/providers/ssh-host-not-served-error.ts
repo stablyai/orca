@@ -9,10 +9,6 @@ export const SSH_WORKTREE_REMOVAL_NOT_SERVED_MESSAGE =
 export const SSH_GIT_RECONNECT_MESSAGE =
   'SSH Git provider is not available. Reconnect to this target and try again.'
 
-export function sshTargetNotConnectedMessage(connectionId: string): string {
-  return `SSH connection "${connectionId}" not found or not connected`
-}
-
 // Preserve Error: message through Electron IPC; a custom name would change renderer-visible errors.
 export class SshHostNotServedError extends Error {
   readonly code = 'ssh_host_not_served'

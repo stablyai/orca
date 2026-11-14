@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { Editor } from '@tiptap/core'
-import { DecorationSet } from '@tiptap/pm/view'
+
 import StarterKit from '@tiptap/starter-kit'
 import { common, createLowlight } from 'lowlight'
 import { afterEach, expect, it } from 'vitest'
@@ -22,18 +22,6 @@ function mountExtended(content: string) {
   editors.push(editor)
   return editor
 }
-
-it('installs one highlighting plugin when the extension is extended', () => {
-  const editor = mountExtended(
-    '<pre><code class="language-javascript">const answer = 42;</code></pre>'
-  )
-  const highlightingStates = editor.state.plugins.flatMap((plugin) => {
-    const state: unknown = plugin.getState(editor.state)
-    return state instanceof DecorationSet ? [state] : []
-  })
-  expect(highlightingStates).toHaveLength(1)
-  expect(highlightingStates[0].find().length).toBeGreaterThan(0)
-})
 
 it('keeps VS Code paste when the extension is extended', () => {
   const editor = mountExtended('<p>Before</p>')

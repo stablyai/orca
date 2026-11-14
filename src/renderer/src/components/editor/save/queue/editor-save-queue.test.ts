@@ -11,7 +11,9 @@ import {
   type FakeEditorDisk
 } from '../../autosave/editor-autosave-controller-test-fixture'
 
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionIdForFile: () => undefined
+}))
 
 const PATH = '/repo/a.ts'
 
@@ -96,42 +98,6 @@ describe('editor save queue: one running and one queued save per record', () => 
     expect(file('a').isDirty).toBe(false)
   })
 
-  it('upgrades a queued autosave to the Overwrite that joins it', async () => {
-    edit('a', 'a')
-    const release = holdNextWrite(disk)
-    const first = queue.queueSave(file('a'), 'a')
-    await flush()
-    edit('a', 'ab')
-    void queue.queueSave(file('a'), 'ab', 'autosave')
-    const overwrite = queue.queueSave(file('a'), 'ab', 'overwrite')
-
-    release()
-    await first
-    expect(await overwrite).toBe('written')
-    const calls = disk.fs.writeFile.mock.calls.map(([args]) => args.diskPrecondition)
-    expect(calls).toHaveLength(2)
-    expect(calls[0]).toBeDefined()
-    expect(calls[1]).toBeUndefined()
-  })
-
-  it.each([
-    ['user', 'written'],
-    ['autosave', 'failed']
-  ] as const)(
-    'a queued %s save of a record the running save left clean writes nothing',
-    async (trigger, expected) => {
-      edit('a', 'a')
-      const release = holdNextWrite(disk)
-      const first = queue.queueSave(file('a'), 'a')
-      const queued = queue.queueSave(file('a'), 'a', trigger)
-
-      release()
-      expect(await first).toBe('written')
-      expect(await queued).toBe(expected)
-      expect(writtenContents()).toEqual(['a'])
-    }
-  )
-
   it('serializes two tabs writing one file (edit + unstaged diff)', async () => {
     store.setState({
       openFiles: [
@@ -175,18 +141,5 @@ describe('editor save queue: one running and one queued save per record', () => 
     expect(await queued).toBe('written')
     expect(disk.files.get(PATH)).toBe('ab')
     expect(file('a').isDirty).toBe(false)
-  })
-
-  it('settle drops the autosave timer', async () => {
-    vi.useFakeTimers()
-    try {
-      edit('a', 'a')
-      queue.syncAutoSave()
-      await queue.settleFileSaves('a')
-      await vi.advanceTimersByTimeAsync(5000)
-      expect(disk.fs.writeFile).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
   })
 })

@@ -1,17 +1,17 @@
-import { selectFreshExplicitAgentStatus } from '../../runtime-hook-agent-row-selection'
+import { selectFreshExplicitAgentStatus } from '../../workspaces/process-listing/runtime-hook-agent-row-selection'
 import { OrcaRuntimeWithPluginHookedTerminalInput } from './terminal-plugin-hooked-input'
-import type { RuntimeTerminalAgentStatus } from '../../../../shared/runtime-types'
-import type { RuntimeTerminalAgentStatusSnapshot } from '../../runtime-terminal-agent-status-query'
-import { getDisplayPromptLifecycle } from '../../runtime-worktree-status-projection'
-import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
+import type { RuntimeTerminalAgentStatus } from '../../../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalAgentStatusSnapshot } from '../query/runtime-terminal-agent-status-query'
+import { getDisplayPromptLifecycle } from '../../workspaces/process-listing/runtime-worktree-status-projection'
+import type { RuntimePtyWorktreeRecord } from '../records/runtime-terminal-state-records'
 import { hasCompatibleAgentTitleIdentity } from '../../../../shared/agent-status/title/agent-title-owner'
-import type { PtyForegroundProcessRead } from '../../runtime-terminal-contracts'
+import type { PtyForegroundProcessRead } from '../lifecycle/pty-foreground-observation-state'
 import { recognizeAgentProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
 import type {
   AgentPromptActivity,
   AgentPromptWaitTextCache
-} from '../../agent-prompt-submission-verification'
-import { readAgentPromptWaitText } from '../../agent-prompt-submission-verification'
+} from './agent-prompt-submission-verification'
+import { readAgentPromptWaitText } from './agent-prompt-submission-verification'
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 
 export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWithPluginHookedTerminalInput {
@@ -39,7 +39,9 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
     }
   }
 
-  getTerminalAgentStatus(handle: string): Promise<RuntimeTerminalAgentStatus> {
+  async getTerminalAgentStatus(handle: string): Promise<RuntimeTerminalAgentStatus> {
+    // A restored permission wait reads its screen first, so a dialog answered after the restart lifts it (#35962).
+    await this.refreshRestoredWait(handle, this.getTerminalAgentStatusPtyId(handle))
     return this.terminalAgentStatus.getStatus(handle)
   }
 
@@ -236,16 +238,13 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
 
   protected getFreshExplicitAgentStatusForHandle(
     handle: string,
-    paneKeyOverride?: string | null
-  ): {
-    status: NonNullable<RuntimeTerminalAgentStatus['status']>
-    updatedAt: number
-    stateStartedAt: number
-  } | null {
+    ptyId: string
+  ): ReturnType<typeof selectFreshExplicitAgentStatus> {
     return selectFreshExplicitAgentStatus({
       handle,
-      paneKey: paneKeyOverride ?? this.getPaneKeyForTerminalHandle(handle),
-      hookRows: this.getAgentStatusSnapshotFn?.() ?? []
+      paneKey: this.getPaneKeyForTerminalHandle(handle),
+      hookRows: this.getAgentStatusSnapshotFn?.() ?? [],
+      screenMayHoldDialog: () => this.screenMayHoldAgentDialog(ptyId)
     })
   }
 
@@ -294,7 +293,9 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
       generation: this.getPtyLifecycleGeneration(ptyId),
       permissionSequence: this.agentPromptPermissionSequenceByPtyId.get(ptyId) ?? 0,
       workingSequence: nativeLifecycle?.workingSequence ?? 0,
-      explicitWorkingStartedAt: explicit?.status === 'working' ? explicit.stateStartedAt : null,
+      // A prompt starts the main agent's turn; child work can hold the row working across it.
+      explicitWorkingStartedAt:
+        explicit?.status === 'working' ? explicit.mainAgentWorkingStartedAt : null,
       outputSequence,
       status
     }
@@ -311,7 +312,7 @@ export abstract class OrcaRuntimeWithSerializeAgentPromptSubmission extends Orca
   }
 
   protected getFreshExplicitAgentStatusForPty(handle: string, ptyId: string) {
-    const explicit = this.getFreshExplicitAgentStatusForHandle(handle)
+    const explicit = this.getFreshExplicitAgentStatusForHandle(handle, ptyId)
     const floor = this.agentPromptExplicitStatusFloorByPtyId.get(ptyId)
     return explicit && (floor === undefined || explicit.updatedAt > floor) ? explicit : null
   }

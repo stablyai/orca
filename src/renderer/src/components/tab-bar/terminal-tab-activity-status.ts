@@ -2,9 +2,12 @@ import {
   readAgentAttentionUnreadReason,
   type ReadableAgentAttentionUnread
 } from '@/attention/agent-attention-contract'
-import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
-import { resolveWorktreeStatus, type WorktreeStatus } from '@/lib/worktree-status'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import {
+  isAgentStatusFresh,
+  AGENT_STATUS_STALE_AFTER_MS
+} from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import { resolveWorktreeStatus } from '@/lib/workspace/activity/worktree-status'
+
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { agentVerdictDisplayMark } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { resolveProgramStatusPresentation } from '../../../../shared/program-status/presentation'
@@ -13,6 +16,7 @@ import {
   parsePaneKey
 } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
+  type WorktreeStatus,
   applyAgentPaneActivityFlags,
   type AgentPaneActivityFlags
 } from '../../../../shared/worktree-status-rollup'
@@ -28,7 +32,7 @@ type ProgressRingStatus = Extract<TerminalTabActivityStatus, 'working' | 'permis
 
 type PaneProgramProgress = { progress: number; updatedAt: number }
 
-type TerminalTabActivityFlags = AgentPaneActivityFlags & {
+export type TerminalTabActivityFlags = AgentPaneActivityFlags & {
   paneIds: Set<string>
   /** Panes whose row went stale; suppress generated permission labels only. */
   stalePaneIds: Set<string>
@@ -45,7 +49,7 @@ type FlagsCache = {
 // Index each pane-status snapshot once so per-tab Zustand selectors cost O(agents + tabs), not O(agents × tabs).
 let flagsCache: FlagsCache | null = null
 
-function getTerminalTabActivityFlags(
+export function getTerminalTabActivityFlags(
   agentStatusByPaneKey: Record<string, AgentStatusEntry> | undefined,
   agentStatusEpoch: number | undefined
 ): Map<string, TerminalTabActivityFlags> {
@@ -71,7 +75,7 @@ function getTerminalTabActivityFlags(
       continue
     }
     // Apply sidebar freshness rules so abandoned/slept panes cannot keep tab spinners alive.
-    if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+    if (!isAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
       // Stale identity suppresses Orca's one-shot permission label without suppressing native titles.
       getOrCreateTerminalTabActivityFlags(flagsByTabId, identity.tabId).stalePaneIds.add(
         identity.paneId

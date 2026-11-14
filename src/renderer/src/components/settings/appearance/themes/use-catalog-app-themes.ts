@@ -1,12 +1,13 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 import type { PluginHostListEntry } from '../../../../../../shared/plugins/plugin-list-entry'
-import type { PluginMarketplaceHostListing } from '../../../../../../preload/api/plugin-host-api'
+import type { PluginMarketplaceHostListing } from '../../../../../../preload/api/plugins/plugin-host-api'
 import type { PluginThemeRegistration } from '../../../../../../shared/plugins/artifacts/plugin-theme-artifact'
 import { pluginHostVersion } from '../../../../../../shared/plugins/installation/plugin-host-version'
 import { buildPluginListEntries, needsNewerOrca } from '../../../plugins/list/plugin-list-entries'
 import { applyPluginAppThemeToSlot } from '../../../plugins/state/plugin-theme-apply'
 import { createPluginPagePreviewCache } from '../../../plugins/state/use-plugin-catalog'
 import { usePluginInstallAction } from '../../../plugins/state/use-plugin-install-action'
+import { useTranslate, type Translate } from '../../../../i18n/use-translate'
 
 type CatalogSnapshot = {
   installed: readonly PluginHostListEntry[]
@@ -28,9 +29,10 @@ export type CatalogAppTheme = {
 export function catalogAppThemes(
   snapshot: CatalogSnapshot,
   base: 'light' | 'dark',
-  installedPluginKeys: ReadonlySet<string>
+  installedPluginKeys: ReadonlySet<string>,
+  t?: Translate
 ): CatalogAppTheme[] {
-  return buildPluginListEntries(snapshot.installed, snapshot.listings)
+  return buildPluginListEntries(snapshot.installed, snapshot.listings, undefined, t)
     .available.flatMap((entry) => {
       const { listing } = entry
       const release = listing?.release
@@ -119,13 +121,19 @@ export function useCatalogAppThemes(
   installing: CatalogAppTheme | null
   error: string | null
 } {
+  const t = useTranslate()
   const { snapshot, loading, load } = useCatalogSnapshot()
   const themes = useMemo(
     () =>
       enabled && snapshot
-        ? catalogAppThemes(snapshot, base, new Set(installedThemes.map((theme) => theme.pluginKey)))
+        ? catalogAppThemes(
+            snapshot,
+            base,
+            new Set(installedThemes.map((theme) => theme.pluginKey)),
+            t
+          )
         : [],
-    [enabled, snapshot, base, installedThemes]
+    [enabled, snapshot, base, installedThemes, t]
   )
   const [picked, setPicked] = useState<CatalogAppTheme | null>(null)
   // Why a ref: the install started in the same event reads the pick before it is state.

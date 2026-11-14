@@ -1,3 +1,6 @@
+import { useMobileNativeChatGeneratedImageAnswers } from './use-mobile-native-chat-generated-image-answers'
+import { useMobileNativeChatTurnDiffs } from './use-mobile-native-chat-turn-diffs'
+import type { MobileNativeChatTurnRow } from './use-mobile-native-chat-row-props'
 import { useCallback, useMemo, useState } from 'react'
 import {
   isSubagentGroupBlock,
@@ -21,7 +24,7 @@ import { nativeChatMessagesWaitingBehindLiveTurn } from '../../../../../src/shar
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../../src/shared/native-chat/native-chat-streaming'
 import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
 import { useMobileNativeChatTranscriptRows } from './use-mobile-native-chat-transcript-rows'
-import type { MobileNativeChatRunPresentation } from '../mobile-native-chat-run-descriptors'
+import type { MobileNativeChatRunPresentation } from './mobile-native-chat-run-descriptors'
 import {
   nativeChatRowsInDrawOrder,
   nativeChatTurnBarRows
@@ -31,29 +34,6 @@ import { useMobileNativeChatTurnStatus } from './use-mobile-native-chat-turn-sta
 const EMPTY_TURN_IDS: ReadonlySet<string> = new Set()
 const NO_TURN_KEYS: readonly undefined[] = []
 const MAX_EXPANDED_TURNS = 128
-
-export type MobileNativeChatTurnRow = {
-  turnStatus: NativeChatTurnStatus | null
-  turnStatusAbove?: boolean
-  turnExpanded: boolean
-  turnKey?: string
-  activeTurnIsWorking: boolean
-  trailingRun: boolean
-  workRun?: readonly NativeChatMessage[]
-  joinsWorkRun?: boolean
-  foldedAway?: boolean
-  openReasoning?: ReadonlySet<string>
-  mayStillGrow: boolean
-  reasoningIsLive: boolean
-  reasoningExpanded: boolean
-  onToggleReasoning: (key: string) => void
-  // Pass roster disclosure only to roster rows so toggles cannot rerender every transcript row.
-  subagentGroupsOpen?: ReadonlySet<string>
-  onToggleSubagentGroup: (groupId: string) => void
-  // Hold expanded user messages above recycled rows so scrolling away cannot collapse them.
-  userMessageOpen: boolean
-  onToggleUserMessage: (messageId: string) => void
-}
 
 export type MobileNativeChatLiveLine = NativeChatLiveLine & { reasoningExpanded: boolean }
 
@@ -120,13 +100,20 @@ export function useMobileNativeChatTurnDisclosure({
   liveLine: MobileNativeChatLiveLine | null
   onToggleReasoning: (key: string) => void
 } {
-  const { rows, turnKeys, liveTurnKey, unresolvedRowIds } = useMemo(() => {
+  const {
+    rows: sourceRows,
+    turnKeys,
+    liveTurnKey,
+    unresolvedRowIds,
+    partialTurnKey
+  } = useMemo(() => {
     if (!enabled) {
       return {
         rows: messages,
         turnKeys: NO_TURN_KEYS,
         liveTurnKey: undefined,
-        unresolvedRowIds: undefined
+        unresolvedRowIds: undefined,
+        partialTurnKey: undefined
       }
     }
     const membership = nativeChatTurnMembership(messages, turnJournal)
@@ -134,9 +121,28 @@ export function useMobileNativeChatTurnDisclosure({
       rows: nativeChatRowsInDrawOrder(messages, membership.drawOrder),
       turnKeys: nativeChatRowsInDrawOrder(membership.turnKeys, membership.drawOrder),
       liveTurnKey: membership.liveTurnKey,
+      partialTurnKey: membership.partialTurnKey,
       unresolvedRowIds: membership.unresolvedRowIds
     }
   }, [enabled, messages, turnJournal])
+  const turnStatuses = useMobileNativeChatTurnStatus({
+    turnKeys,
+    liveTurnKey,
+    enabled,
+    isWorking,
+    workingStartedAt,
+    settledTurns,
+    thinking,
+    scopeKey
+  })
+  const { active, activeTurnKey, completedByTurn } = turnStatuses
+  const rows = useMobileNativeChatGeneratedImageAnswers(
+    enabled,
+    sourceRows,
+    turnKeys,
+    completedByTurn
+  )
+  const summaries = useMobileNativeChatTurnDiffs(rows, enabled, turnKeys, partialTurnKey)
   const waiting = useMemo(() => {
     const ids = enabled
       ? nativeChatMessagesWaitingBehindLiveTurn(
@@ -156,23 +162,12 @@ export function useMobileNativeChatTurnDisclosure({
       indexById: new Map(rows.map((message, index) => [message.id, index]))
     }
   }, [enabled, rows, stopping, turnJournal])
-  const turnStatuses = useMobileNativeChatTurnStatus({
-    turnKeys,
-    liveTurnKey,
-    enabled,
-    isWorking,
-    workingStartedAt,
-    settledTurns,
-    thinking,
-    scopeKey
-  })
   const [expandedTurnIds, toggleExpandedTurn] = useScopedOpenKeys(scopeKey)
   const [expandedReasoning, toggleReasoning] = useScopedOpenKeys(scopeKey)
   const [openSubagentGroups, toggleSubagentGroup] = useScopedOpenKeys(scopeKey)
   const [openUserMessages, toggleUserMessage] = useScopedOpenKeys(scopeKey)
   const bars = useMemo(() => nativeChatTurnBarRows(rows, turnKeys), [rows, turnKeys])
 
-  const { active, activeTurnKey, completedByTurn } = turnStatuses
   const inLiveWorkingTurn = useCallback(
     (index: number) =>
       isNativeChatRowInLiveWorkingTurn(
@@ -236,11 +231,13 @@ export function useMobileNativeChatTurnDisclosure({
             : (completedByTurn[turnKey] ?? null)
           : null
       return {
+        turnDiff: summaries.get(message.id),
         turnStatus,
         ...(bar?.above === true && turnStatus !== null ? { turnStatusAbove: true } : {}),
         turnExpanded: turnKey ? expandedTurnIds.has(turnKey) : false,
         // Pass row keys to one stable handler; per-row closures defeat memoization and render-time ref caches can leak discarded state.
         turnKey: turnKey && fold.foldableTurnKeys.has(turnKey) ? turnKey : undefined,
+        ...(turnKey === message.id ? { opensTurn: true as const } : {}),
         ...(fold.foldedRows.has(index) ? { foldedAway: true } : {}),
         // Without a user boundary, session working state remains authoritative; bridge chat knows only its synthetic stream row is live.
         activeTurnIsWorking: enabled
@@ -269,6 +266,7 @@ export function useMobileNativeChatTurnDisclosure({
     },
     [
       turnKeys,
+      summaries,
       waiting,
       bars,
       enabled,

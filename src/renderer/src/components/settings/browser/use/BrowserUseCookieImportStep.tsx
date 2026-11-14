@@ -1,6 +1,6 @@
 import { Import, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
+import { emitBrowserCookieImportToast } from '@/lib/browser/cookies/browser-cookie-import-toast'
 import { Button } from '../../../ui/button'
 import { BrowserCookieImportDisclosure } from '../../../BrowserCookieImportDisclosure'
 import { BrowserCookieImportMachineNotice } from '../../../BrowserCookieImportMachineNotice'
@@ -19,8 +19,8 @@ import { useAppStore } from '../../../../store/index'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { StepBadge } from '../../setup-guide/SetupStepBadge'
 import { getBrowserUsePaneSearchEntries } from './browser-use-search'
-import { translate } from '@/i18n/i18n'
-import { browserCookieImportFailureText } from '@/lib/browser-cookie-import-error-copy'
+import { useTranslate } from '@/i18n/use-translate'
+import { browserCookieImportFailureText } from '@/lib/browser/cookies/browser-cookie-import-error-copy'
 
 type BrowserUseCookieImportStepProps = {
   cookiesImported: boolean
@@ -35,6 +35,7 @@ export function BrowserUseCookieImportStep({
   sourceLabel,
   onConfigureMoreBrowsers
 }: BrowserUseCookieImportStepProps): React.JSX.Element {
+  const t = useTranslate()
   const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)
   const fetchDetectedBrowsers = useAppStore((s) => s.fetchDetectedBrowsers)
 
@@ -50,7 +51,7 @@ export function BrowserUseCookieImportStep({
       const browser = detectedBrowsers.find((b) => b.family === browserFamily)
       emitBrowserCookieImportToast(
         result.summary,
-        translate(
+        t(
           'auto.components.settings.BrowserUsePane.2ea4617e3a',
           'Imported {{value0}} cookies from {{value1}}{{value2}}.',
           {
@@ -71,7 +72,7 @@ export function BrowserUseCookieImportStep({
     if (result.ok) {
       emitBrowserCookieImportToast(
         result.summary,
-        translate(
+        t(
           'auto.components.settings.BrowserUsePane.8f2675c2f3',
           'Imported {{value0}} cookies from file.',
           { value0: result.summary.importedCookies }
@@ -85,11 +86,8 @@ export function BrowserUseCookieImportStep({
 
   return (
     <SearchableSetting
-      title={translate(
-        'auto.components.settings.BrowserUsePane.2eb906706c',
-        'Import Browser Cookies'
-      )}
-      description={translate(
+      title={t('auto.components.settings.BrowserUsePane.b3e79d1c51', 'Import browser cookies')}
+      description={t(
         'auto.components.settings.BrowserUsePane.af8c83ed61',
         'Import cookies from Chrome, Edge, or other browsers so agents can reuse your logins.'
       )}
@@ -103,20 +101,17 @@ export function BrowserUseCookieImportStep({
         />
         <div className="min-w-0 flex-1 space-y-1">
           <p className="text-sm font-medium">
-            {translate(
-              'auto.components.settings.BrowserUsePane.2eb906706c',
-              'Import Browser Cookies'
-            )}
+            {t('auto.components.settings.BrowserUsePane.b3e79d1c51', 'Import browser cookies')}
           </p>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.BrowserUsePane.72d4815523',
               'Bring your existing logins into Orca so agents can reach authenticated pages. Imports into the default profile.'
             )}
           </p>
           {sourceLabel ? (
             <p className="text-[11px] text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.settings.BrowserUsePane.112f70adc4',
                 'Last imported from {{value0}}',
                 { value0: sourceLabel }
@@ -129,7 +124,7 @@ export function BrowserUseCookieImportStep({
               onClick={onConfigureMoreBrowsers}
               className="text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
             >
-              {translate(
+              {t(
                 'auto.components.settings.BrowserUsePane.67d9a53f47',
                 'Manage profiles for separate logins'
               )}
@@ -156,8 +151,8 @@ export function BrowserUseCookieImportStep({
                 <Import className="size-3.5" />
               )}
               {cookiesImported
-                ? translate('auto.components.settings.BrowserUsePane.0462565413', 'Re-import')
-                : translate('auto.components.settings.BrowserUsePane.2ccfc9cff8', 'Import')}
+                ? t('auto.components.settings.BrowserUsePane.0462565413', 'Re-import')
+                : t('auto.components.settings.BrowserUsePane.2ccfc9cff8', 'Import')}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
@@ -166,11 +161,9 @@ export function BrowserUseCookieImportStep({
               browser.profiles.length > 1 ? (
                 <DropdownMenuSub key={browser.family}>
                   <DropdownMenuSubTrigger>
-                    {translate(
-                      'auto.components.settings.BrowserUsePane.5301857d88',
-                      'From {{value0}}',
-                      { value0: browser.label }
-                    )}
+                    {t('auto.components.settings.BrowserUsePane.5301857d88', 'From {{value0}}', {
+                      value0: browser.label
+                    })}
                   </DropdownMenuSubTrigger>
                   <DropdownMenuPortal>
                     <DropdownMenuSubContent>
@@ -192,17 +185,15 @@ export function BrowserUseCookieImportStep({
                   key={browser.family}
                   onSelect={() => void handleImportFromBrowser(browser.family)}
                 >
-                  {translate(
-                    'auto.components.settings.BrowserUsePane.5301857d88',
-                    'From {{value0}}',
-                    { value0: browser.label }
-                  )}
+                  {t('auto.components.settings.BrowserUsePane.5301857d88', 'From {{value0}}', {
+                    value0: browser.label
+                  })}
                 </DropdownMenuItem>
               )
             )}
             {detectedBrowsers.length > 0 ? <DropdownMenuSeparator /> : null}
             <DropdownMenuItem onSelect={() => void handleImportFromFile()}>
-              {translate('auto.components.settings.BrowserUsePane.be6df68384', 'From File…')}
+              {t('auto.components.settings.BrowserUsePane.4ab048c0b8', 'From file…')}
             </DropdownMenuItem>
             <BrowserCookieImportDisclosure />
           </DropdownMenuContent>

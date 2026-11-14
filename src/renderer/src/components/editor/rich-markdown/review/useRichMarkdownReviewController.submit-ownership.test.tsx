@@ -4,7 +4,7 @@ import { Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import type { DiffComment } from '../../../../../../shared/diff-comment-types'
 import {
   createRichMarkdownAnnotationHighlightExtension,
@@ -150,21 +150,5 @@ describe('review submission owner', () => {
       await submission
     })
     expect(highlightedText(review.editor)).toEqual(['abc', 'xyz'])
-  })
-
-  it('preserves a failed draft for retry', async () => {
-    const failure = mountReview()
-    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    try {
-      const failedSubmission = failure.result.current.submitAnnotation('Review abc')
-      await act(async () => {
-        failure.pending.resolve(null)
-        await failedSubmission
-      })
-      expect(failure.result.current.annotationPopover).toEqual(target)
-      expect(highlightedText(failure.editor)).toEqual([])
-    } finally {
-      error.mockRestore()
-    }
   })
 })

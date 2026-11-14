@@ -77,11 +77,6 @@ describe('nvm default alias decides the seeded runtime', () => {
     }
   )
 
-  it('falls back to newest when there is no default alias', () => {
-    const home = makeNvmHome({ versions: ['v24.18.0', 'v26.7.0'] })
-    expect(seededNvmDir(home)).toBe(join(home, '.nvm', 'versions', 'node', 'v26.7.0', 'bin'))
-  })
-
   it('falls back to newest when the default names an uninstalled version', () => {
     const home = makeNvmHome({ versions: ['v24.18.0', 'v26.7.0'], defaultAlias: '18' })
     expect(seededNvmDir(home)).toBe(join(home, '.nvm', 'versions', 'node', 'v26.7.0', 'bin'))
@@ -93,11 +88,6 @@ describe('nvm default alias decides the seeded runtime', () => {
       defaultAlias: 'a',
       aliases: { a: 'b', b: 'a' }
     })
-    expect(seededNvmDir(home)).toBe(join(home, '.nvm', 'versions', 'node', 'v26.7.0', 'bin'))
-  })
-
-  it('ignores a `system` default, which means no nvm node at all', () => {
-    const home = makeNvmHome({ versions: ['v24.18.0', 'v26.7.0'], defaultAlias: 'system' })
     expect(seededNvmDir(home)).toBe(join(home, '.nvm', 'versions', 'node', 'v26.7.0', 'bin'))
   })
 

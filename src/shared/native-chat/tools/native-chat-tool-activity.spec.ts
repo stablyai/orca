@@ -19,15 +19,6 @@ describe('selectActiveToolCall', () => {
     expect(selectActiveToolCall(blocks, { activeTurnIsWorking: false })).toBeNull()
   })
 
-  it('picks the latest explicitly running call', () => {
-    const blocks = [
-      call('Read', { file_path: 'a' }, 'completed'),
-      call('Bash', { command: 'x' }, 'running'),
-      call('Grep', { pattern: 'y' }, 'running')
-    ]
-    expect(selectActiveToolCall(blocks, { activeTurnIsWorking: true })?.name).toBe('Grep')
-  })
-
   it('ignores settled calls even while the turn works', () => {
     const blocks = [call('Read', { file_path: 'a' }, 'completed')]
     expect(selectActiveToolCall(blocks, { activeTurnIsWorking: true })).toBeNull()

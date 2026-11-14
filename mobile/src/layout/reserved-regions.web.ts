@@ -1,5 +1,5 @@
 import { useMemo, useSyncExternalStore } from 'react'
-import { usePageBridgeClientIfPresent } from '../transport/client-context.web'
+import { usePageBridgeClientIfPresent } from '../transport/connection/client-context.web'
 import { EMPTY_PAGE_GEOMETRY } from '../mobile-web-shell/bridge/bridge-page-geometry'
 
 export function usePageGeometry() {

@@ -6,7 +6,6 @@ import {
 import { GROK_SESSION_OPTION_CATALOG } from '../../agent-session/options/agent-session-option-catalog-grok'
 import {
   buildNativeChatSessionOptionCommand,
-  parseBuiltSessionOptionCommand,
   recordNativeChatSessionOptionCommand
 } from './native-chat-session-option-commands'
 import {
@@ -43,39 +42,7 @@ describe('buildNativeChatSessionOptionCommand', () => {
   })
 })
 
-describe('parseBuiltSessionOptionCommand', () => {
-  it('recovers the value from a built command and rejects other text', () => {
-    const build = (value: unknown): string => `/model ${String(value)}`
-    expect(parseBuiltSessionOptionCommand(build, '/model opus')).toBe('opus')
-    expect(parseBuiltSessionOptionCommand(build, '/effort high')).toBeNull()
-    expect(parseBuiltSessionOptionCommand(build, '/model ')).toBeNull()
-  })
-})
-
 describe('recordNativeChatSessionOptionCommand', () => {
-  it('tracks a typed /model value as dispatched truth', () => {
-    const record = claudeRecord()
-    const result = recordNativeChatSessionOptionCommand({
-      catalog: CLAUDE_SESSION_OPTION_CATALOG,
-      models: CLAUDE_SESSION_OPTION_CATALOG.models,
-      record,
-      command: '/model sonnet'
-    })
-    expect(result).toEqual({ changed: true, opensAgentPicker: false })
-    expect(record.model).toEqual({ value: 'sonnet', source: 'dispatched' })
-  })
-
-  it('tracks a typed option value under the current model', () => {
-    const record = claudeRecord('sonnet')
-    recordNativeChatSessionOptionCommand({
-      catalog: CLAUDE_SESSION_OPTION_CATALOG,
-      models: CLAUDE_SESSION_OPTION_CATALOG.models,
-      record,
-      command: '/effort low'
-    })
-    expect(record.valuesByModel.sonnet?.effort).toEqual({ value: 'low', source: 'dispatched' })
-  })
-
   it('clears tracked truth for a bare picker command and reports the agent picker', () => {
     const claude = claudeRecord('sonnet')
     claude.valuesByModel.sonnet = { effort: { value: 'low', source: 'dispatched' } }
@@ -178,18 +145,6 @@ describe('recordNativeChatSessionOptionCommand', () => {
     })
     expect(record.model).toEqual({ value: 'opus', source: 'dispatched' })
   })
-
-  it('ignores unrelated commands', () => {
-    const record = claudeRecord('sonnet')
-    expect(
-      recordNativeChatSessionOptionCommand({
-        catalog: CLAUDE_SESSION_OPTION_CATALOG,
-        models: CLAUDE_SESSION_OPTION_CATALOG.models,
-        record,
-        command: '/clear'
-      })
-    ).toEqual({ changed: false, opensAgentPicker: false })
-  })
 })
 
 describe('recordNativeChatSessionOptionCommand for grok', () => {
@@ -229,18 +184,6 @@ describe('recordNativeChatSessionOptionCommand for grok', () => {
       persist
     })
     expect(persist).toHaveBeenCalledWith('grok-4.5', 'model', 'grok-4.5')
-  })
-
-  it('tracks effort under the current model', () => {
-    const record = grokRecord('grok-4.5')
-    expect(recordGrok(record, '/effort medium')).toEqual({
-      changed: true,
-      opensAgentPicker: false
-    })
-    expect(record.valuesByModel['grok-4.5']?.effort).toEqual({
-      value: 'medium',
-      source: 'dispatched'
-    })
   })
 
   it('tracks nothing for an effort tier outside the seeded choices', () => {

@@ -1,13 +1,17 @@
 import { parseExecutionHostId, type ExecutionHostId } from '../../execution-host'
-import { buildExecutionHostRegistry } from '../../execution-host-registry'
-import type { ExecutionHostHealth } from '../../execution-host-health'
+import { buildExecutionHostRegistry } from '../../execution-host/execution-host-registry'
+import type { ExecutionHostHealth } from '../../execution-host/execution-host-health'
 import {
   pickerExecutionHosts,
   type ManagedOrcadDeploymentSummary
-} from '../../managed-orcad-execution-host'
+} from '../../execution-host/managed-orcad-execution-host'
 import type { RuntimeCompatVerdict } from '../../protocol-compat'
 import type { RuntimeEnvironmentSource } from './runtime-environments'
-import type { RuntimeEnvironmentStatus } from '../host-status/runtime-host-status'
+import {
+  isRuntimeHostContactRevoked,
+  lastVerifiedRuntimeStatus,
+  type RuntimeEnvironmentStatus
+} from '../host-status/runtime-host-status'
 import type { SshConnectionState } from '../../ssh-types'
 import { getPairedDeviceIdsByEnvironment } from '../../workspace-creator-visibility'
 
@@ -34,6 +38,8 @@ export type PairedServerHost = {
   compatibility: RuntimeCompatVerdict['kind'] | null
   /** The desktop's own device id on that server, which "Hide other devices" compares against. */
   pairedDeviceId: string | null
+  /** The server's store identity from its last verified descriptor; null once contact is revoked. */
+  installationId: string | null
 }
 
 /** The servers the desktop shows, as its sidebar maps them; a managed server folds into its SSH host. */
@@ -66,8 +72,19 @@ export function describePairedServerHosts(inputs: PairedServerHostInputs): Paire
         label: entry.label,
         health: entry.health,
         compatibility: entry.compatibility?.kind ?? null,
-        pairedDeviceId: deviceIds.get(parsed.environmentId) ?? null
+        pairedDeviceId: deviceIds.get(parsed.environmentId) ?? null,
+        installationId: verifiedInstallationId(
+          inputs.statusByEnvironmentId.get(parsed.environmentId)
+        )
       }
     ]
   })
+}
+
+/** Same rule as buildCrossStoreLineageView: a revoked server neither nests nor parents. */
+function verifiedInstallationId(status: RuntimeEnvironmentStatus | undefined): string | null {
+  if (!status || isRuntimeHostContactRevoked(status)) {
+    return null
+  }
+  return lastVerifiedRuntimeStatus(status)?.hostDescriptor?.installationId ?? null
 }

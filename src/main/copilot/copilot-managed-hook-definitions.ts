@@ -1,10 +1,8 @@
-import {
-  wrapPosixHookCommand,
-  wrapWindowsHookCommand,
-  type HookDefinition
-} from '../agent-hooks/installer-utils'
-import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
-import { getWindowsSystem32Path } from '../agent-hooks/windows-powershell-hook-launcher'
+import { wrapPosixHookCommand } from '../agent-hooks/installation/commands/posix-hook-command'
+import { wrapWindowsHookCommand } from '../agent-hooks/installation/commands/windows-hook-command'
+import type { HookDefinition } from '../agent-hooks/installation/configuration/hook-config-schema'
+import { wrapWindowsDirectCmdHookCommand } from '../agent-hooks/installation/commands/windows-direct-cmd-hook-command'
+import { getWindowsSystem32Path } from '../agent-hooks/installation/commands/windows-powershell-hook-launcher'
 
 // VS Code-compatible PascalCase names reuse the hook server's event normalization.
 export const COPILOT_EVENTS = [

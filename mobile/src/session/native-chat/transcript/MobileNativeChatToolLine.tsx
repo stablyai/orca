@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useContext, useMemo } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import { ChevronRight } from 'lucide-react-native'
@@ -20,18 +20,19 @@ import type {
 } from '../../../../../src/shared/native-chat/native-chat-types'
 import { MobileSourceCopyButton } from '../../../components/MobileSourceCopyButton'
 import { MobileSyntaxSegments } from '../../../components/MobileSyntaxSegments'
+import { MarkdownLinkHandlerContext } from '../../../components/markdown-link-handler'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
-import { openExternalLink } from '../../../platform/external-link'
 import { colors, pressedStyle } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { highlightMobileCode } from '../../mobile-file-syntax'
+import { highlightMobileCode } from '../../../files/session-documents/mobile-file-syntax'
 import { MobileNativeChatToolGlyph } from './MobileNativeChatToolIcon'
-import { MobileNativeChatToolOutput } from '../MobileNativeChatFullContent'
+import { MobileNativeChatToolOutput } from './MobileNativeChatFullContent'
 import { useMobileNativeChatOpenedDetail } from '../visual/mobile-native-chat-opened-detail'
 import { useMobileNativeChatDisclosure } from './mobile-native-chat-disclosure-store'
 import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
+import { useMobileNativeChatOpenFile } from '../mobile-native-chat-open-file-context'
 
 function toolDuration(durationMs: unknown, t: Translate): string | null {
   if (typeof durationMs !== 'number' || !Number.isFinite(durationMs) || durationMs < 0) {
@@ -70,6 +71,7 @@ function SearchResults({
 }): React.JSX.Element {
   useMobileColorScheme()
   const type = toolType(fontScale).meta
+  const openLink = useContext(MarkdownLinkHandlerContext)
   return (
     <View style={[styles.codeBox, styles.searchResults]}>
       {results.map((hit) => (
@@ -77,7 +79,7 @@ function SearchResults({
           key={hit.url}
           style={[styles.codeText, styles.searchHit, type]}
           numberOfLines={1}
-          onPress={() => openExternalLink(hit.url)}
+          onPress={() => openLink(hit.url)}
           accessibilityRole="link"
         >
           {hit.title}
@@ -181,17 +183,16 @@ export function MobileNativeChatToolLine({
   block,
   result,
   disclosureKey,
-  fontScale,
-  onOpenFile
+  fontScale
 }: {
   memberId?: string
   block: NativeChatToolCallBlock | NativeChatToolResultBlock
   result?: NativeChatToolResultBlock
   disclosureKey?: string
   fontScale: number
-  onOpenFile?: (path: string) => void
 }): React.JSX.Element {
   useMobileColorScheme()
+  const onOpenFile = useMobileNativeChatOpenFile()
   const t = useMobileTranslation()
   const [expanded, setExpanded] = useMobileNativeChatDisclosure(disclosureKey, false)
   const { call, label, body, resultPreview, failed, results, hasDetail } = useMemo(

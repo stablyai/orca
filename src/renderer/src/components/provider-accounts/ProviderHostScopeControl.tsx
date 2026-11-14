@@ -2,7 +2,7 @@ import { ServerCog } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store/index'
 import type { ProviderHostScope } from './provider-account-scope'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type ProviderHostScopeControlProps = {
   labelPrefix: string
@@ -15,6 +15,7 @@ export function ProviderHostScopeControl({
   scope,
   className
 }: ProviderHostScopeControlProps): React.JSX.Element {
+  const t = useTranslate()
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
 
@@ -29,7 +30,7 @@ export function ProviderHostScopeControl({
         {/* Wrap actions before narrow integration cards collapse the scope copy. */}
         <div className="min-w-[min(14rem,100%)] flex-1">
           <span className="font-medium text-foreground">
-            {translate(
+            {t(
               'auto.components.settings.ProviderHostScopeControl.scope_label',
               '{{value0}}: {{value1}}',
               { value0: labelPrefix, value1: scope.label }
@@ -45,7 +46,7 @@ export function ProviderHostScopeControl({
           onClick={openHostsSettings}
         >
           <ServerCog className="size-3.5" />
-          {translate(
+          {t(
             'auto.components.settings.ProviderHostScopeControl.change_host',
             'Open Remote Servers'
           )}

@@ -1,4 +1,4 @@
-import type { StructuredAgentSessionStatusPublisher } from '../../native-chat/agent-session-wire/structured-agent-session-status-ownership'
+import type { StructuredAgentSessionStatusPublisher } from '../../native-chat/agent-session-wire/observations/structured-agent-session-status-ownership'
 import type { AgentSessionStatusSummary } from '../../../shared/agent-session/agent-session-wire'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {

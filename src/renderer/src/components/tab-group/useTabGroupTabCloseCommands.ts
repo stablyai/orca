@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
+import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
 
 export function useTabGroupTabCloseCommands({ worktreeId }: { worktreeId: string }) {
   return useMemo(

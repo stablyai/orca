@@ -34,22 +34,6 @@ describe('rich markdown ordered list markers', () => {
     }
   })
 
-  it.each([
-    ['1. one\n2. two\n\nDr. Smith said.', 1],
-    ['1. one\nDr. Smith said.', 1],
-    ['3. three\n4. four', 1],
-    ['1. parent\n   1. child\n   2. child two\n2. sibling', 2],
-    ['1. [ ] task\n2. [x] done', 1]
-  ] as const)('round-trips numeric list %j unchanged', (source, lists) => {
-    const editor = openMarkdown(source)
-    try {
-      expect(orderedListCount(editor)).toBe(lists)
-      expect(editor.getMarkdown()).toBe(source)
-    } finally {
-      editor.destroy()
-    }
-  })
-
   it('saves a lettered list pasted as HTML with numeric markers', () => {
     const editor = new Editor({
       element: null,

@@ -1,5 +1,5 @@
 import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../../../shared/agent-session/view/agent-session-goal-control-copy'
-import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { resolvedCodexGoalSettings } from '../turns/codex-structured-message-options'
 import { throwIfSignalAborted } from '../../../../shared/abort-signal-reason'
 import type { AgentSessionThreadGoalChange } from '../../../../shared/agent-session/agent-session-thread-goal-wire'
@@ -38,6 +38,32 @@ export function codexThreadGoalRequests(
   ]
 }
 
+/** After Codex refuses a status change, whether it had no goal to change; unknown counts as a goal. */
+async function codexThreadGoalMissing(
+  session: Pick<CodexSession, 'connection' | 'threadId'>,
+  timeoutMs: number | undefined
+): Promise<boolean> {
+  try {
+    const read = await session.connection.request(
+      'thread/goal/get',
+      { threadId: session.threadId },
+      { timeoutMs }
+    )
+    return typeof read === 'object' && read !== null && 'goal' in read && read.goal === null
+  } catch {
+    return false
+  }
+}
+
+function readCodexClearedFlag(response: unknown): boolean | undefined {
+  return typeof response === 'object' &&
+    response !== null &&
+    'cleared' in response &&
+    typeof response.cleared === 'boolean'
+    ? response.cleared
+    : undefined
+}
+
 export async function changeCodexThreadGoal(
   session: Pick<CodexSession, 'connection' | 'threadId'>,
   change: AgentSessionThreadGoalChange,
@@ -49,11 +75,26 @@ export async function changeCodexThreadGoal(
   try {
     for (const request of codexThreadGoalRequests(session.threadId, change, replacesGoal)) {
       throwIfSignalAborted(signal)
-      await session.connection.request(request.method, request.params, { timeoutMs })
+      const response = await session.connection.request(request.method, request.params, {
+        timeoutMs
+      })
+      // A clear on its own reports whether a goal existed; Codex says nothing else when none did.
+      if (change.kind === 'clear' && readCodexClearedFlag(response) === false) {
+        return { ok: false, rejected: AGENT_SESSION_GOAL_CONTROL_COPY.noGoal }
+      }
       cleared ||= request.method === 'thread/goal/clear'
     }
   } catch (error) {
     if (isCodexAppServerRequestError(error)) {
+      // Codex words a missing goal with internal ids; say it in the user's terms instead.
+      if (change.kind === 'status') {
+        throwIfSignalAborted(signal)
+        const missing = await codexThreadGoalMissing(session, timeoutMs)
+        throwIfSignalAborted(signal)
+        if (missing) {
+          return { ok: false, rejected: AGENT_SESSION_GOAL_CONTROL_COPY.noGoal }
+        }
+      }
       return {
         ok: false,
         rejected: cleared
@@ -79,7 +120,16 @@ export async function changeCodexThreadGoalWithSettings(
   try {
     if (startsWork) {
       const requested = resolvedCodexGoalSettings(session, input.executionOptions)
-      const previousApplied = session.appliedTurnOptions
+      let previousApplied = session.appliedTurnOptions
+      let previousInput = session.appliedTurnInputOptions
+      let invalidatedApplied: CodexSession['appliedTurnOptions']
+      let invalidatedInput: CodexSession['appliedTurnInputOptions']
+      const ownsAcquisition = () =>
+        current() &&
+        !session.ended &&
+        !session.connection.closed &&
+        session.fence === input.fence &&
+        session.acquisitionGeneration === generation
       const installed = await session.appliedSettings?.install(
         session.connection,
         session.threadId,
@@ -87,19 +137,44 @@ export async function changeCodexThreadGoalWithSettings(
         timeoutMs,
         input.signal,
         () => {
-          session.appliedTurnOptions = { ...session.appliedTurnOptions, ...requested }
+          if (!ownsAcquisition()) {
+            return
+          }
+          if (session.appliedTurnOptions === invalidatedApplied) {
+            session.appliedTurnOptions = { ...invalidatedApplied, ...requested }
+          }
+          if (session.appliedTurnInputOptions === invalidatedInput) {
+            session.appliedTurnInputOptions = { ...invalidatedInput, ...requested }
+          }
         },
         () => {
-          session.appliedTurnOptions = previousApplied
+          if (!ownsAcquisition()) {
+            return
+          }
+          if (session.appliedTurnOptions === invalidatedApplied) {
+            session.appliedTurnOptions = previousApplied
+          }
+          if (session.appliedTurnInputOptions === invalidatedInput) {
+            session.appliedTurnInputOptions = previousInput
+          }
         },
         () => {
+          previousApplied = session.appliedTurnOptions
+          previousInput = session.appliedTurnInputOptions
           const known = { ...previousApplied }
+          const knownInput = { ...previousInput }
           for (const key of ['model', 'effort'] as const) {
             if (requested[key] !== undefined && requested[key] !== known[key]) {
               delete known[key]
             }
+            if (requested[key] !== undefined && requested[key] !== knownInput[key]) {
+              delete knownInput[key]
+            }
           }
-          session.appliedTurnOptions = known
+          invalidatedApplied = known
+          invalidatedInput = knownInput
+          session.appliedTurnOptions = invalidatedApplied
+          session.appliedTurnInputOptions = invalidatedInput
         }
       )
       if (installed && !installed.ok) {

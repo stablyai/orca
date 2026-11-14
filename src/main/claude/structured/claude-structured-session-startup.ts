@@ -1,16 +1,15 @@
-import { isClaudeQueryClosed } from '../claude-agent-sdk-control-requests'
-import { claudeStartFailure } from '../claude-startup-failure'
+import { isClaudeQueryClosed } from '../sdk-transport/claude-agent-sdk-control-requests'
+import { claudeStartFailure } from '../sdk-transport/claude-startup-failure'
 import {
   startupAcquisitionRefusal,
   providerExitObserved
-} from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
+} from '../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 // Initialize gates host open after process publication; settings enrichment runs independently.
 
 import type { AgentSessionAccountKind } from '../../../shared/agent-session/agent-session-availability'
-import type { StructuredAgentSessionProviderOpenResult } from '../../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
-import { withProviderRequestTimeout } from '../../provider-process/provider-request-timeout'
+import type { StructuredAgentSessionProviderOpenResult } from '../../native-chat/agent-session-wire/startup/structured-agent-session-provider-open-contract'
 import type { ClaudeStreamJsonConnection } from '../claude-stream-json-connection'
-import { ClaudeSlashCommandCatalog } from '../claude-slash-command-catalog'
+import { ClaudeSlashCommandCatalog } from '../command-catalog/claude-slash-command-catalog'
 import {
   claudeAuthDiagnostic,
   claudeInitializationAuthError,
@@ -26,11 +25,10 @@ import {
 } from './launch/claude-structured-session-acquisition-options'
 import {
   claudeStructuredSessionOptionsFrom,
-  claudeObservedEffort,
   observeClaudeSettingsApplied,
   readClaudeSettingsApplied,
   readClaudeFastModeFacts,
-  readClaudeSettingsEffort
+  observeClaudeSettingsEffort
 } from './launch/claude-structured-session-options'
 import { claudeExecutionObservations } from './claude-structured-execution-observations'
 import {
@@ -62,8 +60,6 @@ export type ClaudeStartupFacts = ClaudeInitializeFacts & {
   prepared: ReturnType<typeof prepareClaudeStructuredSessionAcquisitionOptions>
 }
 
-export const CLAUDE_INITIALIZE_TIMEOUT_MS = 60_000
-
 export async function readClaudeStartupFacts(input: {
   connection: ClaudeStreamJsonConnection
   initProof: ClaudeInitProof
@@ -74,7 +70,6 @@ export async function readClaudeStartupFacts(input: {
   requestTimeoutMs: number | undefined
   emit: (event: ClaudeStructuredSessionEvent) => void
 }): Promise<ClaudeInitializeFacts> {
-  let timer: ReturnType<typeof setTimeout> | undefined
   const control = input.connection.initializationResult().then((result) => {
     const authError = claudeInitializationAuthError(result, input.account)
     if (authError) {
@@ -84,6 +79,7 @@ export async function readClaudeStartupFacts(input: {
   })
   const initialization = await Promise.race([
     control.catch(async (error: unknown) => {
+      const exit = await claudeExitForReport(input.connection, error)
       let proof: unknown
       try {
         input.initProof.seen()
@@ -95,8 +91,8 @@ export async function readClaudeStartupFacts(input: {
       throw claudeStartFailure([
         input.connection.startupFailure?.(),
         proof,
-        error,
-        await claudeExitForReport(input.connection, error)
+        (proof || providerExitObserved(exit)) && isClaudeQueryClosed(error) ? undefined : error,
+        exit
       ])
     }),
     Promise.race([
@@ -109,23 +105,8 @@ export async function readClaudeStartupFacts(input: {
         throw error
       }
       throw await claudeStartupAnswerAfterExit(input.connection, control, error)
-    }),
-    new Promise<never>((_resolve, reject) => {
-      timer = setTimeout(
-        () =>
-          reject(
-            withProviderRequestTimeout(
-              new Error(
-                `claude did not answer initialize within ${CLAUDE_INITIALIZE_TIMEOUT_MS}ms`
-              ),
-              { method: 'initialize', timeoutMs: CLAUDE_INITIALIZE_TIMEOUT_MS }
-            )
-          ),
-        CLAUDE_INITIALIZE_TIMEOUT_MS
-      )
-      timer.unref?.()
     })
-  ]).finally(() => clearTimeout(timer))
+  ])
   if (input.connection.closed) {
     throw (
       input.connection.startupFailure?.() ??
@@ -176,7 +157,6 @@ function applyClaudeSettingsFacts(
   writtenSinceRead: boolean
 ): void {
   const { settings, prepared } = facts
-  const effort = readClaudeSettingsEffort(settings)
   const published = claudeStructuredSessionPublicationOptions(prepared)
   if (!writtenSinceRead) {
     const applied = readClaudeSettingsApplied(settings)
@@ -193,23 +173,9 @@ function applyClaudeSettingsFacts(
     return
   }
   observeClaudeSettingsApplied(session, settings)
+  observeClaudeSettingsEffort(session, settings)
   const agrees = (key: string, reported: string): boolean =>
     !session.options.has(key) || session.options.get(key) === reported
-  if (effort) {
-    session.reportedOptions.effort = effort
-    if (agrees('effort', effort)) {
-      session.confirmedOptions.add('effort')
-    }
-  }
-  // A launch `--effort` shows only in `applied`, never in `effective` (measured on 2.1.280).
-  const launchedEffort = session.options.get('effort')
-  if (
-    launchedEffort !== undefined &&
-    claudeObservedEffort(session.appliedOptions?.effort, session.appliedOptions?.ultracode) ===
-      launchedEffort
-  ) {
-    session.confirmedOptions.add('effort')
-  }
   if (published.fastMode !== null) {
     session.reportedOptions.fastMode = published.fastMode
     if (agrees('fastMode', String(published.fastMode))) {
@@ -228,7 +194,7 @@ function claudeStartedReportedOptions(
   const { model: _projected, ...rest } = current
   const model = claudeExecutionObservations(session).model
   const observed = { ...rest, ...(model ? { model } : {}) }
-  if (session.options.has('effort') || session.reportedOptions.effort !== undefined) {
+  if (session.options.has('effort')) {
     return { reportedOptions: observed }
   }
   const { effort: _displayOnly, ...persisted } = observed

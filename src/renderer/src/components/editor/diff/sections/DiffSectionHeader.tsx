@@ -1,7 +1,7 @@
 import { combinedDiffHeaderAttributes } from '../../combined-diff/scroll-viewport/combined-diff-viewport'
 import { ChevronDown, ChevronRight, ExternalLink, Eye } from 'lucide-react'
 import type { MouseEvent, ReactElement, ReactNode } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { splitPathForDisplay } from '../../editor-path-display'
 
 export function DiffSectionHeader({
@@ -27,6 +27,7 @@ export function DiffSectionHeader({
   onOpenPreview?: (event: MouseEvent) => void
   trailingContent?: ReactNode
 }): ReactElement {
+  const t = useTranslate()
   const displayPath = splitPathForDisplay(path)
   return (
     <div
@@ -61,7 +62,7 @@ export function DiffSectionHeader({
               console.error('Failed to copy diff path:', error)
             })
           }}
-          title={translate('auto.components.editor.DiffSectionHeader.8915726e93', 'Copy path')}
+          title={t('auto.components.editor.DiffSectionHeader.8915726e93', 'Copy path')}
         >
           <span className="path-display-prefix">{displayPath.prefix}</span>
           <span className="path-display-file">{displayPath.fileName}</span>
@@ -88,11 +89,11 @@ export function DiffSectionHeader({
               event.stopPropagation()
               onOpenPreview(event)
             }}
-            title={translate(
+            title={t(
               'auto.components.editor.EditorPanelHeader.fb8331694e',
               'Open Preview to the Side'
             )}
-            aria-label={translate(
+            aria-label={t(
               'auto.components.editor.EditorPanelHeader.fb8331694e',
               'Open Preview to the Side'
             )}

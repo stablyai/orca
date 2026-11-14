@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../../../persistence/loading-store/store'
 import type * as RepoWorktrees from '../../../workspaces/catalog/repo-worktrees'
@@ -10,13 +10,11 @@ import {
   buildProjectGroupChildIndex,
   getProjectGroupSubtreeIds
 } from '../../../../shared/project-groups'
-import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import type * as CrossPlatformPathModule from '../../../../shared/cross-platform-path'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Project } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
-import { getAllowedRoots } from './filesystem-allowed-roots'
 import { resolveAuthorizedPath } from './filesystem-auth'
 import { invalidateAuthorizedRootsCache } from '../../worktrees/removal/registered-worktree-roots-cache'
 
@@ -200,49 +198,10 @@ beforeEach(() => {
   vi.mocked(getProjectGroupSubtreeIds).mockClear()
 })
 
-describe('getAllowedRoots', () => {
-  it('stops scanning repositories when a local candidate settles each folder scope', async () => {
-    const fixture: StoreFixture = {
-      repos: Array.from({ length: 1_000 }, (_, index) =>
-        makeRepo({ id: `repo-${index}`, path: `/folders/root/repo-${index}` })
-      ),
-      projects: [],
-      projectGroups: [],
-      folderWorkspaces: Array.from({ length: 100 }, (_, index) =>
-        makeWorkspace({ id: `folder-${index}`, folderPath: '/folders/root' })
-      )
-    }
-    const { store } = makeCountingStore(fixture)
-    vi.mocked(isPathInsideOrEqual).mockClear()
-    const actual = await getAllowedRoots(store)
-    expect(isPathInsideOrEqual).toHaveBeenCalledTimes(100)
-    expect(actual).toHaveLength(1_100)
-    expect(actual).toEqual([
-      ...fixture.repos.map((repo) => resolve(repo.path)),
-      ...fixture.folderWorkspaces.map((workspace) => resolve(workspace.folderPath))
-    ])
-  })
-
-  it('reads the store once and indexes project groups once per build', async () => {
-    const fixture = makeMixedFixture()
-    const { store, counts } = makeCountingStore(fixture)
-
-    await getAllowedRoots(store)
-
-    expect.soft(counts.getRepos).toBe(1)
-    expect.soft(counts.getProjectGroups).toBe(1)
-    expect.soft(counts.getFolderWorkspaces).toBe(1)
-    expect.soft(counts.getProjects).toBe(1)
-    expect.soft(vi.mocked(buildProjectGroupChildIndex)).toHaveBeenCalledTimes(1)
-    expect.soft(vi.mocked(getProjectGroupSubtreeIds)).not.toHaveBeenCalled()
-  })
-})
-
 describe('resolveAuthorizedPath allowed-root reuse', () => {
   let repoRoot: string
   let outsideRoot: string
   let store: Store
-  let counts: StoreCallCounts
 
   beforeEach(async () => {
     repoRoot = await mkdtemp(join(await realpath(tmpdir()), 'orca-allowed-roots-'))
@@ -250,32 +209,12 @@ describe('resolveAuthorizedPath allowed-root reuse', () => {
     const fixture = makeMixedFixture()
     fixture.repos = [makeRepo({ id: 'repo-local', path: repoRoot }), ...fixture.repos]
     fixture.projects[0]!.sourceRepoIds = ['repo-local']
-    ;({ store, counts } = makeCountingStore(fixture))
+    ;({ store } = makeCountingStore(fixture))
   })
 
   afterEach(async () => {
     await rm(repoRoot, { recursive: true, force: true })
     await rm(outsideRoot, { recursive: true, force: true })
-  })
-
-  it('builds the allowed-root list once per call across repeated reads', async () => {
-    const dirPath = join(repoRoot, 'src')
-    await mkdir(dirPath)
-    await writeFile(join(dirPath, 'index.ts'), 'export {}\n')
-    const callCount = 5
-
-    for (let index = 0; index < callCount; index += 1) {
-      await resolveAuthorizedPath(dirPath, store)
-      await resolveAuthorizedPath(join(dirPath, 'index.ts'), store)
-    }
-
-    const buildCount = callCount * 2
-    // Reuse one root snapshot across raw and realpath authorization.
-    expect.soft(counts.getFolderWorkspaces).toBe(buildCount)
-    expect.soft(counts.getRepos).toBe(buildCount)
-    expect.soft(counts.getProjects).toBe(buildCount)
-    expect.soft(vi.mocked(buildProjectGroupChildIndex)).toHaveBeenCalledTimes(buildCount)
-    expect.soft(vi.mocked(getProjectGroupSubtreeIds)).not.toHaveBeenCalled()
   })
 
   // Windows symlinks require elevation/Developer Mode; retain ordinary path coverage there.

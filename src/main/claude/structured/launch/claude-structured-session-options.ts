@@ -10,7 +10,7 @@ import type { ClaudeSession } from '../claude-structured-session-state'
 import {
   structuredAgentSessionOptionModels,
   type StructuredAgentSessionLiveOptions
-} from '../../../native-chat/agent-session-wire/structured-agent-session-option-models'
+} from '../../../native-chat/agent-session-wire/options/structured-agent-session-option-models'
 import { wireClaudeModels, type WireClaudeModel } from './claude-structured-catalog-listing'
 import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/structured-agent-session-option-codec'
 
@@ -21,12 +21,46 @@ export function claudeObservedEffort(
   return ultracode === true && effort === 'xhigh' ? 'ultracode' : (effort ?? null)
 }
 
-/** Effort comes from settings; system/init omits it. */
-export function readClaudeSettingsEffort(settings: unknown): string | null {
-  return claudeObservedEffort(
-    text(record(record(settings)?.effective)?.effortLevel),
-    record(record(settings)?.applied)?.ultracode
-  )
+function claudeSettingsEffortFacts(settings: unknown): {
+  raw: string | null | undefined
+  observed: string | null | undefined
+} {
+  const root = record(settings)
+  const applied = record(root?.applied)
+  const raw = applied?.effort === null ? null : (text(applied?.effort) ?? undefined)
+  const legacy =
+    root !== null &&
+    (!Object.hasOwn(root, 'applied') || (applied !== null && !Object.hasOwn(applied, 'effort')))
+  const effort = legacy ? (text(record(root?.effective)?.effortLevel) ?? undefined) : raw
+  return {
+    raw,
+    observed: effort === undefined ? undefined : claudeObservedEffort(effort, applied?.ultracode)
+  }
+}
+
+/** Applied effort includes native overrides; only older CLIs need the settings fallback. */
+export function readClaudeSettingsEffort(settings: unknown): string | null | undefined {
+  return claudeSettingsEffortFacts(settings).observed
+}
+
+export function observeClaudeSettingsEffort(
+  session: ClaudeSession,
+  settings: unknown
+): string | null | undefined {
+  const effort = readClaudeSettingsEffort(settings)
+  if (effort === null) {
+    delete session.reportedOptions.effort
+  } else if (effort !== undefined) {
+    session.reportedOptions.effort = effort
+  }
+  const held = session.options.get('effort')
+  // Native defaults stay observations; only a matching held input is corroborated.
+  if (held === undefined || (effort !== undefined && effort !== held)) {
+    session.confirmedOptions.delete('effort')
+  } else if (effort !== undefined) {
+    session.confirmedOptions.add('effort')
+  }
+  return effort
 }
 
 /** CLI resolution of env, settings and defaults; null effort sends none, and older CLIs omit the block. */
@@ -38,7 +72,7 @@ export function readClaudeSettingsApplied(
     return null
   }
   const model = text(applied.model)
-  const effort = text(applied.effort)
+  const effort = claudeSettingsEffortFacts(settings).raw
   return {
     ...(model ? { model } : {}),
     ...(effort ? { effort } : {}),
@@ -151,13 +185,10 @@ function observeClaudeSettingsReadback(
   readMutationSequence: number
 ): void {
   if (settings !== null && readMutationSequence === session.optionMutationSequence) {
-    const effort = readClaudeSettingsEffort(settings)
+    observeClaudeSettingsEffort(session, settings)
     const fastMode = readClaudeSettingsFastMode(settings)
     const perSessionOptIn = readClaudeSettingsFastModePerSessionOptIn(settings)
     observeClaudeSettingsApplied(session, settings)
-    if (effort) {
-      session.reportedOptions.effort = effort
-    }
     if (fastMode !== null) {
       session.reportedOptions.fastMode = fastMode
       if (decodedFastMode(session) !== undefined) {
@@ -212,7 +243,6 @@ export function claudeStructuredSessionOptionsFrom(
     ...(changesLive ? {} : { effortFixed: true as const }),
     current: {
       model,
-      reportedModel: session.reportedOptions.reportedModel,
       reportedPermissionMode: session.reportedOptions.reportedPermissionMode,
       ...(effort ? { effort } : {}),
       ...(fastMode !== undefined ? { fastMode } : {}),

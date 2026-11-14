@@ -13,7 +13,8 @@ import { getOnboardingCohortAtEmit } from '../telemetry/onboarding-cohort-classi
 import { resolveConsent, type ConsentState } from '../telemetry/consent'
 import type { Store } from '../persistence/loading-store/store'
 import { isCohortExtendedEvent, isOnboardingEvent } from '../../shared/telemetry-events'
-import type { EventName, EventProps, OptInVia } from '../../shared/telemetry-events'
+import type { EventName, OptInVia } from '../../shared/telemetry-events'
+import type { EventProps } from '../../shared/telemetry-event-classification'
 
 // Derive consent provenance synchronously from pre-mutation settings.
 let storeRef: Store | null = null
@@ -27,8 +28,12 @@ const MAIN_OWNED_TELEMETRY_EVENTS = new Set<EventName>([
   'daemon_audit_eligibility',
   'daemon_pty_cwd_denied',
   'daemon_pty_cwd_readable',
+  'daemon_pty_cwd_denial_capture',
   'star_nag_outcome',
   'feature_interaction_usage_bucket_reached',
+  'first_agent_interaction',
+  'meaningful_activity_day',
+  'native_chat_prompt_submitted',
   'plugin_installed',
   'ssh_remote_runtime_resolved',
   'ssh_host_server_decided',

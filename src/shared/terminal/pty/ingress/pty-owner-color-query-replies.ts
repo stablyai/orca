@@ -4,7 +4,10 @@ import {
 } from './pty-owner-color-query-colors'
 import type { PtyStartupIngressIntent } from './pty-startup-ingress-intent'
 import { COLOR_SCHEME_QUERY, type PtyStartupQuery } from './pty-startup-query'
-import { TerminalOscColorOverrideTracker } from '../../protocol/queries/terminal-osc-color-override-tracker'
+import {
+  TerminalOscColorOverrideTracker,
+  type TerminalOsc133MarkerSink
+} from '../../protocol/queries/terminal-osc-color-override-tracker'
 import {
   cssColorToOscRgb,
   terminalOscColorQueryReplies,
@@ -33,9 +36,10 @@ export class PtyOwnerColorQueryReplies {
 
   constructor(
     private readonly intent: PtyStartupIngressIntent | undefined,
-    private readonly resolveHostColors: () => TerminalOscColorQueryReplyColors | null = getPtyOwnerHostColors
+    private readonly resolveHostColors: () => TerminalOscColorQueryReplyColors | null = getPtyOwnerHostColors,
+    commandMarkers?: TerminalOsc133MarkerSink
   ) {
-    this.overrides = new TerminalOscColorOverrideTracker(this.ownsAppearance)
+    this.overrides = new TerminalOscColorOverrideTracker(this.ownsAppearance, commandMarkers)
   }
 
   /** A launcher-pinned PTY's owner is its only theme responder, so viewers and the host never answer it. */

@@ -103,12 +103,16 @@ public class OrcaReservedRegionsModule: Module {
           .intersection(window.bounds)
         keyboardInset = overlap.isNull ? 0 : overlap.height
       }
+      // Same top as the root's (OrcaWindowControlsInset), so pages clear iPad window controls too.
+      var safeAreaInsets = window.safeAreaInsets
+      safeAreaInsets.top = max(
+        safeAreaInsets.top, window.edgeInsets(for: .safeArea(cornerAdaptation: .vertical)).top)
       let snapshot = ReservedRegionsSnapshot(
         divisions: window.reservedRegions(kind: .division).map(\.frame),
         hasFoldDivision: !window.reservedRegions(kind: .division, options: .includeInactive).isEmpty,
         occlusions: window.reservedRegions(kind: .occlusion).map(\.frame),
         windowBounds: window.bounds,
-        windowSafeAreaInsets: window.safeAreaInsets,
+        windowSafeAreaInsets: safeAreaInsets,
         keyboardInset: keyboardInset
       )
       // The first layout always reports, so a listener starts from the real state.

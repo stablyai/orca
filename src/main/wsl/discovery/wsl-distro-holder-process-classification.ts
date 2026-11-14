@@ -1,4 +1,4 @@
-import type { WindowsProcessEvidence } from '../../daemon/daemon-incarnation-evidence-types'
+import type { WindowsProcessEvidence } from '../../daemon/endpoint/identity/daemon-incarnation-evidence-types'
 import { isWslDistroHolderCommandLine } from './wsl-distro-holder-command'
 import type { WslDistroHolderRecord } from './wsl-distro-holder-record'
 import type { WslDistroHolderState } from './wsl-distro-holder-types'

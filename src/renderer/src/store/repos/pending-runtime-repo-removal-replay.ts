@@ -1,8 +1,8 @@
 import { toast } from 'sonner'
 import type { RuntimeHostStatusSnapshot } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
-import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import { translate } from '@/i18n/i18n'
-import { readIpcErrorMessage } from '@/lib/ipc-error'
+import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { ERROR_TOAST_DURATION } from './repo-state'
 import { isRuntimeEnvironmentRegistered } from './runtime-environment-registration'
 import {
@@ -41,7 +41,7 @@ export function replayPendingRuntimeRepoRemovalsIfReady(environmentId: string): 
       )
       // The fence hid the server's row; lifting it needs a fresh listing to show the project again.
       // Lazy: the store imports this module through repo removal.
-      void import('@/store')
+      void import('@/store/index')
         .then(({ useAppStore }) =>
           useAppStore.getState().fetchRuntimeEnvironmentRepos(environmentId)
         )

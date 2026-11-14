@@ -41,7 +41,7 @@ export async function runOrcaCli(
 }
 
 async function runOrcaCliOnce(args: string[]): Promise<CliResult> {
-  const devCli = join(process.cwd(), 'config/scripts/orca-dev.mjs')
+  const devCli = join(process.cwd(), 'config/scripts/development/launch/orca-dev.mjs')
   const command = process.env.ORCA_COMPUTER_CLI ?? process.execPath
   const cliArgs = process.env.ORCA_COMPUTER_CLI ? args : [devCli, ...args]
   const env = process.env.ORCA_COMPUTER_CLI
@@ -137,7 +137,7 @@ function delay(ms: number): Promise<void> {
 
 async function ensureOrcaRuntimeServed(): Promise<void> {
   if (!orcaServeProcess || orcaServeProcess.exitCode !== null) {
-    const devCli = join(process.cwd(), 'config/scripts/orca-dev.mjs')
+    const devCli = join(process.cwd(), 'config/scripts/development/launch/orca-dev.mjs')
     const env = await createComputerE2ERuntimeEnv()
     orcaServeStdout = ''
     orcaServeStderr = ''

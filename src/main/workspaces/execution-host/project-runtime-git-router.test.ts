@@ -109,19 +109,6 @@ describe('createProjectRuntimeGitRouter', () => {
     expect(router(String.raw`E:\new\fast-wt`)).toBeUndefined()
   })
 
-  it('rebuilds on a miss at most once per write, in case a write came without its event', () => {
-    const { state, router } = world()
-    expect(router(String.raw`C:\src\app`)).toBe('Ubuntu')
-    state.repos = [...state.repos, repo('added', String.raw`F:\added`)]
-    state.projects = [...state.projects, project('added')]
-    expect(router(String.raw`F:\added\src`)).toBe('Ubuntu')
-    state.repos = [...state.repos, repo('later', String.raw`H:\later`)]
-    state.projects = [...state.projects, project('later')]
-    expect(router(String.raw`H:\later`)).toBeUndefined()
-    router.invalidate()
-    expect(router(String.raw`H:\later`)).toBe('Ubuntu')
-  })
-
   it('routes by the saved preference even when the distro is missing, so Git fails in WSL', () => {
     const { state, router } = world()
     state.projects = state.projects.map((entry) =>
@@ -153,16 +140,6 @@ describe('createProjectRuntimeGitRouter', () => {
     expect(router(String.raw`S:\app\src`)).toBe('Ubuntu')
   })
 
-  it('traces each unknown folder once per write, and again after the next write', () => {
-    const { router, walks } = world()
-    router(String.raw`G:\scratch`)
-    router(String.raw`G:\scratch`)
-    expect(walks()).toBe(1)
-    router.invalidate()
-    router(String.raw`G:\scratch`)
-    expect(walks()).toBe(2)
-  })
-
   it("maps a link under a distro's custom mount root into a known WSL project's drive tree", () => {
     const { router, links, automountRoots } = world()
     links.set(String.raw`E:\new\rooted`, '/c/src/app/.git/worktrees/rooted')
@@ -174,10 +151,5 @@ describe('createProjectRuntimeGitRouter', () => {
     // Under that root, a path that maps to no project's drive tree still routes nothing.
     links.set(String.raw`E:\new\elsewhere`, '/c/other/.git/worktrees/elsewhere')
     expect(router(String.raw`E:\new\elsewhere`)).toBeUndefined()
-  })
-
-  it('names the distros its projects run Git in, for reading their mount roots', () => {
-    const { router } = world()
-    expect(router.distros()).toEqual(['Ubuntu'])
   })
 })

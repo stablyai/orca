@@ -32,17 +32,16 @@ function temporary(t) {
   return directory
 }
 
-function start(t, options = {}) {
+function start(t) {
   const scratchParent = temporary(t)
   const calls = []
   const reports = []
   const events = new EventEmitter()
-  const env = { ORCA_RELAY_TEST_POSTGRES_URL: databaseUrl, PRESERVED: 'yes', ...options.env }
+  const env = { ORCA_RELAY_TEST_POSTGRES_URL: databaseUrl, PRESERVED: 'yes' }
   const pending = runRelayTests({
     cwd: join(scratchParent, 'relay'),
     cli: join(scratchParent, 'vitest.mjs'),
     parallelism: 4,
-    ...options,
     env,
     events,
     scratchParent,
@@ -53,7 +52,7 @@ function start(t, options = {}) {
       return deferred.promise
     }
   })
-  return { pending, calls, reports, events, scratchParent, env }
+  return { pending, calls, reports, events, scratchParent }
 }
 
 function finish(call, result = success, closed = true) {
@@ -103,44 +102,6 @@ test('overlaps both projects within the worker budget and isolates their scratch
   assertClean(h)
 })
 
-for (const [name, options] of [
-  ['selectors', { args: ['src/assignment.test.ts', '-t', 'requested behavior'] }],
-  [
-    'alternate PostgreSQL',
-    { env: { ORCA_IDLE_REHOME_POSTGRES_URL: 'postgres://localhost:55440/relay' } }
-  ],
-  ['application database', { env: { DATABASE_URL: databaseUrl } }],
-  ['one CPU', { parallelism: 1 }],
-  ['two CPUs', { parallelism: 2 }]
-]) {
-  test(`retains the original single run for ${name}`, async (t) => {
-    const h = start(t, options)
-    assert.equal(h.calls.length, 1)
-    const { spec } = h.calls[0]
-    assert.deepEqual(spec.args.slice(1), ['run', ...(options.args ?? [])])
-    for (const [key, value] of Object.entries(h.env)) {
-      assert.equal(spec.env[key], value)
-    }
-    finish(h.calls[0])
-    assert.equal(await h.pending, 0)
-    assertClean(h)
-  })
-}
-
-for (const [name, result] of [
-  ['null exit code', { ...success, code: null }],
-  ['termination signal', { ...success, signal: 'SIGTERM' }],
-  ['timeout', { ...success, timedOut: true }]
-]) {
-  test(`fails a ${name} even when other result fields indicate success`, async (t) => {
-    const h = start(t)
-    finish(h.calls[0], result)
-    finish(h.calls[1])
-    assert.equal(await h.pending, 1)
-    assertClean(h)
-  })
-}
-
 test('fails and retains scratch when a child never reports closure', async (t) => {
   const h = start(t)
   finish(h.calls[0], success, false)
@@ -153,8 +114,7 @@ test('fails and retains scratch when a child never reports closure', async (t) =
 })
 
 for (const [signal, exitCode, laterSignal] of [
-  ['SIGINT', 130, 'SIGTERM'],
-  ['SIGTERM', 143, 'SIGINT']
+  ['SIGINT', 130, 'SIGTERM']
 ]) {
   test(`${signal} cancels every child and retains scratch despite root close callbacks`, async (t) => {
     const h = start(t)

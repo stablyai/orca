@@ -9,14 +9,14 @@ import type {
   ProjectHostSetupUpdateResult
 } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
-import { omitSparsePresetsForRepos } from '../slices/sparse-presets'
-import { repoMatchesHostIdentity } from '../slices/repo-host-identity'
-import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import { omitSparsePresetsForRepos } from '../slices/worktrees/create/sparse-presets'
+import { repoMatchesHostIdentity } from '../repos/repo-host-identity'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import { translate } from '@/i18n/i18n'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { RepoSlice } from '../repos/repo-state'
 import { ERROR_TOAST_DURATION } from '../repos/repo-state'
-import { adoptFromEndpoint } from '../adopt-from-endpoint'
+import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
 import { normalizeProjectRow } from '../../../../shared/project-catalog-row-normalization'
 import {
   assertNotSshProjectHost,
@@ -26,6 +26,7 @@ import {
   prepareProjectHostSetupMutation,
   upsertProjectHostSetup
 } from './project-host-routing'
+import { toastProjectAddFailure } from './project-add-failure-toast'
 
 export function createProjectHostSetupActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -94,11 +95,7 @@ export function createProjectHostSetupActions(
         return { ...result, project, repo, setup }
       } catch (err) {
         console.error('Failed to set up project on host:', err)
-        const message = err instanceof Error ? err.message : String(err)
-        toast.error(translate('auto.store.slices.repos.c6e022ddfc', 'Failed to add project'), {
-          description: message,
-          duration: ERROR_TOAST_DURATION
-        })
+        toastProjectAddFailure(err)
         return null
       }
     },
@@ -265,7 +262,8 @@ export function createProjectHostSetupActions(
           target.kind === 'local'
             ? await window.api.repos.clone({
                 url: args.url,
-                destination: args.destination
+                destination: args.destination,
+                folderName: args.folderName
               })
             : (
                 await callRuntimeRpc<{ repo: Repo }>(
@@ -273,7 +271,8 @@ export function createProjectHostSetupActions(
                   'repo.clone',
                   {
                     url: args.url,
-                    destination: args.destination
+                    destination: args.destination,
+                    folderName: args.folderName
                   },
                   { timeoutMs: 10 * 60_000 }
                 )
@@ -288,11 +287,7 @@ export function createProjectHostSetupActions(
         })
       } catch (err) {
         console.error('Failed to clone project on host:', err)
-        const message = err instanceof Error ? err.message : String(err)
-        toast.error(translate('auto.store.slices.repos.c6e022ddfc', 'Failed to add project'), {
-          description: message,
-          duration: ERROR_TOAST_DURATION
-        })
+        toastProjectAddFailure(err)
         return null
       }
     }

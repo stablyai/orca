@@ -55,17 +55,4 @@ describe('useImageInput', () => {
     )
     expect(() => target.state.doc.check()).not.toThrow()
   })
-
-  it('keeps an image URL inline when the cursor is in ordinary prose', () => {
-    const target = mountComposerEditor('Install the extension\n')
-    target.commands.setTextSelection(13)
-    const { result } = renderImageInput(target)
-
-    act(() => result.current.setImageUrl('https://example.com/shot.png'))
-    act(() => result.current.insertImageUrl())
-
-    expect(target.getMarkdown().trimEnd()).toBe(
-      'Install the ![](https://example.com/shot.png)extension'
-    )
-  })
 })

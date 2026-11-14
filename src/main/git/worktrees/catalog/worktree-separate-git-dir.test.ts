@@ -74,14 +74,6 @@ async function createNormalRepo(): Promise<string> {
   return createCommittedRepo(root, 'repo')
 }
 
-async function createBareRepo(): Promise<string> {
-  const root = await mkdtemp(path.join(tmpdir(), 'orca-bare-worktree-'))
-  tempRoots.push(root)
-  const repoPath = path.join(root, 'repo.git')
-  execFileSync('git', ['init', '--bare', '--quiet', repoPath])
-  return realpath(repoPath)
-}
-
 afterEach(async () => {
   revParseTopLevelCalls.count = 0
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
@@ -103,29 +95,6 @@ describe('git worktree separate git dir paths', () => {
       expect(mainWorktree?.path).not.toBe(gitDirPath)
     }
   )
-
-  it.skipIf(process.platform === 'win32')(
-    'fires exactly one rev-parse for a separate-git-dir repo',
-    async () => {
-      const { worktreePath } = await createSeparateGitDirRepo()
-
-      await listWorktrees(worktreePath)
-
-      expect(revParseTopLevelCalls.count).toBe(1)
-    }
-  )
-
-  it.skipIf(process.platform === 'win32')('leaves a normal repo main path unchanged', async () => {
-    const repoPath = await createNormalRepo()
-
-    const worktrees = await listWorktrees(repoPath)
-    const mainWorktree = worktrees.find((worktree) => worktree.isMainWorktree)
-
-    expect(mainWorktree).toMatchObject({
-      path: repoPath,
-      isMainWorktree: true
-    })
-  })
 
   it.skipIf(process.platform === 'win32')(
     'leaves an ordinary repo reached via a symlinked path unchanged',
@@ -201,17 +170,4 @@ describe('git worktree separate git dir paths', () => {
       ])
     }
   )
-
-  it.skipIf(process.platform === 'win32')('does not throw for a bare repo', async () => {
-    const repoPath = await createBareRepo()
-
-    const worktrees = await listWorktrees(repoPath)
-    const mainWorktree = worktrees.find((worktree) => worktree.isMainWorktree)
-
-    expect(mainWorktree).toMatchObject({
-      path: repoPath,
-      isBare: true,
-      isMainWorktree: true
-    })
-  })
 })

@@ -19,6 +19,10 @@ export const CODEX_COMMAND_IDENTITY_ENV_KEYS = [
   'ORCA_USER_DATA_PATH'
 ] as const
 
+// Blank Orca's clipboard marker for commands Codex runs: agy reads SSH_CONNECTION as a remote host and ignores its local login (#37723).
+// Why set, not exclude: -c exclude would replace the user's own exclude list. Real SSH never reports port 0.
+const CLEAR_SSH_MARKER_ARG = "shell_environment_policy.set.SSH_CONNECTION=''"
+
 // Skip apostrophes: TOML literals cannot hold them and Codex parse fallback may truncate paths; missing identity is safer than wrong identity.
 const identitySetArg = (key: string, value: string): string =>
   `shell_environment_policy.set.${key}='${value}'`
@@ -30,7 +34,8 @@ export function getPosixCodexShellLaunchPreflight(): string {
 # Why || : twice — zsh alone aborts inside the substitution, but every shell's
 # assignment adopts its exit status, so an absent codex trips set -e in bash too.
 __orca_codex_binary="$(unalias codex 2>/dev/null || :; command -v codex 2>/dev/null || :)"
-if [[ -n "\${__orca_codex_binary:-}" && -x "\${__orca_codex_binary}" ]]; then
+# Why typeset -f: a user's own codex function wins; command -v prints its bare name, which -x tests against the cwd.
+if ! typeset -f codex >/dev/null 2>&1 && [[ -n "\${__orca_codex_binary:-}" && -x "\${__orca_codex_binary}" ]]; then
   # Why the function reserved word: it suppresses alias expansion of the name,
   # which otherwise rewrites this header at parse time and aborts the whole file.
   function codex {
@@ -50,6 +55,7 @@ if [[ -n "\${__orca_codex_binary:-}" && -x "\${__orca_codex_binary}" ]]; then
     done
     if [[ "$__orca_codex_identity" != 0 ]]; then
 ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `      [[ -z "\${${key}:-}" || "\${${key}}" == *"'"* ]] || set -- -c "${identitySetArg(key, `\${${key}}`)}" "$@"`).join('\n')}
+      [[ "\${SSH_CONNECTION:-}" != '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}' ]] || set -- -c "${CLEAR_SSH_MARKER_ARG}" "$@"
     fi
     # Why probe every launch: a cached answer goes stale across an upgrade, and 0.155 and older exit 2 on the flag.
     if [[ "$__orca_codex_isolate" != 0 ]]; then
@@ -74,6 +80,9 @@ if test "$__orca_codex_type" = file
     end
     if test "$ORCA_CODEX_ISOLATE" != 0; and not string match -qr -- '${CODEX_SHARED_SERVER_ARG_PATTERN}' $argv
 ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `      test -n "$${key}"; and not string match -q -- "*'*" "$${key}"; and set argv -c "${identitySetArg(key, `$${key}`)}" $argv`).join('\n')}
+      if test "$SSH_CONNECTION" = '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}'; or begin; test "$${REMOTE_VIEWER_CLIPBOARD_ENV}" = 1; and not set -q SSH_CONNECTION; and not set -q SSH_TTY; end
+        set argv -c "${CLEAR_SSH_MARKER_ARG}" $argv
+      end
     end
     if test "$ORCA_CODEX_ISOLATE" != 0; and not string match -qr -- '${CODEX_NO_DAEMON_SKIP_ARG_PATTERN}' $argv; and command codex --help 2>/dev/null </dev/null | string match -q -- '*--no-daemon*'
       set argv --no-daemon $argv
@@ -117,12 +126,13 @@ if ($orcaCodexCommand -and
             } catch {
             }
         }
+        $orcaCodexRemoteClipboard = $env:${REMOTE_VIEWER_CLIPBOARD_ENV} -eq '1' -and -not (Test-Path Env:SSH_CONNECTION) -and -not (Test-Path Env:SSH_TTY)
         $orcaCodexIdentity = @()
         if ($env:ORCA_CODEX_ISOLATE -ne '0' -and -not (@($args) -cmatch '${CODEX_SHARED_SERVER_ARG_PATTERN}')) {
             foreach ($k in ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `'${key}'`).join(',')}) { $v = [Environment]::GetEnvironmentVariable($k); if ($v -and -not $v.Contains("'")) { $orcaCodexIdentity += '-c', "${identitySetArg('$k', '$v')}" } }
+            if ($orcaCodexRemoteClipboard -or $env:SSH_CONNECTION -ceq '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}') { $orcaCodexIdentity += '-c', "${CLEAR_SSH_MARKER_ARG}" }
         }
         $orcaCodexArgs = @(__OrcaEscapeNativeArgs $orcaCodexExecutable.Source (@($orcaCodexIdentity) + @($args)))
-        $orcaCodexRemoteClipboard = $env:${REMOTE_VIEWER_CLIPBOARD_ENV} -eq '1' -and -not (Test-Path Env:SSH_CONNECTION) -and -not (Test-Path Env:SSH_TTY)
         if ($orcaCodexRemoteClipboard) { $env:SSH_CONNECTION = '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}' }
         # Why: a native command inside a function never sees the function's pipeline input on its own.
         try {

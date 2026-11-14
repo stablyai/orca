@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, vi } from 'vitest'
 import * as electron from 'electron'
 import { join } from 'node:path'
-import { installFakeAppEnvironment } from '../../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import { setPtyHostBindings } from './pty-host-bindings'
 import { testPtyIpcSurface } from './pty-ipc-test-surface'
 import type { Mock } from 'vitest'

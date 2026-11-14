@@ -12,7 +12,7 @@ import {
   RUNTIME_CAPABILITIES,
   RUNTIME_SOURCE_FENCE_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
-import { publishHostDescriptor } from '../../../src/main/runtime/host-descriptor'
+import { publishHostDescriptor } from '../../../src/main/runtime/hosts/platform-probe/host-descriptor'
 import type { RuntimeMetadata } from '../../../src/shared/runtime-bootstrap'
 import type { ExpectedRuntimeSource } from '../../../src/shared/runtime-rpc-envelope'
 import { sendRequest } from '../../../src/cli/runtime/transport'

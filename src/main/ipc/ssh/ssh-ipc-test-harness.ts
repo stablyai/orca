@@ -45,7 +45,9 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     getRepos: () => [],
     getSshRemotePtyLeases: vi.fn().mockReturnValue([]),
     markSshRemotePtyLease: vi.fn(),
-    removeSshRemotePtyLeases: vi.fn()
+    removeSshRemotePtyLeases: vi.fn(),
+    getSettings: () => ({}),
+    updateSettings: vi.fn()
   }
   const mockWindow = {
     isDestroyed: () => false,

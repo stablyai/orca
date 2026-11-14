@@ -8,9 +8,12 @@ import type {
 } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 import { supportsHostedReviewCreation } from '../../shared/source-control/hosted-review/hosted-review-creation-providers'
 import { normalizeHostedReviewBaseRef } from '../../shared/source-control/hosted-review/hosted-review-refs'
-import { getRepoSlug } from '../github/client'
-import { isDefaultGitHubHost } from '../../shared/github/repository-identity-key'
-import { detectHostedReviewProvider, getForgeProviderForRepository } from './forge-provider'
+import { getRepoSlug } from '../github/client/fetch/repo-slug-upstream'
+import { isDefaultGitHubHost } from '../../shared/github/repositories/repository-identity-key'
+import {
+  detectHostedReviewProvider,
+  getForgeProviderForRepository
+} from './forge-provider-detection'
 import { invalidateHostedReviewBranchCache } from './hosted-review-branch-cache'
 import { getHostedReviewForBranch } from './hosted-review'
 import { blockedEligibilityToCreateResult } from './hosted-review-creation-blocking'

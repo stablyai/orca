@@ -1,8 +1,8 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import {
   isRpcDeliveryUnknown,
   markRpcDeliveryUnknown
-} from '../../transport/rpc-delivery-ambiguity'
+} from '../../transport/rpc/rpc-delivery-ambiguity'
 
 // Capture rejected promises, not RpcFailure data replies. Preserve the recorder’s five error fields, never stacks.
 export type BridgeErrorCapture = {

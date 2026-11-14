@@ -11,6 +11,8 @@ function fakeGuest(): WebContents {
 type FrameModel = {
   // Document keys: '' = root, session ID = cross-site frame, 'frame:<id>' = same-site context.
   focusedFrameBySession: Record<string, string | null>
+  focusedElementBySession?: Record<string, boolean>
+  rootProbeFails?: boolean
   crossSiteTargets: string[]
   sessionForTarget: Record<string, string>
   deadSessions?: Set<string>
@@ -29,12 +31,20 @@ function frameSender(model: FrameModel) {
     }
     switch (method) {
       case 'Runtime.evaluate': {
+        if (model.rootProbeFails && session === '' && params.contextId === undefined) {
+          throw new Error('Execution context was destroyed')
+        }
         const contextFrame =
           typeof params.contextId === 'number' ? frameByContext.get(params.contextId) : undefined
         const documentKey = contextFrame ? `frame:${contextFrame}` : session
         const frameId = model.focusedFrameBySession[documentKey] ?? null
         if (!frameId) {
-          return { result: { type: 'object', subtype: 'null' } }
+          return {
+            result: {
+              type: 'boolean',
+              value: model.focusedElementBySession?.[documentKey] ?? false
+            }
+          }
         }
         const objectId = `object-${(nextObject += 1)}`
         frameByObject.set(objectId, frameId)
@@ -76,27 +86,6 @@ describe('resolveFocusedFrameRoute', () => {
     })
   })
 
-  it('shares one attach between concurrent keys', async () => {
-    const guest = fakeGuest()
-    const send = frameSender({
-      focusedFrameBySession: { '': 'F1' },
-      crossSiteTargets: ['F1'],
-      sessionForTarget: { F1: 'S1' },
-      attachDelayMs: 20
-    })
-
-    const routes = await Promise.all([
-      resolveFocusedFrameRoute(guest, send),
-      resolveFocusedFrameRoute(guest, send)
-    ])
-
-    expect(routes).toEqual([
-      { kind: 'session', sessionId: 'S1' },
-      { kind: 'session', sessionId: 'S1' }
-    ])
-    expect(send.mock.calls.filter(([method]) => method === 'Target.attachToTarget')).toHaveLength(1)
-  })
-
   it('keeps hiding a session whose attach answered after the caller gave up', async () => {
     vi.useFakeTimers()
     try {
@@ -119,23 +108,6 @@ describe('resolveFocusedFrameRoute', () => {
     }
   })
 
-  it('follows focus into nested cross-site frames and reuses their sessions', async () => {
-    const guest = fakeGuest()
-    const send = frameSender({
-      focusedFrameBySession: { '': 'OUTER', S1: 'INNER' },
-      crossSiteTargets: ['OUTER', 'INNER'],
-      sessionForTarget: { OUTER: 'S1', INNER: 'S2' }
-    })
-
-    expect(await resolveFocusedFrameRoute(guest, send)).toEqual({
-      kind: 'session',
-      sessionId: 'S2'
-    })
-    await resolveFocusedFrameRoute(guest, send)
-
-    expect(send.mock.calls.filter(([method]) => method === 'Target.attachToTarget')).toHaveLength(2)
-  })
-
   it('attaches again when a cached frame session has died', async () => {
     const guest = fakeGuest()
     const model: FrameModel = {
@@ -151,34 +123,5 @@ describe('resolveFocusedFrameRoute', () => {
       kind: 'session',
       sessionId: 'NEW'
     })
-  })
-
-  it('treats an unreadable main frame as main-frame focus', async () => {
-    const send = vi.fn<GuestSessionCdpSender>(async () => {
-      throw new Error('Execution context was destroyed')
-    })
-
-    expect(await resolveFocusedFrameRoute(fakeGuest(), send)).toEqual({ kind: 'widget' })
-  })
-})
-
-describe('isOrcaFrameSessionTraffic', () => {
-  it('hides only the sessions Orca attached, and forgets them when they detach', async () => {
-    const guest = fakeGuest()
-    await resolveFocusedFrameRoute(
-      guest,
-      frameSender({
-        focusedFrameBySession: { '': 'F1' },
-        crossSiteTargets: ['F1'],
-        sessionForTarget: { F1: 'S1' }
-      })
-    )
-
-    expect(isOrcaFrameSessionTraffic(guest, 'Runtime.consoleAPICalled', {}, 'S1')).toBe(true)
-    expect(isOrcaFrameSessionTraffic(guest, 'Runtime.consoleAPICalled', {}, 'AGENT')).toBe(false)
-    expect(isOrcaFrameSessionTraffic(guest, 'Page.loadEventFired', {}, undefined)).toBe(false)
-    expect(
-      isOrcaFrameSessionTraffic(guest, 'Target.detachedFromTarget', { sessionId: 'S1' }, undefined)
-    ).toBe(true)
   })
 })

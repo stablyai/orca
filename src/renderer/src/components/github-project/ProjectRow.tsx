@@ -3,7 +3,7 @@ import React from 'react'
 import { ExternalLink, Play } from 'lucide-react'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import ColumnResizeHandle from './ColumnResizeHandle'
 import { resolveWidth } from './column-widths'
 import ProjectCell from './ProjectCell'
@@ -12,8 +12,8 @@ import type {
   GitHubProjectField,
   GitHubProjectFieldMutationValue,
   GitHubProjectRow as GitHubProjectRowType
-} from '../../../../shared/github/project-types'
-import { translate } from '@/i18n/i18n'
+} from '../../../../shared/github/projects/project-types'
+import { useTranslate } from '@/i18n/use-translate'
 
 const PROJECT_FROZEN_COLUMN_SURFACE_CLASS =
   '[background:color-mix(in_srgb,var(--muted)_50%,var(--background))]'
@@ -55,6 +55,7 @@ export default function ProjectRow({
   sourceHost,
   sourceTarget
 }: Props): React.JSX.Element {
+  const t = useTranslate()
   const disabled = row.itemType === 'REDACTED'
   // Drafts lack a navigable URL/number; expose their body on hover without fetching GitHub details.
   const draftBody =
@@ -123,7 +124,7 @@ export default function ProjectRow({
               <button
                 type="button"
                 onClick={onOpenInBrowser}
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.github.project.ProjectRow.e12be8b4d4',
                   'Open in GitHub'
                 )}
@@ -133,7 +134,7 @@ export default function ProjectRow({
               </button>
             </TooltipTrigger>
             <TooltipContent>
-              {translate('auto.components.github.project.ProjectRow.e12be8b4d4', 'Open in GitHub')}
+              {t('auto.components.github.project.ProjectRow.e12be8b4d4', 'Open in GitHub')}
             </TooltipContent>
           </Tooltip>
         ) : null}
@@ -143,17 +144,14 @@ export default function ProjectRow({
               <button
                 type="button"
                 onClick={onStartWork}
-                aria-label={translate(
-                  'auto.components.github.project.ProjectRow.75b5d816e3',
-                  'Start work'
-                )}
+                aria-label={t('auto.components.github.project.ProjectRow.75b5d816e3', 'Start work')}
                 className="rounded p-1 hover:bg-muted"
               >
                 <Play className="size-3.5" />
               </button>
             </TooltipTrigger>
             <TooltipContent>
-              {translate('auto.components.github.project.ProjectRow.75b5d816e3', 'Start work')}
+              {t('auto.components.github.project.ProjectRow.75b5d816e3', 'Start work')}
             </TooltipContent>
           </Tooltip>
         ) : null}

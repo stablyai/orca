@@ -1,11 +1,12 @@
 import type {
   AgentJournalApprovalItem,
+  AgentJournalPromptIntent,
   AgentJournalPromptOption,
   AgentJournalQuestionItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { boundInlineText } from '../../../native-chat/agent-session-journal/journal-payload-bounds'
-import { boundJournalPromptText } from '../../../native-chat/agent-session-journal/journal-prompt-body-bounds'
+import { boundInlineText } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-payload-bounds'
+import { boundJournalPromptText } from '../../../native-chat/agent-session-journal/item-lifecycle/journal-prompt-body-bounds'
 import {
   CODEX_APPROVAL_DECISIONS,
   type CodexApprovalDecision
@@ -20,12 +21,26 @@ import {
   encodeCodexJournalQuestionOptionId
 } from './codex-prompt-registry-bounds'
 import { codexMcpToolApprovalDecisions } from './codex-mcp-tool-approval'
+import { codexFileChangeApprovalDetail } from './codex-file-change-approval-detail'
 
 const APPROVAL_DECISION_LABELS: Record<CodexApprovalDecision, string> = {
   accept: 'Allow',
   acceptForSession: 'Allow for this session',
   decline: 'Deny',
   cancel: 'Stop'
+}
+
+// Cancel stops the turn, so it neither grants nor refuses just this call.
+const APPROVAL_DECISION_INTENTS: Partial<Record<CodexApprovalDecision, AgentJournalPromptIntent>> =
+  {
+    accept: 'allow_once',
+    acceptForSession: 'allow_always',
+    decline: 'reject_once'
+  }
+
+function codexApprovalOption(decision: CodexApprovalDecision): AgentJournalPromptOption {
+  const intent = APPROVAL_DECISION_INTENTS[decision]
+  return { id: decision, label: APPROVAL_DECISION_LABELS[decision], ...(intent ? { intent } : {}) }
 }
 
 const PENDING = {
@@ -65,7 +80,7 @@ export function codexApprovalOptions(params: unknown): AgentJournalPromptOption[
       )
     : []
   const decisions = offered.length > 0 ? offered : CODEX_APPROVAL_DECISIONS
-  return decisions.map((decision) => ({ id: decision, label: APPROVAL_DECISION_LABELS[decision] }))
+  return decisions.map(codexApprovalOption)
 }
 
 export function codexApprovalItem(input: {
@@ -78,14 +93,25 @@ export function codexApprovalItem(input: {
   if (input.method === CODEX_MCP_ELICITATION_METHOD) {
     return codexMcpToolApprovalItem(params)
   }
+  if (input.method === CODEX_FILE_CHANGE_APPROVAL_METHOD) {
+    const reason = readString(params, 'reason')
+    const grantRoot = readString(params, 'grantRoot')
+    return {
+      kind: 'approval',
+      title: 'Apply file changes?',
+      ...(reason ? { decisionReason: boundJournalPromptText(reason) } : {}),
+      ...(grantRoot ? { description: boundJournalPromptText(`Write access: ${grantRoot}`) } : {}),
+      detail: boundNullablePromptText(
+        codexFileChangeApprovalDetail(params.changes) ?? input.detail
+      ),
+      options: codexApprovalOptions(input.params),
+      resolution: { ...PENDING }
+    }
+  }
   return {
     kind: 'approval',
     title:
-      input.method === CODEX_FILE_CHANGE_APPROVAL_METHOD
-        ? 'Apply file changes?'
-        : input.method === CODEX_COMMAND_APPROVAL_METHOD
-          ? 'Run a command?'
-          : 'Approve this action?',
+      input.method === CODEX_COMMAND_APPROVAL_METHOD ? 'Run a command?' : 'Approve this action?',
     detail: boundNullablePromptText(approvalDetail(params) ?? input.detail),
     options: codexApprovalOptions(input.params),
     resolution: { ...PENDING }
@@ -101,7 +127,9 @@ function codexMcpToolApprovalItem(params: Record<string, unknown>): AgentJournal
     options: codexMcpToolApprovalDecisions(params).map((decision) => ({
       id: decision,
       // MCP cancel skips only this call and the turn continues, so it reads as Deny, not Stop.
-      label: APPROVAL_DECISION_LABELS[decision === 'cancel' ? 'decline' : decision]
+      label: APPROVAL_DECISION_LABELS[decision === 'cancel' ? 'decline' : decision],
+      // MCP cancel refuses this one call; the turn continues.
+      intent: decision === 'cancel' ? 'reject_once' : APPROVAL_DECISION_INTENTS[decision]
     })),
     resolution: { ...PENDING }
   }

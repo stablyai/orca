@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 function errorText(cause: unknown): string {
   return (cause instanceof Error ? cause.message : String(cause)).toLowerCase()
@@ -42,6 +43,15 @@ export function pluginInstallErrorMessage(cause: unknown): string {
       'The repository changed after Orca checked it. Try again.'
     )
   }
+  // Why: a fork of an official template keeps its reserved id/publisher, and this refusal used to
+  // fall through to a generic failure with no hint to rename (#12598). Checked before the Git
+  // heuristic because a reserved key such as `github.x` contains "git".
+  if (detail.includes('reserved for official orca plugins')) {
+    return translate(
+      'auto.components.settings.pluginError.installReservedIdentity',
+      'This plugin uses a name reserved for official Orca plugins, which install only from Orca’s catalog. For your own copy or fork, change "id" in orca-plugin.json so it doesn’t start with "orca-", and set "publisher" to your own name.'
+    )
+  }
   if (/(git|repository|fetch|clone|checkout|remote)/.test(detail)) {
     return translate(
       'auto.components.settings.pluginError.installGit',
@@ -55,40 +65,44 @@ export function pluginInstallErrorMessage(cause: unknown): string {
 }
 
 /** `installed`: a copy Orca installed, so its user can't edit the manifest; dev folders can. */
-export function invalidPluginErrorMessage(detailValue: string, installed = false): string {
+export function invalidPluginErrorMessage(
+  detailValue: string,
+  installed = false,
+  t: Translate = translate
+): string {
   const detail = detailValue.toLowerCase()
   // Why everything but a version gap: the user of an installed copy can't fix its files.
   if (installed && !detail.includes('requires orca')) {
-    return translate(
+    return t(
       'auto.components.settings.pluginError.installedManifestUnloadable',
       "This version can't load in this Orca. Update or reinstall it."
     )
   }
   if (detail.includes('missing orca-plugin.json')) {
-    return translate(
+    return t(
       'auto.components.settings.pluginError.invalidManifestMissing',
       'The plugin root is missing orca-plugin.json. Add it, then refresh plugins.'
     )
   }
   if (detail.includes('invalid manifest')) {
-    return translate(
+    return t(
       'auto.components.settings.pluginError.invalidManifest',
       'orca-plugin.json is invalid. Fix it, then refresh plugins.'
     )
   }
   if (detail.includes('artifact')) {
-    return translate(
+    return t(
       'auto.components.settings.pluginError.invalidArtifact',
       'A worker or panel file is missing or unsafe. Fix it, then refresh.'
     )
   }
   if (detail.includes('requires orca')) {
-    return translate(
+    return t(
       'auto.components.settings.pluginError.incompatible',
       'This plugin requires a different Orca version.'
     )
   }
-  return translate(
+  return t(
     'auto.components.settings.PluginSettingsRow.invalidPluginError',
     "This plugin's files are invalid. Fix them, then refresh."
   )

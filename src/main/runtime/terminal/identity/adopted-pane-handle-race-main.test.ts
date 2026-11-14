@@ -1,19 +1,20 @@
 // Restart adoption can publish a pane before its exported handle registers; any handle issued in that gap must stay valid or become stale.
 import { expect, it, vi } from 'vitest'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-types'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-session-contracts'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
-await import('../../orca-runtime-test-mocks.spec')
-await import('../../orca-runtime-test-lifecycle.spec')
+await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+await import('../../orca-runtime-tests/orca-runtime-test-lifecycle.spec')
 const { HEADLESS_LEAF_ID, TEST_WORKTREE_ID, TEST_WORKTREE_PATH } =
-  await import('../../orca-runtime-test-fixtures.spec')
-const { OrcaRuntimeService } = await import('../../orca-runtime-test-mocks.spec')
+  await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
+await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('../../orca-runtime')
 const {
   makeHeadlessTerminalLayout,
   makeRuntimeStoreWithWorkspaceSession,
   makeWorkspaceSessionWithHeadlessTerminal
-} = await import('../../orca-runtime-test-fixtures.spec')
+} = await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
 
 const TAB = '44444444-4444-4444-8444-444444444444'
 // A daemon session id names its worktree, so a record can exist before registration.

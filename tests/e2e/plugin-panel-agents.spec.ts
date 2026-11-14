@@ -109,6 +109,21 @@ test('a panel lists agents and hears their status and workspace changes', async 
     )
     expect(agents.find((agent) => agent.terminalId === event?.terminalId)?.state).toBe('working')
 
+    // A burst of changes reaches the panel once each, in order, each naming the same terminal.
+    for (const state of ['done', 'working', 'done'] as const) {
+      await emitCodexHookStatus(endpoint, { ...descriptor, state, prompt: 'Board' })
+    }
+    const paneEvents = async (): Promise<AgentEvent[]> =>
+      ((await readInGuest<AgentEvent[]>(guest, 'window.__seen.agents')) ?? []).filter(
+        (seen) => seen.paneKey === descriptor.paneKey
+      )
+    await expect
+      .poll(async () => (await paneEvents()).map(({ state }) => state), { timeout: 15_000 })
+      .toEqual(['working', 'done', 'working', 'done'])
+    expect(new Set((await paneEvents()).map(({ terminalId }) => terminalId))).toEqual(
+      new Set([event?.terminalId])
+    )
+
     // A terminal opening in the focused workspace reaches the panel without a poll.
     await orcaPage.evaluate((id) => {
       window.__store?.getState().createTab(id, undefined, undefined, { activate: false })

@@ -1,4 +1,4 @@
-import { settledDaemonRestart } from '../../daemon/daemon-restart-state'
+import { settledDaemonRestart } from '../../daemon/providers/lifecycle/daemon-restart-state'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import type { Store } from '../../persistence/loading-store/store'
@@ -66,7 +66,7 @@ import {
   resolveCodexResumeLaunch,
   stripSequencedStartupResumeArgv
 } from './host-env/codex-resume'
-import { ensureLinuxTerminalOrcaCliShimDir } from '../../cli/linux-terminal-orca-cli-shim'
+import { ensureLinuxTerminalOrcaCliShimDir } from '../../cli/launchers/linux-terminal-orca-cli-shim'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 
 export function registerPtyHandlers(

@@ -32,7 +32,7 @@ export function attachMutationRecovery(
   )
 }
 
-/** True when only the contract check ran, so this invocation never sent the request. */
+/** True when this invocation never sent the request. */
 export function isRequestUnsent(error: unknown): boolean {
   const data: unknown = error instanceof RuntimeClientError ? error.data : undefined
   return (

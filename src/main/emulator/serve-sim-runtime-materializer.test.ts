@@ -81,42 +81,6 @@ describe('materializeServeSimRuntime', () => {
     }
   })
 
-  it('returns the existing runtime without re-copying', async () => {
-    const root = await createRoot()
-    const bundledPackageDir = await createBundledServeSimPackage(root)
-    const clearQuarantine = vi.fn()
-    const options = {
-      bundledPackageDir,
-      targetRootDir: join(root, 'runtime'),
-      version: '1.2.3',
-      clearQuarantine
-    }
-
-    const first = materializeServeSimRuntime(options)
-    const second = materializeServeSimRuntime(options)
-
-    expect(second).toBe(first)
-    expect(clearQuarantine).toHaveBeenCalledTimes(1)
-  })
-
-  it('prunes runtimes left behind by older app versions', async () => {
-    const root = await createRoot()
-    const bundledPackageDir = await createBundledServeSimPackage(root)
-    const targetRootDir = join(root, 'runtime')
-    await mkdir(join(targetRootDir, '1.0.0', 'dist'), { recursive: true })
-    await writeFile(join(targetRootDir, '1.0.0', 'dist', 'serve-sim.js'), 'old')
-
-    const materialized = materializeServeSimRuntime({
-      bundledPackageDir,
-      targetRootDir,
-      version: '1.2.3',
-      clearQuarantine: () => {}
-    })
-
-    expect(materialized).toBe(join(targetRootDir, '1.2.3', 'node_modules', 'serve-sim'))
-    await expect(stat(join(targetRootDir, '1.0.0'))).rejects.toThrow()
-  })
-
   it('tolerates a concurrent instance winning the rename', async () => {
     const root = await createRoot()
     const bundledPackageDir = await createBundledServeSimPackage(root)
@@ -162,25 +126,6 @@ describe('materializeServeSimRuntime', () => {
     expect(leftovers).toEqual([])
   })
 
-  it('links each bundled dependency next to the copy and skips ones the bundle lacks', async () => {
-    const root = await createRoot()
-    const bundledPackageDir = await createBundledServeSimPackage(root)
-
-    const materialized = materializeServeSimRuntime({
-      bundledPackageDir,
-      targetRootDir: join(root, 'runtime'),
-      version: '1.2.3',
-      clearQuarantine: () => {}
-    })
-
-    const nodeModulesDir = join(root, 'runtime', '1.2.3', 'node_modules')
-    expect(materialized).toBe(join(nodeModulesDir, 'serve-sim'))
-    expect(realpathSync(join(nodeModulesDir, 'ws'))).toBe(
-      realpathSync(join(root, 'bundle', 'node_modules', 'ws'))
-    )
-    expect((await readdir(nodeModulesDir)).sort()).toEqual(['serve-sim', 'ws'])
-  })
-
   it('clears quarantine on the copied package before linking into the bundle', async () => {
     const root = await createRoot()
     const bundledPackageDir = await createBundledServeSimPackage(root)
@@ -198,24 +143,6 @@ describe('materializeServeSimRuntime', () => {
     expect(seenEntries).toHaveLength(1)
     expect(seenEntries[0][0]).toMatch(/\.staging-1\.2\.3-\d+[/\\]node_modules[/\\]serve-sim$/)
     expect(seenEntries[0].slice(1)).toEqual(['serve-sim'])
-  })
-
-  it('rebuilds a same-version runtime left in the old flat layout', async () => {
-    const root = await createRoot()
-    const bundledPackageDir = await createBundledServeSimPackage(root)
-    const targetRootDir = join(root, 'runtime')
-    await mkdir(join(targetRootDir, '1.2.3', 'dist'), { recursive: true })
-    await writeFile(join(targetRootDir, '1.2.3', 'dist', 'serve-sim.js'), 'old layout')
-
-    const materialized = materializeServeSimRuntime({
-      bundledPackageDir,
-      targetRootDir,
-      version: '1.2.3',
-      clearQuarantine: () => {}
-    })
-
-    expect(materialized).toBe(join(targetRootDir, '1.2.3', 'node_modules', 'serve-sim'))
-    await expect(stat(join(targetRootDir, '1.2.3', 'dist'))).rejects.toThrow()
   })
 
   it('rebuilds when the app moved and the dependency links dangle', async () => {

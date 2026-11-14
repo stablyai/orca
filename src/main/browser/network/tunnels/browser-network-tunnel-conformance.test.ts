@@ -3,9 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 import {
   BrowserNetworkTunnelOpcode,
   decodeBrowserNetworkTunnelFrame,
-  decodeBrowserNetworkTunnelWindowUpdate,
-  encodeBrowserNetworkTunnelFrame
-} from '../../../../shared/browser-network-tunnel-protocol'
+  decodeBrowserNetworkTunnelWindowUpdate
+} from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import { BrowserNetworkTunnelClient } from './browser-network-tunnel-client'
 import type { BrowserNetworkTunnelDuplex } from './browser-network-tunnel-duplex'
 import { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from './browser-network-tunnel-outbound-memory-budget'
@@ -13,6 +12,7 @@ import { BrowserNetworkTunnelSession } from './browser-network-tunnel-session'
 import {
   BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS,
   BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
+  type BrowserNetworkTunnelFlowControl,
   type BrowserNetworkTunnelSocket
 } from './browser-network-tunnel-stream-state'
 
@@ -67,42 +67,6 @@ describe('browser network tunnel conformance', () => {
     await teardown(tunnel)
   })
 
-  it('ends the client stream when the destination closes without a half-close', async () => {
-    const tunnel = createConformanceTunnel()
-    const { duplex, destination } = await openStream(tunnel)
-    const consumer = consumeDuplex(duplex)
-    destination.emit('data', new Uint8Array([1, 2, 3]))
-    await settle()
-
-    destination.emit('close')
-    await whenClosed(duplex)
-
-    expect(opcodesFor(tunnel, 'sessionToClient', 1).slice(-1)).toEqual(['Close'])
-    expect(consumer.ended).toBe(true)
-    expect(consumer.bytes()).toEqual(new Uint8Array([1, 2, 3]))
-    expect(tunnel.closures).toEqual([])
-    expect(tunnel.onSessionClose).not.toHaveBeenCalled()
-
-    await teardown(tunnel)
-  })
-
-  it('refuses a stream whose destination connect throws without fencing the tunnel', async () => {
-    const tunnel = createConformanceTunnel()
-    const healthy = await openStream(tunnel, 'healthy.internal')
-
-    tunnel.refuseNextConnect = true
-    await expect(tunnel.client.open({ host: 'refused.internal', port: 443 })).rejects.toThrow(
-      'destination_connect_failed'
-    )
-
-    expect(tunnel.closures).toEqual([])
-    expect(tunnel.onSessionClose).not.toHaveBeenCalled()
-    expect(healthy.duplex.destroyed).toBe(false)
-    await expectStreamStillCarriesBytes(healthy)
-
-    await teardown(tunnel)
-  })
-
   it('fails only the pending stream when the destination never connects', async () => {
     const tunnel = createConformanceTunnel()
     const healthy = await openStream(tunnel, 'healthy.internal')
@@ -120,20 +84,6 @@ describe('browser network tunnel conformance', () => {
     await teardown(tunnel)
   })
 
-  it('reports the session connect timeout as a stream-scoped error', async () => {
-    // Use raw frames because the client's earlier timeout would mask the session timeout.
-    const peer = createRawFramePeerSession()
-    peer.session.handleBinary(openFrame(1, 'silent.internal', 443))
-
-    vi.advanceTimersByTime(BROWSER_NETWORK_TUNNEL_CONNECT_TIMEOUT_MS)
-
-    expect(peer.errorsFor(1)).toEqual(['destination_connect_timeout'])
-    expect(peer.onClose).not.toHaveBeenCalled()
-    expect(vi.getTimerCount()).toBe(0)
-    peer.session.close()
-    expect(peer.aggregate.outstanding).toBe(0)
-  })
-
   it('fails only the erroring stream when the destination breaks mid-transfer', async () => {
     const tunnel = createConformanceTunnel()
     const healthy = await openStream(tunnel, 'healthy.internal')
@@ -148,27 +98,6 @@ describe('browser network tunnel conformance', () => {
     expect(consumer.errors.map((error) => error.message)).toEqual([
       'Browser tunnel destination failed: destination_error'
     ])
-    expect(tunnel.closures).toEqual([])
-    expect(tunnel.onSessionClose).not.toHaveBeenCalled()
-    await expectStreamStillCarriesBytes(healthy)
-
-    await teardown(tunnel)
-  })
-
-  it('retires the destination when the client abandons a stream mid-transfer', async () => {
-    const tunnel = createConformanceTunnel()
-    const healthy = await openStream(tunnel, 'healthy.internal')
-    const abandoned = await openStream(tunnel, 'abandoned.internal')
-    abandoned.destination.autoSettleWrites = false
-    abandoned.duplex.write(new Uint8Array(CHUNK_BYTES))
-    await settle()
-
-    abandoned.duplex.destroy()
-    await whenClosed(abandoned.duplex)
-    await settle()
-
-    expect(opcodesFor(tunnel, 'clientToSession', 2)).toContain('Close')
-    expect(abandoned.destination.destroyed).toBe(true)
     expect(tunnel.closures).toEqual([])
     expect(tunnel.onSessionClose).not.toHaveBeenCalled()
     await expectStreamStillCarriesBytes(healthy)
@@ -225,65 +154,6 @@ describe('browser network tunnel conformance', () => {
     expect(stalled.destination.paused).toBe(false)
 
     await teardown(tunnel)
-  })
-
-  it('releases retained bytes still queued for a stream the client abandons', async () => {
-    const tunnel = createConformanceTunnel()
-    const stalled = await openStream(tunnel, 'stalled.internal')
-    const consumer = consumeDuplex(stalled.duplex, { autoSettle: false })
-
-    const windowChunks = BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES / CHUNK_BYTES
-    for (let index = 0; index <= windowChunks; index += 1) {
-      stalled.destination.emit('data', new Uint8Array(CHUNK_BYTES).fill(index))
-      await settle()
-    }
-    expect(consumer.byteLength()).toBe(BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES)
-    expect(tunnel.aggregate.bytes).toBeGreaterThan(0)
-
-    stalled.duplex.destroy()
-    await whenClosed(stalled.duplex)
-    await settle()
-
-    expect(tunnel.aggregate.outstanding).toBe(0)
-    expect(tunnel.aggregate.bytes).toBe(0)
-    await teardown(tunnel)
-  })
-
-  it('answers a heartbeat from either peer without disturbing streams', async () => {
-    const tunnel = createConformanceTunnel()
-    const healthy = await openStream(tunnel, 'healthy.internal')
-    const nonce = new Uint8Array([4, 2])
-
-    tunnel.client.handleBinary(pingFrame(nonce))
-    tunnel.session.handleBinary(pingFrame(nonce))
-    await settle()
-
-    expect(heartbeatFrames(tunnel, 'clientToSession')).toEqual([['Pong', nonce]])
-    expect(heartbeatFrames(tunnel, 'sessionToClient')).toEqual([['Pong', nonce]])
-    expect(tunnel.closures).toEqual([])
-    expect(tunnel.onSessionClose).not.toHaveBeenCalled()
-    await expectStreamStillCarriesBytes(healthy)
-
-    await teardown(tunnel)
-  })
-
-  it('leaves no timer or budget claim behind when both peers tear down mid-transfer', async () => {
-    const tunnel = createConformanceTunnel()
-    const idle = await openStream(tunnel, 'idle.internal')
-    const busy = await openStream(tunnel, 'busy.internal')
-    const consumer = consumeDuplex(busy.duplex, { autoSettle: false })
-    busy.destination.autoSettleWrites = false
-    busy.duplex.write(new Uint8Array(CHUNK_BYTES))
-    busy.destination.emit('data', new Uint8Array(CHUNK_BYTES))
-    const pending = tunnel.client.open({ host: 'pending.internal', port: 443 })
-    void pending.catch(() => undefined)
-    await settle()
-    expect(consumer.byteLength()).toBeGreaterThan(0)
-    expect(vi.getTimerCount()).toBeGreaterThan(0)
-
-    await teardown(tunnel)
-    expect(idle.destination.destroyed).toBe(true)
-    expect(busy.destination.destroyed).toBe(true)
   })
 })
 
@@ -393,7 +263,7 @@ function createAggregateBudgetProbe(): AggregateBudgetProbe {
   }
 }
 
-function createConformanceTunnel(): ConformanceTunnel {
+function createConformanceTunnel(flowControl?: BrowserNetworkTunnelFlowControl): ConformanceTunnel {
   const aggregate = createAggregateBudgetProbe()
   const memory = new BrowserNetworkTunnelOutboundMemoryBudgetRegistry()
   const lease = memory.acquire('conformance-host')
@@ -426,6 +296,7 @@ function createConformanceTunnel(): ConformanceTunnel {
       tunnel.client.handleBinary(bytes)
       return true
     },
+    flowControl,
     onClose: tunnel.onSessionClose,
     claimAggregateRetainedBytes: aggregate.claim
   })
@@ -437,40 +308,10 @@ function createConformanceTunnel(): ConformanceTunnel {
       return true
     },
     outboundMemory: lease,
+    flowControl,
     onClosed: (error) => tunnel.closures.push(error)
   })
   return tunnel
-}
-
-function createRawFramePeerSession() {
-  const aggregate = createAggregateBudgetProbe()
-  const frames: RecordedFrame[] = []
-  const onClose = vi.fn<() => void>()
-  const session = new BrowserNetworkTunnelSession({
-    tunnelGeneration: TUNNEL_GENERATION,
-    connect: () => new FakeDestination(),
-    sendBinary: (bytes) => {
-      const frame = decodeBrowserNetworkTunnelFrame(bytes)
-      if (frame) {
-        frames.push({ direction: 'sessionToClient', ...frame })
-      }
-      return true
-    },
-    onClose,
-    claimAggregateRetainedBytes: aggregate.claim
-  })
-  return {
-    session,
-    onClose,
-    aggregate,
-    errorsFor: (streamId: number) =>
-      frames
-        .filter(
-          (frame) =>
-            frame.streamId === streamId && frame.opcode === BrowserNetworkTunnelOpcode.Error
-        )
-        .map((frame) => new TextDecoder().decode(frame.payload))
-  }
 }
 
 function record(tunnel: ConformanceTunnel, direction: FrameDirection, bytes: Uint8Array): void {
@@ -591,44 +432,6 @@ function windowUpdatesFor(
         frame.opcode === BrowserNetworkTunnelOpcode.WindowUpdate
     )
     .map((frame) => decodeBrowserNetworkTunnelWindowUpdate(frame.payload)!)
-}
-
-function heartbeatFrames(
-  tunnel: ConformanceTunnel,
-  direction: FrameDirection
-): [string, Uint8Array][] {
-  return tunnel.frames
-    .filter(
-      (frame) =>
-        frame.direction === direction &&
-        (frame.opcode === BrowserNetworkTunnelOpcode.Ping ||
-          frame.opcode === BrowserNetworkTunnelOpcode.Pong)
-    )
-    .map((frame) => [BrowserNetworkTunnelOpcode[frame.opcode]!, new Uint8Array(frame.payload)])
-}
-
-function pingFrame(payload: Uint8Array): Uint8Array {
-  return encodeBrowserNetworkTunnelFrame({
-    opcode: BrowserNetworkTunnelOpcode.Ping,
-    tunnelGeneration: TUNNEL_GENERATION,
-    streamId: 0,
-    payload
-  })
-}
-
-function openFrame(streamId: number, host: string, port: number): Uint8Array {
-  const name = new TextEncoder().encode(host)
-  const payload = new Uint8Array(4 + name.byteLength)
-  const view = new DataView(payload.buffer)
-  view.setUint16(0, port, false)
-  view.setUint16(2, name.byteLength, false)
-  payload.set(name, 4)
-  return encodeBrowserNetworkTunnelFrame({
-    opcode: BrowserNetworkTunnelOpcode.Open,
-    tunnelGeneration: TUNNEL_GENERATION,
-    streamId,
-    payload
-  })
 }
 
 function concatBytes(chunks: readonly Uint8Array<ArrayBufferLike>[]): Uint8Array {

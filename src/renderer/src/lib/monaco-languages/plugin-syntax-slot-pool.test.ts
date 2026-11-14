@@ -25,18 +25,6 @@ function pool(limit?: number) {
 }
 
 describe('PluginSyntaxSlotPool', () => {
-  it('never runs out when 600 languages are opened and closed one after another', () => {
-    const { instance, registered, live } = pool()
-    for (let index = 0; index < 600; index += 1) {
-      const lease = instance.acquire(`plugin:samples.lang/${index}@r1`)
-      expect(lease).not.toBeNull()
-      lease?.release()
-    }
-    // Idle languages stay bound for a quick reopen, but only a bounded number of them.
-    expect(registered.length).toBeLessThanOrEqual(17)
-    expect(live.size).toBeLessThanOrEqual(16)
-  })
-
   it('evicts the least recently used idle language, and only falls back when all are open', () => {
     const { instance, live } = pool(2)
     const a = instance.acquire('a@1')

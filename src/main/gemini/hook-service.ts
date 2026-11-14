@@ -7,30 +7,32 @@ import type {
 } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
 import {
   buildManagedCommandHook,
-  createManagedCommandMatcher,
-  buildWindowsAgentHookPostCommand,
-  getSharedManagedScriptPath,
   MANAGED_HOOK_TIMEOUT_MILLISECONDS,
-  readHooksJson,
-  removeManagedCommands,
-  wrapPosixHookCommand,
-  writeHooksJson,
-  writeManagedScript,
   type HookDefinition
-} from '../agent-hooks/installer-utils'
-import { wrapWindowsBatchHookCommand } from '../agent-hooks/windows-direct-cmd-hook-command'
-import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
+} from '../agent-hooks/installation/configuration/hook-config-schema'
+import {
+  createManagedCommandMatcher,
+  removeManagedCommands
+} from '../agent-hooks/installation/commands/managed-hook-command-matching'
+import { buildWindowsAgentHookPostCommand } from '../agent-hooks/installation/commands/windows-agent-hook-post-command'
+import { getSharedManagedScriptPath } from '../agent-hooks/installation/scripts/managed-hook-script-path'
+import { readHooksJson } from '../agent-hooks/installation/configuration/hooks-json-read'
+import { wrapPosixHookCommand } from '../agent-hooks/installation/commands/posix-hook-command'
+import { writeHooksJson } from '../agent-hooks/installation/configuration/hooks-json-write'
+import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
+import { wrapWindowsBatchHookCommand } from '../agent-hooks/installation/commands/windows-direct-cmd-hook-command'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/installation/scripts/managed-hook-script-refresh'
 import {
   readHooksJsonRemote,
-  writeHooksJsonRemote,
-  writeManagedScriptRemote
-} from '../agent-hooks/installer-utils-remote'
+  writeHooksJsonRemote
+} from '../agent-hooks/installation/configuration/hooks-json-remote'
+import { writeManagedScriptRemote } from '../agent-hooks/installation/scripts/managed-script-write-remote'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
   buildWindowsHookEnvironmentGuardLines
-} from '../agent-hooks/hook-stdin-contract'
-import { posixCurlCommand } from '../agent-hooks/hook-post-command'
+} from '../agent-hooks/installation/scripts/hook-stdin-contract'
+import { posixCurlCommand } from '../agent-hooks/installation/scripts/hook-post-command'
 
 // Gemini has no permission-prompt hook, so approvals cannot produce an Orca waiting state.
 // Gemini uses BeforeTool; remove stale Claude-style PreToolUse registrations below.

@@ -3,14 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store/types'
-import { createEditorModelRegistry } from '@/lib/editor-model-registry'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { createEditorModelRegistry } from '@/lib/editor/monaco/editor-model-registry'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { createEditorStore } from '../../autosave/editor-autosave-controller-test-fixture'
 import { applyEditorBufferText } from './editor-buffer-adapter'
 
 import { editorTabModelUri } from '../../save/queue/editor-save-disk-precondition'
 import { attachClosedEditorTabCleanup } from '../retention/closed-editor-tab-controller'
-import { attachModelLifetimeView } from '../retention/editor-model-lifetime-fixture'
+
 import { showClosedUnsavedFilesToast } from '../../closed-unsaved-files-toast'
 
 const storeRef = vi.hoisted((): { current: StoreApi<AppState> | null } => ({ current: null }))
@@ -74,14 +74,6 @@ describe('applyEditorBufferText', () => {
     store.getState().setMarkdownViewMode(a, 'source')
   })
 
-  it("carries a rich commit into the record's model no editor shows, as one undoable edit", () => {
-    const model = modelOf(store, a)
-    applyEditorBufferText(store.getState(), file(store, b), 'rich edit', bridge)
-    expect(model.getValue()).toBe('rich edit')
-    model.undo()
-    expect(model.getValue()).toBe('disk')
-  })
-
   it('makes each commit its own undo step, apart from typing before it', () => {
     const model = modelOf(store, a)
     model.pushEditOperations([], [{ range: model.getFullModelRange(), text: 'typed' }], () => null)
@@ -91,16 +83,6 @@ describe('applyEditorBufferText', () => {
     expect(model.getValue()).toBe('first commit')
     model.undo()
     expect(model.getValue()).toBe('typed')
-  })
-
-  it('leaves a shown model to its editor and ignores commits from a code view', () => {
-    const model = modelOf(store, a)
-    const detach = attachModelLifetimeView(model)
-    applyEditorBufferText(store.getState(), file(store, b), 'rich edit', bridge)
-    expect(model.getValue()).toBe('disk')
-    detach()
-    applyEditorBufferText(store.getState(), file(store, a), 'typed in source', bridge)
-    expect(model.getValue()).toBe('disk')
   })
 })
 

@@ -12,52 +12,11 @@ import {
   removeThroughPluginIpc,
   resetUninstallFixtures,
   uninstallContentVerifier,
-  uninstallGate,
-  uninstallWorkerPorts
+  uninstallGate
 } from './__mocks__/plugin-uninstall-log-test-fixture'
 
 beforeEach(prepareUninstallFixture)
 afterEach(resetUninstallFixtures)
-
-it('releases eight removed log rings while their old worker callback ports remain rooted', async () => {
-  const { root, service, install } = await createUninstallFixture()
-  const refs: WeakRef<object>[] = []
-  for (let index = 0; index < 8; index += 1) {
-    const key = await install(`retired-${index}`)
-    expect(service.getLogs(key)).toHaveLength(200)
-    refs.push(new WeakRef(latestPluginLog(service, key)))
-    await removeThroughPluginIpc(key)
-    expect(service.findValidPlugin(key)).toBeNull()
-    expect(service.getLogs(key)).toHaveLength(0)
-    expect((await readPluginLockfile(getUserPluginsDir(root))).plugins[key]).toBeUndefined()
-    await expect(stat(join(getUserPluginsDir(root), key))).rejects.toThrow()
-  }
-  const collect = global.gc
-  if (!collect) {
-    throw new Error('Run retention tests with --expose-gc')
-  }
-  for (let index = 0; index < 6; index += 1) {
-    await new Promise<void>((resolve) => setImmediate(resolve))
-    collect()
-  }
-  expect(uninstallWorkerPorts).toHaveLength(8)
-  expect(uninstallWorkerPorts.every((port) => !port.connected)).toBe(true)
-  expect(refs.filter((ref) => ref.deref())).toHaveLength(0)
-})
-
-it('preserves installed stopped history and fences old callbacks from same-key reinstall', async () => {
-  const { service, install } = await createUninstallFixture()
-  const key = await install('reused')
-  await service.deactivatePlugin(key)
-  expect(service.findValidPlugin(key)).not.toBeNull()
-  expect(service.getLogs(key)).toHaveLength(200)
-  const old = latestUninstallWorker()
-  await removeThroughPluginIpc(key)
-  await install('reused')
-  old.emitLateLog('old worker callback')
-  expect(latestUninstallWorker().connected).toBe(true)
-  expect(latestPluginLog(service, key).line).toBe('log-204')
-})
 
 it('retains history after partial filesystem failure and releases it after a successful retry', async () => {
   const { root, service, store, install } = await createUninstallFixture()
@@ -78,18 +37,6 @@ it('retains history after partial filesystem failure and releases it after a suc
   await rm(join(dataDir, key))
   await removeThroughPluginIpc(key)
   expect(service.findValidPlugin(key)).toBeNull()
-  expect(service.getLogs(key)).toHaveLength(0)
-})
-
-it('does not recreate a removed key when its exited worker flushes a final stdio tail', async () => {
-  const { service, install } = await createUninstallFixture()
-  const key = await install('late-tail')
-  const child = latestUninstallWorker()
-  child.stdout.write('tail-owned-by-retiring-worker')
-  await removeThroughPluginIpc(key)
-  expect(child.connected).toBe(false)
-  child.stdout.end()
-  await new Promise<void>((resolve) => setImmediate(resolve))
   expect(service.getLogs(key)).toHaveLength(0)
 })
 

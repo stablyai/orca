@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({ ipcMain: { handle: vi.fn(), removeHandler: vi.fn() } }))
-vi.mock('../../browser-manager', () => ({ browserManager: {} }))
+vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({ browserManager: {} }))
 vi.mock('../api-runtime/browser-extension-api-host', () => ({
   getBrowserExtensionProfileIdForSession: vi.fn()
 }))

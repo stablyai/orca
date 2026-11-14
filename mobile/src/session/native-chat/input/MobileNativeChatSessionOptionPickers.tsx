@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { AccessibilityInfo, Keyboard, Platform, Text, View } from 'react-native'
 import {
   ChevronLeft,
+  Clock,
   FilePenLine,
   Hand,
   LockKeyhole,
@@ -17,6 +18,7 @@ import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
+import { useMoreModelsShown } from './use-more-models-shown'
 import {
   isReadOnlySessionOptionValue,
   sessionOptionDispatchUnconfirmed,
@@ -35,7 +37,8 @@ import {
   descriptorRowElements,
   ModelPill,
   SessionOptionCaption,
-  SessionOptionSummaryRow
+  SessionOptionSummaryRow,
+  showsSessionOptionAsSwitch
 } from './MobileNativeChatSessionOptionRows'
 import {
   SessionOptionSegments,
@@ -123,7 +126,8 @@ export function MobileNativeChatSessionOptionPickers({
     }
     wasOpen.current = open
   }, [open, controller.optionSurface])
-  const { snapshot, pendingId } = controller
+  const { pendingId } = controller
+  const snapshot = controller.snapshot.filter((descriptor) => descriptor.id !== 'interactionMode')
   const hasControls = snapshot.some((descriptor) => descriptor.settable)
   const canOpen = !sendInFlight && pendingId === null && hasControls
   useEffect(() => {
@@ -132,6 +136,7 @@ export function MobileNativeChatSessionOptionPickers({
     }
   }, [open, hasControls, onNavigate])
   const model = snapshot.find((descriptor) => descriptor.category === 'model')
+  const moreModels = useMoreModelsShown(model)
   const permission = snapshot.find(
     (descriptor) => descriptor.id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID
   )
@@ -160,10 +165,10 @@ export function MobileNativeChatSessionOptionPickers({
   }, [showWorkingNotice])
 
   const options = sortNativeChatSessionOptions(snapshot)
-  if (!model && !permission) {
+  if (!model && !permission && options.length === 0) {
     return null
   }
-  const home = model ?? permission!
+  const home = model ?? permission ?? options[0]!
   const homeView = activeDescriptor !== undefined && activeDescriptor === home
   const busy = pendingId !== null || sendInFlight
   // Structured picks and permission mode affect the next send, not the running turn.
@@ -218,6 +223,7 @@ export function MobileNativeChatSessionOptionPickers({
         secondary={secondary}
         warning={permissionColor !== undefined}
         icon={permissionIcon}
+        leading={controller.heldPick ? Clock : undefined}
         accessibleName={
           model
             ? permissionColor
@@ -247,7 +253,10 @@ export function MobileNativeChatSessionOptionPickers({
       <BottomDrawer
         visible={activeDescriptor !== undefined}
         onClose={closePicker}
-        onAfterClose={onDrawerAfterClose}
+        onAfterClose={() => {
+          moreModels.reset()
+          onDrawerAfterClose?.()
+        }}
       >
         {activeDescriptor ? (
           <View style={styles.sheet}>
@@ -257,7 +266,9 @@ export function MobileNativeChatSessionOptionPickers({
                 subtitle={
                   pendingId !== null
                     ? t('chat.sessionOptionPickers.applying', 'Applying…')
-                    : undefined
+                    : controller.appliesOnAttach
+                      ? t('chat.sessionOptionPickers.onAttach', 'Applies when the chat attaches')
+                      : undefined
                 }
                 trailing={{ label: t('common.done', 'Done'), onPress: closePicker }}
               />
@@ -302,6 +313,7 @@ export function MobileNativeChatSessionOptionPickers({
                   disabled: locked(activeDescriptor),
                   onSetOption: (value) => applyOption(activeDescriptor, value),
                   onInvokeAction: () => invokeAction(activeDescriptor),
+                  moreChoices: moreModels,
                   ...(permissionView ? { choiceLeading: permissionChoiceLeading } : {})
                 },
                 t
@@ -369,7 +381,7 @@ function OptionRows({
         {descriptors.flatMap((descriptor) => {
           const isPermission = descriptor === permission
           const disabled = locked(descriptor) || !descriptor.settable
-          if (descriptor.kind.type === 'boolean' && !descriptor.action) {
+          if (showsSessionOptionAsSwitch(descriptor)) {
             return descriptorRowElements(
               {
                 descriptor,

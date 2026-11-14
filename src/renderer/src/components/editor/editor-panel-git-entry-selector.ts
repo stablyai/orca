@@ -1,4 +1,4 @@
-import type { AppState } from '@/store'
+import type { AppState } from '@/store/types'
 
 type EditorPanelGitEntryState = Pick<AppState, 'gitBranchChangesByWorktree' | 'gitStatusByWorktree'>
 

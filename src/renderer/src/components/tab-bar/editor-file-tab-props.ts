@@ -1,5 +1,5 @@
 import type { GitFileStatus } from '../../../../shared/git/status/git-status-types'
-import type { OpenFile } from '../../store/slices/editor'
+import type { OpenFile } from '../../store/slices/editor/types/open-file'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import type { DropIndicator } from './drop-indicator'
 

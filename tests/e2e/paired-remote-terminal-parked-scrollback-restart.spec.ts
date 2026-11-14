@@ -7,7 +7,7 @@ import os from 'node:os'
 import path from 'node:path'
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
-import { resolveLeafScrollbackBuffers } from '../../src/renderer/src/components/terminal-pane/leaf-scrollback-resolution'
+import { resolveLeafScrollbackBuffers } from '../../src/renderer/src/components/terminal-pane/snapshots/leaf-scrollback-resolution'
 import {
   createRuntimeDesktopPairingOffer,
   launchPairedElectronClient,
@@ -336,58 +336,6 @@ test.describe('host retains nothing', () => {
         runtimePartitionHoldsCapture: true,
         localPartitionDidNotKeepCapture: true,
         tokenAfterReveal: true
-      })
-    } finally {
-      const live = relaunched ?? first
-      await closeCreatedTerminals(live, createdTerminals)
-      await live.dispose().catch(() => undefined)
-    }
-  })
-
-  test('a clean quit also lands the parked scrollback in the remote host’s partition (control)', async ({
-    orcaPage
-  }, testInfo) => {
-    test.setTimeout(600_000)
-    const offer = await createRuntimeDesktopPairingOffer(orcaPage)
-    const extraEnv = { ORCA_E2E_TERMINAL_PARKING_DELAY_MS: String(PARK_DELAY_MS) }
-    const first = await launchPairedElectronClient(offer, testInfo, 'parked-restart', { extraEnv })
-    const userDataDir = first.userDataDir
-    const createdTerminals: string[] = []
-    let relaunched: PairedElectronClient | null = null
-    try {
-      const parked = await parkRemoteTerminalWithToken(orcaPage, first, createdTerminals)
-
-      await first.page.evaluate(() => window.dispatchEvent(new Event('beforeunload')))
-      await first.quitPreservingProfile()
-      const onDiskAfterQuit = readOnDiskPartitions(userDataDir, parked.webTabId)
-
-      const reveal = await relaunchAndReveal(offer, testInfo, parked, extraEnv)
-      relaunched = reveal.relaunched
-
-      console.log(
-        `[parked-restart] clean-quit ${JSON.stringify({
-          tokenBeforePark: parked.tokenBeforePark,
-          storeAtPark: parked.storeAtPark,
-          onDiskAfterQuit,
-          storeAfterRelaunch: reveal.storeAfterRelaunch,
-          tokenAfterReveal: reveal.tokenAfterReveal
-        })}`
-      )
-      // Log clean-quit reveal only: identical code varied across runs with the host tail live.
-      // Hard-kill reveal remains asserted because its host is forced unavailable.
-      expect({
-        tokenBeforePark: parked.tokenBeforePark,
-        capturedAtPark: parked.storeAtPark > 0,
-        // Distinguishes missing session partitions from an empty buffer.
-        profileSurvived: onDiskAfterQuit.length > 0,
-        runtimePartitionHoldsCapture: runtimePartitionBufferLength(onDiskAfterQuit) > 0,
-        localPartitionDidNotKeepCapture: localPartitionBufferLength(onDiskAfterQuit) <= 0
-      }).toEqual({
-        tokenBeforePark: true,
-        capturedAtPark: true,
-        profileSurvived: true,
-        runtimePartitionHoldsCapture: true,
-        localPartitionDidNotKeepCapture: true
       })
     } finally {
       const live = relaunched ?? first

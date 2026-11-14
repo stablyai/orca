@@ -1,10 +1,10 @@
 import { useState } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   cancelManagedRuntimeInstall,
   installManagedRuntime
-} from '@/runtime/managed-runtime-install-status'
-import type { ManagedRuntimeInstallObservation } from '@/runtime/use-managed-runtime-install'
+} from '@/runtime/hosts/installation/managed-runtime-install-status'
+import type { ManagedRuntimeInstallObservation } from '@/runtime/hosts/installation/use-managed-runtime-install'
 import type { ManagedRuntimeInstallState } from '../../../../shared/managed-runtime-install'
 import {
   managedRuntimeInstallCard,
@@ -25,6 +25,7 @@ export function useManagedRuntimeInstallCard(
   refusal: string | null
   act: (action: ManagedRuntimeInstallAction) => void
 } {
+  const t = useTranslate()
   const [pending, setPending] = useState<ManagedRuntimeInstallAction['kind'] | null>(null)
   const [refusal, setRefusal] = useState<string | null>(null)
   const act = (action: ManagedRuntimeInstallAction): void => {
@@ -41,16 +42,16 @@ export function useManagedRuntimeInstallCard(
           cause instanceof Error
             ? cause.message
             : action.kind === 'cancel'
-              ? translate(
+              ? t(
                   'components.managed-runtime.cancelFailed',
                   "Couldn't cancel the installation. Try again."
                 )
-              : translate('components.managed-runtime.failed', 'Installation failed. Try again.')
+              : t('components.managed-runtime.failed', 'Installation failed. Try again.')
         )
       )
       .finally(() => setPending(null))
   }
-  const card = managedRuntimeInstallCard(state, agentLabel, layout, pending === 'cancel')
+  const card = managedRuntimeInstallCard(state, agentLabel, layout, pending === 'cancel', t)
   return {
     // An offer's hint points at Settings › Chat › Providers, which installs on this computer only.
     card:

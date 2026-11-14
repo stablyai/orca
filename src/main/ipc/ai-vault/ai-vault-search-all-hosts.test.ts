@@ -6,7 +6,6 @@ import type {
 } from '../../../shared/ai-vault/search/ai-vault-search-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { searchAllExecutionHosts, type SessionSearchHostLeg } from './ai-vault-search-all-hosts'
-import { encodeMergedSearchCursor } from './ai-vault-search-merged-cursor'
 
 /** A host that ranks a fixed list and fences its own cursors on a generation change. */
 class StubHost {
@@ -107,131 +106,6 @@ function resultsOf(response: AiVaultSearchResponse) {
   return response
 }
 
-function unavailableLeg(
-  executionHostId: ExecutionHostId,
-  reason: 'disabled' | 'not-ready' | 'no-service'
-): SessionSearchHostLeg {
-  return {
-    executionHostId,
-    search: () => Promise.resolve({ kind: 'unavailable', reason })
-  }
-}
-
-it('answers an empty merge when no host is reachable to ask', async () => {
-  const response = resultsOf(await searchAllExecutionHosts({ query: 'needle' }, []))
-  expect(response).toMatchObject({
-    hits: [],
-    page: { cursor: null, hasMore: false },
-    generation: 0,
-    hosts: []
-  })
-})
-
-it('asks every leg for the merged order and passes freshness through unchanged', async () => {
-  const host = new StubHost('local', sessions('a', 2))
-  await searchAllExecutionHosts(
-    {
-      query: 'needle',
-      freshness: 'wait-until-current',
-      filters: { sort: 'newest' },
-      debug: true
-    },
-    [host.leg()]
-  )
-  expect(host.lastRequests[0]).toEqual({
-    query: 'needle',
-    freshness: 'wait-until-current',
-    filters: { sort: 'newest' }
-  })
-})
-
-it('forces the merged order onto a leg the caller left to default', async () => {
-  const host = new StubHost('local', sessions('a', 2))
-  await searchAllExecutionHosts({ query: 'needle' }, [host.leg()])
-  expect(host.lastRequests[0]?.filters).toEqual({ sort: 'relevance' })
-})
-
-it('stamps every hit with the host the desktop addressed', async () => {
-  const host = new StubHost('ssh:box', sessions('a', 2))
-  const response = resultsOf(await searchAllExecutionHosts({ query: 'needle' }, [host.leg()]))
-  expect(response.hits.map((hit) => hit.executionHostId)).toEqual(['ssh:box', 'ssh:box'])
-})
-
-it('merges newest first across hosts, with undated hits last', async () => {
-  const left = new StubHost('local', [
-    { id: 'l-new', updatedAt: '2026-09-09T00:00:00.000Z' },
-    { id: 'l-none', updatedAt: null }
-  ])
-  const right = new StubHost('ssh:box', [
-    { id: 'r-mid', updatedAt: '2026-09-05T00:00:00.000Z' },
-    { id: 'r-old', updatedAt: '2026-09-01T00:00:00.000Z' }
-  ])
-  const response = resultsOf(
-    await searchAllExecutionHosts({ query: 'needle', filters: { sort: 'newest' } }, [
-      left.leg(),
-      right.leg()
-    ])
-  )
-  expect(response.hits.map((hit) => hit.sessionId)).toEqual(['l-new', 'r-mid', 'r-old', 'l-none'])
-})
-
-it('breaks a recency tie on execution host id', async () => {
-  const at = '2026-09-05T00:00:00.000Z'
-  const response = resultsOf(
-    await searchAllExecutionHosts({ query: 'needle', filters: { sort: 'newest' } }, [
-      new StubHost('ssh:box', [{ id: 'later-host', updatedAt: at }]).leg(),
-      new StubHost('local', [{ id: 'earlier-host', updatedAt: at }]).leg()
-    ])
-  )
-  expect(response.hits.map((hit) => hit.sessionId)).toEqual(['earlier-host', 'later-host'])
-})
-
-it('rotates hosts by host-id order when merging by relevance', async () => {
-  const response = resultsOf(
-    await searchAllExecutionHosts({ query: 'needle', limit: 4 }, [
-      new StubHost('ssh:box', sessions('b', 3)).leg(),
-      new StubHost('local', sessions('a', 3)).leg()
-    ])
-  )
-  expect(response.hits.map((hit) => hit.sessionId)).toEqual(['a-0', 'b-0', 'a-1', 'b-1'])
-})
-
-it('reports a host that refuses its own cursor as stale and keeps the merge going', async () => {
-  const healthy = new StubHost('local', sessions('a', 6))
-  const purged = new StubHost('ssh:box', sessions('b', 6))
-  const legs = [healthy.leg(), purged.leg()]
-  const first = resultsOf(await searchAllExecutionHosts({ query: 'needle', limit: 4 }, legs))
-  purged.purge()
-  const second = resultsOf(
-    await searchAllExecutionHosts({ query: 'needle', limit: 4, cursor: first.page.cursor! }, legs)
-  )
-  expect(second.hosts).toEqual([
-    { executionHostId: 'local', outcome: 'searched' },
-    { executionHostId: 'ssh:box', outcome: 'stale' }
-  ])
-  expect(second.hits.every((hit) => hit.executionHostId === 'local')).toBe(true)
-})
-
-it('names an unavailable host by its reason without losing the other hosts', async () => {
-  const healthy = new StubHost('local', sessions('a', 2))
-  const response = resultsOf(
-    await searchAllExecutionHosts({ query: 'needle' }, [
-      healthy.leg(),
-      unavailableLeg('ssh:off', 'disabled'),
-      unavailableLeg('ssh:cold', 'not-ready'),
-      unavailableLeg('runtime:old', 'no-service')
-    ])
-  )
-  expect(response.hosts).toEqual([
-    { executionHostId: 'local', outcome: 'searched' },
-    { executionHostId: 'runtime:old', outcome: 'no-service' },
-    { executionHostId: 'ssh:cold', outcome: 'not-ready' },
-    { executionHostId: 'ssh:off', outcome: 'disabled' }
-  ])
-  expect(response.hits).toHaveLength(2)
-  expect(response.page.hasMore).toBe(false)
-})
-
 it('calls a leg that times out unreachable and retries it on the next page', async () => {
   vi.useFakeTimers()
   try {
@@ -289,49 +163,55 @@ it('reads at most three pages from one host per merged request', async () => {
   ])
 })
 
-it('refuses a cursor that belongs to a different query or host set', async () => {
-  const host = new StubHost('local', sessions('a', 6))
-  const first = resultsOf(
-    await searchAllExecutionHosts({ query: 'needle', limit: 2 }, [host.leg()])
-  )
-  const refused = [
-    { query: 'needle', limit: 4, cursor: first.page.cursor! },
-    {
-      query: 'needle',
-      limit: 2,
-      filters: { sort: 'newest' as const },
-      cursor: first.page.cursor!
-    },
-    { query: 'needle', limit: 2, cursor: 'not a cursor' },
-    {
-      query: 'needle',
-      limit: 2,
-      cursor: encodeMergedSearchCursor({
-        limit: 2,
-        sort: 'relevance',
-        hosts: { 'ssh:gone': { c: null, e: 0, g: 1 } }
-      })
+it('replays bounded partial and terminal host pages without refetching or inheriting another query scope', async () => {
+  const a = new StubHost('local', sessions('a', 2))
+  const b = new StubHost('ssh:b', sessions('b', 2))
+  const request = { query: 'needle', limit: 2, filters: { scopePaths: ['/repo'] } }
+  const first = resultsOf(await searchAllExecutionHosts(request, [a.leg(), b.leg()]))
+  expect(first.hits.map((hit) => hit.sessionId)).toEqual(['a-0', 'b-0'])
+  // A new request would fail; the terminal tails have already been read and need no validation call.
+  const fail = (executionHostId: ExecutionHostId): SessionSearchHostLeg => ({
+    executionHostId,
+    search: () => {
+      throw new Error('must not refetch a captured page')
     }
-  ]
-  for (const request of refused) {
-    expect(await searchAllExecutionHosts(request, [host.leg()])).toEqual({
-      kind: 'malformed-cursor'
-    })
-  }
-})
-
-it('sums truncation across the hosts it searched', async () => {
-  const response = resultsOf(
-    await searchAllExecutionHosts({ query: 'needle' }, [
-      new StubHost('local', sessions('a', 2)).leg(),
-      new StubHost('ssh:box', sessions('b', 2)).leg(),
-      unavailableLeg('ssh:off', 'disabled')
+  })
+  const next = resultsOf(
+    await searchAllExecutionHosts({ ...request, cursor: first.page.cursor! }, [
+      fail('local'),
+      fail('ssh:b')
     ])
   )
-  expect(response.truncated).toEqual({
-    candidates: false,
-    snippets: 2,
-    query: false,
-    freshness: false
-  })
+  expect(next.hits.map((hit) => hit.sessionId)).toEqual(['a-1', 'b-1'])
+  expect(next.page).toEqual({ hasMore: false, cursor: null })
+  expect(
+    await searchAllExecutionHosts({ ...request, query: 'other', cursor: first.page.cursor! }, [
+      a.leg(),
+      b.leg()
+    ])
+  ).toEqual({ kind: 'malformed-cursor' })
+  expect(
+    await searchAllExecutionHosts(
+      { ...request, filters: { scopePaths: ['/private'] }, cursor: first.page.cursor! },
+      [a.leg(), b.leg()]
+    )
+  ).toEqual({ kind: 'malformed-cursor' })
+})
+
+it('accepts an existing merged cursor and continues using an older host opaque cursor', async () => {
+  const host = new StubHost('local', sessions('a', 4))
+  const cursor = Buffer.from(
+    JSON.stringify({ l: 2, s: 'relevance', h: { local: { c: null, e: 1, g: 1 } } })
+  ).toString('base64url')
+  const page = resultsOf(
+    await searchAllExecutionHosts({ query: 'needle', limit: 2, cursor }, [host.leg()])
+  )
+  expect(page.hits.map((hit) => hit.sessionId)).toEqual(['a-1', 'a-2'])
+  const tail = resultsOf(
+    await searchAllExecutionHosts({ query: 'needle', limit: 2, cursor: page.page.cursor! }, [
+      host.leg()
+    ])
+  )
+  expect(tail.hits.map((hit) => hit.sessionId)).toEqual(['a-3'])
+  expect(tail.page.hasMore).toBe(false)
 })

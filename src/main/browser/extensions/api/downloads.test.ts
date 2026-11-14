@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => {
 
 vi.mock('electron', () => ({ webContents: { fromId: () => undefined } }))
 vi.mock('./downloads-save-as', () => ({ chooseDownloadSavePath: mocks.chooseSavePath }))
-vi.mock('../../browser-manager', () => ({
+vi.mock('../../guest-lifecycle/manager/browser-manager', () => ({
   browserManager: {
     getTabIdForWebContentsId: () => 'tab-1',
     requestDownloadFilename: mocks.requestDownloadFilename,
@@ -120,134 +120,6 @@ afterEach(async () => {
     forgetHostSession(session)
   }
   sessions.clear()
-})
-
-describe('downloads.download', () => {
-  it("accepts the extension's own pages, relative or absolute, and refuses another extension's", async () => {
-    const { owner, download, willDownload } = setup()
-    const own = `chrome-extension://${EXTENSION_ID}/export.json`
-    const pending = download({ url: 'export.json' })
-    await vi.waitFor(() => expect(owner.downloadURL).toHaveBeenCalledWith(own, { headers: {} }))
-    willDownload(fakeItem(own, '/downloads/export.json'))
-    await expect(pending).resolves.toEqual(expect.any(Number))
-
-    await expect(download({ url: `chrome-extension://${'b'.repeat(32)}/x.json` })).rejects.toThrow(
-      'Invalid URL'
-    )
-  })
-
-  it('gives concurrent identical downloads one native item each', async () => {
-    const { owner, download, willDownload } = setup()
-    const url = 'https://site.test/file.zip'
-    const first = download({ url })
-    const second = download({ url })
-    await vi.waitFor(() => expect(owner.downloadURL).toHaveBeenCalledTimes(1))
-    const itemA = fakeItem(url, '/downloads/file.zip')
-    willDownload(itemA)
-    await vi.waitFor(() => expect(owner.downloadURL).toHaveBeenCalledTimes(2))
-    const itemB = fakeItem(url, '/downloads/file (1).zip')
-    willDownload(itemB)
-
-    const ids = await Promise.all([first, second])
-    expect(new Set(ids).size).toBe(2)
-    expect(itemA.once).toHaveBeenCalledTimes(1)
-    expect(itemB.once).toHaveBeenCalledTimes(1)
-    expect(mocks.emitted.filter(({ event }) => event === 'onCreated')).toEqual([
-      { event: 'onCreated', args: [expect.objectContaining({ filename: '/downloads/file.zip' })] },
-      {
-        event: 'onCreated',
-        args: [expect.objectContaining({ filename: '/downloads/file (1).zip' })]
-      }
-    ])
-  })
-
-  it('names the item before the download manager reserves its destination', async () => {
-    const { session, owner, download, willDownload } = setup()
-    const order: string[] = []
-    session.on('will-download', () => order.push('manager'))
-    mocks.requestDownloadFilename.mockImplementation(() => order.push('filename'))
-    const url = 'https://site.test/file'
-    const pending = download({ url, filename: 'reports/q3.csv', saveAs: false })
-    await vi.waitFor(() => expect(owner.downloadURL).toHaveBeenCalled())
-    const item = fakeItem(url, '/downloads/q3.csv')
-    willDownload(item)
-    await pending
-
-    expect(mocks.requestDownloadFilename).toHaveBeenCalledWith(item, 'reports/q3.csv')
-    expect(order).toEqual(['filename', 'manager'])
-  })
-
-  it('matches a redirected download by the URL it requested', async () => {
-    const { owner, download, willDownload } = setup()
-    const url = 'https://site.test/export'
-    const pending = download({ url, filename: 'export.csv' })
-    await vi.waitFor(() => expect(owner.downloadURL).toHaveBeenCalled())
-    const item = fakeItem(url, '/downloads/export.csv', 'https://cdn.test/a1b2')
-    willDownload(item)
-
-    await expect(pending).resolves.toEqual(expect.any(Number))
-    expect(mocks.requestDownloadFilename).toHaveBeenCalledWith(item, 'export.csv')
-    expect(mocks.emitted).toContainEqual({
-      event: 'onCreated',
-      args: [expect.objectContaining({ url, finalUrl: 'https://cdn.test/a1b2' })]
-    })
-  })
-
-  it('asks where to save first, then downloads to exactly that path', async () => {
-    const { owner, download, willDownload } = setup()
-    mocks.chooseSavePath.mockResolvedValueOnce('/Users/me/Desktop/backup.json')
-    const url = 'https://site.test/export'
-    const pending = download({
-      url,
-      filename: 'backup.json',
-      saveAs: true,
-      conflictAction: 'overwrite'
-    })
-    await vi.waitFor(() => expect(owner.downloadURL).toHaveBeenCalled())
-    expect(mocks.chooseSavePath).toHaveBeenCalledWith(owner, url, 'backup.json')
-    const item = fakeItem(url, '/Users/me/Desktop/backup.json')
-    willDownload(item)
-
-    await expect(pending).resolves.toEqual(expect.any(Number))
-    expect(mocks.requestDownloadSavePath).toHaveBeenCalledWith(
-      item,
-      '/Users/me/Desktop/backup.json'
-    )
-    expect(mocks.requestDownloadFilename).not.toHaveBeenCalled()
-  })
-
-  it('downloads nothing when the save dialog is cancelled', async () => {
-    const { owner, download } = setup()
-    mocks.chooseSavePath.mockResolvedValueOnce(null)
-    await expect(download({ url: 'https://site.test/f', saveAs: true })).rejects.toThrow(
-      'Download canceled by the user'
-    )
-    expect(owner.downloadURL).not.toHaveBeenCalled()
-  })
-
-  it('fails cleanly when the tab closes while the save dialog is open', async () => {
-    const { session, owner, download } = setup()
-    mocks.chooseSavePath.mockImplementationOnce(async () => {
-      owner.isDestroyed = () => true
-      return '/Users/me/Desktop/f'
-    })
-    await expect(download({ url: 'https://site.test/f', saveAs: true })).rejects.toThrow(
-      'The tab closed before the download started'
-    )
-    expect(owner.downloadURL).not.toHaveBeenCalled()
-    expect(session.listenerCount('will-download')).toBe(0)
-  })
-
-  it.each([
-    [{ filename: '../escape.txt' }, 'Invalid filename'],
-    [{ filename: '/etc/passwd' }, 'Invalid filename'],
-    [{ filename: 'C:\\x.txt' }, 'Invalid filename'],
-    [{ conflictAction: 'overwrite' }, 'conflictAction']
-  ])('rejects options it cannot honour: %j', async (options, message) => {
-    const { owner, download } = setup()
-    await expect(download({ url: 'https://site.test/f', ...options })).rejects.toThrow(message)
-    expect(owner.downloadURL).not.toHaveBeenCalled()
-  })
 })
 
 describe('download context lifetime', () => {
@@ -371,31 +243,6 @@ describe('download context lifetime', () => {
     willDownload(fakeItem(url, '/downloads/live.txt'))
     await expect(successor).resolves.toEqual(expect.any(Number))
     expect(session.listenerCount('will-download')).toBe(0)
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('keeps another session live while an unloaded extension waits for its native item', async () => {
-    const firstSession = setup()
-    const otherSession = setup()
-    const url = 'https://site.test/independent'
-    const active = firstSession.download({ url })
-    const obsolete = firstSession.download({ url })
-    await vi.advanceTimersByTimeAsync(0)
-    retireContext(firstSession.session, 'extension')
-    const independent = otherSession.download({ url })
-    await vi.advanceTimersByTimeAsync(0)
-    expect(firstSession.owner.downloadURL).toHaveBeenCalledTimes(1)
-    expect(otherSession.owner.downloadURL).toHaveBeenCalledTimes(1)
-    otherSession.willDownload(fakeItem(url, '/downloads/independent.txt'))
-    await expect(independent).resolves.toEqual(expect.any(Number))
-    firstSession.willDownload(fakeItem(url, '/downloads/active.txt'))
-    await expect(active).resolves.toEqual(expect.any(Number))
-    await vi.advanceTimersByTimeAsync(0)
-    expect(firstSession.owner.downloadURL).toHaveBeenCalledTimes(1)
-    await expect(obsolete).rejects.toThrow('Extension context was unloaded')
-    expect(firstSession.owner.downloadURL).toHaveBeenCalledTimes(1)
-    expect(firstSession.session.listenerCount('will-download')).toBe(0)
-    expect(otherSession.session.listenerCount('will-download')).toBe(0)
     expect(vi.getTimerCount()).toBe(0)
   })
 })

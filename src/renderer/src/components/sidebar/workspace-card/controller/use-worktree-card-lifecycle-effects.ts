@@ -1,0 +1,199 @@
+import '@/store/slices/linear/linear-issue-read'
+import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-read-lifecycle'
+import { useEffect } from 'react'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+
+import { isMacAppDataPath } from '@/app-shell/platform/passive-macos-app-data-access'
+import {
+  installWindowVisibilityInterval,
+  isWindowVisible
+} from '@/lib/window-activity/window-visibility-interval'
+import { isWebClient, type WorktreeCardProps } from './worktree-card-model'
+import type { useWorktreeCardFoundation } from './use-worktree-card-foundation'
+import type { useWorktreeCardReviewDetails } from '../details/use-worktree-card-review-details'
+
+type Foundation = ReturnType<typeof useWorktreeCardFoundation>
+type ReviewDetails = ReturnType<typeof useWorktreeCardReviewDetails>
+
+export function useWorktreeCardLifecycleEffects({
+  worktree,
+  repo,
+  isFolder,
+  hostedReviewCacheKey,
+  cachedBranchFallbackGitHubPRNumber,
+  linkedGitLabMR,
+  linkedBitbucketPR,
+  linkedAzureDevOpsPR,
+  linkedGiteaPR,
+  branch,
+  fetchHostedReviewForBranch,
+  shouldRefreshHostedReview,
+  newCardStyle,
+  hoverDetailsOpen,
+  showIssue,
+  issueCacheKey,
+  fetchIssue,
+  showLinearIssue,
+  linearSourceContext,
+  linearWorkspaceId,
+  fetchLinearIssue
+}: Pick<WorktreeCardProps, 'worktree' | 'repo'> &
+  Pick<
+    ReviewDetails,
+    | 'isFolder'
+    | 'hostedReviewCacheKey'
+    | 'cachedBranchFallbackGitHubPRNumber'
+    | 'linkedGitLabMR'
+    | 'linkedBitbucketPR'
+    | 'linkedAzureDevOpsPR'
+    | 'linkedGiteaPR'
+    | 'branch'
+    | 'issueCacheKey'
+    | 'linearSourceContext'
+    | 'linearWorkspaceId'
+  > &
+  Pick<
+    Foundation,
+    'fetchHostedReviewForBranch' | 'newCardStyle' | 'fetchIssue' | 'fetchLinearIssue'
+  > & {
+    shouldRefreshHostedReview: boolean
+    hoverDetailsOpen: boolean
+    showIssue: boolean
+    showLinearIssue: boolean
+  }): void {
+  const hostedReviewExactKey = !branch || branch === 'HEAD' ? hostedReviewCacheKey : undefined
+  useEffect(() => {
+    if (
+      !newCardStyle ||
+      !hoverDetailsOpen ||
+      !isWindowVisible() ||
+      shouldRefreshHostedReview ||
+      isWebClient() ||
+      !repo ||
+      isFolder ||
+      worktree.isBare ||
+      !hostedReviewCacheKey ||
+      isMacAppDataPath(repo.path)
+    ) {
+      return
+    }
+    // Why: hidden card metadata is revealed on whole-card hover, so fetch lazily instead of always-on polling.
+    void fetchHostedReviewForBranch(repo.path, branch, {
+      repoId: repo.id,
+      repoOwnerExecutionHostId: getRepoExecutionHostId(repo),
+      ...(hostedReviewExactKey ? { exactReviewKey: hostedReviewExactKey } : {}),
+      linkedGitHubPR: worktree.linkedPR ?? null,
+      ...(cachedBranchFallbackGitHubPRNumber !== null
+        ? { fallbackGitHubPR: cachedBranchFallbackGitHubPRNumber }
+        : {}),
+      currentHeadOid: hostedReviewExactKey ? null : (worktree.head ?? null),
+      linkedGitLabMR,
+      linkedBitbucketPR,
+      linkedAzureDevOpsPR,
+      linkedGiteaPR,
+      staleWhileRevalidate: true
+    })
+  }, [
+    hoverDetailsOpen,
+    newCardStyle,
+    shouldRefreshHostedReview,
+    repo,
+    isFolder,
+    worktree.isBare,
+    worktree.linkedPR,
+    worktree.head,
+    cachedBranchFallbackGitHubPRNumber,
+    linkedGitLabMR,
+    linkedBitbucketPR,
+    linkedAzureDevOpsPR,
+    linkedGiteaPR,
+    fetchHostedReviewForBranch,
+    branch,
+    hostedReviewCacheKey,
+    hostedReviewExactKey
+  ])
+
+  // Poll issues only while visible; hidden metadata does not justify GitHub calls.
+  // Why web clients and folders too: this card is the only owner of its issue's freshness; nothing sweeps the catalog.
+  useEffect(() => {
+    if (!repo || !worktree.linkedIssue || !issueCacheKey || !showIssue) {
+      return
+    }
+
+    const issueNumber = worktree.linkedIssue
+
+    // Why: fallback poll behind activity triggers; stopped while hidden to avoid waking idle workspaces.
+    return installWindowVisibilityInterval({
+      run: () => void fetchIssue(repo.path, issueNumber, { repoId: repo.id }),
+      intervalMs: 5 * 60_000
+    })
+  }, [repo, worktree.linkedIssue, fetchIssue, issueCacheKey, showIssue])
+
+  useEffect(() => {
+    if (
+      !newCardStyle ||
+      !hoverDetailsOpen ||
+      showIssue ||
+      !repo ||
+      !worktree.linkedIssue ||
+      !issueCacheKey
+    ) {
+      return
+    }
+    void fetchIssue(repo.path, worktree.linkedIssue, { repoId: repo.id })
+  }, [
+    newCardStyle,
+    hoverDetailsOpen,
+    showIssue,
+    repo,
+    worktree.linkedIssue,
+    fetchIssue,
+    issueCacheKey
+  ])
+
+  useEffect(() => {
+    if (!worktree.linkedLinearIssue || !showLinearIssue) {
+      return
+    }
+    const controller = new AbortController()
+    void consumeLinearIssueRead(
+      fetchLinearIssue(worktree.linkedLinearIssue, linearWorkspaceId, {
+        sourceContext: linearSourceContext
+      }),
+      () => !controller.signal.aborted,
+      undefined,
+      controller.signal
+    ).catch(() => {})
+    return () => controller.abort()
+  }, [
+    worktree.linkedLinearIssue,
+    fetchLinearIssue,
+    showLinearIssue,
+    linearSourceContext,
+    linearWorkspaceId
+  ])
+
+  useEffect(() => {
+    if (!newCardStyle || !hoverDetailsOpen || showLinearIssue || !worktree.linkedLinearIssue) {
+      return
+    }
+    const controller = new AbortController()
+    void consumeLinearIssueRead(
+      fetchLinearIssue(worktree.linkedLinearIssue, linearWorkspaceId, {
+        sourceContext: linearSourceContext
+      }),
+      () => !controller.signal.aborted,
+      undefined,
+      controller.signal
+    ).catch(() => {})
+    return () => controller.abort()
+  }, [
+    newCardStyle,
+    hoverDetailsOpen,
+    showLinearIssue,
+    worktree.linkedLinearIssue,
+    linearSourceContext,
+    linearWorkspaceId,
+    fetchLinearIssue
+  ])
+}

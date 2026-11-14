@@ -1,28 +1,28 @@
 import { useEffect } from 'react'
-import { useAppStore } from '../store'
+import { useAppStore } from '../store/index'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { createSessionWriteSubscriber } from '../lib/session-write-subscriber'
-import { buildActiveViewUnloadPatch } from '../lib/active-view-persist'
+import { createSessionWriteSubscriber } from '../lib/workspace/persistence/session-write-subscriber'
+import { buildActiveViewUnloadPatch } from './startup/active-view-persist'
 import {
   isIntentionalAppRestartInProgress,
   registerUpdaterBeforeUnloadBypass
-} from '../lib/updater-beforeunload'
+} from './updates/updater-beforeunload'
 import {
   buildWorkspaceSessionPayload,
   shouldPersistWorkspaceSession
-} from '../lib/workspace-session'
+} from '../lib/workspace/persistence/workspace-session'
 import {
   buildWorkspaceSessionHostSnapshots,
   patchWorkspaceSessionByHost
-} from '../lib/workspace-session-host-persistence'
+} from '../lib/workspace/persistence/workspace-session-host-persistence'
 import {
   createShutdownCheckpointBeforeUnloadHandler,
   createShutdownCheckpointGuard
-} from '../lib/shutdown-checkpoint-guard'
-import { showShutdownCheckpointFailureToast } from '../lib/shutdown-checkpoint-failure-toast'
-import { isPairedWebClientWindow } from '../lib/desktop-window-chrome'
+} from './shutdown/shutdown-checkpoint-guard'
+import { showShutdownCheckpointFailureToast } from './shutdown/shutdown-checkpoint-failure-toast'
+import { isPairedWebClientWindow } from './chrome/desktop-window-chrome'
 import { createShutdownCheckpointPersist } from './shutdown-checkpoint-persist'
-import { shutdownBufferCaptures } from '../components/terminal-pane/shutdown-buffer-captures'
+import { shutdownBufferCaptures } from '../components/terminal-pane/snapshots/shutdown-buffer-captures'
 import {
   dispatchWindowCloseRequest,
   isWindowCloseCheckpointInProgress

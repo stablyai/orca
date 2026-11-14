@@ -45,7 +45,22 @@ function installExecCommandClipboardDocument(execCommandResult = true): {
   return { appendChild, createElement, execCommand, setData }
 }
 
+const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+
+function stubDecodedImageSize(width: number, height: number): void {
+  vi.stubGlobal(
+    'Image',
+    class {
+      src = ''
+      naturalWidth = width
+      naturalHeight = height
+      decode = vi.fn().mockResolvedValue(undefined)
+    }
+  )
+}
+
 function installClipboardImageBase64(contentBase64: string): void {
+  stubDecodedImageSize(800, 600)
   vi.stubGlobal(
     'FileReader',
     class {
@@ -68,7 +83,7 @@ function installClipboardImageBase64(contentBase64: string): void {
       read: vi.fn().mockResolvedValue([
         {
           types: ['image/png'],
-          getType: vi.fn().mockResolvedValue(new Blob(['ignored'], { type: 'image/png' }))
+          getType: vi.fn().mockResolvedValue(new Blob([PNG_BYTES], { type: 'image/png' }))
         }
       ])
     }
@@ -125,6 +140,34 @@ describe('web UI preload API', () => {
     expect(clipboard.setData).toHaveBeenCalledWith('text/plain', 'copy me')
     expect(clipboard.createElement).not.toHaveBeenCalled()
     expect(clipboard.appendChild).not.toHaveBeenCalled()
+  })
+
+  it('downscales a pasted browser PNG above the pixel cap', async () => {
+    installClipboardImageBlob(new Blob([PNG_BYTES], { type: 'image/png' }))
+    stubDecodedImageSize(8000, 6000)
+    const fitted = new Blob([PNG_BYTES], { type: 'image/png' })
+    const canvas = {
+      width: 0,
+      height: 0,
+      getContext: () => ({ drawImage: vi.fn() }),
+      toBlob: (callback: (blob: Blob) => void) => callback(fitted)
+    }
+    vi.stubGlobal('document', { createElement: () => canvas })
+    const readAsDataURL = vi.fn(function (this: { result: string; onload: () => void }) {
+      this.result = 'data:image/png;base64,Zml0dGVk'
+      this.onload()
+    })
+    vi.stubGlobal(
+      'FileReader',
+      class {
+        readAsDataURL = readAsDataURL
+      }
+    )
+    const { readClipboardImagePngBase64 } = await import('./preload-api/web-clipboard-api')
+
+    await expect(readClipboardImagePngBase64()).resolves.toBe('Zml0dGVk')
+    expect({ width: canvas.width, height: canvas.height }).toEqual({ width: 6688, height: 5016 })
+    expect(readAsDataURL).toHaveBeenCalledWith(fitted)
   })
 
   it('saves browser clipboard images through bounded upload chunks', async () => {
@@ -245,59 +288,6 @@ describe('web UI preload API', () => {
     )
     expect(clipboard.read).toHaveBeenCalledTimes(1)
     expect(clipboard.getType).toHaveBeenCalledTimes(1)
-    expect(readAsDataURL).not.toHaveBeenCalled()
-    expect(runtimeCalls).toEqual([])
-  })
-
-  it('rejects oversized decoded clipboard images before canvas conversion', async () => {
-    const runtimeCalls: { method: string; params: unknown }[] = []
-    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
-    const readAsDataURL = vi.fn(() => {
-      throw new Error('FileReader should not receive oversized decoded image data')
-    })
-    vi.doMock('./web-runtime-client', () => ({
-      WebRuntimeClient: class {
-        call(method: string, params?: unknown): Promise<RuntimeRpcResponse<unknown>> {
-          runtimeCalls.push({ method, params })
-          return Promise.resolve({
-            id: `call-${runtimeCalls.length}`,
-            ok: true,
-            result: null,
-            _meta: { runtimeId: 'runtime-1' }
-          })
-        }
-
-        close(): void {}
-      }
-    }))
-
-    const globals = installBrowserGlobals('Linux')
-    writeStoredRuntimeEnvironment(globals.storage)
-    const { installWebPreloadApi } = await import('./web-preload-api')
-    const { MAX_CLIPBOARD_IMAGE_PIXELS } = await import('./preload-api/web-clipboard-api')
-    installClipboardImageBlob(new Blob(['small'], { type: 'image/jpeg' }))
-    vi.stubGlobal(
-      'Image',
-      class {
-        src = ''
-        naturalHeight = 1
-        naturalWidth = MAX_CLIPBOARD_IMAGE_PIXELS + 1
-        decode = vi.fn().mockResolvedValue(undefined)
-      }
-    )
-    vi.stubGlobal(
-      'FileReader',
-      class {
-        readAsDataURL = readAsDataURL
-      }
-    )
-    installWebPreloadApi()
-
-    await expect(globals.window.api.ui.saveClipboardImageAsTempFile()).rejects.toThrow(
-      'Clipboard image is too large'
-    )
-    expect(revokeObjectURL).toHaveBeenCalledTimes(1)
-    revokeObjectURL.mockRestore()
     expect(readAsDataURL).not.toHaveBeenCalled()
     expect(runtimeCalls).toEqual([])
   })

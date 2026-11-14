@@ -51,6 +51,8 @@ export type TerminalTab = {
   generatedTitle?: string | null
   /** Stable AI Vault conversation name, bound to its provider session identity. */
   aiVaultTitle?: AiVaultSessionTitle | null
+  /** Mirror-only, never saved: the paired host publishes this tab's session name, so this client doesn't resolve its own. */
+  sessionTitleFromHost?: true
   /** Stable label from the tab-bar Quick Command that created this terminal. */
   quickCommandLabel?: string | null
   customTitle: string | null

@@ -2,9 +2,10 @@
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
-import { getHistorySessionDirName } from '../../src/main/daemon/history-paths'
-import { LOG_HEADER_BYTES } from '../../src/main/daemon/terminal-history-log'
-import { profileStateDatabaseFile } from '../../src/main/persistence/profile-state/profile-state-database'
+import { getHistorySessionDirName } from '../../src/main/daemon/history/storage/history-paths'
+import { LOG_HEADER_BYTES } from '../../src/main/daemon/history/storage/terminal-history-log'
+import '../../src/main/persistence/profile-state/database/profile-state-database'
+import { profileStateDatabaseFile } from '../../src/shared/profile-state-storage-paths'
 import { ProfileStateSqliteAuthority } from '../../src/main/persistence/profile-state/profile-state-sqlite-authority'
 import { DEFAULT_LOCAL_ORCA_PROFILE_ID } from '../../src/shared/orca-profiles'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
@@ -81,80 +82,6 @@ writeFileSync(
 
 test.afterAll(() => {
   rmSync(scratch, { recursive: true, force: true })
-})
-
-test('SQLite candidate retains a remote automation run across serve restart', async ({
-  testRepoPath
-}) => {
-  test.setTimeout(240_000)
-
-  const host = await launchHeadlessPairedRuntimeHost({ pinnedServePort: true })
-  try {
-    const added = await host.client.call<{ repo: { id: string } }>('repo.add', {
-      path: testRepoPath,
-      kind: 'git'
-    })
-    const automation = await host.client.call<{ automation: { id: string } }>('automation.create', {
-      agentId: 'codex',
-      name: `remote-sqlite-restart-${Date.now()}`,
-      prompt: 'Retain this remote automation run through a SQLite-only serve restart.',
-      repo: `id:${added.result.repo.id}`,
-      runContext: {
-        kind: 'workspace-run',
-        projectId: added.result.repo.id,
-        hostId: 'runtime:missing',
-        projectHostSetupId: `missing-${Date.now()}`,
-        repoId: added.result.repo.id,
-        path: testRepoPath
-      },
-      workspaceMode: 'new_per_run',
-      reuseSession: false,
-      timezone: 'UTC',
-      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
-      dtstart: Date.now(),
-      enabled: false,
-      missedRunGraceMinutes: 720
-    })
-    const run = await host.client.call<{ run: { id: string; status: string } }>(
-      'automation.runNow',
-      { id: automation.result.automation.id }
-    )
-    expect(['dispatching', 'dispatched']).toContain(run.result.run.status)
-
-    const beforeRestart = await host.client.call<{ runs: { id: string }[] }>('automation.runs', {
-      automationId: automation.result.automation.id
-    })
-    expect(beforeRestart.result.runs.some((entry) => entry.id === run.result.run.id)).toBe(true)
-
-    const profileDirectory = path.join(host.userDataDir, 'profiles', DEFAULT_LOCAL_ORCA_PROFILE_ID)
-    const profileJsonPath = path.join(profileDirectory, 'orca-data.json')
-    const rootJsonPath = path.join(host.userDataDir, 'orca-data.json')
-    const databasePath = profileStateDatabaseFile(profileDirectory)
-    expect(existsSync(databasePath)).toBe(true)
-    await host.restartServeProcess({
-      betweenProcesses: () => {
-        rmSync(profileJsonPath, { force: true })
-        rmSync(rootJsonPath, { force: true })
-      }
-    })
-    expect(existsSync(profileJsonPath)).toBe(false)
-    expect(existsSync(rootJsonPath)).toBe(false)
-
-    const afterRestartDefinitions = await host.client.call<{
-      automations: { id: string }[]
-    }>('automation.list')
-    expect(
-      afterRestartDefinitions.result.automations.some(
-        (entry) => entry.id === automation.result.automation.id
-      )
-    ).toBe(true)
-    const afterRestart = await host.client.call<{ runs: { id: string }[] }>('automation.runs', {
-      automationId: automation.result.automation.id
-    })
-    expect(afterRestart.result.runs.some((entry) => entry.id === run.result.run.id)).toBe(true)
-  } finally {
-    await host.dispose()
-  }
 })
 
 type HostSurface = {

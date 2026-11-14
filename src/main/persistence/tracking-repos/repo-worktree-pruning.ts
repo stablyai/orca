@@ -11,7 +11,7 @@ import {
   getWorktreeIdFromHostIdentity,
   isWorktreeHostIdentity
 } from '../../../shared/worktree/host-qualified-identity'
-import { pruneUnreferencedWorktreeIdentityMeta } from '../loading-store/worktree-identity-metadata'
+import { pruneUnreferencedWorktreeIdentityMeta } from '../loading-store/worktree-metadata/worktree-identity-metadata'
 
 export function pruneWorktreeStateForRepo(
   state: PersistedState,
@@ -129,6 +129,13 @@ export function pruneWorktreeStateForRepo(
     }
     if (parentScope?.type === 'worktree' && belongsToHost(parentScope.worktreeId)) {
       delete state.workspaceLineageByChildKey[childKey as WorkspaceKey]
+    }
+  }
+  // Only the child decides: a parent in another store shares no repo ids with this one.
+  for (const childKey of Object.keys(state.crossStoreLineageByChildKey ?? {})) {
+    const childScope = parseWorkspaceKey(childKey)
+    if (childScope?.type === 'worktree' && belongsToHost(childScope.worktreeId)) {
+      delete state.crossStoreLineageByChildKey?.[childKey]
     }
   }
   pruneMobileClientTabSelections(belongsToHost)

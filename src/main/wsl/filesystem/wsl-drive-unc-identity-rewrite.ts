@@ -16,11 +16,11 @@ import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
   parseEditorFileId,
   WSL_MOVE_FREE_TEXT_KEYS
-} from '../../persistence/moving-wsl-projects/wsl-move-canonical-form'
+} from '../../persistence/moving-wsl-projects/manifest-scope/wsl-move-canonical-form'
 import {
   rewriteOrcadMigrationPathValue,
   type OrcadMigrationPathRewriter
-} from '../../ssh/orcad-migration-path-rewrite'
+} from '../../persistence/migrating-orcad-catalog/path-rewrite/orcad-migration-path-rewrite'
 import { wslUncDrivePathToWindows } from '../../../shared/wsl-paths'
 
 export type WslDriveUncRewriteScope = {
@@ -191,7 +191,7 @@ function rewriteNode(value: unknown, map: (value: string) => string, skip: boole
     entries.set(
       nextKey,
       other
-        ? merged(nextKey, other, { child: nextChild, rekeyed })
+        ? mergeWslDriveUncKeyedEntries(nextKey, other, { child: nextChild, rekeyed })
         : {
             child: nextChild,
             rekeyed
@@ -204,7 +204,7 @@ function rewriteNode(value: unknown, map: (value: string) => string, skip: boole
 }
 
 /** The re-keyed entry wins a tie: it is the one the user's UNC project wrote. */
-function merged(
+export function mergeWslDriveUncKeyedEntries(
   key: string,
   a: { child: unknown; rekeyed: boolean },
   b: { child: unknown; rekeyed: boolean }

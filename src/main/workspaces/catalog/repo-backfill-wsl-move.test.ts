@@ -11,22 +11,22 @@ import { seedWslMoveCutover } from '../../persistence/__fixtures__/wsl-mover/wsl
 import {
   loadWslMoveFence,
   resetWslMoveFenceForTests
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { probeGitRemoteIdentity } from './repo-git-remote-identity'
 import {
   enrichMissingRepoGitRemoteIdentities,
   flushRepoGitRemoteIdentityEnrichmentForTests,
   resetRepoGitRemoteIdentityEnrichmentForTests
 } from './repo-git-remote-identity-enrichment'
-import { RuntimeRepositoryForkBackfill } from '../../runtime/runtime-repository-fork-backfill'
+import { RuntimeRepositoryForkBackfill } from '../../runtime/repositories/runtime-repository-fork-backfill'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
   safeStorage: { isEncryptionAvailable: () => false }
 }))
 vi.mock('./repo-git-remote-identity', () => ({ probeGitRemoteIdentity: vi.fn() }))
-vi.mock('../../github/client', () => ({
-  getRepoUpstream: vi.fn(async () => ({ owner: 'acme', repo: 'app' }))
+vi.mock('../../github/client/fetch/repo-slug-upstream', () => ({
+  probeRepoUpstream: vi.fn(async () => ({ upstream: { owner: 'acme', repo: 'app' }, origin: null }))
 }))
 vi.mock('../../repository-icons/repo-icon-autodetect', () => ({
   detectGitHubAvatarIcon: vi.fn(async () => null)

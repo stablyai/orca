@@ -1,19 +1,27 @@
-import type { MessagePriority, MessageType, OrchestrationDb } from '../../../../orchestration/db'
+import type {
+  MessagePriority,
+  MessageType
+} from '../../../../orchestration/db/orchestration-records'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { resolveGroupAddress } from '../../../../orchestration/groups'
+import { resolveGroupAddress } from '../../../../orchestration/addressing/groups/group-addressing'
 import { isEquivalentPaneKey } from '../../../../orchestration/db/pane-key-match'
-import { resolveBareOrchestrationRecipient } from './recipient-routing'
+import {
+  resolveBareOrchestrationRecipient,
+  type BareRecipientResolution,
+  type SendRecipientWarning
+} from './recipient-routing'
 import {
   listAddressableStructuredWorkers,
   type OrchestrationAddressableAgent
-} from '../../../../orchestration/structured-worker-group-addressing'
+} from '../../../../orchestration/addressing/groups/structured-worker-group-addressing'
 import { legacyWorkerDeliveryContract } from '../routing'
 import { exposeMessages } from './mailbox-message-receipt'
 import { recordReceiptBeforeNudge } from './mutation-replay-nudge'
-import type { BareRecipientResolution, SendRecipientWarning } from './recipient-routing'
-import type { SendParams } from '../schemas'
-import type { OrchestrationCallerIdentity } from '../../../../orchestration/orchestration-caller-identity'
+
+import type { SendParams } from './send-params'
+import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import type { z } from 'zod'
 
 type SendParamsInput = z.infer<typeof SendParams>
@@ -22,6 +30,9 @@ type SendReceipt = <T extends object>(receipt: T) => T & { warnings?: SendRecipi
 type GroupAgentSnapshot = OrchestrationAddressableAgent & { tabId?: string; leafId?: string }
 
 type GroupCandidate = OrchestrationAddressableAgent & { mailbox?: { to: string; runId: string } }
+
+// Status reads for a candidate set that keeps changing during them, at most this many.
+const MAX_STATUS_READS = 3
 
 function listRunGroupCandidates(args: {
   db: OrchestrationDb
@@ -151,35 +162,53 @@ export async function sendGroupMessage(args: {
     })
     agents = [...terminals, ...listAddressableStructuredWorkers(db)]
   }
-  // Revalidate after discovery before selecting recipients or writing mail.
-  revalidateLegacyCoordinator?.()
-  if (!worktreeGroup) {
-    audienceRunId = resolveAudienceRunId()
+  // Authority, audience and candidates are read after the last wait, before any effect.
+  function selectCandidates(): {
+    candidates: GroupCandidate[]
+    groupWarnings: SendRecipientWarning[]
+  } {
+    revalidateLegacyCoordinator?.()
+    if (!worktreeGroup) {
+      audienceRunId = resolveAudienceRunId()
+    }
+    const groupWarnings: SendRecipientWarning[] = []
+    const candidates: GroupCandidate[] =
+      worktreeGroup || !audienceRunId
+        ? agents
+        : listRunGroupCandidates({
+            db,
+            runtime,
+            senderRunId: audienceRunId,
+            groupAddress,
+            agents,
+            warnings: groupWarnings
+          })
+    return { candidates, groupWarnings }
   }
-  const groupWarnings: SendRecipientWarning[] = []
-  const candidates: GroupCandidate[] =
-    worktreeGroup || !audienceRunId
-      ? agents
-      : listRunGroupCandidates({
-          db,
-          runtime,
-          senderRunId: audienceRunId,
-          groupAddress,
-          agents,
-          warnings: groupWarnings
-        })
-  // Read up front: a structured worker's status comes from its journal, which may need opening.
-  const statuses =
-    groupAddress.toLowerCase() === '@idle'
-      ? new Map(
-          await Promise.all(
-            candidates.map(
-              async (candidate) =>
-                [candidate.handle, await runtime.getAgentStatusForHandle(candidate.handle)] as const
-            )
-          )
+  let { candidates, groupWarnings } = selectCandidates()
+  // A structured worker's status comes from its journal, which may need opening; candidates found
+  // during that wait need their own, so every status is read again with them.
+  let statuses = new Map<string, string | null>()
+  for (let attempt = 0; groupAddress.toLowerCase() === '@idle'; attempt++) {
+    if (attempt === MAX_STATUS_READS) {
+      throw new OrchestrationError(
+        'terminal_not_found',
+        `The recipients of ${groupAddress} kept changing while their status was read. No message was sent.`
+      )
+    }
+    statuses = new Map(
+      await Promise.all(
+        candidates.map(
+          async (candidate) =>
+            [candidate.handle, await runtime.getAgentStatusForHandle(candidate.handle)] as const
         )
-      : new Map<string, string | null>()
+      )
+    )
+    ;({ candidates, groupWarnings } = selectCandidates())
+    if (candidates.every((candidate) => statuses.has(candidate.handle))) {
+      break
+    }
+  }
   const handles = resolveGroupAddress(
     groupAddress,
     from,

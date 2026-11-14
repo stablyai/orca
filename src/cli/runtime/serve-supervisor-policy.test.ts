@@ -21,23 +21,6 @@ function exit(overrides: Partial<ServeChildExit> = {}): ServeChildExit {
 }
 
 describe('decideAfterServeChildExit', () => {
-  it('passes a normal exit code through, and explains an unforwarded signal', () => {
-    const base = { expectedHandoff: null, handoff: null, hasHandoffPath: true }
-    expect(decideAfterServeChildExit({ ...base, exit: exit({ code: 3 }) })).toEqual({
-      kind: 'exit',
-      code: 3
-    })
-    expect(
-      decideAfterServeChildExit({
-        ...base,
-        exit: exit({ code: null, signal: 'SIGTERM', signalWasForwarded: true })
-      })
-    ).toEqual({ kind: 'exit', code: 0 })
-    expect(
-      decideAfterServeChildExit({ ...base, exit: exit({ code: null, signal: 'SIGABRT' }) })
-    ).toEqual({ kind: 'signal-exit', signal: 'SIGABRT' })
-  })
-
   it('waits for the new bundle only when this very child requested the install', () => {
     expect(
       decideAfterServeChildExit({

@@ -4,9 +4,10 @@ import { X } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { isSubmittableCommentBody } from '../../session/pr-comment-actions'
+import { isSubmittableCommentBody } from '../../source-control/review/pr-comment-actions'
 import { MessageBox } from '../composer-input/MessageBox'
 import { composerInputStyles } from '../composer-input/composer-input-styles'
+import { useDurableDraftField } from '../../drafts/durable-draft-fields'
 
 type Props = {
   // Share plain-text composer across root comment, reply and edit.
@@ -15,6 +16,8 @@ type Props = {
   submitting: boolean
   // Seeds the field for the edit case; the reply/add cases leave it empty.
   initialBody?: string
+  // Where a new comment or reply waits until it is posted, through closing and the app being killed.
+  draftKey?: string | null
   // Resolves to true on success; the composer clears + collapses (caller-driven via key remount or onSubmitted).
   onSubmit: (body: string) => Promise<boolean>
   onCancel?: () => void
@@ -27,6 +30,7 @@ export function PRCommentComposer({
   submitLabel,
   submitting,
   initialBody,
+  draftKey = null,
   onSubmit,
   onCancel,
   autoFocus,
@@ -34,7 +38,9 @@ export function PRCommentComposer({
 }: Props) {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const [body, setBody] = useState(initialBody ?? '')
+  const [edited, setEdited] = useState(initialBody ?? '')
+  const [kept, setKept] = useDurableDraftField(draftKey, 'body')
+  const [body, setBody] = draftKey === null ? [edited, setEdited] : [kept, setKept]
   // Guard synchronously against double-submit before parent’s async submitting state rerenders.
   const inFlightRef = useRef(false)
   const canSubmit = isSubmittableCommentBody(body) && !submitting
@@ -45,9 +51,11 @@ export function PRCommentComposer({
     }
     inFlightRef.current = true
     try {
-      const ok = await onSubmit(body.trim())
+      const posted = body.trim()
+      const ok = await onSubmit(posted)
+      // A reopened composer shares the draft; text typed there since stays.
       if (ok) {
-        setBody('')
+        setBody((current) => (current.trim() === posted ? '' : current))
       }
     } finally {
       inFlightRef.current = false

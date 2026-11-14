@@ -3,8 +3,12 @@ import { checkDispatchAuthority } from './codex-structured-dispatch-authority'
 import {
   StructuredAgentSessionInputNotAdmitted,
   type StructuredAgentSessionAdmitFreshInput
-} from '../../../native-chat/agent-session-wire/structured-agent-session-input-admission'
-import { turnInputFor } from './codex-structured-message-options'
+} from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
+import {
+  codexMessageInputOptions,
+  compileCodexMessageOptions,
+  turnInputFor
+} from './codex-structured-message-options'
 import { reportedCodexPermissionMode } from '../threads/codex-structured-thread-open'
 import { admitCodexTurnPermission } from './codex-structured-turn-permission'
 import type { CodexSkillReport } from '../catalog/codex-structured-skill-report'
@@ -17,24 +21,20 @@ import type {
   AgentJournalMessageItem,
   AgentJournalTurnJoin
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionDispatchOutcome } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { AgentSessionDispatchOutcome } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { isCodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import { isCodexAppServerUnsupportedError } from '../../app-server/codex-app-server-session'
 import type { CodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { readCodexTurnId } from '../../app-server/codex-structured-thread-facts'
-import { codexTurnRequestOptions } from '../catalog/codex-structured-service-tier'
+import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
 import {
   codexRunningOrOpeningTurn,
   codexStopTarget,
   type CodexTurnOpenWaits
 } from './codex-structured-turn-open-wait'
-import {
-  codexAnsweredTurn,
-  codexDispatchRejection,
-  codexTurnEndRejection
-} from './codex-structured-turn-end-settlement'
+import { codexDispatchRejection } from './codex-structured-turn-end-settlement'
 
 export type CodexTurnHost = {
   account?: AgentSessionAccountKind
@@ -44,6 +44,7 @@ export type CodexTurnHost = {
   permissions?: CodexSession['permissions']
   options: Map<string, string>
   appliedTurnOptions?: Readonly<Record<string, string>>
+  appliedTurnInputOptions?: Readonly<Record<string, string>>
   appliedSettings?: CodexSession['appliedSettings']
   reportedOptions?: CodexSession['reportedOptions']
   catalogAccess?: CodexSession['catalogAccess']
@@ -54,18 +55,22 @@ export type CodexTurnHost = {
   turnOpenWaits: Pick<CodexTurnOpenWaits, 'wait'>
 }
 
+type CodexTurnInput = {
+  clientMessageId: string
+  body: AgentJournalMessageItem
+  requestedAt?: number
+  turnOptions?: Readonly<Record<string, string>>
+  executionOptions?: AgentSessionExecutionOptions
+  signal?: AbortSignal
+  isCurrent?: () => boolean
+  admitFreshInput?: StructuredAgentSessionAdmitFreshInput
+}
+
 /** false means correlation capacity refused the send before writing; null turnId means an unnamed answer. */
 export async function startCodexTurn(
   host: CodexTurnHost,
-  input: {
-    clientMessageId: string
-    body: AgentJournalMessageItem
-    requestedAt?: number
+  input: CodexTurnInput & {
     timeoutMs?: number
-    turnOptions?: Readonly<Record<string, string>>
-    signal?: AbortSignal
-    isCurrent?: () => boolean
-    admitFreshInput?: StructuredAgentSessionAdmitFreshInput
     onReply?: () => void
   }
 ): Promise<{ turnId: string | null; via: AgentJournalTurnJoin } | false> {
@@ -94,8 +99,11 @@ export async function startCodexTurn(
     return steered
   }
   let previousApplied = host.appliedTurnOptions
+  let previousInput = host.appliedTurnInputOptions
   let previousOptions: Map<string, string> | null | undefined
   let requested: Readonly<Record<string, string>> = {}
+  let inputChoices: Readonly<Record<string, string | undefined>> = {}
+  let requestControls: Record<string, string> = {}
   let enqueued = false
   let discardSettingsAttempt: (() => void) | undefined
   const enqueue = (
@@ -114,21 +122,54 @@ export async function startCodexTurn(
       throw new StructuredAgentSessionInputNotAdmitted(undefined, 'permission')
     }
     previousApplied = host.appliedTurnOptions
+    previousInput = host.appliedTurnInputOptions
+    inputChoices = input.executionOptions ?? input.turnOptions ?? Object.fromEntries(host.options)
     previousOptions = input.turnOptions ? new Map(host.options) : null
     if (input.turnOptions) {
       host.options.clear()
-      for (const [key, value] of Object.entries(input.turnOptions)) {
+      for (const [key, value] of Object.entries(
+        codexMessageInputOptions(inputChoices, {}, input.turnOptions)
+      )) {
         host.options.set(key, value)
       }
     }
-    requested = codexTurnRequestOptions(host)
+    requested = {
+      interactionMode: 'default',
+      ...compileCodexMessageOptions(host, input.turnOptions ?? Object.fromEntries(host.options))
+    }
+    const { interactionMode, ...nativeOptions } = requested
+    const collaborationMode = {
+      mode: interactionMode,
+      settings: {
+        model: nativeOptions.model ?? previousApplied?.model ?? host.reportedOptions?.model,
+        reasoning_effort:
+          nativeOptions.effort ?? previousApplied?.effort ?? host.reportedOptions?.effort ?? null,
+        developer_instructions: null
+      }
+    }
+    requestControls = {
+      ...requested,
+      ...(collaborationMode.settings.model ? { model: collaborationMode.settings.model } : {}),
+      ...(collaborationMode.settings.reasoning_effort
+        ? { effort: collaborationMode.settings.reasoning_effort }
+        : {})
+    }
     const known = { ...previousApplied }
-    for (const key of Object.keys(requested)) {
+    const knownInput = { ...previousInput }
+    for (const key of new Set([...Object.keys(requested), ...Object.keys(inputChoices)])) {
       delete known[key]
+      delete knownInput[key]
     }
     host.appliedTurnOptions = known
+    host.appliedTurnInputOptions = knownInput
     discardSettingsAttempt = host.appliedSettings?.attempt(requested)
     enqueued = true
+    host.dispatchEchoes.expect(
+      input.clientMessageId,
+      host.threadId,
+      'start',
+      turnInputFor(host, body)
+    )
     const previousMode = host.permissions?.appliedMode
     if (host.permissions && mode) {
       host.permissions.appliedMode = mode
@@ -143,7 +184,8 @@ export async function startCodexTurn(
             clientUserMessageId: input.clientMessageId,
             input: turnInputFor(host, body),
             ...permission,
-            ...requested
+            ...nativeOptions,
+            collaborationMode
           },
           {
             timeoutMs: input.timeoutMs,
@@ -189,9 +231,8 @@ export async function startCodexTurn(
     }
     if (isCodexAppServerRequestError(error) || isCodexAppServerUnsupportedError(error)) {
       discardSettingsAttempt?.()
-    }
-    if (isCodexAppServerRequestError(error) || isCodexAppServerUnsupportedError(error)) {
       host.appliedTurnOptions = previousApplied
+      host.appliedTurnInputOptions = previousInput
       if (previousOptions) {
         host.options.clear()
         for (const [key, value] of previousOptions) {
@@ -202,22 +243,23 @@ export async function startCodexTurn(
     throw error
   }
   host.appliedTurnOptions = { ...previousApplied, ...requested }
+  host.appliedTurnInputOptions = codexMessageInputOptions(
+    inputChoices,
+    {
+      serviceTier: 'default',
+      ...requestControls,
+      ...previousInput,
+      interactionMode: requestControls.interactionMode
+    },
+    requested
+  )
   return { turnId: readCodexTurnId(answer), via: 'start' }
 }
 
 /** Replies establish admission; exact echoes establish identity. Timeouts cannot disprove delivery. */
 export async function dispatchCodexTurn(
   session: CodexTurnHost,
-  input: {
-    sessionId: string
-    clientMessageId: string
-    body: AgentJournalMessageItem
-    requestedAt?: number
-    turnOptions?: Readonly<Record<string, string>>
-    signal?: AbortSignal
-    isCurrent?: () => boolean
-    admitFreshInput?: StructuredAgentSessionAdmitFreshInput
-  },
+  input: CodexTurnInput & { sessionId: string },
   timeoutMs: number | undefined
 ): Promise<AgentSessionDispatchOutcome> {
   let answer: { turnId: string | null; via: AgentJournalTurnJoin } | false
@@ -257,32 +299,19 @@ export async function dispatchCodexTurn(
     return { state: 'rejected', ...codexDispatchRejection(agentSessionFailureFact('queueFull')) }
   }
   // An answer read after the turn it names already ended is settled by that end.
-  if (!answer.turnId) {
+  if (answer.turnId) {
+    session.dispatchEchoes.bindTurn(
+      input.clientMessageId,
+      session.threadId,
+      answer.turnId,
+      answer.via,
+      answeredAt
+    )
+  } else {
     session.dispatchEchoes.answered(
       input.clientMessageId,
       answeredAt ?? session.dispatchEchoes.tick()
     )
   }
-  const endedFirst = answer.turnId
-    ? session.dispatchEchoes.bindTurn(
-        input.clientMessageId,
-        session.threadId,
-        answer.turnId,
-        answer.via,
-        answeredAt
-      )
-    : null
-  const rejection = endedFirst ? codexTurnEndRejection(endedFirst, session.account) : null
-  return rejection && answer.turnId
-    ? {
-        state: 'rejected',
-        ...codexAnsweredTurn(session, input.sessionId, answer.turnId, answer.via),
-        ...rejection
-      }
-    : { state: 'admitted', ranOptions: codexRanOptions(session) }
-}
-
-/** Steers retain running-turn options; starts use request overrides over thread defaults. */
-function codexRanOptions(session: CodexTurnHost): Record<string, string> {
-  return { ...session.appliedTurnOptions }
+  return { state: 'admitted', ranOptions: { ...session.appliedTurnOptions } }
 }

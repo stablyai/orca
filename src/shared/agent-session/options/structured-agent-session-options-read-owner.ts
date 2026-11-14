@@ -197,8 +197,9 @@ export function createStructuredAgentSessionOptionsReadOwner(
           ...current,
           record: cloneStructuredAgentSessionOptionRecord(current.record),
           reportedPermissionMode: undefined,
-          reportedModel: undefined,
           reportedEffort: undefined,
+          sessionNeverStarted: undefined,
+          catalogNamesConfiguredModel: undefined,
           ...(current.acceptedInputSources ? { acceptedInputSources: {} } : {})
         }
       }
@@ -215,8 +216,8 @@ export function createStructuredAgentSessionOptionsReadOwner(
                 ...current,
                 record: cloneStructuredAgentSessionOptionRecord(current.record),
                 reportedPermissionMode: undefined,
-                reportedModel: undefined,
-                reportedEffort: undefined
+                reportedEffort: undefined,
+                sessionNeverStarted: undefined
               }
             : context.seed()
         // Support stays tagged with its session; consumers filter by session, so it bridges a re-pair.
@@ -256,7 +257,10 @@ export function createStructuredAgentSessionOptionsReadOwner(
                 catalog,
                 context
               )
-            : settleStructuredAgentSessionBuiltinCatalog(current, false)
+            : settleStructuredAgentSessionBuiltinCatalog(
+                { ...current, catalogNamesConfiguredModel: undefined },
+                false
+              )
         )
       )
       if (

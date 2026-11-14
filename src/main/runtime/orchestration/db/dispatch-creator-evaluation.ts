@@ -1,13 +1,13 @@
 import type { DispatchCreator } from './dispatch-depth'
-import type { DispatchContextRow, RemoteDispatchAttachmentRow } from '../types'
-import type { OrchestrationAdmission } from '../orchestration-admission'
+import type { DispatchContextRow, RemoteDispatchAttachmentRow } from './orchestration-records'
+import type { OrchestrationAdmission } from '../addressing/orchestration-admission'
 import { isEquivalentPaneKey } from './pane-key-match'
 import {
   NESTED_WORKER_DEPTH_EXCEEDED_CODE,
   NESTED_WORKER_DEPTH_EXCEEDED_NEXT_STEPS,
   ROOT_DISPATCH_DEPTH,
   nestedWorkerDepthExceededMessage
-} from '../../../../shared/nested-worker-depth'
+} from '../../../../shared/orchestration/workers/nested-worker-depth'
 import { OrchestrationError } from '../orchestration-error'
 import { POTENTIALLY_LIVE_REMOTE_ATTACHMENT_STATES } from './federation/remote-attachment-liveness'
 

@@ -75,19 +75,33 @@ export class RuntimeSourceFence {
   }
 }
 
-export function createRuntimeSourceFence(
+function resolveEnvRuntimeSource(
   env: Readonly<Record<string, string | undefined>>,
-  userDataPath: string,
-  probeTimeoutMs: number
-): RuntimeSourceFence {
+  userDataPath: string
+): RuntimeSourceStamp | null {
   let platformDefaultPath: string | null = null
   try {
     platformDefaultPath = getPlatformUserDataPath()
   } catch {
     // Without a platform default, no terminal can fall back to it.
   }
-  return new RuntimeSourceFence(
-    resolveFencedRuntimeSource(readRuntimeSourceStamp(env), userDataPath, platformDefaultPath),
-    (metadata) => sendRequest<RuntimeStatus>(metadata, 'status.get', undefined, probeTimeoutMs)
+  return resolveFencedRuntimeSource(readRuntimeSourceStamp(env), userDataPath, platformDefaultPath)
+}
+
+/** A terminal launched by another profile carries workspace ids that this runtime never issued. */
+export function isLaunchedByAnotherRuntime(
+  env: Readonly<Record<string, string | undefined>>,
+  userDataPath: string
+): boolean {
+  return readRuntimeSourceStamp(env) !== null && resolveEnvRuntimeSource(env, userDataPath) === null
+}
+
+export function createRuntimeSourceFence(
+  env: Readonly<Record<string, string | undefined>>,
+  userDataPath: string,
+  probeTimeoutMs: number
+): RuntimeSourceFence {
+  return new RuntimeSourceFence(resolveEnvRuntimeSource(env, userDataPath), (metadata) =>
+    sendRequest<RuntimeStatus>(metadata, 'status.get', undefined, probeTimeoutMs)
   )
 }

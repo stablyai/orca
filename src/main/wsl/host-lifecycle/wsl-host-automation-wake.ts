@@ -6,8 +6,8 @@
  * standing request, so it is the one non-interactive wake. Nothing here boots a distro to check.
  * A run due while this desktop last saw the host ready already ran there, so it never wakes it.
  */
-import type { Automation } from '../../../shared/automations-types'
-import { nextAutomationOccurrenceAfter } from '../../../shared/automation-schedule-occurrences'
+import type { Automation } from '../../../shared/automations/automation-definition'
+import { nextAutomationOccurrenceAfter } from '../../../shared/automations/scheduling/automation-schedule-occurrences'
 
 export type WslHostAutomationSchedule = {
   rrule: string

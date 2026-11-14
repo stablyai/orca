@@ -1,5 +1,5 @@
-import { asRecord } from '../../session-scanner-record-value'
-import { extractString } from '../../session-scanner-values'
+import { asRecord } from '../../parsing/session-record-fields'
+import { extractString } from '../../../../shared/trimmed-string'
 
 // OMP inherits PI_CODING_AGENT_DIR, so Pi's folder can hold OMP transcripts; Pi never writes these.
 export function isOmpWrittenRecord(record: Record<string, unknown>): boolean {

@@ -1,5 +1,5 @@
 import { isWindowsAbsolutePathLike } from './cross-platform-path'
-import { IMAGE_FILE_EXTENSIONS } from './image-file-extensions'
+import { IMAGE_FILE_EXTENSIONS } from './file-preview/image-mime-types'
 import { shellEscapePath } from './shell/launch/shell-path-quoting'
 import { isWslUncPath } from './wsl-paths'
 

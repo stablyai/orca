@@ -1,5 +1,6 @@
 import { Component, createElement, type ReactElement, type ReactNode } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { documentQueryClient } from './hook-mount'
 import type { MountContext } from './recording-scenario'
 
 type CrashProps = { onCrash: (message: string) => void; children?: ReactNode }
@@ -23,16 +24,19 @@ class MountedScreenCrash extends Component<CrashProps, { crash: string | null }>
 export function screenMount(element: () => ReactElement, effect: MountContext['effect']) {
   let renderer: ReactTestRenderer | undefined
   let crashed: string | null = null
+  const queries = documentQueryClient()
   const wrapped = () =>
-    createElement(
-      MountedScreenCrash,
-      {
-        onCrash: (message: string) => {
-          crashed = message
-          effect('screen.crash', { message })
-        }
-      },
-      element()
+    queries.wrap(
+      createElement(
+        MountedScreenCrash,
+        {
+          onCrash: (message: string) => {
+            crashed = message
+            effect('screen.crash', { message })
+          }
+        },
+        element()
+      )
     )
   return {
     mount() {
@@ -45,12 +49,13 @@ export function screenMount(element: () => ReactElement, effect: MountContext['e
         renderer?.update(wrapped())
       })
     },
-    unmount() {
+    unmount(): Promise<void> {
       act(() => {
         renderer?.unmount()
         renderer = undefined
         crashed = null
       })
+      return queries.end()
     },
     tree: (): unknown => renderer?.toJSON() ?? null,
     crash: (): string | null => crashed

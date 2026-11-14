@@ -16,6 +16,7 @@ export type HostMessageFields = {
   workspace?: unknown
   memory?: unknown
   retain?: unknown
+  hydration?: unknown
 }
 
 export function readHostMessage(payload: unknown): HostMessageFields {
@@ -37,7 +38,8 @@ export function readHostMessage(payload: unknown): HostMessageFields {
     plugin: 'plugin' in payload ? payload.plugin : undefined,
     workspace: 'workspace' in payload ? payload.workspace : undefined,
     memory: 'memory' in payload ? payload.memory : undefined,
-    retain: 'retain' in payload ? payload.retain : undefined
+    retain: 'retain' in payload ? payload.retain : undefined,
+    hydration: 'hydration' in payload ? payload.hydration : undefined
   }
 }
 

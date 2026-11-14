@@ -1,16 +1,16 @@
 import { useMemo, useState } from 'react'
 import { Globe, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
-import { isBlankBrowserUrl } from '@/lib/browser-palette-search'
+import { useTranslate } from '@/i18n/use-translate'
+import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
 import type {
   BrowserCertificateFailure,
   BrowserCertificateProceedResult,
   BrowserPage as BrowserPageState
 } from '../../../../../shared/browser-workspace-types'
-import type { RemoteBrowserPageHandle } from '@/store/slices/browser'
+import type { RemoteBrowserPageHandle } from '@/store/slices/browser/browser-slice-contract'
 import { resolveRemoteFailureExternalUrl } from '../../../../../shared/browser-url'
-import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
+import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser/screencast/browser-screencast-protocol'
 import { getRemoteBrowserFrameStyle } from './remote-browser-frame-style'
 import { MarkupOverlay } from '../annotate/MarkupOverlay'
 import type { MarkupModeController } from '../annotate/useMarkupMode'
@@ -22,7 +22,7 @@ import {
   canReconnectRemoteBrowserStream,
   type RemoteBrowserStreamStatus
 } from './remote-browser-stream-status'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { RemoteBrowserRuntimeTarget } from './remote-browser-page-input-model'
 
 export function RemoteBrowserPageViewport({
@@ -46,6 +46,7 @@ export function RemoteBrowserPageViewport({
   onGoto,
   onNavigateToUrl,
   onReconnect,
+  onBeforeProceedCertificate,
   handleRemotePointerDown,
   handleRemotePointerUp,
   handleRemoteContextMenu,
@@ -73,12 +74,14 @@ export function RemoteBrowserPageViewport({
   /** The address bar's submit path, which also parks a URL typed before the host page exists. */
   onNavigateToUrl: (url: string) => void
   onReconnect: () => void
+  onBeforeProceedCertificate: () => void
   handleRemotePointerDown: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemotePointerUp: (event: React.PointerEvent<HTMLImageElement>) => void
   handleRemoteContextMenu: (event: React.MouseEvent<HTMLImageElement>) => void
   handleRemoteScreenshotKeyDown: (event: React.KeyboardEvent<HTMLImageElement>) => void
   handleRemoteScreenshotPaste: (event: React.ClipboardEvent<HTMLImageElement>) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const remoteFrameStyle = useMemo(() => getRemoteBrowserFrameStyle(frameMetadata), [frameMetadata])
   // Why: hosts clear the error when a re-attempt starts; hold it until this pane's command settles.
   const [standingFailure, setStandingFailure] = useState(browserTab.loadError)
@@ -138,17 +141,11 @@ export function RemoteBrowserPageViewport({
             )}
             <div className="text-sm font-medium text-foreground">
               {busy
-                ? translate(
-                    'auto.components.browser.pane.BrowserPane.b313a7275b',
-                    'Opening remote browser'
-                  )
-                : translate(
-                    'auto.components.browser.pane.BrowserPane.572046436a',
-                    'Remote browser'
-                  )}
+                ? t('auto.components.browser.pane.BrowserPane.b313a7275b', 'Opening remote browser')
+                : t('auto.components.browser.pane.BrowserPane.572046436a', 'Remote browser')}
             </div>
             <div className="text-xs leading-5 text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.browser.pane.BrowserPane.bbe8f15e83',
                 'This pane is rendered from the active runtime server.'
               )}
@@ -185,6 +182,7 @@ export function RemoteBrowserPageViewport({
             ) {
               return { ok: false, reason: 'missing' }
             }
+            onBeforeProceedCertificate()
             return callRuntimeRpc<BrowserCertificateProceedResult>(
               target,
               'browser.certificate.proceed',
@@ -213,7 +211,7 @@ export function RemoteBrowserPageViewport({
             <ReopenBrowserPageOnServerButton
               environmentId={remotePageHandle.environmentId}
               worktreeId={worktreeId}
-              lastCommittedUrl={browserTab.url}
+              reopenUrl={browserTab.url}
               className="h-6 shrink-0 px-2 text-xs"
             />
           ) : null}
@@ -224,7 +222,7 @@ export function RemoteBrowserPageViewport({
               className="h-6 shrink-0 px-2 text-xs"
               onClick={onReconnect}
             >
-              {translate('auto.components.browser.pane.BrowserPane.b71dc3d930', 'Reconnect')}
+              {t('auto.components.browser.pane.BrowserPane.b71dc3d930', 'Reconnect')}
             </Button>
           ) : null}
         </div>

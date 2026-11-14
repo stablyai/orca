@@ -9,7 +9,7 @@ import {
   pruneMarkdownTocCollapsedIds,
   toggleMarkdownTocCollapsedId
 } from './markdown-toc-collapse-state'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useSidebarResize } from '@/hooks/useSidebarResize'
 import { useAppStore } from '@/store/index'
 import { MARKDOWN_TOC_RESIZE_HANDLE_CLASS_NAME } from './markdown-toc-resize-handle'
@@ -35,6 +35,7 @@ export function MarkdownTableOfContentsPanel({
   onClose,
   onNavigate
 }: MarkdownTableOfContentsPanelProps): React.JSX.Element {
+  const t = useTranslate()
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set())
   const markdownTocPanelWidth = useAppStore((s) => s.markdownTocPanelWidth)
   const setMarkdownTocPanelWidth = useAppStore((s) => s.setMarkdownTocPanelWidth)
@@ -53,9 +54,12 @@ export function MarkdownTableOfContentsPanel({
     setWidth: setMarkdownTocPanelWidth
   })
 
-  useEffect(() => {
+  // Prune on change, not in a derivation, so a heading that is retyped does not resurrect its collapse.
+  const [prevItems, setPrevItems] = useState(items)
+  if (prevItems !== items) {
+    setPrevItems(items)
     setCollapsedIds((current) => pruneMarkdownTocCollapsedIds(current, items))
-  }, [items])
+  }
 
   useEffect(() => {
     const container = containerRef.current
@@ -86,7 +90,7 @@ export function MarkdownTableOfContentsPanel({
     <aside
       ref={containerRef}
       className="markdown-toc-panel"
-      aria-label={translate(
+      aria-label={t(
         'auto.components.editor.MarkdownTableOfContentsPanel.27d0a9c49a',
         'Table of contents'
       )}
@@ -94,16 +98,13 @@ export function MarkdownTableOfContentsPanel({
       <div className="markdown-toc-header">
         <ListTree className="size-3.5 text-muted-foreground" />
         <span>
-          {translate(
-            'auto.components.editor.MarkdownTableOfContentsPanel.06357eea60',
-            'Table of Contents'
-          )}
+          {t('auto.components.editor.MarkdownTableOfContentsPanel.06357eea60', 'Table of Contents')}
         </span>
         <div className="markdown-toc-header-actions">
           <div
             className="markdown-toc-level-controls"
             role="group"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.editor.MarkdownTableOfContentsPanel.0dc7b2f05a',
               'Collapse by level'
             )}
@@ -117,11 +118,11 @@ export function MarkdownTableOfContentsPanel({
                 className="markdown-toc-level-button"
                 aria-label={
                   level === TOC_EXPAND_ALL_LEVEL
-                    ? translate(
+                    ? t(
                         'auto.components.editor.MarkdownTableOfContentsPanel.f3de856175',
                         'Expand all heading levels'
                       )
-                    : translate(
+                    : t(
                         'auto.components.editor.MarkdownTableOfContentsPanel.111e66b85d',
                         'Collapse to heading level {{value0}}',
                         { value0: level }
@@ -129,11 +130,11 @@ export function MarkdownTableOfContentsPanel({
                 }
                 title={
                   level === TOC_EXPAND_ALL_LEVEL
-                    ? translate(
+                    ? t(
                         'auto.components.editor.MarkdownTableOfContentsPanel.a5daadd68b',
                         'Expand all'
                       )
-                    : translate(
+                    : t(
                         'auto.components.editor.MarkdownTableOfContentsPanel.4680a4b808',
                         'Collapse to H{{value0}}',
                         { value0: level }
@@ -149,11 +150,11 @@ export function MarkdownTableOfContentsPanel({
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.editor.MarkdownTableOfContentsPanel.bbe8369097',
               'Close table of contents'
             )}
-            title={translate(
+            title={t(
               'auto.components.editor.MarkdownTableOfContentsPanel.bbe8369097',
               'Close table of contents'
             )}
@@ -193,10 +194,7 @@ export function MarkdownTableOfContentsPanel({
             ))
           ) : (
             <div className="markdown-toc-empty">
-              {translate(
-                'auto.components.editor.MarkdownTableOfContentsPanel.de3928b6e4',
-                'No headings'
-              )}
+              {t('auto.components.editor.MarkdownTableOfContentsPanel.de3928b6e4', 'No headings')}
             </div>
           )}
         </div>
@@ -206,7 +204,7 @@ export function MarkdownTableOfContentsPanel({
         className={MARKDOWN_TOC_RESIZE_HANDLE_CLASS_NAME}
         role="separator"
         aria-orientation="vertical"
-        aria-label={translate(
+        aria-label={t(
           'auto.components.editor.MarkdownTableOfContentsPanel.8f4d2c1a9b',
           'Resize table of contents'
         )}

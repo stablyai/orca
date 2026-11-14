@@ -7,11 +7,11 @@ import {
   isAgentSessionProviderHandle
 } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import { JOURNAL_DB_SCHEMA_VERSION } from '../../../native-chat/agent-session-journal/journal-database-schema'
+import { JOURNAL_DB_SCHEMA_VERSION } from '../../../native-chat/agent-session-journal/database/journal-database-schema'
 import {
   closeTestJournalHostDatabase,
   openTestJournalHostDatabase
-} from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+} from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type Database from '../../../sqlite/sync-database'
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import type { RetiredAgentSessionClaimKey } from './agent-session-store-state'

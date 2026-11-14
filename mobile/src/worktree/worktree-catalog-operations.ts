@@ -1,5 +1,5 @@
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import { retiredWorktreeNamesSchema, worktreeCatalogSchema } from './worktree-catalog-reply-schema'
 
 // Catalog refusal preserves proven counts/rows (STA-3123); retired-name refusal instead reads as an empty registry.

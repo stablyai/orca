@@ -1,19 +1,19 @@
 import type { TaskPageSearchActionsModel } from './use-task-page-search-actions'
 import { useCallback } from 'react'
-import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../shared/github/work-items/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
-import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
 import { useAppStore } from '@/store'
-import { getWorkItemRepo } from '@/lib/work-item-repo-row'
-import { findGithubWorkItemWorkspaceAttachment } from '@/lib/github-work-item-workspace-attachment'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { getWorkItemRepo } from '@/lib/work-items/work-item-repo-row'
+import { findGithubWorkItemWorkspaceAttachment } from '@/lib/work-items/github/github-work-item-workspace-attachment'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
   getGitHubWorkItemWorkspaceSeed,
   getGitLabWorkItemWorkspaceSeed
 } from './task-page-source-context'
-import { getTaskPageRepoSourceContext } from '../../lib/task-repo-source-context'
+import { getTaskPageRepoSourceContext } from '../../lib/work-items/task-repo-source-context'
 type TaskPageWorkspaceActionsInput = Pick<TaskPageSearchActionsModel, 'repos' | 'openModal'>
 
 export function useTaskPageWorkspaceActions<Model extends TaskPageWorkspaceActionsInput>(

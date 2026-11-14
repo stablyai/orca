@@ -16,7 +16,7 @@ import {
   type AcpHistoryTurnIdentity,
   type AcpIdentifiedHistoryTurn
 } from './acp-history-replay'
-import { AcpTimelineTranslator } from '../acp-timeline-translator'
+import { AcpTimelineTranslator } from '../timeline/acp-timeline-translator'
 
 /** The chat a replay belongs to. */
 export type AcpHistoryScope = {

@@ -1,14 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
-import {
-  FOLDER_WORKSPACE_INSTANCE_SEPARATOR,
-  OrcaRuntimeService,
-  OrchestrationDb,
-  createRootDispatch,
-  join,
-  makePaneKey,
-  tmpdir
-} from '../orca-runtime-test-mocks.spec'
-import { TEST_REPO_ID, TEST_WORKTREE_ID, store } from '../orca-runtime-test-fixtures.spec'
+import './runtime-test-module-registration.spec'
+import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../../shared/worktree/id'
+import { OrcaRuntimeService } from '../orca-runtime'
+import { OrchestrationDb } from '../orchestration/db/orchestration-db'
+import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
+import { join } from 'node:path'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { tmpdir } from 'node:os'
+import { TEST_REPO_ID, TEST_WORKTREE_ID, store } from './orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
   it('uses durable Run ownership before worktree-scoped legacy attribution', () => {

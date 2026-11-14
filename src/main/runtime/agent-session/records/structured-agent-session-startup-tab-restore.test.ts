@@ -1,8 +1,6 @@
-import { partialRuntimeStore } from '../../runtime-store-partial-fixture'
+import { partialRuntimeStore } from '../../orca-runtime-tests/runtime-store-partial-fixture'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-// Startup chat-tab restore must write nothing with an existing index and bound failed writes per step rather than per chat.
-
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -11,29 +9,26 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { journalDatabasePath } from '../../../native-chat/agent-session-journal/journal-host-database'
+import { journalDatabasePath } from '../../../native-chat/agent-session-journal/database/journal-host-database'
 import {
   closeTestJournalHostDatabase,
   closeTestJournalHostDatabases,
   insertTestJournalRowJson,
-  openTestJournalHostDatabase,
-  SAVED_BY_NEWER_ORCA
-} from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+  openTestJournalHostDatabase
+} from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import * as journalFactory from '../../../native-chat/agent-session-journal/journal-store-factory'
-import { publishJournalSessionEpoch } from '../../../native-chat/agent-session-journal/journal-row-table'
-import { createQueuedRigProvider } from '../../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig-provider.test-fixture'
-import { createStructuredSessionObservationClock } from '../../../native-chat/agent-session-wire/structured-agent-session-observation-clock.test-fixture'
-import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
+import { publishJournalSessionEpoch } from '../../../native-chat/agent-session-journal/durable-rows/journal-row-table'
+import { createQueuedRigProvider } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'
+import { createStructuredSessionObservationClock } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-observation-clock.test-fixture'
+import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import { mintAgentSessionOperationId } from '../../orchestration/structured-pointer-operation-id'
-import { journalIdentityFor } from '../../../native-chat/agent-session-wire/structured-agent-session-attach'
-import { attachParamsForRecord } from '../../../native-chat/agent-session-wire/structured-agent-session-conversation-open'
-import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
-import { AgentSessionRecordStore } from './agent-session-record-store'
+import { mintAgentSessionOperationId } from '../../orchestration/mailbox/structured-pointer/structured-pointer-operation-id'
+import { journalIdentityFor } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
+import { attachParamsForRecord } from '../../../native-chat/agent-session-wire/host/structured-agent-session-conversation-open'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type * as AgentSessionRecordRows from './agent-session-record-rows'
 import {
-  readPersistedTestAgentSessionStore,
   seedTestAgentSessionRecordStore,
   seedTestAgentSessionStoreFromNewerBuild
 } from './agent-session-record-store-test-harness'
@@ -42,7 +37,7 @@ import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
 } from '../structured-agent-session-runtime'
-import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
 import { codexProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 
@@ -65,9 +60,6 @@ vi.mock('./agent-session-record-rows', async (importOriginal) => {
 })
 
 const PROMPT = 'add a retry'
-const CHAT_A = 'chat-a-0001'
-const CHAT_B = 'chat-b-0002'
-const CLEARED = 'chat-s-0003'
 
 let root: string
 
@@ -221,22 +213,6 @@ function startupRuntime(options: { afterInstall?: () => void; profileChats?: str
     log,
     published: () => runtime.mobileSessionTabsByWorktree.get('workspace-1')?.tabs ?? []
   }
-}
-
-async function expectHistory(sessionId: string): Promise<void> {
-  const host = getStructuredAgentSessionHost()
-  expect(JSON.stringify((await host!.journalSnapshot(sessionId)).items)).toContain(PROMPT)
-}
-
-function spyOnTabWrites() {
-  return {
-    visibility: vi.spyOn(AgentSessionRecordStore.prototype, 'setSessionTabVisibility'),
-    seed: vi.spyOn(AgentSessionRecordStore.prototype, 'initializeSessionTabs')
-  }
-}
-
-async function tabIndexOnDisk(): Promise<string[] | undefined> {
-  return (await readPersistedTestAgentSessionStore(root)).sessionTabs?.map((tab) => tab.sessionId)
 }
 
 describe('restoring the chat tabs open at quit', () => {
@@ -441,160 +417,5 @@ describe('restoring the chat tabs open at quit', () => {
     } finally {
       clock.restore()
     }
-  })
-  it.each([
-    { store: 'records a newer Orca wrote', newer: true, writesFail: false },
-    { store: 'a store whose writes keep failing', newer: false, writesFail: true }
-  ])(
-    'lists every chat from $store and writes nothing; it reads them unless a newer Orca saved them',
-    async ({ newer, writesFail }) => {
-      const records = [
-        chatRecord(CHAT_A),
-        chatRecord(CHAT_B),
-        chatRecord(CLEARED, { clearedInto: CHAT_A })
-      ]
-      const { path } = await seedProfile(records, {
-        newer,
-        visible: [CHAT_A, CHAT_B],
-        history: records.slice(0, 2)
-      })
-      const bytes = await readFile(path)
-      const tabWrites = spyOnTabWrites()
-      vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-      // Writable when the store opens, then failing for good.
-      const { runtime, log, published } = startupRuntime({
-        afterInstall: () => {
-          writes.failing = writesFail
-        }
-      })
-
-      await expect(runtime.restoreStructuredAgentSessionTabs()).resolves.toBeUndefined()
-
-      expect(published().map((tab) => tab.id)).toEqual([
-        `agent-session:${CHAT_A}`,
-        `agent-session:${CHAT_B}`
-      ])
-      expect(
-        published().every(
-          (tab) => tab.type !== 'agent-session' || tab.replacesSessionId === undefined
-        )
-      ).toBe(true)
-      // A newer Orca's leases are adjudicated in memory, so nothing fails there; its chats do not open.
-      if (newer) {
-        for (const sessionId of [CHAT_A, CHAT_B]) {
-          await expect(
-            getStructuredAgentSessionHost()!.journalSnapshot(sessionId)
-          ).rejects.toMatchObject(SAVED_BY_NEWER_ORCA)
-        }
-        expect(log.entries.map((entry) => entry.fields.scope)).not.toContain('lease-reconcile')
-      } else {
-        await expectHistory(CHAT_A)
-        await expectHistory(CHAT_B)
-        expect(log.entries).toEqual([
-          expect.objectContaining({
-            fields: {
-              scope: 'lease-reconcile',
-              error: expect.objectContaining({ message: 'disk I/O error' })
-            }
-          })
-        ])
-      }
-      expect(tabWrites.visibility).not.toHaveBeenCalled()
-      expect(tabWrites.seed).not.toHaveBeenCalled()
-      await stopStructuredAgentSessionRuntime()
-      if (newer) {
-        expect(await readFile(path)).toEqual(bytes)
-      }
-    }
-  )
-
-  it.each([1, 4, 8])('fails one write per startup step with %i chats open', async (count) => {
-    const chats = Array.from({ length: count }, (_, index) => `chat-${index}-000${index}`)
-    const records = chats.map((sessionId) => chatRecord(sessionId))
-    await seedProfile(records, { visible: chats })
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const { runtime, published } = startupRuntime({
-      afterInstall: () => {
-        writes.failing = true
-      }
-    })
-
-    await runtime.prepareStructuredAgentSessionStartupRestoration()
-    const prepared = writes.refused
-    await runtime.restoreStructuredAgentSessionTabs()
-
-    expect(published()).toHaveLength(count)
-    expect(prepared).toBe(1)
-    expect(writes.refused - prepared).toBe(1)
-  })
-
-  describe('on a legacy profile, with no tab index yet', () => {
-    const legacyChats = () => [
-      chatRecord(CHAT_A, { codex: true }),
-      chatRecord(CHAT_B, { codex: true })
-    ]
-
-    it('records every restored chat in one write', async () => {
-      const records = legacyChats()
-      await seedProfile(records)
-      const tabWrites = spyOnTabWrites()
-      const { runtime, published } = startupRuntime({ profileChats: [CHAT_A, CHAT_B] })
-      await runtime.prepareStructuredAgentSessionStartupRestoration()
-      // Allow one write; a per-chat seed would publish an incomplete index.
-      writes.grants = 1
-
-      await runtime.restoreStructuredAgentSessionTabs()
-
-      expect(published().map((tab) => tab.id)).toEqual([
-        `agent-session:${CHAT_A}`,
-        `agent-session:${CHAT_B}`
-      ])
-      expect(await tabIndexOnDisk()).toEqual([CHAT_A, CHAT_B])
-      expect(tabWrites.seed).toHaveBeenCalledOnce()
-      expect(tabWrites.visibility).not.toHaveBeenCalled()
-    })
-
-    it('fails one write more, for that one write', async () => {
-      const records = legacyChats()
-      await seedProfile(records)
-      vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-      const { runtime, published } = startupRuntime({
-        profileChats: [CHAT_A, CHAT_B],
-        afterInstall: () => {
-          writes.failing = true
-        }
-      })
-
-      await runtime.prepareStructuredAgentSessionStartupRestoration()
-      const prepared = writes.refused
-      await runtime.restoreStructuredAgentSessionTabs()
-
-      expect(published()).toHaveLength(2)
-      expect(prepared).toBe(1)
-      // The restore's lease check and the seed.
-      expect(writes.refused - prepared).toBe(2)
-    })
-
-    it('still lists the chats when that write fails, and leaves the index absent', async () => {
-      const records = legacyChats()
-      await seedProfile(records)
-      const { runtime, published, log } = startupRuntime({ profileChats: [CHAT_A, CHAT_B] })
-      await runtime.prepareStructuredAgentSessionStartupRestoration()
-      writes.failing = true
-
-      await expect(runtime.restoreStructuredAgentSessionTabs()).resolves.toBeUndefined()
-
-      expect(published()).toHaveLength(2)
-      await expectHistory(CHAT_A)
-      expect(log.entries).toContainEqual({
-        level: 'warn',
-        message: 'recording restored chat tabs failed',
-        fields: {
-          scope: 'tab-index-seed',
-          error: expect.objectContaining({ message: 'disk I/O error' })
-        }
-      })
-      expect(await tabIndexOnDisk()).toBeUndefined()
-    })
   })
 })

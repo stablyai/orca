@@ -47,5 +47,5 @@ export async function prepareAntigravityAccountForLaunch(args: {
       'This agy launch uses a different credential authority from the selected Antigravity account.'
     )
   }
-  await getAntigravityAccountService({ runtime: 'host' }).prepareForLaunch()
+  await (await getAntigravityAccountService({ runtime: 'host' })).prepareForLaunch()
 }

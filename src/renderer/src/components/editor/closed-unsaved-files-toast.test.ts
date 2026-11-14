@@ -38,10 +38,14 @@ vi.mock('@/store', () => ({ useAppStore: { getState: () => mocks.state } }))
 vi.mock('sonner', () => ({
   toast: { warning: mocks.warning, error: mocks.error, dismiss: mocks.dismiss }
 }))
-vi.mock('@/lib/create-untitled-markdown', () => ({ createUntitledMarkdownFile: mocks.create }))
-vi.mock('@/lib/editor-file-operation-owner', () => ({
+vi.mock('@/lib/editor/file-operations/create-untitled-markdown', () => ({
+  createUntitledMarkdownFile: mocks.create
+}))
+vi.mock('@/lib/editor/file-operations/editor-file-operation-owner', () => ({
+  getEditorFileOperationContext: mocks.context
+}))
+vi.mock('@/lib/editor/file-operations/editor-file-operation-provenance', () => ({
   captureEditorFileOperationProvenance: mocks.capture,
-  getEditorFileOperationContext: mocks.context,
   assertEditorFileOperationCurrent: mocks.assertCurrent
 }))
 import { reopenClosedUnsavedFiles, showClosedUnsavedFilesToast } from './closed-unsaved-files-toast'

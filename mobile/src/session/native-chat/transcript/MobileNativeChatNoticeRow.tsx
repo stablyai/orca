@@ -4,7 +4,8 @@ import {
 } from '../../../../../src/shared/native-chat/claude-model-fallback'
 import { useContext, useId, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { AlertCircle, AlertTriangle, ChevronRight, Info } from 'lucide-react-native'
+import { AlertCircle, AlertTriangle, Info } from 'lucide-react-native'
+import { MobileNativeChatInterruptedContinueButton } from './MobileNativeChatInterruptedContinueButton'
 import {
   nativeChatNoticeBlock,
   nativeChatNoticeLook,
@@ -20,35 +21,40 @@ import {
   readWholeAgentSessionFailureFact
 } from '../../../../../src/shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureSentence } from '../../../../../src/shared/agent-session/failures/agent-session-failure-words'
+import { agentSessionSignInCommand } from '../../../../../src/shared/agent-session/lifecycle/agent-session-setup-commands'
 import { nativeChatOrcaStopRowText } from '../../../../../src/shared/native-chat/native-chat-orca-stop-words'
 import {
+  MobileNativeChatForkedFromContext,
   MobileNativeChatNoticeContext,
-  type MobileNativeChatNoticeNames
-} from '../../mobile-native-chat-notice-context'
-import { MobileMarkdown } from '../../../components/MobileMarkdown'
+  type MobileNativeChatNoticeView
+} from './mobile-native-chat-notice-context'
+import { MobileNativeChatMarkdown } from './MobileNativeChatMarkdown'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
-import { colors, radii, spacing, typography, pressedStyle } from '../../../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { nativeChatHostStatusCopy, nativeChatNoticeCopy } from './native-chat-notice-copy'
 import { nativeChatOrcaStopSay } from './native-chat-orca-stop-copy'
 import { nativeChatUsageLimitText } from './native-chat-usage-limit-copy'
-import { sayMobileAgentSessionFailure } from '../../agent-session-failure-copy'
+import { sayMobileAgentSessionFailure } from '../agent-session/agent-session-failure-copy'
 import type { Translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION } from '../../../../../src/shared/native-chat/native-chat-stopped-before-start'
 import { MONO_SIZE, TEXT_SIZE, scaledType } from './mobile-native-chat-message-styles'
 import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import { toolStyles } from './mobile-native-chat-tool-styles'
+import { MobileNativeChatUsageLimitStatus } from './MobileNativeChatUsageLimitStatus'
+import { MobileNativeChatNoticeDisclosure } from './MobileNativeChatNoticeDisclosure'
+import { sheetPrimaryButtonStyles } from '../../../components/SheetPrimaryButton'
 
 function toneColor(tone: NativeChatNoticeTone): string {
   return { warning: colors.statusAmber, error: colors.statusRed, notice: colors.textMuted }[tone]
 }
 
-// Desktop's no-Continue wording; the phone always reads its Orca host as remote.
+// The phone always reads its Orca host as remote.
 function noticeLineText(
   notice: NativeChatTextBlock,
-  names: MobileNativeChatNoticeNames,
+  names: MobileNativeChatNoticeView,
   t: Translate
 ): string {
   if (notice.orcaStop) {
@@ -56,7 +62,7 @@ function noticeLineText(
     return nativeChatOrcaStopRowText(
       notice.orcaStop.cause,
       names.hostName ?? say('unnamedServer'),
-      { continueAvailable: false, remoteHost: true },
+      { continueAvailable: names.continuation?.continueAvailable === true, remoteHost: true },
       say
     )
   }
@@ -67,7 +73,15 @@ function noticeLineText(
   // Only reword text fully described by its fact; other host text stays as written.
   const context = { agentName: names.agentName }
   const surface =
-    failure?.kind === 'savedConversationMissing'
+    failure &&
+    [
+      'savedConversationMissing',
+      'pluginInputRequired',
+      'modelUnavailable',
+      'providerUnavailable',
+      'providerSafetyStopped',
+      'providerResponseFailed'
+    ].includes(failure.kind)
       ? (['row', 'rejection'] as const).find(
           (candidate) => notice.text === agentSessionFailureSentence(failure, candidate, context)
         )
@@ -77,52 +91,14 @@ function noticeLineText(
     : notice.text
 }
 
-function NoticeDisclosureSummary({
-  summary,
-  expanded,
-  fontScale,
-  onPress,
-  onLongPress
-}: {
-  summary: string
-  expanded: boolean
-  fontScale: number
-  onPress: () => void
-  onLongPress?: () => void
-}): React.JSX.Element {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={summary}
-      aria-expanded={expanded}
-      onPress={onPress}
-      onLongPress={onLongPress}
-      style={({ pressed }) => [styles.disclosure, pressed && pressedStyle]}
-    >
-      <View style={expanded ? toolStyles.caretOpen : undefined}>
-        <ChevronRight size={16 * fontScale} color={colors.textMuted} />
-      </View>
-      <Text
-        selectable={INLINE_TEXT_SELECTION}
-        numberOfLines={1}
-        style={[styles.faint, scaledType(typography.bodySize, fontScale), styles.summary]}
-      >
-        {summary}
-      </Text>
-    </Pressable>
-  )
-}
-
 // Render system notices separately so they cannot read as the agent’s own prose.
 export function MobileNativeChatNoticeRow({
   blocks,
   fontScale,
-  onOpenFile,
   onLongPress
 }: {
   blocks: readonly NativeChatBlock[]
   fontScale: number
-  onOpenFile?: (relativePath: string) => void
   onLongPress?: () => void
 }): React.JSX.Element | null {
   useMobileColorScheme()
@@ -131,6 +107,7 @@ export function MobileNativeChatNoticeRow({
   const detailId = useId()
   const copy = nativeChatNoticeCopy(t)
   const names = useContext(MobileNativeChatNoticeContext)
+  const openForkSource = useContext(MobileNativeChatForkedFromContext)
   const notice = nativeChatNoticeBlock(blocks)
   const aside = [styles.faint, scaledType(typography.bodySize, fontScale)]
   if (!notice) {
@@ -146,9 +123,13 @@ export function MobileNativeChatNoticeRow({
   }
   const look = nativeChatNoticeLook(notice)
   const lineText = noticeLineText(notice, names, t)
-  const failureDetail = agentSessionFailureDetailText(
-    readWholeAgentSessionFailureFact(notice.failure)
-  )
+  const failure = readWholeAgentSessionFailureFact(notice.failure)
+  const failureDetail = agentSessionFailureDetailText(failure)
+  const signInCommand =
+    failure?.kind === 'notSignedIn'
+      ? agentSessionSignInCommand(names.agentName, { account: failure.account, remote: true })
+      : null
+  const runInTerminal = names.onRunInTerminal
   const detail = failureDetail?.trim() !== lineText.trim() ? failureDetail : undefined
   const diagnosticText = look.kind === 'settled-permission' ? notice.text : detail
   const payload = notice.providerFrame?.payload
@@ -184,20 +165,24 @@ export function MobileNativeChatNoticeRow({
     case 'settled-permission': {
       const agent = names.agentName ?? look.agent
       const summary =
-        look.decision === 'denied'
-          ? t('chat.notice.permissionDenied', '{{agent}} denied permission. View details.', {
+        look.decision === 'approved'
+          ? t('chat.notice.safetyReviewApproved', '{{agent}} approved this action. View details.', {
               agent
             })
-          : t(
-              'chat.notice.safetyReview',
-              '{{agent}} reported a safety review warning. View details.',
-              {
+          : look.decision === 'denied'
+            ? t('chat.notice.permissionDenied', '{{agent}} denied permission. View details.', {
                 agent
-              }
-            )
+              })
+            : t(
+                'chat.notice.safetyReview',
+                '{{agent}} reported a safety review warning. View details.',
+                {
+                  agent
+                }
+              )
       return (
         <View>
-          <NoticeDisclosureSummary
+          <MobileNativeChatNoticeDisclosure
             summary={summary}
             expanded={expanded}
             fontScale={fontScale}
@@ -214,6 +199,30 @@ export function MobileNativeChatNoticeRow({
         <View style={styles.divider} accessibilityRole="text" accessibilityLabel={label}>
           <View style={styles.rule} />
           <Text style={styles.dividerLabel}>{label}</Text>
+          <View style={styles.rule} />
+        </View>
+      )
+    }
+    case 'forked-from': {
+      const { sourceName, sourceSessionId } = look
+      return (
+        // No label on the row: it would replace the text and hide the source link from screen readers.
+        <View style={styles.divider}>
+          <View style={styles.rule} />
+          <Text style={styles.dividerLabel}>
+            {copy.forkedFrom}{' '}
+            {openForkSource ? (
+              <Text
+                accessibilityRole="link"
+                style={styles.dividerLink}
+                onPress={() => openForkSource(sourceSessionId)}
+              >
+                {sourceName}
+              </Text>
+            ) : (
+              sourceName
+            )}
+          </Text>
           <View style={styles.rule} />
         </View>
       )
@@ -250,11 +259,10 @@ export function MobileNativeChatNoticeRow({
       return (
         <View style={styles.card}>
           <Text style={styles.planTitle}>{copy.plan}</Text>
-          <MobileMarkdown
+          <MobileNativeChatMarkdown
             content={notice.text}
             rangeSelectable
             textScale={fontScale}
-            onOpenFile={onOpenFile}
             onLongPress={onLongPress}
           />
         </View>
@@ -273,14 +281,41 @@ export function MobileNativeChatNoticeRow({
         scaledType(TEXT_SIZE, fontScale),
         look.tone && { color: toneColor(look.tone) }
       ]
+      const continuation = names.continuation
+      const continueOffered =
+        continuation !== undefined &&
+        notice.orcaStop?.turnItemId !== undefined &&
+        notice.orcaStop.turnItemId === continuation.offeredTurnItemId
       const content = (
         <View style={look.tone ? styles.toneText : undefined}>
           <Text selectable={INLINE_TEXT_SELECTION} style={textStyle}>
             {lineText}
           </Text>
+          {continueOffered ? (
+            <MobileNativeChatInterruptedContinueButton onPress={continuation.continueNow} />
+          ) : signInCommand && runInTerminal ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityHint={t(
+                'chat.notice.signInHint',
+                'Opens a terminal on the computer running this chat'
+              )}
+              onPress={() => runInTerminal(signInCommand)}
+              style={({ pressed }) => [
+                sheetPrimaryButtonStyles.button,
+                styles.action,
+                pressed && sheetPrimaryButtonStyles.pressed
+              ]}
+            >
+              <Text style={sheetPrimaryButtonStyles.label}>
+                {t('chat.notice.signIn', 'Sign in')}
+              </Text>
+            </Pressable>
+          ) : null}
+          <MobileNativeChatUsageLimitStatus notice={notice} fontScale={fontScale} />
           {detail || payload ? (
             <View>
-              <NoticeDisclosureSummary
+              <MobileNativeChatNoticeDisclosure
                 summary={t('pullRequest.markdownBlocks.details', 'Details')}
                 expanded={expanded}
                 fontScale={fontScale}
@@ -313,15 +348,6 @@ export function MobileNativeChatNoticeRow({
 }
 
 const styles = themedStyleSheet(() => ({
-  disclosure: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.sm
-  },
-  summary: {
-    flex: 1
-  },
   divider: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -336,6 +362,9 @@ const styles = themedStyleSheet(() => ({
   dividerLabel: {
     color: colors.textMuted,
     fontSize: typography.metaSize
+  },
+  dividerLink: {
+    textDecorationLine: 'underline'
   },
   faint: {
     color: colors.textMuted
@@ -369,5 +398,9 @@ const styles = themedStyleSheet(() => ({
   },
   toneText: {
     flex: 1
+  },
+  action: {
+    alignSelf: 'flex-start',
+    marginTop: spacing.sm
   }
 }))

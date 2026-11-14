@@ -11,18 +11,23 @@ import watercolorIcon from '../../../../resources/app-icons/orca-watercolor.png?
 import watercolorMacDockIcon from '../../../../resources/app-icons/orca-watercolor.png?asset&asarUnpack'
 import blueIcon from '../../../../resources/app-icons/orca-blue.png?asset'
 import blueMacDockIcon from '../../../../resources/app-icons/orca-blue.png?asset&asarUnpack'
-import { normalizeAppIconId, type AppIconId } from '../../../shared/app-icon'
+import {
+  CUSTOM_APP_ICON_ID,
+  normalizeAppIconId,
+  type BuiltInAppIconId
+} from '../../../shared/app-icon'
+import { getCustomAppIconPath, hasCustomAppIcon } from './custom-app-icon'
 
 const APP_ICON_PATHS = {
   classic: !app.isPackaged ? classicDevIcon : classicIcon,
   watercolor: watercolorIcon,
   blue: blueIcon
-} satisfies Record<AppIconId, string>
+} satisfies Record<BuiltInAppIconId, string>
 
 const MAC_DOCK_ICON_PATHS = {
   watercolor: watercolorMacDockIcon,
   blue: blueMacDockIcon
-} satisfies Record<Exclude<AppIconId, 'classic'>, string>
+} satisfies Record<Exclude<BuiltInAppIconId, 'classic'>, string>
 
 type ExecFile = (
   file: string,
@@ -73,7 +78,12 @@ let macDockIconPersistenceGeneration = 0
 let macDockIconPersistenceQueue = Promise.resolve()
 
 export function getAppIconPath(value: unknown): string {
-  return APP_ICON_PATHS[normalizeAppIconId(value)]
+  const iconId = normalizeAppIconId(value)
+  if (iconId === CUSTOM_APP_ICON_ID) {
+    // A missing import (removed file, copied settings) falls back instead of showing a blank tile.
+    return hasCustomAppIcon() ? getCustomAppIconPath() : APP_ICON_PATHS.classic
+  }
+  return APP_ICON_PATHS[iconId]
 }
 
 export function createAppIconImage(value: unknown): Electron.NativeImage {
@@ -281,6 +291,11 @@ export function persistMacDockIcon(value: unknown, options: PersistMacDockIconOp
       if (cleared && generation === macDockIconPersistenceGeneration) {
         app.dock?.setIcon(nativeImage.createEmpty())
       }
+      return
+    }
+    if (iconId === CUSTOM_APP_ICON_ID) {
+      // Imported icons never touch the signed bundle; only clear what an earlier built-in choice wrote.
+      await clearMacCustomIconMetadata(execFile, appBundlePath)
       return
     }
     // Finder metadata supplies the stopped app’s Dock icon; Electron only changes the live tile.

@@ -63,7 +63,7 @@ export function MobileOnboardingPage({
           {isSessionView
             ? t(
                 'onboarding.onboardingPage.sessionViewDescription',
-                'Choose whether supported agent sessions open in the terminal or Chat UI on this device. Press and hold a session tab to switch its view, or change the default later in Settings.'
+                'Choose whether supported agent sessions open in the terminal or Chat UI on this device. Press and hold a session tab to switch its view, or change the default any time in Settings → Chat UI.'
               )
             : t(
                 'onboarding.onboardingPage.notificationsDescription',

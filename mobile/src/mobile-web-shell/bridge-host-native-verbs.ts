@@ -1,4 +1,4 @@
-import type { RpcResponse } from '../transport/types'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { BridgeNativeVerbRefusedError, readShellRefusalCode } from './bridge-host-errors'
 import {
   BRIDGE_NATIVE_VERB_REFUSAL_CODES,

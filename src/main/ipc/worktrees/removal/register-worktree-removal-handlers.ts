@@ -17,18 +17,21 @@ import {
   getWorktreeRemovalOptionsKey
 } from './worktree-removal-coordinator'
 import { resolveRepoForExecutionHost } from '../repo-host-ownership'
+import { withNestedPreservedBranches } from '../../../workspaces/removal/nested-worktree-removal-plan'
 import {
   finishAcceptedWorktreeRemoval,
-  waitForPendingWorktreeRemoval
+  waitForPendingWorktreeRemoval,
+  waitForWorktreeRemovalAcceptance
 } from '../../../workspaces/removal/worktree-background-removal'
 import { runSerializedWorktreeRemovalAcceptance } from '../../../workspaces/removal/worktree-removal-acceptance-queue'
-import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { assertWslMoveRepoWritable } from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import {
   deleteLostContact,
   observeTerminals,
   runWorkspaceLifecycleCommand,
   workspaceLifecycleKey
-} from '../../../runtime/workspaces/workspace-lifecycle-commands'
+} from '../../../runtime/workspaces/lifecycle/workspace-lifecycle-commands'
+import { worktreeHostIdentity } from '../../../persistence/worktree-meta-host-identity'
 
 export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): void {
   const { store, options, worktreeRemovalsInFlight } = context
@@ -81,18 +84,23 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
         areWorktreePathsEqual(item.path, worktreePath)
       )
       const executionArgs = expectedCheckout ? { ...args, expectedCheckout } : args
-      const accept = async (): Promise<RemoveWorktreeResult> =>
+      const accept = async (): Promise<RemoveWorktreeResult> => {
         // Another client may acquire removal while this request waits for acceptance.
-        waitForPendingWorktreeRemoval(args.worktreeId, removalHostId)
-          ? { removing: true }
-          : executeWorktreeRemoval(
-              context,
-              executionArgs,
-              repo,
-              repoId,
-              worktreePath,
-              removalHostId
-            )
+        if (waitForPendingWorktreeRemoval(args.worktreeId, removalHostId)) {
+          await waitForWorktreeRemovalAcceptance(args.worktreeId, removalHostId)
+          return { removing: true }
+        }
+        return executeWorktreeRemoval(
+          context,
+          executionArgs,
+          repo,
+          repoId,
+          worktreePath,
+          removalHostId
+        )
+      }
+      // Read before the purge drops the row; listeners hear `removed` after it.
+      const removedIdentity = worktreeHostIdentity(store, args.worktreeId, removalHostId)
       let accepted: RemoveWorktreeResult
       let result: RemoveWorktreeResult
       try {
@@ -101,19 +109,14 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
           : runSerializedWorktreeRemovalAcceptance(repo.path, accept))
         result = await finishAcceptedWorktreeRemoval(accepted, args.worktreeId, removalHostId)
       } catch (error) {
-        if (nestedPreservedBranches.length > 0) {
-          throw new Error(
-            `${error instanceof Error ? error.message : String(error)} Branches kept after nested deletions: ${nestedPreservedBranches.map((item) => item.branchName).join(', ')}.`,
-            { cause: error }
-          )
-        }
-        throw error
+        throw withNestedPreservedBranches(error, nestedPreservedBranches)
       }
       if (!accepted.removing) {
         options?.onWorktreeLifecycle?.({
           kind: 'removed',
           worktreeId: args.worktreeId,
-          path: worktreePath
+          path: worktreePath,
+          ...removedIdentity
         })
       }
       // Stamp inside the shared promise so coalesced callers receive the same resulting catalog.

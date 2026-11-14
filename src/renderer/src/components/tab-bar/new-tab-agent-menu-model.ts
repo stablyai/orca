@@ -1,7 +1,12 @@
-import type { buildNewTabAgentMenuRows } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
+import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
+import type {
+  NewTabAgentMenuRow,
+  buildNewTabAgentMenuRows
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
 import type { UseDetectedAgentsResult } from '@/hooks/useDetectedAgents'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { ProspectiveWorkspace } from '@/lib/agent-launch-route-input'
+import type { ProspectiveWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import type { AgentPickerDefaultSettings } from '../../../../shared/agent-launch/picker/agent-launch-picker-defaults'
 
 export type NewTabAgentMenuModel =
@@ -12,6 +17,7 @@ export type NewTabAgentMenuModel =
       detection: UseDetectedAgentsResult
       /** The default these rows were ordered by, so the new-agent badge marks the same agent. */
       defaultTuiAgent?: GlobalSettings['defaultTuiAgent']
+      terminalPending?: boolean
       pickerContext?: {
         launchCwd?: string | null
         workspace: ProspectiveWorkspace
@@ -47,6 +53,7 @@ export function sameAgentLaunchPickerModel(a: NewTabAgentMenuModel, b: NewTabAge
   return same(
     [
       a.defaultTuiAgent,
+      a.terminalPending,
       x?.key,
       x?.launchCwd,
       x?.executionHostId,
@@ -74,6 +81,7 @@ export function sameAgentLaunchPickerModel(a: NewTabAgentMenuModel, b: NewTabAge
     ],
     [
       b.defaultTuiAgent,
+      b.terminalPending,
       y?.key,
       y?.launchCwd,
       y?.executionHostId,
@@ -100,4 +108,20 @@ export function sameAgentLaunchPickerModel(a: NewTabAgentMenuModel, b: NewTabAge
       ])
     ]
   )
+}
+
+/** Why a terminal choice waits: its host has not finished connecting. */
+export function terminalPendingLabel(t: Translate = translate): string {
+  return t('auto.components.NewWorkspaceComposerCard.connectingHost', 'Connecting…')
+}
+
+/** A chat uses host admission; only a terminal needs the host's shell before it can start. */
+export function terminalPendingReason(
+  terminalPending: boolean | undefined,
+  row: NewTabAgentMenuRow | undefined,
+  t?: Translate
+): string | undefined {
+  return terminalPending && (row?.kind === 'cli' || row?.kind === 'terminal')
+    ? terminalPendingLabel(t)
+    : undefined
 }

@@ -4,13 +4,13 @@ param(
  [Parameter(Mandatory=$true)][hashtable]$Context,
  [Parameter(Mandatory=$true)][ValidateSet('win32-arm64','win32-x64')][string]$Target,
  [Parameter(Mandatory=$true)][string]$ReceiptRoot,
- [ValidateSet('orcad-cmd','orcad-powershell','orcad-convert','orcad-cli-managed','orcad-cli-convert')][string[]]$Cells=@('orcad-cmd','orcad-powershell')
+ [ValidateSet('orcad-cmd','orcad-powershell','orcad-cli-managed')][string[]]$Cells=@('orcad-cmd','orcad-powershell')
 )
 $ErrorActionPreference='Stop'
 if($env:GITHUB_ACTIONS -ne 'true' -or $env:ORCA_ISOLATED_SSH_CI -ne '1'){throw 'Disposable CI only'}
-$shells=@{'orcad-cmd'='cmd';'orcad-powershell'='powershell';'orcad-convert'='cmd';'orcad-cli-managed'='cmd';'orcad-cli-convert'='cmd'}
+$shells=@{'orcad-cmd'='cmd';'orcad-powershell'='powershell';'orcad-cli-managed'='cmd'}
 # App-level cells drive the e2e build (and the bundled CLI) against the host; each greps one tagged test.
-$appCells=@{'orcad-convert'=@('tests/e2e/ssh-orcad-auto-convert.spec.ts','');'orcad-cli-managed'=@('tests/e2e/ssh-orcad-windows-cli-matrix.spec.ts','@orcad-cli-managed');'orcad-cli-convert'=@('tests/e2e/ssh-orcad-windows-cli-matrix.spec.ts','@orcad-cli-convert')}
+$appCells=@{'orcad-cli-managed'=@('tests/e2e/ssh-orcad-windows-cli-matrix.spec.ts','@orcad-cli-managed')}
 $electronBuilt=$false
 if($Context.accounts.Count -lt $Cells.Count){throw 'Each cell needs its own private account'}
 $seenApp=$false
@@ -64,7 +64,7 @@ function Invoke-AppCell($Account,[string]$Descriptor,[string]$Log,[string]$Spec,
   Rename-Item -LiteralPath 'out\orcad-template' -NewName 'orcad-template.convert-hidden'
   try {
     if(-not $script:electronBuilt){
-      & node config/scripts/ensure-native-runtime.mjs --runtime=electron 2>&1 | Tee-Object -FilePath $Log | Out-Host
+      & node config/scripts/native-build/node-addons/ensure-native-runtime.mjs --runtime=electron 2>&1 | Tee-Object -FilePath $Log | Out-Host
       if($global:LASTEXITCODE -ne 0){Write-Host 'Switching native modules to Electron failed';return $global:LASTEXITCODE}
       & pnpm exec electron-vite build --mode e2e 2>&1 | Tee-Object -FilePath $Log -Append | Out-Host
       if($global:LASTEXITCODE -ne 0){Write-Host 'The e2e app build failed';return $global:LASTEXITCODE}

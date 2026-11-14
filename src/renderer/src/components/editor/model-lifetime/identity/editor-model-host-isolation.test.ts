@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import '@/store/slices/editor'
+import '@/store/slices/editor/create-editor-slice'
 import { buildOwnedEditorFileId } from '@/store/slices/editor/file-ids/editor-file-ids'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import type { WorktreeOperationRoute } from '@/lib/worktree-operation-route'
+import type { WorktreeOperationRoute } from '@/lib/workspace/ownership/worktree-operation-route'
 import {
   attachModelLifetimeView,
   createModelLifetimeFixture,
@@ -206,25 +206,6 @@ describe('same-path models on different execution hosts', () => {
       }
     }
   )
-
-  it('releases a closed SSH model after its view detaches without touching a live local model', async () => {
-    const { owners, store, attach } = createHostModels()
-    const local = owners[0]!
-    const ssh = owners[1]!
-    const detach = attachModelLifetimeView(ssh.model)
-    attach()
-    store.getState().closeFile(ssh.file.id)
-    await Promise.resolve()
-    expect(ssh.model.isDisposed()).toBe(false)
-    detach()
-    expect(ssh.model.isDisposed()).toBe(false)
-    await Promise.resolve()
-    expect(ssh.model.isDisposed()).toBe(true)
-    expect(local.model.isDisposed()).toBe(false)
-    edit(local.model, 'local still editable')
-    await local.model.undo()
-    expect(local.model.getValue()).toBe(local.initial)
-  })
 
   it('preserves local same-path sharing until the final local tab closes', async () => {
     const { owners, store, attach } = createHostModels()

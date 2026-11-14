@@ -1,5 +1,5 @@
 import type { AppState } from '../../../types'
-import type { WorktreePurgeTarget } from '../../worktree-helpers'
+import type { WorktreePurgeTarget } from './worktree-purge-target'
 import {
   collectRemovalUnsavedFiles,
   currentUnsavedText,
@@ -9,9 +9,14 @@ import {
 } from '@/components/editor/save/flush/removal-unsaved-editor-files'
 import { worktreePurgeClosedFileIds } from './worktree-purge-closed-files'
 import { resolveEditorModelOwner } from '@/components/editor/model-lifetime/identity/editor-model-owner'
-import { isRemovedRuntimeHostId } from '../../stale-runtime-host-rows'
-import { folderWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '../../../workspace-record-selectors'
+import { isRemovedRuntimeHostId } from '../../../host-catalog/removed-runtime-host-rows'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import { findFolderWorkspaceRecord } from '../../../folder-workspaces/folder-workspace-record-index'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '../../../workspaces/catalog/workspace-record-fields'
+import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import type { EditorBufferKeepRequest } from '../../editor/buffers/editor-buffer-kept'
 
 /** Text retained only until the removal notice is dismissed or recovered. */
@@ -72,12 +77,12 @@ export function flushRetiredHostEdits(state: AppState, removed: ReadonlySet<stri
 }
 
 function workspaceLabel(s: AppState, worktreeId: string): string {
-  const worktree = Object.values(selectWorktreesByRepo(s) ?? {})
-    .flat()
-    .find((candidate) => candidate.id === worktreeId)
-  const folder = (selectFolderWorkspaces(s) ?? []).find(
-    (candidate) => folderWorkspaceKey(candidate.id) === worktreeId
-  )
+  const worktree = findFirstIndexedWorktree(selectWorktreesByRepo(s) ?? {}, worktreeId)
+  const scope = parseWorkspaceKey(worktreeId)
+  const folder =
+    scope?.type === 'folder'
+      ? findFolderWorkspaceRecord(selectFolderWorkspaces(s) ?? [], scope.folderWorkspaceId)
+      : undefined
   return worktree?.displayName ?? folder?.name ?? worktreeId
 }
 

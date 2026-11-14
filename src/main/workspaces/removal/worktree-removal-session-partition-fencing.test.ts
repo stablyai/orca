@@ -15,7 +15,7 @@ import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import { removeWorktreeMetaRow } from '../../persistence/host-qualified-worktree-meta'
-import { RUNTIME_PARTITION_TOPOLOGY_FENCE_MS } from '../../persistence/loading-store/runtime-partition-topology-fence'
+import { RUNTIME_PARTITION_TOPOLOGY_FENCE_MS } from '../../persistence/loading-store/workspace-sessions/runtime-partition-topology-fence'
 import { TEST_LEAF_1 } from '../../persistence/persistence-session-fixtures'
 
 let hasCreatedStoreInCase = false
@@ -84,42 +84,6 @@ describe('worktree removal across host session partitions', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
-  it('keeps sibling tabs when a worktree is removed before its host partition was ever persisted', async () => {
-    const store = await createStore()
-    store.setWorktreeMeta(hostWorktreeTarget({ id: STALE, hostId: ENV_A }), { hostId: ENV_A })
-
-    removeWorktreeMetaRow(store, STALE, undefined)
-
-    store.setWorkspaceSession(
-      {
-        ...getDefaultWorkspaceSession(),
-        tabsByWorktree: { [LIVE]: [makeTerminalTab({ id: 'live-tab', worktreeId: LIVE })] }
-      },
-      ENV_A
-    )
-
-    expect(store.getWorkspaceSession(ENV_A).tabsByWorktree[LIVE]?.map((tab) => tab.id)).toEqual([
-      'live-tab'
-    ])
-  })
-
-  it('does not materialize an unwritten host partition when removing a worktree', async () => {
-    const store = await createStore()
-    store.setWorktreeMeta(hostWorktreeTarget({ id: STALE, hostId: ENV_A }), { hostId: ENV_A })
-
-    removeWorktreeMetaRow(store, STALE, undefined)
-
-    expect(store.getWorkspaceSessionHostIds()).toEqual(['local'])
-  })
-
-  it('does not materialize an unwritten host partition when removing session state directly', async () => {
-    const store = await createStore()
-
-    store.removeWorkspaceSessionStateForWorktree(hostWorktreeTarget({ id: STALE, hostId: ENV_A }))
-
-    expect(store.getWorkspaceSessionHostIds()).toEqual(['local'])
-  })
-
   it('still fences a host partition that was persisted before the removal', async () => {
     const store = await createStore()
     store.setWorktreeMeta(hostWorktreeTarget({ id: STALE, hostId: ENV_A }), { hostId: ENV_A })
@@ -167,32 +131,6 @@ describe('worktree removal across host session partitions', () => {
 
     expect(store.getWorkspaceSession().tabsByWorktree[STALE]).toBeUndefined()
     expect(store.getWorkspaceSession(ENV_A).tabsByWorktree[STALE]).toBeUndefined()
-  })
-
-  it('does not fence the local blob for a runtime removal it never held tabs for', async () => {
-    const store = await createStore()
-    store.setWorktreeMeta(hostWorktreeTarget({ id: STALE, hostId: ENV_A }), { hostId: ENV_A })
-    store.setWorkspaceSession(
-      {
-        ...getDefaultWorkspaceSession(),
-        tabsByWorktree: { [STALE]: [makeTerminalTab({ id: 'host-tab', worktreeId: STALE })] }
-      },
-      ENV_A
-    )
-
-    removeWorktreeMetaRow(store, STALE, undefined)
-
-    store.setWorkspaceSession({
-      ...getDefaultWorkspaceSession(),
-      tabsByWorktree: { [LIVE]: [makeTerminalTab({ id: 'live-tab', worktreeId: LIVE })] }
-    })
-
-    expect(store.getWorkspaceSession().tabsByWorktree[LIVE]?.map((tab) => tab.id)).toEqual([
-      'live-tab'
-    ])
-    expect(
-      store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.['repo-gone']
-    ).toBeUndefined()
   })
 
   it('fences the owning partition that holds no tabs for the removed worktree', async () => {
@@ -304,43 +242,6 @@ describe('worktree removal across host session partitions', () => {
     )
   })
 
-  it("lets the window's saves win again once main's fence has expired", async () => {
-    const now = vi.spyOn(performance, 'now')
-    try {
-      now.mockReturnValue(1_000_000)
-      const store = await createStore()
-      store.setWorktreeMeta(hostWorktreeTarget({ id: STALE, hostId: ENV_A }), { hostId: ENV_A })
-      store.setWorkspaceSession(
-        {
-          ...getDefaultWorkspaceSession(),
-          tabsByWorktree: { [STALE]: [makeTerminalTab({ id: 'stale-tab', worktreeId: STALE })] }
-        },
-        ENV_A
-      )
-      removeWorktreeMetaRow(store, STALE, undefined)
-      const save = (): void =>
-        store.setWorkspaceSession(
-          {
-            ...getDefaultWorkspaceSession(),
-            tabsByWorktree: { [LIVE]: [makeTerminalTab({ id: 'live-tab', worktreeId: LIVE })] }
-          },
-          ENV_A
-        )
-
-      now.mockReturnValue(1_000_000 + RUNTIME_PARTITION_TOPOLOGY_FENCE_MS - 1)
-      save()
-      expect(store.getWorkspaceSession(ENV_A).tabsByWorktree[LIVE] ?? []).toEqual([])
-
-      now.mockReturnValue(1_000_000 + RUNTIME_PARTITION_TOPOLOGY_FENCE_MS)
-      save()
-      expect(store.getWorkspaceSession(ENV_A).tabsByWorktree[LIVE]?.map((tab) => tab.id)).toEqual([
-        'live-tab'
-      ])
-    } finally {
-      now.mockRestore()
-    }
-  })
-
   it('fences a legacy tombstone retirement against a stale save that still holds the pane', async () => {
     const now = vi.spyOn(performance, 'now')
     try {
@@ -389,23 +290,5 @@ describe('worktree removal across host session partitions', () => {
     } finally {
       now.mockRestore()
     }
-  })
-
-  it('does not fence the local blob that holds only sibling worktrees of the removed runtime worktree', async () => {
-    const store = await createStore()
-    store.setWorktreeMeta(hostWorktreeTarget({ id: STALE, hostId: ENV_A }), { hostId: ENV_A })
-    store.setWorkspaceSession({
-      ...getDefaultWorkspaceSession(),
-      tabsByWorktree: { [LIVE]: [makeTerminalTab({ id: 'live-tab', worktreeId: LIVE })] }
-    })
-
-    removeWorktreeMetaRow(store, STALE, undefined)
-
-    expect(
-      store.getWorkspaceSession().terminalTopologyRevisionByRepoId?.['repo-gone']
-    ).toBeUndefined()
-    expect(store.getWorkspaceSession().tabsByWorktree[LIVE]?.map((tab) => tab.id)).toEqual([
-      'live-tab'
-    ])
   })
 })

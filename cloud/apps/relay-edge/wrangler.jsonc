@@ -1,0 +1,48 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Local `wrangler dev` and tests only. It has no routes and workers.dev is off, so a deploy
+  // from this file publishes nothing reachable. Deployed environments (names, hostnames, ids,
+  // limits) live in a private deploy config, not in this repo.
+  "name": "orca-relay-edge-local",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // The cells' credential store is imported unchanged; resolve its workspace import to source.
+  // Source files, never a local dist/ build: wrangler's alias does not rewrite subpaths, and the
+  // package's exports point them at dist/. Add a line for any new subpath the bundle imports.
+  "alias": {
+    "@orca-cloud/relay-contract": "../../packages/relay-contract/src/index.ts",
+    "@orca-cloud/relay-contract/persistence-invariants": "../../packages/relay-contract/src/persistence-invariants.ts",
+    "@orca-cloud/relay-contract/protocol-limits": "../../packages/relay-contract/src/protocol-limits.ts"
+  },
+  "workers_dev": false,
+  "durable_objects": {
+    "bindings": [
+      { "name": "HOST_RELAY", "class_name": "HostRelay" },
+      { "name": "SPLICE_RELAY", "class_name": "SpliceRelay" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["HostRelay"] },
+    { "tag": "v2", "new_sqlite_classes": ["SpliceRelay"] }
+  ],
+  // Local dev/tests only: Postgres on 127.0.0.1:55432 (see test/mvp.ts). Deployed environments
+  // bind a real Hyperdrive config instead.
+  // Unauthenticated phone/data upgrades per source per colo. Local: low, so test/mvp-object.ts
+  // can reach it.
+  "ratelimits": [{ "name": "PREAUTH_LIMITER", "namespace_id": "1000", "simple": { "limit": 60, "period": 60 } }],
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "00000000000000000000000000000000",
+      "localConnectionString": "postgres://relay:local-test@127.0.0.1:55433/relay"
+    }
+  ],
+  "vars": {
+    "EDGE_CELL_ID": "edge",
+    "RELAY_JWT_AUDIENCE": "orca-relay",
+    "PING_INTERVAL_MS": "30000",
+    "SILENCE_TIMEOUT_MS": "75000",
+    "ORPHAN_GRACE_MS": "30000"
+  }
+}

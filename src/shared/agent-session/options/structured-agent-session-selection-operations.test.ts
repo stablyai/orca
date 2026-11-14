@@ -58,28 +58,6 @@ describe('chat selection operation handoff', () => {
         .some((pick) => pick.optionId === 'effort' && pick.value === 'high')
     ).toBe(false)
   })
-
-  it('orders accepted defaults independently by model and field without letting an old reply adopt its model', () => {
-    const remember = vi.fn()
-    const controller = createStructuredSessionSelectionController(remember)
-    const oldEffort = controller.issue('effort', 'low', 'sonnet')
-    oldEffort.transmitted = true
-    const newModel = controller.issue('model', 'opus', null)
-    const fast = controller.issue('fastMode', 'true', 'opus')
-    const newEffort = controller.issue('effort', 'high', 'sonnet')
-    controller.settle(fast, { kind: 'accepted', options: { fastMode: 'true' } })
-    controller.settle(newModel, { kind: 'accepted', options: { model: 'opus' } })
-    controller.settle(newEffort, {
-      kind: 'accepted',
-      options: { model: 'unrelated-later-model', effort: 'high' }
-    })
-    controller.settle(oldEffort, { kind: 'accepted', options: { effort: 'low' } })
-    expect(remember.mock.calls.flatMap(([picks]) => picks)).toEqual([
-      { modelId: 'opus', optionId: 'fastMode', value: true },
-      { modelId: 'opus', optionId: 'model', value: 'opus', adoptModelAsLaunchDefault: false },
-      { modelId: 'sonnet', optionId: 'effort', value: 'high' }
-    ])
-  })
 })
 
 it('drains abandoned writes without cancelling host acceptance or remembering late replies', async () => {

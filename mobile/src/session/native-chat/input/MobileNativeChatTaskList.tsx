@@ -76,7 +76,13 @@ function TaskRow({
   )
 }
 
-function Checklist({ list, fontScale }: { list: TaskList; fontScale: number }) {
+export function MobileNativeChatChecklist({
+  list,
+  fontScale
+}: {
+  list: TaskList
+  fontScale: number
+}): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
   return list.tasks.length === 0 ? (
@@ -128,7 +134,7 @@ function OpenedChecklist({ list, fontScale }: { list: TaskList; fontScale: numbe
   const onLayout = useMobileNativeChatOpenedDetail()
   return (
     <View onLayout={onLayout}>
-      <Checklist list={list} fontScale={fontScale} />
+      <MobileNativeChatChecklist list={list} fontScale={fontScale} />
     </View>
   )
 }
@@ -181,7 +187,7 @@ export function MobileNativeChatTaskList({
           <FullList list={list} fontScale={fontScale} disclosureKey={disclosureKey} />
         </>
       ) : (
-        <Checklist list={list} fontScale={fontScale} />
+        <MobileNativeChatChecklist list={list} fontScale={fontScale} />
       )}
       {list.explanation ? (
         <Text style={[styles.lineMeta, type.meta]}>{list.explanation}</Text>

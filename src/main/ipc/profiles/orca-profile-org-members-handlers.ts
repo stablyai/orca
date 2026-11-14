@@ -16,7 +16,7 @@ import {
   listOrcaProfileOrgMembers,
   removeOrcaProfileOrgMember,
   revokeOrcaProfileOrgInvite
-} from '../../orca-profiles/profile-cloud-org-members-service'
+} from '../../orca-profiles/cloud-org/profile-cloud-org-members-service'
 
 function orgMembersScopedArgs(args: unknown): { orgId: string; record: Record<string, unknown> } {
   if (!args || typeof args !== 'object') {

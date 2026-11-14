@@ -23,8 +23,8 @@ import {
   wslMoveHostDistro,
   wslMoveProjectRefForWorkspace,
   WslMoveProjectFencedError
-} from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { listLiveDaemonPtyIds } from '../../../daemon/daemon-provider-state'
+} from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { listLiveDaemonPtyIds } from '../../../daemon/providers/lifecycle/daemon-provider-state'
 import { wslDistroHoldMessage } from '../../../../shared/wsl-distro-stopped-hold'
 import {
   blockedWslDistroForPath,

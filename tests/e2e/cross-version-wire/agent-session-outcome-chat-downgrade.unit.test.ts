@@ -17,10 +17,10 @@ import {
   liveTestJournalRows,
   openTestJournalHostDatabase,
   SAVED_BY_NEWER_ORCA
-} from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import { journalOutcomeSource } from '../../../src/main/native-chat/agent-session-journal/journal-outcome-format'
-import { restoreJournal } from '../../../src/main/native-chat/agent-session-journal/journal-open'
-import type { JournalStoredRow } from '../../../src/main/native-chat/agent-session-journal/journal-row-table'
+} from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { journalOutcomeSource } from '../../../src/main/native-chat/agent-session-journal/outcomes/journal-outcome-format'
+import { restoreJournal } from '../../../src/main/native-chat/agent-session-journal/replay/journal-open'
+import type { JournalStoredRow } from '../../../src/main/native-chat/agent-session-journal/durable-rows/journal-row-table'
 import type { AgentSessionJournal } from '../../../src/main/native-chat/agent-session-journal/journal-store'
 import {
   importReleaseCheckoutModule,

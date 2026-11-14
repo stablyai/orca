@@ -36,6 +36,7 @@ type RevealProbeWindow = Window & {
   __revealRenderProbe?: RevealRenderDebug
   __syncRevealProbe?: {
     paintFrame: (marker: string, background: number, release: boolean) => Promise<void>
+    writeSpinnerFrame: (glyph: string, release: boolean) => Promise<void>
     forceRendererPresent: () => void
     read: () => {
       atlasClears: number
@@ -240,6 +241,17 @@ async function installSynchronizedRevealProbe(page: Page, tabId: string): Promis
       originalRenderRows(start, end)
     }
 
+    const writeFrame = (data: string, release: boolean): Promise<void> =>
+      new Promise((resolve) => {
+        terminal.write(data, () => {
+          if (!release && service._syncOutputHandler?._timeout !== undefined) {
+            window.clearTimeout(service._syncOutputHandler._timeout)
+            service._syncOutputHandler._timeout = undefined
+          }
+          resolve()
+        })
+      })
+
     const paintFrame = (marker: string, background: number, release: boolean): Promise<void> => {
       const width = Math.max(1, terminal.cols)
       const rows = Math.max(1, terminal.rows)
@@ -248,22 +260,22 @@ async function installSynchronizedRevealProbe(page: Page, tabId: string): Promis
         { length: rows },
         (_, row) => `\x1b[${row + 1};1H\x1b[48;5;${background}m\x1b[38;5;231m${line}`
       ).join('')
-      return new Promise((resolve) => {
-        terminal.write(
-          `\x1b[?2026h\x1b[?1049h\x1b[2J${frame}\x1b[0m${release ? '\x1b[?2026l' : ''}`,
-          () => {
-            if (!release && service._syncOutputHandler?._timeout !== undefined) {
-              window.clearTimeout(service._syncOutputHandler._timeout)
-              service._syncOutputHandler._timeout = undefined
-            }
-            resolve()
-          }
-        )
-      })
+      return writeFrame(
+        `\x1b[?2026h\x1b[?1049h\x1b[2J${frame}\x1b[0m${release ? '\x1b[?2026l' : ''}`,
+        release
+      )
     }
+
+    // Codex-like idle tick: title spinner and cursor park, each in its own DEC 2026 frame.
+    const writeSpinnerFrame = (glyph: string, release: boolean): Promise<void> =>
+      writeFrame(
+        `\x1b[?2026h\x1b]0;${glyph} work\x07${release ? `\x1b[${terminal.rows};3H\x1b[?2026l` : ''}`,
+        release
+      )
 
     ;(window as RevealProbeWindow).__syncRevealProbe = {
       paintFrame,
+      writeSpinnerFrame,
       forceRendererPresent: () => renderer.renderRows?.(0, terminal.rows - 1),
       read: () => ({
         atlasClears,
@@ -278,8 +290,8 @@ async function installSynchronizedRevealProbe(page: Page, tabId: string): Promis
 
 async function callSynchronizedRevealProbe(
   page: Page,
-  action: 'forceRendererPresent' | 'paintFrame',
-  frame?: { marker: string; background: number; release: boolean }
+  action: 'forceRendererPresent' | 'paintFrame' | 'writeSpinnerFrame',
+  frame?: { marker: string; background?: number; release: boolean }
 ): Promise<void> {
   await page.evaluate(
     async ({ action, frame }) => {
@@ -291,7 +303,11 @@ async function callSynchronizedRevealProbe(
         if (!frame) {
           throw new Error('Synchronized frame missing')
         }
-        await probe.paintFrame(frame.marker, frame.background, frame.release)
+        await probe.paintFrame(frame.marker, frame.background ?? 0, frame.release)
+        return
+      }
+      if (action === 'writeSpinnerFrame') {
+        await probe.writeSpinnerFrame(frame?.marker ?? '*', frame?.release ?? true)
         return
       }
       probe.forceRendererPresent()
@@ -314,6 +330,33 @@ async function captureFirstRevealedFrame(page: Page, tabId: string): Promise<Buf
   const screen = page.locator(`[data-terminal-tab-id="${tabId}"] .xterm-screen`).first()
   await expect(screen).toBeVisible()
   return screen.screenshot({ animations: 'disabled' })
+}
+
+// Codex-like idle output: ~30 Hz spinner frames; the last stays open so a renderer swap lands mid-frame deterministically.
+async function runSpinnerFramesEndingOpen(page: Page): Promise<void> {
+  const glyphs = ['\u280b', '\u2819', '\u2839', '\u2838', '\u283c', '\u2834']
+  // ast-grep-ignore: test-no-polling-loop -- models Codex's ~30 Hz spinner cadence; nothing is polled
+  for (let i = 0; i < 12; i++) {
+    const marker = glyphs[i % glyphs.length]
+    await callSynchronizedRevealProbe(page, 'writeSpinnerFrame', {
+      marker,
+      release: true
+    })
+    // ast-grep-ignore: test-no-real-time-wait -- models Codex's ~30 Hz spinner cadence
+    await page.waitForTimeout(33)
+  }
+  await callSynchronizedRevealProbe(page, 'writeSpinnerFrame', {
+    marker: glyphs[0],
+    release: false
+  })
+}
+
+async function replaceWebglRenderer(page: Page, tabId: string): Promise<void> {
+  await page.evaluate((tabId) => {
+    const manager = window.__paneManagers?.get(tabId)
+    manager?.setTerminalGpuAcceleration('off')
+    manager?.setTerminalGpuAcceleration('on')
+  }, tabId)
 }
 
 test.describe('terminal reveal paused-render recovery', () => {
@@ -389,6 +432,88 @@ test.describe('terminal reveal paused-render recovery', () => {
       diff.matches,
       `recovered surface matches the revealed content (diffRatio=${diff.diffRatio})`
     ).toBe(true)
+  })
+
+  test('a WebGL canvas replaced while spinner frames hold DEC 2026 paints instead of staying blank', async ({
+    orcaPage
+  }, testInfo) => {
+    await waitForSessionReady(orcaPage)
+    await waitForActiveTerminalManager(orcaPage)
+    const tabId = (await getActiveTabId(orcaPage))!
+    await forceWebglOn(orcaPage, tabId)
+    const hasWebgl = () =>
+      orcaPage
+        .waitForFunction(
+          (tabId) =>
+            (window.__paneManagers?.get(tabId)?.getRenderingDiagnostics?.() ?? []).some(
+              (diagnostic) => diagnostic.hasWebgl
+            ),
+          tabId,
+          { timeout: 15_000 }
+        )
+        .then(() => true)
+        .catch(() => false)
+    const webglAttached = await hasWebgl()
+    test.skip(!webglAttached, 'WebGL renderer is unavailable')
+    if (!webglAttached) {
+      return
+    }
+    expect(await installSynchronizedRevealProbe(orcaPage, tabId)).toBe(true)
+    await callSynchronizedRevealProbe(orcaPage, 'paintFrame', {
+      marker: 'SPINNER_PANE',
+      background: 17,
+      release: true
+    })
+    const coherent = await captureStableTabScreenshot(orcaPage, tabId)
+
+    await runSpinnerFramesEndingOpen(orcaPage)
+    expect((await readSynchronizedRevealProbe(orcaPage)).synchronizedOutput).toBe(true)
+
+    await replaceWebglRenderer(orcaPage, tabId)
+    expect(await hasWebgl(), 'renderer swapped back to WebGL').toBe(true)
+    const afterSwap = await captureFirstRevealedFrame(orcaPage, tabId)
+    const swapDiff = compareTerminalScreenshots(coherent, afterSwap)
+
+    // A painted canvas keeps honoring DEC 2026: the next frame's cells stay hidden until it closes.
+    await callSynchronizedRevealProbe(orcaPage, 'paintFrame', {
+      marker: 'PENDING_FRAME',
+      background: 52,
+      release: false
+    })
+    await orcaPage.evaluate((tabId) => {
+      window.__paneManagers?.get(tabId)?.scheduleRevealPresent()
+    }, tabId)
+    // Let the settled-frame present run before capturing, so the held check is not vacuous.
+    await orcaPage.evaluate(
+      () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    )
+    const held = await captureFirstRevealedFrame(orcaPage, tabId)
+    const heldDiff = compareTerminalScreenshots(coherent, held)
+    await callSynchronizedRevealProbe(orcaPage, 'paintFrame', {
+      marker: 'PENDING_FRAME',
+      background: 52,
+      release: true
+    })
+    const released = await captureStableTabScreenshot(orcaPage, tabId)
+
+    const afterSwapPath = testInfo.outputPath('spinner-canvas-after-swap.png')
+    await writeFile(afterSwapPath, afterSwap)
+    await testInfo.attach('spinner-canvas-after-swap.png', {
+      path: afterSwapPath,
+      contentType: 'image/png'
+    })
+    expect(
+      swapDiff.matches,
+      `new canvas shows the pane, not a blank, while DEC 2026 is open (diffRatio=${swapDiff.diffRatio})`
+    ).toBe(true)
+    expect(
+      heldDiff.matches,
+      `painted canvas keeps the coherent frame while DEC 2026 is held (diffRatio=${heldDiff.diffRatio})`
+    ).toBe(true)
+    expect(
+      compareTerminalScreenshots(coherent, released).matches,
+      'release presents the new frame'
+    ).toBe(false)
   })
 
   test('@headful atlas recovery keeps the coherent frame until synchronized output releases', async ({

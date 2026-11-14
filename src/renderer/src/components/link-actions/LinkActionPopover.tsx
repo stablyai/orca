@@ -5,10 +5,10 @@ import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { useClipboardTextCopyFeedback } from '@/hooks/use-clipboard-text-copy-feedback'
-import { translate } from '@/i18n/i18n'
-import { BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
-import { useAppStore } from '@/store'
+import { useClipboardTextCopyFeedback } from '@/hooks/clipboard/use-clipboard-text-copy-feedback'
+import { useTranslate } from '@/i18n/use-translate'
+import { BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID } from '@/components/settings/navigation/settings-navigation-types'
+import { useAppStore } from '@/store/index'
 import type { LinkAction, LinkActionRequest } from './link-action-request'
 
 type LinkActionPopoverProps<TRequest extends LinkActionRequest> = {
@@ -59,6 +59,7 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
   onPointerDownOutside,
   onOpenSettings
 }: LinkActionPopoverProps<TRequest>): React.JSX.Element {
+  const t = useTranslate()
   const openSettingsPage = useAppStore((state) => state.openSettingsPage)
   const openSettingsTarget = useAppStore((state) => state.openSettingsTarget)
   const isFilePath = request?.kind === 'file'
@@ -100,32 +101,32 @@ export function LinkActionPopover<TRequest extends LinkActionRequest>({
     void action.run()
   }
 
-  const settingsLabel = translate(
+  const settingsLabel = t(
     'auto.components.terminal.pane.TerminalLinkActionPopover.terminalLinkSettings',
     'Terminal link settings'
   )
   const copyLabel =
     copyStatus === 'copied'
-      ? translate('auto.components.terminal.pane.TerminalLinkActionPopover.copied', 'Copied')
+      ? t('auto.components.terminal.pane.TerminalLinkActionPopover.copied', 'Copied')
       : isFilePath
-        ? translate(
+        ? t(
             'auto.components.terminal.pane.TerminalLinkActionPopover.copyFilePath',
             'Copy file path'
           )
-        : translate('auto.components.terminal.pane.TerminalLinkActionPopover.copyLink', 'Copy link')
+        : t('auto.components.terminal.pane.TerminalLinkActionPopover.copyLink', 'Copy link')
 
   const copiedMessage = isFilePath
-    ? translate(
+    ? t(
         'auto.components.terminal.pane.TerminalLinkActionPopover.copiedFilePath',
         'Copied file path'
       )
-    : translate('auto.components.terminal.pane.TerminalLinkActionPopover.copiedLink', 'Copied link')
+    : t('auto.components.terminal.pane.TerminalLinkActionPopover.copiedLink', 'Copied link')
   const copyFailedMessage = isFilePath
-    ? translate(
+    ? t(
         'auto.components.terminal.pane.TerminalLinkActionPopover.copyFilePathFailed',
         'Failed to copy file path'
       )
-    : translate(
+    : t(
         'auto.components.terminal.pane.TerminalLinkActionPopover.copyLinkFailed',
         'Failed to copy link'
       )

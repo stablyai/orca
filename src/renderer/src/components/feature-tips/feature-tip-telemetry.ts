@@ -1,7 +1,8 @@
-import { track } from '@/lib/telemetry'
+import { normalizeAgentDefaultSurface } from '../../../../shared/native-chat/native-chat-providers'
+import { isChatUiLaunchTipTargeted } from '../../../../shared/feature-tips'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { ChatUiLaunchTipVariant } from '../../../../shared/native-chat/chat-ui-launch-tip-audience'
-import type { FeatureTipId } from '../../../../shared/feature-tips'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 export type OrcaCliFeatureTipSource = EventProps<'orca_cli_feature_tip_shown'>['source']
@@ -38,7 +39,7 @@ export function trackCmdJPaletteFeatureTipAcknowledged(source: CmdJPaletteFeatur
 export type ChatUiFeatureTipAction = EventProps<'chat_ui_feature_tip_action'>['action']
 type ShownChatUiLaunchTipVariant = Exclude<ChatUiLaunchTipVariant, 'none'>
 
-const CHAT_UI_LAUNCH_TIP_EXPERIMENT_VERSION = 'corner-card-v2'
+const CHAT_UI_LAUNCH_TIP_EXPERIMENT_VERSION = 'corner-card-v3'
 
 const CHAT_UI_TIP_TELEMETRY_VARIANT = {
   'chat-ui-off': 'chat_ui_off',
@@ -70,41 +71,35 @@ export function trackChatUiFeatureTipAction(
   }
 }
 
-/** Unenrolled profiles retain the original announcement behavior; treatment arms show unless targeting excludes them. */
-export function isChatUiLaunchTipHeldOut(
-  settings: Pick<GlobalSettings, 'telemetry'> | null
+/** Nobody on Chat UI gets the tip; on the terminal, only profiles known to have switched back stay out. */
+export function shouldSuppressAutomaticChatUiLaunchTip(
+  settings: Pick<GlobalSettings, 'telemetry' | 'agentDefaultSurface'> | null
 ): boolean {
-  const telemetry = settings?.telemetry
-  const cohort = telemetry?.chatUiLaunchTipCohort
+  if (normalizeAgentDefaultSurface(settings?.agentDefaultSurface) === 'chat') {
+    return true
+  }
+  // Why: not-switched targeting recorded the profile on Chat UI, so on the terminal now it switched back.
+  const targeting = settings?.telemetry?.chatUiLaunchTipTargeting
   return (
-    cohort === 'control' ||
-    ((cohort === 'treatment' ||
-      cohort === 'treatment-live-switch' ||
-      cohort === 'treatment-swapped-buttons' ||
-      cohort === 'treatment-center') &&
-      (telemetry?.chatUiLaunchTipTargeting?.mode === 'eligible-harnesses' ||
-        telemetry?.chatUiLaunchTipTargeting?.mode === 'not-switched') &&
-      telemetry?.chatUiLaunchTipTargeting?.eligible !== true)
+    isChatUiLaunchTipTargeted(settings?.telemetry) &&
+    targeting?.mode === 'not-switched' &&
+    targeting.eligible !== true
   )
-}
-
-export function wasChatUiLaunchTipShown(
-  seenTipIds: readonly FeatureTipId[],
-  settings: Pick<GlobalSettings, 'telemetry'> | null
-): boolean {
-  return seenTipIds.includes('chat-ui-here') && !isChatUiLaunchTipHeldOut(settings)
 }
 
 export function trackChatUiFeatureTipExposure(
   variant: ChatUiLaunchTipVariant,
-  settings: Pick<GlobalSettings, 'telemetry'> | null
+  settings: Pick<GlobalSettings, 'telemetry' | 'agentDefaultSurface'> | null
 ): void {
   if (variant !== 'none') {
     track('chat_ui_feature_tip_exposure', {
       launch_tip_experiment_version: CHAT_UI_LAUNCH_TIP_EXPERIMENT_VERSION,
       variant: CHAT_UI_TIP_TELEMETRY_VARIANT[variant],
-      launch_tip_cohort: settings?.telemetry?.chatUiLaunchTipCohort ?? 'unassigned',
-      shown: !isChatUiLaunchTipHeldOut(settings),
+      launch_tip_cohort:
+        settings?.telemetry?.chatUiLaunchTipRolloutCohort ??
+        settings?.telemetry?.chatUiLaunchTipCohort ??
+        'unassigned',
+      shown: !shouldSuppressAutomaticChatUiLaunchTip(settings),
       ...(settings?.telemetry?.chatUiLaunchTipTargeting
         ? { targeting: settings.telemetry.chatUiLaunchTipTargeting.mode }
         : {})

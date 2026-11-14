@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { OrchestrationDb } from '../db'
+import type { OrchestrationDb } from '../db/orchestration-db'
 import {
   readCrewParentInputs,
   type CrewParentClaim,
@@ -10,9 +10,10 @@ import {
   readCrewOwnedRunAddresses,
   readCrewTraffic,
   readCrewQuestions,
+  readCrewApprovals,
   type CrewAssignmentRow
 } from './crew-query'
-import type { OrchestrationCoordinatorKey } from '../orchestration-caller-identity'
+import type { OrchestrationCoordinatorKey } from '../addressing/orchestration-caller-identity'
 import { exposeUtcTimestamp } from '../db/utc-timestamp'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
@@ -175,6 +176,7 @@ export function createCrewSourceInputs(db: OrchestrationDb | null, capacity = ()
         validThrough: number
       }
       questions?: ReturnType<typeof readCrewQuestions>
+      approvals?: ReturnType<typeof readCrewApprovals>
     }
   >()
   const retain = <T>(cache: Map<string, T>, key: string, value: T): T => {
@@ -220,6 +222,10 @@ export function createCrewSourceInputs(db: OrchestrationDb | null, capacity = ()
     const input = mailbox(aliases)
     return (input.questions ??= db ? readCrewQuestions(db, aliases) : [])
   }
+  const approvals = (aliases: string[]) => {
+    const input = mailbox(aliases)
+    return (input.approvals ??= db ? readCrewApprovals(db, aliases) : [])
+  }
   const invalidateTraffic = (addresses?: ReadonlySet<string>) => {
     for (const [key, input] of mail) {
       if (!addresses || input.aliases.some((address) => addresses.has(address))) {
@@ -236,6 +242,7 @@ export function createCrewSourceInputs(db: OrchestrationDb | null, capacity = ()
     ownedRuns,
     traffic,
     questions,
+    approvals,
     invalidateTraffic
   }
 }

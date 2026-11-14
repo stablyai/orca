@@ -6,12 +6,13 @@ import {
 import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_CLIENT_PAGE_METADATA_RUNTIME_CAPABILITY
-} from '../../../../shared/browser-runtime-capabilities'
-import {
-  subscribeRemoteRuntimeRequest,
-  type RemoteRuntimeSubscription,
-  type RemoteRuntimeSubscriptionCallbacks
-} from '../../../../shared/remote-runtime/remote-runtime-client'
+} from '../../../../shared/browser/runtime/browser-runtime-capabilities'
+import '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
+import type {
+  RemoteRuntimeTransportSubscription,
+  RemoteRuntimeTransportSubscriptionCallbacks
+} from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
 import { createBrowserClientHostAttachRequest } from '../lifecycle/browser-client-host-attach-request'
 import { sameBrowserClientHostLeaseAuthority } from '../commands/browser-client-host-command-authority'
@@ -29,7 +30,7 @@ type PairedRuntimeBrowserHostLeaseConnectionOptions = {
 }
 
 export class PairedRuntimeBrowserHostLeaseConnection {
-  private subscription: RemoteRuntimeSubscription | null = null
+  private subscription: RemoteRuntimeTransportSubscription | null = null
   private readyTimeout: ReturnType<typeof setTimeout> | null = null
   private resolveReady = (_authority: BrowserClientHostLeaseAuthority): void => {}
   private rejectReady = (_error: Error): void => {}
@@ -48,7 +49,7 @@ export class PairedRuntimeBrowserHostLeaseConnection {
     return this.subscription !== null
   }
 
-  get sendRequest(): RemoteRuntimeSubscription['sendRequest'] | undefined {
+  get sendRequest(): RemoteRuntimeTransportSubscription['sendRequest'] | undefined {
     return this.subscription?.sendRequest
   }
 
@@ -60,9 +61,9 @@ export class PairedRuntimeBrowserHostLeaseConnection {
     void ready.catch(() => undefined)
     const request = createBrowserClientHostAttachRequest(this.options.lease)
     try {
-      let subscription: RemoteRuntimeSubscription
+      let subscription: RemoteRuntimeTransportSubscription
       try {
-        subscription = await subscribeRemoteRuntimeRequest(
+        subscription = await subscribeRemoteRuntimeTransport(
           this.options.lease.connection,
           'browser.clientHost.attach',
           request.params,
@@ -131,7 +132,7 @@ export class PairedRuntimeBrowserHostLeaseConnection {
   }
 
   private callbacks(request: ReturnType<typeof createBrowserClientHostAttachRequest>) {
-    const callbacks: RemoteRuntimeSubscriptionCallbacks = {
+    const callbacks: RemoteRuntimeTransportSubscriptionCallbacks = {
       onResponse: (response) => this.handleResponse(response, request),
       onError: (error) => this.fail(error),
       onClose: () =>
@@ -146,7 +147,7 @@ export class PairedRuntimeBrowserHostLeaseConnection {
   }
 
   private handleResponse(
-    response: Parameters<RemoteRuntimeSubscriptionCallbacks['onResponse']>[0],
+    response: Parameters<RemoteRuntimeTransportSubscriptionCallbacks['onResponse']>[0],
     request: ReturnType<typeof createBrowserClientHostAttachRequest>
   ): void {
     if (!this.active) {

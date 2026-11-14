@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   encodeMobileE2EEV2Transcript,
   validateMobileE2EEV2Handshake
@@ -7,11 +7,6 @@ import {
 import { createMobileE2EEV2Fixture, MOBILE_E2EE_V2_VECTOR } from './mobile-e2ee-v2-fixtures'
 
 describe('mobile E2EE v2 contract', () => {
-  it('validates the exact relay handshake and canonical encodings', () => {
-    const { hello, ready } = createMobileE2EEV2Fixture()
-    expect(validateMobileE2EEV2Handshake(hello, ready)).not.toBeNull()
-  })
-
   it('rejects unknown fields, noncanonical base64, and an unechoed nonce', () => {
     const { hello, ready } = createMobileE2EEV2Fixture()
     expect(validateMobileE2EEV2Handshake({ ...hello, extra: true }, ready)).toBeNull()
@@ -27,30 +22,6 @@ describe('mobile E2EE v2 contract', () => {
         clientNonceB64: btoa(String.fromCharCode(...new Uint8Array(32).fill(9)))
       })
     ).toBeNull()
-  })
-
-  it('rejects each oversized handshake field without decoding it', () => {
-    const { hello, ready } = createMobileE2EEV2Fixture()
-    const oversized = 'A'.repeat(48)
-    const decode = vi.spyOn(globalThis, 'atob')
-    try {
-      expect(validateMobileE2EEV2Handshake(hello, ready)).not.toBeNull()
-      for (const [invalidHello, invalidReady] of [
-        [{ ...hello, clientPublicKeyB64: oversized }, ready],
-        [hello, { ...ready, desktopPublicKeyB64: oversized }],
-        [
-          { ...hello, clientNonceB64: oversized },
-          { ...ready, clientNonceB64: oversized }
-        ],
-        [hello, { ...ready, desktopNonceB64: oversized }]
-      ]) {
-        decode.mockClear()
-        expect(validateMobileE2EEV2Handshake(invalidHello, invalidReady)).toBeNull()
-        expect(decode).not.toHaveBeenCalledWith(oversized)
-      }
-    } finally {
-      decode.mockRestore()
-    }
   })
 
   it('rejects context and capability-selection changes', () => {

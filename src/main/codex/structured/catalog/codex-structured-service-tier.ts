@@ -8,6 +8,7 @@ import type { CodexOpenedThread } from '../threads/codex-structured-thread-open'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
 import { codexSessionCapabilities } from './codex-structured-catalog-entry'
 import { effectiveServiceTier } from '../../../../shared/agent-session/options/structured-agent-session-effective-tier'
+import { isFastServiceTier } from '../../../../shared/agent-session/options/structured-agent-session-discovered-model'
 
 export const CODEX_DEFAULT_SERVICE_TIER = 'default'
 
@@ -41,9 +42,7 @@ export function readCodexServiceTiers(
 export function codexFastServiceTier(
   model: Pick<AgentSessionModelOption, 'serviceTiers'> | undefined
 ): string | undefined {
-  return model?.serviceTiers?.find(
-    (tier) => tier.label.toLowerCase() === 'fast' || tier.value.toLowerCase() === 'fast'
-  )?.value
+  return model?.serviceTiers?.find(isFastServiceTier)?.value
 }
 
 /** Nonstandard tiers other than Fast have no legacy toggle value. */

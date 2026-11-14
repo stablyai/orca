@@ -2,9 +2,9 @@
  * Distros that can't host Orca's server, each refused with the step that fixes it. There is no
  * fallback once the WSL bridge is gone, so a refusal must say what to run, not only what failed.
  */
-import { OrcadHostUnsupportedError } from '../../orcad/orcad-host-unavailable'
+import { OrcadHostUnsupportedError } from '../../orcad/diagnostics/orcad-host-unavailable'
 import { OrcadHostGlibcUnsupportedError } from '../../managed-server/lifecycle/orcad-runtime-target'
-import { RemoteNodeRuntimeSelfTestError } from '../../ssh/orcad-remote-node-runtime-report'
+import { RemoteNodeRuntimeSelfTestError } from '../../managed-server/install/orcad-remote-node-runtime-report'
 import { wslHostAddRefusalText } from '../../../shared/wsl-host-failure-copy'
 
 /** Keeps OrcadHostUnsupportedError's name, so callers that classify by name still see it. */

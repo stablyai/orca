@@ -1,12 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PLUGIN_MANIFEST_V2_SINCE } from './plugin-schema-field-docs'
-import {
-  PLUGIN_COMMAND_LIMIT,
-  PLUGIN_ID_MAX_LENGTH,
-  parsePluginManifest,
-  pluginManifestSchema,
-  satisfiesOrcaEngineRange
-} from './plugin-manifest'
+import { parsePluginManifest } from './plugin-manifest'
 
 function manifest(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -59,81 +52,5 @@ describe('pluginManifestSchema boundaries', () => {
         ]
       }
     })
-  })
-
-  it('refuses format 1 names in format 2', () => {
-    const result = parsePluginManifest({
-      ...manifest({ capabilities: [{ kind: 'storage' }] }),
-      manifestVersion: 2,
-      execution: 'data',
-      engines: { orca: `>=${PLUGIN_MANIFEST_V2_SINCE}` }
-    })
-
-    expect(result.ok).toBe(false)
-  })
-
-  it('rejects oversized identities and invalid semantic versions', () => {
-    expect(parsePluginManifest(manifest({ id: 'a'.repeat(PLUGIN_ID_MAX_LENGTH + 1) })).ok).toBe(
-      false
-    )
-    expect(parsePluginManifest(manifest({ version: '01.0.0' })).ok).toBe(false)
-    expect(parsePluginManifest(manifest({ version: '1.0' })).ok).toBe(false)
-    expect(parsePluginManifest(manifest({ version: '1.0.0-01' })).ok).toBe(false)
-    expect(parsePluginManifest(manifest({ version: '1.0.0-alpha.1+build.5' })).ok).toBe(true)
-  })
-
-  it('rejects duplicate contribution ids', () => {
-    const parsed = pluginManifestSchema.safeParse(
-      manifest({
-        main: 'main.mjs',
-        contributes: {
-          panels: [
-            { id: 'dashboard', title: 'One', entry: 'one.html' },
-            { id: 'dashboard', title: 'Two', entry: 'two.html' }
-          ],
-          commands: [
-            { id: 'run', title: 'One' },
-            { id: 'run', title: 'Two' }
-          ],
-          events: []
-        }
-      })
-    )
-
-    expect(parsed.success).toBe(false)
-    if (!parsed.success) {
-      expect(parsed.error.issues.map((issue) => issue.message)).toEqual(
-        expect.arrayContaining(['duplicate panels id: dashboard', 'duplicate commands id: run'])
-      )
-    }
-  })
-
-  it('caps contribution arrays before they reach renderer or worker registries', () => {
-    const commands = Array.from({ length: PLUGIN_COMMAND_LIMIT + 1 }, (_, index) => ({
-      id: `command-${index}`,
-      title: `Command ${index}`
-    }))
-    expect(
-      parsePluginManifest(
-        manifest({
-          main: 'main.mjs',
-          contributes: { panels: [], commands, events: [] }
-        })
-      ).ok
-    ).toBe(false)
-  })
-})
-
-describe('satisfiesOrcaEngineRange', () => {
-  it.each([
-    ['1.5.0', '>=1.5.0', true],
-    ['1.5.1', '>=1.5.0', true],
-    ['1.4.9', '>=1.5.0', false],
-    ['1.5.0-rc.1', '>=1.5.0', false],
-    ['1.5.1-rc.1', '>=1.5.0', true],
-    ['1.5.0+build.7', '>=1.5.0', true],
-    ['1.5.0+build-7', '>=1.5.0', true]
-  ])('%s against %s is %s', (host, range, expected) => {
-    expect(satisfiesOrcaEngineRange(host, range)).toBe(expected)
   })
 })

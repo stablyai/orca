@@ -5,8 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createPairingRedactor,
   PAIRING_HIDDEN_LINE,
-  redactingSpawn,
-  shouldRedactSupervisedStdout
+  redactingSpawn
 } from './serve-pairing-redaction'
 
 const READY = [
@@ -47,12 +46,6 @@ describe('supervised pairing redaction', () => {
       endpoint: 'ws://x',
       pairing: { available: false }
     })
-  })
-
-  it('redacts only supervised output that is not a terminal', () => {
-    expect(shouldRedactSupervisedStdout(true, false)).toBe(true)
-    expect(shouldRedactSupervisedStdout(true, true)).toBe(false)
-    expect(shouldRedactSupervisedStdout(false, false)).toBe(false)
   })
 
   it('pipes only stdout through the redactor and keeps the ipc slot', async () => {

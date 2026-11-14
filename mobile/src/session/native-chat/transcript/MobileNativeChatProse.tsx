@@ -1,7 +1,8 @@
+import { mobileNativeChatMarkdownImageBlock } from './mobile-native-chat-markdown-image-block'
 import { useCallback, useContext, useEffect, useState } from 'react'
 import { Image, Pressable, Text, View } from 'react-native'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
-import { MobileMarkdown } from '../../../components/MobileMarkdown'
+import { MobileNativeChatMarkdown } from './MobileNativeChatMarkdown'
 import {
   isImageRefBlock,
   isTextBlock,
@@ -11,6 +12,7 @@ import {
 import { isAgentSessionHostStatusPresentation } from '../../../../../src/shared/agent-session/view/agent-session-host-status-rows'
 import { withoutPendingNativeChatVisualDirectiveTail } from '../../../../../src/shared/native-chat/native-chat-visual-directive'
 import { MobileNativeChatRowOverlaysContext } from './mobile-native-chat-row-overlays'
+import { MobileNativeChatMarkdownRowKeyContext } from './mobile-native-chat-disclosure-store'
 import {
   isRenderableImageUri,
   readHostChatImage,
@@ -27,46 +29,20 @@ import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { nativeChatHostStatusCopy } from './native-chat-notice-copy'
 import { pressedStyle } from '../../../theme/mobile-theme'
-import { routeNativeChatHref } from '../../../../../src/shared/native-chat/native-chat-href-routing'
-import { isRuntimePathAbsolute } from '../../../../../src/shared/cross-platform-path'
-import { isRasterImagePath } from '../../../../../src/shared/file-preview-kind'
-import { isKnownRasterImageMimeType } from '../../../../../src/shared/raster-image-preview-limits'
-import { isSvgFilePath } from '../../../../../src/shared/svg-document'
-
-/** Raster https, data and absolute-path images draw on the phone (paths through the chat's host); anything else stays a link.
- *  The shell's CSP refuses plain http, and React Native's Image cannot draw SVG. */
-function markdownImageBlock(href: string, alt: string): NativeChatImageRefBlock | null {
-  const label = alt.trim() ? { alt } : {}
-  const source = href.trim()
-  if (/^data:/i.test(source)) {
-    return isKnownRasterImageMimeType(source.slice(5).split(/[;,]/, 1)[0])
-      ? { type: 'image-ref', url: source, ...label }
-      : null
-  }
-  const route = routeNativeChatHref(source)
-  if (route.kind === 'web') {
-    return /^https:/i.test(route.url) && !isSvgFilePath(route.url.split(/[?#]/, 1)[0] ?? '')
-      ? { type: 'image-ref', url: route.url, ...label }
-      : null
-  }
-  return route.kind === 'file' &&
-    isRuntimePathAbsolute(route.pathText) &&
-    isRasterImagePath(route.pathText)
-    ? { type: 'image-ref', path: route.pathText, ...label }
-    : null
-}
 
 export function Prose({
+  rowKey,
   block,
   text,
   userMessage,
   fontScale,
-  onOpenFile,
   onLongPress,
   renderVisual,
   growing = false,
   revealing = false
 }: {
+  /** The transcript row, so a code block's wrap choice outlives the row's mount. */
+  rowKey?: string
   block: NativeChatBlock
   text: string
   userMessage?: boolean
@@ -76,7 +52,6 @@ export function Prose({
   /** The reply may still be growing: a directive still being typed at its tail is held back. */
   growing?: boolean
   revealing?: boolean
-  onOpenFile?: (relativePath: string) => void
   /** Android only: routes a long press on a link span to the row's actions sheet. */
   onLongPress?: () => void
 }): React.JSX.Element | null {
@@ -84,7 +59,7 @@ export function Prose({
   const t = useMobileTranslation()
   const renderImage = useCallback(
     (href: string, alt: string): React.ReactNode => {
-      const image = markdownImageBlock(href, alt)
+      const image = mobileNativeChatMarkdownImageBlock(href, alt)
       return image ? (
         <ImageAttachment block={image} fontScale={fontScale} onLongPress={onLongPress} />
       ) : null
@@ -104,32 +79,33 @@ export function Prose({
     }
     if (userMessage) {
       return (
-        <MobileMarkdown
+        <MobileNativeChatMarkdown
           content={text}
           tone="userMessage"
           rangeSelectable
           textScale={CHAT_PROSE_SCALE * fontScale}
-          onOpenFile={onOpenFile}
           onLongPress={onLongPress}
           renderImage={renderImage}
         />
       )
     }
     return (
-      <MobileMarkdown
-        content={
-          renderVisual && (growing || revealing)
-            ? withoutPendingNativeChatVisualDirectiveTail(text)
-            : text
-        }
-        growing={revealing}
-        renderVisual={renderVisual}
-        rangeSelectable
-        textScale={CHAT_PROSE_SCALE * fontScale}
-        onOpenFile={onOpenFile}
-        onLongPress={onLongPress}
-        renderImage={renderImage}
-      />
+      <MobileNativeChatMarkdownRowKeyContext.Provider value={rowKey}>
+        <MobileNativeChatMarkdown
+          content={
+            renderVisual && (growing || revealing)
+              ? withoutPendingNativeChatVisualDirectiveTail(text)
+              : text
+          }
+          growing={revealing}
+          streaming={growing || revealing}
+          renderVisual={renderVisual}
+          rangeSelectable
+          textScale={CHAT_PROSE_SCALE * fontScale}
+          onLongPress={onLongPress}
+          renderImage={renderImage}
+        />
+      </MobileNativeChatMarkdownRowKeyContext.Provider>
     )
   }
   if (isImageRefBlock(block)) {

@@ -1,7 +1,10 @@
 // Only refusals sealed by the pinned key may trigger repair; foreign servers fail identity checks.
 import type { KnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { pairingRevisionOf, type ManagedOrcadPairingGate } from './orcad-managed-pairing-repair'
-import { OrcadManagedPairingRejectedError } from './orcad-managed-tunnel-identity'
+import {
+  OrcadManagedIdentityError,
+  OrcadManagedPairingRejectedError
+} from './orcad-managed-tunnel-identity'
 
 export type ManagedOrcadPairingRecovery = {
   resolve: (environmentId: string) => KnownRuntimeEnvironment
@@ -25,6 +28,14 @@ export async function buildWithPairingRepair(
     await build(refused)
     return 'built'
   } catch (error) {
+    if (error instanceof OrcadManagedIdentityError && error.kind === 'replaced-server') {
+      throw recovery.repairs.recordStandingRefusal(
+        environmentId,
+        pairingRevisionOf(refused),
+        epoch,
+        error
+      )
+    }
     if (!(error instanceof OrcadManagedPairingRejectedError)) {
       throw error
     }

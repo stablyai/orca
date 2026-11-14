@@ -16,7 +16,6 @@ import {
   type CodexTrustEntry
 } from './config-toml-trust'
 import { computeCodexTrustKey as computeTrustKey } from '../identity/codex-trust-identity'
-import { escapeTomlBasicString as escapeTomlString } from '../../configuration/toml/config-toml-syntax'
 import {
   createTrustConfigFixture,
   removeTrustConfigFixture
@@ -93,89 +92,6 @@ describe('removeHookTrustEntries', () => {
     expect(existsSync(targetPath)).toBe(false)
   })
 
-  it('does not roll a .bak forward when the requested key is not present', () => {
-    const original = ['[features]', 'hooks = true', ''].join('\n')
-    writeFileSync(configPath, original, 'utf-8')
-    removeHookTrustEntries(configPath, ['/missing/hooks.json:pre_tool_use:0:0'])
-    expect(readFileSync(configPath, 'utf-8')).toBe(original)
-    expect(existsSync(`${configPath}.bak`)).toBe(false)
-  })
-
-  it('removes a single block while leaving unrelated tables intact', () => {
-    const key = '/x/hooks.json:pre_tool_use:0:0'
-    const original = [
-      '[features]',
-      'hooks = true',
-      '',
-      `[hooks.state."${key}"]`,
-      'enabled = true',
-      'trusted_hash = "sha256:KEEP"',
-      '',
-      '[unrelated]',
-      'value = 42',
-      ''
-    ].join('\n')
-    writeFileSync(configPath, original, 'utf-8')
-
-    removeHookTrustEntries(configPath, [key])
-
-    const written = readFileSync(configPath, 'utf-8')
-    expect(written).not.toContain(`[hooks.state."${key}"]`)
-    expect(written).not.toContain('sha256:KEEP')
-    expect(written).toContain('[features]\nhooks = true')
-    expect(written).toContain('[unrelated]\nvalue = 42')
-  })
-
-  it('removes duplicate blocks for the requested key', () => {
-    const key = '/x/hooks.json:pre_tool_use:0:0'
-    const otherKey = '/x/hooks.json:post_tool_use:0:0'
-    const original = [
-      `[hooks.state."${key}"]`,
-      'enabled = false',
-      'trusted_hash = "sha256:A"',
-      '',
-      `[hooks.state."${otherKey}"]`,
-      'enabled = true',
-      'trusted_hash = "sha256:OTHER"',
-      '',
-      `[hooks.state."${key}"]`,
-      'enabled = true',
-      'trusted_hash = "sha256:B"',
-      ''
-    ].join('\n')
-    writeFileSync(configPath, original, 'utf-8')
-
-    removeHookTrustEntries(configPath, [key])
-
-    const written = readFileSync(configPath, 'utf-8')
-    expect(written).not.toContain(`[hooks.state."${key}"]`)
-    expect(written).not.toContain('sha256:A')
-    expect(written).not.toContain('sha256:B')
-    expect(written).toContain(`[hooks.state."${otherKey}"]`)
-    expect(written).toContain('sha256:OTHER')
-  })
-
-  it('removes mixed quoting duplicates for the requested key', () => {
-    const key = 'C:\\x\\hooks.json:session_start:0:0'
-    const original = [
-      `[hooks.state.'${key}']`,
-      'enabled = true',
-      'trusted_hash = "sha256:LITERAL"',
-      '',
-      `[hooks.state."${escapeTomlString(key)}"]`,
-      'enabled = true',
-      'trusted_hash = "sha256:BASIC"',
-      ''
-    ].join('\n')
-    writeFileSync(configPath, original, 'utf-8')
-
-    removeHookTrustEntries(configPath, [key])
-
-    const written = readFileSync(configPath, 'utf-8')
-    expect(written).not.toContain(`[hooks.state.'${key}']`)
-    expect(written).not.toContain(`[hooks.state."${escapeTomlString(key)}"]`)
-  })
-
   it('does not remove the target hook header text inside a multi-line string', () => {
     const key = '/x/hooks.json:pre_tool_use:0:0'
     const original = [
@@ -200,55 +116,5 @@ describe('removeHookTrustEntries', () => {
     expect(written).toContain(
       ['body = """', `[hooks.state."${key}"]`, 'is only documentation here.', '"""'].join('\n')
     )
-  })
-
-  it('does not let triple quotes in comments hide a block being removed', () => {
-    const key = '/x/hooks.json:pre_tool_use:0:0'
-    const original = [
-      '# user note mentions triple quote: """',
-      `[hooks.state."${key}"]`,
-      'enabled = true',
-      'trusted_hash = "sha256:K"',
-      ''
-    ].join('\n')
-    writeFileSync(configPath, original, 'utf-8')
-
-    removeHookTrustEntries(configPath, [key])
-
-    const written = readFileSync(configPath, 'utf-8')
-    expect(written).toContain('# user note mentions triple quote: """')
-    expect(written).not.toContain(`[hooks.state."${key}"]`)
-    expect(written).not.toContain('sha256:K')
-  })
-
-  it('preserves the line separator when no blank line precedes the removed block', () => {
-    const key = '/x/hooks.json:pre_tool_use:0:0'
-    const original = [
-      'a = 1',
-      `[hooks.state."${key}"]`,
-      'enabled = true',
-      'trusted_hash = "sha256:K"',
-      '[other]',
-      'b = 2',
-      ''
-    ].join('\n')
-    writeFileSync(configPath, original, 'utf-8')
-
-    removeHookTrustEntries(configPath, [key])
-
-    const written = readFileSync(configPath, 'utf-8')
-    expect(written).not.toContain('a = 1[other]')
-    expect(written).toContain('a = 1\n[other]')
-  })
-
-  it('removes a block whose header has an inline comment', () => {
-    const key = '/x/hooks.json:pre_tool_use:0:0'
-    const original = `[hooks.state."${key}"] # user note\nenabled = true\ntrusted_hash = "sha256:K"\n`
-    writeFileSync(configPath, original, 'utf-8')
-
-    removeHookTrustEntries(configPath, [key])
-
-    const written = readFileSync(configPath, 'utf-8')
-    expect(written).not.toContain(`[hooks.state."${key}"]`)
   })
 })

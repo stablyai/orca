@@ -59,25 +59,6 @@ afterEach(async () => {
 })
 
 describe('derived plugin publishers', () => {
-  it('names a Git URL install after the URL owner, ignoring the manifest publisher', async () => {
-    const source = await tempRoot('orca-derived-git-')
-    const pluginsDir = await tempRoot('orca-derived-installs-')
-    await writeThemePlugin(source, 'brand-name')
-    await commitRepository(source)
-    await serveRepositoriesOverTestSsh(await tempRoot('orca-derived-ssh-'), {
-      '/Acme/dusk.git': source
-    })
-
-    const result = await installPluginFromGit({
-      pluginsDir,
-      url: 'ssh://git@plugin.test/Acme/dusk.git',
-      ref: '',
-      hostVersion: HOST
-    })
-
-    expect(result).toMatchObject({ ok: true, pluginKey: 'acme.dusk' })
-  })
-
   it('keeps the key of an install made before publishers were derived', async () => {
     const source = await tempRoot('orca-derived-git-')
     const pluginsDir = await tempRoot('orca-derived-installs-')

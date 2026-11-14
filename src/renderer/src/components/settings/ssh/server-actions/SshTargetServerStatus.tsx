@@ -1,6 +1,6 @@
 import type { SshConnectionState, SshTarget } from '../../../../../../shared/ssh-types'
-import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
+import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import { DropdownMenuItem, DropdownMenuSeparator } from '../../../ui/dropdown-menu'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../../../ui/dialog'
 import { sshHostServerStatusLine } from '@/ssh/ssh-host-server-status-copy'
@@ -9,14 +9,17 @@ import {
   SshHostKeepServerVersionDialog
 } from './SshHostKeepServerVersionDialog'
 import { SshHostDeltaMoveDialog } from './SshHostDeltaMoveDialog'
-import { SshHostNodeMirrorAction } from './SshHostNodeMirrorAction'
+import { SshHostNodeMirrorAction } from '../../../ssh-host-recovery/SshHostNodeMirrorAction'
 import { OpenPlainSshTerminalButton } from '../../../plain-ssh-terminal/OpenPlainSshTerminalButton'
-import { canMoveSshHostAnyway, SshHostMoveAnywayDialog } from './SshHostMoveAnywayAction'
+import {
+  canMoveSshHostAnyway,
+  SshHostMoveAnywayDialog
+} from '../../../ssh-host-recovery/SshHostMoveAnywayAction'
 import { canRestartSshHostServer, SshHostRestartServerDialog } from './SshHostRestartServerAction'
 import { canRecoverSshHostServer, SshHostRecoverServerDialog } from './SshHostRecoverServerAction'
 import { Button } from '../../../ui/button'
-import { isSshTargetConnecting } from '../targets/ssh-target-action-state'
-import { getManagedOrcadApi } from '../../runtime-environments/managed-servers/use-managed-server-catalog'
+import { isConnectingSshStatus } from '../../../../ssh/ssh-connection-recoverability'
+import { getManagedOrcadApi } from '../../../../runtime/hosts/installation/managed-orcad-api-availability'
 
 export type SshTargetServerDialog =
   | 'details'
@@ -35,7 +38,8 @@ export function SshTargetServerStatusLine({
   state: SshConnectionState | undefined
   onOpenDialog?: (dialog: SshTargetServerDialog) => void
 }): React.JSX.Element | null {
-  const line = sshHostServerStatusLine(target, state)
+  const t = useTranslate()
+  const line = sshHostServerStatusLine(target, state, t)
   if (!line) {
     return null
   }
@@ -60,10 +64,10 @@ export function SshTargetServerStatusLine({
           size="xs"
           variant="default"
           // A connect in flight may clear the refusal; a click would start a second one.
-          disabled={state ? isSshTargetConnecting(state.status) : false}
+          disabled={state ? isConnectingSshStatus(state.status) : false}
           onClick={() => onOpenDialog('move-anyway')}
         >
-          {translate('auto.components.settings.moveAnyway.action', 'Move anyway…')}
+          {t('auto.components.settings.moveAnyway.action', 'Move anyway…')}
         </Button>
       ) : null}
       <OpenPlainSshTerminalButton
@@ -73,7 +77,7 @@ export function SshTargetServerStatusLine({
       />
       {onOpenDialog && canRecoverSshHostServer(state?.managedServer) ? (
         <Button type="button" size="xs" variant="outline" onClick={() => onOpenDialog('recover')}>
-          {translate('auto.components.settings.recoverServer.action', 'Recover server…')}
+          {t('auto.components.settings.recoverServer.action', 'Recover server…')}
         </Button>
       ) : null}
     </div>
@@ -89,8 +93,9 @@ export function SshTargetServerMenuItems({
   state: SshConnectionState | undefined
   onOpenDialog: (dialog: SshTargetServerDialog) => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const status = state?.managedServer
-  const hasDetail = Boolean(sshHostServerStatusLine(target, state)?.detail)
+  const hasDetail = Boolean(sshHostServerStatusLine(target, state, t)?.detail)
   const sourceChanged = hasSshHostSourceChanged(target)
   const canRestart = canRestartSshHostServer(status)
   const canRecover = canRecoverSshHostServer(status)
@@ -104,31 +109,31 @@ export function SshTargetServerMenuItems({
       {sourceChanged ? (
         <>
           <DropdownMenuItem onSelect={() => onOpenDialog('delta-move')}>
-            {translate('auto.components.settings.deltaMove.action', 'Move the new projects…')}
+            {t('auto.components.settings.deltaMove.action', 'Move the new projects…')}
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => onOpenDialog('keep-server')}>
-            {translate('auto.components.settings.keepServer.action', 'Keep the server’s version…')}
+            {t('auto.components.settings.keepServer.action', 'Keep the server’s version…')}
           </DropdownMenuItem>
         </>
       ) : null}
       {canRestart ? (
         <DropdownMenuItem onSelect={() => onOpenDialog('restart')}>
-          {translate('auto.components.settings.restartServer.action', 'Restart Orca’s server…')}
+          {t('auto.components.settings.restartServer.action', 'Restart Orca’s server…')}
         </DropdownMenuItem>
       ) : null}
       {canRecover ? (
         <DropdownMenuItem onSelect={() => onOpenDialog('recover')}>
-          {translate('auto.components.settings.recoverServer.action', 'Recover server…')}
+          {t('auto.components.settings.recoverServer.action', 'Recover server…')}
         </DropdownMenuItem>
       ) : null}
       {canMoveAnyway ? (
         <DropdownMenuItem onSelect={() => onOpenDialog('move-anyway')}>
-          {translate('auto.components.settings.moveAnyway.action', 'Move anyway…')}
+          {t('auto.components.settings.moveAnyway.action', 'Move anyway…')}
         </DropdownMenuItem>
       ) : null}
       {hasDetail ? (
         <DropdownMenuItem onSelect={() => onOpenDialog('details')}>
-          {translate('auto.components.settings.sshHostServer.failureDetails', 'Details')}
+          {t('auto.components.settings.sshHostServer.failureDetails', 'Details')}
         </DropdownMenuItem>
       ) : null}
     </>
@@ -149,9 +154,10 @@ export function SshTargetServerDialogs({
   onDialogChange: (dialog: SshTargetServerDialog | null) => void
   onChanged: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const api = getManagedOrcadApi()
   const status = state?.managedServer
-  const detail = sshHostServerStatusLine(target, state)?.detail
+  const detail = sshHostServerStatusLine(target, state, t)?.detail
   const openChange =
     (which: SshTargetServerDialog) =>
     (open: boolean): void =>
@@ -195,7 +201,7 @@ export function SshTargetServerDialogs({
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              {translate('auto.components.settings.sshHostServer.failureDetails', 'Details')}
+              {t('auto.components.settings.sshHostServer.failureDetails', 'Details')}
             </DialogTitle>
           </DialogHeader>
           <pre className="scrollbar-sleek max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border bg-background px-3 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground">

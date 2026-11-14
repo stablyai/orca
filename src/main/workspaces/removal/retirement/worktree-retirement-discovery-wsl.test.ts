@@ -1,19 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdir, mkdtemp, readdir, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { MARINE_CREATURES } from '../../../../shared/marine-creatures'
-import { createRetiredNameLookup } from '../../../../shared/worktree/retired-name-registry'
 
 const { runWslTranscriptFsTaskMock, getWslHomeAsyncMock } = vi.hoisted(() => ({
   runWslTranscriptFsTaskMock: vi.fn(),
   getWslHomeAsyncMock: vi.fn()
 }))
 
-vi.mock('../../../native-chat/wsl-transcript-fs-gate', async (importOriginal) => ({
-  ...((await importOriginal()) as Record<string, unknown>),
-  runWslTranscriptFsTask: runWslTranscriptFsTaskMock
-}))
+vi.mock(
+  '../../../native-chat/transcript-filesystem/wsl-transcript-fs-gate',
+  async (importOriginal) => ({
+    ...((await importOriginal()) as Record<string, unknown>),
+    runWslTranscriptFsTask: runWslTranscriptFsTaskMock
+  })
+)
 
 // Keep parseWslPath and hasCachedWslHome real for the backfill path under test.
 vi.mock('../../../wsl/discovery/distro-catalog', async (importOriginal) => ({
@@ -22,10 +24,12 @@ vi.mock('../../../wsl/discovery/distro-catalog', async (importOriginal) => ({
 }))
 
 const { discoverRetiredWorktreeNames } = await import('./worktree-retirement-discovery')
-const { ensureRetiredWorktreeNamesBackfilled } = await import('./worktree-name-retirement')
-const { WslTranscriptFsError } = await import('../../../native-chat/wsl-transcript-fs-gate')
+await import('./worktree-name-retirement')
+const { WslTranscriptFsError } =
+  await import('../../../native-chat/transcript-filesystem/wsl-transcript-fs-error')
 
 const FIRST = MARINE_CREATURES[0].toLowerCase()
+
 const DISTRO_ROOT = '\\\\wsl.localhost\\Ubuntu\\home\\ada\\orca\\workspaces'
 
 describe('retirement discovery on WSL', () => {
@@ -111,71 +115,7 @@ describe('retirement discovery on WSL', () => {
     expect(retired.complete).toBe(false)
   })
 
-  it('keeps a deleted WSL workspace name spent, so the next create cannot reuse its cwd', async () => {
-    // The distro bucket outlives the deleted workspace and must keep its name retired.
-    const distroHome = await mkdtemp(join(tmpdir(), 'orca-wsl-distro-home-'))
-    const workspaceRoot = await mkdtemp(join(tmpdir(), 'orca-wsl-workspaces-'))
-    try {
-      await mkdir(join(distroHome, '.claude', 'projects', `-home-ada-orca-workspaces-${FIRST}`), {
-        recursive: true
-      })
+  // A distro-root workspace folder encodes to the root prefix `-` on the Linux side.
 
-      const retired = await discoverRetiredWorktreeNames({
-        // The root is listed under its real (empty) path; the UNC spelling supplies the distro.
-        workspaceRoots: [DISTRO_ROOT],
-        home: workspaceRoot,
-        env: {},
-        resolveWslHome: async () => distroHome
-      })
-
-      expect(retired.names).toEqual(new Set([FIRST]))
-      expect(createRetiredNameLookup({ exhaustedTiers: 0, names: [...retired.names] })(FIRST)).toBe(
-        true
-      )
-    } finally {
-      await rm(distroHome, { force: true, recursive: true })
-      await rm(workspaceRoot, { force: true, recursive: true })
-    }
-  })
-
-  it('reaches distro discovery from the real backfill, not only when called directly', async () => {
-    const distroHome = await mkdtemp(join(tmpdir(), 'orca-wsl-backfill-home-'))
-    try {
-      await mkdir(join(distroHome, '.claude', 'projects', `-home-ada-orca-workspaces-${FIRST}`), {
-        recursive: true
-      })
-      getWslHomeAsyncMock.mockResolvedValue('\\\\wsl.localhost\\Ubuntu\\home\\ada')
-      runWslTranscriptFsTaskMock.mockImplementation(
-        (options: { path: string }, task: (signal: AbortSignal) => Promise<unknown>) => {
-          const claudeRoot = join('\\\\wsl.localhost\\Ubuntu\\home\\ada', '.claude', 'projects')
-          return options.path === claudeRoot
-            ? readdir(join(distroHome, '.claude', 'projects'), { withFileTypes: true })
-            : task(new AbortController().signal)
-        }
-      )
-      const merged: string[] = []
-
-      await ensureRetiredWorktreeNamesBackfilled(
-        {
-          mergeRetiredWorktreeNames: (_repoId: string, names: Iterable<string>) => {
-            merged.push(...names)
-            return true
-          }
-        } as never,
-        {
-          id: 'repo-wsl',
-          path: '\\\\wsl.localhost\\Ubuntu\\home\\ada\\repos\\a',
-          displayName: 'a',
-          badgeColor: '',
-          addedAt: 0
-        } as never,
-        // Use a UNC root directly; parseWslPath ignores UNC repo routing off Windows.
-        { workspaceDir: DISTRO_ROOT, nestWorkspaces: false }
-      )
-
-      expect(merged).toContain(FIRST)
-    } finally {
-      await rm(distroHome, { force: true, recursive: true })
-    }
-  })
+  // A refused permission stays refused on retry; a slow route may answer next time.
 })

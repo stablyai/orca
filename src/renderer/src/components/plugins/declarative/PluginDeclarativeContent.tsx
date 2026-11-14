@@ -1,6 +1,6 @@
-import { NativeChatHighlightedCode } from '@/components/native-chat/NativeChatHighlightedCode'
+import { NativeChatHighlightedCode } from '@/components/native-chat/markdown/code/NativeChatHighlightedCode'
 import { MarkdownGitHubCallout } from '@/components/markdown-github-callout'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { PluginDeclarativeProps } from '../../../../../shared/plugins/declarative/plugin-declarative-catalog'
 import { PluginDeclarativeIconGlyph } from './plugin-declarative-icons'
 
@@ -52,6 +52,7 @@ export function PluginDeclarativeKeyValue({
 }: {
   props: PluginDeclarativeProps<'KeyValue'>
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <dl
       aria-label={props.label}
@@ -70,9 +71,9 @@ export function PluginDeclarativeKeyValue({
               <span className="text-muted-foreground">–</span>
             ) : typeof item.value === 'boolean' ? (
               item.value ? (
-                translate('auto.components.plugins.declarative.KeyValue.yes', 'Yes')
+                t('auto.components.plugins.declarative.KeyValue.yes', 'Yes')
               ) : (
-                translate('auto.components.plugins.declarative.KeyValue.no', 'No')
+                t('auto.components.plugins.declarative.KeyValue.no', 'No')
               )
             ) : (
               String(item.value)
@@ -121,13 +122,14 @@ export function PluginDeclarativeSkeleton({
 }: {
   props: PluginDeclarativeProps<'Skeleton'>
 }): React.JSX.Element {
+  const t = useTranslate()
   const shape = props.shape ?? 'text'
   const lines = shape === 'text' ? (props.lines ?? 3) : 1
   return (
     <div
       role="status"
       aria-label={
-        props.label ?? translate('auto.components.plugins.declarative.Skeleton.loading', 'Loading')
+        props.label ?? t('auto.components.plugins.declarative.Skeleton.loading', 'Loading')
       }
       className="flex min-w-0 flex-col gap-2"
     >

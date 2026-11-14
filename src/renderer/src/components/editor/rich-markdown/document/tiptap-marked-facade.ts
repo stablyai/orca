@@ -18,6 +18,7 @@ import {
   marked
 } from 'marked'
 import { ORDERED_LIST_MARKER_PATTERN } from '@tiptap/extension-list'
+import { findProseUrlEnd } from '../../../../../../shared/prose-url-boundary'
 
 // Same item start Tiptap's ordered list accepts, so every list it built can be re-read here.
 const TIPTAP_LIST_ITEM = new RegExp(`^(\\s*(?:${ORDERED_LIST_MARKER_PATTERN})[.)])(\\s+)`)
@@ -59,7 +60,7 @@ function isListToken(token: Tokens.Generic | undefined): token is Tokens.List {
   return token?.type === 'list' && Array.isArray(token.items)
 }
 
-class BlockquoteListTokenizer extends Tokenizer {
+class RichMarkdownTokenizer extends Tokenizer {
   // Marked v18 lazy quotes call list directly then read raw, bypassing Tiptap’s no-break-space list tokenizer.
   list(source: string): Tokens.List | undefined {
     const token = super.list(source)
@@ -74,6 +75,13 @@ class BlockquoteListTokenizer extends Tokenizer {
       }
     }
     return undefined
+  }
+
+  // GFM ends a bare url only at whitespace; end it at CJK prose punctuation as chat does.
+  url(source: string): Tokens.Link | undefined {
+    const token = super.url(source)
+    const end = token ? findProseUrlEnd(token.raw) : -1
+    return end === -1 ? token : super.url(source.slice(0, end))
   }
 }
 
@@ -109,8 +117,7 @@ export function createTiptapMarkedFacade(): typeof marked {
       super({
         ...registry.defaults,
         ...options,
-        tokenizer:
-          options?.tokenizer ?? registry.defaults.tokenizer ?? new BlockquoteListTokenizer(),
+        tokenizer: options?.tokenizer ?? registry.defaults.tokenizer ?? new RichMarkdownTokenizer(),
         extensions: registry.defaults.extensions
       })
     }

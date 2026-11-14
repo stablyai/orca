@@ -1,3 +1,4 @@
+import type { AgentPickerEntry } from './agent-launch-picker'
 import type { GlobalSettings } from '../../global-settings-types'
 import {
   nativeChatPreferenceFor,
@@ -7,6 +8,7 @@ import type { ExecutionHostId } from '../../execution-host'
 import type { TuiAgent } from '../catalog/tui-agent'
 import { filterEnabledTuiAgents, TUI_AGENT_AUTO_PICK_ORDER } from '../catalog/tui-agent-selection'
 import type { AgentSessionChatProgram } from '../../agent-session/agent-session-agent-availability'
+import { agentSessionInstallCommand } from '../../agent-session/lifecycle/agent-session-setup-commands'
 
 export type HostChatAnswer =
   | 'yes'
@@ -15,6 +17,8 @@ export type HostChatAnswer =
   | 'wsl'
   | 'subfolder'
   | 'not-on-host'
+  /** The host is Windows, where this agent has no chat. */
+  | 'windows'
   | 'no-chats'
 export type ChatProgramObservation = AgentSessionChatProgram | 'unlearned'
 const chatProgramOffered = (program: ChatProgramObservation) =>
@@ -39,6 +43,7 @@ export type ChatUnavailableReason =
   | 'wsl'
   | 'subfolder'
   | 'not-on-host'
+  | 'windows'
 
 export type NewTabAgentMenuRow = (
   | { kind: 'chat'; agent: TuiAgent }
@@ -57,6 +62,9 @@ export function buildNewTabAgentMenuRows(args: {
   hostChatAnswer: (agent: TuiAgent) => HostChatAnswer
   /** Whether the chat's own program runs there, which for some agents is not their CLI. */
   chatProgram: (agent: TuiAgent) => ChatProgramObservation
+  /** Offer chats for agents the host lacks: the chat walks through installing and signing in. */
+  offerAgentSetup?: boolean
+  hostPlatform?: string | null
 }): NewTabAgentMenuRow[] {
   const { settings } = args
   const defaultAgent = settings?.defaultTuiAgent
@@ -73,6 +81,13 @@ export function buildNewTabAgentMenuRows(args: {
   const canOpen = (agent: TuiAgent): boolean =>
     chatProgramOffered(args.chatProgram(agent)) ||
     (args.chatProgram(agent) === 'unknown' && installed.includes(agent))
+  // Only uninstalled programs: an unreadable one stays a failed check, never an install prompt.
+  const needsSetup = (agent: TuiAgent): boolean =>
+    args.offerAgentSetup === true &&
+    agentSessionInstallCommand(agent, args.hostPlatform) !== null &&
+    args.detectedOnHost !== null &&
+    !installed.includes(agent) &&
+    ['missing', 'installable'].includes(args.chatProgram(agent))
   const chatToo = new Set<TuiAgent>()
   for (const agent of chatAgents) {
     const displayed = nativeChatPreferenceFor(settings, agent)
@@ -87,7 +102,7 @@ export function buildNewTabAgentMenuRows(args: {
       continue
     }
     const program = args.chatProgram(agent)
-    if (answer === 'yes' && canOpen(agent)) {
+    if (answer === 'yes' && (canOpen(agent) || needsSetup(agent))) {
       runnable.push(agent)
     } else {
       unavailable.set(
@@ -105,6 +120,12 @@ export function buildNewTabAgentMenuRows(args: {
                 : answer
       )
     }
+  }
+  // A host with no agents at all offers chats that set one up, so a first agent is findable.
+  if (runnable.length === 0 && unavailable.size === 0 && installed.length === 0) {
+    runnable.push(
+      ...chatAgents.filter((agent) => needsSetup(agent) && args.hostChatAnswer(agent) === 'yes')
+    )
   }
   return [
     ...orderAgentLaunchPickerAgents(defaultAgent, runnable).map((agent) => ({
@@ -125,4 +146,19 @@ export function buildNewTabAgentMenuRows(args: {
       ...(chatToo.has(agent) ? { chat: true as const } : {})
     }))
   ]
+}
+
+export function agentPickerHydrationQueue(
+  entries: readonly AgentPickerEntry[],
+  selected: () => TuiAgent | undefined
+): () => number | undefined {
+  const pending = new Set(entries.flatMap((entry, index) => (entry.surfaces.length ? [index] : [])))
+  return () => {
+    const preferred = entries.findIndex((entry) => entry.agent === selected())
+    const index = pending.has(preferred) ? preferred : pending.values().next().value
+    if (index !== undefined) {
+      pending.delete(index)
+    }
+    return index
+  }
 }

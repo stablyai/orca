@@ -2,7 +2,7 @@ import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import {
   TEST_WORKTREE_ID,
   makeRuntimeStoreWithWorkspaceSession
-} from '../orca-runtime-test-fixtures.spec'
+} from './orca-runtime-test-fixtures.spec'
 
 export const LEFT_LEAF = '51515151-5151-4151-8151-515151515151'
 export const RIGHT_LEAF = '52525252-5252-4252-8252-525252525252'

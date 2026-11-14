@@ -15,7 +15,7 @@ import {
 } from '../../src/main/persistence/persistence-test-harness'
 import { makeTerminalTab } from '../../src/main/persistence/persistence-session-fixtures'
 import { buildDetectedGitWorktrees } from '../../src/main/ipc/worktrees/listing/ssh-worktree-fallback'
-import { resolveRepoWorktreeRows } from '../../src/main/runtime/repo-worktree-row-resolution'
+import { resolveRepoWorktreeRows } from '../../src/main/runtime/workspaces/catalog/repo-worktree-row-resolution'
 
 beforeEach(() => {
   testState.dir = mkdtempSync(join(tmpdir(), 'orca-folder-upgrade-store-'))

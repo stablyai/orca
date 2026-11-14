@@ -1,13 +1,14 @@
 // Install lazily after Electron finalizes the profile path; runtimes without structured requests need no store. Journal-open failures install a refusal.
 
+import { stopPRWatchRuntime } from './pr-watch-runtime'
 import type { AgentSessionResumeTrigger } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
 import {
   structuredAgentSessionTeardownTrigger,
   tearDownRuntime,
   type InstalledRuntime
 } from './structured-agent-session-runtime-teardown'
-import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
-import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { setStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { stopAgentSessionAttachments } from './structured-agent-session-attachment-wiring'
 import {
   closeAgentSessionRecordStoreDatabase,
@@ -18,15 +19,15 @@ import { agentModelCatalogStore } from '../../native-chat/agent-model-catalog/ag
 import {
   neverThrowingStructuredAgentSessionLogger,
   type StructuredAgentSessionLogger
-} from '../../native-chat/agent-session-wire/structured-agent-session-logger'
-import { migrateLegacyNativeChatVisualsFolders } from '../../native-chat/native-chat-scratch-folder-migration'
+} from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
+import { migrateLegacyNativeChatVisualsFolders } from '../../native-chat/conversation-files/native-chat-scratch-folder-migration'
 
-import type { StructuredAgentSessionRuntimeDeps } from '../structured-agent-session-runtime-contract'
+import type { StructuredAgentSessionRuntimeDeps } from './installation/structured-agent-session-runtime-contract'
 
 import {
   ensureStructuredAgentModelCatalogOwner,
   stopStructuredAgentModelCatalogOwner
-} from '../structured-agent-model-catalog-wiring'
+} from './model-catalog/structured-agent-model-catalog-wiring'
 
 let installing: Promise<InstalledRuntime> | null = null
 
@@ -69,6 +70,8 @@ export async function stopStructuredAgentSessionRuntime(options?: {
   trigger?: AgentSessionResumeTrigger
 }): Promise<void> {
   const trigger = options?.trigger ?? structuredAgentSessionTeardownTrigger()
+  // Its tables live in the journal database this teardown closes.
+  stopPRWatchRuntime()
   const catalogStopped = stopStructuredAgentModelCatalogOwner()
   const pending = installing
   installing = null
@@ -145,6 +148,6 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
   }
   // Before the host serves reads: a chat opened right after an update finds its visuals in place.
   await migrateLegacyNativeChatVisualsFolders(deps.stateDirectory, logger)
-  const { installOnJournal } = await import('../structured-agent-session-host-assembly')
+  const { installOnJournal } = await import('./installation/structured-agent-session-host-assembly')
   return await installOnJournal({ ...deps, logger }, recordStore, catalogOwner)
 }

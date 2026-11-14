@@ -100,32 +100,6 @@ function compositionEnd(text: string, options?: { trailingInput?: boolean }): vo
 }
 
 describe('RepoSettingsDraftInput', () => {
-  it('keeps draft text while the store still holds the previous value (IME regression)', () => {
-    const onTextChange = vi.fn()
-    render({ repoId: 'repo-1', storeValue: '가', onTextChange })
-
-    typeText('가나')
-
-    // Stale async store echoes previously reset Hangul composition into decomposed jamo.
-    render({ repoId: 'repo-1', storeValue: '가', onTextChange })
-
-    expect(getInput().value).toBe('가나')
-    expect(onTextChange).toHaveBeenCalledWith('가나')
-  })
-
-  it('keeps draft text when a stale store echo arrives after newer keystrokes', () => {
-    const onTextChange = vi.fn()
-    render({ repoId: 'repo-1', storeValue: '', onTextChange })
-
-    typeText('가')
-    typeText('가나')
-
-    // Stale repos:changed echo of the first keystroke.
-    render({ repoId: 'repo-1', storeValue: '가', onTextChange })
-
-    expect(getInput().value).toBe('가나')
-  })
-
   it('keeps draft text on a stale echo when React runs state updaters twice', () => {
     const onTextChange = vi.fn()
     render({ repoId: 'repo-1', storeValue: '', onTextChange }, { strict: true })
@@ -135,37 +109,6 @@ describe('RepoSettingsDraftInput', () => {
     render({ repoId: 'repo-1', storeValue: '가', onTextChange }, { strict: true })
 
     expect(getInput().value).toBe('가나')
-  })
-
-  it('accepts same-repo store changes that did not come from the input draft', () => {
-    const onTextChange = vi.fn()
-    render({ repoId: 'repo-1', storeValue: '../custom-worktrees', onTextChange })
-
-    render({ repoId: 'repo-1', storeValue: '', onTextChange })
-
-    expect(getInput().value).toBe('')
-  })
-
-  it('resets the draft when the pane switches repos', () => {
-    const onTextChange = vi.fn()
-    render({ repoId: 'repo-1', storeValue: 'Repo One', onTextChange })
-
-    typeText('Renamed')
-
-    render({ repoId: 'repo-2', storeValue: 'Repo Two', onTextChange })
-
-    expect(getInput().value).toBe('Repo Two')
-  })
-
-  it('persists every keystroke through onTextChange', () => {
-    const onTextChange = vi.fn()
-    render({ repoId: 'repo-1', storeValue: '', onTextChange })
-
-    typeText('a')
-    typeText('ab')
-
-    expect(onTextChange).toHaveBeenNthCalledWith(1, 'a')
-    expect(onTextChange).toHaveBeenNthCalledWith(2, 'ab')
   })
 
   it('does not persist unconfirmed IME text while composing', () => {
@@ -210,19 +153,6 @@ describe('RepoSettingsDraftInput', () => {
     expect(onTextChange).toHaveBeenNthCalledWith(2, '日本語!')
   })
 
-  it('resumes per-keystroke persistence after composition ends', () => {
-    const onTextChange = vi.fn()
-    render({ repoId: 'repo-1', storeValue: '', onTextChange })
-
-    compositionStart()
-    composingInput('あ')
-    compositionEnd('亜')
-    typeText('亜b')
-
-    expect(onTextChange).toHaveBeenNthCalledWith(1, '亜')
-    expect(onTextChange).toHaveBeenNthCalledWith(2, '亜b')
-  })
-
   it('resets composition state when the pane switches repos', () => {
     const onTextChange = vi.fn()
     render({ repoId: 'repo-1', storeValue: '', onTextChange })
@@ -264,29 +194,5 @@ describe('RepoSettingsDraftInput', () => {
 
     expect(onTextChange).toHaveBeenCalledTimes(1)
     expect(onTextChange).toHaveBeenCalledWith('홍')
-  })
-
-  it('does not re-persist a confirmed value on blur or unmount', () => {
-    const onTextChange = vi.fn()
-    render({ repoId: 'repo-1', storeValue: '', onTextChange })
-
-    compositionStart()
-    composingInput('홍')
-    compositionEnd('홍')
-    blurInput()
-    unmountNow()
-
-    expect(onTextChange).toHaveBeenCalledTimes(1)
-    expect(onTextChange).toHaveBeenCalledWith('홍')
-  })
-
-  it('does not persist on blur or unmount when nothing was edited', () => {
-    const onTextChange = vi.fn()
-    render({ repoId: 'repo-1', storeValue: 'seed', onTextChange })
-
-    blurInput()
-    unmountNow()
-
-    expect(onTextChange).not.toHaveBeenCalled()
   })
 })

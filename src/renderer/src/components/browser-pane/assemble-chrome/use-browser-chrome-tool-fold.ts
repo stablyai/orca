@@ -1,28 +1,12 @@
 import { useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { BROWSER_CHROME_ADDRESS_SLOT_ATTRIBUTE } from './browser-chrome-address-slot'
 
-/** Compaction stages run in order: least-used tools fold first; grab/annotate fold last. */
-export type BrowserChromeFoldStage =
-  | 'import-label'
-  | 'external'
-  | 'devtools'
-  | 'share'
-  | 'extensions'
-  | 'import'
-  | 'draw'
-  | 'grab'
-  | 'annotate'
+/** Compaction stages run in order: pinned extensions fold into ⋯ first, then Annotate drops its label. */
+export type BrowserChromeFoldStage = 'extensions' | 'annotate-label'
 
 export const BROWSER_CHROME_FOLD_ORDER: readonly BrowserChromeFoldStage[] = [
-  'import-label',
-  'external',
-  'devtools',
-  'share',
   'extensions',
-  'import',
-  'draw',
-  'grab',
-  'annotate'
+  'annotate-label'
 ]
 
 /** Below this the URL stops being readable, so tools fold before the address shrinks further. */

@@ -11,7 +11,7 @@ import { isInvalidDiscoveredPlugin } from '../plugin-discovery'
 import { assertPluginSystemEnabled, resolveDevPlugin } from '../plugin-dev-event-emit'
 import type { PluginDevFolderLookup, PluginDevFolderTarget } from '../plugin-dev-folders'
 import type { PluginEventDeliveryContext } from '../plugin-event-delivery'
-import type { PluginWorkerHandle } from '../workers/plugin-host-process'
+import type { PluginWorkerHandle } from '../workers/parent-process/plugin-host-process-types'
 
 export type PluginDevHookService = PluginDevFolderLookup & {
   options: { isPluginSystemEnabled: () => boolean }

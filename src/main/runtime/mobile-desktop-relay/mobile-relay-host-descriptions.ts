@@ -6,7 +6,7 @@ import type {
   MobileRelayHostRelay
 } from '../../../shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
-import type { RuntimeStatus } from '../../../shared/runtime-types'
+import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
 import type {
   MobileDesktopRelayHostListing,
   MobileDesktopRelayHosts
@@ -39,6 +39,7 @@ export function describeRelayHosts(
         label: host.label,
         health: host.health,
         relay: relayVerdict(host.health, answer),
+        ...(host.installationId ? { installationId: host.installationId } : {}),
         ...(identity.stoppedOnDesktop ? { stoppedOnDesktop: true as const } : {}),
         ...(identity.unavailableOnDesktop ? { unavailableOnDesktop: true as const } : {})
       }

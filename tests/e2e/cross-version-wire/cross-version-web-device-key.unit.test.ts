@@ -10,14 +10,14 @@ import {
   REGISTER_DEVICE_KEY_METHOD
 } from '../../../src/shared/remote-runtime/pairing/device-key-capability'
 import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/remote-runtime/pairing/paired-runtime-connection'
-import { DeviceRegistry } from '../../../src/main/runtime/device-registry'
-import { registerSocketDeviceKey } from '../../../src/main/runtime/runtime-rpc/runtime-rpc-device-key-registration'
+import { DeviceRegistry } from '../../../src/main/runtime/rpc/server/pairing/device-registry'
+import { registerSocketDeviceKey } from '../../../src/main/runtime/rpc/server/runtime-rpc-device-key-registration'
 import { generateKeyPair } from '../../../src/shared/remote-runtime/e2ee/node/e2ee-crypto'
 import {
   MobileSocketWiring,
   type AuthenticatedMobileSocket,
   type MobileSocketTransport
-} from '../../../src/main/runtime/rpc/mobile-socket-wiring'
+} from '../../../src/main/runtime/rpc/mobile/mobile-socket-wiring'
 import type { KeyedWebDeviceKeySupport } from '../../../src/renderer/src/web/web-device-key'
 import { createMemoryWebDeviceKeyStore } from '../../../src/renderer/src/web/web-device-key-store'
 import { WebRuntimeConnectionTransport } from '../../../src/renderer/src/web/web-runtime-connection-transport'
@@ -41,7 +41,7 @@ let releasedHost: HostImplementation
 beforeAll(async () => {
   const checkout = await materializeReleaseCheckout(resolveBaselineReleaseRef())
   const [registryModule, wiringModule] = await Promise.all([
-    importReleaseCheckoutModule(checkout, 'src/main/runtime/device-registry.ts'),
+    importReleaseCheckoutModule(checkout, 'src/main/runtime/rpc/server/pairing/device-registry.ts'),
     importReleaseCheckoutModule(checkout, 'src/main/runtime/rpc/mobile-socket-wiring.ts')
   ])
   releasedHost = {
@@ -232,8 +232,10 @@ describe('a browser moving from its pairing code to a device key', () => {
     expect(
       await browser.store.get(`${Buffer.from(desktop.publicKey).toString('base64')}|env-1`)
     ).toMatchObject({ state: 'active', deviceId: keyed.device.deviceId })
-    // The token row stays for every other holder of the same code.
-    expect(currentHost.registry.validateToken(paired.token)?.deviceId).toBe(paired.deviceId)
+    // A fresh link that paired this browser is single use: its code no longer signs in, and the
+    // row stays only as the key's anchor.
+    expect(currentHost.registry.validateToken(paired.token)).toBeNull()
+    expect(currentHost.registry.getDevice(paired.deviceId)).not.toBeNull()
 
     // Every socket the web bundle opens carries the marker hosts use to tell it from a phone.
     expect(dialedUrls.length).toBeGreaterThan(1)

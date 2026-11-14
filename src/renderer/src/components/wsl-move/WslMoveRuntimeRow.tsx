@@ -1,5 +1,5 @@
 import React from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { SettingsRow } from '../settings/form-controls/SettingsFormControls'
 import { openWslMoveDialogFor } from './wsl-move-entry'
@@ -12,10 +12,11 @@ export function WslMoveRuntimeRow({
   distro: string
   repoId: string
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <SettingsRow
-      label={translate('wslMove.runtime.label', 'Project runtime')}
-      description={translate(
+      label={t('wslMove.runtime.label', 'Project runtime')}
+      description={t(
         'wslMove.runtime.description',
         'This project runs in {{distro}} through this computer. Move it to the {{distro}} host to run it there.',
         { distro }
@@ -27,7 +28,7 @@ export function WslMoveRuntimeRow({
           size="sm"
           onClick={() => openWslMoveDialogFor(distro, { kind: 'repo', id: repoId })}
         >
-          {translate('wslMove.runtime.move', 'Move project')}
+          {t('wslMove.runtime.move', 'Move project')}
         </Button>
       }
     />

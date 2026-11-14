@@ -7,7 +7,7 @@ import {
   WORKTREE_CREATE_EXECUTION_HOSTS,
   WORKTREE_CREATE_PHASES,
   type WorktreeCreatePhase
-} from './worktree/create-timing-vocabulary'
+} from './worktree/creation/create-timing-vocabulary'
 
 // Numbers and closed enums exclude repo-identifying paths/branches/refs/errors. Fields are optional for folder workspaces and untimed creates.
 

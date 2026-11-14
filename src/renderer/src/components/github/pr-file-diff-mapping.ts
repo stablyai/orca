@@ -4,17 +4,17 @@ import {
   getLargeDiffRenderLimit,
   type LargeDiffRenderLimit
 } from '../../../../shared/large-diff-render-limit'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type {
   GitBranchChangeEntry,
   GitDiffResult
 } from '../../../../shared/git/diff/git-diff-compare-types'
-import type { PRComment } from '../../../../shared/github/comment-types'
+import type { PRComment } from '../../../../shared/github/comments/comment-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import type {
-  GitHubOwnerRepo,
   GitHubPRFile,
   GitHubPRFileContents
-} from '../../../../shared/github/pull-request-types'
+} from '../../../../shared/github/pull-requests/pull-request-types'
 
 export const PR_DIFF_OVERSCAN = 5
 

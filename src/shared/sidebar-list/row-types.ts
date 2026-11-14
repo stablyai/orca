@@ -1,3 +1,4 @@
+import type { WorktreeLineageSource } from './worktree-lineage-range'
 import type { WorktreeOccurrence } from '../worktree-occurrence-plan'
 import type { FolderWorkspace } from '../folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../project-group-types'
@@ -65,6 +66,8 @@ export type WorktreeRow = {
   lineageChildWorktreeIds?: readonly string[]
   lineageGroupKey?: string
   lineageCollapsed?: boolean
+  /** Every workspace nested under this one, collapsed or not; host-qualified. */
+  lineageDescendantIdentities?: WorktreeLineageSource
   hostContextLabel?: string
   showProjectName?: boolean
 }
@@ -77,13 +80,18 @@ export type ImportedWorktreesCardCandidate = {
 export type ImportedWorktreesCardRow = {
   type: 'imported-worktrees-card'
   key: string
-  repo: Repo
-  hiddenWorktrees: DetectedWorktree[]
-  placement: 'repo-group' | 'pinned-fallback'
-  /** Set only when the row's project is checked out on more than one host. */
+  /** Set only when the row's project, or this line's host, needs naming among several hosts. */
   hostContextLabel?: string
   hostContextHostId?: ExecutionHostId
-}
+} & (
+  | { placement: 'repo-group'; repo: Repo; hiddenWorktrees: DetectedWorktree[] }
+  // Outside project grouping no header owns a project, so one line covers a host's projects.
+  | {
+      placement: 'all-projects'
+      hostId: ExecutionHostId
+      projects: ImportedWorktreesCardCandidate[]
+    }
+)
 
 export type NewExternalWorktreesInboxCandidate = {
   repo: Repo
@@ -108,12 +116,19 @@ export type PendingCreationRow = {
 }
 
 export type FolderWorkspaceRow = {
+  lineageDescendantIdentities?: WorktreeLineageSource
   type: 'folder-workspace'
   key: string
   folderWorkspace: FolderWorkspace
   projectGroup: ProjectGroup
   depth: number
   groupDepth: number
+  hostContextLabel?: string
+  /** Workspaces nested under this folder; set only when it has any. */
+  lineageChildCount?: number
+  lineageChildWorktreeIds?: readonly string[]
+  lineageGroupKey?: string
+  lineageCollapsed?: boolean
 }
 
 /** Stable create/repo identity only: subscribing to full progress records would rebuild the list on phase/loader churn. */

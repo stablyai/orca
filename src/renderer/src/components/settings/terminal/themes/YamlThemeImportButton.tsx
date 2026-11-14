@@ -1,7 +1,7 @@
 import { FileUp } from 'lucide-react'
 import { Button } from '../../../ui/button'
 import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Import Warp-format YAML directly through the file picker, independently of Warp discovery. */
 export function YamlThemeImportButton({
@@ -9,6 +9,7 @@ export function YamlThemeImportButton({
 }: {
   warpThemes: UseWarpThemeImportReturn
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Button
       variant="outline"
@@ -17,7 +18,7 @@ export function YamlThemeImportButton({
       onClick={() => void warpThemes.handleImportYamlClick()}
     >
       <FileUp className="size-4" />
-      {translate('auto.components.settings.YamlThemeImportButton.label', 'Import from YAML')}
+      {t('auto.components.settings.YamlThemeImportButton.label', 'Import from YAML')}
     </Button>
   )
 }

@@ -1,5 +1,5 @@
-import type { NativeChatVisualsLaunch } from '../../../native-chat/native-chat-visuals-delivery'
-import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { NativeChatVisualsLaunch } from '../../../native-chat/conversation-files/native-chat-visuals-delivery'
+import type { StructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { CodexAppServerConnection } from '../../app-server/codex-app-server-connection-types'
 import { isCodexAppServerRequestError } from '../../app-server/codex-app-server-request-error'
 import { isCodexMethodNotFoundError } from '../../app-server/codex-app-server-session'

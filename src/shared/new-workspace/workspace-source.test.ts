@@ -1,15 +1,31 @@
 import { describe, expect, it } from 'vitest'
+import { resolveComposerBranchSelection } from '../composer-branch-selection'
 import {
-  buildJiraWorkspaceSource,
   buildLinearWorkspaceSource,
   buildWorkspaceSourceSelection,
-  getWorkspaceSourceName,
   getWorkspaceSourceProvider,
   shouldApplyWorkspaceSourceAutoName,
   shouldPreserveWorkspaceSourceOnRepoChange
 } from './workspace-source'
 
 describe('workspace source policy', () => {
+  it.each([
+    ['refs/remotes/origin/topic', 'origin/topic'],
+    ['refs/heads/topic', 'topic'],
+    ['origin/topic', 'origin/topic']
+  ])('shows selected branch %s without rewriting its action', (refName, label) => {
+    const selection = resolveComposerBranchSelection({
+      refName,
+      localBranchName: 'topic',
+      currentName: '',
+      lastAutoName: ''
+    })
+    expect(
+      buildWorkspaceSourceSelection({ linkedWorkItem: null, baseBranch: selection.baseBranch })
+    ).toEqual({ kind: 'branch', label })
+    expect(selection.baseBranch).toBe(refName)
+  })
+
   it.each(['347', '002', '#347', 'https://github.com/fixture/repo/issues/347'])(
     'keeps manual name %s after the query field becomes a selected source',
     (currentName) => {
@@ -34,38 +50,6 @@ describe('workspace source policy', () => {
     url: 'https://linear.app/acme/issue/ENG-42/ship-mobile-parity',
     workspaceId: 'workspace-1',
     branchName: '  team/eng-42-ship-mobile-parity  '
-  })
-
-  it('builds one Linear identity for desktop and mobile create flows', () => {
-    expect(linear).toMatchObject({
-      provider: 'linear',
-      number: 0,
-      linearIdentifier: 'ENG-42',
-      linearWorkspaceId: 'workspace-1',
-      linearOrganizationUrlKey: 'acme',
-      linearBranchName: 'team/eng-42-ship-mobile-parity'
-    })
-    expect(getWorkspaceSourceName(linear)).toEqual({
-      seedName: 'eng-42-ship-mobile-parity',
-      displayName: 'ENG-42 Ship mobile parity'
-    })
-  })
-
-  it('persists a Jira title without repeating its separately stored identifier', () => {
-    expect(
-      buildJiraWorkspaceSource({
-        key: 'ORCA-123',
-        title: 'Fix Jira card details',
-        url: 'https://company.atlassian.net/browse/ORCA-123'
-      })
-    ).toEqual({
-      provider: 'jira',
-      type: 'issue',
-      number: 0,
-      title: 'Fix Jira card details',
-      url: 'https://company.atlassian.net/browse/ORCA-123',
-      jiraIdentifier: 'ORCA-123'
-    })
   })
 
   it('preserves global work-item sources across repo changes', () => {

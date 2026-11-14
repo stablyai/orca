@@ -2,7 +2,7 @@ import { fork, type ChildProcess } from 'node:child_process'
 import { writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { expect, test, type TestInfo } from '@playwright/test'
-import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
+import { PROTOCOL_VERSION } from '../../src/main/daemon/protocol/daemon-protocol-version'
 import {
   cleanupDaemonGenerationFixtures,
   createDaemonGenerationRuntime,

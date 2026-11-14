@@ -11,7 +11,10 @@ import {
   getEphemeralVmRecipeResultProjectRoot
 } from '../../../shared/ephemeral-vm-recipes'
 import { listEphemeralVmRuntimes } from '../../../shared/ephemeral-vm-runtime-store'
-import type { EphemeralVmRuntimeRecord } from '../../../shared/ephemeral-vm-runtimes'
+import {
+  hasEphemeralVmRecipeResult,
+  type EphemeralVmProvisionedRuntimeRecord
+} from '../../../shared/ephemeral-vm-runtimes'
 import { provisionedRootPathsEqual } from './provisioned-root-checkout'
 
 type AdoptionArgs = AdoptProvisionedRootArgs & {
@@ -58,12 +61,13 @@ function requireOwnedProvisionedRootRuntime(
   userDataPath: string,
   runtimeId: string,
   connectionId: string
-): EphemeralVmRuntimeRecord {
+): EphemeralVmProvisionedRuntimeRecord {
   const runtime = listEphemeralVmRuntimes(userDataPath).find((entry) => entry.id === runtimeId)
   if (!runtime) {
     throw new Error(`Unknown ephemeral VM runtime: ${runtimeId}`)
   }
   if (
+    !hasEphemeralVmRecipeResult(runtime) ||
     runtime.connectionMode !== 'ssh' ||
     runtime.sshTargetId !== connectionId ||
     runtime.recipe?.checkoutMode !== 'provisioned-root' ||

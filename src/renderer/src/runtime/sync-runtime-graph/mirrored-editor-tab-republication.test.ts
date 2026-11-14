@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { makeState as makePublicationState } from '../sync-runtime-graph-test-harness'
+import { makeState as makePublicationState } from './testing/sync-runtime-graph-test-harness'
 import { applyWebSessionTabsSnapshot } from '../web-session-tabs-sync/snapshot-api'
 import {
   ENV,
@@ -8,10 +8,10 @@ import {
   makeSnapshot,
   makeState,
   resetWebSessionTabsSyncTestState
-} from '../web-session-tabs-sync-test-harness'
+} from '../web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 import { buildMobileSessionTabSnapshots } from './mobile-session-snapshots'
 import { getRuntimeMobileSessionSyncKey, runtimeMobileSessionSyncKeysEqual } from './sync-key'
-import type { RuntimeMobileSessionFileTab } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionFileTab } from '../../../../shared/runtime-mobile-session-tab-contracts'
 
 vi.mock('../../store', () => ({ useAppStore: { setState: vi.fn() } }))
 

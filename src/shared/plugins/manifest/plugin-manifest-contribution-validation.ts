@@ -28,6 +28,7 @@ type ContributionValidationManifest = {
     themes: IdentifiedContribution[]
     terminalThemes: IdentifiedContribution[]
     iconThemes: IdentifiedContribution[]
+    fonts: { family: string }[]
     syntaxes: (IdentifiedContribution & PluginFileMatch & { scopeName: string })[]
     customEditors: (IdentifiedContribution & PluginFileMatch)[]
     newFiles: IdentifiedContribution[]
@@ -115,6 +116,13 @@ export function validatePluginManifestContributions(
     (entry) => (entry as { locale: string }).locale.toLowerCase(),
     'languagePacks',
     'language pack locale',
+    ctx
+  )
+  rejectDuplicateValues(
+    manifest.contributes.fonts.map((font) => font.family.toLowerCase()),
+    String,
+    'fonts',
+    'font family',
     ctx
   )
   rejectDuplicateValues(
@@ -221,7 +229,10 @@ export function validatePluginManifestContributions(
   }
   for (const [index, subscription] of manifest.contributes.events.entries()) {
     const required = PLUGIN_EVENT_CAPABILITY[subscription.on]
-    if (!manifest.capabilities.some((capability) => capability.kind === required)) {
+    if (
+      required !== null &&
+      !manifest.capabilities.some((capability) => capability.kind === required)
+    ) {
       ctx.addIssue({
         code: 'custom',
         path: ['contributes', 'events', index, 'on'],

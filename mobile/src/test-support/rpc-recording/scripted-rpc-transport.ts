@@ -25,10 +25,11 @@ import {
   type NativeObservation
 } from './recording-causality'
 import type { BridgePortObservation } from '../../mobile-web-shell/bridge/bridge-port-pair-test-harness'
-import type { ConnectionState, RpcResponse } from '../../transport/types'
-import type { RpcClient } from '../../transport/rpc-client'
-import { RpcClientStreamRegistry } from '../../transport/rpc-client-stream-registry'
-import { createStableLogicalRpcClient } from '../../transport/stable-logical-rpc-client'
+import type { ConnectionState } from '../../transport/connection/connection-state'
+import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { RpcClientStreamRegistry } from '../../transport/rpc/rpc-client-stream-registry'
+import { createStableLogicalRpcClient } from '../../transport/connection/stable-logical-rpc-client'
 import {
   captureArguments,
   captureError,

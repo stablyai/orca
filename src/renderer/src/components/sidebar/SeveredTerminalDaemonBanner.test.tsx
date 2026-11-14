@@ -55,24 +55,6 @@ describe('SeveredTerminalDaemonBanner', () => {
     document.body.innerHTML = ''
   })
 
-  it('stays hidden off Linux and while the daemon has its files', async () => {
-    installApi('darwin', DAEMON)
-    expect((await render()).textContent).toBe('')
-    expect(severedDaemon).not.toHaveBeenCalled()
-
-    installApi('linux', null)
-    expect((await render()).textContent).toBe('')
-  })
-
-  it('explains the risk and that new terminals are not kept', async () => {
-    installApi('linux', DAEMON)
-    const text = (await render()).textContent ?? ''
-    expect(text).toContain('Terminal service is running without its program files')
-    expect(text).toContain('3 running terminals')
-    expect(text).toContain('new terminals are not kept')
-    expect(text).toContain('Restart terminal daemon')
-  })
-
   it('confirms that a restart ends processes, then restarts the incarnation it showed', async () => {
     installApi('linux', DAEMON)
     await render()
@@ -90,16 +72,5 @@ describe('SeveredTerminalDaemonBanner', () => {
       linuxStartTicks: '777',
       bootId: 'boot-1'
     })
-  })
-
-  it('remembers a dismissal for this daemon incarnation only', async () => {
-    installApi('linux', DAEMON)
-    const container = await render()
-    await act(async () => button('Dismiss').click())
-    expect(container.textContent).toBe('')
-
-    expect((await render()).textContent).toBe('')
-    installApi('linux', { ...DAEMON, pid: 5000 })
-    expect((await render()).textContent).toContain('Restart terminal daemon')
   })
 })

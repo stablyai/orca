@@ -1,7 +1,7 @@
 import { readCustomEditorKeyChord } from '../../../../shared/plugins/frames/plugin-custom-editor-bridge'
 import { FRAME_EVENTS } from '../../../../shared/plugins/frames/plugin-frame-bridge'
 import type { PluginEvent } from '../../../../shared/plugins/frames/plugin-protocol'
-import type { PluginFrameMessageContext } from '../right-sidebar/plugin-frame-host'
+import type { PluginFrameMessageContext } from '../plugins/frames/plugin-frame-host-lanes'
 import type { CustomEditorHostOptions } from './plugin-custom-editor-host-types'
 
 /** A custom editor frame's own events. True when it announced that its session merges outside

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { SkillInstallProviderId } from './skill-install-providers'
+import { isSkillInstallProviderId, type SkillInstallProviderId } from './skill-install-providers'
 
 // Frozen per capability version: a client renders a value it does not know as "Needs attention".
 export const BUNDLED_SKILL_OP_KINDS = Object.freeze([
@@ -20,6 +20,8 @@ export function isBundledSkillOpKind(value: string): value is BundledSkillOpKind
 
 export const BUNDLED_SKILL_LEAVE_REASONS = Object.freeze([
   'edited',
+  /** A copy another Orca build (newer, or a dev build) installed; its bytes are unknown here. */
+  'other-build',
   'other',
   'unwritable',
   'unreadable',
@@ -161,6 +163,23 @@ export const BundledSkillAutoUpdateRequestSchema = z.strictObject({
   names: z
     .array(z.string().regex(/^[a-z0-9][a-z0-9-]{0,63}$/u))
     .min(1)
-    .max(64)
+    .max(64),
+  /** Only record which copies already hold this build's bytes; never update any skill. Hosts
+   *  that predate it reject the request, so they write nothing either. */
+  recordOnly: z.literal(true).optional()
 })
 export type BundledSkillAutoUpdateRequest = z.infer<typeof BundledSkillAutoUpdateRequestSchema>
+// Desktop IPC may target a chat provider without a CLI on PATH; the remote v1 schema stays frozen.
+export const LocalBundledSkillPlanRequestSchema = BundledSkillPlanRequestSchema.extend({
+  agent: z
+    .custom<SkillInstallProviderId>(
+      (value) => typeof value === 'string' && isSkillInstallProviderId(value)
+    )
+    .optional()
+})
+export type LocalBundledSkillPlanRequest = z.infer<typeof LocalBundledSkillPlanRequestSchema>
+
+export const LocalBundledSkillExecuteRequestSchema = BundledSkillExecuteRequestSchema.extend({
+  request: LocalBundledSkillPlanRequestSchema
+})
+export type LocalBundledSkillExecuteRequest = z.infer<typeof LocalBundledSkillExecuteRequestSchema>

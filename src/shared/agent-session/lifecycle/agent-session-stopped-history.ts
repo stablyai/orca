@@ -13,7 +13,7 @@ import {
   classifyDispatchRejection,
   dispatchWasWithdrawn
 } from '../requests/structured-agent-session-dispatch-rejection'
-import { MAX_PROMPT_BYTES } from '../../rpc-contract/structured-agent-session-message-params'
+import { MAX_PROMPT_BYTES } from '../../rpc-contract/structured-agent-session/structured-agent-session-message-params'
 
 /** The record Claude writes for its own Stop, carried after each stopped message. */
 export const STOPPED_MESSAGE_INTERRUPTED_MARKER = '[Request interrupted by user]'
@@ -65,7 +65,7 @@ const REFUSED_BEFORE_WRITE: ReadonlySet<SubmissionRejectionKind> = new Set([
 ])
 
 /** Refused before anything reached the agent: what it carried is owed again. */
-function refusedBeforeWrite(carrier: AgentJournalSubmission): boolean {
+export function refusedBeforeWrite(carrier: AgentJournalSubmission): boolean {
   if (carrier.dispatchState !== 'rejected' || carrier.answeredInTurn) {
     return false
   }
@@ -94,6 +94,17 @@ function deliveryBytes(words: string): number {
   return wordsBytes(words) + STOPPED_MESSAGE_FRAMING_BYTES
 }
 
+/** Structural candidate; body and size policy remain in the shared selector. */
+export function stoppedHistoryCandidate(submission: AgentJournalSubmission): boolean {
+  return (
+    submission.acceptedSequence !== undefined &&
+    submission.origin === 'client' &&
+    submission.source?.kind === 'user' &&
+    submission.queuedMessageId === undefined &&
+    withdrawnUnwritten(submission)
+  )
+}
+
 /** Owe stopped messages in send order; exclude ones too large to fit beside a one-letter send so they cannot block others. */
 export function agentSessionStoppedHistoryOwed(
   journal: StoppedHistoryJournal
@@ -111,11 +122,8 @@ export function agentSessionStoppedHistoryOwed(
       if (
         submission.acceptedSequence === undefined ||
         submission.acceptedSequence <= journal.clearSequence ||
-        submission.origin !== 'client' ||
-        submission.source?.kind !== 'user' ||
-        submission.queuedMessageId !== undefined ||
-        covered.has(submission.clientMessageId) ||
-        !withdrawnUnwritten(submission)
+        !stoppedHistoryCandidate(submission) ||
+        covered.has(submission.clientMessageId)
       ) {
         return []
       }

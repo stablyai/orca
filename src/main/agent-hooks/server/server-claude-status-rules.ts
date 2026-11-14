@@ -5,8 +5,16 @@ import {
 } from '../../../shared/claude-subagent-roster'
 import { isAskUserQuestionTool } from '../../../shared/agent-status/lifecycle/agent-question-answered-intent'
 import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
-import { isClaudePermissionSettledByReplay } from '../../../shared/agent-hook-listener/claude-settled-permission-requests'
+import {
+  isClaudePermissionSettledByBatch,
+  isClaudePermissionSettledByReplay
+} from '../../../shared/agent-hook-listener/claude-settled-permission-requests'
 import type { EnrichedAgentHookEventPayload } from './server-types'
+import { leadReplyOf, withAcceptedReply } from './server-accepted-reply'
+import {
+  claudePermissionNamesToolUse,
+  type ClaudeToolRequestFields
+} from '../../../shared/agent-hook-listener/claude-tool-request-identity'
 
 /** Retain the shell-work fact only with the main-agent observation that established it. */
 export function pairedClaudeNonAgentWork(
@@ -21,8 +29,15 @@ export function pairedClaudeNonAgentWork(
     : undefined
 }
 
-/** Keep main-agent progress behind a child's permission prompt so restart cannot settle live work. */
+/** Keep main-agent progress, and the reply the lead finished with, behind a child's permission prompt so restart cannot settle live work. */
 export function withHeldChildWaitMainAgent(
+  previous: EnrichedAgentHookEventPayload,
+  next: AgentHookEventPayload
+): EnrichedAgentHookEventPayload {
+  return withAcceptedReply(heldChildWaitRow(previous, next), previous, leadReplyOf(next), true)
+}
+
+function heldChildWaitRow(
   previous: EnrichedAgentHookEventPayload,
   next: AgentHookEventPayload
 ): EnrichedAgentHookEventPayload {
@@ -77,6 +92,10 @@ export function shouldKeepClaudePermissionVisible(
     return false
   }
   if (isClaudePermissionSettledByReplay(previous, next)) {
+    return false
+  }
+  // Claude can deny a request itself (prompt timeout, safety check) with no Post* hook; its batch end lists it.
+  if (isClaudePermissionSettledByBatch(previous, next)) {
     return false
   }
   if (isClaudePermissionResumingApprovedTool(previous, next)) {
@@ -178,21 +197,20 @@ export function shouldInheritClaudeToolUseIdForPermission(
   ) {
     return false
   }
-  const sameKnownToolInput =
-    previous.payload.toolInput !== undefined &&
-    previous.payload.toolInput === next.payload.toolInput
-  const sameUnknownToolInput =
-    previous.payload.toolInput === undefined && next.payload.toolInput === undefined
-  if (
-    previous.toolAgentId !== next.toolAgentId ||
-    previous.toolAgentType !== next.toolAgentType ||
-    previous.payload.toolName === undefined ||
-    previous.payload.toolName !== next.payload.toolName ||
-    (!sameKnownToolInput && !sameUnknownToolInput)
-  ) {
-    return false
+  // Older hosts send no inferred ID; apply the listener's own matching rule to their rows.
+  return claudePermissionNamesToolUse(
+    claudeRowRequestFields(previous),
+    claudeRowRequestFields(next)
+  )
+}
+
+function claudeRowRequestFields(row: AgentHookEventPayload): ClaudeToolRequestFields {
+  return {
+    toolAgentId: row.toolAgentId,
+    toolAgentType: row.toolAgentType,
+    toolName: row.payload.toolName,
+    toolInput: row.payload.toolInput
   }
-  return true
 }
 
 export function attachClaudePermissionToolUseId(

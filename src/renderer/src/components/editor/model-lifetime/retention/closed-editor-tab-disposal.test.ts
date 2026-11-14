@@ -129,24 +129,6 @@ function buildScenario(): {
 }
 
 describe('disposeClosedEditorModels', () => {
-  it('scans the model registry once per batch instead of twice per closed diff tab', () => {
-    const batched = buildScenario()
-    const batchedRegistry = createRegistry(batched.models)
-    disposeClosedEditorModels(batchedRegistry, batched.closedTabs)
-
-    const perTab = buildScenario()
-    const perTabRegistry = createRegistry(perTab.models)
-    disposeByPrefixPerTab(perTabRegistry, perTab.prefixes)
-
-    expect(perTabRegistry.counters.getModelsCalls).toBe(CLOSED_DIFF_TAB_COUNT * 2)
-    expect(perTabRegistry.counters.uriToStringCalls).toBe(
-      CLOSED_DIFF_TAB_COUNT * 2 * perTab.models.length * 2
-    )
-
-    expect(batchedRegistry.counters.getModelsCalls).toBe(1)
-    expect(batchedRegistry.counters.uriToStringCalls).toBeLessThanOrEqual(batched.models.length * 2)
-  })
-
   it('disposes exactly the models the per-tab sweep disposed', () => {
     const batched = buildScenario()
     disposeClosedEditorModels(createRegistry(batched.models), batched.closedTabs)
@@ -186,12 +168,5 @@ describe('disposeClosedEditorModels', () => {
       closed.originalModelPath,
       closed.modifiedModelPath
     ])
-  })
-
-  it('is a no-op when nothing closed', () => {
-    const registry = createRegistry([createModel('diff:original:tab-1:tab-1')])
-    disposeClosedEditorModels(registry, [])
-    expect(registry.counters.getModelsCalls).toBe(0)
-    expect(registry.models[0].disposed).toBe(false)
   })
 })

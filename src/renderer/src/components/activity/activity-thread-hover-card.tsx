@@ -1,28 +1,32 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useEffect } from 'react'
 import { Pencil, StickyNote } from 'lucide-react'
 import { HoverCardContent } from '@/components/ui/hover-card'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import CommentMarkdown from '../sidebar/CommentMarkdown'
-import { DetailHeader, MetadataActionIcon } from '../sidebar/WorktreeCardMetadataControls'
+import {
+  DetailHeader,
+  MetadataActionIcon
+} from '../sidebar/workspace-card/metadata/WorktreeCardMetadataControls'
 import {
   WorktreeCardDetailSection,
   WorktreeCardDetailSectionContent
-} from '../sidebar/WorktreeCardDetailSection'
-import { WorktreeCardTaskDetailSection } from '../sidebar/WorktreeCardTaskDetailSection'
-import { getWorktreeCardTaskActions } from '../sidebar/worktree-card-task-actions'
-import { WorktreeCardReviewDetailSection } from '../sidebar/WorktreeCardReviewDetailSection'
-import { WorktreeCardAutomationDetailSection } from '../sidebar/WorktreeCardAutomationDetailSection'
-import { WorktreeCardCliDetailSection } from '../sidebar/WorktreeCardCliDetailSection'
-import { WorktreeCardPortsDetails } from '../sidebar/WorktreeCardPorts'
-import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from '../sidebar/WorktreeContextMenu'
-import { useWorktreeCardDetailsHoverControl } from '../sidebar/worktree-card-details-hover-state'
-import { useWorktreeCardFoundation } from '../sidebar/use-worktree-card-foundation'
-import { useWorktreeCardReviewDetails } from '../sidebar/use-worktree-card-review-details'
-import { useWorktreeCardLinkedDetails } from '../sidebar/use-worktree-card-linked-details'
-import { useWorktreeCardLifecycleEffects } from '../sidebar/use-worktree-card-lifecycle-effects'
-import { useWorktreeCardSecondaryDetails } from '../sidebar/use-worktree-card-secondary-details'
-import { useWorkspaceReferenceLinkActions } from '../sidebar/use-workspace-reference-link-actions'
+} from '../sidebar/workspace-card/details/WorktreeCardDetailSection'
+import { WorktreeCardTaskDetailSection } from '../sidebar/workspace-card/review/WorktreeCardTaskDetailSection'
+import { getWorktreeCardTaskActions } from '../sidebar/workspace-card/review/worktree-card-task-actions'
+import { WorktreeCardReviewDetailSection } from '../sidebar/workspace-card/review/WorktreeCardReviewDetailSection'
+import { WorktreeCardAutomationDetailSection } from '../sidebar/workspace-card/details/WorktreeCardAutomationDetailSection'
+import { WorktreeCardCliDetailSection } from '../sidebar/workspace-card/details/WorktreeCardCliDetailSection'
+import { WorktreeCardPortsDetails } from '../sidebar/workspace-card/details/WorktreeCardPorts'
+import '../sidebar/workspace-actions/context-menu/WorktreeContextMenu'
+import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from '../sidebar/workspace-actions/context-menu/worktree-context-menu-policy'
+import { useWorktreeCardDetailsHoverControl } from '../sidebar/workspace-card/details/worktree-card-details-hover-state'
+import { useWorktreeCardFoundation } from '../sidebar/workspace-card/controller/use-worktree-card-foundation'
+import { useWorktreeCardReviewDetails } from '../sidebar/workspace-card/details/use-worktree-card-review-details'
+import { useWorktreeCardLinkedDetails } from '../sidebar/workspace-card/details/use-worktree-card-linked-details'
+import { useWorktreeCardLifecycleEffects } from '../sidebar/workspace-card/controller/use-worktree-card-lifecycle-effects'
+import { useWorktreeCardSecondaryDetails } from '../sidebar/workspace-card/details/use-worktree-card-secondary-details'
+import { useWorkspaceReferenceLinkActions } from '../sidebar/workspace-card/review/use-workspace-reference-link-actions'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { ActivityThreadHoverCardSummary } from './activity-thread-hover-card-summary'
 import { ActivityThreadHoverCardRoot } from './activity-thread-hover-card-root'
@@ -51,6 +55,12 @@ export function ActivityThreadHoverCard({
 }: ActivityThreadHoverCardProps): React.JSX.Element {
   const detailsHoverControl = useWorktreeCardDetailsHoverControl()
   const open = detailsHoverControl.hoverOpen && !suppressed
+  const { closeHover } = detailsHoverControl
+  useEffect(() => {
+    if (suppressed) {
+      closeHover()
+    }
+  }, [suppressed, closeHover])
   const { linkActionPopoverProps, onOpenLink, onAuxClickCapture } =
     useWorkspaceReferenceLinkActions(thread.worktree.id, detailsHoverControl)
 
@@ -95,6 +105,7 @@ function ActivityThreadHoverCardContent({
   onJumpToWorkspace?: (thread: AgentPaneThread) => void
   canJumpToWorkspace?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const { worktree, repo } = thread
   const foundation = useWorktreeCardFoundation({ worktree, repo: repo ?? undefined })
   const review = useWorktreeCardReviewDetails({
@@ -256,13 +267,10 @@ function ActivityThreadHoverCardContent({
           <WorktreeCardDetailSection>
             <DetailHeader
               icon={<StickyNote className="size-3 text-muted-foreground" />}
-              label={translate('auto.components.sidebar.WorktreeCardMeta.93cbea12c2', 'Notes')}
+              label={t('auto.components.sidebar.WorktreeCardMeta.93cbea12c2', 'Notes')}
               actions={
                 <MetadataActionIcon
-                  label={translate(
-                    'auto.components.sidebar.WorktreeCardMeta.c7fa72ead0',
-                    'Edit notes'
-                  )}
+                  label={t('auto.components.sidebar.WorktreeCardMeta.c7fa72ead0', 'Edit notes')}
                   onClick={foundation.handleEditComment}
                 >
                   <Pencil className="size-3" />

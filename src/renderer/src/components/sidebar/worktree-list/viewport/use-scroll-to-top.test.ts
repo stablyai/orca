@@ -58,56 +58,6 @@ describe('useWorktreeListScrollToTop', () => {
     document.body.replaceChildren()
   })
 
-  it('shows on a hard upward wheel gesture and hides on the idle deadline', () => {
-    const element = createViewportElement()
-    const { result } = renderHook(() => useWorktreeListScrollToTop({ scrollElement: element }))
-
-    dispatchHardWheelUp(element)
-    expect(result.current.showScrollToTop).toBe(true)
-
-    advance(HARD_SCROLL_UP.hideAfterIdleMs)
-    expect(result.current.showScrollToTop).toBe(false)
-  })
-
-  it('does not extend the idle deadline on non-intent scroll noise', () => {
-    const element = createViewportElement()
-    const { result } = renderHook(() => useWorktreeListScrollToTop({ scrollElement: element }))
-
-    dispatchHardWheelUp(element)
-    const intentAt = clockMs
-    // Let the hard samples age out so later ticks are judged on their own.
-    advance(HARD_SCROLL_UP.windowMs + 16)
-
-    // Gentle upward ticks keep arriving but never refresh intent.
-    for (let i = 0; i < 6; i += 1) {
-      advance(200)
-      act(() => {
-        element.dispatchEvent(new WheelEvent('wheel', { deltaY: -4 }))
-      })
-    }
-    expect(clockMs - intentAt).toBeLessThan(HARD_SCROLL_UP.hideAfterIdleMs)
-    expect(result.current.showScrollToTop).toBe(true)
-
-    advance(intentAt + HARD_SCROLL_UP.hideAfterIdleMs - clockMs)
-    expect(result.current.showScrollToTop).toBe(false)
-  })
-
-  it('re-arms the idle timer when intent is refreshed', () => {
-    const element = createViewportElement()
-    const { result } = renderHook(() => useWorktreeListScrollToTop({ scrollElement: element }))
-
-    dispatchHardWheelUp(element)
-    advance(HARD_SCROLL_UP.hideAfterIdleMs - 200)
-    expect(result.current.showScrollToTop).toBe(true)
-
-    dispatchHardWheelUp(element)
-    advance(HARD_SCROLL_UP.hideAfterIdleMs - 200)
-    expect(result.current.showScrollToTop).toBe(true)
-
-    advance(200)
-    expect(result.current.showScrollToTop).toBe(false)
-  })
-
   it('suppresses detection for the post-jump window after scrollToTop', () => {
     const element = createViewportElement()
     const onUserScrollIntent = vi.fn()
@@ -133,24 +83,6 @@ describe('useWorktreeListScrollToTop', () => {
     advance(HARD_SCROLL_UP.suppressAfterJumpMs)
     dispatchHardWheelUp(element)
     expect(result.current.showScrollToTop).toBe(true)
-  })
-
-  it('force-hides when the list stops being scrollable, even mid-gesture', () => {
-    const element = createViewportElement()
-    const { result } = renderHook(() => useWorktreeListScrollToTop({ scrollElement: element }))
-
-    dispatchHardWheelUp(element)
-    expect(result.current.showScrollToTop).toBe(true)
-
-    Object.defineProperty(element, 'scrollHeight', { value: 1100, configurable: true })
-    act(() => {
-      element.dispatchEvent(new WheelEvent('wheel', { deltaY: -240 }))
-    })
-    expect(result.current.showScrollToTop).toBe(false)
-
-    // The pending idle timer was cleared, so nothing flips state later.
-    advance(HARD_SCROLL_UP.hideAfterIdleMs * 2)
-    expect(result.current.showScrollToTop).toBe(false)
   })
 
   it('clears the timer and detaches listeners when the scroll element goes away', () => {

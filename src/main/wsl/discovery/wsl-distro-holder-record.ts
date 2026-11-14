@@ -5,7 +5,7 @@ import {
   removeStaleDurableWriteTempFiles,
   writeFileDurable
 } from '../../filesystem/durable-file-write'
-import { hasErrorCode } from '../../daemon/daemon-process-inspection'
+import { hasErrorCode } from '../../daemon/endpoint/identity/daemon-process-inspection'
 
 /** Per-distro record intentionally survives Orca quit so the next launch can re-adopt the surviving holder. */
 export type WslDistroHolderRecord = {

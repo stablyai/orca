@@ -1,5 +1,5 @@
 import React from 'react'
-import { formatMarkdownReviewCardQuote } from '@/lib/markdown-review-notes'
+import { formatMarkdownReviewCardQuote } from '@/lib/editor/markdown/review-notes/markdown-review-notes'
 import type {
   MarkdownPreviewBlockRange,
   MarkdownPreviewPositionNode

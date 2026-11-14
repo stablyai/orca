@@ -1,4 +1,4 @@
-import type { GitHubProjectOwnerType } from '../../../../shared/github/project-types'
+import type { GitHubProjectOwnerType } from '../../../../shared/github/projects/project-types'
 
 export type ResolvedProjectSelection = {
   owner: string

@@ -1,4 +1,4 @@
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import {
   Dialog,
@@ -33,6 +33,7 @@ export function RuntimeAddServerDialog({
   onClose,
   onSubmit
 }: RuntimeAddServerDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const takenNames = useAppStore((state) => state.runtimeEnvironments)
   return (
     <Dialog
@@ -46,10 +47,10 @@ export function RuntimeAddServerDialog({
       <DialogContent scrollable>
         <DialogHeader>
           <DialogTitle>
-            {translate('auto.components.settings.serverList.addTitle', 'Add server')}
+            {t('auto.components.settings.serverList.addTitle', 'Add server')}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.settings.serverList.addDescriptionShort',
               'Paste the access link from Share this computer on the other machine.'
             )}

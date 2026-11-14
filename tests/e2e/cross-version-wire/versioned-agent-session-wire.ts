@@ -1,7 +1,7 @@
 import type * as ClientReducer from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import type * as ClientProjection from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import type * as ClientSchemas from '../../../src/shared/agent-session/journal/agent-session-journal-schemas'
-import type { sendPlan } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-mutation-plans'
+import type { sendPlan } from '../../../src/main/native-chat/agent-session-wire/operations/structured-agent-session-mutation-plans'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
@@ -165,7 +165,7 @@ async function loadWorkingTreeBuild(): Promise<AgentSessionWireBuild> {
   const [protocol, dispatcher, methodRegistry] = await Promise.all([
     import('../../../src/shared/protocol-version'),
     import('../../../src/main/runtime/rpc/dispatcher'),
-    import('../../../src/main/runtime/rpc/methods')
+    import('../../../src/main/runtime/rpc/methods/rpc-method-registry')
   ])
   const module = dispatcher as unknown as DispatcherModule
   const methods = methodRegistry.ALL_RPC_METHODS as unknown[]
@@ -190,13 +190,13 @@ async function loadWorkingTreeBuild(): Promise<AgentSessionWireBuild> {
       }),
     installStructuredHost: async (host) => {
       const registry =
-        await import('../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry')
+        await import('../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry')
       applyStructuredHost(registry as unknown as Record<string, unknown>, WORKING_TREE, host)
     },
     admitSend: async (sent) => {
       const [plans, admission] = await Promise.all([
-        import('../../../src/main/native-chat/agent-session-wire/structured-agent-session-mutation-plans'),
-        import('../../../src/main/native-chat/agent-session-wire/structured-agent-session-mutation-admission')
+        import('../../../src/main/native-chat/agent-session-wire/operations/structured-agent-session-mutation-plans'),
+        import('../../../src/main/native-chat/agent-session-wire/operations/structured-agent-session-mutation-admission')
       ])
       return admitSend(plans, admission, sent)
     }
@@ -207,7 +207,7 @@ async function loadReleaseBuild(checkout: ReleaseCheckout): Promise<AgentSession
   const [protocol, dispatcher, methodRegistry] = await Promise.all([
     importReleaseCheckoutModule(checkout, '/src/shared/protocol-version.ts'),
     importReleaseCheckoutModule(checkout, '/src/main/runtime/rpc/dispatcher.ts'),
-    importReleaseCheckoutModule(checkout, '/src/main/runtime/rpc/methods/index.ts')
+    importReleaseCheckoutModule(checkout, '/src/main/runtime/rpc/methods/rpc-method-registry.ts')
   ])
   const module = dispatcher as unknown as DispatcherModule
   const methods = methodRegistry.ALL_RPC_METHODS as unknown[]

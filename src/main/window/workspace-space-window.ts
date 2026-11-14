@@ -1,8 +1,11 @@
 import { mainI18n, translateMain } from '../i18n/main-i18n'
 import { app, BrowserWindow, nativeTheme, type WebContents } from 'electron'
 import { join } from 'node:path'
-import { isBackgroundLaunch, showWindowWithoutStealingFocus } from './foreground-activation-policy'
-import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
+import {
+  isBackgroundLaunch,
+  showWindowWithoutStealingFocus
+} from './activation/foreground-activation-policy'
+import { installPrivilegedWindowNavigationPolicy } from './security/privileged-window-navigation'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
 import type { Store } from '../persistence/loading-store/store'
 import { stepUIZoomLevel, type UIZoomDirection } from '../../shared/ui-zoom-level'

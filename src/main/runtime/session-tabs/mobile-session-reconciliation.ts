@@ -1,11 +1,46 @@
+import { reconcileChatTabIdentities } from '../agent-session/agent-session-tab-identity'
+import { preserveTerminalRetirementProofs } from '../terminal/surface/mobile-session-terminal-retirement-proof'
+import { stampMobileSnapshotVersion } from './mobile-session-snapshot-version'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { startedMainTerminalSurfaces } from '../terminal/surface/main-terminal-surfaces'
+import {
+  headlessMobileSnapshotContentUnchanged,
+  mobileSnapshotIdentityUnchanged
+} from './mobile-session-snapshot-equality'
 import type { OrcaRuntimeWithMergePreservedHeadlessMobileSessionTabs as MergePreservedHeadlessMobileSessionTabsMethods } from './mobile-session-preservation'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as StoredMobileSnapshotHasStalePreservedTabMethods } from './mobile-session-publication-preservation'
 import { OrcaRuntimeWithWriteOrchestrationPointerPty } from '../orchestration/terminal-authority/write-orchestration-pointer-pty'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabsSnapshot } from '../../../shared/runtime-session-contracts'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import { getMobileSessionSnapshotTabIdentityKeys } from '../mobile-session-tab-merge'
+import { getMobileSessionSnapshotTabIdentityKeys } from '../session-lifecycle/projection/mobile-session-tab-merge'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
 
 export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWithWriteOrchestrationPointerPty {
+  storeMobileSessionSnapshot(
+    worktreeId: string,
+    snapshot: RuntimeMobileSessionTabsSnapshot
+  ): RuntimeMobileSessionTabsSnapshot {
+    const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
+    snapshot = reconcileChatTabIdentities(snapshot, existing)
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      const merged = startedMainTerminalSurfaces(this)?.withMainOrder(snapshot) ?? snapshot
+      // Main-order-only rebuilds are no-ops unless occupant/publication/retirement evidence changed.
+      if (
+        existing &&
+        mobileSnapshotIdentityUnchanged(existing, snapshot) &&
+        headlessMobileSnapshotContentUnchanged(existing, merged) &&
+        !headlessMobileSnapshotContentUnchanged(snapshot, merged)
+      ) {
+        return existing
+      }
+      snapshot = merged
+    }
+    snapshot = preserveTerminalRetirementProofs(snapshot, existing)
+    const stamped = stampMobileSnapshotVersion(snapshot, existing)
+    this.mobileSessionTabsByWorktree.set(worktreeId, stamped)
+    return stamped
+  }
+
   protected abstract buildPreservedHeadlessMobileSessionSnapshot(
     ...args: Parameters<
       MergePreservedHeadlessMobileSessionTabsMethods['buildPreservedHeadlessMobileSessionSnapshot']
@@ -44,7 +79,8 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
     snapshots: RuntimeMobileSessionTabsSnapshot[] | undefined,
     unchangedWorktreeIds?: string[],
     resyncWorktreeIds = new Set<string>(),
-    rendererGeneration?: string | null
+    rendererGeneration?: string | null,
+    publishedSnapshots?: RuntimeMobileSessionTabsSnapshot[]
   ): Set<string> {
     const changedWorktreeIds = new Set<string>()
     if (snapshots === undefined) {
@@ -185,7 +221,25 @@ export abstract class OrcaRuntimeWithSyncMobileSessionTabs extends OrcaRuntimeWi
         rendererTabCount: fencedSnapshot.tabs.length,
         rendererTabIdentityKeys: new Set(
           fencedSnapshot.tabs.flatMap((tab) => getMobileSessionSnapshotTabIdentityKeys(tab))
-        )
+        ),
+        ...(this.authoritativeWindowId !== null &&
+        this.authoritativeWindowId !== HEADLESS_RUNTIME_WINDOW_ID &&
+        typeof rendererGeneration === 'string'
+          ? {
+              titlePublisher: {
+                windowId: this.authoritativeWindowId,
+                rendererGeneration,
+                // Main's merge can add rows the window never published or resolved.
+                surfaceIds: new Set(
+                  publishedSnapshots
+                    ?.find((published) => published.worktree === snapshot.worktree)
+                    ?.tabs.flatMap((tab) =>
+                      tab.type === 'terminal' && tab.resolvesSessionTitle ? [tab.id] : []
+                    ) ?? []
+                )
+              }
+            }
+          : {})
       })
     }
     for (const [worktreeId, existing] of Array.from(this.mobileSessionTabsByWorktree)) {

@@ -22,6 +22,8 @@ type MobileStateViewProps = {
   loading?: boolean
   /** Keeps the content centred above a floating bottom bar. */
   bottomInset?: number
+  /** Full-width content under the message, such as a list of choices. */
+  children?: ReactNode
 }
 
 /** Every screen's loading, empty, no-match, error and offline state: icon, title, one sentence, one action. */
@@ -33,7 +35,8 @@ export function MobileStateView({
   details,
   action,
   loading = false,
-  bottomInset = 0
+  bottomInset = 0,
+  children
 }: MobileStateViewProps) {
   useMobileColorScheme()
   return (
@@ -49,6 +52,7 @@ export function MobileStateView({
       {message ? <Text style={styles.message}>{message}</Text> : null}
       {details ? <MobileStateDetails details={details} /> : null}
       {action ? <MobileStateButton label={action.label} onPress={action.onPress} /> : null}
+      {children ? <View style={styles.children}>{children}</View> : null}
     </View>
   )
 }
@@ -119,13 +123,16 @@ export function MobileLoadErrorState({
   )
 }
 
-/** The host is unreachable and nothing is cached: say so and offer a reconnect. */
+/** The host is unreachable and the screen has nothing to show: say so and offer a reconnect. */
 export function MobileOfflineState({
   hostName,
+  message,
   onReconnect,
   bottomInset
 }: {
   hostName?: string | null
+  /** Replaces the default advice, e.g. with when the stored data around this state was read. */
+  message?: string
   onReconnect?: (() => void) | null
   bottomInset?: number
 }) {
@@ -138,10 +145,10 @@ export function MobileOfflineState({
           ? t('common.offline.waitingFor', 'Waiting for {{host}}', { host: hostName })
           : t('common.offline.waiting', 'Waiting for desktop')
       }
-      message={t(
-        'common.offline.message',
-        'Check that your computer is awake and Orca is running.'
-      )}
+      message={
+        message ??
+        t('common.offline.message', 'Check that your computer is awake and Orca is running.')
+      }
       action={
         onReconnect
           ? { label: t('common.offline.reconnect', 'Reconnect'), onPress: onReconnect }
@@ -184,6 +191,10 @@ export function MobileNoMatchState({
 }
 
 const styles = themedStyleSheet(() => ({
+  children: {
+    alignSelf: 'stretch',
+    marginTop: spacing.md
+  },
   state: {
     flex: 1,
     alignItems: 'center',

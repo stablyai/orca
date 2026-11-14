@@ -1,10 +1,11 @@
+import { editorViewPlacement } from '@/store/slices/editor/tabs/editor-view-placement'
 import React, { useCallback, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
-import { useWorkspaceFileBrowserActionPredicate } from '@/lib/file-preview'
+import { useWorkspaceFileBrowserActionPredicate } from '@/lib/browser/documents/file-preview'
 import { useVisibleWorktreeDiffComments } from '../../diff-comments/use-visible-worktree-diff-comments'
-import type { OpenFile } from '@/store/slices/editor'
-import '@/lib/monaco-setup'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import '@/lib/editor/monaco/monaco-setup'
 import type { DiffSection } from '../diff/sections/diff-section-types'
 import {
   EMPTY_GIT_BRANCH_ENTRIES,
@@ -63,9 +64,7 @@ export default function CombinedDiffViewer({
     (s) => s.gitBranchChangesByWorktree[file.worktreeId] ?? EMPTY_GIT_BRANCH_ENTRIES
   )
   const branchSummary = useAppStore((s) => s.gitBranchCompareSummaryByWorktree[file.worktreeId])
-  const openAllDiffs = useAppStore((s) => s.openAllDiffs)
   const openConflictReview = useAppStore((s) => s.openConflictReview)
-  const openBranchAllDiffs = useAppStore((s) => s.openBranchAllDiffs)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const clearDiffComments = useAppStore((s) => s.clearDiffComments)
   // The notes of the copy this diff was read from (the file's server when it names one).
@@ -112,7 +111,6 @@ export default function CombinedDiffViewer({
     setGeneration,
     setSectionHeights,
     setSections,
-    setSideBySide: preferences.setSideBySide,
     succession: buildCombinedDiffViewTabSuccession(file.id, viewStateScopeId),
     viewStateKey
   })
@@ -211,21 +209,28 @@ export default function CombinedDiffViewer({
     shouldAutoReloadFromGitStatus: entrySet.shouldAutoReloadFromGitStatus,
     treeMode: entrySet.treeMode
   })
-  const { handleSectionSaveRef, modifiedEditorsRef, openSection, openSectionPreview } =
-    useCombinedDiffSectionActions({
-      activeGroupId,
-      branchCompare: entrySet.branchCompare,
-      canOpenWorkspaceFileBrowserForPath,
-      commitCompare: entrySet.commitCompare,
-      file,
-      isAllMode: entrySet.isAllMode,
-      isBranchMode: entrySet.isBranchMode,
-      isCommitMode: entrySet.isCommitMode,
-      sections,
-      sectionsRef: registry.sectionsRef,
-      setSectionHeights,
-      setSections
-    })
+  const {
+    handleSectionSaveRef,
+    modifiedEditorsRef,
+    openSection,
+    openSectionPreview,
+    openAlternateDiff
+  } = useCombinedDiffSectionActions({
+    activeGroupId,
+    viewStateScopeId,
+    branchSummary,
+    branchCompare: entrySet.branchCompare,
+    canOpenWorkspaceFileBrowserForPath,
+    commitCompare: entrySet.commitCompare,
+    file,
+    isAllMode: entrySet.isAllMode,
+    isBranchMode: entrySet.isBranchMode,
+    isCommitMode: entrySet.isCommitMode,
+    sections,
+    sectionsRef: registry.sectionsRef,
+    setSectionHeights,
+    setSections
+  })
 
   useCombinedDiffViewPersist({
     combinedGitStatusSignature,
@@ -236,7 +241,6 @@ export default function CombinedDiffViewer({
     scrollContainerRef,
     sectionHeights,
     sections,
-    sideBySide: preferences.sideBySide,
     viewStateKey
   })
   useCombinedDiffScrollPersistence({
@@ -256,23 +260,6 @@ export default function CombinedDiffViewer({
     updateScrollbar,
     viewStateKey
   })
-
-  const openAlternateDiff = useCallback(() => {
-    if (!file.combinedAlternate) {
-      return
-    }
-
-    if (file.combinedAlternate.source === 'combined-all') {
-      openAllDiffs(file.worktreeId, file.filePath)
-      return
-    }
-
-    if (branchSummary && branchSummary.status === 'ready') {
-      openBranchAllDiffs(file.worktreeId, file.filePath, branchSummary, {
-        source: 'combined-all'
-      })
-    }
-  }, [branchSummary, file, openAllDiffs, openBranchAllDiffs])
 
   const { setScrollSurfaceMounted } = notes
   const setScrollContainerRef = useCallback(
@@ -297,9 +284,10 @@ export default function CombinedDiffViewer({
         path: entry.path,
         conflictKind: entry.conflictKind
       })),
-      'combined-diff-exclusion'
+      'combined-diff-exclusion',
+      editorViewPlacement(useAppStore.getState(), file, viewStateScopeId)
     )
-  }, [file.filePath, file.worktreeId, openConflictReview, skippedConflicts])
+  }, [file, viewStateScopeId, openConflictReview, skippedConflicts])
 
   const commitHeader =
     entrySet.isCommitMode && entrySet.commitCompare ? (

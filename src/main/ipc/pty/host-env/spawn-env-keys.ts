@@ -1,5 +1,9 @@
 import { ORCA_AGENT_SESSION_ID_ENV } from '../../../../shared/agent-session/lifecycle/agent-session-caller-env'
 import { ORCA_STRUCTURED_SESSION_ENV } from '../../../../shared/structured-session-marker'
+import {
+  ORCA_SCRUB_SAFE_LAUNCH_ENV,
+  ORCA_SCRUB_SAFE_PANE_ENV
+} from '../../../../shared/agent-hook-listener/transport/agent-hook-scrub-safe-env'
 
 export const AGENT_HOOK_RUNTIME_ENV_KEYS = [
   'ORCA_AGENT_HOOK_PORT',
@@ -12,14 +16,14 @@ export const AGENT_HOOK_RUNTIME_ENV_KEYS = [
   'ORCA_CLAUDE_AGENT_STATUS_SETTINGS'
 ] as const
 
-// Inherited Claude child stamps make an independent pane act as the launching session's child.
-export const CLAUDE_CHILD_SESSION_STAMP_ENV_KEYS = [
-  'CLAUDECODE',
-  'CLAUDE_CODE_CHILD_SESSION',
-  'CLAUDE_CODE_SESSION_ID',
-  'CLAUDE_CODE_BRIDGE_SESSION_ID',
-  'CLAUDE_CODE_EXECPATH',
-  'CLAUDE_CODE_ENTRYPOINT'
+export const AGENT_PANE_HOOK_ENV_KEYS = [
+  'ORCA_PANE_KEY',
+  'ORCA_TAB_ID',
+  'ORCA_WORKTREE_ID',
+  'ORCA_AGENT_LAUNCH_TOKEN',
+  ORCA_SCRUB_SAFE_PANE_ENV,
+  ORCA_SCRUB_SAFE_LAUNCH_ENV,
+  ...AGENT_HOOK_RUNTIME_ENV_KEYS
 ] as const
 
 // Inherited structured-session IDs would make every pane claim the parent orchestration caller.

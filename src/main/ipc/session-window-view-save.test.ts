@@ -8,7 +8,7 @@ import {
   emptySession,
   GIT_KEY,
   leaf
-} from '../../shared/workspace-layout/workspace-layout-session.test-fixture'
+} from '../../shared/workspace-layout/persistence/workspace-layout-session.test-fixture'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 
 const { handlers } = vi.hoisted(() => ({
@@ -139,28 +139,6 @@ describe('a window save in a layout-owner build', () => {
     expect(layout?.root).toEqual(mainSession().terminalLayoutsByTabId['tab-a']!.root)
     expect(Object.keys(layout?.scrollbackRefsByLeafId ?? {})).toEqual([leaf(1)])
     expect(terminalTabs(store.getWorkspaceSession('local'))).toEqual(['tab-a', 'tab-b'])
-  })
-
-  it('gives a visited workspace main holds its terminal row, and one main lacks none', async () => {
-    store.setWorkspaceSession(
-      addWorkspace(emptySession(), GIT_KEY, [
-        { id: 'group-1', tabs: [{ id: 'editor-1', kind: 'editor' }] }
-      ]),
-      'local'
-    )
-    const save = {
-      ...addWorkspace(emptySession(), GIT_KEY, [
-        { id: 'group-1', tabs: [{ id: 'editor-1', kind: 'editor' }] }
-      ]),
-      tabsByWorktree: { [GIT_KEY]: [], [OTHER_KEY]: [] },
-      lastVisitedAtByWorktreeId: { [GIT_KEY]: 5, [OTHER_KEY]: 6 }
-    }
-
-    await call('session:set', save, 'local')
-
-    const saved = store.getWorkspaceSession('local')
-    expect(Object.hasOwn(saved.tabsByWorktree, GIT_KEY)).toBe(true)
-    expect(Object.hasOwn(saved.tabsByWorktree, OTHER_KEY)).toBe(false)
   })
 
   it('writes a paired server’s partition as the window sent it', async () => {

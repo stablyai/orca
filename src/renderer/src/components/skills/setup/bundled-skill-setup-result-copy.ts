@@ -8,12 +8,17 @@ import {
   type BundledSkillOutcomeText
 } from '../../../../../shared/bundled-skill-summary'
 import { collapseHomePath } from '../../../../../shared/bundled-skill-locations'
-import { leaveReasonText, locationPlaceLabel, skillOutcomeText } from '../skill-plan-op-copy'
+import {
+  leaveReasonText,
+  locationPlaceLabel,
+  skillOutcomeText
+} from '../freshness/skill-plan-op-copy'
 import {
   bundledSkillSetupResultHeadline,
   type BundledSkillSetupChanges
 } from './bundled-skill-setup-copy'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { dirname } from '@/lib/path'
 
 const RESULT_HEADLINE_ORDER: readonly BundledSkillOutcomeText[] = [
@@ -23,12 +28,17 @@ const RESULT_HEADLINE_ORDER: readonly BundledSkillOutcomeText[] = [
   'Linked'
 ]
 
+/** Why setup can't finish: the first location Orca must leave and can't replace. */
 export function bundledSkillSetupAttentionMessage(plan: BundledSkillPlan): string {
   const blocked = plan.skills
     .flatMap((entry) => entry.ops)
     .find(
       (op) =>
-        op.kind === 'leave' && !op.replaceable && op.reason && isBundledSkillLeaveReason(op.reason)
+        op.kind === 'leave' &&
+        !op.replaceable &&
+        op.reason !== 'other-build' &&
+        op.reason &&
+        isBundledSkillLeaveReason(op.reason)
     )
   switch (blocked?.reason) {
     case 'unwritable':
@@ -62,6 +72,8 @@ export function bundledSkillSetupAttentionMessage(plan: BundledSkillPlan): strin
         'auto.components.settings.bundledSkillSetupCopy.attentionSharedNotCurrent',
         'Needs attention · The shared copy this folder uses is not Orca’s'
       )
+    // Another build's copy is kept, never a blocker, so it never reaches here; listed for exhaustiveness.
+    case 'other-build':
     case undefined:
       return translate('auto.components.skills.skillPlanOpCopy.needsAttention', 'Needs attention')
   }
@@ -69,7 +81,8 @@ export function bundledSkillSetupAttentionMessage(plan: BundledSkillPlan): strin
 
 export function skillInstallResultLine(
   result: BundledSkillInstallResult,
-  changes?: BundledSkillSetupChanges
+  changes?: BundledSkillSetupChanges,
+  t: Translate = translate
 ): string {
   const summary = summarizeBundledSkillOutcomes(result)
   const texts = new Set(summary.skills.map((skill) => skill.text))
@@ -77,31 +90,31 @@ export function skillInstallResultLine(
   const outcome = result.skills.find((_, index) => summary.skills[index].text === headlineText)
   const headline =
     changes && summary.ok && !texts.has('Needs attention')
-      ? bundledSkillSetupResultHeadline(changes)
+      ? bundledSkillSetupResultHeadline(changes, t)
       : outcome
-        ? skillOutcomeText(outcome)
-        : translate('auto.components.skills.skillPlanOpCopy.keep', 'No change')
+        ? skillOutcomeText(outcome, t)
+        : t('auto.components.skills.skillPlanOpCopy.keep', 'No change')
   const notUpdated = summary.skills.flatMap((skill) => skill.leftAlone)
   if (notUpdated.length === 0) {
     return headline
   }
   const reasons = [...new Set(notUpdated.map((left) => left.code))]
-    .map((reason) => leaveReasonText(reason))
+    .map((reason) => leaveReasonText(reason, t))
     .join('; ')
   if (notUpdated.length > 1) {
-    return translate(
+    return t(
       'auto.components.settings.bundledSkillSetupCopy.resultUpdateSkippedPlaces',
       '{{result}} · Update skipped in {{places}} places: {{reason}}',
       { result: headline, places: notUpdated.length, reason: reasons }
     )
   }
   const location = changes?.notUpdated.find((location) => location.path === notUpdated[0].path)
-  return translate(
+  return t(
     'auto.components.settings.bundledSkillSetupCopy.resultUpdateSkippedAgent',
     '{{result}} · Update skipped in {{agent}}: {{reason}}',
     {
       result: headline,
-      agent: location ? locationPlaceLabel(location) : notUpdated[0].path,
+      agent: location ? locationPlaceLabel(location, t) : notUpdated[0].path,
       reason: reasons
     }
   )

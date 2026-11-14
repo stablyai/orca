@@ -1,7 +1,7 @@
 import {
   StructuredAgentSessionInputNotAdmitted,
   type StructuredAgentSessionAdmitFreshInput
-} from '../../../native-chat/agent-session-wire/structured-agent-session-input-admission'
+} from '../../../native-chat/agent-session-wire/delivery/structured-agent-session-input-admission'
 import type { CodexTurnHost } from './codex-structured-turn-start'
 import type { AgentJournalMessageItem } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { checkDispatchAuthority } from './codex-structured-dispatch-authority'
@@ -32,6 +32,13 @@ export async function steerCodexTurn(
         return { kind: 'acquire' as const, reason: 'permission' as const }
       }
       checkDispatchAuthority(host, input.clientMessageId, input.signal, input.isCurrent)
+      host.dispatchEchoes.expect(
+        input.clientMessageId,
+        host.threadId,
+        'steer',
+        turnInputFor(host, input.body),
+        expectedTurnId
+      )
       return {
         kind: 'sent' as const,
         response: host.connection.request(

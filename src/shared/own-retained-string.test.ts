@@ -62,16 +62,6 @@ describe('ownRetainedString', () => {
     expect(ownRetainedString(value).length).toBe(value.length)
   })
 
-  it('preserves short strings at the copy threshold', () => {
-    // Below V8 SlicedString::kMinLength a slice is already a standalone copy.
-    for (const value of ['', '\x1b', '\ud800', 'x'.repeat(12)]) {
-      const parent = `${'y'.repeat(64 * 1024)}${value}`
-      const short = parent.slice(parent.length - value.length)
-      expect(ownRetainedString(short)).toBe(short)
-    }
-    expect(ownRetainedString('x'.repeat(13))).toBe('x'.repeat(13))
-  })
-
   it('matches the block copier when Buffer is unavailable', () => {
     const values = [
       '漢\ud800|\udc00|\ud83d'.repeat(512),

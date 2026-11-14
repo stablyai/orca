@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { PluginHostListEntry } from '../../../../../preload/api-types'
+import type { PluginHostListEntry } from '../../../../../shared/plugins/plugin-list-entry'
 import { usePluginReviewQueue } from './use-plugin-review-queue'
 
 let root: Root | null = null
@@ -47,9 +47,9 @@ describe('usePluginReviewQueue', () => {
     expect(queue?.reviewKey).toBe('a')
 
     // Why: "b" was approved elsewhere meanwhile, so only "c" still needs review.
-    await act(async () => queue?.advance([pending('c')]))
+    await act(async () => queue?.advance('a', [pending('c')]))
     expect(queue?.reviewKey).toBe('c')
-    await act(async () => queue?.advance([]))
+    await act(async () => queue?.advance('c', []))
     expect(queue?.reviewKey).toBeNull()
   })
 })

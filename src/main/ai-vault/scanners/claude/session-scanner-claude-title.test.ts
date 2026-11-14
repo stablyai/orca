@@ -3,7 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { scanAiVaultSessions } from '../../session-scanner'
-import { isolatedScanRoots, writeJsonlFile } from '../../session-scanner-test-fixtures'
+import {
+  isolatedScanRoots,
+  writeJsonlFile
+} from '../../scanner-fixtures/session-scanner-test-fixtures'
 
 let tempRoots: string[] = []
 
@@ -13,7 +16,7 @@ afterEach(async () => {
 })
 
 describe('scanAiVaultSessions Claude title selection', () => {
-  it('prefers the latest generated ai-title over the first user prompt, but a custom-title wins over both', async () => {
+  it('prefers the latest generated ai-title over the first user prompt, but a custom-title wins over both, and marks which is a name', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-ai-title-'))
     tempRoots.push(root)
     const roots = isolatedScanRoots(root)
@@ -62,12 +65,28 @@ describe('scanAiVaultSessions Claude title selection', () => {
       }
     ])
 
+    await writeJsonlFile(join(projectDir, 'prompt.jsonl'), [
+      {
+        type: 'user',
+        sessionId: 'prompt',
+        timestamp: '2026-05-01T12:00:00.000Z',
+        cwd: '/tmp/claude',
+        message: { role: 'user', content: 'Unnamed session prompt' }
+      }
+    ])
+
     const result = await scanAiVaultSessions({ ...roots, platform: 'darwin' })
 
     expect(result.issues).toEqual([])
-    expect(result.sessions.map((session) => session.title).sort()).toEqual([
-      'Updated karma discussion title',
-      'User set title'
+    // Renames and generated names are the session's own; a prompt only stands in until one exists.
+    expect(
+      result.sessions
+        .map((session) => [session.title, session.titleKind])
+        .sort(([a], [b]) => String(a).localeCompare(String(b)))
+    ).toEqual([
+      ['Unnamed session prompt', 'fallback'],
+      ['Updated karma discussion title', 'named'],
+      ['User set title', 'named']
     ])
   })
 })

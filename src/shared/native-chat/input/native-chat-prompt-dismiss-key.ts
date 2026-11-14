@@ -9,7 +9,9 @@ export function nativeChatCardDismissKey(card: InteractivePromptCard): string | 
   if (card.kind === 'question') {
     return nativeChatAskDismissKey(card.prompt)
   }
-  return `approval:${card.approval.title}:${card.approval.detail ?? ''}`
+  // Startup menus share one title and differ only in description; options re-aim within one occurrence.
+  const { title, detail, description } = card.approval
+  return `approval:${JSON.stringify([title, detail ?? '', description ?? ''])}`
 }
 
 /** The host wait's start for a status-backed card; identical prompt text may belong to separate waits. */

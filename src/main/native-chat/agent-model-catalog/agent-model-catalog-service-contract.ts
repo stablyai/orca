@@ -62,16 +62,12 @@ export type AgentModelCatalogService = {
 
 export type AgentModelCatalogReadParams = {
   agent: string
+  /** Older readers follow only actual wait expiry, so retain their terminal wait. */
+  progress?: boolean
   records?: AgentModelCatalogReadRecords | null
   operation?: AgentModelCatalogReadOperation
   /** Original explicit operation budget, shared with compatibility saved-scope continuation. */
   deadline?: number
-  /** Internal selector resolution; never part of the wire contract. */
-  workspace?: {
-    selector: string
-    identity: () => unknown
-    resolve: () => Promise<string | null | { path: string | null; identity: unknown }>
-  }
   sessionId?: string
   /** Capability observation only; never changes the chat's selected input. */
   selectedModel?: string

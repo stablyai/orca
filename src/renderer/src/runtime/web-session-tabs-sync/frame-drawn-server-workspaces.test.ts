@@ -10,19 +10,19 @@ import {
   makeSnapshot,
   makeState,
   resetWebSessionTabsSyncTestState
-} from '../web-session-tabs-sync-test-harness'
+} from './testing/web-session-tabs-sync.test-fixture'
 import { applyWebSessionTabsSnapshot } from './snapshot-api'
 import { decideWebSessionTabsSnapshot } from './tracking-decisions'
 import type { WebSessionTabsSyncState } from './state'
 import './tracking-mappings'
-import '../web-session-close-intent'
-import '../web-session-focus-intent'
+import './closing/web-session-close-intent'
+import './navigation/web-session-focus-intent'
 import {
   isFrameDrawnServerWorkspace,
   resetFrameDrawnServerWorkspacesForTests,
-  resyncMirroredServerWorkspace,
   setFrameDrawnServerWorkspaces
-} from './frame-drawn-server-workspaces'
+} from './frame-drawn-server-workspace-set'
+import { resyncMirroredServerWorkspace } from './frame-drawn-server-workspaces'
 
 const hoisted = vi.hoisted(() => ({
   layoutOwnerIsMain: true,
@@ -35,7 +35,7 @@ vi.mock('../../../../shared/layout-owner-switch', () => ({
   }
 }))
 vi.mock('../../store', () => ({ useAppStore: { setState: vi.fn() } }))
-vi.mock('../web-runtime-session-snapshot', () => ({
+vi.mock('./inventory/web-runtime-session-snapshot', () => ({
   refreshWebRuntimeSessionTabsSnapshot: hoisted.refresh
 }))
 
@@ -107,21 +107,6 @@ describe('frame-drawn server workspaces', () => {
     hoisted.refresh.mockReset()
     resetWebSessionTabsSyncTestState()
     resetFrameDrawnServerWorkspacesForTests()
-  })
-
-  it('keeps a repeated sender publication and unchanged frame status as a no-op', () => {
-    const snapshot = {
-      ...shell('a', 2),
-      agentSenderAssociations: {
-        associations: [],
-        principals: [],
-        attachments: [],
-        revision: { epoch: 'host', revision: 1 }
-      }
-    }
-    const previous = frameDrawnStore()
-    const store = merge(previous, applyWebSessionTabsSnapshot(previous, snapshot, ENV, NOW))
-    expect(applyWebSessionTabsSnapshot(store, snapshot, ENV, NOW)).toBe(store)
   })
 
   it('hands a workspace back: the snapshot replaces the frame tree in one write', async () => {

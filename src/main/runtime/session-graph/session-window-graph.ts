@@ -1,12 +1,12 @@
-import { OrcaRuntimeWithAttachWindow } from './session-graph-promotion'
+import { OrcaRuntimeWithAdmitWindowPublisher } from './session-window-publisher'
 import type {
   RuntimeRendererSyncWindowGraph,
   RuntimeSyncedTab,
   RuntimeSyncWindowGraph,
   RuntimeSyncWindowGraphResult
 } from '../../../shared/runtime-session-contracts'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
-import type { RuntimeLeafRecord } from '../runtime-terminal-state-records'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
+import type { RuntimeLeafRecord } from '../terminal/records/runtime-terminal-state-records'
 
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 
@@ -23,7 +23,7 @@ function assertUniqueRuntimeGraphTabIds(tabs: readonly RuntimeSyncedTab[]): void
   }
 }
 
-export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow {
+export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAdmitWindowPublisher {
   /** Layout-owner builds: main's panes in place of the window's (session-tabs-inventory.ts). */
   protected abstract withMainSurfaces(windowId: number, graph: Graph): Graph
   declare protected terminalGroupGridSizes?: RuntimeSyncWindowGraph['terminalGroupGridSizes']
@@ -52,36 +52,9 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
   ): RuntimeSyncWindowGraphResult {
     // Reject duplicate bare tab ids before mutating authority/state or indexes could route PTYs to the wrong worktree.
     assertUniqueRuntimeGraphTabIds(graph.tabs)
-    if (
-      windowId !== HEADLESS_RUNTIME_WINDOW_ID &&
-      this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID &&
-      this.headlessGraphFallbackAvailable
-    ) {
-      if (windowId !== this.pendingHeadlessPromotionWindowId) {
-        throw new Error('Runtime graph publisher does not match the pending desktop promotion')
-      }
-      // Accept late healthy graphs after failed promotion restores headless authority.
-      this.attachWindow(windowId)
-    }
-    if (this.authoritativeWindowId === null) {
-      this.authoritativeWindowId = windowId
-    }
-    if (windowId !== this.authoritativeWindowId) {
-      throw new Error('Runtime graph publisher does not match the authoritative window')
-    }
-    const rendererGeneration =
-      windowId === HEADLESS_RUNTIME_WINDOW_ID
-        ? null
-        : 'rendererGeneration' in graph && typeof graph.rendererGeneration === 'string'
-          ? graph.rendererGeneration
-          : undefined
-    if (
-      typeof rendererGeneration === 'string' &&
-      rendererGeneration === this.rendererGeneration &&
-      this.graphStatus !== 'ready'
-    ) {
-      throw new Error('Runtime graph publisher belongs to a superseded renderer generation')
-    }
+    const rendererGeneration = this.admitWindowPublisher(windowId, graph)
+    const previousTitleAuthority = this.captureSessionTitleAuthority()
+    const publishedMobileSessionTabs = graph.mobileSessionTabs
     if (windowId === HEADLESS_RUNTIME_WINDOW_ID) {
       this.headlessGraphFallbackAvailable = true
       this.servesHeadlessGraph = true
@@ -110,7 +83,8 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
       graph.mobileSessionTabs,
       graph.unchangedMobileSessionWorktrees,
       mobileSessionResyncWorktrees,
-      rendererGeneration
+      rendererGeneration,
+      publishedMobileSessionTabs
     )
     const nextLeaves = new Map<string, RuntimeLeafRecord>()
     const graphSyncedAt = this.nextTitleObservationSequence()
@@ -278,11 +252,6 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
       })
       changedMobileWorktrees.add(worktreeId)
     }
-    for (const worktreeId of changedMobileWorktrees) {
-      if (this.mobileSessionTabsByWorktree.has(worktreeId)) {
-        this.scheduleMobileSessionTabsChanged(worktreeId)
-      }
-    }
     const isAuthoritativeGraphPublisher = windowId === this.authoritativeWindowId
     this.markGraphReady(windowId)
     if (
@@ -298,8 +267,17 @@ export abstract class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAtta
     if (rendererGeneration !== undefined) {
       this.rendererGeneration = rendererGeneration
     }
+    this.republishSessionTitleAuthorityChanges(previousTitleAuthority, changedMobileWorktrees)
+    for (const worktreeId of changedMobileWorktrees) {
+      if (this.mobileSessionTabsByWorktree.has(worktreeId)) {
+        this.scheduleMobileSessionTabsChanged(worktreeId)
+      }
+    }
     for (const leaf of this.leaves.values()) {
       this.adoptPreAllocatedHandle(leaf)
+      if (leaf.ptyId && this._orchestrationDb?.hasAnyDispatchContexts()) {
+        this.issueHandle(leaf)
+      }
       const previousLeaf = previousLeaves.get(this.getLeafKey(leaf.tabId, leaf.leafId))
       // A pane newly showing a terminal can bind it to the pane's Run or Dispatch mailbox.
       if (

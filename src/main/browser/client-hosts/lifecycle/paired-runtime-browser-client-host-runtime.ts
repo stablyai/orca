@@ -7,7 +7,10 @@ import {
   BROWSER_CLIENT_EXPECT_URL_HOST_CAPABILITY
 } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
 import { BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY } from '../../../../shared/browser/client-hosting/browser-client-file-channel-protocol'
-import type { BrowserClientHostLeaseAuthority } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
+import {
+  BROWSER_CLIENT_PAGE_INITIALIZATION_CAPABILITY,
+  type BrowserClientHostLeaseAuthority
+} from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import type { PairedRuntimeConnection } from '../../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import {
   getPreferredPairedRuntimeConnection,
@@ -25,8 +28,8 @@ import { BrowserClientFileChannelTransport } from '../file-transfers/browser-cli
 import { registerBrowserClientHostEnvironmentRoutes } from './browser-client-host-environment-routes'
 import { BrowserClientPageCommandExecutor } from '../../client-pages/execution/browser-client-page-command-executor'
 import { createBrowserClientPageGuestBinding } from '../../client-pages/lifecycle/browser-client-page-guest-binding'
-import { browserManager } from '../../browser-manager'
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { BrowserClientUploadStaging } from '../file-transfers/browser-client-upload-staging'
 import {
   executeBrowserClientPageAutomation,
@@ -122,12 +125,14 @@ const browserClientHosts =
             browserHostClientId: getBrowserClientHostId(),
             hostCapabilities: [
               'webview',
+              BROWSER_CLIENT_PAGE_INITIALIZATION_CAPABILITY,
               BROWSER_CLIENT_PROFILE_SWITCH_CAPABILITY,
               BROWSER_CLIENT_AUTOMATION_HOST_CAPABILITY,
               BROWSER_CLIENT_EXPECT_URL_HOST_CAPABILITY,
               BROWSER_CLIENT_FILE_CHANNEL_HOST_CAPABILITY
             ],
             handler,
+            acquireInitialization: (event) => executor?.acquireInitialization(event),
             getPageInventory,
             pageReconciliationProtocolVersion: 1,
             fileChannelProtocolVersion: 1,

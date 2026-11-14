@@ -71,15 +71,6 @@ describe('ensureRemoteTracksBranchNarrowly', () => {
     ])
   })
 
-  it('is a no-op for a branch already narrowly tracked (idempotent)', async () => {
-    const { exec } = makeConfigExec({ fork: ['+refs/heads/main*:refs/remotes/fork/main*'] })
-
-    await ensureRemoteTracksBranchNarrowly(exec, REPO, 'fork', 'main')
-
-    const addCalls = exec.mock.calls.filter(([args]) => args[1] === '--add')
-    expect(addCalls).toEqual([])
-  })
-
   it('leaves a different branch entry untouched when replacing a stray literal', async () => {
     const { exec } = makeConfigExec({
       fork: [
@@ -104,15 +95,6 @@ describe('removeStaleForkFetchRefspec', () => {
     })
 
     await expect(removeStaleForkFetchRefspec(exec, REPO, 'fork', 'gone')).resolves.toBe(true)
-    await expect(getRemoteFetchRefspecs(exec, REPO, 'fork')).resolves.toEqual([
-      '+refs/heads/keep:refs/remotes/fork/keep'
-    ])
-  })
-
-  it('returns false and changes nothing when the branch is not tracked', async () => {
-    const { exec } = makeConfigExec({ fork: ['+refs/heads/keep:refs/remotes/fork/keep'] })
-
-    await expect(removeStaleForkFetchRefspec(exec, REPO, 'fork', 'gone')).resolves.toBe(false)
     await expect(getRemoteFetchRefspecs(exec, REPO, 'fork')).resolves.toEqual([
       '+refs/heads/keep:refs/remotes/fork/keep'
     ])

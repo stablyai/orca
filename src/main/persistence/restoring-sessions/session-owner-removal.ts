@@ -6,7 +6,7 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import '../../../shared/workspace-session/workspace-session-partition-owner'
-import { isWslMoveWorkspaceSessionFrozen } from '../moving-wsl-projects/wsl-move-scope-guard'
+import { isWslMoveWorkspaceSessionFrozen } from '../moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { cloneWorkspaceSessionState, deleteOwnerKeyedSessionFields } from './session-owner-fields'
 
 /** Frozen WSL sessions must survive pruning for downgrade. */

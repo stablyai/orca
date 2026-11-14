@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import {
   startAgentHibernationCoordinator,
   stopAgentHibernationCoordinator
-} from '@/lib/agent-hibernation-coordinator'
+} from '@/lib/agent-session/hibernation/agent-hibernation-coordinator'
 
 export function AgentHibernationGate(): null {
   const enabled = useAppStore((state) => state.settings?.experimentalAgentHibernation === true)

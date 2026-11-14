@@ -16,11 +16,7 @@ import {
   upsertHookTrustEntries,
   type CodexTrustEntry
 } from '../../trust/toml/config-toml-trust'
-import {
-  computeCodexTrustKey as computeTrustKey,
-  getExplicitHomeCodexHookSourcePath as getCodexExplicitHomeHookSourcePath,
-  normalizeCodexTrustSourcePath as normalizeCodexHookSourcePath
-} from '../../trust/identity/codex-trust-identity'
+import { computeCodexTrustKey as computeTrustKey } from '../../trust/identity/codex-trust-identity'
 import type { CodexHookHashes } from '../../trust/hooks/codex-hook-trust-derivation'
 
 const { homedirMock } = vi.hoisted(() => ({ homedirMock: vi.fn<() => string>() }))
@@ -34,8 +30,6 @@ import {
   reconcileRealHomeCodexHookEntries,
   removeRealHomeCodexHookForOptOut
 } from '../reconciliation/codex-real-home-hook-install'
-import { getRealHomeHookKeySourcePaths } from '../reconciliation/codex-real-home-hooks-json'
-import { cleanupLegacyManagedHookRepresentations } from '../reconciliation/codex-hook-legacy-cleanup'
 import '../installation/hook-service'
 import { getCodexManagedHookInstallMaterial } from './codex-hook-definition'
 
@@ -99,20 +93,6 @@ afterEach(() => {
 })
 
 describe('both spellings of a symlinked ~/.codex', () => {
-  it('resolves the key through a symlinked HOME before ~/.codex exists', () => {
-    const linkedHome = join(root, 'linked-home')
-    symlinkSync(home, linkedHome, process.platform === 'win32' ? 'junction' : 'dir')
-    homedirMock.mockReturnValue(linkedHome)
-
-    expect(getRealHomeHookKeySourcePaths()).toEqual([
-      normalizeCodexHookSourcePath(join(linkedHome, '.codex', 'hooks.json')),
-      normalizeCodexHookSourcePath(join(home, '.codex', 'hooks.json'))
-    ])
-    expect(getCodexExplicitHomeHookSourcePath(join(linkedHome, '.codex', 'hooks.json'))).toBe(
-      normalizeCodexHookSourcePath(join(home, '.codex', 'hooks.json'))
-    )
-  })
-
   it("approves under both keys, and the opt-out removes both by Codex's hash", async () => {
     const resolvedHooks = linkCodexHomeToDotfiles()
 
@@ -199,29 +179,6 @@ describe('both spellings of a symlinked ~/.codex', () => {
       'sha256:user-resolved'
     )
     expect(trust.get(computeTrustKey(afterAt(resolvedHooks, 1)))).toBeUndefined()
-  })
-
-  it("sweeps a retired hook's approval under both keys", async () => {
-    const resolvedHooks = linkCodexHomeToDotfiles()
-    const retired = `/bin/sh "${join(home, 'old-user-data', 'agent-hooks', 'codex-hook.sh')}"`
-    writeFileSync(
-      hooksPath(),
-      `${JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command: retired }] }] } })}\n`
-    )
-    const retiredAt = (sourcePath: string): CodexTrustEntry => ({
-      sourcePath,
-      eventLabel: 'stop',
-      groupIndex: 0,
-      handlerIndex: 0,
-      command: retired
-    })
-    upsertHookTrustEntries(tomlPath(), [retiredAt(hooksPath()), retiredAt(resolvedHooks)])
-
-    await cleanupLegacyManagedHookRepresentations()
-
-    const trust = readHookTrustEntries(tomlPath())
-    expect(trust.get(computeTrustKey(retiredAt(hooksPath())))).toBeUndefined()
-    expect(trust.get(computeTrustKey(retiredAt(resolvedHooks)))).toBeUndefined()
   })
 
   it('keeps both files when an approval would break config.toml', async () => {

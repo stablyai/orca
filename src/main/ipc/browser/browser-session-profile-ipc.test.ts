@@ -1,3 +1,4 @@
+// @orca-isolated-worker: browser registration retains grant listeners bound to this file's mocks.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -16,25 +17,26 @@ const {
   setBrowserIdentityModeMock: vi.fn(async () => ({ ok: true }))
 }))
 
-vi.mock('../../browser/identity/browser-identity-mode-store', () => ({
+vi.mock('../../browser/identity/mode/browser-identity-mode-store', () => ({
   setBrowserIdentityMode: setBrowserIdentityModeMock,
   getBrowserIdentityModeStatus: vi.fn(() => ({ identity: {}, migrationNotice: null }))
 }))
 
+vi.mock('./browser-passwords-ipc', () => ({ registerBrowserPasswordsHandlers: vi.fn() }))
 vi.mock('electron', () => ({
   BrowserWindow: { fromWebContents: vi.fn() },
   ipcMain: { handle: handleMock, removeHandler: removeHandlerMock },
   webContents: { fromId: vi.fn() }
 }))
 
-vi.mock('../../browser/browser-manager', () => ({
+vi.mock('../../browser/guest-lifecycle/manager/browser-manager', () => ({
   browserCertificateTrustController: { proceed: vi.fn() },
   browserManager: {
     getWebContentsIdByTabId: vi.fn(() => new Map())
   }
 }))
 
-vi.mock('../../browser/sessions/browser-session-registry', () => ({
+vi.mock('../../browser/sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: {
     createProfile: createProfileMock
   }
@@ -44,12 +46,18 @@ vi.mock('../../browser/client-hosts/lifecycle/paired-runtime-browser-client-host
   getPairedRuntimeBrowserClientRouteIdentity: routeIdentityMock
 }))
 
-vi.mock('../../browser/cookies/browser-cookie-import', () => ({
+vi.mock('../../browser/cookies/sources/browser-cookie-detection', () => ({
   detectInstalledBrowsers: detectBrowsersMock,
-  importCookiesFromBrowser: vi.fn(),
-  importCookiesFromFile: vi.fn(),
-  pickCookieFile: vi.fn(),
   selectBrowserProfile: vi.fn()
+}))
+vi.mock('../../browser/cookies/browser-cookie-import', () => ({
+  importCookiesFromBrowser: vi.fn()
+}))
+vi.mock('../../browser/cookies/imports/import-cookie-file', () => ({
+  importCookiesFromFile: vi.fn()
+}))
+vi.mock('../../browser/cookies/imports/cookie-file-picker', () => ({
+  pickCookieFile: vi.fn()
 }))
 
 import { registerBrowserHandlers } from './browser'
@@ -81,7 +89,7 @@ describe('browser session profile IPC', () => {
     event: { sender: Electron.WebContents },
     mode: unknown
   ) => Promise<unknown> {
-    registerBrowserHandlers()
+    registerBrowserHandlers({ getSettings: vi.fn() })
     return handleMock.mock.calls.find(([channel]) => channel === 'browser:identity:set')?.[1]
   }
 
@@ -98,7 +106,7 @@ describe('browser session profile IPC', () => {
     event: { sender: Electron.WebContents },
     args: { environmentId: string }
   ) => unknown {
-    registerBrowserHandlers()
+    registerBrowserHandlers({ getSettings: vi.fn() })
     return handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:session:detectBrowsersForClientHost'
     )?.[1]

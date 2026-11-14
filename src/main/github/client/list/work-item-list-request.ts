@@ -1,13 +1,14 @@
 import type { ClassifiedError } from '../../../../shared/classified-error'
 import type { IssueSourcePreference } from '../../../../shared/repo-types'
-import type { ParsedTaskQuery } from '../../../../shared/task-query'
-import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/work-items'
+import type { ParsedTaskQuery } from '../../../../shared/work-items/task-query'
+import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/github/work-items/work-item-ssh-error'
 import { shouldProbeGitRemote } from '../../../git/remotes/remote-name-listing'
-import type { LocalGitExecOptions, OwnerRepo } from '../../gh-utils'
+import type { LocalGitExecOptions } from '../../repositories/github-repository-identity'
+import type { GitHubRepositoryIdentity as OwnerRepo } from '../../../../shared/github/repositories/repository-identity'
 import {
   getGitHubApiRepositoryForRemote,
   getOriginGitHubApiRepository
-} from '../../github-api-repository'
+} from '../../repositories/github-api-repository-remote-probe'
 import { WORK_ITEM_PR_LIST_JSON_FIELDS, type MainWorkItem } from './../map/work-item-field-coercion'
 import { WORK_ITEM_NUMBER_SORT_QUALIFIER, quoteGitHubSearchValue } from './work-item-search-query'
 export type WorkItemListRequest = {

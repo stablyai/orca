@@ -5,28 +5,25 @@ import type {
   GitStatusResult
 } from '../../../shared/git/status/git-status-types'
 import type { GitDiffResult } from '../../../shared/git/diff/git-diff-compare-types'
-import type {
-  GitHistoryOptions,
-  GitHistoryResult
-} from '../../../shared/git/history/git-history-types'
 import type { GitStatusRefBindingRequest as GitStatusUpstreamRefWatchRequest } from '../worktrees/git/worktree-git-status-ref-watch'
-import type { GitAdmissionTier } from '../../git/command-runner/git-exec-options'
-import { getStatus } from '../../git/source-control/status-read'
-import { getSubmoduleStatus } from '../../git/source-control/submodule-status'
+import type { GitAdmissionTier } from '../../../shared/rpc-contract/source-control/git-admission-tier-params'
+import { getStatus } from '../../git/source-control/status/status-read'
+import { getSubmoduleStatus } from '../../git/source-control/submodules/submodule-status'
 import {
   abortMerge,
   abortRebase,
   detectConflictOperation
-} from '../../git/source-control/git-conflict-operation'
-import { getDiff } from '../../git/source-control/file-diff'
-import { getHistory } from '../../git/history'
+} from '../../git/source-control/mutations/git-conflict-operation'
+import { getDiff } from '../../git/source-control/diffs/file-diff'
+import { registerFilesystemGitHistoryHandlers } from './filesystem-git-history-handlers'
+import { registerFilesystemGitAtRiskLocalFilesHandlers } from './filesystem-git-at-risk-local-files-handlers'
 import { isGitWorktreeMutationInFlight } from '../../git/command-runner/git-worktree-mutation-state'
 import type { GitMutationInFlight } from '../../../shared/git/commands/git-mutation-in-flight'
-import { checkIgnoredPaths } from '../../git/source-control/check-ignored-paths'
+import { checkIgnoredPaths } from '../../git/source-control/ignores/check-ignored-paths'
 import {
   appendFolderToGitignore,
   findKnownHugeFolderPathsToIgnore
-} from '../../git/huge-folder-ignore'
+} from '../../git/source-control/ignores/huge-folder-ignore'
 import { resolveRegisteredWorktreePath } from '../worktrees/removal/registered-worktree-roots-cache'
 import { validateGitRelativeFilePath } from './access/filesystem-path-containment'
 import {
@@ -49,6 +46,8 @@ import {
 
 export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerContext): void {
   const { store, gitStatusCancellations } = context
+  registerFilesystemGitHistoryHandlers(context)
+  registerFilesystemGitAtRiskLocalFilesHandlers(context)
   ipcMain.handle(
     'git:status',
     async (
@@ -187,33 +186,6 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
     async (_event, args: { worktreePath: string; folderName: string }): Promise<boolean> => {
       const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
       return appendFolderToGitignore(worktreePath, args.folderName)
-    }
-  )
-
-  ipcMain.handle(
-    'git:history',
-    async (
-      _event,
-      args: {
-        worktreePath: string
-        connectionId?: string
-        /** Refresh: a user act that may start a stopped WSL distro. */
-        wakeWslDistro?: boolean
-      } & GitHistoryOptions
-    ): Promise<GitHistoryResult> => {
-      const options: GitHistoryOptions = {
-        limit: args.limit,
-        baseRef: args.baseRef,
-        branchOnly: args.branchOnly,
-        skip: args.skip
-      }
-      requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      return readWorktreeGitUnlessWslStopped(
-        store,
-        args.worktreePath,
-        args.wakeWslDistro,
-        (worktreePath, gitOptions) => getHistory(worktreePath, { ...options, ...gitOptions })
-      )
     }
   )
 

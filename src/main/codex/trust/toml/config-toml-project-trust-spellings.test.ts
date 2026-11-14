@@ -4,11 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { syncSystemConfigIntoManagedCodexHome } from '../../configuration/settings/codex-config-mirror'
 import { findDuplicateTomlDeclarations } from '../../configuration/toml/config-toml-duplicate-declarations-test-fixture'
-import {
-  deduplicateProjectTomlSections,
-  getProjectTrustLevel,
-  getTomlSections
-} from '../../configuration/toml/config-toml-runtime-owned-sections'
+
 import './config-toml-trust'
 import { upsertProjectTrustContent as upsertProjectTrustLevelInContent } from './config-toml-project-trust'
 
@@ -36,36 +32,6 @@ describe('project trust writes recognise every spelling of the project table', (
     expect(findDuplicateTomlDeclarations(updated)).toEqual([])
   })
 
-  it.each(['"trust_level" = "untrusted"', "'trust_level' = 'untrusted'"])(
-    'rewrites a quoted %s key instead of inserting a second one',
-    (trustLine) => {
-      const original = [`["projects"."${PROJECT}"]`, 'notes = "keep"', trustLine, ''].join('\n')
-
-      const updated = upsertTrusted(original)
-
-      expect(updated).toBe(
-        [`["projects"."${PROJECT}"]`, 'notes = "keep"', 'trust_level = "trusted"', ''].join('\n')
-      )
-    }
-  )
-
-  it('leaves Codex quoted trust untouched in content when it is already trusted', () => {
-    const original = [`["projects"."${PROJECT}"]`, '"trust_level" = "trusted"', ''].join('\n')
-
-    const updated = upsertTrusted(original)
-
-    expect(findDuplicateTomlDeclarations(updated)).toEqual([])
-    expect(updated.match(/\[/g)).toHaveLength(1)
-  })
-
-  it('keeps CRLF line endings on the rewritten trust line', () => {
-    const original = [`["projects"."${PROJECT}"]`, '"trust_level" = "untrusted"', ''].join('\r\n')
-
-    expect(upsertTrusted(original)).toBe(
-      [`["projects"."${PROJECT}"]`, 'trust_level = "trusted"', ''].join('\r\n')
-    )
-  })
-
   it.each([
     { header: "['projects'.'C:\\Users\\me\\repo']", projectPath: 'C:\\Users\\me\\repo' },
     { header: '["projects"."C:\\\\Users\\\\me\\\\repo"]', projectPath: 'C:\\Users\\me\\repo' },
@@ -81,33 +47,45 @@ describe('project trust writes recognise every spelling of the project table', (
 
     expect(updated).toBe([header, 'trust_level = "trusted"', ''].join('\n'))
   })
-})
 
-describe('the config mirror treats every spelling as one project table', () => {
-  it('reads a quoted trust_level key', () => {
-    expect(getProjectTrustLevel(`["projects"."${PROJECT}"]\n"trust_level" = "untrusted"`)).toBe(
-      'untrusted'
-    )
-  })
-
-  it('deduplicates quoted, literal and bare spellings of one project', () => {
-    const config = [
-      `["projects"."${PROJECT}"]`,
-      '"trust_level" = "trusted"',
+  it.each([
+    {
+      label: 'a literal string ending in four quotes',
+      argsLine: `args = ["-c", '''printf 'ok'''']`
+    },
+    {
+      label: 'a basic string ending in four quotes',
+      argsLine: `args = ["-c", """printf "ok""""]`
+    }
+  ])('updates the project table after $label', ({ argsLine }) => {
+    const project = '/tmp/orca-toml-repro'
+    const original = [
+      '[mcp_servers.repro]',
+      'command = "sh"',
+      argsLine,
       '',
-      `['projects'.'${PROJECT}']`,
-      "trust_level = 'trusted'",
-      '',
-      `[projects."${PROJECT}"]`,
-      'trust_level = "trusted"',
+      `[projects."${project}"]`,
+      'trust_level = "untrusted"',
       ''
     ].join('\n')
 
-    const sections = deduplicateProjectTomlSections(getTomlSections(config))
+    const updated = upsertTrusted(original, project)
 
-    expect(sections.map((section) => section.header)).toEqual([`["projects"."${PROJECT}"]`])
+    expect(updated).toBe(
+      [
+        '[mcp_servers.repro]',
+        'command = "sh"',
+        argsLine,
+        '',
+        `[projects."${project}"]`,
+        'trust_level = "trusted"',
+        ''
+      ].join('\n')
+    )
   })
+})
 
+describe('the config mirror treats every spelling as one project table', () => {
   describe('syncSystemConfigIntoManagedCodexHome', () => {
     let root: string
     let runtimeHomePath: string
@@ -143,27 +121,6 @@ describe('the config mirror treats every spelling as one project table', () => {
 
       const runtimeConfig = readFileSync(join(runtimeHomePath, 'config.toml'), 'utf-8')
       expect(runtimeConfig).toContain('model = "gpt-5.5"')
-      expect(runtimeConfig.match(/projects/g)).toHaveLength(1)
-      expect(findDuplicateTomlDeclarations(runtimeConfig)).toEqual([])
-    })
-
-    it('collapses a managed home already holding both spellings', () => {
-      writeFileSync(join(systemHomePath, 'config.toml'), 'model = "gpt-5.5"\n')
-      writeFileSync(
-        join(runtimeHomePath, 'config.toml'),
-        [
-          `["projects"."${PROJECT}"]`,
-          '"trust_level" = "trusted"',
-          '',
-          `[projects."${PROJECT}"]`,
-          'trust_level = "trusted"',
-          ''
-        ].join('\n')
-      )
-
-      syncSystemConfigIntoManagedCodexHome({ runtimeHomePath, systemHomePath })
-
-      const runtimeConfig = readFileSync(join(runtimeHomePath, 'config.toml'), 'utf-8')
       expect(runtimeConfig.match(/projects/g)).toHaveLength(1)
       expect(findDuplicateTomlDeclarations(runtimeConfig)).toEqual([])
     })

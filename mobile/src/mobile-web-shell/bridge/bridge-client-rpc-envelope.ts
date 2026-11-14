@@ -1,8 +1,8 @@
-import type { SendRequestOptions } from '../../transport/rpc-client'
+import type { SendRequestOptions } from '../../transport/rpc/unvalidated-rpc-request-port'
 import {
   RpcEnvelopeFieldsSchema,
   type RpcEnvelopeFields
-} from '../../transport/rpc-envelope-fields'
+} from '../../transport/rpc/rpc-envelope-fields'
 import {
   BridgeRpcEnvelopeInvalidError,
   BridgeRpcEnvelopeUngrantedError

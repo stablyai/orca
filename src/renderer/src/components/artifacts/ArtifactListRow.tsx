@@ -1,7 +1,7 @@
 import { Fragment } from 'react'
 import { Copy, ExternalLink, MoreHorizontal, Trash2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import type { ArtifactListItem } from '../../../../shared/artifacts'
+import type { ArtifactListItem } from '../../../../shared/artifacts/artifacts'
 import { Button } from '@/components/ui/button'
 import {
   ContextMenu,
@@ -18,8 +18,12 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
-import { cn } from '@/lib/utils'
-import { isPortaledRowMenuClick, isRowActivationKey } from '@/lib/list-row-interaction'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
+import {
+  isPortaledRowMenuClick,
+  isRowActivationKey
+} from '@/lib/list-interaction/list-row-interaction'
 import {
   artifactName,
   artifactTypeLabel,
@@ -33,7 +37,7 @@ import {
   LIST_TABLE_ROW_CLASS,
   LIST_TABLE_ROW_DIVIDER_CLASS,
   LIST_TABLE_ROW_SELECTED_CLASS
-} from '@/lib/list-table-layout'
+} from '@/lib/list-interaction/list-table-layout'
 
 type ArtifactRowAction = {
   key: string
@@ -49,24 +53,25 @@ type ArtifactRowAction = {
 function artifactRowActions(
   item: ArtifactListItem,
   deleting: boolean,
-  deleteArtifact: (item: ArtifactListItem) => void
+  deleteArtifact: (item: ArtifactListItem) => void,
+  t: Translate = translate
 ): readonly ArtifactRowAction[] {
   return [
     {
       key: 'copy',
-      label: translate('auto.components.artifacts.copyLink', 'Copy link'),
+      label: t('auto.components.artifacts.copyLink', 'Copy link'),
       icon: Copy,
       onSelect: () => void copyArtifactLink(item.shareUrl)
     },
     {
       key: 'open',
-      label: translate('auto.components.artifacts.openInBrowser', 'Open in browser'),
+      label: t('auto.components.artifacts.openInBrowser', 'Open in browser'),
       icon: ExternalLink,
       onSelect: () => openArtifactInBrowser(item.shareUrl)
     },
     {
       key: 'delete',
-      label: translate('auto.components.artifacts.ArtifactsPage.deleteArtifact', 'Delete artifact'),
+      label: t('auto.components.artifacts.ArtifactsPage.deleteArtifact', 'Delete artifact'),
       icon: Trash2,
       onSelect: () => deleteArtifact(item),
       destructive: true,
@@ -91,12 +96,14 @@ export function ArtifactListRow({
   selectArtifact: (slug: string) => void
   deleteArtifact: (item: ArtifactListItem) => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const name = artifactName(item)
-  const typeLabel = artifactTypeLabel(item)
-  const updatedLabel = formatArtifactUpdatedCompact(item.artifact.updatedAt)
-  const expiryLabel = formatArtifactExpiryCompact(item.artifact.expiresAt)
+  const typeLabel = artifactTypeLabel(item, t)
+  const updatedLabel = formatArtifactUpdatedCompact(item.artifact.updatedAt, t, intlLocale)
+  const expiryLabel = formatArtifactExpiryCompact(item.artifact.expiresAt, t, intlLocale)
   const sizeLabel = formatByteSize(item.artifact.byteSize)
-  const rowActions = artifactRowActions(item, deleting, deleteArtifact)
+  const rowActions = artifactRowActions(item, deleting, deleteArtifact, t)
 
   return (
     // Non-modal, so scrolling is never blocked: windowing unmounting an open menu mid-scroll reads as dismissal.
@@ -148,7 +155,7 @@ export function ArtifactListRow({
                 variant="ghost"
                 size="icon-xs"
                 className="size-7 text-muted-foreground"
-                aria-label={translate('auto.components.artifacts.actions', 'Artifact actions')}
+                aria-label={t('auto.components.artifacts.actions', 'Artifact actions')}
                 onClick={(event) => event.stopPropagation()}
               >
                 <MoreHorizontal className="size-4" />

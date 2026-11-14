@@ -1,7 +1,7 @@
 import type * as pty from 'node-pty'
 import { PhysicalExitTracker } from '../../../shared/physical-exit-tracker'
 import { killWithDescendantSweep } from '../../pty/process-retirement/pty-descendant-termination'
-import { terminateShutdownDescendants } from '../../daemon/terminal-descendant-shutdown'
+import { terminateShutdownDescendants } from '../../daemon/sessions/terminal-descendant-shutdown'
 import {
   forceKillPosixPtyProcessGroups,
   forceKillPosixPtyProcessGroupsSync

@@ -19,8 +19,8 @@ import {
   liveTestJournalRows,
   openTestJournalHostDatabase,
   SAVED_BY_NEWER_ORCA
-} from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import { journalOpenRefusal } from '../../../src/main/native-chat/agent-session-journal/journal-open-failure'
+} from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { journalOpenRefusal } from '../../../src/main/native-chat/agent-session-journal/replay/journal-open-failure'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,

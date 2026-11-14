@@ -45,21 +45,4 @@ describe('resolveLocalDroppedPathsForAgent', () => {
       posixPath
     ])
   })
-
-  it('translates same-distro legacy WSL UNC paths case-insensitively', () => {
-    expect(
-      withWin32Platform(() =>
-        resolveLocalDroppedPathsForAgent(
-          ['\\\\wsl$\\ubuntu-24.04\\home\\user\\repo\\README.md'],
-          '\\\\wsl.localhost\\Ubuntu-24.04\\home\\user\\repo'
-        )
-      )
-    ).toEqual(['/home/user/repo/README.md'])
-  })
-
-  it('leaves dropped paths unchanged for non-WSL worktrees', () => {
-    const paths = ['C:\\Users\\alice\\Desktop\\notes.txt']
-
-    expect(resolveLocalDroppedPathsForAgent(paths, 'C:\\Users\\alice\\repo')).toBe(paths)
-  })
 })

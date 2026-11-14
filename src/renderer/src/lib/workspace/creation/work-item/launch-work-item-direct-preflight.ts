@@ -1,0 +1,256 @@
+import { invalidTerminalArgsMessage } from './launch-work-item-direct-messages'
+import { planAgentCliArgsSuffix } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import type { AgentStartupShell } from '../../../../../../shared/agent-launch/startup/tui-agent-startup-shell'
+import { readAgentLaunchPreferencesForWorkspace } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
+import { useAppStore } from '@/store/index'
+import {
+  ensureDetectedAgentsForRepo,
+  loadProjectLaunchContext
+} from '../../../agent-session/launch/inventory/agent-detection-target-inventory'
+import { CLIENT_PLATFORM } from '../new-workspace'
+import { getLocalRepoProjectExecutionRuntimeContext } from '../../../../runtime/hosts/preflight/local-preflight-context'
+import {
+  refineLocalLaunchPlatform,
+  resolveRepoExecutionHostPlatform
+} from '../../../../runtime/hosts/platform/execution-host-facts'
+import { isTuiAgentEnabled } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
+import { resolveDefaultAgentForWorkspace } from '../../../agent-session/launch/shortcuts/agent-tab-shortcuts'
+import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
+import {
+  awaitStructuredRouteHostAnswer,
+  planAgentSessionLaunch
+} from '../../../agent-session/launch/routing/agent-session-launch-plan'
+import type { AgentSessionLaunchRequest } from '../../../agent-session/launch/routing/agent-session-launch-plan'
+import { resolveGitHubPrStartPointForRepo } from '@/lib/source-control/review/github-pr-start-point'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
+import '../setup/workspace-setup-preparation'
+import type { AppState } from '@/store/types'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
+import type { ProjectLaunchContext } from '../../../../../../shared/rpc-contract/preflight/preflight-params'
+
+import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { Repo } from '../../../../../../shared/repo-types'
+import type { GitHubPrStartPoint } from '../../../../../../shared/worktree/types'
+import type {
+  DirectWorkItemLaunchInputs,
+  LaunchWorkItemDirectArgs
+} from './launch-work-item-direct-types'
+
+export async function resolveDirectPrStartPoint(
+  repoId: string,
+  prNumber: number,
+  target: RuntimeClientTarget | null,
+  hints: {
+    branchName?: string
+    headRefName?: string
+    baseRefName?: string
+    isCrossRepository?: boolean
+  } = {}
+): Promise<GitHubPrStartPoint> {
+  return resolveGitHubPrStartPointForRepo({
+    repoId,
+    prNumber,
+    target,
+    headRefName: hints.headRefName ?? hints.branchName,
+    baseRefName: hints.baseRefName,
+    isCrossRepository: hints.isCrossRepository
+  })
+}
+
+export type DirectLaunchOwnerRow = {
+  repo: Repo
+  executionHostId: ExecutionHostId
+  target: RuntimeClientTarget
+}
+
+/** Share one repo owner across setup, PR start, trust and creation; null/ambiguous owner goes to the modal rather than focus-based guessing. */
+export function resolveDirectLaunchOwnerRow(
+  repos: readonly Repo[],
+  repoId: string
+): DirectLaunchOwnerRow | null {
+  const rows = repos.filter((r) => r.id === repoId)
+  if (rows.length !== 1) {
+    return null
+  }
+  const executionHostId = getRepoExecutionHostId(rows[0])
+  const target = ipcOrRuntimeTargetForHostId(executionHostId)
+  return target ? { repo: rows[0], executionHostId, target } : null
+}
+
+/** Freeze the prospective verdict before create; the actual-agent path handles older hosts. */
+export async function planDirectWorkItemLaunch(args: {
+  requestId: string
+  prospectiveAgent: TuiAgent | null
+  projectContext?: ProjectLaunchContext
+  repoId: string
+  repoOwnerHostId: ExecutionHostId
+  draftContent: string
+  promptDelivery: 'draft' | 'submit-after-ready'
+  resolveSessionOptions?: (agent: TuiAgent) => Readonly<Record<string, string>> | undefined
+  sessionOptions?: Readonly<Record<string, string>>
+  chatSessionOptions?: Readonly<Record<string, string>>
+  launchInputs?: DirectWorkItemLaunchInputs
+  launchChoice?: LaunchWorkItemDirectArgs['launchChoice']
+}) {
+  const { prospectiveAgent, projectContext } = args
+  if (!prospectiveAgent) {
+    return undefined
+  }
+  const sessionOptions = args.launchInputs
+    ? args.launchInputs.sessionOptions
+    : args.resolveSessionOptions
+      ? args.resolveSessionOptions(prospectiveAgent)
+      : args.sessionOptions
+  const chatSessionOptions = args.launchInputs
+    ? args.launchInputs.chatSessionOptions
+    : args.chatSessionOptions
+  const request: AgentSessionLaunchRequest = {
+    requestId: args.requestId,
+    agent: prospectiveAgent,
+    workspace: {
+      kind: projectContext?.workspaceKind ?? 'git-worktree',
+      repoId: args.repoId,
+      executionHostId: args.repoOwnerHostId,
+      ...(projectContext ? { executionContext: projectContext.executionContext } : {})
+    },
+    prompt: args.draftContent,
+    promptDelivery: args.promptDelivery,
+    ...(sessionOptions ? { launchOptions: sessionOptions } : {}),
+    ...(chatSessionOptions !== undefined ? { chatLaunchOptions: chatSessionOptions } : {}),
+    ...directLaunchSurfaceRequest(args.launchChoice, args.launchInputs)
+  }
+  await awaitStructuredRouteHostAnswer(useAppStore.getState(), request, 3000)
+  return planAgentSessionLaunch(useAppStore.getState(), request)
+}
+
+/** Preserve explicit operations and captured saved preferences through both planning sites. */
+export function directLaunchSurfaceRequest(
+  choice: LaunchWorkItemDirectArgs['launchChoice'],
+  inputs?: Pick<AgentSessionLaunchRequest, 'requestedSurface' | 'preferredSurface'>
+): Pick<
+  AgentSessionLaunchRequest,
+  'requestedSurface' | 'preferredSurface' | 'selectedExecutionHostId'
+> {
+  const preferredSurface = inputs?.preferredSurface ?? choice?.preferredSurface
+  return {
+    ...(preferredSurface ? { preferredSurface } : {}),
+    ...(inputs?.requestedSurface ? { requestedSurface: inputs.requestedSurface } : {}),
+    ...(choice?.requestedSurface ? { requestedSurface: choice.requestedSurface } : {}),
+    ...(choice?.executionHostId ? { selectedExecutionHostId: choice.executionHostId } : {})
+  }
+}
+
+export async function resolveDirectProspectiveAgent(
+  store: AppState,
+  repo: Repo,
+  projectContext: ProjectLaunchContext | undefined,
+  args: Pick<LaunchWorkItemDirectArgs, 'agentOverride' | 'agentLaunchPreferences'>
+) {
+  const { agentOverride, agentLaunchPreferences } = args
+  const detectedAgentsPromise = projectContext
+    ? Promise.resolve(projectContext.agents)
+    : agentOverride
+      ? null
+      : ensureDetectedAgentsForRepo(store, repo)
+  const detectedAgentIds = ((await detectedAgentsPromise) ?? []).filter(isTuiAgent)
+  const current = useAppStore.getState()
+  const workspace = {
+    kind: projectContext?.workspaceKind ?? 'git-worktree',
+    repoId: repo.id,
+    executionHostId: getRepoExecutionHostId(repo),
+    ...(projectContext ? { executionContext: projectContext.executionContext } : {})
+  } as const
+  const preferences =
+    agentLaunchPreferences ?? readAgentLaunchPreferencesForWorkspace(current, workspace)
+  const prospectiveAgent =
+    agentOverride ??
+    resolveDefaultAgentForWorkspace({
+      defaultTuiAgent: preferences?.defaultTuiAgent,
+      detectedAgentIds,
+      disabledTuiAgents: preferences?.disabledTuiAgents,
+      chatIn: { store: current, workspace }
+    })
+  const unavailable = Boolean(
+    agentLaunchPreferences &&
+    agentOverride &&
+    !isTuiAgentEnabled(agentOverride, agentLaunchPreferences.disabledTuiAgents)
+  )
+  return { prospectiveAgent, unavailable }
+}
+
+export function directWorkItemAgentArgsError(
+  agentArgs: string | null | undefined,
+  shell: AgentStartupShell,
+  nativeChat: boolean,
+  agent?: TuiAgent
+): string | null {
+  if (nativeChat) {
+    return null
+  }
+  // Reject malformed saved arguments before creating a workspace.
+  if (agent) {
+    return invalidTerminalArgsMessage(agent, agentArgs, shell)
+  }
+  const plan = planAgentCliArgsSuffix(agentArgs, shell)
+  return plan.ok ? null : plan.error
+}
+
+export function prepareDirectLaunchContext(
+  store: AppState,
+  args: Pick<LaunchWorkItemDirectArgs, 'repoId' | 'launchPlatform' | 'openModalFallback'>
+) {
+  const owner = resolveDirectLaunchOwnerRow(store.repos, args.repoId)
+  if (!owner) {
+    args.openModalFallback()
+    return null
+  }
+  const { repo, target: repoOwnerTarget } = owner
+
+  const repoConnectionId = repo.connectionId?.trim() || null
+  const repoProjectRuntime = repoConnectionId
+    ? undefined
+    : getLocalRepoProjectExecutionRuntimeContext(store, args.repoId, CLIENT_PLATFORM)
+  // Why: the agent runs on the repo's execution host, so its OS decides quoting, not this client's (#27971).
+  const repoLaunchFact = resolveRepoExecutionHostPlatform(store, repo, () => repoProjectRuntime)
+  if (repoLaunchFact.kind === 'withheld') {
+    return { unavailable: repoLaunchFact }
+  }
+  const repoLaunchHost = refineLocalLaunchPlatform(repoLaunchFact, args.launchPlatform)
+  const shell: AgentStartupShell = repoLaunchHost.platform === 'win32' ? 'powershell' : 'posix'
+  // Why: agent detection shells out and can be cold/slow. Start it now, but
+  // don't let it serialize setup-policy resolution or git worktree creation.
+  const projectContextPromise = loadProjectLaunchContext(repoOwnerTarget, args.repoId).then(
+    (context) => ({ context }),
+    () => null
+  )
+
+  return {
+    ...owner,
+    repoConnectionId,
+    repoProjectRuntime,
+    repoLaunchHost,
+    shell,
+    projectContextPromise
+  }
+}
+
+export function captureDirectWorkItemLaunchArgs(
+  args: LaunchWorkItemDirectArgs
+): LaunchWorkItemDirectArgs {
+  return {
+    ...args,
+    ...(args.sessionOptions ? { sessionOptions: { ...args.sessionOptions } } : {}),
+    ...(args.chatSessionOptions !== undefined
+      ? { chatSessionOptions: { ...args.chatSessionOptions } }
+      : {})
+  }
+}
+
+export function loadDirectWorkItemProjectPreflight(target: RuntimeClientTarget, repoId: string) {
+  return loadProjectLaunchContext(target, repoId).then(
+    (context) => ({ context }),
+    () => null
+  )
+}
