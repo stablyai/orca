@@ -14981,7 +14981,6 @@
             "databaseCount_other": "{{value0}} Datenbanken",
             "scanning": "{{value0}} wird durchsucht",
             "checking": "{{value0}} wird geprüft",
-            "scanned": "{{value0}} durchsucht",
             "agentCheckedCount_one": "{{agent}}: {{settled}} von {{total}} möglichem Verlaufseintrag geprüft",
             "agentCheckedCount_other": "{{agent}}: {{settled}} von {{total}} möglichen Verlaufseinträgen geprüft"
           },
@@ -21544,7 +21543,6 @@
   },
   "sessionSearch": {
     "panel": {
-      "noMatches": "Keine passenden Sitzungen im indexierten Verlauf. Eine andere Suchanfrage oder einen anderen Suchbereich verwenden.",
       "loadMore": "Weitere Treffer laden",
       "indexedHistory": "Indexierter Verlauf",
       "hostsSkipped": "Nicht durchsucht: {{value0}}",

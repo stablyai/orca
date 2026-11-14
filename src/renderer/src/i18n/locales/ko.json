@@ -14299,7 +14299,6 @@
             "databaseCount_other": "데이터베이스 {{value0}}개",
             "scanning": "{{value0}} 스캔 중",
             "checking": "{{value0}} 확인 중",
-            "scanned": "{{value0}} 스캔함",
             "agentCheckedCount_other": "{{agent}}: 기록 후보 {{total}}개 중 {{settled}}개 확인됨"
           },
           "run": {
@@ -21245,7 +21244,6 @@
   },
   "sessionSearch": {
     "panel": {
-      "noMatches": "색인화된 기록에 일치하는 세션이 없습니다. 다른 쿼리나 범위를 시도해 보세요.",
       "loadMore": "더 많은 경기 로드",
       "indexedHistory": "색인된 기록",
       "hostsSkipped": "검색되지 않음: {{value0}}",

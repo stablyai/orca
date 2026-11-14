@@ -15164,7 +15164,6 @@
             "databaseCount_other": "{{value0}} 个数据库",
             "scanning": "正在扫描 {{value0}}",
             "checking": "正在检查 {{value0}}",
-            "scanned": "已扫描 {{value0}}",
             "agentCheckedCount_other": "{{agent}}：已检查 {{settled}} / {{total}} 个历史记录候选项"
           },
           "run": {
@@ -23075,7 +23074,6 @@
   },
   "sessionSearch": {
     "panel": {
-      "noMatches": "已索引的历史记录中没有匹配的会话，请尝试其他查询或范围",
       "loadMore": "加载更多匹配项",
       "indexedHistory": "已索引的历史记录 · 最佳匹配",
       "hostsSkipped": "未搜索：{{value0}}",

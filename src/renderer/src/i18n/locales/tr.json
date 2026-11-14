@@ -15128,7 +15128,6 @@
             "databaseCount_other": "{{value0}} veritabanı",
             "scanning": "{{value0}} taranıyor",
             "checking": "{{value0}} kontrol ediliyor",
-            "scanned": "{{value0}} tarandı",
             "agentCheckedCount_other": "{{agent}}: {{total}} olası geçmiş kaydından {{settled}} tanesi kontrol edildi",
             "agentCheckedCount_one": "{{agent}}: {{total}} olası geçmiş kaydından {{settled}} tanesi kontrol edildi"
           },
@@ -21684,7 +21683,6 @@
   },
   "sessionSearch": {
     "panel": {
-      "noMatches": "Dizinlenmiş geçmişte eşleşen oturum yok. Başka bir sorgu veya kapsam deneyin.",
       "loadMore": "Daha fazla eşleşme yükle",
       "indexedHistory": "Dizinlenmiş geçmiş",
       "hostsSkipped": "Aranmadı: {{value0}}",

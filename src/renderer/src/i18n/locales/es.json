@@ -14675,7 +14675,6 @@
             "databaseCount_many": "{{value0}} bases de datos",
             "scanning": "Analizando {{value0}}",
             "checking": "Comprobando {{value0}}",
-            "scanned": "Analizados {{value0}}",
             "agentCheckedCount_one": "{{agent}}: {{settled}} de {{total}} candidato del historial comprobado",
             "agentCheckedCount_other": "{{agent}}: {{settled}} de {{total}} candidatos del historial comprobados",
             "agentCheckedCount_many": "{{agent}}: {{settled}} de {{total}} candidatos del historial comprobados"
@@ -21796,7 +21795,6 @@
   "sessionSearch": {
     "panel": {
       "retry": "Probar de nuevo",
-      "noMatches": "No hay sesiones coincidentes en el historial indexado. Prueba otra consulta o ámbito.",
       "loadMore": "Cargar más coincidencias",
       "indexedHistory": "Historial indexado",
       "hostsSkipped": "Sin buscar: {{value0}}",

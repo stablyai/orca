@@ -14774,7 +14774,6 @@
             "databaseCount_other": "{{value0}} 個資料庫",
             "scanning": "正在掃描 {{value0}}",
             "checking": "正在檢查 {{value0}}",
-            "scanned": "已掃描 {{value0}}",
             "agentCheckedCount_other": "{{agent}}：已檢查 {{settled}} / {{total}} 筆候選歷史記錄"
           },
           "run": {
@@ -21225,7 +21224,6 @@
   },
   "sessionSearch": {
     "panel": {
-      "noMatches": "已建立索引的歷史記錄中沒有符合的工作階段。請改用其他查詢或範圍。",
       "loadMore": "載入更多符合項目",
       "indexedHistory": "已建立索引的歷史記錄",
       "hostsSkipped": "未搜尋：{{value0}}",

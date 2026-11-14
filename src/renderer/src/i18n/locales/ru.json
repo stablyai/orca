@@ -15424,7 +15424,6 @@
             "databaseCount_other": "{{value0}} базы данных",
             "scanning": "Сканирование ({{value0}})",
             "checking": "Проверка ({{value0}})",
-            "scanned": "Просканировано ({{value0}})",
             "agentCheckedCount_one": "{{agent}}: проверено {{settled}} из {{total}} возможной записи истории",
             "agentCheckedCount_few": "{{agent}}: проверено {{settled}} из {{total}} возможных записей истории",
             "agentCheckedCount_many": "{{agent}}: проверено {{settled}} из {{total}} возможных записей истории",
@@ -22223,7 +22222,6 @@
   },
   "sessionSearch": {
     "panel": {
-      "noMatches": "В индексе истории нет подходящих сессий. Измените запрос или область поиска.",
       "loadMore": "Загрузить ещё совпадения",
       "indexedHistory": "Индексированная история",
       "hostsSkipped": "Поиск не выполнен: {{value0}}",
