@@ -1,3 +1,4 @@
+import { isRootAgentJournalItem } from '../agent-session/journal/agent-session-journal-producer'
 import type { NativeChatMessage } from './native-chat-types'
 
 type Row = Pick<NativeChatMessage, 'id' | 'role' | 'source'>
@@ -32,28 +33,40 @@ export function terminalForkPointBefore(messages: readonly Row[], id: string): s
     .findLast((message) => message.source === 'transcript' && message.role !== 'user')?.id
 }
 
-type ReplyRow = Row & Pick<NativeChatMessage, 'agentStart' | 'queued' | 'pendingSend'>
+function holdsWords(message: NativeChatMessage): boolean {
+  return (
+    message.role === 'assistant' &&
+    message.source === 'transcript' &&
+    !message.agentStart &&
+    isRootAgentJournalItem(message) &&
+    message.blocks.some((block) => block.type === 'text' && block.text.trim().length > 0)
+  )
+}
 
-/** The replies a terminal chat forks from: each one whose turn ended at your next message (tool
- *  rows after it still belong to its turn), or at the end once the agent is idle. */
+/** The replies a terminal chat forks from: each turn's last row with words. Tool, status and hook
+ *  rows after it stay in its turn; a queued send ends nothing while the agent works, and the
+ *  latest turn ends only once the agent is idle. */
 export function terminalForkReplyIds(
-  messages: readonly ReplyRow[],
+  messages: readonly NativeChatMessage[],
   agentWorking: boolean
 ): ReadonlySet<string> {
   const ids = new Set<string>()
-  messages.reduceRight<ReplyRow | undefined>((next, message) => {
-    if (
-      message.role === 'assistant' &&
-      message.source === 'transcript' &&
-      !message.agentStart &&
-      // A queued send waits on the running reply; it ends nothing until the agent is idle.
-      (next
-        ? next.role === 'user' && (!agentWorking || (!next.queued && next.pendingSend !== 'queued'))
-        : !agentWorking)
-    ) {
-      ids.add(message.id)
+  let reply: string | undefined
+  for (const message of messages) {
+    if (message.role === 'user') {
+      if (agentWorking && (message.queued || message.pendingSend === 'queued')) {
+        continue
+      }
+      if (reply) {
+        ids.add(reply)
+      }
+      reply = undefined
+    } else if (holdsWords(message)) {
+      reply = message.id
     }
-    return message.role === 'tool' ? next : message
-  }, undefined)
+  }
+  if (reply && !agentWorking) {
+    ids.add(reply)
+  }
   return ids
 }

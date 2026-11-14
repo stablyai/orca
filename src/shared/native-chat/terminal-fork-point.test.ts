@@ -4,6 +4,7 @@ import {
   terminalForkReplyIds,
   terminalForkTurnEnd
 } from './terminal-fork-point'
+import type { NativeChatMessage } from './native-chat-types'
 
 const rows = [
   { id: 'u1', role: 'user', source: 'transcript' },
@@ -21,12 +22,23 @@ describe('terminal fork points', () => {
     expect(terminalForkPointBefore(rows, 'u1')).toBeUndefined()
   })
   it('offers a reply whose turn ends in tool rows, mid-transcript and at the idle end', () => {
-    const ended = [
-      ...rows,
-      { id: 'a2', role: 'assistant', source: 'transcript' },
-      { id: 't2', role: 'tool', source: 'transcript' }
-    ] as const
-    expect([...terminalForkReplyIds(ended, false)]).toEqual(['a2', 'a1'])
+    const row = (id: string, role: NativeChatMessage['role'], text = '') => ({
+      id,
+      role,
+      source: 'transcript' as const,
+      timestamp: 1,
+      blocks: text ? [{ type: 'text' as const, text }] : []
+    })
+    const ended: NativeChatMessage[] = [
+      row('u1', 'user', 'go'),
+      row('a1', 'assistant', 'Done.'),
+      row('t1', 'tool'),
+      row('u2', 'user', 'more'),
+      row('a2', 'assistant', 'Also done.'),
+      row('t2', 'tool'),
+      row('s2', 'system', 'Stop hook feedback')
+    ]
+    expect([...terminalForkReplyIds(ended, false)]).toEqual(['a1', 'a2'])
     expect([...terminalForkReplyIds(ended, true)]).toEqual(['a1'])
   })
 })

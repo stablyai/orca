@@ -246,3 +246,71 @@ it('still hands a chat it cannot copy to another agent as a recap', async () => 
   })
   expect(run).toHaveBeenCalledWith('claude', { sessionId: 'chat', throughItemId: 'reply' })
 })
+
+it('offers Fork on each finished terminal reply, past the tool and hook rows that end its turn', async () => {
+  const { client } = connection(0)
+  const row = (
+    id: string,
+    role: NativeChatMessage['role'],
+    blocks: NativeChatMessage['blocks']
+  ) => ({
+    id,
+    role,
+    blocks,
+    timestamp: 1,
+    source: 'transcript' as const
+  })
+  const text = (value: string) => [{ type: 'text' as const, text: value }]
+  const call = [{ type: 'tool-call' as const, toolCallId: 't', name: 'TodoWrite', input: {} }]
+  const result = [{ type: 'tool-result' as const, toolCallId: 't', content: 'ok' }]
+  const messages: NativeChatMessage[] = [
+    row('u1', 'user', text('fix it')),
+    row('a1', 'assistant', text('Checking.')),
+    row('c1', 'assistant', call),
+    row('r1', 'tool', result),
+    row('a2', 'assistant', text('Fixed.')),
+    row('c2', 'assistant', call),
+    row('r2', 'tool', result),
+    row('u2', 'user', text('thanks')),
+    row('a3', 'assistant', text('Anytime.')),
+    row('s3', 'system', text('Stop hook feedback'))
+  ]
+  function ForkProbe({ agentWorking }: { agentWorking: boolean }) {
+    latest = useMobileNativeChatFork({
+      client,
+      hostCapabilities: FORK_HOST,
+      hostStatusPending: false,
+      agent: 'claude',
+      sessionId: 'terminal-session',
+      messages,
+      turnJournal: null,
+      agentWorking,
+      sessionForkSupport: 'supported',
+      createFork: async () => {},
+      terminal: true
+    })
+    return null
+  }
+  let renderer!: ReactTestRenderer
+  await act(async () => {
+    renderer = create(createElement(ForkProbe, { agentWorking: false }))
+    renderers.push(renderer)
+  })
+  expect(messages.map((entry) => latest?.offerFor(entry))).toEqual([
+    'hidden',
+    'reserved',
+    'reserved',
+    'hidden',
+    'available',
+    'reserved',
+    'hidden',
+    'hidden',
+    'available',
+    'hidden'
+  ])
+  await act(async () => {
+    renderer.update(createElement(ForkProbe, { agentWorking: true }))
+  })
+  expect(latest?.offerFor(messages[4]!)).toBe('available')
+  expect(latest?.offerFor(messages[8]!)).toBe('reserved')
+})
