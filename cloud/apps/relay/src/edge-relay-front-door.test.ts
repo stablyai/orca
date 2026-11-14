@@ -129,7 +129,7 @@ describe('EdgeAssignments with front doors', () => {
   const databases: RelayDatabase[] = []
   afterEach(async () => {
     vi.restoreAllMocks()
-    for (const database of databases.splice(0)) await database.close()
+    for (const database of databases.splice(0)) { await database.close() }
   })
   const identity = { userId: 'user-1', relayHostId: HOST }
 
@@ -141,7 +141,7 @@ describe('EdgeAssignments with front doors', () => {
     const admin = {
       assign: async (body: EdgeAssignBody) => {
         pushes.push(body)
-        if (fail?.next) throw new EdgeAdminUnavailableError('status_503')
+        if (fail?.next) { throw new EdgeAdminUnavailableError('status_503') }
         return { outcome: 'applied' as const, assignmentEpoch: body.assignmentEpoch }
       }
     } as unknown as EdgeAdmin
@@ -259,11 +259,13 @@ describe('EdgeAssignments with front doors', () => {
     const admin = {
       assign: async (body: EdgeAssignBody) => {
         pushes.push(body)
-        if (edgeState.down) throw new EdgeAdminUnavailableError('timeout')
-        if (body.assignmentEpoch < edgeState.epoch) return { outcome: 'stale' as const, assignmentEpoch: edgeState.epoch }
+        if (edgeState.down) { throw new EdgeAdminUnavailableError('timeout') }
+        if (body.assignmentEpoch < edgeState.epoch) {
+          return { outcome: 'stale' as const, assignmentEpoch: edgeState.epoch }
+        }
         const outcome = body.assignmentEpoch === edgeState.epoch ? ('unchanged' as const) : ('applied' as const)
         edgeState.epoch = body.assignmentEpoch
-        if (edgeState.landThenFail) throw new EdgeAdminUnavailableError('timeout')
+        if (edgeState.landThenFail) { throw new EdgeAdminUnavailableError('timeout') }
         return { outcome, assignmentEpoch: body.assignmentEpoch }
       }
     } as unknown as EdgeAdmin

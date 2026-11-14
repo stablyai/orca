@@ -127,7 +127,7 @@ export function parseEdgeControlOver(
     frontDoor: rawFrontDoor
   } = parsed.data.flags
   const frontDoor = rawFrontDoor === undefined ? undefined : parseFrontDoor(rawFrontDoor)
-  if (frontDoor === null) ignoredKeys.push('frontDoor')
+  if (frontDoor === null) { ignoredKeys.push('frontDoor') }
   const keptFrontDoor = frontDoor === null ? previous?.frontDoor : frontDoor
   ignoredKeys.sort()
   return {
@@ -243,8 +243,8 @@ export function edgeFrontDoorFor(
   country: string | null
 ): { url: string; byCountry: boolean } | undefined {
   const door = flags.frontDoor
-  if (door === undefined || frontDoorUrls?.has(door.url) !== true) return undefined
-  if (edgeCountryExcluded(flags, region, country)) return undefined
+  if (door === undefined || frontDoorUrls?.has(door.url) !== true) { return undefined }
+  if (edgeCountryExcluded(flags, region, country)) { return undefined }
   const byCountry = country !== null && door.countries?.includes(country) === true
   return byCountry || door.hosts?.includes(relayHostId) === true ? { url: door.url, byCountry } : undefined
 }

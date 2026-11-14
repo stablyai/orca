@@ -320,7 +320,7 @@ export class EdgeAssignments {
   // re-place the host on a cell it is not connected to.
   async edgeAssignment(identity: Identity): Promise<RelayAssignment | null> {
     if (!this.seeded) return null
-    if (this.config.frontDoorUrls !== undefined) return await this.edgeAssignmentWithFrontDoor(identity)
+    if (this.config.frontDoorUrls !== undefined) { return await this.edgeAssignmentWithFrontDoor(identity) }
     const row = (
       await this.database.query(
         `SELECT cell_id, assignment_epoch, lease_expires_at FROM relay_assignments
@@ -344,7 +344,7 @@ export class EdgeAssignments {
         [identity.userId, identity.relayHostId]
       )
     )[0]
-    if (!row || text(row, 'cell_id') !== EDGE_CELL_ID) return null
+    if (!row || text(row, 'cell_id') !== EDGE_CELL_ID) { return null }
     return this.answer(
       identity,
       integer(row, 'assignment_epoch'),
@@ -470,7 +470,7 @@ export class EdgeAssignments {
     try {
       return await this.frontDoorAttempt(identity, mapFloor, region, route)
     } catch (error) {
-      if (!(error instanceof FrontDoorSwitchIntent)) throw error
+      if (!(error instanceof FrontDoorSwitchIntent)) { throw error }
       // Write-ahead: the switch's epoch is recorded as pending, committed, before its push is sent.
       // From then on every ask of this host (any shape) first completes it (frontDoorAttempt), so
       // the director never answers an epoch below one the edge may hold.
@@ -481,7 +481,7 @@ export class EdgeAssignments {
         // Nothing was pending to finish (another director moved the row meanwhile, e.g. while
         // directors read different edge.json generations) and this ask wants a switch again:
         // busy, and the host re-asks once the directors agree.
-        if (retryError instanceof FrontDoorSwitchIntent) throw new EdgeMoveBusyError()
+        if (retryError instanceof FrontDoorSwitchIntent) { throw new EdgeMoveBusyError() }
         throw retryError
       }
     }
@@ -504,11 +504,15 @@ export class EdgeAssignments {
           { failIfUnavailable: true }
         )
       } catch (error) {
-        if (error instanceof Error && error.message === 'database_lock_unavailable') throw new EdgeMoveBusyError()
+        if (error instanceof Error && error.message === 'database_lock_unavailable') {
+          throw new EdgeMoveBusyError()
+        }
         throw error
       }
       const row = rows[0]
-      if (!row || text(row, 'cell_id') !== EDGE_CELL_ID || integer(row, 'assignment_epoch') >= epoch) return
+      if (!row || text(row, 'cell_id') !== EDGE_CELL_ID || integer(row, 'assignment_epoch') >= epoch) {
+        return
+      }
       await transaction.query(
         `INSERT INTO relay_edge_host_regions
          (user_id, relay_host_id, region, recorded_at, cell_url, pending_epoch, pending_cell_url)
@@ -560,7 +564,9 @@ export class EdgeAssignments {
           { failIfUnavailable: true }
         )
       } catch (error) {
-        if (error instanceof Error && error.message === 'database_lock_unavailable') throw new EdgeMoveBusyError()
+        if (error instanceof Error && error.message === 'database_lock_unavailable') {
+          throw new EdgeMoveBusyError()
+        }
         throw error
       }
       const row = rows[0]
@@ -590,7 +596,7 @@ export class EdgeAssignments {
             [identity.userId, identity.relayHostId]
           )
         )[0]
-        if (!winner || text(winner, 'cell_id') !== EDGE_CELL_ID) throw new EdgeMoveBusyError()
+        if (!winner || text(winner, 'cell_id') !== EDGE_CELL_ID) { throw new EdgeMoveBusyError() }
         return this.answer(
           identity,
           integer(winner, 'assignment_epoch'),
@@ -624,7 +630,7 @@ export class EdgeAssignments {
             pushed = await this.pushOnto(transaction, identity, pendingEpoch, region, { devices: false })
           } catch (error) {
             // Not done: answering the row's epoch could be below the edge's. The host re-asks.
-            if (error instanceof EdgeMoveDeferredError) throw new EdgeMoveBusyError()
+            if (error instanceof EdgeMoveDeferredError) { throw new EdgeMoveBusyError() }
             throw error
           }
           await record(transaction, target)
@@ -652,7 +658,7 @@ export class EdgeAssignments {
         // A switch: leave this transaction with nothing written, record it as pending, then finish it.
         throw new FrontDoorSwitchIntent(Math.max(rowEpoch, mapFloor) + 1, chosen)
       }
-      if (requestUnits(row) > 0) throw new EdgeMoveDeferredError('units_held')
+      if (requestUnits(row) > 0) { throw new EdgeMoveDeferredError('units_held') }
       const epoch = Math.max(integer(row, 'assignment_epoch'), mapFloor) + 1
       await transaction.query(
         `UPDATE relay_assignments

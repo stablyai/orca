@@ -12,7 +12,7 @@ export function edgeRoute(
   country: string | null,
   ask: { reconnect?: boolean; regionCorrection?: unknown }
 ): EdgeRoute | undefined {
-  if (config.frontDoorUrls === undefined) return undefined
+  if (config.frontDoorUrls === undefined) { return undefined }
   const door = edgeFrontDoorFor(
     config.control?.() ?? EDGE_CONTROL_DEFAULTS,
     config.frontDoorUrls,
