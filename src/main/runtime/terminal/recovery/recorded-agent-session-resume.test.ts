@@ -18,7 +18,8 @@ const SESSION = '0bc9e9f8-192c-4bd4-beb8-8b745c59c8b0'
 
 function sleepingConversation(
   overrides: Partial<SleepingAgentSessionRecord> = {},
-  spawnError?: Error
+  spawnError?: Error,
+  pty: { reattach?: boolean; shellAlone?: () => boolean } = {}
 ) {
   const record: SleepingAgentSessionRecord = {
     worktreeId: TEST_WORKTREE_ID,
@@ -49,12 +50,13 @@ function sleepingConversation(
         if (spawnError) {
           throw spawnError
         }
-        return { id: 'resumed-original-pane' }
+        return { id: 'resumed-original-pane', ...(pty.reattach ? { isReattach: true } : {}) }
       })
     ),
     write: () => true,
     kill: () => true,
-    getForegroundProcess: async () => null
+    getForegroundProcess: async () => null,
+    confirmShellForeground: async () => pty.shellAlone?.() ?? false
   })
   runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
   return { runtime, launches }
@@ -128,5 +130,33 @@ describe('resuming an explicitly selected recorded conversation', () => {
       })
     ).rejects.toThrow('agent_session_resume_not_authorized')
     expect(launches).toEqual([])
+  })
+
+  it('stops adopting a claimed terminal once only its shell remains', async () => {
+    let shellAlone = false
+    const { runtime } = sleepingConversation({}, undefined, { shellAlone: () => shellAlone })
+    const resume = () =>
+      runtime.resumeRecordedAgentSession(`id:${TEST_WORKTREE_ID}`, { paneKey: PANE })
+    expect((await resume()).disposition).toBe('resumed')
+    shellAlone = true
+    await expect(resume()).rejects.toThrow('could not be verified')
+  })
+
+  it('reports a reattached terminal as adopted, never as a fresh resume', async () => {
+    const { runtime } = sleepingConversation({}, undefined, { reattach: true })
+    expect(
+      (await runtime.resumeRecordedAgentSession(`id:${TEST_WORKTREE_ID}`, { paneKey: PANE }))
+        .disposition
+    ).toBe('adopted')
+  })
+
+  it('refuses a reattached terminal that is only a shell', async () => {
+    const { runtime } = sleepingConversation({}, undefined, {
+      reattach: true,
+      shellAlone: () => true
+    })
+    await expect(
+      runtime.resumeRecordedAgentSession(`id:${TEST_WORKTREE_ID}`, { paneKey: PANE })
+    ).rejects.toThrow('did not resume in its pane')
   })
 })

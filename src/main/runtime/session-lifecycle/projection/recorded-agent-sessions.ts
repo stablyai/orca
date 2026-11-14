@@ -75,20 +75,7 @@ export abstract class OrcaRuntimeWithRecordedAgentSessions extends OrcaRuntimeWi
     }
     const live = this.recordedPanePty(record.paneKey, workspace.id)
     if (live) {
-      const row = this.getAgentStatusRowsForPane(record.paneKey)
-        .filter((entry) => !entry.providerSessionOnly)
-        .toSorted((a, b) => b.receivedAt - a.receivedAt)[0]
-      const matches =
-        !row?.providerSession ||
-        agentProviderSessionsEqual(record.agent, row.providerSession, record.providerSession)
-      if (matches && this.agentSessionResumeClaims.ownsPty(record, record.paneKey, live)) {
-        return reply(live, 'adopted')
-      }
-      if (
-        row?.agentType === record.agent &&
-        agentProviderSessionsEqual(record.agent, row.providerSession, record.providerSession) &&
-        (await this.checkHookAgentPresenceFn?.(record.paneKey, 0)) === 'live'
-      ) {
+      if (await this.adoptsRecordedPty(record, live)) {
         return reply(live, 'adopted')
       }
       throw new OrchestrationError(
@@ -125,20 +112,52 @@ export abstract class OrcaRuntimeWithRecordedAgentSessions extends OrcaRuntimeWi
     }
     const started = await restoring
     if (
-      !started?.resumedAgentSession ||
-      started.resumedAgentSession.agent !== record.agent ||
-      !agentProviderSessionsEqual(
+      started?.resumedAgentSession?.agent === record.agent &&
+      agentProviderSessionsEqual(
         record.agent,
         started.resumedAgentSession.providerSession,
         record.providerSession
       )
     ) {
-      throw new OrchestrationError(
-        'agent_session_ownership_unknown',
-        'The recorded conversation did not resume in its pane. Inspect the original pane before retrying.'
-      )
+      return reply(started.id, 'resumed')
     }
-    return reply(started.id, 'resumed')
+    // A reattached PTY was not started by this resume; adopt it only on live-pane evidence.
+    if (
+      started &&
+      this.recordedPanePty(record.paneKey, workspace.id) === started.id &&
+      (await this.adoptsRecordedPty(record, started.id))
+    ) {
+      return reply(started.id, 'adopted')
+    }
+    throw new OrchestrationError(
+      'agent_session_ownership_unknown',
+      'The recorded conversation did not resume in its pane. Inspect the original pane before retrying.'
+    )
+  }
+
+  /** A claimed PTY counts only until it is proven back at a bare shell; otherwise require a live hook report. */
+  private async adoptsRecordedPty(
+    record: SleepingAgentSessionRecord,
+    ptyId: string
+  ): Promise<boolean> {
+    const row = this.getAgentStatusRowsForPane(record.paneKey)
+      .filter((entry) => !entry.providerSessionOnly)
+      .toSorted((a, b) => b.receivedAt - a.receivedAt)[0]
+    const matches =
+      !row?.providerSession ||
+      agentProviderSessionsEqual(record.agent, row.providerSession, record.providerSession)
+    if (
+      matches &&
+      this.agentSessionResumeClaims.ownsPty(record, record.paneKey, ptyId) &&
+      !(await this.confirmTerminalShellAlone(ptyId))
+    ) {
+      return true
+    }
+    return (
+      row?.agentType === record.agent &&
+      agentProviderSessionsEqual(record.agent, row.providerSession, record.providerSession) &&
+      (await this.checkHookAgentPresenceFn?.(record.paneKey, 0)) === 'live'
+    )
   }
 
   private recordedPanePty(paneKey: string, worktreeId: string): string | null {

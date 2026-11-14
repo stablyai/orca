@@ -79,11 +79,22 @@ export async function sendToReusableSession(
       }
       throw new AutomationRunLaunchError('The previous automation pane is not ready for reuse.')
     }
-    const restored = await runtime.resumeRecordedAgentSession(
-      `id:${worktreeId}`,
-      { paneKey: saved.paneKey, agent: automation.agentId, sessionId: saved.providerSession.id },
-      { automatic: request.run.trigger === 'scheduled' }
-    )
+    const restored = await runtime
+      .resumeRecordedAgentSession(
+        `id:${worktreeId}`,
+        { paneKey: saved.paneKey, agent: automation.agentId, sessionId: saved.providerSession.id },
+        { automatic: request.run.trigger === 'scheduled' }
+      )
+      .catch((error: unknown) => {
+        // Link the failed run to the kept pane; no PTY is claimed for it.
+        throw new AutomationRunLaunchError(error instanceof Error ? error.message : String(error), {
+          workspaceId: worktreeId,
+          workspaceDisplayName,
+          terminalSessionId: parsePaneKey(saved.paneKey)?.tabId ?? previous.terminalSessionId,
+          terminalPaneKey: saved.paneKey,
+          terminalPtyId: null
+        })
+      })
     session = {
       handle: restored.handle,
       previous: {

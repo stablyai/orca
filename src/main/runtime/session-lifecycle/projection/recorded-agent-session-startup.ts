@@ -54,7 +54,11 @@ export function bindRecordedResumePty(
     return undefined
   }
   startup.resumeClaim.bind(ptyId)
-  return !result.agentResumeRefused && startup.launchAgent && startup.resumeProviderSession
+  // A reattach found an existing process; only a fresh spawn ran this resume.
+  return !result.isReattach &&
+    !result.agentResumeRefused &&
+    startup.launchAgent &&
+    startup.resumeProviderSession
     ? { agent: startup.launchAgent, providerSession: startup.resumeProviderSession }
     : undefined
 }

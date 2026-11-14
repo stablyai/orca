@@ -79,7 +79,10 @@ describe('an automation whose original conversation slept', () => {
   })
 
   it('fails a refused restore instead of inviting a fresh launch', async () => {
-    await expect(reuse({ restoreFails: true })).rejects.toThrow('held elsewhere')
+    await expect(reuse({ restoreFails: true })).rejects.toMatchObject({
+      message: 'original conversation is held elsewhere',
+      target: { terminalSessionId: 'original-tab', terminalPaneKey: PANE, terminalPtyId: null }
+    })
   })
 
   it('retains the restored target when prompt delivery is unconfirmed', async () => {
