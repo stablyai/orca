@@ -2,7 +2,6 @@ import path from 'node:path'
 import type { ElectronApplication, Locator, Page, TestInfo } from '@stablyai/playwright-test'
 import { eventSchemas } from '../../src/shared/telemetry-events'
 import { test, expect } from './helpers/orca-app'
-import { openSidebarProjectDialog } from './helpers/sidebar-project-dialog'
 import {
   createRuntimeDesktopPairingOffer,
   launchPairedElectronClient
@@ -49,12 +48,15 @@ for (const theme of ['dark', 'light'] as const) {
       await page.evaluate(async (theme) => {
         await window.__store?.getState().updateSettings({ theme })
       }, theme)
-      await openSidebarProjectDialog(page)
-      const dialog = page.getByRole('dialog', { name: /Add a project/i })
-      const hostPicker = dialog.getByRole('combobox')
-      await hostPicker.click()
-      await page.locator('[cmdk-item]').filter({ hasText: 'Disposable host' }).click()
-      await dialog.getByRole('button', { name: /Browse folder|Browse host/i }).click()
+      await page
+        .locator('[data-sidebar-header-actions]')
+        .getByRole('button', { name: 'Add project', exact: true })
+        .click()
+      const addMenu = page.getByRole('menu', { name: 'Add project', exact: true })
+      await expect(
+        addMenu.getByRole('menuitem', { name: 'Project host: Disposable host', exact: true })
+      ).toBeVisible()
+      await addMenu.getByRole('menuitem', { name: /Browse folder/i }).click()
       await page
         .getByRole('dialog', { name: /Browse host filesystem/i })
         .getByRole('button', { name: 'Cancel', exact: true })
