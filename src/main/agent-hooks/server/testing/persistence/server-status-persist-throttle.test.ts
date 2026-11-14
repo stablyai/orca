@@ -117,6 +117,44 @@ describe('saved agent status cadence', () => {
     })
   })
 
+  it('commits a new turn that repeats the finished prompt', async () => {
+    await prompt('inspect the workspace')
+    await vi.advanceTimersByTimeAsync(1)
+    await postHookEvent(server, buildBody({ hook_event_name: 'Stop' }))
+    await vi.advanceTimersByTimeAsync(1)
+    await prompt('inspect the workspace')
+    await vi.advanceTimersByTimeAsync(1)
+    expect(JSON.parse(readSavedStatus(lastStatusPath())).entries[PANE].payload).toMatchObject({
+      state: 'working',
+      prompt: 'inspect the workspace'
+    })
+  })
+
+  it('commits a turn completion carried by a working row without a main-agent fact', async () => {
+    const identity = {
+      paneKey: PANE,
+      source: 'claude' as const,
+      providerSession: { key: 'session_id' as const, id: 'background-session' }
+    }
+    const working = { agentType: 'claude' as const, state: 'working' as const, prompt: 'build' }
+    server.ingestRemote({ ...identity, hookEventName: 'PreToolUse', payload: working }, 'ssh-a')
+    await vi.advanceTimersByTimeAsync(1)
+    server.ingestRemote(
+      {
+        ...identity,
+        hookEventName: 'Stop',
+        payload: { ...working, turnCompletedAt: 5_000, lastAssistantMessage: 'build started' }
+      },
+      'ssh-a'
+    )
+    await vi.advanceTimersByTimeAsync(1)
+    expect(JSON.parse(readSavedStatus(lastStatusPath())).entries[PANE].payload).toMatchObject({
+      state: 'working',
+      turnCompletedAt: 5_000,
+      lastAssistantMessage: 'build started'
+    })
+  })
+
   it('saves an authority change within seconds once a held lock clears', async () => {
     await prompt('first')
     await vi.advanceTimersByTimeAsync(1)
