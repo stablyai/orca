@@ -13,12 +13,18 @@ export class HeadlessOriginBuffers {
   constructor(
     private readonly terminal: Terminal,
     private readonly attachLine: (line: OriginBufferLine) => OriginBufferLine,
-    private readonly changed: () => void
+    private readonly changed: () => void,
+    private readonly beforeChange: () => void,
+    private readonly nativeFactory: (
+      buffer: OriginBuffer,
+      factory: OriginBuffer['getBlankLine']
+    ) => boolean
   ) {
     const core = originTerminalCore(terminal)
     if (core && typeof core.reset === 'function') {
       const reset = core.reset
       core.reset = (...args) => {
+        this.beforeChange()
         reset.apply(core, args)
         this.attach()
       }
@@ -35,14 +41,27 @@ export class HeadlessOriginBuffers {
       if (!this.buffers.has(buffer)) {
         this.buffers.add(buffer)
         const blank = buffer.getBlankLine
-        buffer.getBlankLine = (...args) => this.attachLine(blank.apply(buffer, args))
+        buffer.getBlankLine = (...args) => {
+          if (!this.nativeFactory(buffer, blank)) {
+            this.beforeChange()
+          }
+          return this.attachLine(blank.apply(buffer, args))
+        }
         const clear = buffer.clear
         buffer.clear = (...args) => {
+          this.beforeChange()
           clear.apply(buffer, args)
           this.attachList(buffer.lines)
         }
       }
       this.attachList(buffer.lines)
+    }
+  }
+
+  private beforeInsert(list: OriginLineList, count: number): void {
+    const capacity = list.maxLength
+    if (capacity === undefined || !Number.isFinite(capacity) || list.length + count > capacity) {
+      this.beforeChange()
     }
   }
 
@@ -54,37 +73,48 @@ export class HeadlessOriginBuffers {
     const get = list.get
     const set = list.set
     list.set = (index, line) => {
+      this.beforeChange()
       set.call(list, index, this.attachLine(line))
       this.changed()
     }
     const push = list.push
     list.push = (line) => {
+      this.beforeInsert(list, 1)
       push.call(list, this.attachLine(line))
       this.changed()
     }
     const splice = list.splice
     list.splice = (start, count, ...lines) => {
+      if (count) {
+        this.beforeChange()
+      } else {
+        this.beforeInsert(list, lines.length)
+      }
       splice.call(list, start, count, ...lines.map((line) => this.attachLine(line)))
       this.changed()
     }
     const shift = list.shiftElements
     list.shiftElements = (start, count, offset) => {
+      this.beforeChange()
       shift.call(list, start, count, offset)
       this.changed()
     }
     const trim = list.trimStart
     list.trimStart = (count) => {
+      this.beforeChange()
       trim.call(list, count)
       this.changed()
     }
     const pop = list.pop
     list.pop = () => {
+      this.beforeChange()
       const result = pop.call(list)
       this.changed()
       return result
     }
     const recycle = list.recycle
     list.recycle = () => {
+      this.beforeChange()
       this.changed()
       return this.attachLine(recycle.call(list))
     }
@@ -94,6 +124,7 @@ export class HeadlessOriginBuffers {
         configurable: true,
         get: () => length.get!.call(list),
         set: (value: number) => {
+          this.beforeChange()
           length.set!.call(list, value)
           this.changed()
         }

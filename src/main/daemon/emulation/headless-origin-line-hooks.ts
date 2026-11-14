@@ -24,10 +24,11 @@ export const ORIGIN_LINE_HOOKS: OriginLineMethods = {
     return readOriginLineAttachment(this)!.owner.cells.load(this, index, cell)
   },
   setCell(this: OriginBufferLine, index, cell) {
-    readOriginLineAttachment(this)!.owner.setCell(this, index, cell)
+    readOriginLineAttachment(this)!.owner.cells.set(this, index, cell)
   },
   set(this: OriginBufferLine, index, cell) {
     const state = readOriginLineAttachment(this)!
+    state.owner.materialize()
     state.originals.set.call(this, index, cell)
     state.owner.writeCell(this, index)
   },
@@ -47,13 +48,13 @@ export const ORIGIN_LINE_HOOKS: OriginLineMethods = {
     return readOriginLineAttachment(this)!.owner.edits.resize(this, cols, cell)
   },
   copyFrom(this: OriginBufferLine, source, blank) {
-    readOriginLineAttachment(this)!.owner.copyFrom(this, source, blank)
+    readOriginLineAttachment(this)!.owner.copies.copyFrom(this, source, blank)
   },
   clone(this: OriginBufferLine, blank) {
-    return readOriginLineAttachment(this)!.owner.clone(this, blank)
+    return readOriginLineAttachment(this)!.owner.copies.clone(this, blank)
   },
   copyCellsFrom(this: OriginBufferLine, source, from, to, count, reverse) {
-    readOriginLineAttachment(this)!.owner.copyCells(this, source, from, to, count, reverse)
+    readOriginLineAttachment(this)!.owner.copies.copyCells(this, source, from, to, count, reverse)
   }
 }
 export const { set: _optionalSetHook, ...REQUIRED_ORIGIN_LINE_HOOKS } = ORIGIN_LINE_HOOKS

@@ -497,3 +497,137 @@ it('attributes an empty-base native combine without affecting an interleaved def
     plain.dispose()
   }
 })
+
+it('keeps equal-scope scroll growth old, then preserves old tails across scoped and unscoped writes', async () => {
+  const emulator = new HeadlessEmulator({ cols: 12, rows: 2, scrollback: 10 })
+  const owner = {}
+  const old = { owner, epoch: 1 }
+  const current = { owner, epoch: 2 }
+  const eligible = (text: string) => {
+    const joined = joinedTerminalOrigins(emulator.getVisibleActionLines(current))
+    return compileTextTest({ contains: text })(
+      joined.text,
+      terminalSupportQuery(joined.origins, current)
+    )
+  }
+  try {
+    await emulator.write('old0\r\nold1', { contentOrigin: old })
+    await emulator.write('\r\nold2', { contentOrigin: { owner, epoch: 1 } })
+    expect(emulator.getVisibleLines()).toEqual(['old1', 'old2'])
+    expect(eligible('old1')).toBe(false)
+    expect(eligible('old2')).toBe(false)
+    await emulator.write('\rnew', { contentOrigin: current })
+    expect(emulator.getVisibleLines()).toEqual(['old1', 'new2'])
+    expect(eligible('new')).toBe(true)
+    expect(eligible('2')).toBe(false)
+    await emulator.write('\r\nopaque')
+    expect(eligible('opaque')).toBe(true)
+    expect(eligible('new')).toBe(true)
+  } finally {
+    emulator.dispose()
+  }
+})
+
+it('keeps queued unscoped output unknown at the first scoped FIFO write', async () => {
+  const emulator = new HeadlessEmulator({ cols: 20, rows: 2 })
+  const owner = {}
+  const current = { owner, epoch: 2 }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: disable only this test terminal's optional sync seam to exercise its real FIFO.
+  const terminal = (emulator as unknown as { terminal: Terminal }).terminal
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the production emulator checks this optional private method before using it.
+  const core = originTerminalCore(terminal) as ReturnType<typeof originTerminalCore> & {
+    writeSync?: unknown
+  }
+  core.writeSync = undefined
+  try {
+    const earlier = emulator.write('opaque\r\n')
+    const scoped = emulator.write('old', { contentOrigin: { owner, epoch: 1 } })
+    await Promise.all([earlier, scoped])
+    const lines = emulator.getVisibleActionLines(current)
+    expect(lines).toEqual(['opaque', 'old'])
+    expect(terminalScreenSupport(lines, current)?.(0, 0, 6)).toBe(true)
+    expect(terminalScreenSupport(lines, current)?.(1, 0, 3)).toBe(false)
+  } finally {
+    emulator.dispose()
+  }
+})
+
+it('preserves unknown fills and zero-width writes while retaining an established wide write span', async () => {
+  const terminal = new Terminal({ cols: 8, rows: 2, allowProposedApi: true })
+  const origins = new HeadlessContentOrigins(terminal)
+  const owner = {}
+  const old = { owner, epoch: 1 }
+  const current = { owner, epoch: 2 }
+  const write = async (text: string) => {
+    origins.begin(old)
+    await new Promise<void>((resolve) => terminal.write(text, resolve))
+    origins.end()
+  }
+  try {
+    await write('界X')
+    const line = originTerminalCore(terminal)!.buffers.active.lines.get(0)!
+    origins.begin(old)
+    line.setCellFromCodepoint(1, 0x301, 0, {})
+    origins.end()
+    expect(origins.read(current)[0]).toBe('界X')
+    // Export the continuation as a one-column cell so its established write support is observable.
+    const cell = terminal.buffer.active.getLine(0)!.getCell(1)!
+    line.loadCell(1, cell)
+    line.setCell(4, cell)
+    origins.begin(current)
+    line.setCellFromCodepoint(6, 33, 1, {})
+    origins.end()
+    expect(origins.read(current)[0]).toBe('界X \u0301 !')
+    expect(terminalScreenSupport(origins.read(current), current)?.(0, 3, 4)).toBe(false)
+  } finally {
+    terminal.dispose()
+  }
+  const filledTerminal = new HeadlessEmulator({ cols: 8, rows: 2 })
+  try {
+    await filledTerminal.write('old', { contentOrigin: old })
+    await filledTerminal.write('\x1b#8', { contentOrigin: old })
+    const filled = filledTerminal.getVisibleActionLines(current)
+    expect(filled).toEqual(['EEEEEEEE', 'EEEEEEEE'])
+    expect(terminalScreenSupport(filled, current)?.(0, 0, 8)).toBe(true)
+  } finally {
+    filledTerminal.dispose()
+  }
+  const fresh = new HeadlessEmulator({ cols: 8, rows: 2 })
+  try {
+    await fresh.write('\u0301\x1b[2GX', { contentOrigin: old })
+    const lines = fresh.getVisibleActionLines(current)
+    expect(lines[0]).toBe('\u0301X')
+    expect(terminalScreenSupport(lines, current)?.(0, 0, 1)).toBe(true)
+    expect(terminalScreenSupport(lines, current)?.(0, 1, 2)).toBe(false)
+  } finally {
+    fresh.dispose()
+  }
+})
+
+it('does not invent predecessor support for the continuation of a width-changing join', async () => {
+  const terminal = new Terminal({ cols: 8, rows: 2, allowProposedApi: true })
+  const origins = new HeadlessContentOrigins(terminal)
+  const owner = {}
+  const old = { owner, epoch: 1 }
+  const current = { owner, epoch: 2 }
+  try {
+    origins.begin(old)
+    await new Promise<void>((resolve) => terminal.write('a', resolve))
+    const line = originTerminalCore(terminal)!.buffers.active.lines.get(0)!
+    line.addCodepointToCell(0, 0xfe0f, 2)
+    line.setCellFromCodepoint(1, 0x301, 0, {})
+    origins.end()
+    const cell = terminal.buffer.active.getLine(0)!.getCell(1)!
+    line.loadCell(1, cell)
+    line.setCell(4, cell)
+    origins.begin(current)
+    line.setCellFromCodepoint(6, 33, 1, {})
+    origins.end()
+    const lines = origins.read(current)
+    expect(lines[0]).toBe('a\ufe0f  \u0301 !')
+    expect(terminalScreenSupport(lines, current)?.(0, 0, 2)).toBe(false)
+    expect(terminalScreenSupport(lines, current)?.(0, 4, 5)).toBe(true)
+  } finally {
+    terminal.dispose()
+  }
+})

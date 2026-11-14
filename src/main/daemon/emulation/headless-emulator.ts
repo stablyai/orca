@@ -1,5 +1,5 @@
 import './xterm-env-polyfill'
-import { Terminal, type ITerminalOptions } from '@xterm/headless'
+import { Terminal } from '@xterm/headless'
 import { SerializeAddon } from '@xterm/addon-serialize'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import { activateOrcaTerminalUnicodeProvider } from '../../../shared/terminal/appearance/terminal-unicode-provider'
@@ -37,23 +37,14 @@ import {
 import { HeadlessContentOrigins } from './headless-content-origins'
 import type { TerminalContentOrigin } from '../../../shared/terminal/output/terminal-content-origin'
 
-/** windowsPty: ConPTY repaints its own grid after a resize, so growing rows must not pull scrollback. */
-export type HeadlessEmulatorOptions = Pick<ITerminalOptions, 'windowsPty'> & {
-  cols: number
-  rows: number
-  scrollback?: number
-  /** Only opted-in live writes may reply; daemon Session must never supply this sink. */
-  onQueryReply?: (reply: string) => void
-  pathFlavor?: 'posix' | 'win32'
-  remotePosixFileUriAuthority?: boolean
-  wslDistro?: string
-}
-
-export type HeadlessEmulatorWriteOptions = {
-  contentOrigin?: TerminalContentOrigin
-  /** Opt in only for live chunks; seed, hydration and snapshot writes must never reply. */
-  forwardQueryReplies?: boolean
-}
+import type {
+  HeadlessEmulatorOptions,
+  HeadlessEmulatorWriteOptions
+} from './headless-emulator-options'
+export type {
+  HeadlessEmulatorOptions,
+  HeadlessEmulatorWriteOptions
+} from './headless-emulator-options'
 
 type TerminalWithSynchronousWrite = Terminal & {
   _core?: {
@@ -244,6 +235,7 @@ export class HeadlessEmulator {
     }
     this.restoredOscLinks = []
     const writeSync = this.partialEscapeTail ? null : (data: string) => void this.writeSync(data)
+    this.contentOrigins?.materialize()
     resizeLikeOwnPty(this.terminal, cols, rows, writeSync)
     this.contentOrigins?.resized()
   }
@@ -351,6 +343,7 @@ export class HeadlessEmulator {
 
   clearScrollback(): void {
     this.restoredOscLinks = []
+    this.contentOrigins?.materialize()
     this.terminal.clear()
   }
 

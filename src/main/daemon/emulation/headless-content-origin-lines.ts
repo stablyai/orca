@@ -12,7 +12,10 @@ import {
 export type OriginCell = IBufferCell
 type OriginCellAttributes = { fg?: number; bg?: number }
 export type OriginBufferLine = {
-  mutationObserver?: Pick<HeadlessContentOrigins, 'codepointWritten' | 'codepointCombined'>
+  mutationObserver?: Pick<
+    HeadlessContentOrigins,
+    'codepointWritten' | 'codepointCombined' | 'glyphNotificationsEnabled' | 'materialize'
+  >
   length: number
   getString(index: number): string
   hasContent(index: number): number
@@ -45,6 +48,7 @@ export type OriginBufferLine = {
 }
 export type OriginLineList = {
   length: number
+  maxLength?: number
   get(index: number): OriginBufferLine | undefined
   set(index: number, line: OriginBufferLine): void
   push(line: OriginBufferLine): void
@@ -56,6 +60,7 @@ export type OriginLineList = {
 }
 export type OriginBuffer = {
   lines: OriginLineList
+  getNullCell(...args: unknown[]): OriginCell
   getBlankLine(...args: unknown[]): OriginBufferLine
   clear(...args: unknown[]): void
 }
@@ -113,6 +118,7 @@ export function readOriginScreenLines(terminal: Terminal, owner: HeadlessContent
   const buffer = terminal.buffer.active
   const lines: string[] = []
   const origins: TerminalOriginRuns[] = []
+  const uniform = owner.uniformOrigin
   for (let index = buffer.viewportY; index < buffer.viewportY + terminal.rows; index++) {
     const line = core?.buffers.active.lines.get(index)
     const columns: number[] = []
@@ -145,6 +151,8 @@ export function readOriginScreenLines(terminal: Terminal, owner: HeadlessContent
         for (const run of component) {
           append(at + run.start, Math.min(end, at + run.end), run.origin)
         }
+      } else if (uniform && state && line?.hasContent(column)) {
+        append(at, end, uniform)
       } else if (line?.hasContent(column)) {
         while (state?.runs[sourceIndex] && state.runs[sourceIndex]!.end <= column) {
           sourceIndex++
@@ -184,3 +192,20 @@ export function carryOriginScreenLines(source: readonly string[], lines: string[
 }
 
 export type OriginScreenCache = { revision: number; scope: TerminalContentOrigin; lines: string[] }
+
+export function readOriginScreenCache(
+  terminal: Terminal,
+  owner: HeadlessContentOrigins,
+  revision: number,
+  scope: TerminalContentOrigin,
+  cached?: OriginScreenCache
+): OriginScreenCache {
+  if (
+    cached?.revision === revision &&
+    cached.scope.owner === scope.owner &&
+    cached.scope.epoch === scope.epoch
+  ) {
+    return cached
+  }
+  return { revision, scope, lines: readOriginScreenLines(terminal, owner) }
+}

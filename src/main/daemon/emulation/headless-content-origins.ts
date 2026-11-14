@@ -1,13 +1,23 @@
 import type { Terminal } from '@xterm/headless'
 import { HeadlessOriginCellSnapshots } from './headless-origin-cell-snapshots'
 import { HeadlessOriginBuffers } from './headless-origin-buffers'
+import { HeadlessOriginLineCopies } from './headless-origin-line-copies'
+import {
+  captureNativeOriginLine,
+  compatibleOriginLine,
+  canonicalEmptyOriginLine,
+  visitOriginLines,
+  seedUniformOriginLine,
+  initiallyEmptyOriginBuffers,
+  nativeOriginFactory
+} from './headless-origin-uniform'
 import {
   captureOriginLineMethods,
   prepareOriginLineHookPrototype,
   ORIGIN_LINE_HOOKS,
   REQUIRED_ORIGIN_LINE_HOOKS
 } from './headless-origin-line-hooks'
-import { HeadlessOriginLineEdits, replaceOriginCells } from './headless-origin-line-edits'
+import { HeadlessOriginLineEdits } from './headless-origin-line-edits'
 import {
   terminalOriginAt,
   terminalOriginSpan,
@@ -16,20 +26,35 @@ import {
   type TerminalContentOrigin
 } from '../../../shared/terminal/output/terminal-content-origin'
 import {
-  readOriginScreenLines,
+  readOriginScreenCache,
   readOriginLineAttachment,
   attachOriginLineState,
   type OriginLineAttachment,
   type OriginLineMethods,
   type OriginBufferLine,
-  type OriginCell,
   type OriginLineState,
   type OriginScreenCache
 } from './headless-content-origin-lines'
 
 /** Certificates follow the editor's actual line identities; no second screen or global patch. */
 export class HeadlessContentOrigins {
-  readonly cells = new HeadlessOriginCellSnapshots((line) => this.state(line))
+  readonly cells = new HeadlessOriginCellSnapshots(
+    (line) => this.state(line),
+    (line, index, runs, component) => this.writeCell(line, index, runs, component),
+    (state, index) => this.edits.erase(state, index)
+  )
+  readonly copies = new HeadlessOriginLineCopies(
+    (line) => this.state(line),
+    (line) => this.attachLine(line),
+    (line, state) => this.assign(line, state),
+    (line) =>
+      this.glyphNotificationsEnabled === false &&
+      compatibleOriginLine(line, this.native, readOriginLineAttachment(line)?.originals) &&
+      canonicalEmptyOriginLine(line)
+  )
+  glyphNotificationsEnabled?: boolean
+  uniformOrigin?: TerminalContentOrigin
+  private readonly native: ReturnType<typeof captureNativeOriginLine>
   private sharedOriginals?: OriginLineMethods
   readonly edits = new HeadlessOriginLineEdits(
     (line) => this.state(line),
@@ -47,17 +72,32 @@ export class HeadlessContentOrigins {
   private cached?: OriginScreenCache
 
   constructor(private readonly terminal: Terminal) {
+    this.native = captureNativeOriginLine(terminal)
     this.attachments = new HeadlessOriginBuffers(
       terminal,
       (line) => this.attachLine(line),
-      () => this.revision++
+      () => this.revision++,
+      () => this.materialize(),
+      (buffer, factory) => nativeOriginFactory(buffer, factory, this.native)
     )
   }
 
   begin(origin?: TerminalContentOrigin): void {
+    this.attachments.attach()
+    if (this.glyphNotificationsEnabled === undefined) {
+      const empty = origin && initiallyEmptyOriginBuffers(this.terminal, this, this.native)
+      this.glyphNotificationsEnabled = !empty
+      if (empty) {
+        this.uniformOrigin = origin
+      }
+    } else if (
+      this.glyphNotificationsEnabled === false &&
+      (origin?.owner !== this.uniformOrigin?.owner || origin?.epoch !== this.uniformOrigin?.epoch)
+    ) {
+      this.materialize()
+    }
     this.origin = origin
     this.revision++
-    this.attachments.attach()
   }
 
   end(): void {
@@ -65,19 +105,26 @@ export class HeadlessContentOrigins {
     this.origin = undefined
   }
 
-  read(scope: TerminalContentOrigin): string[] {
-    this.flush()
-    const cached = this.cached
-    if (
-      cached?.revision === this.revision &&
-      cached.scope.owner === scope.owner &&
-      cached.scope.epoch === scope.epoch
-    ) {
-      return cached.lines
+  materialize(): void {
+    const origin = this.uniformOrigin
+    this.glyphNotificationsEnabled = true
+    this.uniformOrigin = undefined
+    if (origin) {
+      visitOriginLines(this.terminal, (line) => {
+        seedUniformOriginLine(line, this, origin)
+        return true
+      })
+      this.revision++
     }
-    const lines = readOriginScreenLines(this.terminal, this)
-    this.cached = { revision: this.revision, scope, lines }
-    return lines
+  }
+
+  read(scope: TerminalContentOrigin): string[] {
+    if (this.glyphNotificationsEnabled === undefined) {
+      this.materialize()
+    }
+    this.flush()
+    this.cached = readOriginScreenCache(this.terminal, this, this.revision, scope, this.cached)
+    return this.cached.lines
   }
 
   resized(): void {
@@ -86,6 +133,9 @@ export class HeadlessContentOrigins {
   }
 
   private state(line: OriginBufferLine): OriginLineAttachment {
+    if (this.glyphNotificationsEnabled !== true) {
+      this.materialize()
+    }
     this.flush()
     this.attachLine(line)
     return readOriginLineAttachment(line)!
@@ -123,6 +173,9 @@ export class HeadlessContentOrigins {
   }
 
   printed(line: OriginBufferLine, index: number, width: number, code: number): void {
+    if (this.glyphNotificationsEnabled !== true) {
+      this.materialize()
+    }
     if (width === 0) {
       return
     }
@@ -137,6 +190,9 @@ export class HeadlessContentOrigins {
   }
 
   codepointWritten(line: OriginBufferLine, index: number, code: number, width: number): void {
+    if (this.glyphNotificationsEnabled !== true) {
+      this.materialize()
+    }
     const state = readOriginLineAttachment(line)!
     if (state.editing) {
       this.edits.erase(state, index)
@@ -151,6 +207,9 @@ export class HeadlessContentOrigins {
     beforeLength: number,
     afterLength: number
   ): void {
+    if (this.glyphNotificationsEnabled !== true) {
+      this.materialize()
+    }
     if (beforeLength === 0 && afterLength > 0) {
       this.writeCell(line, index, terminalOriginSpan(1, this.origin))
       return
@@ -221,66 +280,21 @@ export class HeadlessContentOrigins {
     })
   }
 
-  setCell(line: OriginBufferLine, index: number, cell: OriginCell): void {
-    const state = readOriginLineAttachment(line)!
-    const origin = this.cells.get(cell)
-    state.originals.setCell.call(line, index, cell)
-    if (state.editing) {
-      if (state.recordSets) {
-        this.edits.erase(state, index)
-      }
-    } else {
-      this.writeCell(
-        line,
-        index,
-        origin ? terminalOriginSpan(1, terminalOriginAt(origin.runs, origin.index)) : [],
-        origin?.component
-      )
-    }
-  }
-
-  copyFrom(line: OriginBufferLine, source: OriginBufferLine, blank?: boolean): void {
-    const state = this.state(source)
-    readOriginLineAttachment(line)!.originals.copyFrom.call(line, source, blank)
-    this.assign(line, {
-      runs: state.runs,
-      components: !blank && state.components?.size ? new Map(state.components) : undefined
-    })
-  }
-
-  clone(line: OriginBufferLine, blank?: boolean): OriginBufferLine {
-    const result = this.attachLine(
-      readOriginLineAttachment(line)!.originals.clone.call(line, blank)
-    )
-    const state = this.state(line)
-    this.assign(result, {
-      runs: state.runs,
-      components: !blank && state.components?.size ? new Map(state.components) : undefined
-    })
-    return result
-  }
-
-  copyCells(
-    line: OriginBufferLine,
-    source: OriginBufferLine,
-    from: number,
-    to: number,
-    count: number,
-    reverse: boolean
-  ): void {
-    const original = this.state(source)
-    const target = this.state(line)
-    const next = replaceOriginCells(target, to, to + count, original, from)
-    target.originals.copyCellsFrom.call(line, source, from, to, count, reverse)
-    this.assign(line, next)
-  }
-
   private attachLine(line: OriginBufferLine): OriginBufferLine {
     if (readOriginLineAttachment(line)?.owner === this) {
       return line
     }
     const originals = captureOriginLineMethods(line, this.sharedOriginals)
     const hookPrototype = prepareOriginLineHookPrototype(line, originals)
+    if (
+      !hookPrototype ||
+      !compatibleOriginLine(line, this.native) ||
+      (this.glyphNotificationsEnabled === false && !canonicalEmptyOriginLine(line))
+    ) {
+      if (this.glyphNotificationsEnabled !== true) {
+        this.materialize()
+      }
+    }
     this.sharedOriginals ??= originals
     attachOriginLineState(line, {
       owner: this,
