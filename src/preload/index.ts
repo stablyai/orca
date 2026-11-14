@@ -63,6 +63,7 @@ import { ephemeralVmApi } from './api/cloud-workspaces/ephemeral-vm-bridge'
 import { cacheApi } from './api/github/cache-bridge'
 import { sessionApi } from './api/workspaces/session-bridge'
 import { updaterApi } from './api/updater/updater-bridge'
+import { agentUpdatesApi } from './api/agent-updates/agent-updates-bridge'
 import { docPreviewApi } from './api/document-preview/doc-preview-bridge'
 import { notebookApi } from './api/document-preview/notebook-bridge'
 import { fsApi } from './api/filesystem/fs-bridge'
@@ -169,6 +170,7 @@ const api = {
   cache: cacheApi,
   session: sessionApi,
   updater: updaterApi,
+  agentUpdates: agentUpdatesApi,
   docPreview: docPreviewApi,
   notebook: notebookApi,
   fs: fsApi,
