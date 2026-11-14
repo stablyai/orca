@@ -63,11 +63,13 @@ export const notificationsApi = {
     volume?: number
   }): Promise<NotificationSoundResult> => {
     try {
-      const resolved = (await ipcRenderer.invoke(
-        'notifications:resolveSoundPath'
-      )) as NotificationSoundPathResult
+      const resolved: NotificationSoundPathResult = await ipcRenderer.invoke(
+        'notifications:resolveSoundPath',
+        { force: options?.force === true }
+      )
       if (!resolved.ok) {
-        if (cachedNotificationSound) {
+        // Focus suppression is transient; keep the decoded sound for later plays.
+        if (resolved.reason !== 'focus-active' && cachedNotificationSound) {
           disposeCachedNotificationSound()
         }
         return { played: false, reason: resolved.reason }
