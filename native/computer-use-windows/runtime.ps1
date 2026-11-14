@@ -857,19 +857,17 @@ function Invoke-OrcaEditTextInsertion($Edit, [int]$Index, [string]$Text) {
 function Set-OrcaTextCaret($Element, [string]$Leading) {
     # Why: a ValuePattern write resets WPF's caret to the start, so the next insertion would land there.
     try {
-        # Why: UIA moves by insertion positions, which count a surrogate pair or a CRLF once.
-        $positions = 0
-        for ($i = 0; $i -lt $Leading.Length; $i++) {
-            if ([char]::IsHighSurrogate($Leading[$i]) -or ($Leading[$i] -eq "`r" -and $i + 1 -lt $Leading.Length -and $Leading[$i + 1] -eq "`n")) { $i++ }
-            $positions++
-        }
+        # Why: UIA moves by caret positions, which keep a surrogate pair, a combining sequence and a CRLF together.
+        $positions = (New-Object Globalization.StringInfo $Leading).LengthInTextElements - ([regex]::Matches($Leading, "`r`n")).Count
         $start = [Windows.Automation.Text.TextPatternRangeEndpoint]::Start
         $end = [Windows.Automation.Text.TextPatternRangeEndpoint]::End
-        $caret = $Element.GetCurrentPattern([Windows.Automation.TextPattern]::Pattern).DocumentRange.Clone()
-        $caret.MoveEndpointByRange($end, $caret, $start)
-        [void]$caret.MoveEndpointByUnit($end, [Windows.Automation.Text.TextUnit]::Character, $positions)
-        $caret.MoveEndpointByRange($start, $caret, $end)
-        $caret.Select()
+        $leadingRange = $Element.GetCurrentPattern([Windows.Automation.TextPattern]::Pattern).DocumentRange.Clone()
+        $leadingRange.MoveEndpointByRange($end, $leadingRange, $start)
+        [void]$leadingRange.MoveEndpointByUnit($end, [Windows.Automation.Text.TextUnit]::Character, $positions)
+        # Why: a provider that counts positions differently would put the caret elsewhere, so only a confirmed prefix moves it.
+        if ($leadingRange.GetText(-1) -cne $Leading) { return }
+        $leadingRange.MoveEndpointByRange($start, $leadingRange, $end)
+        $leadingRange.Select()
     } catch {}
 }
 
@@ -888,11 +886,11 @@ function Get-OrcaTextSelectionOffsets($Element) {
 }
 
 function Invoke-OrcaValueTextInsertion($Element, [int]$Index, [string]$Text) {
-    # Why: Chromium applies a value write as replaced inner text, which editors with their own model miss or revert.
-    if ((Get-OrcaProperty $Element "FrameworkId") -eq "Chrome") { return $null }
     $pattern = try { $Element.GetCurrentPattern([Windows.Automation.ValuePattern]::Pattern) } catch { $null }
     if ($null -eq $pattern) { return $null }
     if ($pattern.Current.IsReadOnly) { throw "element $Index text is not settable: the field is read-only" }
+    # Why: Chromium applies a value write as replaced inner text, which editors with their own model miss or revert.
+    if ((Get-OrcaProperty $Element "FrameworkId") -eq "Chrome") { return $null }
     if (Test-OrcaSensitiveElement $Element) {
         throw "element $Index text is not settable at its caret: it is a password field, whose text can't be read; use set-value to replace it"
     }
@@ -931,12 +929,13 @@ function Invoke-OrcaElementTextInsertion($Element, $Record, $Process, $RootEleme
     if (Test-OrcaElementDisabled $Element) { throw "element $index text is not settable: the field is disabled" }
     $edit = Get-OrcaNativeEdit $Element $Process
     if ($null -ne $edit) { return Invoke-OrcaEditTextInsertion $edit $index $Text }
-    $action = Invoke-OrcaValueTextInsertion $Element $index $Text
-    if ($null -ne $action) { return $action }
+    # Why: list and tree items also take ValuePattern, where a write renames them rather than typing.
     $controlType = try { [string]$Element.Current.ControlType.ProgrammaticName } catch { "" }
     if ($controlType -notin @("ControlType.Edit", "ControlType.Document")) {
         throw "element $index text is not settable: it is not a text field"
     }
+    $action = Invoke-OrcaValueTextInsertion $Element $index $Text
+    if ($null -ne $action) { return $action }
     if (-not [bool]$Operation.restoreWindow) {
         throw (New-OrcaForegroundRefusal $Process "element $index accepts text only as keys, which go only to the window in front" "" "takes the user's keyboard")
     }

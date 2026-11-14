@@ -72,18 +72,18 @@ function Get-OrcaAppName($Process) { $Process.ProcessName }
 function Get-OrcaRootElement { $null }
 function Get-OrcaWindowFrame { @{ x = 100; y = 200 } }
 function Find-OrcaElement($RootElement, $Record) { if ($null -eq $Record) { $null } else { $Record.live } }
-function Invoke-OrcaValueTextInsertion($Element, $Index, $Text) { $null }
+function Invoke-OrcaValueTextInsertion { $script:valueWrites++; $null }
 function Send-OrcaKey { [OrcaDesktopWin32]::Calls.Add("sendkeys") }
 function Send-OrcaHotkey { [OrcaDesktopWin32]::Calls.Add("sendkeys") }
 function Send-OrcaPasteText { [OrcaDesktopWin32]::Calls.Add("sendkeys") }
 function New-OrcaSnapshot { [pscustomobject]@{} }
 function Restore-OrcaWindow { [OrcaDesktopWin32]::Calls.Add("activate"); $null }
 
-function New-TestElement([string]$ClassName, [int64]$Handle, [bool]$Enabled = $true) {
+function New-TestElement([string]$ClassName, [int64]$Handle, [bool]$Enabled = $true, [string]$ControlType = "ControlType.Document") {
     $live = [pscustomobject]@{
         Current = [pscustomobject]@{
             ClassName = $ClassName; NativeWindowHandle = $Handle; IsPassword = $false; IsEnabled = $Enabled; Name = "Body"
-            AutomationId = ""; LocalizedControlType = "document"; ControlType = [pscustomobject]@{ ProgrammaticName = "ControlType.Document" }
+            AutomationId = ""; LocalizedControlType = "document"; ControlType = [pscustomobject]@{ ProgrammaticName = $ControlType }
         }
     }
     [pscustomobject]@{ index = 7; live = $live }
@@ -153,10 +153,17 @@ $outcome = Invoke-TestOperation ([pscustomobject]@{ tool = "type_text"; app = "F
 if ($outcome.message -notlike "background_unavailable: element 7 accepts text only as keys*") { throw "no text route, received '$($outcome.message)'" }
 Assert-TestEqual ([OrcaDesktopWin32]::Calls.Count) 0 "no text route sends nothing"
 
+# List and tree items take ValuePattern too, where a write would rename them, so they are refused untouched.
+[OrcaDesktopWin32]::Reset("", 0, 0)
+$script:valueWrites = 0
+$outcome = Invoke-TestOperation ([pscustomobject]@{ tool = "type_text"; app = "Fixture"; text = "x"; element = (New-TestElement "" 0 $true "ControlType.ListItem") })
+if ($outcome.message -notlike "element 7 text is not settable: it is not a text field") { throw "list item, received '$($outcome.message)'" }
+Assert-TestEqual ([OrcaDesktopWin32]::Calls.Count + $script:valueWrites) 0 "list item sends nothing"
+
 # Foreground typing re-checks focus right before SendInput, so a user's switch never receives the text.
 [OrcaDesktopWin32]::Reset("", 0, 0)
 [OrcaDesktopWin32]::Foreground = [IntPtr]101
-$outcome = Invoke-TestOperation ([pscustomobject]@{ tool = "type_text"; app = "Fixture"; text = "café"; restoreWindow = $true })
+$outcome = Invoke-TestOperation ([pscustomobject]@{ tool = "type_text"; app = "Fixture"; text = "caf$([char]0x00E9)"; restoreWindow = $true })
 if ($null -ne $outcome.message) { throw "foreground typing failed: $($outcome.message)" }
-Assert-TestEqual (@([OrcaDesktopWin32]::Calls | Where-Object { $_ -like "keys:*" }) -join "|") "keys:café" "foreground typing sends Unicode input"
+Assert-TestEqual (@([OrcaDesktopWin32]::Calls | Where-Object { $_ -like "keys:*" }) -join "|") "keys:caf$([char]0x00E9)" "foreground typing sends Unicode input"
 Write-Output "windows-text-entry-tests-ok"
