@@ -4,7 +4,7 @@ import {
   readme,
   type PluginTemplate,
   type PluginTemplateInput
-} from './plugin-template-files'
+} from '../../../shared/plugins/authoring/plugin-template-files'
 
 // Sandboxed-frame templates: they run code, so loading them needs `--approve`.
 

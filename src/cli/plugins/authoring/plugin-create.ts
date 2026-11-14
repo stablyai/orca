@@ -4,7 +4,10 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { parsePluginManifest } from '../../../shared/plugins/manifest/plugin-manifest'
 import { pluginDisplayNameFromId } from './plugin-display-name'
 import { PLUGIN_TEMPLATE_NAMES, type PluginTemplateName } from './plugin-template-names'
-import { pluginTemplateKey } from './plugin-template-files'
+import {
+  pluginIdFromName,
+  pluginTemplateKey
+} from '../../../shared/plugins/authoring/plugin-template-files'
 import { renderPluginTemplate } from './plugin-templates'
 import { writePluginTypeFiles } from './plugin-type-files'
 
@@ -21,10 +24,7 @@ export class PluginCreateError extends Error {}
 
 /** A manifest id from a folder name: lowercase words joined by `-`. */
 export function pluginIdFromFolder(folder: string): string {
-  return basename(folder)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
+  return pluginIdFromName(basename(folder))
 }
 
 function assertEmptyFolder(dir: string): void {

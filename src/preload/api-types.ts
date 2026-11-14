@@ -51,6 +51,7 @@ import type { PetApi } from './api/pets/pet-api'
 import type { AppIconApi } from './api/window-ui/app-icon-api'
 import type { BrowserPasswordsApi } from './api/browser/browser-passwords-api'
 import type { PluginsApi } from './api/plugins/plugin-host-api'
+import type { ThemeStudioApi } from './api/theme-studio/theme-studio-bridge'
 import type { PreflightApi } from './api/preflight/preflight-api'
 import type { PtyApi } from './api/terminal/pty-api'
 import type { ProjectGroupsApi, ProjectsApi, RepositoryApi } from './api/projects/repository-api'
@@ -187,6 +188,7 @@ export type PreloadApi = {
   pwsh: RuntimeApi['pwsh']
   gitBash: RuntimeApi['gitBash']
   plugins: PluginsApi
+  themeStudio: ThemeStudioApi
   agentStatus: AgentStatusApi
   mobile: MobileApi
   speech: SpeechApi

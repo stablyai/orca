@@ -5,6 +5,8 @@ import {
   terminalCustomThemeToXtermTheme
 } from '../../../../../shared/terminal-themes/terminal-custom-themes'
 import type { TerminalCustomTheme } from '../../../../../shared/terminal-themes/terminal-custom-themes'
+import { themeStudioTerminalPreview } from '@/store/appearance/theme-studio-preview-store'
+import { withTerminalColorOverrides } from '../../../../../shared/terminal-themes/terminal-color-overrides'
 import { resolveTerminalPalette } from '../../../../../shared/terminal-themes/terminal-theme-selection'
 import type { TerminalPaletteSettings } from '../../../../../shared/terminal-themes/terminal-theme-selection'
 import {
@@ -100,10 +102,14 @@ export function resolveEffectiveTerminalAppearance(
     TerminalPaletteSettings,
   systemPrefersDark = getSystemPrefersDark()
 ): EffectiveTerminalAppearance {
-  const { mode, useLightVariant, themeName, theme } = resolveTerminalPalette(
-    settings,
-    systemPrefersDark
-  )
+  const palette = resolveTerminalPalette(settings, systemPrefersDark)
+  const { mode, useLightVariant, themeName } = palette
+  // An `orca theme` draft's palette paints over the slot's until it is kept or discarded.
+  const draftPalette = themeStudioTerminalPreview(useLightVariant ? 'light' : 'dark')
+  const theme =
+    palette.theme && draftPalette
+      ? withTerminalColorOverrides(palette.theme, draftPalette)
+      : palette.theme
   const dividerColor = useLightVariant
     ? normalizeColor(settings.terminalDividerColorLight, DEFAULT_TERMINAL_DIVIDER_LIGHT)
     : normalizeColor(settings.terminalDividerColorDark, DEFAULT_TERMINAL_DIVIDER_DARK)

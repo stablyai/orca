@@ -1,4 +1,5 @@
 import { BranchSwitchCollisionError } from '../../../git/worktrees/checkout/branch-switch-target'
+import { THEME_STUDIO_ERROR_CODES } from '../../../../shared/theme-studio/theme-studio-errors'
 import { SparsePresetValidationError } from '../../../../shared/worktree/creation/sparse-preset-failure'
 import {
   RECIPE_VM_REFUSAL_CODES,
@@ -197,6 +198,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   AGENT_SKILL_SHARING_UNSUPPORTED_ENVIRONMENT_CODE,
   SKILL_INSTALL_RPC_ERROR_CODE,
   ...PLUGIN_CLI_ERROR_CODES,
+  ...Object.values(THEME_STUDIO_ERROR_CODES),
   // Keep owner conflicts distinct so clients can choose reload, re-adopt or stop offering the action.
   ...Object.values(AUTOMATION_OWNER_CONFLICT_CODES),
   ...Object.values(ORCHESTRATION_SESSION_CALLER_ERROR_CODES)

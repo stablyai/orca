@@ -7,6 +7,7 @@ import { useSplitDividerSetting } from '@/hooks/use-split-divider-setting'
 import { rebuildAllTerminalWebglRenderers } from '@/lib/pane-manager/pane-manager-registry'
 import { applyDocumentTheme, applyPluginAppTheme } from './appearance/document-theme'
 import { applyThemeBackground } from './appearance/theme-background'
+import { useThemeStudioAppTheme } from './appearance/use-theme-studio-app-theme'
 import { syncThemeBackgroundVideo } from './appearance/theme-background-video'
 import { usePrefersReducedMotion } from '../hooks/usePrefersReducedMotion'
 import { useWindowActive } from '../hooks/use-window-active'
@@ -80,15 +81,24 @@ export function useDocumentAppearance(): void {
   // Why find by id: a disabled or removed plugin drops out of the list, which restores built-in colors.
   const pluginTheme =
     pluginThemes.find((entry) => entry.id === selected && (entry.base === 'dark') === dark) ?? null
-  const appTheme = matchTerminal ? terminalTheme : pluginTheme
-  const editorTheme = findCodeEditorTheme(
+  // An `orca theme` draft paints over the selected theme without touching settings.
+  const draftTheme = useThemeStudioAppTheme(dark)
+  const appTheme = draftTheme ?? (matchTerminal ? terminalTheme : pluginTheme)
+  const selectedEditorTheme = findCodeEditorTheme(
     useAppStore((s) => (dark ? s.settings?.editorThemeDark : s.settings?.editorThemeLight)),
     pluginThemes
   )
-  // Why Match Terminal needn't wait: it derives from settings alone, not the plugin list.
+  // Why: an editor that follows the theme a draft replaces follows the draft.
+  const editorTheme =
+    draftTheme &&
+    typeof selectedEditorTheme === 'object' &&
+    selectedEditorTheme?.id === pluginTheme?.id
+      ? null
+      : selectedEditorTheme
+  // Why Match Terminal and drafts needn't wait: they don't come from the plugin list.
   const pluginThemesLoaded = usePluginThemeStore((s) => s.loaded)
   const appPainted = useRef<Readonly<Record<string, string>>>({})
-  const ready = matchTerminal || pluginThemesLoaded
+  const ready = draftTheme !== null || matchTerminal || pluginThemesLoaded
   usePluginTerminalPaletteRefresh()
   usePluginAppThemeSync()
   useSplitDividerSetting()
@@ -130,9 +140,10 @@ export function useDocumentAppearance(): void {
     // Why wait for the list: until it loads, the startup cache is still the right paint.
     // Why theme too: contrast is checked against the built-ins of the current mode.
     if (ready && theme) {
-      appPainted.current = applyPluginAppTheme(appTheme)
+      // Why no cache for a draft: the next launch must start in the user's own theme.
+      appPainted.current = applyPluginAppTheme(appTheme, draftTheme ? { storage: null } : {})
     }
-  }, [appTheme, ready, theme, dark])
+  }, [appTheme, draftTheme, ready, theme, dark])
 
   const sidebarTint = useAppStore(
     useShallow((s) =>

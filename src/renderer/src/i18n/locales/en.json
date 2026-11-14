@@ -20273,6 +20273,14 @@
         "title": "Orca refused this browser",
         "retry": "Try again"
       }
+    },
+    "app-shell": {
+      "themeStudio": {
+        "previewing": "Previewing {{value0}}",
+        "previewHint": "An agent is editing this theme. Keep saves it as one of your themes.",
+        "keep": "Keep",
+        "discard": "Discard"
+      }
     }
   },
   "components": {

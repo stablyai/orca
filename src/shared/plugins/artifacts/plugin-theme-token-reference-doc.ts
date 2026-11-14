@@ -158,6 +158,21 @@ export function pluginFrameThemeVariables(): { variable: string; token: string; 
   }))
 }
 
+/** Each public token: what it paints, whether a theme must set it, and what it is when omitted. */
+export function pluginThemeTokenReference(): {
+  token: string
+  paints: string
+  required: boolean
+  whenOmitted: string | null
+}[] {
+  return PLUGIN_APP_THEME_TOKENS.map((token) => ({
+    token,
+    paints: TOKEN_ROLES[token],
+    required: REQUIRED.has(token),
+    whenOmitted: REQUIRED.has(token) ? null : omittedValue(token)
+  }))
+}
+
 /** Colour token list for theme authors, rendered from the public token set. */
 export function renderPluginThemeTokenReference(): string {
   const lines = [
@@ -169,9 +184,9 @@ export function renderPluginThemeTokenReference(): string {
     '',
     '| Token | Paints | Required | When omitted |',
     '| --- | --- | --- | --- |',
-    ...PLUGIN_APP_THEME_TOKENS.map(
-      (token) =>
-        `| \`${token}\` | ${TOKEN_ROLES[token]} | ${REQUIRED.has(token) ? 'yes' : 'no'} | ${REQUIRED.has(token) ? '' : omittedValue(token)} |`
+    ...pluginThemeTokenReference().map(
+      ({ token, paints, required, whenOmitted }) =>
+        `| \`${token}\` | ${paints} | ${required ? 'yes' : 'no'} | ${whenOmitted ?? ''} |`
     ),
     '',
     '## Frame CSS variables',

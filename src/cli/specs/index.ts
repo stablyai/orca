@@ -34,6 +34,7 @@ import { PLUGIN_AUTHORING_COMMAND_SPECS, PLUGIN_RUNTIME_COMMAND_SPECS } from './
 import { PAIR_COMMAND_SPECS } from './pair'
 import { PLUGIN_VIEW_COMMAND_SPECS } from './plugin-view'
 import { PLUGIN_INSTALL_COMMAND_SPECS } from './plugin-install'
+import { THEME_COMMAND_SPECS } from './theme'
 import { WORKSPACE_CLEANUP_COMMAND_SPECS } from './workspace-cleanup'
 
 export const COMMAND_SPECS: CommandSpec[] = [
@@ -72,5 +73,6 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...PLUGIN_RUNTIME_COMMAND_SPECS,
   ...PLUGIN_VIEW_COMMAND_SPECS,
   ...PLUGIN_INSTALL_COMMAND_SPECS,
+  ...THEME_COMMAND_SPECS,
   ...PAIR_COMMAND_SPECS
 ]

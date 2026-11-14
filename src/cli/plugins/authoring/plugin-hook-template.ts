@@ -6,7 +6,7 @@ import {
   readme,
   type PluginTemplate,
   type PluginTemplateInput
-} from './plugin-template-files'
+} from '../../../shared/plugins/authoring/plugin-template-files'
 import { PLUGIN_TYPES_DIR } from './plugin-type-files'
 
 const WORKER_TS = `// A guard: Orca asks this worker before it types text into a terminal (terminal.send).

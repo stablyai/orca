@@ -33,6 +33,7 @@ import {
 } from './runtime-startup/main-process-runtime-service'
 import { initializeMainProcessAutomations } from './runtime-startup/main-process-automations'
 import { initializeMainProcessPlugins } from './plugin-startup/main-process-plugins'
+import { bindThemeStudio } from '../theme-studio/theme-studio-desktop-binding'
 import {
   collectWorktreeTrashSweepRoots,
   sweepStaleWorktreeTrash
@@ -72,6 +73,14 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   configureRuntimeServices(runtime)
   installFirstWorkRenameHookSubscription()
   await initializeMainProcessPlugins(runtime)
+  if (state.pluginService) {
+    bindThemeStudio({
+      serveMode: state.isServeMode,
+      userDataPath: app.getPath('userData'),
+      pluginService: state.pluginService,
+      getMainWindow: () => state.mainWindow
+    })
+  }
   state.starNag = new StarNagService(store, state.stats!)
   state.starNag.start()
   state.starNag.registerIpcHandlers()

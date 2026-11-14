@@ -59,7 +59,7 @@ async function requireInstallServices(): Promise<PluginInstallRpcServices> {
 
 function installDeps(
   services: PluginInstallRpcServices,
-  context: RpcContext
+  context: Pick<RpcContext, 'caller'>
 ): PluginCliInstallDeps {
   return {
     service: services.pluginService,
@@ -78,6 +78,19 @@ async function listEntry(
   return (
     (await listPluginsForClients(service)).find((entry) => entry.pluginKey === pluginKey) ?? null
   )
+}
+
+/** `orca plugin install <dir>` for a content-only folder Orca wrote itself, such as a saved theme. */
+export async function installHostWrittenPluginFolder(
+  path: string
+): Promise<{ pluginKey: string; version: string }> {
+  const services = await requireInstallServices()
+  const outcome = await installPluginFromCli(
+    installDeps(services, { caller: undefined }),
+    { kind: 'local-path', path },
+    undefined
+  )
+  return { pluginKey: outcome.pluginKey, version: outcome.version }
 }
 
 export const PLUGIN_INSTALL_METHODS = [
