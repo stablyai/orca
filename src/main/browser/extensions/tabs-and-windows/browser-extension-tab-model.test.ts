@@ -79,7 +79,7 @@ describe('an extension tab opened while Orca starts', () => {
       mocks.pages.set('welcome', { id: 21, session: mocks.workSession, worktreeId: 'wt-a' })
       return { browserPageId: 'welcome' }
     })
-    const opening = openBrowserExtensionTab('work', 'https://welcome.test', true)
+    const opening = openBrowserExtensionTab('work', 'https://welcome.test', { active: true })
     await Promise.resolve()
     expect(mocks.createTab).not.toHaveBeenCalled()
     window.rendererReady()
@@ -87,7 +87,7 @@ describe('an extension tab opened while Orca starts', () => {
 
     // A reload waits for the new document to restore again.
     window.reload()
-    const reopening = openBrowserExtensionTab('work', 'https://welcome.test', true)
+    const reopening = openBrowserExtensionTab('work', 'https://welcome.test', { active: true })
     await Promise.resolve()
     expect(mocks.createTab).toHaveBeenCalledTimes(1)
     window.rendererReady()
