@@ -201,4 +201,42 @@ describe('pr-refresh-coordinator', () => {
     expect(outcomes()).toHaveLength(2)
     expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
   })
+
+  it('delivers a newly shown alias while automatic timers are off', async () => {
+    const policy = await import('../../../../shared/review-refresh-policy')
+    policy.setPRAutoRefreshCadence('off')
+    const { reportVisiblePRRefreshCandidates } = await import('./pr-refresh-coordinator')
+    getPRForBranchOutcomeMock.mockImplementation(async () => ({
+      kind: 'found',
+      pr: makePR({ checksStatus: 'pending' }),
+      fetchedAt: Date.now()
+    }))
+    const first = makeCandidate({
+      cacheKey: '/repo::feature/a',
+      branch: 'feature/a',
+      linkedPRNumber: 12,
+      worktreeId: 'wt-a'
+    })
+    reportVisiblePRRefreshCandidates([first], 1, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(60_000)
+    const second = makeCandidate({
+      cacheKey: '/repo::feature/b',
+      branch: 'feature/b',
+      linkedPRNumber: 12,
+      worktreeId: 'wt-b'
+    })
+    reportVisiblePRRefreshCandidates([first, second], 2, 1)
+    await vi.advanceTimersByTimeAsync(0)
+    const delivered = sendMock.mock.calls.map(([, event]) => event).filter((event) => event.outcome)
+    expect(delivered).toHaveLength(2)
+    expect(delivered[1].aliases.map((alias) => alias.cacheKey)).toEqual([
+      '/repo::feature/a',
+      '/repo::feature/b'
+    ])
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(10 * 60_000)
+    expect(getPRForBranchOutcomeMock).toHaveBeenCalledTimes(2)
+  })
 })

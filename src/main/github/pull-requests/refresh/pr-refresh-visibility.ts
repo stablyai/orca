@@ -55,7 +55,7 @@ export class PRRefreshVisibility {
         ? `worktree:${candidate.worktreeId}`
         : `cache:${candidate.cacheKey}`
       const prior = existing?.candidates.get(key)?.rows.get(aliasKey)
-      if (!this.has(key)) {
+      if (!prior) {
         exposed.add(key)
       } else if (
         prior &&
