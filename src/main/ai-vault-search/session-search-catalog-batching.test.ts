@@ -674,7 +674,7 @@ it.each(['observation apply', 'probe end', 'probe begin reply'])(
       )
       const interruptions = cut === 'probe begin reply' ? 125 : 300
       for (let index = 0; index < interruptions; index++) {
-        await inventory.invalidate(join(root, `unavailable-${index}`))
+        await inventory.invalidate(join(root, `unavailable-${index}.jsonl`))
       }
       expect(await inventory.releasePage()).toBe(false)
       await inventory.reactivate()

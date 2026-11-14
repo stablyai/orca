@@ -77,7 +77,7 @@ export class SessionSearchAuthorityPage {
             ? ['dirty', 'file-refusals', 'refusals']
             : ['dirty', 'file-refusals', 'file-refusals:eligible', 'refusals']
       for (const suffix of suffixes) {
-        this.catalog.prefetchValues(`${this.scope}:${suffix}`, paths)
+        this.catalog.inventory.prefetchFallback(`${this.scope}:${suffix}`, paths)
       }
       yield* page
     }

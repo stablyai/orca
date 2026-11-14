@@ -23,10 +23,6 @@ export abstract class SessionSearchCatalogStorage {
     const row = this.execute({ kind: 'get', scope, key }).rows?.[0]
     return row && sessionSearchValueRow(row)
   }
-  prefetchValues(scope: string, paths: Iterable<string>): void {
-    this.touched.add(scope)
-    this.inventory.prefetchFallback(scope, paths)
-  }
   putValue(scope: string, row: SessionSearchValueRow): void {
     this.touched.add(scope)
     const owner = this.inventory.owner(scope)
