@@ -4,7 +4,10 @@ import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { GroupHookCheckResult } from '../../../../../../shared/project-group-hooks'
 import { projectGroupHookOwner } from '../../../../../../shared/workspace-hook-owner'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
-import { PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY } from '../../../../../../shared/worktree-runtime-capabilities'
+import {
+  PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY,
+  PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY
+} from '../../../../../../shared/worktree-runtime-capabilities'
 import { getFolderSourceRepos } from '../../../../../../shared/folder-workspaces/folder-workspace-source-repos'
 import { projectGroupSetupExample } from '../../../../../../shared/project-group-setup-example'
 import { useFolderSetupSupport } from '@/lib/workspace/creation/setup/folder-setup-support'
@@ -14,7 +17,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useShallow } from 'zustand/react/shallow'
 import { getFolderWorkspaceAgentLaunchFact } from '@/components/sidebar/workspace-creation/folder/folder-workspace-agent-startup'
 import { RepositoryHooksSection } from './RepositoryHooksSection'
-import { GROUP_SETUP_HOOKS_TEMPLATE } from './repository-hook-settings-draft'
+import { groupHookYamlPresentation } from './repository-hook-settings-draft'
 
 export function ProjectGroupHooksSection({
   group
@@ -31,6 +34,10 @@ export function ProjectGroupHooksSection({
     inspection ? { ...group, hookSettings: inspection.hookSettings } : group
   )
   const support = useFolderSetupSupport(owner, PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY)
+  const archiveSupport = useFolderSetupSupport(
+    owner,
+    PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY
+  )
   const [repos, groups, platform] = useAppStore(
     useShallow((state) => {
       const facts = getFolderWorkspaceAgentLaunchFact(state, group)
@@ -123,19 +130,21 @@ export function ProjectGroupHooksSection({
       }
     })
   }
+  const yamlPresentation = groupHookYamlPresentation(archiveSupport === 'supported')
   const inspectionReady =
     inspection !== null && !inspection.unavailable && inspection.status !== 'error'
   return (
     <fieldset ref={fieldset} disabled={!inspectionReady || saving} className="min-w-0">
       <RepositoryHooksSection
         repo={owner}
-        showArchive={false}
+        showArchive={yamlPresentation.archive}
+        yamlPresentation={yamlPresentation}
         yamlHooks={inspection?.hooks ?? null}
         hasHooksFile={inspection?.hasHooks ?? false}
         hooksInspectionReady={inspectionReady}
         mayNeedUpdate={inspection?.mayNeedUpdate ?? false}
         copiedTemplate={false}
-        onCopyTemplate={() => void window.api.ui.writeClipboardText(GROUP_SETUP_HOOKS_TEMPLATE)}
+        onCopyTemplate={() => void window.api.ui.writeClipboardText(yamlPresentation.template)}
         setupExample={example}
         onUpdateHookSettings={updateHookSettings}
       />

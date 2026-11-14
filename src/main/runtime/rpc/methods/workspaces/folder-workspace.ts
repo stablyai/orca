@@ -45,7 +45,9 @@ export const FOLDER_WORKSPACE_METHODS = [
     params: FolderWorkspaceDelete,
     handler: async (params, { runtime }) =>
       runtime.deleteFolderWorkspace(params.folderWorkspaceId, {
-        requireUniqueId: params.requireUniqueId
+        requireUniqueId: params.requireUniqueId,
+        runHooks: params.runHooks,
+        allowFailedArchiveHook: params.allowFailedArchiveHook
       })
   }),
   defineMethod({

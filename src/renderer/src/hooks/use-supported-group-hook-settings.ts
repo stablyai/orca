@@ -4,11 +4,17 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import { projectGroupHookOwner } from '../../../shared/workspace-hook-owner'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../shared/execution-host'
-import { PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY } from '../../../shared/worktree-runtime-capabilities'
-import { resolveFolderSetupSupported } from '@/lib/workspace/creation/setup/folder-setup-support'
+import {
+  PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY,
+  PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY
+} from '../../../shared/worktree-runtime-capabilities'
+import { runtimeEnvironmentSupportsCapabilities } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import { useAppStore } from '@/store'
 
-export type ProjectGroupSettingsEntry = ProjectGroup & { settingsLabel?: string }
+export type ProjectGroupSettingsEntry = ProjectGroup & {
+  settingsLabel?: string
+  supportsArchiveHooks?: boolean
+}
 
 export function useSupportedGroupHookSettings(): readonly ProjectGroupSettingsEntry[] {
   const groups = useAppStore((state) => state.projectGroups)
@@ -20,35 +26,40 @@ export function useSupportedGroupHookSettings(): readonly ProjectGroupSettingsEn
       )
     )
   )
-  const [supportedHosts, setSupportedHosts] = useState<ReadonlySet<string>>(new Set())
-  const hosts = useMemo(() => {
-    const owners = new Map<string, NonNullable<ReturnType<typeof projectGroupHookOwner>>>()
-    for (const group of groups) {
-      const owner = projectGroupHookOwner(group)
-      if (owner) {
-        owners.set(getRepoExecutionHostId(group), owner)
+  const [supportedHosts, setSupportedHosts] = useState<ReadonlyMap<string, boolean>>(new Map())
+  const hosts = useShallow((entries: readonly ProjectGroup[]) => {
+    const owners = new Set<string>()
+    for (const group of entries) {
+      if (projectGroupHookOwner(group)) {
+        owners.add(getRepoExecutionHostId(group))
       }
     }
-    return [...owners]
-  }, [groups])
+    return [...owners].sort()
+  })(groups)
   useEffect(() => {
     let cancelled = false
     void Promise.all(
-      hosts.map(async ([host, owner]) => {
+      hosts.map(async (host) => {
         try {
-          return (await resolveFolderSetupSupported(
-            owner,
-            PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY
-          ))
-            ? host
-            : null
+          const parsed = parseExecutionHostId(host)
+          if (parsed?.kind !== 'runtime') {
+            return parsed?.kind === 'local' ? ([host, true] as const) : null
+          }
+          const [setup, archive] = await runtimeEnvironmentSupportsCapabilities(
+            parsed.environmentId,
+            [
+              PROJECT_GROUP_FOLDER_SETUP_RUNTIME_CAPABILITY,
+              PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY
+            ]
+          )
+          return setup ? ([host, archive] as const) : null
         } catch {
           return null
         }
       })
     ).then((answers) => {
       if (!cancelled) {
-        setSupportedHosts(new Set(answers.filter((host): host is string => host !== null)))
+        setSupportedHosts(new Map(answers.filter((answer) => answer !== null)))
       }
     })
     return () => {
@@ -61,7 +72,14 @@ export function useSupportedGroupHookSettings(): readonly ProjectGroupSettingsEn
         const host = getRepoExecutionHostId(group)
         return Boolean(group.parentPath) &&
           (parseExecutionHostId(host)?.kind === 'local' || supportedHosts.has(host))
-          ? [{ ...group, settingsLabel: labels[index] }]
+          ? [
+              {
+                ...group,
+                settingsLabel: labels[index],
+                supportsArchiveHooks:
+                  parseExecutionHostId(host)?.kind === 'local' || supportedHosts.get(host) === true
+              }
+            ]
           : []
       }),
     [groups, supportedHosts, labels]

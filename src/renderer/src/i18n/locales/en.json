@@ -1436,7 +1436,9 @@
       "useExample": "Use this example",
       "description": "Scripts that run in this folder when a workspace is created. Every workspace shares the folder. Local scripts are stored on this machine; `orca.yaml` scripts are shared with your team.",
       "invalidSetup": "The file is present, but Orca could not find a valid setup script.",
-      "supportedKeys": "Define only the supported keys: `scripts` and `setup`."
+      "supportedKeys": "Define only the supported keys: `scripts` and `setup`.",
+      "supportedArchiveKeys": "Define only the supported keys: `scripts`, `setup`, and `archive`.",
+      "invalidArchive": "The file is present, but Orca could not find a valid setup or archive script."
     }
   },
   "menu": {

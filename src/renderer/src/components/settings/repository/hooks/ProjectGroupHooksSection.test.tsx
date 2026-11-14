@@ -89,7 +89,6 @@ it('loads owner-host settings and inserts/copies the real-repo example without o
     </TooltipProvider>
   )
   await waitFor(() => expect(screen.getByDisplayValue('echo saved on owner')).toBeTruthy())
-  expect(screen.queryByDisplayValue('echo keep archive')).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: 'Use this example' }))
   await waitFor(() => expect(updateProjectGroup).toHaveBeenCalled())
   const script =
@@ -105,73 +104,6 @@ it('loads owner-host settings and inserts/copies the real-repo example without o
   expect(checkRuntimeGroupHooks).toHaveBeenCalledWith('runtime:owner', 'services', {
     background: true
   })
-})
-
-it('shows setup-only shared configuration through the group Advanced disclosure', async () => {
-  const group = createProjectGroup({
-    name: 'Services',
-    parentPath: '/services',
-    createdFrom: 'folder-scan',
-    tabOrder: 0
-  })
-  const writeClipboardText = vi.fn(async () => {})
-  Object.defineProperty(window.api, 'ui', {
-    configurable: true,
-    value: { writeClipboardText }
-  })
-  useAppStore.setState({ settingsSearchQuery: '', projectGroups: [group], repos: [] })
-  for (const state of ['missing', 'invalid', 'loaded'] as const) {
-    vi.mocked(checkRuntimeGroupHooks).mockClear()
-    vi.mocked(checkRuntimeGroupHooks).mockResolvedValue({
-      status: 'ok',
-      hasHooks: state !== 'missing',
-      hooks:
-        state === 'loaded'
-          ? {
-              scripts: { setup: 'echo shared setup', archive: 'echo hidden archive' },
-              issueCommand: 'echo hidden issue'
-            }
-          : null,
-      mayNeedUpdate: false,
-      setupRunPolicy: 'run-by-default',
-      setupConfig: null
-    })
-    const view = render(
-      <TooltipProvider>
-        <ProjectGroupHooksSection group={group} />
-      </TooltipProvider>
-    )
-    await waitFor(() =>
-      expect(checkRuntimeGroupHooks).toHaveBeenCalledWith('local', group.id, { background: true })
-    )
-    const advancedSummary = within(view.container)
-      .getByText('Advanced', { selector: 'h5' })
-      .closest('summary')!
-    const advanced = advancedSummary.closest('details')!
-    fireEvent.click(advancedSummary)
-    if (state !== 'invalid') {
-      const disclosure = await within(advanced).findByRole('button', {
-        name: state === 'loaded' ? /^orca.yaml detected$/ : /^No orca.yaml detected$/
-      })
-      fireEvent.click(disclosure)
-    }
-    await waitFor(() => {
-      const preview = advanced.querySelector('pre')
-      expect(preview?.textContent).toContain('setup:')
-      expect(preview?.textContent).not.toContain('archive:')
-      expect(preview?.textContent).not.toContain('issueCommand:')
-      if (state === 'loaded') {
-        expect(preview?.textContent).toContain('echo shared setup')
-      }
-    })
-    if (state === 'missing') {
-      fireEvent.click(within(advanced).getByRole('button', { name: 'Copy template' }))
-      expect(writeClipboardText).toHaveBeenCalledWith(
-        'scripts:\n  setup: |\n    echo "Setting up workspace"'
-      )
-    }
-    view.unmount()
-  }
 })
 
 it('preserves saved scripts while authoritative group inspection is pending', async () => {
