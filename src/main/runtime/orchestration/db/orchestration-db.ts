@@ -46,6 +46,8 @@ class OrchestrationDbCore {
     this.db.pragma('journal_size_limit = 8388608')
     // Savepoint journals otherwise need a temp file; a full or unwritable temp dir then aborts the whole transaction (#38123).
     this.db.pragma('temp_store = MEMORY')
+    // The 2 MiB default makes every worker-list scan re-read its pages (#40821).
+    this.db.pragma('cache_size = -65536')
     createTables.call(this as unknown as OrchestrationDb)
     // Read before migrate, which drops the capture triggers it may need to rebuild around.
     const removedWorkCaptureWasIntact = isRemovedWorkCaptureIntact(this.db)
