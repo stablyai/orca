@@ -9,7 +9,7 @@ export function deriveGitHubTaskPreset(
     return null
   }
   if (kind === 'prs') {
-    if (query.author?.toLowerCase() === '@me') {
+    if (query.authors.length === 1 && query.authors[0].toLowerCase() === '@me') {
       return 'my-prs'
     }
     if (query.reviewRequested?.toLowerCase() === '@me') {
@@ -18,7 +18,7 @@ export function deriveGitHubTaskPreset(
   } else if (query.assignee?.toLowerCase() === '@me') {
     return 'my-issues'
   }
-  return query.author !== null ||
+  return query.authors.length > 0 ||
     query.assignee !== null ||
     query.reviewRequested !== null ||
     query.reviewedBy !== null

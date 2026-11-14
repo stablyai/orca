@@ -5,9 +5,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/class-names'
 import { useRepoLabelsBySlug, useRepoAssigneesBySlug } from '@/hooks/useGitHubSlugMetadata'
 import type { PickerOption } from '@/components/github/PRFilterPickers'
+import { filterAuthorsValue, filterLabelsValue } from '@/components/github/pr-filter-value-summary'
 import {
   filterDraftLabel,
-  filterLabelsValue,
   filterStateLabel,
   SectionDetail,
   SectionMenu,
@@ -120,11 +120,13 @@ export default function PRFilterDropdowns({
     for (const login of authorLogins) {
       options.set(login.toLowerCase(), { key: login, primary: login })
     }
-    if (parsed.author && !options.has(parsed.author.toLowerCase())) {
-      options.set(parsed.author.toLowerCase(), { key: parsed.author, primary: parsed.author })
+    for (const author of parsed.authors) {
+      if (!options.has(author.toLowerCase())) {
+        options.set(author.toLowerCase(), { key: author, primary: author })
+      }
     }
     return [...options.values()]
-  }, [authorLogins, parsed.author])
+  }, [authorLogins, parsed.authors])
   const labelOpts = useMemo<PickerOption[]>(
     () => (hasPrimarySlug ? labelsState.data.map((name) => ({ key: name, primary: name })) : []),
     [hasPrimarySlug, labelsState.data]
@@ -154,7 +156,7 @@ export default function PRFilterDropdowns({
 
   const activeCount =
     (statusActive ? 1 : 0) +
-    (parsed.author ? 1 : 0) +
+    (parsed.authors.length > 0 ? 1 : 0) +
     (parsed.assignee ? 1 : 0) +
     (reviewerActive ? 1 : 0) +
     (parsed.labels.length > 0 ? 1 : 0)
@@ -212,7 +214,7 @@ export default function PRFilterDropdowns({
                 activeCount > 0
                   ? () => {
                       onChange({
-                        author: null,
+                        authors: [],
                         assignee: null,
                         reviewer: null,
                         labels: [],
@@ -252,11 +254,11 @@ export default function PRFilterDropdowns({
           onClear={() => onChange({ state: 'open', draft: false })}
         />
       ) : null}
-      {parsed.author ? (
+      {parsed.authors.length > 0 ? (
         <ActivePill
           label={t('auto.components.github.PRFilterDropdowns.01f3f3d161', 'Author')}
-          value={parsed.author}
-          onClear={() => onChange({ author: null })}
+          value={filterAuthorsValue(parsed.authors, t) ?? ''}
+          onClear={() => onChange({ authors: [] })}
         />
       ) : null}
       {parsed.labels.length > 0 ? (

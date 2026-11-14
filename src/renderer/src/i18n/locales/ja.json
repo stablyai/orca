@@ -3058,6 +3058,7 @@
           "bd162b7d5a": "マージ済み",
           "draft": "下書き",
           "labelCount_other": "{{count}} 個のラベル",
+          "authorCount_other": "{{count}} 人の著者",
           "allStates": "全て",
           "filterPullRequests": "PR を絞り込む",
           "filterIssues": "Issue を絞り込む",

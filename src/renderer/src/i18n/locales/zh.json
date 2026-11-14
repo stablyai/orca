@@ -3249,6 +3249,7 @@
           "bd162b7d5a": "合并",
           "draft": "草稿",
           "labelCount_other": "{{count}} 个标签",
+          "authorCount_other": "{{count}} 位作者",
           "allStates": "全部",
           "filterPullRequests": "筛选 PR",
           "filterIssues": "筛选议题",

@@ -4219,6 +4219,8 @@
           "draft": "Draft",
           "labelCount_one": "{{count}} label",
           "labelCount_other": "{{count}} labels",
+          "authorCount_one": "{{count}} author",
+          "authorCount_other": "{{count}} authors",
           "allStates": "All",
           "filterPullRequests": "Filter pull requests",
           "filterIssues": "Filter issues",
