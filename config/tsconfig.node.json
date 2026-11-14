@@ -42,6 +42,7 @@
   ],
   "compilerOptions": {
     "composite": true,
+    "allowImportingTsExtensions": true,
     "types": ["electron-vite/node"]
   }
 }
