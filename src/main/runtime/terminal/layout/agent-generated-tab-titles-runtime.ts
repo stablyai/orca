@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import { OrcaRuntimeWithWorktreeSleepResumeRecording } from '../stop/worktree-sleep-resume-recording'
 import { AgentGeneratedTabTitles, type GeneratedTitleTarget } from './agent-generated-tab-titles'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
@@ -41,7 +42,7 @@ export abstract class OrcaRuntimeWithAgentGeneratedTabTitles extends OrcaRuntime
     if (!hostId || parseExecutionHostId(hostId)?.kind === 'runtime') {
       return null
     }
-    const session = this.store?.getWorkspaceSession?.(hostId)
+    const session = borrowWorkspaceSession(this.store, hostId)
     const tab = session?.tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tabId)
     if (!tab) {
       return null

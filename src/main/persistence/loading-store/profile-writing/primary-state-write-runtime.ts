@@ -1,3 +1,4 @@
+import { ProfileStateSaveIntent } from './profile-state-save-intent'
 import type { StoreRuntimeState } from '../store-runtime-state'
 
 export type PrimaryStateWriteOperationsRuntime = Pick<
@@ -17,7 +18,7 @@ export type PrimaryStateWriteOperationsRuntime = Pick<
   | 'pendingWrite'
   | 'profileMaintenancePending'
   | 'profileStateAuthority'
-  | 'profileStateSplitSnapshots'
+  | 'workspaceSessionFieldCapture'
   | 'protectedSecrets'
   | 'quitFlushStarted'
   | 'state'
@@ -61,7 +62,7 @@ export async function stopAfterFailedPrimaryStateMutation(
   // Throwing callbacks supply no rollback; freeze persistence rather than commit partial edits.
   runtime.writesFrozen = true
   runtime.quitFlushStarted = true
-  runtime.profileStateSplitSnapshots.clear()
+  runtime.workspaceSessionFieldCapture.clear()
   runtime.fatalMutationError = error instanceof Error ? error : new Error(String(error))
   if (runtime.writeTimer) {
     clearTimeout(runtime.writeTimer)
@@ -74,15 +75,19 @@ export function capturePrimaryStateWriteIntent(runtime: PrimaryStateWriteOperati
   const generation = runtime.writeGeneration
   const dirtyDomains = runtime.dirtyProfileStateDomains
   const automationRuns = runtime.pendingAutomationRunsAfter
-  runtime.dirtyProfileStateDomains = new Set()
+  runtime.dirtyProfileStateDomains = new ProfileStateSaveIntent()
   runtime.pendingAutomationRunsAfter = undefined
 
   const restoreIntent = (): void => {
     if (dirtyDomains === null) {
       runtime.dirtyProfileStateDomains = null
     } else if (runtime.dirtyProfileStateDomains !== null) {
-      for (const domain of dirtyDomains) {
-        runtime.dirtyProfileStateDomains.add(domain)
+      if (runtime.dirtyProfileStateDomains instanceof ProfileStateSaveIntent) {
+        runtime.dirtyProfileStateDomains.restore(dirtyDomains)
+      } else {
+        for (const domain of dirtyDomains) {
+          runtime.dirtyProfileStateDomains.add(domain)
+        }
       }
     }
     if (automationRuns === undefined || runtime.pendingAutomationRunsAfter !== undefined) {

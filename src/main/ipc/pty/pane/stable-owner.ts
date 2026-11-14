@@ -1,3 +1,5 @@
+import { setBorrowedWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-snapshot-operations'
+import { borrowWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import { persistFreshPaneBinding } from './fresh-pane-binding'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../../../persistence/restoring-sessions/workspace-session-write-rollback'
 import { cloneWorkspaceSessionState } from '../../../persistence/restoring-sessions/session-owner-fields'
@@ -43,7 +45,8 @@ export function resolvePersistedStablePaneOwner(
   if (!parsed) {
     return null
   }
-  const session = store.getWorkspaceSession(
+  const session = borrowWorkspaceSession(
+    store,
     connectionId ? toSshExecutionHostId(connectionId) : undefined
   )
   const tab = session.tabsByWorktree?.[worktreeId]?.find(
@@ -135,7 +138,7 @@ export async function retirePersistedStablePaneOwner(
     if (current.ptyId !== owner.ptyId || current.incarnationId !== owner.persistedIncarnationId) {
       return { value: false, persist: false }
     }
-    const session = cloneWorkspaceSessionState(store.getWorkspaceSession(hostId))
+    const session = cloneWorkspaceSessionState(borrowWorkspaceSession(store, hostId))
     const retired = retireTerminalSurfaceFromPersistence(session, {
       worktreeId,
       parentTabId: owner.tabId,
@@ -146,15 +149,15 @@ export async function retirePersistedStablePaneOwner(
     if (retired === session) {
       return { value: false, persist: false }
     }
-    store.setWorkspaceSession(retired, hostId)
-    const staged = cloneWorkspaceSessionState(store.getWorkspaceSession(hostId))
+    setBorrowedWorkspaceSession(store, retired, hostId)
+    const staged = cloneWorkspaceSessionState(borrowWorkspaceSession(store, hostId))
     return {
       value: true,
       rollback: () => {
-        const current = store.getWorkspaceSession(hostId)
+        const current = borrowWorkspaceSession(store, hostId)
         const rolledBack = rollbackWorkspaceSessionAfterFailedAsyncWrite(session, staged, current)
         if (rolledBack !== current) {
-          store.setWorkspaceSession(rolledBack, hostId)
+          setBorrowedWorkspaceSession(store, rolledBack, hostId)
         }
       }
     }

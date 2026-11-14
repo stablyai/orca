@@ -77,7 +77,7 @@ export abstract class OrcaRuntimeWithFailedStartPanes extends OrcaRuntimeWithCre
         retiresBinding: (paneKey: string, ptyId: string) => {
           const pty = this.ptysById.get(ptyId)
           const record =
-            this.getWorkspaceSessionForWorktree(workspace)?.sleepingAgentSessionsByPaneKey?.[
+            this.borrowWorkspaceSessionForWorktree(workspace)?.sleepingAgentSessionsByPaneKey?.[
               paneKey
             ]
           return (

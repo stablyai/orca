@@ -1,3 +1,4 @@
+import { copyLaunchConfig } from '../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
 import { OrcaRuntimeWithResolveWorktreeRemovalTarget } from '../../workspaces/workspace-removal-target'
 import type { TerminalWorkspaceLaunchScope } from '../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
@@ -104,11 +105,11 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
         ? makePaneKey(tabId, leafId)
         : null)
     const record = sourcePaneKey
-      ? this.getWorkspaceSessionForWorktree(worktreeId)?.sleepingAgentSessionsByPaneKey?.[
+      ? this.borrowWorkspaceSessionForWorktree(worktreeId)?.sleepingAgentSessionsByPaneKey?.[
           sourcePaneKey
         ]
       : undefined
-    return resolveSavedRestoreLaunchRecipe({
+    const recipe = resolveSavedRestoreLaunchRecipe({
       agent: request.agent,
       providerSession: request.providerSession,
       record: record && worktreeIdsEqual(record.worktreeId, worktreeId) ? record : undefined,
@@ -116,6 +117,7 @@ export abstract class OrcaRuntimeWithGetAgentSessionExecutionNamespace extends O
         ? this.getAgentProviderSessionSnapshotFn?.().find((row) => row.paneKey === sourcePaneKey)
         : undefined
     })
+    return this.isWorkspaceSessionOwnedForWorktree(worktreeId) ? copyLaunchConfig(recipe)! : recipe
   }
 
   async ensureAgentSession(

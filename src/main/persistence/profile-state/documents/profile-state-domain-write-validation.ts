@@ -1,3 +1,4 @@
+import type { ProfileStateDocumentPart } from '../document-parts/profile-state-document-parts'
 import { PROFILE_STATE_DOCUMENT_VERSION } from '../database/profile-state-database-schema'
 import { isProfileStateSplitDomain } from '../document-parts/profile-state-document-parts'
 import './profile-state-documents'
@@ -23,6 +24,9 @@ export type PreparedProfileStateMutation = ProfileStateDomainMutation & {
   automationRunsValue?: unknown
   /** Parsed payload of a split domain, so storing its parts does not parse it again. */
   splitDomainValue?: unknown
+  preparedParts?: readonly (ProfileStateDocumentPart & {
+    contentHash: string
+  })[]
   existingParts?: ProfileStateExistingDocumentParts
   automationRuns?: AutomationRunsWritePreparation
 }

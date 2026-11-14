@@ -1,3 +1,5 @@
+import { setBorrowedWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-snapshot-operations'
+import { borrowWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import { OrcaRuntimeWithResolveTerminalSplitSourceAuthority } from '../launch/terminal-split-source-authority'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { worktreeIdentityKey } from '../../../../shared/worktree/id'
@@ -13,12 +15,11 @@ import type { WorktreeTerminalMutationKind } from '../../workspaces/lifecycle/wo
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { cloneWorkspaceSessionState } from '../../../persistence/restoring-sessions/session-owner-fields'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../../../persistence/restoring-sessions/workspace-session-write-rollback'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
-  getWorktreeExecutionHostId,
-  parseExecutionHostId,
-  type ExecutionHostId
-} from '../../../../shared/execution-host'
-import type { WorktreePtyHostFence } from '../../workspaces/removal/worktree-pty-host-fence'
+  getWorktreePtyHostFence,
+  type WorktreePtyHostFence
+} from '../../workspaces/removal/worktree-pty-host-fence'
 import { collectWorktreePtyIds } from './worktree-pty-collection'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { withMainBoundLeaves } from '../surface/main-terminal-surfaces'
@@ -37,13 +38,10 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
   ): Promise<RuntimeWorktreeTerminalSleepResult>
 
   private getWorktreeHostFence(
-    worktree: { id: string; repoId?: string } & Parameters<typeof getWorktreeExecutionHostId>[0]
+    worktree: { id: string; repoId?: string } & Parameters<typeof getWorktreePtyHostFence>[0]
   ): WorktreePtyHostFence {
     const repo = worktree.repoId ? this.store?.getRepo?.(worktree.repoId) : undefined
-    const parsedHost = parseExecutionHostId(getWorktreeExecutionHostId(worktree, repo))
-    return parsedHost?.kind === 'runtime'
-      ? { resolvedRuntimeEnvironmentId: parsedHost.environmentId }
-      : { resolvedConnectionId: parsedHost?.kind === 'ssh' ? parsedHost.targetId : null }
+    return getWorktreePtyHostFence(worktree, repo)
   }
 
   async closeTerminalsForWorktree(
@@ -55,7 +53,6 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
     const hostFence = this.getWorktreeHostFence(worktree)
 
     return await this.runWorktreeTerminalMutation(worktree.id, async () => {
-      // Clearing a rotated partition can reroute ownership; retain the session host that held tabs when close began.
       const sessionHostId = this.getWorkspaceSessionHostIdForWorktree(worktree.id)
       const snapshot = await this.listMobileSessionTabs(`id:${worktree.id}`, undefined, {
         includeAgentSenders: false
@@ -139,7 +136,7 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
     }
     const refusal = await this.store.runDurableMutation<Error | undefined>(() => {
       // SAFETY: Keep the original late lookup and failure if this capability disappears.
-      const session = cloneWorkspaceSessionState(this.store!.getWorkspaceSession!(hostId))
+      const session = cloneWorkspaceSessionState(borrowWorkspaceSession(this.store, hostId))
       const next = edit(session)
       if (next instanceof Error) {
         return { value: next, persist: false }
@@ -148,18 +145,18 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
         return { value: undefined, persist: false }
       }
       // SAFETY: Keep the original late lookup and failure if this capability disappears.
-      this.store!.setWorkspaceSession!(next, hostId)
+      setBorrowedWorkspaceSession(this.store, next, hostId)
       // SAFETY: Keep the original late lookup and failure if this capability disappears.
-      const staged = cloneWorkspaceSessionState(this.store!.getWorkspaceSession!(hostId))
+      const staged = cloneWorkspaceSessionState(borrowWorkspaceSession(this.store, hostId))
       return {
         value: undefined,
         rollback: () => {
           // SAFETY: Keep the original late lookup and failure if this capability disappears.
-          const current = this.store!.getWorkspaceSession!(hostId)
+          const current = borrowWorkspaceSession(this.store, hostId)
           const rolledBack = rollbackWorkspaceSessionAfterFailedAsyncWrite(session, staged, current)
           if (rolledBack !== current) {
             // SAFETY: Keep the original late lookup and failure if this capability disappears.
-            this.store!.setWorkspaceSession!(rolledBack, hostId)
+            setBorrowedWorkspaceSession(this.store, rolledBack, hostId)
           }
         }
       }

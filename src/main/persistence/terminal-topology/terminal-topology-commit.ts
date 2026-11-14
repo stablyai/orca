@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../loading-store/workspace-sessions/session-host-partitions'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { hasClosedTerminalTabRecord } from '../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -237,7 +238,7 @@ export function topologyCommitContext({
   return {
     state: runtime.state,
     hostIds: () => sessions.getWorkspaceSessionHostIds(),
-    getSession: (hostId) => sessions.getWorkspaceSession(hostId),
+    getSession: (hostId) => borrowWorkspaceSession(sessions, hostId),
     markDirty: (domain) => runtime.dirtyProfileStateDomains?.add(domain),
     ...(runtime.layoutEditorViews
       ? { editorViews: { layoutEditorViews: runtime.layoutEditorViews } }

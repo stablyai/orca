@@ -68,7 +68,7 @@ function withDependentSaveDomains(domains: ReadonlySet<string>): ReadonlySet<str
 
 type StateSerializationSecretHandlingOperationsRuntime = Pick<
   StoreRuntimeState,
-  'protectedSecrets' | 'state' | 'originalExperimentalNativeChat' | 'profileStateSplitSnapshots'
+  'protectedSecrets' | 'state' | 'originalExperimentalNativeChat' | 'workspaceSessionFieldCapture'
 >
 
 export class StateSerializationSecretHandlingOperations {
@@ -81,11 +81,10 @@ export class StateSerializationSecretHandlingOperations {
     const pendingEncryption = this.runtime.protectedSecrets.hasPendingEncryption()
     const complete = dirtyDomains === null || dirtyDomains.size === 0 || pendingEncryption
     let stateToSave: Record<string, unknown>
-    let secretSubs: SecretSentinelSubstitution[] = []
     let protectedSecretUpdates: ProtectedSecretRetentionUpdate[] = []
     const projection = complete ? this.buildCompleteProjection() : undefined
     if (projection) {
-      ;({ stateToSave, secretSubs, protectedSecretUpdates } = projection)
+      ;({ stateToSave, protectedSecretUpdates } = projection)
     } else {
       stateToSave = {}
       const encrypt = (slot: string, plaintext: string): string => {
@@ -102,13 +101,11 @@ export class StateSerializationSecretHandlingOperations {
       }
     }
     return capturePreparedProfileStateWrite({
-      snapshots: this.runtime.profileStateSplitSnapshots,
+      fields: this.runtime.workspaceSessionFieldCapture,
+      dirtyDomains,
       stateToSave,
       complete,
-      secretSubs,
       protectedSecretUpdates,
-      protectedStorageDegraded: projection?.protectedStorageDegraded,
-      pendingEncryption: pendingEncryption || this.runtime.protectedSecrets.hasPendingEncryption(),
       automationRuns,
       serializeRoot: projection
         ? () => this.serializeCompleteProjection(projection, false)

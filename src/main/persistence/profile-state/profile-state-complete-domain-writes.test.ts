@@ -8,7 +8,7 @@ import {
 } from './database/profile-state-database'
 import './documents/profile-state-documents'
 import { readProfileStateRevision } from './database/profile-state-revision'
-import { ProfileStateSplitSnapshots } from '../loading-store/profile-writing/profile-state-split-snapshots'
+import { WorkspaceSessionFieldCapture } from '../loading-store/profile-writing/workspace-session-field-capture'
 import { capturePreparedProfileStateWrite } from '../loading-store/profile-writing/profile-state-prepared-write'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 
@@ -48,19 +48,26 @@ describe('complete domain revision fencing', () => {
     'exports mixed domain kinds in capture order (complete=%s)',
     (complete) => {
       const { authority } = fixture(false)
-      const snapshots = new ProfileStateSplitSnapshots()
-      snapshots.seed(undefined)
+      const fields = new WorkspaceSessionFieldCapture()
+      fields.initialize()
+      const stateToSave = { workspaceSession: { activeTabId: 't' }, marker: 'kept' }
       const captured = capturePreparedProfileStateWrite({
-        snapshots,
-        stateToSave: { workspaceSession: { activeTabId: 't' }, marker: 'kept' },
+        fields,
+        dirtyDomains: null,
+        stateToSave,
         complete,
-        secretSubs: [],
+        serializeRoot: () => ({
+          payload: Buffer.from(JSON.stringify(stateToSave)),
+          stateHash: 'native',
+          protectedSecretUpdates: []
+        }),
         protectedSecretUpdates: []
       })
-      if (!captured.write) {
-        throw new Error('Expected a prepared write')
+      if (captured.write) {
+        authority.writePreparedState(captured.write)
+      } else {
+        authority.writeSerializedState(captured.payload)
       }
-      authority.writePreparedState(captured.write)
       expect(authority.readSerializedState()).toBe(
         '{"workspaceSession":{"activeTabId":"t"},"marker":"kept"}'
       )

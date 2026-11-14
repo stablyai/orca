@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 // Reproject dirty Store partitions and publish each workspace only from its owning partition.
 
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -136,7 +137,7 @@ export class WorkspaceLayoutProjection {
 
   private loadPartition(hostId: ExecutionHostId): ProjectedPartition {
     const store = this.deps.store()
-    const session = store?.getWorkspaceSession?.(hostId)
+    const session = borrowWorkspaceSession(store, hostId)
     return new ProjectedPartition(
       hostId,
       session

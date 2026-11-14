@@ -102,7 +102,8 @@ export abstract class LegacyWorkerTerminalSurface extends OrcaRuntimeWithRestore
   } {
     const hostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
     const session =
-      this.store?.getWorkspaceSession?.(hostId) ?? this.getWorkspaceSessionForWorktree(worktreeId)
+      this.store?.getWorkspaceSession?.(hostId) ??
+      this.borrowWorkspaceSessionForWorktree(worktreeId)
     const sessionWorktreeId = session ? resolveTerminalSessionWorktreeId(session, worktreeId) : null
     return {
       ...(sessionWorktreeId && session?.activeTabIdByWorktree?.[sessionWorktreeId]

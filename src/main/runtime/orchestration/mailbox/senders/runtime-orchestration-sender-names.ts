@@ -15,6 +15,7 @@ import {
   orchestrationSenderName,
   structuredChatNaming,
   captureMirroredTabs,
+  terminalNameInputs,
   type MirroredTabs,
   type SenderHookRow,
   type SenderNamingLayout,
@@ -132,13 +133,8 @@ export class RuntimeOrchestrationSenderNames {
   agentRowNamer(): (source: AgentRowNamingSource) => string | null {
     // A pass reads the setting and each worktree's session at most once, however many rows it lists.
     let generatedTitlesEnabled: boolean | undefined
-    const sessions = new Map<string, MirroredTabs | null | undefined>()
-    const session: SessionLookup = (worktreeId) => {
-      if (!sessions.has(worktreeId)) {
-        sessions.set(worktreeId, this.deps.getWorkspaceSession(worktreeId))
-      }
-      return sessions.get(worktreeId)
-    }
+    const tabs = captureMirroredTabs(this.deps.getWorkspaceSession)
+    const session = tabs.session
     const chatSources = this.chatSources(session)
     return (source) => {
       const { tabId, worktreeId } = source
@@ -151,7 +147,9 @@ export class RuntimeOrchestrationSenderNames {
         return chat ? chat.ownName || chat.fallback : null
       }
       const record = { worktreeId, tabId, ptyId: source.ptyId ?? null }
-      const pane = this.paneNaming(record, source.paneKey, session)
+      const pane = this.paneNaming(record, source.paneKey, session, tabs.terminalTab, (id) =>
+        tabs.layout(record.worktreeId, id)
+      )
       generatedTitlesEnabled ??= this.deps.getGeneratedTitlesEnabled()
       return pane.tab
         ? getAgentRowConversationName(
@@ -308,7 +306,13 @@ export class RuntimeOrchestrationSenderNames {
         )
     const trackedTitle = record.ptyId ? this.deps.getTrackedTitle(record.ptyId) : null
     return {
-      tab: tab ? { ...tab, title: tab.title ?? '', customTitle: tab.customTitle ?? null } : null,
+      tab: tab
+        ? {
+            ...terminalNameInputs(tab),
+            title: tab.title ?? '',
+            customTitle: tab.customTitle ?? null
+          }
+        : null,
       paneTitle:
         trackedTitle ??
         splitPaneTitle(

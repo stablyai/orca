@@ -269,7 +269,8 @@ export function writeProfileStateDomains(
             updatedAt,
             legacyRevision: splitState.legacyRevision,
             diffExisting: true,
-            existingParts: mutation.existingParts
+            existingParts: mutation.existingParts,
+            preparedParts: mutation.preparedParts
           })
         ) {
           continue

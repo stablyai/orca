@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession as borrowSession } from '../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import { collectSavedStructuredAgentSessionIds } from '../agent-session/lifecycle/saved-structured-agent-session-restoration'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type {
@@ -137,9 +138,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     this.store = store
     installGitHubProjectAccounts(store, () => this.resolvedWorktrees.peek()?.worktrees ?? [])
     this.legacyStructuredSessionTabIds = Object.freeze(
-      collectSavedStructuredAgentSessionIds(
-        store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID) ?? null
-      )
+      collectSavedStructuredAgentSessionIds(borrowSession(store, LOCAL_EXECUTION_HOST_ID) ?? null)
     )
     this.machineName.start()
     this.getSetupTerminalTitle = deps?.getSetupTerminalTitle ?? (() => 'Setup')

@@ -148,6 +148,7 @@ export class Store {
       this.state = bindPersistedTabTerminalPanes(sweepPersistedUnattachedTerminalRows(this.state))
       this.runtime.state = this.state
     }
+    this.runtime.workspaceSessionFieldCapture.initialize(!imported)
     // Imported snapshots cannot own the live hook server or write their source file.
     if (!imported) {
       // Finish interrupted blob installs; shell history waits for post-attach live-process evidence.

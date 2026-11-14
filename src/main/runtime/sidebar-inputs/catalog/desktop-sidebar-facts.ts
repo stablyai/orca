@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getRepoExecutionHostId,
@@ -55,7 +56,7 @@ export type DesktopSidebarFactSources = {
 export function readDesktopSidebarFacts(sources: DesktopSidebarFactSources): DesktopSidebarFacts {
   const { store } = sources
   // Global session fields live on the local slice alone (workspace-session-host-field-ownership.ts).
-  const session = store.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)
+  const session = borrowWorkspaceSession(store, LOCAL_EXECUTION_HOST_ID)
   const ui = store.getUI?.()
   const settings = store.getSettings?.()
   const repos = runtimeVisibleRepos(store)

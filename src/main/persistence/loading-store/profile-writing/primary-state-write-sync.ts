@@ -1,3 +1,4 @@
+import { ProfileStateSaveIntent } from './profile-state-save-intent'
 import { writeSelectiveProfileState } from './profile-state-selective-write'
 import { profileStateWriterFailureOutcome } from '../../profile-state/writer/profile-state-writer-errors'
 import type { PrimaryStateWriteOperationsContext } from './primary-state-write-context'
@@ -40,14 +41,7 @@ export function writeToDiskSync(
         intent.restoreIntent()
         return false
       }
-      const unchanged = captured.unchanged && authority.assertCurrentRevision !== undefined
-      if (unchanged) {
-        authority.assertCurrentRevision?.()
-      }
-      if (
-        unchanged ||
-        (captured.stateHash !== null && canReuseDurableProfileState(runtime, captured.stateHash))
-      ) {
+      if (captured.stateHash !== null && canReuseDurableProfileState(runtime, captured.stateHash)) {
         captured.acknowledge()
       } else {
         if (captured.write) {
@@ -63,7 +57,7 @@ export function writeToDiskSync(
       markPrimaryStateWriteDurable(runtime, intent.generation)
     } catch (error) {
       if (profileStateWriterFailureOutcome(error) === 'indeterminate') {
-        runtime.profileStateSplitSnapshots.clear()
+        runtime.workspaceSessionFieldCapture.clear()
       }
       intent.restoreIntent()
       throw error
@@ -104,7 +98,7 @@ export function writeToDiskSync(
   }
   // The authority fences the revision even when the complete state is unchanged.
   if (canReuseDurableProfileState(runtime, stateHash)) {
-    runtime.dirtyProfileStateDomains = new Set()
+    runtime.dirtyProfileStateDomains = new ProfileStateSaveIntent()
     runtime.pendingAutomationRunsAfter = undefined
     markPrimaryStateWriteDurable(runtime, opts.expectedGeneration ?? runtime.writeGeneration)
     return true
@@ -114,7 +108,7 @@ export function writeToDiskSync(
   } else {
     authority.writeSerializedState(built.payload)
   }
-  runtime.dirtyProfileStateDomains = new Set()
+  runtime.dirtyProfileStateDomains = new ProfileStateSaveIntent()
   runtime.pendingAutomationRunsAfter = undefined
   if (!isCurrent || isCurrent()) {
     runtime.lastWrittenStateHash = stateHash

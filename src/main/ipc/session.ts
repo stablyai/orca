@@ -1,3 +1,9 @@
+import { borrowWorkspaceSession } from '../persistence/loading-store/workspace-sessions/session-host-partitions'
+import {
+  admitDetachedWorkspaceSessionInput,
+  setDetachedWorkspaceSession,
+  patchDetachedWorkspaceSession
+} from '../persistence/loading-store/workspace-sessions/session-snapshot-operations'
 import { ipcMain } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
@@ -23,7 +29,7 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
 
   // Optional hostId preserves local-partition behavior for older renderers.
   ipcMain.handle('session:get', (_event, hostId?: string | null) => {
-    return store.getWorkspaceSession(hostId)
+    return borrowWorkspaceSession(store, hostId)
   })
 
   // Repo catalogs omit folder-only SSH hosts; enumerate session partitions directly (#12723).
@@ -33,14 +39,14 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
 
   // Main owns layout membership; merge the window's view and facts, then report layout drift.
   const sessionForMain = (args: WorkspaceSessionState, hostId: string | null | undefined) => {
-    const stored = store.getWorkspaceSession(hostId)
+    const stored = borrowWorkspaceSession(store, hostId)
     reportWindowSaveDrift(stored, args, hostId, 'session:set')
     return windowViewSaveForMain(stored, args, hostId, (session, partition) =>
       runtime.shutdownReconnectFactsFor(session, partition)
     )
   }
   const patchForMain = (args: WorkspaceSessionPatch, hostId: string | null | undefined) => {
-    const stored = store.getWorkspaceSession(hostId)
+    const stored = borrowWorkspaceSession(store, hostId)
     reportWindowSaveDrift(stored, { ...stored, ...args }, hostId, 'session:patch')
     return windowViewPatchForMain(stored, args, hostId, (session, partition) =>
       runtime.shutdownReconnectFactsFor(session, partition)
@@ -49,10 +55,12 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
 
   ipcMain.handle('session:set', (_event, args: WorkspaceSessionState, hostId?: string | null) => {
     if (!isFenced(hostId)) {
-      store.setWorkspaceSession(
+      admitDetachedWorkspaceSessionInput(store, args, hostId)
+      setDetachedWorkspaceSession(
+        store,
         ORCA_LAYOUT_OWNER_IS_MAIN
           ? sessionForMain(args, hostId)
-          : windowSaveKeepingMainSleepRecords(store.getWorkspaceSession(hostId), args, 'set'),
+          : windowSaveKeepingMainSleepRecords(borrowWorkspaceSession(store, hostId), args, 'set'),
         hostId
       )
     }
@@ -60,10 +68,12 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
 
   ipcMain.handle('session:patch', (_event, args: WorkspaceSessionPatch, hostId?: string | null) => {
     if (!isFenced(hostId)) {
-      store.patchWorkspaceSession(
+      admitDetachedWorkspaceSessionInput(store, args, hostId)
+      patchDetachedWorkspaceSession(
+        store,
         ORCA_LAYOUT_OWNER_IS_MAIN
           ? patchForMain(args, hostId)
-          : windowSaveKeepingMainSleepRecords(store.getWorkspaceSession(hostId), args, 'patch'),
+          : windowSaveKeepingMainSleepRecords(borrowWorkspaceSession(store, hostId), args, 'patch'),
         hostId
       )
     }

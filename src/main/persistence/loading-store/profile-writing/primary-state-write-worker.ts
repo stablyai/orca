@@ -44,7 +44,7 @@ export async function writeProfileStateInWorker(
     }
   } catch (error) {
     if (profileStateWriterFailureOutcome(error) === 'indeterminate') {
-      runtime.profileStateSplitSnapshots.clear()
+      runtime.workspaceSessionFieldCapture.clear()
     }
     restoreIntent()
     throw error
@@ -71,9 +71,7 @@ function beginWrite(
     if (!isCurrent()) {
       return undefined
     }
-    const unchanged =
-      captured.unchanged ||
-      (captured.stateHash !== null && captured.stateHash === lastWrittenStateHash)
+    const unchanged = captured.stateHash !== null && captured.stateHash === lastWrittenStateHash
     const completion = unchanged
       ? authority.assertCurrentRevision()
       : captured.write

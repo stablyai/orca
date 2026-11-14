@@ -1,3 +1,5 @@
+import { ProfileStateSaveIntent } from './profile-state-save-intent'
+import { WORKSPACE_SESSION_DOMAINS } from '../../workspace-session-domains'
 import type { StoreRuntimeState } from '../store-runtime-state'
 import type { PrimaryStateWriteOperations } from './primary-state-writes'
 import { enqueueWrite } from './primary-state-writes'
@@ -133,6 +135,15 @@ export function scheduleSave(
   scheduleDomainSave(owner, domains, writtenHostId)
 }
 
+/** Audited immutable field replacement; unannotated or reentrant full writes always dominate. */
+export function scheduleSessionFieldSave(
+  owner: WriteSchedulingOperations,
+  domains: ProfileSaveDomains,
+  writtenHostId: ExecutionHostId
+): void {
+  scheduleDomainSave(owner, domains, writtenHostId, true)
+}
+
 /** Startup load, migration and maintenance resume only: their changes span the profile. */
 export function scheduleFullProfileSave(owner: WriteSchedulingOperations): void {
   scheduleDomainSave(owner, undefined)
@@ -141,7 +152,8 @@ export function scheduleFullProfileSave(owner: WriteSchedulingOperations): void 
 function scheduleDomainSave(
   owner: WriteSchedulingOperations,
   dirtyDomains: readonly string[] | undefined,
-  writtenHostId?: ExecutionHostId
+  writtenHostId?: ExecutionHostId,
+  fields = false
 ): void {
   const { runtime, writes } = owner[writeSchedulingOperationsContext]
   notifyWorkspaceSessionWritten(runtime, dirtyDomains, writtenHostId)
@@ -161,7 +173,15 @@ function scheduleDomainSave(
     runtime.dirtyProfileStateDomains = null
   } else if (trackedDomains !== null) {
     for (const domain of dirtyDomains) {
-      trackedDomains.add(domain)
+      if (
+        fields &&
+        WORKSPACE_SESSION_DOMAINS.some((sessionDomain) => sessionDomain === domain) &&
+        trackedDomains instanceof ProfileStateSaveIntent
+      ) {
+        trackedDomains.addFields(domain)
+      } else {
+        trackedDomains.add(domain)
+      }
     }
   }
   // A timer admitted after the final snapshot could outlive the awaited shutdown work.

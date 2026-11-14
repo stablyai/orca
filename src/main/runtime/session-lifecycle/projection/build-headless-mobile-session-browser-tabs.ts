@@ -1,3 +1,5 @@
+import { setBorrowedWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-snapshot-operations'
+import { borrowWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from '../../session-tabs/mobile-session-publication-preservation'
 import { OrcaRuntimeWithPersistTerminalSurfaceRetirements } from '../../session-tabs/terminal-surface-retirements'
 import type {
@@ -100,10 +102,8 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
     worktreeId: string,
     tabId: string
   ): Pick<Tab, 'color' | 'isPinned'> | null {
-    const tab =
-      this.getWorkspaceSessionForWorktree(worktreeId)?.unifiedTabs?.[worktreeId]?.find(
-        (candidate) => candidate.id === tabId || candidate.entityId === tabId
-      ) ?? null
+    const tabs = this.borrowWorkspaceSessionForWorktree(worktreeId)?.unifiedTabs?.[worktreeId]
+    const tab = tabs?.find((candidate) => candidate.id === tabId || candidate.entityId === tabId)
     return tab ? { color: tab.color, isPinned: tab.isPinned } : null
   }
 
@@ -111,14 +111,14 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
     const originalHostId = this.getWorkspaceSessionHostIdForTab(worktreeId, tabId)
     return captureAcknowledgedTerminalTabRetirement(worktreeId, tabId, () => {
       const resolvedHostId = this.getWorkspaceSessionHostIdForTab(worktreeId, tabId)
-      const resolvedSession = this.store?.getWorkspaceSession?.(resolvedHostId)
+      const resolvedSession = borrowWorkspaceSession(this.store, resolvedHostId)
       // Emptying the last tab may reroute the worktree to its catalog host.
       const hostId = resolvedSession?.tabsByWorktree[worktreeId]?.some((tab) => tab.id === tabId)
         ? resolvedHostId
         : originalHostId
       return {
         hostId,
-        session: this.store?.getWorkspaceSession?.(hostId) ?? null,
+        session: borrowWorkspaceSession(this.store, hostId) ?? null,
         snapshot: this.mobileSessionTabsByWorktree.get(worktreeId),
         incarnationOf: (ptyId) => this.ptysById.get(ptyId)?.incarnationId
       }
@@ -154,13 +154,13 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
             worktreeId,
             target,
             hostIds(),
-            { getWorkspaceSession: (hostId) => store.getWorkspaceSession!(hostId) },
+            { getWorkspaceSession: (hostId) => borrowWorkspaceSession(store, hostId) },
             fenced
           ),
           ownerMatches: () => !acknowledgeTabRetirement || acknowledgeTabRetirement().matches,
           hostIds,
-          getSession: (hostId) => store.getWorkspaceSession!(hostId),
-          setSession: (session, hostId) => store.setWorkspaceSession!(session, hostId),
+          getSession: (hostId) => borrowWorkspaceSession(store, hostId),
+          setSession: (session, hostId) => setBorrowedWorkspaceSession(store, session, hostId),
           onClosed: (closedPtyIds) => {
             ptyIdsToKill = closedPtyIds
           }
@@ -200,7 +200,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
       ),
       graphLeafIds,
       sessionLayout:
-        this.getWorkspaceSessionForWorktree(worktreeId)?.terminalLayoutsByTabId?.[target.tabId]
+        this.borrowWorkspaceSessionForWorktree(worktreeId)?.terminalLayoutsByTabId?.[target.tabId]
     })
   }
 

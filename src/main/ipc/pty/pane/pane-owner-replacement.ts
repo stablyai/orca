@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { Store } from '../../../persistence/loading-store/store'
@@ -54,7 +55,7 @@ export function swapReplacedPaneBinding(
 ): () => PersistPtyBindingArgs | null {
   return () => {
     const bound =
-      store.getWorkspaceSession().terminalLayoutsByTabId?.[binding.tabId]?.ptyIdsByLeafId?.[
+      borrowWorkspaceSession(store).terminalLayoutsByTabId?.[binding.tabId]?.ptyIdsByLeafId?.[
         binding.leafId
       ]
     // Unbound is ok: the renderer's pre-connect clear can withdraw it (split tab).

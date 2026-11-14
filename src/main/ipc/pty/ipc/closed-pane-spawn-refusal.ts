@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import { isClosedPaneFenced } from '../../../persistence/terminal-topology/pane-ownership/closed-pane-binding-fence'
 import type { Store } from '../../../persistence/loading-store/store'
 import { layoutContainsLeafId } from '../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
@@ -14,7 +15,7 @@ export function refuseClosedPaneSpawn(
   }
   const held = (store?.getWorkspaceSessionHostIds() ?? []).some((hostId) =>
     layoutContainsLeafId(
-      store?.getWorkspaceSession(hostId)?.terminalLayoutsByTabId?.[tabId]?.root ?? null,
+      borrowWorkspaceSession(store, hostId)?.terminalLayoutsByTabId?.[tabId]?.root ?? null,
       leafId
     )
   )

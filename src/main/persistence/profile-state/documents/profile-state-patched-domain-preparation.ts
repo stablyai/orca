@@ -1,3 +1,4 @@
+import { prepareProfileStateFieldParts } from '../document-parts/profile-state-field-parts-preparation'
 import type Database from '../../../sqlite/sync-database'
 import { assertProfileStateDocumentRevision } from '../database/profile-state-revision'
 import {
@@ -42,6 +43,11 @@ export function preparePatchedProfileStateDomains(
       )
       if (!document) {
         throw new Error('Profile state patch lost its authoritative parts')
+      }
+      const prepared = prepareProfileStateFieldParts(patch, existingParts)
+      if (prepared) {
+        mutations.push(prepared)
+        continue
       }
       base = JSON.parse(document.payload)
     } else {

@@ -101,7 +101,7 @@ export abstract class OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding
       // After HUB restart, failed reattach may remove persistence before any exit record; keep the pane available for ensure.
       return true
     }
-    const session = this.getWorkspaceSessionForWorktree(worktreeId)
+    const session = this.borrowWorkspaceSessionForWorktree(worktreeId)
     if (!session) {
       return false
     }

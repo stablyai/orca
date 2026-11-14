@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../loading-store/workspace-sessions/session-host-partitions'
 // Main and renderer must share workspace validity or load will resurrect layouts one side discarded.
 
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
@@ -56,7 +57,11 @@ function dropInvalidWorkspaces(
     if (ownedByPairedHost(hostId)) {
       continue
     }
-    for (const key of invalidWorkspaceKeys(store.getWorkspaceSession(hostId), catalog, inScope)) {
+    for (const key of invalidWorkspaceKeys(
+      borrowWorkspaceSession(store, hostId),
+      catalog,
+      inScope
+    )) {
       store.removeWorkspaceSessionStateForWorktree(hostWorktreeTarget({ id: key, hostId }))
     }
   }

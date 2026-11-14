@@ -5,6 +5,7 @@ import type { WriteSchedulingOperations } from '../profile-writing/write-schedul
 
 export type SessionSnapshotOperationsRuntime = Pick<
   StoreRuntimeState,
+  | 'workspaceSessionFieldCapture'
   | 'durableMutationPhase'
   | 'pendingSnapshotFileWork'
   | 'profileMaintenancePending'

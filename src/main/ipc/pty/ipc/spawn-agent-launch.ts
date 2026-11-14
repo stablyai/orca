@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import { randomUUID } from 'node:crypto'
 import { AgentLaunch } from '../../../../shared/rpc-contract/agent-launch/agent-launch-params'
 import { toAgentLaunchPreferences } from '../../../../shared/agent-launch/choices/agent-launch-preferences'
@@ -15,7 +16,7 @@ import type { PtySpawnIpcArgs } from './spawn-types'
 
 function closedInSession(store: Store | undefined, paneKey: string): boolean {
   const pane = parsePaneKey(paneKey)
-  const session = store?.getWorkspaceSession()
+  const session = borrowWorkspaceSession(store)
   return Boolean(
     pane &&
     session &&

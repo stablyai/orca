@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import type { PtySpawnOutcome } from '../spawn-outcome'
 import { isClosedPaneFenced } from '../../../persistence/terminal-topology/pane-ownership/closed-pane-binding-fence'
 import { hasClosedTerminalTabRecord } from '../../../../shared/workspace-layout/terminal-surfaces/closed-terminal-tab-tombstones'
@@ -254,7 +255,8 @@ export function consumeExitedPaneOperation(
     throw new Error('terminal_pane_owner_changed')
   }
   if (args.renderer && args.worktreeId) {
-    const session = store?.getWorkspaceSession(
+    const session = borrowWorkspaceSession(
+      store,
       args.connectionId ? toSshExecutionHostId(args.connectionId) : undefined
     )
     if (

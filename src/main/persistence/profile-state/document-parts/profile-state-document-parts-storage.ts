@@ -30,7 +30,7 @@ type PartsMeta = {
 
 export type ProfileStateExistingDocumentParts = Map<
   string,
-  { ordinal: number; contentHash: string }
+  { ordinal: number; contentHash: string; payload?: string }
 >
 
 function readPartsMeta(db: Database.Database, domain: string): PartsMeta | undefined {
@@ -136,7 +136,8 @@ export function readProfileStateSplitDocument(
     parts.push({ key: row.part_key, payload: row.payload })
     retainedParts?.set(row.part_key, {
       ordinal: Number(row.ordinal),
-      contentHash: String(row.content_hash)
+      contentHash: String(row.content_hash),
+      payload: row.payload
     })
   }
   let payload: string
@@ -219,6 +220,7 @@ export function writeProfileStateDomainParts(
     /** Existing parts are a valid base to diff against. */
     diffExisting: boolean
     existingParts?: ProfileStateExistingDocumentParts
+    preparedParts?: readonly (ProfileStateDocumentPart & { contentHash: string })[]
   }
 ): boolean {
   if (!hasProfileStateDocumentPartsTables(db)) {
@@ -228,16 +230,20 @@ export function writeProfileStateDomainParts(
   if (depth === undefined) {
     return false
   }
-  const parts = splitProfileStateDomainValue(
-    args.value === undefined ? JSON.parse(args.payload) : args.value,
-    depth
-  )
+  const parts =
+    args.preparedParts ??
+    splitProfileStateDomainValue(
+      args.value === undefined ? JSON.parse(args.payload) : args.value,
+      depth
+    )
   // Non-canonical JSON (whitespace, escapes) would not round-trip byte-for-byte.
-  if (assembleProfileStateDomainPayload(parts) !== args.payload) {
+  if (!args.preparedParts && assembleProfileStateDomainPayload(parts) !== args.payload) {
     deleteProfileStateDomainParts(db, args.domain)
     return false
   }
-  const existing = args.existingParts ?? new Map<string, { ordinal: number; contentHash: string }>()
+  const existing =
+    args.existingParts ??
+    new Map<string, { ordinal: number; contentHash: string; payload?: string }>()
   if (args.diffExisting && args.existingParts === undefined) {
     for (const row of db
       .prepare(
@@ -280,7 +286,8 @@ export function writeProfileStateDomainParts(
     seen.add(part.key)
     const ordinal = ordinals[index]!
     const previous = existing.get(part.key)
-    const contentHash = hashProfileStatePart(part.payload)
+    const contentHash =
+      'contentHash' in part ? String(part.contentHash) : hashProfileStatePart(part.payload)
     if (!previous) {
       insert.run(args.domain, part.key, ordinal, part.payload, contentHash)
     } else if (previous.contentHash !== contentHash) {

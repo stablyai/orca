@@ -19,7 +19,7 @@ export abstract class OrcaRuntimeWithClientTerminalScrollback extends OrcaRuntim
     return readHostTerminalScrollback(
       {
         resolveWorktreeId: async (selector) => (await this.resolveWorkspaceSelector(selector)).id,
-        getWorkspaceSession: (worktreeId) => this.workspaceSessions.get(worktreeId),
+        getWorkspaceSession: (worktreeId) => this.workspaceSessions.borrow(worktreeId),
         statSnapshotSize: (ref) => statSnapshotSize.call(store, ref),
         readSnapshot: (ref) => readSnapshot.call(store, ref)
       },

@@ -1,3 +1,5 @@
+import { withRequiredWorkspaceSessionMaps } from './workspace-session-partitions'
+export { withRequiredWorkspaceSessionMaps } from './workspace-session-partitions'
 import { orderTerminalRowsByTabGroups } from '../../../../shared/workspace-layout/terminal-topology/terminal-row-order'
 import type { PersistedState } from '../../../../shared/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
@@ -29,7 +31,11 @@ import {
 
 import type { StoreRuntimeState } from '../store-runtime-state'
 
-import { type WriteSchedulingOperations, scheduleSave } from '../profile-writing/write-scheduling'
+import {
+  type WriteSchedulingOperations,
+  scheduleSave,
+  scheduleSessionFieldSave
+} from '../profile-writing/write-scheduling'
 import {
   preserveMissingWorkspaceSessionTerminalBindings,
   sshTargetIdForWorkspaceSessionHost
@@ -43,7 +49,7 @@ import {
 
 type SessionHostPartitionOperationsRuntime = Pick<
   StoreRuntimeState,
-  'state' | 'terminalScrollbackSnapshotStorage'
+  'state' | 'terminalScrollbackSnapshotStorage' | 'workspaceSessionFieldCapture'
 >
 
 const sessionHostPartitionOperationsContext = Symbol('SessionHostPartitionOperations')
@@ -69,18 +75,10 @@ export class SessionHostPartitionOperations {
   }
 
   getWorkspaceSession(hostId?: string | null): PersistedState['workspaceSession'] {
-    const resolved = resolveHostId(hostId)
-    if (resolved === LOCAL_EXECUTION_HOST_ID) {
-      return (
-        this[sessionHostPartitionOperationsContext].runtime.state.workspaceSession ??
-        getDefaultWorkspaceSession()
-      )
-    }
-    return (
-      this[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId?.[
-        resolved
-      ] ?? getDefaultWorkspaceSession()
+    this[sessionHostPartitionOperationsContext].runtime.workspaceSessionFieldCapture.expose(
+      sessionDomain(hostId)
     )
+    return borrowWorkspaceSession(this, hostId)
   }
 
   getWorkspaceSessionHostIds(): ExecutionHostId[] {
@@ -127,7 +125,7 @@ export class SessionHostPartitionOperations {
   }
 
   getWorktreeIdForTab(tabId: string): string | undefined {
-    return findWorktreeIdForTab(this.getWorkspaceSession(), tabId)
+    return findWorktreeIdForTab(borrowWorkspaceSession(this), tabId)
   }
 
   removeWorkspaceSessionStateForWorktree(
@@ -169,7 +167,7 @@ export function removeWorkspaceSessionOwnerInPartition(
   if (resolved === LOCAL_EXECUTION_HOST_ID && isWslMoveWorkspaceSessionFrozen(worktreeId)) {
     return
   }
-  const current = owner.getWorkspaceSession(resolved)
+  const current = borrowWorkspaceSession(owner, resolved)
   const advanceTerminalTopologyRevision = options.advanceTerminalTopologyRevision ?? true
   const session = removeWorkspaceSessionOwner(current, worktreeId, {
     advanceTerminalTopologyRevision
@@ -206,7 +204,7 @@ export function partitionOwnsWorktreeTabs(
   worktreeId: string,
   hostId: ExecutionHostId
 ): boolean {
-  return owner.getWorkspaceSession(hostId).tabsByWorktree?.[worktreeId] !== undefined
+  return borrowWorkspaceSession(owner, hostId).tabsByWorktree?.[worktreeId] !== undefined
 }
 
 export function partitionHasOtherRepoWorktreeTabs(
@@ -215,7 +213,7 @@ export function partitionHasOtherRepoWorktreeTabs(
   hostId: ExecutionHostId
 ): boolean {
   const repoId = getRepoIdFromWorktreeId(worktreeId)
-  const tabsByWorktree = owner.getWorkspaceSession(hostId).tabsByWorktree ?? {}
+  const tabsByWorktree = borrowWorkspaceSession(owner, hostId).tabsByWorktree ?? {}
   return Object.entries(tabsByWorktree).some(
     ([id, tabs]) =>
       id !== worktreeId && getRepoIdFromWorktreeId(id) === repoId && (tabs?.length ?? 0) > 0
@@ -225,7 +223,8 @@ export function partitionHasOtherRepoWorktreeTabs(
 export function setHostWorkspaceSession(
   owner: SessionHostPartitionOperations,
   hostId: ExecutionHostId,
-  session: WorkspaceSessionState
+  session: WorkspaceSessionState,
+  fields = false
 ): void {
   const persisted =
     owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId?.[hostId]
@@ -267,20 +266,64 @@ export function setHostWorkspaceSession(
     ...owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId,
     [hostId]: withRequiredWorkspaceSessionMaps(orderTerminalRowsByTabGroups(pruned))
   }
-  scheduleSave(
+  const schedule = fields ? scheduleSessionFieldSave : scheduleSave
+  schedule(
     owner[sessionHostPartitionOperationsContext].scheduling,
     ['workspaceSessionsByHostId'],
     hostId
   )
 }
 
-/** Restore required maps omitted by the renderer's sparse host split. */
-export function withRequiredWorkspaceSessionMaps(
-  session: WorkspaceSessionState
-): WorkspaceSessionState {
-  return {
-    ...session,
-    tabsByWorktree: session.tabsByWorktree ?? {},
-    terminalLayoutsByTabId: session.terminalLayoutsByTabId ?? {}
+type SessionReader = {
+  getWorkspaceSession?(hostId?: string | null): WorkspaceSessionState | undefined
+}
+function ownsSessionContext(owner: SessionReader): owner is SessionHostPartitionOperations {
+  return sessionHostPartitionOperationsContext in owner
+}
+
+export function sessionDomain(hostId?: string | null): string {
+  return resolveHostId(hostId) === LOCAL_EXECUTION_HOST_ID
+    ? 'workspaceSession'
+    : 'workspaceSessionsByHostId'
+}
+
+/** Only audited internal readers may borrow; all unknown implementations retain their public contract. */
+export function borrowWorkspaceSession(
+  owner: SessionHostPartitionOperations,
+  hostId?: string | null
+): WorkspaceSessionState
+export function borrowWorkspaceSession(
+  owner: SessionReader | null | undefined,
+  hostId?: string | null
+): WorkspaceSessionState | undefined
+export function borrowWorkspaceSession(
+  owner: SessionReader | null | undefined,
+  hostId?: string | null
+): WorkspaceSessionState | undefined {
+  if (!owner) {
+    return undefined
   }
+  if (!ownsSessionContext(owner)) {
+    return owner.getWorkspaceSession?.(hostId)
+  }
+  const resolved = resolveHostId(hostId)
+  const { state } = owner[sessionHostPartitionOperationsContext].runtime
+  return (
+    (resolved === LOCAL_EXECUTION_HOST_ID
+      ? state.workspaceSession
+      : state.workspaceSessionsByHostId?.[resolved]) ?? getDefaultWorkspaceSession()
+  )
+}
+
+export function isOwnedWorkspaceSession(
+  owner: SessionReader | null | undefined,
+  hostId?: string | null
+): boolean {
+  return (
+    !!owner &&
+    ownsSessionContext(owner) &&
+    owner[sessionHostPartitionOperationsContext].runtime.workspaceSessionFieldCapture.isOwned(
+      sessionDomain(hostId)
+    )
+  )
 }

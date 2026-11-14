@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import {
   getRegisteredSshState,
   listRegisteredSshTargets
@@ -129,7 +130,7 @@ export function sidebarInputsFeedDomains(
           ...keyWorkspaceActivityByRow(facts.getWorkspaceActivityFacts().facts, rows),
           ...buildPairedServerActivityFacts(
             pairedServerRows.snapshot().servers,
-            (hostId) => sources.store()?.getWorkspaceSession?.(hostId) ?? null
+            (hostId) => borrowWorkspaceSession(sources.store(), hostId) ?? null
           )
         }
       },

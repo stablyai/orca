@@ -83,7 +83,7 @@ export abstract class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWith
     if (parsed && !leaf && pty && !pty.connected && worktreeId) {
       // An exited PTY outlives its tab; once the host closed that tab the pane is gone, and a client
       // must not read the leftover record as a pane the host still owns (#9194).
-      const session = this.getWorkspaceSessionForWorktree(worktreeId)
+      const session = this.borrowWorkspaceSessionForWorktree(worktreeId)
       if (
         session?.tabsByWorktree[worktreeId] &&
         !workspaceSessionListsTerminalTab(session, worktreeId, parsed.tabId)

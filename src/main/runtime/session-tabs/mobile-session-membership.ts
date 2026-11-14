@@ -118,7 +118,7 @@ export abstract class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends O
     candidatePtyId: string | null | undefined
   ): boolean {
     // Only absent sessions license membership; normalize partition misses to undefined.
-    const session = this.getWorkspaceSessionForWorktree(worktreeId) ?? undefined
+    const session = this.borrowWorkspaceSessionForWorktree(worktreeId) ?? undefined
     const repoId = getRepoIdFromWorktreeId(worktreeId)
     if (
       !hasHostAuthoritativeTerminalMembership(session, worktreeId) &&

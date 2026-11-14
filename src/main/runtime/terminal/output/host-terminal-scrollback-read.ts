@@ -37,8 +37,11 @@ export async function readHostTerminalScrollback(
   request: HostTerminalScrollbackReadRequest
 ): Promise<SessionReadTerminalScrollbackResult> {
   const worktreeId = await deps.resolveWorktreeId(request.worktree)
-  const session = deps.getWorkspaceSession(worktreeId)
-  if (!session || !worktreeSessionNamesScrollbackRef(session, worktreeId, request.ref)) {
+  const namesRef = (() => {
+    const session = deps.getWorkspaceSession(worktreeId)
+    return !!session && worktreeSessionNamesScrollbackRef(session, worktreeId, request.ref)
+  })()
+  if (!namesRef) {
     throw new Error('terminal_scrollback_not_found')
   }
   const size = await deps.statSnapshotSize(request.ref)

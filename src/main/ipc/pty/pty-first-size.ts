@@ -40,3 +40,30 @@ export function paneSize(
   }
   return session?.terminalLayoutsByTabId?.[pane.tabId]?.lastGridsByLeafId?.[pane.leafId]
 }
+
+/** Extract only grid scalars before a launch awaits or hands options to another owner. */
+export function savedPtyFirstSize(
+  session: WorkspaceSessionState | null,
+  pane: Parameters<typeof paneSize>[1],
+  workspace: {
+    worktreeId: string
+    targetGroupId?: string | null
+    activeGroupId?: string | null
+    groupSizes?: Record<string, PtyGridSize>
+    singleGroup?: PtyGridSize
+  }
+): PtyGridSize {
+  const groupId =
+    workspace.targetGroupId ??
+    workspace.activeGroupId ??
+    session?.activeGroupIdByWorktree?.[workspace.worktreeId]
+  const size = resolvePtyFirstSize({
+    pane: paneSize(session, pane),
+    group: groupId ? workspace.groupSizes?.[groupId] : undefined,
+    singleGroup:
+      (session?.tabGroups?.[workspace.worktreeId]?.length ?? 0) <= 1
+        ? workspace.singleGroup
+        : undefined
+  })
+  return { cols: size.cols, rows: size.rows }
+}

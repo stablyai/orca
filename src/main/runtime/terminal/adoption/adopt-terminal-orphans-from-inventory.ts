@@ -44,7 +44,7 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
       throw new Error('workspace_session_unavailable')
     }
     const readSession = () => {
-      const session = this.getWorkspaceSessionForWorktree(workspace.id)
+      const session = this.borrowWorkspaceSessionForWorktree(workspace.id)
       if (!session) {
         throw new Error('workspace_session_unavailable')
       }
@@ -103,8 +103,9 @@ export abstract class OrcaRuntimeWithAdoptTerminalOrphansFromInventory extends O
           this.followExportedPaneKeys()
         },
         getMobileSnapshots: () => this.mobileSessionTabsByWorktree.values(),
-        getSession: (worktreeId) => this.getWorkspaceSessionForWorktree(worktreeId),
-        setSession: (worktreeId, next) => this.setWorkspaceSessionForWorktree(worktreeId, next),
+        getSession: (worktreeId) => this.borrowWorkspaceSessionForWorktree(worktreeId),
+        setSession: (worktreeId, next) =>
+          this.setBorrowedWorkspaceSessionForWorktree(worktreeId, next),
         ...(runDurableMutation ? { runDurableMutation } : {}),
         flushSession: () => this.flushWorkspaceSessionOrThrowAsync(),
         hydrateSession: (worktreeId) =>

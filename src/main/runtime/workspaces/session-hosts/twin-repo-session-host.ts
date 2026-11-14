@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -79,7 +80,7 @@ export function resolveTwinRepoSessionHostId(
       LOCAL_EXECUTION_HOST_ID,
       ...(store.getWorkspaceSessionHostIds?.() ?? [])
     ])
-  ].filter((hostId) => partitionHoldsWorktree(store.getWorkspaceSession?.(hostId), worktreeId))
+  ].filter((hostId) => partitionHoldsWorktree(borrowWorkspaceSession(store, hostId), worktreeId))
   if (saved.length > 0) {
     const savedPrimary = pickPrimaryHostForClaims(saved)
     if (listed.length === 0 || listed.includes(savedPrimary)) {

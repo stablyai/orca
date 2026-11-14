@@ -1,3 +1,7 @@
+import {
+  borrowWorkspaceSession,
+  isOwnedWorkspaceSession
+} from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import { sleepingRecordsEquivalentIgnoringCaptureTime } from '../../../../shared/agent-session/lifecycle/agent-resume-record-equivalence'
 import { OrcaRuntimeWithStopTerminalsForWorktree } from './worktree-terminal-stop'
 import { launchStatement } from '../launch/launch-evidence'
@@ -36,11 +40,15 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
     worktreeId: string,
     paneKey: string
   ): Promise<SleepingAgentSessionRecord | undefined> {
-    return this.inResumeRecordOrder(
-      async () =>
-        this.store?.getWorkspaceSession?.(this.getWorkspaceSessionHostIdForWorktree(worktreeId))
-          ?.sleepingAgentSessionsByPaneKey?.[paneKey]
-    )
+    return this.inResumeRecordOrder(async () => {
+      const hostId = this.getWorkspaceSessionHostIdForWorktree(worktreeId)
+      const record = borrowWorkspaceSession(this.store, hostId)?.sleepingAgentSessionsByPaneKey?.[
+        paneKey
+      ]
+      return record && isOwnedWorkspaceSession(this.store, hostId)
+        ? structuredClone(record)
+        : record
+    })
   }
 
   /** Forgets a pane's saved resume the host refused because a chat is its conversation's home,
@@ -195,7 +203,7 @@ export abstract class OrcaRuntimeWithWorktreeSleepResumeRecording extends OrcaRu
     }
     const command = hookStatusResumeCommand({
       status,
-      session: this.store.getWorkspaceSession(hostId),
+      session: borrowWorkspaceSession(this.store, hostId)!,
       worktreeId,
       launchConfigOf: this.getLaunchStatementForPaneKey
     })

@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import { webContents } from 'electron'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
@@ -62,7 +63,7 @@ function visitSavedPages(
   visit: (page: BrowserPage, session: Electron.Session) => boolean | void
 ): void {
   for (const hostId of from.getWorkspaceSessionHostIds()) {
-    const state = from.getWorkspaceSession(hostId)
+    const state = borrowWorkspaceSession(from, hostId)
     for (const tabs of Object.values(state.browserTabsByWorktree ?? {})) {
       for (const tab of tabs) {
         const session = extensionSessionFor(tab)
@@ -104,7 +105,7 @@ function withTabId(page: BrowserPage, session: Electron.Session): DiscardedBrows
 function savedPageIdsIn(hostIds: readonly string[]): Set<string> {
   return new Set(
     hostIds.flatMap((hostId) =>
-      Object.values(source?.getWorkspaceSession(hostId).browserPagesByWorkspace ?? {}).flatMap(
+      Object.values(borrowWorkspaceSession(source, hostId)?.browserPagesByWorkspace ?? {}).flatMap(
         (pages) => pages.map((page) => page.id)
       )
     )

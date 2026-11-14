@@ -85,7 +85,8 @@ export abstract class OrcaRuntimeWithWriteOrchestrationPointerPty extends OrcaRu
 
   /** A user's pane name from the saved layout: every client's pane rename lands there. */
   protected getSavedPaneTitle(worktreeId: string, tabId: string, leafId: string): string | null {
-    const layout = this.getWorkspaceSessionForWorktree(worktreeId)?.terminalLayoutsByTabId?.[tabId]
+    const layout =
+      this.borrowWorkspaceSessionForWorktree(worktreeId)?.terminalLayoutsByTabId?.[tabId]
     return layout?.titlesByLeafId?.[leafId]?.trim() || null
   }
 

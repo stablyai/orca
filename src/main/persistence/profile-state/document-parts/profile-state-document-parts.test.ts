@@ -174,6 +174,58 @@ describe('profile state document parts', () => {
     }
   })
 
+  it('replaces a complete field prefix, normalizes incoming JSON and preserves omitted-field deletion', () => {
+    const db = open()
+    try {
+      write(db, { workspaceSession: '{"tabsByWorktree":{"a":[],"b":[]},"activeTabId":"a"}' })
+      const patch = (payload: string) =>
+        writeProfileStateDomains(db, {
+          expectedRevision: readProfileStateRevision(db),
+          replacements: [],
+          patches: [
+            {
+              domain: 'workspaceSession',
+              operations: [{ kind: 'set', path: ['tabsByWorktree'], payload }]
+            }
+          ]
+        })
+      patch('{ "a": [ ], "b": [ "changed" ] }')
+      expect(exportProfileStateJson(db)).toBe(
+        '{"workspaceSession":{"tabsByWorktree":{"a":[],"b":["changed"]},"activeTabId":"a"}}'
+      )
+      patch('{"b":[]}')
+      expect(exportProfileStateJson(db)).toBe(
+        '{"workspaceSession":{"tabsByWorktree":{"b":[]},"activeTabId":"a"}}'
+      )
+    } finally {
+      db.close()
+    }
+  })
+
+  it.each(['a', 'b'])('does not conceal a corrupt %s row with a field replacement', (target) => {
+    const db = open()
+    try {
+      write(db, { workspaceSession: '{"tabsByWorktree":{"a":[],"b":[]}}' })
+      db.prepare(
+        'UPDATE profile_state_document_parts SET payload = ? WHERE domain = ? AND part_key = ?'
+      ).run('["corrupt"]', 'workspaceSession', JSON.stringify(['tabsByWorktree', target]))
+      expect(() =>
+        writeProfileStateDomains(db, {
+          expectedRevision: readProfileStateRevision(db),
+          replacements: [],
+          patches: [
+            {
+              domain: 'workspaceSession',
+              operations: [{ kind: 'set', path: ['tabsByWorktree'], payload: '{"a":[],"b":[]}' }]
+            }
+          ]
+        })
+      ).toThrow('part is invalid')
+    } finally {
+      db.close()
+    }
+  })
+
   it('reads back the exact document after entries change, appear and move', () => {
     const db = open()
     try {

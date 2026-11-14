@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../loading-store/workspace-sessions/session-host-partitions'
 import type { LayoutClientVisibility } from '../../../shared/workspace-layout/client-views/workspace-layout-client-visibility'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type {
@@ -97,7 +98,7 @@ export class LayoutCommandPersistence {
     const commit = raisingBindingGenerations(
       context.runtime,
       resolved,
-      (hostId) => context.sessions.getWorkspaceSession(hostId),
+      (hostId) => borrowWorkspaceSession(context.sessions, hostId),
       applyLayout(resolved, command, topologyCommitContext(context), {
         live: { ...run.live, visibility: run.visibility },
         stopBeforeWrite: run.stopBeforeWrite,
@@ -106,7 +107,7 @@ export class LayoutCommandPersistence {
     )
     const admitted = (): DurableProfileStateMutation<LayoutApplyOutcome> =>
       run.admit &&
-      !run.admit(resolved.map((hostId) => context.sessions.getWorkspaceSession(hostId)))
+      !run.admit(resolved.map((hostId) => borrowWorkspaceSession(context.sessions, hostId)))
         ? { value: { ok: false, code: 'tab_not_found' }, persist: false }
         : commit()
     // Applied closes must stay closed even when persistence fails.

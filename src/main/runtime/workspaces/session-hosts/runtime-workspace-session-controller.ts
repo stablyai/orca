@@ -1,3 +1,8 @@
+import { setBorrowedWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-snapshot-operations'
+import {
+  borrowWorkspaceSession,
+  isOwnedWorkspaceSession
+} from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import {
   getConnectionExecutionHostId,
   getRepoExecutionHostId,
@@ -127,7 +132,7 @@ export class RuntimeWorkspaceSessionController {
       return preferredHostId
     }
     return this.resolveHostId(worktreeId, preferredHostId, persistedHostIds, (hostId) =>
-      store.getWorkspaceSession!(hostId)
+      borrowWorkspaceSession(store, hostId)!
     )
   }
 
@@ -152,7 +157,7 @@ export class RuntimeWorkspaceSessionController {
     const holders = [
       ...new Set([routedHostId, ...(store.getWorkspaceSessionHostIds?.() ?? [])])
     ].filter((hostId) => {
-      const session = store.getWorkspaceSession!(hostId)
+      const session = borrowWorkspaceSession(store, hostId)
       return session ? workspaceSessionListsTerminalTab(session, worktreeId, tabId) : false
     })
     return holders.length > 0 ? holders : [routedHostId]
@@ -172,6 +177,21 @@ export class RuntimeWorkspaceSessionController {
       : null
   }
 
+  /** Internal scalar/projecting readers; raw get remains the mutable public API. */
+  borrow(worktreeId: string): WorkspaceSessionState | null {
+    const hostId = this.tryGetHostId(worktreeId)
+    return hostId ? (borrowWorkspaceSession(this.deps.getStore(), hostId) ?? null) : null
+  }
+
+  isOwned(worktreeId: string): boolean {
+    const hostId = this.tryGetHostId(worktreeId)
+    return !!hostId && isOwnedWorkspaceSession(this.deps.getStore(), hostId)
+  }
+
+  setBorrowed(worktreeId: string, session: WorkspaceSessionState): void {
+    setBorrowedWorkspaceSession(this.deps.getStore(), session, this.getHostId(worktreeId))
+  }
+
   setForWorktree(worktreeId: string, session: WorkspaceSessionState): void {
     this.deps.getStore()?.setWorkspaceSession?.(session, this.getHostId(worktreeId))
   }
@@ -186,7 +206,7 @@ export class RuntimeWorkspaceSessionController {
     }
     const worktreeIds = new Set<string>()
     for (const hostId of hostIds) {
-      const session = store?.getWorkspaceSession?.(hostId)
+      const session = borrowWorkspaceSession(store, hostId)
       for (const worktreeId of Object.keys(session?.tabsByWorktree ?? {})) {
         if (repoIds.has(getRepoIdFromWorktreeId(worktreeId))) {
           worktreeIds.add(worktreeId)
@@ -197,6 +217,19 @@ export class RuntimeWorkspaceSessionController {
   }
 
   getHydrationTargets(includeAllPersistedWorktrees: boolean): Map<string, WorkspaceSessionState> {
+    return this.hydrationTargets(includeAllPersistedWorktrees, false)
+  }
+
+  borrowHydrationTargets(
+    includeAllPersistedWorktrees: boolean
+  ): Map<string, WorkspaceSessionState> {
+    return this.hydrationTargets(includeAllPersistedWorktrees, true)
+  }
+
+  private hydrationTargets(
+    includeAllPersistedWorktrees: boolean,
+    borrowed: boolean
+  ): Map<string, WorkspaceSessionState> {
     const store = this.deps.getStore()
     if (!store) {
       return new Map()
@@ -229,7 +262,9 @@ export class RuntimeWorkspaceSessionController {
     const targets = new Map<string, WorkspaceSessionState>()
     const sessionsByHostId = new Map<ExecutionHostId, WorkspaceSessionState>()
     for (const hostId of hostIds) {
-      const session = store?.getWorkspaceSession?.(hostId)
+      const session = borrowed
+        ? borrowWorkspaceSession(store, hostId)
+        : store.getWorkspaceSession?.(hostId)
       if (!session) {
         continue
       }
@@ -251,7 +286,10 @@ export class RuntimeWorkspaceSessionController {
           catalogOwnerHostId ?? LOCAL_EXECUTION_HOST_ID,
           [...sessionsByHostId.keys()],
           (candidateHostId) =>
-            sessionsByHostId.get(candidateHostId) ?? store.getWorkspaceSession!(candidateHostId)
+            sessionsByHostId.get(candidateHostId) ??
+            (borrowed
+              ? borrowWorkspaceSession(store, candidateHostId)!
+              : store.getWorkspaceSession!(candidateHostId))
         )
         if (
           ownerHostId === hostId &&

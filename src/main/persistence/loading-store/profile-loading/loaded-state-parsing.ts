@@ -57,7 +57,6 @@ type LoadedStateParsingOperationsRuntime = Pick<
   | 'originalExperimentalNativeChat'
   | 'protectedSecrets'
   | 'profileStateAuthority'
-  | 'profileStateSplitSnapshots'
   | 'storageAuthority'
   | 'terminalScrollbackSnapshotStorage'
 >
@@ -74,23 +73,16 @@ export class LoadedStateParsingOperations {
   }
 
   loadFromAuthority(raw: string | undefined): PersistedState {
-    return this.loadInternal(raw, undefined, true)
+    return this.loadInternal(raw)
   }
 
   loadParsedFromAuthority(parsed: Record<string, unknown> | undefined): PersistedState {
-    return this.loadInternal(undefined, parsed, true)
+    return this.loadInternal(undefined, parsed)
   }
 
-  private loadInternal(
-    serialized?: string,
-    parsedInput?: Record<string, unknown>,
-    admitted = false
-  ): PersistedState {
+  private loadInternal(serialized?: string, parsedInput?: Record<string, unknown>): PersistedState {
     // Pre-telemetry profiles lack cohort fields, so source existence determines upgrade status.
     const fileExistedOnLoad = serialized !== undefined || parsedInput !== undefined
-    if (admitted && !fileExistedOnLoad && this.runtime.profileStateAuthority?.writePreparedState) {
-      this.runtime.profileStateSplitSnapshots.seed(undefined)
-    }
     logStartupMilestone('persistence-load-start', {
       fileExists: fileExistedOnLoad
     })
@@ -104,9 +96,6 @@ export class LoadedStateParsingOperations {
         parsed = parseProfileStateInput(serialized, parsedInput) as LoadedProfileState | undefined
         if (parsed === undefined) {
           throw new Error('Profile state startup snapshot is missing')
-        }
-        if (admitted && this.runtime.profileStateAuthority?.writePreparedState) {
-          this.runtime.profileStateSplitSnapshots.seed(parsed)
         }
         parsed = this.cohorts.migrateCohortSeeds(parsed, true)
         // Freeze audience before defaults or migrations alter the saved Chat UI state.

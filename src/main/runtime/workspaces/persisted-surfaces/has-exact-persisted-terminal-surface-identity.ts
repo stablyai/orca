@@ -14,7 +14,7 @@ export abstract class OrcaRuntimeWithHasExactPersistedTerminalSurfaceIdentity ex
   protected getPersistedSessionListingTerminalTab(
     worktreeId: string,
     tabId: string,
-    session = this.getWorkspaceSessionForWorktree(worktreeId)
+    session = this.borrowWorkspaceSessionForWorktree(worktreeId)
   ): WorkspaceSessionState | null {
     const sessionWorktreeId = session ? resolveTerminalSessionWorktreeId(session, worktreeId) : null
     return session &&

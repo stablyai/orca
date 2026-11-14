@@ -1,3 +1,4 @@
+import { WorkspaceSessionRuntime } from '../workspaces/session-hosts/workspace-session-runtime'
 import type { TerminalIdentityReadContext as IdentityRead } from '../terminal/query/terminal-identity-read-context'
 import type * as Calls from './runtime-host-service-calls'
 import type { selectFreshExplicitAgentStatus } from '../workspaces/process-listing/runtime-hook-agent-row-selection'
@@ -40,14 +41,13 @@ import type { OrchestrationMailboxTerminal } from '../orchestration/mailbox/rout
 import type { OrchestrationMailboxPointerSubmitTarget } from '../orchestration/mailbox/terminal-pointer/mailbox-pointer-submit'
 import type { WriteSettlement } from '../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import type { StructuredPointerTarget } from '../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-delivery'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type * as PtyControllerContract from '../terminal/lifecycle/runtime-pty-controller-contract'
 import type { RuntimeClientEventBus } from '../client/events/runtime-client-event-bus'
 import type { RuntimeRepoSelector } from '../workspaces/catalog/runtime-repo-selector'
 import type { PtyPane, PtyPaneSource } from '../terminal/surface/pty-pane-query'
 
-export abstract class RuntimeConstructionServices {
+export abstract class RuntimeConstructionServices extends WorkspaceSessionRuntime {
   abstract getOrchestrationDb(): OrchestrationDb
   abstract getExistingOrchestrationDb(): OrchestrationDb | null
   abstract listRepos(): Repo[]
@@ -272,9 +272,6 @@ export abstract class RuntimeConstructionServices {
   abstract isWorkerAgentInTurn(
     resource: Pick<WorkerTerminalResourceRow, 'pane_key' | 'terminal_handle'>
   ): boolean
-  protected abstract getWorkspaceSessionForWorktree(
-    worktreeId: string
-  ): WorkspaceSessionState | null
   protected abstract readonly getAgentStatusSnapshotForPaneFn:
     | ((paneKey: string) => AgentStatusIpcPayload[])
     | null

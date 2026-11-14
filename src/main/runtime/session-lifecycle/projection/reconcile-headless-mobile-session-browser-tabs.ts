@@ -1,3 +1,4 @@
+import { borrowWorkspaceSession } from '../../../persistence/loading-store/workspace-sessions/session-host-partitions'
 import type { OrcaRuntimeWithStoredMobileSnapshotHasStalePreservedTab as BrowserOwnership } from '../../session-tabs/mobile-session-publication-preservation'
 import type { OrcaRuntimeWithPruneMobileSessionTabGroupLayout as MobileSessionProjection } from './prune-mobile-session-tab-group-layout'
 import type { OrcaRuntimeWithCloseStructuredAgentSessionTab as StructuredSessionClose } from '../../session-tabs/structured-session-tab-close'
@@ -195,9 +196,9 @@ export abstract class OrcaRuntimeWithReconcileHeadlessMobileSessionBrowserTabs e
       }
     }
     return (
-      findTerminalTabIdForLeaf(this.store?.getWorkspaceSession?.(), leafId) ??
+      findTerminalTabIdForLeaf(borrowWorkspaceSession(this.store), leafId) ??
       findTerminalTabIdForLeaf(
-        this.store?.getWorkspaceSession?.(toSshExecutionHostId(targetId)),
+        borrowWorkspaceSession(this.store, toSshExecutionHostId(targetId)),
         leafId
       )
     )
