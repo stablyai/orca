@@ -7,7 +7,10 @@ import {
   AGENT_STATUS_STALE_AFTER_MS
 } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { DashboardAgentRow } from './useDashboardData'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
+import type {
+  AgentRetentionSuppression,
+  RetainedAgentEntry
+} from '@/store/slices/agent-status/agent-status-contract'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
@@ -206,33 +209,32 @@ export function useRetainedAgentsSync(): void {
   ])
 }
 
+/** Match snapshots despite delayed provider identity, keeping replacement runs in the same pane distinct. */
 function sameAgentRun(
-  previous: { row: DashboardAgentRow },
-  current: { row: DashboardAgentRow }
+  previous: Pick<DashboardAgentRow, 'entry' | 'startedAt' | 'agentType'>,
+  current: Pick<DashboardAgentRow, 'entry' | 'startedAt' | 'agentType'>
 ): boolean {
   // Resume identity arrives independently; compare sessions only when both sides have one.
-  const previousSession = previous.row.entry.providerSession
-  const currentSession = current.row.entry.providerSession
+  const previousSession = previous.entry.providerSession
+  const currentSession = current.entry.providerSession
   if (previousSession && currentSession) {
     return previousSession.key === currentSession.key && previousSession.id === currentSession.id
   }
   // Terminal handles can span runs and are absent locally; use them only to corroborate run identity.
-  const previousHandle = previous.row.entry.terminalHandle
-  const currentHandle = current.row.entry.terminalHandle
+  const previousHandle = previous.entry.terminalHandle
+  const currentHandle = current.entry.terminalHandle
   if (previousHandle && currentHandle && previousHandle !== currentHandle) {
     return false
   }
-  return (
-    previous.row.startedAt === current.row.startedAt &&
-    previous.row.agentType === current.row.agentType
-  )
+  return previous.startedAt === current.startedAt && previous.agentType === current.agentType
 }
 
+/** Retain eligible disappeared runs and consume exit suppressors without discarding a replacement run's result. */
 export function collectRetainedAgentsOnDisappear(args: {
   previousAgents: Map<string, { row: DashboardAgentRow; worktreeId: string }>
   currentAgents: Map<string, { row: DashboardAgentRow; worktreeId: string }>
   retainedAgentsByPaneKey: Record<string, RetainedAgentEntry>
-  retentionSuppressedPaneKeys: Record<string, true>
+  retentionSuppressedPaneKeys: Record<string, AgentRetentionSuppression>
   recentlyClosedAgentStatusTabIds: Record<string, true>
   recentlyRetiredAgentStatusPaneKeys: Record<string, true | string>
   /** Live tabs by id; supplies the real destination tab when a pane key transferred. */
@@ -242,7 +244,18 @@ export function collectRetainedAgentsOnDisappear(args: {
   consumedSuppressedPaneKeys: string[]
 } {
   const toRetain: RetainedAgentEntry[] = []
-  const consumedSuppressedPaneKeys: string[] = []
+  const consumedSuppressedPaneKeys = new Set<string>()
+
+  for (const [paneKey, suppression] of Object.entries(args.retentionSuppressedPaneKeys)) {
+    const current = args.currentAgents.get(paneKey)
+    if (
+      suppression !== true &&
+      current &&
+      (!suppression.run || !sameAgentRun(suppression.run, current.row))
+    ) {
+      consumedSuppressedPaneKeys.add(paneKey)
+    }
+  }
 
   for (const [paneKey, prev] of args.previousAgents) {
     if (args.currentAgents.has(paneKey)) {
@@ -251,7 +264,7 @@ export function collectRetainedAgentsOnDisappear(args: {
     const transferredPaneKey = resolveAgentPaneAuthorityKey(paneKey)
     const migrated =
       transferredPaneKey === paneKey ? undefined : args.currentAgents.get(transferredPaneKey)
-    if (migrated && sameAgentRun(prev, migrated)) {
+    if (migrated && sameAgentRun(prev.row, migrated.row)) {
       continue
     }
     // A different live run owns the transferred key; retain this row under its own key instead.
@@ -273,8 +286,11 @@ export function collectRetainedAgentsOnDisappear(args: {
         ? ownerPaneKey
         : null
     if (suppressedPaneKey) {
-      consumedSuppressedPaneKeys.push(suppressedPaneKey)
-      continue
+      const suppression = args.retentionSuppressedPaneKeys[suppressedPaneKey]
+      consumedSuppressedPaneKeys.add(suppressedPaneKey)
+      if (suppression === true || !suppression.run || sameAgentRun(suppression.run, prev.row)) {
+        continue
+      }
     }
     // Retain under the current owner after pane transfer, including PTY exits before the next sync.
     const ownerTabId = paneKeyTabId(ownerPaneKey) ?? prev.row.tab.id
@@ -304,5 +320,5 @@ export function collectRetainedAgentsOnDisappear(args: {
     })
   }
 
-  return { toRetain, consumedSuppressedPaneKeys }
+  return { toRetain, consumedSuppressedPaneKeys: [...consumedSuppressedPaneKeys] }
 }

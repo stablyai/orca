@@ -25,6 +25,7 @@ import {
 } from './pane-launch-agent-candidate'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { clearStaleAgentTabTitleOnConfirmedShell } from './confirmed-shell-agent-title'
+import { retireConfirmedShellAgent } from './confirmed-process-exit-row-retire'
 
 export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
   // Share expected-agent derivation between 133;D confirmation and visible resampling so their identity guards cannot drift.
@@ -174,6 +175,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
       session.writeInputModeGround(CONFIRMED_SHELL_MODE_RESET)
       // Agents that leave their OSC title (grok, codex) never trip the title exit; Orca's own hibernation stop keeps its chat.
       if (!isHibernationWakeRecord) {
+        retireConfirmedShellAgent(session.cacheKey)
         session.deps.onAgentExitedRef.current(session.pane.leafId)
       }
       // Why: no 133;D backs these proofs, so a deferred command-finished drop keeps its own read.

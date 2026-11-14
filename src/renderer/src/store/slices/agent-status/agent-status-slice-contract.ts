@@ -18,6 +18,7 @@ import type {
   DropAgentStatusOptions,
   DropHibernatedAgentPaneOptions,
   RetainedAgentEntry,
+  AgentRetentionSuppression,
   AllAgentSessionCaptureMode
 } from './agent-status-contract'
 import type {
@@ -67,8 +68,8 @@ export type AgentStatusSlice = {
   /** Ephemeral launch snapshots keyed by pane; hook payloads lack Orca launch settings, so the renderer supplies them from startup. */
   agentLaunchConfigByPaneKey: Record<string, AgentLaunchConfigRegistryEntry>
 
-  /** Pane keys explicitly torn down, forbidden from re-retention on next disappearance; a one-shot suppressor consumed by the retention sync. */
-  retentionSuppressedPaneKeys: Record<string, true>
+  /** One-shot retention suppressors; confirmed shell exits name the run so pane reuse keeps later results. */
+  retentionSuppressedPaneKeys: Record<string, AgentRetentionSuppression>
 
   /** Terminal tabs explicitly closed this session; used to drop late in-flight IPC statuses and stale main-cache replays. */
   recentlyClosedAgentStatusTabIds: Record<string, true>

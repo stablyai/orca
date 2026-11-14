@@ -24,6 +24,10 @@ export type RetainedAgentEntry = {
   startedAt: number
 }
 
+export type AgentRetentionSuppression =
+  | true
+  | { run?: Pick<RetainedAgentEntry, 'entry' | 'agentType' | 'startedAt'> }
+
 export type AgentStatusWorktreeShutdownReason =
   | 'manual-sleep'
   | 'remove-worktree'
@@ -44,6 +48,10 @@ export type DropHibernatedAgentPaneOptions = {
 export type DropAgentStatusOptions = {
   /** Pane death permits cutoff/manual-unread cleanup; row dismissal preserves them so later hooks cannot resurrect cleared history. */
   paneRemoved?: boolean
+  /** Confirmed exit can precede retention's observation of an already removed live row. */
+  suppressRetention?: boolean | Exclude<AgentRetentionSuppression, true>
+  /** Renderer retention cleanup has no authority to delete the host's current status. */
+  rendererOnly?: boolean
 }
 
 export type DropAgentStatusByTabPrefixOptions = {

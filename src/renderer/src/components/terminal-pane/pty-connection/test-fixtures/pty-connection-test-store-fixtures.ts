@@ -50,6 +50,10 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     runtimePaneTitlesByTabId: {},
     agentStatusByPaneKey: {},
     retainedAgentsByPaneKey: {},
+    retentionSuppressedPaneKeys: {},
+    updateAgentStatusState: vi.fn((update: (state: StoreState) => Partial<StoreState>) => {
+      Object.assign(getState(), update(getState()))
+    }),
     paneForegroundAgentByPaneKey: {},
     sleepingAgentSessionsByPaneKey: {},
     suppressedPtyExitIds: {},

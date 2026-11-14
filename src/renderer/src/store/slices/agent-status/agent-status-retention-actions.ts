@@ -74,7 +74,7 @@ export function createAgentStatusRetentionActions(
     dismissRetainedAgents: (paneKeys) => {
       set((s) => {
         let next: Record<string, RetainedAgentEntry> | null = null
-        let nextSuppressed: Record<string, true> | null = null
+        let nextSuppressed: AgentStatusSlice['retentionSuppressedPaneKeys'] | null = null
         for (const paneKey of paneKeys) {
           if (!(paneKey in (next ?? s.retainedAgentsByPaneKey))) {
             continue

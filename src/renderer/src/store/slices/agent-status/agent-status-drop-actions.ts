@@ -42,6 +42,19 @@ export function createAgentStatusDropActions(
         const hasLive = paneKey in s.agentStatusByPaneKey
         liveExisted = hasLive
         const hasRetained = paneKey in s.retainedAgentsByPaneKey
+        const scopedSuppression =
+          typeof opts?.suppressRetention === 'object' ? opts.suppressRetention : undefined
+        const needsSuppressor =
+          (hasLive || Boolean(opts?.suppressRetention)) &&
+          (scopedSuppression !== undefined || !(paneKey in s.retentionSuppressedPaneKeys))
+        const suppressionPatch = needsSuppressor
+          ? {
+              retentionSuppressedPaneKeys: {
+                ...s.retentionSuppressedPaneKeys,
+                [paneKey]: scopedSuppression ?? (true as const)
+              }
+            }
+          : {}
         const migrationUnsupported = pruneMigrationUnsupportedEntries(
           s.migrationUnsupportedByPtyId,
           (entry) => entry.paneKey === paneKey
@@ -66,6 +79,7 @@ export function createAgentStatusDropActions(
         }
         if (!hasLive && !hasRetained && !migrationUnsupported.changed) {
           const cleanupPatch = {
+            ...suppressionPatch,
             ...(nextConversations !== s.agentConversationsByPaneKey
               ? { agentConversationsByPaneKey: nextConversations }
               : {}),
@@ -93,7 +107,6 @@ export function createAgentStatusDropActions(
         if (hasRetained) {
           delete nextRetained[paneKey]
         }
-        const needsSuppressor = hasLive && !(paneKey in s.retentionSuppressedPaneKeys)
         return {
           agentStatusByPaneKey: nextLive,
           agentConversationsByPaneKey: nextConversations,
@@ -105,14 +118,7 @@ export function createAgentStatusDropActions(
             : {}),
           activityClearedAtByPaneKey: nextClearedAt,
           manuallyUnreadTurnsByPaneKey: nextManualUnread,
-          ...(needsSuppressor
-            ? {
-                retentionSuppressedPaneKeys: {
-                  ...s.retentionSuppressedPaneKeys,
-                  [paneKey]: true
-                }
-              }
-            : {}),
+          ...suppressionPatch,
           agentStatusEpoch:
             hasLive || migrationUnsupported.changed ? s.agentStatusEpoch + 1 : s.agentStatusEpoch,
           sortEpoch: hasLive || migrationUnsupported.changed ? s.sortEpoch + 1 : s.sortEpoch
@@ -121,7 +127,7 @@ export function createAgentStatusDropActions(
       if (liveExisted) {
         freshness.scheduleDeferred()
       }
-      if (typeof window !== 'undefined') {
+      if (opts?.rendererOnly !== true && typeof window !== 'undefined') {
         window.api?.agentStatus?.drop?.(paneKey)
       }
     },
