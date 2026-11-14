@@ -1,8 +1,3 @@
-import {
-  JournalLegacyRetentionError,
-  readJournalLegacySource
-} from './journal-legacy-retention-error'
-import { readJournalLegacyProofPage } from './journal-legacy-source-proof'
 import { JournalForkPreparation } from './journal-fork-preparation'
 import { parentPort, workerData } from 'node:worker_threads'
 import { existsSync } from 'node:fs'
@@ -92,7 +87,6 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
       case 'database':
         reply({ type: 'database', id, result: readJournalSqlDatabase(db, operation.operation) })
         break
-      case 'legacy-proof':
       case 'conversion-prepare': {
         // Each frozen-source read is its own short statement; no snapshot spans the restore.
         if (!original && existsSync(workerData.originalFilename)) {
@@ -102,21 +96,12 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
               fileMustExist: true,
               timeout: 5000
             })
-          original =
-            operation.kind === 'legacy-proof' ? readJournalLegacySource(openSource) : openSource()
+          original = openSource()
         }
-        if (operation.kind === 'legacy-proof') {
-          if (!original) {
-            throw new Error('legacy source disappeared during proof')
-          }
-          reply({
-            type: 'legacy-proof',
-            id,
-            page: readJournalLegacyProofPage(original, operation.cursor, db)
-          })
-          break
-        }
-        const prepared = original ? prepareJournalDomainImport(original, operation.sessionId) : null
+        const prepared = original
+          ? (prepareJournalDomainImport(original, operation.sessionId) ??
+            prepareEmptyConversion(original, operation.sessionId))
+          : null
         if (prepared) {
           const { pages, ...header } = prepared
           conversions.set(id, pages)
@@ -144,14 +129,6 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
         break
     }
   } catch (error) {
-    if (operation.kind === 'legacy-proof' && error instanceof JournalLegacyRetentionError) {
-      reply({
-        type: 'legacy-proof',
-        id,
-        page: { next: null, sessions: [], retained: error.message, reason: error.reason }
-      })
-      return
-    }
     let retire = operation.kind === 'fork-prepare'
     if (fork) {
       try {
@@ -179,3 +156,42 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
     })
   }
 })
+
+/** Preserve empty saved epochs independently of legacy-source retirement. */
+function prepareEmptyConversion(
+  source: Database.Database,
+  sessionId: string
+): JournalDomainImport | null {
+  const session = source
+    .prepare('SELECT workspace_id,epoch FROM journal_sessions WHERE session_id=?')
+    .get(sessionId)
+  if (!session) {
+    return null
+  }
+  for (const table of ['journal_rows', 'queued_messages', 'journal_outcome_epochs']) {
+    if (
+      source.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table) &&
+      source.prepare(`SELECT 1 FROM ${table} WHERE session_id=? LIMIT 1`).get(sessionId)
+    ) {
+      return null
+    }
+  }
+  return {
+    sessionId,
+    workspaceId: String(session.workspace_id),
+    epoch: String(session.epoch),
+    head: {
+      lastSequence: 0,
+      highestFence: 0,
+      contextBoundary: 0,
+      lastActivityAt: 0,
+      derivedTurnItemId: null,
+      historyOrigin: null,
+      queueFailureBoundary: 0,
+      queuePauseMarks: { latestStop: null, resumedSequence: 0, reopenedSequence: 0 }
+    },
+    pages: (function* () {
+      yield* []
+    })()
+  }
+}

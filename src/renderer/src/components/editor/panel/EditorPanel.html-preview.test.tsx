@@ -18,7 +18,7 @@ vi.mock('../loading/useEditorPanelContentState', () => ({
   })
 }))
 vi.mock('../EditorContent', () => ({ EditorContent: () => null }))
-vi.mock('@/components/browser-pane/host-guest/browser-focus', () => ({
+vi.mock('@/components/browser-pane/host-guest/input/browser-focus', () => ({
   requestBrowserFocus: vi.fn()
 }))
 

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PRInfo } from '../../../../shared/github/pull-requests/pull-request-types'
 
 const { coordinatorMocks, moduleMocks } = await vi.hoisted(async () => {
@@ -40,7 +40,15 @@ describe('pr-refresh-coordinator', () => {
     moduleMocks.resetPRRefreshCoordinatorMocks(coordinatorMocks)
   })
 
+  // Transforming the coordinator's module graph is the slow first step on a loaded machine: do it
+  // once under the hook limit, so each test still imports its own fresh instance, quickly.
+  beforeAll(async () => {
+    await import('./pr-refresh-coordinator')
+  })
+
   afterEach(() => {
+    // A body that failed must not leave its timers to run on the next test's clock.
+    vi.clearAllTimers()
     vi.useRealTimers()
   })
 

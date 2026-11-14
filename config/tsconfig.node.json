@@ -38,7 +38,8 @@
     "../src/types/**/*"
   ],
   "exclude": [
-    "../src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-mail.test.ts"
+    "../src/main/runtime/orchestration/terminal-authority/structured-sessions/structured-chat-coordinator-mail.test.ts",
+    "../src/main/github/pull-requests/refresh/pr-refresh-coordinator-local-delivery.test.ts"
   ],
   "compilerOptions": {
     "composite": true,

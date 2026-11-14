@@ -21,6 +21,7 @@ export type NotificationSettings = {
   suppressWhenFocused: boolean
   customSoundId:
     | 'system'
+    | 'none'
     | 'two-tone'
     | 'bong'
     | 'thump'
@@ -37,6 +38,10 @@ export type NotificationSettings = {
   mutedNotificationSourceIds: NotificationSourceId[]
   /** Off silences every notification from a workspace the sidebar's Filters switches hide. Local only. */
   notifyHiddenWorkspaces: boolean
+}
+
+export function usesCustomNotificationSound(soundId: string | null | undefined): boolean {
+  return !!soundId && soundId !== 'system' && soundId !== 'none'
 }
 
 export type NotificationEventSource = 'agent-task-complete' | 'terminal-bell' | 'test'
