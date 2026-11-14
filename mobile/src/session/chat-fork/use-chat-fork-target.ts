@@ -22,7 +22,7 @@ export type ChatForkWorkspaceRow = { worktreeId: string; name: string; detail: s
 const registeredAgentsSchema = z.unknown().transform((value, ctx) => {
   const agents = decodeAgentSessionAgentsResult(value)
   if (!agents) {
-    ctx.addIssue({ code: 'custom', message: 'not an agent list' })
+    ctx.addIssue({ code: 'custom' })
     return z.NEVER
   }
   return agents
