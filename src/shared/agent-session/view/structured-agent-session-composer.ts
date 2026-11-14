@@ -69,7 +69,7 @@ export type StructuredAgentSessionCommandOutcome = {
   refusedWhile?: StructuredAgentSessionCommandRefusalCause
 }
 
-function commandParts(text: string): { name: string; argument: string } | null {
+function commandParts(text: string, agent?: AgentType) {
   if (!text.startsWith('/')) {
     return null
   }
@@ -77,7 +77,8 @@ function commandParts(text: string): { name: string; argument: string } | null {
   if (!match) {
     return null
   }
-  const name = match[1]!.toLowerCase().replace(/^new$/, 'clear')
+  const token = match[1]!.toLowerCase()
+  const name = agent === 'codex' && token === 'new' ? 'clear' : token
   const argument = match[2]?.trim() ?? ''
   // Other commands take one line; a longer message that starts with their name is for the agent.
   return /[\n\r\u2028\u2029]/.test(argument) &&
@@ -155,7 +156,7 @@ export function isStructuredAgentSessionComposerCommand(
   agent: AgentType | undefined,
   snapshot: readonly SessionOptionDescriptor[]
 ): boolean {
-  const command = commandParts(text)
+  const command = commandParts(text, agent)
   return Boolean(
     (command && structuredRecognizedCommands().some((entry) => entry.name === command.name)) ||
     (agentSessionInteractionCommand(agent ?? '', text) !== null &&
@@ -177,23 +178,20 @@ export function isStructuredAgentSessionHostCommand(
 }
 
 export function prepareStructuredAgentSessionComposerCommand(
-  _agent: AgentType,
+  agent: AgentType,
   _reported?: readonly AgentSessionSlashCommand[]
 ): (text: string) => boolean {
   const names = new Set(structuredRecognizedCommands().map((entry) => entry.name))
   return (text) => {
-    const command = commandParts(text)
+    const command = commandParts(text, agent)
     return command !== null && names.has(command.name)
   }
 }
 
-/** `/clear` or `/compact` alone: a conversation command with nothing after it. */
 export function isLoneStructuredAgentSessionConversationCommand(text: string): boolean {
   const command = commandParts(text.trim())
   return Boolean(
-    command &&
-    command.argument === '' &&
-    CONVERSATION_COMMANDS.some((entry) => entry.name === command.name)
+    command && command.argument === '' && ['clear', 'compact', 'new'].includes(command.name)
   )
 }
 
@@ -220,7 +218,7 @@ export function structuredAgentSessionCommandChangesConversation(text: string): 
     const change = command.argument ? structuredAgentSessionGoalChange(command.argument) : null
     return change?.kind === 'set' || (change?.kind === 'status' && change.status === 'active')
   }
-  return command?.name === 'clear' || command?.name === 'compact'
+  return command !== null && ['clear', 'compact', 'new'].includes(command.name)
 }
 
 /** `/goal` with nothing after it: an entrance to goal mode, not an objective. */
@@ -257,7 +255,7 @@ export async function dispatchStructuredAgentSessionComposerCommand(
       error: null
     }
   }
-  const command = commandParts(text)
+  const command = commandParts(text, controller.agent)
   if (command?.name === 'goal' && controller.changeThreadGoal) {
     if (!command.argument) {
       return {
