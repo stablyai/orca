@@ -29,6 +29,7 @@ export function WorktreeCardHeader({
     renameRowKey,
     compactCards,
     newCardStyle,
+    isActiveSurface,
     parsedRepoHost,
     sshTargetLabel,
     sshStatus,
@@ -91,7 +92,7 @@ export function WorktreeCardHeader({
           displayName={visibleCardTitle}
           disabled={isDeleting || affiliateListMode}
           showUnreadEmphasis={showUnreadEmphasis}
-          dimReadTitle={newCardStyle}
+          dimReadTitle={newCardStyle && !isActiveSurface}
           className="text-[13px] leading-5"
           editingClassName="flex-1"
           titleWrapper={titleWrapper}
