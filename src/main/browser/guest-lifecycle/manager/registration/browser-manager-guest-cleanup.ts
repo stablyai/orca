@@ -16,7 +16,7 @@ export abstract class BrowserManagerGuestCleanup extends BrowserManagerGuestNavi
       this.policyCleanupByGuestId.delete(guestWebContentsId)
     }
     this.policyAttachedGuestIds.delete(guestWebContentsId)
-    this.agentLedGuestIds.delete(guestWebContentsId)
+    this.releaseAgentLead(guestWebContentsId)
     this.offscreenGuestIds.delete(guestWebContentsId)
     this.popupOwnerContextByGuestId.delete(guestWebContentsId)
     this.pageInitiatedTabBudgetByRootGuestId.delete(guestWebContentsId)
