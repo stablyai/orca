@@ -1,6 +1,6 @@
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
-import type { IPtyProvider } from '../../../providers/pty-provider-contract'
+import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import { beginTerminalInstall } from '../../../workspaces/removal/watcher-removal-gate'
 
 export function isClaudeLaunchCommand(command: string | undefined): boolean {

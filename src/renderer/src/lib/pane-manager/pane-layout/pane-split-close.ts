@@ -47,6 +47,7 @@ type SplitManagedPaneArgs = {
     spawnHints?: Parameters<NonNullable<PaneManagerOptions['onPaneCreated']>>[1]
   ) => void
   getDragCallbacks: () => DragReorderCallbacks
+  activePaneId: number | null
   setActivePaneId: (paneId: number | null) => void
   isDestroyed: () => boolean
 }
@@ -66,13 +67,24 @@ export function splitManagedPane(args: SplitManagedPaneArgs): ManagedPane | null
   const divider = args.createDivider(isVertical)
 
   const movedPaneStates = prepareMovedPanesForSplit(existingContainer, existing, args.panes)
+  const activate = args.opts?.activate !== false
+  const focusedBefore = activate ? null : document.activeElement
 
   wrapInSplit(existingContainer, newPane.container, isVertical, divider, {
     ratio: args.opts?.ratio,
     newPaneFirst: args.newPaneFirst
   })
-  args.setActivePaneId(newPane.id)
-  openSplitPane(args, newPane, existing.leafId, args.opts?.cwd)
+  if (activate) {
+    args.setActivePaneId(newPane.id)
+  } else if (
+    focusedBefore instanceof HTMLElement &&
+    focusedBefore.isConnected &&
+    document.activeElement !== focusedBefore
+  ) {
+    // Reparenting the source pane drops its focus; give the user's keyboard back.
+    focusedBefore.focus({ preventScroll: true })
+  }
+  openSplitPane(args, newPane, existing.leafId, activate)
 
   for (const movedPaneState of movedPaneStates) {
     scheduleSplitScrollRestore(
@@ -143,15 +155,22 @@ function openSplitPane(
   args: SplitManagedPaneArgs,
   newPane: ManagedPaneInternal,
   parentLeafId: string,
-  cwd?: string
+  activate: boolean
 ): void {
+  const cwd = args.opts?.cwd
   openTerminal(newPane, {
     ligatures: args.managerOptions.terminalLigaturesEnabled?.(),
     inlineImages: args.managerOptions.terminalInlineImagesEnabled?.()
   })
-  applyPaneOpacity(args.panes.values(), newPane.id, args.styleOptions)
+  applyPaneOpacity(
+    args.panes.values(),
+    activate ? newPane.id : args.activePaneId,
+    args.styleOptions
+  )
   applyDividerStyles(args.root, args.styleOptions)
-  newPane.terminal.focus()
+  if (activate) {
+    newPane.terminal.focus()
+  }
   updateMultiPaneState(args.getDragCallbacks())
   // Forward creation hints to inherit local cwd or adopt the runtime-spawned PTY in web splits.
   args.publishPaneCreated(newPane, {

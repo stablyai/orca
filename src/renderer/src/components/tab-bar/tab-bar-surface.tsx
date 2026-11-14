@@ -116,6 +116,7 @@ export function renderTabBarSurface(
     activeClientHostedBrowserRowId
   })
 
+  const hasTabs = orderedItems.length + clientHostedBrowserRows.length > 0
   return (
     <div ref={surfaceRef} className="flex items-stretch h-full overflow-hidden flex-1 min-w-0">
       {tabStripOverflowState.hasOverflow ? (
@@ -148,7 +149,10 @@ export function renderTabBarSurface(
         {/* Why: no-drag lets tab interactions work inside the titlebar's drag region (outer container stays window-draggable). */}
         <div
           data-single-tab={singleTab ? '' : undefined}
-          className="group/tab-strip relative flex min-h-0 w-max min-w-0 max-w-full shrink"
+          // Why: tabs are the only drag source, so a narrow pane clips the "+" before the last tab sliver.
+          className={`group/tab-strip relative flex min-h-0 w-max max-w-full shrink ${
+            hasTabs ? 'min-w-10' : 'min-w-0'
+          }`}
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           <div
@@ -214,8 +218,11 @@ export function renderTabBarSurface(
         modal={false}
       >
         <DropdownMenuTrigger asChild>
+          {/* Why: below 86px (40 tab floor + 36 "+" + 8 action padding + 2 sub-pixel slack) "+" would only clip; hide it whole so Tab never lands on it. Empty groups keep it. */}
           <button
-            className="ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+            className={`ml-2 my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground ${
+              hasTabs ? '@max-[86px]/tab-strip:hidden' : ''
+            }`}
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
             title={t('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}
             aria-label={t('auto.components.tab.bar.TabBar.b1a132357f', 'New tab')}

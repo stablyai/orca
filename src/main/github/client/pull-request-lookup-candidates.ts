@@ -1,10 +1,8 @@
 import type { IssueSourcePreference } from '../../../shared/repo-types'
-import type { LocalGitExecOptions } from '../gh-utils'
-import {
-  getOriginGitHubApiRepository,
-  resolveGitHubApiRepositoryCandidates,
-  type GitHubApiRepository
-} from '../github-api-repository'
+import type { LocalGitExecOptions } from '../repositories/github-repository-identity'
+import { getOriginGitHubApiRepository } from '../repositories/github-api-repository-remote-probe'
+import { resolveGitHubApiRepositoryCandidates } from '../repositories/github-api-repository'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../shared/github/repositories/repository-identity'
 export async function resolvePullRequestLookupCandidates(
   repoPath: string,
   preference: IssueSourcePreference | undefined,

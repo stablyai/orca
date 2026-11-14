@@ -1,6 +1,6 @@
 import type { LucideIcon } from 'lucide-react-native'
 import { useState, type ReactNode, type Ref } from 'react'
-import { Pressable, Text, View } from 'react-native'
+import { Pressable, Text, View, type HostInstance } from 'react-native'
 import Animated from 'react-native-reanimated'
 import { colors, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
@@ -21,7 +21,7 @@ export function MobileHomeTabHeader(props: { title: string; trailing?: ReactNode
 
 export function MobileHomeTabHeaderButton(props: {
   /** The anchor a pull-down menu drops from. */
-  ref?: Ref<View>
+  ref?: Ref<HostInstance>
   icon: LucideIcon
   accessibilityLabel: string
   disabled?: boolean

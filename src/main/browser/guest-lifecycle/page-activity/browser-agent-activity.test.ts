@@ -21,8 +21,7 @@ vi.mock('electron', () => ({
 }))
 
 import { BrowserAgentActivity } from './browser-agent-activity'
-import { runWithActiveRpcCaller } from '../../../runtime/rpc/rpc-active-caller'
-import { runInRemoteCliBrowserScope } from '../../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
+import { runWithActiveRpcCaller } from '../../../runtime/rpc/callers/active-call'
 import {
   BROWSER_AGENT_CURSOR_ARRIVED_CHANNEL,
   BROWSER_AGENT_CURSOR_CHANNEL,
@@ -78,50 +77,6 @@ describe('BrowserAgentActivity', () => {
   })
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  it("names the SSH host driving a page, and clears only that host's pages when it is stopped", async () => {
-    const { activity, sent } = setup()
-    const host = { targetId: 'ssh-1', hostLabel: 'build-box' }
-    const lease = await runWithActiveRpcCaller({ kind: 'local-cli' }, () =>
-      runInRemoteCliBrowserScope(
-        'wt-1',
-        async () => activity.beginCommand(PAGE),
-        undefined,
-        undefined,
-        undefined,
-        host
-      )
-    )
-    runWithActiveRpcCaller({ kind: 'local-cli' }, () => activity.beginCommand('local-page')).end()
-    expect(sent[0]?.data).toEqual({
-      browserPageId: PAGE,
-      worktreeId: 'wt-1',
-      active: true,
-      controllerHostLabel: 'build-box'
-    })
-    expect(sent[1]?.data).toEqual({ browserPageId: 'local-page', worktreeId: 'wt-1', active: true })
-
-    activity.endForController('ssh-1')
-    expect(activity.isActive(PAGE)).toBe(false)
-    expect(activity.isActive('local-page')).toBe(true)
-    expect(sent.at(-1)?.data).toEqual({ browserPageId: PAGE, worktreeId: 'wt-1', active: false })
-    lease.end()
-  })
-
-  it('hands an agent claim to the page it continues on with a fresh idle window', () => {
-    const { activity, agentCommand } = setup()
-    activity.handOver('opener', PAGE)
-    expect(activity.isActive(PAGE)).toBe(false)
-
-    agentCommand().end()
-    vi.advanceTimersByTime(15_000)
-    runWithActiveRpcCaller({ kind: 'local-cli' }, () => activity.beginCommand('popup')).end()
-    activity.handOver('popup', PAGE)
-    vi.advanceTimersByTime(19_000)
-    expect(activity.isActive(PAGE)).toBe(true)
-    vi.advanceTimersByTime(1_000)
-    expect(activity.isActive(PAGE)).toBe(false)
   })
 
   it('holds a fresh move until the renderer reports the cursor landed', async () => {

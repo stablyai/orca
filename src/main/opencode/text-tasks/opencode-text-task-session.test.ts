@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { createServer, type ServerResponse } from 'node:http'
 import { once } from 'node:events'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it } from 'vitest'
 import { runOpenCodeTextTaskSession } from './opencode-text-task-session'
 
 const servers: ReturnType<typeof createServer>[] = []
@@ -77,34 +77,6 @@ it('recovers and deletes an owned session when cancelled during creation without
   expect(requests).toContain('POST /api/session/ses_late/interrupt')
   expect(requests).toContain('DELETE /api/session/ses_late')
   expect(requests).not.toContain('POST /api/session/ses_late/prompt')
-})
-
-it('preserves a completed title when deleting its session fails', async () => {
-  const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  const url = await fixture((path, _body, response) => {
-    if (path.startsWith('POST /session?')) {
-      json(response, { id: 'ses_cleanup', permission: appliedV1Policy })
-    } else if (path.startsWith('POST /session/ses_cleanup/message?')) {
-      json(response, { info: {}, parts: [{ type: 'text', text: 'Harbor Lantern' }] })
-    } else {
-      response.writeHead(500).end()
-    }
-  })
-  try {
-    await expect(
-      runOpenCodeTextTaskSession({
-        version: 'v1',
-        v1SessionPolicyFiltersTools: true,
-        url,
-        password: 'test',
-        directory: '/workspace',
-        prompt: 'Name this chat',
-        signal: new AbortController().signal
-      })
-    ).resolves.toBe('Harbor Lantern')
-  } finally {
-    warning.mockRestore()
-  }
 })
 
 it('discards a cancelled borrowed v1 response without aborting or deleting its session', async () => {

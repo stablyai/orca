@@ -1,4 +1,4 @@
-import type { GitRuntimeOptions } from '../../git-runtime-options'
+import type { GitRuntimeOptions } from '../../command-runner/git-runtime-options'
 import { canonicalWorktreePath } from '../catalog/worktree-path-comparison'
 import { detectSparseCheckout } from './worktree-sparse-state'
 

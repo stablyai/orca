@@ -1,4 +1,7 @@
-import { throwIfAiVaultScanCancelled, waitForAiVaultScan } from '../ai-vault-scan-cancellation'
+import {
+  throwIfAiVaultScanCancelled,
+  waitForAiVaultScan
+} from '../scan-lifecycle/ai-vault-scan-cancellation'
 import { StringDecoder } from 'node:string_decoder'
 import { FlexAssembler, arrayRule, objectRule } from 'stream-json/core/utils/flex-assembler.js'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'

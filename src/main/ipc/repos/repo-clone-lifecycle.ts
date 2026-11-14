@@ -1,5 +1,4 @@
-import type { BrowserWindow } from 'electron'
-import { ipcMain } from 'electron'
+import { type BrowserWindow, ipcMain } from 'electron'
 import type { ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { mkdir } from 'node:fs/promises'
@@ -8,19 +7,22 @@ import type { Repo } from '../../../shared/repo-types'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
 import { getGitCloneFailureMessage } from '../../../shared/git/remotes/git-clone-failure-message'
-import { gitSpawnAfterWindowsEnvironmentReady, promptGuardGitEnv } from '../../git/runner'
-import { reuseSavedCloneTarget } from '../../git/saved-clone-target'
-import { checkCloneTarget } from '../../git/clone-target-check'
+import { gitSpawnAfterWindowsEnvironmentReady } from '../../git/command-runner/git-spawn'
+import { promptGuardGitEnv } from '../../git/command-runner/git-environment/git-process-env'
+import { reuseSavedCloneTarget } from '../../git/repositories/cloning/saved-clone-target'
+import { checkCloneTarget } from '../../git/repositories/cloning/clone-target-check'
 import type { CloneTargetArgs } from '../../../shared/git/clone/clone-target-check'
-import { getRepoName, inspectGitRepoForRegistrationAsync } from '../../git/repo'
-import type { ClaimedCloneTarget } from '../../git/repo-clone-path'
+import { getRepoName } from '../../git/repositories/repository-name'
+import { inspectGitRepoForRegistrationAsync } from '../../git/repositories/discovery/repo-detection'
+
 import {
+  type ClaimedCloneTarget,
   cleanupClaimedCloneTarget,
   claimCloneTarget,
   deriveValidatedClonePath,
   getClonePathComparisonKey,
   getSavedProjectPathKeys
-} from '../../git/repo-clone-path'
+} from '../../git/repositories/cloning/repo-clone-path'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { detectRepoLocalMetadata } from '../../repository-icons/repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'

@@ -1,6 +1,6 @@
 /** Chat approvals Orca reported open. Each closes as soon as its journal item settles: answered in
  *  the worker's own chat, or gone. Orca's own answers write their closing lines themselves. */
-import type { AgentSessionJournal } from '../../../../native-chat/agent-session-journal/journal-store'
+import type { JournalPublication } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-conversations'
 import { getStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { subscribeForRedrive } from '../../mailbox/structured-pointer/structured-session-journal-redrive'
 import { structuredMailboxCustody } from '../../mailbox/routing/structured-session-mail-target'
@@ -20,7 +20,7 @@ import {
 export type ChatJournalWatch = (
   sessionId: string,
   onChange: () => void,
-  relevant: (journal: AgentSessionJournal) => boolean
+  relevant: (publication: JournalPublication) => boolean
 ) => () => void
 
 const watchHostJournal: ChatJournalWatch = (sessionId, onChange, relevant) => {
@@ -37,10 +37,25 @@ export class ChatWorkerApprovalWatch {
     private readonly deps: Pick<WorkerTurnStopReportDeps, 'getDb' | 'notify'> & {
       readPrompt?: ChatWorkerPromptReader
       watchJournal?: ChatJournalWatch
+      signal: AbortSignal
     }
-  ) {}
+  ) {
+    deps.signal.addEventListener(
+      'abort',
+      () => {
+        for (const session of this.sessions.values()) {
+          session.stop()
+        }
+        this.sessions.clear()
+      },
+      { once: true }
+    )
+  }
 
   track(sessionId: string, approvalId: string, dispatchId: string): void {
+    if (this.deps.signal.aborted) {
+      return
+    }
     let session = this.sessions.get(sessionId)
     if (!session) {
       const approvals = new Map<string, Set<string>>()
@@ -50,12 +65,14 @@ export class ChatWorkerApprovalWatch {
         stop: watch(
           sessionId,
           () => void this.check(sessionId),
-          (journal) =>
-            [...approvals.keys()].some((id) => {
-              const body = journal.itemBody(id)
-              return body?.kind !== 'approval' || body.resolution.state !== 'pending'
-            })
+          (publication) =>
+            !publication.commit ||
+            publication.commit.items.some((item) => approvals.has(item.itemId))
         )
+      }
+      if (this.deps.signal.aborted) {
+        session.stop()
+        return
       }
       this.sessions.set(sessionId, session)
     }
@@ -66,7 +83,7 @@ export class ChatWorkerApprovalWatch {
 
   async check(sessionId: string): Promise<void> {
     const session = this.sessions.get(sessionId)
-    if (!session) {
+    if (!session || this.deps.signal.aborted) {
       return
     }
     for (const [approvalId, dispatchIds] of session.approvals) {
@@ -75,6 +92,9 @@ export class ChatWorkerApprovalWatch {
         sessionId,
         approvalId
       ).catch(() => undefined)
+      if (this.deps.signal.aborted) {
+        return
+      }
       if (prompt === undefined || prompt?.body.resolution.state === 'pending') {
         continue
       }
@@ -86,6 +106,9 @@ export class ChatWorkerApprovalWatch {
       }
       if (outcome && db) {
         for (const dispatchId of dispatchIds) {
+          if (this.deps.signal.aborted) {
+            return
+          }
           const dispatch = db.getDispatchContextById(dispatchId)
           if (!dispatch || closeReportedApproval(db, dispatch, approvalId, outcome, this.deps)) {
             dispatchIds.delete(dispatchId)
@@ -104,9 +127,15 @@ export class ChatWorkerApprovalWatch {
 
   /** After a restart, picks up approvals reported open whose closing line never came. */
   async adopt(): Promise<void> {
+    if (this.deps.signal.aborted) {
+      return
+    }
     const db = this.deps.getDb()
     const sessions = new Set<string>()
     for (const { approval, dispatch } of db ? recentOpenApprovalReports(db) : []) {
+      if (this.deps.signal.aborted) {
+        return
+      }
       const { approvalId } = approval
       if (
         !db ||

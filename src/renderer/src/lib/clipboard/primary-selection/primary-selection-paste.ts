@@ -207,7 +207,7 @@ export function findEditablePrimarySelectionPasteTarget(
   if (!(target instanceof Element)) {
     return null
   }
-  if (target.closest('.xterm-helper-textarea')) {
+  if (target.closest('.xterm-helper-textarea, .rich-markdown-editor a')) {
     return null
   }
 

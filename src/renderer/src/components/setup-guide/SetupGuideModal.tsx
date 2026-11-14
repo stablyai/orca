@@ -13,8 +13,8 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { useAppStore } from '@/store'
-import { FeatureWallSetupChecklist } from '../feature-wall/FeatureWallSetupChecklist'
+import { useAppStore } from '@/store/index'
+import { FeatureWallSetupChecklist } from '../feature-wall/setup/FeatureWallSetupChecklist'
 import { useSetupGuideProgress } from './use-setup-guide-progress'
 import { useSetupGuideOpenCloseTelemetry } from './use-setup-guide-telemetry'
 import { useTranslate } from '@/i18n/use-translate'

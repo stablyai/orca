@@ -28,7 +28,8 @@ export type LostWorkerReport = {
 export class RuntimeLegacyWorkerTerminalRecoveryPersistence {
   constructor(
     private readonly getStore: () => RuntimeStore | null,
-    private readonly getDb: () => OrchestrationDb,
+    // A profile without a database has no workers to recover.
+    private readonly getDb: () => OrchestrationDb | null,
     private readonly getHostId: (worktreeId: string) => ExecutionHostId | null
   ) {}
 
@@ -124,6 +125,9 @@ export class RuntimeLegacyWorkerTerminalRecoveryPersistence {
   ): boolean {
     try {
       const db = this.getDb()
+      if (!db) {
+        return false
+      }
       const before = db.getDispatchContextById(candidate.dispatchId)
       const worker = db.reconcileMissingWorkerTerminal(
         candidate.dispatchId,
@@ -169,10 +173,13 @@ export class RuntimeLegacyWorkerTerminalRecoveryPersistence {
 
   private getPlan(dispatchIds?: readonly string[]): LegacyWorkerTerminalRecoveryPlan | null {
     try {
+      const db = this.getDb()
       return planLegacyWorkerTerminalRecovery(
-        dispatchIds
-          ? this.getDb().listLegacyWorkerTerminalRecoveryRows(dispatchIds)
-          : this.getDb().listLegacyWorkerTerminalRecoveryRows()
+        !db
+          ? []
+          : dispatchIds
+            ? db.listLegacyWorkerTerminalRecoveryRows(dispatchIds)
+            : db.listLegacyWorkerTerminalRecoveryRows()
       )
     } catch (error) {
       console.warn('[orchestration] failed to plan legacy worker terminal recovery', error)

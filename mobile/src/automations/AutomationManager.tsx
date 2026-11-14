@@ -389,13 +389,13 @@ export function AutomationManager(props: {
       <OrcaHookTrustDrawer {...setupConsent.drawer} />
       <ConfirmModal
         visible={deleting !== null}
-        title={t('automations.mobile.deleteAutomationTitle', 'Delete automation?')}
+        title={t('common.delete', 'Delete')}
         message={t(
           'automations.mobile.deleteRetained',
           'Delete “{{name}}” and its retained runs?',
           { name: deleting?.automation.name ?? '' }
         )}
-        confirmLabel={t('automations.mobile.deleteAutomation', 'Delete automation')}
+        confirmLabel={t('common.delete', 'Delete')}
         destructive
         onCancel={() => setDeleting(null)}
         onConfirm={() => deleting && remove(deleting)}

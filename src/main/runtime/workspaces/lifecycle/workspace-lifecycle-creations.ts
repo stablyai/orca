@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type {
   WorkspaceCreation,
   WorkspaceCreationsSnapshot
-} from '../../../../shared/sidebar-list/workspace-creations'
+} from '../../../../shared/sidebar-list/feed-facts/workspace-creations'
 import type { ProducerRevision } from '../../sidebar-inputs/producer-revision'
 import type { LifecycleMembership } from './workspace-lifecycle-command'
 

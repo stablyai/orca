@@ -1,10 +1,13 @@
 import { defineFixture } from '../../../component-fixtures/component-fixture'
+import { NativeChatMessageList } from '../NativeChatMessageList'
+import type { NativeChatLiveSession } from '../session/terminal/read/native-chat-live-session-contract'
+import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import { NativeChatApprovalCard } from '../prompts/NativeChatApprovalCard'
 import {
-  NativeChatWorkerApprovalRows,
-  NativeChatWorkerApprovalStrip,
-  type NativeChatWorkerApproval
+  NativeChatWorkerApprovalReceipt,
+  NativeChatWorkerApprovalStack
 } from './NativeChatWorkerApprovals'
+import type { NativeChatWorkerApproval } from './native-chat-worker-approval-feed'
 import type { OrchestrationCrewRow } from '../../../../../shared/orchestration/orchestration-crew'
 import type {
   WorkerApprovalOutcome,
@@ -68,7 +71,6 @@ const openDocs: NativeChatWorkerApproval = {
   worker: docs
 }
 const target = { kind: 'local' } as const
-const root = { current: null }
 
 const composer = (
   <div className="px-3 pt-2 sm:px-4">
@@ -78,47 +80,6 @@ const composer = (
   </div>
 )
 
-export const open = defineFixture({
-  width: 760,
-  render: () => (
-    <div className="native-chat-appearance bg-chat-pane py-4">
-      <NativeChatWorkerApprovalRows approvals={[openBash]} target={target} />
-    </div>
-  )
-})
-
-export const several = defineFixture({
-  width: 760,
-  render: () => (
-    <div className="native-chat-appearance bg-chat-pane pt-4 pb-3">
-      <NativeChatWorkerApprovalRows approvals={[openBash, openDocs]} target={target} />
-      <NativeChatWorkerApprovalStrip approvals={[openBash, openDocs]} rootRef={root} />
-      {composer}
-    </div>
-  )
-})
-
-export const coordinatorBusy = defineFixture({
-  width: 760,
-  render: () => (
-    <div className="native-chat-appearance bg-chat-pane pt-3 pb-3">
-      <NativeChatWorkerApprovalStrip approvals={[openBash, openDocs]} rootRef={root} />
-      <NativeChatApprovalCard
-        approval={{
-          title: 'Allow Read?',
-          detail: '~/orca-lanes/worker-prompt-stall/plan.html',
-          options: [
-            { label: 'Allow', send: 'allow' },
-            { label: 'Deny', send: 'deny' }
-          ]
-        }}
-        onChoose={() => {}}
-        onCancel={() => {}}
-      />
-    </div>
-  )
-})
-
 function closed(
   id: string,
   outcome: WorkerApprovalOutcome,
@@ -126,7 +87,7 @@ function closed(
 ): NativeChatWorkerApproval {
   return {
     approval: approval(id, bash, {
-      state: outcome.decision ? 'answered' : 'expired',
+      state: outcome.by === 'auto' ? 'expired' : 'answered',
       allowedActions: [],
       outcome
     }),
@@ -139,50 +100,153 @@ export const answered = defineFixture({
   width: 760,
   render: () => (
     <div className="native-chat-appearance bg-chat-pane py-3">
-      <NativeChatWorkerApprovalRows
-        target={target}
-        approvals={[
-          closed('a', { by: 'person', decision: 'allow', reason: null, reasonDelivered: true }),
-          closed('b', {
-            by: 'person',
-            decision: 'deny',
-            reason: 'Denied by the owner.',
-            reasonDelivered: true
-          }),
-          closed('c', {
-            by: 'coordinator',
-            decision: 'deny',
-            reason:
-              'Write the script to scripts/dialog_title.py and run it with python3 instead of a heredoc.',
-            reasonDelivered: true
-          }),
-          closed('d', {
-            by: 'worker-terminal',
-            decision: 'allow',
-            reason: null,
-            reasonDelivered: true
-          }),
-          closed('e', {
-            by: 'worker-terminal',
-            decision: 'deny',
-            reason: null,
-            reasonDelivered: true
-          }),
-          closed(
-            'f',
-            { by: 'worker-chat', decision: 'allow', reason: null, reasonDelivered: false },
-            docs
-          ),
-          closed('g', { by: 'auto', decision: 'deny', reason: null, reasonDelivered: true }),
-          closed('h', {
-            by: 'terminal-only',
-            decision: null,
-            reason: null,
-            reasonDelivered: true
-          }),
-          closed('i', { by: 'unknown', decision: null, reason: null, reasonDelivered: false })
-        ]}
-      />
+      {[
+        closed('a', { by: 'person', decision: 'allow', reason: null, reasonDelivered: false }),
+        closed('b', {
+          by: 'person',
+          decision: 'deny',
+          reason: 'Denied by the owner.',
+          reasonDelivered: true
+        }),
+        closed('c', {
+          by: 'coordinator',
+          decision: 'deny',
+          reason:
+            'Write the script to scripts/dialog_title.py and run it with python3 instead of a heredoc.',
+          reasonDelivered: true
+        }),
+        closed('d', {
+          by: 'worker-terminal',
+          decision: 'allow',
+          reason: null,
+          reasonDelivered: false
+        }),
+        closed('e', {
+          by: 'worker-terminal',
+          decision: 'deny',
+          reason: null,
+          reasonDelivered: false
+        }),
+        closed(
+          'f',
+          { by: 'worker-chat', decision: 'allow', reason: null, reasonDelivered: false },
+          docs
+        ),
+        closed('g', { by: 'auto', decision: 'deny', reason: null, reasonDelivered: false }),
+        closed('h', {
+          by: 'terminal-only',
+          decision: null,
+          reason: null,
+          reasonDelivered: false
+        }),
+        closed('i', { by: 'unknown', decision: null, reason: null, reasonDelivered: false })
+      ].map((entry) => (
+        <NativeChatWorkerApprovalReceipt key={entry.approval.approvalId} entry={entry} />
+      ))}
     </div>
   )
 })
+
+// A coordinator chat that kept replying after a worker asked twice: each card sits at its own time.
+const CHAT_START = Date.parse('2026-11-11T20:09:00.000Z')
+function reply(id: string, role: NativeChatMessage['role'], minute: number, text: string) {
+  const message: NativeChatMessage = {
+    id,
+    role,
+    source: 'transcript',
+    timestamp: CHAT_START + minute * 60_000,
+    blocks: [{ type: 'text', text }]
+  }
+  return message
+}
+const transcript: NativeChatLiveSession = {
+  messages: [
+    reply('ask', 'user', 0, 'Have a worker build the bot settings page.'),
+    reply('started', 'assistant', 1, 'A worker is on it in dungeness.'),
+    reply('status', 'user', 4, 'How is it going?'),
+    reply('answer', 'assistant', 5, 'It finished the settings rows and is wiring the avatar now.'),
+    reply('next', 'user', 7, 'Also check the tree spacing.'),
+    reply('ack', 'assistant', 8, 'Added it to the worker task.')
+  ],
+  agent: 'claude',
+  sessionId: 'fixture',
+  status: 'ready',
+  readPhase: 'ready',
+  hasMore: false,
+  loadingEarlier: false,
+  olderHistoryGeneration: 0,
+  loadEarlier: async () => 'applied'
+}
+const allowedAt = new Date(CHAT_START + 2.5 * 60_000).toISOString()
+
+const allowed = {
+  ...closed('allowed', { by: 'person', decision: 'allow', reason: null, reasonDelivered: false }),
+  at: allowedAt
+}
+
+/** The coordinator chat as the pane lays it out: transcript with receipts, then the pinned stack,
+ *  the chat's own prompt, and the composer. */
+function pane(
+  stack: readonly NativeChatWorkerApproval[],
+  ownPrompt = false,
+  height = 'h-[760px]'
+): React.JSX.Element {
+  return (
+    <div className={`native-chat-appearance flex ${height} flex-col bg-chat-pane pb-3`}>
+      <NativeChatMessageList
+        session={transcript}
+        isWorking={false}
+        expandSignal={false}
+        timedRows={[
+          {
+            key: allowed.approval.approvalId,
+            at: Date.parse(allowed.at),
+            node: <NativeChatWorkerApprovalReceipt entry={allowed} />
+          }
+        ]}
+      />
+      <NativeChatWorkerApprovalStack approvals={stack} target={target} />
+      {ownPrompt ? (
+        <NativeChatApprovalCard
+          approval={{
+            title: 'Allow Read?',
+            detail: '~/orca-lanes/worker-prompt-stall/plan.html',
+            options: [
+              { label: 'Allow', send: 'allow' },
+              { label: 'Deny', send: 'deny' }
+            ]
+          }}
+          onChoose={() => {}}
+          onCancel={() => {}}
+        />
+      ) : null}
+      {composer}
+    </div>
+  )
+}
+
+export const oneOpen = defineFixture({ width: 760, render: () => pane([openBash]) })
+
+export const twoOpen = defineFixture({ width: 760, render: () => pane([openBash, openDocs]) })
+
+export const openWithOwnPrompt = defineFixture({
+  width: 760,
+  render: () => pane([openBash], true)
+})
+
+// A short split pane: the stack gives way first, so the chat's own prompt keeps its buttons.
+export const twoOpenWithOwnPromptShort = defineFixture({
+  width: 760,
+  render: () => pane([openBash, openDocs], true, 'h-[520px]')
+})
+
+// The click's outcome where the card was, for the moment before it moves into the transcript.
+export const settling = defineFixture({
+  width: 760,
+  render: () =>
+    pane([
+      closed('settled', { by: 'person', decision: 'allow', reason: null, reasonDelivered: false })
+    ])
+})
+
+export const receiptInPlace = defineFixture({ width: 760, render: () => pane([]) })

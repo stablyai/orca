@@ -1,6 +1,6 @@
 import { useEffect, useState, type RefObject } from 'react'
-import type { NativeChatFollowUpBehavior } from '../../../../../../shared/native-chat/input/native-chat-follow-up-behavior'
-import { createNativeChatSteerChordPreviewHook } from '../../../../../../shared/native-chat/input/use-native-chat-steer-chord-preview'
+import type { NativeChatFollowUpBehavior } from '../../../../../../shared/native-chat/input/composer/native-chat-follow-up-behavior'
+import { createNativeChatSteerChordPreviewHook } from '../../../../../../shared/native-chat/input/composer/use-native-chat-steer-chord-preview'
 
 import type { NativeChatComposerSendIntent } from '../submit/native-chat-composer-send-intent'
 import { isMacPlatform } from '../../pane/routing/native-chat-shortcut'

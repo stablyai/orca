@@ -11,7 +11,7 @@ import {
   hashCanonical,
   readPromptBasePayloadHash,
   replayStableCallerParams
-} from '../../../runtime/rpc/orchestration-mutation-receipt'
+} from '../../../runtime/rpc/orchestration/mutations/orchestration-mutation-receipt'
 import { getCompiledSchema } from '../../../schema-validation/zod-schema-compilation'
 import type { LegacyRelayCliCall } from './legacy-relay-cli-caller'
 

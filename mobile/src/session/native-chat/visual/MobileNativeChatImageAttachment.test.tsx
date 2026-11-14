@@ -8,8 +8,8 @@ import {
   findAllByHostType,
   findByHostType
 } from '../../../test-support/react-test-renderer-host-nodes'
-import { Prose } from '../transcript/MobileNativeChatProse'
-import { MobileNativeChatRowOverlaysContext } from '../transcript/mobile-native-chat-row-overlays'
+import { Prose } from '../transcript/message-content/MobileNativeChatProse'
+import { MobileNativeChatRowOverlaysContext } from '../transcript/message-actions/mobile-native-chat-row-overlays'
 
 vi.mock('react-native', () => ({
   Image: 'Image',

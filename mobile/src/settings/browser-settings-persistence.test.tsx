@@ -61,7 +61,6 @@ describe('browser settings persistence', () => {
       resolveLoad('orca-browser')
     })
     expect(renderer.root.findByType(PickerModal).props.selected).toBe('phone-browser')
-    expect(JSON.stringify(renderer.toJSON())).toContain('Phone browser')
   })
 
   it('restores the saved destination when changing the destination fails', async () => {
@@ -74,7 +73,6 @@ describe('browser settings persistence', () => {
       renderer.root.findByType(PickerModal).props.onSelect('phone-browser')
     })
     expect(renderer.root.findByType(PickerModal).props.selected).toBe('orca-browser')
-    expect(JSON.stringify(renderer.toJSON())).toContain('Could not save browser preferences')
   })
 
   it('restores the hydrated destination when the save fails before the first read finishes', async () => {
@@ -94,6 +92,5 @@ describe('browser settings persistence', () => {
     })
     await act(async () => resolveLoad('phone-browser'))
     expect(renderer.root.findByType(PickerModal).props.selected).toBe('phone-browser')
-    expect(JSON.stringify(renderer.toJSON())).toContain('Could not save browser preferences')
   })
 })

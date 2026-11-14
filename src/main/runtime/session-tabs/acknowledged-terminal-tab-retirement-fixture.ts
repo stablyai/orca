@@ -12,7 +12,7 @@ import { Store } from '../../persistence/loading-store/store'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { buildHeadlessMobileSessionTerminalTabs } from '../terminal/surface/mobile-session-terminal-projection'
 import { setRuntimeDesktopSurface } from '../construction/runtime-desktop-surface'
-import { advanceTerminalTopologyRevision } from '../../persistence/terminal-topology/terminal-topology-membership'
+import { advanceTerminalTopologyRevision } from '../../persistence/terminal-topology/pane-ownership/terminal-topology-membership'
 
 export const ACK_WORKTREE = 'repo1::/tmp/worktree'
 export const ACK_TAB = '11111111-1111-4111-8111-111111111111'

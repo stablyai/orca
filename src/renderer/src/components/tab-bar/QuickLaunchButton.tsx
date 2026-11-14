@@ -240,23 +240,22 @@ export function ProjectedAgentMenuItems({
   return (
     <>
       {(detectedIds === null && (detectionFailed || needsServerUpdate)) || rows.length === 0 ? (
-        <DropdownMenuItem
-          disabled
-          className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 text-muted-foreground"
-        >
-          {needsServerUpdate
-            ? t(
-                'auto.components.tab.bar.QuickLaunchButton.terminalListNeedsServerUpdate',
-                'Update Orca on this server to list terminal agents'
-              )
-            : detectionFailed
+        <DropdownMenuItem variant="launch" disabled>
+          <span className="font-normal text-muted-foreground">
+            {needsServerUpdate
               ? t(
-                  'auto.components.tab.bar.QuickLaunchButton.terminalListFailed',
-                  'Couldn’t list terminal agents for this workspace'
+                  'auto.components.tab.bar.QuickLaunchButton.terminalListNeedsServerUpdate',
+                  'Update Orca on this server to list terminal agents'
                 )
-              : detectedIds && detectedIds.length > 0
-                ? t('auto.components.tab.bar.QuickLaunchButton.8dea9b5cdf', 'No enabled agents')
-                : t('auto.components.tab.bar.QuickLaunchButton.e518f544b1', 'No agents detected')}
+              : detectionFailed
+                ? t(
+                    'auto.components.tab.bar.QuickLaunchButton.terminalListFailed',
+                    'Couldn’t list terminal agents for this workspace'
+                  )
+                : detectedIds && detectedIds.length > 0
+                  ? t('auto.components.tab.bar.QuickLaunchButton.8dea9b5cdf', 'No enabled agents')
+                  : t('auto.components.tab.bar.QuickLaunchButton.e518f544b1', 'No agents detected')}
+          </span>
         </DropdownMenuItem>
       ) : null}
       {pickerInventory ? (

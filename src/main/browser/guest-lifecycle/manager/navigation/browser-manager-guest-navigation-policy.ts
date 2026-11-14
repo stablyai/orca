@@ -195,12 +195,22 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       }
     }
 
+    // Offscreen pages have no renderer; titles parse after commit and loads finish later.
+    const offscreenStateChangedHandler = (): void => {
+      if (this.offscreenGuestIds.has(guest.id)) {
+        this.offscreenGuestStateNotices.schedule(String(guest.id))
+      }
+    }
+
     guest.on('will-navigate', willNavigateHandler)
     guest.on('will-redirect', willRedirectHandler)
     guest.on('did-start-navigation', didStartNavigationHandler)
     guest.on('did-navigate', didNavigateHandler)
     guest.on('did-navigate-in-page', didNavigateInPageHandler)
     guest.on('page-favicon-updated', faviconUpdatedHandler)
+    guest.on('page-title-updated', offscreenStateChangedHandler)
+    guest.on('did-start-loading', offscreenStateChangedHandler)
+    guest.on('did-stop-loading', offscreenStateChangedHandler)
     guest.on('did-fail-load', didFailLoadHandler)
     // Why emit: an extension-blocked guest main frame commits no error page, so Electron reports
     // nothing; every did-fail-load reader (this policy, the pane, webNavigation) needs the failure.
@@ -234,6 +244,9 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
         guest.off('did-navigate', didNavigateHandler)
         guest.off('did-navigate-in-page', didNavigateInPageHandler)
         guest.off('page-favicon-updated', faviconUpdatedHandler)
+        guest.off('page-title-updated', offscreenStateChangedHandler)
+        guest.off('did-start-loading', offscreenStateChangedHandler)
+        guest.off('did-stop-loading', offscreenStateChangedHandler)
         guest.off('did-fail-load', didFailLoadHandler)
         guest.off('will-prevent-unload', allowPageUnload)
       }

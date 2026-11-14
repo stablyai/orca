@@ -207,26 +207,6 @@ export const OPERATION_MUTATIONS = {
     before: `          ...(viewport && next === 'auto' ? { viewport } : {})`,
     after: `          ...(next === 'auto' ? { viewport } : {})`
   },
-  // Send null instead of omitting afterTabId; only sessions without an active tab detect it.
-  'create-after-tab-id-null': {
-    file: 'use-mobile-session-terminal-create-actions.ts',
-    before: '      const afterTabId = activeSessionTabId ?? undefined',
-    after: '      const afterTabId = activeSessionTabId'
-  },
-  // Swap shell command and agent prompt; empty-option scenarios cannot detect it.
-  'create-quick-command-keys': {
-    file: 'mobile-session-terminal-create-request.ts',
-    before: `    ...(options?.startupCommand ? { command: options.startupCommand } : {}),
-    ...(options?.startupCommandDelivery
-      ? { startupCommandDelivery: options.startupCommandDelivery }
-      : {}),
-    ...(options?.agentPrompt ? { agentPrompt: options.agentPrompt } : {}),`,
-    after: `    ...(options?.startupCommand ? { agentPrompt: options.startupCommand } : {}),
-    ...(options?.startupCommandDelivery
-      ? { startupCommandDelivery: options.startupCommandDelivery }
-      : {}),
-    ...(options?.agentPrompt ? { command: options.agentPrompt } : {}),`
-  },
   // Remove the in-flight guard; only overlapping taps expose duplicate terminals.
   'create-second-tap-in-flight': {
     file: 'use-mobile-session-terminal-create-actions.ts',

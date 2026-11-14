@@ -1,4 +1,9 @@
-import type { SkillDiscoverySource, SkillSourceKind } from '../../../../../shared/skills'
+import { relativePathInsideRoot } from '../../../../../shared/cross-platform-path'
+import type {
+  DiscoveredSkill,
+  SkillDiscoverySource,
+  SkillSourceKind
+} from '../../../../../shared/skills'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 
@@ -53,4 +58,13 @@ export function getInstalledAgentSkillVerdict(
           )
         : null)
   }
+}
+
+// Why: Claude desktop owns `~/.claude/skills/synced/<bucket>/<name>` copies; they are not Orca feature installs.
+export function isClaudeDesktopSyncedSkill(skill: DiscoveredSkill): boolean {
+  if (skill.sourceKind !== 'home' || !skill.providers.includes('claude')) {
+    return false
+  }
+  const segments = relativePathInsideRoot(skill.rootPath, skill.directoryPath)?.split('/') ?? []
+  return segments.length >= 3 && segments[0] === 'synced'
 }

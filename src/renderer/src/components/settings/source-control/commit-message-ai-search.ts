@@ -2,6 +2,8 @@ import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
+export const PR_CREATION_DEFAULTS_SETTING_ID = 'source-control-pr-creation-defaults'
+
 export const getCommitMessageAiPaneSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(
@@ -124,6 +126,7 @@ export const getCommitMessageAiPaneSearchEntries = createLocalizedCatalog(() => 
     ]
   },
   {
+    targetSectionId: PR_CREATION_DEFAULTS_SETTING_ID,
     title: translate(
       'auto.components.settings.commit.message.ai.search.eefd33788c',
       'PR creation defaults'

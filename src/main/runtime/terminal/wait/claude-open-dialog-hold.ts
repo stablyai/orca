@@ -74,8 +74,9 @@ export function claudeDialogWarning(lines: readonly string[] | null): string | n
   const rules = region
     .slice(0, Math.max(proceed, 0))
     .flatMap((line, index) => (DASHED_RULE_RE.test(line) ? [index] : []))
-  // The first rule opens the command's box, the second closes it; a warning follows the second.
-  if (proceed === -1 || rules.length < 2) {
+  // A warning follows the rule that closes the command's box: the last one. A long command
+  // scrolls the rule that opens the box off the screen, so only the closing one may show.
+  if (proceed === -1 || rules.length === 0) {
     return null
   }
   const warning = region

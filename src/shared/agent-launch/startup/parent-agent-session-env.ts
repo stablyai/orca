@@ -67,3 +67,12 @@ export function stripInheritedAgentSessionEnv(
     }
   }
 }
+
+/** Orca's own environment as an independent child's base, without the agent session that launched Orca. */
+export function processEnvWithoutAgentSession(
+  platform: NodeJS.Platform = process.platform
+): NodeJS.ProcessEnv {
+  const env = { ...process.env }
+  stripInheritedAgentSessionEnv(env, { platform })
+  return env
+}

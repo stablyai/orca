@@ -1,61 +1,54 @@
+import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import { subscriberDeliveryPort } from './agent-session-subscriber-delivery-port'
 import type { QueuePublication } from '../../delivery/structured-agent-session-queued-publication'
-import type { ForkMarker } from '../history/agent-session-fork-marker'
 import { ForkMarkerSubscriptions } from './agent-session-fork-marker-delivery'
-import type { AgentSessionSubscribeInput, Subscriber } from './agent-session-subscribe-input'
+import type {
+  AgentSessionSubscribeInput,
+  Subscriber,
+  AgentSessionSubscribersHooks
+} from './agent-session-subscribe-input'
 
 import type {
-  AgentSessionHistoryPage,
   AgentSessionSubscribeEvent,
   AgentSessionTurnActivity
 } from '../../../../../shared/agent-session/agent-session-wire'
 import {
-  backgroundTaskFingerprint,
   emitSubscriberFrame,
-  subscriberCommandsChanged,
-  type SubscriberFieldHooks
+  subscriberCommandsChanged
 } from './agent-session-subscriber-frame-fields'
 import {
   deliverToSubscriber,
+  publishSubscriberSnapshot,
   type SubscriberDeliveryPort
 } from './agent-session-subscriber-catch-up'
-import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal as AgentSessionJournal } from '../../../agent-session-journal/journal-sql-store'
+import {
+  publishSubscriberLiveText,
+  republishSubscriberBackgroundTasks
+} from './agent-session-live-publications'
 import { emptyAgentSessionBatch } from './agent-session-empty-batch'
-import { readAgentSessionHydrationPage } from '../history/agent-session-history-page'
-import { withPublishedWork } from '../../observations/agent-session-published-work'
-import { subscriberHistoryReader } from '../history/agent-session-bounded-frames'
 import { rememberSessionActivity } from './structured-agent-session-activity-retention'
-import { refreshDerivedStopNotes } from './agent-session-stop-note-refresh'
-import { refreshPublishedWork } from './agent-session-work-refresh'
-import type { StructuredAgentSessionCurrentWork } from '../../observations/structured-agent-session-current-work'
+import { resumeSubscriber } from './agent-session-stop-note-refresh'
+import { SubscriberFrameSuperseded } from './agent-session-subscriber-frame-capture'
 
 // Advance subscriber cursors independently, sending resets or reducer-projected batches as needed.
 
-export type AgentSessionSubscribersHooks = SubscriberFieldHooks & {
-  readForkMarker?: (sessionId: string) => ForkMarker | undefined
-  readForkJournal?: (sessionId: string) => AgentSessionJournal | undefined
-  onJournalPublished?: (sessionId: string, journal: AgentSessionJournal) => void
-  readCurrentWork?: (
-    sessionId: string,
-    journal: AgentSessionJournal
-  ) => StructuredAgentSessionCurrentWork | undefined
-  now?: () => number
-}
+export type { AgentSessionSubscribersHooks } from './agent-session-subscribe-input'
 
 export class AgentSessionSubscribers {
+  private readonly deliveries = new WeakMap<Subscriber, Promise<void>>()
   private readonly bySession = new Map<string, Map<string, Subscriber>>()
   private readonly forkMarkers = new ForkMarkerSubscriptions(
     () => this.deliveryPort(),
     (id) => this.subscribers(id),
     () => this.now(),
-    (id) => this.hooks.readForkJournal?.(id)
+    (id) => this.hooks.readForkJournal?.(id),
+    (subscriber, journal) =>
+      this.enqueue(subscriber, () => this.forkMarkers.refresh(subscriber, journal))
   )
   private readonly activityBySession = new Map<string, AgentSessionTurnActivity>()
 
   constructor(private readonly hooks: AgentSessionSubscribersHooks = {}) {}
-
-  get retainedActivityCountForTests(): number {
-    return this.activityBySession.size
-  }
 
   subscriberCountForTests(sessionId: string): number {
     return this.bySession.get(sessionId)?.size ?? 0
@@ -79,45 +72,26 @@ export class AgentSessionSubscribers {
     this.bySession.set(input.sessionId, session)
 
     this.forkMarkers.add(subscriber)
-    const hostNow = this.now()
-    if (input.cursor) {
-      this.deliver(subscriber, input.journal, hostNow, true)
-      this.forkMarkers.refresh(subscriber, input.journal, true)
-      refreshDerivedStopNotes(
-        this.deliveryPort(),
-        subscriber,
-        input.journal,
-        hostNow,
-        this.hooks.readCurrentWork?.(input.sessionId, input.journal)
-      )
-    } else {
-      const view = input.journal.publicRead()
-      const work = this.hooks.readCurrentWork?.(input.sessionId, input.journal)
-      const page = withPublishedWork(
-        readAgentSessionHydrationPage(
-          input.journal,
-          input.fence,
-          subscriberHistoryReader(subscriber),
-          view.currentSnapshot()
-        ),
-        work
-      )
-      this.emit(
-        subscriber,
-        {
-          type: 'snapshot',
-          sessionId: input.sessionId,
-          page,
-          fence: input.fence,
-          hostNow,
-          ...this.activityField(input.sessionId)
-        },
-        { currentWork: work, historyView: view.normalizationKey, journal }
-      )
-      subscriber.cursor = page.liveCursor ?? page.window.nextCursor
-      subscriber.forkMarkerView = JSON.stringify(subscriber.readForkMarker?.())
-      refreshPublishedWork(this.deliveryPort(), subscriber, input.journal, work, { hostNow })
-    }
+    this.enqueue(subscriber, async () => {
+      const hostNow = this.now()
+      const port = this.deliveryPort(input.sessionId, journal)
+      if (input.cursor) {
+        await resumeSubscriber(port, subscriber, journal, hostNow, () =>
+          this.forkMarkers.refresh(subscriber, journal, true)
+        )
+      } else {
+        await publishSubscriberSnapshot(port, subscriber, journal, input.fence, hostNow)
+        subscriber.forkMarkerView = JSON.stringify(subscriber.readForkMarker?.())
+      }
+      await publishSubscriberLiveText(this.deliveryPort(), {
+        sessionId: input.sessionId,
+        journal,
+        fence: input.fence,
+        items: this.hooks.readLiveText?.(input.sessionId) ?? [],
+        subscribers: [subscriber],
+        hostNow
+      })
+    })
     const { sessionId, id } = subscriber
     return () => this.close(sessionId, id)
   }
@@ -154,85 +128,81 @@ export class AgentSessionSubscribers {
     }
   }
 
-  readQueuePublication(sessionId: string): QueuePublication | undefined {
-    return this.hooks.readQueuePublication?.(sessionId)
+  publishLiveText = (
+    sessionId: string,
+    journal: AgentSessionJournal,
+    fence: number,
+    items: readonly AgentJournalRenderItem[],
+    targets = this.subscribers(sessionId)
+  ): void => {
+    const hostNow = this.now()
+    for (const subscriber of targets) {
+      this.enqueue(subscriber, () =>
+        publishSubscriberLiveText(this.deliveryPort(), {
+          sessionId,
+          journal,
+          fence,
+          items,
+          subscribers: [subscriber],
+          hostNow
+        })
+      )
+    }
+  }
+
+  /** What a request's frame captures with, outside any subscriber. */
+  frameHooks = (sessionId: string, journal: AgentSessionJournal) =>
+    this.deliveryPort(sessionId, journal).hooks
+
+  async readQueuePublication(sessionId: string): Promise<QueuePublication | undefined> {
+    return (await this.hooks.readQueuePublication?.(sessionId)) ?? undefined
   }
 
   deliverFrames(
     sessionId: string,
     journal: AgentSessionJournal,
-    activity?: AgentSessionTurnActivity | null
+    activity?: AgentSessionTurnActivity | null,
+    queueChanged = true
   ): void {
     const hostNow = this.now()
+    const port = this.deliveryPort(sessionId, journal, queueChanged)
     for (const subscriber of this.subscribers(sessionId)) {
-      this.deliver(subscriber, journal, hostNow, false, activity)
+      this.enqueue(subscriber, () =>
+        deliverToSubscriber(port, { subscriber, journal, hostNow, emitCheckpoint: false, activity })
+      )
     }
   }
 
   snapshot(sessionId: string, journal: AgentSessionJournal, fence: number): void {
-    const view = journal.publicRead()
-    const work = this.hooks.readCurrentWork?.(sessionId, journal)
-    // Cache each stored/bounded form separately; each sizes its own page.
-    let storedPage: AgentSessionHistoryPage | undefined
-    let boundedPage: AgentSessionHistoryPage | undefined
-    const read = (subscriber: Subscriber): AgentSessionHistoryPage =>
-      withPublishedWork(
-        readAgentSessionHydrationPage(
+    const hostNow = this.now()
+    const port = this.deliveryPort(sessionId, journal)
+    for (const subscriber of this.subscribers(sessionId)) {
+      this.enqueue(subscriber, async () => {
+        await publishSubscriberSnapshot(port, subscriber, journal, fence, hostNow)
+        await publishSubscriberLiveText(this.deliveryPort(), {
+          sessionId,
           journal,
           fence,
-          subscriberHistoryReader(subscriber),
-          view.currentSnapshot()
-        ),
-        work
-      )
-    const pageFor = (subscriber: Subscriber): AgentSessionHistoryPage =>
-      subscriber.readHistorySnapshot
-        ? read(subscriber)
-        : subscriber.boundedFrames
-          ? (boundedPage ??= read(subscriber))
-          : (storedPage ??= read(subscriber))
-    const hostNow = this.now()
-    for (const subscriber of this.subscribers(sessionId)) {
-      const page = pageFor(subscriber)
-      this.emit(
-        subscriber,
-        {
-          type: 'snapshot',
-          sessionId,
-          page,
-          fence,
-          hostNow,
-          ...this.activityField(sessionId)
-        },
-        { currentWork: work, historyView: view.normalizationKey, journal }
-      )
-      subscriber.cursor = page.liveCursor ?? page.window.nextCursor
-      subscriber.fence = fence
-      refreshPublishedWork(this.deliveryPort(), subscriber, journal, work, { hostNow })
+          items: this.hooks.readLiveText?.(sessionId) ?? [],
+          subscribers: [subscriber],
+          hostNow
+        })
+      })
     }
     this.hooks.onJournalPublished?.(sessionId, journal)
   }
 
   republishBackgroundTasks(sessionId: string, fence: number): void {
-    const state = this.hooks.readBackgroundTasks?.(sessionId)
-    if (state === undefined) {
-      return
-    }
-    const fingerprint = backgroundTaskFingerprint(state)
-    const hostNow = this.now()
     for (const subscriber of this.subscribers(sessionId)) {
-      if (subscriber.backgroundTasks === fingerprint) {
-        continue
-      }
-      this.emit(subscriber, {
-        type: 'batch',
-        sessionId,
-        batch: emptyAgentSessionBatch(subscriber.cursor),
-        fence,
-        backgroundTasks: state,
-        hostNow
-      })
-      subscriber.fence = fence
+      this.enqueue(subscriber, () =>
+        republishSubscriberBackgroundTasks(
+          this.deliveryPort(),
+          [subscriber],
+          sessionId,
+          fence,
+          this.now()
+        )
+      )
     }
   }
 
@@ -242,14 +212,16 @@ export class AgentSessionSubscribers {
       for (const subscriber of this.subscribers(sessionId)) {
         const invalidated = subscriber.commandsOnRequest && retired?.(sessionId)
         if (invalidated || subscriberCommandsChanged(this.hooks, subscriber)) {
-          this.emit(subscriber, {
-            type: 'batch',
-            sessionId,
-            batch: emptyAgentSessionBatch(subscriber.cursor),
-            fence: subscriber.fence,
-            hostNow,
-            ...(invalidated ? { commandsChanged: true as const } : {})
-          })
+          this.enqueue(subscriber, () =>
+            this.emit(subscriber, {
+              type: 'batch',
+              sessionId,
+              batch: emptyAgentSessionBatch(subscriber.cursor),
+              fence: subscriber.fence,
+              hostNow,
+              ...(invalidated ? { commandsChanged: true as const } : {})
+            })
+          )
         }
       }
     }
@@ -262,56 +234,81 @@ export class AgentSessionSubscribers {
     this.forkMarkers.refreshSources(readJournal, sourceIds)
   }
 
-  private subscribers(sessionId: string): Subscriber[] {
-    return [...(this.bySession.get(sessionId)?.values() ?? [])]
-  }
-
-  private deliver(
-    subscriber: Subscriber,
-    journal: AgentSessionJournal,
-    hostNow: number,
-    emitCheckpoint = false,
-    activity?: AgentSessionTurnActivity | null
-  ): void {
-    deliverToSubscriber(this.deliveryPort(), {
-      subscriber,
-      journal,
-      hostNow,
-      emitCheckpoint,
-      activity
-    })
-  }
+  private subscribers = (sessionId: string): Subscriber[] => [
+    ...(this.bySession.get(sessionId)?.values() ?? [])
+  ]
 
   private now = (): number => this.hooks.now?.() ?? Date.now()
 
-  private deliveryPort(): SubscriberDeliveryPort {
-    return {
-      hooks: this.hooks,
-      emit: (target, event, options) => this.emit(target, event, options),
-      isActive: this.isActive,
-      activity: (sessionId) => this.activityField(sessionId).activity
-    }
+  private deliveryPort(
+    sessionId?: string,
+    journal?: AgentSessionJournal,
+    queueChanged = true
+  ): SubscriberDeliveryPort {
+    return subscriberDeliveryPort(
+      {
+        hooks: this.hooks,
+        emit: (target, event, options, hooks) => this.emit(target, event, options, hooks),
+        isActive: this.isActive,
+        activity: (id) => this.activityBySession.get(id) ?? null
+      },
+      sessionId,
+      journal,
+      queueChanged
+    )
   }
 
   private isActive = (subscriber: Subscriber): boolean =>
     this.bySession.get(subscriber.sessionId)?.get(subscriber.id) === subscriber
 
   /** Dead transports must not obscure durable mutation outcomes or poison later publications. */
-  private emit(
+  private async emit(
     subscriber: Subscriber,
     event: AgentSessionSubscribeEvent,
-    options?: Parameters<SubscriberDeliveryPort['emit']>[2]
-  ): void {
+    options?: Parameters<SubscriberDeliveryPort['emit']>[2],
+    hooks = this.hooks
+  ): Promise<void> {
     try {
-      emitSubscriberFrame(this.hooks, subscriber, event, options)
+      if (!this.isActive(subscriber)) {
+        return
+      }
+      await emitSubscriberFrame(hooks, subscriber, event, {
+        ...options,
+        isActive: () => this.isActive(subscriber)
+      })
       if (options?.historyView !== undefined && this.isActive(subscriber)) {
         subscriber.historyView = options.historyView
       }
     } catch (error) {
+      // Nothing was sent; the newer commit's own delivery replaces the frame.
+      if (error instanceof SubscriberFrameSuperseded) {
+        throw error
+      }
       // A dropped subscriber gets no more frames, so end its stream or the client never resubscribes.
       this.drop(subscriber)
       subscriber.end?.(error)
     }
+  }
+
+  private enqueue(subscriber: Subscriber, deliver: () => Promise<unknown>): void {
+    const previous = this.deliveries.get(subscriber) ?? Promise.resolve()
+    const next = previous
+      .then(async () => {
+        if (this.isActive(subscriber)) {
+          await deliver()
+        }
+      })
+      .catch((error: unknown) => {
+        if (!(error instanceof SubscriberFrameSuperseded)) {
+          this.drop(subscriber)
+        }
+      })
+    this.deliveries.set(subscriber, next)
+    void next.finally(() => {
+      if (this.deliveries.get(subscriber) === next) {
+        this.deliveries.delete(subscriber)
+      }
+    })
   }
 
   private drop(subscriber: Subscriber): void {
@@ -321,9 +318,5 @@ export class AgentSessionSubscribers {
       this.bySession.delete(subscriber.sessionId)
       this.forkMarkers.delete(subscriber)
     }
-  }
-
-  private activityField(sessionId: string): { activity: AgentSessionTurnActivity | null } {
-    return { activity: this.activityBySession.get(sessionId) ?? null }
   }
 }

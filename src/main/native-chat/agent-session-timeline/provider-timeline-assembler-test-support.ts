@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../agent-session-journal/journal-observation.test-support'
 // Exercise grammar events through the real deferred sink and on-disk journal.
 
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -12,8 +13,8 @@ import type {
   AgentJournalToolCallItem,
   AgentJournalTurnLifecycle
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { backgroundTaskFallbackText } from '../../../shared/native-chat/input/native-chat-background-task-row'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import { backgroundTaskFallbackText } from '../../../shared/native-chat/input/task-lists/native-chat-background-task-row'
 import {
   isBackgroundTaskBlock,
   type NativeChatBackgroundTaskBlock
@@ -28,7 +29,7 @@ import {
   createDeferredStructuredAgentSessionEventSink,
   type StructuredAgentSessionEventSink
 } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import { testEventSinkLogging } from '../agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { testEventSinkLogging } from '../agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import {
   createProviderTimelineAssembler,
   type ProviderTimelineAssembler,
@@ -41,6 +42,7 @@ import {
   type ProviderTimelineItemFamily
 } from './provider-timeline-identity'
 import { providerTimelineSink, type ProviderTimelineSink } from './provider-timeline-plan'
+import { boundTarget } from './provider-timeline-bound-target-test-support'
 
 export const SESSION = 'session-timeline'
 export const AGENT = 'grok'
@@ -177,7 +179,7 @@ export function openUnboundProviderTimelineAssembler(
   return {
     assembler,
     bind: async () => {
-      deferred.bind({ journal, fence: 1, publish: () => {} })
+      deferred.bind(boundTarget(journal))
       await deferred.drained()
     },
     drained: async () => {
@@ -235,7 +237,7 @@ export async function openProviderTimelineRig(
   }
   let journal = await journals.open(journalOptions)
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
-  deferred.bind({ journal, fence: 1, publish: () => {} })
+  deferred.bind(boundTarget(journal))
   cleanups.push(async () => {
     deferred.close()
   })
@@ -268,7 +270,7 @@ export async function openProviderTimelineRig(
   const rows = async () => {
     elapse()
     await deferred.drained()
-    return journal.snapshot().items
+    return await readTestJournalItems(journal)
   }
   const turns = async () =>
     (await rows()).flatMap((item) => {

@@ -39,7 +39,7 @@ export function updateQueuedStructuredAgentMessage(
     run: async (ctx) => {
       const queued = ctx.journal.queuedMessages
       const decision = queuedMessageUpdateDecision(
-        queued.get(fields.messageId),
+        await Promise.resolve(queued.get(fields.messageId)),
         ctx.sessionId,
         fields,
         queuedImageCards !== false
@@ -51,7 +51,7 @@ export function updateQueuedStructuredAgentMessage(
         return { ok: true, value: decision }
       }
       // Personal edits may use the user’s byte reserve, even for agent-origin cards.
-      const refusal = queuedMessagesPublishedBytesRefusal(
+      const refusal = await queuedMessagesPublishedBytesRefusal(
         ctx.journal,
         decision.body,
         true,
@@ -86,7 +86,7 @@ export function holdQueuedStructuredAgentMessageEdit(
   return context.serialize(sessionId, async () => {
     if (params.action === 'release') {
       const journal = context.sessions.get(sessionId)?.journal
-      journal?.queuedMessages.editLeases.release(key, messageId)
+      await journal?.queuedMessages.editLeases.release(key, messageId)
       if (journal) {
         republish(context, sessionId, journal)
       }
@@ -101,17 +101,22 @@ export function holdQueuedStructuredAgentMessageEdit(
       // Renewal adds no hold; avoid publication that would keep an unattended editor’s agent alive.
       return queued.editLeases.renew(key, messageId)
     }
-    const row = queued.get(messageId)
+    const row = await Promise.resolve(queued.get(messageId))
     const result: AgentSessionQueuedMessageEditHoldResult =
       row && queuedMessageEditableText(row.body) === null
         ? { status: 'not-editable' }
-        : queued.editLeases.acquire(key, { messageId, fingerprint: params.expectedBodyFingerprint })
+        : await Promise.resolve(
+            queued.editLeases.acquire(key, {
+              messageId,
+              fingerprint: params.expectedBodyFingerprint
+            })
+          )
     republish(context, sessionId, session.journal)
     return result
   })
 }
 
-/** Publish/wake explicitly for nonjournaled leases; publication failure cannot revoke them. */
+/** Publication failure cannot revoke a committed edit hold. */
 export function republish(
   context: StructuredAgentSessionMutationContext,
   sessionId: string,

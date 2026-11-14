@@ -1,4 +1,9 @@
 export class StructuredAgentSessionAcquireAborts {
+  constructor(private readonly workChanged?: (sessionId: string) => void) {}
+
+  has(sessionId: string): boolean {
+    return (this.inFlight.get(sessionId)?.size ?? 0) > 0
+  }
   private readonly inFlight = new Map<
     string,
     Set<{ controller: AbortController; handover: boolean; goal: boolean; bound?: () => boolean }>
@@ -28,6 +33,7 @@ export class StructuredAgentSessionAcquireAborts {
     const active = { controller, handover, goal, bound }
     waits.add(active)
     this.inFlight.set(sessionId, waits)
+    this.workChanged?.(sessionId)
     return {
       signal: controller.signal,
       abort: () => controller.abort(new Error('stopped while starting')),
@@ -36,6 +42,7 @@ export class StructuredAgentSessionAcquireAborts {
         if (waits.size === 0 && this.inFlight.get(sessionId) === waits) {
           this.inFlight.delete(sessionId)
         }
+        this.workChanged?.(sessionId)
       }
     }
   }

@@ -4,9 +4,9 @@ import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Image, Platform, Pressable, Text, View } from 'react-native'
 import type { NativeChatImageRefBlock } from '../../../../../src/shared/native-chat/native-chat-types'
-import { MobileNativeChatRowOverlaysContext } from '../transcript/mobile-native-chat-row-overlays'
+import { MobileNativeChatRowOverlaysContext } from '../transcript/message-actions/mobile-native-chat-row-overlays'
 import { isRenderableImageUri, readHostChatImage } from './mobile-native-chat-image-preview'
-import { styles, TEXT_SIZE } from '../transcript/mobile-native-chat-message-styles'
+import { styles, TEXT_SIZE } from '../transcript/messages/mobile-native-chat-message-styles'
 
 export function MobileNativeChatImageAttachment({
   block,

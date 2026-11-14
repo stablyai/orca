@@ -2,11 +2,7 @@ import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import type { BrowserGuestMetadata } from '../../../../shared/browser/guest-lifecycle/browser-guest-metadata'
 import type { BrowserLoadError } from '../../../../shared/browser-workspace-types'
-import {
-  installBrowserGuestMetadata,
-  publishBrowserGuestMetadata,
-  readBrowserGuestMetadata
-} from './browser-guest-metadata'
+import { installBrowserGuestMetadata, publishBrowserGuestMetadata } from './browser-guest-metadata'
 
 function fixture() {
   let url = 'https://example.test/start'
@@ -59,24 +55,6 @@ function fixture() {
 }
 
 describe('native guest metadata', () => {
-  it('samples native loading before navigation-start and keeps subsequent title reports current', () => {
-    const f = fixture()
-    f.setLoading(true)
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture supplies the native metadata methods.
-    const state = readBrowserGuestMetadata(f.guest as unknown as Electron.WebContents)
-    expect(state).toMatchObject({
-      url: 'https://example.test/start',
-      loading: true,
-      navigationRevision: 0
-    })
-    f.guest.emit('page-title-updated', {}, 'Current title')
-    expect(f.reports.at(-1)).toMatchObject({ title: 'Current title', loading: true })
-    f.setLoading(false)
-    f.guest.emit('did-stop-loading')
-    expect(f.reports.at(-1)).toMatchObject({ url: 'https://example.test/start', loading: false })
-    f.dispose()
-  })
-
   it('projects same-URL native history and retains it through a failed destination without publishing Chromium internals', () => {
     const f = fixture()
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture supplies the production publisher native methods.

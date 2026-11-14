@@ -1,4 +1,5 @@
 import { STT_UTILITY_PROCESS_NAME } from '../../speech/stt-worker-process'
+import { BACKEND_UTILITY_PROCESS_NAME } from '../../../shared/backend-service-contract'
 
 export type ProcessGoneSource = 'renderer' | 'child'
 export type ExpectedTeardownScope = 'none' | 'renderer-reload' | 'app-shutdown'
@@ -14,7 +15,10 @@ const RECOVERABLE_UTILITY_SERVICE_NAMES = new Set([
   'video_capture.mojom.VideoCaptureService'
 ])
 // Orca's own utility processes whose exits the app already handles and reports in place.
-const RECOVERABLE_ORCA_UTILITY_NAMES = new Set([STT_UTILITY_PROCESS_NAME])
+const RECOVERABLE_ORCA_UTILITY_NAMES = new Set([
+  STT_UTILITY_PROCESS_NAME,
+  BACKEND_UTILITY_PROCESS_NAME
+])
 const RECOVERABLE_CHILD_PROCESS_REASONS = new Set(['abnormal-exit', 'crashed', 'killed'])
 const NON_RECOVERABLE_RENDERER_REASONS = new Set(['integrity-failure'])
 

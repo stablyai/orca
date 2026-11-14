@@ -28,9 +28,9 @@ import { addLockedWorktreePreparation } from './worktree-preparation-add'
 import {
   clearGitCapabilityStateForTests,
   getLocalGitCapabilityCache
-} from '../../command-runner/git-capability-state'
+} from '../../command-runner/host-routing/git-capability-state'
 import { WorktreePreparationLockOwnershipError } from './worktree-preparation-lock'
-import { resetWslLinkedWorktreeGitRoutingForTests } from '../../command-runner/wsl-linked-worktree-git-routing'
+import { resetWslLinkedWorktreeGitRoutingForTests } from '../../command-runner/host-routing/wsl-linked-worktree-git-routing'
 
 const reason = 'orca-create-preparation:v1:123:atomic'
 const unsupported = Object.assign(new Error("error: unknown option 'reason'"), { code: 129 })

@@ -10,11 +10,9 @@ import { isAgentSessionRefusalError } from '../../../shared/agent-session/failur
 import { journalDatabasePath } from '../../native-chat/agent-session-journal/database/journal-host-database'
 import { requireStructuredHost } from '../rpc/methods/structured-sessions/creation/structured-agent-session-gate'
 import type { RpcContext } from '../rpc/core'
-import {
-  ensureStructuredAgentSessionHost,
-  stopStructuredAgentSessionRuntime
-} from './structured-agent-session-runtime'
-import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { stopStructuredAgentSessionRuntime } from './structured-agent-session-runtime'
+import { ensureTestStructuredAgentSessionHost as ensureStructuredAgentSessionHost } from './records/agent-session-record-store-test-harness'
+import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { closeTestJournalHostDatabases } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
 let root: string

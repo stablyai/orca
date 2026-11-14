@@ -6,7 +6,7 @@ import { journalRowBase } from '../writing/journal-row-builders'
 import type { JournalStopEvent, JournalTombstoneRow } from '../durable-rows/journal-row-schema'
 
 // Reserve IDs that no real item uses.
-const JOURNAL_STOP_EVENT_ITEM_ID = agentJournalItemKey({
+export const JOURNAL_STOP_EVENT_ITEM_ID = agentJournalItemKey({
   provider: 'orca',
   clientMessageId: 'stop-event'
 })

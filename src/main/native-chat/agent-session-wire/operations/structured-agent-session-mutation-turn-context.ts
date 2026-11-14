@@ -1,4 +1,4 @@
-import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { AgentSessionMutationRequest } from './structured-agent-session-mutation-admission'
@@ -20,6 +20,7 @@ export function mutationTurnContext<TValue>(
     journal,
     fence,
     ...(request.currentWork ? { currentWork: request.currentWork } : {}),
+    ...(request.readWork ? { readWork: request.readWork } : {}),
     adapter: request.adapter,
     agents: request.agents,
     agent: record.provider,

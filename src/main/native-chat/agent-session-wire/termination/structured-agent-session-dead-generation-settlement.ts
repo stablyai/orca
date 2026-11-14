@@ -10,7 +10,6 @@ import {
   type AgentJournalRenderItem
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalPendingSubmissionResolutions } from '../../agent-session-journal/submissions/journal-pending-submission-recovery'
-import '../../agent-session-journal/writing/journal-row-builders'
 import {
   journalLifecycleMutationItemId,
   type JournalLifecycleMutationInput
@@ -44,8 +43,6 @@ import {
   type DeadGenerationJournal
 } from './structured-agent-session-unfinished-work'
 
-import './structured-agent-session-stale-state-settlement'
-
 export type StructuredAgentSessionDeadGenerationInput = {
   journal: DeadGenerationJournal
   sessionId: string
@@ -68,9 +65,32 @@ export type StructuredAgentSessionDeadGenerationInput = {
 /** Owns selects exited-generation fences; earlier generations settle under their own rules. */
 export function planStructuredAgentSessionDeadGeneration(
   input: StructuredAgentSessionDeadGenerationInput,
-  owns: (fence: number | undefined) => boolean = () => true
+  owns: (fence: number | undefined) => boolean = () => true,
+  authority?: {
+    continuingInputs: readonly string[]
+    finalizingInputs: readonly { clientMessageId: string; settlementOwner?: true }[]
+  }
 ): { mutations: JournalLifecycleMutationInput[]; dispatches: ResolveDispatchInput[] } {
-  const hasUnfinishedWork = hasUnfinishedStructuredAgentSessionWork(input.journal, input.exit)
+  const continuing = new Set(authority?.continuingInputs)
+  const finalizing = new Set(authority?.finalizingInputs.map((entry) => entry.clientMessageId))
+  const order = input.journal.inputOrder
+  const workJournal =
+    authority && order
+      ? {
+          ...input.journal,
+          inputOrder: {
+            recoverableSubmissions: () =>
+              order
+                .recoverableSubmissions()
+                .filter(
+                  (entry) =>
+                    !(continuing.has(entry.clientMessageId) && entry.dispatchState === 'pending') &&
+                    !finalizing.has(entry.clientMessageId)
+                )
+          }
+        }
+      : input.journal
+  const hasUnfinishedWork = hasUnfinishedStructuredAgentSessionWork(workJournal, input.exit)
   const showUnexpectedExitOutcome = input.showUnexpectedExitOutcome ?? hasUnfinishedWork
   // Leave queued sends to delivery. Failed-start handoffs never ran; ready-child handoffs remain uncertain.
   const startupFailure = input.exitedDuringStartup
