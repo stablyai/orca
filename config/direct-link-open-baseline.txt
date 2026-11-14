@@ -20,8 +20,8 @@
 2 src/renderer/src/components/linear-api-key-dialog.tsx
 1 src/renderer/src/components/native-chat/media/images/NativeChatMarkdownImage.tsx
 1 src/renderer/src/components/onboarding/ThemeLookCarousel.tsx
-1 src/renderer/src/components/right-sidebar/ssh-forwarded-ports-section.tsx
-1 src/renderer/src/components/right-sidebar/ssh-ports-panel.tsx
+1 src/renderer/src/components/right-sidebar/ports/ssh-forwarded-ports-section.tsx
+1 src/renderer/src/components/right-sidebar/ports/ssh-ports-panel.tsx
 1 src/renderer/src/components/settings/accounts/codex/CodexLoginLinkNotice.tsx
 1 src/renderer/src/components/settings/general/GeneralSupportSection.tsx
 1 src/renderer/src/components/settings/accounts/sign-in/HostAccountSignInPrompt.tsx
