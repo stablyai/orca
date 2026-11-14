@@ -1,6 +1,6 @@
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
-import { MobileAgentIcon } from '../../components/MobileAgentIcon'
-import { PickerModal, type PickerOption } from '../../components/PickerModal'
+import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
+import { PickerModal, type PickerOption } from '../../components/sheets/PickerModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import type { ChatForkPicks, ChatForkSelection, ChatForkWorkspace } from './chat-fork-selection'
 import type { ChatForkHostRow } from './use-chat-fork-hosts'

@@ -10,7 +10,7 @@ import type { StructuredAgentSessionForkSource } from '../../../src/shared/agent
 import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
 import { slugifyForWorkspaceName } from '../../../src/shared/workspace-name'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import { sessionWorktreeRecordRead } from '../worktree/session-worktree-record-operations'
+import { sessionWorktreeRecordRead } from '../worktree/catalog/session-worktree-record-operations'
 import { createWorktreeWithNameRetry } from '../new-workspace/creation/worktree-create-retry'
 import type { WorktreeCreateIdempotencyProbe } from '../new-workspace/creation/worktree-create-idempotency-policy'
 import { createMobileStructuredAgentSession } from './native-chat/agent-session/mobile-structured-agent-session-launch'

@@ -9,10 +9,10 @@ import {
   ListRow,
   SectionHeader
 } from '../../components/list/ListGroup'
-import { MobileAgentIcon } from '../../components/MobileAgentIcon'
-import { newWorktreeFormStyles as styles } from '../../components/new-worktree-form-styles'
+import { MobileAgentIcon } from '../../components/icons/MobileAgentIcon'
+import { newWorktreeFormStyles as styles } from '../../new-workspace/creation/forms/new-worktree-form-styles'
 import { SheetHeader } from '../../components/nav-bar/SheetHeader'
-import { SheetPrimaryButton } from '../../components/SheetPrimaryButton'
+import { SheetPrimaryButton } from '../../components/sheets/SheetPrimaryButton'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'

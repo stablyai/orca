@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../src/shared/agent-session/agent-session-create-capabilities'
 import { AI_VAULT_CHAT_FORK_IMPORT_CAPABILITY } from '../../../../src/shared/ai-vault/resume/ai-vault-resume-preparation'
-import { hostPickerOptions } from '../../components/use-connected-host-picker'
+import { hostPickerOptions } from '../../host-catalog/selection/use-connected-host-picker'
 import { selectConnectableHostProfiles } from '../../host-catalog/host-catalog-selection'
 import type { HostProfile } from '../../host-catalog/host-profile'
 import { loadHostCatalog } from '../../host-catalog/host-store'
