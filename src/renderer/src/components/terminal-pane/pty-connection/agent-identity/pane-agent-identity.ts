@@ -6,7 +6,7 @@ import { CONFIRMED_SHELL_MODE_RESET } from '../../../../../../shared/terminal/pr
 import {
   isLocalNativeWindowsConpty,
   resolveWindowsShellOverride
-} from '@/lib/pane-manager/windows-pty-compatibility'
+} from '@/lib/pane-manager/terminal-protocol/windows-pty-compatibility'
 import { createTerminalCommandLifecycle } from '../../emulation/commands/terminal-command-lifecycle'
 import { createPaneForegroundAgentTracker } from './foreground-process/pane-foreground-agent-tracker'
 import { isRemoteExecutionHostPtyId } from '../../../../../../shared/execution-host/remote-execution-host-pty-id'

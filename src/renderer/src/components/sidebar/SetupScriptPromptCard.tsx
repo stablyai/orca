@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
-import { track } from '@/lib/telemetry'
+import { useAppStore } from '@/store/index'
+import { track } from '@/diagnostics/telemetry/telemetry'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   buildImportedHookSettings,

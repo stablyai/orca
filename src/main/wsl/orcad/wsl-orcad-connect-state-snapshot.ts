@@ -21,7 +21,7 @@ import {
 } from '../../managed-server/activation/orcad-activation-transaction'
 import { execOrcadRemote } from '../../managed-server/install/orcad-remote-runtime-control'
 import { probeInstallLockExistsCommand } from '../../managed-server/install/remote-install-lock-commands'
-import { ORCAD_LOCK_FILE_NAME } from '../../orcad/orcad-instance-lock'
+import { ORCAD_LOCK_FILE_NAME } from '../../orcad/instance-lock/orcad-instance-lock'
 import {
   parseWslGuestIdentity,
   wslGuestIdentityShellCommand,

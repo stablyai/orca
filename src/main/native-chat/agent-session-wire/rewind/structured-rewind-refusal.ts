@@ -1,8 +1,6 @@
-import {
-  AGENT_SESSION_REWIND_REASONS,
-  type AgentSessionRewindParams,
-  type AgentSessionRewindReason
-} from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { AgentSessionRewindParams } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
+import { AGENT_SESSION_REWIND_REASONS } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind-reasons'
+import type { AgentSessionRewindReason } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind-reasons'
 import {
   refuse,
   type AgentSessionWireRefusal

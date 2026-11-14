@@ -20,7 +20,7 @@ import { seedWslMoveCutover } from '../../../persistence/__fixtures__/wsl-mover/
 import {
   loadWslMoveFence,
   resetWslMoveFenceForTests
-} from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import type { ResolvedWorktreeSnapshot } from './runtime-resolved-worktree-cache'

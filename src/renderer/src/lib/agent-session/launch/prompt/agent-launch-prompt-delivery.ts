@@ -1,6 +1,6 @@
 import { agentDeliversDraftViaNativePrefill } from '@/lib/agent-session/messaging/paste/agent-native-draft-prefill'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-session/messaging/paste/agent-paste-draft'
-import { canMirrorLaunchDraftToNativeChat } from '../../../../../../shared/native-chat/input/native-chat-launch-draft-mirrorability'
+import { canMirrorLaunchDraftToNativeChat } from '../../../../../../shared/native-chat/input/composer/native-chat-launch-draft-mirrorability'
 import { isNativeChatSupportedAgent } from '../../../../../../shared/native-chat/native-chat-agent-support'
 import { useAppStore } from '@/store/index'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'

@@ -1,6 +1,6 @@
 import { Text, View } from 'react-native'
 import { MessageSquareMore } from 'lucide-react-native'
-import type { NativeChatAskRowSubject } from '../../../../../src/shared/native-chat/input/native-chat-ask-row'
+import type { NativeChatAskRowSubject } from '../../../../../src/shared/native-chat/input/questions/native-chat-ask-row'
 import { nativeChatAskRowCopy } from './native-chat-ask-row-copy'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'

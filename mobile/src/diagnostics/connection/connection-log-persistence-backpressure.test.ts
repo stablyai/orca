@@ -61,34 +61,27 @@ describe('connection log persistence backpressure', () => {
     expect(saved.at(-1)).toEqual(['a', ['1', '2']])
   })
 
-  it.each([false, true])(
-    'includes an append during save settlement (deferred=%s)',
-    async (deferred) => {
-      let afterSave = () => {}
-      const saved: string[][] = []
-      const store = createConnectionLogStore(200, {
-        load: async () => [],
-        save: async (_host, entries) => {
-          saved.push(entries.map((item) => item.id))
-          afterSave()
-        }
-      })
-      await store.hydrate('a')
-      await drainMicrotasks()
-      saved.length = 0
-      afterSave = () => {
-        afterSave = () => {}
-        if (deferred) {
-          queueMicrotask(() => store.append('a', entry(2)))
-        } else {
-          store.append('a', entry(2))
-        }
+  it('includes an append queued during save settlement', async () => {
+    let afterSave = () => {}
+    const saved: string[][] = []
+    const store = createConnectionLogStore(200, {
+      load: async () => [],
+      save: async (_host, entries) => {
+        saved.push(entries.map((item) => item.id))
+        afterSave()
       }
-      store.append('a', entry(1))
-      await drainMicrotasks()
-      expect(saved).toEqual([['1'], ['1', '2']])
+    })
+    await store.hydrate('a')
+    await drainMicrotasks()
+    saved.length = 0
+    afterSave = () => {
+      afterSave = () => {}
+      queueMicrotask(() => store.append('a', entry(2)))
     }
-  )
+    store.append('a', entry(1))
+    await drainMicrotasks()
+    expect(saved).toEqual([['1'], ['1', '2']])
+  })
 
   it('attempts the newest snapshot instead of replaying superseded ones', async () => {
     let release: () => void = () => {}

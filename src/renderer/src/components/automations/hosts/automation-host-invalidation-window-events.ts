@@ -4,7 +4,7 @@ import {
   AUTOMATIONS_CHANGED_EVENT,
   automationsChangedWindowDetail,
   type AutomationsChangedWindowDetail
-} from '@/lib/automations-changed-window-event'
+} from '@/components/automations/events/automations-changed-window-event'
 import type { StableAutomationAuthorityRef } from '../../../../../shared/automations/ownership/automation-owner-ref'
 import type { AutomationAuthorityChangeEvent } from './automation-host-invalidation'
 

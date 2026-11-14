@@ -21,6 +21,7 @@ import {
   superviseForegroundServe
 } from './serve-update-supervisor'
 import { RuntimeClientError } from './types'
+import { BACKGROUND_OPEN_ARG } from '../../shared/background-open-argv'
 import {
   getExecutableAppArgs,
   resolveAppRoot,
@@ -69,7 +70,7 @@ export function launchOrcaApp(): void {
   const overrideExecutable = process.env.ORCA_APP_EXECUTABLE
   if (typeof overrideExecutable === 'string' && overrideExecutable.trim().length > 0) {
     const pinned = pinLaunchUserDataPath(
-      getExecutableAppArgs(overrideExecutable),
+      [...getExecutableAppArgs(overrideExecutable), BACKGROUND_OPEN_ARG],
       stripElectronRunAsNode(process.env),
       userDataPath
     )
@@ -93,7 +94,7 @@ export function launchOrcaApp(): void {
     }
 
     const pinned = pinLaunchUserDataPath(
-      getExecutableAppArgs(process.execPath),
+      [...getExecutableAppArgs(process.execPath), BACKGROUND_OPEN_ARG],
       stripElectronRunAsNode(process.env),
       userDataPath
     )
@@ -107,12 +108,19 @@ export function launchOrcaApp(): void {
   )
 }
 
-/** Nondefault profiles need a new instance: open drops env and only new instances receive --args. */
+/** Nondefault profiles need a new instance: open drops env and only new instances receive --args. -g keeps the user's app in front. */
 export function getMacOpenArgs(appBundlePath: string, userDataPath: string): string[] {
   if (isSameUserDataPath(userDataPath, getPlatformUserDataPath())) {
-    return [appBundlePath]
+    return ['-g', appBundlePath, '--args', BACKGROUND_OPEN_ARG]
   }
-  return ['-n', appBundlePath, '--args', `--user-data-dir=${userDataPath}`]
+  return [
+    '-g',
+    '-n',
+    appBundlePath,
+    '--args',
+    `--user-data-dir=${userDataPath}`,
+    BACKGROUND_OPEN_ARG
+  ]
 }
 
 function spawnDetached(command: string, args: string[], options: SpawnOptions): void {

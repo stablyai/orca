@@ -2,7 +2,8 @@ import { writeFile } from 'node:fs/promises'
 vi.mock(
   '../../../../ai-vault/scanners/opencode/reader-transport/session-scanner-opencode-sqlite-worker-spawn',
   async (original) => {
-    const query = await import('../../../transcript-opencode-sqlite-query')
+    const query =
+      await import('../../../transcript-history/opencode/transcript-opencode-sqlite-query')
     return {
       ...(await original<object>()),
       readOpenCodeTranscriptPageViaWorker: query.readOpenCodeTranscriptPage,
@@ -20,7 +21,7 @@ import {
   hostTestOperationId
 } from './structured-agent-session-host-test-data'
 import type { AgentSessionAttachParams } from '../../acquisition/structured-agent-session-attach'
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 let rig: RestTestRig
 

@@ -1,7 +1,7 @@
 import { getRelativePathInsideRoot } from '@/lib/path'
 import { useLayoutEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import { importExternalPathsToRuntime } from '@/runtime/files/imports/runtime-file-import-client'
 import { useTranslate } from '@/i18n/use-translate'
 import { createOsFileDropSequence, useOsFileDropOwner } from '@/hooks/use-os-file-drop-owner'

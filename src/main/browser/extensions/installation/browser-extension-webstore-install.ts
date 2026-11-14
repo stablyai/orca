@@ -1,3 +1,4 @@
+import { recordBrowserExtensionInstalled } from '../../../telemetry/browser-extensions-banner'
 import { randomUUID } from 'node:crypto'
 import { rename, rm, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve } from 'node:path'
@@ -178,6 +179,9 @@ export async function commitStagedWebStoreExtension(
   }
   if (getHeldBrowserExtensionUpdate(extensionId)?.version === record.version) {
     forgetHeldBrowserExtensionUpdate(extensionId)
+  }
+  if (!previous) {
+    recordBrowserExtensionInstalled('web_store')
   }
   notifyBrowserExtensionListChanged()
   return record

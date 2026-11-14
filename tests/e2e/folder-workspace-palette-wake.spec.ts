@@ -47,7 +47,7 @@ for (const selection of ['workspace', 'tab'] as const) {
       if (!target || !other) {
         throw new Error('Could not create folder workspaces')
       }
-      return { target: target.id, other: other.id }
+      return { target: target.folderWorkspace.id, other: other.folderWorkspace.id }
     }, folderPath)
     const openPalette = async (): Promise<void> => {
       // Native menu accelerators need desktop focus; drive the same palette through CDP.

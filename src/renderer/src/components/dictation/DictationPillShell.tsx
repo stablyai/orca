@@ -1,5 +1,5 @@
-import { KEEPS_FOCUS_ATTRIBUTE } from '@/lib/focus-keeping-press'
-import { cn } from '@/lib/utils'
+import { KEEPS_FOCUS_ATTRIBUTE } from '@/lib/overlay-interaction/focus-keeping-press'
+import { cn } from '@/lib/class-names'
 import { useDictationPillBox, type DictationPillAnchor } from './dictation-pill-anchor'
 
 // Presses on the pill keep focus where the words are going.

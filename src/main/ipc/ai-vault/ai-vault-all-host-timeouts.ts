@@ -1,4 +1,4 @@
-import type { RuntimeAiVaultHostInfo } from '../../ai-vault/ai-vault-runtime-scan'
+import type { RuntimeAiVaultHostInfo } from '../../ai-vault/runtime-hosts/ai-vault-runtime-scan'
 
 // Per-leg bounds for the all-hosts fan-outs, so one slow host cannot hold a merge open.
 export const AI_VAULT_ALL_HOST_TIMEOUT_MS = {

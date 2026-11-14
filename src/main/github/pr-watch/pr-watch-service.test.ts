@@ -3,17 +3,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type {
   GitHubPRRefreshCandidate,
   PRRefreshOutcome
-} from '../../../shared/github/pull-request-refresh-types'
+} from '../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase
 } from '../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { assemblePRRefreshFoundOutcome } from '../client/lookup/pr-refresh-outcome-assembly'
-import type { PRWatchJob } from '../pr-refresh-watch-jobs'
+import type { PRWatchJob } from '../pull-requests/refresh/pr-refresh-watch-jobs'
 import { readPRPendingDeliveryChatIds, readPRPendingHeads } from './pr-check-event-tables'
 import { readPRHeadCheckRollup } from './pr-head-check-read'
 import { capturePRPendingActions } from './pr-pending-actions'
@@ -36,7 +36,7 @@ const queue = vi.hoisted(() => {
   return state
 })
 
-vi.mock('../pr-refresh-coordinator', () => ({
+vi.mock('../pull-requests/refresh/pr-refresh-coordinator', () => ({
   addPRRefreshOutcomeObserver: (observer: QueueObserver) => {
     queue.observers.add(observer)
     return () => queue.observers.delete(observer)
@@ -53,7 +53,7 @@ vi.mock('./pr-head-check-read', () => ({
   resolvePRCommitSha: async () => null,
   isCommitInPRHead: async () => false
 }))
-vi.mock('../github-api-repository', () => ({
+vi.mock('../repositories/github-api-repository', () => ({
   resolveGitHubApiRepositoryCandidates: async () => ({
     candidates: [{ owner: 'acme', repo: 'repo', host: 'github.com' }]
   })

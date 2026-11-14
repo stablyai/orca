@@ -164,7 +164,9 @@ test('phone shows the desktop tab strip of a server workspace, also with the win
       await host.client.call<{ browserPageId: string }>('browser.tabCreate', {
         worktree,
         url: 'about:blank',
-        activate: false
+        activate: false,
+        // Unplaced, a server-side create would go to the paired desktop.
+        placement: { kind: 'server' }
       })
     ).result
     const phoneStrip = async (): Promise<Strip> =>

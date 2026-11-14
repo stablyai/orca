@@ -1,5 +1,5 @@
-import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/native-chat-row-content'
-import { nativeChatProseToMarkdown } from '../../../../../../shared/native-chat/transcript/native-chat-prose'
+import { deriveNativeChatRowContent } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-row-content'
+import { nativeChatProseToMarkdown } from '../../../../../../shared/native-chat/transcript/row-content/native-chat-prose'
 import { buildNativeChatTranscriptSlots } from '../../conversation/slots/native-chat-transcript-slots'
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
@@ -28,6 +28,18 @@ describe('transcript row height estimate', () => {
 
     expect(nativeChatRowContentMetrics(withRole('user')).role).toBe('user')
     expect(nativeChatRowContentMetrics(withRole('assistant')).role).toBe('assistant')
+  })
+
+  it('does not reserve text-bubble lines for a user image send whose only text is [Image #1]', () => {
+    const metrics = nativeChatRowContentMetrics({
+      ...message('unused', 'user'),
+      blocks: [
+        { type: 'text', text: '[Image #1]' },
+        { type: 'image-ref', path: '/tmp/shot.png' }
+      ]
+    })
+    expect(metrics.textLines).toBe(0)
+    expect(metrics.imageCount).toBe(1)
   })
 })
 

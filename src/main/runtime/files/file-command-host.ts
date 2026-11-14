@@ -6,7 +6,7 @@ import type { RuntimeFileOpenPosition } from '../../../shared/file-access/runtim
 import type {
   NativeChatMediaPathRequest,
   NativeChatMediaPathResolution
-} from '../../native-chat/native-chat-media-path'
+} from '../../native-chat/conversation-files/native-chat-media-path'
 
 export type RuntimeFileCommandHost = {
   getRuntimeId(): string

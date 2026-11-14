@@ -16,7 +16,7 @@ import { cleanupUnusedWorktreePushTargetRemote } from '../../ipc/worktree-remote
 import { getLocalProjectWorktreeGitOptions } from '../../workspaces/execution-host/project-runtime-git-options'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
-import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { resolveWorktreeRemovalRepoOwner } from '../../workspaces/removal/worktree-removal-repo-owner'
 import { parseExactWorktreeIdSelector } from '../workspaces/catalog/runtime-worktree-selection'
 

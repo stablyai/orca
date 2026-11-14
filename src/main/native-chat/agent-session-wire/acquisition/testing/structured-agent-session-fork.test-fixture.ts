@@ -1,11 +1,11 @@
 import { vi } from 'vitest'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { agentSessionRecordFixture } from '../../../agent-session-record-test-fixture'
+import { agentSessionRecordFixture } from '../../../testing/agent-session-record-test-fixture'
 import {
   claudeProviderHandle,
   codexProviderHandle
-} from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+} from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import { agentJournalItemKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type { AgentJournalSnapshot } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { prepareStructuredAgentSessionFork } from '../structured-agent-session-fork'

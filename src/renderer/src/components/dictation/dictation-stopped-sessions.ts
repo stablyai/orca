@@ -47,3 +47,18 @@ export function waitForStoppedSession(
     })
   })
 }
+
+export type DictationStoppedSessions = {
+  record: (sessionId: string) => void
+  /** Resolves once the session's stopped event arrives, or after a second. */
+  wait: (sessionId: string) => Promise<void>
+}
+
+export function createDictationStoppedSessions(): DictationStoppedSessions {
+  const stoppedSessionIds = { current: new Set<string>() }
+  const stoppedResolvers = { current: new Map<string, () => void>() }
+  return {
+    record: (sessionId) => recordStoppedSession(sessionId, stoppedSessionIds, stoppedResolvers),
+    wait: (sessionId) => waitForStoppedSession(sessionId, stoppedSessionIds, stoppedResolvers)
+  }
+}

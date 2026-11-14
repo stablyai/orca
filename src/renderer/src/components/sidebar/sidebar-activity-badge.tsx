@@ -1,6 +1,6 @@
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 
 export function SidebarActivityBadge({
   counts

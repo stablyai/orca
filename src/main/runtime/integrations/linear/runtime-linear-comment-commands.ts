@@ -5,11 +5,12 @@ import {
   createIssueAttachment as createLinearIssueAttachment,
   deleteIssueCommentForAgent as deleteLinearIssueCommentForAgent,
   updateIssueCommentForAgent as updateLinearIssueCommentForAgent
-} from '../../../linear/linear-issue-comments'
-import { getCommentByUuidForAgent as getLinearCommentByUuidForAgent } from '../../../linear/linear-issue-lookups'
+} from '../../../linear/issues/linear-issue-comments'
+import { getCommentByUuidForAgent as getLinearCommentByUuidForAgent } from '../../../linear/issues/linear-issue-lookups'
 import { isLinearUuid } from '../../../../shared/linear/uuid'
-import { LinearWriteFailure } from '../../../linear/linear-issue-write-support'
-import { linearError, type LinearAgentAccessError } from '../../../linear/issue-context/errors'
+import { LinearWriteFailure } from '../../../linear/issues/linear-issue-write-support'
+import { linearError } from '../../../linear/issues/context/linear-access-errors'
+import type { LinearAgentAccessError } from '../../../linear/issues/context/linear-access-errors'
 import type {
   LinearCommentAddRequest,
   LinearAttachRequest,
@@ -20,8 +21,8 @@ import type {
 } from '../../../../shared/linear/agent-access'
 import type * as LinearAgentResults from '../../../../shared/linear/agent-result-types'
 import { RuntimeLinearCreateCommands } from './runtime-linear-create-commands'
-import { getConnectedWorkspaces } from '../../../linear/issue-context/client'
-import { resolveWorkspaceSelector } from '../../../linear/issue-context/workspaces'
+import { getConnectedWorkspaces } from '../../../linear/issues/context/issue-context-resolution'
+import { resolveWorkspaceSelector } from '../../../linear/issues/context/workspace-selector-resolution'
 
 export class RuntimeLinearCommentCommands extends RuntimeLinearCreateCommands {
   async linearIssueAddComment(

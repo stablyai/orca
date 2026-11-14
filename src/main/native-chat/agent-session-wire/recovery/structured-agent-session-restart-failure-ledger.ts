@@ -5,11 +5,11 @@ import type {
   AgentSessionResumeFailureInput,
   AgentSessionResumeFailureRecord
 } from '../../../runtime/agent-session/records/agent-session-recovery-capsule-entries'
-import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type {
   AgentSessionResumeFailureOutcome,
   AgentSessionResumeMarker
-} from '../../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+} from '../../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import {
   normalizeOptionalField,
   AGENT_MODEL_MAX_LENGTH

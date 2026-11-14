@@ -7,105 +7,105 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/browser/MobileBrowserKeyRow.tsx",
+    "filePath": "mobile/src/browser/pane-view/MobileBrowserKeyRow.tsx",
     "kind": "jsx-expression",
     "text": "Esc",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/browser/MobileBrowserPointerModifiers.tsx",
+    "filePath": "mobile/src/browser/pane-view/MobileBrowserPointerModifiers.tsx",
     "kind": "object-property:label",
     "text": "Alt",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/browser/MobileBrowserPointerModifiers.tsx",
+    "filePath": "mobile/src/browser/pane-view/MobileBrowserPointerModifiers.tsx",
     "kind": "object-property:label",
     "text": "Cmd",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/browser/MobileBrowserPointerModifiers.tsx",
+    "filePath": "mobile/src/browser/pane-view/MobileBrowserPointerModifiers.tsx",
     "kind": "object-property:label",
     "text": "Ctrl",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/browser/MobileBrowserPointerModifiers.tsx",
+    "filePath": "mobile/src/browser/pane-view/MobileBrowserPointerModifiers.tsx",
     "kind": "object-property:label",
     "text": "Shift",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "filePath": "mobile/src/accounts/accounts-snapshot.ts",
     "kind": "object-property:message",
     "text": "Claude limits use the wrong provider identity",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "filePath": "mobile/src/accounts/accounts-snapshot.ts",
     "kind": "object-property:message",
     "text": "Codex limits use the wrong provider identity",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "filePath": "mobile/src/accounts/accounts-snapshot.ts",
     "kind": "object-property:message",
     "text": "Host Codex accounts cannot name a WSL distro",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "filePath": "mobile/src/accounts/accounts-snapshot.ts",
     "kind": "object-property:message",
     "text": "Host rate-limit targets cannot name a WSL distro",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "filePath": "mobile/src/accounts/accounts-snapshot.ts",
     "kind": "object-property:message",
     "text": "Inactive Claude limits use the wrong provider identity",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "filePath": "mobile/src/accounts/accounts-snapshot.ts",
     "kind": "object-property:message",
     "text": "Inactive Codex limits use the wrong provider identity",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "filePath": "mobile/src/accounts/accounts-snapshot.ts",
     "kind": "object-property:message",
     "text": "WSL Codex accounts require an exact distro",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/accounts-snapshot.ts",
+    "filePath": "mobile/src/accounts/accounts-snapshot.ts",
     "kind": "object-property:message",
     "text": "WSL rate-limit targets require an exact distro",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/codex-reset-credit-reply-schema.ts",
+    "filePath": "mobile/src/accounts/usage/codex-reset-credit-reply-schema.ts",
     "kind": "object-property:message",
     "text": "Host reset scopes cannot name a WSL distro",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/components/codex-reset-credit-reply-schema.ts",
+    "filePath": "mobile/src/accounts/usage/codex-reset-credit-reply-schema.ts",
     "kind": "object-property:message",
     "text": "WSL reset scopes require an exact distro",
     "dynamic": false,
@@ -175,7 +175,7 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/files/mobile-file-preview-route.ts",
+    "filePath": "mobile/src/files/preview/mobile-file-preview-route.ts",
     "kind": "object-property:message",
     "text": "Unable to load preview",
     "dynamic": false,
@@ -289,7 +289,7 @@
   {
     "filePath": "mobile/src/settings/about-screen.tsx",
     "kind": "jsx-attribute:title",
-    "text": "onOrca.dev",
+    "text": "orca.dev",
     "dynamic": false,
     "count": 1
   },
@@ -308,238 +308,238 @@
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/session/MobileSessionLatchKeys.tsx",
+    "filePath": "mobile/src/terminal/session/accessory-keys/MobileSessionLatchKeys.tsx",
     "kind": "object-property:label",
     "text": "Shift",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/session/MobileSessionLatchKeys.tsx",
+    "filePath": "mobile/src/terminal/session/accessory-keys/MobileSessionLatchKeys.tsx",
     "kind": "object-property:label",
     "text": "Ctrl",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/session/MobileSessionLatchKeys.tsx",
+    "filePath": "mobile/src/terminal/session/accessory-keys/MobileSessionLatchKeys.tsx",
     "kind": "object-property:label",
     "text": "Alt",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/tasks/mobile-smart-source-modes.ts",
+    "filePath": "mobile/src/new-workspace/source-selection/mobile-smart-source-modes.ts",
     "kind": "object-property:label",
     "text": "GitHub",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/tasks/mobile-smart-source-modes.ts",
+    "filePath": "mobile/src/new-workspace/source-selection/mobile-smart-source-modes.ts",
     "kind": "object-property:label",
     "text": "GitLab",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/tasks/mobile-smart-source-modes.ts",
+    "filePath": "mobile/src/new-workspace/source-selection/mobile-smart-source-modes.ts",
     "kind": "object-property:label",
     "text": "Jira",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/tasks/mobile-smart-source-modes.ts",
+    "filePath": "mobile/src/new-workspace/source-selection/mobile-smart-source-modes.ts",
     "kind": "object-property:label",
     "text": "Linear",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/tasks/mobile-tasks-create-drawers.tsx",
+    "filePath": "mobile/src/tasks/workspace-creation/mobile-tasks-create-drawers.tsx",
     "kind": "jsx-attribute:placeholder",
     "text": "lin_api_...",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/tasks/mobile-tasks-options.tsx",
+    "filePath": "mobile/src/tasks/task-list/mobile-tasks-options.tsx",
     "kind": "object-property:label",
     "text": "GitHub",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/tasks/mobile-tasks-options.tsx",
+    "filePath": "mobile/src/tasks/task-list/mobile-tasks-options.tsx",
     "kind": "object-property:label",
     "text": "GitLab",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/tasks/mobile-tasks-options.tsx",
+    "filePath": "mobile/src/tasks/task-list/mobile-tasks-options.tsx",
     "kind": "object-property:label",
     "text": "Jira",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/tasks/mobile-tasks-options.tsx",
+    "filePath": "mobile/src/tasks/task-list/mobile-tasks-options.tsx",
     "kind": "object-property:label",
     "text": "Linear",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/tasks/mobile-tasks-workspace-trust-drawers.tsx",
+    "filePath": "mobile/src/tasks/workspace-creation/mobile-tasks-workspace-trust-drawers.tsx",
     "kind": "jsx-attribute:placeholder",
     "text": "src/renderer packages/ui",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:accessibilityLabel",
     "text": "Backspace",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:accessibilityLabel",
     "text": "Enter",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:accessibilityLabel",
     "text": "Escape",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:accessibilityLabel",
     "text": "Shift Tab",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:accessibilityLabel",
     "text": "Space",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:accessibilityLabel",
     "text": "Tab",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Ctrl+A",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Ctrl+C",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Ctrl+D",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Ctrl+E",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Ctrl+L",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Ctrl+R",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Ctrl+U",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Ctrl+W",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Ctrl+Z",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Del",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Enter",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Esc",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Shift+Tab",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Space",
     "dynamic": false,
     "count": 1
   },
   {
-    "filePath": "mobile/src/terminal/terminal-key-definitions.ts",
+    "filePath": "mobile/src/terminal/key-input/terminal-key-definitions.ts",
     "kind": "object-property:label",
     "text": "Tab",
     "dynamic": false,

@@ -2,7 +2,7 @@ import type {
   AgentJournalCursor,
   AgentSessionJournalIdentity
 } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import { agentSessionJournalProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { agentSessionJournalProviderHandle } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { JournalReducerState } from '../projection/journal-reducer'
 import type { JournalHostDatabase } from '../database/journal-host-database'
 import type { JournalReplacementItem } from './journal-epoch-replacement'

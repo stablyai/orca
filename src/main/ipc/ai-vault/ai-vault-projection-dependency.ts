@@ -1,6 +1,6 @@
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { AgentSessionAssociationObservation } from '../../../shared/agent-session/view/agent-session-status-snapshot-fold'
-import { getRuntimeEnvironmentTransportGeneration } from '../runtime-environments/runtime-environment-transport-generation'
+import { getRuntimeEnvironmentTransportGeneration } from '../runtime-environments/connections/runtime-environment-transport-generation'
 
 type Authority = { identity: string; revision: number; references: number }
 const authorities = new Map<string, Authority>()

@@ -1,3 +1,4 @@
+import type { BrowserPageAnnotation } from '../element-grab/browser-grab-types'
 import type {
   BrowserCertificateFailure,
   BrowserCookieImportResult,
@@ -20,12 +21,16 @@ export type BrowserSnapshotDelta =
       treeChange?: { startLine: number; deleteCount: number; lines: string[] }
     }
 
+/** A passkey (WebAuthn) request the page is waiting on; Orca's browser has no UI to complete it. */
+export type BrowserPasskeyRequest = { origin: string }
+
 export type BrowserSnapshotResult = {
   browserPageId: string
   snapshot: string | BrowserSnapshotDelta
   refs: BrowserSnapshotRef[]
   url: string
   title: string
+  passkeyRequest?: BrowserPasskeyRequest
 }
 
 /** What an agent's page action caused; absent for people's input and from runtimes that predate it. */
@@ -41,6 +46,10 @@ export type BrowserActionEffects = {
   popups?: { action: 'blocked' | 'opened-external' | 'window'; origin: string }[]
   downloads?: { filename: string; origin: string }[]
   consoleErrors?: string[]
+  /** Still pending when the page settled. */
+  passkeyRequest?: BrowserPasskeyRequest
+  /** The page asked for the system print dialog, which Orca refused so it would not take the user's screen. */
+  blockedPrint?: { origin: string }
   /** Snapshot lines changed since the last reading; `full` is the whole new tree. Absent when unread. */
   page?: 'unchanged' | { lines: string[]; removedLines: number; full: boolean; truncated: boolean }
   /** False when the page was still changing at the settle cap. */
@@ -122,6 +131,11 @@ export type BrowserTabSetProfileResult = {
 }
 
 export type BrowserTabShowResult = { tab: BrowserTabInfo }
+/** The notes the user left on a tab's page and has not sent yet. */
+export type BrowserTabAnnotationsResult = {
+  tab: BrowserTabInfo
+  annotations: BrowserPageAnnotation[]
+}
 export type BrowserTabCurrentResult = { tab: BrowserTabInfo }
 
 export type BrowserTabProfileShowResult = {

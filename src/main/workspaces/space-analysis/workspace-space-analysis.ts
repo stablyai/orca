@@ -128,7 +128,10 @@ export async function analyzeWorkspaceSpace(
   const repos = repoResults.map((result) => result.summary)
   const worktrees = repoResults
     .flatMap((result) => result.worktrees)
-    .sort((a, b) => b.sizeBytes - a.sizeBytes || a.displayName.localeCompare(b.displayName))
+    .sort(
+      (a, b) =>
+        b.sizeBytes - a.sizeBytes || (a.displayName ?? '').localeCompare(b.displayName ?? '')
+    )
   throwIfWorkspaceSpaceScanAborted(options.signal)
   const summary = summarizeWorkspaceSpaceRows(worktrees)
   let unavailableRepoCount = 0

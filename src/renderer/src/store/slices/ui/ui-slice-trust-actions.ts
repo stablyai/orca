@@ -167,6 +167,15 @@ export function createUiTrustActions(set: UISliceSet, _get: UISliceGet): Partial
         window.api.ui.set({ codexSharedSettingsNoticeSeen: true }).catch(console.error)
         return { codexSharedSettingsNoticeSeen: true }
       }),
+    worktreeCardsUpdateNoticeSeen: true,
+    markWorktreeCardsUpdateNoticeSeen: () =>
+      set((s) => {
+        if (s.worktreeCardsUpdateNoticeSeen) {
+          return s
+        }
+        window.api.ui.set({ worktreeCardsUpdateNoticeSeen: true }).catch(console.error)
+        return { worktreeCardsUpdateNoticeSeen: true }
+      }),
     claudeDiffPanelNoticeSeen: true,
     markClaudeDiffPanelNoticeSeen: () =>
       set((s) => {

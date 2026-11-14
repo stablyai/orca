@@ -4,8 +4,8 @@ import {
   launchDraftResolvedByTranscript,
   nativeChatLaunchDraftTurnBaseline,
   type NativeChatLaunchDraftTurnBaseline
-} from '../../../../../src/shared/native-chat/transcript/native-chat-launch-draft-resolution'
-import { normalizedNativeChatUserMessageText } from '../../../../../src/shared/native-chat/transcript/native-chat-image-transcript-markers'
+} from '../../../../../src/shared/native-chat/transcript/pending-sends/native-chat-launch-draft-resolution'
+import { normalizedNativeChatUserMessageText } from '../../../../../src/shared/native-chat/transcript/images/native-chat-image-transcript-markers'
 import { mobileNativeChatLaunchDraftSeeds } from './mobile-native-chat-draft-store'
 import { mobileNativeChatDraftDestination } from './mobile-native-chat-draft-inputs'
 

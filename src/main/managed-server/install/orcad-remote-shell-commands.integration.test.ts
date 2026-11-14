@@ -15,8 +15,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   exportProfileStateJson,
   importProfileStateJson
-} from '../../persistence/profile-state/profile-state-documents'
-import { openProfileStateDatabase } from '../../persistence/profile-state/profile-state-database'
+} from '../../persistence/profile-state/documents/profile-state-documents'
+import { openProfileStateDatabase } from '../../persistence/profile-state/database/profile-state-database'
 import { orcadLivenessProbeCommand, parseOrcadLiveness } from './orcad-remote-launch'
 import { ORCAD_PID_FILENAME } from './orcad-remote-host-support'
 import { parseOrcadStopOutcome, stopOrcadCommand } from './orcad-remote-process-control'

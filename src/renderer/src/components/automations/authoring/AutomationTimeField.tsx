@@ -1,7 +1,7 @@
 import { ImeInput } from '@/lib/text-input/ime/ime-text-field'
 import React from 'react'
 import { Clock } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 
 const TIME_SHELL_CLASS =

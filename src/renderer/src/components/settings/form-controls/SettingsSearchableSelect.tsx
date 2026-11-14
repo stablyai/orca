@@ -5,7 +5,7 @@ import { Button } from '../../ui/button'
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from '../../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { filterSearchableSelectGroups } from './settings-form-option-filter'
 

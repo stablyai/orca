@@ -77,6 +77,8 @@ describe('OrcaRuntimeService', () => {
     vi.mocked(listWorktrees)
       .mockImplementationOnce(() => staleScan.promise)
       .mockResolvedValueOnce([createdWorktree])
+      // listDetected prunes after the create, so it observes again with its own pre-scan claim.
+      .mockResolvedValueOnce([...MOCK_GIT_WORKTREES, createdWorktree])
       .mockResolvedValueOnce([...MOCK_GIT_WORKTREES, createdWorktree])
 
     const staleLookup = runtime.showManagedWorktree(TEST_WORKTREE_ID)

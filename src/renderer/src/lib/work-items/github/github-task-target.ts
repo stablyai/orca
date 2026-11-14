@@ -1,14 +1,17 @@
-import { normalizeGhAccountBinding } from '../../../../../shared/github/account-binding'
+import { normalizeGhAccountBinding } from '../../../../../shared/github/accounts/account-binding'
 import { githubTaskBinding } from './github-task-observation'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
-} from '../../../../../shared/github/work-item-types'
+} from '../../../../../shared/github/work-items/work-item-types'
 import type { Repo } from '../../../../../shared/repo-types'
-import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
-import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
-import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/links'
-import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
+import {
+  type TaskSourceContext,
+  getTaskSourceCacheScope
+} from '../../../../../shared/work-items/task-source-context'
+
+import { parseGitHubIssueOrPRLink } from '../../../../../shared/github/repositories/links'
+import { githubRepoIdentityKey } from '../../../../../shared/github/repositories/repository-identity-key'
 import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import { parseHostAuthorityKey } from '../../../../../shared/host-authority'
 import type { AppState } from '@/store/types'

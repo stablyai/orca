@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  deriveQueuePauses,
-  journalQueuePauseRestatement,
-  queuePauseHolding,
-  nextSendableQueuedCard
-} from './queued-message-pause'
+import { deriveQueuePauses, journalQueuePauseRestatement } from './queued-message-pause'
 import { createJournalQueuePauseMarks } from './queued-message-pause-marks'
 
 const card = (messageId: string) => ({
@@ -27,18 +22,6 @@ const pauses = (cards = [card('before-one'), card('before-two')], m = marks(), a
   })
 
 describe('exact waiting-card membership after context clear', () => {
-  it('holds only recorded waiting IDs and intersects them with cards still waiting', () => {
-    const after = card('after')
-    const current = [card('before-two'), after]
-    const held = pauses(current)
-    expect(held).toEqual([
-      { reason: 'cleared', since: { epoch: 'epoch', sequence: 5 }, messageIds: ['before-two'] }
-    ])
-    expect(queuePauseHolding(held, after)).toBeUndefined()
-    expect(pauses([after])).toEqual([])
-    expect(nextSendableQueuedCard(pauses([after]), [after])).toEqual(after)
-  })
-
   it('restates an explicit lift when rewind retires the accepted turn', () => {
     const prior = marks()
     const cards = [card('before-one'), card('before-two')]

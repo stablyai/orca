@@ -22,7 +22,7 @@ import type {
 import {
   ClaudeAtRestCommandCatalog,
   type ClaudeAtRestCommandsDeps
-} from '../../../../claude/claude-at-rest-commands'
+} from '../../../../claude/command-catalog/claude-at-rest-commands'
 
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
@@ -40,7 +40,7 @@ import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
 } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { claudeProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const runtimeMocks = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
 vi.mock(

@@ -5,7 +5,7 @@ import {
 } from './worktree-scope'
 import { useCallback, useEffect } from 'react'
 import { useStore } from 'zustand'
-import { worktreeGitCopyHostId } from '@/lib/worktree-git-copy'
+import { worktreeGitCopyHostId } from '@/lib/workspace/ownership/worktree-git-copy'
 import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
 import { remoteActionErrorSettledByConflictOperation } from '../sync/remote-refresh'
 import {

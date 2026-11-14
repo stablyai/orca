@@ -1,7 +1,7 @@
 import { ArrowLeft, ArrowRight, RefreshCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   BROWSER_CHROME_ADDRESS_SLOT_ATTRIBUTE,
   BROWSER_CHROME_ADDRESS_SLOT_HEIGHT_CLASS

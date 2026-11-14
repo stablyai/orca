@@ -1,8 +1,11 @@
 import {
   OPENCODE_CONFIG_DIR_ENV_KEYS,
   isOpenCodeLegacySharedConfigDir
-} from '../../../opencode/legacy-shared-config-dir'
-import { openCode2HookService, openCodeHookService } from '../../../opencode/hook-service'
+} from '../../../opencode/status-hooks/legacy-shared-config-dir'
+import {
+  openCode2HookService,
+  openCodeHookService
+} from '../../../opencode/status-hooks/hook-service'
 import { resolveOpenCodeSourceConfigDir } from './pi-agent'
 import { restoreOrStripOverlayEnv } from '../../../../shared/agent-launch/startup/agent-overlay-env'
 import { selectOpenCodeHookAgent } from '../../../../shared/opencode-launch-command'

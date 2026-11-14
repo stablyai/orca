@@ -1,9 +1,9 @@
-import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-record-index'
-import type { AppState } from '@/store/types'
-import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
-import { getSleepingRecordTabId } from '@/lib/sleeping-agent-wake-requests'
+import { sleepingAgentRecordIndex } from '@/store/terminals/sleep/sleeping-agent-record-index'
+import { getSleepingRecordTabId } from '@/lib/agent-session/resume/sleeping-agent-wake-requests'
 import '../terminal-pane/parking/output-watchers/terminal-parked-tab-watchers'
 import { parkedTerminalTabCoverage } from '../terminal-pane/parking/output-watchers/parked-terminal-tab-coverage'
+import type { AppState } from '@/store/types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 
 export function selectRevealTerminalTabIds(state: AppState, worktreeId: string): Set<string> {
   const revealTabIds = new Set<string>()

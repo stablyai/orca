@@ -4,7 +4,7 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import { Button } from '../../../ui/button'
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '../../../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../../../ui/popover'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { FileTypeIcon, FolderIcon } from '@/components/FileTypeIcon'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import {

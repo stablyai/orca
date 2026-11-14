@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { isWindowsDesktopClient } from '@/lib/files/os-open/windows-path-access'
 
 // One font list backs every font picker, so its availability is shared too.

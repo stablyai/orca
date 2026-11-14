@@ -2,7 +2,7 @@ import React from 'react'
 import { GitMerge, GitPullRequestArrow, RefreshCw, Sparkles, TriangleAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { GitConflictOperation } from '../../../../../../shared/git/status/git-status-types'
 
 export function ConflictSummaryCard({

@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { focusTerminalTabSurface } from '@/components/terminal-pane/input/focus/focus-terminal-tab-surface'
-import { isFocusKeepingPress } from '@/lib/focus-keeping-press'
+import { isFocusKeepingPress } from '@/lib/overlay-interaction/focus-keeping-press'
 import { clearFloatingPanelReclaimIntent } from '@/components/floating-terminal/floating-workspace-focus-reclaim'
 import { isFloatingWorkspaceTerminalInputTarget } from '@/components/floating-terminal/floating-workspace-terminal-actions'
 import { reportFloatingFocus } from './floating-terminal-focus-reporting'

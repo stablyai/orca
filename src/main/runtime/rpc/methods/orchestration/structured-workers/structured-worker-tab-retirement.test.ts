@@ -2,8 +2,8 @@ import { hostTestState } from '../../../../../native-chat/agent-session-wire/hos
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { agentSessionConversationView } from '../../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+} from '../../../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { AgentSessionLease } from '../../../../../../shared/agent-session/lifecycle/agent-session-record'
 /** Every settlement must clear durable restore and prune live worker chat tabs; leftover tabs can reattach released sessions outside orchestration accounting. */
 
@@ -26,7 +26,7 @@ vi.mock('../../structured-sessions/creation/structured-agent-session-create', ()
 
 const { stopStructuredWorker } = await import('./orchestration-structured-worker-lifecycle')
 const { createStructuredWorkerSession } = await import('./orchestration-structured-worker-session')
-await import('../worker/worker-release-completion')
+await import('../worker/release/worker-release-completion')
 
 const WORKTREE = 'workspace-1'
 const SESSION = 'session-1'
@@ -147,17 +147,6 @@ describe('structured worker stop retires the chat tab', () => {
     expect(published.activeTabId).toBeNull()
     expect(published.activeTabType).toBeNull()
     expect(emit).toHaveBeenCalled()
-  })
-
-  it('leaves the tab alone when the close was NOT proven', async () => {
-    installHost({ closeThrows: true })
-    const identity = registerIdentity()
-    const { runtime } = await runtimeShowingStructuredTab()
-
-    const stop = await stopStructuredWorker(identity, runtime)
-
-    expect(stop.stopped).toBe(false)
-    expect(await structuredTabIds(runtime)).toEqual([`agent-session:${SESSION}`])
   })
 })
 

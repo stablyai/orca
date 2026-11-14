@@ -4,7 +4,7 @@ import {
   type PluginFileTypeSuggestionPurpose,
   type PluginFileTypeSuggestionSettings
 } from '../../../shared/plugins/contributions/plugin-file-type'
-import { isInvalidDiscoveredPlugin, type DiscoveredPlugin } from '../plugin-discovery'
+import { isInvalidDiscoveredPlugin, type DiscoveredPlugin } from '../discovery/plugin-discovery'
 import type { PluginMarketplaceListing } from './plugin-marketplace-projection'
 
 export type PluginFileTypeSuggestion = {

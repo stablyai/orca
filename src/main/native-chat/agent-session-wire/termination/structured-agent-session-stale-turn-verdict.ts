@@ -12,8 +12,8 @@ import {
 import {
   agentJournalTurnBody,
   readAgentJournalTurn
-} from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import type { AgentSessionDeathEvidence } from '../../../../shared/agent-session/lifecycle/agent-session-death-evidence'
+} from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import type { AgentSessionDeathEvidence } from '../../../../shared/agent-session/lifecycle/leases/agent-session-death-evidence'
 import type { AgentSessionReplacedRuntime } from '../../../runtime/agent-session/agent-session-replaced-runtime'
 import type { JournalLifecycleMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'

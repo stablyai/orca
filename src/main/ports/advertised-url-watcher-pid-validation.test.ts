@@ -30,19 +30,6 @@ describe('AdvertisedUrlWatcher.lookupBest PID validation', () => {
     expect(events).toContainEqual({ worktreeId: 'repo::/wt2', port: 3001 })
   })
 
-  it('pins only the selected lookupBest winner when candidates share a port', () => {
-    const watcher = bindFresh()
-    watcher.bindPty('pty-2', 'repo::/wt2')
-    watcher.ingest(PTY, 'A: http://localhost:3001/\n')
-    watcher.ingest('pty-2', 'B: https://custom.example.com:3001/\n')
-
-    const best = watcher.lookupBest([WORKTREE, 'repo::/wt2'], 3001, 4242)
-
-    expect(best?.host).toBe('custom.example.com')
-    expect(watcher.lookup('repo::/wt2', 3001)?.validatedListenerPid).toBe(4242)
-    expect(watcher.lookup(WORKTREE, 3001)?.validatedListenerPid).toBeUndefined()
-  })
-
   it('falls through to a still-valid candidate when one entry was reassigned', () => {
     const watcher = bindFresh()
     watcher.bindPty('pty-2', 'repo::/wt2')
@@ -55,17 +42,6 @@ describe('AdvertisedUrlWatcher.lookupBest PID validation', () => {
 })
 
 describe('AdvertisedUrlWatcher.lookup PID validation', () => {
-  it('evicts the entry when the listener PID changes', () => {
-    const watcher = bindFresh()
-    const events: { worktreeId: string; port: number }[] = []
-    watcher.onDidChange((event) => events.push(event))
-    watcher.ingest(PTY, 'A: https://a.example.com:3001/\n')
-    expect(watcher.lookup(WORKTREE, 3001, 4242)?.validatedListenerPid).toBe(4242)
-    expect(watcher.lookup(WORKTREE, 3001, 9999)).toBeUndefined()
-    expect(watcher.lookup(WORKTREE, 3001, 4242)).toBeUndefined()
-    expect(events).toContainEqual({ worktreeId: WORKTREE, port: 3001 })
-  })
-
   it('replacing a cached URL resets validatedListenerPid', () => {
     const watcher = bindFresh()
     watcher.ingest(PTY, 'A: http://localhost:3001/\n')

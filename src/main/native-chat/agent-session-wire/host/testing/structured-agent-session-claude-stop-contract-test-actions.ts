@@ -1,7 +1,7 @@
 import { createStoppedClaudeDeadline } from './structured-agent-session-stop-deadline.test-fixture'
 import { expect, vi } from 'vitest'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
-import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
+import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { activeStructuredAgentSessionTurnId } from '../../../../../shared/agent-session/view/structured-agent-session-live-turn'
 import { projectStructuredAgentSessionStatusState } from '../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { structuredAgentSessionAgentStatus } from '../../../../../shared/agent-session/view/structured-agent-session-agent-status'
@@ -10,7 +10,7 @@ import {
   claudeWasSent as wrote,
   type FakeConnection
 } from '../../../../claude/structured/claude-structured-session-test-support'
-import { invokeCanUseTool } from '../../../../claude/claude-can-use-tool-test-support'
+import { invokeCanUseTool } from '../../../../claude/structured/permissions/claude-can-use-tool-test-support'
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage,

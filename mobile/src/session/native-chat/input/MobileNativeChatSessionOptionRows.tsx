@@ -16,11 +16,11 @@ import {
   nativeChatSessionChoiceLabel,
   nativeChatSessionOptionActionLabel,
   nativeChatSessionOptionLabel
-} from '../../../../../src/shared/native-chat/input/native-chat-session-option-labels'
+} from '../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-labels'
 import {
   loneFastTier,
   speedButtonTiers
-} from '../../../../../src/shared/native-chat/input/native-chat-session-speed-tiers'
+} from '../../../../../src/shared/native-chat/input/session-options/native-chat-session-speed-tiers'
 import { sayMobileNativeChatSessionOption as say } from './native-chat-session-option-copy'
 import { MobileSwitch } from '../../../components/MobileSwitch'
 
@@ -221,12 +221,14 @@ export function descriptorRowElements(
       onPress={() => onSetOption(choice.value)}
     />
   )
-  // No search here: search-only aliases follow a More models toggle, as compact pickers show them.
-  const more = moreChoices ? choices.filter((choice) => choice.searchOnly) : []
+  // No search here, so search-only rows stay out; folded ones follow a More models toggle.
+  const listed = choices.filter((choice) => !choice.hidden || choice.value === currentValue)
+  const more = moreChoices ? listed.filter((choice) => choice.legacy) : []
   return [
-    ...choices.filter((choice) => !choice.searchOnly).map(choiceRow),
+    ...listed.filter((choice) => !choice.legacy).map(choiceRow),
     ...(more.length > 0 && moreChoices
       ? [
+          ...(moreChoices.shown ? more.map(choiceRow) : []),
           <ListRow
             key="more-choices"
             title={
@@ -235,8 +237,7 @@ export function descriptorRowElements(
                 : t('chat.sessionOptionRows.moreModels', 'More models')
             }
             onPress={moreChoices.onToggle}
-          />,
-          ...(moreChoices.shown ? more.map(choiceRow) : [])
+          />
         ]
       : [])
   ]

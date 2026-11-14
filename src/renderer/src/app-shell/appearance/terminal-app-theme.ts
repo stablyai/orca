@@ -1,31 +1,22 @@
-import type { ITheme } from '@xterm/xterm'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import {
-  completePluginAppThemeTokens,
-  type PluginThemeTokenColorRule
-} from '../../../../shared/plugins/artifacts/plugin-theme-artifact'
+import { completePluginAppThemeTokens } from '../../../../shared/plugins/artifacts/plugin-theme-artifact'
+import type { PluginThemeTokenColorRule } from '../../../../shared/plugins/artifacts/plugin-theme-artifact'
 import { pluginAppThemeCssFallback } from '../../../../shared/plugins/artifacts/plugin-theme-css-fallbacks'
 import { MATCH_TERMINAL_APP_THEME } from '../../../../shared/plugin-theme-settings'
-import {
-  resolveTerminalPalette,
-  type TerminalPaletteSettings as TerminalAppThemeSettings
-} from '../../../../shared/terminal-themes/terminal-theme-selection'
-import type { AppThemePaint } from './document-theme'
+import { resolveTerminalPalette } from '../../../../shared/terminal-themes/terminal-theme-selection'
+import type { TerminalPaletteSettings as TerminalAppThemeSettings } from '../../../../shared/terminal-themes/terminal-theme-selection'
 import { hashThemeContent } from '../../lib/editor/appearance/plugin-monaco-theme'
-import type { ColorProbe } from './plugin-theme-tokens'
-import {
-  contrastRatio,
-  mix,
-  readableOn,
-  rgbaToHex,
-  type Rgba
-} from '../../../../shared/color/rgba-contrast'
-import { getSystemPrefersDark } from '../../lib/terminal-theme'
+import { contrastRatio, mix, readableOn, rgbaToHex } from '../../../../shared/color/rgba-contrast'
+import type { Rgba } from '../../../../shared/color/rgba-contrast'
+import { getSystemPrefersDark } from '../../lib/terminal/appearance/terminal-theme'
 import {
   isTerminalBackgroundLight,
   resolveOpaqueTerminalBackground
 } from '../../../../shared/terminal-themes/terminal-title-contrast'
 import { terminalPaletteRgba } from '../../../../shared/terminal-themes/terminal-palette-rgba'
+import type { ITheme } from '@xterm/xterm'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { AppThemePaint } from './document-theme'
+import type { ColorProbe } from './plugin-theme-tokens'
 
 export type TerminalAppTheme = AppThemePaint & {
   id: typeof MATCH_TERMINAL_APP_THEME

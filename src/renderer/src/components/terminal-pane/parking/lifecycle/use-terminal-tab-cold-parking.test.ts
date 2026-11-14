@@ -49,7 +49,7 @@ vi.mock('../output-watchers/terminal-parked-watcher-registry', async (importOrig
   disposeParkedTerminalWatchersForWorktree: vi.fn()
 }))
 
-vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
+vi.mock('@/diagnostics/crash-reporting/crash-breadcrumb-recorder', () => ({
   recordRendererCrashBreadcrumb: vi.fn()
 }))
 

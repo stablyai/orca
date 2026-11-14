@@ -1,13 +1,13 @@
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { agentSessionAccountHome } from '../../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { agentSessionAccountHome } from '../../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AgentSessionJournalIdentity } from '../../../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   ClaudeProfileRouter,
   type ClaudeProfileRouterSettings
-} from '../../../../claude-accounts/claude-profile-router'
-import { installClaudeProfileRouter } from '../../../../claude-accounts/claude-profile-installed-router'
-import { claudeProfileMarkerPath } from '../../../../claude-accounts/claude-profile-paths'
+} from '../../../../claude-accounts/profiles/routing/claude-profile-router'
+import { installClaudeProfileRouter } from '../../../../claude-accounts/profiles/routing/claude-profile-installed-router'
+import { claudeProfileMarkerPath } from '../../../../claude-accounts/profiles/claude-profile-paths'
 import { CLAUDE_STRUCTURED_AGENT } from '../../../../claude/structured/claude-structured-agent-definition'
 import { claudeInitializationAuthError } from '../../../../claude/structured/claude-structured-init-proof'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'

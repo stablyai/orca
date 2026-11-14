@@ -63,7 +63,7 @@ export type OrchestrationWorkerReadTranscriptResult = {
   contentComplete?: boolean
   clipping?: string[]
   warnings: string[]
-  // The live PTY was released; output comes from the frozen archive source.
+  // The worker was released; output is read from its original transcript or chat history.
   archived?: boolean
 }
 
@@ -85,7 +85,7 @@ export type OrchestrationWorkerReadTerminalResult = {
   contentComplete?: boolean
   clipping?: string[]
   warnings: string[]
-  // The live PTY was released; output comes from the frozen archive source.
+  // The worker was released; output is read from its original transcript or chat history.
   archived?: boolean
 }
 

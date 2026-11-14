@@ -13,7 +13,7 @@ import {
   ContextMenuItem,
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import {
   getPRCommentGroupSurfaceClasses,
   type PRCommentPresentationClasses
@@ -21,7 +21,7 @@ import {
 import type {
   GitHubReactionContent,
   PRComment
-} from '../../../../../../shared/github/comment-types'
+} from '../../../../../../shared/github/comments/comment-types'
 import {
   getPRCommentGroupId,
   type PRCommentGroup

@@ -1,6 +1,15 @@
 import { compareAppVersions, isValidAppVersion } from './app-version'
 
-export const OPENCODE_NATIVE_PROMPT_VERSIONS = ['2.0.12', '2.0.16'] as const
+// These releases drop a bare --prompt (submitted before agent/model load); 2.0.19 fixed it upstream.
+export const OPENCODE_NATIVE_PROMPT_VERSIONS = [
+  '2.0.12',
+  '2.0.13',
+  '2.0.14',
+  '2.0.15',
+  '2.0.16',
+  '2.0.17',
+  '2.0.18'
+] as const
 
 export type OpenCodeCliCapabilities = {
   version: string | null

@@ -1,6 +1,6 @@
 import React from 'react'
-import { cn } from '@/lib/utils'
-import { observeOffscreenAnimation } from '@/lib/offscreen-animation-pause'
+import { cn } from '@/lib/class-names'
+import { observeOffscreenAnimation } from '@/lib/window-activity/offscreen-animation-pause'
 
 const SPINNER_ANIMATION_NAME = 'agent-spinner-rotate'
 

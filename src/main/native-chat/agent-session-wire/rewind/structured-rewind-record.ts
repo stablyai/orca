@@ -1,6 +1,6 @@
 import type { JournalOperationReceipt } from '../../agent-session-journal/writing/journal-row-writer'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
-import type { AgentSessionRewindRecord } from '../../../../shared/agent-session/lifecycle/agent-session-rewind'
+import type { AgentSessionRewindRecord } from '../../../../shared/agent-session/lifecycle/rewind/agent-session-rewind'
 import type { RewindRecoveryDeps } from './structured-rewind-recovery'
 import { rewindRefusal } from './structured-rewind-refusal'
 

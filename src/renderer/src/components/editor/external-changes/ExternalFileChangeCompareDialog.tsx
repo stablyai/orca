@@ -9,13 +9,13 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { getConnectionIdForFile } from '@/lib/workspace/ownership/connection-context'
 import { editorTabFileAccess } from '@/lib/files/access/local-file-access'
 import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
 import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
 import {
-  FILE_OWNER_UNRESOLVED_MESSAGE,
+  fileOwnerUnresolvedMessage,
   getRuntimeTargetForFileOwner
 } from '@/lib/files/access/file-owner-runtime-target'
 import { useAppStore } from '@/store/index'
@@ -64,7 +64,7 @@ export function ExternalFileChangeCompareDialog({
       file.runtimeEnvironmentId
     )
     if (!target) {
-      setDiskState({ kind: 'error', message: FILE_OWNER_UNRESOLVED_MESSAGE })
+      setDiskState({ kind: 'error', message: fileOwnerUnresolvedMessage() })
       return
     }
     void readRuntimeFileContent({

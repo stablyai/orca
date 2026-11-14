@@ -15,9 +15,9 @@ import type {
   AgentSessionAttachResult,
   AgentSessionMutationResult
 } from '../../../../shared/agent-session/agent-session-wire'
-import { agentSessionLeaseAdmitsWriter } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import { agentSessionLeaseAdmitsWriter } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AgentChatPermissionChoice } from '../../../../shared/agent-launch/permissions/agent-chat-permission-mode'
 import {
   admitAttachOrRefuse,

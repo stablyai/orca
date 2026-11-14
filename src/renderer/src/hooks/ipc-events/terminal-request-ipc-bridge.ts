@@ -1,9 +1,9 @@
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { resolveTerminalWorktreeRoute } from '@/lib/workspace/ownership/terminal-worktree-route'
-import { insertUnifiedTabAfterAnchor } from '@/lib/unified-tab-anchor-insertion'
+import { insertUnifiedTabAfterAnchor } from '@/lib/workspace/tabs/unified-tab-anchor-insertion'
 import { translate } from '@/i18n/i18n'
 import { revealWorkspaceSurface } from '@/lib/workspace/activation/workspace-surface-reveal'
-import { useAppStore } from '../../store'
+import { useAppStore } from '../../store/index'
 import { focusTerminalInitiatedTab, resolveTerminalPresentation } from './terminal-command-state'
 
 export function registerTerminalRequestIpcBridge(unsubs: (() => void)[]): void {

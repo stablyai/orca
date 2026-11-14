@@ -12,7 +12,7 @@ import { getAgentSessionOptionCatalog } from '../../../../../src/shared/agent-se
 import type {
   CatalogCommandDelivery,
   CatalogModel
-} from '../../../../../src/shared/agent-session/options/agent-session-option-catalog-types'
+} from '../../../../../src/shared/agent-session/options/catalog-providers/agent-session-option-catalog-types'
 import type {
   NativeChatSessionOptionSettingsMutation,
   SessionOptionsSurface,
@@ -23,15 +23,15 @@ import type { MobileNativeChatSendOutcome } from '../composer/mobile-native-chat
 import {
   createNativeChatPtySessionOptions,
   type NativeChatPtySessionOptionsSurface
-} from '../../../../../src/shared/native-chat/input/native-chat-pty-session-options'
+} from '../../../../../src/shared/native-chat/input/session-options/native-chat-pty-session-options'
 import {
   readNativeChatSessionOptionCache,
   writeNativeChatSessionOptionCache
-} from '../../../../../src/shared/native-chat/input/native-chat-session-option-cache'
+} from '../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-cache'
 import {
   createNativeChatSessionOptionRecord,
   matchNativeChatCatalogModelId
-} from '../../../../../src/shared/native-chat/input/native-chat-session-option-state'
+} from '../../../../../src/shared/native-chat/input/session-options/native-chat-session-option-state'
 import { setBoundedScopeCacheEntry } from '../../../../../src/shared/native-chat/native-chat-scope-cache'
 import { sayMobileNativeChatSessionOption } from './native-chat-session-option-copy'
 

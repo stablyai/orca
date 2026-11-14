@@ -6,8 +6,8 @@ import { PANE } from '../server.test-fixtures'
 
 import '../../../../../shared/agent-hook-listener/presence/hook-process-root-evidence'
 
-import '../../../../../wsl-guest/agent-hook-server'
-import '../../../../../wsl-guest/relay-pane-root'
+import '../../../../../wsl-guest/agent-hooks/server/agent-hook-server'
+import '../../../../../wsl-guest/agent-hooks/presence/relay-pane-root'
 import '../../../observations/local-tmux-managed-pty'
 
 import {

@@ -12,6 +12,8 @@ import { structuredAgentSessionIdFromTabId } from '../../../../../shared/agent-s
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import {
+  liveSenderAgent,
+  observeOrchestrationSender,
   orchestrationSenderName,
   structuredChatNaming,
   captureMirroredTabs,
@@ -91,6 +93,11 @@ export class RuntimeOrchestrationSenderNames {
       undefined,
       taskName
     )
+  }
+
+  /** The agent a chat or terminal party is running now, as its sender card would show it. */
+  liveAgentOf(party: AgentMessageSender['party']): AgentType | null {
+    return liveSenderAgent(observeOrchestrationSender(party, this.namingSources()))
   }
 
   /** Name and agent share one current chat or terminal observation. */

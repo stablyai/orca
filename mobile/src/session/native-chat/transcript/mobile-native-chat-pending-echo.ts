@@ -3,13 +3,13 @@ import type { MobileNativeChatDraftDestination } from '../composer/mobile-native
 import {
   assignNativeChatPendingOccurrence,
   nativeChatPendingContentKey
-} from '../../../../../src/shared/native-chat/transcript/native-chat-pending-occurrence'
+} from '../../../../../src/shared/native-chat/transcript/pending-sends/native-chat-pending-occurrence'
 import {
   NATIVE_CHAT_PENDING_SEND_LIMIT,
   prunePendingSends,
   visibleNativeChatPendingSends,
   type NativeChatPendingSend
-} from '../../../../../src/shared/native-chat/transcript/native-chat-pending-sends'
+} from '../../../../../src/shared/native-chat/transcript/pending-sends/native-chat-pending-sends'
 
 export type MobileNativeChatPendingMessage = NativeChatPendingSend & {
   // Phone-local preview URIs; these echoes retire only once their preview binds to a transcript row.

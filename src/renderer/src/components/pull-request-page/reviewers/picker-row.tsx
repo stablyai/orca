@@ -1,9 +1,9 @@
 import React from 'react'
 import { Check } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
-import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
+import type { GitHubAssignableUser } from '../../../../../shared/github/pull-requests/pull-request-types'
 
 export function ReviewerPickerRow({
   id,

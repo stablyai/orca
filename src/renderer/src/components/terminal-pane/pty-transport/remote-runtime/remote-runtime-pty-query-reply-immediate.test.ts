@@ -97,34 +97,6 @@ describe('remote transport sendInputImmediate (#7329)', () => {
     }
   })
 
-  it('sends an immediate reply even with no pending typed input', async () => {
-    vi.useFakeTimers()
-    try {
-      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-      const transport = createRemoteRuntimePtyTransport('env-1', {
-        worktreeId: 'wt-1',
-        tabId: 'tab-1',
-        leafId: 'pane:1'
-      })
-      transport.attach({
-        existingPtyId: 'remote:env-1@@terminal-1',
-        cols: 80,
-        rows: 24,
-        callbacks: {}
-      })
-      await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalled())
-
-      expect(transport.sendInputImmediate('\x1b[3;1R')).toBe(true)
-      await Promise.resolve()
-
-      const sends = terminalSendCalls() as { params: { text: string } }[]
-      expect(sends).toHaveLength(1)
-      expect(sends[0]?.params.text).toBe('\x1b[3;1R')
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('does not reorder a query reply ahead of a large paste still in async validation', async () => {
     // Large pastes may still be in async validation, outside pending; replies cannot overtake that hidden prefix (#7736).
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')

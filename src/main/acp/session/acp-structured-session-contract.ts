@@ -15,6 +15,8 @@ export type AcpStructuredSession = {
   fence: number
   acquisitionGeneration: string
   spec: AcpLaunchSpec
+  /** The session's folder on the agent's host. */
+  cwd: string
   /** Session modes this launch reports as Orca's permission modes. */
   permissionModes: Readonly<Partial<Record<AgentChatPermissionMode, string>>> | undefined
   childStops?: AcpChildStops

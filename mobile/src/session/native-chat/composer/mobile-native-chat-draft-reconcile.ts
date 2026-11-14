@@ -8,9 +8,9 @@ import {
   normalizeImageTranscriptMessages,
   normalizeNativeChatUserText,
   normalizedNativeChatUserMessageText
-} from '../../../../../src/shared/native-chat/transcript/native-chat-image-transcript-markers'
-import { nativeChatPendingOccurrence } from '../../../../../src/shared/native-chat/transcript/native-chat-pending-occurrence'
-import type { NativeChatPendingSend } from '../../../../../src/shared/native-chat/transcript/native-chat-pending-sends'
+} from '../../../../../src/shared/native-chat/transcript/images/native-chat-image-transcript-markers'
+import { nativeChatPendingOccurrence } from '../../../../../src/shared/native-chat/transcript/pending-sends/native-chat-pending-occurrence'
+import type { NativeChatPendingSend } from '../../../../../src/shared/native-chat/transcript/pending-sends/native-chat-pending-sends'
 
 export type UnconfirmedSend = {
   draftKey: string

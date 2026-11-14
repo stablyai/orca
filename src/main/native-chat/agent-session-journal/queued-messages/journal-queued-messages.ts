@@ -16,7 +16,7 @@ import type {
   AgentSessionQueuedMessageMoveResult,
   AgentSessionQueuedMessageUpdateResult
 } from '../../../../shared/agent-session/requests/agent-session-queued-message-wire'
-import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import type { JournalQueueCardChange, JournalQueueRow } from './journal-queue-events'
 import { LegacyQueuedCards } from './journal-queue-import'
 import {

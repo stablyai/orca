@@ -1,5 +1,5 @@
 import type { WindowMaterial, WindowMaterialHost } from '../../../../shared/window-material'
-import { getRendererAppPlatform } from '../../lib/renderer-app-platform'
+import { getRendererAppPlatform } from '../platform/renderer-app-platform'
 
 let material: WindowMaterial | undefined
 

@@ -1,3 +1,4 @@
+import { guestNavigationMethods } from '../browser-manager-test-harness'
 // @orca-isolated-worker: cached Electron mocks can omit BrowserWindow across shared files.
 import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -56,6 +57,7 @@ function createGuest(id: number) {
   let opened = false
   const frontend: { devToolsWebContents: DevToolsHost | null } = { devToolsWebContents: null }
   const guest = Object.assign(new EventEmitter(), frontend, {
+    ...guestNavigationMethods(),
     id,
     hostWebContents: {},
     getType: () => 'webview',

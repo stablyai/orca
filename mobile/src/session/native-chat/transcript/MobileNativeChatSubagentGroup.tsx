@@ -4,10 +4,15 @@ import {
   formatSubagentTokens,
   nativeChatSubagentGroupHeader,
   subagentStateLabel
-} from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-group-header'
+} from '../../../../../src/shared/native-chat/transcript/subagents/native-chat-subagent-group-header'
 import { sayMobileNativeChatSubagentGroup as say } from './native-chat-subagent-group-copy'
-import { normalizeSubagentState } from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-summary'
-import { formatNativeChatDuration } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
+import { sayMobileNativeChatSessionOption as sayOption } from '../input/native-chat-session-option-copy'
+import { normalizeSubagentState } from '../../../../../src/shared/native-chat/transcript/subagents/native-chat-subagent-summary'
+import {
+  subagentEntryDetail,
+  subagentEntryRunsOn
+} from '../../../../../src/shared/native-chat/transcript/subagents/native-chat-subagent-entry-detail'
+import { formatNativeChatDuration } from '../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import type {
   NativeChatSubagentGroupBlock,
   NativeChatSubagentState
@@ -113,21 +118,31 @@ export function MobileNativeChatSubagentGroup({
       {open
         ? block.agents.map((agent) => {
             const state = normalizeSubagentState(agent.state)
+            const detail = [subagentEntryRunsOn(agent, sayOption), subagentEntryDetail(agent)]
+              .filter((part): part is string => part !== null)
+              .join(' · ')
             return (
-              <View key={agent.id} testID="subagent-group-entry" style={styles.entry}>
-                <View style={[styles.dot, stateDotStyle(state)]} />
-                <Text
-                  style={[styles.entryLabel, state === 'idle' && styles.entryLabelIdle]}
-                  numberOfLines={1}
-                >
-                  {agent.label}
-                </Text>
-                <Text style={styles.entryState} numberOfLines={1}>
-                  {subagentStateLabel(state, 1, 1, say)}
-                  {typeof agent.tokens === 'number'
-                    ? ` · ${formatSubagentTokens(agent.tokens)}`
-                    : null}
-                </Text>
+              <View key={agent.id} testID="subagent-group-entry" style={styles.entryBlock}>
+                <View style={styles.entry}>
+                  <View style={[styles.dot, stateDotStyle(state)]} />
+                  <Text
+                    style={[styles.entryLabel, state === 'idle' && styles.entryLabelIdle]}
+                    numberOfLines={1}
+                  >
+                    {agent.label}
+                  </Text>
+                  <Text style={styles.entryState} numberOfLines={1}>
+                    {subagentStateLabel(state, 1, 1, say)}
+                    {typeof agent.tokens === 'number'
+                      ? ` · ${formatSubagentTokens(agent.tokens)}`
+                      : null}
+                  </Text>
+                </View>
+                {detail ? (
+                  <Text style={styles.entryDetail} numberOfLines={2}>
+                    {detail}
+                  </Text>
+                ) : null}
               </View>
             )
           })
@@ -179,12 +194,20 @@ const styles = themedStyleSheet(() => ({
   caretOpen: {
     transform: [{ rotate: '90deg' }]
   },
+  entryBlock: {
+    paddingLeft: spacing.lg + spacing.xs
+  },
   entry: {
     minHeight: 24,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingLeft: spacing.lg + spacing.xs
+    gap: spacing.sm
+  },
+  // Aligns under the label, past the 6pt dot and its gap.
+  entryDetail: {
+    paddingLeft: 6 + spacing.sm,
+    color: colors.textMuted,
+    fontSize: typography.metaSize
   },
   entryLabel: {
     flexShrink: 1,

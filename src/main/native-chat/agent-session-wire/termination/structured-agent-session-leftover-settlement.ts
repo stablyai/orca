@@ -1,4 +1,4 @@
-import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import {
   continuingStructuredAgentSessionInput,
   finalizingStructuredAgentSessionInput
@@ -13,7 +13,7 @@ import {
   type StaleStructuredAgentSessionStateJournal
 } from './structured-agent-session-stale-state-settlement'
 import type { DeadGenerationJournal } from './structured-agent-session-unfinished-work'
-import { STALE_SESSION_ROW_PREFIX } from '../../../../shared/agent-session/lifecycle/agent-session-stop-row-identity'
+import { STALE_SESSION_ROW_PREFIX } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-stop-row-identity'
 import { structuredAgentSessionFailureWordsContext } from '../operations/structured-agent-session-send-preparation'
 import { structuredAgentSessionLiveFence } from '../observations/structured-agent-session-current-work'
 

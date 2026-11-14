@@ -2,13 +2,13 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/rows/dashboard-agent-row'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { CompactAgentRow } from './worktree-card-compact-agent-row'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-vi.mock('@/components/dashboard/use-agent-row-conversation-name', () => ({
+vi.mock('@/components/dashboard/rows/use-agent-row-conversation-name', () => ({
   useAgentRowConversationName: () => null
 }))
 

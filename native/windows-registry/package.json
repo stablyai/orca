@@ -16,6 +16,6 @@
   "main": "index.js",
   "types": "index.d.ts",
   "dependencies": {
-    "node-addon-api": "^8.5.0"
+    "node-addon-api": "^8.9.2"
   }
 }

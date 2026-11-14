@@ -1,7 +1,6 @@
 import { Loader2, Plus, Trash2, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import { isWebClientLocation } from '@/lib/web-client-location'
 import { selectClaudeProviderAccount } from '@/runtime/provider-accounts/observations/runtime-provider-accounts-client'
 import { Badge } from '../../../ui/badge'
 import { Button } from '../../../ui/button'
@@ -9,6 +8,7 @@ import { ButtonGroup } from '../../../ui/button-group'
 import { Label } from '../../../ui/label'
 import { ClaudeIcon } from '../../../status-bar/icons'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
+import { ClaudeOAuthUsageSetting } from './claude-oauth-usage-setting'
 import { ClaudeRunningSessionSwitchSetting } from './claude-running-session-switch-setting'
 import {
   getProviderAccountRuntime,
@@ -52,6 +52,7 @@ export function renderClaudeAccountsSection(
     claudeAccounts,
     claudeAction,
     isRemoteAccountScope,
+    recordFeatureInteraction,
     remoteAccountScopeNotice,
     runClaudeAccountAction,
     setRemoveClaudeTarget,
@@ -91,7 +92,7 @@ export function renderClaudeAccountsSection(
       )
     )
   // The dialog already saved; this refreshes the list and reports it like other account changes.
-  const saveApiEndpointResult = (state: ClaudeRateLimitAccountsState): void =>
+  const onEndpointSaved = (state: ClaudeRateLimitAccountsState): void =>
     void runClaudeAccountAction('adding', () => Promise.resolve(state))
   return (
     <div key="claude-accounts" id="accounts-claude" className="scroll-mt-6">
@@ -157,14 +158,9 @@ export function renderClaudeAccountsSection(
                   />
                 ) : null}
               </ButtonGroup>
-              {/* The token is written into a folder on this computer, so remote, WSL and web views do not offer it. */}
-              {!isRemoteAccountScope &&
-              accountRuntime.runtime === 'host' &&
-              !isWebClientLocation() ? (
-                <AddClaudeApiEndpointButton
-                  disabled={addDisabled}
-                  onSaved={saveApiEndpointResult}
-                />
+              {/* Remote and WSL accounts keep their folders on another machine. */}
+              {!isRemoteAccountScope && accountRuntime.runtime === 'host' ? (
+                <AddClaudeApiEndpointButton disabled={addDisabled} onSaved={onEndpointSaved} />
               ) : null}
               {/* Follow the running addition; hide Cancel only when its server prompt already offers it. */}
               {claudeAction === 'adding' &&
@@ -358,7 +354,7 @@ export function renderClaudeAccountsSection(
                           <EditClaudeApiEndpointButton
                             account={account}
                             disabled={isRemoteAccountScope || isBusy}
-                            onSaved={saveApiEndpointResult}
+                            onSaved={onEndpointSaved}
                           />
                         ) : (
                           <ClaudeSignInAgainButtons
@@ -392,6 +388,13 @@ export function renderClaudeAccountsSection(
             )}
           </div>
         </SearchableSetting>
+        {isRemoteAccountScope ? null : (
+          <ClaudeOAuthUsageSetting
+            settings={settings}
+            updateSettings={updateSettings}
+            recordFeatureInteraction={recordFeatureInteraction}
+          />
+        )}
         {isRemoteAccountScope ? null : (
           <ClaudeRunningSessionSwitchSetting settings={settings} updateSettings={updateSettings} />
         )}

@@ -1,6 +1,7 @@
 import { useEffectEvent, useId, useLayoutEffect, useState } from 'react'
 import { LoaderCircle, Pencil, Plus } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '@/components/ui/button'
 import {
@@ -294,8 +295,12 @@ export function ClaudeApiEndpointButton({
 export function AddClaudeApiEndpointButton(props: {
   disabled: boolean
   onSaved: (state: ClaudeRateLimitAccountsState) => void
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const t = useTranslate()
+  // The token is written into a folder on this computer, so the web client does not offer it.
+  if (isWebClientLocation()) {
+    return null
+  }
   return (
     <ClaudeApiEndpointButton variant="outline" className="gap-1.5" {...props}>
       <Plus className="size-3" />

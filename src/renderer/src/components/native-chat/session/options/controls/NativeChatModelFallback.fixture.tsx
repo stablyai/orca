@@ -25,7 +25,7 @@ const message = projectStructuredItemToNativeChat({
   body: { kind: 'status', ...raw }
 })
 
-function ModelPicker({ reportedModel }: { reportedModel?: string }) {
+function ModelPicker() {
   return (
     <NativeChatSessionOptionPickers
       surface={{
@@ -43,7 +43,6 @@ function ModelPicker({ reportedModel }: { reportedModel?: string }) {
           transport: 'agent-session',
           settable: false,
           valueSource: 'applied',
-          reportedModel,
           kind: {
             type: 'select',
             currentValue: 'claude-opus-5-5',
@@ -81,7 +80,7 @@ export const composer = defineFixture({
   width: 360,
   render: () => (
     <div className="native-chat-appearance p-4">
-      <ModelPicker reportedModel="claude-opus-4-8" />
+      <ModelPicker />
     </div>
   )
 })
@@ -104,7 +103,7 @@ export const after = defineFixture({
   render: () => (
     <div className="native-chat-appearance space-y-4 p-4">
       <FallbackNotice />
-      <ModelPicker reportedModel="claude-opus-4-8" />
+      <ModelPicker />
     </div>
   )
 })

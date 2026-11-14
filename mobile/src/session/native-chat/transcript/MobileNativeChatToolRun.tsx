@@ -3,12 +3,12 @@ import {
   Animated,
   Pressable,
   Platform,
-  type ScrollView,
   Text,
   useWindowDimensions,
   View,
   type NativeScrollEvent,
-  type NativeSyntheticEvent
+  type NativeSyntheticEvent,
+  type ScrollViewInstance
 } from 'react-native'
 import { Check } from 'lucide-react-native'
 import { useWorkingPulse } from '../../../components/use-working-motion'
@@ -28,7 +28,7 @@ import type {
   NativeChatBlock,
   NativeChatToolCallBlock
 } from '../../../../../src/shared/native-chat/native-chat-types'
-import { buildNativeChatTaskListRows } from '../../../../../src/shared/native-chat/input/native-chat-task-list-history'
+import { buildNativeChatTaskListRows } from '../../../../../src/shared/native-chat/input/task-lists/native-chat-task-list-history'
 import { colors, pressedStyle } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { MobileNativeChatToolGlyph } from './MobileNativeChatToolIcon'
@@ -95,7 +95,7 @@ function ToolRunMembers({
   const [remembered] = useState(() =>
     memoryKey === undefined ? undefined : runScroll?.get(memoryKey)
   )
-  const scroller = useRef<ScrollView>(null)
+  const scroller = useRef<ScrollViewInstance>(null)
   const followsEnd = useRef(remembered?.followsEnd ?? startsAtEnd)
   const pendingRestore = useRef(remembered !== undefined && !remembered.followsEnd)
   // Decide follow in the work update so later detail expansion cannot inherit it.

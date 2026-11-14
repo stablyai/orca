@@ -12,8 +12,8 @@ import type {
   AgentJournalToolCallItem,
   AgentJournalTurnLifecycle
 } from '../../../shared/agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import { backgroundTaskFallbackText } from '../../../shared/native-chat/input/native-chat-background-task-row'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import { backgroundTaskFallbackText } from '../../../shared/native-chat/input/task-lists/native-chat-background-task-row'
 import {
   isBackgroundTaskBlock,
   type NativeChatBackgroundTaskBlock

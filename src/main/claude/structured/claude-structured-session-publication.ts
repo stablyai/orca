@@ -1,5 +1,5 @@
 import { withAgentSessionCreatePhase } from '../../observability/agent-session-instrumentation'
-import { agentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { agentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import { CLAUDE_STRUCTURED_AGENT } from './claude-structured-agent-definition'
 import { randomUUID } from 'node:crypto'
 import { refreshClaudeStructuredSessionOptions } from './launch/claude-structured-session-options'
@@ -8,8 +8,8 @@ import type {
   StructuredAgentSessionAcquireInput
 } from '../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { claudeProviderHandleLink } from './claude-structured-owner-identity'
-import type { ClaudePromptRegistry } from '../claude-prompt-registry'
-import type { ClaudeJournalTranslator } from '../claude-journal-translator-contract'
+import type { ClaudePromptRegistry } from './permissions/claude-prompt-registry'
+import type { ClaudeJournalTranslator } from './journal/claude-journal-translator-contract'
 import type {
   ClaudeSession,
   ClaudeSessionExit,
@@ -18,12 +18,12 @@ import type {
   ClaudeStructuredSessionEvent,
   ClaudeStructuredSessionAdapterDeps
 } from './claude-structured-session-state'
-import { ClaudeBackgroundTaskTracker } from '../claude-background-task-tracker'
-import { ClaudeChildWorkDecoder } from '../claude-child-work-decoder'
-import { ClaudeSlashCommandCatalog } from '../claude-slash-command-catalog'
+import { ClaudeBackgroundTaskTracker } from '../background-tasks/claude-background-task-tracker'
+import { ClaudeChildWorkDecoder } from '../child-work/claude-child-work-decoder'
+import { ClaudeSlashCommandCatalog } from '../command-catalog/claude-slash-command-catalog'
 import type { ClaudeStructuredLaunch } from './launch/claude-structured-launch-resolution'
 import type { ClaudeAcquisitionLaunch } from './launch/claude-structured-acquisition-launch'
-import type { ClaudeNamingGeneration } from '../claude-naming-generation'
+import type { ClaudeNamingGeneration } from '../conversation-naming/claude-naming-generation'
 import { readClaudeStartupFacts } from './claude-structured-session-startup'
 
 function claudeSessionInitialization(input: {

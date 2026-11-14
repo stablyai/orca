@@ -2,7 +2,7 @@ import React, { useCallback, useState } from 'react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
 import type { GitHubImageUploadAddress } from '@/components/github/github-image-upload'
 import {

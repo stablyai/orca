@@ -21,7 +21,7 @@ import {
   CODEX_RESTORE_MAX_BYTES,
   historicalTurnLifecycle
 } from '../../structured/journal/codex-structured-journal-translation-restore'
-import { agentJournalTurnBody as codexTurnLifecycleBody } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { agentJournalTurnBody as codexTurnLifecycleBody } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import {
   codexTurnLifecycleIdentity,
   reviseCodexTurnRow

@@ -1,5 +1,7 @@
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { rewindHistoryIndexPastView } from './workspace-navigation-history'
+import { isAutomationsHistoryEntry } from './automations-page-location'
+import { appendAutomationsPageEntry } from './automations-page-history'
 
 export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
@@ -19,8 +21,34 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
     pendingAutomationRunNavigation: null,
     setPendingAutomationRunNavigation: (navigation) =>
       set({ pendingAutomationRunNavigation: navigation }),
+    automationsPageLocationRequest: null,
+    setAutomationsPageLocationRequest: (location) =>
+      set({ automationsPageLocationRequest: location }),
+    recordAutomationsPageVisit: (location) => {
+      // Why: replaying an entry must not record it again and truncate the forward stack.
+      if (get().isNavigatingHistory) {
+        set({ automationsPageNextVisitMode: 'push' })
+        return
+      }
+      set((state) => ({
+        ...appendAutomationsPageEntry(state, location, state.automationsPageNextVisitMode),
+        automationsPageNextVisitMode: 'push'
+      }))
+    },
+    automationsPageNextVisitMode: 'push',
+    setAutomationsPageNextVisitMode: (mode) => set({ automationsPageNextVisitMode: mode }),
+    automationsPageFocusTitleOnOpen: false,
+    setAutomationsPageFocusTitleOnOpen: (value) => set({ automationsPageFocusTitleOnOpen: value }),
     openAutomationsPage: () => {
-      get().recordViewVisit('automations')
+      const state = get()
+      // Why: an open page already recorded its sub-page; a second sentinel would be a dead Back step.
+      if (
+        state.activeView !== 'automations' ||
+        !isAutomationsHistoryEntry(state.worktreeNavHistory[state.worktreeNavHistoryIndex])
+      ) {
+        state.recordViewVisit('automations')
+      }
+      set({ automationsPageNextVisitMode: 'push', automationsPageFocusTitleOnOpen: true })
       set((state) => ({
         activeView: 'automations',
         previousViewBeforeAutomations:
@@ -32,7 +60,8 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
     closeAutomationsPage: () =>
       set((state) => ({
         activeView: state.previousViewBeforeAutomations,
-        worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'automations')
+        worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'automations'),
+        automationsPageNextVisitMode: 'push'
       })),
     openSpacePage: () => {
       get().recordFeatureInteraction?.('workspace-cleanup')

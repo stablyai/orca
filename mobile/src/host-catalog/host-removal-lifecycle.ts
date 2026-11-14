@@ -1,9 +1,10 @@
 import type { QueryClient } from '@tanstack/react-query'
+import { discardConnectionLogs } from '../diagnostics/connection/persisted-connection-log-store'
 import { wipeHostStore } from '../device-store/device-store'
 import {
   deleteHostPageCache,
   forgetHostUpdateFailures
-} from '../mobile-web-shell/removed-host-shell-cache'
+} from '../mobile-web-shell/generations/removed-host-shell-cache'
 import { unregisterPushForRemovedHost } from '../notifications/push-registration'
 import { forgetNativeHostQueries } from '../query/native-query-persistence'
 import { forgetHostDescriptor } from '../host-descriptors/host-descriptor-store'
@@ -31,4 +32,5 @@ export async function removeHostAndCloseClient(
   void forgetHostUpdateFailures(hostId).catch(() => undefined)
   void deleteHostPageCache(hostId).catch(() => undefined)
   void wipeHostStore(hostId).catch(() => undefined)
+  void discardConnectionLogs(hostId).catch(() => undefined)
 }
