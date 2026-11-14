@@ -24,11 +24,7 @@ import {
   type SessionSearchInventoryMember
 } from './session-search-inventory-relation'
 
-const physicalMembers = {
-  search_inventory_entries: ['files', 'directories'],
-  search_inventory_activity: ['authority', 'observing', 'delivery']
-} satisfies Record<string, SessionSearchInventoryMember[]>
-export type SessionSearchPhysicalTable = keyof typeof physicalMembers
+export type SessionSearchPhysicalTable = 'search_inventory_entries' | 'search_inventory_activity'
 export type SessionSearchPhysicalFields = Record<string, SyncDatabase.BindValue>
 export type SessionSearchPhysicalMutation = {
   source: number
