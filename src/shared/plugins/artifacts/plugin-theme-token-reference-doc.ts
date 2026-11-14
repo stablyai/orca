@@ -90,8 +90,11 @@ const TOKEN_ROLES: Record<PluginAppThemeToken, string> = {
   '--git-decoration-ignored': 'Git-ignored files'
 }
 
-// Why: these mix per mode in main.css, or from chat-internal colors that authors cannot set.
+// Why: these mix per mode in main.css, come from chat-internal colors that authors cannot set,
+// or fall back differently per surface.
 const OMITTED_DESCRIPTIONS: Partial<Record<PluginAppThemeToken, string>> = {
+  '--tab-active-indicator':
+    'tab line: same as `--tab-active-foreground`; right sidebar tool line: same as `--foreground`',
   '--worktree-sidebar-active-border': 'a mix of `--worktree-sidebar-border`',
   '--chat-user-message': '`--foreground` mixed lightly into the chat background',
   '--chat-bold-foreground': 'the color of chat headings',
