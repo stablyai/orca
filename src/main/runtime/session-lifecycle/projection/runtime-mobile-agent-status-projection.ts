@@ -234,7 +234,7 @@ export function resolveRuntimeHookLiveAgentRow(
     return live
   }
   if (
-    !terminalTitleBlocksExplicitAgentStatus(pty?.lastOscTitle) &&
+    !terminalTitleBlocksExplicitAgentStatus(pty?.lastOscTitle ?? null) &&
     live.payload.state === 'done' &&
     pty?.lastAgentStatus !== 'working' &&
     pty?.lastAgentStatus !== 'permission'
