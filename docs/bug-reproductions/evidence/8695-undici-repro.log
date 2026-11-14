@@ -1,0 +1,54 @@
+=== #8695 undici paused-parser repro 2026-07-16T06:22:32Z ===
+node: v24.18.0
+
+--- system node ---
+node:internal/assert/utils:77
+    throw err;
+    ^
+
+AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+
+  assert(!this.paused)
+
+    at Parser.finish (node:internal/deps/undici/undici:7380:9)
+    at Socket.onHttpSocketEnd (node:internal/deps/undici/undici:7819:34)
+    at Socket.emit (node:events:521:24)
+    at endReadableNT (node:internal/streams/readable:1729:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v24.18.0
+system node exit: 1
+
+--- Orca Electron as node (/Applications/Orca.app/Contents/MacOS/Orca) ---
+node:internal/assert/utils:77
+    throw err;
+    ^
+
+AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+
+  assert(!this.paused)
+
+    at Parser.finish (node:internal/deps/undici/undici:7380:9)
+    at Socket.onHttpSocketEnd (node:internal/deps/undici/undici:7819:34)
+    at Socket.emit (node:events:521:24)
+    at endReadableNT (node:internal/streams/readable:1729:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21) {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v24.18.0
+orca exit: 1
+
+RESULT: REPRODUCED (process crashed or non-zero exit as expected)

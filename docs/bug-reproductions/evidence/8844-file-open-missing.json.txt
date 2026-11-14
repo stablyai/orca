@@ -1,0 +1,33 @@
+stamp: 2026-07-16T06:13:34Z
+orca_bin: /Applications/Orca.app/Contents/Resources/bin/orca
+cwd: /Users/nwparker/orca/workspaces/orca/cooked-PRs
+relative_path: spec/does-not-exist-repro-8844.md
+absolute_path: /Users/nwparker/orca/workspaces/orca/cooked-PRs/spec/does-not-exist-repro-8844.md
+exists_before: no
+--- orca file open --json ---
+{
+  "id": "6f65d67e-c31d-4d4e-b3a4-95bebe1a9b8a",
+  "ok": true,
+  "result": {
+    "worktree": "8cf8301a-6725-4f9f-a5f4-93ba5c7c1e99::/Users/nwparker/orca/workspaces/orca/cooked-PRs",
+    "relativePath": "spec/does-not-exist-repro-8844.md",
+    "kind": "markdown",
+    "opened": true
+  },
+  "_meta": {
+    "runtimeId": "feee85bb-b526-4f92-8c2b-959c1b3a2c03"
+  }
+}
+
+exit: 0
+exists_after: no
+
+NOTES:
+- Bug: ok:true / opened:true / exit 0 even though the file is missing.
+- Ghost tab: Orca creates an editor tab; loading later fails with fs:readFile ENOENT.
+- Root cause (source): RuntimeFileCommands.openMobileFile never stats the path;
+  it classifies by extension and always returns opened:true for non-binary kinds,
+  then host.openFile(...). See src/main/runtime/orca-runtime-files.ts openMobileFile.
+- CLI: src/cli/handlers/file.ts 'file open' trusts files.open RPC result.
+parsed ok=true opened=true exit=0
+RESULT: REPRODUCED
