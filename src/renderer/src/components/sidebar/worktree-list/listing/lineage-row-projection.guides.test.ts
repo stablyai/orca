@@ -72,4 +72,13 @@ describe('lineage row guides', () => {
     const legacy = buildLineageRowProjection(rows, 'none', false).frames
     expect(legacy[1].guides?.branch?.x).toBe(legacy[1].left - 10)
   })
+
+  it('keeps a deep single-child chain linear by sharing the empty rails', () => {
+    const chain = Array.from({ length: 1_000 }, (_, depth) => item(`c${depth}`, depth))
+    const chainFrames = buildLineageRowProjection(chain, 'none', true).frames
+    const firstRails = chainFrames[1].guides?.rails
+    expect(firstRails).toEqual([])
+    expect(chainFrames.every((frame) => frame.guides?.rails === firstRails)).toBe(true)
+    expect(chainFrames.slice(1).every((frame) => frame.guides?.branch?.last)).toBe(true)
+  })
 })
