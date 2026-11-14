@@ -11216,6 +11216,7 @@
           "e27c8d45bf": "Los diagnósticos están desactivados por una variable de entorno."
         },
         "ShortcutCommandBlock": {
+          "retryAfterError": "Pulsa otro atajo o Esc para cancelar.",
           "eb72c52c28": "Pulsa un atajo o toca dos veces una tecla modificadora (p. ej., {{value0}}). Esc cancela.",
           "70b5d25583": "Atajo de {{value0}}",
           "287e07ddde": "Modificado",

@@ -8006,6 +8006,7 @@
           "b2c384cfd6": "Nenhuma interface encontrada"
         },
         "ShortcutCommandBlock": {
+          "retryAfterError": "Pressione outro atalho ou Esc para cancelar.",
           "eb72c52c28": "Pressione um atalho, ou toque duas vezes em um modificador (ex.: {{value0}}). Esc cancela.",
           "70b5d25583": "Atalho de {{value0}}",
           "287e07ddde": "Modificado",

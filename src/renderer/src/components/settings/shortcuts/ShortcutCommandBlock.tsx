@@ -79,8 +79,14 @@ export function ShortcutCommandBlock({
     'Press a shortcut, or double-tap a modifier (e.g. {{value0}}). Esc cancels.',
     { value0: doubleTapHint }
   )
+  // A rejected chord keeps the recorder listening; say so, since the error replaces the recording hint.
   const helperMessage = error
-    ? error
+    ? isRecording
+      ? `${error} ${t(
+          'auto.components.settings.ShortcutCommandBlock.retryAfterError',
+          'Press another shortcut, or Esc to cancel.'
+        )}`
+      : error
     : isRecording
       ? recordingMessage
       : warnings.length > 0
