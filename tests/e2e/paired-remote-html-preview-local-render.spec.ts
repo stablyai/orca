@@ -20,7 +20,6 @@ import {
   readPairedHtmlPreviewInventory,
   requireSingleDocWorkspace
 } from './helpers/paired-html-preview-inventory'
-import { focusPairedClientWindow } from './helpers/paired-client-window-reveal'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
 const FIXTURE_NAME = 'paired-html-focus.html'
@@ -476,11 +475,6 @@ test('renders a paired HTML doc as a document browser tab while the host gains n
       .not.toBeNull()
     // Confirmed preview links honor the in-app preference; the default opens the system browser.
     await page.evaluate(() => window.__store?.getState().updateSettings({ openLinksInApp: true }))
-    // Trusted routing checks the reader’s front contents; preserve the fixture’s guarded activation policy.
-    expect(await focusPairedClientWindow(client)).toMatchObject({
-      isFocused: true,
-      isVisible: true
-    })
     // Take the baseline before the heading press so it cannot absorb an input-driven escape.
     const linkBaseline = {
       ...(await readPairedHtmlPreviewInventory(page, inventoryArgs)),

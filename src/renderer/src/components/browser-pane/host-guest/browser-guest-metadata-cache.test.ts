@@ -38,6 +38,32 @@ function tag(id: number): Electron.WebviewTag {
 afterEach(clearBrowserGuestMetadata)
 
 describe('guest metadata lifetime cache', () => {
+  it('keeps a mounted subscriber through policy retirement until it is disposed', () => {
+    Object.defineProperty(window, 'api', {
+      configurable: true,
+      value: { browser: { getGuestMetadata: vi.fn(async () => null) } }
+    })
+    const webview = tag(7)
+    let observedUrl: string | null = null
+    const dispose = subscribeBrowserGuestMetadata('page', webview, (state) => {
+      observedUrl = state?.url ?? null
+    })
+    try {
+      acceptBrowserGuestMetadata(snapshot(7, 1))
+      acceptBrowserGuestMetadata({ ...snapshot(7, 2), kind: 'retired' })
+      expect(observedUrl).toBeNull()
+
+      acceptBrowserGuestMetadata({ ...snapshot(7, 3), url: 'https://example.test/redirected' })
+      expect(observedUrl).toBe('https://example.test/redirected')
+
+      dispose()
+      acceptBrowserGuestMetadata({ ...snapshot(7, 4), url: 'https://example.test/later' })
+      expect(observedUrl).toBe('https://example.test/redirected')
+    } finally {
+      dispose()
+    }
+  })
+
   it('initializes a successor after an eventless command returns unchanged native state', async () => {
     const state = snapshot(1, 1, 'Idle A')
     Object.defineProperty(window, 'api', {
