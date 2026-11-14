@@ -135,6 +135,7 @@ export type NotificationSoundResult = {
     | 'read-failed'
     | 'playback-failed'
     | 'deduped'
+    | 'focus-active'
 }
 
 export type NotificationSoundDataResult =
@@ -146,12 +147,15 @@ export type NotificationSoundDataResult =
     }
   | {
       ok: false
-      reason: Exclude<NotificationSoundResult['reason'], 'playback-failed'>
+      reason: Exclude<NotificationSoundResult['reason'], 'playback-failed' | 'focus-active'>
     }
 
 export type NotificationSoundPathResult =
   | { ok: true; path: string }
-  | { ok: false; reason: 'missing-path' | 'invalid-path' | 'unsupported-type' }
+  | {
+      ok: false
+      reason: 'missing-path' | 'invalid-path' | 'unsupported-type' | 'focus-active'
+    }
 
 export type NotificationPermissionStatusResult = {
   supported: boolean

@@ -21,7 +21,7 @@ import {
 } from '../tabs/simulator-pane-shutdown-scheduler'
 import { assertClientCreationActionAvailable } from '../../workspace/creation/surface-policy/client-creation-action-policy'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
-import type { EmulatorStreamInfo } from '@/components/emulator-pane/emulator-pane-types'
+import type { EmulatorStreamInfo } from '@/components/emulator-pane/session/emulator-pane-types'
 
 type OpenMobileEmulatorTabOptions = {
   targetGroupId?: string

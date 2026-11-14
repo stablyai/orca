@@ -15,7 +15,7 @@ import { toWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layou
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-types'
 import { resetWebSessionTabsSyncTestState } from '@/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 import { useAgentStatus } from '@/runtime/agent-status/use-agent-status'
-import { useAgentBucketCounts } from '@/components/dashboard/useAgentBucketCounts'
+import { useAgentBucketCounts } from '@/components/dashboard/bucket-counts/useAgentBucketCounts'
 import { acceptedAgentStatuses, AcceptedAgentStatuses } from './accepted-agent-statuses'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 

@@ -1,7 +1,7 @@
 import { useAppStateView, useAppStateViewActive } from '@/store/retained-views/app-state-view'
 import { useCallback, useMemo, useSyncExternalStore } from 'react'
 import { useStore } from 'zustand'
-import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import type { AgentStatusProjection } from '@/store/slices/agent-status/agent-status-projection'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {

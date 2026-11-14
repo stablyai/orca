@@ -6,7 +6,7 @@ import type {
   AgentType,
   AgentStatusEntry
 } from '../../../../../shared/agent-status/contracts/agent-status-types'
-import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { Tab } from '../../../../../shared/tab-types'
 import { KeyedDeadlines } from '../../../../../shared/keyed-deadlines'

@@ -8,7 +8,7 @@ import { specPaths } from '../../discovery/command-spec'
 import type { HandlerContext } from '../../dispatch/dispatch'
 import type { RuntimeClient } from '../../runtime/client'
 
-import { RuntimeClientError, RuntimeRpcFailureError } from '../../runtime/types'
+import { RuntimeClientError, RuntimeRpcFailureError } from '../../runtime/connection/types'
 import { bindPluginDevWatchHost, PluginHostUnreachableError } from './plugin-dev-watch'
 
 function context(call: ReturnType<typeof vi.fn>, rawArgs: string[] = []): HandlerContext {

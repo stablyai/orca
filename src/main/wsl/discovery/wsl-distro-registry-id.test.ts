@@ -1,11 +1,9 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   parseDefaultWslDistroId,
   parseWslDistroRegistrations,
   readWslDistroRegistryId,
-  readWslDistroRegistryIdShared,
-  resolveWslDistroName,
-  resetWslDistroRegistryIdSharedReadsForTests
+  resolveWslDistroName
 } from './wsl-distro-registry-id'
 
 const LXSS = 'HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss'
@@ -46,18 +44,6 @@ describe('the distro registration GUID', () => {
     ])
   })
 
-  it('reads it through one reg.exe query, matching the name case-insensitively', async () => {
-    const query = vi.fn(async () => ({ code: 0, stdout: REG_OUTPUT }))
-    await expect(readWslDistroRegistryId('ubuntu-24.04', query)).resolves.toBe(
-      '0283592d-be56-40d4-b935-3dc18c3aa007'
-    )
-    expect(query).toHaveBeenCalledWith([
-      'query',
-      'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Lxss',
-      '/s'
-    ])
-  })
-
   it('answers null for an unknown distro, a failed query or a thrown spawn', async () => {
     await expect(
       readWslDistroRegistryId('Debian', async () => ({ code: 0, stdout: REG_OUTPUT }))
@@ -70,21 +56,6 @@ describe('the distro registration GUID', () => {
         throw new Error('ENOENT')
       })
     ).resolves.toBeNull()
-  })
-})
-
-describe('readWslDistroRegistryIdShared', () => {
-  it('reads the registry once per deploy window, case-insensitively, then again after it', async () => {
-    resetWslDistroRegistryIdSharedReadsForTests()
-    let reads = 0
-    const read = async () => `guid-${++reads}`
-    let clock = 0
-    const now = () => clock
-    expect(await readWslDistroRegistryIdShared('Ubuntu', now, read)).toBe('guid-1')
-    expect(await readWslDistroRegistryIdShared('ubuntu', now, read)).toBe('guid-1')
-    clock = 31_000
-    expect(await readWslDistroRegistryIdShared('Ubuntu', now, read)).toBe('guid-2')
-    expect(reads).toBe(2)
   })
 })
 

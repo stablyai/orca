@@ -4,7 +4,7 @@ import {
   useAppStateValue
 } from '@/store/retained-views/app-state-view'
 import { useCallback, useEffect, useMemo } from 'react'
-import { isAgentSessionHandleProvider } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import { isAgentSessionHandleProvider } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId

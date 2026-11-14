@@ -3,9 +3,10 @@ import { agentJournalItemKey } from '../../../../shared/agent-session/journal/ag
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { StructuredAgentSessionEventSink } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import type { StructuredAgentSessionRevisionJournal } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
+import { journalTimelineItemsView } from '../../../native-chat/agent-session-journal/writing/journal-timeline-view'
+import { resolveJournalTimelineItem } from '../../../native-chat/agent-session-journal/writing/journal-timeline-resolution'
 import {
   CAPTURED_COMPACT_SESSION_ID,
   type CapturedCompactEvent
@@ -51,25 +52,29 @@ function harness() {
     rows.set(row.key, row)
     writes.push(row)
   }
-  const journal: StructuredAgentSessionRevisionJournal = {
-    item: () => null,
-    epoch: 'epoch-1',
-    itemBody: (itemId) => rows.get(itemId)?.body ?? null,
-    visitItems: (visit) => {
-      let sequence = 0
-      for (const row of rows.values()) {
-        visit(row.key, sequence++, row.body)
-      }
-    }
+  const view = {
+    ...journalTimelineItemsView(
+      () => null,
+      () =>
+        [...rows.values()].map(({ key, body, turnScope }, sequence) => ({
+          itemId: key,
+          body,
+          ...(turnScope ? { turnScope } : {}),
+          revision: 1,
+          sequence,
+          observedAt: 0
+        }))
+    ),
+    itemBody: (itemId: string) => rows.get(itemId)?.body ?? null
   }
   const revise: NonNullable<StructuredAgentSessionEventSink['tryReviseResolvedItem']> = (
-    _bytes,
-    resolve,
+    bytes,
+    resolution,
     options
   ) => {
-    const resolved = resolve(journal)
-    if (resolved) {
-      write(resolved.identity, resolved.body, options.turnScope)
+    const resolved = resolveJournalTimelineItem(view, resolution, options.turnScope, bytes)
+    if (resolved.kind === 'resolved') {
+      write(resolved.item.identity, resolved.item.body, options.turnScope)
     }
     return { accepted: true }
   }

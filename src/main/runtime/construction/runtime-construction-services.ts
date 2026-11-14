@@ -57,6 +57,7 @@ export abstract class RuntimeConstructionServices extends RuntimeAgentStatusRead
   abstract notifyWorktreesChanged(repoId: string, options?: { invalidateGitScans?: boolean }): void
   protected abstract notifyReposChanged(): void
   protected abstract isPtyKnownExited(ptyId: string): boolean
+  protected abstract onPtyStopSettled(ptyId: string, stopped: boolean): void
 
   abstract getPtyLivenessVerdict(
     ...args: Calls.GetPtyLivenessVerdictArgs

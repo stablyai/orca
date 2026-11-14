@@ -35,7 +35,7 @@ import {
 } from '../arguments/flags'
 import { findProjectSetups, resolveProjectIdSelector } from './project-selector'
 import { resolveRepoPathArgument } from './repo-path-arguments'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import type { RuntimeRpcSuccess } from '../../shared/runtime-rpc-envelope'
 
 async function callProjectHostSetup<TResult>(

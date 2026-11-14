@@ -2,14 +2,14 @@ import type { DashboardBucket } from '../../../../../shared/dashboard-snapshot'
 import {
   dashboardRowBucketProjection,
   readAgentRowTurnRecords
-} from '@/components/dashboard/dashboard-row-bucket'
-import { collectActiveDashboardWorkspaces } from '@/components/dashboard/dashboard-snapshot-workspaces'
+} from '@/components/dashboard/rows/dashboard-row-bucket'
+import { collectActiveDashboardWorkspaces } from '@/components/dashboard/snapshot/dashboard-snapshot-workspaces'
 import {
   selectWorktreesByRepo,
   selectFolderWorkspaces
 } from '../../workspaces/catalog/workspace-record-fields'
 import type { AppState } from '../../types'
-import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import { readRecordChanges } from '../../keyed-record-change-reads'
 import { structuralValuesEqualIgnoringUndefined as equal } from '../../../../../shared/structural-value-equality'
 import {

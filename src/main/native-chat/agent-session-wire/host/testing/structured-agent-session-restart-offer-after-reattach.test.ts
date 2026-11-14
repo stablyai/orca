@@ -1,12 +1,13 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { expect, it } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../../../runtime/agent-session/records/agent-session-recovery-capsule'
-import { AGENT_SESSION_RESTART_CONTINUATION_MESSAGE } from '../../../../../shared/agent-session/lifecycle/agent-session-restart-continuation'
+import { AGENT_SESSION_RESTART_CONTINUATION_MESSAGE } from '../../../../../shared/agent-session/lifecycle/stopping/agent-session-restart-continuation'
 import { restartContinuationBody } from '../../recovery/structured-agent-session-restart-continuation-envelope'
-import { interruptedRestart } from './structured-agent-session-restart-interruption-test-harness'
+import { interruptedRestart } from './structured-agent-session-restart-interruption.test-fixture'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 
 it("delivers a retry as a new continuation after the first one's start failed", async () => {
   const { host, acquire, dispatch, marker } = await interruptedRestart('children')
@@ -16,7 +17,7 @@ it("delivers a retry as a new continuation after the first one's start failed", 
   acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
   const first = await host.restartResume.continueAfterRestart([SESSION], 'modal')
   expect(first.failed).toMatchObject([{ sessionId: SESSION, outcome: 'refused', retryable: true }])
-  const [rejected] = (await host.journalSnapshot(SESSION)).submissions
+  const [rejected] = (await readTestHostJournal(host, SESSION)).submissions
   expect(rejected).toMatchObject({ dispatchState: 'rejected' })
 
   const retried = await host.restartResume.continueAfterRestart([SESSION], 'retry')
@@ -26,7 +27,7 @@ it("delivers a retry as a new continuation after the first one's start failed", 
   const sent = dispatch.mock.calls[0]?.[0]
   expect(sent?.clientMessageId).not.toBe(rejected?.clientMessageId)
   expect(sent?.body).toEqual(restartContinuationBody(marker))
-  expect((await host.journalSnapshot(SESSION)).submissions).toMatchObject([
+  expect((await readTestHostJournal(host, SESSION)).submissions).toMatchObject([
     { clientMessageId: rejected?.clientMessageId, dispatchState: 'rejected' },
     { clientMessageId: sent?.clientMessageId, dispatchState: 'accepted' }
   ])

@@ -1,4 +1,4 @@
-import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 import { canonicalOrchestrationForRow } from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import { sameAgentStatusTerminalOwner } from '../../../../../shared/agent-status/identity/agent-status-terminal-owner'
 import { resolveAgentStatusLiveEntryTiming } from './agent-status-live-entry-timing'
@@ -26,7 +26,7 @@ import { liveEntryChildFields } from './agent-status-live-entry-children'
 import {
   canReuseStatusProviderSession,
   statusRetainsResumableIdentity
-} from '../../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
+} from '../../../../../shared/agent-session/lifecycle/resume/agent-resume-record-from-status'
 
 import type {
   AgentStatusLiveEntryArgs,

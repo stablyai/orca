@@ -1,4 +1,4 @@
-import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 
 import type { AgentDotState } from '@/components/AgentStateDot'
 import type { KeyedDeadlines } from '../../../../../shared/keyed-deadlines'

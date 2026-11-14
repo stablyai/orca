@@ -2,7 +2,7 @@ import { stat } from 'node:fs'
 import { performance } from 'node:perf_hooks'
 import type { DaemonAsyncIoHealth } from '../../../shared/daemon-async-io-health'
 
-export const DAEMON_ASYNC_IO_TIMEOUT_MS = 5_000
+const DAEMON_ASYNC_IO_TIMEOUT_MS = 5_000
 const HEALTH_CACHE_MS = 30_000
 
 /** A timed-out operation remains owned until it completes; polling cannot flood a stuck pool. */

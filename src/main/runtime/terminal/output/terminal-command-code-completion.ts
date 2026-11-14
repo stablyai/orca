@@ -20,7 +20,7 @@ export abstract class RuntimeCommandCodeCompletion extends OrcaRuntimeWithApplyT
     }
   >()
 
-  protected override onIntentionalPtyStopSettled(ptyId: string, stopped: boolean): void {
+  protected override onPtyStopSettled(ptyId: string, stopped: boolean): void {
     this.openCodeRunLifetime.onStopSettled(ptyId, stopped)
     const candidate = this.commandCodeDoneCandidates.get(ptyId)
     if (!candidate) {

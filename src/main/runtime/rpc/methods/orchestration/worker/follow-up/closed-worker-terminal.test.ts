@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { useHelperFollowUpCli } from '../testing/helper-follow-up-cli.test-support'
-import { agentProviderSessionsEqual } from '../../../../../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../../../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 
 import { AgentHookServer } from '../../../../../../agent-hooks/server/agent-hook-server'
 import { agentHookRuntimeDeps } from '../../../../../../agent-hooks/runtime/agent-hook-runtime-deps'

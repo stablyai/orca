@@ -122,14 +122,33 @@ export function getLocalCommandSourcePolicyNotice(
       }
 }
 
-export function renderYamlScriptPreview(hooks: OrcaHooks | null, setupOnly = false): string {
+export type HookYamlPresentation = {
+  template: string
+  archive: boolean
+  issueCommand: boolean
+}
+
+export function renderYamlScriptPreview(
+  hooks: OrcaHooks | null,
+  support: Pick<HookYamlPresentation, 'archive' | 'issueCommand'>
+): string {
   const formatScript = (key: string, command?: string): string =>
     command ? `\n  ${key}: |\n${command.replace(/^/gm, '    ')}` : ''
   const issueCommand =
-    !setupOnly && hooks?.issueCommand
+    support.issueCommand && hooks?.issueCommand
       ? `\nissueCommand: |\n${hooks.issueCommand.replace(/^/gm, '  ')}`
       : ''
-  return `scripts:${formatScript('setup', hooks?.scripts.setup)}${setupOnly ? '' : formatScript('archive', hooks?.scripts.archive)}${issueCommand}`
+  return `scripts:${formatScript('setup', hooks?.scripts.setup)}${support.archive ? formatScript('archive', hooks?.scripts.archive) : ''}${issueCommand}`
 }
 
 export const GROUP_SETUP_HOOKS_TEMPLATE = 'scripts:\n  setup: |\n    echo "Setting up workspace"'
+
+export function groupHookYamlPresentation(archive: boolean): HookYamlPresentation {
+  return {
+    template:
+      GROUP_SETUP_HOOKS_TEMPLATE +
+      (archive ? '\n  archive: |\n    echo "Cleaning up workspace"' : ''),
+    archive,
+    issueCommand: false
+  }
+}

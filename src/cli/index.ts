@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './runtime/app-launch/packaged-cli-interpreter'
 import {
   findCommandSpec,
   isCommandGroup,
@@ -16,7 +17,7 @@ import {
 } from './hosts/execution-host-flag'
 import { fetchSshTargetSummaries, listSshTargets } from './hosts/host-selector-alternatives'
 import { reportCliError } from './output/cli-error'
-import { RuntimeClientError } from './runtime/types'
+import { RuntimeClientError } from './runtime/connection/types'
 import { cliErrorExitCode } from './output/cli-exit-code'
 import { printHelp } from './discovery/help'
 import type { RuntimeClient } from './runtime/client'

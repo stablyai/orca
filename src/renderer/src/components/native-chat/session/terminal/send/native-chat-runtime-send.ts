@@ -7,7 +7,7 @@ import {
 import { sendNativeChatObservedWrites } from './native-chat-observed-send'
 import { sendRuntimePtyInput } from '@/runtime/hosted-terminals/input/runtime-terminal-input-send'
 import { sendRuntimePtyInputVerified } from '@/runtime/hosted-terminals/input/runtime-terminal-verified-input'
-import type { AskAnswerKeyGroup } from '../../../../../../../shared/native-chat/input/native-chat-ask-answer'
+import type { AskAnswerKeyGroup } from '../../../../../../../shared/native-chat/input/questions/native-chat-ask-answer'
 import {
   clearConfirmDurationMs,
   clearThenWrite,
@@ -17,11 +17,11 @@ import {
 import {
   NATIVE_CHAT_QUESTION_STEP_MS,
   NATIVE_CHAT_SUBMIT_DELAY_MS
-} from '../../../../../../../shared/native-chat/input/native-chat-answer-stepping'
+} from '../../../../../../../shared/native-chat/input/questions/native-chat-answer-stepping'
 import {
   buildNativeChatPasteBytes,
   NATIVE_CHAT_SUBMIT
-} from '../../../../../../../shared/native-chat/input/native-chat-paste-bytes'
+} from '../../../../../../../shared/native-chat/input/composer/native-chat-paste-bytes'
 import {
   AGENT_TUI_COMMAND_KEY_INTERVAL_MS,
   typeAgentTuiCommand

@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { getPosixClaudeShellFunction, getFishClaudeShellFunction } from './claude-shell-function'
-import { agentSessionSignInCommand } from './agent-session/lifecycle/agent-session-setup-commands'
+import { agentSessionSignInCommand } from './agent-session/lifecycle/launch/agent-session-setup-commands'
 // Skip missing zsh/fish instead of failing with exit 127 on CI images.
 const POSIX_SHELLS = ['/bin/bash', '/bin/zsh'].filter((shell) => existsSync(shell))
 const FISH = ['/opt/homebrew/bin/fish', '/usr/local/bin/fish', '/usr/bin/fish'].find(existsSync)

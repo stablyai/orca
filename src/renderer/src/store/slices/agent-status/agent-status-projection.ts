@@ -7,7 +7,7 @@ import {
 } from './agent-status-projection-terminal-types'
 import { stageAcceptedAgentTransitions } from './agent-status-projection-transitions'
 import type { AgentStatusChange, AgentStatusChangeListener } from './agent-status-contract'
-import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import type { WorktreeAgentActivitySummary } from '@/components/sidebar/workspace-card/activity/worktree-agent-activity-summary'
 import type { WorktreeAttention } from '../../../../../shared/sidebar-list/sorting/smart-attention'
 import type { TabAgentPane } from '@/lib/agent-session/tab-identity/tab-agent-status-index'

@@ -1,4 +1,4 @@
-import { ConfirmModal } from '../../components/ConfirmModal'
+import { ConfirmModal } from '../../components/sheets/ConfirmModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 
 export function MobileFilePreviewDiscardModal(props: {

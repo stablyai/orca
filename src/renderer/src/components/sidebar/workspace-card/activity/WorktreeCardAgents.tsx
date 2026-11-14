@@ -28,7 +28,7 @@ import { useWorktreeAgentActivation } from './use-worktree-agent-activation'
 import { opensClaudeParentConversation } from '@/lib/agent-session/navigation/claude-agent-row-view'
 import { IdleChildAgentGroupRow } from './worktree-card-idle-child-agents'
 import type { AgentChildren } from '@/store/slices/agent-status/agent-row-display-index'
-import type { DashboardAgentRow as AgentRow } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow as AgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 
 const stopBubble = (event: React.SyntheticEvent) => event.stopPropagation()
 type Props = {

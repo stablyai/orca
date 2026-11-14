@@ -11,7 +11,7 @@ import {
   selectorAmbiguityRecovery
 } from '../workspace-selection/selector-ambiguity-recovery'
 import type { RuntimeRpcFailure } from '../../shared/runtime-rpc-envelope'
-import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/types'
+import { RuntimeClientError, RuntimeRpcFailureError } from '../runtime/connection/types'
 import { readableWslDistroCliRefusal } from '../hosts/wsl-distro-cli-refusal'
 
 type ContextRecovery = { nextSteps: readonly string[] } & Record<string, unknown>

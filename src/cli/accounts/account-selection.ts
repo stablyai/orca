@@ -1,6 +1,6 @@
 import type { HandlerContext } from '../dispatch/dispatch'
 import { printResult } from '../output/command-result-output'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 import { ANTIGRAVITY_ACCOUNTS_RUNTIME_CAPABILITY } from '../../shared/account-runtime-capabilities'
 import type {
   AntigravityAccountState,

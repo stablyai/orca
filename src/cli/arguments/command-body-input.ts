@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { getRequiredStringFlag, getRequiredStringFlagAllowingEmpty } from './flags'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 type BodyOptions = {
   required: boolean

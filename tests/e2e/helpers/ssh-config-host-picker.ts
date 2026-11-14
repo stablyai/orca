@@ -1,4 +1,4 @@
-import { openSidebarProjectDialog } from './sidebar-project-dialog'
+import { openSidebarProjectMenu } from './sidebar-project-dialog'
 
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
@@ -109,25 +109,10 @@ export async function returnToAppShell(page: Page): Promise<void> {
 
 export async function openAddSshHostDialog(page: Page): Promise<Locator> {
   await returnToAppShell(page)
-  await openSidebarProjectDialog(page)
-  const addProjectDialog = page.getByRole('dialog', { name: /Add a project/i })
-  await expect(addProjectDialog).toBeVisible({ timeout: 10_000 })
-
-  const hostCombobox = addProjectDialog.getByRole('combobox')
-  await expect(hostCombobox).toBeVisible()
-  await hostCombobox.click()
-
-  // cmdk exposes options; accessible name includes the detail line.
-  const addRemoteHostItem = page.getByRole('option', { name: /Add remote host/i })
-  await expect(addRemoteHostItem).toBeVisible({ timeout: 5_000 })
-  await addRemoteHostItem.click()
-
-  // Nested popover is portaled; name includes the “existing machine over SSH” detail.
-  const addSshHostAction = page.getByRole('button', {
-    name: /Add SSH host.*existing machine over SSH/i
-  })
-  await expect(addSshHostAction).toBeVisible({ timeout: 5_000 })
-  await addSshHostAction.click()
+  await openSidebarProjectMenu(page)
+  await page.getByRole('menuitem', { name: /Project host:/i }).hover()
+  await page.getByRole('menuitem', { name: /Add remote host/i }).hover()
+  await page.getByRole('menuitem', { name: /Add SSH host.*existing machine over SSH/i }).click()
 
   const sshDialog = page.getByRole('dialog', { name: 'Add SSH host' })
   await expect(sshDialog).toBeVisible({ timeout: 10_000 })

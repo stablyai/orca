@@ -23,7 +23,7 @@ import type {
   GitHubPRFileContents
 } from '../../../../shared/github/pull-requests/pull-request-types'
 
-const MonacoCodeExcerpt = lazy(() => import('@/components/editor/MonacoCodeExcerpt'))
+const MonacoCodeExcerpt = lazy(() => import('@/components/editor/monaco/MonacoCodeExcerpt'))
 
 const CODE_CONTEXT_EXPAND_STEP = 5
 const CODE_CONTEXT_FALLBACK_LINES = 20

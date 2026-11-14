@@ -651,6 +651,7 @@
         "fontKeywordTypeface": "yazı tipi",
         "fontKeywordTypography": "tipografi",
         "inheritFont": "IDE yazı tipiyle aynı",
+        "systemFont": "Sistem yazı tipi",
         "fontPreviewLabel": "Sohbet yazı tipi önizlemesi",
         "fontPreview": "Pijamalı hasta yağız şoföre çabucak güvendi.",
         "title": "Sohbet arayüzü",
@@ -796,6 +797,8 @@
       }
     },
     "agents": {
+      "installedRegion": "Yüklü ajanlar",
+      "availableRegion": "Yüklenebilecek ajanlar",
       "permissionsTitle": "İzinler",
       "permissionsChoiceExplanation": "Her ajanın izin istemeden yapabilecekleri. Aşağıda bir ajan için farklı bir ayar seçebilirsiniz.",
       "permissionEachOwn": "Her ajanın kendi ayarları",
@@ -17146,7 +17149,8 @@
                     },
                     "extensions": {
                       "intro": {
-                        "title": "Chrome eklentileri",
+                        "title": "Chrome uzantılarınızı getirin",
+                        "everydayTitle": "Her gün kullandığınız tarayıcı araçları, Orca'da",
                         "body": "Eklentileri Chrome Web Store’dan yükleyin ve adres çubuğunun yanına sabitleyin.",
                         "action": "Chrome Web Store’u aç",
                         "secondaryAction": "Anladım"
@@ -19441,7 +19445,8 @@
         "safetyReviewApproved": "{{agent}} bu işleme onay verdi. Ayrıntıları görüntüleyin.",
         "safetyReview": "{{agent}} bir güvenlik incelemesi uyarısı bildirdi. Ayrıntıları görüntüleyin.",
         "truncatedResponse": "Sağlayıcı yanıtı kısaltıldı (özgün boyut: {{bytes}} bayt).",
-        "forkedFrom": "Çatallandığı kaynak"
+        "forkedFrom": "Çatallandığı kaynak",
+        "forkedFromUnknown": "Başka bir sohbetten çatallandı"
       },
       "composer": {
         "planMode": "Planla",
@@ -20192,7 +20197,12 @@
         "unconfirmedDetail": "Yine de açılmış olabilir. Yeniden çatallamadan önce Oturum Geçmişini kontrol edin.",
         "failed": "{{agent}} bu sohbeti çatallayamadı",
         "failedDetail": "Sohbetiniz değişmedi. Tekrar deneyin.",
-        "commandWorking": "{{agent}} yanıt verirken çatallanamaz. Yanıt bittiğinde /fork komutunu yeniden çalıştırın."
+        "commandWorking": "{{agent}} yanıt verirken çatallanamaz. Yanıt bittiğinde /fork komutunu yeniden çalıştırın.",
+        "mark": "Çatal ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "Çatal: {{name}}",
+        "sourceTooltip": "{{name}} sohbetinin çatalı",
+        "unknownSourceTooltip": "Başka bir sohbetin çatalı"
       },
       "cardKindHidden": {
         "description": "Bunu istediğiniz zaman şuradan değiştirebilirsiniz:",

@@ -21,7 +21,7 @@ import { deriveRemoteRuntimeTerminalCreateHandle } from '../terminal/identity/re
 import type { RuntimePtyController } from '../terminal/lifecycle/runtime-pty-controller-contract'
 import { savedResumeResult } from '../../ipc/pty/host-env/saved-resume-admission'
 import { spawnedCommands, resumeSpawns } from './agent-resume-spawn-commands.test-fixture'
-import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import { agentProviderSessionsEqual } from '../../../shared/agent-session/lifecycle/resume/agent-provider-session-equality'
 
 const PANE_KEY = `host-tab:${HEADLESS_LEAF_ID}`
 const SESSION = { key: 'session_id', id: 'provider-session-1' } as const

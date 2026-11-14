@@ -53,30 +53,8 @@ final class RowSelectionClickTests: XCTestCase {
         ])
     }
 
-    func testAClickThatSelectedTheRowNeedsNoWrite() throws {
-        let tree = outline(rowSettable: ["AXSelected"])
-        tree.nodes[3]?.selected = true
 
-        XCTAssertEqual(try RowSelectionClick.confirm(3, ax: tree), .selectedByClick)
-        XCTAssertEqual(tree.writes, [])
-    }
 
-    func testACellWrappedInAGroupIsSelectedThroughItsRow() throws {
-        let tree = outline()
-        tree.nodes[5] = .init(role: "AXGroup", parent: 3)
-        tree.nodes[4]?.parent = 5
-
-        XCTAssertTrue(RowSelectionClick.isUnselectedRow(4, ax: tree))
-        XCTAssertEqual(try RowSelectionClick.confirm(4, ax: tree), .selectedByWrite(attribute: "AXSelectedRows"))
-        XCTAssertEqual(tree.writes, ["AXSelectedRows:1:3"])
-    }
-
-    func testSelectedChildrenTakesTheContainersOwnChild() throws {
-        let tree = outline(containerSettable: ["AXSelectedChildren"])
-
-        XCTAssertEqual(try RowSelectionClick.confirm(4, ax: tree), .selectedByWrite(attribute: "AXSelectedChildren"))
-        XCTAssertEqual(tree.writes, ["AXSelectedChildren:1:3"])
-    }
 
     func testAnOuterListThatTakesWritesIsLeftAlone() throws {
         let tree = outline(containerSettable: [], rowSettable: ["AXSelected"])

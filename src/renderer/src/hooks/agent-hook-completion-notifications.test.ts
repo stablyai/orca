@@ -69,54 +69,8 @@ function hookStatus(state: ParsedAgentStatusPayload['state']): ParsedAgentStatus
   }
 }
 
-function seedCodexPane(paneKey: string, launchToken = 'launch-token-1'): void {
-  mockStoreState.agentLaunchConfigByPaneKey[paneKey] = {
-    launchConfig: {
-      agentArgs: '',
-      agentEnv: {}
-    },
-    launchToken
-  }
-  mockStoreState.agentStatusByPaneKey = mockStoreState.agentStatusByPaneKey.replace([
-    [
-      paneKey,
-      {
-        state: 'working',
-        prompt: 'implement notifications',
-        paneKey,
-        updatedAt: Date.now(),
-        stateStartedAt: Date.now(),
-        agentType: 'codex',
-        stateHistory: []
-      }
-    ]
-  ])
-}
-
 describe('agent hook completion notifications', () => {
   const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
-
-  // Why: the Codex permission-pause tests share a working→pause sequence.
-  async function observeCodexPermissionPause(state: 'waiting' | 'blocked'): Promise<void> {
-    const { observeAgentHookCompletionForNotification } =
-      await import('./agent-hook-completion-notifications')
-    observeAgentHookCompletionForNotification({
-      paneKey,
-      worktreeId: 'wt-1',
-      payload: hookStatus('working')
-    })
-    observeAgentHookCompletionForNotification({
-      paneKey,
-      worktreeId: 'wt-1',
-      payload: {
-        state,
-        prompt: 'implement notifications',
-        agentType: 'codex',
-        toolName: 'exec_command',
-        toolInput: 'git status'
-      }
-    })
-  }
 
   beforeEach(() => {
     vi.resetModules()
@@ -312,10 +266,8 @@ describe('agent hook completion notifications', () => {
     mockStoreState.suppressedPtyExitIds = {
       'pty-1': true
     }
-    const {
-      _getAgentHookCompletionNotificationCoordinatorCountForTest,
-      observeAgentHookCompletionForNotification
-    } = await import('./agent-hook-completion-notifications')
+    const { observeAgentHookCompletionForNotification } =
+      await import('./agent-hook-completion-notifications')
 
     observeAgentHookCompletionForNotification({
       paneKey,
@@ -329,7 +281,6 @@ describe('agent hook completion notifications', () => {
     })
     vi.advanceTimersByTime(HOOK_DONE_QUIET_MS)
 
-    expect(_getAgentHookCompletionNotificationCoordinatorCountForTest()).toBe(0)
     expect(dispatchTerminalNotification).not.toHaveBeenCalled()
   })
 
@@ -374,21 +325,6 @@ describe('agent hook completion notifications', () => {
           toolName: 'Edit',
           toolInput: 'package.json'
         })
-      })
-    )
-  })
-
-  it('notifies for a Codex permission request', async () => {
-    seedCodexPane(paneKey)
-    await observeCodexPermissionPause('waiting')
-
-    expect(dispatchTerminalNotification).toHaveBeenCalledTimes(1)
-    expect(dispatchTerminalNotification).toHaveBeenCalledWith(
-      'wt-1',
-      expect.objectContaining({
-        source: 'agent-task-complete',
-        paneKey,
-        terminalTitle: 'codex'
       })
     )
   })

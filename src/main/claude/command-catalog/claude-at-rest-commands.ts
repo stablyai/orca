@@ -6,7 +6,7 @@ import {
   isLegacyAgentSessionAccountHome,
   requireLegacyAgentSessionAccountHome,
   type AgentSessionAccountHome
-} from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+} from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session/agent-session-wire'
 import { structuredSlashCommands } from '../../../shared/agent-session/view/structured-agent-session-composer'
 import { discoverSkills } from '../../skills/discovery/skill-native-discovery'
