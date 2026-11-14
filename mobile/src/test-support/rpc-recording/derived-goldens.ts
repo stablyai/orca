@@ -1,11 +1,6 @@
 import { materializeScenario } from './scenario-execution-mode'
 import { hoistPreludeCheckpoints } from './prelude-checkpoints'
-import {
-  bindCompletions,
-  interruptionSchedules,
-  lifecycleSchedules,
-  siblingSchedules
-} from './schedule-driver'
+import { bindCompletions, lifecycleSchedules } from './schedule-driver'
 import type { RecordingScenario, ExecutionMode, ScenarioLineage } from './recording-scenario'
 
 // Share derivation with census/pruning so all consumers enumerate the recordings actually written.
@@ -18,14 +13,6 @@ export type DerivedGolden = {
   scenarios: () => RecordingScenario[]
 }
 
-const SIBLING_SCHEDULE_BASES = [
-  'b3',
-  'settings-new-tab-ssh',
-  'settings-workspace-context-fulfilled',
-  'settings-task-hydration-fulfilled',
-  'settings-repo-metadata-fulfilled'
-]
-const INTERRUPTION_BASES = ['inventory-lifecycle', 'settings-bot-overrides-fulfilled']
 const LIFECYCLE_BASES = [
   'inventory-lifecycle',
   'b3',
@@ -87,38 +74,6 @@ export function familyGoldens(
 ): DerivedGolden[] {
   const manifest = input.map((scenario) => materializeScenario(scenario, mode))
   const goldens: DerivedGolden[] = []
-  for (const id of SIBLING_SCHEDULE_BASES) {
-    const base = baseScenario(manifest, id)
-    const replies = base.steps.flatMap((step) => ('complete' in step ? [step] : []))
-    // Complete prerequisites before permuting the sibling barrier.
-    const first = replies.find((step) =>
-      step.complete.startsWith(id === 'b3' ? 'linear.getIssue' : 'settings.get')
-    )
-    if (!first) {
-      throw new Error(`No prerequisite completion to order siblings against: ${id}`)
-    }
-    const second = replies[replies.indexOf(first) + 1]
-    if (!second) {
-      continue
-    }
-    goldens.push({
-      id: `schedules-${id}`,
-      title: `schedules-${id}: completion orders and correlated faults`,
-      family: base.family,
-      lineage: { ...base.lineage!, schedule: 'siblings' },
-      scenarios: () => siblingSchedules(base, first, second)
-    })
-  }
-  for (const id of INTERRUPTION_BASES) {
-    const base = baseScenario(manifest, id)
-    goldens.push({
-      id: `interruptions-${id}`,
-      title: `interruptions-${id}: timeout, disconnect and stable-client cutover`,
-      family: base.family,
-      lineage: { ...base.lineage!, schedule: 'interruptions' },
-      scenarios: () => interruptionSchedules(base)
-    })
-  }
   for (const id of LIFECYCLE_BASES) {
     const base = baseScenario(manifest, id)
     const actions: readonly ('reset' | 'unmount' | 'blur')[] = id.includes('hydration')

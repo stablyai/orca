@@ -38,7 +38,10 @@ export type BrowserGuestInputGesture = {
 
 export function trackBrowserGuestInputGesture(
   guest: WebContents,
-  { now = Date.now, onActivatingInput }: { now?: () => number; onActivatingInput?: () => void } = {}
+  {
+    now = Date.now,
+    onActivatingInput
+  }: { now?: () => number; onActivatingInput?: (byAgent: boolean) => void } = {}
 ): BrowserGuestInputGesture {
   let lastGestureAt: number | null = null
   let lastGestureByAgent = false
@@ -46,7 +49,7 @@ export function trackBrowserGuestInputGesture(
     if (isActivatingBrowserGuestInput(input)) {
       lastGestureAt = now()
       lastGestureByAgent = isAgentInjectingInput(guest)
-      onActivatingInput?.()
+      onActivatingInput?.(lastGestureByAgent)
     }
   }
   let attached = false

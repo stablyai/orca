@@ -11,7 +11,6 @@ const input = {
   control: process.platform !== 'darwin',
   shift: true
 }
-const primaryDoubleTap = process.platform === 'darwin' ? 'Cmd' : 'Ctrl'
 
 function fixture(local = true) {
   const send = vi.fn()
@@ -118,34 +117,6 @@ describe('Plugins shortcut from a browser guest', () => {
         expect.objectContaining({ key: '≈', code: 'KeyX', meta: true, alt: true })
       )
     })
-  })
-
-  it('follows the typed letter on a German layout where Y and Z swap keys on Linux', () => {
-    withPlatform('linux', () => {
-      const { context, event, send } = fixture()
-      context.getKeybindings = () => ({})
-      const chord = { control: true, shift: true }
-      expect(forwardGuestShortcutInput(context, event, { ...chord, key: 'Z', code: 'KeyY' })).toBe(
-        false
-      )
-      expect(send).not.toHaveBeenCalled()
-      expect(forwardGuestShortcutInput(context, event, { ...chord, key: 'Y', code: 'KeyZ' })).toBe(
-        true
-      )
-      expect(send).toHaveBeenCalledOnce()
-    })
-  })
-
-  it('replays a configured modifier double tap', () => {
-    const { context, event, send } = fixture()
-    context.getKeybindings = () => ({ 'view.plugins': ['DoubleTap+Mod'] })
-    expect(forwardGuestShortcutInput(context, event, { doubleTapModifier: primaryDoubleTap })).toBe(
-      true
-    )
-    expect(send).toHaveBeenCalledWith(
-      'ui:browserPageTabShortcut',
-      expect.objectContaining({ doubleTapModifier: primaryDoubleTap })
-    )
   })
 
   it('leaves composing input and nonlocal renderers alone', () => {

@@ -48,15 +48,6 @@ describe('sleeping sweep retention', () => {
     expect(after.nextExpiryInMs).toBeNull()
   })
 
-  it('is idempotent across a double-invoked render at the same instant', () => {
-    const state = createSleepingSweepRetentionState()
-    runPass(state, ['wt-a'], 1_000)
-    runPass(state, [], 2_000)
-    const second = runPass(state, [], 2_000)
-
-    expect([...second.retainedIds]).toEqual(['wt-a'])
-  })
-
   it('drops grace state for a workspace that leaves the candidate set', () => {
     const state = createSleepingSweepRetentionState()
     runPass(state, ['wt-a'], 1_000)

@@ -22,7 +22,7 @@ type StartupBuilders = {
 
 /** What the new workspace's first terminal launches, refusing a disabled agent. */
 export async function resolveManagedWorktreeCreateStartup(
-  args: RuntimeManagedWorktreeCreateArgs,
+  args: Omit<RuntimeManagedWorktreeCreateArgs, 'repoSelector' | 'name'>,
   disabledTuiAgents: Parameters<typeof isTuiAgentEnabled>[1],
   build: StartupBuilders
 ) {

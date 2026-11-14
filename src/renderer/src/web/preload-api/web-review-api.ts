@@ -13,10 +13,11 @@ export function createRuntimeNamespaceApi(prefix: string): never {
 
 export function createHooksApi(): NonNullable<Partial<PreloadApi>['hooks']> {
   return {
-    check: async ({ repoId, background }) =>
+    check: async ({ repoId, background, createSource }) =>
       callRuntimeResult('repo.hooksCheck', {
         repo: repoId,
-        ...repoHooksCheckWakeParams(background)
+        ...repoHooksCheckWakeParams(background),
+        ...(createSource ? { createSource } : {})
       }),
     inspectSetupScriptImports: async ({ repoId }) =>
       callRuntimeResult('repo.setupScriptImports', { repo: repoId }),

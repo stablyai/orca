@@ -12,7 +12,8 @@ import {
 } from '../page-activity/browser-agent-activity'
 import { BrowserPageEvents, type BrowserPageEvent } from '../page-activity/browser-page-events'
 import { BrowserPageInputCredit } from '../../routing/input-ownership/browser-page-input-credit'
-import { browserPopupPageId } from '../popups/browser-popup-page-id'
+import { browserPopupPageId, browserPopupPageWebContentsId } from '../popups/browser-popup-page-id'
+import { resolveBrowserRouteGuestPopupOpener } from '../../routing/guest-authority/browser-route-guest-popup-ownership'
 import type { RpcCallerIdentity } from '../../../runtime/rpc/callers/rpc-caller-identity'
 
 export abstract class BrowserManagerVisibility extends BrowserManagerState {
@@ -37,7 +38,29 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
 
   /** Holds the page's agent marking for one queued command, from queueing until it settles. */
   beginAgentCommand(browserPageId: string): AgentCommandLease {
-    return this.agentActivity.beginCommand(browserPageId)
+    const lease = this.agentActivity.beginCommand(browserPageId)
+    const guestId =
+      this.webContentsIdByTabId.get(browserPageId) ?? browserPopupPageWebContentsId(browserPageId)
+    // Only attached guests, whose teardown releases the lead.
+    if (lease.agent && guestId !== null && this.policyAttachedGuestIds.has(guestId)) {
+      this.agentLedGuestIds.add(guestId)
+    }
+    return lease
+  }
+
+  /** A popup opened from a page the agent leads starts led too. */
+  protected inheritAgentLead(openerWebContentsId: number, popupWebContentsId: number): void {
+    if (
+      this.agentLedGuestIds.has(openerWebContentsId) &&
+      this.policyAttachedGuestIds.has(popupWebContentsId)
+    ) {
+      this.agentLedGuestIds.add(popupWebContentsId)
+    }
+  }
+
+  /** The desktop user's own input takes the page back from the agent. */
+  protected releaseAgentLead(guestWebContentsId: number): void {
+    this.agentLedGuestIds.delete(guestWebContentsId)
   }
 
   /** Clears the agent marking from every page this SSH host was driving. */
@@ -65,9 +88,15 @@ export abstract class BrowserManagerVisibility extends BrowserManagerState {
     }
   }
 
-  /** An agent is driving the page this guest shows (a tab or a popup). */
-  isAgentUsingGuest(guestWebContentsId: number): boolean {
-    return this.isAgentUsingPage(this.pageIdForGuest(guestWebContentsId))
+  /** An agent drives the page this guest shows (a tab or a popup), or drove it since the desktop user last gave it input. */
+  isAgentLeadingGuest(guestWebContentsId: number): boolean {
+    // SSH route popups skip guest policies, so they follow their opener's lead.
+    const leadingGuestId =
+      resolveBrowserRouteGuestPopupOpener(guestWebContentsId) ?? guestWebContentsId
+    return (
+      this.agentLedGuestIds.has(leadingGuestId) ||
+      this.isAgentUsingPage(this.pageIdForGuest(guestWebContentsId))
+    )
   }
 
   private pageIdForGuest(guestWebContentsId: number): string {

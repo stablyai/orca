@@ -130,7 +130,6 @@
 1 test-no-real-time-wait:src/main/browser/cdp/input/guest-focused-frame-route.test.ts
 3 test-no-real-time-wait:src/main/browser/cookies/browser-cookie-import-concurrency.test.ts
 1 test-no-real-time-wait:src/main/browser/guest-lifecycle/popups/compatibility/browser-popup-native-compatibility.electron.test.ts
-1 test-no-real-time-wait:src/main/browser/identity/wire-probes/browser-session-ua-wire-identity-cross-context.electron.test.ts
 1 test-no-real-time-wait:src/main/browser/identity/wire-probes/browser-session-ua-wire-identity.electron.test.ts
 1 test-no-real-time-wait:src/main/browser/network/tunnels/execution-route-socket-duplex.test.ts
 1 test-no-real-time-wait:src/main/browser/network/tunnels/remote-browser-socks-server.test.ts
@@ -555,7 +554,6 @@
 1 test-timeout-needs-reason:src/main/browser/cookies/browser-cookie-import-partition.electron.test.ts
 1 test-timeout-needs-reason:src/main/browser/cookies/browser-cookie-import-validated-partition.electron.test.ts
 1 test-timeout-needs-reason:src/main/browser/guest-lifecycle/find/browser-find-frame-traversal.electron.test.ts
-1 test-timeout-needs-reason:src/main/browser/identity/wire-probes/browser-session-ua-wire-identity-cross-context.electron.test.ts
 1 test-timeout-needs-reason:src/main/browser/identity/wire-probes/browser-session-ua-wire-identity.electron.test.ts
 2 test-timeout-needs-reason:src/main/codex/app-server/codex-app-server-teardown.integration.test.ts
 1 test-timeout-needs-reason:src/main/codex/hooks/installation/hook-service-legacy-cleanup.test.ts
