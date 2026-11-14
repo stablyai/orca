@@ -1,11 +1,10 @@
 import { AiVaultScanRowObservers } from './ai-vault-scan-row-observers'
 import { randomUUID } from 'node:crypto'
-import {
-  AI_VAULT_SCAN_CANCELLED_MESSAGE,
-  type AiVaultListResult
-} from '../../../shared/ai-vault/contracts/ai-vault-types'
+import type { AiVaultListResult } from '../../../shared/ai-vault/contracts/ai-vault-types'
+import { createAiVaultScanCancelledError as scanCancellationError } from './ai-vault-scan-cancellation'
 import type { AiVaultRowDelta, AiVaultScanRows } from '../../../shared/ai-vault-scan-rows'
 import {
+  acceptScanOutcome,
   createScanRecoveryInterest,
   forwardScanRecoveryInterest,
   inheritScanRecoveryInterest,
@@ -26,6 +25,7 @@ type Run = {
   observeRows?: (rows: AiVaultScanRows) => void
   onCreate?: (id: string) => void
   onError?: (error: unknown) => void
+  onAccept?: (outcome: ScanOutcome, requiredOrder: number) => void
   onReject?: (error: unknown, id: string) => unknown
   start: (
     signal: AbortSignal,
@@ -45,9 +45,11 @@ type Entry = {
   rows: AiVaultScanRowObservers
 }
 
+type ExecutionOwner = { active: Entry; queued?: Entry }
+
 /** A force arriving during observation owns one trailing pass, without aborting healthy work. */
 export class AiVaultScanCoordinator {
-  private readonly entries = new Map<string, Entry>()
+  private readonly entries = new Map<string, ExecutionOwner>()
 
   run(args: Run): Promise<AiVaultListResult> {
     if (args.signal?.aborted) {
@@ -56,29 +58,64 @@ export class AiVaultScanCoordinator {
     args = { ...args, requiredOrder: args.requiredOrder ?? scanForceOrder(args.force, args.signal) }
     const receipt = scanRecoveryInterest(args.signal)?.receipts.get(args.key)
     if (args.requiredOrder && receipt && receipt.order > args.requiredOrder) {
+      acceptScanOutcome(receipt, args.requiredOrder)
       return receipt.ok
         ? Promise.resolve(receipt.result)
         : Promise.reject(
             args.onReject ? args.onReject(receipt.error, receipt.scanId ?? '') : receipt.error
           )
     }
-    let entry = this.entries.get(args.key)
-    const leading = entry
+    let owner = this.entries.get(args.key)
+    const active = owner?.active
     const trailing =
-      !!entry &&
-      !!args.requiredOrder &&
-      entry.started &&
-      (scanRecoveryInterest(entry.controller.signal)?.observation ?? 0) <= args.requiredOrder
-    if (!entry || trailing) {
-      entry = this.create(args, trailing ? leading : undefined)
-      this.entries.set(args.key, entry)
+      !!active &&
+      (active.controller.signal.aborted ||
+        (!!args.requiredOrder &&
+          active.started &&
+          (scanRecoveryInterest(active.controller.signal)?.observation ?? 0) <= args.requiredOrder))
+    let entry = trailing ? owner?.queued : active
+    if (!entry) {
+      const completion = Promise.withResolvers<AiVaultListResult>()
+      entry = this.create(completion.promise)
+      const leading = trailing ? owner?.active : undefined
+      if (owner) {
+        owner.queued = entry
+      } else {
+        owner = { active: entry }
+        this.entries.set(args.key, owner)
+      }
+      const attached = this.attach(args, entry, owner)
+      this.launch(args, entry, owner, completion, leading)
+      return attached
     }
-    return this.attach(args, entry)
+    return this.attach(args, entry, owner!)
   }
 
-  private create(args: Run, leading?: Entry): Entry {
+  private create(promise: Promise<AiVaultListResult>): Entry {
     const controller = new AbortController()
-    const interest = createScanRecoveryInterest(controller.signal)
+    createScanRecoveryInterest(controller.signal)
+    const id = randomUUID()
+    return {
+      id,
+      controller,
+      promise,
+      waiters: 0,
+      started: false,
+      settled: false,
+      requirements: new Map(),
+      rows: new AiVaultScanRowObservers(id, controller.signal)
+    }
+  }
+
+  private launch(
+    args: Run,
+    entry: Entry,
+    owner: ExecutionOwner,
+    completion: ReturnType<typeof Promise.withResolvers<AiVaultListResult>>,
+    leading?: Entry
+  ): void {
+    const { controller, id } = entry
+    const interest = scanRecoveryInterest(controller.signal)!
     const leadingInterest = leading ? scanRecoveryInterest(leading.controller.signal) : undefined
     const releaseLeading = leadingInterest
       ? forwardScanRecoveryInterest(interest, leadingInterest)
@@ -86,23 +123,13 @@ export class AiVaultScanCoordinator {
     if (leadingInterest) {
       interest.receipts = leadingInterest.receipts
     }
-    const id = randomUUID()
-    const entry: Entry = {
-      id,
-      controller,
-      promise: Promise.resolve(undefined!),
-      waiters: 0,
-      started: false,
-      settled: false,
-      requirements: new Map(),
-      rows: new AiVaultScanRowObservers(id, controller.signal)
-    }
     const hold = leading ? new AbortController() : null
     const held =
       leading && hold
         ? this.attach(
             { ...args, force: false, requiredOrder: 0, signal: hold.signal },
-            leading
+            leading,
+            owner
           ).then(
             () => leading.outcome,
             () => leading.outcome
@@ -110,13 +137,21 @@ export class AiVaultScanCoordinator {
         : null
     const releaseHold = () => hold?.abort()
     controller.signal.addEventListener('abort', releaseHold, { once: true })
-    entry.promise = Promise.resolve().then(async () => {
+    if (controller.signal.aborted) {
+      releaseHold()
+    }
+    let acceptedLeading: ScanOutcome | undefined
+    const running = Promise.resolve().then(async () => {
       if (leading) {
         const outcome = await held
         releaseHold()
+        if (controller.signal.aborted) {
+          throw scanCancellationError()
+        }
         const required = Math.max(0, ...entry.requirements.values())
         if (outcome && outcome.order > required) {
           interest.observation = outcome.order
+          acceptedLeading = outcome
           if (outcome.ok) {
             return outcome.result
           }
@@ -142,63 +177,85 @@ export class AiVaultScanCoordinator {
     })
     const settle = () => {
       entry.settled = true
+      if (owner.active === entry) {
+        if (owner.queued) {
+          owner.active = owner.queued
+          owner.queued = undefined
+        } else if (this.entries.get(args.key) === owner) {
+          this.entries.delete(args.key)
+        }
+      } else if (owner.queued === entry) {
+        owner.queued = undefined
+      }
       entry.rows.dispose()
       releaseLeading()
       releaseHold()
       controller.signal.removeEventListener('abort', releaseHold)
-      if (this.entries.get(args.key) === entry) {
-        this.entries.delete(args.key)
+    }
+    const accept = (requiredOrder: number) => {
+      if (!entry.outcome?.ok || entry.outcome.order <= requiredOrder) {
+        return
+      }
+      if (acceptedLeading) {
+        acceptedLeading.accept?.(requiredOrder)
+      } else {
+        args.onAccept?.(entry.outcome, requiredOrder)
+      }
+      for (const outcome of interest.receipts.values()) {
+        acceptScanOutcome(outcome, requiredOrder)
       }
     }
-    void entry.promise.then(
+    void running.then(
       (result) => {
-        entry.outcome = { ok: true, result, order: interest.observation, scanId: id }
+        entry.outcome = { ok: true, result, order: interest.observation, scanId: id, accept }
         settle()
+        completion.resolve(result)
       },
       (error) => {
         entry.outcome = { ok: false, error, order: interest.observation, scanId: id }
-        args.onError?.(error)
         settle()
+        args.onError?.(error)
+        completion.reject(error)
       }
     )
-    return entry
   }
 
-  private attach(args: Run, entry: Entry): Promise<AiVaultListResult> {
-    entry.waiters++
-    const interest = scanRecoveryInterest(entry.controller.signal)
-    const forced = args.force === true && scanRecoveryInterest(args.signal) === undefined
-    const releaseParent = inheritScanRecoveryInterest(args.signal, entry.controller.signal)
-    const obligation = Symbol()
-    if (args.requiredOrder) {
-      entry.requirements.set(obligation, args.requiredOrder ?? 0)
-    }
-    if (forced && interest) {
-      interest.forced++
-      notifyScanRecoveryInterest(interest)
-    }
-    const releaseRows = entry.rows.attach(args.observeRows)
+  private attach(args: Run, entry: Entry, owner: ExecutionOwner): Promise<AiVaultListResult> {
     return new Promise((resolve, reject) => {
       let attached = true
+      let releaseRows: () => void = () => undefined
+      let releaseParent: () => void = () => undefined
+      const interest = scanRecoveryInterest(entry.controller.signal)
+      const forced = args.force === true && scanRecoveryInterest(args.signal) === undefined
+      const obligation = Symbol()
+      entry.waiters++
+      if (args.requiredOrder) {
+        entry.requirements.set(obligation, args.requiredOrder)
+      }
+      if (forced && interest) {
+        interest.forced++
+      }
       const detach = () => {
         if (!attached) {
           return
         }
         attached = false
         args.signal?.removeEventListener('abort', abort)
-        releaseRows()
         entry.waiters--
         entry.requirements.delete(obligation)
-        releaseParent()
         if (forced && interest) {
           interest.forced--
-          notifyScanRecoveryInterest(interest)
         }
         if (!entry.waiters && !entry.settled) {
-          if (this.entries.get(args.key) === entry) {
-            this.entries.delete(args.key)
+          if (owner.queued === entry) {
+            owner.queued = undefined
           }
           entry.controller.abort()
+        }
+        releaseRows()
+        releaseParent()
+        if (forced && interest) {
+          notifyScanRecoveryInterest(interest)
         }
       }
       const abort = () => {
@@ -210,10 +267,27 @@ export class AiVaultScanCoordinator {
         abort()
         return
       }
+      const parent = inheritScanRecoveryInterest(args.signal, entry.controller.signal)
+      if (attached) {
+        releaseParent = parent
+      } else {
+        parent()
+      }
+      const rows = entry.rows.attach(args.observeRows)
+      if (attached) {
+        releaseRows = rows
+      } else {
+        rows()
+      }
+      if (forced && interest) {
+        notifyScanRecoveryInterest(interest)
+      }
+
       void entry.promise.then(
         (result) => {
           if (attached) {
             if (entry.outcome) {
+              entry.outcome.accept?.(args.requiredOrder ?? 0)
               recordScanOutcome(args.signal, args.key, entry.outcome)
             }
             detach()
@@ -232,10 +306,4 @@ export class AiVaultScanCoordinator {
       )
     })
   }
-}
-
-function scanCancellationError(): Error {
-  const error = new Error(AI_VAULT_SCAN_CANCELLED_MESSAGE)
-  error.name = 'AbortError'
-  return error
 }

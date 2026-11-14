@@ -106,6 +106,7 @@ export function observeAiVaultProvisionalRows(args: {
   const preview = new AiVaultProvisionalRows(args.baseline, args.deleted, args.limit)
   let observing = true
   let rows: readonly AiVaultSession[] = args.baseline
+  let cancelPublication: (() => void) | undefined
   const unsubscribe = window.api.aiVault.onScanRows?.((event) => {
     if (!observing || event.requestToken !== args.requestToken || !args.isCurrent()) {
       return
@@ -113,16 +114,17 @@ export function observeAiVaultProvisionalRows(args: {
     if (!preview.accept(event)) {
       return
     }
-    args.gate.publishProvisional(() => {
-      if (!observing || !args.isCurrent()) {
-        return
-      }
-      rows = preview.snapshot(rows)
-      args.apply(rows)
-    })
+    cancelPublication = args.gate.publishProvisional(
+      () => {
+        rows = preview.snapshot(rows)
+        args.apply(rows)
+      },
+      () => observing && args.isCurrent()
+    )
   })
   return () => {
     observing = false
+    cancelPublication?.()
     preview.retire()
     unsubscribe?.()
   }

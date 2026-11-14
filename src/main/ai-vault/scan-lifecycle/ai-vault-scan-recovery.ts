@@ -1,9 +1,10 @@
 import type { AiVaultListResult } from '../../../shared/ai-vault/contracts/ai-vault-types'
 
-export type ScanOutcome = { order: number; scanId?: string } & (
-  | { ok: true; result: AiVaultListResult }
-  | { ok: false; error: unknown }
-)
+export type ScanOutcome = {
+  order: number
+  scanId?: string
+  accept?: (requiredOrder: number) => void
+} & ({ ok: true; result: AiVaultListResult } | { ok: false; error: unknown })
 type Interest = {
   forced: number
   inherited: number
@@ -83,5 +84,12 @@ export function forwardScanRecoveryInterest(source: Interest, target: Interest):
     source.listeners.delete(update)
     target.sources.delete(token)
     updateTotal()
+  }
+}
+
+/** A successful observation discharges an obligation only after it actually began. */
+export function acceptScanOutcome(outcome: ScanOutcome, requiredOrder: number): void {
+  if (outcome.ok && outcome.order > requiredOrder) {
+    outcome.accept?.(requiredOrder)
   }
 }

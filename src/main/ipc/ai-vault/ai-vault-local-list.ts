@@ -19,9 +19,26 @@ export async function scanLocalAiVaultSessionsAsIssue(
   publish?: (delta: AiVaultRowDelta) => void
 ): Promise<AiVaultListResult> {
   try {
+    const forwarded = new Set<string>()
     const observe = publish
-      ? (rows: AiVaultScanRows) =>
-          publish(rows.kind === 'delta' ? rows.delta : { upserts: [...rows.sessions], removed: [] })
+      ? (rows: AiVaultScanRows) => {
+          const snapshotIds =
+            rows.kind === 'snapshot' ? new Set(rows.sessions.map((row) => row.id)) : null
+          const delta =
+            rows.kind === 'delta'
+              ? rows.delta
+              : {
+                  upserts: [...rows.sessions],
+                  removed: [...forwarded].filter((id) => !snapshotIds?.has(id))
+                }
+          for (const id of delta.removed) {
+            forwarded.delete(id)
+          }
+          for (const row of delta.upserts) {
+            forwarded.add(row.id)
+          }
+          publish(delta)
+        }
       : undefined
     if (observe && publish) {
       forwardRowInterest(observe, publish)

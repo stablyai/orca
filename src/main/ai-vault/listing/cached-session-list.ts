@@ -3,7 +3,6 @@ import type { AiVaultScanRows } from '../../../shared/ai-vault-scan-rows'
 import {
   recordScanOutcome,
   scanForceOrder,
-  scanRecoveryInterest,
   type ScanOutcome
 } from '../scan-lifecycle/ai-vault-scan-recovery'
 import {
@@ -71,8 +70,8 @@ const cachedLists = new Map<string, CachedAiVaultList>()
 let scanCoordinator = new AiVaultScanCoordinator()
 // Reject cache writes from scans that began before invalidation, or late results can resurrect deleted sessions.
 let cacheGeneration = 0
-// Advances on each forced refresh, so a scan that began before one cannot cache its older result.
-let forcedRefreshEpoch = 0
+// Older observations cannot repopulate caches after an accepted Refresh.
+let acceptedForceOrder = 0
 
 export async function listAiVaultSessions(
   args?: AiVaultListArgs,
@@ -90,6 +89,7 @@ export async function listAiVaultSessions(
   const fullKey = args?.scopeOnly ? aiVaultLocalScanScopeKey({ ...args, scopeOnly: false }) : key
   const cachedList = servingCachedList([key, fullKey], depth, args, now, requiredOrder)
   if (cachedList) {
+    cachedList.outcome.accept?.(requiredOrder)
     recordScanOutcome(
       options.signal,
       JSON.stringify({ scanKey, generation: cacheGeneration }),
@@ -99,7 +99,6 @@ export async function listAiVaultSessions(
   }
   // Capture before the coordinator's start microtask so intervening invalidation still rejects the result.
   const startGeneration = cacheGeneration
-  const startForcedRefresh = forcedRefreshEpoch
   let progress: LocalAiVaultScanProgressHandle | null = null
   return scanCoordinator.run({
     // Isolate invalidated scans without changing the key used by progress readers.
@@ -114,8 +113,38 @@ export async function listAiVaultSessions(
     onError: () => progress?.fail(),
     onReject: (error, scanId) =>
       isAiVaultScanCancelledError(error) ? error : new AiVaultLocalScanError(scanId, error),
+    onAccept: (outcome, required) => {
+      if (!outcome.ok || startGeneration !== cacheGeneration || outcome.order <= required) {
+        return
+      }
+      if (required > acceptedForceOrder) {
+        acceptedForceOrder = required
+        for (const [cachedKey, cached] of cachedLists) {
+          if (cached.outcome.order <= required) {
+            cachedLists.delete(cachedKey)
+          }
+        }
+      }
+      if (outcome.order <= acceptedForceOrder) {
+        return
+      }
+      const current = cachedLists.get(key)
+      if (
+        !current ||
+        current.expiresAt <= Date.now() ||
+        (outcome.order >= current.outcome.order &&
+          !aiVaultCachedDepthServes(current.depth, depth, args?.scopePaths))
+      ) {
+        rememberCachedList({
+          key,
+          depth,
+          result: outcome.result,
+          outcome,
+          expiresAt: Date.now() + AI_VAULT_CACHE_TTL_MS
+        })
+      }
+    },
     start: async (scanSignal, scanId, publish) => {
-      const force = (scanRecoveryInterest(scanSignal)?.required ?? 0) > 0
       const scanProgress = progress
       if (!scanProgress) {
         throw new Error('Local scan progress was not created.')
@@ -150,38 +179,6 @@ export async function listAiVaultSessions(
         { ...attachAiVaultScopeCwdAliases(scanned, scope), scanId },
         wslConfirmed
       )
-      // Return pre-invalidation results to their caller, but never repopulate the cache with them.
-      if (
-        !scanSignal.aborted &&
-        startGeneration === cacheGeneration &&
-        startForcedRefresh === forcedRefreshEpoch
-      ) {
-        const current = cachedLists.get(key)
-        if (
-          force ||
-          !current ||
-          current.expiresAt <= Date.now() ||
-          !aiVaultCachedDepthServes(current.depth, depth, args?.scopePaths)
-        ) {
-          // A forced refresh supersedes every list: an older one for another scope (the
-          // scope-only view a full list also serves) must not be served after it.
-          if (force) {
-            cachedLists.clear()
-            forcedRefreshEpoch++
-          }
-          rememberCachedList({
-            key,
-            depth,
-            result,
-            outcome: {
-              ok: true,
-              result,
-              order: scanRecoveryInterest(scanSignal)?.observation ?? 0
-            },
-            expiresAt: Date.now() + AI_VAULT_CACHE_TTL_MS
-          })
-        }
-      }
       return result
     }
   })

@@ -113,6 +113,8 @@ it.each([false, true])(
     const path = join(roots.codexSessionsDir, 'rollout-legacy.jsonl')
     const cache = { filePath: join(root, 'cache', 'parse.json'), appVersion: 'test' }
     await writeJsonlFile(path, codex('before'))
+    const timestamp = new Date('2026-11-13T12:00:00.000Z')
+    await fs.utimes(path, timestamp, timestamp)
     const before = await fs.stat(path)
     initSessionParseCachePersistence(cache)
     const first = await scanAiVaultSessions({ ...roots, unlimited: true })
@@ -125,8 +127,12 @@ it.each([false, true])(
     const replacement = join(root, 'replacement.jsonl')
     await writeJsonlFile(replacement, codex('after!'))
     expect((await fs.stat(replacement)).size).toBe(before.size)
-    await fs.utimes(replacement, before.atime, before.mtime)
+    await fs.utimes(replacement, timestamp, timestamp)
     await fs.rename(replacement, path)
+    const replaced = await fs.stat(path)
+    expect(replaced.mtimeMs).toBe(before.mtimeMs)
+    expect(replaced.size).toBe(before.size)
+    expect(replaced.ino).not.toBe(before.ino)
     if (restart) {
       initSessionParseCachePersistence(cache)
     }

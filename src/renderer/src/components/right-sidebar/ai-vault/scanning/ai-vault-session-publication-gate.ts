@@ -25,41 +25,60 @@ export class AiVaultSessionPublicationGate {
   }
 
   publish(result: AiVaultListResult, apply: (result: AiVaultListResult) => void): void {
-    this.cancel()
-    const generation = this.generation
-    // Counted when it lands: a cancelled publication must not drop a saved list still on its way.
-    const land = () => {
-      this.published += 1
-      startTransition(() => apply(result))
-    }
-    if (hasInputBeenQuietFor(AI_VAULT_PUBLICATION_QUIET_MS)) {
-      land()
-      return
-    }
-    this.cancelPending = scheduleAfterInputQuiet(
-      () => {
-        if (generation !== this.generation) {
-          return
-        }
-        this.cancelPending = null
-        land()
-      },
-      {
-        delayMs: 0,
-        quietMs: AI_VAULT_PUBLICATION_QUIET_MS,
-        idleTimeoutMs: AI_VAULT_PUBLICATION_QUIET_MS,
-        maxWaitMs: AI_VAULT_PUBLICATION_MAX_WAIT_MS
-      }
+    this.enqueue(
+      () => apply(result),
+      () => true
     )
   }
 
-  publishProvisional(apply: () => void): void {
-    this.publish({ sessions: [], issues: [], scannedAt: '' }, apply)
+  publishProvisional(apply: () => void, eligible: () => boolean): () => void {
+    return this.enqueue(apply, eligible)
+  }
+
+  private pending: (() => void) | null = null
+
+  private enqueue(apply: () => void, eligible: () => boolean): () => void {
+    const land = () => {
+      if (eligible()) {
+        this.published += 1
+        startTransition(apply)
+      }
+    }
+    this.pending = land
+    if (hasInputBeenQuietFor(AI_VAULT_PUBLICATION_QUIET_MS)) {
+      this.cancel()
+      land()
+    } else if (!this.cancelPending) {
+      const generation = this.generation
+      this.cancelPending = scheduleAfterInputQuiet(
+        () => {
+          if (generation !== this.generation) {
+            return
+          }
+          const pending = this.pending
+          this.pending = null
+          this.cancelPending = null
+          pending?.()
+        },
+        {
+          delayMs: 0,
+          quietMs: AI_VAULT_PUBLICATION_QUIET_MS,
+          idleTimeoutMs: AI_VAULT_PUBLICATION_QUIET_MS,
+          maxWaitMs: AI_VAULT_PUBLICATION_MAX_WAIT_MS
+        }
+      )
+    }
+    return () => {
+      if (this.pending === land) {
+        this.cancel()
+      }
+    }
   }
 
   cancel(): void {
     this.generation += 1
     this.cancelPending?.()
     this.cancelPending = null
+    this.pending = null
   }
 }

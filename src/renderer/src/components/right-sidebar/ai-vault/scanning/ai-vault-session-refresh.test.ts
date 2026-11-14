@@ -1,5 +1,11 @@
 // @vitest-environment happy-dom
 
+import { AiVaultSessionPublicationGate } from './ai-vault-session-publication-gate'
+import { observeAiVaultProvisionalRows } from '../../ai-vault-provisional-rows'
+import {
+  markInputQuietSchedulerInput,
+  resetInputQuietSchedulerForTest
+} from '@/lib/window-activity/input-quiet-scheduler'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -151,6 +157,7 @@ function lastCallArgs(): unknown {
 
 beforeEach(() => {
   vi.useFakeTimers()
+  resetInputQuietSchedulerForTest()
   listSessionsMock.mockReset().mockResolvedValue(EMPTY_RESULT)
   cancelListSessionsMock.mockReset().mockResolvedValue()
   rowObservers.clear()
@@ -388,3 +395,85 @@ describe('useAiVaultSessionRefresh after a restart', () => {
 })
 
 // Plain HTTP hides crypto.randomUUID; fallback tokens must remain v4 UUIDs (#18096).
+
+describe('progressive History publication ownership', () => {
+  function observe(
+    gate: AiVaultSessionPublicationGate,
+    apply: (rows: readonly AiVaultSession[]) => void
+  ) {
+    return observeAiVaultProvisionalRows({
+      requestToken: 'token',
+      baseline: [],
+      deleted: new Set(),
+      gate,
+      isCurrent: () => true,
+      apply
+    })
+  }
+  function emit(sequence: number) {
+    for (const callback of rowObservers) {
+      callback({
+        requestToken: 'token',
+        scanId: 'scan',
+        sequence,
+        reset: sequence === 1,
+        upserts: [makeVaultSession(sequence)],
+        removed: sequence > 1 ? [`session-${sequence - 1}`] : []
+      })
+    }
+  }
+
+  it('publishes the latest rows by the first deadline despite continuous input and batches', async () => {
+    vi.spyOn(performance, 'now').mockImplementation(() => Date.now())
+    const gate = new AiVaultSessionPublicationGate()
+    const reentrant = vi.fn()
+    const apply = vi.fn((_rows: readonly AiVaultSession[]) => gate.publish(EMPTY_RESULT, reentrant))
+    const stop = observe(gate, apply)
+    markInputQuietSchedulerInput()
+    emit(1)
+    for (let sequence = 2; sequence <= 20; sequence++) {
+      await vi.advanceTimersByTimeAsync(50)
+      markInputQuietSchedulerInput()
+      emit(sequence)
+    }
+    expect(apply).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(50)
+    expect(apply).toHaveBeenCalledOnce()
+    expect(apply.mock.calls[0]?.[0]?.map((row) => row.id)).toEqual(['session-20'])
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(reentrant).toHaveBeenCalledOnce()
+    stop()
+    gate.cancel()
+  })
+
+  it('lets delayed saved rows appear after a queued provisional owner retires', async () => {
+    const gate = new AiVaultSessionPublicationGate()
+    const saved = deferredList()
+    const applySaved = vi.fn()
+    gate.showUntilPublished(saved.promise, applySaved)
+    const apply = vi.fn()
+    const stop = observe(gate, apply)
+    markInputQuietSchedulerInput()
+    emit(1)
+    stop()
+    await vi.advanceTimersByTimeAsync(1000)
+    saved.resolve(EMPTY_RESULT)
+    await flushMicrotasks()
+    expect(apply).not.toHaveBeenCalled()
+    expect(applySaved).toHaveBeenCalledWith(EMPTY_RESULT)
+    gate.cancel()
+  })
+
+  it('keeps an authoritative result that replaced a retiring provisional callback', async () => {
+    const gate = new AiVaultSessionPublicationGate()
+    const stop = observe(gate, vi.fn())
+    const applyFinal = vi.fn()
+    markInputQuietSchedulerInput()
+    emit(1)
+    gate.publish(EMPTY_RESULT, applyFinal)
+    stop()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(applyFinal).toHaveBeenCalledOnce()
+    gate.cancel()
+  })
+})

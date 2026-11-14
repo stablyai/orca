@@ -24,6 +24,16 @@ export async function readFirstCwd(
   agent: AiVaultAgent,
   signal?: AbortSignal
 ): Promise<string | null> {
+  try {
+    return await readObservedCwd(filePath, signal)
+  } catch (err) {
+    throwIfAiVaultScanCancelled(signal)
+    recordRefusal(issues, filePath, err, agent)
+    return null
+  }
+}
+
+async function readObservedCwd(filePath: string, signal?: AbortSignal): Promise<string | null> {
   const observed = await wslGatedStat(filePath, 'scan', signal)
   const file: FileWithMtime = {
     path: filePath,
@@ -62,10 +72,6 @@ export async function readFirstCwd(
         return cwd
       }
     }
-  } catch (err) {
-    throwIfAiVaultScanCancelled(signal)
-    recordRefusal(issues, filePath, err, agent)
-    return null
   } finally {
     // readline.close() leaves its input open; destroy the stream after early exits and read failures.
     lines.close()

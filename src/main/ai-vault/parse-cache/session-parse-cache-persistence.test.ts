@@ -22,8 +22,10 @@ import {
 } from './session-scanner-parse-cache'
 import {
   invalidateSessionParseCacheEntry,
-  resetSessionParseCacheForTests
+  resetSessionParseCacheForTests,
+  storeSessionScopeCwd
 } from './session-parse-cache-store'
+import { readSessionCopyProof } from './session-copy-proof'
 import type * as ParseCacheModule from './session-scanner-parse-cache'
 import { parseSessionCandidate } from '../parsing/session-scanner-candidate-parse'
 import { MAX_SESSION_TRANSCRIPT_RECORD_BYTES } from '../transcripts/session-transcript-record-budget'
@@ -293,4 +295,29 @@ describe('session parse cache persistence', () => {
     expect(fsPromises.readdir).not.toHaveBeenCalled()
     expect(await readdir(root)).toEqual([])
   })
+})
+
+it('drains copy proofs and later scope writes when the database cannot open', async () => {
+  const root = await makeTempDir()
+  const blocked = join(root, 'not-a-directory')
+  await writeFile(blocked, 'blocked')
+  initSessionParseCachePersistence({
+    filePath: join(blocked, 'parse.json'),
+    appVersion: APP_VERSION
+  })
+  const file = {
+    path: join(root, 'transcript.jsonl'),
+    mtimeMs: 1,
+    modifiedAt: '',
+    sizeBytes: 2,
+    dev: 1,
+    ino: 2,
+    birthtimeMs: 3
+  }
+  await expect(readSessionCopyProof(file, async () => 'proved-session')).resolves.toBe(
+    'proved-session'
+  )
+  storeSessionScopeCwd(file.path, { ...file, platform: process.platform, cwd: '/repo' })
+  await flushSessionParseCachePersist()
+  await flushSessionParseCachePersist()
 })

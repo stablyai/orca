@@ -98,7 +98,8 @@ export async function flushSessionParseCachePersist(): Promise<void> {
     }
   }
   while (pendingCopyProofs.size > 0) {
-    openedDatabase()?.writeCopyProofs(takeWriteChunk(pendingCopyProofs), Date.now())
+    const chunk = takeWriteChunk(pendingCopyProofs)
+    openedDatabase()?.writeCopyProofs(chunk, Date.now())
     if (pendingCopyProofs.size > 0) {
       await yieldToEventLoop()
     }

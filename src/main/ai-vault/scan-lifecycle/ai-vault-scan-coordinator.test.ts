@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { AiVaultScanCoordinator } from './ai-vault-scan-coordinator'
-import { scanRecoveryInterest, nextScanObservationOrder } from './ai-vault-scan-recovery'
+import {
+  scanRecoveryInterest,
+  nextScanObservationOrder,
+  createScanRecoveryInterest
+} from './ai-vault-scan-recovery'
 
 const EMPTY = { sessions: [], issues: [], scannedAt: '2026-11-13' }
 function deferred<T>() {
@@ -164,4 +168,54 @@ it('drops a detached newest requirement so a recovered observation can serve sur
   pending.resolve(EMPTY)
   await Promise.all([first, force])
   expect(start).not.toHaveBeenCalled()
+})
+
+it.each([10, 100])(
+  'keeps one live execution across %i cancelled successors and abort re-entry',
+  async (count) => {
+    const coordinator = new AiVaultScanCoordinator()
+    const pending = Promise.withResolvers<typeof EMPTY>()
+    const start = vi.fn(() => pending.promise)
+    const first = coordinator.run({ key: 'scope', start })
+    await Promise.resolve()
+    const survivors: Promise<typeof EMPTY>[] = []
+    for (let index = 0; index < count; index++) {
+      const controller = new AbortController()
+      const forced = coordinator.run({
+        key: 'scope',
+        start,
+        force: true,
+        signal: controller.signal
+      })
+      const cancelled = expect(forced).rejects.toMatchObject({ name: 'AbortError' })
+      controller.signal.addEventListener(
+        'abort',
+        () => {
+          survivors.push(coordinator.run({ key: 'scope', start }))
+        },
+        { once: true }
+      )
+      controller.abort()
+      await cancelled
+    }
+    expect(start).toHaveBeenCalledOnce()
+    pending.resolve(EMPTY)
+    await expect(Promise.all([first, ...survivors])).resolves.toEqual(
+      Array.from({ length: count + 1 }, () => EMPTY)
+    )
+    expect(start).toHaveBeenCalledOnce()
+  }
+)
+
+it('carries accepted-outcome policy through a completed parent receipt without another start', async () => {
+  const coordinator = new AiVaultScanCoordinator()
+  const parent = new AbortController()
+  const interest = createScanRecoveryInterest(parent.signal)
+  interest.required = nextScanObservationOrder()
+  const start = vi.fn(async () => EMPTY)
+  const onAccept = vi.fn()
+  await coordinator.run({ key: 'scope', force: true, signal: parent.signal, start, onAccept })
+  await coordinator.run({ key: 'scope', force: true, signal: parent.signal, start })
+  expect(start).toHaveBeenCalledOnce()
+  expect(onAccept).toHaveBeenCalledTimes(2)
 })
