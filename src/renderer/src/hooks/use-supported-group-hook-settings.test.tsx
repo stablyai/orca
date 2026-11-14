@@ -7,6 +7,7 @@ import { createProjectGroup } from '../../../shared/project-groups'
 import { PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY } from '../../../shared/worktree-runtime-capabilities'
 import { clearRuntimeCompatibilityCache } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { publicRuntimeEnvironment } from '@/runtime/rpc/testing/paired-runtime-environment-test-fixture'
 import { useSupportedGroupHookSettings } from './use-supported-group-hook-settings'
 import { ProjectGroupHooksSection } from '@/components/settings/repository/hooks/ProjectGroupHooksSection'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -318,4 +319,77 @@ it('ignores a removed owner reply and waits for replacement contact after a fail
   await waitFor(() => expect(view.result.current[0]?.supportsArchiveHooks).toBe(true))
   view.unmount()
   replaceRuntimeEnvironmentRevisions([])
+})
+
+it('ignores the old pairing reply while only the replaced host is probed again', async () => {
+  for (const count of [10, 100]) {
+    clearRuntimeCompatibilityCache()
+    const changing = publicRuntimeEnvironment({ id: 'changing', pairingRevision: 1 })
+    const quiet = publicRuntimeEnvironment({ id: 'quiet', pairingRevision: 1 })
+    const replies: ((
+      response: ReturnType<typeof createCompatibleRuntimeStatusResponse>
+    ) => void)[] = []
+    const call = vi.fn(({ selector }: { selector: string }) =>
+      selector === 'quiet'
+        ? Promise.resolve(createCompatibleRuntimeStatusResponse('quiet'))
+        : new Promise<ReturnType<typeof createCompatibleRuntimeStatusResponse>>((resolve) => {
+            replies.push(resolve)
+          })
+    )
+    const projectGroups = Array.from({ length: count }, (_, i) => ({
+      ...createProjectGroup({
+        name: `Group ${i}`,
+        parentPath: `/groups/${i}`,
+        createdFrom: 'manual',
+        tabOrder: i
+      }),
+      executionHostId: i % 2 === 0 ? 'runtime:changing' : 'runtime:quiet'
+    }))
+    Object.defineProperty(window.api, 'runtimeEnvironments', {
+      configurable: true,
+      value: { call }
+    })
+    act(() => {
+      useAppStore.setState({
+        runtimeEnvironments: [],
+        runtimeStatusByEnvironmentId: new Map(),
+        projectGroups
+      })
+      useAppStore.getState().setRuntimeEnvironments([changing, quiet])
+    })
+    const view = renderHook(() => useSupportedGroupHookSettings())
+    await waitFor(() => expect(view.result.current).toHaveLength(count / 2))
+    expect(call.mock.calls.map(([request]) => request.selector).sort()).toEqual([
+      'changing',
+      'quiet'
+    ])
+    await act(async () => {
+      useAppStore.getState().setRuntimeEnvironments([{ ...changing, pairingRevision: 2 }, quiet])
+      // The replacement catalog can republish the same group rows after the retired host purge.
+      useAppStore.setState({ projectGroups })
+    })
+    await waitFor(() => expect(replies).toHaveLength(2))
+    await act(async () => replies[0](createCompatibleRuntimeStatusResponse('retired-pairing')))
+    expect(view.result.current).toHaveLength(count / 2)
+    expect(view.result.current.every((group) => group.executionHostId === 'runtime:quiet')).toBe(
+      true
+    )
+    const replacement = createCompatibleRuntimeStatusResponse('replacement-pairing')
+    replacement.result.capabilities = replacement.result.capabilities?.filter(
+      (capability) => capability !== PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY
+    )
+    await act(async () => replies[1](replacement))
+    await waitFor(() => expect(view.result.current).toHaveLength(count))
+    expect(view.result.current.map((group) => group.supportsArchiveHooks)).toEqual(
+      Array.from({ length: count / 2 }, () => [false, true]).flat()
+    )
+    expect(call.mock.calls.map(([request]) => request.selector).sort()).toEqual([
+      'changing',
+      'changing',
+      'quiet'
+    ])
+    view.unmount()
+    await act(async () => useAppStore.getState().setRuntimeEnvironments([]))
+    expect(call).toHaveBeenCalledTimes(3)
+  }
 })
