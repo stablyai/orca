@@ -51,6 +51,8 @@ export function createNormalizedAiVaultScopeCwdMatcher(
     }
     const normalized = cwd
     const namespace = filePath ? sessionFileExecutionNamespace(filePath) : 'native'
+    // A Windows-store transcript with a Linux cwd was recorded by an agent in a local WSL distro (#42369); a POSIX filePath names another host's store and still needs distro proof.
+    const windowsStore = namespace === 'native' && /^[A-Za-z]:[\\/]/.test(filePath ?? '')
     return matchers.some(({ direct, wsl, linux, mounted }) => {
       if (direct(normalized)) {
         return true
@@ -61,7 +63,8 @@ export function createNormalizedAiVaultScopeCwdMatcher(
       // Mounted host drives are shared; Linux home paths require distro proof.
       return mounted
         ? mounted(normalizeRuntimePathForComparison(toWindowsWslPath(cwd, wsl.distro)))
-        : namespace === `wsl:${wsl.distro.toLowerCase()}` && Boolean(linux?.(normalized))
+        : (namespace === `wsl:${wsl.distro.toLowerCase()}` || windowsStore) &&
+            Boolean(linux?.(normalized))
     })
   }
 }
