@@ -4,6 +4,7 @@ import { withDurableRuntimeStore } from '../../../runtime/orca-runtime-tests/run
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import type { Store } from '../../../persistence/loading-store/store'
+import { TerminalSessionOwnerUnverifiedError } from '../../../daemon/protocol/daemon-errors'
 import type { IPtyProvider } from '../../../providers/pty/provider-contract'
 import { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import { adoptStablePane } from './adopt-stable'
@@ -100,6 +101,72 @@ describe('a stable pane whose reattach was refused', () => {
 
     expect(spawn).toHaveBeenCalledTimes(1)
     expect(runtime.getPtyLivenessVerdict(PTY_ID)).toBeNull()
+    expect(JSON.stringify(read())).toBe(before)
+  })
+
+  // #25286: a paused shell's reattach beside an unresponsive legacy daemon must not
+  // dead-end on the unverified banner when main watched the expected incarnation exit.
+  it('respawns fresh when the unverified owner was a certified exit of the expected incarnation', async () => {
+    const { store, read } = paneStore()
+    const paneKey = `${TAB}:${LEAF}`
+    store.setWorkspaceSession({
+      ...read(),
+      terminalPtyIncarnationsByPaneKey: { [paneKey]: 'incarnation-1' }
+    })
+    const runtime = new OrcaRuntimeService()
+    runtime.onPtyExit(PTY_ID, 0, 'incarnation-1', { providerExitObserved: true })
+    expect(runtime.getPtyLivenessVerdict(PTY_ID)).toMatchObject({
+      status: 'exited',
+      incarnationId: 'incarnation-1'
+    })
+    const spawn = vi
+      .fn()
+      .mockRejectedValueOnce(new TerminalSessionOwnerUnverifiedError(PTY_ID))
+      .mockResolvedValueOnce({ id: 'ssh:conn-1@@pty2:epoch-b:1', isReattach: false })
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the refused attachment falls through to the fresh spawn, which never admits this provider.
+    vi.spyOn(providers, 'getProvider').mockReturnValue({ spawn } as unknown as IPtyProvider)
+    const result = await adoptStablePane(runtime, store, {
+      cols: 80,
+      rows: 24,
+      tabId: TAB,
+      leafId: LEAF,
+      worktreeId: WORKTREE,
+      connectionId: CONNECTION,
+      spawnFresh: () => spawn({ cols: 80, rows: 24 })
+    })
+
+    expect(spawn).toHaveBeenCalledTimes(2)
+    expect(result).toBeNull()
+    expect(read().terminalLayoutsByTabId[TAB]?.ptyIdsByLeafId?.[LEAF]).toBeUndefined()
+  })
+
+  it('keeps the unverified banner when the certified exit was another incarnation of the id', async () => {
+    const { store, read } = paneStore()
+    store.setWorkspaceSession({
+      ...read(),
+      terminalPtyIncarnationsByPaneKey: { [`${TAB}:${LEAF}`]: 'incarnation-1' }
+    })
+    const before = JSON.stringify(read())
+    const runtime = new OrcaRuntimeService()
+    runtime.onPtyExit(PTY_ID, 0, 'incarnation-2', { providerExitObserved: true })
+    const spawn = vi.fn().mockRejectedValue(new TerminalSessionOwnerUnverifiedError(PTY_ID))
+
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the banner refusal never admits this provider.
+    vi.spyOn(providers, 'getProvider').mockReturnValue({ spawn } as unknown as IPtyProvider)
+    await expect(
+      adoptStablePane(runtime, store, {
+        cols: 80,
+        rows: 24,
+        tabId: TAB,
+        leafId: LEAF,
+        worktreeId: WORKTREE,
+        connectionId: CONNECTION,
+        spawnFresh: () => spawn({ cols: 80, rows: 24 })
+      })
+    ).rejects.toThrow('terminal_pane_owner_unverified')
+
+    expect(spawn).toHaveBeenCalledTimes(1)
     expect(JSON.stringify(read())).toBe(before)
   })
 })

@@ -25,6 +25,19 @@ function isSameStablePaneOwner(a: StablePaneOwner, b: StablePaneOwner): boolean 
   )
 }
 
+/** Whether main itself watched this exact incarnation exit; an inventory it cannot finish adds nothing (#25286). */
+function expectedIncarnationCertifiedExited(
+  args: StablePaneSpawnContext,
+  owner: StablePaneOwner
+): boolean {
+  const expectedIncarnationId = owner.runtimeIncarnationId ?? owner.persistedIncarnationId
+  if (expectedIncarnationId === undefined) {
+    return false
+  }
+  const verdict = args.runtime?.getPtyLivenessVerdict?.(owner.ptyId)
+  return verdict?.status === 'exited' && verdict.incarnationId === expectedIncarnationId
+}
+
 export async function attemptStablePaneAttach(
   args: StablePaneSpawnContext & { owner: StablePaneOwner }
 ): Promise<StablePaneAttachAttempt> {
@@ -49,14 +62,15 @@ export async function attemptStablePaneAttach(
     })
   } catch (error) {
     if (error instanceof TerminalSessionOwnerUnverifiedError) {
-      throw new Error('terminal_pane_owner_unverified')
-    }
-    // Preserve endpoint-loss meaning before paired RPC strips socket code/syscall.
-    if (isDaemonEndpointGoneError(error)) {
+      // A locally certified exit of the expected incarnation beats the cross-daemon inventory this error could not finish.
+      if (!expectedIncarnationCertifiedExited(args, owner)) {
+        throw new Error('terminal_pane_owner_unverified')
+      }
+    } else if (isDaemonEndpointGoneError(error)) {
+      // Preserve endpoint-loss meaning before paired RPC strips socket code/syscall.
       throw new TerminalHostGoneError()
-    }
-    // Only typed absence from the owning registry authorizes retiring the process.
-    if (!(error instanceof SessionNotFoundError)) {
+    } else if (!(error instanceof SessionNotFoundError)) {
+      // Only typed absence from the owning registry authorizes retiring the process.
       throw error
     }
     const ownerBeforeRetire = args.resolveOwner?.()
