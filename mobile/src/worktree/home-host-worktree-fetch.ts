@@ -6,7 +6,9 @@ import {
 import { defineHostQuery } from '../query/host-query'
 import {
   homeAgentEntries,
+  homeWorkspaceEntries,
   type HomeAgentEntry,
+  type HomeWorkspaceEntry,
   type HomeWorktreeSummary
 } from './home-worktree-info'
 import { isWorktreeActive } from './workspace-list-sections'
@@ -23,6 +25,8 @@ export type HomeWorktreeCounts = {
   totalWorktrees: number
   activeCount: number
   agents: readonly HomeAgentEntry[]
+  // Unarchived workspaces for the Agents search; never stored, like agents.
+  workspaces?: readonly HomeWorkspaceEntry[]
   // The rows this launch read: the next read's delta base, and the wide layout's host list seed. Never stored.
   catalog?: WorktreeCatalogSnapshot
 }
@@ -42,6 +46,7 @@ export const homeWorktreeCountsQuery = defineHostQuery<
       totalWorktrees: listed.length,
       activeCount: listed.filter(isWorktreeActive).length,
       agents: homeAgentEntries(listed),
+      workspaces: homeWorkspaceEntries(listed),
       catalog
     }
   },

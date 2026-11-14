@@ -20,6 +20,12 @@ import {
 import { summarizeAgentListHosts } from '../../agents/agent-list-rows'
 import { loadAgentListView, saveAgentListView } from '../../agents/agent-list-preferences'
 import { MobileAgentListRows, type AgentListRowHandlers } from '../../agents/MobileAgentListRows'
+import { MobileAgentListWorkspaceRows } from '../../agents/MobileAgentListWorkspaceRows'
+import {
+  matchAgentlessWorkspaces,
+  type AgentListWorkspaceMatch
+} from '../../agents/agent-list-workspace-matches'
+import { useOpenMobileSession } from '../../session/use-open-mobile-session'
 import type { ActionSheetAction } from '../../components/ActionSheetModal'
 import { MobileSearchField } from '../../components/MobileSearchField'
 import { PullDownMenu } from '../../components/nav-bar/PullDownMenu'
@@ -69,6 +75,17 @@ export function MobileHomeAgentsTab(props: {
     () => buildAgentList(data.agentList, { view, hostFilter, query }),
     [data.agentList, view, hostFilter, query]
   )
+  const workspaceMatches = useMemo(
+    () => matchAgentlessWorkspaces(data.agentList, { hostFilter, query }),
+    [data.agentList, hostFilter, query]
+  )
+  const openMobileSession = useOpenMobileSession()
+  const openWorkspace = (match: AgentListWorkspaceMatch) =>
+    openMobileSession({
+      hostId: match.hostId,
+      worktreeId: match.workspace.worktreeId,
+      name: match.workspace.workspaceName
+    })
   const nameDesktops = hosts.length > 1 && hostFilter === null
   const listed = useMemo(() => agentListRowsIn(list.sections), [list.sections])
   const unreadRows = listed.filter((row) => row.unread === true)
@@ -196,10 +213,27 @@ export function MobileHomeAgentsTab(props: {
     )
   }
 
+  const workspacesSection =
+    workspaceMatches.length > 0 ? (
+      <View key="workspaces-without-agents">
+        <MobileHomeSectionHeading
+          title={t('agents.sections.workspaces', 'Workspaces')}
+          count={workspaceMatches.length}
+          first={list.sections.length === 0}
+        />
+        <MobileAgentListWorkspaceRows
+          matches={workspaceMatches}
+          hosts={hosts}
+          nameDesktop={nameDesktops}
+          onOpen={openWorkspace}
+        />
+      </View>
+    ) : null
+
   const body = !data.hostCatalogLoaded
     ? null
     : list.sections.length === 0
-      ? emptyState()
+      ? (workspacesSection ?? emptyState())
       : list.sections.map((section, index) => (
           <View key={section.key}>
             <AgentListSectionHeading
@@ -252,7 +286,7 @@ export function MobileHomeAgentsTab(props: {
         <MobileSearchField
           value={query}
           onChangeText={setQuery}
-          placeholder={t('agents.search.placeholder', 'Search agents')}
+          placeholder={t('agents.search.placeholder', 'Search agents and workspaces')}
           onClear={() => setQuery('')}
           autoFocus
           style={styles.search}
@@ -278,6 +312,7 @@ export function MobileHomeAgentsTab(props: {
         keyboardDismissMode="on-drag"
       >
         {body}
+        {data.hostCatalogLoaded && list.sections.length > 0 ? workspacesSection : null}
       </ScrollView>
       <PullDownMenu
         visible={menu !== 'closed'}

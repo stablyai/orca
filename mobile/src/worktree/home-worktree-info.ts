@@ -27,10 +27,20 @@ export type HomeAgentEntry = Readonly<{
   agent: RuntimeWorktreeAgentRow
 }>
 
+/** A listed workspace, so search can find one with no agent. */
+export type HomeWorkspaceEntry = Readonly<{
+  worktreeId: string
+  workspaceName: string
+  repo: string
+  branch: string
+}>
+
 export type HostWorktreeInfo = {
   hostId: string
   totalWorktrees: number
   activeCount: number
+  /** Every unarchived workspace from this connection's latest list read. */
+  workspaces?: readonly HomeWorkspaceEntry[]
   /** Every agent from this connection's latest list read. */
   agents?: readonly HomeAgentEntry[]
   /** The agents of a read the connection has since lost: what they were, not what they are. */
@@ -42,6 +52,19 @@ export type HostWorktreeInfo = {
   countsProvenAt?: number
 }
 
+/** One entry per listed workspace, named the way its rows show it. */
+export function homeWorkspaceEntries(
+  worktrees: readonly HomeWorktreeSummary[]
+): HomeWorkspaceEntry[] {
+  return worktrees.map((worktree) => ({
+    worktreeId: worktree.worktreeId,
+    workspaceName: worktree.displayName || worktree.repo,
+    repo: worktree.repo,
+    branch: worktree.branch
+  }))
+}
+
+/** Every agent the list read returned, with the workspace it runs in. */
 export function homeAgentEntries(worktrees: readonly HomeWorktreeSummary[]): HomeAgentEntry[] {
   return worktrees.flatMap((worktree) =>
     Array.isArray(worktree.agents)
@@ -59,7 +82,12 @@ export function homeAgentEntries(worktrees: readonly HomeWorktreeSummary[]): Hom
 /** One desktop's counts read, as its card and the Agents list see it. */
 export type HomeWorktreeRead = {
   data:
-    | { totalWorktrees: number; activeCount: number; agents: readonly HomeAgentEntry[] }
+    | {
+        totalWorktrees: number
+        activeCount: number
+        agents: readonly HomeAgentEntry[]
+        workspaces?: readonly HomeWorkspaceEntry[]
+      }
     | undefined
   dataUpdatedAt: number
   // The latest read failed; counts it had stay, as stale ones.
@@ -89,6 +117,8 @@ export function homeWorktreeInfo(
     totalWorktrees: data.totalWorktrees,
     activeCount: data.activeCount,
     ...(live ? { agents: data.agents } : agents ? { lastSeenAgents: agents } : {}),
+    // Only a live read's workspaces can be opened from search.
+    ...(live && data.workspaces ? { workspaces: data.workspaces } : {}),
     ...(failed ? { catalogUnavailable: true, staleCounts: true } : {}),
     countsProvenAt: read.dataUpdatedAt
   }
