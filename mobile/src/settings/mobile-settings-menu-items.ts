@@ -4,6 +4,7 @@ import {
   Info,
   MessageSquare,
   Mic,
+  Smartphone,
   SunMoon,
   Terminal,
   Wrench
@@ -42,6 +43,12 @@ export function mobileSettingsMenuItems(push: (route: string) => void): MobileSe
       label: translate('settings.menuItems.voice', 'Voice'),
       icon: Mic,
       onPress: () => push('/voice-settings')
+    },
+    {
+      id: 'appIcon',
+      label: translate('settings.menuItems.appIcon', 'App icon'),
+      icon: Smartphone,
+      onPress: () => push('/app-icon-settings')
     },
     {
       id: 'notifications',

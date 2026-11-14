@@ -219,6 +219,9 @@ importers:
       expo:
         specifier: ~58.0.22
         version: 58.0.22(b2ffcb8c71eee4a24360d0a9a7389bd9)
+      expo-alternate-app-icons:
+        specifier: 11.0.0
+        version: 11.0.0(expo@58.0.22)(react-native@0.88.1(patch_hash=421ceb99c80d69a601533b52fddf89690883eec999872e23e6d55ee25da30665)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0)
       expo-build-properties:
         specifier: ^58.0.12
         version: 58.0.12(expo@58.0.22)
@@ -3931,6 +3934,13 @@ packages:
   expect@29.7.0:
     resolution: {integrity: sha512-2Zks0hf1VLFYI1kbh0I5jP3KHHyCHpkfyHBzsSXRFgl/Bg9mWYfMW8oD+PdMPlEwy5HNsR9JutYy6pMeOh61nw==}
     engines: {node: ^14.15.0 || ^16.10.0 || >=18.0.0}
+
+  expo-alternate-app-icons@11.0.0:
+    resolution: {integrity: sha512-9k25v/LIaX52FSOwKTZcCvh/VrpuITEtn9ini4Rs8k08YGDA26LIx7Jum6tngWfRQn9RbQD3uGA7vDTUEGUWFg==}
+    peerDependencies:
+      expo: '>=53'
+      react: '*'
+      react-native: '*'
 
   expo-application@58.1.2:
     resolution: {integrity: sha512-WYFdNHGaxe/j69oYREhK0cKsKYszuIuz399WXYCP+M1grfO+FCWB/RbuMgaXJsLWlzqhNjA/zLgfJ+33FwrQvw==}
@@ -10823,6 +10833,12 @@ snapshots:
       jest-matcher-utils: 29.7.0
       jest-message-util: 29.7.0
       jest-util: 29.7.0
+
+  expo-alternate-app-icons@11.0.0(expo@58.0.22)(react-native@0.88.1(patch_hash=421ceb99c80d69a601533b52fddf89690883eec999872e23e6d55ee25da30665)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.3.0)(supports-color@8.1.1))(react@19.3.0):
+    dependencies:
+      expo: 58.0.22(b2ffcb8c71eee4a24360d0a9a7389bd9)
+      react: 19.3.0
+      react-native: 0.88.1(patch_hash=421ceb99c80d69a601533b52fddf89690883eec999872e23e6d55ee25da30665)(@babel/core@7.29.7(supports-color@8.1.1))(@react-native/metro-config@0.88.1(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.18)(react@19.3.0)(supports-color@8.1.1)
 
   expo-application@58.1.2(expo@58.0.22):
     dependencies:
