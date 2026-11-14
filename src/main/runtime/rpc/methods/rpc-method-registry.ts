@@ -36,6 +36,7 @@ import { SESSION_TAB_METHODS } from './session-tabs/session-tabs'
 import { NATIVE_CHAT_METHODS } from './native-chat/native-chat'
 import { FILE_METHODS } from './files/files'
 import { GIT_METHODS } from './source-control/git/git'
+import { PERFORCE_METHODS } from './source-control/perforce/perforce'
 import { GITHUB_METHODS } from './source-control/github/github'
 import { GITLAB_METHODS } from './source-control/gitlab/gitlab'
 import { HOSTED_REVIEW_METHODS } from './source-control/reviews/hosted-review'
@@ -137,6 +138,7 @@ export const ALL_RPC_METHODS = [
   ...NATIVE_CHAT_METHODS,
   ...FILE_METHODS,
   ...GIT_METHODS,
+  ...PERFORCE_METHODS,
   ...GITHUB_METHODS,
   ...GITLAB_METHODS,
   ...HOSTED_REVIEW_METHODS,

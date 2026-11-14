@@ -30,6 +30,7 @@ import {
 } from './settings-setup-workflow-section-renderers'
 import {
   renderGitSettingsSection,
+  renderPerforceSettingsSection,
   renderTasksSettingsSection
 } from './settings-git-task-section-renderers'
 import {
@@ -178,6 +179,7 @@ export function renderSettingsPage(
                   {renderShareSkillsSettingsSection(context, t)}
                   {renderSessionHistorySettingsSection(context, t)}
                   {renderGitSettingsSection(context, t)}
+                  {renderPerforceSettingsSection(context, t)}
                   {renderTasksSettingsSection(context, t)}
                   {renderTerminalSettingsSection(context, t)}
                   {renderQuickCommandsSettingsSection(context, t)}

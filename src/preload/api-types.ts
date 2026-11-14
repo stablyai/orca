@@ -80,6 +80,7 @@ import type {
 } from './api/workspaces/workspace-port-api'
 import type { LinkPreviewApi } from './api/link-preview/link-preview-api'
 import type { WorkspaceSessionApi } from './api/workspaces/workspace-session-api'
+import type { PerforceApi } from './api/source-control/perforce-api'
 import type {
   FolderWorkspacesApi,
   SparsePresetsApi,
@@ -98,6 +99,7 @@ export type PreloadApi = {
   projects: ProjectsApi
   projectGroups: ProjectGroupsApi
   folderWorkspaces: FolderWorkspacesApi
+  perforce: PerforceApi
   sparsePresets: SparsePresetsApi
   worktrees: WorktreeApi
   workspaceCleanup: WorkspaceCleanupApi

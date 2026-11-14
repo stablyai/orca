@@ -76,6 +76,31 @@ describe('runtime RPC call queue', () => {
     await expect(Promise.all(waits)).resolves.toEqual(Array(8).fill('listed'))
   })
 
+  it('keeps Git status moving while Perforce scans hold their own slots', async () => {
+    const queue = new RuntimeRpcCallQueuePool(2, 2)
+    const release: (() => void)[] = []
+    const scans = ['perforce.status', 'perforce.syncCopies', 'perforce.sync'].map((method) =>
+      queue.enqueue('web-runtime', method, async () => {
+        await new Promise<void>((resolve) => release.push(resolve))
+        return method
+      })
+    )
+    await vi.waitFor(() => expect(release.length).toBeGreaterThanOrEqual(2))
+
+    const status = queue.enqueue('web-runtime', 'git.status', async () => 'git')
+    await expect(status).resolves.toBe('git')
+
+    for (let released = 0; released < scans.length; released += 1) {
+      await vi.waitFor(() => expect(release.length).toBeGreaterThan(0))
+      release.shift()?.()
+    }
+    await expect(Promise.all(scans)).resolves.toEqual([
+      'perforce.status',
+      'perforce.syncCopies',
+      'perforce.sync'
+    ])
+  })
+
   it('keeps terminal input moving while byte-range reads fill their own small lane', async () => {
     const queue = new RuntimeRpcCallQueuePool(8, 2)
     const release: (() => void)[] = []

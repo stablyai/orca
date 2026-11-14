@@ -69,7 +69,8 @@ function RightSidebarInner(): React.JSX.Element {
     activeFolderWorkspaceKey,
     pluginSystemEnabled,
     pluginFetchStatus,
-    installedPluginTabKeys
+    installedPluginTabKeys,
+    redetectPerforce
   } = useRightSidebarActivityItems({ rightSidebarOpen })
   const { effectiveTab, selectActivityTab } = useRightSidebarTabRouting({
     visibleItems,
@@ -218,6 +219,7 @@ function RightSidebarInner(): React.JSX.Element {
             closeButton={closeButton}
             activityBarPosition={activityBarPosition}
             onChangeActivityBarPosition={setActivityBarPosition}
+            onDetectPerforce={redetectPerforce}
           />
         ) : (
           /* The 40px activity bar absorbs part of the 138px window-control overlay; inset the header by the remaining 98px. */
@@ -253,6 +255,7 @@ function RightSidebarInner(): React.JSX.Element {
           <ActivityBarPositionMenu
             currentPosition={activityBarPosition}
             onChangePosition={setActivityBarPosition}
+            onDetectPerforce={redetectPerforce}
             pluginKey={contextPlugin.pluginKey}
           />
         </ContextMenu>

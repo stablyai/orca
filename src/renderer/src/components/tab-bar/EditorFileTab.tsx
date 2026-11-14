@@ -1,4 +1,3 @@
-import { editorTabWorkspace } from '@/store/slices/editor/tabs/workspace-editor-files'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
@@ -6,14 +5,11 @@ import { Eye, ShieldAlert, Pin } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { TabHoverCard } from './TabHoverCard'
 import { basename } from '@/lib/path'
-import { getEditorDisplayLabel } from '@/components/editor/panel/header/editor-labels'
+import { useEditorTabTarget } from './use-editor-tab-target'
 import { renameFileOnDisk } from '@/lib/editor/file-operations/rename-file'
 import { isImeCompositionKeyDown } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 import { detectLanguage } from '../../../../shared/editor-language/editor-language-detect'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
-import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'
-import { getOpenFileExecutionHostId } from '@/lib/workspace/ownership/unified-tab-host-ownership'
-import { resolveReviewRepository } from '@/lib/source-control/review/review-owner'
 import { useAppStore } from '@/store/index'
 import { STATUS_COLORS } from '../../lib/source-control/paths/git-path-decoration'
 import { STATUS_LABELS } from '../../../../shared/git/status/git-status-labels'
@@ -62,15 +58,7 @@ export default function EditorFileTab({
   includeTopTabBorder = true
 }: EditorFileTabProps): React.JSX.Element {
   const t = useTranslate()
-  const placedElsewhere = useAppStore((state) =>
-    file.tabId
-      ? editorTabWorkspace(state.unifiedTabsByWorktree, file.tabId) !== file.worktreeId
-      : false
-  )
-  const worktree = useWorktreeById(file.worktreeId, getOpenFileExecutionHostId(file))
-  const repo = useAppStore((state) =>
-    worktree ? resolveReviewRepository(state.repos, worktree) : null
-  )
+  const { worktree, repo, tabLabel } = useEditorTabTarget(file, t)
   // Keep dragged tabs anchored; only the insertion bar moves.
   const { attributes, listeners, setNodeRef } = useSortable({
     // Split copies share a file entity; unified tab IDs keep each copy independently draggable.
@@ -315,8 +303,7 @@ export default function EditorFileTab({
               openRenameInput()
             }}
           >
-            {getEditorDisplayLabel(file, undefined, t)}
-            {placedElsewhere && repo ? ` · ${repo.displayName}` : ''}
+            {tabLabel}
           </span>
         )}
         {isMissingFileMutation && !isRenaming && (
@@ -363,7 +350,7 @@ export default function EditorFileTab({
             tabRoot
           ) : (
             <TabHoverCard
-              title={`${getEditorDisplayLabel(file, undefined, t)}${placedElsewhere && repo ? ` · ${repo.displayName}` : ''}`}
+              title={tabLabel}
               programName={customEditor?.title ?? t('tabHoverCard.editor', 'Editor')}
               icon={tabIcon('size-4')}
               description={file.relativePath}

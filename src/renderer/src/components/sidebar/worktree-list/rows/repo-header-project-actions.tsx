@@ -26,6 +26,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import { PerforceCopyMenuItems } from '@/components/perforce-copies/PerforceCopyMenuItems'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { getRepositoryIconSectionId } from '@/components/settings/repository/repository-settings-targets'
@@ -185,6 +186,7 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
             {t('auto.components.sidebar.WorktreeList.64e55f7f01', 'Remove from group')}
           </DropdownMenuItem>
         ) : null}
+        <PerforceCopyMenuItems repo={repo} />
         <WslMoveProjectMenuItem repo={repo} />
         <DropdownMenuSeparator />
         <DropdownMenuItem

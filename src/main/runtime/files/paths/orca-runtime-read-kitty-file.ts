@@ -1,4 +1,4 @@
-import { RuntimeWorkspaceSelectors } from '../../workspaces/workspace-selectors'
+import { RuntimeWorkspaceSelectorsWithCopyAdoption } from '../../workspaces/perforce-copy-selector-adoption'
 import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
 import { getProviderForPty } from '../../../ipc/pty/provider/registry'
 import { readTerminalKittyFile } from '../../terminal/output/terminal-kitty-file-read'
@@ -7,7 +7,7 @@ import type {
   TerminalKittyFileResult
 } from '../../../../shared/terminal/images/terminal-kitty-file'
 
-export abstract class OrcaRuntimeWithReadKittyFile extends RuntimeWorkspaceSelectors {
+export abstract class OrcaRuntimeWithReadKittyFile extends RuntimeWorkspaceSelectorsWithCopyAdoption {
   async readKittyFile(
     handle: string,
     request: TerminalKittyFileRequest,

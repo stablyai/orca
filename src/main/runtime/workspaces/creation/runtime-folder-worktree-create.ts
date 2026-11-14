@@ -17,6 +17,7 @@ import {
   mergeRuntimeFolderWorkspace
 } from '../catalog/runtime-folder-workspace'
 import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktree-create-types'
+import { createRuntimeFolderPerforceCopy } from './runtime-folder-perforce-copy'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type {
   WorktreeStartupDraftPaste,
@@ -80,7 +81,8 @@ export async function createRuntimeFolderWorktree(args: {
   const now = Date.now()
   const settings = deps.store.getSettings()
   const instanceId = randomUUID()
-  const worktreeId = getRuntimeFolderWorkspaceInstanceId(repo, instanceId)
+  const copy = await createRuntimeFolderPerforceCopy(repo, request, settings)
+  const worktreeId = copy?.worktreeId ?? getRuntimeFolderWorkspaceInstanceId(repo, instanceId)
   const displayNameRequest = resolveWorktreeCreateDisplayNameRequest(
     request.displayName,
     request.displayNameKind,
@@ -137,8 +139,10 @@ export async function createRuntimeFolderWorktree(args: {
     ...(args.createdWithAgent ? { createdWithAgent: args.createdWithAgent } : {}),
     ...(request.comment !== undefined ? { comment: request.comment } : {}),
     ...(request.manualOrder !== undefined ? { manualOrder: request.manualOrder } : {}),
-    ...(request.workspaceStatus !== undefined ? { workspaceStatus: request.workspaceStatus } : {})
+    ...(request.workspaceStatus !== undefined ? { workspaceStatus: request.workspaceStatus } : {}),
+    ...copy?.meta
   })
+  copy?.recorded()
   args.onWorkspaceCreated?.(worktreeId)
   const worktree = mergeRuntimeFolderWorkspace(repo, worktreeId, meta)
   deps.invalidateResolvedWorktrees()
@@ -282,7 +286,8 @@ export async function createRuntimeFolderWorktree(args: {
     ...(preparedSetup?.setupTrustMismatch
       ? { setupTrustMismatch: preparedSetup.setupTrustMismatch }
       : {}),
-    ...(warning ? { warning } : {})
+    ...(warning ? { warning } : {}),
+    ...copy?.result
   }
 }
 

@@ -11,7 +11,7 @@ import {
   type DaemonProvider
 } from '../daemon/providers/lifecycle/daemon-provider-routing'
 import type { SessionInfo } from '../daemon/protocol/daemon-session-info'
-import { isFolderWorkspaceIdForRepo } from '../ipc/worktrees/folder-workspace-model'
+import { isFolderRepoWorktreeIdForRepo } from '../ipc/worktrees/folder-workspace-model'
 import type { Store } from '../persistence/loading-store/store'
 import { readAllWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
 import { getLocalProjectWorktreeGitOptions } from '../workspaces/execution-host/project-runtime-git-options'
@@ -232,7 +232,7 @@ function getVerifiedFolderWorktreeIds(
       repo &&
       isFolderRepo(repo) &&
       hasLocalAuthority &&
-      isFolderWorkspaceIdForRepo(repo, worktreeId)
+      isFolderRepoWorktreeIdForRepo(repo, worktreeId)
     ) {
       verified.add(worktreeId)
     }
