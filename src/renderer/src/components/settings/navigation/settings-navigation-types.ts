@@ -47,8 +47,6 @@ const SETTINGS_NAV_TARGETS = [
   'automations',
   'orca-account',
   'cloud-billing',
-  'cloud-team',
-  'cloud-enterprise',
   'cloud-workspaces',
   'cloud-secrets',
   'cloud-environments',

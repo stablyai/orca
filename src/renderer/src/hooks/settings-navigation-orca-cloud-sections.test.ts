@@ -10,7 +10,8 @@ import {
   resolveAccountBillingTarget,
   labelAccountBilling,
   hasOrcaBillingAccount,
-  ACCOUNT_BILLING_PLAN_ANCHOR
+  ACCOUNT_BILLING_PLAN_ANCHOR,
+  ACCOUNT_TEAM_ADMIN_ANCHOR
 } from './settings-navigation-orca-cloud-sections'
 
 function options(patch: Partial<SettingsNavigationBuildOptions>): SettingsNavigationBuildOptions {
@@ -36,7 +37,6 @@ describe('Orca Cloud settings group', () => {
     const sections = buildOrcaCloudSettingsSections(options({}))
     expect(sections.map((section) => section.id)).toEqual([
       'cloud-billing',
-      'cloud-team',
       'cloud-secrets',
       'cloud-skills',
       'cloud-environments',
@@ -53,32 +53,23 @@ describe('Orca Cloud settings group', () => {
     expect(new Set(sections.map((section) => section.group))).toEqual(new Set(['orca-cloud']))
   })
 
-  it('adds Workspaces then Enterprise after Team for a team owner or admin only', () => {
+  it('adds Workspaces for a team owner or admin only; team and admin have no page', () => {
     const ids = (patch: Parameters<typeof options>[0]) =>
       buildOrcaCloudSettingsSections(options(patch)).map((section) => section.id)
-    expect(ids({})).not.toContain('cloud-enterprise')
-    expect(ids({ isOrcaTeamAdmin: false })).not.toContain('cloud-enterprise')
     // HOME-1: the team's workspace list is an admin management view, never a member page.
     expect(ids({})).not.toContain('cloud-workspaces')
     expect(ids({ isOrcaTeamAdmin: false })).not.toContain('cloud-workspaces')
     const admin = ids({ isOrcaTeamAdmin: true })
-    expect(admin.slice(0, 5)).toEqual([
-      'cloud-billing',
-      'cloud-team',
-      'cloud-workspaces',
-      'cloud-enterprise',
-      'cloud-secrets'
-    ])
-    const section = buildOrcaCloudSettingsSections(options({ isOrcaTeamAdmin: true })).find(
-      (entry) => entry.id === 'cloud-enterprise'
-    )!
-    expect(section).toMatchObject({ title: 'Enterprise', group: 'orca-cloud' })
-    // The audit log is found by searching for it; it no longer lives under Orca API keys.
+    expect(admin.slice(0, 3)).toEqual(['cloud-billing', 'cloud-workspaces', 'cloud-secrets'])
+    // Team, Enterprise and the audit log are managed in the web console (Account › Team & admin).
+    for (const patch of [{}, { isOrcaTeamAdmin: true }]) {
+      expect(ids(patch)).not.toContain('cloud-team')
+      expect(ids(patch)).not.toContain('cloud-enterprise')
+    }
     const keywords = (id: string) =>
       buildOrcaCloudSettingsSections(options({ isOrcaTeamAdmin: true }))
         .find((entry) => entry.id === id)!
         .searchEntries.flatMap((entry) => entry.keywords ?? [])
-    expect(keywords('cloud-enterprise')).toContain('audit log')
     expect(keywords('cloud-workspaces')).toContain('cloud workspaces')
     expect(keywords('cloud-api-keys')).not.toContain('audit log')
     // Never without a control plane, whatever the role.
@@ -123,7 +114,7 @@ describe('one Orca Cloud group (JA-16)', () => {
     nav('orca-account', 'setup'),
     nav('general', 'setup'),
     nav('cloud-billing', 'orca-cloud'),
-    nav('cloud-team', 'orca-cloud'),
+    nav('cloud-secrets', 'orca-cloud'),
     nav('automations', 'workflows')
   ]
 
@@ -134,7 +125,7 @@ describe('one Orca Cloud group (JA-16)', () => {
       'capabilities:accounts',
       'setup:general',
       'orca-cloud:orca-account',
-      'orca-cloud:cloud-team',
+      'orca-cloud:cloud-secrets',
       'workflows:automations'
     ])
     expect(out.find((section) => section.id === 'orca-account')?.title).toBe('Account & billing')
@@ -151,7 +142,7 @@ describe('one Orca Cloud group (JA-16)', () => {
     const account = gatherOrcaCloudSettingsGroup(withEntries, options({})).find(
       (section) => section.id === 'orca-account'
     )
-    expect(account?.searchEntries).toEqual([
+    expect(account?.searchEntries.slice(0, 2)).toEqual([
       { title: 'Orca account' },
       {
         title: 'Plan & billing',
@@ -159,6 +150,19 @@ describe('one Orca Cloud group (JA-16)', () => {
         targetSectionId: ACCOUNT_BILLING_PLAN_ANCHOR
       }
     ])
+  })
+
+  it('finds members, single sign-on and the audit log on the Account page\'s Team & admin row', () => {
+    const account = gatherOrcaCloudSettingsGroup(all, options({})).find(
+      (section) => section.id === 'orca-account'
+    )
+    const teamAdmin = account?.searchEntries.filter(
+      (entry) => entry.targetSectionId === ACCOUNT_TEAM_ADMIN_ANCHOR
+    )
+    expect(teamAdmin?.map((entry) => entry.title)).toEqual(['Team & admin'])
+    expect(teamAdmin?.[0]?.keywords).toEqual(
+      expect.arrayContaining(['members', 'sso', 'audit log', 'enterprise'])
+    )
   })
 
   it('is "Account" with no billing to show, and leaves the upstream account alone', () => {
@@ -192,8 +196,8 @@ describe('one Orca Cloud group (JA-16)', () => {
     expect(resolveAccountBillingTarget({ pane: 'cloud-billing' }, false)).toEqual({
       pane: 'cloud-billing'
     })
-    expect(resolveAccountBillingTarget({ pane: 'cloud-team' }, true)).toEqual({
-      pane: 'cloud-team'
+    expect(resolveAccountBillingTarget({ pane: 'cloud-secrets' }, true)).toEqual({
+      pane: 'cloud-secrets'
     })
   })
 
@@ -210,7 +214,7 @@ describe('isOrcaCloudSettingsSectionId', () => {
     const { isOrcaCloudSettingsSectionId } =
       await import('./settings-navigation-orca-cloud-sections')
     expect(isOrcaCloudSettingsSectionId('cloud-billing')).toBe(true)
-    expect(isOrcaCloudSettingsSectionId('cloud-team')).toBe(true)
+    expect(isOrcaCloudSettingsSectionId('cloud-secrets')).toBe(true)
     expect(isOrcaCloudSettingsSectionId('orca-account')).toBe(true)
     expect(isOrcaCloudSettingsSectionId('general')).toBe(false)
     expect(isOrcaCloudSettingsSectionId('terminal')).toBe(false)

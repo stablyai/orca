@@ -1,6 +1,6 @@
-// The Settings rows that stand in for team, billing and Enterprise management, which live in the
-// Orca Cloud web console. The desktop keeps only read-only status (the plan and its health, a
-// failed payment) so the person knows when to go there.
+// The Settings row that stands in for billing management, which lives in the Orca Cloud web
+// console; team and admin are one row on the Account page (AccountTeamAdminRow). The desktop keeps
+// only read-only status (the plan and its health, a failed payment) so the person knows when to go.
 import { useTranslate } from '@/i18n/use-translate'
 import { openCloudConsole } from '@/lib/orca-cloud/open-cloud-console'
 import { PaymentIssueNotice } from '../../billing/PaymentIssueNotice'
@@ -37,33 +37,5 @@ export function PlanBillingConsoleLink(): React.JSX.Element {
         )}
       />
     </div>
-  )
-}
-
-export function TeamConsoleLink(): React.JSX.Element {
-  const t = useTranslate()
-  return (
-    <CloudConsoleLinkRow
-      section="team"
-      label={t('settings.cloudConsole.team.title', 'Members and invites')}
-      description={t(
-        'settings.cloudConsole.team.description',
-        'Invite teammates, change roles, remove members, or create a team.'
-      )}
-    />
-  )
-}
-
-export function EnterpriseConsoleLink(): React.JSX.Element {
-  const t = useTranslate()
-  return (
-    <CloudConsoleLinkRow
-      section="enterprise"
-      label={t('settings.cloudConsole.enterprise.title', 'Enterprise')}
-      description={t(
-        'settings.cloudConsole.enterprise.description',
-        'Single sign-on, verified domains, directory sync, required two-factor and the audit log.'
-      )}
-    />
   )
 }

@@ -1,11 +1,9 @@
 import {
-  OrcaCloudEnterprisePane,
   OrcaCloudEnvironmentsPane,
   OrcaCloudLocalCommandsSettingsPane,
   OrcaCloudMcpPane,
   OrcaCloudSecretsPane,
   OrcaCloudSkillsSyncPane,
-  OrcaCloudTeamPane,
   OrcaCloudWorkspacesPane
 } from '../orca-cloud/OrcaCloudSettingsPanes'
 import { SettingsSection } from '../section-layout/SettingsSection'
@@ -26,10 +24,8 @@ export function renderOrcaCloudSettingsSections(
   }
   // Titles and descriptions come from the nav metadata so the pane and the sidebar never disagree.
   const sections: { id: string; pane: React.JSX.Element; navOnly?: boolean }[] = [
-    { id: 'cloud-team', pane: <OrcaCloudTeamPane /> },
     // Listed in the nav for team owners and admins only; without the entry there is no page.
     { id: 'cloud-workspaces', pane: <OrcaCloudWorkspacesPane />, navOnly: true },
-    { id: 'cloud-enterprise', pane: <OrcaCloudEnterprisePane />, navOnly: true },
     { id: 'cloud-secrets', pane: <OrcaCloudSecretsPane /> },
     { id: 'cloud-skills', pane: <OrcaCloudSkillsSyncPane /> },
     { id: 'cloud-environments', pane: <OrcaCloudEnvironmentsPane /> },

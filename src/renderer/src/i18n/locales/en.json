@@ -1422,12 +1422,6 @@
         "reconnectTitle": "Sign in again",
         "body": "Orca Cloud settings belong to your Orca account. Sign in to manage them."
       },
-      "team": {
-        "searchDescription": "Members, invites and seats for your Orca Cloud team.",
-        "keywordMembers": "members",
-        "keywordInvite": "invite",
-        "keywordSeats": "seats"
-      },
       "billing": {
         "searchDescription": "Your Orca Cloud plan, sandbox hours, overage and payment.",
         "keywordPlan": "plan",
@@ -1478,17 +1472,6 @@
       "accountOnly": "Account",
       "accountOnlyDescription": "Your Orca account and what’s included with it."
     },
-    "enterprise": {
-      "title": "Enterprise",
-      "searchDescription": "Single sign-on and directory sync, and the audit log of changes across your team.",
-      "keywordAudit": "audit log",
-      "keywordActivity": "activity",
-      "keywordSso": "sso",
-      "keywordSaml": "saml",
-      "keywordScim": "scim",
-      "keywordCompliance": "compliance",
-      "description": "Single sign-on, sign-in policies and the audit log for your team."
-    },
     "teamWorkspaces": {
       "search": "Search workspaces",
       "searchPlaceholder": "Search name, repository, person, W-number…",
@@ -1523,15 +1506,17 @@
       "billing": {
         "description": "Change your plan, see sandbox hours and invoices, and update payment."
       },
-      "team": {
-        "title": "Members and invites",
-        "description": "Invite teammates, change roles, remove members, or create a team."
-      },
-      "enterprise": {
-        "title": "Enterprise",
-        "description": "Single sign-on, verified domains, directory sync, required two-factor and the audit log."
-      },
-      "openFailed": "Couldn’t open the browser. Try again."
+      "openFailed": "Couldn’t open the browser. Try again.",
+      "teamAdmin": {
+        "title": "Team & admin",
+        "description": "Manage members, billing, single sign-on and the audit log in your browser.",
+        "keywordTeam": "team",
+        "keywordMembers": "members",
+        "keywordInvite": "invite",
+        "keywordSso": "sso",
+        "keywordAudit": "audit log",
+        "keywordEnterprise": "enterprise"
+      }
     }
   },
   "menu": {
@@ -21121,12 +21106,10 @@
         "updatePayment": "Update payment method",
         "team": {
           "menuItem": "Team",
-          "title": "Team",
           "you": "(you)",
           "roleOwner": "Owner",
           "roleAdmin": "Admin",
-          "roleMember": "Member",
-          "createHint": "Share one Orca Cloud plan with your teammates."
+          "roleMember": "Member"
         },
         "comparePlans": "Compare plans",
         "capLabel2": "Monthly spend cap",

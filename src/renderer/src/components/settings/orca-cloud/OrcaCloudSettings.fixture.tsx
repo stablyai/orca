@@ -172,7 +172,11 @@ export const signedOut = defineFixture({
   width: 784,
   store: { orcaProfileAuthStatus: SIGNED_OUT },
   render: () => (
-    <Page id="cloud-team" title="Team" description="Share one Orca Cloud plan with your teammates.">
+    <Page
+      id="cloud-mcp"
+      title="MCP servers"
+      description="MCP servers from Claude and Codex on this computer, synced to your cloud workspaces."
+    >
       <OrcaCloudSignedOutNotice />
     </Page>
   )

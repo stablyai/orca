@@ -19,35 +19,21 @@ export const getOrcaCloudBillingSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
-export const getOrcaCloudTeamSearchEntries = createLocalizedCatalog(() => [
+/** Account › "Team & admin": the web console's team, billing and admin pages. */
+export const getOrcaCloudTeamAdminSearchEntries = createLocalizedCatalog(() => [
   {
-    title: translate('auto.components.billing.team.title', 'Team'),
+    title: translate('settings.cloudConsole.teamAdmin.title', 'Team & admin'),
     description: translate(
-      'settings.orcaCloud.team.searchDescription',
-      'Members, invites and seats for your Orca Cloud team.'
+      'settings.cloudConsole.teamAdmin.description',
+      'Manage members, billing, single sign-on and the audit log in your browser.'
     ),
     keywords: [
-      ...translateSearchKeyword('settings.orcaCloud.team.keywordMembers', 'members'),
-      ...translateSearchKeyword('settings.orcaCloud.team.keywordInvite', 'invite'),
-      ...translateSearchKeyword('settings.orcaCloud.team.keywordSeats', 'seats')
-    ]
-  }
-])
-
-export const getOrcaCloudEnterpriseSearchEntries = createLocalizedCatalog(() => [
-  {
-    title: translate('settings.enterprise.title', 'Enterprise'),
-    description: translate(
-      'settings.enterprise.searchDescription',
-      'Single sign-on and directory sync, and the audit log of changes across your team.'
-    ),
-    keywords: [
-      ...translateSearchKeyword('settings.enterprise.keywordAudit', 'audit log'),
-      ...translateSearchKeyword('settings.enterprise.keywordActivity', 'activity'),
-      ...translateSearchKeyword('settings.enterprise.keywordSso', 'sso'),
-      ...translateSearchKeyword('settings.enterprise.keywordSaml', 'saml'),
-      ...translateSearchKeyword('settings.enterprise.keywordScim', 'scim'),
-      ...translateSearchKeyword('settings.enterprise.keywordCompliance', 'compliance')
+      ...translateSearchKeyword('settings.cloudConsole.teamAdmin.keywordTeam', 'team'),
+      ...translateSearchKeyword('settings.cloudConsole.teamAdmin.keywordMembers', 'members'),
+      ...translateSearchKeyword('settings.cloudConsole.teamAdmin.keywordInvite', 'invite'),
+      ...translateSearchKeyword('settings.cloudConsole.teamAdmin.keywordSso', 'sso'),
+      ...translateSearchKeyword('settings.cloudConsole.teamAdmin.keywordAudit', 'audit log'),
+      ...translateSearchKeyword('settings.cloudConsole.teamAdmin.keywordEnterprise', 'enterprise')
     ]
   }
 ])

@@ -12,6 +12,7 @@ import { OrcaProfileSignOutConfirmDialog } from '../../../orca-profiles/OrcaProf
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../../OrcaSignInProgress'
 import { useOrcaCloudApiAvailable } from '@/hooks/useOrcaCloudApiAvailability'
 import { AccountMfaRow } from './AccountMfaRow'
+import { AccountTeamAdminRow } from './AccountTeamAdminRow'
 import { GitHubIdentityRow } from './GitHubIdentityRow'
 import type { OrcaProfileReconnectReason } from '../../../../../../shared/orca-profile-reconnect-reason'
 
@@ -152,8 +153,11 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
         {/* Their own second factor: status, and a link to the account page that manages it. */}
         {connected && cloudAvailable ? <AccountMfaRow /> : null}
 
-        {/* JA-16: with Orca Cloud the page is identity + Sign out only; plan, team and agents have
-            their own entries in the Orca Cloud group right beside it. */}
+        {/* Team, billing and admin are managed in the web console; this row is the way there. */}
+        {connected && cloudAvailable ? <AccountTeamAdminRow /> : null}
+
+        {/* JA-16: with Orca Cloud the page is identity + Sign out (and the console row); agents and
+            the rest of Orca Cloud have their own entries in the group right beside it. */}
         {cloudAvailable ? null : (
           <div className="space-y-4 border-t border-border/60 pt-5">
             <SettingsGroupHeader
