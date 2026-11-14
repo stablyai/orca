@@ -2,11 +2,124 @@
 
 import { fireEvent, render } from '@testing-library/react'
 import { useState } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { useNativeChatRecallPosition } from '../../drafts/use-native-chat-composer-recall'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
-import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
+import {
+  useNativeChatComposerKeyDown,
+  type UseNativeChatComposerKeyDownArgs
+} from './use-native-chat-composer-keydown'
+
+afterEach(() => vi.restoreAllMocks())
+
+describe('composer send key', () => {
+  function setup(
+    enterToSend: boolean,
+    composing = false,
+    autocomplete: UseNativeChatComposerKeyDownArgs['autocomplete'] = { mode: 'none' }
+  ) {
+    function Composer(): React.JSX.Element {
+      const [draft, setDraft] = useState('unfinished message')
+      const [sent, setSent] = useState('')
+      const onKeyDown = useNativeChatComposerKeyDown({
+        autocomplete,
+        activeSuggestion: 0,
+        draft,
+        mentionFiles: { files: [], loading: false, failed: false },
+        completeMention: vi.fn(),
+        isComposing: () => composing,
+        completePickerItem: (item) => setDraft(item.token),
+        dispatchPickerCommand: (item) => setSent(item.token),
+        dismissPicker: vi.fn(),
+        interrupt: vi.fn(),
+        send: (intent) => {
+          setSent(`${intent?.alternate ? 'alternate' : 'normal'}: ${draft}`)
+          setDraft('')
+        },
+        setActiveSuggestion: vi.fn(),
+        setDraft,
+        setCaret: vi.fn(),
+        enterToSend
+      })
+      return (
+        <>
+          <textarea value={draft} onChange={() => {}} onKeyDown={onKeyDown} />
+          <output>{sent}</output>
+        </>
+      )
+    }
+    const { container } = render(<Composer />)
+    const field = container.querySelector('textarea')!
+    return {
+      press: (init: KeyboardEventInit & { keyCode?: number } = {}) =>
+        !fireEvent.keyDown(field, { key: 'Enter', ...init }),
+      draft: () => field.value,
+      sent: () => container.querySelector('output')!.textContent,
+      endComposition: () => {
+        composing = false
+      }
+    }
+  }
+
+  it.each([
+    ['Macintosh', { metaKey: true }, { ctrlKey: true }],
+    ['Windows', { ctrlKey: true }, { metaKey: true }],
+    ['Linux', { ctrlKey: true }, { metaKey: true }]
+  ])('uses the send chord on %s when Enter inserts newlines', (platform, chord, other) => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(platform)
+    const composer = setup(false)
+    expect(composer.press()).toBe(false)
+    expect(composer.press({ shiftKey: true })).toBe(false)
+    expect(composer.press(other)).toBe(false)
+    expect(composer.press({ ...chord, isComposing: true })).toBe(true)
+    expect(composer.press({ ...chord, keyCode: 229 })).toBe(true)
+    expect(composer.draft()).toBe('unfinished message')
+    expect(composer.press(chord)).toBe(true)
+    expect(composer.sent()).toBe('normal: unfinished message')
+    expect(composer.draft()).toBe('')
+  })
+
+  it('does not send the composing draft with the new send chord', () => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Macintosh')
+    const composer = setup(false, true)
+    expect(composer.press({ metaKey: true })).toBe(true)
+    expect(composer.draft()).toBe('unfinished message')
+    expect(composer.sent()).toBe('')
+    composer.endComposition()
+    composer.press({ metaKey: true })
+    expect(composer.sent()).toBe('normal: unfinished message')
+  })
+
+  it('completes a slash command with Enter and dispatches it with the send chord', () => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Macintosh')
+    const composer = setup(false, false, {
+      mode: 'slash',
+      query: 'comp',
+      triggerKey: '/:0',
+      prefix: '/',
+      dispatchable: true,
+      grouped: false,
+      commandsEnabled: true,
+      skillsEnabled: false,
+      skillStatus: 'ready',
+      items: [
+        {
+          kind: 'command',
+          id: 'compact',
+          name: 'compact',
+          token: '/compact',
+          skillCollision: false
+        }
+      ]
+    })
+    composer.press()
+    expect(composer.draft()).toBe('/compact')
+    expect(composer.sent()).toBe('')
+    composer.press({ metaKey: true })
+    expect(composer.sent()).toBe('/compact')
+  })
+})
 
 describe('useNativeChatComposerKeyDown', () => {
   describe('prompt recall', () => {

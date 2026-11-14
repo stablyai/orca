@@ -12,7 +12,7 @@ import { useNativeChatLaunchDraftAdoption } from '../drafts/use-native-chat-laun
 import { NativeChatComposerWorkspace } from './controls/NativeChatComposerWorkspace'
 import { NativeChatComposerField } from './editor/NativeChatComposerField'
 import { useNativeChatComposerAttachments } from '../attachments/chips/use-native-chat-composer-attachments'
-import { nativeChatComposerSendState } from './submit/native-chat-composer-send-state'
+import { useNativeChatComposerSendState } from './submit/native-chat-composer-send-state'
 import { useNativeChatSteerChordPreview } from './controls/use-native-chat-steer-chord-preview'
 import { useNativeChatComposerHandle } from './editor/use-native-chat-composer-handle'
 import { useNativeChatFileDrops } from '../attachments/intake/use-native-chat-file-drops'
@@ -259,7 +259,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       optimisticSendOutcome,
       terminalTabId
     })
-    const submission = useNativeChatComposerSubmit({
+    const { goalMode, ...submission } = useNativeChatComposerSubmit({
       agent,
       textareaRef,
       structuredTransport,
@@ -277,8 +277,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       setCaret
     })
 
-    const { goalMode } = submission
-    const { sendHeld, ...sendButton } = nativeChatComposerSendState({
+    const { sendHeld, enterToSend, ...sendButton } = useNativeChatComposerSendState({
       agent,
       draft,
       messageDelivery: submission.messageDelivery,
@@ -334,6 +333,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
       dismissPicker: dismiss,
       interrupt: editSession?.cancel ?? interrupt,
       send,
+      enterToSend,
       hasAttachments: imageAttachments.length > 0,
       ...(!editSession && steerHead ? { steerHead } : {}),
       chordSteersHead: sendButton.chordSteersHead,

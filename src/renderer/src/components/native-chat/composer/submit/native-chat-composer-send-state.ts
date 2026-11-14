@@ -8,6 +8,7 @@ import {
   structuredAgentSessionCommandChangesConversation
 } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
 import type { Translate } from '../../../../i18n/use-translate'
+import { useAppStore } from '../../../../store'
 
 export type NativeChatComposerSendState = {
   /** Why Send is disabled, when the user can do something about it. */
@@ -17,6 +18,7 @@ export type NativeChatComposerSendState = {
   /** The draft holds text or images: while the agent works, Send takes Stop's place. */
   hasDraft: boolean
   sendButtonDisabled: boolean
+  enterToSend: boolean
   /** While the agent works: what Cmd/Ctrl+Enter would do instead of a plain send, when it differs. */
   alternateSend: NativeChatFollowUpBehavior | undefined
   /** Cmd/Ctrl+Enter on an empty composer sends the head queued card now: into the running turn, or with none running (a paused queue after Stop), as its own. */
@@ -24,7 +26,7 @@ export type NativeChatComposerSendState = {
 }
 
 /** What the composer's Send/Stop button offers now, and whether it can be pressed. */
-export function nativeChatComposerSendState(
+export function useNativeChatComposerSendState(
   input: {
     agent: AgentType
     draft: string
@@ -48,6 +50,7 @@ export function nativeChatComposerSendState(
   },
   t?: Translate
 ): NativeChatComposerSendState {
+  const enterToSend = useAppStore((state) => state.settings?.nativeChatEnterToSend !== false)
   const { structuredTransport: transport } = input
   const imageBlock = nativeChatImageSendBlock(input.imageAttachments, t)
   const localHold =
@@ -79,7 +82,7 @@ export function nativeChatComposerSendState(
   // The send's own resolver, so the hint withdraws wherever Cmd/Ctrl+Enter would send no differently.
   const followUp = transport?.sendFollowUp
   const alternateSend: NativeChatFollowUpBehavior | undefined =
-    input.messageDelivery && !input.editSession && followUp?.offersChoice
+    enterToSend && input.messageDelivery && !input.editSession && followUp?.offersChoice
       ? followUp.action === 'queue'
         ? 'steer'
         : 'queue'
@@ -93,9 +96,13 @@ export function nativeChatComposerSendState(
     sendHeld,
     hasDraft,
     sendButtonDisabled,
+    enterToSend,
     alternateSend,
     // Never where the chord queues, or a second press would steer the card the first one just queued.
     chordSteersHead:
-      input.messageDelivery && !input.editSession && (alternateSend === 'steer' || !input.isWorking)
+      enterToSend &&
+      input.messageDelivery &&
+      !input.editSession &&
+      (alternateSend === 'steer' || !input.isWorking)
   }
 }
