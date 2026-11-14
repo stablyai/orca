@@ -1,6 +1,9 @@
 import { join, relative, sep } from 'node:path'
 import { isCodexSessionBackfillDate } from './codex-session-backfill-scan-dates'
-import { listCodexSessionJsonlFilesIncrementally } from '../rollouts/codex-session-file-listing'
+import {
+  isNotFoundError,
+  listCodexSessionJsonlFilesIncrementally
+} from '../rollouts/codex-session-file-listing'
 import type {
   CodexSessionBackfillDate,
   CodexSessionBackfillOptions
@@ -44,8 +47,4 @@ function resolveCodexSessionBackfillDateRoots(
   return scanDates
     .filter(isCodexSessionBackfillDate)
     .map(([year, month, day]) => join(sessionsRoot, year, month, day))
-}
-
-function isNotFoundError(error: unknown): boolean {
-  return (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
 }

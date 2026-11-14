@@ -38,6 +38,8 @@ export function createCodexSessionMigrationScheduler(args: {
   finishScheduledRun?: () => void
   startBackfill: MigrationRun
   startIndexHeal: MigrationRun
+  /** Migration only pays off when a codex binary exists to read the history (#42096). */
+  isCodexCliAvailable?: () => boolean
   initialDelayMs?: number
 }): CodexSessionMigrationScheduler {
   let scheduledTimer: ReturnType<typeof setTimeout> | null = null
@@ -73,6 +75,10 @@ export function createCodexSessionMigrationScheduler(args: {
       pendingFullScan ||= requestedFullScan
     }
     if (args.isQuitting() || !args.isEligible()) {
+      return
+    }
+    // Requested generations and scan dates stay pending for a run after codex returns.
+    if (args.isCodexCliAvailable && !args.isCodexCliAvailable()) {
       return
     }
     if (migrationTask) {

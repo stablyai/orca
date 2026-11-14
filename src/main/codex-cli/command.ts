@@ -1,7 +1,7 @@
 import { resolveCliCommandAsync } from '../../shared/node-cli-command-async-resolution'
 import { resolveCliCommand } from '../../shared/node-cli-command-resolution'
 import { resolveGuestNativeProgram } from '../ipc/wsl-guest-windows-drive-path'
-import { WINDOWS_ONLY_AGENT_CLI_DIR } from './windows-only-agent-cli'
+import { codexSpawnEnoent, WINDOWS_ONLY_AGENT_CLI_DIR } from './windows-only-agent-cli'
 
 export {
   getVersionManagerBinPaths,
@@ -32,6 +32,11 @@ export function resolveGuestNativeAgentCommand(
 
 export function resolveCodexCommand(options: ResolveCommandOptions = {}): string {
   return resolveGuestNativeAgentCommand('codex', options)
+}
+
+/** Whether a codex binary exists for maintenance jobs that must spawn it (#42096). */
+export function isCodexCliAvailable(options: ResolveCommandOptions = {}): boolean {
+  return !codexSpawnEnoent(resolveCodexCommand(options)).missing
 }
 
 /** Per-spawn lookup (#35565): only Windows' per-candidate stats are slow enough to move off the event loop. */

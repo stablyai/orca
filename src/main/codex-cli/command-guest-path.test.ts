@@ -1,8 +1,17 @@
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { resolveGuestNativeAgentCommand, WINDOWS_ONLY_AGENT_CLI_DIR } from './command'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  isCodexCliAvailable,
+  resolveGuestNativeAgentCommand,
+  WINDOWS_ONLY_AGENT_CLI_DIR
+} from './command'
+
+// Host machines may have a real codex in /usr/local/bin or /opt/homebrew/bin.
+vi.mock('../../shared/system-cli-install-dirs', () => ({
+  getSystemCliInstallDirectories: () => []
+}))
 
 let root: string
 let native: string
@@ -45,4 +54,18 @@ describe.skipIf(process.platform === 'win32')('agent CLI resolution on a WSL hos
       )
     }
   )
+})
+
+describe('codex CLI availability', () => {
+  const options = () => ({ pathEnv: '', homePath: join(root, 'home') })
+
+  it('reports unavailable when no codex binary is on PATH or in install dirs', () => {
+    expect(isCodexCliAvailable(options())).toBe(false)
+  })
+
+  it('reports available when PATH resolves a codex binary', () => {
+    const binDir = join(root, 'bin')
+    install(binDir, process.platform === 'win32' ? 'codex.cmd' : 'codex')
+    expect(isCodexCliAvailable({ ...options(), pathEnv: binDir })).toBe(true)
+  })
 })

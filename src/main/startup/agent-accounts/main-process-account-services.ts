@@ -6,6 +6,7 @@ import { startCodexSessionBackfillInBackground } from '../../codex/history/backf
 import { startCodexSessionIndexHealInBackground } from '../../codex/history/index/codex-session-index-heal'
 import { startCodexStateDbBackfillRecoveryInBackground } from '../../codex/history/index/codex-state-db-backfill-recovery'
 import { getOrcaManagedCodexHomePath } from '../../codex/configuration/homes/codex-home-paths'
+import { isCodexCliAvailable } from '../../codex-cli/command'
 import {
   hasOpenCodeGoApiKey,
   readOpenCodeGoApiKey,
@@ -44,7 +45,9 @@ export function initializeMainProcessAccountServices(): void {
       state.codexRuntimeHome?.prepareHostSystemDefaultSessionMigrationPass(scanDates),
     finishScheduledRun: () => state.codexRuntimeHome?.finishHostSystemDefaultSessionMigrationPass(),
     startBackfill: startCodexSessionBackfillInBackground,
-    startIndexHeal: startCodexSessionIndexHealInBackground
+    startIndexHeal: startCodexSessionIndexHealInBackground,
+    // Bridge, backfill and index heal all presume Codex exists; skip them without a binary (#42096).
+    isCodexCliAvailable
   })
   const services = createProviderAccountServices(store, {
     codexAccountLifecycle: { onHostSystemDefaultSelected: state.codexSessionMigration.requestRun },
