@@ -121,7 +121,6 @@ const NODE_RUNTIME_INCLUDE = [
   'src/main/updater/lifecycle/main-window-updater-deferred-setup.test.ts',
   'src/renderer/src/components/terminal-pane/host-state/terminal-pane-host-state-memo.test.ts',
   'src/main/native-chat/agent-session-journal/**/*.test.ts',
-  'src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-terminal-writer-acquire.test.ts',
   'src/main/runtime/agent-session/records/agent-session-conversation-name-store.test.ts',
   'src/main/runtime/rpc/methods/structured-sessions/attachments/structured-agent-session-visual.test.ts',
   // Bun resolves 'ws' to its built-in client, which bypasses the patched package.
