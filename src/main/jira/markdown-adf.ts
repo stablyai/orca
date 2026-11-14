@@ -212,7 +212,7 @@ function listNode(node: MdNode, context: ConversionContext): AdfNode {
   if (!node.ordered) {
     return { type: 'bulletList', content: items }
   }
-  const start = typeof node.start === 'number' && node.start > 0 ? node.start : 1
+  const start = typeof node.start === 'number' && node.start >= 0 ? node.start : 1
   return {
     type: 'orderedList',
     ...(start === 1 ? {} : { attrs: { order: start } }),

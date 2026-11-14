@@ -43,7 +43,7 @@ function normalize(value: string, start: number, end: number): HttpLinkSpan | nu
       ipv6Length++
     }
   }
-  if (previous && !/[\s\p{P}]/u.test(previous)) {
+  if (previous && !/[\s\p{P}<]/u.test(previous)) {
     return null
   }
   let tailStart = end

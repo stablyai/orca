@@ -262,15 +262,6 @@ importers:
       jsonc-parser:
         specifier: ^3.3.1
         version: 3.3.1
-      mdast-util-gfm:
-        specifier: 3.1.0
-        version: 3.1.0(supports-color@7.2.0)
-      mdast-util-to-markdown:
-        specifier: 2.2.3
-        version: 2.2.3
-      mdast-util-to-markdown-cjk-friendly:
-        specifier: 1.0.2
-        version: 1.0.2(@types/mdast@4.0.4)(micromark-util-types@2.0.2)
       mime-types:
         specifier: 3.0.2
         version: 3.0.2
@@ -557,6 +548,9 @@ importers:
       lowlight:
         specifier: ^3.3.0
         version: 3.3.0
+      markdown-table:
+        specifier: 3.0.4
+        version: 3.0.4
       lucide-react:
         specifier: ^0.577.0
         version: 0.577.0(@types/react@19.2.18)(react@19.2.8)
@@ -13606,7 +13600,7 @@ snapshots:
       mdast-util-gfm-strikethrough: 2.0.0(supports-color@7.2.0)
       mdast-util-gfm-table: 2.0.0(supports-color@7.2.0)
       mdast-util-gfm-task-list-item: 2.0.0(supports-color@7.2.0)
-      mdast-util-to-markdown: 2.2.3
+      mdast-util-to-markdown: 2.1.2
     transitivePeerDependencies:
       - supports-color
 

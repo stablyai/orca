@@ -4,16 +4,23 @@ import { httpCandidateNormalizer, type HttpLinkSpan } from './adf-http-link'
 import { bareEmailSpans } from './adf-bare-email'
 import { escapeMarkdownTextLinkDestination } from './adf-media-destination'
 import { adfChildren, adfRecord, adfString } from './adf-nodes'
+import { renderInlineMarkdown } from './adf-inline-markdown'
 
-export type JiraMediaMarkdown = Literal & { type: 'jiraMedia'; value: string }
+type JiraMarkdownLiteral = Literal & {
+  type: 'jiraMedia' | 'jiraAutolink'
+  value: string
+  url?: string
+}
 declare module 'mdast' {
   // oxlint-disable-next-line typescript/consistent-type-definitions -- Module augmentation requires declaration merging.
   interface RootContentMap {
-    jiraMedia: JiraMediaMarkdown
+    jiraMedia: JiraMarkdownLiteral
+    jiraAutolink: JiraMarkdownLiteral
   }
   // oxlint-disable-next-line typescript/consistent-type-definitions -- Module augmentation requires declaration merging.
   interface PhrasingContentMap {
-    jiraMedia: JiraMediaMarkdown
+    jiraMedia: JiraMarkdownLiteral
+    jiraAutolink: JiraMarkdownLiteral
   }
 }
 type Wrapper = Extract<PhrasingContent, { type: 'strong' | 'emphasis' | 'delete' | 'link' }>
@@ -57,7 +64,7 @@ function proseNodes(value: string): PhrasingContent[] {
       result.push({ type: 'text', value: value.slice(offset, next.start) })
     }
     const label = value.slice(next.start, next.end)
-    result.push({ type: 'link', url: next.url, children: [{ type: 'text', value: label }] })
+    result.push({ type: 'jiraAutolink', value: label, url: next.url })
     offset = next.end
   }
   if (offset < value.length) {
@@ -90,6 +97,18 @@ function appendWrapped(
   }
 }
 
+export const trailingWhitespaceReader = {
+  read: (value: string, index: number): string => value[index]
+}
+
+function trailingWhitespaceStart(value: string): number {
+  let end = value.length
+  while (end > 0 && /^\s$/u.test(trailingWhitespaceReader.read(value, end - 1))) {
+    end--
+  }
+  return end
+}
+
 function normalizedStyles(nodes: PhrasingContent[]): PhrasingContent[] {
   const normalized = nodes.flatMap((node): PhrasingContent[] => {
     if (!('children' in node)) {
@@ -105,7 +124,8 @@ function normalizedStyles(nodes: PhrasingContent[]): PhrasingContent[] {
     if (first?.type === 'text') {
       first.value = first.value.slice(leading.length)
     }
-    const trailing = last?.type === 'text' ? (/\s+$/.exec(last.value)?.[0] ?? '') : ''
+    const trailing =
+      last?.type === 'text' ? last.value.slice(trailingWhitespaceStart(last.value)) : ''
     if (last?.type === 'text' && trailing) {
       last.value = last.value.slice(0, -trailing.length)
     }
@@ -173,4 +193,13 @@ export function adfInlineNodes(
     }
   }
   return normalizedStyles(result)
+}
+
+export function renderAdfInline(
+  value: unknown,
+  renderMedia: MediaRenderer,
+  inTable = false,
+  heading = false
+): string {
+  return renderInlineMarkdown(adfInlineNodes(value, renderMedia, inTable), inTable, heading)
 }
