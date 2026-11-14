@@ -4,7 +4,10 @@ import {
 } from '../../../../../shared/window-shortcut-policy'
 import { keybindingMatchesAction } from '../../../../../shared/keybindings/matching'
 import { hasModifier } from '../../../../../shared/keybindings/parser'
-import type { KeybindingOverrides } from '../../../../../shared/keybindings/types'
+import type {
+  KeybindingActionId,
+  KeybindingOverrides
+} from '../../../../../shared/keybindings/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import type { BrowserPageZoomDirection } from '../../../../../shared/browser-page-zoom'
 import type { BrowserFindTarget } from '../../../../../shared/browser-find-source'
@@ -12,6 +15,14 @@ import type { BrowserPageTabShortcut } from '../../../../../shared/browser-page-
 import type { ResolveRenderer } from '../../browser-guest-renderer-target'
 import { matchesGuestTabShortcut } from './browser-guest-tab-shortcut'
 import { textInputOwnsComposition } from '../../../../../shared/text-input-shortcut-policy'
+
+const RIGHT_SIDEBAR_PANEL_ACTIONS: readonly KeybindingActionId[] = [
+  'sidebar.explorer.toggle',
+  'sidebar.search.toggle',
+  'sidebar.sourceControl.toggle',
+  'sidebar.checks.toggle',
+  'sidebar.ports.toggle'
+]
 
 export type ShouldForwardDictationShortcut = () => boolean
 export type IsMobileEmulatorEnabled = () => boolean
@@ -78,6 +89,12 @@ export function forwardGuestShortcutInput(
       const renderer = resolveRenderer(browserTabId)
       return renderer !== null && isLocalRenderer?.(renderer) === true
     })()
+  // Why: a guest without browser chrome has no panels of its own, so these chords open Orca's.
+  const matchesRightSidebarPanel =
+    !page &&
+    RIGHT_SIDEBAR_PANEL_ACTIONS.some((id) =>
+      keybindingMatchesAction(id, input, process.platform, keybindings)
+    )
   if (action?.type === 'zoom') {
     if (!page) {
       // Why: a plugin frame has no page zoom; Orca zooms what it would with focus outside a pane.
@@ -92,6 +109,7 @@ export function forwardGuestShortcutInput(
     if (
       forwardsDictation ||
       matchesPlugins ||
+      matchesRightSidebarPanel ||
       // Why: Orca claims a held tab chord on every repeat but acts once, so repeats never reach the page.
       matchesGuestTabShortcut(
         input,
@@ -239,6 +257,7 @@ export function forwardGuestShortcutInput(
     renderer.send('ui:dictationKeyDown')
   } else if (
     matchesPlugins ||
+    matchesRightSidebarPanel ||
     matchesGuestTabShortcut(
       input,
       process.platform,
