@@ -16,16 +16,24 @@ import type * as Os from 'node:os'
 import { join } from 'node:path'
 import { setupCodexHookHomes } from './hook-service-test-harness'
 
-const { getPathMock, homedirMock, controls } = vi.hoisted(() => ({
-  getPathMock: vi.fn<(name: string) => string>(),
-  homedirMock: vi.fn<() => string>(),
-  controls: {
-    aroundMirror: null as null | (() => () => void),
-    afterCleanup: null as null | (() => void),
+const { getPathMock, homedirMock, controls } = vi.hoisted(() => {
+  const controls: {
+    aroundMirror: null | (() => () => void)
+    afterCleanup: null | (() => void)
+    hideLegacy: boolean
+    failLegacyDelete: boolean
+  } = {
+    aroundMirror: null,
+    afterCleanup: null,
     hideLegacy: false,
     failLegacyDelete: false
   }
-}))
+  return {
+    getPathMock: vi.fn<(name: string) => string>(),
+    homedirMock: vi.fn<() => string>(),
+    controls
+  }
+})
 
 vi.mock('electron', () => ({ app: { getPath: getPathMock } }))
 vi.mock('os', async (importOriginal) => ({
