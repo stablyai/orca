@@ -20,6 +20,13 @@ import { journalDomainDatabasePath } from './journal-domain-database'
 import type { JournalSqlStoredRecords } from '../journal-sql-database-read'
 
 /** The runtime owns workers, never a writable connection or a retained chat projection. */
+type JournalSqlDatabaseOptions = {
+  readerPath?: string
+  onMaintenanceError: (error: unknown, sessionId?: string) => void
+  /** Each periodic maintenance pass, for owners that recover their own work on it. */
+  onMaintenanceTick?: () => void
+}
+
 export class JournalSqlDatabase {
   readonly readers: JournalSqlReaderPool
   private readonly conversions: JournalSqlConversions
@@ -33,11 +40,7 @@ export class JournalSqlDatabase {
     private readonly writer: JournalSqlOwner,
     readonly stateDirectory: string,
     readonly readOnly: boolean,
-    options: {
-      readerPath?: string
-      onMaintenanceError: (error: unknown, sessionId?: string) => void
-      onMaintenanceTick?: () => void
-    }
+    options: JournalSqlDatabaseOptions
   ) {
     this.readers = new JournalSqlReaderPool(
       journalDomainDatabasePath(stateDirectory),
@@ -70,13 +73,7 @@ export class JournalSqlDatabase {
 
   static async open(
     stateDirectory: string,
-    options: {
-      writerPath?: string
-      readerPath?: string
-      onMaintenanceError: (error: unknown, sessionId?: string) => void
-      /** Each periodic maintenance pass, for owners that recover their own work on it. */
-      onMaintenanceTick?: () => void
-    }
+    options: JournalSqlDatabaseOptions & { writerPath?: string }
   ): Promise<JournalSqlDatabase> {
     const filename = journalDomainDatabasePath(stateDirectory)
     const writer = new JournalSqlOwner(filename, stateDirectory, options.writerPath)
