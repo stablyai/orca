@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
@@ -76,7 +76,7 @@ it('exposes the current selection on keyboard focus and follows the chat snapsho
   }
   const picker = (snapshot: SessionOptionDescriptor[]) => (
     <TooltipProvider>
-      <NativeChatSessionOptionPickers snapshot={snapshot} surface={surface} isWorking={true} />
+      <NativeChatSessionOptionPickers snapshot={snapshot} surface={surface} isWorking={false} />
     </TooltipProvider>
   )
   const view = render(picker([model, effort]))
@@ -103,6 +103,13 @@ it('exposes the current selection on keyboard focus and follows the chat snapsho
   expect(screen.getByRole('button').getAttribute('aria-label')).not.toContain('Chat model')
   view.rerender(picker([{ ...model, valueSource: 'default' }, effort]))
   expect(screen.getByRole('tooltip').textContent).toBe('Chat model · Extra high')
+  view.rerender(picker([{ ...model, transport: 'catalog', valueSource: 'dispatched' }]))
+  const trigger = screen.getByRole('button', { name: 'Model Chat model' })
+  const descriptionId = trigger.getAttribute('aria-describedby')
+  expect(descriptionId).not.toBeNull()
+  expect(document.getElementById(descriptionId!)?.textContent).toContain(
+    'Sent to the agent — not confirmed'
+  )
 })
 
 it('keeps a working model-only picker inspectable without allowing changes', async () => {
@@ -133,8 +140,8 @@ it('keeps a working model-only picker inspectable without allowing changes', asy
   const view = render(picker(true))
   const informationalTrigger = screen.getByRole('button', { name: 'Model Chat model' })
   expect(informationalTrigger.getAttribute('aria-disabled')).toBe('true')
-  expect(view.container.querySelector('button')?.disabled).toBe(true)
-  fireEvent.focus(informationalTrigger)
+  act(() => informationalTrigger.focus())
+  expect(document.activeElement).toBe(informationalTrigger)
   expect((await screen.findByRole('tooltip')).textContent).toBe('Chat model')
   fireEvent.click(informationalTrigger)
   for (const key of ['Enter', ' ', 'ArrowDown']) {
@@ -142,6 +149,8 @@ it('keeps a working model-only picker inspectable without allowing changes', asy
   }
   expect(screen.queryByRole('dialog')).toBeNull()
   view.rerender(picker(false))
-  fireEvent.click(screen.getByRole('button', { name: 'Model Chat model' }))
+  expect(document.activeElement).toBe(informationalTrigger)
+  expect(informationalTrigger.getAttribute('aria-disabled')).toBeNull()
+  fireEvent.click(informationalTrigger)
   expect(await screen.findByRole('dialog')).not.toBeNull()
 })
