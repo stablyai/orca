@@ -2,9 +2,13 @@
 
 import { isPtyIdMintedForAnotherWorkspace } from './foreign-pane-bindings'
 import type { RuntimeMobileSessionCreateTerminalResult as CreatedTerminal } from '../../../../shared/runtime-session-contracts'
+import type { RecordedAgentSessionIdentity } from '../../../../shared/agent-session/recorded-agent-session'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 
-export type StartedPty = Pick<CreatedTerminal, 'startupCwdFallback'> & { id: string }
+export type StartedPty = Pick<CreatedTerminal, 'startupCwdFallback'> & {
+  id: string
+  resumedAgentSession?: RecordedAgentSessionIdentity
+}
 export type RestoredPane = { worktreeId: string; tabId: string; leafId: string }
 
 export type RestoredPaneStartPlan = {
@@ -15,6 +19,7 @@ export type RestoredPaneStartPlan = {
 /** Who asked, which the start keeps: an automatic probe is refused for a slept worktree. */
 export type RestoredPaneTrigger = {
   automatic?: boolean
+  resumeSession?: RecordedAgentSessionIdentity
   /** A user's own tab open or Start; without it a stopped WSL distro holds the start. */
   wslUserAct?: true
   targetsHost?: boolean

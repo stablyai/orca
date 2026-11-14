@@ -5,6 +5,12 @@ const FILE_OPEN_FOCUS_HELP =
   "--focus                Bring the user to the file (switches Orca's window to its worktree)"
 
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
+  'agent resume': {
+    pane: '--pane <paneKey>      Original pane key from agent sessions',
+    session:
+      '--session <id>        Recorded provider conversation ID; requires --agent without --pane',
+    agent: '--agent <id>          Agent that owns the recorded conversation'
+  },
   'extension reload': {
     'extension-id':
       '--extension-id <id>   Installed unpacked extension ID; also accepted positionally',
