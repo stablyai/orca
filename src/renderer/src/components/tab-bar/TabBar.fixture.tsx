@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { DndContext } from '@dnd-kit/core'
 import { defineFixture } from '../../component-fixtures/component-fixture'
+import { getDefaultSettings } from '../../../../shared/constants'
+import type { TabSizingMode } from '../../../../shared/tab-sizing'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import TabBar from './TabBar'
 import type { TabBarProps } from './tab-bar-props'
@@ -291,3 +293,42 @@ export const agentIdentityChanges = defineFixture({
   width: 900,
   render: () => <AgentIdentityFixture />
 })
+
+const SIZING_FILES: TabBarProps['editorFiles'] = ['README.md', 'tab-width-rules.ts'].map(
+  (name, index) => ({
+    id: `file-${index}`,
+    worktreeId: WORKSPACE_ID,
+    filePath: `/tmp/${name}`,
+    relativePath: name,
+    language: 'markdown',
+    isDirty: false,
+    mode: 'edit'
+  })
+)
+
+function sizingFixture(
+  tabSizing: TabSizingMode,
+  width: number,
+  widths: { tabSizingMinWidth?: number; tabSizingMaxWidth?: number } = {}
+) {
+  return defineFixture({
+    width,
+    store: { settings: { ...getDefaultSettings('/home/fixture'), tabSizing, ...widths } },
+    render: () => (
+      <TabWidthFixture
+        count={3}
+        titles={['Terminal 1', 'Native chat tab title regeneration', 'sh']}
+        tabBarOrder={['tab-0', 'tab-1', 'file-0', 'tab-2', 'file-1']}
+        editorFiles={SIZING_FILES}
+      />
+    )
+  })
+}
+
+export const sizingAuto = sizingFixture('auto', 1600)
+export const sizingFit = sizingFixture('fit', 1600)
+export const sizingShrink = sizingFixture('shrink', 1600)
+export const sizingFixed = sizingFixture('fixed', 1600)
+export const sizingFixedNarrow = sizingFixture('fixed', 620)
+export const sizingAutoMax180 = sizingFixture('auto', 1600, { tabSizingMaxWidth: 180 })
+export const sizingFixedMin100 = sizingFixture('fixed', 420, { tabSizingMinWidth: 100 })
