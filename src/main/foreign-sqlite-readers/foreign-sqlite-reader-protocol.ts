@@ -2,6 +2,7 @@
 
 import type { OpenCodeSessionCursor } from './opencode-binder-sessions-result'
 import type { OpenCodePromptFailureQuery } from './opencode-prompt-failure-result'
+import type { HermesSessionsQuery } from './hermes-sessions-result'
 
 type CursorProfileRequest = {
   id: number
@@ -26,7 +27,11 @@ export type ForeignSqliteReaderRequest =
   | OpenCodeBinderSessionsRequest
   | OpenCodePromptFailureRequest
 
-export type ForeignSqliteReaderKind = ForeignSqliteReaderRequest['kind']
+export type HermesSessionsRequest = HermesSessionsQuery & { id: number; kind: 'hermesSessions' }
+
+export type ForeignSqliteWorkerRequest = ForeignSqliteReaderRequest | HermesSessionsRequest
+
+export type ForeignSqliteReaderKind = ForeignSqliteWorkerRequest['kind']
 
 export type ForeignSqliteReaderResponse =
   | { id: number; ok: true; value: unknown }

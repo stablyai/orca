@@ -89,7 +89,10 @@ function previewTranscript(session: AiVaultSession): string {
 
 function vaultTranscriptPath(session: AiVaultSession): string | null {
   // These rows name an account-wide database; handing that path over would expose every conversation in it.
-  if (isAiVaultDatabaseAgent(session.agent)) {
+  if (
+    isAiVaultDatabaseAgent(session.agent) ||
+    (session.agent === 'hermes' && session.filePath.endsWith(`#${session.sessionId}`))
+  ) {
     return null
   }
   return session.filePath.trim() || null
