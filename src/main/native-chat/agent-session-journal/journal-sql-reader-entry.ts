@@ -1,8 +1,3 @@
-import {
-  JournalLegacyRetentionError,
-  readJournalLegacySource
-} from './journal-legacy-retention-error'
-import { readJournalLegacyProofPage } from './journal-legacy-source-proof'
 import { JournalForkPreparation } from './journal-fork-preparation'
 import { parentPort, workerData } from 'node:worker_threads'
 import { existsSync } from 'node:fs'
@@ -92,7 +87,6 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
       case 'database':
         reply({ type: 'database', id, result: readJournalSqlDatabase(db, operation.operation) })
         break
-      case 'legacy-proof':
       case 'conversion-prepare': {
         // Each frozen-source read is its own short statement; no snapshot spans the restore.
         if (!original && existsSync(workerData.originalFilename)) {
@@ -102,19 +96,7 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
               fileMustExist: true,
               timeout: 5000
             })
-          original =
-            operation.kind === 'legacy-proof' ? readJournalLegacySource(openSource) : openSource()
-        }
-        if (operation.kind === 'legacy-proof') {
-          if (!original) {
-            throw new Error('legacy source disappeared during proof')
-          }
-          reply({
-            type: 'legacy-proof',
-            id,
-            page: readJournalLegacyProofPage(original, operation.cursor, db)
-          })
-          break
+          original = openSource()
         }
         const prepared = original ? prepareJournalDomainImport(original, operation.sessionId) : null
         if (prepared) {
@@ -144,14 +126,6 @@ port.on('message', ({ id, operation }: JournalSqlReaderRequest) => {
         break
     }
   } catch (error) {
-    if (operation.kind === 'legacy-proof' && error instanceof JournalLegacyRetentionError) {
-      reply({
-        type: 'legacy-proof',
-        id,
-        page: { next: null, sessions: [], retained: error.message, reason: error.reason }
-      })
-      return
-    }
     let retire = operation.kind === 'fork-prepare'
     if (fork) {
       try {
