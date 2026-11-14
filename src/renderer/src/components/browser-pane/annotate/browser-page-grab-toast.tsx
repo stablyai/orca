@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
-import { imageCopyFailedMessage } from '@/lib/clipboard-image-copy'
+import { imageCopyFailedMessage } from '@/lib/clipboard/images/clipboard-image-copy'
 import type {
   BrowserPageGrabAnnotations,
   BrowserPageGrabToastState

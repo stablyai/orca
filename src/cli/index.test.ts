@@ -18,7 +18,7 @@ const {
   spawnMock: vi.fn()
 }))
 
-vi.mock('./runtime-client', async () => {
+vi.mock('./runtime/client', async () => {
   const { createRuntimeClientModuleMock } = await import('./index-test-harness.js')
   return createRuntimeClientModuleMock({
     callMock,
@@ -27,6 +27,16 @@ vi.mock('./runtime-client', async () => {
     getDefaultUserDataPathMock
   })
 })
+
+vi.mock('./runtime/launch', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  serveOrcaApp: serveOrcaAppMock
+}))
+
+vi.mock('./runtime/metadata', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getDefaultUserDataPath: getDefaultUserDataPathMock
+}))
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
@@ -44,7 +54,7 @@ vi.mock('child_process', async () => {
 })
 
 import { main } from './index'
-import { okFixture, queueFixtures } from './test-fixtures'
+import { okFixture, queueFixtures } from './runtime/fixtures/runtime-rpc-fixtures'
 
 describe('command aliases dispatch to the canonical handler', () => {
   let logSpy: ReturnType<typeof vi.spyOn>

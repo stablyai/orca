@@ -1,7 +1,7 @@
-import { waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
+import { waitForAiVaultScan } from '../../scan-lifecycle/ai-vault-scan-cancellation'
 import { basename } from 'node:path'
-import { wslGatedReadFile } from '../../../native-chat/wsl-transcript-fs-access'
-import { WslTranscriptFsError } from '../../../native-chat/wsl-transcript-fs-error'
+import { wslGatedReadFile } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-error'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { kiroTranscriptPathForMetadata } from '../../../../shared/ai-vault/session-display/ai-vault-session-log-resource'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
@@ -9,15 +9,16 @@ import {
   createAccumulator,
   finalizeSession,
   updateTimeline
-} from '../../session-scanner-accumulator'
-import { addSessionContent } from '../../session-scanner-messages'
-import { consumeCompleteJsonlLines } from '../../session-scanner-jsonl-reader'
+} from '../../parsing/session-scanner-accumulator'
+import { addSessionContent } from '../../parsing/session-scanner-messages'
+import { consumeCompleteJsonlLines } from '../../parsing/session-scanner-jsonl-reader'
 import type { FileWithMtime, SessionAccumulator } from '../../session-scanner-types'
 import type { TranscriptMessageSink } from '../../transcripts/session-transcript-consumers'
 import type { SkippedTranscriptRecord } from '../../transcripts/session-transcript-record-budget'
-import { arrayValue, extractString, parseJsonObject } from '../../session-scanner-values'
-import { asRecord } from '../../session-scanner-record-value'
-import { normalizeTitleText } from '../../session-scanner-text-normalization'
+import { arrayValue, asRecord } from '../../parsing/session-record-fields'
+import { extractString } from '../../../../shared/trimmed-string'
+import { parseJsonObject } from '../../parsing/session-json-object'
+import { normalizeTitleText } from '../../parsing/session-scanner-text-normalization'
 
 type ParserSessionOptions = {
   executionHostId?: ExecutionHostId

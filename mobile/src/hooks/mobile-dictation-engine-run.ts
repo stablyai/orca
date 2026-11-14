@@ -1,7 +1,7 @@
 import type { RefObject } from 'react'
 import { dictationSessionErrorMessage } from '../dictation/mobile-dictation-setup'
-import type { DictationCapture } from '../platform/dictation-capture-contract'
-import type { OnDeviceSpeech } from '../platform/on-device-speech-contract'
+import type { DictationCapture } from '../platform/audio-capture/dictation-capture-contract'
+import type { OnDeviceSpeech } from '../platform/speech/on-device-speech-contract'
 import { openMobileDictationCapture } from './mobile-dictation-capture-open'
 import { createMobileDictationId, type DictationStatus } from './mobile-dictation-session-state'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
@@ -48,6 +48,7 @@ export type MobileDictationRun = {
   readonly finish: RefObject<(emptyTranscriptMessage: string) => Promise<void>>
   readonly onTranscript: RefObject<(text: string) => void>
   readonly onAudioLimitReached: RefObject<(() => void) | undefined>
+  readonly worktreeId: RefObject<string | undefined>
   readonly keptTranscript: MobileDictationTranscriptSoFar
   // keepText: leave the words so far on screen (recording, finishing, or a failure kept for Retry).
   readonly applyStatus: (next: DictationStatus, keepText?: boolean) => void

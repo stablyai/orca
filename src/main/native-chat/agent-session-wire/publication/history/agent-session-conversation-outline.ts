@@ -62,6 +62,7 @@ export function readAgentSessionConversationOutline(
   }
   return {
     sessionId: snapshot.sessionId,
+    humanMessagesOnly: true,
     cursor: snapshot.cursor,
     entries: first === 0 ? entries : entries.slice(first),
     omittedEntries: first

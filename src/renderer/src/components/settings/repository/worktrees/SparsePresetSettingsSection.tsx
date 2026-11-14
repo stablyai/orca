@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { Plus, RefreshCcw } from 'lucide-react'
 import type { SparsePreset } from '../../../../../../shared/worktree/create-types'
 import { useAppStore } from '../../../../store/index'
-import { parseSparsePresetDirectories, validateSparsePresetName } from '@/lib/sparse-preset-draft'
+import {
+  parseSparsePresetDirectories,
+  validateSparsePresetName
+} from '@/components/sparse/sparse-preset-draft'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { Button } from '../../../ui/button'
 import { getSparsePresetOperationErrorMessage } from './sparse-preset-operation-error'
@@ -208,8 +211,8 @@ export function SparsePresetSettingsSection({
     <section ref={sectionRef}>
       <SettingsGroup
         title={t(
-          'auto.components.settings.SparsePresetSettingsSection.388513be2d',
-          'Sparse Checkout Presets'
+          'auto.components.settings.SparsePresetSettingsSection.124ff6ea6c',
+          'Sparse checkout presets'
         )}
         description={t(
           'auto.components.settings.SparsePresetSettingsSection.17f8c4ce10',
@@ -224,7 +227,7 @@ export function SparsePresetSettingsSection({
             disabled={!!draft || presets === undefined || deletingPresetId !== null}
           >
             <Plus className="size-3.5" />
-            {t('auto.components.settings.SparsePresetSettingsSection.d7565029a9', 'New Preset')}
+            {t('auto.components.settings.SparsePresetSettingsSection.683e781027', 'New preset')}
           </Button>
         }
       >

@@ -1,11 +1,13 @@
 import {
   MobileWebBundleErrorCodeSchema,
+  MOBILE_WEB_BUNDLE_BROTLI_RANGE_METHOD,
   MOBILE_WEB_BUNDLE_CHUNK_METHOD,
   MOBILE_WEB_BUNDLE_MANIFEST_METHOD,
   MOBILE_WEB_BUNDLE_RANGE_METHOD,
   type MobileWebBundleErrorCode
 } from '../../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
 import {
+  MobileWebBundleBrotliRangeReplySchema,
   MobileWebBundleChunkReplySchema,
   MobileWebBundleManifestReplySchema,
   MobileWebBundleRangeReplySchema
@@ -41,6 +43,15 @@ export const mobileWebBundleRangeRead = defineRpcOperation({
   acceptance: 'require-result-or-throw',
   barrier: 'on-settle',
   read: rpcResultVariant('mobile-web-bundle-range', MobileWebBundleRangeReplySchema)
+})
+
+// Only for assets whose manifest entry names a brotli copy, so only hosts that ship one are asked.
+export const mobileWebBundleBrotliRangeRead = defineRpcOperation({
+  name: 'mobileWeb.bundle-brotli-range',
+  method: MOBILE_WEB_BUNDLE_BROTLI_RANGE_METHOD,
+  acceptance: 'require-result-or-throw',
+  barrier: 'on-settle',
+  read: rpcResultVariant('mobile-web-bundle-brotli-range', MobileWebBundleBrotliRangeReplySchema)
 })
 
 /** A code is a bare snake_case token, so only the two positions one can occupy are read. */

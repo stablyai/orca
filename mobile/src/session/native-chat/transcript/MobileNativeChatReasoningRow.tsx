@@ -1,4 +1,4 @@
-import { mobileNativeChatMemberId } from '../../mobile-native-chat-reading-place'
+import { mobileNativeChatMemberId } from './mobile-native-chat-reading-place'
 import { useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
@@ -7,14 +7,14 @@ import {
   nativeChatReasoningDisclosureKey,
   nativeChatReasoningHeadline,
   nativeChatReasoningHeadlineText
-} from '../../../../../src/shared/native-chat/transcript/native-chat-reasoning-row'
+} from '../../../../../src/shared/native-chat/transcript/row-content/native-chat-reasoning-row'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
-import { deriveNativeChatRowContent } from '../../../../../src/shared/native-chat/transcript/native-chat-row-content'
-import { useMobileNativeChatFullMessage } from '../MobileNativeChatFullContent'
-import { MobileNativeChatMarkdown } from '../MobileNativeChatMarkdown'
+import { deriveNativeChatRowContent } from '../../../../../src/shared/native-chat/transcript/row-content/native-chat-row-content'
+import { useMobileNativeChatFullMessage } from './MobileNativeChatFullContent'
+import { MobileNativeChatMarkdown } from './MobileNativeChatMarkdown'
 import { colors } from '../../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
-import { MobileNativeChatLongPressContent } from '../MobileNativeChatLongPressContent'
+import { MobileNativeChatLongPressContent } from './MobileNativeChatLongPressContent'
 import { CHAT_PROSE_SCALE, styles } from './mobile-native-chat-message-styles'
 
 /** A grouped thought keeps its own source recovery when its original transcript row is hidden. */

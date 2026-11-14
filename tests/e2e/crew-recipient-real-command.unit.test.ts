@@ -13,7 +13,7 @@ import { releaseAgentSessionRecordStore } from '../../src/main/runtime/agent-ses
 
 import { afterEach, expect, it, vi } from 'vitest'
 
-import { createSessionCallerHarness } from '../../src/main/runtime/rpc/orchestration-session-caller-test-fixture'
+import { createSessionCallerHarness } from '../../src/main/runtime/rpc/orchestration/callers/session.test-fixture'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
 vi.mock(

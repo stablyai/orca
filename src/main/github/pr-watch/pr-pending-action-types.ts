@@ -1,5 +1,5 @@
 import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
-import type { GitHubPRRefreshCandidate } from '../../../shared/github/pull-request-refresh-types'
+import type { GitHubPRRefreshCandidate } from '../../../shared/github/pull-requests/refresh/pull-request-refresh-types'
 import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/database/journal-host-database'
 import type { PushRemote } from './pr-chat-action-recorder'
 import type { PRPendingActionRow, PRPendingObligation } from './pr-pending-actions'

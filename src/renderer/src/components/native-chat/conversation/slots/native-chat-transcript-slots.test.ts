@@ -1,8 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import * as imageSources from '../../markdown/native-chat-markdown-image-sources'
+import { nativeChatAgentRowWords } from '../../messages/rows/native-chat-message-row-words'
 
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 
-import type { NativeChatTurnStatus } from '../../../../../../shared/native-chat/transcript/native-chat-turn-status'
+import type { NativeChatTurnStatus } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 
 import type { NativeChatResolvedPrompt } from '../../../../../../shared/native-chat/native-chat-resolution-receipt'
 import type { NativeChatTurnDiff } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
@@ -59,6 +61,151 @@ function toolRun(id: string): NativeChatMessage {
 }
 
 describe('transcript slots', () => {
+  it('shows completed generated output with final prose after settlement and only once when expanded', () => {
+    const generated: NativeChatMessage = {
+      ...text('image', ''),
+      blocks: [
+        { type: 'text', text: 'Generated image', presentation: 'generated-image' },
+        { type: 'image-ref', path: '/tmp/elephant.png' }
+      ]
+    }
+    const rows = [
+      text('u', 'Generate.', 'user'),
+      toolRun('work'),
+      text('answer', 'Your elephant.'),
+      generated
+    ]
+    const turnStatuses = {
+      active: null,
+      completedByTurn: { u: { startedAt: 1, thinking: false, workedSeconds: 4 } }
+    }
+    for (const expandedTurnKeys of [new Set<string>(), new Set(['u'])]) {
+      const slots = build(rows, { turnStatuses, expandedTurnKeys })
+      const answer = slots.find((slot) => slot.message.id === 'answer')!
+      expect(answer.drawsMessage).toBe(true)
+      expect(answer.endsResponse).toBe(true)
+      const source = slots.find((slot) => slot.message.id === 'image')
+      if (expandedTurnKeys.has('u')) {
+        expect(nativeChatAgentRowWords(source!.message)).toBe('Generated image')
+        expect(source!.endsResponse).toBe(false)
+      }
+      expect(answer.message.blocks).toEqual([
+        { type: 'text', text: 'Your elephant.' },
+        { type: 'image-ref', path: '/tmp/elephant.png' }
+      ])
+      expect(
+        slots
+          .filter((slot) => slot.drawsMessage)
+          .flatMap((slot) => slot.message.blocks.filter((block) => block.type === 'image-ref'))
+      ).toEqual([{ type: 'image-ref', path: '/tmp/elephant.png' }])
+    }
+    const embedded = build(
+      [rows[0]!, generated, text('answer', '![](<file:///tmp/elephant.png>)')],
+      { turnStatuses }
+    )
+    expect(embedded.find((slot) => slot.message.id === 'answer')?.message.blocks).toEqual([
+      { type: 'text', text: '![](<file:///tmp/elephant.png>)' }
+    ])
+  })
+
+  it.each([
+    ['![](/tmp/p.png)', false],
+    ['$$\n![](/tmp/p.png)\n$$', true],
+    ['```md\n![](/tmp/p.png)\n```', true],
+    ['[picture](/tmp/p.png)', true],
+    ['<img src="/tmp/p.png" alt="Picture">', false],
+    ['<!-- <img src="/tmp/p.png"> -->', true],
+    ['`<img src="/tmp/p.png">`', true]
+  ])('deduplicates only rendered image embeds in %s', (markdown, retained) => {
+    const generated: NativeChatMessage = {
+      ...text('image', ''),
+      blocks: [
+        { type: 'text', text: 'Generated image', presentation: 'generated-image' },
+        { type: 'image-ref', path: '/tmp/p.png' }
+      ]
+    }
+    const slots = build([text('u', 'Generate.', 'user'), generated, text('answer', markdown)], {
+      turnStatuses: {
+        active: null,
+        completedByTurn: { u: { startedAt: 1, thinking: false, workedSeconds: 4 } }
+      }
+    })
+    expect(
+      slots
+        .find((slot) => slot.message.id === 'answer')
+        ?.message.blocks.filter((block) => block.type === 'image-ref')
+    ).toEqual(retained ? [{ type: 'image-ref', path: '/tmp/p.png' }] : [])
+  })
+
+  it.each([1000, 10000])(
+    'keeps completed image responses stable on the production streaming trigger at %i rows',
+    (count) => {
+      const generated: NativeChatMessage = {
+        ...text('image', ''),
+        blocks: [
+          { type: 'text', text: 'Generated image', presentation: 'generated-image' },
+          { type: 'image-ref', path: '/tmp/p.png' }
+        ]
+      }
+      const rows = [
+        text('u', 'Generate.', 'user'),
+        generated,
+        ...Array.from({ length: count - 3 }, (_, index) => text(`work-${index}`, 'Working.')),
+        text('answer', 'Finished.'),
+        text('live', 'Next.', 'user'),
+        text('stream', 'Streaming.')
+      ]
+      const overrides = {
+        turnStatuses: {
+          active: null,
+          completedByTurn: { u: { startedAt: 1, thinking: false, workedSeconds: 4 } }
+        }
+      }
+      const reads = vi.spyOn(imageSources, 'nativeChatMarkdownImageSources')
+      try {
+        const first = build(rows, overrides)
+        expect(reads).toHaveBeenCalledTimes(1)
+        reads.mockClear()
+        const next = build([...rows.slice(0, -1), text('stream', 'Streaming more.')], overrides)
+        // Only live text changed: settled answers need zero source discovery and preserve row identity.
+        expect(reads).not.toHaveBeenCalled()
+        expect(
+          next
+            .filter((slot) => slot.turnKey === 'u')
+            .every(
+              (slot) =>
+                slot.message ===
+                first.find((before) => before.message.id === slot.message.id)?.message
+            )
+        ).toBe(true)
+      } finally {
+        reads.mockRestore()
+      }
+    }
+  )
+
+  it("hangs response controls only above the person's next message, never on the last row", () => {
+    const visualReply = text('visual', 'Here is the trend.\n\n::orca-visual{file="trend.html"}')
+    const hangs = (messages: NativeChatMessage[]) =>
+      build(messages).map((slot) => [slot.message.id, slot.actionsHang === true])
+
+    expect(hangs([text('u1', 'Hi', 'user'), text('reply', 'Hello')])).toEqual([
+      ['u1', false],
+      ['reply', false]
+    ])
+    expect(hangs([text('u1', 'Chart it', 'user'), visualReply])).toEqual([
+      ['u1', false],
+      ['visual', false]
+    ])
+    expect(
+      hangs([text('u1', 'Hi', 'user'), text('reply', 'Hello'), text('u2', 'Thanks', 'user')])
+    ).toEqual([
+      ['u1', false],
+      ['reply', true],
+      ['u2', false]
+    ])
+  })
+
   it('draws the completed plan outside collapsed work', () => {
     const plan: NativeChatMessage = {
       ...text('plan', '# Proposed change', 'system'),
@@ -129,6 +276,22 @@ describe('transcript slots', () => {
     // A running turn's frontier still offers nothing: its rows stay live.
     const working = build(messages, { liveTurnKey: 'u', isWorking: true })
     expect(working.find((slot) => slot.message.id === 'a')?.activeTurnIsWorking).toBe(true)
+  })
+
+  it('marks only the newest reply for always-visible actions, including while it is working', () => {
+    const messages = [
+      text('u1', 'first', 'user'),
+      text('a1', 'first reply'),
+      text('u2', 'second', 'user'),
+      text('a2', 'second reply')
+    ]
+    for (const overrides of [{}, { liveTurnKey: 'u2', isWorking: true }]) {
+      const replies = build(messages, overrides).filter((slot) => slot.endsResponse)
+      expect(replies.map((slot) => [slot.message.id, slot.latestResponse === true])).toEqual([
+        ['a1', false],
+        ['a2', true]
+      ])
+    }
   })
 
   it("keeps a turn's actions on its text, or on its image while folding hides the text", () => {

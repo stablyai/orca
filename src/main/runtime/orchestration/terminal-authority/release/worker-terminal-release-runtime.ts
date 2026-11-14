@@ -9,6 +9,7 @@ export type WorkerTerminalReleaseRuntime = StructuredSessionSurfaceRuntime &
     | 'callOrchestrationWorkerServer'
     | 'getOrchestrationFleetAgentStatusSnapshot'
     | 'getOrchestrationDb'
+    | 'getExistingOrchestrationDb'
     | 'showTerminal'
     | 'resolveTerminalHandleByProcessIncarnation'
     | 'getTerminalPaneKey'

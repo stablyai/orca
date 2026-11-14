@@ -13,6 +13,7 @@ import { STOP_FAILURE_PIECES } from './agent-session-failure-stop-words-text'
 import { PROVIDER_EXIT_PIECES } from './agent-session-provider-exit-words-text'
 import { PROVIDER_RETRY_PIECES } from './agent-session-provider-retry-words-text'
 import { USAGE_LIMIT_PIECES } from './agent-session-usage-limit-words-text'
+import { PROVIDER_FAILURE_PIECES } from './agent-session-provider-failure-words-text'
 import { START_FAILURE_PIECES } from './agent-session-start-failure-words-text'
 
 // The pieces a refusal notice says too keep the notice's keys, so each has one translation.
@@ -181,6 +182,7 @@ const PIECES: Record<AgentSessionFailureCopyId, (values: AgentSessionFailureCopy
         'components.native-chat.failureWords.claudeEffortInvalid',
         COPY.claudeEffortInvalid
       ),
+    ...PROVIDER_FAILURE_PIECES,
     providerRejected: (values) =>
       translate(
         'components.native-chat.failureWords.providerRejected',

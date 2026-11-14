@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState, type ReactElement } from 'react'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { RuntimeTerminalDriverState } from '../../../../../shared/runtime-session-contracts'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -59,7 +59,7 @@ export function BrowserMobileDriverOverlay({ driver, onTakeBack }: Props): React
       aria-labelledby={OVERLAY_TITLE_ID}
       aria-live="assertive"
       className={cn(
-        'pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-background/80 p-6 backdrop-blur-sm',
+        'pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-background/80 p-6',
         'mobile-browser-driver-banner'
       )}
     >

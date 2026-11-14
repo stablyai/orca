@@ -4,25 +4,25 @@ import { launchWorkItemDirect } from '@/lib/workspace/creation/work-item/launch-
 import { useAppStore } from '@/store'
 import { projectViewCacheKeyTarget } from '@/store/github/cache/cache-identity'
 import { useTranslate } from '@/i18n/use-translate'
-import ProjectViewList from './ProjectViewList'
-import ProjectBoard from './ProjectBoard'
-import ProjectRoadmap from './ProjectRoadmap'
-import ProjectItemSlugDialog from './ProjectItemSlugDialog'
-import { ProjectMissingRepoDialog } from './ProjectMissingRepoDialog'
-import { ProjectViewToolbar } from './ProjectViewToolbar'
+import ProjectViewList from './table/ProjectViewList'
+import ProjectBoard from './board/ProjectBoard'
+import ProjectRoadmap from './roadmap/ProjectRoadmap'
+import ProjectItemSlugDialog from './slug-dialog/ProjectItemSlugDialog'
+import { ProjectMissingRepoDialog } from './row-actions/ProjectMissingRepoDialog'
+import { ProjectViewToolbar } from './view/ProjectViewToolbar'
 import {
   ProjectTableSkeleton,
   ProjectViewErrorState,
   ProjectViewTabStrip
-} from './ProjectViewStates'
-import { useProjectRowActions } from './useProjectRowActions'
-import { useProjectViewTable } from './useProjectViewTable'
+} from './view/ProjectViewStates'
+import { useProjectRowActions } from './row-actions/useProjectRowActions'
+import { useProjectViewTable } from './view/useProjectViewTable'
 import type {
   GitHubProjectFieldMutationValue,
   GitHubProjectRow
-} from '../../../../shared/github/project-types'
+} from '../../../../shared/github/projects/project-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
+import { taskSourceRuntimeTarget } from '@/lib/work-items/task-source-runtime-target'
 import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 
 type Props = {

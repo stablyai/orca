@@ -16,7 +16,7 @@ import { agentJournalItemKey } from '../../../shared/agent-session/journal/agent
 import type { AgentSessionContextUsage } from '../../../shared/agent-session/agent-session-context-usage'
 import { latestStructuredAgentContextFacts } from '../../../shared/agent-session/structured-agent-session-context-usage'
 import { runningStructuredAgentSessionTurnItemBySequence } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
-import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { journalWroteBeforeOpen } from './replay/journal-cursor'
 import type { JournalHostDatabase } from './database/journal-host-database'
 import {

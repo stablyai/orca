@@ -189,7 +189,7 @@ export function isOrcadMobileWebAssetPath(path: string): boolean {
   )
 }
 
-/** Slot paths of every asset `manifestText` lists, sorted; throws rather than ship a partial page. */
+/** Slot paths of every asset `manifestText` lists, their brotli copies and the host-only catalogs, sorted; throws rather than ship a partial page. */
 export function orcadMobileWebAssetFilenames(manifestText: string): string[] {
   const manifest: unknown = JSON.parse(manifestText)
   const assets =
@@ -197,12 +197,20 @@ export function orcadMobileWebAssetFilenames(manifestText: string): string[] {
   if (!Array.isArray(assets) || assets.length === 0) {
     throw new Error(`${ORCAD_MOBILE_WEB_MANIFEST} lists no assets`)
   }
-  const filenames = assets.map((asset: unknown) => {
-    const path = asset && typeof asset === 'object' && 'path' in asset ? asset.path : undefined
+  const catalogs =
+    manifest && typeof manifest === 'object' && 'catalogs' in manifest ? manifest.catalogs : []
+  if (!Array.isArray(catalogs)) {
+    throw new Error(`${ORCAD_MOBILE_WEB_MANIFEST} catalogs is not a list`)
+  }
+  const filenames = [...assets, ...catalogs].flatMap((asset: unknown) => {
+    const entry = asset && typeof asset === 'object' ? asset : {}
+    const path = 'path' in entry ? entry.path : undefined
     if (typeof path !== 'string' || !isOrcadMobileWebAssetPath(path)) {
       throw new Error(`${ORCAD_MOBILE_WEB_MANIFEST} names an unsafe asset path: ${String(path)}`)
     }
-    return `${ORCAD_MOBILE_WEB_DIR}/${path}`
+    const slotPath = `${ORCAD_MOBILE_WEB_DIR}/${path}`
+    // The asset's brotli copy, served to phones that inflate it; mirrors mobileWebBundleBrotliPath.
+    return 'brotliByteLength' in entry ? [slotPath, `${slotPath}.br`] : [slotPath]
   })
   return filenames.sort(compareCodeUnits)
 }
@@ -232,6 +240,8 @@ export const ORCAD_ARTIFACTS: readonly OrcadArtifact[] = [
   { filename: 'command-path-directory-worker-entry.js' },
   // Worker thread that reads other apps' SQLite (the OpenCode binder and history) off the event loop.
   { filename: ORCAD_FOREIGN_SQLITE_READER_ENTRY },
+  // Terminal agent identity SQL runs in this worker thread, off the hook server's loop.
+  { filename: 'agent-identity-worker-entry.js' },
   { filename: ORCAD_PORT_SCAN_COMMAND_WORKER_ENTRY },
   // Forked so transcript parsing stays off the server's event loop.
   { filename: ORCAD_SESSION_SCANNER_SERVICE_ENTRY },

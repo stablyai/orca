@@ -1,4 +1,4 @@
-import { Platform, StyleSheet } from 'react-native'
+import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { MONO_SIZE, scaledType } from './mobile-native-chat-message-styles'
 import { themedStyleSheet } from '../../../theme/themed-styles'
@@ -10,9 +10,6 @@ export function toolType(fontScale: number) {
     meta: scaledType(typography.metaSize, fontScale)
   }
 }
-
-// iOS has no font named `monospace`; it silently falls back to the proportional system face.
-const MONO_FAMILY = Platform.OS === 'ios' ? 'Menlo' : typography.monoFamily
 
 export const toolStyles = themedStyleSheet(() => ({
   run: {
@@ -111,7 +108,7 @@ export const toolStyles = themedStyleSheet(() => ({
   },
   codeText: {
     color: colors.textPrimary,
-    fontFamily: MONO_FAMILY
+    fontFamily: typography.monoFamily
   },
   searchResults: {
     gap: 2

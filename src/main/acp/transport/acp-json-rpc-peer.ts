@@ -105,7 +105,7 @@ export class AcpJsonRpcPeer {
   request(
     method: string,
     params: unknown,
-    options?: { timeoutMs?: number | null }
+    options?: Pick<AcpRequestOptions, 'timeoutMs' | 'onTimeout'>
   ): Promise<unknown>
   request(
     method: string,

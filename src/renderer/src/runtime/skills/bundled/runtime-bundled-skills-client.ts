@@ -9,9 +9,12 @@ import {
   BUNDLED_ORCA_SKILL_RENAMES_CAPABILITY
 } from '../../../../../shared/skill-install-capability'
 import { bundledSkillNames } from '../../../../../shared/bundled-skill-names'
-import type { BundledSkillTarget } from '@/lib/bundled-skill-target'
+import type { BundledSkillTarget } from '@/lib/skills/runtime/bundled-skill-target'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
-import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
+import {
+  runtimeEnvironmentCapabilityProof,
+  runtimeEnvironmentSupportsCapability
+} from '../../rpc/compatibility/runtime-capability-proof'
 
 const BUNDLED_SKILL_PLAN_TIMEOUT_MS = 60_000
 const BUNDLED_SKILL_EXECUTE_TIMEOUT_MS = 5 * 60_000
@@ -94,30 +97,38 @@ export async function executeBundledSkillsOnTarget(
   )
 }
 
-/** Silently updates hash-verified copies of `names`; null when the host predates it, so the caller asks instead. */
+/**
+ * Silently updates hash-verified copies of `names`; null when the host predates it, so the caller asks instead.
+ * `recordOnly` only records copies already at the host's bytes and never updates a skill.
+ */
 export async function autoUpdateBundledSkillsOnTarget(
   target: BundledSkillTarget,
-  names: string[]
+  names: string[],
+  options: { recordOnly?: boolean } = {}
 ): Promise<BundledSkillInstallResult | null> {
   if (target.kind === 'ssh') {
     return null
   }
+  const request = { names, ...(options.recordOnly ? { recordOnly: true as const } : {}) }
   if (target.kind !== 'environment') {
-    return window.api.skills.bundledAutoUpdate({ names })
+    return window.api.skills.bundledAutoUpdate(request)
   }
-  if (
-    !(await runtimeEnvironmentSupportsCapability(
-      target.environmentId,
-      BUNDLED_ORCA_SKILL_AUTO_UPDATE_CAPABILITY
-    )) ||
-    !(await supportsSelectedNames(target.environmentId, names))
-  ) {
+  // Why pinned: a re-pair while these probes await must not send this write to a different host.
+  const proof = await runtimeEnvironmentCapabilityProof(
+    target.environmentId,
+    BUNDLED_ORCA_SKILL_AUTO_UPDATE_CAPABILITY
+  )
+  if (!proof.supported || !(await supportsSelectedNames(target.environmentId, names))) {
     return null
   }
   return callRuntimeRpc<BundledSkillInstallResult>(
     { kind: 'environment', environmentId: target.environmentId },
     'skills.autoUpdateBundledOrca',
-    { names },
-    { timeoutMs: BUNDLED_SKILL_EXECUTE_TIMEOUT_MS }
+    request,
+    {
+      timeoutMs: BUNDLED_SKILL_EXECUTE_TIMEOUT_MS,
+      expectedEnvironmentRuntimeId: proof.runtimeId,
+      expectedEnvironmentPairingRevision: proof.pairingRevision
+    }
   )
 }

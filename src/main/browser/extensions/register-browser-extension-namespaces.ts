@@ -19,7 +19,7 @@ import { registerTabsNamespace } from './api/tabs'
 import { registerWebNavigationNamespace } from './api/web-navigation'
 import { registerWindowsNamespace } from './api/windows'
 
-/** Every main-side namespace; each must also appear in src/preload/browser-extension-api-surface.ts. */
+/** Every main-side namespace; each must also appear in src/preload/browser/extensions/api/browser-extension-api-surface.ts. */
 export function registerBrowserExtensionNamespaces(): void {
   registerWindowsNamespace()
   registerTabsNamespace()

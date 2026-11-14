@@ -1,4 +1,5 @@
 import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
+import type { BrowserPageAnnotation } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import type { RemoteBrowserPageHandle } from '../../../store/slices/browser/browser-slice-contract'
 
@@ -6,7 +7,8 @@ export function buildBrowserSessionData(
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>,
   browserPagesByWorkspace: Record<string, BrowserPage[]>,
   activeBrowserTabIdByWorktree: Record<string, string | null>,
-  remoteBrowserPageHandlesByPageId: Record<string, RemoteBrowserPageHandle>
+  remoteBrowserPageHandlesByPageId: Record<string, RemoteBrowserPageHandle>,
+  browserAnnotationsByPageId: Record<string, BrowserPageAnnotation[]>
 ): Pick<
   WorkspaceSessionState,
   'browserTabsByWorktree' | 'browserPagesByWorkspace' | 'activeBrowserTabIdByWorktree'
@@ -16,7 +18,8 @@ export function buildBrowserSessionData(
     browserTabsByWorktree: buildPersistedBrowserTabsByWorktree(browserTabsByWorktree),
     browserPagesByWorkspace: buildPersistedBrowserPagesByWorkspace(
       browserPagesByWorkspace,
-      remoteBrowserPageHandlesByPageId
+      remoteBrowserPageHandlesByPageId,
+      browserAnnotationsByPageId
     ),
     activeBrowserTabIdByWorktree
   }
@@ -35,16 +38,21 @@ export function buildPersistedBrowserTabsByWorktree(
 
 export function buildPersistedBrowserPagesByWorkspace(
   browserPagesByWorkspace: Record<string, BrowserPage[]>,
-  remoteBrowserPageHandlesByPageId: Record<string, RemoteBrowserPageHandle>
+  remoteBrowserPageHandlesByPageId: Record<string, RemoteBrowserPageHandle>,
+  browserAnnotationsByPageId: Record<string, BrowserPageAnnotation[]>
 ): WorkspaceSessionState['browserPagesByWorkspace'] {
   return Object.fromEntries(
     Object.entries(browserPagesByWorkspace).map(([workspaceId, pages]) => [
       workspaceId,
-      pages.map((page) => ({
-        ...page,
-        loading: false,
-        ...persistedRemoteBrowserPageIdentity(remoteBrowserPageHandlesByPageId[page.id])
-      }))
+      pages.map((page) => {
+        const annotations = browserAnnotationsByPageId[page.id]
+        return {
+          ...page,
+          loading: false,
+          ...persistedRemoteBrowserPageIdentity(remoteBrowserPageHandlesByPageId[page.id]),
+          ...(annotations?.length ? { annotations } : {})
+        }
+      })
     ])
   )
 }

@@ -1,14 +1,14 @@
 import { createElement, Fragment, useMemo, useState, type ReactNode, type RefObject } from 'react'
-import type { TextInput } from 'react-native'
+import type { TextInputInstance } from 'react-native'
 import { MobileNativeChatBackgroundTasks } from '../input/MobileNativeChatBackgroundTasks'
 import { MobileNativeChatDockedTaskList } from '../input/MobileNativeChatDockedTaskList'
-import type { NativeChatTaskList } from '../../../../../src/shared/native-chat/input/native-chat-task-list'
+import type { NativeChatTaskList } from '../../../../../src/shared/native-chat/input/task-lists/native-chat-task-list'
 import {
   MobileNativeChatQueuedMessages,
   mobileNativeChatChordHeadId,
   type MobileNativeChatQueuedMessagesProps
 } from '../input/MobileNativeChatQueuedMessages'
-import type { MobileStructuredBackgroundTasks } from '../../use-mobile-structured-background-tasks'
+import type { MobileStructuredBackgroundTasks } from '../input/use-mobile-structured-background-tasks'
 import { useMobileNativeChatQueuedEditFocus } from '../input/use-mobile-native-chat-queued-edit-focus'
 import { createMobileQueuedHeadLight } from '../input/mobile-queued-head-light'
 import {
@@ -28,7 +28,7 @@ export type MobileNativeChatSteerHead = {
 
 export type MobileNativeChatComposerTray = {
   content?: ReactNode
-  composerInputRef?: RefObject<TextInput | null>
+  composerInputRef?: RefObject<TextInputInstance | null>
   steerHead?: MobileNativeChatSteerHead
 }
 

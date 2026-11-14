@@ -6,7 +6,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type { JournalReducerState } from '../projection/journal-reducer'
 import type { JournalStopEvent } from '../durable-rows/journal-row-schema'
 import type {

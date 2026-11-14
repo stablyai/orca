@@ -2,7 +2,10 @@ import type { AppState } from '@/store/types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { isSleepingSweepExempt } from '../../../../../../shared/workspace-view/workspace-row-filters'
 import { getAgentStatusEpochNow } from '@/lib/agent-status/evidence/agent-status-epoch-clock'
-import { getWorktreeIdsWithLiveAgent, isInactiveWorkspace } from '@/lib/worktree-activity-state'
+import {
+  getWorktreeIdsWithLiveAgent,
+  isInactiveWorkspace
+} from '@/lib/workspace/activity/worktree-activity-state'
 import {
   getVisibleWorktreeBrowserActivityTabs,
   getVisibleWorktreeTerminalActivityTabs,

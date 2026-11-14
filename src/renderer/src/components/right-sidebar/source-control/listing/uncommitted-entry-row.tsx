@@ -2,9 +2,9 @@ import React from 'react'
 import { ChevronDown, MessageSquare, Minus, Plus, Trash, Undo2 } from 'lucide-react'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { basename, dirname, joinPath } from '@/lib/path'
-import { cn } from '@/lib/utils'
-import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
-import { writeWorkspaceFileDragSourceForWorkspace } from '@/lib/workspace-file-drag-source'
+import { cn } from '@/lib/class-names'
+import { WORKSPACE_FILE_PATH_MIME } from '@/lib/files/drop/workspace-file-drag'
+import { writeWorkspaceFileDragSourceForWorkspace } from '@/lib/files/drop/workspace-file-drag-source'
 import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
@@ -35,7 +35,7 @@ import {
   getSubmoduleWorktreeOnlyLabel,
   getSubmoduleWorktreeOnlyTooltip
 } from './row-layout'
-import { STATUS_COLORS } from '../../../../lib/git-path-decoration'
+import { STATUS_COLORS } from '../../../../lib/source-control/paths/git-path-decoration'
 import { STATUS_LABELS } from '../../../../../../shared/git/status/git-status-labels'
 
 export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({

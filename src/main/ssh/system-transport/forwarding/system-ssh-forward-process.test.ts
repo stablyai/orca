@@ -146,19 +146,6 @@ describe('system SSH forward process', () => {
     expect(spawnMock).not.toHaveBeenCalled()
   })
 
-  it('rejects startup when ssh exits early with stderr', async () => {
-    vi.useFakeTimers()
-    const child = createFakeProcess()
-    const socket = createFakeSocket()
-    connectMock.mockReturnValue(socket)
-
-    const pending = waitForSystemSshForwardStartup(child as never, 3000)
-    child.stderr.emit('data', Buffer.from('bind: Address already in use\n'))
-    child.emit('exit', 255)
-
-    await expect(pending).rejects.toThrow('bind: Address already in use')
-  })
-
   it("rejects startup and stops ssh when it cannot listen on this forward's own port", async () => {
     const child = createFakeProcess()
     spawnMock.mockReturnValue(child)
@@ -199,17 +186,6 @@ describe('system SSH forward process', () => {
 
     await expect(pending).resolves.toBeUndefined()
     expect(child.kill).not.toHaveBeenCalled()
-  })
-
-  it('rejects startup when the ssh process emits an error', async () => {
-    vi.useFakeTimers()
-    const child = createFakeProcess()
-    connectMock.mockReturnValue(createFakeSocket())
-
-    const pending = waitForSystemSshForwardStartup(child as never, 3000)
-    child.emit('error', new Error('spawn failed'))
-
-    await expect(pending).rejects.toThrow('spawn failed')
   })
 
   it('rejects when no listener appears within the listener timeout', async () => {

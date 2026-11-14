@@ -3,7 +3,7 @@ import {
   TERMINAL_VIEWPORT_MIN_ROWS,
   clampTerminalViewport
 } from '../../../../../../shared/terminal/viewport/terminal-viewport'
-import { onOverrideChange } from '@/lib/pane-manager/mobile-fit-overrides'
+import { onOverrideChange } from '@/lib/pane-manager/terminal-fit/mobile-fit-overrides'
 import { recordTerminalFreezeBreadcrumb } from '../../render-health/diagnostics/terminal-freeze-breadcrumbs'
 import { redactPtyIdForDiagnostics } from '../../../../../../shared/terminal/pty/diagnostics/pty-delivery-diagnostics'
 

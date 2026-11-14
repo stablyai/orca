@@ -7,7 +7,7 @@ import {
   OctagonAlert,
   TriangleAlert
 } from 'lucide-react-native'
-import type { GitHubCalloutKind } from '../../../src/shared/github/github-callouts'
+import type { GitHubCalloutKind } from '../../../src/shared/github/markdown/github-callouts'
 import { translate } from '../i18n/mobile-i18n'
 import { styles } from './mobile-markdown-styles'
 import { colors } from '../theme/mobile-theme'

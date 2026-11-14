@@ -39,6 +39,7 @@ export function useMobileDictationDestination({
             ? { field: 'live', handle: terminalHandle }
             : null
       setTarget(targetRef.current)
+      return targetRef.current
     },
     [chatComposerScopeKey]
   )

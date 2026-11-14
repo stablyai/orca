@@ -1,25 +1,25 @@
 import type { AgentSessionConversationCommand } from '../../../../../src/shared/agent-session/agent-session-conversation-command'
 import type { AgentSessionSlashCommand } from '../../../../../src/shared/agent-session/agent-session-wire'
 import {
+  getAgentAnsweredNativeChatCommands,
   getNativeChatAgentProfile,
   type NativeChatAgentProfile
 } from '../../../../../src/shared/native-chat/native-chat-agent-profiles'
-import { nativeChatPickerScannedSkills } from '../../../../../src/shared/native-chat/input/native-chat-composer-autocomplete'
+import { nativeChatPickerScannedSkills } from '../../../../../src/shared/native-chat/input/composer/native-chat-composer-autocomplete'
 import {
   buildNativeChatPickerItems,
   type NativeChatPickerItem,
   type NativeChatSkillDiscoverySnapshot
-} from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
+} from '../../../../../src/shared/native-chat/input/composer/native-chat-picker-items'
 import {
   nativeChatPickerCommands,
   nativeChatSessionSkills
-} from '../../../../../src/shared/native-chat/input/native-chat-skill-visibility'
+} from '../../../../../src/shared/native-chat/input/commands/native-chat-skill-visibility'
 import type {
   NativeChatSessionSkill,
   SlashCommandSuggestion
-} from '../../../../../src/shared/native-chat/input/native-chat-slash-commands'
+} from '../../../../../src/shared/native-chat/input/commands/native-chat-slash-commands'
 import { structuredSessionSlashCommands } from '../../../../../src/shared/agent-session/view/structured-agent-session-composer'
-import { getMobileNativeChatCommands } from '../mobile-native-chat-send-classification'
 
 // Why: the menu is a plain ScrollView right above a streaming transcript, so it mounts a bounded
 // number of rows; typing narrows the rest.
@@ -66,7 +66,7 @@ export function mobileComposerCatalog({
         structured.compactInstructions,
         interactionModeSupported
       )
-    : getMobileNativeChatCommands(agent)
+    : getAgentAnsweredNativeChatCommands(agent)
   return {
     profile: getNativeChatAgentProfile(agent),
     commands: nativeChatPickerCommands(agent, commands, discovery.skills),

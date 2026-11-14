@@ -53,6 +53,7 @@ export type BridgePortPairOptions<TRpc extends RpcClient> = {
   holdToPage?: (json: string) => boolean
   rewriteToPage?: (json: string) => string
   routeGrants?: readonly string[]
+  pageRouteGrants?: readonly { pathname: string; grants: readonly string[] }[]
   sessionEstablished?: boolean
   clientIdentity?: string | null
   serveNativeVerb?: (verb: BridgeNativeVerb, params: unknown) => Promise<unknown>

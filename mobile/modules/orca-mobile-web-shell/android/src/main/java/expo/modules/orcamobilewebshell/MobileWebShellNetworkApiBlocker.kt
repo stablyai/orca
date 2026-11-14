@@ -17,7 +17,7 @@ internal val MOBILE_WEB_SHELL_NETWORK_API_BLOCKER = """
   })();
 """.trimIndent()
 
-/** Query document-start-script capability (Chromium 83 floor), not version strings. */
+/** Query capability, not version strings; stable WebView has it from Chromium 101. */
 internal fun installMobileWebShellNetworkApiBlocker(
   webView: WebView,
   allowedOrigin: String

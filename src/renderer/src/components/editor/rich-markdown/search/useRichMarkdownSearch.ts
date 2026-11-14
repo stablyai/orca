@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import type { Editor } from '@tiptap/react'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import { useAppStore } from '@/store/index'
 import {
   isMarkdownPreviewFindShortcut,
   isMarkdownPreviewReplaceShortcut
 } from '../../markdown-preview/search/markdown-preview-search'
-import { isTextSearchQueryTooLarge as isMarkdownPreviewSearchQueryTooLarge } from '../../../../lib/text-match-ranges'
+import { isTextSearchQueryTooLarge as isMarkdownPreviewSearchQueryTooLarge } from '../../../../lib/text-search/text-match-ranges'
 import {
   createRichMarkdownSearchPlugin,
   findRichMarkdownSearchMatches,
@@ -14,8 +14,8 @@ import {
 } from './rich-markdown-search'
 import { createRichMarkdownSearchMatchesCache } from './rich-markdown-search-matches-cache'
 import { useRichMarkdownSearchHighlights } from './useRichMarkdownSearchHighlights'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
-import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
+import { isImeOwnedKeyboardEvent } from '@/lib/text-input/ime/ime-composition-keyboard-event'
 
 export function useRichMarkdownSearch({
   editor,

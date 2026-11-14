@@ -4,7 +4,7 @@ import type { RuntimeClientTarget } from '../../../../../../shared/runtime-clien
 import { toast } from 'sonner'
 import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
 import { translate } from '@/i18n/i18n'
-import { readIpcErrorMessage } from '@/lib/ipc-error'
+import { readIpcErrorMessage } from '@/runtime/errors/ipc-error'
 import {
   bulkStageRuntimeGitPaths,
   bulkUnstageRuntimeGitPaths,

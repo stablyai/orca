@@ -1,6 +1,6 @@
 import { normalizeMobileSessionTabSelection } from '../../session-tabs/mobile-session-tab-selection'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-session-contracts'
-import { dropRetirementProofsForLiveSurfaces } from '../../../../shared/workspace-layout/terminal-retirement-proof-ledger'
+import { dropRetirementProofsForLiveSurfaces } from '../../../../shared/workspace-layout/terminal-surfaces/terminal-retirement-proof-ledger'
 import { orderMobileSessionTabsByGroups } from './mobile-session-tab-merge'
 import type {
   RuntimeMobileSessionProjectionHost,

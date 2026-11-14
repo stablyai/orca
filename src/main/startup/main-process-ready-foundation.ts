@@ -1,5 +1,5 @@
 import { app, session } from 'electron'
-import { applyBackgroundActivationPolicy } from '../window/foreground-activation-policy'
+import { applyBackgroundActivationPolicy } from '../window/activation/foreground-activation-policy'
 import { applyElectronProxySettings } from '../network/proxy-settings'
 import { installElectronProxyRequestGuard } from '../network/electron-proxy-request-guard'
 import { handleElectronProxyLogin } from '../network/electron-proxy-credentials'
@@ -15,11 +15,11 @@ import { browserSiteDisplayController } from '../browser/site-settings/display/b
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getCanonicalUserDataPath } from '../persistence/loading-store/user-data-path'
 import { getAppEnvironment } from '../../shared/app-environment'
-import { loadWslMoveFence } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { startWslMoveStartup } from '../persistence/moving-wsl-projects/wsl-move-startup'
+import { loadWslMoveFence } from '../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
+import { startWslMoveStartup } from '../persistence/moving-wsl-projects/startup/wsl-move-startup'
 import { startWslHostsPolicyLiveUpdates } from '../wsl/host-lifecycle/wsl-hosts-policy-live-update'
 import { runPendingWslDriveUncConversions } from '../wsl/filesystem/wsl-drive-unc-conversion-startup'
-import { createProfileStateStoreForStartup } from '../persistence/profile-state/profile-state-startup-authority'
+import { createProfileStateStoreForStartup } from '../persistence/profile-state/startup/profile-state-startup-authority'
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { initializeBrowserClientHostId } from '../browser/client-hosts/lifecycle/browser-client-host-id'
 import { scheduleSecretProtectionGapReport } from '../host/deferred-secret-protection-report'
@@ -27,17 +27,15 @@ import { withholdUnreachableKeychainForServe } from '../host/serve-keychain-guar
 import { initSshHostKeyStoreFile } from '../ssh/host-keys/ssh-host-key-store'
 import { initOrcadHeldFenceTokenFile } from '../managed-server/activation/orcad-held-fence-tokens'
 import { neutralizeLegacyTerminalShimDir } from '../pty/shell-startup/legacy-terminal-shim-dir'
-import { createWindowsShellPathHydration } from './windows-shell-path-hydration'
-import {
-  configureWindowsHostGitEnvironmentReadiness,
-  setDefaultWslDistroOverride
-} from '../git/runner'
+import { createWindowsShellPathHydration } from './shell-environment/windows-shell-path-hydration'
+import { configureWindowsHostGitEnvironmentReadiness } from '../git/command-runner/host-routing/windows-host-git-environment'
+import { setDefaultWslDistroOverride } from '../git/command-runner/host-routing/wsl-command-resolution'
 import { wslHookRelayManager } from '../agent-hooks/wsl-relay/wsl-hook-relay-manager'
 import { applyAppIcon } from '../window/desktop-integration/app-icon'
 import {
   shouldSuppressDevEducation,
   suppressDevEducationForStore
-} from './dev-education-suppression'
+} from './profile-startup/dev-education-suppression'
 import {
   awaitBrowserSessionProxies,
   setBrowserNetworkProxySettingsResolver
@@ -53,20 +51,20 @@ import {
 } from '../browser/extensions/browser-extension-startup'
 import { whenBrowserExtensionSessionsLoaded } from '../browser/extensions/profile-sessions/browser-extension-session-loader'
 import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
-import { logStartupMilestone } from './startup-diagnostics'
-import { writeHttp1CompatibilityMarker } from './http1-compatibility-marker'
+import { logStartupMilestone } from './diagnostics/startup-diagnostics'
+import { writeHttp1CompatibilityMarker } from './network-compatibility/http1-compatibility-marker'
 import { mainProcessState as state } from './main-process-state'
-import { syncMacMenuBarIcon } from './main-window-actions'
-import { updateGpuAccelerationAboutPanel } from './gpu-lifecycle'
+import { syncMacMenuBarIcon } from './main-window/main-window-actions'
+import { updateGpuAccelerationAboutPanel } from './gpu-recovery/gpu-lifecycle'
 import {
   logWslCliReconciliationResults,
   reconcileManagedWslCliRegistrations
-} from '../cli/wsl-cli-registration-reconciliation'
-import { createWslCliReconciliationStartupBarrier } from './wsl-cli-reconciliation-startup-barrier'
+} from '../cli/wsl/wsl-cli-registration-reconciliation'
+import { createWslCliReconciliationStartupBarrier } from './wsl-startup/wsl-cli-reconciliation-startup-barrier'
 import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
-import { reportProfileStateWriteFailure } from './profile-state-write-failure'
-import { reportProfileStateSaveDelay } from './profile-state-save-delay'
+import { reportProfileStateWriteFailure } from './profile-startup/profile-state-write-failure'
+import { reportProfileStateSaveDelay } from './profile-startup/profile-state-save-delay'
 import { preloadSsh2 } from '../ssh/authentication/ssh2-module-load'
 
 export async function initializeReadyFoundation(): Promise<void> {
@@ -90,7 +88,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   })
   const canonicalUserDataPath = getCanonicalUserDataPath()
   preservePreviousHangDetection(canonicalUserDataPath)
-  installMainThreadHangWatchdog({ userDataPath: canonicalUserDataPath })
+  const hangWatchdog = installMainThreadHangWatchdog({ userDataPath: canonicalUserDataPath })
   // Install certificate decisions before any webview/headless window can issue TLS.
   app.on(
     'certificate-error',
@@ -176,6 +174,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   }
   const store = profileState.store
   state.store = store
+  hangWatchdog?.setMenuBarIconSetting(store.getSettings().showMenuBarIcon !== false)
   // SSH users keep ssh2 loaded before interactive use, as before #35731; others load it on first connect.
   if (store.getSshTargets().length > 0) {
     preloadSsh2()
@@ -269,10 +268,11 @@ export async function initializeReadyFoundation(): Promise<void> {
         )
       }
     }
-    if ('experimentalBrowserExtensions' in updates) {
-      void switchBrowserExtensionSupport(settings.experimentalBrowserExtensions === true)
+    if ('browserExtensionsEnabled' in updates) {
+      void switchBrowserExtensionSupport(settings.browserExtensionsEnabled !== false)
     }
     if ('showMenuBarIcon' in updates) {
+      hangWatchdog?.setMenuBarIconSetting(settings.showMenuBarIcon !== false)
       // Store owns settings mutations; sync every menu-bar toggle through this listener.
       syncMacMenuBarIcon(settings.showMenuBarIcon !== false)
     }
@@ -299,7 +299,7 @@ export async function initializeReadyFoundation(): Promise<void> {
   registerDocPreviewGrantHandlers()
   // Session setup needs the extension support decision before loading profiles.
   initializeBrowserExtensionSupport({
-    enabled: store.getSettings().experimentalBrowserExtensions === true,
+    enabled: store.getSettings().browserExtensionsEnabled !== false,
     savedBrowserTabs: store
   })
   // Desktop webviews and runtime commands share sessions; initialize without waiting for renderer IPC.

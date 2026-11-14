@@ -12,7 +12,7 @@ import {
   agentSessionFailureFact,
   providerDiagnosticOf
 } from '../../../../shared/agent-session/failures/agent-session-failure'
-import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
+import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/protocol/agent-session-execution-options'
 import { isAbortSignalReason } from '../../../../shared/abort-signal-reason'
 import { isAgentSessionOptionRejectedError } from '../options/structured-agent-session-option-error'
 import { agentSessionFailureWords } from '../../../../shared/agent-session/failures/agent-session-failure-words'
@@ -25,7 +25,7 @@ import {
   structuredAgentSessionHandoverOrigin
 } from '../operations/structured-agent-session-command-turn'
 import { carriedStoppedHistory } from '../termination/structured-agent-session-stopped-history-selection'
-import { withStoppedHistory } from '../../../../shared/agent-session/lifecycle/agent-session-stopped-history'
+import { withStoppedHistory } from '../../../../shared/agent-session/lifecycle/stopping/agent-session-stopped-history'
 import {
   markStructuredAgentSessionInputUnadmitted,
   beginStructuredAgentSessionHandover,

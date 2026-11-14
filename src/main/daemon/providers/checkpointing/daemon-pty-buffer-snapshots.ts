@@ -3,16 +3,14 @@ import { parseTerminalKittyKeyboardFlags } from '../../../../shared/terminal/pro
 import { boundSnapshot } from './daemon-durable-history-snapshot'
 import { DaemonPtySessionControl } from '../adapter/daemon-pty-session-control'
 import { isUnknownRequestTypeError } from '../../endpoint/identity/daemon-endpoint-errors'
-import type { DaemonClient } from '../../transport/client/daemon-client'
+import { focusLossReportSupport } from '../../protocol/daemon-protocol-version'
 import { DAEMON_SESSION_SCROLLBACK_ROWS } from '../../sessions/daemon-session-scrollback-window'
 import type { GetSnapshotResult } from '../../protocol/daemon-rpc-contract'
-import type { PtyProviderBufferSnapshot } from '../../../providers/pty-provider-contract'
+import type { PtyProviderBufferSnapshot } from '../../../providers/pty/provider-contract'
 
 const DURABLE_HISTORY_OVERLAY_DEADLINE_MS = 5_000
 
 export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
-  private focusLossUnsupportedBy: DaemonClient | null = null
-
   async getBufferSnapshot(
     id: string,
     opts: { scrollbackRows?: number } = {}
@@ -186,18 +184,18 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
   }
 
   async reportFocusLost(id: string): Promise<void> {
-    const client = this.client
-    if (this.focusLossUnsupportedBy === client) {
+    const support = focusLossReportSupport(this.protocolVersion)
+    if (support === 'unsupported' || (support === 'ask' && this.focusLossReportRejected)) {
       return
     }
     try {
-      await client.request('reportFocusLost', { sessionId: id })
+      await this.client.request('reportFocusLost', { sessionId: id })
     } catch (error) {
-      if (!isUnknownRequestTypeError(error)) {
+      if (support !== 'ask' || !isUnknownRequestTypeError(error)) {
         throw error
       }
-      // Shipped without a protocol bump; recheck once a new client reaches a replacement daemon.
-      this.focusLossUnsupportedBy = client
+      // A v55 daemon from 1.4.251 predates the request; its replacement is asked again.
+      this.focusLossReportRejected = true
     }
   }
 

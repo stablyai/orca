@@ -1,4 +1,4 @@
-import { journalContextCursor } from '../context-epochs/journal-context-cursor'
+import { journalContextCursor } from '../context-epochs/journal-context-epoch'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
 import {
   createJournalInputObligations,

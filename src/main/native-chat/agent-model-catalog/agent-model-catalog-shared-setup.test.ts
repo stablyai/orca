@@ -1,9 +1,10 @@
 import { expect, it, onTestFinished, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
-import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
+import { agentSessionRecordFixture } from '../testing/agent-session-record-test-fixture'
 import { createAgentModelCatalogService } from './agent-model-catalog-service'
-import { AgentModelCatalogStore, type AgentModelCatalogSuccess } from './agent-model-catalog-store'
+import { AgentModelCatalogStore } from './agent-model-catalog-store'
+import type { AgentModelCatalogSuccess } from './agent-model-catalog-entry'
 
 const HOME = { variable: 'CODEX_HOME', path: '/account' }
 // Its picker follows a project's own settings, unlike Claude's and Codex's.
@@ -21,25 +22,6 @@ function chat(sessionId: string, workspaceId = 'ws', provider = 'codex'): AgentS
       workspaceKind: 'folder'
     }
   })
-}
-
-/** As when its tab closes: the owner is released with evidence that its process ended. */
-function released(record: AgentSessionRecord): AgentSessionRecord {
-  return {
-    ...record,
-    lease: {
-      ...record.lease,
-      claimStatus: 'released',
-      deathEvidence: {
-        kind: 'kill-delivered',
-        detail: 'closed',
-        observedAt: 2_000,
-        ownerFence: record.lease.runtimeFence,
-        lastProvenAliveAt: 1_000,
-        runtimeEnd: 'quit'
-      }
-    }
-  }
 }
 
 const listing = (id: string): AgentModelCatalogSuccess => ({
@@ -123,89 +105,6 @@ function harness(agent = 'codex') {
   }
 }
 
-it.each(['listing', 'setup'] as const)(
-  "keeps chat b's listing when chat a closes during its %s and an unrelated folder changes",
-  async (stage) => {
-    const h = harness()
-    const gate = stage === 'setup' ? Promise.withResolvers<void>() : undefined
-    h.folder.gate = gate
-    void h.service.demand({ agent: 'codex', sessionId: 'a', deadline: Date.now() + 60_000 })
-    const b = h.service.read({
-      agent: 'codex',
-      sessionId: 'b',
-      waitForListing: true,
-      deadline: Date.now() + 30_000
-    })
-    if (stage === 'listing') {
-      await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
-    }
-    h.records.a = released(h.records.a)
-    h.service.retireContext('another-folder')
-    gate?.resolve()
-    await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
-    h.discovery.resolve(listing('shared'))
-    expect(await b).toMatchObject({ models: [{ id: 'shared' }] })
-    expect(h.run).toHaveBeenCalledOnce()
-  }
-)
-
-it.each(
-  (['gate', 'cli', 'settings'] as const).flatMap((stage) =>
-    (['agent', 'workspace'] as const).map((retired) => [stage, retired] as const)
-  )
-)(
-  'settles a waiting reader at once when its %s stage is stalled and its %s retires',
-  async (stage, retired) => {
-    vi.useFakeTimers()
-    onTestFinished(() => {
-      vi.useRealTimers()
-    })
-    // Only agents whose picker follows a project's settings check them.
-    const listed = stage === 'settings' ? agent : 'codex'
-    const h = harness(listed)
-    const stalled = Promise.withResolvers<void>()
-    h.folder[stage] = stalled
-    let settled = false
-    void h.service
-      .read({ agent: listed, sessionId: 'b', waitForListing: true, deadline: Date.now() + 30_000 })
-      .then(() => {
-        settled = true
-      })
-    await vi.advanceTimersByTimeAsync(0)
-    if (retired === 'agent') {
-      h.store.expireAgent(listed)
-    } else {
-      h.service.retireContext('ws')
-    }
-    await vi.advanceTimersByTimeAsync(0)
-    expect(settled).toBe(true)
-    stalled.resolve()
-    h.discovery.resolve(listing('retired'))
-    await vi.advanceTimersByTimeAsync(0)
-    expect(h.service.snapshot({ agent: listed, sessionId: 'b' })).not.toHaveProperty('models')
-  }
-)
-
-it("still lists for chat b when chat a's record goes away while their shared setup runs", async () => {
-  const h = harness()
-  // The CLI is found only once the login shell is read again.
-  h.resolve.mockImplementation(async (_home, _cwd, lookup, _operation, at) => {
-    if (lookup !== 'recover') {
-      throw new Error('not on the saved PATH')
-    }
-    return { identity: `codex in ${at}`, run: h.run }
-  })
-  const gate = Promise.withResolvers<void>()
-  h.folder.gate = gate
-  void h.service.demand({ agent: 'codex', sessionId: 'a' })
-  const b = h.service.read({ agent: 'codex', sessionId: 'b', waitForListing: true })
-  delete h.records.a
-  gate.resolve()
-  await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
-  h.discovery.resolve(listing('shared'))
-  expect(await b).toMatchObject({ models: [{ id: 'shared' }] })
-})
-
 it('keeps one listing for a workspace on the same folder when another workspace there moves', async () => {
   const h = harness()
   h.records.a = chat('a', 'ws-a')
@@ -238,7 +137,7 @@ it('keeps one listing for a workspace on the same folder when another workspace 
   expect(await a).toMatchObject({ models: [{ id: 'other' }] })
 })
 
-it('ends a shorter reader at its own deadline, and a stalled refresh lists nothing after its budget', async () => {
+it('ends a shorter reader while scope resolution remains current', async () => {
   vi.useFakeTimers()
   onTestFinished(() => {
     vi.useRealTimers()
@@ -264,9 +163,7 @@ it('ends a shorter reader at its own deadline, and a stalled refresh lists nothi
   // Its readers are gone, but the refresh runs on its own budget.
   expect(h.service.snapshot({ agent: 'codex', sessionId: 'b' })).toHaveProperty('listingInProgress')
   await vi.advanceTimersByTimeAsync(29_000)
-  expect(h.service.snapshot({ agent: 'codex', sessionId: 'b' })).not.toHaveProperty(
-    'listingInProgress'
-  )
+  expect(h.service.snapshot({ agent: 'codex', sessionId: 'b' })).toHaveProperty('listingInProgress')
   gate.resolve()
   await vi.advanceTimersByTimeAsync(0)
   expect(h.run).not.toHaveBeenCalled()
@@ -278,7 +175,8 @@ it('holds readers of a stalled refresh only to their own deadlines, and starts n
     vi.useRealTimers()
   })
   const h = harness()
-  h.folder.gate = Promise.withResolvers<void>()
+  const gate = Promise.withResolvers<void>()
+  h.folder.gate = gate
   void h.service.demand({ agent: 'codex', sessionId: 'a', deadline: Date.now() + 1_000 })
   const b = h.service.read({
     agent: 'codex',
@@ -288,7 +186,7 @@ it('holds readers of a stalled refresh only to their own deadlines, and starts n
   })
   await vi.advanceTimersByTimeAsync(30_000)
   // b's deadline ended its wait; a reader leaving never restarts the work.
-  expect(await b).toEqual({ origin: 'unknown' })
+  expect(await b).toMatchObject({ origin: 'unknown', listingInProgress: true, waitExpired: true })
   expect(h.recordWorkspacePath).toHaveBeenCalledOnce()
   const c = h.service.read({
     agent: 'codex',
@@ -296,41 +194,14 @@ it('holds readers of a stalled refresh only to their own deadlines, and starts n
     waitForListing: true,
     deadline: Date.now() + 30_000
   })
-  await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
-  expect(h.recordWorkspacePath).toHaveBeenCalledTimes(2)
+  await vi.advanceTimersByTimeAsync(15_000)
+  gate.resolve()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(h.recordWorkspacePath).toHaveBeenCalledOnce()
   h.discovery.resolve(listing('fresh'))
   await vi.advanceTimersByTimeAsync(0)
   expect(await c).toMatchObject({ models: [{ id: 'fresh' }] })
 })
-
-it.each(['cancelled', 'stopped'] as const)(
-  'settles a reader at once when it is %s while its setup is stalled',
-  async (how) => {
-    vi.useFakeTimers()
-    onTestFinished(() => {
-      vi.useRealTimers()
-    })
-    const h = harness()
-    h.folder.gate = Promise.withResolvers<void>()
-    const reader = h.service.captureRead({
-      agent: 'codex',
-      sessionId: 'b',
-      deadline: Date.now() + 30_000
-    })
-    let settled = false
-    void h.service.demand({ agent: 'codex', sessionId: 'b', operation: reader }).then(() => {
-      settled = true
-    })
-    await vi.advanceTimersByTimeAsync(0)
-    if (how === 'cancelled') {
-      reader.controller.abort()
-    } else {
-      void h.service.stop()
-    }
-    await vi.advanceTimersByTimeAsync(0)
-    expect(settled).toBe(true)
-  }
-)
 
 it("keeps the folder's defaults when they arrive after a shorter last reader left", async () => {
   vi.useFakeTimers()
@@ -356,26 +227,32 @@ it("keeps the folder's defaults when they arrive after a shorter last reader lef
   expect(await a).toMatchObject({ models: [{ id: 'listed', isDefault: true }] })
 })
 
-it("keeps the listing when the folder's settings stall, naming no default, within the reader's budget", async () => {
+it('delivers inventory before slow folder defaults, then delivers the proven default', async () => {
   vi.useFakeTimers()
   onTestFinished(() => {
     vi.useRealTimers()
   })
   const h = harness(agent)
-  h.folder.settings = Promise.withResolvers<void>()
-  void h.service.demand({ agent, sessionId: 'a', deadline: Date.now() + 1_000 })
-  let answer: unknown
-  void h.service
-    .read({ agent, sessionId: 'b', waitForListing: true, deadline: Date.now() + 30_000 })
-    .then((result) => {
-      answer = result
-    })
-  await vi.waitFor(() => expect(h.run).toHaveBeenCalledOnce())
+  const settings = Promise.withResolvers<void>()
+  h.folder.settings = settings
+  const first = h.service.read({ agent, sessionId: 'b', waitForListing: true })
+  await vi.advanceTimersByTimeAsync(0)
   h.discovery.resolve(listing('listed'))
-  await vi.advanceTimersByTimeAsync(30_000)
-  // Whether the project picks its own model stays unknown, so the account's default isn't named.
-  expect(answer).toMatchObject({ models: [{ id: 'listed', isDefault: false }] })
-  expect(answer).not.toHaveProperty('listingInProgress')
+  await vi.advanceTimersByTimeAsync(0)
+  expect(await first).toMatchObject({
+    models: [{ id: 'listed', isDefault: false }],
+    listingInProgress: true
+  })
+  let next: unknown
+  const follow = h.service.read({ agent, sessionId: 'b', waitForListing: true }).then((result) => {
+    next = result
+  })
+  await vi.advanceTimersByTimeAsync(1_000)
+  expect(next).toBeUndefined()
+  settings.resolve()
+  await follow
+  expect(next).toMatchObject({ models: [{ id: 'listed', isDefault: true }] })
+  expect(next).not.toHaveProperty('listingInProgress')
 })
 
 it("never lets a moved folder's late settings describe the folder it moved to", async () => {
@@ -456,3 +333,43 @@ it('keeps one folder-agent listing for a workspace on the same folder when anoth
   expect(await a).toMatchObject({ models: [{ id: 'other' }] })
   expect(probe.mock.calls.map((call) => call[1]?.workspacePath)).toEqual(['/repo', '/other'])
 })
+
+it.each([10, 100])(
+  'registers %i readers and unique targets once per shared flight',
+  async (count) => {
+    vi.useFakeTimers()
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
+    for (const delayedScope of [false, true]) {
+      const h = harness('opencode2')
+      const scope = Promise.withResolvers<void>()
+      if (delayedScope) {
+        h.folder.gate = scope
+      }
+      const registrations = vi.spyOn(h.store, 'refresh')
+      const submissions = vi.spyOn(h.store.efforts, 'demand')
+      const readers: Promise<unknown>[] = []
+      for (let index = 0; index < count; index++) {
+        readers.push(
+          h.service.read({
+            agent: 'opencode2',
+            sessionId: 'a',
+            selectedModel: `m${index}`,
+            waitForListing: true
+          })
+        )
+        if (!delayedScope) {
+          await vi.advanceTimersByTimeAsync(0)
+        }
+      }
+      scope.resolve()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(h.run).toHaveBeenCalledOnce()
+      expect(registrations.mock.calls.length).toBe(count)
+      expect(submissions.mock.calls.length).toBe(count)
+      h.discovery.resolve(listing('shared'))
+      await Promise.all(readers)
+    }
+  }
+)

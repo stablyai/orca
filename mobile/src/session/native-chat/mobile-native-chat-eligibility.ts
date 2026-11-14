@@ -1,10 +1,10 @@
-import { isStructuredAgentId } from '../../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { isStructuredAgentId } from '../../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentStatusEntry } from '../../../../src/shared/agent-status/contracts/agent-status-types'
 import {
   isNativeChatAgentAvailable,
   nativeChatAvailabilityAgent
 } from '../../../../src/shared/native-chat/native-chat-availability'
-import { isNativeChatTranscriptLocalReadable } from '../../../../src/shared/native-chat/transcript/native-chat-transcript-readability'
+import { isNativeChatTranscriptLocalReadable } from '../../../../src/shared/native-chat/transcript/messages/native-chat-transcript-readability'
 
 export type MobileNativeChatResolution = {
   agent: string

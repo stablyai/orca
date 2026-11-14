@@ -2,12 +2,12 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from 'vitest'
-import { agentSessionConversationView } from '../../../src/shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../src/shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import {
   agentSessionLeaseOwnerVerdict,
   agentSessionLeasePossiblyWriting
-} from '../../../src/shared/agent-session/lifecycle/agent-session-lease-adjudication'
-import { agentSessionRecordFixture } from '../../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
+} from '../../../src/shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
+import { agentSessionRecordFixture } from '../../../src/shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
 import { agentModelCatalogReleasedOwner } from '../../../src/main/native-chat/agent-model-catalog/agent-model-catalog-snapshot'
 import {
   closeTestJournalHostDatabase,

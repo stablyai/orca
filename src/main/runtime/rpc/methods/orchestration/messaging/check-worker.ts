@@ -9,7 +9,7 @@ import { routeAllMailboxPages } from './mailbox-page-routing'
 import { asDispatchFence, callerHoldsDispatchPane, dispatchFenced } from './dispatch-mailbox-fence'
 import { interruptedAcknowledgedCheck } from '../routing'
 import { currentDispatchAssigneeRun } from './recipient-routing'
-import type { CheckParams } from '../../../../../../shared/rpc-contract/orchestration-params'
+import type { CheckParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import type { z } from 'zod'
 
 type CheckParamsInput = z.infer<typeof CheckParams>

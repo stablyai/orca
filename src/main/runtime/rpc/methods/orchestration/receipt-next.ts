@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import { projectWorkerListFleet } from './worker/worker-list-projection'
+import { projectWorkerListFleet } from './worker/fleet/worker-list-projection'
 
 // Only an empty check sees the whole mailbox, so only it says to stop.
 const AWAIT_WAKE = "Orca wakes you when workers report; end your turn when you're done."
@@ -66,11 +66,16 @@ export function withAnswerNext<T extends object>(receipt: T): T & { next: string
 /** A worker still runs and worker-list owes no action: each running worker's stop or exit sends mail. */
 async function awaitsWorkerReports(runtime: OrcaRuntimeService, runId: string): Promise<boolean> {
   const db = runtime.getOrchestrationDb()
-  const rows = db.listWorkerTerminalResources({ runId })
-  const { workers } = await projectWorkerListFleet(runtime, rows, {
-    limit: rows.length,
-    completeProjection: true
-  })
+  const workers: Awaited<ReturnType<typeof projectWorkerListFleet>>['workers'] = []
+  // Settled history projects to no action, so a long Run's past workers are never projected here.
+  for (const dispatchIds of db.listWorkerReportWaitCandidates(runId)) {
+    const rows = db.listWorkerTerminalResources({ runId, dispatchIds })
+    const fleet = await projectWorkerListFleet(runtime, rows, {
+      limit: rows.length,
+      completeProjection: true
+    })
+    workers.push(...fleet.workers)
+  }
   return (
     workers.some((worker) => worker.outcome === 'in_progress') &&
     workers.every((worker) => worker.nextAction.kind === 'none')

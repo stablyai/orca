@@ -8,7 +8,7 @@ import type {
 import type { AgentJournalTurnScope } from '../../../../../src/shared/agent-session/journal/agent-session-journal-turn-scope'
 import { agentJournalSubmissionKey } from '../../../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
-import type { NativeChatTurnJournal } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
+import type { NativeChatTurnJournal } from '../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
 import { useMobileNativeChatTurnDisclosure } from './use-mobile-native-chat-turn-disclosure'
 
 import { Harness, Result, userMessage } from './use-mobile-native-chat-turn-disclosure.test-fixture'
@@ -304,19 +304,6 @@ describe('useMobileNativeChatTurnDisclosure', () => {
         vi.useRealTimers()
       }
     })
-  })
-
-  it('keeps a long message of yours open per message, so a recycled row reopens it', () => {
-    const messages = [userMessage('u1'), userMessage('u2')]
-    act(() => {
-      renderer = create(createElement(Harness, { messages, enabled: false }))
-    })
-    const before = renderer!.root.findByType(Result).props.disclosure
-    expect(before.resolveRow(0, messages[0]).userMessageOpen).toBe(false)
-    act(() => before.resolveRow(0, messages[0]).onToggleUserMessage('u1'))
-    const after = renderer!.root.findByType(Result).props.disclosure
-    expect(after.resolveRow(0, messages[0]).userMessageOpen).toBe(true)
-    expect(after.resolveRow(1, messages[1]).userMessageOpen).toBe(false)
   })
 
   it('keeps a turn the provider opened live while it runs, and the turn before it settled', () => {

@@ -13,7 +13,7 @@ import '../../../../shared/constants'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/browser/browser-blank-page'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
-import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/close-all-context-menus'
+import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
 import { getLiveBrowserUrl } from '../browser-pane/describe-page/live-browser-url-registry'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import {
@@ -31,7 +31,7 @@ import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from './tab-context-menu-opening'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { BrowserFavicon } from '@/components/browser-favicon'
 import { AgentCursorGlyph } from '../browser-pane/agent-cursor/agent-cursor-glyph'
 import {
@@ -40,7 +40,7 @@ import {
 } from '../browser-pane/agent-cursor/browser-agent-activity-state'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 
 export function formatBrowserTabUrlLabel(url: string, t: Translate = translate): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {

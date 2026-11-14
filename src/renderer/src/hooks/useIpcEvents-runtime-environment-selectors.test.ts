@@ -10,6 +10,8 @@ import type {
   RuntimeEnvironmentStoreSyncSubscriber
 } from './ipc-events/runtime-environment-subscription-selection'
 
+import { createRuntimeClientEventsSync } from './runtime-client-events-sync'
+
 type RuntimeEnvironmentStoreSubscriber = RuntimeEnvironmentStoreSyncSubscriber
 type RuntimeEnvironmentStoreState = RuntimeEnvironmentStoreSyncState
 
@@ -32,6 +34,78 @@ function makeRuntimeEnvironmentStoreState(args: {
 }
 
 describe('createRuntimeEnvironmentStoreSyncSubscriber', () => {
+  it('retires removed registry members despite retained status and follows active host changes', async () => {
+    const environments = [
+      { id: 'A', createdAt: 1 },
+      { id: 'B', createdAt: 2 }
+    ]
+    const statuses = new Map([
+      ['A', { status: { runtimeId: 'peer-a' }, checkedAt: 1 }],
+      ['B', { status: { runtimeId: 'peer-b' }, checkedAt: 1 }]
+    ])
+    let state = makeRuntimeEnvironmentStoreState({ environments, statuses })
+    const subscriptions: string[] = []
+    const retirements: string[] = []
+    const wakes: (readonly string[] | undefined)[] = []
+    const manager = createRuntimeClientEventsSync({
+      getDesiredEnvironmentIds: () => getRuntimeClientEventEnvironmentIds(state),
+      subscribe: (id) => {
+        subscriptions.push(id)
+        return Promise.resolve({
+          unsubscribe: () => {
+            retirements.push(id)
+          }
+        })
+      },
+      onEvent: vi.fn()
+    })
+    const subscriber = createRuntimeEnvironmentStoreSyncSubscriber({
+      initialDesiredEnvironmentIds: getRuntimeClientEventEnvironmentIds(state),
+      initialReachableEnvironmentIds: getReachableRuntimeEnvironmentIds(state),
+      getDesiredEnvironmentIds: getRuntimeClientEventEnvironmentIds,
+      getReachableEnvironmentIds: getReachableRuntimeEnvironmentIds,
+      buildEnvironmentKey: (ids) => [...ids].sort().join(':'),
+      requestProjectRefresh: vi.fn(),
+      markEnvironmentSshStateStale: vi.fn(),
+      sync: (ids) => {
+        wakes.push(ids)
+        manager.sync(ids)
+      }
+    })
+    const publish = (next: RuntimeEnvironmentStoreState): void => {
+      const previous = state
+      state = next
+      subscriber(state, previous)
+    }
+    manager.sync()
+    await Promise.resolve()
+    publish(makeRuntimeEnvironmentStoreState({ environments: [environments[1]], statuses }))
+    expect(retirements).toEqual(['A'])
+    expect(wakes).toEqual([[]])
+    publish(
+      makeRuntimeEnvironmentStoreState({
+        environments: [environments[1]],
+        statuses,
+        activeEnvironmentId: 'C'
+      })
+    )
+    await Promise.resolve()
+    expect(subscriptions).toEqual(['A', 'B', 'C'])
+    expect(wakes).toEqual([[], ['C']])
+    publish(
+      makeRuntimeEnvironmentStoreState({
+        environments: [environments[1]],
+        statuses,
+        activeEnvironmentId: 'D'
+      })
+    )
+    await Promise.resolve()
+    expect(retirements).toEqual(['A', 'C'])
+    expect(subscriptions).toEqual(['A', 'B', 'C', 'D'])
+    expect(wakes).toEqual([[], ['C'], ['D']])
+    manager.stop()
+  })
+
   it('syncs each connect, disconnect, re-pair, runtime generation, and nested SSH generation once', () => {
     let environments = [
       { id: 'runtime-a', createdAt: 1, pairingRevision: 1 },

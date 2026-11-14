@@ -2,12 +2,12 @@ import type { AgentType } from '../../../../../src/shared/agent-status/contracts
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import { nativeChatToolFoldKind } from '../../../../../src/shared/native-chat/tools/native-chat-tool-fold'
 import { isOrphanRowId } from '../../../../../src/shared/native-chat/tools/native-chat-folded-tool-results'
-import { subagentItemBlock } from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-items'
+import { subagentItemBlock } from '../../../../../src/shared/native-chat/transcript/subagents/native-chat-subagent-items'
 import {
   hasImagePromptMarker,
   imageSourcePathsFromMessage,
   normalizeImageTranscriptUnit
-} from '../../../../../src/shared/native-chat/transcript/native-chat-image-transcript-markers'
+} from '../../../../../src/shared/native-chat/transcript/images/native-chat-image-transcript-markers'
 import type { MobileNativeChatProjection } from './mobile-native-chat-projection'
 import {
   prepareMobileNativeChatSource,
@@ -15,10 +15,11 @@ import {
   withMobileNativeChatHarness
 } from './mobile-native-chat-projection-sources'
 import {
-  buildMobileNativeChatUnit,
-  groupMobileNativeChatUnitMembers,
-  type Unit
-} from './mobile-native-chat-projection-units'
+  buildNativeChatFoldUnit,
+  groupNativeChatFoldUnitMembers,
+  type NativeChatFoldUnit as Unit
+} from '../../../../../src/shared/native-chat/transcript/folding/native-chat-fold-units'
+import { finishMobileNativeChatMessages } from './mobile-native-chat-render-data'
 
 // A tail harness row that is its own image unit and no roster member leaves every earlier unit as it was.
 function staysInTail(harness: NativeChatMessage): boolean {
@@ -109,9 +110,15 @@ export function projectMobileNativeChatTail(
   rescan.push(...newRows)
   // Orphan names depend on every earlier id, so a re-projected unit with orphans takes the full pass.
   const rebuilt: Unit[] = []
-  for (const members of groupMobileNativeChatUnitMembers(rescan, kinds)) {
+  for (const members of groupNativeChatFoldUnitMembers(rescan, kinds)) {
     const held = previous.units.findLast((unit) => unit.sources[0]!.id === members[0]!.id)
-    const unit = buildMobileNativeChatUnit(members, NO_IDS, kinds, held)
+    const unit = buildNativeChatFoldUnit(
+      members,
+      NO_IDS,
+      kinds,
+      held,
+      finishMobileNativeChatMessages
+    )
     if (unit !== held && unit.orphans.length > 0) {
       return null
     }

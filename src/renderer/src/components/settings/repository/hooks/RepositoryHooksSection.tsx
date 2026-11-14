@@ -7,8 +7,11 @@ import type {
   SetupAgentStartupPolicy,
   SetupRunPolicy
 } from '../../../../../../shared/orca-yaml-hook-types'
+import type { WorkspaceHookOwner } from '../../../../../../shared/workspace-hook-owner'
+import { Button } from '@/components/ui/button'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
+import { isFolderRepo } from '../../../../../../shared/repo-kind'
 import { resolveHookCommandSourcePolicy } from '../../../../../../shared/hook-command-source-policy'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
@@ -17,7 +20,8 @@ import { SettingsGroup } from '../../section-layout/SettingsGroup'
 import { getRepositoryLocalCommandsSectionId } from '../repository-settings-targets'
 import {
   getLocalHookFields,
-  getLocalCommandSourcePolicyNotice
+  getLocalCommandSourcePolicyNotice,
+  type HookYamlPresentation
 } from './repository-hook-settings-draft'
 import {
   LocalCommandSourceNotice,
@@ -25,14 +29,20 @@ import {
 } from './RepositoryHookScriptSetting'
 import {
   RepositoryHookCommandSourceSetting,
-  RepositorySetupPolicySetting
+  RepositorySetupAgentStartupSetting,
+  RepositorySetupRunPolicySetting
 } from './RepositoryHookPolicySettings'
 import { RepositoryIssueCommandSetting } from './RepositoryIssueCommandSetting'
 import { useRepositoryHookSettingsDraft } from './use-repository-hook-settings-draft'
 import { useRepositoryIssueCommand } from './use-repository-issue-command'
+import { getRepositoryHookScriptDescription } from './repository-git-hooks-search-entries'
 
 type RepositoryHooksSectionProps = {
-  repo: Repo
+  repo: WorkspaceHookOwner
+  gitRepo?: Repo
+  showArchive?: boolean
+  yamlPresentation?: HookYamlPresentation
+  setupExample?: string
   yamlHooks: OrcaHooks | null
   hasHooksFile: boolean
   hooksInspectionReady: boolean
@@ -45,6 +55,10 @@ type RepositoryHooksSectionProps = {
 
 export function RepositoryHooksSection({
   repo,
+  gitRepo,
+  setupExample,
+  showArchive = true,
+  yamlPresentation,
   yamlHooks,
   hasHooksFile,
   hooksInspectionReady,
@@ -73,12 +87,8 @@ export function RepositoryHooksSection({
     flushScriptDraftOnUnmount,
     updateHookSettingsPolicyDraft
   } = useRepositoryHookSettingsDraft({ repo, repoHostIdentity, onUpdateHookSettings })
-  const issueCommand = useRepositoryIssueCommand({
-    repoId: repo.id,
-    repoHostIdentity,
-    selectedHostId
-  })
-  const localHookFields = getLocalHookFields(t)
+  const isFolder = isFolderRepo(repo)
+  const localHookFields = getLocalHookFields(t, isFolder)
   const selectedSetupRunPolicy: SetupRunPolicy =
     hookSettingsDraft.setupRunPolicy ?? 'run-by-default'
   const selectedSetupAgentStartupPolicy: SetupAgentStartupPolicy =
@@ -86,10 +96,11 @@ export function RepositoryHooksSection({
   const sharedSetupScript = yamlHooks?.scripts.setup
   const sharedArchiveScript = yamlHooks?.scripts.archive
   const hasSharedSetupScript = Boolean(sharedSetupScript?.trim())
-  const hasSharedArchiveScript = Boolean(sharedArchiveScript?.trim())
+  const hasSharedArchiveScript = showArchive && Boolean(sharedArchiveScript?.trim())
   const hasSharedScript = hasSharedSetupScript || hasSharedArchiveScript
   const hasLocalScript = Boolean(
-    hookSettingsDraft.scripts.setup?.trim() || hookSettingsDraft.scripts.archive?.trim()
+    hookSettingsDraft.scripts.setup?.trim() ||
+    (showArchive && hookSettingsDraft.scripts.archive?.trim())
   )
   const selectedCommandSourcePolicy: HookCommandSourcePolicy = resolveHookCommandSourcePolicy(
     hookSettingsDraft.commandSourcePolicy,
@@ -100,7 +111,7 @@ export function RepositoryHooksSection({
       hooksInspectionReady,
       currentPolicy: selectedCommandSourcePolicy,
       setupScript: hookSettingsDraft.scripts.setup,
-      archiveScript: hookSettingsDraft.scripts.archive,
+      archiveScript: showArchive ? hookSettingsDraft.scripts.archive : undefined,
       hasSharedScript
     },
     t
@@ -110,18 +121,31 @@ export function RepositoryHooksSection({
   return (
     <div ref={flushScriptDraftOnUnmount}>
       <SettingsGroup
-        title={t('auto.components.settings.RepositoryHooksSection.ff082fe7c6', 'Worktree Hooks')}
-        description={t(
-          'auto.components.settings.RepositoryHooksSection.8567127a40',
-          'Scripts that run when worktrees are created or archived. Local scripts are stored on this machine; `orca.yaml` scripts are shared with your team.'
-        )}
+        title={
+          isFolder
+            ? t('components.settings.RepositoryHooksSection.folderTitle', 'Workspace hooks')
+            : t('auto.components.settings.RepositoryHooksSection.01bdba296f', 'Worktree hooks')
+        }
+        description={
+          !showArchive
+            ? t(
+                'settings.groupHooks.description',
+                'Scripts that run in this folder when a workspace is created. Every workspace shares the folder. Local scripts are stored on this machine; `orca.yaml` scripts are shared with your team.'
+              )
+            : isFolder
+              ? t(
+                  'components.settings.RepositoryHooksSection.folderDescription',
+                  'Scripts that run in this folder when a workspace is created or removed. Every workspace shares the folder. Local scripts are stored on this machine; `orca.yaml` scripts are shared with your team.'
+                )
+              : t(
+                  'auto.components.settings.RepositoryHooksSection.8567127a40',
+                  'Scripts that run when worktrees are created or archived. Local scripts are stored on this machine; `orca.yaml` scripts are shared with your team.'
+                )
+        }
       >
         <SearchableSetting
-          title={t('auto.components.settings.RepositoryHooksSection.52b31baf02', 'Setup Script')}
-          description={t(
-            'auto.components.settings.RepositoryHooksSection.30d555acd2',
-            'Local and shared scripts that run after a new worktree is created.'
-          )}
+          title={t('auto.components.settings.RepositoryHooksSection.1ecf0b115a', 'Setup script')}
+          description={getRepositoryHookScriptDescription(repo, 'setup', t)}
           className="py-4"
           forceVisible={forceVisible}
           keywords={[
@@ -145,11 +169,43 @@ export function RepositoryHooksSection({
             onCommit={commitScriptDraft}
             sectionId={getRepositoryLocalCommandsSectionId(repo.id)}
           />
+          {setupExample ? (
+            <div className="mt-3 space-y-2">
+              <p className="text-settings-detail text-muted-foreground">
+                {t(
+                  'settings.groupHooks.example',
+                  'Example: create a worktree in each repo (this machine only)'
+                )}
+              </p>
+              <pre className="overflow-x-auto rounded-md bg-muted p-3 text-xs">
+                <code>{setupExample}</code>
+              </pre>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    updateScriptDraft('setup', setupExample)
+                    commitScriptDraft()
+                  }}
+                >
+                  {t('settings.groupHooks.useExample', 'Use this example')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void window.api.ui.writeClipboardText(setupExample)}
+                >
+                  {t('common.copy', 'Copy')}
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </SearchableSetting>
         <SearchableSetting
           title={t(
-            'auto.components.settings.RepositoryHooksSection.fb6bebcf7e',
-            'When to Run Setup'
+            'auto.components.settings.RepositoryHooksSection.1c17e751c4',
+            'When to run setup'
           )}
           description={t(
             'auto.components.settings.RepositoryHooksSection.63e1783173',
@@ -159,46 +215,65 @@ export function RepositoryHooksSection({
           forceVisible={forceVisible}
           keywords={['setup run policy', 'ask', 'run by default', 'skip by default']}
         >
-          <RepositorySetupPolicySetting
+          <RepositorySetupRunPolicySetting
+            isFolder={isFolder}
             setupRunPolicy={selectedSetupRunPolicy}
-            setupAgentStartupPolicy={selectedSetupAgentStartupPolicy}
             onRunPolicyChange={(setupRunPolicy) =>
               updateHookSettingsPolicyDraft({ setupRunPolicy })
             }
+          />
+        </SearchableSetting>
+        <SearchableSetting
+          title={t(
+            'auto.components.settings.RepositoryHooksSection.waitForSetupBeforeAgent',
+            'Wait for setup to complete before starting agent'
+          )}
+          className="py-4"
+          forceVisible={forceVisible}
+          keywords={[
+            'wait for setup before starting agent',
+            'wait for setup to complete before starting agent',
+            'setup'
+          ]}
+        >
+          <RepositorySetupAgentStartupSetting
+            setupAgentStartupPolicy={selectedSetupAgentStartupPolicy}
             onStartupPolicyChange={(setupAgentStartupPolicy) =>
               updateHookSettingsPolicyDraft({ setupAgentStartupPolicy })
             }
           />
         </SearchableSetting>
-        <SearchableSetting
-          title={t('auto.components.settings.RepositoryHooksSection.9a100323ff', 'Archive Script')}
-          description={t(
-            'auto.components.settings.RepositoryHooksSection.b91a0f297d',
-            'Local and shared scripts that run before a worktree is archived.'
-          )}
-          className="py-4"
-          forceVisible={forceVisible}
-          keywords={[
-            'archive',
-            'script',
-            'command',
-            'local',
-            'local settings scripts',
-            'orca.yaml',
-            'orca.yaml hooks',
-            'hook'
-          ]}
-        >
-          <RepositoryHookScriptSetting
-            key={`${repo.id}:archive`}
-            field={localHookFields[1]}
-            value={hookSettingsDraft.scripts.archive ?? ''}
-            hasShared={hasSharedArchiveScript}
-            sharedScript={sharedArchiveScript}
-            onChange={(next) => updateScriptDraft('archive', next)}
-            onCommit={commitScriptDraft}
-          />
-        </SearchableSetting>
+        {showArchive ? (
+          <SearchableSetting
+            title={t(
+              'auto.components.settings.RepositoryHooksSection.bfdb1266ce',
+              'Archive script'
+            )}
+            description={getRepositoryHookScriptDescription(repo, 'archive', t)}
+            className="py-4"
+            forceVisible={forceVisible}
+            keywords={[
+              'archive',
+              'script',
+              'command',
+              'local',
+              'local settings scripts',
+              'orca.yaml',
+              'orca.yaml hooks',
+              'hook'
+            ]}
+          >
+            <RepositoryHookScriptSetting
+              key={`${repo.id}:archive`}
+              field={localHookFields[1]}
+              value={hookSettingsDraft.scripts.archive ?? ''}
+              hasShared={hasSharedArchiveScript}
+              sharedScript={sharedArchiveScript}
+              onChange={(next) => updateScriptDraft('archive', next)}
+              onCommit={commitScriptDraft}
+            />
+          </SearchableSetting>
+        ) : null}
         {localCommandSourceNotice ? (
           <div data-settings-row="" className="py-4">
             <LocalCommandSourceNotice
@@ -209,21 +284,13 @@ export function RepositoryHooksSection({
             />
           </div>
         ) : null}
-        <SearchableSetting
-          title={t(
-            'auto.components.settings.RepositoryHooksSection.13394103bd',
-            'Custom GitHub Issue Command'
-          )}
-          description={t(
-            'auto.components.settings.RepositoryHooksSection.2cc27dc12b',
-            'Optional per-user override for the linked-issue command.'
-          )}
-          className="py-4"
-          forceVisible={forceVisible}
-          keywords={['github issue command', 'issue command', 'workflow', 'agent', 'github']}
-        >
-          <RepositoryIssueCommandSetting {...issueCommand} />
-        </SearchableSetting>
+        {gitRepo && !isFolder ? (
+          <RepositoryIssueCommandRow
+            repo={gitRepo}
+            repoHostIdentity={repoHostIdentity}
+            forceVisible={forceVisible}
+          />
+        ) : null}
         <SearchableSetting
           title={t('auto.components.settings.RepositoryHooksSection.c9bc1bfd8f', 'Advanced')}
           description={t(
@@ -243,6 +310,8 @@ export function RepositoryHooksSection({
           ]}
         >
           <RepositoryHookCommandSourceSetting
+            setupOnly={!showArchive}
+            yamlPresentation={yamlPresentation}
             searchQuery={settingsSearchQuery}
             selectedPolicy={selectedCommandSourcePolicy}
             yamlState={yamlState}
@@ -258,5 +327,40 @@ export function RepositoryHooksSection({
         </SearchableSetting>
       </SettingsGroup>
     </div>
+  )
+}
+
+/** The issue command needs a GitHub repo, so only Git projects mount its file inspection. */
+function RepositoryIssueCommandRow({
+  repo,
+  repoHostIdentity,
+  forceVisible
+}: {
+  repo: Repo
+  repoHostIdentity: string
+  forceVisible: boolean
+}): React.JSX.Element {
+  const t = useTranslate()
+  const issueCommand = useRepositoryIssueCommand({
+    repoId: repo.id,
+    repoHostIdentity,
+    selectedHostId: getRepoExecutionHostId(repo)
+  })
+  return (
+    <SearchableSetting
+      title={t(
+        'auto.components.settings.RepositoryHooksSection.da00f141c2',
+        'Custom GitHub issue command'
+      )}
+      description={t(
+        'auto.components.settings.RepositoryHooksSection.2cc27dc12b',
+        'Optional per-user override for the linked-issue command.'
+      )}
+      className="py-4"
+      forceVisible={forceVisible}
+      keywords={['github issue command', 'issue command', 'workflow', 'agent', 'github']}
+    >
+      <RepositoryIssueCommandSetting {...issueCommand} />
+    </SearchableSetting>
   )
 }

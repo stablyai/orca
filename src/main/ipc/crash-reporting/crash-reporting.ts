@@ -1,16 +1,19 @@
 import { clipboard, ipcMain } from 'electron'
+import { getCanonicalUserDataPath } from '../../persistence/loading-store/user-data-path'
+import { nativeHangCaptureDirectory } from '../../hang-watchdog/native-hang-capture-store'
+import { createPreviousNativeHangReport } from '../../hang-watchdog/previous-native-hang-report'
 import {
   type CrashReportCopyDiagnosticsArgs,
   type CrashReportSubmitArgs,
   formatCrashReportText
 } from '../../../shared/crash-reporting'
-import type { CrashReportStore } from '../../crash-reporting/crash-report-store'
+import type { CrashReportStore } from '../../crash-reporting/reports/crash-report-store'
 import { rendererCrashBreadcrumbOrigin } from '../../../shared/crash-breadcrumb-origin'
 import {
   assertClipboardTextWriteWithinLimit,
   isClipboardTextWriteTooLargeError
 } from '../../../shared/clipboard-text'
-import { formatCrashReportCopyText } from '../../crash-reporting/crash-report-copy-text'
+import { formatCrashReportCopyText } from '../../crash-reporting/reports/crash-report-copy-text'
 import {
   recentRendererErrorReportKeys,
   recordRendererErrorReport
@@ -19,7 +22,7 @@ import { recordRendererBreadcrumbFromRenderer } from './crash-reporting-renderer
 import {
   profiledRendererFor,
   profileRendererMemoryBreadcrumb
-} from '../../crash-reporting/renderer-heap-allocation-profile'
+} from '../../crash-reporting/memory/renderer-heap-allocation-profile'
 import {
   getLatestPendingReport,
   getLatestSendableReport,
@@ -48,11 +51,23 @@ export function _getCrashReportingStateSizesForTests(): {
 }
 
 export function registerCrashReportingHandlers(store: CrashReportStore): void {
+  const directory = nativeHangCaptureDirectory(getCanonicalUserDataPath())
+  const previousHang =
+    process.platform === 'darwin'
+      ? createPreviousNativeHangReport({
+          store,
+          directory,
+          processStartedAt: Date.now() - process.uptime() * 1000
+        })
+      : null
   ipcMain.removeHandler('crashReports:getLatestPending')
   ipcMain.handle('crashReports:getLatestPending', () => getLatestPendingReport(store))
 
   ipcMain.removeHandler('crashReports:getLatestReport')
-  ipcMain.handle('crashReports:getLatestReport', () => getLatestSendableReport(store))
+  ipcMain.handle('crashReports:getLatestReport', async () => {
+    await previousHang?.ensureImported()
+    return getLatestSendableReport(store)
+  })
 
   ipcMain.removeHandler('crashReports:dismiss')
   ipcMain.handle('crashReports:dismiss', async (_event, args: { reportId: string }) => {

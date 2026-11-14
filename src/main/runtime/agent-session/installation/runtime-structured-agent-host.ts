@@ -2,14 +2,15 @@ import { ensureStructuredAgentModelCatalogOwner } from '../model-catalog/structu
 import type { StructuredAgentModelCatalogDeps } from './structured-agent-runtime-registration-types'
 import { resolveStructuredCodexAccountKind } from '../environment/structured-agent-account-home'
 import { nativeChatShellEnvironmentPolicy } from '../../../../shared/native-chat/native-chat-shell-environment'
-import { claudeStructuredAuthPolicyForSettings } from '../../../claude-accounts/claude-structured-auth-policy'
-import { resolveStructuredAgentCommand } from '../../../native-chat/structured-agent-command-resolution'
-import { structuredAgentConfiguredArgs } from '../../../native-chat/structured-agent-configured-args'
+import { claudeStructuredAuthPolicyForSettings } from '../../../claude-accounts/runtime-auth/claude-structured-auth-policy'
+import { resolveStructuredAgentCommand } from '../../../native-chat/agent-launch/structured-agent-command-resolution'
+import { structuredAgentConfiguredArgs } from '../../../native-chat/agent-launch/structured-agent-configured-args'
 import { getProfileUserDataPath } from '../../../orca-profiles/profile-storage-paths'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { resolveTuiAgentLaunchEnv } from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { overlayEnvironmentVariables } from '../../../../shared/environment-overlay'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { RuntimeWorkspaceCatalog } from '../../workspaces/catalog/workspace-catalog'
 import type { OrcaRuntimeWithRefreshPtyWorktreeRecordsFromController } from '../../terminal/lifecycle/pty-worktree-refresh'
 import type { RuntimeAccountController } from '../environment/runtime-account-controller'
@@ -18,6 +19,11 @@ import type { OrcaRuntimeWithGetStructuredAgentSessionCreateSupport } from '../.
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { StructuredAgentSessionHostDeps } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host-types'
 import { OrcaRuntimeWithStartTuiIdleVisibleReadProbe } from '../../terminal/wait/terminal-wait-visible-probe'
+import {
+  hostShellEnvironment,
+  hostShellEnvironmentRevision
+} from '../environment/structured-agent-shell-environment'
+import { usageLimitAccountSources } from './usage-limit-account-usage'
 
 export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTuiIdleVisibleReadProbe {
   /** Apply the host-owning desktop's account overlay to configured agent environment. */
@@ -25,10 +31,11 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
     agent: StructuredAgentId,
     settings: Pick<GlobalSettings, 'agentDefaultEnv'>
   ) {
-    return {
-      ...resolveTuiAgentLaunchEnv(agent, settings),
-      ...this.accounts.hostLaunchEnvFor(agent)
-    }
+    return overlayEnvironmentVariables(
+      overlayEnvironmentVariables({}, resolveTuiAgentLaunchEnv(agent, settings), process.platform),
+      this.accounts.hostLaunchEnvFor(agent),
+      process.platform
+    )
   }
 
   protected structuredAgentCatalogDependencies(): StructuredAgentModelCatalogDeps {
@@ -72,7 +79,15 @@ export abstract class RuntimeStructuredAgentHost extends OrcaRuntimeWithStartTui
       isEnabled: () =>
         this.requireStore().getSettings().nativeChatAutoContinueAfterUsageLimit === true,
       subscribe: (changed) => this.requireStore().onSettingsChanged?.(changed) ?? (() => {}),
-      isWorkspaceAsleep: (workspaceId) => this.isWorktreeTerminalSleepHeld(workspaceId)
+      isWorkspaceAsleep: (workspaceId) => this.isWorktreeTerminalSleepHeld(workspaceId),
+      ...usageLimitAccountSources({
+        rateLimits: () => this.accounts.usageRateLimits(),
+        settings: () => this.requireStore().getSettings(),
+        // The last capture: this runs every sweep pass and must not start a login shell.
+        shellEnvironment: () => hostShellEnvironment(true),
+        shellEnvironmentRevision: hostShellEnvironmentRevision,
+        claudeLaunchEnv: (settings) => this.structuredAgentLaunchEnv('claude', settings)
+      })
     }
   }
 

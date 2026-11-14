@@ -6,7 +6,7 @@ import {
   type NativeChatTurnDiff,
   type NativeChatTurnDiffFile
 } from '../../../../../src/shared/native-chat/tools/native-chat-turn-diffs'
-import { MobileNativeChatDiffCard } from '../MobileNativeChatDiffCard'
+import { MobileNativeChatDiffCard } from './MobileNativeChatDiffCard'
 import { useMobileNativeChatDisclosure } from './mobile-native-chat-disclosure-store'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'

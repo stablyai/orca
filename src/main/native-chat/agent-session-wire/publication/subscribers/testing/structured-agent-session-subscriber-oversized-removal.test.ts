@@ -12,7 +12,7 @@ import {
   insertTestJournalRow
 } from '../../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { AgentSessionSubscribers } from '../structured-agent-session-subscribers'
-import { codexProviderHandle } from '../../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 import {
   fixture,

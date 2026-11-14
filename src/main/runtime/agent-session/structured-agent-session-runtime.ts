@@ -1,7 +1,7 @@
 // Install lazily after Electron finalizes the profile path; runtimes without structured requests need no store. Journal-open failures install a refusal.
 
 import { stopPRWatchRuntime } from './pr-watch-runtime'
-import type { AgentSessionResumeTrigger } from '../../../shared/agent-session/lifecycle/agent-session-resume-marker'
+import type { AgentSessionResumeTrigger } from '../../../shared/agent-session/lifecycle/resume/agent-session-resume-marker'
 import {
   structuredAgentSessionTeardownTrigger,
   tearDownRuntime,
@@ -20,7 +20,7 @@ import {
   neverThrowingStructuredAgentSessionLogger,
   type StructuredAgentSessionLogger
 } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
-import { migrateLegacyNativeChatVisualsFolders } from '../../native-chat/native-chat-scratch-folder-migration'
+import { migrateLegacyNativeChatVisualsFolders } from '../../native-chat/conversation-files/native-chat-scratch-folder-migration'
 
 import type { StructuredAgentSessionRuntimeDeps } from './installation/structured-agent-session-runtime-contract'
 

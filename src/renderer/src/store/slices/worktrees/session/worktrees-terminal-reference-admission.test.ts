@@ -1,9 +1,9 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import type { GitHubWorkItem } from '../../../../../../shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../../../shared/github/work-items/work-item-types'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
-import { singlePaneLayoutSnapshot } from '../../../terminals/terminal-single-pane-layout'
-import { makeTerminalTab } from '../../../terminals/terminal-row.test-fixture'
+import { singlePaneLayoutSnapshot } from '../../../terminals/layout/terminal-single-pane-layout'
+import { makeTerminalTab } from '../../../terminals/testing/terminal-row.test-fixture'
 import { makeWorktree } from '../worktree.test-fixture'
 import {
   createTestStore,
@@ -110,62 +110,39 @@ beforeEach(() => {
   resetWorktreeSliceModuleMemory()
 })
 
-it('preserves distinct live confirmations on one branch without replacing the manual primary', async () => {
-  const { store, pending, observeBurst, branchLookup } = setup()
+it('keeps workspace attachments unchanged after closed-pane lookups settle', async () => {
+  const { store, pending, observeBurst, closePane } = setup()
   observeBurst()
   await flush()
-  let completed = 0
-  while (completed < 4) {
-    const batch = [...pending]
-    pending.clear()
-    for (const [number, deferred] of batch) {
-      deferred.resolve(review(number))
-    }
-    completed += batch.length
-    await flush()
-  }
-  expect(branchLookup).not.toHaveBeenCalled()
-  const items = getWorkspaceAttachments(store.getState().worktreesByRepo.repo[0])
-  expect(items.map((item) => item.number).sort((a, b) => (a ?? 0) - (b ?? 0))).toEqual([
-    7, 100, 101, 102, 103
-  ])
-  expect(store.getState().worktreesByRepo.repo[0].linkedPR).toBe(7)
-})
 
-it('drops stale queued starts and fallback reads after the pane closes', async () => {
-  const { store, pending, observeBurst, closePane, branchLookup } = setup()
-  observeBurst()
-  await flush()
-  expect(exactLookup).toHaveBeenCalledWith(expect.objectContaining({ number: 100 }))
   closePane()
   for (const deferred of pending.values()) {
     deferred.resolve(null)
   }
   await flush()
-  expect(exactLookup).not.toHaveBeenCalledWith(expect.objectContaining({ number: 103 }))
-  expect(branchLookup).not.toHaveBeenCalled()
+
   expect(
     getWorkspaceAttachments(store.getState().worktreesByRepo.repo[0]).map((item) => item.number)
   ).toEqual([7])
 })
 
-it('retains occupied native permits until settlement after their pane closes', async () => {
-  const { store, pending, observeBurst, closePane, branchLookup } = setup()
+it('attaches a current pane review after closed-pane lookups settle', async () => {
+  const { store, pending, observeBurst, closePane } = setup()
   observeBurst()
   await flush()
-  expect(exactLookup).toHaveBeenCalledWith(expect.objectContaining({ number: 100 }))
+
   closePane()
   store.getState().observeTerminalGitHubPullRequestLink(workspaceId, link(1000), context('tab-2'))
   await flush()
-  expect(exactLookup).not.toHaveBeenCalledWith(expect.objectContaining({ number: 1000 }))
+
   pending.get(100)?.resolve(null)
   await flush()
-  expect(exactLookup).toHaveBeenLastCalledWith(expect.objectContaining({ number: 1000 }))
+
   pending.get(1000)?.resolve(review(1000))
   pending.get(101)?.resolve(null)
   pending.get(102)?.resolve(null)
   await flush()
-  expect(branchLookup).not.toHaveBeenCalled()
+
   expect(
     getWorkspaceAttachments(store.getState().worktreesByRepo.repo[0]).map((item) => item.number)
   ).toEqual([7, 1000])

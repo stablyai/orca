@@ -18,11 +18,11 @@ import { isStructuredTab } from '../../../../../../shared/agent-session/view/str
 beforeEach(() => setPresenceGated(false))
 afterEach(() => setPresenceGated(true))
 
-vi.mock('@/store', () => ({ useAppStore: { getState: () => store.getState() } }))
-vi.mock('@/lib/desktop-notification-sound', () => ({
+vi.mock('@/store/index', () => ({ useAppStore: { getState: () => store.getState() } }))
+vi.mock('@/lib/notifications/desktop-notification-sound', () => ({
   playDesktopNotificationSound: vi.fn(async () => false)
 }))
-vi.mock('@/lib/blocked-notification-fallback', () => ({
+vi.mock('@/lib/notifications/blocked-notification-fallback', () => ({
   showBlockedNotificationFallbackToast: vi.fn()
 }))
 

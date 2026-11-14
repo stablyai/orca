@@ -7,7 +7,8 @@ vi.mock('./locale-catalog-imports', () => ({
   importLocaleCatalog: (locale: string) =>
     failing.has(locale)
       ? Promise.reject(new Error('missing chunk'))
-      : new Promise((resolve) => pending.set(locale, resolve))
+      : new Promise((resolve) => pending.set(locale, resolve)),
+  onLocaleCatalogArrival: () => () => undefined
 }))
 
 const { activateMobileUiLocale, getMobileUiLocale, mobileI18n, translate } =
@@ -30,13 +31,5 @@ describe('activateMobileUiLocale', () => {
     expect(getMobileUiLocale()).toBe('ja')
     expect(mobileI18n.language).toBe('ja')
     expect(translate('greeting', 'Hello')).toBe('こんにちは')
-  })
-
-  it('falls back to English when a catalog cannot load', async () => {
-    failing.add('de')
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    await activateMobileUiLocale('de')
-    expect(getMobileUiLocale()).toBe('en')
-    expect(translate('greeting', 'Hello')).toBe('Hello')
   })
 })

@@ -2,14 +2,14 @@
 
 import { delimiter, isAbsolute } from 'node:path'
 import { homedir } from 'node:os'
-import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/accounts/agent-session-account-home'
 import type { resolveCliCommand } from '../../../shared/node-cli-command-resolution'
 import { hasExplicitTuiLaunchCommand } from '../../../shared/agent-launch/startup/tui-agent-launch-command-override'
 import {
   resolveStructuredAgentCommand,
   type StructuredAgentCommand,
   type StructuredAgentCommandSettings
-} from '../../native-chat/structured-agent-command-resolution'
+} from '../../native-chat/agent-launch/structured-agent-command-resolution'
 import {
   copyBesidePinnedMembers,
   resolveInstalledRuntimeRelease

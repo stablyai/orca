@@ -1,8 +1,8 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { NativeChatMessage } from '../../../../shared/native-chat/native-chat-types'
 import { nativeChatStreamingMessage } from '../../../../shared/native-chat/native-chat-streaming'
-import { orderNativeChatDisplayMessages } from '../../../../shared/native-chat/transcript/native-chat-message-order'
-import { pendingSendsAsMessages } from '../../../../shared/native-chat/transcript/native-chat-pending-sends'
+import { orderNativeChatDisplayMessages } from '../../../../shared/native-chat/transcript/messages/native-chat-message-order'
+import { pendingSendsAsMessages } from '../../../../shared/native-chat/transcript/pending-sends/native-chat-pending-sends'
 import { MessageRow } from './messages/rows/NativeChatMessageRow'
 
 const history: NativeChatMessage[] = [

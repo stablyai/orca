@@ -4,18 +4,24 @@ import {
   nativeChatToolFoldKind,
   type NativeChatToolFoldKind
 } from '../../../../../src/shared/native-chat/tools/native-chat-tool-fold'
-import { foldSubagentItems } from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-items'
+import { foldSubagentItems } from '../../../../../src/shared/native-chat/transcript/subagents/native-chat-subagent-items'
 import {
   nativeChatImageTranscriptUnits,
   normalizeImageTranscriptUnit
-} from '../../../../../src/shared/native-chat/transcript/native-chat-image-transcript-markers'
-import { foldMobileNativeChatMessages } from '../mobile-native-chat-render-data'
+} from '../../../../../src/shared/native-chat/transcript/images/native-chat-image-transcript-markers'
+import {
+  finishMobileNativeChatMessages,
+  foldMobileNativeChatMessages
+} from './mobile-native-chat-render-data'
 import {
   prepareMobileNativeChatSources,
   type MobileNativeChatProjectionSource
 } from './mobile-native-chat-projection-sources'
 import { projectMobileNativeChatTail } from './mobile-native-chat-projection-tail'
-import { buildMobileNativeChatUnits, type Unit } from './mobile-native-chat-projection-units'
+import {
+  buildNativeChatFoldUnits,
+  type NativeChatFoldUnit as Unit
+} from '../../../../../src/shared/native-chat/transcript/folding/native-chat-fold-units'
 
 type ImageUnit = { sources: readonly NativeChatMessage[]; rows: NativeChatMessage[] }
 export type MobileNativeChatProjection = {
@@ -75,7 +81,12 @@ export function projectMobileNativeChatMessages(
   const kinds = new Map(
     grouped.map((source) => [source, previous?.kinds.get(source) ?? nativeChatToolFoldKind(source)])
   )
-  const units = buildMobileNativeChatUnits(grouped, kinds, previous)
+  const units = buildNativeChatFoldUnits(
+    grouped,
+    kinds,
+    new Map(previous?.units.map((unit) => [unit.sources[0]!.id, unit])),
+    finishMobileNativeChatMessages
+  )
   const unchanged =
     previous &&
     units.length === previous.units.length &&

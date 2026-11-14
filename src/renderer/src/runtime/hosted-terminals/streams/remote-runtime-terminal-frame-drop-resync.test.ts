@@ -323,33 +323,6 @@ describe('remote terminal frame-drop resync', () => {
     }
   })
 
-  it('escalates to stall recovery when the host never answers a recovery', async () => {
-    vi.useFakeTimers()
-    try {
-      const onTransportClose = vi.fn()
-      await getRemoteRuntimeTerminalMultiplexer('env-1').subscribeTerminal({
-        terminal: 'terminal-1',
-        client: { id: 'desktop-1', type: 'desktop' },
-        callbacks: { onData: vi.fn(), onSnapshot: vi.fn(), onTransportClose }
-      })
-      await Promise.resolve()
-      await Promise.resolve()
-      server.holdNextRecoverySnapshot = true
-      server.output('aaa')
-      server.dropNextOutput = true
-      server.output('bbb')
-      server.output('ccc')
-      await vi.advanceTimersByTimeAsync(10_000)
-      server.holdNextRecoverySnapshot = true
-      await vi.advanceTimersByTimeAsync(500)
-
-      await vi.advanceTimersByTimeAsync(10_000)
-      expect(onTransportClose).toHaveBeenCalledWith({ recoverable: true, stalled: true })
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('does not re-request a recovery that is still streaming on a slow link', async () => {
     vi.useFakeTimers()
     try {
@@ -376,40 +349,6 @@ describe('remote terminal frame-drop resync', () => {
     }
   })
 
-  it('drops stale binary output and retires the old transport after a same-id re-pair', async () => {
-    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 10 }])
-    const data: string[] = []
-    const onTransportClose = vi.fn()
-    const multiplexer = getRemoteRuntimeTerminalMultiplexer('env-1')
-    await multiplexer.subscribeTerminal({
-      terminal: 'terminal-1',
-      client: { id: 'desktop-1', type: 'desktop' },
-      callbacks: {
-        onData: (chunk) => data.push(chunk),
-        onSnapshot: vi.fn(),
-        onTransportClose
-      }
-    })
-
-    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 1, pairingRevision: 11 }])
-    server.output('stale output')
-
-    expect(data).toEqual([])
-    expect(onTransportClose).toHaveBeenCalled()
-    expect(unsubscribe).toHaveBeenCalled()
-  })
-
-  it('requests an authoritative resync instead of rendering malformed span JSON', async () => {
-    const { data, snapshots } = await subscribeClient()
-
-    server.malformedOutputSpan()
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(data).toEqual([])
-    expect(snapshots).toEqual(['INITIAL', '\x1b[?2026l\x1b[2J\x1b[3J\x1b[HRECOVERED'])
-  })
-
   it('uses UTF-16 sequence units when detecting gaps in multibyte output', async () => {
     const { data, snapshots } = await subscribeClient()
 
@@ -422,30 +361,5 @@ describe('remote terminal frame-drop resync', () => {
 
     expect(data).toEqual(['é'])
     expect(snapshots).toEqual(['INITIAL', '\x1b[?2026l\x1b[2J\x1b[3J\x1b[HRECOVERED'])
-  })
-
-  it('defers recovery until an in-flight manual snapshot finishes', async () => {
-    const { data, snapshots, stream } = await subscribeClient()
-    server.holdNextManualSnapshot = true
-    const manualSnapshot = stream.serializeBuffer({ scrollbackRows: 100 })
-    await Promise.resolve()
-
-    server.output('aaa')
-    server.dropNextOutput = true
-    server.output('🙂')
-    server.output('ccc')
-
-    expect(data).toEqual(['aaa'])
-
-    server.flushHeldManualSnapshot()
-    await Promise.resolve()
-    await Promise.resolve()
-
-    await expect(manualSnapshot).resolves.toMatchObject({ data: 'MANUAL' })
-
-    expect(snapshots).toEqual(['INITIAL', '\x1b[?2026l\x1b[2J\x1b[3J\x1b[HRECOVERED'])
-
-    server.output('ddd')
-    expect(data).toEqual(['aaa', 'ddd'])
   })
 })

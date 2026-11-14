@@ -1,4 +1,4 @@
-import type { PluginEventName } from '../../shared/plugins/manifest/plugin-manifest'
+import type { PluginEventName } from '../../shared/plugins/contributions/plugin-event-contribution'
 import {
   capabilityKinds,
   type PluginCapabilityKind
@@ -13,38 +13,38 @@ import {
   getUserPluginsDir,
   type DiscoveredPlugin,
   type ValidDiscoveredPlugin
-} from './plugin-discovery'
-import { PluginAuditLog, type PluginAuditEntry } from './plugin-audit-log'
-import { PluginContentVerifier } from './plugin-content-integrity'
-import type { PluginRuntimeDelegate } from './workers/plugin-host-service-bindings'
+} from './discovery/plugin-discovery'
+import { PluginAuditLog, type PluginAuditEntry } from './logging/plugin-audit-log'
+import { PluginContentVerifier } from './artifacts/plugin-content-integrity'
+import type { PluginRuntimeDelegate } from './workers/host-api/plugin-host-service-bindings'
 import {
   createPluginServiceHostCall,
   pluginPanelBridgeServices,
   resolvePluginServiceHostCallPolicy,
   type PluginServiceHostCall
-} from './plugin-service-host-call'
+} from './runtime/plugin-service-host-call'
 import { PluginPanelBridge } from './panels/plugin-panel-bridge'
 import { PluginPanelController } from './panels/plugin-panel-controller'
 import { PluginWorkerController } from './workers/plugin-worker-controller'
-import { PluginServiceHousekeeping } from './plugin-service-housekeeping'
+import { PluginServiceHousekeeping } from './development/plugin-service-housekeeping'
 import {
   collectApprovedWorkerSpecs,
   isApprovedWorkerSpec
-} from './workers/plugin-worker-reconciliation'
-import type { PluginRunState } from './workers/plugin-supervisor'
+} from './workers/worker-admission/plugin-worker-reconciliation'
+import type { PluginRunState } from './workers/worker-supervision/plugin-supervisor'
 import {
   isPluginApproved,
   livePluginActivationState,
   pluginPolicyBlockError,
   snapshotPluginConsentLists
-} from './plugin-activation-policy'
+} from './activation/plugin-activation-policy'
 import { createPluginContentPacks } from './contributions/plugin-content-pack-registry'
 import type { PluginServiceOptions } from './plugin-service-options'
 import type { PluginChangeEvent } from '../../shared/plugins/events/plugin-change-event'
-import { waitForPluginRefreshSettlement } from './plugin-refresh-settlement'
-import { invokePluginWorkerCommand } from './plugin-command-invocation'
-import { deliverPluginEvent, pluginWorkersWantEvent } from './plugin-event-delivery'
-import type { PluginEventDeliveryContext } from './plugin-event-delivery'
+import { waitForPluginRefreshSettlement } from './activation/plugin-refresh-settlement'
+import { invokePluginWorkerCommand } from './commands/plugin-command-invocation'
+import { deliverPluginEvent, pluginWorkersWantEvent } from './events/plugin-event-delivery'
+import type { PluginEventDeliveryContext } from './events/plugin-event-delivery'
 import { PluginInstallationState } from './installation/plugin-installation-state'
 
 export class PluginService {
@@ -92,8 +92,7 @@ export class PluginService {
         pluginsDataDir: getPluginsDataDir(this.options.userDataPath),
         desktop: this.options.getDesktopFrameServices?.(),
         panels: pluginPanelBridgeServices(this.panelBridge),
-        statusBar: this.options.statusBar,
-        appearance: this.options.appearance,
+        sinks: this.options,
         audit: this.audit,
         log: (pluginKey) => this.installed.captureLog(pluginKey, 'info')
       })

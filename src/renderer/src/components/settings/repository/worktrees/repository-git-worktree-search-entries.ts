@@ -4,13 +4,10 @@ import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { searchKeywordTranslator } from '../../search/settings-search-keywords'
 
-export function getRepositoryGitWorktreeSearchEntries(
-  repo: Repo,
-  t: Translate = translate
-): SettingsSearchEntry[] {
+function getRepositoryGitWorktreeSearchParts(repo: Repo, t: Translate = translate) {
   const translateSearchKeyword = searchKeywordTranslator(t)
-  return [
-    {
+  const entries = {
+    externalWorktrees: {
       title: t(
         'auto.components.settings.repository.search.externalWorktrees',
         'External worktrees'
@@ -32,8 +29,8 @@ export function getRepositoryGitWorktreeSearchEntries(
         ...translateSearchKeyword('auto.components.settings.repository.search.sidebar', 'sidebar')
       ]
     },
-    {
-      title: t('auto.components.settings.repository.search.094adbe930', 'Default Worktree Base'),
+    base: {
+      title: t('auto.components.settings.repository.search.88d466b2e3', 'Default worktree base'),
       description: t(
         'auto.components.settings.repository.search.f571081ec4',
         'Default base branch or ref when creating worktrees.'
@@ -47,8 +44,8 @@ export function getRepositoryGitWorktreeSearchEntries(
         ...translateSearchKeyword('auto.components.settings.repository.search.9811f3d152', 'branch')
       ]
     },
-    {
-      title: t('auto.components.settings.repository.search.443d127b5a', 'Worktree Location'),
+    location: {
+      title: t('auto.components.settings.repository.search.2e216fbad2', 'Worktree location'),
       description: t(
         'auto.components.settings.repository.search.cd33a5525e',
         'Project-specific directory for new worktrees.'
@@ -77,8 +74,8 @@ export function getRepositoryGitWorktreeSearchEntries(
         )
       ]
     },
-    {
-      title: t('auto.components.settings.repository.search.1f0f20bbb6', 'Sparse Checkout Presets'),
+    sparsePresets: {
+      title: t('auto.components.settings.repository.search.355868ac19', 'Sparse checkout presets'),
       description: t(
         'auto.components.settings.repository.search.90a331fd68',
         'Saved directory sets for sparse worktree creation.'
@@ -115,8 +112,8 @@ export function getRepositoryGitWorktreeSearchEntries(
         )
       ]
     },
-    {
-      title: t('auto.components.settings.repository.search.01b3377ebc', 'Worktree Shared Paths'),
+    sharedPaths: {
+      title: t('auto.components.settings.repository.search.ea22e2187e', 'Worktree shared paths'),
       description: t(
         'auto.components.settings.repository.search.ed885e589f',
         'Paths to materialize from the primary checkout into newly created worktrees.'
@@ -150,5 +147,29 @@ export function getRepositoryGitWorktreeSearchEntries(
         )
       ]
     }
+  } satisfies Record<string, SettingsSearchEntry>
+  return entries
+}
+
+export function getRepositoryGitWorktreeSearchEntries(
+  repo: Repo,
+  t: Translate = translate
+): SettingsSearchEntry[] {
+  const entries = getRepositoryGitWorktreeSearchParts(repo, t)
+  return [
+    entries.externalWorktrees,
+    entries.base,
+    entries.location,
+    entries.sparsePresets,
+    entries.sharedPaths
   ]
+}
+
+export function getRepositoryGitWorktreeSearchMetadata(repo: Repo, t: Translate = translate) {
+  const entries = getRepositoryGitWorktreeSearchParts(repo, t)
+  return {
+    identity: [entries.externalWorktrees, entries.base, entries.location],
+    sparsePresets: [entries.sparsePresets],
+    sharedPaths: [entries.sharedPaths]
+  }
 }

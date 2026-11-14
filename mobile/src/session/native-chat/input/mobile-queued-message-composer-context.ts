@@ -1,0 +1,21 @@
+import type { NativeChatSkillDiscoverySnapshot } from '../../../../../src/shared/native-chat/input/composer/native-chat-picker-items'
+import { createContext } from 'react'
+import type { MobileNativeChatStructuredComposer } from '../composer/mobile-native-chat-structured-composer'
+
+export const MobileQueuedMessageComposerContext = createContext<{
+  agent: string | null
+  interactionModeSupported?: boolean
+  structured: MobileNativeChatStructuredComposer | null
+  skillDiscovery?: NativeChatSkillDiscoverySnapshot
+  onNeedSkills?: () => void
+  filePaths: string[]
+  onNeedFiles: ((query: string) => void) | undefined
+  onError: (text: string) => void
+  onMicPress: (() => void) | undefined
+  micActive: boolean
+  micStarting: boolean
+  micProcessing: boolean
+  dictationMode: string | undefined
+  onMicPressIn: () => void
+  onMicPressOut: () => void
+} | null>(null)

@@ -5,7 +5,7 @@ import { expect } from 'vitest'
 import { activeProviderContext } from '../../../../../shared/agent-session/agent-session-provider-context'
 import { agentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../../../shared/agent-session/failures/agent-session-failure-words'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionQueuePause } from '../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
 import type { AgentSessionExecutionLocation } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -32,11 +32,13 @@ import { seedQueuedRigLegacyJournal } from './structured-agent-session-queued-le
 import { createStructuredAgentSessionLogger } from '../structured-agent-session-logger'
 import {
   createQueuedRigProvider,
+  proveQueuedRigStart,
   eventually,
   type RigSendOptions,
   type QueuedRigProviderOptions
 } from './structured-agent-session-queued-message-rig-provider.test-fixture'
 import { claudeAndCodexDeclared } from '../../providers/testing/structured-agent-session-adapter-router-test-support'
+import { createTestParams } from './structured-agent-session-create-test-fixture'
 
 export const QUEUED_RIG_CALLER = { callerKey: 'client-1' }
 export type QueuedMessageTestRig = Awaited<ReturnType<typeof createQueuedMessageTestRig>>
@@ -44,6 +46,7 @@ export type QueuedMessageTestRig = Awaited<ReturnType<typeof createQueuedMessage
 export async function createQueuedMessageTestRig(
   options: QueuedRigProviderOptions & {
     sessionId?: string
+    atRest?: true
     legacyInputs?: true
     idleSweep?: StructuredAgentSessionHostDeps['idleSweep']
     now?: () => number
@@ -97,7 +100,11 @@ export async function createQueuedMessageTestRig(
       : {})
   })
   const pinLegacy = options.legacyInputs && seedQueuedRigLegacyJournal(root, SESSION, options.agent)
-  expect(await host.attach(QUEUED_RIG_CALLER, firstAttach)).toMatchObject({ ok: true })
+  expect(
+    options.atRest
+      ? await host.create(QUEUED_RIG_CALLER, createTestParams(undefined, firstAttach))
+      : await host.attach(QUEUED_RIG_CALLER, firstAttach)
+  ).toMatchObject({ ok: true })
   if (pinLegacy) {
     pinLegacy(host)
   }
@@ -274,14 +281,6 @@ export async function createQueuedMessageTestRig(
     })
   }
 
-  async function proveStart(): Promise<void> {
-    await eventually(() =>
-      expect(host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('starting')
-    )
-    provider.proveOpen()
-    await Promise.resolve()
-  }
-
   async function dispose(): Promise<void> {
     await host.flushAllStreamedEvents()
     await closeTestJournalHostDatabase(root)
@@ -325,7 +324,7 @@ export async function createQueuedMessageTestRig(
     queuePause,
     restartOffers,
     resume,
-    proveStart,
+    proveStart: () => proveQueuedRigStart(host, SESSION, provider.proveOpen),
     dispose
   }
 }

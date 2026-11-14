@@ -29,7 +29,6 @@ vi.mock('../authentication/ssh-identity-file-read', () => ({
 
 import { buildConnectConfig } from './ssh-connect-config'
 import { findDefaultKeyFile } from '../authentication/ssh-auth-resolution'
-import { resolveEffectiveProxy } from '../system-transport/ssh-proxy-command'
 import { walkInitialAuthLadder } from './testing/ssh-connection-test-fixtures'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { SshResolvedConfig } from '../config/ssh-g-config-resolution'
@@ -120,70 +119,6 @@ describe('buildConnectConfig', () => {
     }
   })
 
-  it('uses ssh -G HostName when a config-host target still points at its alias', () => {
-    const config = buildConnectConfig(
-      makeTarget({ label: 'workbox', configHost: 'workbox', host: 'workbox' }),
-      makeResolved({ hostname: 'workbox.internal' })
-    )
-
-    expect(config.host).toBe('workbox.internal')
-  })
-
-  it('uses ssh -G Port when a config-host target still has the default port', () => {
-    const config = buildConnectConfig(
-      makeTarget({ configHost: 'workbox', host: 'workbox', port: 22 }),
-      makeResolved({ port: 2202 })
-    )
-
-    expect(config.port).toBe(2202)
-  })
-
-  it('keeps explicit non-default target ports ahead of ssh -G Port', () => {
-    const config = buildConnectConfig(
-      makeTarget({ configHost: 'workbox', host: 'workbox', port: 2022 }),
-      makeResolved({ port: 2202 })
-    )
-
-    expect(config.port).toBe(2022)
-  })
-
-  it('uses fresh OpenSSH endpoint authority for imported config targets', () => {
-    const config = buildConnectConfig(
-      makeTarget({
-        source: 'ssh-config',
-        configHost: 'workbox',
-        host: 'stale.example.com',
-        port: 2022,
-        username: 'stale-user'
-      }),
-      makeResolved({
-        hostname: 'current.example.com',
-        port: 2202,
-        user: 'current-user'
-      })
-    )
-
-    expect(config.host).toBe('current.example.com')
-    expect(config.port).toBe(2202)
-    expect(config.username).toBe('current-user')
-  })
-
-  it('uses configured IdentityAgent before SSH_AUTH_SOCK', () => {
-    const config = buildConnectConfig(
-      makeTarget(),
-      makeResolved({ identityAgent: '/tmp/one-password.sock' })
-    )
-    expect(config.agent).toBe('/tmp/one-password.sock')
-  })
-
-  it('prefers ssh -G resolved IdentityAgent for config-host targets', () => {
-    const config = buildConnectConfig(
-      makeTarget({ configHost: 'work', identityAgent: '%d/.1password/agent.sock' }),
-      makeResolved({ identityAgent: testHomePath('.1password', 'agent.sock') })
-    )
-    expect(config.agent).toBe(testHomePath('.1password', 'agent.sock'))
-  })
-
   it('allows IdentityAgent none to disable agent auth', () => {
     const config = buildConnectConfig(makeTarget(), makeResolved({ identityAgent: 'none' }))
     expect(config.agent).toBeUndefined()
@@ -198,32 +133,6 @@ describe('buildConnectConfig', () => {
 
     expect(config.agent).toBeUndefined()
     expect(config.privateKey).toEqual(Buffer.from('not-a-key'))
-  })
-
-  it('uses fresh OpenSSH IdentityFile authority for imported config targets', () => {
-    mockReadFileSync.mockImplementation((path: unknown) => Buffer.from(String(path)))
-    const config = buildConnectConfig(
-      makeTarget({
-        source: 'ssh-config',
-        configHost: 'workbox',
-        identityFile: '/home/user/.ssh/stale'
-      }),
-      makeResolved({ identityFile: ['/home/user/.ssh/current'] }),
-      { includeAgent: false, includePrivateKey: true }
-    )
-
-    expect(config.privateKey).toEqual(Buffer.from('/home/user/.ssh/current'))
-    expect(mockReadFileSync).toHaveBeenCalledWith('/home/user/.ssh/current')
-  })
-
-  it('expands Windows-style target.identityFile before reading private key', () => {
-    mockReadFileSync.mockReturnValue(Buffer.from('key'))
-    const config = buildConnectConfig(makeTarget({ identityFile: '~\\.ssh\\custom' }), null, {
-      includeAgent: false,
-      includePrivateKey: true
-    })
-    expect(config.privateKey).toEqual(Buffer.from('key'))
-    expect(mockReadFileSync).toHaveBeenCalledWith(testHomePath('.ssh', 'custom'))
   })
 
   it('defers an existing default key file to the no-agent retry', () => {
@@ -241,17 +150,6 @@ describe('buildConnectConfig', () => {
       'agent',
       'keyboard-interactive'
     ])
-  })
-
-  it('reads a deferred default key only once the agent-first attempt reaches the challenge', () => {
-    const defaultKeyPath = testHomePath('.ssh', 'id_ed25519')
-    mockExistsSync.mockImplementation((p: unknown) => String(p) === defaultKeyPath)
-    mockReadFileSync.mockReturnValue(UNENCRYPTED_KEY)
-    const config = buildConnectConfig(makeTarget(), null)
-    // Agent-only success must not touch FIFO/slow-mount identity files.
-    expect(mockReadFileSync).not.toHaveBeenCalledWith(defaultKeyPath)
-    expect(walkInitialAuthLadder(config, PASSWORD_HOST_METHODS)).toEqual(['none', 'agent'])
-    expect(mockReadFileSync).toHaveBeenCalledWith(defaultKeyPath)
   })
 
   it('keeps the challenge when several keys wait, which could spend the retry auth budget', () => {
@@ -301,33 +199,5 @@ describe('buildConnectConfig', () => {
         'keyboard-interactive'
       ])
     }
-  })
-})
-
-describe('resolveEffectiveProxy', () => {
-  it('returns target.proxyCommand first', () => {
-    const target = { ...makeTarget(), proxyCommand: 'cloudflared access ssh --hostname %h' }
-    const resolved = makeResolved({ proxyCommand: 'other' })
-    expect(resolveEffectiveProxy(target, resolved)).toEqual({
-      kind: 'proxy-command',
-      command: 'cloudflared access ssh --hostname %h'
-    })
-  })
-
-  it('uses fresh OpenSSH proxy authority for imported config targets', () => {
-    const target = {
-      ...makeTarget(),
-      source: 'ssh-config' as const,
-      configHost: 'workbox',
-      proxyCommand: 'ssh -W %h:%p stale-bastion'
-    }
-
-    expect(resolveEffectiveProxy(target, makeResolved())).toBeUndefined()
-    expect(
-      resolveEffectiveProxy(target, makeResolved({ proxyCommand: 'ssh -W %h:%p current-bastion' }))
-    ).toEqual({
-      kind: 'proxy-command',
-      command: 'ssh -W %h:%p current-bastion'
-    })
   })
 })

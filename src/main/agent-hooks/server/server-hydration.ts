@@ -5,8 +5,8 @@ import {
 import {
   seedClaudeLeadTurnFromPersistedStatus,
   seedClaudeSubagentRosterFromSnapshots
-} from '../../../shared/agent-hook-listener/providers/claude-roster-state'
-import { seedCodexStateFromSnapshot } from '../../../shared/agent-hook-listener/providers/codex-state'
+} from '../../../shared/agent-hook-listener/providers/claude/lifecycle/claude-roster-state'
+import { seedCodexStateFromSnapshot } from '../../../shared/agent-hook-listener/providers/codex/codex-state'
 import { AGENT_STATUS_PERSISTED_HYDRATION_MODE } from '../../../shared/agent-status/transport/agent-status-legacy-adapter'
 import { AGENT_STATUS_HYDRATE_MAX_AGE_MS as HYDRATE_MAX_AGE_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
 import { LAST_STATUS_FILE_VERSION, STATUS_FLUSH_BUSY_TIMEOUT_MS } from './server-constants'

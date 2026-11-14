@@ -23,7 +23,7 @@ import { eventually } from './structured-agent-session-queued-message-rig-provid
 import type { QueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
 import { structuredQueuePauses } from '../../delivery/structured-agent-session-queued-pause'
 import { openRigTurnFor } from './structured-agent-session-queued-rig-turn.test-fixture'
-import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 
 let rig: QueuedMessageTestRig
 afterEach(async () => rig.dispose())
@@ -52,6 +52,12 @@ function stopEvents(): StoredStopEvent[] {
     }
   }
   return [...events.values()]
+}
+/** As the startup ceiling expiring the start in flight. */
+async function failStartAtCeiling(): Promise<void> {
+  const { lifetime, serialize, sessions } = rig.host.collaboratorsForTests()
+  lifetime.stopStartingChild(SESSION, sessions.get(SESSION)?.child ?? null)
+  await serialize(SESSION, async () => {})
 }
 async function queuedDraft(text: string) {
   const queued = await rig.send(text, 'queue-if-active').result
@@ -124,7 +130,7 @@ it('a failed personal start retains Stop after its returned input is deleted', a
     expect(rig.host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('starting')
   )
 
-  await rig.host.collaboratorsForTests().lifetime.idleSweep.tick()
+  await failStartAtCeiling()
   await personal.result
 
   expect(stopEvents().map((event) => event.reason)).toEqual(['user-stop', 'host-stop'])
@@ -169,7 +175,7 @@ it('an unattended failed start preserves a manual Stop without returning the mai
     expect(rig.host.collaboratorsForTests().sessions.get(SESSION)?.child?.phase).toBe('starting')
   )
 
-  await rig.host.collaboratorsForTests().lifetime.idleSweep.tick()
+  await failStartAtCeiling()
   await mail.result
 
   expect(journal().queuedMessages.get(mail.id)).toBeNull()

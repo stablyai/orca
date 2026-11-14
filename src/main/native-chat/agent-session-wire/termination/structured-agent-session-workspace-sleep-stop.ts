@@ -2,9 +2,9 @@ import { recordAgentSessionAcquisitionExit } from '../../../runtime/agent-sessio
 import {
   agentSessionLeaseIsReleased,
   agentSessionLeaseOwnerVerdict
-} from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+} from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import '../../../runtime/agent-session/records/agent-session-record-founding'
-import { agentSessionNeverStarted as structuredSessionNeverStarted } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionNeverStarted as structuredSessionNeverStarted } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { StructuredAgentSessionConversations } from '../host/structured-agent-session-conversations'
 import type { StructuredAgentSessionStopEnding } from './structured-agent-session-host-stop-event'
 import type {

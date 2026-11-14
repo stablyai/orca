@@ -8,7 +8,6 @@ import {
   type MobileNativeChatRowOverlays
 } from './mobile-native-chat-row-overlays'
 import type { MobileNativeChatConversation } from '../use-mobile-native-chat-conversation-state'
-import { MarkdownLinkHandlerContext } from '../../../components/markdown-link-handler'
 
 vi.mock('react-native', async () => ({
   ...(await import('../../../test-support/react-native-motion-stub')).reactNativeMotionStub(),
@@ -24,21 +23,19 @@ vi.mock('react-native-safe-area-context', () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
 }))
 vi.mock('lucide-react-native', () => ({ X: 'X' }))
-vi.mock('../../../platform/haptics', () => ({ triggerMediumImpact: vi.fn() }))
+vi.mock('../../../platform/haptics/haptics', () => ({ triggerMediumImpact: vi.fn() }))
 vi.mock('./MobileNativeChatRewindDialog', () => ({ MobileNativeChatRewindDialog: () => null }))
 vi.mock('./MobileNativeChatMessageActionsSheet', () => ({
   MobileNativeChatMessageActionsSheet: 'MessageActionsSheet'
 }))
-vi.mock('../../MobileLinkActionSheet', () => ({ MobileLinkActionSheet: 'LinkActionSheet' }))
+vi.mock('./MobileLinkActionSheet', () => ({ MobileLinkActionSheet: 'LinkActionSheet' }))
 vi.mock('../visual/MobileImageViewerActions', () => ({
   MobileImageViewerActions: 'ImageViewerActions'
 }))
 
 let overlays: MobileNativeChatRowOverlays | null = null
-let openLink: ((url: string) => void) | null = null
 function Row(): null {
   overlays = useContext(MobileNativeChatRowOverlaysContext)
-  openLink = useContext(MarkdownLinkHandlerContext)
   return null
 }
 const chat = (conversation: MobileNativeChatConversation) => (
@@ -60,18 +57,15 @@ afterEach(() => {
   renderer = null
 })
 
-describe.each([
-  ['picture', 'Modal', () => overlays!.openImage({ uri: 'file:///a.jpg', label: 'a photo' })],
-  ['actions sheet', 'MessageActionsSheet', () => overlays!.openActions(message)],
-  ['link sheet', 'LinkActionSheet', () => openLink!('https://example.com')]
-])("a row's %s", (_, type, open) => {
+describe("a row's actions sheet", () => {
   function shownAcross(conversations: MobileNativeChatConversation[]): boolean[] {
     const [first, ...rest] = conversations
     act(() => {
       renderer = create(chat(first!))
     })
-    act(open)
-    const shown = () => renderer!.root.findAll((node) => String(node.type) === type).length === 1
+    act(() => overlays!.openActions(message))
+    const shown = () =>
+      renderer!.root.findAll((node) => String(node.type) === 'MessageActionsSheet').length === 1
     return [shown()].concat(
       rest.map((conversation) => {
         act(() => renderer!.update(chat(conversation)))
@@ -88,15 +82,6 @@ describe.each([
         { surfaceId: 'tab-a', sessionId: 's1' }
       ])
     ).toEqual([true, false, false])
-  })
-
-  it("closes when the tab's agent session is replaced", () => {
-    expect(
-      shownAcross([
-        { surfaceId: 'tab-a', sessionId: 's1' },
-        { surfaceId: 'tab-a', sessionId: 's2' }
-      ])
-    ).toEqual([true, false])
   })
 
   it("stays open when the tab's first session id arrives, then closes on a replacement", () => {

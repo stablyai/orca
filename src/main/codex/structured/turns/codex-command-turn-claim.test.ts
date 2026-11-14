@@ -5,7 +5,7 @@ import { agentJournalItemKey } from '../../../../shared/agent-session/journal/ag
 import type { AgentJournalItemBody } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnScope } from '../../../../shared/agent-session/journal/agent-session-journal-turn-scope'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
@@ -160,14 +160,20 @@ describe('a Codex turn a conversation command claims', () => {
       agentJournalItemKey(COMMAND.resultIdentity)
     )
     expect(rows.map((write) => write.turnScope)).toEqual(rows.map(() => scope))
-    expect(
-      rows.some(
-        (write) =>
-          write.body.kind === 'status' &&
-          write.body.tone === 'error' &&
-          write.body.text.includes('Selected model is at capacity')
-      )
-    ).toBe(true)
+    const failures = rows.filter(
+      (write) => write.body.kind === 'status' && write.body.tone === 'error'
+    )
+    expect(failures.map((write) => write.body)).toMatchObject([
+      {
+        kind: 'status',
+        failure: { kind: 'providerUnavailable' },
+        providerFrame: {
+          payload: {
+            head: expect.stringContaining('Selected model is at capacity')
+          }
+        }
+      }
+    ])
   })
 
   it('leaves the next turn to write its own record after a failed compaction', () => {

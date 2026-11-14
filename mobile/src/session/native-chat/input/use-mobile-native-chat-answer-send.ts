@@ -4,26 +4,26 @@ import {
   buildCodexAskAnswerKeys,
   formatAskAnswer,
   hasAskAnswer
-} from '../../../../../src/shared/native-chat/input/native-chat-ask-answer'
-import type { AskAnswerSelection } from '../../../../../src/shared/native-chat/input/native-chat-ask-answer'
-import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
+} from '../../../../../src/shared/native-chat/input/questions/native-chat-ask-answer'
+import type { AskAnswerSelection } from '../../../../../src/shared/native-chat/input/questions/native-chat-ask-answer'
+import type { AskPrompt } from '../../../../../src/shared/native-chat/input/questions/native-chat-ask-types'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
-import { MOBILE_NATIVE_CHAT_QUESTION_STEP_MS } from './mobile-native-chat-answer-stepping'
+import { NATIVE_CHAT_QUESTION_STEP_MS } from '../../../../../src/shared/native-chat/input/questions/native-chat-answer-stepping'
 import {
   openMobileNativeChatSendBudget,
   sendMobileNativeChatMessageWithOutcome
-} from '../mobile-native-chat-send'
-import { healMobileNativeChatStaleInput } from '../mobile-native-chat-stale-input'
+} from '../composer/mobile-native-chat-send'
+import { healMobileNativeChatStaleInput } from '../composer/mobile-native-chat-stale-input'
 import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
-} from '../mobile-native-chat-terminal-write-lock'
+} from '../composer/mobile-native-chat-terminal-write-lock'
 import {
   nativeChatAskRequiresTerminal,
   resolveNativeChatTranscriptAgent,
   shouldStepNativeChatAskAnswer
 } from '../../../../../src/shared/native-chat/native-chat-agent-support'
-import { buildNativeChatPasteBytes } from '../../../../../src/shared/native-chat/input/native-chat-paste-bytes'
+import { buildNativeChatPasteBytes } from '../../../../../src/shared/native-chat/input/composer/native-chat-paste-bytes'
 
 export type MobileNativeChatAnswerSend = {
   answerAsk: (prompt: AskPrompt, selections: AskAnswerSelection[]) => Promise<boolean>
@@ -229,11 +229,11 @@ export function useMobileNativeChatAnswerSend(args: {
             return fail()
           }
           if (index < groups.length - 1) {
-            if (!(await wait(MOBILE_NATIVE_CHAT_QUESTION_STEP_MS))) {
+            if (!(await wait(NATIVE_CHAT_QUESTION_STEP_MS))) {
               return false
             }
             // Pacing is deliberate, not transport latency — don't charge it to the budget.
-            deadline += MOBILE_NATIVE_CHAT_QUESTION_STEP_MS
+            deadline += NATIVE_CHAT_QUESTION_STEP_MS
           }
         }
         return groups.length > 0 && writeTurnsRef.current.get(handle) === turn

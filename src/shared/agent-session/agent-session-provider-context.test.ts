@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { activeProviderContext } from './agent-session-provider-context'
-import { agentSessionRecordFixture } from './lifecycle/agent-session-record.test-fixture'
+import { agentSessionRecordFixture } from './lifecycle/records/agent-session-record.test-fixture'
 import { isPersistedAgentSessionRecord } from './lifecycle/agent-session-record'
-import { encodeAgentSessionRecord } from './lifecycle/agent-session-record-stored-form'
+import { encodeAgentSessionRecord } from './lifecycle/records/agent-session-record-stored-form'
 
 const boundary = { operationId: 'clear-operation', afterFence: 3, clearedAt: 5000 }
 

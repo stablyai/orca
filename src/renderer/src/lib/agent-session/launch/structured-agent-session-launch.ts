@@ -1,23 +1,21 @@
 import { useAppStore } from '@/store/index'
 import { reserveStructuredLaunchSlot } from './structured-agent-session-launch-surface'
-import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import {
-  abandonStructuredAgentSessionLaunchIntent,
   createStructuredAgentSessionLaunchIntent,
   retryStructuredAgentSessionLaunchIntent
-} from '@/lib/launch-structured-agent-session'
+} from '@/lib/agent-session/launch/structured-agent-session-launch-intent'
 import {
   discardStructuredAgentSessionChatSends,
-  stageStructuredLaunchPrompt,
-  type StructuredPromptDeliveryResult
-} from '@/lib/agent-session/launch/structured-agent-session-launch-prompt'
+  stageStructuredLaunchPrompt
+} from '@/lib/agent-session/launch/structured-agent-session-staged-prompt'
+
 import {
   launchAndReconcile,
-  reconcileUnknownLaunch,
-  type StructuredAgentLaunchReceipt
+  reconcileUnknownLaunch
 } from '@/lib/agent-session/launch/structured-agent-session-launch-recovery'
+import type { StructuredAgentLaunchReceipt } from '@/lib/agent-session/launch/structured-agent-session-launch-recovery'
 import {
+  type StructuredPromptDeliveryResult,
   addStructuredLaunchCaller,
   launchPromptText,
   joinLaunchDelivery,
@@ -27,14 +25,18 @@ import {
   type StructuredAgentLaunchOptions,
   type StructuredLaunchCaller
 } from '@/lib/agent-session/launch/structured-agent-session-launch-callers'
+
 import {
   getStructuredAgentSessionLaunchLifecycle,
+  structuredLaunchIdentity
+} from './structured-agent-session-launch-registry'
+import {
   getStructuredLaunchStateBySessionId,
   notifyStructuredLaunchListeners,
   setStructuredLaunchState,
-  structuredLaunchIdentity,
   type StructuredLaunchState
-} from './structured-agent-session-launch-registry'
+} from './structured-agent-session-launch-state-store'
+
 import { markStructuredAgentSessionLaunchCancelled } from './structured-agent-session-launch-cancel'
 import { restorePersistedStructuredLaunchState } from './structured-agent-session-launch-reload'
 import { getJoinableStructuredLaunchState } from './structured-agent-session-launch-holders'
@@ -55,6 +57,10 @@ import {
 } from './structured-agent-session-launch-options'
 import { releaseStructuredLaunchSource } from './structured-agent-session-launch-source-handoff'
 import * as launchDraft from './structured-agent-session-launch-draft'
+import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import { abandonStructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-abandon'
+import { adoptPairedHostSeed } from './structured-agent-session-launch-host-seed'
 
 type StructuredLaunchStateResult = {
   state: StructuredLaunchState
@@ -70,28 +76,6 @@ export type StructuredAgentLaunchResult = {
   promptDeliveryResult?: Promise<StructuredPromptDeliveryResult>
   isVisibilityUnknown: () => boolean
   releaseCallerAfterUnknownOutcome: () => boolean
-}
-
-/** Each attempt's probe names the seed the paired server's create will use; the picker shows it. */
-function adoptPairedHostSeed(
-  state: StructuredLaunchState,
-  seedOptions: StructuredLaunchState['selection']['seed']
-): void {
-  // The support answer is a fresh seed; continuation baseline belongs to actual host create.
-  if (state.intent.params.resumeFrom || state.intent.params.forkFrom) {
-    seedOptions = undefined
-  }
-  const { seedPending, ...selection } = state.selection
-  if (!seedPending && JSON.stringify(seedOptions) === JSON.stringify(state.intent.seedOptions)) {
-    return
-  }
-  if (seedOptions) {
-    state.intent.seedOptions = seedOptions
-  } else {
-    delete state.intent.seedOptions
-  }
-  state.selection = { ...selection, seed: seedOptions }
-  notifyStructuredLaunchListeners()
 }
 
 function resetStructuredLaunchCallers(
@@ -133,7 +117,7 @@ function restartStructuredLaunchState(
   )
   trackLaunchSettlement(state, state.promise)
   trackStructuredLaunchConfirmationDeadline(state, state.promise)
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchListeners(state.intent.sessionId)
 }
 
 function joinStructuredLaunchState(
@@ -230,7 +214,7 @@ function structuredAgentLaunchState(
     promise: Promise.resolve({ sessionId: '', fence: 0 }),
     visibilityUnknown: false,
     cancelled: false,
-    onVisibilityChanged: notifyStructuredLaunchListeners,
+    onVisibilityChanged: () => notifyStructuredLaunchListeners(intent.sessionId),
     callers,
     selection: initialStructuredLaunchSelection(intent)
   }
@@ -250,7 +234,7 @@ function structuredAgentLaunchState(
   })
   trackStructuredLaunchPromptOutcome(state, caller)
   setStructuredLaunchState(state)
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchListeners(state.intent.sessionId)
   trackLaunchSettlement(state, state.promise)
   return { state, caller, joined: false }
 }
@@ -268,7 +252,7 @@ export function cancelStructuredAgentLaunch(worktreeId: string, sessionId: strin
   )
   discardStructuredAgentSessionChatSends(state.intent.sessionId)
   abandonStructuredAgentSessionLaunchIntent(state.intent)
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchListeners(sessionId)
   return true
 }
 

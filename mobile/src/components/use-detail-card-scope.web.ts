@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from 'react'
 import type { DetailCardScopeOptions } from './use-detail-card-scope'
-import { isTextField } from '../platform/keyboard-persisting-taps'
+import { isTextField } from '../platform/keyboard/keyboard-persisting-taps'
 
 function element(value: unknown): HTMLElement | null {
   return value instanceof HTMLElement ? value : null
@@ -47,7 +47,7 @@ export function useDetailCardScope({
       record.restore = false
       dismiss()
     }
-    const click = (event: MouseEvent) => {
+    const press = (event: MouseEvent) => {
       if (!inside(event.target) && !headerBack(event.target)) {
         outside()
       }
@@ -120,7 +120,9 @@ export function useDetailCardScope({
       }
     }
     const capture = { capture: true, signal: listeners.signal }
-    document.addEventListener('click', click, capture)
+    // Why: the terminal claims its touches, so iOS sends no click for a tap there.
+    document.addEventListener('pointerdown', press, capture)
+    document.addEventListener('click', press, capture)
     document.addEventListener('keydown', key, capture)
     document.addEventListener('keyup', key, capture)
     document.addEventListener('keydown', isolate, { signal: listeners.signal })

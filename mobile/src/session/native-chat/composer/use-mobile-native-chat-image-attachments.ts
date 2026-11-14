@@ -10,7 +10,7 @@ import {
 import { useCallback, useMemo } from 'react'
 import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../../transport/connection/connection-state'
-import type { MobileImageSource } from '../../../platform/media-picker-contract'
+import type { MobileImageSource } from '../../../platform/media-picking/media-picker-contract'
 import type { PendingNativeChatImage } from './mobile-native-chat-image-attachment'
 import type { MobilePastedImages } from './mobile-native-chat-composer-paste'
 import {
@@ -21,20 +21,20 @@ import {
   openMobileNativeChatSendBudget,
   type MobileNativeChatSendIntent,
   type MobileNativeChatSendOutcome
-} from '../mobile-native-chat-send'
+} from './mobile-native-chat-send'
 import {
   clearMobileNativeChatInputStale,
   healMobileNativeChatStaleInput,
   isMobileNativeChatInputStale,
   markMobileNativeChatInputStale
-} from '../mobile-native-chat-stale-input'
+} from './mobile-native-chat-stale-input'
 import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
-} from '../mobile-native-chat-terminal-write-lock'
+} from './mobile-native-chat-terminal-write-lock'
 import { useMobileNativeChatImageUpload } from './use-mobile-native-chat-image-upload'
 import type { PendingNativeChatFile } from './mobile-native-chat-file-attachment'
-import type { StructuredMobileSendAttachment } from '../../use-mobile-structured-send-with-outcome'
+import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
 
 type CurrentRef<T> = { readonly current: T }
 type ShowToast = (message: string, durationMs?: number) => void

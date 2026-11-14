@@ -62,4 +62,30 @@ describe('RuntimeOrchestrationFederation relay', () => {
     expect(acknowledged()).toBeGreaterThan(0)
     federation.stopRelay()
   })
+
+  it('pulls an idle remote worker twice a minute once nothing has asked for its relay for 30 s', async () => {
+    const { runtime, remoteCall } = createIdleSyncHarness()
+    const db = runtime.getOrchestrationDb()
+    const active = db.getFederatedDispatch('dispatch_remote')
+    db.listActiveFederatedDispatches = () => (active ? [active] : [])
+    const transport: OrchestrationEnvironmentTransport = {
+      resolve: () => {
+        throw new Error('unused')
+      },
+      call: () => {
+        throw new Error('unused')
+      }
+    }
+    const federation = new RuntimeOrchestrationFederation(runtime, transport)
+    const pulls = () =>
+      remoteCall.mock.calls.filter(([, method]) => method === 'orchestration.federationPull').length
+
+    federation.ensureRelay()
+    await vi.advanceTimersByTimeAsync(5 * 60_000)
+    const before = pulls()
+    await vi.advanceTimersByTimeAsync(60_000)
+
+    expect(pulls() - before).toBe(2)
+    federation.stopRelay()
+  })
 })

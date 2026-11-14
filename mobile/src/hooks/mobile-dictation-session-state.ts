@@ -2,6 +2,7 @@
 import { Buffer } from 'buffer'
 
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { DictationTerm } from '../../../src/shared/dictation-dictionary'
 import type { MobileDictationMeter } from './mobile-dictation-meter'
 
 export type DictationStatus = 'idle' | 'starting' | 'recording' | 'processing' | 'error'
@@ -20,6 +21,10 @@ export type UseMobileDictationOptions = {
   onError?: (error: Error, outcome: { kept: boolean }) => void
   // The computer's filler switch, for text the phone recognizes itself; unknown means on.
   removeFillerWords?: boolean
+  // The computer's dictionary for this worktree, for text the phone recognizes itself.
+  dictationTerms?: readonly DictationTerm[]
+  // Lets the computer pick this worktree's repo terms for text it recognizes.
+  worktreeId?: string
   // The host's cloud upload is full; the dictation stops and inserts what was kept.
   onAudioLimitReached?: () => void
 }
@@ -36,7 +41,8 @@ export type UseMobileDictationResult = {
   failure: MobileDictationKeptFailure | null
   // Null until recording starts on an engine.
   engine: MobileDictationEngineShown | null
-  start: () => Promise<void>
+  // client: the starting session's client, when one hook serves several sessions.
+  start: (client?: RpcClient | null) => Promise<void>
   stop: () => Promise<void>
   retry: () => Promise<void>
   cancel: () => Promise<void>

@@ -1,6 +1,6 @@
 import { Text, View } from 'react-native'
 import { MessageSquareMore } from 'lucide-react-native'
-import type { NativeChatAskRowSubject } from '../../../../../src/shared/native-chat/input/native-chat-ask-row'
+import type { NativeChatAskRowSubject } from '../../../../../src/shared/native-chat/input/questions/native-chat-ask-row'
 import { nativeChatAskRowCopy } from './native-chat-ask-row-copy'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
@@ -8,7 +8,7 @@ import { colors, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { scaledType } from './mobile-native-chat-message-styles'
-import { MobileNativeChatQuestionText } from '../MobileNativeChatQuestionText'
+import { MobileNativeChatQuestionText } from './MobileNativeChatQuestionText'
 
 const ICON_SIZE = 15
 

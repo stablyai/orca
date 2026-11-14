@@ -1,3 +1,4 @@
+import { copyBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import type {
   BrowserSlice,
   BrowserSliceGet,
@@ -16,7 +17,7 @@ import { destroyWorkspaceWebviews } from './browser-webview-cleanup'
 import { omitRecordKeys } from '../../worktrees/teardown/record-key-omission'
 import { landOnEmptiedWorktree } from '../../tabs/tabs-empty-workspace'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
-import { forgetDesktopCreatedServerTab } from '@/lib/desktop-created-server-tabs'
+import { forgetDesktopCreatedServerTab } from '@/store/workspace-layout/frames/desktop-created-server-tabs'
 import {
   closeBrowserTabThroughLayoutOwner,
   withDrawnBrowserPages,
@@ -80,9 +81,10 @@ export function createBrowserCloseActions(
                 const handle = s.remoteBrowserPageHandlesByPageId[page.id]
                 return handle ? [{ worktreeId: page.worktreeId, handle }] : []
               })
-          const nextRemoteBrowserPageHandlesByPageId = {
-            ...s.remoteBrowserPageHandlesByPageId
-          }
+          const nextRemoteBrowserPageHandlesByPageId = copyBrowserPageHandles(
+            s.remoteBrowserPageHandlesByPageId,
+            closedPages.map((page) => page.id)
+          )
           for (const page of closedPages) {
             delete nextRemoteBrowserPageHandlesByPageId[page.id]
           }

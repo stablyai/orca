@@ -1,4 +1,4 @@
-import { parseGitHubIssueOrPRLink } from './github-links'
+import { parseGitHubIssueOrPRLink } from '../github/repositories/links'
 
 export type GitHubWorkItemIdentity = {
   type: 'issue' | 'pr'

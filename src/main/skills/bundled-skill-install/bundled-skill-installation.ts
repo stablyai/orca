@@ -38,7 +38,7 @@ export async function installBundledSkills(
 
 /** Silent path: updates only hash-verified Orca copies of `names`, planned under the same locks. */
 export async function autoUpdateInstalledBundledSkills(
-  input: BundledSkillServiceInput & { names: readonly string[] }
+  input: BundledSkillServiceInput & { names: readonly string[]; recordOnly?: boolean }
 ): Promise<BundledSkillInstallResult> {
   return autoUpdateBundledSkills({ ...withDefaults(input), names: input.names })
 }

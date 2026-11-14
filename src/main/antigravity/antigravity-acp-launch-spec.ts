@@ -4,12 +4,12 @@ import { join } from 'node:path'
 import { homedir } from 'node:os'
 import type { AcpLaunchSpec } from '../acp/launch/acp-launch-contract'
 import { ANTIGRAVITY_ACP_DIALECT } from '../acp/acp-dialects/antigravity-dialect'
-import type { StructuredAgentSessionHistory } from '../native-chat/structured-agent-cli-conversations'
+import type { StructuredAgentSessionHistory } from '../native-chat/conversation-adoption/structured-agent-cli-conversations'
 import {
   AntigravityChatAuthConfigSchema,
   resolveAntigravityChatAuthConfig
 } from '../../shared/antigravity-chat-auth-config'
-import { agentSessionSignInFor } from '../../shared/agent-session/lifecycle/agent-session-sign-in'
+import { agentSessionSetupFor } from '../../shared/agent-session/lifecycle/launch/agent-session-setup-commands'
 import { ANTIGRAVITY_ACP_COMMAND, ANTIGRAVITY_ACP_RUNTIME } from './antigravity-acp-runtime'
 import { ANTIGRAVITY_ACP_ENV, scrubAntigravityAcpEnvironment } from './antigravity-acp-environment'
 import {
@@ -21,6 +21,7 @@ import {
 import { ANTIGRAVITY_CHAT_HOME_FOLDER } from './antigravity-chat-home'
 import { assertAntigravityChatAuthPublished } from './antigravity-chat-auth-publication'
 import { readAntigravitySignInLine } from './antigravity-sign-in-url'
+import { antigravityChatRulesMeta } from './antigravity-chat-rules'
 import {
   AGY_SKIP_PERMISSIONS_FLAG,
   ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION,
@@ -49,7 +50,7 @@ const ANTIGRAVITY_MANAGED_LAUNCH_SPEC = {
   env: ANTIGRAVITY_ACP_ENV,
   scrubEnvironment: scrubAntigravityAcpEnvironment,
   dialect: ANTIGRAVITY_ACP_DIALECT,
-  loginCommand: agentSessionSignInFor('antigravity')?.loginCommand ?? [],
+  loginCommand: agentSessionSetupFor('antigravity')?.loginCommand ?? [],
   authMethod: ({ antigravityChatAuth }) =>
     resolveAntigravityChatAuthConfig(antigravityChatAuth).method,
   authMethodUnavailableMessage:
@@ -74,6 +75,7 @@ const ANTIGRAVITY_MANAGED_LAUNCH_SPEC = {
   privateTempDirectory: true,
   // `session/load` replays the whole conversation, which the chat already holds.
   resumePreference: 'resume',
+  resolveSessionMeta: antigravityChatRulesMeta,
   launchGate: ANTIGRAVITY_LAUNCH_GATE
 } satisfies AcpLaunchSpec
 
@@ -111,6 +113,7 @@ const ANTIGRAVITY_HOST_LAUNCH_SPEC: AcpLaunchSpec = {
   minimumVersions: [ANTIGRAVITY_HOST_ACP_MINIMUM_VERSION],
   installDirectories: ({ homePath }) => [join(homePath, '.local', 'bin')],
   managedRuntime: undefined,
+  resolveSessionMeta: undefined,
   // agy has no full-access mode, so its launch flag grants it; plan approvals still reach the chat.
   permissionModeConfig: {
     values: { ask: 'default', 'accept-edits': 'accept-edits', 'full-access': 'default' },

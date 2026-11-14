@@ -36,8 +36,8 @@ import {
 } from '../../../../../shared/native-chat/native-chat-interrupted-continue'
 import type { NativeChatOrcaStopView } from '@/components/native-chat/messages/notices/native-chat-orca-stop-context'
 import { useStructuredAgentSessionHostLabel } from '@/components/native-chat/pane/ownership/use-structured-agent-session-host-label'
-import { useNativeChatTargetRestartResuming } from '@/components/native-chat-restart-runtimes'
-import { useNativeChatLaunchResumePending } from '@/components/native-chat-launch-resume-decision'
+import { useNativeChatTargetRestartResuming } from '@/components/native-chat-recovery/offers/native-chat-restart-runtimes'
+import { useNativeChatLaunchResumePending } from '@/components/native-chat-recovery/offers/native-chat-launch-resume-decision'
 import type { NativeChatComposerNoticeContent } from '@/components/native-chat/composer/controls/native-chat-composer-notice'
 import type { NativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/native-chat-structured-composer-transport'
 
@@ -93,11 +93,8 @@ export function useNativeChatInterruptedContinuation(input: {
     () => latestNativeChatUsageLimitCut(input.journalItems, input.submissions),
     [input.journalItems, input.submissions]
   )
-  const usageLimitAutoContinue = useNativeChatUsageLimitAutoContinue(
-    target,
-    sessionId,
-    usageLimitCut
-  )
+  const { auto: usageLimitAutoContinue, continueAt: usageLimitContinueAt } =
+    useNativeChatUsageLimitAutoContinue(target, sessionId, usageLimitCut)
   const [attempt, setAttempt] = useState(NO_NATIVE_CHAT_INTERRUPTED_CONTINUE_ATTEMPT)
   const [usageFailure, setUsageFailure] = useState<string | null>(null)
   if (usageFailure !== null && input.pending.some((entry) => entry.phase === 'sending')) {
@@ -193,6 +190,7 @@ export function useNativeChatInterruptedContinuation(input: {
       continueNow,
       usageLimitTurnItemId,
       usageLimitAutoContinue,
+      usageLimitContinueAt,
       onUsageLimitHandOffStarted:
         usageLimitAutoContinue?.kind === 'scheduled' ? usageLimitAutoContinue.cancel : undefined,
       usageLimitContinueDisabled: usageCapability === 'unknown',
@@ -207,6 +205,7 @@ export function useNativeChatInterruptedContinuation(input: {
       continueNow,
       usageLimitTurnItemId,
       usageLimitAutoContinue,
+      usageLimitContinueAt,
       usageCapability,
       continueUsageLimit
     ]

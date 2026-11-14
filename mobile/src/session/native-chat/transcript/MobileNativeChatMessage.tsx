@@ -1,7 +1,7 @@
 import { memo, useCallback, useContext, useLayoutEffect, useMemo, useRef } from 'react'
 import { Text, View } from 'react-native'
 import { INLINE_TEXT_SELECTION } from '../../../components/inline-text-selection'
-import { MobileNativeChatLongPressContent as Content } from '../MobileNativeChatLongPressContent'
+import { MobileNativeChatLongPressContent as Content } from './MobileNativeChatLongPressContent'
 import { splitNativeChatBlocks } from '../../../../../src/shared/native-chat/tools/native-chat-tool-fold'
 import { nativeChatToolRunViewedImages } from '../../../../../src/shared/native-chat/tools/native-chat-tool-viewed-images'
 import { selectActiveToolCall } from '../../../../../src/shared/native-chat/tools/native-chat-tool-activity'
@@ -9,15 +9,15 @@ import * as Chat from '../../../../../src/shared/native-chat/native-chat-types'
 import {
   isRenderableSubagentGroup,
   withoutSubagentGroupTwins
-} from '../../../../../src/shared/native-chat/transcript/native-chat-subagent-summary'
-import { deriveNativeChatRowContent } from '../../../../../src/shared/native-chat/transcript/native-chat-row-content'
+} from '../../../../../src/shared/native-chat/transcript/subagents/native-chat-subagent-summary'
+import { deriveNativeChatRowContent } from '../../../../../src/shared/native-chat/transcript/row-content/native-chat-row-content'
 import {
   MobileNativeChatGroupedThought,
   MobileNativeChatReasoningRow
 } from './MobileNativeChatReasoningRow'
-import { mobileNativeChatRowId } from '../../mobile-native-chat-reading-place'
+import { mobileNativeChatRowId } from './mobile-native-chat-reading-place'
 import { nativeChatWorkRunEntries } from '../../../../../src/shared/native-chat/native-chat-work-run'
-import { nativeChatReasoningDisclosureKey } from '../../../../../src/shared/native-chat/transcript/native-chat-reasoning-row'
+import { nativeChatReasoningDisclosureKey } from '../../../../../src/shared/native-chat/transcript/row-content/native-chat-reasoning-row'
 import { MobileNativeChatTurnStatus } from './MobileNativeChatTurnStatus'
 import { MobileNativeChatNoticeRow } from './MobileNativeChatNoticeRow'
 import { MobileNativeChatPullRequestEventLine } from './MobileNativeChatPullRequestEventLine'
@@ -27,21 +27,21 @@ import { MobileNativeChatUserMessageFold } from './MobileNativeChatUserMessageFo
 import { TextAttachmentActions } from './MobileNativeChatTextAttachmentActions'
 import { MobileNativeChatMessageMeta } from './MobileNativeChatMessageMeta'
 import { MobileNativeChatAwaitingInputRow } from './MobileNativeChatAwaitingInputRow'
-import { MobileNativeChatResolutionReceipt } from '../MobileNativeChatResolutionReceipt'
+import { MobileNativeChatResolutionReceipt } from './MobileNativeChatResolutionReceipt'
 import {
   nativeChatAskRunBlocks,
   nativeChatAskRunSubject
-} from '../../../../../src/shared/native-chat/input/native-chat-ask-row'
+} from '../../../../../src/shared/native-chat/input/questions/native-chat-ask-row'
 import type { NativeChatResolvedPrompt } from '../../../../../src/shared/native-chat/native-chat-resolution-receipt'
 import { MobileNativeChatSubagentGroup } from './MobileNativeChatSubagentGroup'
 import { MobileNativeChatBackgroundTaskRun } from './MobileNativeChatBackgroundTaskRun'
-import { withoutBackgroundTaskRows } from '../../../../../src/shared/native-chat/input/native-chat-background-task-row'
+import { withoutBackgroundTaskRows } from '../../../../../src/shared/native-chat/input/task-lists/native-chat-background-task-row'
 import { ToolRun } from './MobileNativeChatToolRun'
-import type { NativeChatTurnStatus } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-status'
+import type { NativeChatTurnStatus } from '../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-status'
 import { styles } from './mobile-native-chat-message-styles'
 import { MobileNativeChatAgentMessageCard } from './MobileNativeChatAgentMessageCard'
 import { MobileNativeChatVisualContext } from '../visual/mobile-native-chat-visual-context'
-import { useMobileNativeChatFullMessage } from '../MobileNativeChatFullContent'
+import { useMobileNativeChatFullMessage } from './MobileNativeChatFullContent'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { MobileNativeChatPacedProse } from './MobileNativeChatPacedProse'

@@ -7,7 +7,7 @@ import {
   nativeChatCommandOutputParentId,
   surfaceNativeChatCommandOutputs
 } from '../../../../../src/shared/native-chat/tools/native-chat-command-output'
-import { isMobileNativeChatSource } from '../mobile-native-chat-render-data'
+import { isMobileNativeChatSource } from './mobile-native-chat-render-data'
 
 export type MobileNativeChatProjectionSource = {
   raw: NativeChatMessage

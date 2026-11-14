@@ -3,9 +3,9 @@ import { useHostTerminalLayoutReconciliation } from '../layout/reconciliation/us
 import { useTerminalPaneActivityIsolation } from '../layout/isolation/use-terminal-pane-activity-isolation'
 import { useRef } from 'react'
 import { useTerminalPaneProcessExitActions } from './use-terminal-pane-process-exit-actions'
-import type { TerminalPaneCloseController } from '../layout/close/use-terminal-pane-close-actions'
+import type { TerminalPaneMountedController } from '../mounting/use-terminal-pane-lifecycle-stage'
 
-export function useTerminalPaneReconciliation(controller: TerminalPaneCloseController) {
+export function useTerminalPaneReconciliation(controller: TerminalPaneMountedController) {
   const {
     activityIsolationSnapshotRef,
     closeTerminalLinkActions,
@@ -16,6 +16,7 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
     isRendererVisible,
     isolatedPaneKey,
     managerRef,
+    terminalManager,
     paneCount,
     paneLayoutRevision,
     paneTransportsRef,
@@ -36,6 +37,7 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
   })
 
   useHostTerminalLayoutReconciliation({
+    terminalManager,
     executeClosePane,
     hostRetiredLeafIdsRef,
     isActive,
@@ -49,6 +51,7 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
   })
 
   useTerminalPaneActivityIsolation({
+    terminalManager,
     activityIsolationSnapshotRef,
     containerRef,
     isolatedPaneKey,

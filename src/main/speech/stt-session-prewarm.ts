@@ -30,14 +30,9 @@ export async function prewarmSttModel(
     return
   }
   const manifest = getCatalogModel(modelId)
-  // Desktop and phone starts pass no hotwords, so this matches the recognizer they would load.
   const config: SttRecognizerConfig | null =
     manifest && isLocalSpeechModel(manifest)
-      ? {
-          modelId,
-          hotwordsFilePath: undefined,
-          language: engineDictationLanguage(manifest, language)
-        }
+      ? { modelId, language: engineDictationLanguage(manifest, language) }
       : null
   if (config && state.engine && sameSttRecognizerConfig(state.engine, config)) {
     return
@@ -45,7 +40,7 @@ export async function prewarmSttModel(
   const ready =
     manifest !== undefined &&
     config !== null &&
-    hasLocalSpeechRecognizer(manifest) &&
+    hasLocalSpeechRecognizer() &&
     (await state.modelManager.getModelState(modelId)).status === 'ready'
   for (;;) {
     // Never disturb a dictation; whatever it loaded is what the user is using.

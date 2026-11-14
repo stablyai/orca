@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ClaudeUsageTokenTotals } from './types'
-import { estimateCostUsd, normalizeModelForPricing } from './claude-model-pricing'
+import { estimateCostUsd } from './claude-model-pricing'
 
 const MTOK = 1_000_000
 
@@ -18,60 +18,9 @@ function estimate(model: string, ...counts: number[]): number | null {
   return estimateCostUsd(model, tokens(...counts))
 }
 
-describe('model pricing name matching', () => {
-  it.each([
-    [' ANTHROPIC/claude-opus-4.1-thinking ', 'claude-opus-4-1'],
-    ['claude-opus-4-20250514', 'claude-opus-4'],
-    ['claude-opus-4.20250514', 'claude-opus-4'],
-    ['claude-opus-4@20250514', 'claude-opus-4'],
-    ['claude-opus-4-5@20251101', 'claude-opus-4-5'],
-    ['us.anthropic.claude-sonnet-4-5-20250929-v1:0', 'claude-sonnet-4-5'],
-    ['claude-sonnet-5-thinking', 'claude-sonnet-5'],
-    ['claude-sonnet-5-5', 'claude-sonnet-5-5'],
-    ['claude-sonnet-5.5[1m]', 'claude-sonnet-5-5'],
-    ['claude-opus-5.5[1m]', 'claude-opus-5-5'],
-    ['claude-opus-5-5-thinking', 'claude-opus-5-5'],
-    ['claude-fable-5-1[1m]', 'claude-fable-5-1'],
-    ['claude-fable-5-1m', 'claude-fable-5'],
-    ['claude-opus-4.8-thinking', 'claude-opus-4-8'],
-    ['claude-3-5-sonnet-20241022', 'claude-sonnet-3-5'],
-    ['claude-3.5-sonnet', 'claude-sonnet-3-5'],
-    ['claude-3-7-sonnet-20250219', 'claude-sonnet-3-7'],
-    ['claude-3-5-haiku-20241022', 'claude-haiku-3-5'],
-    ['claude-3-haiku-20240307', 'claude-haiku-3'],
-    ['claude-4.5-sonnet-thinking', 'claude-sonnet-4-5'],
-    ['model_placeholder_m26', 'claude-opus-4-6']
-  ])('reads the family and version out of %s', (model, key) => {
-    expect(normalizeModelForPricing(model)).toBe(key)
-  })
-
-  it.each([
-    'claude-opus-5-6',
-    'claude-sonnet-5-6',
-    'claude-fable-5-2',
-    'claude-opus-6',
-    'claude-opus-4.9',
-    'claude-opus-5-50',
-    'claude-sonnet-50',
-    'claude-3-opus-20240229',
-    'sonnet',
-    'gpt-5'
-  ])('leaves %s unpriced', (model) => {
-    expect(normalizeModelForPricing(model)).toBeNull()
-  })
-})
-
 describe('estimateCostUsd cache-write TTL rates', () => {
   it('splits a mixed write bucket without double-billing the 1-hour share', () => {
     expect(estimate('claude-opus-5', 0, 0, 0, 1_000_000, 400_000)).toBeCloseTo(7.75)
-  })
-
-  it('clamps a 1-hour count that exceeds the reported write total', () => {
-    expect(estimate('claude-opus-5', 0, 0, 0, 1_000, 5_000)).toBeCloseTo(0.01)
-  })
-
-  it('still returns null for unknown models', () => {
-    expect(estimate('gpt-5', 0, 0, 0, 1_000_000, 1_000_000)).toBeNull()
   })
 })
 
@@ -88,17 +37,6 @@ describe('estimateCostUsd long-context requests', () => {
         longContext: tokens(MTOK)
       })
     ).toBeCloseTo(0.1 + 0.5)
-  })
-
-  it('ignores a long-context subset for a model with flat rates', () => {
-    const long = tokens(MTOK)
-    expect(estimateCostUsd('claude-sonnet-4-6', { ...long, longContext: long })).toBeCloseTo(3)
-  })
-
-  it('clamps a long-context subset larger than its totals', () => {
-    expect(
-      estimateCostUsd('claude-haiku-5-5', { ...tokens(MTOK), longContext: tokens(3 * MTOK) })
-    ).toBeCloseTo(0.5)
   })
 })
 

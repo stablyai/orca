@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, vi } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
+import { computeAgentSessionPayloadFingerprint } from '../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import '../../../../../shared/protocol-version'
 import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import type { StructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-host'
@@ -21,7 +21,7 @@ import { OrchestrationDb } from '../../db/orchestration-db'
 
 import { RpcDispatcher } from '../../../rpc/dispatcher'
 import { ORCHESTRATION_METHODS } from '../../../rpc/methods/orchestration/orchestration'
-import { idOf, isRecord, resultOf } from '../../../rpc/orchestration-session-caller-test-fixture'
+import { idOf, isRecord, resultOf } from '../../../rpc/orchestration/callers/session.test-fixture'
 import {
   ensureStructuredAgentSessionHost,
   stopStructuredAgentSessionRuntime
@@ -84,7 +84,7 @@ export async function call(
 }
 
 export async function openChat(sessionId: string): Promise<FakeConnection> {
-  const attached = await host.attach({ callerKey: 'test-surface' }, attachParams(sessionId))
+  const attached = await host.attach({ callerKey: 'test-surface' }, attachParams(sessionId, root))
   expect(attached, JSON.stringify(attached)).toMatchObject({ ok: true })
   await host.setSessionTabVisibility(sessionId, true)
   threadBySession.set(sessionId, codex.connections.at(-1)!.threadId!)

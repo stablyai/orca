@@ -6,7 +6,7 @@ import { paneKeyOf } from '../../../../../shared/workspace-layout/workspace-layo
 import type {
   PublishedPane,
   PublishedWorkspaceLayout
-} from '../../../../../shared/workspace-layout/workspace-layout-published'
+} from '../../../../../shared/workspace-layout/published-layout/workspace-layout-published'
 
 type PaneStarts = AppState['terminalPaneStartsByPaneKey']
 type ShownByKey = Map<string, ReadonlySet<string>>

@@ -9,12 +9,12 @@ import {
   type DroppedPathConsumer,
   type PreparedDroppedPaths
 } from '../../../shared/file-import/native-file-drop-preparation'
-import { prepareOsFileDropPaths } from '../lib/os-file-drop-preparation'
-import { hasOsFileDragTypes } from '../lib/os-file-drop-cancellation-guard'
+import { prepareOsFileDropPaths } from '../lib/files/drop/os-file-drop-preparation'
+import { hasOsFileDragTypes } from '../lib/files/drop/os-file-drop-cancellation-guard'
 import {
   holdBrowserAttachmentFiles,
   releaseBrowserAttachmentFiles
-} from '../lib/browser-attachment-files'
+} from '../lib/files/drop/browser-attachment-files'
 
 export type OsFileDropSequence = { deliveryTail: Promise<void> }
 

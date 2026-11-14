@@ -45,18 +45,16 @@ import {
   getLinkedItemDisplayName,
   getSmartNameSelection as getFolderSmartNameSelection
 } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
+import { getLinearLinkedWorkItemBranchName } from '@/lib/work-items/linear/linear-linked-work-item'
 import {
-  buildLinearIssueLinkedWorkItem,
-  getLinearLinkedWorkItemBranchName
-} from '@/lib/linear-linked-work-item'
-import { getLinearIssueWorkspaceName } from '../../../../shared/workspace-name'
-import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
-import {
+  getLinearIssueWorkspaceName,
   getLinkedWorkItemSuggestedName,
-  getLinkedWorkItemWorkspaceName,
-  type LinkedWorkItemSummary
-} from '@/lib/new-workspace'
-import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/smart-workspace-name-field-model'
+  getLinkedWorkItemWorkspaceName
+} from '../../../../shared/workspace-name'
+import { getJiraIssueKeyCasingSeedOptions } from '@/lib/work-items/jira/jira-issue-key-casing'
+import '@/lib/workspace/creation/new-workspace'
+import type { LinkedWorkItemSummary } from '@/lib/workspace/creation/new-workspace'
+import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/name-field/smart-workspace-name-field-model'
 import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 
 export function useIssueSourceActions(input: IssueSourceActionsInput) {
@@ -121,7 +119,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       setLinkedGitLabIssue(null)
       setLinkedGitLabMR(null)
       setLinkedTaskSourceContext(null)
-      const linkedLinearIssue = buildLinearIssueLinkedWorkItem(issue)
+      const linkedLinearIssue = toLinearLinkedWorkItem(issue)
       setLinkedWorkItem(linkedLinearIssue)
       const suggestedName = getLinearIssueWorkspaceName(issue)
       // Treat typed Linear identifiers as lookup text too, rather than user-owned names.

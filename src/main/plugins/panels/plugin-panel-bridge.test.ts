@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { PluginCapabilityKind } from '../../../shared/plugins/capabilities/plugin-capabilities'
-import type { ValidDiscoveredPlugin } from '../plugin-discovery'
-import type { PluginWorkerHandle } from '../workers/plugin-host-process'
+import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
+import type { PluginWorkerHandle } from '../workers/parent-process/plugin-host-process-types'
 import { PluginPanelBridge } from './plugin-panel-bridge'
 
 const caller = { id: 'panel-a', surface: 'panel' as const, contributionId: 'todos' }
 
-function setup(options: { main?: string; capabilities?: PluginCapabilityKind[] } = {}) {
+function setup(
+  options: { main?: string; capabilities?: PluginCapabilityKind[]; approved?: boolean } = {}
+) {
   const worker = {
     requestFromPanel: vi.fn(async (_request?: { signal?: AbortSignal }): Promise<unknown> => ({
       ok: true
@@ -19,7 +21,7 @@ function setup(options: { main?: string; capabilities?: PluginCapabilityKind[] }
     findApprovedPlugin: (key) =>
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the bridge reads only pluginKey and manifest.main.
       key === plugin.pluginKey ? (plugin as never as ValidDiscoveredPlugin) : null,
-    grantedCapabilities: () => options.capabilities ?? [],
+    grantedCapabilities: () => (options.approved === false ? null : (options.capabilities ?? [])),
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the bridge calls only requestFromPanel and notifyDataChanged.
     ensureWorker: async () => worker as never as PluginWorkerHandle,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: as above.

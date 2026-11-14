@@ -14,7 +14,7 @@ import {
 import { usableAgentChildLabel } from './agent-status/presentation/agent-child-row-name'
 import { agentChildRunStateFor } from './agent-status/child-work/agent-status-child-work-display'
 import type { AgentChildWorkView } from './agent-status/child-work/agent-status-child-work-view'
-import { formatNativeChatDuration } from './native-chat/transcript/native-chat-turn-status'
+import { formatNativeChatDuration } from './native-chat/transcript/turns/native-chat-turn-status'
 
 type TaskKind = AgentSessionBackgroundTask['kind']
 type RunState = AgentSessionBackgroundTaskRunState

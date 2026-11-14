@@ -4,17 +4,17 @@ import {
 } from '../../../../../src/shared/native-chat/input/native-chat-ask'
 import { useMemo } from 'react'
 import type { AgentStatusEntry } from '../../../../../src/shared/agent-status/contracts/agent-status-types'
-import type { AskPrompt } from '../../../../../src/shared/native-chat/input/native-chat-ask-types'
+import type { AskPrompt } from '../../../../../src/shared/native-chat/input/questions/native-chat-ask-types'
 import {
   resolveNativeChatInteractivePromptCard,
   type ChatApproval
 } from '../../../../../src/shared/native-chat/input/native-chat-interactive-prompt'
-import { nativeChatPromptWaitStartedAt } from '../../../../../src/shared/native-chat/input/native-chat-prompt-dismiss-key'
+import { nativeChatPromptWaitStartedAt } from '../../../../../src/shared/native-chat/input/approvals/native-chat-prompt-dismiss-key'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
 import {
   useMobileStructuredAsyncQuestion,
   type MobileStructuredAskSession
-} from '../../use-mobile-structured-async-question'
+} from './use-mobile-structured-async-question'
 
 export type MobileNativeChatPrompts = {
   /** A terminal chat's approval; a structured chat's journal prompts are its own cards. */

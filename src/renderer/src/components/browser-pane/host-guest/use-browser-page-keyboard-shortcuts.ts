@@ -7,7 +7,7 @@ import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-t
 import type { GrabIntent } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { isEditableKeyboardTarget } from './browser-keyboard'
 import { useBrowserPageWebviewShortcuts } from './use-browser-page-webview-shortcuts'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 
 export function useBrowserPageKeyboardShortcuts({
   browserTabId,

@@ -5,12 +5,12 @@ import { Package, RotateCcw } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import type { SkillSourceKind } from '../../../../../../shared/skills'
 import { FilenameFirstPath } from '@/components/file-path-cursor-tooltip'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
-import type { ComposerAutocomplete } from '../../../../../../shared/native-chat/input/native-chat-composer-autocomplete'
-import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/native-chat-picker-items'
+import type { ComposerAutocomplete } from '../../../../../../shared/native-chat/input/composer/native-chat-composer-autocomplete'
+import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
 import type { NativeChatMentionFiles } from './use-native-chat-mention-files'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { localizeSlashCommandDescription } from './native-chat-slash-command-descriptions'
@@ -203,7 +203,7 @@ function PickerOption({
           <span className="min-w-0 truncate font-mono text-chat-code font-medium">
             {item.token}
           </span>
-          {item.kind === 'command' && item.argumentHint ? (
+          {item.argumentHint ? (
             <span className="min-w-0 truncate font-mono text-2xs text-muted-foreground">
               {item.argumentHint}
             </span>

@@ -7,8 +7,8 @@ import {
   peekStoredChatTranscript,
   readStoredChatTranscript,
   storedTabChatTranscriptIdentity
-} from './native-chat/mobile-native-chat-transcript-store'
-import type { MobileSessionKeyboardStateModel } from '../terminal/session/use-mobile-session-keyboard-state'
+} from './native-chat/transcript/mobile-native-chat-transcript-store'
+import type { MobileSessionKeyboardStateModel } from '../terminal/session/input-controls/use-mobile-session-keyboard-state'
 
 /**
  * A relaunch opens on the chat the stored strip had active when the phone holds a copy of it, until the

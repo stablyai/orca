@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, vi, type Mock } from 'vitest'
 import type { AgentJournalSubmission } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
@@ -55,6 +55,12 @@ const openFailures = new Map<string, (error: Error) => void>()
 const endings = new Map<string, AgentSessionStartFailure>()
 
 const openGates = new Map<string, (model: string) => void>()
+let hostNow = NOW
+
+/** Moves the host's wall clock, as a sleep does, without running any timer. */
+export function advanceHostWallClock(ms: number): void {
+  hostNow += ms
+}
 
 export async function proveOpen(model = 'default'): Promise<void> {
   const generation = `generation-${acquire.mock.calls.length}`
@@ -143,7 +149,7 @@ async function startHost({ startupLimits, supportsGoals }: StartupHostOptions = 
     mintSpawnToken: () => `spawn-${acquire.mock.calls.length}`,
     idleSweep: { intervalMs: 60 * 60_000, idleMs: () => 60 * 60_000 },
     ...(startupLimits === undefined ? {} : { startupLimits }),
-    now: () => NOW
+    now: () => hostNow
   })
   const handleEvent = host.handleAdapterEvent.bind(host)
   host.handleAdapterEvent = async (event) => {
@@ -186,6 +192,7 @@ export function registerStartupAttemptHostTests(): void {
     })
     root = await mkdtemp(join(tmpdir(), 'orca-startup-attempt-'))
     resetHostTestOperationIds()
+    hostNow = NOW
     providerStarted.mockReset()
     recordLiveListing.mockReset()
     openFailures.clear()

@@ -5,7 +5,9 @@ import {
   DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY,
   DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY,
-  isDesktopBrowserBridgeMethod
+  DESKTOP_BROWSER_BRIDGE_TAB_ANNOTATIONS_CAPABILITY,
+  isDesktopBrowserBridgeMethod,
+  isHostReachableDocument
 } from '../../../shared/desktop-browser-bridge-protocol'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
@@ -22,10 +24,7 @@ import {
   DesktopBrowserBridgeManager,
   type DesktopBrowserBridgeCandidate
 } from '../../browser/desktop-browser-bridge/desktop-browser-bridge-manager'
-import {
-  executeDesktopBrowserBridgeRequest,
-  isHostReachableDocument
-} from '../../browser/desktop-browser-bridge/desktop-browser-bridge-executor'
+import { executeDesktopBrowserBridgeRequest } from '../../browser/desktop-browser-bridge/desktop-browser-bridge-executor'
 import { rendererResolveRemoteCliWorkspace } from '../../browser/desktop-browser-bridge/desktop-browser-bridge-renderer-scope'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
 import { RpcDispatcher } from '../../runtime/rpc/dispatcher'
@@ -33,8 +32,8 @@ import { ALL_RPC_METHODS } from '../../runtime/rpc/methods/rpc-method-registry'
 import { ensureOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
 import { getSshTargetRegistryStore } from '../../ssh/targets/ssh-target-registry'
 import type { SshConnectionManager } from '../../ssh/connection/ssh-connection-manager'
-import { getRuntimeEnvironmentStatus } from '../runtime-environments/runtime-environment-status-probe'
-import { isRuntimeEnvironmentManuallyDisconnected } from '../runtime-environments/runtime-environment-manual-disconnect'
+import { getRuntimeEnvironmentStatus } from '../runtime-environments/status/runtime-environment-status-probe'
+import { isRuntimeEnvironmentManuallyDisconnected } from '../runtime-environments/connectivity/runtime-environment-manual-disconnect'
 import {
   isDesktopBrowserBridgeHostStopped,
   setDesktopBrowserBridgeControl
@@ -153,7 +152,8 @@ export function installDesktopBrowserBridge(options: {
             ...ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
             DESKTOP_BROWSER_BRIDGE_RUNTIME_CAPABILITY,
             DESKTOP_BROWSER_BRIDGE_CANCEL_CAPABILITY,
-            DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY
+            DESKTOP_BROWSER_BRIDGE_EXPECT_URL_CAPABILITY,
+            DESKTOP_BROWSER_BRIDGE_TAB_ANNOTATIONS_CAPABILITY
           ]
         }
       )

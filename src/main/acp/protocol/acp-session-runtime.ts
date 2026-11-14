@@ -43,7 +43,7 @@ const withMeta = (meta: Meta): { _meta?: Meta } => (meta ? { _meta: meta } : {})
 
 /** Stream-level protocol seam; production agents use createAcpAgentConnection. */
 export class AcpSessionRuntime {
-  private readonly peer: AcpJsonRpcPeer
+  protected readonly peer: AcpJsonRpcPeer
   private readonly listeners = new Set<(event: AcpSessionEvent) => void>()
   private initialized?: Promise<InitializeResponse>
   private starting?: Promise<AcpSessionStarted>

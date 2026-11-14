@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
-import { nativeChatTurnMembership } from '../../../../../src/shared/native-chat/transcript/native-chat-turn-membership'
+import { nativeChatTurnMembership } from '../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-membership'
 import { nativeChatTurnDiffs } from '../../../../../src/shared/native-chat/tools/native-chat-turn-diffs'
 
 export function useMobileNativeChatTurnDiffs(

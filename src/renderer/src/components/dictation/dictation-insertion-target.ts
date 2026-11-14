@@ -3,11 +3,13 @@ import { getUtf8ChunkEndIndex } from '../../../../shared/utf8-byte-limits'
 import {
   TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES,
   TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES,
-  TEXT_CONTROL_PASTE_MAX_BYTES,
+  TEXT_CONTROL_PASTE_MAX_BYTES
+} from '@/lib/text-input/paste/text-control-paste-model'
+import {
   measureTextControlPasteByteLength,
   measureTextControlPasteByteLengthWithYield,
   pasteTextIntoTextControl
-} from '@/lib/text-control-paste'
+} from '@/lib/text-input/paste/text-control-paste'
 import {
   DICTATION_TEXT_BLOCK_SELECTOR,
   dictationSeparators

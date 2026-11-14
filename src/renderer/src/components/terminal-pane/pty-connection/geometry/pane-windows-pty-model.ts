@@ -4,7 +4,7 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   buildWindowsPtyCompatibilityOptions,
   isLocalPtyOwner
-} from '@/lib/pane-manager/windows-pty-compatibility'
+} from '@/lib/pane-manager/terminal-protocol/windows-pty-compatibility'
 import {
   remotePtyOwnerMachinePlatform,
   resolveRemotePtyOwnerMachine,

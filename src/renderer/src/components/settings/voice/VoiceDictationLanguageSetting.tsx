@@ -9,6 +9,7 @@ import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translat
 import { languageDisplayName, uiCollator } from '@/i18n/ui-intl-formatters'
 import { SettingsRow } from '../form-controls/SettingsFormControls'
 import { SettingsSearchableSelect } from '../form-controls/SettingsSearchableSelect'
+import { VOICE_SETTING_ANCHORS } from './voice-pane-search'
 
 // Intl formatter caches key on option identity, so this must be a module constant.
 const NAME_COLLATOR: Intl.CollatorOptions = { sensitivity: 'base' }
@@ -21,11 +22,18 @@ function describeLanguageSetting(
   intlLocale?: string
 ): string {
   if (model && modelIgnoresLanguage) {
-    return t(
-      'components.settings.voice.dictationLanguage.ignored',
-      '{{model}} only transcribes the languages it was built for, so it ignores this setting.',
-      { model: model.label }
-    )
+    // Models without a language hint either know one language or work out which of theirs you speak.
+    return model.languages.length === 1
+      ? t(
+          'components.settings.voice.dictationLanguage.alwaysUses',
+          'The language you speak. {{model}} always uses {{language}}.',
+          { model: model.label, language: languageDisplayName(model.languages[0], intlLocale) }
+        )
+      : t(
+          'components.settings.voice.dictationLanguage.detectsItself',
+          'The language you speak. {{model}} detects it by itself.',
+          { model: model.label }
+        )
   }
   if (model && language !== DICTATION_LANGUAGE_AUTO && !engineDictationLanguage(model, language)) {
     return t(
@@ -35,8 +43,8 @@ function describeLanguageSetting(
     )
   }
   return t(
-    'components.settings.voice.dictationLanguage.description',
-    'The language you speak. Auto-detect lets the model work it out each time.'
+    'components.settings.voice.dictationLanguage.rated',
+    'The language you speak. Quality is rated for it.'
   )
 }
 
@@ -44,32 +52,38 @@ type VoiceDictationLanguageSettingProps = {
   voiceSettings: VoiceSettings
   selectedModel: SpeechModelManifest | undefined
   onUpdateVoiceSettings: (updates: Partial<VoiceSettings>) => void
+  className?: string
 }
 
 export function VoiceDictationLanguageSetting({
   voiceSettings,
   selectedModel,
-  onUpdateVoiceSettings
+  onUpdateVoiceSettings,
+  className
 }: VoiceDictationLanguageSettingProps): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
   const modelIgnoresLanguage = selectedModel !== undefined && !selectedModel.dictationLanguages
   const language = voiceSettings.dictationLanguage || DICTATION_LANGUAGE_AUTO
-  const choices = selectedModel?.dictationLanguages ?? DICTATION_LANGUAGES
-  // Keep a choice the model lacks selectable rather than showing a blank trigger.
-  const codes =
-    language === DICTATION_LANGUAGE_AUTO || choices.includes(language)
-      ? choices
-      : [language, ...choices]
+  // Every language, even ones this model lacks: the choice also rates the other models.
+  const codes = [
+    ...new Set([
+      ...(language === DICTATION_LANGUAGE_AUTO ? [] : [language]),
+      ...DICTATION_LANGUAGES,
+      ...(selectedModel?.dictationLanguages ?? [])
+    ])
+  ]
   const collator = uiCollator(NAME_COLLATOR, intlLocale)
   const options = codes
     .map((code) => ({ code, name: languageDisplayName(code, intlLocale) }))
     .sort((a, b) => collator.compare(a.name, b.name))
-  const label = t('components.settings.voice.dictationLanguage.title', 'Dictation Language')
+  const label = t('components.settings.voice.language.title', 'Language')
   const autoLabel = t('components.settings.voice.dictationLanguage.auto', 'Auto-detect')
 
   return (
     <SettingsRow
+      id={VOICE_SETTING_ANCHORS.language}
+      className={className}
       label={label}
       description={describeLanguageSetting(
         selectedModel,
@@ -81,6 +95,7 @@ export function VoiceDictationLanguageSetting({
       control={
         <SettingsSearchableSelect
           ariaLabel={label}
+          fitValue
           value={language}
           groups={[
             {
@@ -99,7 +114,6 @@ export function VoiceDictationLanguageSetting({
             'auto.components.settings.SettingsSearchableSelect.searchLanguages',
             'Search languages…'
           )}
-          disabled={!voiceSettings.enabled || modelIgnoresLanguage}
           onValueChange={(value) => onUpdateVoiceSettings({ dictationLanguage: value })}
         />
       }

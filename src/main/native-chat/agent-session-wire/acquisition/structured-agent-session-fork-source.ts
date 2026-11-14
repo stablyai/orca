@@ -8,8 +8,11 @@ import {
   agentSessionExecutionLocationsEqual,
   type AgentSessionExecutionLocation
 } from '../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { isAgentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
+import type { StructuredAgentId } from '../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
+import {
+  isAgentSessionRefusalError,
+  type AgentSessionRefusalError
+} from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { isAgentSessionForkSourceAdmissionRefusal } from '../../../../shared/agent-session/failures/agent-session-definitive-refusal'
 import {
   AGENT_SESSION_FAILURE_COPY,
@@ -17,8 +20,9 @@ import {
 } from '../../../../shared/agent-session/failures/agent-session-failure-copy'
 import {
   AgentConversationCopyError,
+  AgentConversationCopyStartError,
   agentConversationCopyRefusal
-} from '../../agent-conversation-copy-error'
+} from '../../conversation-adoption/agent-conversation-copy-error'
 import { acpAgentName } from '../../../acp/session/acp-structured-agent-definitions'
 import { structuredAgentRuntimeMetadata } from '../../../runtime/agent-session/installation/structured-agent-runtime-metadata'
 import type { StructuredAgentSessionHost } from '../host/structured-agent-session-host'
@@ -70,7 +74,7 @@ async function resolveForkSource(input: StructuredAgentSessionForkInput) {
     const capability = host.deps.agents.capabilities(input.agent)?.fork
     const { head, pendingClear } = activeProviderContext(record)
     const fail = (
-      message: string,
+      message: string | AgentSessionRefusalError,
       reason:
         | 'conversationCleared'
         | 'rewindUnconfirmed'
@@ -79,16 +83,16 @@ async function resolveForkSource(input: StructuredAgentSessionForkInput) {
         | 'providerRejected'
         | 'launchFolderMissing' = 'savedConversationMissing'
     ): never => {
-      const refusal = agentConversationCopyRefusal(
-        'agent_session_operation_invalid',
-        { reason },
-        message
-      )
-      if (original) {
+      const refusal =
+        typeof message === 'string'
+          ? agentConversationCopyRefusal('agent_session_operation_invalid', { reason }, message)
+          : message
+      const failureReason = refusal.refusal.details?.reason
+      if (original && !(refusal.cause instanceof AgentConversationCopyStartError)) {
         const piece =
-          reason === 'savedConversationMissing'
+          failureReason === 'savedConversationMissing'
             ? 'forkOriginalMissing'
-            : reason === 'turnActive'
+            : failureReason === 'turnActive'
               ? 'forkOriginalLatestOnly'
               : 'forkOriginalUnavailable'
         const title = record.conversationName?.trim()

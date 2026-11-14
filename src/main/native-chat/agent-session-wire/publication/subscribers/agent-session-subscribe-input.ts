@@ -10,6 +10,8 @@ export type AgentSessionSubscribeInput = {
   id: string
   sessionId: string
   emit: (event: AgentSessionSubscribeEvent) => void
+  /** Ends the subscriber's stream once the host stops delivering to it, so the client resubscribes. */
+  end?: (cause: unknown) => void
   cursor?: AgentJournalCursor
   /** Bound each frame to the phone bridge’s limit; RPC enables this for every phone. */
   boundedFrames?: boolean
@@ -26,6 +28,7 @@ export type AgentSessionSubscriberEmit = (event: AgentSessionSubscribeEvent) => 
 export type Subscriber = {
   id: string
   emit: AgentSessionSubscriberEmit
+  end?: (cause: unknown) => void
   cursor: AgentJournalCursor
   fence: number
   forkMarkerView?: string

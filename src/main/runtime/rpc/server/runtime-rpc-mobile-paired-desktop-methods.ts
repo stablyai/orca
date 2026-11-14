@@ -3,7 +3,9 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-s
 /** Phone methods the relaying Mac always answers itself, even when the call names a server. */
 export const PAIRED_DESKTOP_METHODS = [
   // Device and pairing concerns of the phone's own pairing.
+  'mobileWeb.bundle.brotliRange',
   'mobileWeb.bundle.chunk',
+  'mobileWeb.bundle.localeCatalog',
   'mobileWeb.bundle.manifest',
   'mobileWeb.bundle.range',
   'notifications.getMissedSince',
@@ -95,12 +97,6 @@ export const PAIRED_DESKTOP_METHODS = [
   'github.project.updatePullRequestBySlug',
   'github.project.viewTable',
   'github.project.workItemDetailsBySlug',
-  // Desktop main federates session history across hosts itself (executionHostId / scope params).
-  'aiVault.listSessions',
-  'aiVault.prepareSessionResume',
-  'aiVault.resolveSessionTitles',
-  'aiVault.searchSessions',
-  'aiVault.searchStatus',
   // User preferences live on the Mac; the phone's settings screens mirror the desktop's.
   'settings.get',
   'settings.getTerminalQuickCommands',

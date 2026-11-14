@@ -63,15 +63,11 @@ vi.mock('lucide-react-native', () => ({
   Wrench: 'Wrench',
   Terminal: 'Terminal'
 }))
-const proseRenders = vi.hoisted(() => ({ count: 0 }))
-export function proseRenderCount() {
-  return proseRenders.count
-}
+
 vi.mock('../../../components/MobileMarkdown', async () => {
   const React = await import('react')
   return {
     MobileMarkdown: (props: ComponentProps<typeof MobileMarkdownComponent>) => {
-      proseRenders.count++
       return React.createElement('MobileMarkdown', props)
     }
   }

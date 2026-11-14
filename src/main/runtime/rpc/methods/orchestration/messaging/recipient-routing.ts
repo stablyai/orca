@@ -15,6 +15,7 @@ import { readAgentSessionRecordStore } from '../../../../orchestration/addressin
 import {
   readSessionRecipient,
   refuseUndeliverableSessionRecipient,
+  type TerminalAgentRecipient,
   type SessionRecipientRefusal
 } from './session-recipient'
 import { reportFollowUpAction } from '../../../../orchestration/workers/reports/report-follow-up-action'
@@ -164,6 +165,7 @@ export function resolveReplyRecipient(params: {
   db: OrchestrationDb
   originalFrom: string
   originalRunId: string | undefined
+  terminalRecipient: TerminalAgentRecipient
 }): { to: string; runId: string | undefined; warning?: SendRecipientWarning } {
   const { runtime, db, originalFrom, originalRunId } = params
   const unchanged = { to: originalFrom, runId: originalRunId }
@@ -184,7 +186,8 @@ export function resolveReplyRecipient(params: {
     runtime,
     db,
     handle: originalFrom,
-    senderRunId: originalRunId
+    senderRunId: originalRunId,
+    terminalRecipient: params.terminalRecipient
   })
   if (!recipient.ok) {
     throw new OrchestrationError(recipient.code, `${recipient.message} No reply was sent.`, {
@@ -205,6 +208,8 @@ export type SendRecipientWarning = {
     | 'recipient_unreachable'
     | 'recipient_ambiguous'
     | 'recipient_run_mismatch'
+    | 'recipient_delivery_held'
+    | 'recipient_delivery_unknown'
   recipient: string
   message: string
 }
@@ -234,10 +239,14 @@ export function resolveBareOrchestrationRecipient(params: {
   senderRunId?: string
   explicitRunId?: string
   legacyAdoptedMailboxOwner?: LegacyAdoptedMailboxOwner | null
+  /** `resolveTerminalAgentRecipient(handle)`, awaited first; omit only where the handle cannot
+   *  name a terminal agent. */
+  terminalRecipient?: TerminalAgentRecipient
 }): BareRecipientResolution {
   const { runtime, db } = params
   const sessionStore = readAgentSessionRecordStore()
-  const session = readSessionRecipient(params.handle, sessionStore)
+  const terminal = params.terminalRecipient ?? null
+  const session = readSessionRecipient(params.handle, sessionStore, terminal)
   if (session && 'code' in session) {
     return refused(params.handle, session)
   }
@@ -261,7 +270,7 @@ export function resolveBareOrchestrationRecipient(params: {
     ownerRunIds: () => db.getRunMailboxOwnerIdsForHandle(handle, params.legacyAdoptedMailboxOwner),
     fallback: () => {
       if (session) {
-        const refusal = refuseUndeliverableSessionRecipient(session, sessionStore, db)
+        const refusal = refuseUndeliverableSessionRecipient(session, sessionStore, db, terminal)
         return refusal
           ? refused(params.handle, refusal)
           : { ok: true, to: handle, runId: params.senderRunId }

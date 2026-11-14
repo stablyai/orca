@@ -21,8 +21,8 @@ export function ShortcutTerminalPolicyControl({
     <SearchableSetting
       id="terminal-shortcut-policy"
       title={t(
-        'auto.components.settings.ShortcutTerminalPolicyControl.c3a554288e',
-        'Shortcuts in Terminal'
+        'auto.components.settings.ShortcutTerminalPolicyControl.7d81bebd89',
+        'Shortcuts in terminal'
       )}
       description={t(
         'auto.components.settings.ShortcutTerminalPolicyControl.0f55c6f15c',
@@ -33,8 +33,8 @@ export function ShortcutTerminalPolicyControl({
     >
       <SettingsRow
         label={t(
-          'auto.components.settings.ShortcutTerminalPolicyControl.c3a554288e',
-          'Shortcuts in Terminal'
+          'auto.components.settings.ShortcutTerminalPolicyControl.7d81bebd89',
+          'Shortcuts in terminal'
         )}
         description={t(
           'auto.components.settings.ShortcutTerminalPolicyControl.c43c7ff5f9',

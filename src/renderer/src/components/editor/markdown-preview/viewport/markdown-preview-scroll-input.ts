@@ -1,4 +1,4 @@
-import { isEditableTarget } from '@/lib/editable-target'
+import { isEditableTarget } from '@/lib/text-input/focus/editable-target'
 
 export function listenMarkdownPreviewScrollInput(
   container: HTMLDivElement,

@@ -6,7 +6,7 @@ import {
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { useRepoMap } from '@/store/repos/use-repository-catalog'
 import { useWorktreeMap } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import {
@@ -14,7 +14,7 @@ import {
   automationRepoForRow,
   automationWorktreeForRow,
   type AutomationListRow
-} from './automation-list-row-identity'
+} from './listing/automation-list-row-identity'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo

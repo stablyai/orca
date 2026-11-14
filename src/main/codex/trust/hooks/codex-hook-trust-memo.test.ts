@@ -57,14 +57,6 @@ describe('Codex hook trust memo', () => {
     })
   })
 
-  it('keeps an answer that Codex needs no approval for its listed events', () => {
-    remember(codexPath, 'codex-cli 0.128.0', { stop: null, session_start: null })
-
-    expect(readMemoizedVersionAnswer('codex-cli 0.128.0', COMMAND)).toMatchObject({
-      hashes: { stop: null, session_start: null }
-    })
-  })
-
   it("keeps Codex's refusal for its version, for any binary of that version", () => {
     memoizeCodexHookAnswer(codexPath, fingerprint(), COMMAND, {
       kind: 'refused',

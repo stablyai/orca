@@ -5,15 +5,16 @@ import {
   DictationSetup,
   DictationStart,
   OpenAiSpeechKeySet,
-  SpeechModelAction
-} from '../../../../../shared/rpc-contract/speech-params'
+  SpeechModelAction,
+  SpeechSetupRead
+} from '../../../../../shared/rpc-contract/speech/speech-params'
 
 export const SPEECH_METHODS = [
   defineMethod({
     name: 'speech.models.list',
     permission: 'workspace',
-    params: null,
-    handler: async (_params, { runtime }) => runtime.listMobileSpeechModels()
+    params: SpeechSetupRead,
+    handler: async (params, { runtime }) => runtime.listMobileSpeechModels(params?.worktreeId)
   }),
   defineMethod({
     name: 'speech.models.download',

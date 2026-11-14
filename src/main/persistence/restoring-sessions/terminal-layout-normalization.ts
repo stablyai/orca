@@ -7,13 +7,7 @@ import { isTerminalLeafId } from '../../../shared/workspace-layout/stable-pane-i
 import {
   collectLayoutLeafIdsInOrder,
   firstLayoutLeafId
-} from '../../../shared/workspace-layout/terminal-pane-tree'
-
-export {
-  collectLayoutLeafIdsInOrder,
-  firstLayoutLeafId,
-  layoutContainsLeafId
-} from '../../../shared/workspace-layout/terminal-pane-tree'
+} from '../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 
 export type LayoutLeafNormalization = {
   snapshot: TerminalLayoutSnapshot

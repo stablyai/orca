@@ -5,7 +5,7 @@ import {
 } from '../../../src/shared/agent-status/presentation/agent-child-row-lead-trail'
 import type { AgentChildRowModel } from '../../../src/shared/agent-status/presentation/agent-child-row-model'
 import type { AgentChildDisplayState } from '../../../src/shared/agent-status/child-work/agent-status-child-work-display'
-import { sayMobileBackgroundTask } from '../session/mobile-background-task-copy'
+import { sayMobileBackgroundTask } from '../session/native-chat/input/mobile-background-task-copy'
 import { translate } from '../i18n/mobile-i18n'
 import { agentStateLabel } from './agent-row-display'
 
@@ -60,5 +60,5 @@ export function mobileAgentChildRowText(
       : row.detail?.kind === 'role' && (!row.detail.agentType || row.detail.agentType === 'unknown')
         ? translate('session.agentChildRow.agent', 'Agent')
         : agentChildRowDetailText(row, now, mobileAgentChildRowCopy())
-  return agentChildRowLeadTrail(row, mobileAgentChildRowName(row), detail)
+  return agentChildRowLeadTrail(mobileAgentChildRowName(row), detail)
 }

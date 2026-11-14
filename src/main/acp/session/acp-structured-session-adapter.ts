@@ -25,7 +25,11 @@ import {
 import { readAcpLiveOptions } from '../options/acp-live-options'
 import { acpControlsSettled, writeAcpSessionOption } from '../options/acp-session-option-write'
 import { acpOptionWriteBound, withAcpModelFallback } from '../turns/acp-model-command'
-import { stopAcpChildren, acpChildStopCapabilities } from '../turns/acp-structured-child-stop'
+import {
+  acpChildStopCapabilities,
+  closeAcpChildSessions,
+  stopAcpChildren
+} from '../turns/acp-structured-child-stop'
 import * as childState from './children/acp-structured-child'
 import { AcpStructuredChildren } from './children/acp-structured-child-lifecycle'
 import { AcpConversationCopies } from '../conversation-copy/acp-conversation-copies'
@@ -155,6 +159,11 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
     if (input.turnId !== undefined && liveTurnId !== null && input.turnId !== liveTurnId) {
       return { cancelled: false, refusal: { turnNotRunning: true } }
     }
+    // A chat Stop ends subagents too, even when the root turn ended just before it arrived;
+    // a permission card's Cancel stops only its own turn.
+    if (!input.prompt) {
+      closeAcpChildSessions(session)
+    }
     if (!stop.acpStopHasWork(session)) {
       return { cancelled: false, refusal: { turnNotRunning: true } }
     }
@@ -211,6 +220,14 @@ export class AcpStructuredSessionAdapter implements SessionAdapter {
   holdsDispatch = (sessionId: string): boolean => {
     const session = this.children.sessions.get(sessionId)
     return session ? childState.isAcpReadySession(session) && session.turns.running : false
+  }
+
+  confirmIdle: NonNullable<SessionAdapter['confirmIdle']> = (sessionId) => {
+    const session = this.children.sessions.get(sessionId)
+    // OMP cannot prove that a finished parent has no background work or pending results.
+    return session?.spec.agent === 'omp' && !session.connection.exited
+      ? Promise.resolve('unknown')
+      : undefined
   }
 
   holdsLiveProviderProcess = (sessionId: string, generation: string): boolean => {

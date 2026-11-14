@@ -8,7 +8,7 @@ import {
 import { HOST_TEST_NOW } from '../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { RpcContext } from '../../core'
-import { LOCAL_CLI_RPC_CALLER } from '../../rpc-caller-identity'
+import { LOCAL_CLI_RPC_CALLER } from '../../callers/rpc-caller-identity'
 import {
   methodNamed,
   rpcContext,

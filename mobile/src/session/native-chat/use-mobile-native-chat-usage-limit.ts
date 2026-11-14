@@ -5,6 +5,7 @@ import {
 } from '../../../../src/shared/native-chat/native-chat-usage-limit-cut'
 import {
   nativeChatUsageLimitAutoContinueKind,
+  usageLimitContinueAtForCut,
   usageLimitContinueStateForCut,
   type NativeChatUsageLimitAutoContinueKind
 } from '../../../../src/shared/native-chat/native-chat-usage-limit-auto-continue'
@@ -12,20 +13,22 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../src/shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionOptionsResult } from '../../../../src/shared/agent-session/options/agent-session-options-result'
+import type { AgentSessionOptionsResult } from '../../../../src/shared/agent-session/options/protocol/agent-session-options-result'
 import type { AgentJournalCursor } from '../../../../src/shared/agent-session/journal/agent-session-journal-identity'
-import { mobileStructuredSessionStatusFeed } from '../mobile-structured-session-status-feed'
-import { callAgentSession } from '../mobile-structured-agent-session-rpc'
+import { mobileStructuredSessionStatusFeed } from './agent-session/mobile-structured-session-status-feed'
+import { callAgentSession } from './agent-session/mobile-structured-agent-session-rpc'
 import type {
   MobileStructuredAgentSessionArgs,
   StructuredMobileSession
-} from '../mobile-structured-agent-session-contract'
+} from './agent-session/mobile-structured-agent-session-contract'
 
 /** The usage-limit row the person can act on: the latest cut while nothing is running or sending. */
 export type MobileNativeChatUsageLimit = {
   turnItemId: string
   /** The host's automatic continue for this cut; null when it has none to show. */
   autoContinue: Exclude<NativeChatUsageLimitAutoContinueKind, 'off'> | null
+  /** The reset the host's automatic continue waits for; later than the cut's while the account is spent. */
+  continueAt: number | undefined
   /** Null on a host that refuses "Don't continue" from a phone. */
   cancel: (() => void) | null
   cancelling: boolean
@@ -84,6 +87,14 @@ export function useMobileNativeChatUsageLimit(
     [feed, sessionId, cut]
   )
   const state = useSyncExternalStore(subscribe, readState, readState)
+  const readContinueAt = useCallback(
+    () =>
+      feed && sessionId
+        ? usageLimitContinueAtForCut(feed.getSnapshot().get(sessionId)?.usageLimitContinue, cut)
+        : undefined,
+    [feed, sessionId, cut]
+  )
+  const continueAt = useSyncExternalStore(subscribe, readContinueAt, readContinueAt)
   // The host publishes no state for a cut it can't schedule and republishes one that ages out.
   const kind = nativeChatUsageLimitAutoContinueKind(state, { schedulable: true, localHost: false })
   // The chat's last options answer predates the cut (the host says no until one exists), so ask
@@ -161,6 +172,7 @@ export function useMobileNativeChatUsageLimit(
     return {
       turnItemId,
       autoContinue: kind === 'off' ? null : kind,
+      continueAt,
       cancel: kind === 'scheduled' && canCancel ? cancel : null,
       cancelling,
       cancelFailed: failedCut === turnItemId && kind === 'scheduled',
@@ -169,5 +181,16 @@ export function useMobileNativeChatUsageLimit(
         switchAnswer?.turnItemId === turnItemId ? switchAnswer.canSwitch : live ? undefined : false,
       continueNow
     }
-  }, [turnItemId, kind, canCancel, cancel, cancelling, failedCut, switchAnswer, live, continueNow])
+  }, [
+    turnItemId,
+    kind,
+    continueAt,
+    canCancel,
+    cancel,
+    cancelling,
+    failedCut,
+    switchAnswer,
+    live,
+    continueNow
+  ])
 }

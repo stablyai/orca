@@ -1,6 +1,5 @@
 import { join } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
-import { speechEngineForModelFiles, type SpeechEngine } from '../../shared/speech-model-engine'
 import {
   hasSpeechEnginePackage,
   SPEECH_RECOGNIZER_DIR_ENV
@@ -23,10 +22,7 @@ function speechNodeModulesDirCandidates(): string[] {
       ? process.resourcesPath
       : undefined
   if (getAppEnvironment().isPackaged() && resourcesPath) {
-    return [
-      join(resourcesPath, 'node_modules'),
-      join(resourcesPath, 'app.asar.unpacked', 'node_modules')
-    ]
+    return [join(resourcesPath, 'node_modules')]
   }
   if (getAppEnvironment().isPackaged()) {
     // orcad: only the installed app's copy, which `orca serve` names.
@@ -36,23 +32,18 @@ function speechNodeModulesDirCandidates(): string[] {
   return require.resolve.paths('transcribe-cpp') ?? []
 }
 
-// The app's engine packages don't change while it runs, so each engine is looked up once.
-const speechEngineModulesDirs = new Map<SpeechEngine, string | null>()
+// The app's engine packages don't change while it runs, so they are looked up once.
+let speechEngineModulesDir: string | null | undefined
 
-/** The node_modules directory holding `engine`, or null on hosts without it. */
-export function getSpeechEngineModulesDir(engine: SpeechEngine): string | null {
-  let dir = speechEngineModulesDirs.get(engine)
-  if (dir === undefined) {
-    dir =
-      speechNodeModulesDirCandidates().find((candidate) =>
-        hasSpeechEnginePackage(candidate, engine)
-      ) ?? null
-    speechEngineModulesDirs.set(engine, dir)
+/** The node_modules directory holding transcribe-cpp, or null on hosts without it. */
+export function getSpeechEngineModulesDir(): string | null {
+  if (speechEngineModulesDir === undefined) {
+    speechEngineModulesDir =
+      speechNodeModulesDirCandidates().find((dir) => hasSpeechEnginePackage(dir)) ?? null
   }
-  return dir
+  return speechEngineModulesDir
 }
 
-/** Whether this host ships the engine `model` runs on. */
-export function hasLocalSpeechRecognizer(model: { files?: readonly string[] }): boolean {
-  return getSpeechEngineModulesDir(speechEngineForModelFiles(model.files ?? [])) !== null
+export function hasLocalSpeechRecognizer(): boolean {
+  return getSpeechEngineModulesDir() !== null
 }

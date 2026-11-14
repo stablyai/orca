@@ -5,7 +5,7 @@ import type {
 import {
   QueuedMessageEditHoldParams,
   QueuedMessageUpdateParams
-} from '../../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
+} from '../../../../../shared/rpc-contract/structured-agent-session/structured-agent-session-queued-edit-params'
 import {
   createQueuedMessageTestRig,
   QUEUED_RIG_CALLER
@@ -66,7 +66,7 @@ export const createMobileCommandMenuHostFixture: MobileCommandMenuHostFixtureMod
     const { tmpdir } = await import('node:os')
     const { join } = await import('node:path')
     const { ClaudeAtRestCommandCatalog } =
-      await import('../../../../claude/claude-at-rest-commands')
+      await import('../../../../claude/command-catalog/claude-at-rest-commands')
     const { commandDiscoveryRig, OMP, DISCOVERY_SESSION } =
       await import('../../../../acp/discovery/testing/acp-command-discovery.test-fixture')
     const { acpStructuredAgentDefinition } =

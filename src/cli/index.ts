@@ -1,42 +1,40 @@
 #!/usr/bin/env node
+import './runtime/packaged-cli-interpreter'
 import {
   findCommandSpec,
   isCommandGroup,
   normalizeCommandPositionals,
   parseArgs,
   resolveHelpPath,
-  specPaths,
   validateCommandAndFlags
-} from './args'
+} from './arguments/args'
+import { specPaths } from './discovery/command-spec'
 import { readOrcaCliVersion } from './cli-version'
-import { dispatch } from './dispatch'
+import { dispatch } from './dispatch/dispatch'
 import {
   resolveEnvironmentSelectorForStore,
   resolveHostFlagEnvironmentId
-} from './execution-host-flag'
-import { fetchSshTargetSummaries, listSshTargets } from './host-selector-alternatives'
-import { reportCliError } from './cli-error'
+} from './hosts/execution-host-flag'
+import { fetchSshTargetSummaries, listSshTargets } from './hosts/host-selector-alternatives'
+import { reportCliError } from './output/cli-error'
 import { RuntimeClientError } from './runtime/types'
-import { cliErrorExitCode } from './cli-exit-code'
-import { printHelp } from './help'
-import type { RuntimeClient } from './runtime-client'
+import { cliErrorExitCode } from './output/cli-exit-code'
+import { printHelp } from './discovery/help'
+import type { RuntimeClient } from './runtime/client'
 import { COMMAND_SPECS } from './specs'
-import { resolveOrchestrationCliExecutable } from './runtime/orchestration-recovery-command'
-import { refuseConflictingSessionCallerFlags } from './session-caller-flags'
-import { ignoresRemoteSelection } from './remote-selection-scope'
+import { resolveOrchestrationCliExecutable } from './orchestration/recovery/orchestration-recovery-command'
+import { refuseConflictingSessionCallerFlags } from './orchestration/identity/session-caller-flags'
+import { ignoresRemoteSelection } from './dispatch/remote-selection-scope'
 import {
   isLocalEnvironmentSelector,
   refuseLocalManagementSelector
-} from './local-environment-selector'
-
-export { COMMAND_SPECS } from './specs'
-export { buildCurrentWorktreeSelector, normalizeWorktreeSelector } from './selectors'
+} from './hosts/local-environment-selector'
 
 const COMMAND_PATHS = COMMAND_SPECS.flatMap((spec) => specPaths(spec))
 
 // Defer the runtime graph until after help and validation; await it to keep ctx.client synchronous.
 async function loadRuntimeClientClass(): Promise<typeof RuntimeClient> {
-  return (await import('./runtime-client.js')).RuntimeClient
+  return (await import('./runtime/client.js')).RuntimeClient
 }
 
 // The SSH bridge runs here, but ORCA_CLI_CWD carries the remote caller's directory.
@@ -65,6 +63,10 @@ export async function main(
     return
   }
   if (argv[0] === 'claude-teams') {
+    if (argv.length === 2 && (argv[1] === '--help' || argv[1] === '-h')) {
+      printHelp(COMMAND_SPECS, ['claude-teams'])
+      return
+    }
     await runClaudeTeams(argv.slice(1), cwd)
     return
   }
@@ -105,7 +107,20 @@ export async function main(
     refuseConflictingSessionCallerFlags(commandSpec, parsed.flags)
     await refuseLocalManagementSelector(parsed.commandPath, parsed.flags)
     const RuntimeClientClass = await loadRuntimeClientClass()
-    const ignoreRemoteSelection = ignoresRemoteSelection(parsed.commandPath)
+    // `--on` runs on the caller's own Orca, which reaches that server; an inherited selection never reroutes it.
+    const onCallersOrca = runsOnCallersOrca(parsed.commandPath, parsed.flags)
+    if (
+      onCallersOrca &&
+      (parsed.flags.has('pairing-code') ||
+        (parsed.flags.has('environment') &&
+          !isLocalEnvironmentSelector(parsed.flags.get('environment'))))
+    ) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--on already names the server; drop --environment. Your own Orca reaches it.'
+      )
+    }
+    const ignoreRemoteSelection = onCallersOrca || ignoresRemoteSelection(parsed.commandPath)
     const pairingCode = ignoreRemoteSelection ? null : parsed.flags.get('pairing-code')
     const environmentSelector = ignoreRemoteSelection ? null : parsed.flags.get('environment')
     // An explicit local route suppresses ambient ORCA_ENVIRONMENT and pairing codes.
@@ -190,6 +205,19 @@ export async function main(
     })
     process.exitCode = cliErrorExitCode(error, parsed.commandPath)
   }
+}
+
+const ON_CALLERS_ORCA_COMMANDS: ReadonlySet<string> = new Set(['send', 'reply', 'worker-start'])
+
+function runsOnCallersOrca(
+  commandPath: readonly string[],
+  flags: ReadonlyMap<string, string | boolean>
+): boolean {
+  return (
+    commandPath[0] === 'orchestration' &&
+    ON_CALLERS_ORCA_COMMANDS.has(commandPath[1] ?? '') &&
+    flags.has('on')
+  )
 }
 
 async function runClaudeTeams(argv: string[], cwd: string): Promise<void> {

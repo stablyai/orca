@@ -18,13 +18,13 @@ import {
 import {
   buildDaemonSessionClient,
   type DaemonSessionClientResult
-} from '../../../orcad/orcad-daemon-session-client-fixture'
+} from '../../../orcad/testing/daemon-processes/orcad-daemon-session-client-fixture'
 import {
   killAndAwaitExit,
   killProfileDaemons,
   removeTestRoot
-} from '../../../orcad/orcad-daemon-teardown-fixture'
-import { locatePinnedNodeForTests } from '../../../orcad/orcad-node-slot-fixture'
+} from '../../../orcad/testing/daemon-processes/orcad-daemon-teardown-fixture'
+import { locatePinnedNodeForTests } from '../../../orcad/testing/native-slots/orcad-node-slot-fixture'
 
 type Runtime = 'electron' | 'node'
 

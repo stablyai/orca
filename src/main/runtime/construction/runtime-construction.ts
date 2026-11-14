@@ -1,7 +1,7 @@
 import { collectSavedStructuredAgentSessionIds } from '../agent-session/lifecycle/saved-structured-agent-session-restoration'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type {
-  RuntimeConstructionBindings,
+  RuntimeConstructionBindings as Bindings,
   RuntimeConstructionDependencies
 } from './runtime-construction-dependencies'
 import type { OrcaRuntimeWithRuntimeId as IdentityState } from './runtime-identity-state'
@@ -14,7 +14,7 @@ import type { ProjectExecutionRuntimeResolution } from '../../../shared/executio
 import { OrcaRuntimeWithLinearCommands } from '../integrations/linear/linear-commands'
 
 import type { RuntimeStore } from './runtime-store-contract'
-import { installGitHubProjectAccounts } from '../../github/github-project-account'
+import { installGitHubProjectAccounts } from '../../github/accounts/github-project-account'
 import type { WorkspaceSleepPlatform } from '../workspaces/sleep/workspace-sleep-platform'
 import type { StatsCollector } from '../../stats/collector'
 
@@ -50,13 +50,13 @@ import { RuntimeClientSettingsController } from '../client/settings/runtime-clie
 import { RuntimeSessionSearchSettingsController } from '../integrations/ai-vault/runtime-session-search-settings'
 import { RuntimeAutomationController } from '../integrations/automations/runtime-automation-controller'
 import { RuntimeOrchestrationFederation } from '../orchestration/federation/runtime-orchestration-federation'
-import { configureAiVaultSessionSources } from '../../ai-vault/cached-session-list'
-import { configureHostReadableTranscriptPathSources } from '../../native-chat/host-readable-transcript-path'
+import { configureAiVaultSessionSources } from '../../ai-vault/discovery/ai-vault-scan-roots'
+import { configureHostReadableTranscriptPathSources } from '../../native-chat/transcript-discovery/host-readable-transcript-path'
 import { createEphemeralAgentSessionClaimSigner } from '../agent-session/ownership/agent-session-claim-identity'
 import { registerConptyDa1OverrideInstaller } from '../terminal/output/terminal-model-query-authority'
 import { registerTerminalViewAttributesApplier } from '../terminal/view/terminal-view-attribute-store'
 import { RuntimeMachineName } from '../hosts/platform-probe/runtime-machine-name'
-import { setPRConflictSummaryRemoteFetches } from '../../github/conflict-summary'
+import { setPRConflictSummaryRemoteFetches } from '../../github/pull-requests/conflicts/conflict-summary'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../shared/terminal/replay/terminal-scrollback-policy'
 
 // oxlint-disable-next-line typescript/no-unsafe-declaration-merging -- SAFETY: The constructor installs every checked canonical surface.
@@ -75,11 +75,11 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
   declare protected readonly attestAgentHookCompatibilityAuthorityFn: HostServices['attestAgentHookCompatibilityAuthorityFn']
   declare protected readonly retireAgentHookCompatibilityAuthorityFn: HostServices['retireAgentHookCompatibilityAuthorityFn']
   declare protected readonly readHookCliWriterObservationFn:
-    | RuntimeConstructionBindings['readHookCliWriterObservation']
+    | Bindings['readHookCliWriterObservation']
     | null
   declare protected readonly checkHookAgentPresenceFn: HostServices['checkHookAgentPresenceFn']
   declare readonly subscribeAgentProviderSessionChangesFn:
-    | RuntimeConstructionBindings['subscribeAgentProviderSessionChanges']
+    | Bindings['subscribeAgentProviderSessionChanges']
     | null
   declare protected readonly reconcileAgentStatusForEndedProcessFn: HostServices['reconcileAgentStatusForEndedProcessFn']
   declare protected readonly forgetHookAgentExitFn: HostServices['forgetHookAgentExitFn']
@@ -115,14 +115,14 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
 
   readonly workspaceSleepPlatform: WorkspaceSleepPlatform | null
 
-  protected readonly getAgentStatusSnapshotForPaneFn:
-    | RuntimeConstructionBindings['getAgentStatusSnapshotForPane']
-    | null
+  declare protected readonly getAgentStatusSnapshotForPaneFn: HostServices['getAgentStatusSnapshotForPaneFn']
+
+  protected readonly publicPaneStatusFn?: Bindings['getPublicAgentStatusSnapshotForPane']
 
   /** The agent's full final reply for that finished lead turn; status rows carry only a capped preview. */
-  readonly getAcceptedAgentReply: RuntimeConstructionBindings['getAcceptedAgentReply']
+  readonly getAcceptedAgentReply: Bindings['getAcceptedAgentReply']
   /** Synchronous on every hook status row change, including clears. */
-  readonly subscribeAgentStatusRowChanges: RuntimeConstructionBindings['subscribeAgentStatusRowChanges']
+  readonly subscribeAgentStatusRowChanges: Bindings['subscribeAgentStatusRowChanges']
 
   protected readonly machineName = new RuntimeMachineName(
     () => this.store?.getSettings?.().machineName
@@ -253,6 +253,7 @@ export abstract class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCo
     }
     this.getAgentStatusSnapshotFn = deps?.getAgentStatusSnapshot ?? null
     this.getAgentStatusSnapshotForPaneFn = deps?.getAgentStatusSnapshotForPane ?? null
+    this.publicPaneStatusFn = deps?.getPublicAgentStatusSnapshotForPane
     this.structuredAgentStatusSinkFn = deps?.structuredAgentStatusSink ?? null
     this.readObservedAgentStatusPaneIdentityFn =
       deps?.readObservedAgentStatusPaneIdentity ?? (() => ({ kind: 'unobserved' }))

@@ -1,10 +1,10 @@
 import { createElement, useState, type ReactNode } from 'react'
 import { Goal } from 'lucide-react-native'
-import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/native-chat-follow-up-behavior'
+import type { NativeChatSendFollowUp } from '../../../../../src/shared/native-chat/input/composer/native-chat-follow-up-behavior'
 import { isBareStructuredAgentSessionGoalCommand } from '../../../../../src/shared/agent-session/view/structured-agent-session-composer'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
-import type { MobileStructuredThreadGoal } from '../../use-mobile-structured-thread-goal'
-import type { MobileNativeChatSendIntent } from '../mobile-native-chat-send'
+import type { MobileStructuredThreadGoal } from '../input/use-mobile-structured-thread-goal'
+import type { MobileNativeChatSendIntent } from './mobile-native-chat-send'
 import { MobileNativeChatThreadGoalStrip } from '../input/MobileNativeChatThreadGoalStrip'
 import { MobileNativeChatComposerModeChip } from './MobileNativeChatComposerModeChip'
 

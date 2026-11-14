@@ -8,7 +8,7 @@ import {
   reusePromptProjection,
   type PromptProjection
 } from './structured-agent-session-actionable-prompts'
-import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { readAgentJournalTurn } from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
 import { compareAgentJournalItems } from '../../../../shared/agent-session/journal/agent-session-journal-position'
 
 import { isHistoricalProviderTimelineItem } from '../../agent-session-timeline/provider-timeline-history'
@@ -25,7 +25,7 @@ import type { AgentSessionLatestTurn } from '../../../../shared/agent-session/ag
 import type { StructuredAgentSessionWorkScope } from '../../../../shared/agent-session/view/structured-agent-session-main-agent-working'
 import { isUnansweredStructuredAgentSessionDispatch } from '../../../../shared/agent-session/requests/structured-agent-session-unanswered-dispatch'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
-import { DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED } from '../../agent-session-journal/projection/journal-dispatch-doubt-reasons'
+import { admittedStructuredSubmission } from './structured-agent-session-submission-presentation'
 import {
   continuingStructuredAgentSessionInput,
   finalizingStructuredAgentSessionInput,
@@ -155,12 +155,7 @@ export class StructuredAgentSessionCurrentWork {
    *  answer, reads in doubt: no client counts it as work, and its echo or refusal still settles it. */
   publishedSubmission = (submission: AgentJournalSubmission): AgentJournalSubmission =>
     this.unanswered(submission) && !this.holds(submission)
-      ? {
-          ...submission,
-          dispatchState: 'unknown',
-          recovered: true,
-          reason: submission.reason ?? DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED
-        }
+      ? admittedStructuredSubmission(submission, this.generationEnded(submission))
       : submission
 
   private unanswered(submission: AgentJournalSubmission): boolean {

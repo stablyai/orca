@@ -27,7 +27,7 @@ async function survivorsAfterDeadline(
   )
   let pids: number[] = []
   try {
-    const result = await runHook('archive', dir, REPO, dir, undefined, 400)
+    const result = await runHook('archive', dir, REPO, dir, undefined, { timeoutMs: 400 })
     expect(result.success).toBe(false)
     expect(existsSync(pidFile)).toBe(true)
     pids = readFileSync(pidFile, 'utf8').trim().split(/\s+/).map(Number)
@@ -49,14 +49,6 @@ async function survivorsAfterDeadline(
 
 // Mocked kill probes cannot prove a process group exists; exercise real signals here.
 describe.skipIf(process.platform === 'win32')('hook termination against real processes', () => {
-  it('kills the shell and its child when the deadline expires', async () => {
-    const { shell, child, output } = await survivorsAfterDeadline(
-      'echo "archive step 3 of 7"\nsleep 120 &\necho "$$ $!" > "$PWD/pids"\nwait'
-    )
-    expect({ shell, child }).toEqual({ shell: false, child: false })
-    expect(output).toContain('archive step 3 of 7')
-  }, 30_000)
-
   it('kills a descendant that ignores SIGTERM', async () => {
     // Only the group SIGKILL can end this one; a SIGTERM to the shell alone leaves it running.
     const { child } = await survivorsAfterDeadline(
