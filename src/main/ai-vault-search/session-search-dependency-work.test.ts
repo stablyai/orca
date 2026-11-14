@@ -279,7 +279,15 @@ it.each(['physical page', 'physical complete', 'dependency page'])(
       notifySessionSearchFileChange(index)
       clock.advance(20000)
       await subject.settled()
-      expect(title()).toEqual([{ title: 'codex seed question' }])
+      expect(title()).toEqual([{ title: 'Returning title' }])
+      await writeFile(
+        index,
+        `${JSON.stringify({ id: CODEX_FIXTURE_SESSION_ID, thread_name: 'Updated returning title' })}\n${otherTitles}`
+      )
+      notifySessionSearchFileChange(index)
+      clock.advance(20000)
+      await subject.settled()
+      expect(title()).toEqual([{ title: 'Updated returning title' }])
       expect(subject.status().phase).toBe('current')
       expect(subject.status().filesFailed).toBe(0)
       expect(errors).toEqual([])
