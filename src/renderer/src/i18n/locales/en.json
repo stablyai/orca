@@ -677,6 +677,10 @@
       "wordSeparators": {
         "description": "Characters treated as word boundaries for double-click selection, including space.",
         "noSpaceHint": "No space included — double-click will select across spaces."
+      },
+      "fontSize": {
+        "decrease": "Decrease font size",
+        "increase": "Increase font size"
       }
     },
     "appearance": {
@@ -794,6 +798,10 @@
           "undecodable": "Could not decode the selected image.",
           "saveFailed": "Could not save the custom icon."
         }
+      },
+      "uiZoom": {
+        "zoomOut": "Zoom out",
+        "zoomIn": "Zoom in"
       }
     },
     "browser": {
