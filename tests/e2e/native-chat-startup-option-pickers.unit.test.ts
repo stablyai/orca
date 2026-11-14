@@ -156,7 +156,8 @@ it('picks model then effort through the menus during startup and uses both in th
     )
     fireEvent.click(screen.getByRole('button', { name: 'Model opus, Effort High' }))
     fireEvent.click(await screen.findByRole('option', { name: 'sonnet' }))
-    fireEvent.click(await screen.findByRole('radio', { name: 'Low' }))
+    fireEvent.keyDown(await screen.findByRole('slider', { name: 'Effort' }), { key: 'Home' })
+    fireEvent.keyDown(screen.getByRole('slider', { name: 'Effort' }), { key: 'Enter' })
     const body = hostTestMessage('reply using these choices')
     await expect(
       host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })

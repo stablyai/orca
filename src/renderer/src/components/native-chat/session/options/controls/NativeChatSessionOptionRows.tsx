@@ -21,6 +21,7 @@ import {
   nativeChatSessionOptionLabel
 } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-option-labels'
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
+import { EffortSlider } from './NativeChatEffortSlider'
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
 import { NativeChatSessionSpeedButton } from './NativeChatSessionSpeedButton'
 import { speedButtonTiers } from '../../../../../../../shared/native-chat/input/session-options/native-chat-session-speed-tiers'
@@ -88,12 +89,13 @@ function LevelSegment(props: {
 function OptionRow(props: {
   descriptor: SessionOptionDescriptor
   layout: 'menu' | 'settings' | 'inline'
+  pending: boolean
   /** Kept from an earlier model in this visit; the current one does not offer it. */
   gone: boolean
   onSet: (value: SessionOptionValue) => void
   onAction: () => void
 }): React.JSX.Element {
-  const { descriptor, layout, gone, onSet, onAction } = props
+  const { descriptor, layout, gone, pending, onSet, onAction } = props
   const labelId = useId()
   const label = nativeChatSessionOptionLabel(descriptor, say)
   const off = gone || !descriptor.settable
@@ -202,6 +204,25 @@ function OptionRow(props: {
       </div>
     )
   }
+  if (
+    descriptor.id === 'effort' &&
+    descriptor.kind.choices.length > 1 &&
+    (gone || descriptor.kind.choices.some((choice) => choice.value === current))
+  ) {
+    return (
+      <EffortSlider
+        key={JSON.stringify([
+          descriptor.kind.choices.map((choice) => choice.value),
+          current,
+          off || pending
+        ])}
+        descriptor={{ ...descriptor, kind: descriptor.kind }}
+        gone={gone}
+        disabled={off || pending}
+        onSet={onSet}
+      />
+    )
+  }
   return (
     <div
       className={cn(
@@ -218,6 +239,14 @@ function OptionRow(props: {
       >
         {label}
       </span>
+      {!gone &&
+      descriptor.id === 'effort' &&
+      current &&
+      !descriptor.kind.choices.some((choice) => choice.value === current) ? (
+        <span className="text-xs text-foreground">
+          {nativeChatSessionChoiceLabel({ value: current, label: current }, say, descriptor.id)}
+        </span>
+      ) : null}
       <ToggleGroup
         type="single"
         variant="segmented"
@@ -309,6 +338,7 @@ export function NativeChatSessionOptionRows({
                       <OptionRow
                         descriptor={descriptor}
                         layout={layout}
+                        pending={pendingIds.has(descriptor.id)}
                         gone={!options.some((option) => option.id === descriptor.id)}
                         onSet={(value) => onSet(descriptor, value)}
                         onAction={() => onAction(descriptor)}

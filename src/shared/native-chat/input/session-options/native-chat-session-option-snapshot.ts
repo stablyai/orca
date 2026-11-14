@@ -89,20 +89,24 @@ function optionDescriptor(args: {
   const showDefault = !tracked && (cliStatesDefault || (mode === 'draft' && !modelIsCliDefault))
   const valueSource = tracked?.source ?? (showDefault ? 'default' : 'unknown')
   if (option.kind.type === 'select') {
-    // Speed offers only the tiers the model lists, as Codex does; a config-only tier still runs.
     const choices =
-      option.id === 'serviceTier'
+      option.id === 'effort' || option.id === 'serviceTier'
         ? [...option.kind.choices]
         : choiceWithCurrent(option.kind.choices, tracked)
-    if (choices.length <= 1) {
-      return null
-    }
     const currentValue =
       typeof tracked?.value === 'string'
         ? tracked.value
         : showDefault
           ? option.kind.defaultValue
           : undefined
+    const unlistedEffort =
+      option.id === 'effort' &&
+      typeof tracked?.value === 'string' &&
+      !choices.some((choice) => choice.value === tracked.value)
+    const readOnlyUnlistedEffort = unlistedEffort && choices.length <= 1
+    if (choices.length <= 1 && !unlistedEffort) {
+      return null
+    }
     return {
       id: option.id,
       label: option.label,
@@ -111,12 +115,15 @@ function optionDescriptor(args: {
       kind: {
         type: 'select',
         ...(currentValue === undefined ? {} : { currentValue }),
-        choices
+        choices:
+          readOnlyUnlistedEffort && currentValue !== undefined
+            ? [{ value: currentValue, label: currentValue }]
+            : choices
       },
       valueSource,
       transport: liveTransport,
-      ...settable,
-      ...(action ? { action } : {})
+      ...(readOnlyUnlistedEffort ? { settable: false } : settable),
+      ...(action && !readOnlyUnlistedEffort ? { action } : {})
     }
   }
   // A switch has no unknown position. Resolve to defaultValue like composed dispatch, but keep unknown/default provenance so pills cannot claim confirmation.
