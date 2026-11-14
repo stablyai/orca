@@ -1279,7 +1279,6 @@
       "src/main/codex/structured/launch/codex-structured-real-cli-permissions.test.ts": 282,
       "src/main/codex/structured/launch/codex-structured-real-cli-visuals.test.ts": 266,
       "src/main/codex/structured/threads/codex-structured-rewind.test.ts": 154,
-      "src/main/codex/structured/catalog/codex-structured-service-tier-shown.test.ts": 436,
       "src/main/codex/structured/session-lifecycle/codex-structured-session-adapter-lifecycle.test.ts": 597,
       "src/main/codex/structured/session-lifecycle/codex-structured-session-adapter.test.ts": 837,
       "src/main/codex/structured/session-lifecycle/codex-structured-session-background-tasks.test.ts": 761,
