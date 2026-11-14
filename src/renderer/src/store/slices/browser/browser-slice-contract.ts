@@ -32,7 +32,7 @@ import type {
 import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { TabSplitDirection, TabSplitTarget } from '../tabs/tabs-slice-contract'
-import type { RuntimeBrowserPlacement } from '../../../../../shared/runtime-browser-placement'
+import type { RuntimeBrowserPlacement } from '../../../../../shared/browser/client-hosting/runtime-browser-placement'
 
 export type CreateBrowserTabOptions = {
   /** Link-only guard, checked before records and again at the unified-tab mutation. */

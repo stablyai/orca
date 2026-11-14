@@ -10,7 +10,7 @@ import { isMissingRuntimePathError } from '@/runtime/files/metadata/runtime-file
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import type { RuntimeTerminalPathResolution } from '../../../shared/terminal/runtime-terminal-file-path'
-import { resolveWslRepoWorktreeBasePath } from '../../../shared/wsl-paths'
+import { resolveWslRepoWorktreeBasePath } from '../../../shared/file-access/wsl-paths'
 import {
   isQuickOpenAbsolutePath,
   type QuickOpenQueryTarget

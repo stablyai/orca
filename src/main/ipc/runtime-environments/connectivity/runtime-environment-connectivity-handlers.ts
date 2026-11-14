@@ -19,8 +19,8 @@ import {
   connectThroughOwningService,
   removeThroughOwningService
 } from './runtime-environment-host-service-ops'
-import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
-import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
+import type { RuntimeRpcResponse } from '../../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
+import type { RuntimeStatus } from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import type { Store } from '../../../persistence/loading-store/store'
 import { retireRemovedRuntimeEnvironment } from '../catalog/runtime-environment-removal-cleanup'
 import { removeRedundantManagedPairing } from '../catalog/runtime-environment-redundant-managed-removal'

@@ -17,7 +17,7 @@ import '../../../../src/shared/protocol-version'
 import {
   AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
   SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY
-} from '../../../../src/shared/session-tabs-runtime-capabilities'
+} from '../../../../src/shared/remote-runtime/protocol/session-tabs-runtime-capabilities'
 import {
   AGENT_LAUNCH_RUNTIME_CAPABILITY,
   AGENT_LAUNCH_TAB_CLOSED_CLIENT_CAPABILITY,

@@ -5,7 +5,7 @@ import {
   type AgentSenderResolution
 } from '@/runtime/native-chat/agent-senders/agent-sender-associations'
 import type { AgentMessageSender } from '../../../../../../shared/agent-session/agent-session-message-source'
-import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 import { sameAgentIdentity } from '../../../../../../shared/agent-status/title/agent-title-owner'
 import {
   agentMessageSavedKind,

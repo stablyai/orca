@@ -10,11 +10,11 @@ import {
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY
-} from '../worktree-runtime-capabilities'
+} from './protocol/worktree-runtime-capabilities'
 import {
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
   SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY
-} from '../session-tabs-runtime-capabilities'
+} from './protocol/session-tabs-runtime-capabilities'
 import type { RuntimeCapability } from '../protocol-version'
 import {
   TERMINAL_QUICK_COMMAND_LARGE_LISTS_RUNTIME_CAPABILITY,

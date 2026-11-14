@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resetAgentPaneAuthorityAliasesForTests } from './agent-pane-authority'
-import { wslHookRelayConnectionId } from '../../../../../shared/wsl-hook-relay-contract'
+import { wslHookRelayConnectionId } from '../../../../../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 import { createTestStore } from '../../testing/app-store-test-fixture'
 import { buildWorktreeAgentRows } from '@/components/sidebar/workspace-card/activity/worktree-agent-rows'
 import { AGENT_STATE_HISTORY_MAX } from '../../../../../shared/agent-status/lifecycle/agent-state-history'

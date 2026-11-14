@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeRpcFailure, RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type {
+  RuntimeRpcFailure,
+  RuntimeRpcResponse
+} from '../../../shared/remote-runtime/rpc/runtime-rpc-envelope'
 import type { RateLimitState } from '../../../shared/rate-limit-types'
 import { createEmptyRateLimitState } from '../../../shared/rate-limit-state-factory'
 import {

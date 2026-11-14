@@ -3,7 +3,7 @@ import type { ParsedExecutionHost, ExecutionHostId } from '../../../../../shared
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { runtimeHostContactForEntry } from '../../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import { resolveHostAgentStartupShell } from '../../../../../shared/windows-terminal-shell'
-import { isWslUncPath } from '../../../../../shared/wsl-paths'
+import { isWslUncPath } from '../../../../../shared/file-access/wsl-paths'
 import {
   getConnectionIdForWorktreeCopy,
   getConnectionIdFromState

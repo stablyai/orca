@@ -1,4 +1,4 @@
-import type { RuntimeDesktopWindowStatus } from '../../../shared/runtime-session-contracts'
+import type { RuntimeDesktopWindowStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 type ActivationGateState = Exclude<RuntimeDesktopWindowStatus, 'available' | 'openable'> | 'ready'
 

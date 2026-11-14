@@ -2,8 +2,8 @@
 import { expect, test } from './helpers/orca-app'
 import { launchPhoneMirrorTopology } from './helpers/phone-mirror-topology'
 import type { PairedMobileClient } from './helpers/paired-mobile-client'
-import type { RuntimeWorktreePsSummary } from '../../src/shared/runtime-worktree-contracts'
-import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-session-contracts'
+import type { RuntimeWorktreePsSummary } from '../../src/shared/worktree/catalog/runtime-worktree-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../src/shared/remote-runtime/session-graph/runtime-session-contracts'
 
 function sortedPtyIds(ids: (string | null | undefined)[]): string[] {
   return ids.flatMap((id) => (id ? [id] : [])).sort()

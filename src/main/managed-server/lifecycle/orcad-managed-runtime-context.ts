@@ -1,11 +1,11 @@
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
-import { ORCAD_UPDATE_TERMINALS_RUNNING_CODE } from '../../../shared/orcad-managed-runtime'
+import { ORCAD_UPDATE_TERMINALS_RUNNING_CODE } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import {
   getOrcadSshDeployment,
   type KnownRuntimeEnvironment,
   type OrcadSshDeploymentLink
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { getManagedOrcadFenceEnvironmentId } from '../../../shared/managed-orcad-ssh-owner'
+import { getManagedOrcadFenceEnvironmentId } from '../../../shared/remote-runtime/ssh/managed-orcad-ssh-owner'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import { computeLocalOrcadBuildHash } from '../install/orcad-local-build-hash'
 
@@ -15,7 +15,7 @@ import { admitOrcadRecordForIntent, type OrcadUpdateIntent } from './orcad-manag
 import {
   type OrcadTerminalCensus,
   UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
-} from '../../../shared/orcad-terminal-census'
+} from '../../../shared/remote-runtime/orcad-lifecycle/orcad-terminal-census'
 import { probeActiveOrcadReadiness } from '../activation/orcad-active-readiness'
 import { resolveOrcadRemoteContext, type OrcadRemoteContext } from '../install/orcad-remote-context'
 import { ORCAD_INSTALL_MODEL } from '../install/remote-install-model'

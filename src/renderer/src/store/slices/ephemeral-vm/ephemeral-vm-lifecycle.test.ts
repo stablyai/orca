@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../../types'
-import type { EphemeralVmRuntimeRecord } from '../../../../../shared/ephemeral-vm-runtimes'
+import type { EphemeralVmRuntimeRecord } from '../../../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtimes'
 import {
   createEphemeralVmLifecycleSlice,
   projectEphemeralVmWorkspaceRuntimes,

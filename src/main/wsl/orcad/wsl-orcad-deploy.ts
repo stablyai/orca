@@ -1,9 +1,9 @@
-import type { WslHostDeferredUpdate } from '../../../shared/wsl-host-types'
+import type { WslHostDeferredUpdate } from '../../../shared/remote-runtime/wsl-hosts/wsl-host-types'
 import type { WslOrcadLaunch, WslOrcadDeployOptions } from './wsl-orcad-launch-contract'
 /** D1/D2b/D8 reuse SSH installation, activation journals/fences and admission over wsl.exe. C5 pairs through the reported loopback port. */
 import { getAppEnvironment } from '../../../shared/app-environment'
 
-import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/orcad-managed-runtime'
+import { ORCAD_MANAGED_REMOTE_PORT } from '../../../shared/remote-runtime/orcad-lifecycle/orcad-managed-runtime'
 import type { ServeReadiness } from '../../server/serve-readiness'
 
 import { recoverInterruptedOrcadActivation } from '../../managed-server/activation/orcad-activation-recovery'

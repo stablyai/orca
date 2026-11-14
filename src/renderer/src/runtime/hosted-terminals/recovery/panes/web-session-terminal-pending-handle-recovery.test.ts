@@ -6,7 +6,7 @@ import {
 } from '../web-session-terminal-orphan-recovery'
 import type { TerminalOrphanRecoveryState } from '../surfaces/web-session-terminal-orphan-recovery-surface'
 import type { TerminalOrphanRecoveryCall } from '../adoption/web-session-terminal-orphan-recovery-adoption'
-import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 import '../../../rpc/testing/runtime-environment-bridge-fixture'
 
 const ENVIRONMENT_ID = 'remote-runtime'

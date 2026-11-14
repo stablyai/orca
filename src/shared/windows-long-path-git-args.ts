@@ -1,4 +1,4 @@
-import { parseWslUncPath } from './wsl-paths'
+import { parseWslUncPath } from './file-access/wsl-paths'
 
 const WINDOWS_LONG_PATH_GIT_ARGS = ['-c', 'core.longpaths=true'] as const
 

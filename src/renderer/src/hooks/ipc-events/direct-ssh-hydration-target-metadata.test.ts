@@ -3,7 +3,7 @@ import { useAppStore } from '@/store/index'
 import { selectRuntimeAwareSshTargetRemoved } from '@/store/slices/ssh/runtime-environment-ssh-selectors'
 import { registerDirectSshStateIpcBridge } from './direct-ssh-state-ipc-bridge'
 import { resetSshConfigPassiveSyncForTests } from '../../runtime/hosts/ssh/ssh-config-passive-sync'
-import type { SshConnectionState } from '../../../../shared/ssh-types'
+import type { SshConnectionState } from '../../../../shared/remote-runtime/ssh/ssh-types'
 
 type SshApiStub = {
   importConfig?: () => Promise<{

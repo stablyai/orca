@@ -1,4 +1,4 @@
-import type { SshTarget } from '../../../../shared/ssh-types'
+import type { SshTarget } from '../../../../shared/remote-runtime/ssh/ssh-types'
 import type { CensusHostRelayTerminals } from '../../migration-source/orcad-migration-terminal-gate'
 import { requireManagedOrcadInfrastructure } from '../../../managed-server/lifecycle/orcad-managed-runtime-context'
 import {

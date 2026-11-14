@@ -1,6 +1,6 @@
 import type { RuntimeTerminalWriteOptions } from './runtime-terminal-writer'
 import type { TerminalInputKind } from '../../../../shared/terminal/input/terminal-input-kind'
-import type { RuntimeTerminalSend } from '../../../../shared/runtime-terminal-send-contract'
+import type { RuntimeTerminalSend } from '../../../../shared/terminal/runtime/runtime-terminal-send-contract'
 
 /** Agent-prompt writes add the correlation inputs a queued-acceptance receipt needs. */
 export type RuntimeAgentPromptWriteOptions = Omit<RuntimeTerminalWriteOptions, 'inputKind'> & {

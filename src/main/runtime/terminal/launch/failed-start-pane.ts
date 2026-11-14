@@ -5,7 +5,7 @@ import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-r
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { PaneStartArgsOf } from './runtime-pane-admission'
 import type { TerminalCreateOptions } from './terminal-create-options'
-import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
+import type { RuntimeTerminalCreate } from '../../../../shared/terminal/runtime/runtime-terminal-create-contract'
 import {
   PaneResumeOutcomes,
   PaneStartStatuses,

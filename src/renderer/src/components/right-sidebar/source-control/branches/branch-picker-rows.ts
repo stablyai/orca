@@ -1,7 +1,7 @@
 import type {
   RuntimeGitLocalBranches,
   RuntimeRepoSearchRefs
-} from '../../../../../../shared/runtime-worktree-contracts'
+} from '../../../../../../shared/worktree/catalog/runtime-worktree-contracts'
 import type { BranchSwitchTarget } from '../../../../../../shared/git/branch-switch-target'
 import { isBranchNameValid } from '../../../../../../shared/git/branch-switch-target'
 import { normalizeRuntimePathForComparison } from '../../../../../../shared/cross-platform-path'

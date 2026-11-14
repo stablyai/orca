@@ -4,7 +4,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import '../components/settings/__fixtures__/settings-persistence-test-fixture'
 import { useAppStore } from '@/store'
 import { createProjectGroup } from '../../../shared/project-groups'
-import { PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY } from '../../../shared/worktree-runtime-capabilities'
+import { PROJECT_GROUP_FOLDER_ARCHIVE_RUNTIME_CAPABILITY } from '../../../shared/remote-runtime/protocol/worktree-runtime-capabilities'
 import { clearRuntimeCompatibilityCache } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { publicRuntimeEnvironment } from '@/runtime/rpc/testing/paired-runtime-environment-test-fixture'
@@ -13,7 +13,7 @@ import {
   replaceRuntimeEnvironmentRevisions,
   getRuntimeEnvironmentRevision
 } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
+import type { RuntimeStatus } from '../../../shared/remote-runtime/session-graph/runtime-session-contracts'
 
 afterEach(() => replaceRuntimeEnvironmentRevisions([]))
 

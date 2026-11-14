@@ -3,7 +3,7 @@ import {
   listRegisteredSshTargets
 } from '../../ssh/targets/ssh-target-registry'
 import { getWslHostService } from '../../wsl/host-lifecycle/wsl-host-service-instance'
-import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
+import type { RuntimeClientEvent } from '../../../shared/remote-runtime/session-graph/runtime-client-events'
 import type { DesktopSidebarFacts } from '../../../shared/sidebar-list/feed-facts/desktop-sidebar-facts'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import {

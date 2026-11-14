@@ -12,7 +12,7 @@ import {
   isFloatingWorkspaceId,
   isFloatingWorkspaceSelector
 } from '../../../shared/floating-workspace-worktree'
-import { parseWslUncPath } from '../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../shared/file-access/wsl-paths'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { composeWorktreeId, splitWorktreeIdForFilesystem } from '../../../shared/worktree/id'
 import { resolveWorktreeHostRouting } from '../workspaces/catalog/worktree-launch-host-repo'

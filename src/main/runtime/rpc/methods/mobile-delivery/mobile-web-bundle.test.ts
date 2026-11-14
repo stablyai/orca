@@ -11,7 +11,7 @@ import { MobileWebBundleManifestResultSchema } from '../../../../../shared/mobil
 import '../../server/runtime-rpc-mobile-method-allowlist'
 import type { RpcRequest, RpcResponse } from '../../core'
 
-import '../../../../../shared/orcad-artifacts'
+import '../../../../../shared/remote-runtime/orcad-distribution/orcad-artifacts'
 import type { RpcDispatcher } from '../../dispatcher'
 
 import {

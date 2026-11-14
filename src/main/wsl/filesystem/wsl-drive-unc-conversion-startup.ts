@@ -29,7 +29,7 @@ import { getHistoryRoot, listWslHistoryRoots } from '../../pty/history/terminal-
 import { orchestrationDbFile } from '../../runtime/orchestration/db/orchestration-db-file'
 import { journalDomainDatabasePath } from '../../native-chat/agent-session-journal/database/journal-domain-database'
 import { rewriteWslDriveUncState } from './wsl-drive-unc-state-rewrite'
-import { WSL_DRIVE_UNC_STATE_DISPOSITIONS } from '../../../shared/wsl-drive-unc-state-dispositions'
+import { WSL_DRIVE_UNC_STATE_DISPOSITIONS } from '../../../shared/wsl-move/wsl-drive-unc-state-dispositions'
 
 export type WslDriveUncConversionStartupDeps = {
   /** Where the journal lives. */

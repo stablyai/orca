@@ -1,7 +1,7 @@
 import {
   findEnvironmentEphemeralVmRuntime,
   isEphemeralVmSuspended
-} from '../../../../shared/ephemeral-vm-environment-sleep'
+} from '../../../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-environment-sleep'
 import { resolveEnvironment } from '../../../../shared/remote-runtime/host-store/runtime-environment-store'
 import type { KnownRuntimeEnvironment } from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'

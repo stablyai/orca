@@ -22,7 +22,7 @@ import type {
 } from '../../../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { WorkspaceSleepNotice } from '../../../../shared/workspace-sleep'
-import type { RuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
+import type { RuntimeNavigationTarget } from '../../../../shared/remote-runtime/session-graph/runtime-navigation'
 import type { ClientHostedBrowserRowsEvent } from '../../../../shared/client-hosted-browser-rows'
 import type {
   WorktreeBaseStatusEvent,
@@ -33,8 +33,8 @@ import type { WorktreeStartupLaunch } from '../../../../shared/worktree/creation
 import type {
   RuntimeMobileSessionTabMove,
   RuntimeTerminalDriverState
-} from '../../../../shared/runtime-session-contracts'
-import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-terminal-contracts'
+} from '../../../../shared/remote-runtime/session-graph/runtime-session-contracts'
+import type { RuntimeTerminalPresentation } from '../../../../shared/terminal/runtime/runtime-terminal-contracts'
 import type {
   AgentListPublication,
   AgentPaneActivityChange

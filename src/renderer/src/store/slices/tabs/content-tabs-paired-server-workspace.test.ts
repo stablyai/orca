@@ -2,7 +2,7 @@ import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call
 import type * as RuntimeCompatibilityProbeModule from '@/runtime/rpc/compatibility/runtime-compatibility-probe'
 // Paired-owned browser/chat layouts bypass local main in both builds. SSH worktree layout remains local-main-owned but lacks a structured-chat host.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
+import type { RuntimeClientTarget } from '../../../../../shared/remote-runtime/host-catalog/runtime-client-target'
 
 import '../../../../../shared/layout-owner-switch'
 import {

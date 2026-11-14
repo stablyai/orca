@@ -9,7 +9,7 @@ import {
   getRuntimePathBasename,
   normalizeRuntimePathForComparison
 } from '../../../../shared/cross-platform-path'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
+import { isWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import { mapWithConcurrency } from '../../../../shared/map-with-concurrency'
 import { getWorktreeMirrorDistro } from '../../../workspaces/execution-host/project-runtime-git-options'
 import {

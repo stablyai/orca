@@ -5,7 +5,7 @@ import type * as DistroGate from '../../../../wsl/discovery/wsl-background-distr
 import type { DaemonServer } from '../../../server/daemon-server'
 import type { DaemonPtyAdapter } from '../daemon-pty-adapter'
 import { createMockSubprocess, startDaemonAdapterHarness } from './daemon-pty-adapter-test-harness'
-import { parseWslDistroHold } from '../../../../../shared/wsl-distro-stopped-hold'
+import { parseWslDistroHold } from '../../../../../shared/remote-runtime/wsl-hosts/wsl-distro-stopped-hold'
 
 const readState = vi.hoisted(() =>
   vi.fn(

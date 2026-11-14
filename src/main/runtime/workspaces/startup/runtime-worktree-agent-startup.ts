@@ -1,5 +1,5 @@
 import { prepareWorktreeModelStartupInputs } from './runtime-worktree-model-startup'
-import { isWslShellName } from '../../../../shared/local-windows-terminal-runtime'
+import { isWslShellName } from '../../../../shared/shell/launch/local-windows-terminal-runtime'
 import type { SessionOptionValue } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { agentStartedTelemetry } from '../../../agent-launch/agent-started-telemetry'
 import type { AgentLaunchPreferences } from '../../../../shared/agent-session/agent-session-host-authority'

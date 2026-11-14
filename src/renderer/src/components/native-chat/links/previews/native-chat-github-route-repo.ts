@@ -11,7 +11,7 @@ import {
   authorityKey,
   parseHostAuthorityKey,
   type HostAuthorityKey
-} from '../../../../../../shared/host-authority'
+} from '../../../../../../shared/execution-host/host-authority'
 import {
   githubHostFromIdentityKey,
   githubRepoIdentityKey,

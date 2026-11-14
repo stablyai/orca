@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { setAppEnvironment } from '../../../shared/app-environment'
 import { removeTreeSync } from '../../../shared/windows-transient-lock-removal'
-import type { SshTarget } from '../../../shared/ssh-types'
+import type { SshTarget } from '../../../shared/remote-runtime/ssh/ssh-types'
 import { SshConnection } from '../connection/ssh-connection'
 
 export function installHostileHostAppEnvironment(): () => void {

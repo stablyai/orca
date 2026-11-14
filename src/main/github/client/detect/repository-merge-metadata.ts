@@ -8,7 +8,7 @@ import { githubRepoIdentityKey } from '../../../../shared/github/repositories/re
 import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../../api/rate-limit'
 import { codeHostReadExecutionScope as githubReadExecutionScope } from '../../../source-control/code-host-read-execution-scope'
 import { runCoalescedProbe } from '../../../git/remotes/coalesced-probe'
-import { parseWslUncPath } from '../../../../shared/wsl-paths'
+import { parseWslUncPath } from '../../../../shared/file-access/wsl-paths'
 import type { GhExecOptions } from './../github-exec-scope'
 import {
   MERGE_QUEUE_CACHE_TTL_MS,

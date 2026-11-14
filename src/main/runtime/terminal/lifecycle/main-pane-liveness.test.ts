@@ -12,7 +12,7 @@ await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
 await import('../../orca-runtime-tests/orca-runtime-test-lifecycle.spec')
 await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
 const { OrcaRuntimeService } = await import('../../orca-runtime')
-const { toAppSshPtyId } = await import('../../../../shared/ssh-pty-id')
+const { toAppSshPtyId } = await import('../../../../shared/remote-runtime/ssh/ssh-pty-id')
 const {
   HEADLESS_LEAF_ID,
   HEADLESS_SECOND_LEAF_ID,

@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { win32 as pathWin32 } from 'node:path'
-import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../../shared/orcad-managed-launch-env'
+import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../../shared/remote-runtime/serve-supervisor/orcad-managed-launch-env'
 import { readOpenSshDefaultShell } from '../../../shared/openssh-default-shell'
 
 /** Match relay DefaultShell for SSH-managed Windows hosts only; desktop and user-started servers retain their defaults (#9327). */

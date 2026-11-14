@@ -24,7 +24,7 @@ import {
   sanitizeWslHookInstanceKey,
   WSL_HOOK_RELAY_INSTANCE_ENV,
   wslHookRelayEndpointDir
-} from '../shared/wsl-hook-relay-contract'
+} from '../shared/agent-hook-listener/transport/wsl-hook-relay-contract'
 
 async function main(): Promise<void> {
   const windowsPort = Number(process.env.ORCA_AGENT_HOOK_PORT ?? '')

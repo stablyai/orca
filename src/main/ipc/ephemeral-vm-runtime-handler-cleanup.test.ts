@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { removeTempDirs } from '../../shared/testing/remove-temp-dirs.test-support'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { upsertEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
+import { upsertEphemeralVmRuntime } from '../../shared/remote-runtime/ephemeral-vm-store/ephemeral-vm-runtime-store'
 import type * as RuntimeEnvironmentStore from '../../shared/remote-runtime/host-store/runtime-environment-store'
 
 const handlers = new Map<string, (_event: unknown, args: { runtimeId: string }) => unknown>()
