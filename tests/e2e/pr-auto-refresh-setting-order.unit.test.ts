@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { GlobalSettings } from '../../src/shared/global-settings-types'
 import type { RuntimeClientEvent } from '../../src/shared/runtime-client-events'
+import { TooltipProvider } from '@/components/ui/tooltip'
 
 // The host is the real settings controller over an in-memory profile store, publishing its real
 // settings-change events; its agent-view reconciliation is a finite step the test releases. The
@@ -144,28 +145,30 @@ it('converges after a real late write response revokes a later settings event re
   const subscription = await subscribeRuntimeClientEvents('env-a', () => {})
   await act(async () =>
     root.render(
-      createElement(PRAutoRefreshSetting, {
-        hostScope: { target: { kind: 'environment', environmentId: 'env-a' }, available: true },
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a remote host never reads the local settings.
-        settings: {} as never,
-        updateSettings: () => {}
-      })
+      createElement(
+        TooltipProvider,
+        null,
+        createElement(PRAutoRefreshSetting, {
+          hostScope: { target: { kind: 'environment', environmentId: 'env-a' }, available: true },
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a remote host never reads the local settings.
+          settings: {} as never,
+          updateSettings: () => {}
+        })
+      )
     )
   )
   await act(async () => {})
+  const options = () =>
+    Array.from(container.querySelectorAll<HTMLButtonElement>('button[role="radio"]'))
   const selected = () =>
-    Array.from(container.querySelectorAll<HTMLButtonElement>('button[role="radio"]')).find(
-      (button) => button.getAttribute('aria-checked') === 'true'
-    )?.textContent ?? null
-  expect(selected()).toBe('Default')
+    options().findIndex((button) => button.getAttribute('aria-checked') === 'true')
+  expect(selected()).toBe(0)
 
   // 1. This client chooses Reduced (A). The host writes it and announces it (EA) while its
   //    agent-view reconciliation is still running; EA's read (RA) answers Reduced meanwhile.
   const reconciliation = Promise.withResolvers<void>()
   wire.reconcile.mockImplementationOnce(() => reconciliation.promise)
-  const reduced = Array.from(
-    container.querySelectorAll<HTMLButtonElement>('button[role="radio"]')
-  ).find((button) => button.textContent === 'Reduced')!
+  const reduced = options()[1]
   await act(async () => reduced.click())
   await act(async () => deliverEvents())
   await act(async () => {})
@@ -197,7 +200,7 @@ it('converges after a real late write response revokes a later settings event re
   expect(produced.update).toEqual(['reduced'])
   expect(produced.get.slice(0, 3)).toEqual(['default', 'reduced', 'off'])
   expect(getKnownPRAutoRefreshCadenceForHost('env-a')).toBe('off')
-  expect(selected()).toBe('Off')
+  expect(selected()).toBe(2)
   expect(_hostPRAutoRefreshReadsInFlightForTests()).toBe(0)
   subscription.unsubscribe()
 })
