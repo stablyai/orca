@@ -129,7 +129,8 @@ export function reportedEvent<T extends PiLifecycleEvent['type']>(
 export async function setup(
   options: Readonly<Record<string, string>> = {},
   eventSink?: (sink: StructuredAgentSessionEventSink) => StructuredAgentSessionEventSink,
-  reported?: ConstructorParameters<typeof FakeConnection>[1]
+  reported?: ConstructorParameters<typeof FakeConnection>[1],
+  deps: Partial<PiRpcSessionAdapterDeps> = {}
 ) {
   const rig = await openProviderTimelineRig({ agent: 'pi', sessionId })
   const connections: FakeConnection[] = []
@@ -171,7 +172,8 @@ export async function setup(
     openConnection,
     onLifecycle: lifecycle,
     onSettled: settled,
-    logger: { warn: vi.fn(), error: vi.fn() }
+    logger: { warn: vi.fn(), error: vi.fn() },
+    ...deps
   })
   const acquired = await adapter.acquire(input)
   const started = await adapter.open({
