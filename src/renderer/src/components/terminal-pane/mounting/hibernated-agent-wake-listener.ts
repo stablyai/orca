@@ -11,6 +11,7 @@ type WakeablePaneBinding = IDisposable & {
 /** Wakes this pane's armed hibernated agents when the worktree-wide wake event targets it. */
 export function listenForHibernatedAgentWake(
   worktreeId: string,
+  tabId: string,
   getBindings: () => Iterable<WakeablePaneBinding>
 ): () => void {
   const onWake = (event: Event): void => {
@@ -18,7 +19,7 @@ export function listenForHibernatedAgentWake(
       return
     }
     const detail: WakeHibernatedAgentsWorktreeDetail | null = event.detail
-    if (!detail || detail.worktreeId !== worktreeId) {
+    if (!detail || detail.worktreeId !== worktreeId || detail.tabIds?.includes(tabId) === false) {
       return
     }
     for (const binding of getBindings()) {

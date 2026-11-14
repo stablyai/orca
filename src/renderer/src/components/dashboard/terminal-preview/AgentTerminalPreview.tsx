@@ -50,7 +50,8 @@ export function AgentTerminalPreview({
   className,
   onRequestClose,
   linkSource,
-  onBrowserForeground
+  onBrowserForeground,
+  focusOnResync = true
 }: {
   ptyId: string
   /** Host-input facts relayed with the card; null routes bytes by client OS. */
@@ -59,6 +60,8 @@ export function AgentTerminalPreview({
   onRequestClose?: () => void
   linkSource?: DashboardPreviewLinkSource
   onBrowserForeground?: () => void
+  /** False for hosts where only the first replay may take focus, never a resync. */
+  focusOnResync?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const containerRef = useRef<HTMLDivElement>(null)
@@ -75,6 +78,7 @@ export function AgentTerminalPreview({
   const macOptionAsAltRef = useRef(macOptionAsAlt)
   const terminalInputRef = useRef(terminalInput)
   const onRequestCloseRef = useRef(onRequestClose)
+  const focusOnResyncRef = useRef(focusOnResync)
   const { terminalTheme: composedTheme, terminalMode } = useMemo(() => {
     if (!settings) {
       return { terminalTheme: null, terminalMode: 'dark' as const }
@@ -98,7 +102,16 @@ export function AgentTerminalPreview({
     macOptionAsAltRef.current = macOptionAsAlt
     terminalInputRef.current = terminalInput
     onRequestCloseRef.current = onRequestClose
-  }, [settings, macOptionAsAlt, terminalInput, onRequestClose, linkSource, onBrowserForeground])
+    focusOnResyncRef.current = focusOnResync
+  }, [
+    settings,
+    macOptionAsAlt,
+    terminalInput,
+    onRequestClose,
+    linkSource,
+    onBrowserForeground,
+    focusOnResync
+  ])
 
   // Font changes retain the replay-driven fit, grid claim and input-owner reset.
   useEffect(() => {
@@ -199,6 +212,7 @@ export function AgentTerminalPreview({
       requestRefresh: () => void
     ): void => {
       const snap = connection.snapshot!
+      const firstReplay = !terminal
       if (!terminal) {
         standalone = openStandaloneTerminal({
           container,
@@ -268,7 +282,9 @@ export function AgentTerminalPreview({
       }
       boxFit.schedule()
       gridClaim.schedule()
-      terminal.focus()
+      if (firstReplay || focusOnResyncRef.current) {
+        terminal.focus()
+      }
     }
 
     const releaseTerminal = (): void => {

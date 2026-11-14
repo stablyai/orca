@@ -31,6 +31,19 @@ describe('KeybindingService profile defaults', () => {
     writeFileSync(getUserKeybindingsPath(home), JSON.stringify(document))
   }
 
+  it('tells change listeners after a write and a reload, with the new overrides already readable', () => {
+    const service = open()
+    const seen: (string[] | undefined)[] = []
+    const stop = service.onChange(() =>
+      seen.push(service.getOverrides()['floatingTerminal.toggle'])
+    )
+    service.setActionBindings('floatingTerminal.toggle', ['Ctrl+Alt+9'])
+    service.reload()
+    stop()
+    service.reload()
+    expect(seen).toEqual([['Ctrl+Alt+9'], ['Ctrl+Alt+9']])
+  })
+
   it('keeps fresh and older profiles independent across opening order and reloads', () => {
     const fresh = open()
     expect(keybindingMatchesAction('worktree.palette', cmdK, 'darwin', fresh.getOverrides())).toBe(

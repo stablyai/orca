@@ -3,7 +3,7 @@ import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-t
 
 import { createNonSecureContextUuid } from '../../../shared/non-secure-context-uuid'
 import { translate } from '@/i18n/i18n'
-import { selectFloatingWorkspacePanelVisible } from '@/store/workspaces/floating/floating-workspace-panel-selector'
+import { selectFloatingWorkspaceOnScreen } from '@/store/workspaces/floating/floating-workspace-panel-selector'
 import { useAppStore } from '../store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
@@ -62,6 +62,6 @@ export function launchFloatingWorkspaceAgentShortcut(
   shortcut: Pick<TerminalAgentTabShortcut, 'agent' | 'pendingAgent'>
 ): void {
   launchAgentTabShortcut(FLOATING_TERMINAL_WORKTREE_ID, shortcut, () =>
-    selectFloatingWorkspacePanelVisible(useAppStore.getState())
+    selectFloatingWorkspaceOnScreen(useAppStore.getState())
   )
 }

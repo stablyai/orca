@@ -16,6 +16,7 @@ import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId 
 import { flushUnsavedCloudSessions } from '../orca-profiles/cloud-session/profile-cloud-session-owner'
 import type { Store } from '../persistence/loading-store/store'
 import { closeDashboardPopout } from './dashboard-popout-window'
+import { destroyFloatingWorkspaceWindowWithMainWindow } from './floating-workspace-window'
 import { closeWorkspaceSpaceWindow } from './workspace-space-window'
 import { installMainWindowCloseLifecycle } from './main-window/main-window-close-lifecycle'
 import type {
@@ -238,6 +239,7 @@ export function createMainWindow(
     store
   })
 
+  destroyFloatingWorkspaceWindowWithMainWindow(mainWindow)
   mainWindow.on('closed', () => {
     closeDashboardPopout()
     closeWorkspaceSpaceWindow()

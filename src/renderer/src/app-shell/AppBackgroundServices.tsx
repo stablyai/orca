@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { AgentHibernationGate } from '../components/AgentHibernationGate'
 import { AiVaultTabTitleSyncGate } from '../components/AiVaultTabTitleSyncGate'
+import { canOpenFloatingWorkspacePopout } from '../components/floating-terminal/floating-workspace-open-mode'
 import RetainedAgentsSyncGate from '../components/dashboard/retention/RetainedAgentsSyncGate'
 import { WorkspacePortScanner } from '../components/ports/WorkspacePortScanner'
 import { SavedHostScopeWidenGate } from '../components/sidebar/worktree-list/listing/SavedHostScopeWidenGate'
@@ -20,6 +21,9 @@ const DashboardPopoutBridge = lazy(
 const AgentListVerdictPublisher = lazy(
   () => import('../components/activity/agent-list-verdict-publisher')
 )
+const FloatingWorkspaceWindowBridge = lazy(
+  () => import('../components/floating-terminal/FloatingWorkspaceWindowBridge')
+)
 
 /** Isolate high-churn subscriptions from App rendering; services outlive their consuming surfaces. */
 export function AppBackgroundServices(): React.JSX.Element {
@@ -30,6 +34,13 @@ export function AppBackgroundServices(): React.JSX.Element {
   const canPublishAgentList = Boolean(window.api.agentStatus?.publishListVerdicts)
   // The list builds on every agent update, so only a desktop with a paired phone pays for it.
   const { hasPairedDevice } = usePairedMobileDevices({ enabled: canPublishAgentList })
+
+  const floatingWindowBridgeEnabled = useAppStore(
+    (s) =>
+      canOpenFloatingWorkspacePopout() &&
+      s.settings?.floatingTerminalEnabled === true &&
+      s.settings.experimentalFloatingWorkspacePopout === true
+  )
 
   return (
     <>
@@ -46,6 +57,11 @@ export function AppBackgroundServices(): React.JSX.Element {
       {dashboardPopoutEnabled ? (
         <Suspense fallback={null}>
           <DashboardPopoutBridge />
+        </Suspense>
+      ) : null}
+      {floatingWindowBridgeEnabled ? (
+        <Suspense fallback={null}>
+          <FloatingWorkspaceWindowBridge />
         </Suspense>
       ) : null}
       <AgentHibernationGate />

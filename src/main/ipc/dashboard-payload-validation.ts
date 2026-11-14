@@ -1,5 +1,6 @@
 import {
   DASHBOARD_MAX_LABEL_LENGTH,
+  type DashboardCardTerminalInput,
   type DashboardRevealAgentArgs,
   type DashboardSnapshot
 } from '../../shared/dashboard-snapshot'
@@ -33,7 +34,7 @@ const imageIconValidity = new BoundedMap<string, boolean>({
 const MAX_ID_LENGTH = 4_096
 const MAX_LABEL_LENGTH = DASHBOARD_MAX_LABEL_LENGTH
 const DASHBOARD_BUCKETS = new Set(['attention', 'working', 'done', 'idle'])
-const DASHBOARD_DOT_STATES = new Set(['working', 'blocked', 'waiting', 'done', 'idle'])
+export const DASHBOARD_DOT_STATES = new Set(['working', 'blocked', 'waiting', 'done', 'idle'])
 const DASHBOARD_HOST_KINDS = new Set(['local', 'ssh', 'wsl', 'remote'])
 const DASHBOARD_WORKSPACE_KINDS = new Set(['worktree', 'folder'])
 const DASHBOARD_REVIEW_STATES = new Set(['open', 'closed', 'merged', 'draft'])
@@ -278,7 +279,9 @@ function isDashboardCard(value: unknown): boolean {
   )
 }
 
-function isDashboardTerminalInput(value: unknown): boolean {
+export function isDashboardTerminalInput(
+  value: unknown
+): value is DashboardCardTerminalInput | undefined {
   if (value === undefined) {
     return true
   }

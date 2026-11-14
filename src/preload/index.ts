@@ -47,6 +47,7 @@ import { preflightApi } from './api/preflight/preflight-bridge'
 import { notificationsApi } from './api/notifications/notifications-bridge'
 import { onboardingApi } from './api/onboarding/onboarding-bridge'
 import { dashboardApi } from './api/window-ui/dashboard-bridge'
+import { floatingWorkspaceWindowApi } from './api/window-ui/floating-workspace-window-bridge'
 import { terminalPreviewApi } from './api/terminal/terminal-preview-bridge'
 import { macosTccPromptsApi } from './api/desktop-permissions/macos-tcc-prompts-bridge'
 import { developerPermissionsApi } from './api/desktop-permissions/developer-permissions-bridge'
@@ -156,6 +157,7 @@ const api = {
   notifications: notificationsApi,
   onboarding: onboardingApi,
   dashboard: dashboardApi,
+  floatingWorkspaceWindow: floatingWorkspaceWindowApi,
   terminalPreview: terminalPreviewApi,
   macosTccPrompts: macosTccPromptsApi,
   developerPermissions: developerPermissionsApi,
