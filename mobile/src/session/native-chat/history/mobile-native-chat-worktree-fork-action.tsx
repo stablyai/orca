@@ -1,6 +1,9 @@
 import { AI_VAULT_TERMINAL_FORK_CUT_CAPABILITY } from '../../../../../src/shared/ai-vault/resume/ai-vault-resume-preparation'
 import { AGENT_SESSION_CREATE_FORK_WORKTREE_RUNTIME_CAPABILITY } from '../../../../../src/shared/agent-session/agent-session-create-capabilities'
+import { Bot } from 'lucide-react-native'
 import type { ActionSheetAction } from '../../../components/sheets/ActionSheetModal'
+import { MobileForkIcon } from '../../../components/icons/MobileForkIcon'
+import { colors } from '../../../theme/mobile-theme'
 import type { MobileSessionController } from '../../use-mobile-session-controller'
 import { requestMobileWorktreeFork } from './mobile-native-chat-worktree-fork-requests'
 import {
@@ -43,6 +46,9 @@ export function mobileWorktreeForkAction(
     hint: subagent
       ? t('chat.fork.subagent.menuHint', 'A copy of this chat works on a task and reports back')
       : t('chat.fork.worktree.menuHint', 'A new worktree with a copy of this chat'),
+    ...(subagent
+      ? { icon: Bot }
+      : { renderIcon: () => <MobileForkIcon size={16} color={colors.textSecondary} /> }),
     disabled: controller.connState !== 'connected',
     closeBeforePress: true,
     onPress: () => {

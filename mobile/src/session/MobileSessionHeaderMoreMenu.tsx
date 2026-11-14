@@ -1,11 +1,9 @@
 import type { RefObject } from 'react'
 import type { HostInstance } from 'react-native'
 import {
-  Bot,
   Columns2,
   Folder,
   GitBranch,
-  GitBranchPlus,
   ListChecks,
   Plus,
   SquareChevronRight
@@ -126,8 +124,8 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
         ]
       : []
   const tabs: ActionSheetAction[] = [
-    ...(worktreeFork ? [{ ...worktreeFork, icon: GitBranchPlus }] : []),
-    ...(subagentFork ? [{ ...subagentFork, icon: Bot }] : []),
+    ...(worktreeFork ? [worktreeFork] : []),
+    ...(subagentFork ? [subagentFork] : []),
     ...(actionsCollapsed
       ? [
           {

@@ -1,8 +1,8 @@
 import { useContext, useSyncExternalStore } from 'react'
 import { Pressable, View } from 'react-native'
-import { GitFork } from 'lucide-react-native'
 import type { NativeChatMessage } from '../../../../../../src/shared/native-chat/native-chat-types'
 import { MobileSourceCopyButton } from '../../../../components/code-presentation/MobileSourceCopyButton'
+import { MobileForkIcon } from '../../../../components/icons/MobileForkIcon'
 import { colors, radii } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
@@ -78,7 +78,11 @@ function ForkButton({
       disabled={disabled}
       onPress={onFork}
     >
-      <GitFork size={14} color={colors.textMuted} style={disabled ? styles.disabled : null} />
+      <MobileForkIcon
+        size={14}
+        color={colors.textMuted}
+        style={disabled ? styles.disabled : null}
+      />
     </Pressable>
   )
 }
