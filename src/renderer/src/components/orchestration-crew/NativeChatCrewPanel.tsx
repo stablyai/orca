@@ -1,3 +1,4 @@
+import { cn } from '@/lib/class-names'
 import { formatOrcaSessionAddress, isOrcaSessionId } from '../../../../shared/orca-session-address'
 import type { RefObject } from 'react'
 import type { NativeChatComposerHandle } from '../native-chat/composer/native-chat-composer-types'
@@ -47,16 +48,25 @@ export function NativeChatCrewPanel({
 /** Wraps a native chat's transcript: the crew panel overlays it, never the header's buttons or the composer below it. */
 export function NativeChatCrewFrame({
   panel,
+  keepsFloor = false,
   children
 }: {
   /** The availability gate prevents unavailable panels from acquiring subscriptions. */
   panel: React.ReactNode
+  /** A fitted dock sits below: keep a sliver of transcript until the dock's fallbacks give it up. */
+  keepsFloor?: boolean
   children: React.ReactNode
 }): React.JSX.Element {
   const enabled = useOrchestrationPanelEnabled()
   // Keep transcript layout independent of panel availability.
   return (
-    <div className="relative flex min-h-0 flex-1 flex-col">
+    <div
+      className={cn(
+        'relative flex min-h-0 flex-1 flex-col',
+        keepsFloor &&
+          'min-h-[calc(var(--spacing)*20)] [[data-native-chat-dock-fit~=transcript]_&]:min-h-0'
+      )}
+    >
       {enabled ? (
         // Clips the panel to the transcript even when it is shorter than the panel's header.
         <div className="pointer-events-none absolute inset-0 overflow-hidden">{panel}</div>

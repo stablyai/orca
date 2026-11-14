@@ -19805,7 +19805,16 @@
         "skip": "Atla",
         "sending": "Gönderiliyor…",
         "terminalRequired": "Bu OMP sorusunu terminalde yanıtlayın.",
-        "openTerminal": "Terminalde yanıtla"
+        "openTerminal": "Terminalde yanıtla",
+        "recommended": "Önerilen",
+        "stepAnswered": "{{value0}}, yanıtlandı",
+        "stepOf": "{{value0}} / {{value1}}",
+        "answered": "Yanıtlandı",
+        "title": "Soru",
+        "previous": "Önceki soru",
+        "nextQuestion": "Sonraki soru",
+        "back": "Geri",
+        "skipAndSubmit": "Atla ve gönder"
       },
       "ask": {
         "awaiting": "Kullanıcı girdisi bekleniyor:",
@@ -19983,7 +19992,11 @@
         "collapse": "Daralt",
         "expand": "Genişlet",
         "queued": "Sıraya alındı",
-        "clearAll": "Tümünü temizle"
+        "clearAll": "Tümünü temizle",
+        "couldNotSend": "Gönderilemedi",
+        "retry": "Yeniden dene",
+        "showLessRows": "Daha az göster",
+        "moreRows": "+{{value0}} daha"
       },
       "thought": "Düşündü",
       "thoughtForDuration": "{{duration}} boyunca düşündü",
@@ -20221,7 +20234,10 @@
         "many_other": "{{count}} pull request oluşturuldu"
       },
       "splitRight": "Sağa Böl",
-      "splitDown": "Aşağı Böl"
+      "splitDown": "Aşağı Böl",
+      "dock": {
+        "label": "Mesaj kutusu ve istemler"
+      }
     },
     "tab": {
       "bar": {

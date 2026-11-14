@@ -267,6 +267,7 @@ export function NativeChatComposerField({
   return (
     <div
       data-composer-field={launch ? undefined : ''}
+      data-native-chat-queue-dock={launch ? undefined : ''}
       className={launch ? undefined : '@container/composer-field shrink-0 bg-chat-pane'}
     >
       <div className={launch ? undefined : 'native-chat-composer-gutter pt-2 pb-4'}>
@@ -306,9 +307,10 @@ export function NativeChatComposerField({
             className="mb-1.5"
           />
           <div
+            data-native-chat-dock-pinned={launch ? undefined : ''}
             className={cn(
               // Use a constant container border so focus changes cannot flash it.
-              'group/composer rounded-xl border p-1.5 shadow-xs',
+              'group/composer relative z-[1] rounded-xl border p-1.5 shadow-xs',
               !launch && 'native-chat-composer-card',
               launch
                 ? 'border-foreground/10 bg-background dark:bg-foreground/[0.04]'
@@ -373,7 +375,7 @@ export function NativeChatComposerField({
                 'w-full bg-transparent px-2 py-1 text-sm outline-none',
                 launch
                   ? 'min-h-7 max-h-[calc(6lh+0.5rem)] text-foreground placeholder:text-muted-foreground [&_p.is-editor-empty:first-child]:before:!h-auto [&_p.is-editor-empty:first-child]:before:w-full [&_p.is-editor-empty:first-child]:before:mr-[-100%]'
-                  : 'min-h-12 max-h-[calc(8lh+0.5rem)] text-chat-foreground-strong placeholder:text-chat-foreground-faint pointer-coarse:min-h-14',
+                  : 'min-h-12 max-h-[calc(8lh+0.5rem)] text-chat-foreground-strong placeholder:text-chat-foreground-faint pointer-coarse:min-h-14 [[data-native-chat-dock-fit~=composer]_[data-native-chat-dock]:has([data-native-chat-question-card])_&]:max-h-[calc(3lh+0.5rem)]',
                 'overflow-y-auto scrollbar-sleek',
                 // Why: the editor is a contenteditable, which `:disabled` never matches.
                 '[&[contenteditable=false]]:cursor-not-allowed [&[contenteditable=false]]:opacity-50'

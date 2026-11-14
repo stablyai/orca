@@ -357,7 +357,7 @@ function FocusedQuestion({ steps = 1 }: { steps?: number }) {
   )
 }
 
-// Keyboard focus lands on option 1 as the card opens; it must not look picked.
+// The card takes focus as it opens; no option may look picked or ringed.
 export const keyboardFocus = defineFixture({
   width: 720,
   render: () => <FocusedQuestion />
@@ -373,7 +373,7 @@ export const narrow = defineFixture({
   render: () => <FocusedQuestion />
 })
 
-// Answered the first step, then skipped to the last: the footer must still offer Submit.
+// Answered the first step, then skipped to the last: the footer offers Skip and submit.
 export const skippedLastStep = defineFixture({
   width: 720,
   render: () => <FocusedQuestion steps={2} />,

@@ -1,19 +1,13 @@
 import { NativeChatQueuedMessageRows } from './NativeChatQueuedMessageRows'
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
-import { AlertCircle, ChevronDown, ChevronRight, Play, Trash2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
+import { cn } from '@/lib/class-names'
 import {
   NativeChatQueuedMessageCard,
   queuedMessageCardCaption
 } from './NativeChatQueuedMessageCard'
-import type {
-  QueuedMessagesPendingAction,
-  StructuredAgentSessionQueuedMessagesController
-} from './use-structured-agent-session-queued-messages'
-import { NativeChatPendingIcon } from './NativeChatPendingIcon'
+import { NativeChatQueueHeader } from './NativeChatQueueHeader'
+import type { StructuredAgentSessionQueuedMessagesController } from './use-structured-agent-session-queued-messages'
 import type { AgentSessionFailureFact } from '../../../../../shared/agent-session/failures/agent-session-failure'
 import { NATIVE_CHAT_ROOT_SELECTOR } from '@/components/native-chat/paste/native-chat-paste-request'
 import { focusNativeChatPromptCard } from '../prompts/use-native-chat-prompt-card-focus'
@@ -22,6 +16,9 @@ import {
   queuedMessageCardNeedsAttention
 } from '../../../../../shared/agent-session/view/structured-agent-session-queued-cards'
 import type { QueuedEditAttachTarget } from './editing/NativeChatQueuedMessageComposer'
+import { invalidateNativeChatDockFit } from '../pane/dock/native-chat-dock-fit'
+import { useNativeChatDockFitToken } from '../pane/dock/use-native-chat-dock-fit'
+import { NATIVE_CHAT_QUEUE_FULL_ROWS, useNativeChatQueueRoom } from './use-native-chat-queue-room'
 
 /** Keep host-held drafts outside the transcript until consumed; keep the live region mounted for the first card. */
 export function NativeChatQueuedMessageList({
@@ -48,16 +45,38 @@ export function NativeChatQueuedMessageList({
   const t = useTranslate()
   const regionRef = useRef<HTMLDivElement>(null)
   const queueRef = useRef<HTMLDivElement>(null)
+  const foldRef = useRef<HTMLButtonElement>(null)
+  const unitRef = useRef<HTMLSpanElement>(null)
   const { cards, pause } = controller
   const listId = useId()
   const [expanded, setExpanded] = useState(true)
+  // The person unfolded a queue the dock had folded for room; that choice wins until the queue empties.
+  const [userOpen, setUserOpen] = useState(false)
+  const [showAll, setShowAll] = useState(false)
+  const [openIds, setOpenIds] = useState<ReadonlySet<string>>(() => new Set())
+  const [dragging, setDragging] = useState(false)
   // Collapsing is local to this queue's run: once it empties, the next card shows open.
-  if (cards.length === 0 && !expanded) {
+  if (cards.length === 0 && (!expanded || userOpen || showAll)) {
     setExpanded(true)
+    setUserOpen(false)
+    setShowAll(false)
   }
+  const room = useNativeChatQueueRoom(regionRef, unitRef)
+  if (!room.questionOpen && showAll) {
+    setShowAll(false)
+  }
+  const editing = controller.editor !== undefined
+  const shownOpenIds = cards.filter((card) => openIds.has(card.messageId))
+  const fitFolded = useNativeChatDockFitToken(regionRef, 'queue') && !userOpen && !editing
+  const listShown = expanded && !fitFolded
+  // Rows are whole: the list's cap is a row count in the chat's own spacing, never a pixel total.
+  const rowCap =
+    editing || shownOpenIds.length > 0 ? null : showAll ? NATIVE_CHAT_QUEUE_FULL_ROWS : room.rowCap
+  const hiddenCount = rowCap === null ? 0 : Math.max(0, cards.length - rowCap)
+  const offersMore = room.rowCap < NATIVE_CHAT_QUEUE_FULL_ROWS && (showAll || hiddenCount > 0)
   const newest = cards.at(-1)
   const steerableHead = controller.queueCapable ? headSteerableQueuedMessageCard(cards) : null
-  const attentionCard = !expanded ? cards.find(queuedMessageCardNeedsAttention) : undefined
+  const attentionCard = !listShown ? cards.find(queuedMessageCardNeedsAttention) : undefined
   const attentionCaption = attentionCard
     ? queuedMessageCardCaption(attentionCard, agentName, statedFailures, t)
     : null
@@ -77,6 +96,12 @@ export function NativeChatQueuedMessageList({
       listRef.current.scrollTop = listRef.current.scrollHeight
     }
   }, [cards, newest, newestIsPersons])
+  // A folded list has no box to observe, so its changes ask the dock to re-fit.
+  useLayoutEffect(() => {
+    if (regionRef.current) {
+      invalidateNativeChatDockFit(regionRef.current)
+    }
+  }, [cards.length, editing, shownOpenIds.length, userOpen, showAll, expanded])
   // Refocus only if focus stayed on the queue; an active prompt card takes priority over the composer.
   const refocusAfter = (action: Promise<unknown>): void => {
     void action.then(() => {
@@ -98,20 +123,49 @@ export function NativeChatQueuedMessageList({
       refocusAfter(Promise.resolve())
     }
   })
+  const toggle = (): void => {
+    if (fitFolded) {
+      setUserOpen(true)
+      return
+    }
+    // Folding hides the focused row; keep focus on the control that folded it.
+    if (expanded && listRef.current?.contains(document.activeElement)) {
+      foldRef.current?.focus()
+    }
+    setExpanded(!expanded)
+  }
   return (
-    <div ref={regionRef} aria-live="polite">
+    <div
+      ref={regionRef}
+      aria-live="polite"
+      data-native-chat-queue=""
+      data-user-open={userOpen || undefined}
+      data-editing={editing || undefined}
+      className={cn(
+        cards.length > 0 &&
+          // A tab tucked 12px behind the next input surface (that surface's 8px top padding plus 12px).
+          'relative z-0 flex min-h-0 shrink-0 flex-col px-3 sm:px-4 [[data-native-chat-composer-tab-strip]+&]:pt-2 [&:has(+[data-native-chat-queue-dock])]:-mb-5 [[data-native-chat-dock-fit~=queue]_&[data-user-open]]:shrink'
+      )}
+    >
+      {/* One chat-spacing unit, measured so row caps and the short-pane test scale with the chat's text size. */}
+      <span ref={unitRef} aria-hidden className="pointer-events-none absolute h-1 w-0" />
       {cards.length > 0 ? (
-        <div ref={queueRef} className="mx-auto w-full max-w-(--chat-content-max-width) px-4 py-1">
-          <div className="divide-y divide-border rounded-md border border-border bg-card text-card-foreground">
+        <div className="@container mx-auto flex min-h-0 w-full max-w-(--chat-content-max-width) flex-col">
+          <div
+            ref={queueRef}
+            className="mx-3 flex min-h-0 flex-col rounded-t-xl border border-b-0 border-border bg-chat-composer-surface pt-0.5 pb-3.5 [--queued-row:calc(var(--spacing)*8)] [[data-native-chat-queue]:not(:has(+[data-native-chat-queue-dock]))_&]:mb-2 [[data-native-chat-queue]:not(:has(+[data-native-chat-queue-dock]))_&]:rounded-b-xl [[data-native-chat-queue]:not(:has(+[data-native-chat-queue-dock]))_&]:border-b [[data-native-chat-queue]:not(:has(+[data-native-chat-queue-dock]))_&]:pb-1"
+          >
             <NativeChatQueueHeader
+              foldRef={foldRef}
               count={cards.length}
               attentionCaption={attentionCaption}
               pause={pause}
               queuePending={controller.queuePending}
               clearCapable={controller.clearCapable}
-              expanded={expanded}
+              expanded={listShown}
+              foldDisabled={dragging}
               listId={listId}
-              onToggle={() => setExpanded(!expanded)}
+              onToggle={toggle}
               onClearAll={() => refocusAfter(controller.clear())}
               onResume={() => refocusAfter(controller.resume())}
             />
@@ -121,15 +175,22 @@ export function NativeChatQueuedMessageList({
               // Hidden, not unmounted: an open edit keeps its typing while the list is collapsed.
               hidden={!expanded}
               aria-label={t('components.native-chat.queuedMessages.listLabel', 'Queued messages')}
-              // Bound queue height to preserve transcript/composer space; allow extra room for edit thumbnails.
+              style={
+                rowCap === null
+                  ? undefined
+                  : { maxHeight: `calc(var(--queued-row) * ${rowCap} + var(--spacing) * 0.5)` }
+              }
               className={cn(
-                'scrollbar-sleek divide-y divide-border overflow-y-auto',
-                controller.editor ? 'max-h-72' : 'max-h-40'
+                'scrollbar-sleek min-h-(--queued-row) shrink overflow-y-auto px-1 py-px',
+                rowCap === null && 'max-h-72',
+                // Folded for room unless the person opened it, is editing, or has focus in it.
+                '[[data-native-chat-dock-fit~=queue]_[data-native-chat-queue]:not([data-user-open],[data-editing],:focus-within)_&]:hidden'
               )}
             >
               <NativeChatQueuedMessageRows
                 cards={cards}
                 reorder={controller.editor ? undefined : controller.reorder}
+                onDraggingChange={setDragging}
                 renderCard={(card, drag) => (
                   <NativeChatQueuedMessageCard
                     key={card.messageId}
@@ -149,6 +210,16 @@ export function NativeChatQueuedMessageList({
                         ? () => void controller.edit(card.messageId)
                         : undefined
                     }
+                    expanded={openIds.has(card.messageId)}
+                    onToggleExpanded={() =>
+                      setOpenIds((ids) => {
+                        const next = new Set(ids)
+                        if (!next.delete(card.messageId)) {
+                          next.add(card.messageId)
+                        }
+                        return next
+                      })
+                    }
                     editor={
                       controller.editor?.messageId === card.messageId
                         ? controller.editor
@@ -160,110 +231,24 @@ export function NativeChatQueuedMessageList({
                 )}
               />
             </ul>
+            {offersMore && expanded ? (
+              <button
+                type="button"
+                aria-controls={listId}
+                aria-expanded={showAll}
+                onClick={() => setShowAll(!showAll)}
+                className="mx-1 shrink-0 rounded-md px-1.5 py-1 text-left text-xs font-medium text-muted-foreground hover:bg-foreground/5 hover:text-foreground focus-visible:outline-[1.5px] focus-visible:outline-foreground/45 [[data-native-chat-dock-fit~=queue]_[data-native-chat-queue]:not([data-user-open],[data-editing],:focus-within)_&]:hidden"
+              >
+                {showAll
+                  ? t('components.native-chat.queuedMessages.showLessRows', 'Show less')
+                  : t('components.native-chat.queuedMessages.moreRows', '+{{value0}} more', {
+                      value0: hiddenCount
+                    })}
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}
-    </div>
-  )
-}
-
-function NativeChatQueueHeader({
-  count,
-  attentionCaption,
-  pause,
-  queuePending,
-  clearCapable,
-  expanded,
-  listId,
-  onToggle,
-  onClearAll,
-  onResume
-}: {
-  count: number
-  attentionCaption: string | null
-  pause: { reason: string } | null
-  queuePending: QueuedMessagesPendingAction | null
-  clearCapable: boolean
-  expanded: boolean
-  listId: string
-  onToggle: () => void
-  onClearAll: () => void
-  onResume: () => void
-}): React.JSX.Element {
-  const t = useTranslate()
-  const toggleLabel = expanded
-    ? t('components.native-chat.queuedMessages.collapse', 'Collapse')
-    : t('components.native-chat.queuedMessages.expand', 'Expand')
-  return (
-    <div
-      className={cn(
-        'flex items-center gap-1 rounded-t-md py-1 pr-1 pl-2.5 text-xs text-muted-foreground',
-        pause && 'bg-muted',
-        !expanded && 'rounded-b-md'
-      )}
-    >
-      <p className={cn('truncate', pause && 'font-medium text-foreground')}>
-        {pause
-          ? t('components.native-chat.queuedMessages.paused', 'Paused')
-          : t('components.native-chat.queuedMessages.queued', 'Queued')}
-      </p>
-      <span aria-hidden>·</span>
-      <span className={cn('tabular-nums', attentionCaption ? 'shrink-0' : 'min-w-0 flex-1')}>
-        {count}
-      </span>
-      {attentionCaption ? (
-        <span className="flex min-w-0 flex-1 items-center gap-1 text-destructive">
-          <AlertCircle className="size-3.5 shrink-0" aria-hidden />
-          <span className="truncate">{attentionCaption}</span>
-        </span>
-      ) : null}
-      {pause ? (
-        <>
-          {/* Each greys during the other: a Resume would send the cards a Clear is deleting. */}
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            disabled={!clearCapable || queuePending !== null}
-            onClick={onClearAll}
-          >
-            <NativeChatPendingIcon pending={queuePending === 'clear'} className="size-3">
-              <Trash2 className="size-3" />
-            </NativeChatPendingIcon>
-            {t('components.native-chat.queuedMessages.clearAll', 'Clear all')}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            disabled={queuePending !== null}
-            onClick={onResume}
-          >
-            <NativeChatPendingIcon pending={queuePending === 'resume'} className="size-3">
-              <Play className="size-3" />
-            </NativeChatPendingIcon>
-            {t('components.native-chat.queuedMessages.resume', 'Resume')}
-          </Button>
-        </>
-      ) : null}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label={t('components.native-chat.queuedMessages.listLabel', 'Queued messages')}
-            aria-expanded={expanded}
-            aria-controls={listId}
-            onClick={onToggle}
-          >
-            {expanded ? <ChevronDown /> : <ChevronRight />}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={4}>
-          {toggleLabel}
-        </TooltipContent>
-      </Tooltip>
     </div>
   )
 }

@@ -73,7 +73,10 @@ export function NativeChatApprovalCard({
 
   return (
     <SecuritySurface>
-      <div className={stacked ? 'bg-chat-pane' : 'min-h-0 shrink overflow-hidden bg-chat-pane'}>
+      <div
+        data-native-chat-queue-dock={stacked ? undefined : ''}
+        className={stacked ? 'bg-chat-pane' : 'min-h-0 shrink overflow-hidden bg-chat-pane'}
+      >
         <div
           className={cn(
             'mx-auto flex w-full max-w-(--chat-content-max-width) px-3 pt-2 pb-1 sm:px-4',
@@ -94,7 +97,7 @@ export function NativeChatApprovalCard({
                 escape()
               }
             }}
-            className="flex min-h-0 w-full flex-1 flex-col gap-2 overflow-hidden rounded-lg border border-input bg-card px-4 py-3 shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="relative z-[1] flex min-h-0 w-full flex-1 flex-col gap-2 overflow-hidden rounded-lg border border-input bg-card px-4 py-3 shadow-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <div className="flex shrink-0 items-start gap-2">
               <ShieldQuestion className="mt-0.5 size-4 shrink-0 text-muted-foreground" />

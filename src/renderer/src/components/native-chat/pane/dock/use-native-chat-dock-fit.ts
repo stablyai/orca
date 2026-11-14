@@ -1,0 +1,115 @@
+import { useCallback, useLayoutEffect, useSyncExternalStore, type RefObject } from 'react'
+import {
+  NATIVE_CHAT_DOCK_FIT_ATTRIBUTE,
+  NATIVE_CHAT_DOCK_INVALIDATE_EVENT,
+  NATIVE_CHAT_DOCK_OBSERVED_SELECTOR,
+  runNativeChatDockFit
+} from './native-chat-dock-fit'
+
+/** Keep the dock's controls reachable in a short pane: re-fit whenever an observed box or the dock's items change. */
+export function useNativeChatDockFit(dockRef: RefObject<HTMLElement | null>): void {
+  useLayoutEffect(() => {
+    const dock = dockRef.current
+    // From the dock, not a ref: an ancestor's ref is not attached yet when this child's layout effect runs.
+    const root = dock?.closest<HTMLElement>('[data-native-chat-root]')
+    if (!root || !dock || typeof ResizeObserver === 'undefined') {
+      return
+    }
+    let queued = false
+    const run = (): void => {
+      queued = false
+      runNativeChatDockFit(root, dock)
+    }
+    // Coalesce invalidations from one commit; a microtask still runs before the browser paints.
+    const schedule = (): void => {
+      if (!queued) {
+        queued = true
+        queueMicrotask(run)
+      }
+    }
+    // Resize callbacks run after layout and before paint, so a level change never shows a stale frame.
+    const resize = new ResizeObserver(run)
+    const observed = new WeakSet<Element>()
+    const observeNew = (): boolean => {
+      let added = false
+      const targets = [
+        dock,
+        ...dock.children,
+        ...dock.querySelectorAll(NATIVE_CHAT_DOCK_OBSERVED_SELECTOR)
+      ]
+      for (const target of targets) {
+        if (!observed.has(target)) {
+          observed.add(target)
+          resize.observe(target)
+          added = true
+        }
+      }
+      return added
+    }
+    observeNew()
+    run()
+    // Only newly mounted boxes need a pass; removed ones resize their observed parents.
+    const mutations = new MutationObserver(() => {
+      if (observeNew()) {
+        schedule()
+      }
+    })
+    mutations.observe(dock, { childList: true, subtree: true })
+    dock.addEventListener(NATIVE_CHAT_DOCK_INVALIDATE_EVENT, schedule)
+    // A capped field keeps its box while its text shrinks, so while a fallback holds, a change in
+    // its content height (not every keystroke) asks for a pass that may lift the cap.
+    const contentHeights = new WeakMap<Element, number>()
+    const input = (event: Event): void => {
+      const field = event.target
+      if (!(field instanceof HTMLElement) || !root.hasAttribute(NATIVE_CHAT_DOCK_FIT_ATTRIBUTE)) {
+        return
+      }
+      const height = field.scrollHeight
+      if (contentHeights.get(field) !== height) {
+        contentHeights.set(field, height)
+        schedule()
+      }
+    }
+    dock.addEventListener('input', input)
+    return () => {
+      resize.disconnect()
+      mutations.disconnect()
+      dock.removeEventListener(NATIVE_CHAT_DOCK_INVALIDATE_EVENT, schedule)
+      dock.removeEventListener('input', input)
+      root.removeAttribute(NATIVE_CHAT_DOCK_FIT_ATTRIBUTE)
+    }
+  }, [dockRef])
+}
+
+function subscribeToFit(element: Element | null, onChange: () => void): () => void {
+  const root = element?.closest('[data-native-chat-root]')
+  if (!root) {
+    return () => {}
+  }
+  const observer = new MutationObserver(onChange)
+  observer.observe(root, { attributes: true, attributeFilter: [NATIVE_CHAT_DOCK_FIT_ATTRIBUTE] })
+  return () => observer.disconnect()
+}
+
+/** Mirrors one fit token for semantics (aria-expanded); layout reads the attribute through CSS, not this. */
+export function useNativeChatDockFitToken(
+  ref: RefObject<HTMLElement | null>,
+  token: string
+): boolean {
+  const subscribe = useCallback(
+    (onChange: () => void) => subscribeToFit(ref.current, onChange),
+    [ref]
+  )
+  return useSyncExternalStore(
+    subscribe,
+    () =>
+      (
+        ref.current
+          ?.closest('[data-native-chat-root]')
+          ?.getAttribute(NATIVE_CHAT_DOCK_FIT_ATTRIBUTE) ?? ''
+      )
+        .split(' ')
+        .includes(token),
+    () => false
+  )
+}

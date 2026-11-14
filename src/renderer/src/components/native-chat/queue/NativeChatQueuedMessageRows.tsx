@@ -33,6 +33,8 @@ type Props = {
   cards: QueuedMessageCard[]
   reorder?: QueuedMessageReorder
   renderCard: (card: QueuedMessageCard, drag?: QueuedMessageDragPresentation) => ReactNode
+  /** A row is being dragged: the list must not fold under it. */
+  onDraggingChange?: (dragging: boolean) => void
 }
 
 // Consume fresh render callbacks below the memoized sortable hooks.
@@ -63,14 +65,19 @@ export function NativeChatQueuedMessageRows(props: Props): ReactNode {
 function SortableQueuedMessages({
   cards,
   reorder,
-  renderCard
+  renderCard,
+  onDraggingChange
 }: Props & { reorder: QueuedMessageReorder }): React.JSX.Element {
   const t = useTranslate()
   const mounted = useRef(false)
+  const draggingChange = useRef(onDraggingChange)
+  draggingChange.current = onDraggingChange
   useLayoutEffect(() => {
     mounted.current = true
     return () => {
       mounted.current = false
+      // A membership change remounts this list mid-drag; the drag ends with it.
+      draggingChange.current?.(false)
     }
   }, [])
   const sensors = useSensors(useSensor(PointerSensor, pointerOptions))
@@ -95,13 +102,20 @@ function SortableQueuedMessages({
         sensors={sensors}
         accessibility={accessibility}
         collisionDetection={closestCenter}
-        onDragStart={({ active }) => setDrag({ from: String(active.id), over: String(active.id) })}
+        onDragStart={({ active }) => {
+          setDrag({ from: String(active.id), over: String(active.id) })
+          onDraggingChange?.(true)
+        }}
         onDragOver={({ active, over }) =>
           setDrag(over ? { from: String(active.id), over: String(over.id) } : null)
         }
-        onDragCancel={() => setDrag(null)}
+        onDragCancel={() => {
+          setDrag(null)
+          onDraggingChange?.(false)
+        }}
         onDragEnd={({ active, over }) => {
           setDrag(null)
+          onDraggingChange?.(false)
           if (!mounted.current || !over || active.id === over.id) {
             return
           }

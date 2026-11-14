@@ -175,4 +175,48 @@ describe('async question send ownership', () => {
     expect(send).toHaveBeenCalledTimes(2)
     expect(blue().getAttribute('aria-pressed')).toBe('true')
   })
+  it('sends a pending answer once however often it is confirmed, and again after a refused send', () => {
+    let accept = false
+    const send = vi.fn<NativeChatStructuredComposerTransport['send']>((_text, _images, request) => {
+      request?.onCreated?.(`answer-${send.mock.calls.length}`)
+      return accept
+    })
+    act(() =>
+      root.render(
+        <NativeChatStructuredAsyncQuestion
+          paneKey="scope"
+          sourceKey="host/epoch"
+          sourceScope="host/epoch"
+          session={{ messages: [asked], readPhase: 'ready' }}
+          send={send}
+        />
+      )
+    )
+    const blue = () =>
+      [...container.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')].find((node) =>
+        node.textContent?.includes('Blue')
+      )!
+    const enter = () =>
+      act(() => {
+        blue().dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
+        )
+      })
+    act(() => blue().dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    // The host refuses the first send: nothing is pending, so the next Enter tries again.
+    act(() => vi.advanceTimersByTime(200))
+    expect(send).toHaveBeenCalledTimes(1)
+    accept = true
+    enter()
+    expect(send).toHaveBeenCalledTimes(2)
+    // Accepted and not yet settled: further confirmations send nothing.
+    enter()
+    enter()
+    act(() =>
+      [...container.querySelectorAll('button')]
+        .find((node) => node.textContent?.startsWith('Sending'))
+        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    )
+    expect(send).toHaveBeenCalledTimes(2)
+  })
 })
