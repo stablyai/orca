@@ -1,7 +1,7 @@
 import type * as MobileBranchBaseRefModule from '../../../source-control/branches/mobile-branch-base-ref'
 import type * as MobileGitHistoryModule from '../../../source-control/history/mobile-git-history'
 import type * as MobileCommitMessageAiModule from '../../../source-control/commits/mobile-commit-message-ai'
-import type * as MobilePrLinkModule from '../../../source-control/review/mobile-pr-link'
+import type * as MobilePrLinkModule from '../../../source-control/review/creation/mobile-pr-link'
 import type { MountAdapter } from '../recording-scenario'
 import { operationModuleLoader } from '../operation-module-loader'
 
@@ -62,7 +62,7 @@ export function sourceControlMountAdapters(
     },
     'source-control.pr-link': ({ client }) => {
       const link = modules.load<typeof MobilePrLinkModule>(
-        'mobile/src/source-control/review/mobile-pr-link.ts'
+        'mobile/src/source-control/review/creation/mobile-pr-link.ts'
       )
       let outcome: unknown = 'unlinked'
       let linkedPR: unknown = 'unread'

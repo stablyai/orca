@@ -92,7 +92,7 @@ vi.mock('react-native', () => ({
 vi.mock('../transport/encryption/mobile-session-id-encoding', () => ({
   encodeBase64Url: () => 'session-id'
 }))
-vi.mock('../components/host-protocol-gates-context', () => ({
+vi.mock('../components/host-connection/host-protocol-gates-context', () => ({
   useHostProtocolGates: () => doubles.gates
 }))
 vi.mock('../transport/connection/host-client-hooks', () => ({

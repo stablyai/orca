@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { useRouter } from 'expo-router'
-import { HostProtocolGate } from '../components/HostProtocolGate'
+import { HostProtocolGate } from '../components/host-connection/HostProtocolGate'
 import { MobileWebShellScreen } from '../mobile-web-shell/MobileWebShellScreen'
 import type { ShellOverlayLoad } from '../mobile-web-shell/shell-overlay-load'
 import { shellScreenRoute } from '../mobile-web-shell/shell-screen-route'

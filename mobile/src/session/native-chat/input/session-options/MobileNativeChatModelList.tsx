@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Keyboard, ScrollView, View } from 'react-native'
 import { ListGroup } from '../../../../components/list/ListGroup'
-import { MobileSearchField } from '../../../../components/MobileSearchField'
+import { MobileSearchField } from '../../../../components/controls/MobileSearchField'
 import { spacing } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'
