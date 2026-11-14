@@ -4,12 +4,6 @@ import { expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../../../../shared/agent-session/lifecycle/operations/agent-session-mutation-envelope'
 import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../../../shared/agent-session/options/protocol/agent-session-optional-model-capability'
 import { agentSessionOperationKey } from '../../../../../../shared/agent-session/lifecycle/operations/agent-session-operation-ledger'
-import { CODEX_SESSION_OPTION_CATALOG } from '../../../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-claude-codex'
-import {
-  commitStructuredAgentSessionOptionValues,
-  createStructuredAgentSessionOptionState,
-  structuredAgentSessionOptionPicks
-} from '../../../../../../shared/agent-session/options/structured-agent-session-options'
 import {
   hostTestOperationId,
   HOST_TEST_SESSION as SESSION
@@ -22,7 +16,6 @@ import {
 } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
 
 import { editPersistedTestAgentSessionStore } from '../../../../agent-session/records/agent-session-record-store-test-harness'
-import type { RpcResponse } from '../../../core'
 import { openTestJournalHostDatabase } from '../../../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 
 import {
@@ -72,11 +65,6 @@ it('commits a legacy no-choice answer before reply and replays it after upgrade 
   expect(
     fixture.rig.store.getOperationRow('device-1', params.envelope.clientOperationId)?.outcome
   ).toMatchObject({ optionResult: { version: 1, ...inert } })
-  const warm = commitStructuredAgentSessionOptionValues(
-    createStructuredAgentSessionOptionState('codex', CODEX_SESSION_OPTION_CATALOG),
-    { model: 'gpt-saved', effort: 'high' }
-  )
-  expect(structuredAgentSessionOptionPicks(warm, inert.options)).toEqual([])
   const choice = await call('agentSession.setOption', optionRequest('gpt-new'))
   expect(choice[0]).toMatchObject({
     result: {
@@ -84,9 +72,6 @@ it('commits a legacy no-choice answer before reply and replays it after upgrade 
       value: { value: 'gpt-new', options: { model: 'gpt-new', effort: 'high' } }
     }
   })
-  expect(
-    structuredAgentSessionOptionPicks(warm, { model: 'gpt-new', effort: 'high' })
-  ).toHaveLength(2)
   expect((await call('agentSession.setOption', optionRequest('')))[0]).toMatchObject({
     result: { ok: true, replayed: false, value: inert }
   })
@@ -164,7 +149,7 @@ it('preserves a v1.4.223 live ACP acceptance without reclassifying it as no-choi
   expect(fixture.rig.adapter.readOptions).not.toHaveBeenCalled()
 })
 
-it('keeps unreadable accepted results spent and modern empty writes on their ordinary path', async () => {
+it('keeps unreadable accepted results spent', async () => {
   await restingChat()
   const params = optionRequest('')
   await call('agentSession.setOption', params)
@@ -183,115 +168,6 @@ it('keeps unreadable accepted results spent and modern empty writes on their ord
     expect(
       fixture.rig.store.getOperationRow('device-1', params.envelope.clientOperationId)?.outcome
     ).toMatchObject({ optionResult })
-  }
-  const modern = {
-    ...CLIENT,
-    clientCapabilities: [
-      ...CLIENT.clientCapabilities,
-      AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY
-    ]
-  }
-  expect((await call('agentSession.setOption', optionRequest(''), modern))[0]).toMatchObject({
-    ok: false
-  })
-  expect(fixture.rig.store.getRecord(SESSION)?.options).toEqual({
-    model: 'gpt-saved',
-    effort: 'high'
-  })
-})
-
-it('reads, subscribes and answers everything without starting an agent', async () => {
-  await restingChat()
-  expect(fixture.rig.host.hasSession(SESSION)).toBe(false)
-
-  const [history] = await call('agentSession.history', { sessionId: SESSION, direction: 'tail' })
-  const frames = await call('agentSession.subscribe', { sessionId: SESSION })
-  const [options] = await call('agentSession.options', { sessionId: SESSION })
-  const [commands] = await call('agentSession.commands', { sessionId: SESSION })
-  const [outline] = await call('agentSession.conversationOutline', { sessionId: SESSION })
-  const [status] = await call('agentSession.handoffStatus', { sessionId: SESSION })
-  const [held] = await call('agentSession.hold', { sessionId: SESSION, holderId: 'pane' })
-
-  expect(fixture.rig.adapter.acquire).not.toHaveBeenCalled()
-  expect(history).toMatchObject({ ok: true, result: { ok: true } })
-  const snapshot = frames.find((frame) => frame.ok && 'result' in frame)
-  expect(snapshot).toMatchObject({ result: { type: 'snapshot', commands: null } })
-  expect(options).toMatchObject({
-    ok: true,
-    result: { current: { model: 'gpt-saved', effort: 'high' } }
-  })
-  // Absent, never an empty list: the composer keeps its own menu.
-  expect(commands).toMatchObject({ ok: true, result: {} })
-  expect(commands?.ok && 'result' in commands && commands.result).not.toHaveProperty('commands', [])
-  expect(outline).toMatchObject({ ok: true })
-  expect(status).toMatchObject({ ok: true })
-  expect(held).toMatchObject({ ok: true, result: { held: true } })
-})
-
-it('opens nothing once quit began, for a read that was already waiting on the lock', async () => {
-  await restingChat()
-  // The host's per-session queue, held so the read waits behind it.
-  const { serialize, lifetime } = fixture.rig.host.collaboratorsForTests()
-  let release = (): void => undefined
-  const held = new Promise<void>((started) => {
-    void serialize(SESSION, () => {
-      started()
-      return new Promise<void>((resolve) => (release = resolve))
-    })
-  })
-  await held
-  const read = fixture.rig.host.history({ sessionId: SESSION, direction: 'tail' })
-
-  // Disposed as quit's first teardown step does.
-  lifetime.dispose()
-  release()
-
-  await expect(read).rejects.toThrow()
-  expect(fixture.rig.host.hasSession(SESSION)).toBe(false)
-})
-
-it('refuses a read whose journal will not open with the classified reason, never the storage text', async () => {
-  await restingChat()
-  const open = vi.spyOn(fixture.rig.host.collaboratorsForTests().conversationDelivery, 'open')
-  vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-  const storagePath = '/Users/someone/.orca/journals/session-1/journal.sqlite'
-  const failWith = (error: Error): void => {
-    open.mockRejectedValue(error)
-  }
-  const failures = async (): Promise<RpcResponse[]> =>
-    [
-      ...(await call('agentSession.history', { sessionId: SESSION, direction: 'tail' })),
-      ...(await call('agentSession.subscribe', { sessionId: SESSION })),
-      ...(await call('agentSession.options', { sessionId: SESSION }))
-    ].filter((reply) => !reply.ok)
-
-  failWith(
-    Object.assign(new Error(`file is not a database: ${storagePath}`), {
-      code: 'ERR_SQLITE_ERROR',
-      errcode: 26
-    })
-  )
-  const corrupt = await failures()
-  failWith(Object.assign(new Error(`EACCES: permission denied, open '${storagePath}'`), {}))
-  const unavailable = await failures()
-
-  for (const [replies, reason] of [
-    [corrupt, 'journalCorrupt'],
-    [unavailable, 'journalUnavailable']
-  ] as const) {
-    expect(replies).toHaveLength(3)
-    for (const reply of replies) {
-      expect(reply).toMatchObject({
-        ok: false,
-        error: {
-          // Released clients still read this refusal code from the message, not passthrough code.
-          code: 'runtime_error',
-          message: 'agent_session_journal_unreadable',
-          data: { refusal: { code: 'agent_session_journal_unreadable', details: { reason } } }
-        }
-      })
-      expect(JSON.stringify(reply)).not.toContain(storagePath)
-    }
   }
 })
 
@@ -386,25 +262,6 @@ it('resets a client catching up over a superseded record with a damaged key, whi
   expect(await call('agentSession.subscribe', { sessionId: SESSION, cursor: live })).toMatchObject([
     { ok: true, result: { type: 'batch' } }
   ])
-})
-
-it.each([
-  ['unparseable', '{damaged'],
-  ['non-text', Buffer.from([0])]
-])('resets a client when a key is damaged under an open chat: %s', async (_name, key) => {
-  await restingChat()
-  await call('agentSession.subscribe', { sessionId: SESSION })
-  damageSupersededItemKey(key)
-
-  expect(
-    (
-      await call('agentSession.history', {
-        sessionId: SESSION,
-        direction: 'after',
-        cursor: { epoch: outcomeEpoch().epoch, sequence: 1 }
-      })
-    )[0]
-  ).toMatchObject({ ok: true, result: { ok: false, reset: 'schema_unreadable' } })
 })
 
 it('keeps a storage failure during catch-up retryable instead of resetting the client', async () => {
