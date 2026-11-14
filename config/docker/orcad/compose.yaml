@@ -1,0 +1,35 @@
+services:
+  orcad:
+    image: ${ORCAD_IMAGE:-orca/orcad:local}
+    build:
+      context: ../../..
+      dockerfile: config/docker/orcad/Dockerfile
+      args:
+        ORCAD_SOURCE_COMMIT: ${ORCAD_SOURCE_COMMIT:?Run node config/docker/orcad/configure.mjs first}
+        ORCAD_SOURCE_DIRTY: ${ORCAD_SOURCE_DIRTY:-false}
+        ORCAD_SOURCE_FINGERPRINT: ${ORCAD_SOURCE_FINGERPRINT:?Run node config/docker/orcad/configure.mjs first}
+        CLAUDE_CODE_VERSION: ${ORCAD_CLAUDE_CODE_VERSION:-2.1.310}
+        CODEX_VERSION: ${ORCAD_CODEX_VERSION:-}
+        GEMINI_CLI_VERSION: ${ORCAD_GEMINI_CLI_VERSION:-}
+    environment:
+      ORCAD_PAIRING_ADDRESS: ${ORCAD_PAIRING_ADDRESS:-127.0.0.1:6768}
+    ports:
+      - '${ORCAD_PUBLISH_ADDRESS:-127.0.0.1}:${ORCAD_PUBLISH_PORT:-6768}:6768'
+    volumes:
+      - home:/home/node
+      - state:/var/lib/orca
+      - workspaces:/workspaces
+    restart: unless-stopped
+    stop_grace_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: '3'
+
+volumes:
+  home:
+  state:
+  workspaces:
