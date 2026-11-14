@@ -165,6 +165,11 @@ export async function runNativeChatHostFork(input: HostForkInput): Promise<boole
     })
     placed = relayed.placed
   } catch (error) {
+    // Leaving the chat mid-copy cancels it on purpose; that is not a failure to report.
+    if (input.signal?.aborted) {
+      toast.dismiss(toastId)
+      return false
+    }
     toast.error(failedTitle, { id: toastId, description: relayFailureText(error) })
     return false
   }
