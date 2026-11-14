@@ -293,6 +293,7 @@ export function useFileExplorerTreePaneState({
     requestDeleteAll: deletion.requestDeleteAll,
     refreshDir,
     handleClick: handlers.handleClick,
+    handleRowActivation: handlers.handleRowClick,
     toggleDir: hasNameFilter ? handleToggleNameFilterDir : toggleDir,
     scrollToIndex: rowScrolling.scrollToIndex,
     pathOwner
