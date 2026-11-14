@@ -9,20 +9,23 @@ const hosts = vi.hoisted(() => {
     Host.displayName = name
     return Host
   }
-  return { View: make('View'), Text: make('Text') }
+  return { Title: make('Title'), MarkedName: make('MarkedName') }
 })
 
-vi.mock('react-native', () => ({
-  View: hosts.View,
-  Text: hosts.Text,
-  StyleSheet: { create: <T,>(styles: T) => styles },
-  Platform: { OS: 'ios', select: (options: Record<string, unknown>) => options.ios },
-  Appearance: { getColorScheme: () => 'light', addChangeListener: () => ({ remove: () => {} }) }
-}))
-// The sheet's chrome is not under test: render only its title the way the real header does.
+vi.mock('react-native', () => ({}))
+// The sheet's chrome is not under test: keep only the title and its spoken label.
 vi.mock('../../components/sheets/ActionSheetModal', () => ({
   ActionSheetModal: (props: { title?: ReactNode; titleAccessibilityLabel?: string }) =>
-    createElement(hosts.Text, { accessibilityLabel: props.titleAccessibilityLabel }, props.title)
+    createElement(hosts.Title, { accessibilityLabel: props.titleAccessibilityLabel }, props.title)
+}))
+vi.mock('../fork/MobileForkMarkedName', () => ({
+  MobileForkMarkedName: (props: { name: string }) => createElement(hosts.MarkedName, props)
+}))
+vi.mock('../fork/mobile-fork-marked-name', () => ({
+  mobileForkAccessibleName: (name: string) => `fork-label(${name})`
+}))
+vi.mock('../../i18n/use-mobile-translation', () => ({
+  useMobileTranslation: () => (_key: string, fallback: string) => fallback
 }))
 vi.mock('../native-chat/mobile-native-chat-cli-fork', () => ({
   getMobileNativeChatCliForkActions: () => []
@@ -40,11 +43,11 @@ afterEach(() => {
   renderer = undefined
 })
 
-function titleOf(forked: boolean): { text: string; label: string | undefined } {
+function renderSheet(forked: boolean): ReactTestRenderer {
   const tab = {
     type: 'agent-session' as const,
     id: 'tab',
-    title: 'Annotate capabilities',
+    title: 'Plan',
     sessionId: 'chat',
     agent: 'claude' as const,
     isActive: true,
@@ -65,25 +68,20 @@ function titleOf(forked: boolean): { text: string; label: string | undefined } {
       })
     )
   })
-  const header = renderer!.root.findAllByType(hosts.Text)[0]!
-  const text = (node: unknown): string =>
-    typeof node === 'string'
-      ? node
-      : Array.isArray(node)
-        ? node.map(text).join('')
-        : node && typeof node === 'object' && 'children' in node
-          ? text(node.children)
-          : ''
-  return { text: text(renderer!.toJSON()), label: header.props.accessibilityLabel }
+  return renderer!
 }
 
-it("titles a fork tab's sheet with its fork mark", () => {
-  expect(titleOf(true)).toEqual({
-    text: 'Fork · Annotate capabilities',
-    label: 'Fork: Annotate capabilities'
-  })
+it("titles a fork tab's sheet with the fork-marked name and its spoken label", () => {
+  const sheet = renderSheet(true)
+  const title = sheet.root.findByType(hosts.Title)
+  expect(sheet.root.findByType(hosts.MarkedName).props.name).toBe('Plan')
+  expect(title.props.accessibilityLabel).toBe('fork-label(Plan)')
 })
 
-it("keeps an original chat tab's sheet title plain", () => {
-  expect(titleOf(false)).toEqual({ text: 'Annotate capabilities', label: undefined })
+it("titles an original chat tab's sheet with its plain name", () => {
+  const sheet = renderSheet(false)
+  const title = sheet.root.findByType(hosts.Title)
+  expect(sheet.root.findAllByType(hosts.MarkedName)).toHaveLength(0)
+  expect(title.props.children).toBe('Plan')
+  expect(title.props.accessibilityLabel).toBeUndefined()
 })
