@@ -78,7 +78,7 @@ export function planSearchShortcutOptInForSnapshot(
     return {
       kind: 'accepted',
       searchOnModK,
-      owners: findModKOwners(snapshot.platform, snapshot.overrides, searchOnModK, pluginOwners)
+      owners: findModKOwners(snapshot.platform, snapshot.overrides, pluginOwners)
     }
   }
   if (
@@ -104,28 +104,26 @@ function searchHasModK(platform: NodeJS.Platform, overrides: KeybindingOverrides
 function findModKOwners(
   platform: NodeJS.Platform,
   explicitOverrides: KeybindingOverrides,
-  searchOnModK: boolean,
   pluginOwners: readonly SearchShortcutPluginOwner[]
 ): SearchShortcutOwner[] {
   const identity = getKeybindingConflictIdentity(SEARCH_BINDING, platform)
   const owners: SearchShortcutOwner[] = []
-  if (!searchOnModK) {
-    const coreOwners = new Set<KeybindingActionId>()
-    for (const conflict of findKeybindingConflicts(
-      platform,
-      { ...explicitOverrides, [SEARCH_ACTION]: [SEARCH_BINDING] },
-      { includeMainProcessInterception: true }
-    )) {
-      if (conflict.actionIds.includes(SEARCH_ACTION)) {
-        for (const actionId of conflict.actionIds) {
-          if (actionId !== SEARCH_ACTION) {
-            coreOwners.add(actionId)
-          }
+  // Enumerate even when Search already has Mod+K: a hand-edited file can give it to both.
+  const coreOwners = new Set<KeybindingActionId>()
+  for (const conflict of findKeybindingConflicts(
+    platform,
+    { ...explicitOverrides, [SEARCH_ACTION]: [SEARCH_BINDING] },
+    { includeMainProcessInterception: true }
+  )) {
+    if (conflict.actionIds.includes(SEARCH_ACTION)) {
+      for (const actionId of conflict.actionIds) {
+        if (actionId !== SEARCH_ACTION) {
+          coreOwners.add(actionId)
         }
       }
     }
-    owners.push(...[...coreOwners].map((actionId) => ({ actionId })))
   }
+  owners.push(...[...coreOwners].map((actionId) => ({ actionId })))
   for (const plugin of pluginOwners) {
     // An explicit override replaces a plugin command's manifest keys, as at dispatch.
     const bindings = Object.hasOwn(explicitOverrides, plugin.actionId)
@@ -159,7 +157,7 @@ function planSearchShortcutOptIn(
     platform,
     resolveKeybindingOverrides(platform, explicitOverrides, getSearchOptInBindings(platform))
   )
-  const owners = findModKOwners(platform, explicitOverrides, searchOnModK, pluginOwners)
+  const owners = findModKOwners(platform, explicitOverrides, pluginOwners)
   return owners.length > 0 || !searchOnModK ? { kind: 'conflict', owners } : { kind: 'eligible' }
 }
 

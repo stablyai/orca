@@ -514,6 +514,17 @@ describe('KeybindingService Search shortcut opt-in', () => {
     })
   })
 
+  it('lists a core owner of Cmd+K even when a hand-edited file also gives Search Cmd+K', () => {
+    stored = 'accepted'
+    write({ platforms: { darwin: { 'worktree.palette': ['Mod+K'], 'terminal.clear': ['Mod+K'] } } })
+    const snapshot = openLegacy().reload()
+    expect(planSearchShortcutOptInForSnapshot(snapshot)).toEqual({
+      kind: 'accepted',
+      searchOnModK: true,
+      owners: [{ actionId: 'terminal.clear' }]
+    })
+  })
+
   it('keeps legacy shortcuts when the save is rejected before commit', async () => {
     const service = openLegacy({
       persist: async () => {

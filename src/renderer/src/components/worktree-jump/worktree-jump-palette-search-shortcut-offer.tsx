@@ -53,7 +53,10 @@ function SearchShortcutOfferPrompt({
     try {
       const outcome = await setSearchShortcutChoice(choice)
       if (choice === 'dismissed') {
-        if (outcome !== 'applied' && mountedRef.current) {
+        if (outcome === 'unconfirmed') {
+          // The dismissal may be live, which unmounts this footer, so feedback must outlive it.
+          showUnconfirmedToast(t)
+        } else if (outcome !== 'applied' && mountedRef.current) {
           setFailed(true)
         }
       } else if (outcome === 'applied' || outcome === 'superseded') {
@@ -76,18 +79,12 @@ function SearchShortcutOfferPrompt({
                 : undefined,
             action: {
               label: t('searchShortcutOptIn.undo', 'Undo'),
-              onClick: () => void undoSearchShortcut(setSearchShortcutChoice, t, keys)
+              onClick: () => void undoSearchShortcut(setSearchShortcutChoice, t)
             }
           }
         )
       } else if (outcome === 'unconfirmed') {
-        // Possibly saved: claim nothing about which key works, only where to look.
-        toast(t('searchShortcutOptIn.unconfirmedToast', "Couldn't confirm the change"), {
-          description: t(
-            'searchShortcutOptIn.unconfirmedDetail',
-            'Settings › Shortcuts shows which Search shortcut is active.'
-          )
-        })
+        showUnconfirmedToast(t)
       } else if (mountedRef.current) {
         setFailed(true)
       }
@@ -153,8 +150,7 @@ async function undoSearchShortcut(
   setSearchShortcutChoice: (
     choice: SearchShortcutChoice
   ) => Promise<SearchShortcutChoiceResult['outcome']>,
-  t: ReturnType<typeof useTranslate>,
-  keys: { key: string; legacyKey: string }
+  t: ReturnType<typeof useTranslate>
 ): Promise<void> {
   let outcome: SearchShortcutChoiceResult['outcome'] | 'error'
   try {
@@ -164,17 +160,28 @@ async function undoSearchShortcut(
     outcome = 'error'
   }
   if (outcome === 'applied') {
-    toast(t('searchShortcutOptIn.undoneToast', '{{legacyKey}} opens Search again', keys))
-  } else if (outcome === 'unconfirmed') {
-    toast(t('searchShortcutOptIn.unconfirmedToast', "Couldn't confirm the change"), {
-      description: t(
-        'searchShortcutOptIn.unconfirmedDetail',
-        'Settings › Shortcuts shows which Search shortcut is active.'
+    // Later explicit edits survive Undo, so name the result, not specific chords.
+    toast(
+      t(
+        'searchShortcutOptIn.undoneToast',
+        'Undone. Settings › Shortcuts shows the active Search shortcut.'
       )
-    })
+    )
+  } else if (outcome === 'unconfirmed') {
+    showUnconfirmedToast(t)
   } else {
     toast.error(
       t('searchShortcutOptIn.undoFailed', "Couldn't undo. Try again in Settings › Shortcuts.")
     )
   }
+}
+
+// Possibly saved: claim nothing about which key works, only where to look.
+function showUnconfirmedToast(t: ReturnType<typeof useTranslate>): void {
+  toast(t('searchShortcutOptIn.unconfirmedToast', "Couldn't confirm the change"), {
+    description: t(
+      'searchShortcutOptIn.unconfirmedDetail',
+      'Settings › Shortcuts shows which Search shortcut is active.'
+    )
+  })
 }

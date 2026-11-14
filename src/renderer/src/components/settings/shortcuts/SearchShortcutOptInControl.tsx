@@ -122,12 +122,12 @@ function describeOffer(
       return state.offer.searchOnModK
         ? t(
             'searchShortcutOptIn.acceptedDetail',
-            '{{key}} no longer clears terminals. {{legacyKey}} still opens Search.',
+            'Search opens with {{key}}, and {{key}} no longer clears terminals.',
             keys
           )
         : t(
             'searchShortcutOptIn.acceptedCustom',
-            'Search uses a custom shortcut, and {{key}} no longer clears terminals. Undo restores {{legacyKey}} and {{key}} clear.',
+            'Search uses a custom shortcut. Undo returns this profile to its previous Search and clear defaults.',
             keys
           )
     case 'custom-search':
