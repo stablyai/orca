@@ -266,7 +266,11 @@ export function activityThreadRowCopy(
   const toolPreviewState = liveState === 'monitoring' ? null : liveState
   const state = activityThreadStatusId(thread)
   const needsAttention = state === 'waiting' || state === 'blocked' || state === 'permission'
-  if (renderedPreview && !previewDuplicatesIdentity(renderedPreview, taskTitle, workspaceLabel)) {
+  if (
+    state !== 'unverifiable' &&
+    renderedPreview &&
+    !previewDuplicatesIdentity(renderedPreview, taskTitle, workspaceLabel)
+  ) {
     return {
       taskTitle,
       statusLine: renderedPreview,

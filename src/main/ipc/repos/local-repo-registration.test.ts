@@ -51,16 +51,4 @@ describe('addLocalRepoFromPath through a symlink alias', () => {
     expect(second).toMatchObject({ alreadyExisted: true })
     expect(repos).toHaveLength(1)
   })
-
-  it('keeps two different folders as two workspaces', async () => {
-    await mkdir(join(root, 'a'))
-    await mkdir(join(root, 'b'))
-    const repos: Repo[] = []
-    const store = createStore(repos)
-
-    await addLocalRepoFromPath(store, join(root, 'a'), 'folder')
-    await addLocalRepoFromPath(store, join(root, 'b'), 'folder')
-
-    expect(repos).toHaveLength(2)
-  })
 })

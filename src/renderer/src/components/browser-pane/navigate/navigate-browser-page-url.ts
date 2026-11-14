@@ -1,3 +1,4 @@
+import { issueBrowserGuestNavigation } from '../host-guest/browser-guest-metadata-cache'
 import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
 import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import {
@@ -82,7 +83,9 @@ export function navigateBrowserPageToUrl({
     recoveryNavigationValidationRef.current = recoveryLoadError
       ? { committed: false, started: false, targetUrl: normalizedBrowserModelUrl }
       : null
-    webview.src = targetUrl
+    issueBrowserGuestNavigation(webview, () => {
+      webview.src = targetUrl
+    })
     if (targetUrl !== ORCA_BROWSER_BLANK_URL) {
       focusWebviewNow()
     }

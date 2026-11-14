@@ -271,7 +271,11 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
         addAttachments: addComposerAttachments,
         insertFolderPaths: insertComposerFolderPaths,
         onError: (error) =>
-          toast.error(error instanceof Error ? error.message : 'Failed to drop files.')
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : translate('components.toastFallbacks.filesDropFailed', 'Failed to drop files.')
+          )
       })
     },
     [

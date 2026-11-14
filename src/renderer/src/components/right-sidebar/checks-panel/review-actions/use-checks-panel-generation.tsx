@@ -11,8 +11,8 @@ import {
   cancelRuntimeGeneratePullRequestFields
 } from '@/runtime/source-control/git/runtime-git-generation-client'
 import type { RuntimeGeneratePullRequestFieldsOverrides } from '@/runtime/source-control/git/runtime-git-client-context'
-import type { ChecksPanelReviewState } from '../use-checks-panel-review-state'
-import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'
+import type { ChecksPanelReviewState } from '../review-state/use-checks-panel-review-state'
+import type { ChecksPanelControllerState } from '../panel/use-checks-panel-controller-state'
 import { normalizeHostedReviewBaseRef as stripBaseRef } from '../../../../../../shared/source-control/hosted-review/hosted-review-refs'
 import {
   createRunningPullRequestGenerationRecord,

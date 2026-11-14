@@ -22,7 +22,35 @@ import {
   buildRepositoryGitHubAvatarUpdate,
   resolveRepositoryGitHubAvatar
 } from '../../../../runtime/repository-github/repository-icon-github'
-import { useTranslate } from '@/i18n/use-translate'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
+
+function getRepositoryIconLabel(repoIcon: RepoIcon | null | undefined, t: Translate): string {
+  if (repoIcon?.type === 'image') {
+    if (repoIcon.source === 'github') {
+      return t('auto.components.settings.RepositoryIconPicker.githubAvatar', 'GitHub avatar')
+    }
+    return (
+      repoIcon.label ??
+      t('auto.components.settings.RepositoryIconPicker.customImage', 'Custom image')
+    )
+  }
+  if (repoIcon?.type === 'emoji') {
+    return t('auto.components.settings.RepositoryIconPicker.emojiDescription', '{{emoji}} emoji', {
+      emoji: repoIcon.emoji
+    })
+  }
+  if (repoIcon?.type === 'lucide') {
+    const label =
+      getRepoLucideIconOptions().find((option) => option.name === repoIcon.name)?.label ??
+      t('auto.components.repo.repo.icon.bed2674f9d', 'Folder')
+    return t(
+      'auto.components.settings.RepositoryIconPicker.lucideDescription',
+      '{{label}} icon with repo color',
+      { label }
+    )
+  }
+  return t('auto.components.settings.RepositoryIconPicker.defaultIcon', 'Default')
+}
 
 export function RepositoryIconPicker({
   repo,
@@ -48,24 +76,7 @@ export function RepositoryIconPicker({
     [ownerEnvironmentId]
   )
 
-  const currentIconLabel = useMemo(() => {
-    if (repo.repoIcon?.type === 'image') {
-      if (repo.repoIcon.source === 'github') {
-        return 'GitHub avatar'
-      }
-      return repo.repoIcon.label ?? 'Custom image'
-    }
-    if (repo.repoIcon?.type === 'emoji') {
-      return `${repo.repoIcon.emoji} emoji`
-    }
-    if (repo.repoIcon?.type === 'lucide') {
-      const label =
-        getRepoLucideIconOptions().find((option) => option.name === selectedLucideName)?.label ??
-        'Folder'
-      return `${label} icon with repo color`
-    }
-    return 'Default'
-  }, [repo.repoIcon, selectedLucideName])
+  const currentIconLabel = getRepositoryIconLabel(repo.repoIcon, t)
 
   const setIcon = (repoIcon: RepoIcon | null) => updateRepo(repo.id, { repoIcon })
   const setBadgeColor = (badgeColor: string) => updateRepo(repo.id, { badgeColor })

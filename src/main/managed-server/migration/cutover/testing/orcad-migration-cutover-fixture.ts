@@ -1,6 +1,6 @@
 import { ORCAD_MIGRATION_MANIFEST_VERSION } from '../../../../../shared/orcad-migration/orcad-migration-manifest-validation'
 import type { OrcadMigrationSourceCutover } from '../../../../../shared/orcad-migration/orcad-migration-source-cutover'
-import { computeOrcadMigrationManifestSha256 } from '../../../../orcad/orcad-migration-manifest-digest'
+import { computeOrcadMigrationManifestSha256 } from '../../../../orcad/migration/orcad-migration-manifest-digest'
 
 export function orcadMigrationCutoverFixture(
   migrationId = 'migration-1',

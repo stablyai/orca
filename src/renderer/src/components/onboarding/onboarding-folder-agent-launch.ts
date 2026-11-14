@@ -13,7 +13,8 @@ import {
   planAgentSessionLaunch,
   type AgentSessionLaunchPlan
 } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+
+import { createNonSecureContextUuid } from '../../../../shared/non-secure-context-uuid'
 import {
   buildOnboardingFolderAgentStartup,
   onboardingFolderDefaultAgent,
@@ -47,7 +48,7 @@ export async function resolveDismissedOnboardingFolderAgentLaunch(args: {
   }
   // Resolved once per added folder: adding it is the one action this chat serves.
   const plan = planAgentSessionLaunch(args.store, {
-    requestId: newAgentLaunchRequestId(),
+    requestId: createNonSecureContextUuid(),
     agent,
     workspace: {
       kind: 'folder',

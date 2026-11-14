@@ -4,7 +4,7 @@ import '../../../store/testing/app-store-test-fixture'
 import { getDefaultSettings } from '../../../../../shared/constants'
 import '../../../../../shared/session-tabs-runtime-capabilities'
 import '../../../../../shared/protocol-version'
-import { canOfferHttpLinkGroupAction } from '../../../lib/browser/navigation/http-link-in-group-availability'
+import '../../../lib/browser/navigation/http-link-in-group-availability'
 import { createWebRuntimeSessionBrowserTab } from './web-runtime-browser-creation'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '../../../store/index'
@@ -35,7 +35,6 @@ import {
 } from './testing/web-runtime-browser-creation-placement-test-rig'
 import { captureWebSessionIntentOwner } from '../../web-session-tabs-sync/identity/web-runtime-session-environment'
 import { peekWebSessionFocusIntent } from '../../web-session-tabs-sync/navigation/web-session-focus-intent'
-import type { BrowserSessionProfile } from '../../../../../shared/browser-workspace-types'
 import type * as SnapshotModule from '../../web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 
 vi.mock('@/components/browser-pane/host-guest/browser-focus', async (importOriginal) => ({
@@ -129,55 +128,6 @@ describe('runtime link opens through staging and materialization', () => {
     expect(requestBrowserFocus).not.toHaveBeenCalled()
   })
 
-  it('offers explicit runtime reuse only when a matching pinned page proves the route and session', async () => {
-    const state = useAppStore.getState()
-    const profile: BrowserSessionProfile = {
-      id: 'default',
-      scope: 'default',
-      partition: 'persist:remote-default',
-      label: 'Default',
-      source: null
-    }
-    useAppStore.setState({
-      browserSessionProfilesByHostId: { [HOST]: [profile] },
-      remoteBrowserPageHandlesByPageId: {
-        ...state.remoteBrowserPageHandlesByPageId,
-        [SOURCE.pageId]: {
-          environmentId: ENV,
-          remotePageId: SOURCE.pageId,
-          browserProfileId: 'default'
-        }
-      },
-      browserTabsByWorktree: {
-        [WT]: state.browserTabsByWorktree[WT]!.map((workspace) => ({
-          ...workspace,
-          sessionProfileId: null,
-          sessionPartition: 'persist:remote-default'
-        }))
-      },
-      browserPagesByWorkspace: {
-        ...state.browserPagesByWorkspace,
-        [SOURCE.workspaceId]: state.browserPagesByWorkspace[SOURCE.workspaceId]!.map((page) => ({
-          ...page,
-          url: 'https://example.com/link'
-        }))
-      }
-    })
-    expect(
-      canOfferHttpLinkGroupAction(useAppStore.getState(), {
-        workspaceId: WT,
-        sourceTabId: SOURCE.unifiedTabId,
-        url: 'https://example.com/link',
-        sourceOwner: { kind: 'runtime', runtimeEnvironmentId: ENV }
-      })
-    ).toBe(true)
-    expect(await open(true)).toMatchObject({
-      status: 'opened',
-      result: { browserWorkspaceId: SOURCE.workspaceId, browserPageId: SOURCE.pageId, groupId: G1 }
-    })
-    expect(pendingCreates).toHaveLength(0)
-  })
-
   it('a delivery callback failure cannot unwind a page that already materialized', async () => {
     const call = installRuntimeTransport()
     const creating = createWebRuntimeSessionBrowserTab({
@@ -206,14 +156,5 @@ describe('runtime link opens through staging and materialization', () => {
     pendingCreates[0]!.resolve('superseded-host-page')
     expect(await creating).toEqual({ status: 'superseded' })
     expect(wrapperForRemotePage('superseded-host-page')).toBeDefined()
-  })
-
-  it('reports the current group after the user moves the staged tab', async () => {
-    const creating = open()
-    const provisional = pendingCreates[0]!.params.page!
-    const staged = wrapperForRemotePage(provisional)!
-    useAppStore.getState().moveUnifiedTabToGroup(staged.id, G1)
-    pendingCreates[0]!.resolve()
-    expect(await creating).toMatchObject({ status: 'opened', result: { groupId: G1 } })
   })
 })

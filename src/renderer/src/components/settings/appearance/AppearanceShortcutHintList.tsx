@@ -3,19 +3,16 @@ import type React from 'react'
 import type { ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutKeyCombo } from '../../ShortcutKeyCombo'
 import { useTranslate } from '@/i18n/use-translate'
+import { translateUnassignedLabel } from '@/i18n/unassigned-label'
 
 export function ShortcutHintList({
   combos
 }: {
   combos: ShortcutKeyComboDetails[]
 }): React.JSX.Element {
-  const t = useTranslate()
+  useTranslate()
   if (combos.length === 0) {
-    return (
-      <span className="text-xs text-muted-foreground">
-        {t('auto.components.settings.AppearancePane.3057983501', 'Unassigned')}
-      </span>
-    )
+    return <span className="text-xs text-muted-foreground">{translateUnassignedLabel()}</span>
   }
   const primaryCombo = combos[0]
 

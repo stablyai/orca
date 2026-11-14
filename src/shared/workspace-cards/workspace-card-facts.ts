@@ -95,6 +95,8 @@ export type WorkspaceCardFacts = {
   options: {
     style: WorkspaceCardStyle
     show: WorkspaceCardShowOptions
+    /** Card display's "Details row": the new style draws its row under the name only when on. */
+    detailsRow: boolean
     agentRows: 'full' | 'compact'
   }
   env: { projectGroups: boolean }

@@ -9,6 +9,7 @@ import { SshTargetsEmptyState } from './targets/SshTargetsEmptyState'
 import { SshTargetDestructiveActions } from './targets/SshTargetDestructiveActions'
 import { SshHostsHeaderActions, SshHostsListToolbar } from './SshPaneToolbar'
 import { SshHostsHeaderPortal } from './ssh-hosts-header-slot'
+import { SSH_SETTING_ANCHORS } from './ssh-search'
 import { useSshTargetTests } from './targets/use-ssh-target-tests'
 import { SshRestoreRemovedHostsDialog } from './targets/SshRestoreRemovedHostsDialog'
 import { useSshConfigSync } from './targets/use-ssh-config-sync'
@@ -24,6 +25,7 @@ import { SshTargetForm } from './targets/SshTargetForm'
 import { EMPTY_FORM, getEditingTargetForSshTarget } from '../../ssh-host-form/ssh-target-draft'
 import type { EditingTarget } from '../../ssh-host-form/ssh-target-draft'
 import { buildSshTargetSavePayload } from './targets/ssh-target-save-payload'
+import { formatSshUserFacingError } from './targets/ssh-user-facing-error'
 import { HostRemoveDialog } from '../../sidebar/HostRemoveDialog'
 import {
   isManagedServerSshHost,
@@ -159,7 +161,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
       if (mountedRef.current) {
         toast.error(
           err instanceof Error
-            ? err.message
+            ? formatSshUserFacingError(err.message)
             : t('auto.components.settings.SshPane.2227ce47b6', 'Failed to save target')
         )
       }
@@ -248,7 +250,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
     } catch (err) {
       toast.error(
         err instanceof Error
-          ? err.message
+          ? formatSshUserFacingError(err.message)
           : t('auto.components.settings.SshPane.a43de1d3ee', 'Disconnect failed')
       )
     }
@@ -261,7 +263,7 @@ export function SshPane({ addTargetIntentSignal }: SshPaneProps): React.JSX.Elem
   }
 
   return (
-    <div className="space-y-3">
+    <div id={SSH_SETTING_ANCHORS.hosts} className="space-y-3">
       <SshHostsHeaderPortal>
         <SshHostsHeaderActions
           syncing={syncing}

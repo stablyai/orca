@@ -81,9 +81,7 @@ export function launchWorkspaceState(
         addedAt: 0,
         kind: 'git',
         connectionId: null,
-        executionHostId: 'local',
-        // Parity rows model a repo whose first-launch trust answer is already stored.
-        agentWorkspaceTrust: 'pre-trust'
+        executionHostId: 'local'
       }
     : null
   const worktree = {

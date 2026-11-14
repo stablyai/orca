@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
-import { TerminalLigaturesAddon } from '@/lib/pane-manager/terminal-ligatures-addon'
+import { TerminalLigaturesAddon } from '@/lib/pane-manager/terminal-rendering/terminal-ligatures-addon'
 import { Moon, Sun } from 'lucide-react'
 import '@xterm/xterm/css/xterm.css'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'

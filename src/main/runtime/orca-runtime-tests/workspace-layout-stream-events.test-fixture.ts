@@ -1,11 +1,11 @@
 // Normalize records frames into per-workspace whole-layout events so both layout ownership modes share assertions.
 
-import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-published'
-import { applyWorkspaceLayoutRecordChange } from '../../../shared/workspace-layout/workspace-layout-records'
+import type { PublishedWorkspaceLayout } from '../../../shared/workspace-layout/published-layout/workspace-layout-published'
+import { applyWorkspaceLayoutRecordChange } from '../../../shared/workspace-layout/published-layout/workspace-layout-records'
 import type {
   WorkspaceLayoutEvent,
   WorkspaceLayoutStreamEvent
-} from '../../../shared/workspace-layout/workspace-layout-stream-frames'
+} from '../../../shared/workspace-layout/published-layout/workspace-layout-stream-frames'
 
 export type LayoutEventCollector = {
   /** One per workspace changed, in frame order. */

@@ -11,7 +11,7 @@ import { seedWslMoveCutover } from '../../persistence/__fixtures__/wsl-mover/wsl
 import {
   loadWslMoveFence,
   resetWslMoveFenceForTests
-} from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
+} from '../../persistence/moving-wsl-projects/quiescence/wsl-move-scope-guard'
 import { probeGitRemoteIdentity } from './repo-git-remote-identity'
 import {
   enrichMissingRepoGitRemoteIdentities,

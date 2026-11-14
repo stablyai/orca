@@ -1,19 +1,21 @@
+import { StructuredAgentSessionJournalProjections } from '../structured-agent-session-status-journal-projection'
+import type { JournalWorkAuthority } from '../../../agent-session-journal/journal-observer-read'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionExecutionLocation } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionHandleProvider } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
+import type { AgentSessionHandleProvider } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { AgentHookServer } from '../../../../agent-hooks/server/agent-hook-server'
-import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session'
+import { indexedStatusFeedSession } from './structured-agent-session-status-feed-test-session.test-fixture'
 import { StructuredAgentSessionStatusFeed } from '../structured-agent-session-status-feed'
 
 import type { StructuredAgentSessionStatusSink } from '../structured-agent-session-status-ownership'
 import { createStructuredAgentSessionLogger } from '../../host/structured-agent-session-logger'
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const SESSION = 'reenter-session'
 const journals = createTrackedJournalOpener()
@@ -69,7 +71,7 @@ async function createFeed() {
     now: () => 1_000,
     statusSink: () => statusSink
   })
-  feed.publish(SESSION)
+  await feed.publish(SESSION)
   expect(server.getCanonicalStatusSnapshot().parents).toHaveLength(1)
   return { session, sessions, server, statusSink, feed }
 }
@@ -83,7 +85,7 @@ describe('structured status canonical owner re-entry', () => {
     const publishedBeforeReentry = vi.mocked(statusSink.publish).mock.calls.length
     sessions.set(SESSION, session)
 
-    feed.publish(SESSION)
+    await feed.publish(SESSION)
 
     expect(statusSink.publish).toHaveBeenCalledTimes(publishedBeforeReentry + 1)
     expect(server.getCanonicalStatusSnapshot().parents).toHaveLength(1)
@@ -102,7 +104,7 @@ describe('structured status canonical owner re-entry', () => {
       }
     })
 
-    feed.publish(SESSION)
+    await feed.publish(SESSION)
 
     expect(statusSink.forget).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ executionHostId: 'local', sessionId: SESSION })
@@ -114,4 +116,150 @@ describe('structured status canonical owner re-entry', () => {
       })
     ])
   })
+})
+
+it('discards row-free authority changes before publishing an asynchronous observer answer', async () => {
+  const journal = await openJournal()
+  const projections = new StructuredAgentSessionJournalProjections()
+  let revision = 0
+  let contextId: string | null = null
+  let latestStop: JournalWorkAuthority['stop'] = null
+  let attached = true
+  const held: string[] = []
+  const capture = () => {
+    if (!attached) {
+      return null
+    }
+    const authority: JournalWorkAuthority = {
+      handle: journal.observationHandle(),
+      record: {
+        currentFence: 1,
+        ownerObservation: { claimStatus: 'live', unreconciled: false, handoffStage: null }
+      },
+      child: { fence: 1, heldSends: held },
+      handingOver: [],
+      continuingUnadmitted: [],
+      finalizing: [],
+      openedThrough: journal.openingCursor(),
+      reopenFloor: null,
+      operationalRevision: revision,
+      stopRevision: journal.stopMarks.revision(),
+      stop: journal.stopMarks.withCurrentSettlement(latestStop)
+    }
+    return { authority, contextId }
+  }
+  const narrow = await projections.readWorkSql(journal, capture)
+  expect(narrow?.result.kind).toBe('state')
+  expect(projections.currentSql(journal, capture())).toBeNull()
+  expect(projections.savedStop(journal, null)).toBeUndefined()
+  await journal.appendItem(
+    { provider: 'orca', clientMessageId: 'work-turn' },
+    { kind: 'turn', turnId: 'work-turn', state: 'running' },
+    { fence: 1, turnScope: { kind: 'thread' } }
+  )
+  expect(await projections.readWorkSql(journal, capture)).toMatchObject({
+    cursor: journal.cursor(),
+    result: { kind: 'state', state: { latestTurn: { turn: { state: 'running' } } } }
+  })
+  expect(narrow?.cursor).not.toEqual(journal.cursor())
+  attached = false
+  expect(await projections.readWorkSql(journal, capture)).toBeNull()
+  attached = true
+  const reattachFailure = new Error('reattached work read failed')
+  vi.spyOn(journal.reads, 'work').mockRejectedValueOnce(reattachFailure)
+  await expect(projections.readWorkSql(journal, capture)).rejects.toBe(reattachFailure)
+  await projections.readWorkSql(journal, capture)
+  const reached = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  const read = journal.reads.observer.bind(journal.reads)
+  const observer = vi.spyOn(journal.reads, 'observer').mockImplementation(async (input) => {
+    const result = await read(input)
+    reached.resolve()
+    await release.promise
+    return result
+  })
+  const invalidated: string[] = []
+  const observed: unknown[] = []
+  const pending = Promise.all(
+    ['first', 'second'].map((reader) =>
+      projections.readSql(
+        journal,
+        capture,
+        () => invalidated.push(reader),
+        (projection) => observed.push(projection)
+      )
+    )
+  )
+  await reached.promise
+  revision = 1
+  held.push('new-live-owner')
+  release.resolve()
+  expect(await pending).toEqual([null, null])
+  expect(invalidated).toEqual(['first', 'second'])
+  expect(observed).toEqual([])
+  observer.mockRestore()
+  const current = await projections.readSql(journal, capture, () => {})
+  expect(current).toMatchObject({
+    workRevision: 1,
+    authority: { child: { heldSends: ['new-live-owner'] } }
+  })
+  await projections.readWorkSql(journal, capture)
+  expect(projections.currentSql(journal, capture())).toBe(current)
+  expect(projections.savedStop(journal, null)).toEqual({ value: null })
+  held.push('later-owner')
+  expect(current?.authority?.child?.heldSends).toEqual(['new-live-owner'])
+  const refreshedWork = await projections.readWorkSql(journal, capture)
+  expect(await projections.readWorkSql(journal, capture)).toEqual(refreshedWork)
+  expect(projections.savedStop(journal, null)).toBeUndefined()
+  expect(await projections.readSql(journal, capture, () => {})).toMatchObject({
+    authority: { child: { heldSends: ['later-owner', 'new-live-owner'] } }
+  })
+  contextId = 'reopened-context'
+  const contextWork = await projections.readWorkSql(journal, capture)
+  expect(await projections.readWorkSql(journal, capture)).toEqual(contextWork)
+  expect(projections.currentSql(journal, capture())).toBeNull()
+  expect(projections.savedStop(journal, contextId)).toBeUndefined()
+  await projections.readSql(journal, capture, () => {})
+  revision = 2
+  const failed = Promise.withResolvers<Awaited<ReturnType<typeof read>>>()
+  const failure = new Error('observer read failed')
+  vi.spyOn(journal.reads, 'observer').mockImplementationOnce(() => failed.promise)
+  const failures = Promise.allSettled([
+    projections.readSql(journal, capture, () => {}),
+    projections.readSql(journal, capture, () => {})
+  ])
+  failed.reject(failure)
+  expect(await failures).toEqual([
+    { status: 'rejected', reason: failure },
+    { status: 'rejected', reason: failure }
+  ])
+  expect(await projections.readSql(journal, capture, () => {})).toMatchObject({ workRevision: 2 })
+  revision = 3
+  await journal.appendStopEvent({ reason: 'user-stop' }, 1)
+  latestStop = await journal.stopMarks.latest()
+  expect(latestStop).not.toBeNull()
+  const captureNarrow = () => {
+    const captured = capture()!
+    return { ...captured, authority: { ...captured.authority, stop: null } }
+  }
+  const workEntered = Promise.withResolvers<void>()
+  const workRelease = Promise.withResolvers<void>()
+  const workRead = journal.reads.work.bind(journal.reads)
+  vi.spyOn(journal.reads, 'work').mockImplementationOnce(async (input) => {
+    const answer = await workRead(input)
+    workEntered.resolve()
+    await workRelease.promise
+    return answer
+  })
+  const pendingWork = projections.readWorkSql(journal, captureNarrow)
+  await workEntered.promise
+  const published = await projections.readSql(journal, capture, () => {})
+  workRelease.resolve()
+  await pendingWork
+  expect(projections.currentSql(journal, capture())).toBe(published)
+  expect(await projections.readWorkSql(journal, captureNarrow)).toMatchObject({
+    result: { kind: 'state' }
+  })
+  expect(projections.currentSql(journal, capture())).toBe(published)
+  expect(projections.savedStop(journal, contextId)).toEqual({ value: latestStop })
 })

@@ -1,3 +1,4 @@
+import '../agent-hooks/server/testing/memory-agent-identity-store.test-fixture'
 import {
   cp,
   mkdtemp,

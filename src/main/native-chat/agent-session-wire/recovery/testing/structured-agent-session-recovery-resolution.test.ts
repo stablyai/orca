@@ -1,21 +1,25 @@
-import { closeTestJournalHostDatabases } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabase,
+  closeTestJournalHostDatabases
+} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { AgentSessionOwnerProbe } from '../../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import type { AgentSessionOwnerProbe } from '../../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import type { AgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../../../runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
   resolveStructuredSessionRecovery,
   type StructuredSessionRecoveryResolutionDeps
 } from '../structured-agent-session-recovery-resolution'
-import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-recovery'
 const roots: string[] = []
 let operations = 0
+const directories = new WeakMap<AgentSessionRecordStore, string>()
 
 afterEach(async () => {
   await closeTestJournalHostDatabases()
@@ -29,7 +33,10 @@ async function newStoreDirectory(): Promise<string> {
 }
 
 async function openStore(directory?: string): Promise<AgentSessionRecordStore> {
-  return openTestAgentSessionRecordStore(directory ?? (await newStoreDirectory()))
+  const root = directory ?? (await newStoreDirectory())
+  const store = await openTestAgentSessionRecordStore(root)
+  directories.set(store, root)
+  return store
 }
 
 async function reserve(store: AgentSessionRecordStore) {
@@ -87,10 +94,15 @@ async function liveOwner(store: AgentSessionRecordStore, pid = 4242) {
 }
 
 async function latch(store: AgentSessionRecordStore) {
-  return store.transitionHandoff(SESSION, (record) => ({
-    ...record,
-    lease: { ...record.lease, handoffStage: 'recovering' }
-  }))
+  const directory = directories.get(store)!
+  await closeTestJournalHostDatabase(directory)
+  const reopened = await openStore(directory)
+  await reopened.reconcileOnRestart({
+    sessionId: SESSION,
+    probe: async () => ({ outcome: 'indeterminate', reason: 'test owner awaits recovery' }),
+    now: NOW
+  })
+  return reopened
 }
 
 function deps(
@@ -114,9 +126,9 @@ function deps(
 
 describe('structured session recovery resolution', () => {
   it('releases an owner whose identity cannot be verified, and signals nothing', async () => {
-    const store = await openStore()
+    let store = await openStore()
     await liveOwner(store)
-    await latch(store)
+    store = await latch(store)
     const stopOwnerProcess = vi.fn()
 
     const result = await resolveStructuredSessionRecovery(
@@ -139,9 +151,9 @@ describe('structured session recovery resolution', () => {
   })
 
   it('releases a Windows owner the probe matches without signalling its saved pid', async () => {
-    const store = await openStore()
+    let store = await openStore()
     await liveOwner(store)
-    await latch(store)
+    store = await latch(store)
     const stopOwnerProcess = vi.fn()
 
     const result = await resolveStructuredSessionRecovery(

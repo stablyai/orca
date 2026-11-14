@@ -17,6 +17,7 @@ import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
 import { JIRA_TRANSITION_FIELDS_RUNTIME_CAPABILITY } from '../../../../shared/jira/jira-detail-capabilities'
 import { RuntimeRpcCallError } from '../rpc/calls/runtime-rpc-result'
 import { readRuntimeJiraPayload } from './runtime-jira-payload-stream'
+import { translate } from '@/i18n/i18n'
 
 export type JiraCommentResult = { ok: true; id: string } | { ok: false; error: string }
 
@@ -81,7 +82,10 @@ export async function jiraUpdateIssueForTarget(
     await assertRuntimeEnvironmentCapability(
       target.environmentId,
       JIRA_TRANSITION_FIELDS_RUNTIME_CAPABILITY,
-      'Update the remote Orca server to submit required transition fields, or complete the transition in Jira.'
+      translate(
+        'auto.runtime.jira.transitionFieldsNeedsUpdate',
+        'Update the remote Orca server to submit required transition fields, or complete the transition in Jira.'
+      )
     )
   }
   const args = { key, updates, siteId: siteId ?? undefined }

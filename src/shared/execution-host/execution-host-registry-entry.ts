@@ -14,6 +14,7 @@ export type ExecutionHostRegistryEntry = {
   id: ExecutionHostId
   kind: ExecutionHostKind
   label: string
+  isDefaultLocalLabel?: boolean
   detail: string
   health: ExecutionHostHealth
   connectionStatus?: SshConnectionStatus

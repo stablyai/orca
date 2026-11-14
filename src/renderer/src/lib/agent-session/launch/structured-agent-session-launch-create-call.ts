@@ -45,8 +45,6 @@ import type { StructuredAgentSessionCreateParams } from '../../../../../shared/a
 import type { StructuredAgentSessionLaunchIntent } from './structured-agent-session-launch-intent'
 import type { StructuredAgentLaunchReceipt } from './structured-agent-session-launch-recovery'
 
-export { STRUCTURED_LAUNCH_FORK_UNSUPPORTED_REFUSAL } from './structured-agent-session-launch-fork-support'
-
 type LaunchSeed = Readonly<Record<string, string>> | undefined
 const DEFINITIVE_CREATE_FAILURE_CODES = [
   'structured_agent_session_unsupported',

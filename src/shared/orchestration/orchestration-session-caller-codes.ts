@@ -8,6 +8,8 @@ export const ORCHESTRATION_SESSION_CALLER_ERROR_CODES = {
   providerId: 'session_caller_provider_id',
   /** The session exists but has no live owner here: released, switching owners, or unreconciled. */
   notLive: 'session_caller_not_live',
+  /** The id names a terminal agent, which mail cannot reach by id yet. */
+  terminalAgent: 'session_caller_terminal_agent',
   /** A request with no session id named a chat's address as its caller. */
   chatNotDeclarable: 'session_caller_chat_not_declarable'
 } as const

@@ -1,5 +1,5 @@
-import { githubBodyImageUrls } from '../../body-image-urls'
-import type { PRComment } from '../../../../shared/github/comment-types'
+import { githubBodyImageUrls } from '../../attachments/body-image-urls'
+import type { PRComment } from '../../../../shared/github/comments/comment-types'
 export function mapReviewCommentResponse(
   data: {
     id?: number

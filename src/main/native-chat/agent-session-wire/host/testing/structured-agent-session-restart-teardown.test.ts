@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { expect, it, vi } from 'vitest'
 import { AgentSessionRecoveryCapsule } from '../../../../runtime/agent-session/records/agent-session-recovery-capsule'
@@ -6,16 +7,16 @@ import {
   attach,
   hostTestState,
   serveHostTestChildWork
-} from './structured-agent-session-host-test-harness'
+} from './structured-agent-session-host.test-fixture'
 import {
   childRecord,
   pendingApproval
-} from '../../recovery/testing/structured-agent-session-restart-resume-test-harness'
+} from '../../recovery/testing/structured-agent-session-restart-resume.test-fixture'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import { inspect } from 'node:util'
 
 it.each(['beginTeardown', 'captureBeforeStop', 'recordMarkers'] as const)(
@@ -31,8 +32,11 @@ it.each(['beginTeardown', 'captureBeforeStop', 'recordMarkers'] as const)(
     try {
       await expect(host.flushAllStreamedEvents()).resolves.toBeUndefined()
       expect(operation).toHaveBeenCalledOnce()
-      expect(warning).toHaveBeenCalledOnce()
-      expect(warning.mock.calls[0]?.[0]).toBe(
+      expect(warning.mock.calls).toHaveLength(2)
+      expect(warning.mock.calls.map(([message]) => message)).toContain(
+        '[agent-session] queued-drain: draining queued messages failed'
+      )
+      expect(warning.mock.calls.map(([message]) => message)).toContain(
         {
           beginTeardown:
             '[agent-session] teardown-recovery-witnesses: capturing recovery witnesses for teardown failed',
@@ -52,7 +56,9 @@ it.each(['beginTeardown', 'captureBeforeStop', 'recordMarkers'] as const)(
       )
       expect(inspect(log.entries, { depth: 8 })).not.toContain('/private/account')
       expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
-      await expect(host.journalSnapshot(SESSION)).rejects.toThrow('agent_session_ownership_unknown')
+      await expect(readTestHostJournal(host, SESSION)).rejects.toThrow(
+        'agent_session_ownership_unknown'
+      )
     } finally {
       operation.mockRestore()
       warning.mockRestore()

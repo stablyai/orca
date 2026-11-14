@@ -4,7 +4,7 @@ import {
 } from '../../../../runtime/terminal/identity/agent-status-observed-pane-identity'
 import { OPEN_CODE_WRITER_TOPOLOGY } from '../../cli-writer-observation'
 import { toAgentStatusIpcPayload } from '../../server-status-identity'
-import { buildRelayHookEnvelope } from '../../../../../wsl-guest/agent-hook-envelope-build'
+import { buildRelayHookEnvelope } from '../../../../../wsl-guest/agent-hooks/publication/agent-hook-envelope-build'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AgentHookServer } from '../../agent-hook-server'
 import { buildBody, PANE, postHookEvent } from '../server.test-fixtures'

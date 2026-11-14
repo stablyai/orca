@@ -1,5 +1,5 @@
 import { accessSync, constants, statSync } from 'node:fs'
-import { getBundledLauncherPath } from '../../cli/bundled-cli-launcher-path'
+import { getBundledLauncherPath } from '../../cli/packaged-assets/bundled-cli-launcher-path'
 
 export type CodexShellLaunchPreflightCommandOptions = {
   hooksEnabled: boolean

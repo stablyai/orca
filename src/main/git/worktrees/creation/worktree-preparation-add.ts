@@ -4,7 +4,7 @@ import { isUnsupportedWorktreeAddLockReasonError } from '../../../../shared/git/
 import { resolveWorktreeHostPath } from '../../../../shared/git/metadata/git-metadata-path'
 import { windowsLongPathGitArgs } from '../../../../shared/windows-long-path-git-args'
 import { toHostFilesystemPath } from '../../../filesystem/host-tree-removal'
-import { withLocalGitCapabilityCacheForExecution } from '../../command-runner/git-capability-state'
+import { withLocalGitCapabilityCacheForExecution } from '../../command-runner/host-routing/git-capability-state'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
 import {
   getErrorCode,
@@ -22,7 +22,7 @@ import {
   verifyWorktreePreparationLock,
   WorktreePreparationLockOwnershipError
 } from './worktree-preparation-lock'
-import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/wsl-linked-worktree-git-routing'
+import { invalidateWslLinkedWorktreeGitRouting } from '../../command-runner/host-routing/wsl-linked-worktree-git-routing'
 
 async function isAbsent(worktreePath: string, options: GitWorktreeExecOptions): Promise<boolean> {
   const hostPath = resolveWorktreeHostPath(worktreePath, options)

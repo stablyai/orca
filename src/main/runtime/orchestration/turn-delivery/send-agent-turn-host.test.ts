@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../native-chat/agent-session-journal/journal-observation.test-support'
 // Use the real host's fingerprint admission to reject envelopes derived from different fields.
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -11,7 +12,7 @@ import {
   HOST_TEST_SESSION as SESSION,
   hostTestMessage,
   hostTestOperationId
-} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { openRigTurnFor } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-rig-turn.test-fixture'
 import {
   sendAgentTurn,
@@ -67,7 +68,7 @@ function sendTurn(
 }
 
 async function sentMessage(clientMessageId: string) {
-  const snapshot = await rig.host.journalSnapshot(SESSION)
+  const snapshot = await readTestHostJournal(rig.host, SESSION)
   return snapshot.items.find((item) => item.itemId === agentJournalSubmissionKey(clientMessageId))
 }
 

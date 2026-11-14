@@ -1,11 +1,11 @@
 import { defineMethod } from '../../core'
-import { resolveRpcWorkspaceCreatorProvenance } from '../../workspace-creator-context'
+import { resolveRpcWorkspaceCreatorProvenance } from '../../callers/workspace-creator-context'
 import {
   FolderWorkspaceCreate,
   FolderWorkspaceDelete,
   FolderWorkspacePathStatus,
   FolderWorkspaceUpdate
-} from '../../../../../shared/rpc-contract/folder-workspace-params'
+} from '../../../../../shared/rpc-contract/workspaces/folder-workspace-params'
 
 export const FOLDER_WORKSPACE_METHODS = [
   defineMethod({
@@ -20,12 +20,12 @@ export const FOLDER_WORKSPACE_METHODS = [
     name: 'folderWorkspace.create',
     permission: 'workspace',
     params: FolderWorkspaceCreate,
-    handler: async (params, context) => ({
-      folderWorkspace: await context.runtime.createFolderWorkspace({
+    handler: async (params, context) =>
+      context.runtime.createFolderWorkspace({
         ...params,
+        signal: context.signal,
         creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context)
       })
-    })
   }),
   defineMethod({
     name: 'folderWorkspace.update',
@@ -45,7 +45,9 @@ export const FOLDER_WORKSPACE_METHODS = [
     params: FolderWorkspaceDelete,
     handler: async (params, { runtime }) =>
       runtime.deleteFolderWorkspace(params.folderWorkspaceId, {
-        requireUniqueId: params.requireUniqueId
+        requireUniqueId: params.requireUniqueId,
+        runHooks: params.runHooks,
+        allowFailedArchiveHook: params.allowFailedArchiveHook
       })
   }),
   defineMethod({

@@ -1,22 +1,23 @@
 import { createLegacyPrerequisites } from './structured-agent-session-launch-prerequisites'
 import type { LegacyPrerequisites } from './structured-agent-session-launch-prerequisites'
 import { useSyncExternalStore } from 'react'
-import { acceptedStructuredSessionSelectionOutcome } from '../../../../../shared/agent-session/options/structured-agent-session-options-write-owner'
+import { acceptedStructuredSessionSelectionOutcome } from '../../../../../shared/agent-session/options/reconciliation/structured-agent-session-options-write-owner'
 import { structuredSessionSelectionController } from '../options/structured-agent-session-selection-controller'
 import { structuredAgentSessionOptionPicks } from '../../../../../shared/agent-session/options/structured-agent-session-options'
 import type { StructuredAgentSessionOptionState } from '../../../../../shared/agent-session/options/structured-agent-session-options'
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionPayloadFingerprint
-} from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
+} from '../../../../../shared/agent-session/lifecycle/operations/structured-agent-session-mutation'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import {
   getStructuredLaunchStateBySessionId,
-  subscribeStructuredAgentLaunchStatus
-} from './structured-agent-session-launch-registry'
-import type { StructuredLaunchState } from './structured-agent-session-launch-registry'
+  subscribeStructuredAgentLaunchStatus,
+  type StructuredLaunchState
+} from './structured-agent-session-launch-state-store'
+
 import {
   agentSessionRefusalFailure,
   agentSessionThrownFailure
@@ -25,7 +26,7 @@ import type { AgentSessionWriteFailure } from '../../../../../shared/agent-sessi
 import type {
   SelectionOperation,
   SelectionOutcome
-} from '../../../../../shared/agent-session/options/structured-agent-session-selection-operations'
+} from '../../../../../shared/agent-session/options/selection/structured-agent-session-selection-operations'
 import type {
   AgentSessionMutationResult,
   AgentSessionOptionResult
@@ -56,8 +57,6 @@ export function initialStructuredLaunchSelection(
     ...(intent.target.kind !== 'local' && !intent.seedOptions ? { seedPending: true } : {})
   }
 }
-
-export type StructuredLaunchOptionOutcome = SelectionOutcome
 
 const launchControllers = new WeakMap<
   StructuredLaunchState,
@@ -91,7 +90,7 @@ export function holdStructuredAgentSessionLaunchOption(
   encoded: string,
   /** The picker's list, under which a model pick keeps only the held values the model offers. */
   picker?: StructuredAgentSessionOptionState
-): Promise<StructuredLaunchOptionOutcome> | null {
+): Promise<SelectionOutcome> | null {
   const state = getStructuredLaunchStateBySessionId(sessionId)
   if (!state || state.cancelled || state.callers.outcome === 'published') {
     return null
@@ -130,7 +129,7 @@ export async function setStructuredSessionSelectionOption(
   key: string,
   value: string,
   options: { expectedEnvironmentPairingRevision?: number } = {}
-): Promise<StructuredLaunchOptionOutcome> {
+): Promise<SelectionOutcome> {
   const fields = { key, value }
   try {
     const result = await callStructuredAgentSession<

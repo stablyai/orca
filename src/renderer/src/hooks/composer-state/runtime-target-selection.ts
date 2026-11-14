@@ -20,9 +20,11 @@ import { buildProjectHostSetupOptions } from '@/lib/workspace/creation/project-h
 import { buildNewWorkspaceCreateTargetOptions } from '@/lib/workspace/creation/new-workspace-project-options'
 import { getRuntimeEnvironmentIdForRepo } from '@/lib/workspace/ownership/repo-runtime-owner'
 import { useEphemeralVmRecipeOptions } from '@/hooks/useEphemeralVmRecipeOptions'
+import { selectProjectFirstReason } from './runtime-target-selection-copy'
 import type { ComposerRuntimeTargetSelectionInput } from './composer-target-input-contracts'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
+import { pickerRepos } from '../../../../shared/hidden-projects'
 
 export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSelectionInput) {
   const {
@@ -156,7 +158,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
   // Quote for the repo execution host’s OS, not the client’s (#22204).
   const selectedRepoAgentLaunchFact = useMemo((): ExecutionHostPlatformFact => {
     if (!selectedRepo) {
-      return { kind: 'withheld', reason: 'Select a project first.', recovery: 'refreshProjects' }
+      return { kind: 'withheld', reason: selectProjectFirstReason(), recovery: 'refreshProjects' }
     }
     return resolveRepoExecutionHostPlatform(
       { sshConnectionStates, sshStateByEnvironment, runtimeStatusByEnvironmentId },
@@ -225,11 +227,11 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
       buildNewWorkspaceCreateTargetOptions({
         projects,
         projectHostSetups,
-        eligibleRepos,
+        eligibleRepos: pickerRepos(eligibleRepos, selectedRepo?.id),
         projectGroups,
         hosts: hostOptions
       }),
-    [eligibleRepos, hostOptions, projectGroups, projectHostSetups, projects]
+    [eligibleRepos, hostOptions, projectGroups, projectHostSetups, projects, selectedRepo?.id]
   )
 
   // Why: probes and attachment uploads inspect the selected repo, even though creation defaults still follow host scope.

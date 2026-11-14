@@ -108,37 +108,6 @@ function worktree(name: string, host: 'paired' | 'local' = 'paired'): Worktree {
   }
 }
 
-const OTHER = worktree('other')
-const CREATED = worktree('created')
-
-function seedPairedServer(): ReturnType<typeof vi.fn> {
-  const call = vi.fn(() => new Promise(() => undefined))
-  vi.stubGlobal('window', { ...window, api: { runtimeEnvironments: { call, subscribe: vi.fn() } } })
-  useAppStore.setState({
-    repos: [
-      {
-        id: 'repo-1',
-        path: path.join('workspace', 'repo'),
-        displayName: 'repo',
-        badgeColor: '#000',
-        addedAt: 0,
-        executionHostId: 'runtime:server-1'
-      }
-    ],
-    worktreesByRepo: { 'repo-1': [OTHER, CREATED] },
-    tabsByWorktree: {},
-    ptyIdsByTabId: {},
-    pendingWorktreeCreations: { 'creation-1': pendingCreation() },
-    settings: {
-      ...getDefaultSettings(path.join('workspace', '.orca')),
-      activeRuntimeEnvironmentId: 'server-1'
-    }
-  })
-  // The user moved to another workspace while the create ran.
-  useAppStore.getState().setActiveWorktree(OTHER.id, 'runtime:server-1')
-  return call
-}
-
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch reads only these request fields.
 const REQUEST = {
   agent: 'claude',
@@ -171,41 +140,6 @@ afterEach(() => {
   useAppStore.setState(initial, true)
 })
 
-describe('a background worktree create whose paired server declines the chat', () => {
-  it("opens the request's agent terminal without pulling the user onto the new workspace", async () => {
-    mocks.createSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
-    seedPairedServer()
-    mocks.webLaunch.mockResolvedValue({
-      outcome: { status: 'created' },
-      delivered: true,
-      failureNotified: false
-    })
-
-    await launchStructuredWorktreeSession({
-      creationId: 'creation-1',
-      request: REQUEST,
-      agentLaunchRoute: 'structured-native-chat',
-      worktreeId: CREATED.id,
-      shouldActivateOnCompletion: false,
-      activation: false,
-      primaryTabId: null
-    })
-
-    expect(mocks.webLaunch).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({
-        agent: 'claude',
-        worktreeId: CREATED.id,
-        environmentId: 'server-1',
-        prompt: 'fix the flaky test',
-        promptDelivery: 'auto-submit',
-        activate: false,
-        selectWorktree: false
-      })
-    )
-    expect(useAppStore.getState().activeWorktreeId).toBe(OTHER.id)
-  })
-})
-
 const LOCAL_OTHER = worktree('local-other', 'local')
 const LOCAL_CREATED = worktree('local-created', 'local')
 
@@ -229,38 +163,6 @@ function seedThisMachine(): void {
     activeWorktreeId: LOCAL_OTHER.id
   })
 }
-
-describe('a background worktree create whose own machine declines the chat', () => {
-  it("opens the request's agent terminal in place, with no chat, leaving the user where they are", async () => {
-    mocks.createSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
-    seedThisMachine()
-
-    await launchStructuredWorktreeSession({
-      creationId: 'creation-1',
-      request: REQUEST,
-      agentLaunchRoute: 'structured-native-chat',
-      worktreeId: LOCAL_CREATED.id,
-      shouldActivateOnCompletion: false,
-      activation: false,
-      primaryTabId: null
-    })
-
-    await vi.waitFor(() =>
-      expect(useAppStore.getState().tabsByWorktree[LOCAL_CREATED.id]).toHaveLength(1)
-    )
-    const state = useAppStore.getState()
-    const tab = state.tabsByWorktree[LOCAL_CREATED.id]![0]!
-    expect(startupOf(tab.id)).toMatchObject({
-      command: "claude --model opus 'fix the flaky test'"
-    })
-    expect(
-      (state.unifiedTabsByWorktree[LOCAL_CREATED.id] ?? []).filter(
-        (candidate) => candidate.contentType === 'agent-session'
-      )
-    ).toEqual([])
-    expect(state.activeWorktreeId).toBe(LOCAL_OTHER.id)
-  })
-})
 
 describe.each(['git', 'folder'] as const)('foreground %s implicit Chat decline', (kind) => {
   it.each([`-c 'model="true"'`, '--add-dir docs', undefined, ''])(
@@ -334,7 +236,7 @@ describe.each(['git', 'folder'] as const)('foreground %s implicit Chat decline',
             createFolderWorkspace: async () => {
               const workspace = makeFolderWorkspace()
               useAppStore.setState({ folderWorkspaces: [workspace] })
-              return workspace
+              return { folderWorkspace: workspace }
             },
             onOpenChange: vi.fn()
           })

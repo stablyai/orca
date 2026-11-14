@@ -1,12 +1,12 @@
 import { clampLinearSearchLimit } from '../../../../shared/linear/agent-access'
 import { clampLinearIssueListLimit } from '../../../../shared/linear/issue-read-limits'
-import { listIssues as listLinearIssues } from '../../../linear/linear-issue-listing'
-import { listMcpIssues } from '../../../linear/mcp-issue-list'
+import { listIssues as listLinearIssues } from '../../../linear/issues/linear-issue-listing'
+import { listMcpIssues } from '../../../linear/issues/mcp-issue-list'
 import {
   getTeamMembersOrThrow as getLinearTeamMembersOrThrow,
   listTeamsForAgent as listLinearTeamsForAgent
-} from '../../../linear/teams'
-import { sanitizeLinearErrorMessage } from '../../../linear/issue-context/errors'
+} from '../../../linear/teams/linear-team-queries'
+import { sanitizeLinearErrorMessage } from '../../../linear/issues/context/linear-access-errors'
 import type { LinearIssueListFilter } from '../../../../shared/linear/agent-access'
 import type {
   LinearIssueListResult,

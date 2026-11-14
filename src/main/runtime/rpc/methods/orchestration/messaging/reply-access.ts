@@ -6,10 +6,11 @@ import type {
 } from '../../../../orchestration/db/orchestration-records'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
-import type { ReplyParams } from '../../../../../../shared/rpc-contract/orchestration-params'
+import type { ReplyParams } from '../../../../../../shared/rpc-contract/orchestration/orchestration-params'
 import { resolveRunScope } from '../runs/run-scope'
 import type { OrchestrationAccessRuleInput } from '../access/orchestration-method-access'
 import { helperQuestionAnswerer } from './helper-question-answerer'
+import { getRemoteOwnedQuestion } from '../../../../orchestration/db/remote-owned/remote-dispatch-records'
 
 /** Who may answer: the helper a question was asked of, the Run's current consumer, or anyone for plain mail. */
 export type ReplyAccess =
@@ -21,6 +22,8 @@ export type ReplyAccess =
     }
   | { kind: 'run'; original: MessageRow; question: QuestionRow; run: RunRow }
   | { kind: 'message'; original: MessageRow }
+  /** A question a worker on a paired server asked; the reply goes to that server. */
+  | { kind: 'remote'; original: MessageRow; run: RunRow }
 
 export function replyAccess({
   params,
@@ -56,6 +59,22 @@ export function replyAccess({
     )
   }
   const question = db.getQuestion(params.id)
+  const remote = question ? undefined : getRemoteOwnedQuestion(db, params.id)
+  if (remote) {
+    // Answered by its Run's coordinator, as a question from a worker here is.
+    const run = resolveRunScope(runtime, {
+      runId: params.run ?? remote.run_id,
+      callerTerminalHandle: caller,
+      requireCurrentConsumer: true,
+      legacyCoordinatorRunId,
+      callerEvidence: ctx.orchestrationCompatibilityEvidence,
+      callerSession: ctx.orchestrationCaller
+    })
+    if (run.id !== remote.run_id) {
+      throw new Error(`Message not found: ${params.id}`)
+    }
+    return { kind: 'remote', original, run }
+  }
   if (!question) {
     return { kind: 'message', original }
   }

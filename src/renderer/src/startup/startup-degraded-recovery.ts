@@ -109,7 +109,7 @@ export async function recoverFromDegradedStartup(args: DegradedStartupRecoveryAr
     void probeTerminalProviderGoneSessions(restoredPtyIds)
     await refreshTerminalProviderSnapshotCapabilities(restoredPtyIds)
     await reconnectPersistedTerminals(abortSignal)
-    await window.api.app.recoverLegacyWorkerTerminalsForRendererStartup()
+    await window.api.app.recoverLegacyWorkerTerminalsForRendererStartup({ afterReconnect: true })
     // Reconnect does not set the success chain’s final flag; release restoration readers on degraded boot too.
     if (!isCancelled()) {
       useAppStore.setState({ terminalStartupRestorationReady: true })

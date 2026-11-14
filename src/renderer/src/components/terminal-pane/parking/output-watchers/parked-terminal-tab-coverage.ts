@@ -1,6 +1,6 @@
 import { isTerminalNoticeLifetimeCurrent } from '../../provider-notices/terminal-notice-lifetime'
 import { useAppStore } from '@/store/index'
-import { sleepingAgentRecordIndex } from '@/store/terminals/sleeping-agent-record-index'
+import { sleepingAgentRecordIndex } from '@/store/terminals/sleep/sleeping-agent-record-index'
 import { isTerminalLeafId } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { isRemoteExecutionHostPtyId } from '../../../../../../shared/execution-host/remote-execution-host-pty-id'
 import { terminalProviderAllowsParking } from '../../../terminal/terminal-provider-snapshot-capability'
@@ -16,7 +16,7 @@ import '../../layout/terminal-layout-leaf-traversal'
 import {
   collectLayoutLeafIdsInOrder,
   resolveRootlessTerminalLayoutLeafId
-} from '../../../../../../shared/workspace-layout/terminal-pane-tree'
+} from '../../../../../../shared/workspace-layout/terminal-topology/terminal-pane-tree'
 import type { ParkedTerminalPaneCapture } from './terminal-parked-watcher-registry'
 import { launchAgentTabIds } from './parked-tab-agent-owner-index'
 

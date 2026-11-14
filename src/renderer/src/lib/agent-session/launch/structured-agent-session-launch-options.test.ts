@@ -13,7 +13,7 @@ import {
   registerStructuredSelectionCatalogStore,
   forgetStructuredSessionSelection
 } from '../options/structured-agent-session-selection-controller'
-import '../../../../../shared/agent-session/options/agent-session-option-catalog-claude-codex'
+import '../../../../../shared/agent-session/options/catalog-providers/agent-session-option-catalog-claude-codex'
 import '../../../../../shared/agent-session/options/structured-agent-session-options'
 import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
 import type { StructuredAgentSessionLaunchIntent } from '@/lib/agent-session/launch/structured-agent-session-launch-intent'

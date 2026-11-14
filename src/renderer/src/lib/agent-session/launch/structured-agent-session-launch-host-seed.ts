@@ -1,5 +1,7 @@
-import { notifyStructuredLaunchListeners } from './structured-agent-session-launch-registry'
-import type { StructuredLaunchState } from './structured-agent-session-launch-registry'
+import {
+  notifyStructuredLaunchListeners,
+  type StructuredLaunchState
+} from './structured-agent-session-launch-state-store'
 
 /** Each attempt's probe names the seed the paired server's create will use; the picker shows it. */
 export function adoptPairedHostSeed(

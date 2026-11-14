@@ -3,7 +3,7 @@ import type {
   PluginHostListEntry,
   PluginHostStatus
 } from '../../../shared/plugins/plugin-list-entry'
-import type { ValidDiscoveredPlugin } from '../plugin-discovery'
+import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import {
   resolvePluginViewEditor,
   resolvePluginViewPanel,

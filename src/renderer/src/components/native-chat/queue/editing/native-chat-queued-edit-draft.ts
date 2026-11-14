@@ -3,7 +3,7 @@ import { withoutImageReference } from '../../../../../../shared/native-chat/nati
 import {
   imageReferencesToPromptMarkers,
   promptMarkersToImageReferences
-} from '../../../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
+} from '../../../../../../shared/native-chat/transcript/images/native-chat-sent-image-prompt-markers'
 import {
   queuedEditKeptImages,
   queuedMessageEditableText,

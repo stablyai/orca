@@ -1,7 +1,8 @@
 import { useAppStore } from '@/store/index'
 import { persistAgentLaunchTabOrder } from '@/lib/agent-session/launch/pane/launch-agent-tab-order'
-import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
-import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
+import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
+
+import { createNonSecureContextUuid } from '../../../../../shared/non-secure-context-uuid'
 import {
   flattenTerminalQuickCommand,
   isTerminalAgentQuickCommand,
@@ -53,8 +54,8 @@ export function runQuickCommandInNewTab({
     if (!command.prompt.trim() || !supportsTerminalAgentQuickCommand(command.agent)) {
       return null
     }
-    const result = launchAgentInNewTab({
-      requestId: newAgentLaunchRequestId(),
+    const result = launchAgentInNewTabWithOutcome({
+      requestId: createNonSecureContextUuid(),
       agent: command.agent,
       prompt: command.prompt,
       worktreeId,

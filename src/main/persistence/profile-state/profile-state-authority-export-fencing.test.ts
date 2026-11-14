@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
-import { ProfileStateRevisionConflictError } from './profile-state-document-validation'
+import { ProfileStateRevisionConflictError } from './documents/profile-state-document-validation'
 
 describe('profile export snapshot revision', () => {
   it('refuses a competing revision before publishing JSON', () => {

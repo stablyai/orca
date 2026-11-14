@@ -63,7 +63,7 @@ export function RepositoryIconColorSection({
                 )
           }
           selected={!isPresetBadgeColor}
-          triggerLabel="Custom"
+          triggerLabel={t('auto.components.settings.RepositoryIconPicker.custom', 'Custom')}
           showHexInTrigger={!isPresetBadgeColor}
           className="h-7 px-2"
         />

@@ -12,11 +12,20 @@ import {
 import {
   agentJournalTurnBody,
   readAgentJournalTurn
-} from '../../../../shared/agent-session/lifecycle/agent-session-turn-record'
-import type { AgentSessionDeathEvidence } from '../../../../shared/agent-session/lifecycle/agent-session-death-evidence'
+} from '../../../../shared/agent-session/lifecycle/records/agent-session-turn-record'
+import type { AgentSessionDeathEvidence } from '../../../../shared/agent-session/lifecycle/leases/agent-session-death-evidence'
 import type { AgentSessionReplacedRuntime } from '../../../runtime/agent-session/agent-session-replaced-runtime'
 import type { JournalLifecycleMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { JournalLatestStop } from '../../agent-session-journal/context-epochs/journal-stop-turn-end'
+
+export type TurnVerdictJournal = {
+  itemFence: (itemId: string) => number | undefined
+  lastProviderActivityAt: (fence: number) => number | undefined
+  stopMarks: {
+    latest: () => JournalLatestStop | null
+    personStopDecides: (turnId: string | null, endedAt?: number) => boolean
+  }
+}
 
 export type StructuredAgentSessionTurnVerdict =
   /** Stop events determine personal cancellation when building the row. */
@@ -72,7 +81,7 @@ export function turnVerdictFromReplacedRuntime(
 }
 
 export function lastProvenTurnLiveAt(
-  journal: Pick<AgentSessionJournal, 'stopMarks' | 'itemFence' | 'lastProviderActivityAt'>,
+  journal: TurnVerdictJournal,
   item: AgentJournalRenderItem
 ): number | undefined {
   const stop = journal.stopMarks.latest()
@@ -85,7 +94,7 @@ export function lastProvenTurnLiveAt(
 
 /** Personal Stop owns these interrupted turns, suppressing provider-failure notices. */
 export function endedByPersonsStop(
-  journal: Pick<AgentSessionJournal, 'stopMarks'>,
+  journal: Pick<TurnVerdictJournal, 'stopMarks'>,
   turnEnds: readonly JournalLifecycleMutationInput[]
 ): boolean {
   const interrupted = turnEnds.flatMap((mutation) => {
@@ -112,7 +121,7 @@ export function runningTurnLifecycleRevisions(
 export function provenUnverifiableTurnRevisions(
   items: readonly AgentJournalRenderItem[],
   evidence: AgentSessionDeathEvidence | null | undefined,
-  journal: Pick<AgentSessionJournal, 'itemFence' | 'stopMarks' | 'lastProviderActivityAt'>,
+  journal: Parameters<typeof lastProvenTurnLiveAt>[0],
   /** Replacement covers all owners it held; death covers only its named owner. */
   replaced?: AgentSessionReplacedRuntime
 ): JournalLifecycleMutationInput[] {
@@ -137,7 +146,7 @@ export type StructuredAgentSessionWatchedExit = { ownerFence: number; observedAt
 export function watchedExitRevisions(
   items: readonly AgentJournalRenderItem[],
   exit: StructuredAgentSessionWatchedExit | undefined,
-  journal: Pick<AgentSessionJournal, 'itemFence'>
+  journal: Pick<TurnVerdictJournal, 'itemFence'>
 ): JournalLifecycleMutationInput[] {
   if (!exit) {
     return []
@@ -158,7 +167,7 @@ export function watchedExitRevisions(
 export function provenUnverifiedToolCallRevisions(
   items: readonly AgentJournalRenderItem[],
   evidence: AgentSessionDeathEvidence | null | undefined,
-  journal: Pick<AgentSessionJournal, 'itemFence'>,
+  journal: Pick<TurnVerdictJournal, 'itemFence'>,
   replaced?: AgentSessionReplacedRuntime
 ): JournalLifecycleMutationInput[] {
   const ownerFence = evidence?.ownerFence

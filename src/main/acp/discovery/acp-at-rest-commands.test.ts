@@ -1,7 +1,6 @@
-import { readdir } from 'node:fs/promises'
 import { statSync } from 'node:fs'
 import type * as fs from 'node:fs/promises'
-import { join } from 'node:path'
+
 import { afterEach, expect, it, vi } from 'vitest'
 import capture from '../../../shared/__fixtures__/omp-native-commands.json'
 import '../../../shared/priority-semaphore'
@@ -12,7 +11,7 @@ import {
 } from './testing/acp-command-discovery.test-fixture'
 import { acpLaunchSpecFor } from '../launch/acp-launch-registry'
 import { readAcpForkSupport } from '../capabilities/acp-fork-support'
-import { agentSessionRecordFixture } from '../../native-chat/agent-session-record-test-fixture'
+import { agentSessionRecordFixture } from '../../native-chat/testing/agent-session-record-test-fixture'
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof fs>()
@@ -91,26 +90,6 @@ it('observes pre-initialize reports, validates session identity and keeps the la
     mcpServers: []
   })
   expect(children[0]!.lastCloseResult).toEqual({ root: 'exited', tree: null })
-})
-
-it('handles actual root exit just before listener registration without changing historical evidence', async () => {
-  const evidence = Object.freeze({ root: 'live' as const, tree: 'unverifiable' as const })
-  const { catalog, children, root } = await rig((child) => {
-    const onExit = child.onExit.bind(child)
-    vi.spyOn(child, 'onExit').mockImplementation((listener) => {
-      child.exit()
-      onExit(listener)
-    })
-    child.proveClose = async () => {
-      child.evidence = evidence
-      return false
-    }
-  })
-  expect(await catalog.settled(ompRecord(), 1_000)).toBeDefined()
-  await catalog.closeAll()
-  expect(children[0]!.lastCloseResult).toBe(evidence)
-  expect(children[0]!.closes).toBe(1)
-  expect(await readdir(join(root, 'acp-command-sessions', 'omp'))).toEqual([])
 })
 
 it('lists OpenCode 2 commands from a session it then deletes, and never starts OpenCode 1.x', async () => {

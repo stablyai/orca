@@ -45,9 +45,9 @@ ignores:
   - '**/__fixtures__/**'
   - 'src/shared/agent-launch/startup/claude-chat-entrypoint.ts'
   - 'src/main/claude/claude-stream-json-connection.ts'
-  - 'src/main/claude/claude-agent-sdk-process-spawn.ts'
+  - 'src/main/claude/child-process/claude-agent-sdk-process-spawn.ts'
   - 'src/main/claude/structured/launch/claude-structured-child-env.ts'
-  - 'src/main/claude/claude-model-catalog-probe.ts'
+  - 'src/main/claude/model-catalog/claude-model-catalog-probe.ts'
 rule:
   all:
     - any:
@@ -67,9 +67,9 @@ ignores:
   - '**/__fixtures__/**'
   - 'src/shared/agent-launch/startup/claude-chat-entrypoint.ts'
   - 'src/main/claude/claude-stream-json-connection.ts'
-  - 'src/main/claude/claude-agent-sdk-process-spawn.ts'
+  - 'src/main/claude/child-process/claude-agent-sdk-process-spawn.ts'
   - 'src/main/claude/structured/launch/claude-structured-child-env.ts'
-  - 'src/main/claude/claude-model-catalog-probe.ts'
+  - 'src/main/claude/model-catalog/claude-model-catalog-probe.ts'
 rule:
   all:
     - any:
@@ -88,7 +88,7 @@ ignores:
   - '**/*.test-fixtures.*'
   - '**/__fixtures__/**'
   - 'src/shared/agent-launch/startup/claude-chat-entrypoint.ts'
-  - 'src/shared/agent-launch/startup/claude-parent-session-env.ts'
+  - 'src/shared/agent-launch/startup/parent-agent-session-env.ts'
 rule:
   all:
     - any:
@@ -107,7 +107,7 @@ ignores:
   - '**/*.test-fixtures.*'
   - '**/__fixtures__/**'
   - 'src/shared/agent-launch/startup/claude-chat-entrypoint.ts'
-  - 'src/shared/agent-launch/startup/claude-parent-session-env.ts'
+  - 'src/shared/agent-launch/startup/parent-agent-session-env.ts'
 rule:
   all:
     - any:

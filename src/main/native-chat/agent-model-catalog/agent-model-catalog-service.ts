@@ -1,5 +1,6 @@
+import { onAgentsRefreshedOnHost } from '../../preflight/agents-refreshed-on-host'
 import { onLiveAccount } from './agent-model-catalog-running-account'
-import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import type { AgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record'
 import { readAccountList } from './agent-model-catalog-account-list'
 import { captureAgentModelCatalogRead } from './agent-model-catalog-operation'
@@ -34,6 +35,9 @@ import {
 export function createAgentModelCatalogService(
   deps: AgentModelCatalogServiceDeps
 ): AgentModelCatalogService {
+  const unbindRefresh = onAgentsRefreshedOnHost((userInitiated) =>
+    deps.store.refreshInputs(userInitiated)
+  )
   const tasks = new Set<Promise<unknown>>()
   const lifetime = new AbortController()
   const admission = new PrioritySemaphore(2)
@@ -78,9 +82,18 @@ export function createAgentModelCatalogService(
     const operation = params.operation ?? captureRead(params)
     await waitWithinAgentModelCatalogRead(operation, lookup.request(params, operation)?.done)
   }
+  const flush = (params: AgentModelCatalogReadParams) => {
+    const bound = memoryBinding(params)
+    if (!params.savedOnly && bound?.current()) {
+      deps.store.flushProgress(bound.fingerprint)
+    }
+  }
   return {
     captureRead,
-    snapshot,
+    snapshot: (params) => {
+      flush(params)
+      return snapshot(params)
+    },
     demand: async (params) => {
       if (!params.savedOnly) {
         await demand(params)
@@ -108,7 +121,7 @@ export function createAgentModelCatalogService(
           params,
           reader: { deadline, signal: operation.signal },
           store: deps.store,
-          refresh: lookup.request(params, operation),
+          refresh: () => lookup.request(params, operation),
           binding: () => bindings.get(requestKey(params))
         })
       }
@@ -118,6 +131,7 @@ export function createAgentModelCatalogService(
         expired && params.operation?.current({ ignoreDeadline: true })
           ? { ...params, operation: undefined }
           : params
+      flush(answerParams)
       const result = snapshot(answerParams)
       const answer = lifetime.signal.aborted
         ? result
@@ -140,6 +154,7 @@ export function createAgentModelCatalogService(
     async stop() {
       lifetime.abort()
       unbindRetirement()
+      unbindRefresh()
       retireContext()
       deps.store.clearPartialAttempts()
       await Promise.allSettled(tasks)

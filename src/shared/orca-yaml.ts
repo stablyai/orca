@@ -13,6 +13,7 @@ import {
   MAX_ORCA_YAML_COLLECTION_ENTRIES
 } from './orca-yaml-file-limit'
 import { parseEphemeralVmRecipeTimeoutSeconds } from './ephemeral-vm-recipe-timeouts'
+import { parseRecipePassEnv } from './ephemeral-vm-recipe-env'
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -182,6 +183,18 @@ function normalizeVmRecipes(value: unknown): VmRecipeParseResult {
           message: `Recipe "${id}" ${timeouts.message} Steps keep no time limit.`
         })
       }
+      const parsedPassEnv =
+        record.passEnv === undefined ? undefined : parseRecipePassEnv(record.passEnv)
+      if (parsedPassEnv === null) {
+        // Why: a typo must not widen the environment back to everything, and dropping the recipe
+        // would let a same-id plugin recipe or a stored snapshot run with the full environment.
+        diagnostics.push({
+          index,
+          field: 'passEnv',
+          message: `Recipe "${id}" passEnv must be a list of environment variable names (a trailing * matches a prefix). Scripts only receive basic variables until it is fixed.`
+        })
+      }
+      const passEnv = parsedPassEnv === null ? [] : parsedPassEnv
       return {
         id,
         name,
@@ -194,7 +207,8 @@ function normalizeVmRecipes(value: unknown): VmRecipeParseResult {
         ...(destroyDisabled ? { destroyDisabled: true } : {}),
         ...(timeouts.ok && timeouts.timeoutSeconds
           ? { timeoutSeconds: timeouts.timeoutSeconds }
-          : {})
+          : {}),
+        ...(passEnv ? { passEnv } : {})
       }
     })
     .filter((entry): entry is OrcaVmRecipe => entry !== null)

@@ -138,6 +138,14 @@ export type VoiceSettings = {
   dictationTerms?: DictationTerm[]
   /** Adds the current repo's name as a hint (DictationTerm.hint). Absent = on. */
   dictationRepoNameHint?: boolean
+  /** Sends each dictation's text through the AI cleanup agent before it lands. Absent = off. */
+  aiCleanup?: boolean
+  /** The agent the user agreed to send dictated text to; cleanup stays off for any other. */
+  aiCleanupConsentAgent?: string
+  /** Replaces the built-in cleanup instructions. Absent = built-in. */
+  aiCleanupInstructions?: string
+  /** Said to take back what came just before it; only AI cleanup acts on it. Absent = "scratch that". */
+  dictationCorrectionWord?: string
 }
 
 /** Where a dictation goes: an engine in the desktop's own process takes repoTerms, a host resolves worktreeId itself. */
