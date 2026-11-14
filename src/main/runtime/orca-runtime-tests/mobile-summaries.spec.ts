@@ -179,11 +179,11 @@ describe('OrcaRuntimeService', () => {
         ]
       })
     }
-    publishStaleGraph()
+    await publishStaleGraph()
 
     await runtime.sleepTerminalsForWorktree(`id:${TEST_WORKTREE_ID}`)
     // Another client can republish a pre-sleep graph after physical teardown.
-    publishStaleGraph()
+    await publishStaleGraph()
     const firstObserver = await runtime.getWorktreePs()
     const secondObserver = await runtime.getWorktreePs()
 

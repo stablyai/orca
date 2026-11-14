@@ -170,7 +170,7 @@ describe('OrcaRuntimeService', () => {
         })
       }
 
-      publishEmpty(1)
+      await publishEmpty(1)
       expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([
         expect.objectContaining({ parentTabId: 'host-tab', status: 'pending-handle' })
       ])
@@ -180,14 +180,14 @@ describe('OrcaRuntimeService', () => {
         ? [expect.objectContaining({ parentTabId: 'host-tab', status: 'pending-handle' })]
         : []
       vi.advanceTimersByTime(30_001)
-      publishEmpty(2)
+      await publishEmpty(2)
       expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual(
         afterLease
       )
 
       leaseState = 'terminated'
       leaseUpdatedAt = Date.now()
-      publishEmpty(3)
+      await publishEmpty(3)
       expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual(
         afterLease
       )
