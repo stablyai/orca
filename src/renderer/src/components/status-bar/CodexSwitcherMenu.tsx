@@ -14,15 +14,18 @@ import { ProviderDetailsMenu } from './ProviderDetailsMenu'
 import { AccountSwitchSection } from './AccountSwitchList'
 import { AccountSwitchRowItem } from './AccountSwitchRowItem'
 import { useCodexSwitcherController } from './use-codex-switcher-controller'
+import type { OwnerUsageRateLimits } from './use-owner-usage-rate-limits'
 
 export function CodexSwitcherMenu({
   codex,
+  ownerUsage,
   compact,
   iconOnly,
   asSubmenu = false,
   triggerContent
 }: {
   codex: ProviderRateLimits
+  ownerUsage?: OwnerUsageRateLimits
   compact: boolean
   iconOnly: boolean
   asSubmenu?: boolean
@@ -31,6 +34,7 @@ export function CodexSwitcherMenu({
   const t = useTranslate()
   const {
     activeTarget,
+    activeUsage,
     canRedeemReset,
     handleConfirmReset,
     handleOpenChange,
@@ -55,7 +59,7 @@ export function CodexSwitcherMenu({
     setSkipFutureResetConfirm,
     skipFutureResetConfirm,
     switchGroups
-  } = useCodexSwitcherController(codex)
+  } = useCodexSwitcherController(codex, ownerUsage)
 
   const isBusy = isSwitching || reauthenticatingAccountId !== null
   const rows = (selectedGroup?.targets ?? []).map((target) => {
@@ -111,9 +115,8 @@ export function CodexSwitcherMenu({
     active: boolean,
     inactiveUsage: (typeof rows)[number]['inactiveUsage']
   ): React.ReactNode {
-    // Why: rows follow this desktop's codexTarget, so a remote owner's usage could land on the wrong row.
-    if (active && !hasActiveRuntimeEnvironment) {
-      return <InlineUsageBars limits={codex} isFetching={codex.status === 'fetching'} />
+    if (active && activeUsage) {
+      return <InlineUsageBars limits={activeUsage} isFetching={activeUsage.status === 'fetching'} />
     }
     if (inactiveUsage?.isFetching && !inactiveUsage.rateLimits) {
       return <InlineUsageSkeleton />
@@ -136,7 +139,7 @@ export function CodexSwitcherMenu({
       )}
       variant="account"
       accountLabel={
-        !hasActiveRuntimeEnvironment
+        activeUsage
           ? (activeTarget?.label ??
             t('auto.components.status.bar.StatusBar.c676918adc', 'System default'))
           : undefined
@@ -164,12 +167,14 @@ export function CodexSwitcherMenu({
         ) : undefined
       }
       topContent={
-        <AccountRuntimeToggle
-          groups={switchGroups}
-          value={selectedGroup?.key ?? selectedRuntimeKey}
-          onChange={(group) => void handleSelectRuntime(group)}
-          ariaLabel={t('auto.components.status.bar.StatusBar.38b5647724', 'Codex usage runtime')}
-        />
+        !hasActiveRuntimeEnvironment ? (
+          <AccountRuntimeToggle
+            groups={switchGroups}
+            value={selectedGroup?.key ?? selectedRuntimeKey}
+            onChange={(group) => void handleSelectRuntime(group)}
+            ariaLabel={t('auto.components.status.bar.StatusBar.38b5647724', 'Codex usage runtime')}
+          />
+        ) : undefined
       }
       open={open}
       onOpenChange={handleOpenChange}
@@ -186,7 +191,7 @@ export function CodexSwitcherMenu({
       <AccountSwitchSection
         heading={t('auto.components.status.bar.StatusBar.7657e3db9c', 'Codex Account')}
         targets={selectedGroup?.targets ?? []}
-        panelShowsActiveAccount={!hasActiveRuntimeEnvironment}
+        panelShowsActiveAccount={activeUsage !== null}
         onOpenSettings={() => {
           openSettingsTarget({
             pane: 'accounts',

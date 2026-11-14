@@ -19,7 +19,7 @@ type CodexSignInActionDependencies = {
   mountedRef: MutableRefObject<boolean>
   reauthenticatingAccountId: string | null
   recordFeatureInteraction: AppState['recordFeatureInteraction']
-  setAccounts: Dispatch<SetStateAction<CodexRateLimitAccountsState>>
+  setAccounts: (accounts: CodexRateLimitAccountsState) => void
   setReauthenticatingAccountId: Dispatch<SetStateAction<string | null>>
 }
 
