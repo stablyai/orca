@@ -1,7 +1,7 @@
 import {
   formatArchiveHookOverride,
   type ArchiveHookOverride
-} from '../../shared/worktree/archive-hook-removal-gate'
+} from '../../shared/worktree/removal/archive-hook-removal-gate'
 
 type HookWarningResult = {
   warning?: string

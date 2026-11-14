@@ -8,7 +8,7 @@ import {
   githubWorkItemTargetKey,
   resolveGitHubWorkItemTarget,
   matchesGitHubWorkItemTarget
-} from '../../../../src/shared/github/work-item-target'
+} from '../../../../src/shared/github/work-items/work-item-target'
 
 export function githubTaskKey(source: GitHubWorkItem): string {
   const target = resolveGitHubWorkItemTarget(source)

@@ -1,8 +1,11 @@
-import { ghExecFileAsync } from '../../gh-utils'
-import type { GitHubApiRepository } from '../../github-api-repository'
+import { ghExecFileAsync } from '../../../git/command-runner/hosted-cli/gh-exec-file'
+import type { GitHubRepositoryIdentity as GitHubApiRepository } from '../../../../shared/github/repositories/repository-identity'
 import type { GhExecOptions } from '../github-exec-scope'
-import { createGhLogicalLifetime } from '../../../git/command-runner/hosted-cli/gh-capture-lifetime'
-import type { GhCaptureLifetimeHooks } from '../../../git/command-runner/hosted-cli/gh-capture-lifetime'
+import {
+  createGhLogicalLifetime,
+  type GhCaptureLifetimeHooks
+} from '../../../git/command-runner/hosted-cli/gh-capture-lifetime'
+
 import { runCheckDetailsCall } from './check-details-admission-lifetime'
 import { createCheckDetailsAbortError, waitForCheckDetailsResolution } from './check-details-abort'
 

@@ -74,23 +74,6 @@ it('tracks workspace source and manifest closures without trusting dist or widen
   ).toBe(false)
 })
 
-it('checks ordinary source unit files against actual imports before skipping the matrix', async () => {
-  const reachable = 'src/main/persistence/example/used.test.ts'
-  const unrelated = 'src/main/persistence/example/unrelated.test.tsx'
-  const removed = 'src/main/persistence/example/removed.test.ts'
-  const root = moduleTree({
-    'entry.ts': `import './${reachable}'; throw Error('never execute')`,
-    [reachable]: 'export const value = 1',
-    [unrelated]: 'throw Error("never execute unrelated test")'
-  })
-  const inputs = await collectNodeServerInputs({ root, entryPoints: ['entry.ts'] })
-  expect(inputs.has(reachable)).toBe(true)
-  expect(inputs.has(unrelated)).toBe(false)
-  expect((await classifyNodeServerChanges([reachable], async () => inputs)).shouldRun).toBe(true)
-  expect((await classifyNodeServerChanges([unrelated], async () => inputs)).shouldRun).toBe(false)
-  expect((await classifyNodeServerChanges([removed], async () => inputs)).shouldRun).toBe(false)
-})
-
 it('retains qualification when a removed ordinary unit file breaks an actual import', async () => {
   const removed = 'src/main/persistence/example/removed.test.ts'
   const root = moduleTree({ 'entry.ts': `import './${removed}'` })

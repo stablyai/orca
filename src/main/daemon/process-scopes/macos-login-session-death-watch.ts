@@ -1,4 +1,4 @@
-import type { LoginPreflightOutcome } from '../../providers/macos-tcc-login-shell'
+import type { LoginPreflightOutcome } from '../../providers/shell-launch/macos/login-session-pty-probe'
 import type { DaemonFileLog } from '../observability/daemon-file-log'
 import {
   createLoginSessionWatchClock,

@@ -59,7 +59,7 @@ export function createStructuredAgentSessionCatalogReads(
       return { origin: 'unknown' }
     }
     const request = { ...params, records, operation, deadline: operation.deadline }
-    if (!params.savedOnly) {
+    if (!params.savedOnly && !params.waitForListing) {
       void catalog.demand(request)
     }
     return catalog.read(request)

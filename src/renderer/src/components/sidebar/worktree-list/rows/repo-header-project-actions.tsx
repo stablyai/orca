@@ -5,6 +5,7 @@ import {
   CircleX,
   Ellipsis,
   Eye,
+  EyeOff,
   FolderInput,
   FolderTree,
   Plus,
@@ -33,11 +34,13 @@ import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
 import { isGitRepoKind } from '../../../../../../shared/repo-kind'
+import '../../../../../../shared/worktree/visibility/ownership'
 import {
   effectiveExternalWorktreeVisibility,
   isLegacyRepoForExternalWorktreeVisibility
-} from '../../../../../../shared/worktree/ownership'
+} from '../../../../../../shared/external-worktree-visibility'
 import { REPO_HEADER_ACTION_BUTTON_CLASS } from './repo-header-action-button-class'
+import { setProjectHidden } from '../../hidden-projects/set-project-hidden'
 import { getRepoHeaderCreateState } from './repo-header-create-state'
 import {
   handleRepoHeaderActionPointerDown,
@@ -81,11 +84,14 @@ export type RepoHeaderProjectActions = {
 // Memoized: the sidebar re-renders every header row when the active workspace changes.
 export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjectActionsMenu({
   repo,
+  hostRepos,
   label,
   projectGroups,
   actions
 }: {
   repo: Repo
+  /** A header spanning hosts: every copy it shows, which Hide hides together. */
+  hostRepos?: ReadonlyMap<string, Repo>
   label: string
   projectGroups: readonly ProjectGroup[]
   actions: RepoHeaderProjectActions
@@ -181,6 +187,14 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
         ) : null}
         <WslMoveProjectMenuItem repo={repo} />
         <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onSelect={() =>
+            void setProjectHidden(hostRepos ? [...hostRepos.values()] : [repo], true, label)
+          }
+        >
+          <EyeOff className="size-3.5" />
+          {t('sidebar.hiddenProjects.hideFromSidebar', 'Hide from Sidebar')}
+        </DropdownMenuItem>
         <DropdownMenuItem variant="destructive" onSelect={() => actions.onRemoveProject(repo)}>
           <Trash2 className="size-3.5" />
           {t('auto.components.sidebar.WorktreeList.c83968f87f', 'Remove Project')}

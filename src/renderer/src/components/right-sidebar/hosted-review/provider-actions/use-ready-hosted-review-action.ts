@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { toast } from 'sonner'
-import type { PRInfo } from '../../../../../../shared/github/pull-request-types'
+import type { PRInfo } from '../../../../../../shared/github/pull-requests/pull-request-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 import { markGitHubHostedReviewReadyForReview } from './hosted-review-github-actions'

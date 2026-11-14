@@ -11,7 +11,7 @@ import type {
   PluginHostCallOutcome,
   PluginSurface
 } from '../../../../shared/plugins/frames/plugin-protocol'
-import type { PluginAuditLog } from '../../plugin-audit-log'
+import type { PluginAuditLog } from '../../logging/plugin-audit-log'
 import {
   PLUGIN_RUNTIME_FAILURE_CODES_SINCE,
   PluginHostCallError,
@@ -184,6 +184,8 @@ function summarizeParams(method: string, params: unknown): string {
       return `terminal=${String(record.terminalId)}`
     case 'workspace.create':
       return `project=${String(record.projectId)} agent=${String(record.agent ?? 'none')} promptChars=${textLength(record.prompt)} setup=${String(record.setup ?? 'default')} open=${record.open === true}`
+    case 'project.setHidden':
+      return `project=${String(record.projectId)} host=${String(record.hostId ?? 'any')} hidden=${record.hidden === true}`
     case 'agent.resume':
       return `workspace=${String(record.workspaceId)} agent=${String(record.agent)} session=${String(record.sessionId)}`
     case 'automation.create':

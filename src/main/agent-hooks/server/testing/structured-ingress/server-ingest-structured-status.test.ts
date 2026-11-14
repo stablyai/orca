@@ -93,6 +93,32 @@ afterEach(() => {
 })
 
 describe('AgentHookServer ingestStructuredStatus', () => {
+  it('retains early child work through status-less parent publications until the owner forgets it', () => {
+    const server = new AgentHookServer()
+    server.ingestStructuredStatus(summary({ status: null }), SUBJECT)
+    server.ingestStructuredChildWork(SUBJECT, [liveChild('child-1', 'agent')], 'codex')
+    server.ingestStructuredStatus(summary({ status: null }), SUBJECT)
+    expect(server.getStatusSnapshot()).toEqual([])
+    server.ingestStructuredStatus(summary({ status: 'idle' }), SUBJECT)
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      state: 'working',
+      mainAgent: { state: 'done' }
+    })
+    server.ingestStructuredStatus(summary({ status: null }), SUBJECT)
+    expect(server.getStatusSnapshot()).toEqual([])
+    server.ingestStructuredStatus(summary({ status: 'idle' }), SUBJECT)
+    expect(server.getStatusSnapshot()[0]).toMatchObject({
+      state: 'working',
+      mainAgent: { state: 'done' }
+    })
+    server.ingestStructuredChildWork(SUBJECT, [endedChild('child-1')], 'codex')
+    server.ingestStructuredStatus(summary({ status: 'idle' }), SUBJECT)
+    expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done' })
+    server.dropStructuredStatus(SUBJECT)
+    expect(server.getStructuredChildWorkViews(SUBJECT)).toEqual([])
+    expect(server.getStatusSnapshot()).toEqual([])
+  })
+
   it("folds the host's live child records into an idle session the way the hook lane folds a roster", () => {
     const server = new AgentHookServer()
     server.ingestStructuredStatus(summary({ status: 'idle' }), SUBJECT)

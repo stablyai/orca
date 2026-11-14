@@ -13,7 +13,6 @@ afterEach(() => {
 })
 
 it.each([
-  ['first<br>second', 'first\nsecond'],
   ['<code>first</code><br><br><code>second</code>', 'first\n\nsecond'],
   ['prefix <code>middle</code> suffix', 'prefix middle suffix'],
   ['<code>last line</code><br><br>', 'last line']

@@ -1,5 +1,5 @@
 import type { ClaudeTaskInvocations } from './claude-task-invocations'
-import { isSettledBackgroundTaskState } from '../../../shared/native-chat/input/native-chat-background-task-row'
+import { isSettledBackgroundTaskState } from '../../../shared/native-chat/input/task-lists/native-chat-background-task-row'
 import { classifyClaudeBackgroundTaskKind } from '../../../shared/claude-background-task-kind'
 import { record, taskDescription, taskId, taskName } from './claude-background-task-frames'
 import type {

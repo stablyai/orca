@@ -1,11 +1,11 @@
-import type { GitHubWorkItem } from '../../../../src/shared/github/work-item-types'
+import type { GitHubWorkItem } from '../../../../src/shared/github/work-items/work-item-types'
 import type { GitLabWorkItem } from '../../../../src/shared/gitlab-types'
+import { normalizeGitHubLinkQuery } from '../../../../src/shared/new-workspace/github-links'
 import {
-  normalizeGitHubLinkQuery,
   parseGitHubIssueOrPRLink,
   type GitHubIssueOrPRLink,
   type RepoSlug
-} from '../../../../src/shared/new-workspace/github-links'
+} from '../../../../src/shared/github/repositories/links'
 import { parseGitLabIssueOrMRLink } from '../../../../src/shared/new-workspace/gitlab-links'
 import { isSmartWorkspaceSourceQueryWithinLimit } from '../../../../src/shared/new-workspace/smart-workspace-source-results'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
@@ -16,7 +16,7 @@ import {
   readGitHubWorkItemByNumber,
   gitlabWorkItemByPathRead
 } from '../../tasks/providers/mobile-task-source-search-operations'
-import { githubRepoIdentityKey } from '../../../../src/shared/github/repository-identity-key'
+import { githubRepoIdentityKey } from '../../../../src/shared/github/repositories/repository-identity-key'
 
 export type PasteRepoCandidate = {
   id: string

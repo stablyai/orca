@@ -3,19 +3,19 @@ import {
   OWN_LINEAGE_STORE_KEY,
   resolveCrossStoreLineageParents,
   type CrossStoreLineageView
-} from '../../../../../../shared/worktree/cross-store-lineage-resolution'
+} from '../../../../../../shared/worktree/lineage/cross-store-lineage-resolution'
 import { getFolderWorkspaceWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import {
   resolveSidebarLineageParentIdentities,
   type SidebarLineageParentIdentities
-} from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
+} from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import {
   pickFolderLineageRecord,
   readInlineFolderLineage
-} from '../../../../../../shared/worktree/folder-lineage-parents'
+} from '../../../../../../shared/worktree/lineage/folder-lineage-parents'
 import { getIndexedAllWorktrees } from '../listing/worktree-catalog-index'
 import {
   selectFolderWorkspaces,

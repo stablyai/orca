@@ -1,7 +1,7 @@
 import { getAgentSessionOptionLaunchCatalog } from '../../agent-session/options/agent-session-option-catalog'
 import type { AgentChoiceCliForm } from '../choices/agent-launch-choices'
 import type { AgentPermissionChoice } from './tui-agent-permission-choice'
-import { agentRequiredValueOptions } from '../../agent-session/options/agent-session-option-agent-args'
+import { agentRequiredValueOptions } from '../../agent-session/options/launch/agent-session-option-agent-args'
 import { agentPermissionArgs, agentPermissionChoices } from './tui-agent-permission-choice'
 import { tokenizeStartupCommand, type AgentStartupShell } from '../startup/tui-agent-startup-shell'
 import type { TuiAgent } from '../catalog/tui-agent'

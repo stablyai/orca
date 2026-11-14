@@ -1,7 +1,7 @@
 import { PHONE_RELAY_CONNECT_BUDGET_MS } from '../../../shared/remote-runtime/recipe-vm-wake'
 import { verifyRelayedGitHubAuthority } from './relay-github-authority'
 import { createRelayedBrowserTab } from './relayed-browser-tab-create'
-import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../shared/github/work-item-target'
+import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../shared/github/work-items/work-item-target'
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { randomUUID } from 'node:crypto'
 import type { RpcRequest } from '../rpc/core'

@@ -1,10 +1,10 @@
-import type { CommandHandler } from '../dispatch'
+import type { CommandHandler } from '../dispatch/dispatch'
 import {
   describePtyProcessCeiling,
   type PtyProcessCeilingState
 } from '../../shared/terminal/pty/native-process/pty-process-ceiling-state'
-import { printResult } from '../command-result-output'
-import { RuntimeClientError } from '../runtime/types'
+import { printResult } from '../output/command-result-output'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 type SeveredDaemonStatus = {
   pid: number

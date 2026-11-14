@@ -25,7 +25,7 @@ import {
   resetSshConnectionGenerations
 } from '../../ssh/connection/authority/ssh-connection-generation'
 import { resetSshProviderAuthorities } from '../../ssh/connection/authority/ssh-provider-authority'
-import { installManagedOrcadStartStatus } from '../runtime-environments/runtime-environment-managed-tunnel'
+import { installManagedOrcadStartStatus } from '../runtime-environments/managed-orcad/runtime-environment-managed-tunnel'
 import {
   connectInFlight,
   credentialRequestedForTarget,

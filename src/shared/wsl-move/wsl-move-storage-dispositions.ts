@@ -16,7 +16,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       44,
       'Chats stay local on the desktop (owner decision C), so their launch records stay as written.'
     ),
-  'src/renderer/src/components/editor/file-view-preference-storage.ts': {
+  'src/renderer/src/components/editor/view-mode/file-view-preference-storage.ts': {
     disposition: 'rewrite-desktop',
     item: 72,
     note: 'CSV column widths and PDF scale, keyed by worktree id, runtime and file path.'
@@ -51,8 +51,8 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
     [
       'src/renderer/src/components/browser-pane/annotate/use-markup-draw-hint.ts',
       'src/renderer/src/components/feature-tips/FeatureTipsModal.tsx',
-      'src/renderer/src/components/feature-wall/BrowserUseSkillSetupCard.tsx',
-      'src/renderer/src/components/feature-wall/feature-wall-completion-persistence.ts',
+      'src/renderer/src/components/feature-wall/setup/agent-capabilities/BrowserUseSkillSetupCard.tsx',
+      'src/renderer/src/components/feature-wall/completion/feature-wall-completion-persistence.ts',
       'src/renderer/src/components/floating-terminal/floating-terminal-panel-bounds.ts',
       'src/renderer/src/components/floating-terminal/floating-terminal-panel-view-state.ts',
       'src/renderer/src/components/floating-terminal/floating-terminal-trigger-position.ts',

@@ -3,7 +3,7 @@ import { AGENT_HOOK_INSTALL_PLUGINS_METHOD } from '../../../shared/agent-hook-li
 import { isRecord } from '../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import { selectOpenCodePluginSources } from '../installation/opencode-plugin-settings'
 import type { ManagedHookDetectionSettings } from '../installation/managed-hook-detection-commands'
-import type { PluginSources } from '../../../wsl-guest/plugin-sources'
+import type { PluginSources } from '../../../wsl-guest/plugins/installation/plugin-sources'
 
 type GuestPluginInstallDeps = {
   pluginSources: () => PluginSources

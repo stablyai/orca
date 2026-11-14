@@ -36,8 +36,20 @@ export type ResolvedWorkspaceCleanupPolicy = {
   inactiveActionSupported: boolean
 }
 
+export const WORKSPACE_CLEANUP_RULE_KEYS = [
+  'merged',
+  'unchanged',
+  'inactive',
+  'automationRuns',
+  'orchestrationWorkers'
+] as const satisfies readonly Exclude<keyof WorkspaceCleanupRules, 'keepWhen'>[]
+
+export function hasEnabledWorkspaceCleanupRule(rules: WorkspaceCleanupRules): boolean {
+  return WORKSPACE_CLEANUP_RULE_KEYS.some((key) => rules[key].enabled)
+}
+
 // Flip when workspace archiving exists.
-const WORKSPACE_ARCHIVE_SUPPORTED = false
+export const WORKSPACE_ARCHIVE_SUPPORTED = false
 
 export function getDefaultWorkspaceCleanupRules(): WorkspaceCleanupRules {
   return {
@@ -126,7 +138,8 @@ export function normalizeRepoWorkspaceCleanupPolicy(
   return undefined
 }
 
-function withEveryRuleOff(rules: WorkspaceCleanupRules): WorkspaceCleanupRules {
+/** The same rules with every rule off; thresholds and protections are kept. */
+export function withEveryRuleOff(rules: WorkspaceCleanupRules): WorkspaceCleanupRules {
   return {
     merged: { enabled: false },
     unchanged: { ...rules.unchanged, enabled: false },

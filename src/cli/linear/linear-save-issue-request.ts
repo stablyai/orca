@@ -3,7 +3,7 @@ import {
   getOptionalNullableNumberFlag,
   getOptionalStringFlag,
   getRepeatedStringFlag
-} from '../flags'
+} from '../arguments/flags'
 import {
   buildLinearCurrentContext,
   getDueDateFlag,
@@ -12,7 +12,7 @@ import {
   readLinearBody,
   rejectAllWorkspaceForWrite
 } from './linear-request-builders'
-import { RuntimeClientError } from '../runtime/types'
+import { RuntimeClientError } from '../runtime/connection/types'
 
 export async function buildSaveIssueRequest(
   flags: Map<string, string | boolean>,

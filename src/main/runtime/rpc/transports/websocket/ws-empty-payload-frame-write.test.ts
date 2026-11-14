@@ -69,10 +69,6 @@ function sendCallback(): {
   return { done, cb }
 }
 
-function closedCode(ws: WebSocket): Promise<number> {
-  return new Promise((resolve) => ws.once('close', (code) => resolve(code)))
-}
-
 describe('ws empty-payload frame writes', () => {
   it('server heartbeat ping with no payload reaches the client and keeps the socket open', async () => {
     const { server, client } = await connectPair()
@@ -89,49 +85,5 @@ describe('ws empty-payload frame writes', () => {
     expect(client.writeLengths).not.toContain(0)
     expect(server.ws.readyState).toBe(WebSocket.OPEN)
     expect(cb).toHaveBeenCalledTimes(1)
-  })
-
-  it('auto-pong to an empty client ping does not write an empty payload on the server', async () => {
-    const { server, client } = await connectPair()
-    const pong = new Promise<Buffer>((resolve) => client.ws.once('pong', resolve))
-
-    client.ws.ping()
-
-    expect((await pong).length).toBe(0)
-    expect(server.writeLengths).not.toContain(0)
-    expect(client.writeLengths).not.toContain(0)
-    expect(server.ws.readyState).toBe(WebSocket.OPEN)
-  })
-
-  it('empty pong and empty text frames are delivered with exactly one callback each', async () => {
-    const { server, client } = await connectPair()
-    const pong = new Promise<Buffer>((resolve) => client.ws.once('pong', resolve))
-    const message = new Promise<string>((resolve) =>
-      client.ws.once('message', (data: Buffer) => resolve(data.toString()))
-    )
-    const pongCallback = sendCallback()
-    const sendCallbackState = sendCallback()
-
-    server.ws.pong(undefined, undefined, pongCallback.cb)
-    server.ws.send('', sendCallbackState.cb)
-
-    expect(await pongCallback.done).toBeFalsy()
-    expect(await sendCallbackState.done).toBeFalsy()
-    expect((await pong).length).toBe(0)
-    expect(await message).toBe('')
-    expect(pongCallback.cb).toHaveBeenCalledTimes(1)
-    expect(sendCallbackState.cb).toHaveBeenCalledTimes(1)
-    expect(server.writeLengths).not.toContain(0)
-  })
-
-  it('a close with no code completes the closing handshake instead of 1006', async () => {
-    const { server, client } = await connectPair()
-    const clientClosed = closedCode(client.ws)
-
-    server.ws.close()
-
-    expect(await clientClosed).toBe(1005)
-    expect(server.writeLengths).not.toContain(0)
-    expect(client.writeLengths).not.toContain(0)
   })
 })

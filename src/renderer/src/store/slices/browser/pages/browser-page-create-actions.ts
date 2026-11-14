@@ -1,3 +1,4 @@
+import { copyBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import type {
   BrowserSlice,
   BrowserSliceGet,
@@ -154,9 +155,10 @@ export function createBrowserPageCreateActions(
           if (remoteHandle) {
             remotePagesToClose.push({ worktreeId: page.worktreeId, handle: remoteHandle })
           }
-          const nextRemoteBrowserPageHandlesByPageId = {
-            ...s.remoteBrowserPageHandlesByPageId
-          }
+          const nextRemoteBrowserPageHandlesByPageId = copyBrowserPageHandles(
+            s.remoteBrowserPageHandlesByPageId,
+            [pageId]
+          )
           delete nextRemoteBrowserPageHandlesByPageId[pageId]
           const nextBrowserAnnotationsByPageId = { ...s.browserAnnotationsByPageId }
           const nextBrowserAnnotationMarkerIdsByPageId = { ...s.browserAnnotationMarkerIdsByPageId }

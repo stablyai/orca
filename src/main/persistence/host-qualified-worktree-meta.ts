@@ -7,7 +7,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../shared/execution-host'
-import { isLocalOnlyWorktreeMetaId } from '../../shared/worktree/local-only-worktree-meta-ids'
+import { isLocalOnlyWorktreeMetaId } from '../../shared/worktree/metadata/local-only-worktree-meta-ids'
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'

@@ -1,13 +1,13 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import { translate } from '@/i18n/i18n'
 import { mayHoldAgentReferences } from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
-import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/native-chat-picker-items'
-import type { SlashCommandSuggestion } from '../../../../../../shared/native-chat/input/native-chat-slash-commands'
+import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/composer/native-chat-picker-items'
+import type { SlashCommandSuggestion } from '../../../../../../shared/native-chat/input/commands/native-chat-slash-commands'
 import {
   isNativeChatSideChatCommand,
   parseNativeChatSideChatDraft,
   withNativeChatSideChatCommands
-} from '../../../../../../shared/native-chat/input/native-chat-side-chat-command'
+} from '../../../../../../shared/native-chat/input/commands/native-chat-side-chat-command'
 import type { NativeChatStructuredComposerTransport } from '../submit/native-chat-structured-composer-transport'
 import type { NativeChatPickerState } from './use-native-chat-picker-state'
 import { nativeChatPendingAttachmentSnapshot } from '../../attachments/chips/native-chat-pending-attachment-cache'

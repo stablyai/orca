@@ -1,11 +1,11 @@
-import { journalInputCaller } from '../../agent-session-journal/input-order/journal-input-provenance'
+import { readAttachTelemetryCaller } from './structured-agent-session-attach-telemetry'
 import { prepareStructuredAgentSessionAttach } from './structured-agent-session-attach-preparation'
 import {
   publishAttachedChild,
   readBoundChildRewind,
   type AttachAttempt
 } from './structured-agent-session-attach-publish'
-import { agentSessionLeaseAdmitsWriter } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
+import { agentSessionLeaseAdmitsWriter } from '../../../../shared/agent-session/lifecycle/leases/agent-session-lease-adjudication'
 import { refuse } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import { randomUUID } from 'node:crypto'
 import type {
@@ -145,6 +145,7 @@ async function runAttachUnderAbort(
 ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const sessionId = params.envelope.sessionId
   const recordPhase = options.recordPhase
+  const telemetryCaller = await readAttachTelemetryCaller(context, sessionId, options, lock)
   const prepared = await prepareStructuredAgentSessionAttach(context, params, options, lock)
   if (!prepared.ok) {
     return prepared
@@ -179,6 +180,18 @@ async function runAttachUnderAbort(
         if (barrier && !barrier.ok) {
           throw barrier.error
         }
+        if (params.agent === 'claude') {
+          // The translator classifies against the reserved conversation's actual saved facts.
+          await lock.commit(async () => {
+            const conversation = await context.openConversation(sessionId, { acquisition: true })
+            if (!conversation) {
+              throw new Error('agent_session_identity_required')
+            }
+            await attemptSink.followSnapshots(
+              context.sessions.snapshotSource(sessionId, conversation.journal)
+            )
+          })
+        }
       },
       authority: {
         ...(launchDirectory ? { launchDirectory } : {}),
@@ -190,20 +203,7 @@ async function runAttachUnderAbort(
         ...(await lock.wait(pinnedAgentSessionLaunchEnv(context.deps.resolveLaunchEnv, params)))
       },
       callerKey,
-      ...(options.startedFor
-        ? {
-            telemetryCaller: () => {
-              const submission = context.sessions
-                .get(sessionId)
-                ?.journal.submission(options.startedFor!)
-              return submission
-                ? journalInputCaller(context.deps.journalDatabase.db, sessionId, submission)
-                : undefined
-            }
-          }
-        : options.telemetryCallerKey
-          ? { telemetryCaller: () => options.telemetryCallerKey }
-          : {}),
+      telemetryCaller: () => telemetryCaller,
       params,
       now: () => context.now(),
       recordPhase,
@@ -256,7 +256,14 @@ async function runAttachUnderAbort(
         eventSink.bind({
           journal: attached.journal,
           fence,
-          publish: (activity) => context.subscribers.publish(sessionId, attached.journal, activity)
+          publish: (activity) => context.subscribers.publish(sessionId, attached.journal, activity),
+          publishLiveText: (items) => {
+            if (context.sessions.get(sessionId)?.journal === attached.journal) {
+              context.subscribers.publishLiveText(sessionId, attached.journal, fence, items)
+            }
+          },
+          observeSettledTurns: (listener) =>
+            context.sessions.observeSettledTurns(sessionId, attached.journal, listener)
         })
         const { journal } = attached
         const bound = { acquisitionGeneration, owner, fence, journal, current, eventSink }

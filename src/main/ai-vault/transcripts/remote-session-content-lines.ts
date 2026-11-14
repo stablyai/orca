@@ -1,4 +1,4 @@
-import { splitTranscriptStreamLines } from '../../native-chat/transcript-stream-lines'
+import { splitTranscriptStreamLines } from '../../native-chat/transcript-streaming/transcript-stream-lines'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import { throwIfAiVaultScanCancelled } from '../scan-lifecycle/ai-vault-scan-cancellation'
 import { MAX_SESSION_TRANSCRIPT_RECORD_BYTES } from './session-transcript-record-budget'

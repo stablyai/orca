@@ -27,7 +27,6 @@ export function OnboardingLanguageSwitcher({
   onOpenChange: (open: boolean) => void
 }): React.JSX.Element | null {
   const t = useTranslate()
-  const cohort = useAppStore((state) => state.settings?.telemetry?.onboardingLanguageCohort)
   const language = useAppStore((state) => state.settings?.uiLanguage ?? 'system')
   const updateSettings = useAppStore((state) => state.updateSettingsOrThrow)
   const catalogError = useLanguageReadiness((state) => state.error)
@@ -127,10 +126,7 @@ export function OnboardingLanguageSwitcher({
     }
   }
 
-  if (
-    cohort === 'control' ||
-    (!open && !shouldShowLanguageSwitcher(detection) && !catalogError && !recoveryVisible)
-  ) {
+  if (!open && !shouldShowLanguageSwitcher(detection) && !catalogError && !recoveryVisible) {
     return null
   }
 

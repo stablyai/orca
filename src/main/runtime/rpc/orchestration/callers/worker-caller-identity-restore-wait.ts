@@ -1,7 +1,7 @@
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { RpcRequest } from '../../core'
 import type { OrchestrationCallerField } from '../../methods/orchestration/access/orchestration-method-access'
-import { isDispatchMutationMessageType } from '../../../../../shared/rpc-contract/orchestration-params'
+import { isDispatchMutationMessageType } from '../../../../../shared/rpc-contract/orchestration/orchestration-params'
 
 // The calls a worker makes as itself, each fenced on its terminal's pane and process.
 const WORKER_REPORT_METHODS: ReadonlySet<string> = new Set([

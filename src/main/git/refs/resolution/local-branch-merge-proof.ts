@@ -6,6 +6,7 @@ import {
 } from '../../../../shared/git/branches/git-branch-cleanup'
 import { withLocalGitCapabilityCacheForExecution } from '../../command-runner/host-routing/git-capability-state'
 import { gitExecFileAsync } from '../../command-runner/git-exec-file'
+import { offlineGitEnv } from '../../command-runner/git-environment/git-process-env'
 import { routeLocalGitOptions } from '../../command-runner/host-routing/local-git-runtime-route'
 import { createLocalGitObjectQuarantine } from '../../objects/local-git-object-quarantine'
 import {
@@ -19,7 +20,7 @@ export async function localBranchHasNoUnmergedChanges(args: {
   branchName: string
   /** Defaults to the branch-cleanup targets, which include `cwd`'s HEAD: pass explicit refs from a linked worktree. */
   targetRefs?: string[]
-  /** Fetch stale remote targets before giving up; scans stay offline. */
+  /** Fetch stale remote targets before giving up; false keeps the proof offline, partial-clone blob fetches included. */
   refreshRemoteTargets: boolean
   options?: GitWorktreeExecOptions
 }): Promise<boolean> {
@@ -28,12 +29,14 @@ export async function localBranchHasNoUnmergedChanges(args: {
   const options = routeLocalGitOptions({ ...args.options, cwd })
   const quarantine = createLocalGitObjectQuarantine(cwd, options)
   const runGit = (argv: string[], execOptions?: GitBranchCleanupExecOptions) => {
-    const run = (env: NodeJS.ProcessEnv | undefined) =>
-      gitExecFileAsync(argv, {
+    const run = (quarantineEnv: NodeJS.ProcessEnv | undefined) => {
+      const env = refreshRemoteTargets ? quarantineEnv : offlineGitEnv(quarantineEnv)
+      return gitExecFileAsync(argv, {
         ...gitExecOptions(cwd, options),
         ...(execOptions?.stdin !== undefined ? { stdin: execOptions.stdin } : {}),
         ...(env ? { env } : {})
       })
+    }
     return execOptions?.discardWrittenObjects ? quarantine.run(run) : run(undefined)
   }
   const targetRefs = args.targetRefs ?? (await getBranchCleanupTargetRefs(runGit, branchName))

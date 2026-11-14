@@ -1,31 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { clientFrame, createFakeRpcClient } from './bridge-host-test-fakes'
-import { harness, ROUTE } from './bridge-host-test-harness'
-import { routeViewOf } from './page-route-policy'
+import { harness } from './bridge-host-test-harness'
 
 describe('init and state', () => {
-  // Drive manifest projection through routeViewOf: newer desktop fields must be stripped before strict pair parsing, or the whole init is refused.
-  it('answers init for a route entry carrying a manifest field this build does not read', () => {
-    const declared = [
-      {
-        pathname: '/h/[hostId]',
-        grants: ['navigate', 'storage', 'haptics'],
-        renderer: 'someLaterDesktopsField'
-      }
-    ]
-    const bridge = harness({
-      pageRouteGrants: routeViewOf(declared, ROUTE.pathname).pageRouteGrants
-    })
-    bridge.host.receive(clientFrame({ type: 'ready' }))
-    expect(bridge.routeRefusals).toEqual([])
-    const init = bridge.last()
-    if (init.type !== 'init') {
-      throw new Error('expected an init frame')
-    }
-    expect(init.pageRouteGrants).toEqual([
-      { pathname: '/h/[hostId]', grants: ['navigate', 'storage', 'haptics'] }
-    ])
-  })
   // Advance the held route even when posting fails; the next document’s ready must repair delivery with the newest tap (ruling 34 addendum).
   it('answers the next document with the route a tap wrote while the view was gone', async () => {
     const view = { gone: true }

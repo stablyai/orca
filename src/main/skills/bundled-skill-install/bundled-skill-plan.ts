@@ -1,5 +1,5 @@
 import { bundledSkillDigestOf } from './bundled-skill-plan-identity'
-import { dirname, join, resolve } from 'node:path'
+import { join } from 'node:path'
 import type {
   BundledSkillOp,
   BundledSkillPlan,
@@ -20,9 +20,10 @@ import type { BundledSkillFilesystem } from './bundled-skill-filesystem'
 import { recoverySiblings } from './bundled-skill-swap-recovery'
 import { findBundledSkillSource } from './bundled-skill-source-selection'
 import { planFormerSkillPlacements } from './renamed-skill-placement'
+import { isOtherBuildCopy } from './bundled-skill-written-digests'
 import {
   bundledSkillPathKey,
-  resolveBundledSkillRealPath,
+  linkPointsAt,
   resolveBundledSkillTargets,
   type BundledSkillTargetRequest,
   type BundledSkillTargetRoot
@@ -54,7 +55,8 @@ type SkillContext = {
   sharedRoot?: BundledSkillTargetRoot
 }
 
-type SharedTarget = { path: string; realPath: string; current: boolean }
+// `otherBuild`: the shared folder holds another Orca build's copy, so links to it are already right.
+type SharedTarget = { path: string; realPath: string; current: boolean; otherBuild?: boolean }
 
 const WRITES_SHARED_CURRENT = new Set<BundledSkillOp['kind']>([
   'keep',
@@ -63,18 +65,6 @@ const WRITES_SHARED_CURRENT = new Set<BundledSkillOp['kind']>([
   'replace'
 ])
 
-async function linkPointsAt(
-  filesystem: BundledSkillFilesystem,
-  path: string,
-  rawTarget: string,
-  realPath: string
-): Promise<boolean> {
-  const resolved =
-    (await filesystem.realpath(path)) ??
-    resolve(await resolveBundledSkillRealPath(filesystem, dirname(path)), rawTarget)
-  return bundledSkillPathKey(resolved) === bundledSkillPathKey(realPath)
-}
-
 type PlannedTarget = {
   op: BundledSkillOp
   holdsOrcaCopy: boolean
@@ -82,8 +72,16 @@ type PlannedTarget = {
   leaves: BundledSkillOp[]
 }
 
-const ORCA_COPY_CLASSES = new Set<BundledSkillFolderClass>(['current', 'released', 'edited'])
+type PlannedFolderClass = BundledSkillFolderClass | 'other-build'
 
+const ORCA_COPY_CLASSES = new Set<PlannedFolderClass>([
+  'current',
+  'released',
+  'edited',
+  'other-build'
+])
+
+/** Classifies one root's copy of the skill and decides its op, including another build's copy. */
 async function planTarget(
   context: SkillContext,
   root: BundledSkillTargetRoot,
@@ -108,13 +106,19 @@ async function planTarget(
     context.digest,
     context.sharedRoot
   )
-  let folderClass: BundledSkillFolderClass = classified.folderClass
+  let folderClass: PlannedFolderClass = classified.folderClass
   // Cloud receipts identify a different package; a current replaced copy must settle as keep.
   if (
     (folderClass === 'released' || folderClass === 'edited') &&
     (await hasCloudReceipt(stateDirectory, stateKeys))
   ) {
     folderClass = 'other'
+  } else if (
+    folderClass === 'edited' &&
+    (await isOtherBuildCopy(filesystem, context.input.destination, context.source, observed))
+  ) {
+    // A newer build's bytes are unknown here; never call them stale or offer to downgrade them.
+    folderClass = 'other-build'
   }
   const { restoreFrom, cleanup } = await recoverySiblings(
     filesystem,
@@ -158,14 +162,12 @@ async function planTarget(
         if (!shared) {
           return files('write')
         }
-        if (!shared.current && former.installed) {
-          return files('write')
-        }
-        if (!shared.current) {
-          return leave('shared-not-current', false)
+        if (!shared.current && !(shared.otherBuild && filesystem.supportsLinks)) {
+          return former.installed ? files('write') : leave('shared-not-current', false)
         }
         return filesystem.supportsLinks ? linkToShared('link', shared) : files('copy')
       case 'edited':
+      case 'other-build':
       case 'other':
         break
     }
@@ -174,12 +176,15 @@ async function planTarget(
       observed.kind === 'link' &&
       (await linkPointsAt(filesystem, path, observed.target, shared.realPath))
     ) {
-      return shared.current
+      return shared.current || shared.otherBuild
         ? { ...base, kind: 'keep', cleanup }
         : leave('shared-not-current', false)
     }
     if (context.force !== 'all' && !context.force.has(bundledSkillPathKey(path))) {
-      return leave(folderClass === 'edited' ? 'edited' : 'other', true)
+      // Replacing another build's copy may downgrade it, so only an explicit --force offers that.
+      return folderClass === 'other-build'
+        ? leave('other-build', false)
+        : leave(folderClass === 'edited' ? 'edited' : 'other', true)
     }
     return shared?.current && filesystem.supportsLinks
       ? linkToShared('replace', shared)
@@ -224,6 +229,7 @@ async function planTarget(
   }
 }
 
+/** Plans the shared root first, then agent roots, which may link to the shared copy. */
 async function planSkill(
   input: BundledSkillPlanInput,
   roots: readonly BundledSkillTargetRoot[],
@@ -244,7 +250,8 @@ async function planSkill(
       ? {
           path: sharedTarget.op.path,
           realPath: join(sharedRoot.realPath, source.name),
-          current: WRITES_SHARED_CURRENT.has(sharedTarget.op.kind)
+          current: WRITES_SHARED_CURRENT.has(sharedTarget.op.kind),
+          otherBuild: sharedTarget.op.reason === 'other-build'
         }
       : null
   const planAgents = async (target: SharedTarget | null) => {

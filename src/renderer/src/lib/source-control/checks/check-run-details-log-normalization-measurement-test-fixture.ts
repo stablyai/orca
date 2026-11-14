@@ -2,7 +2,7 @@ import { performance } from 'node:perf_hooks'
 import { normalizeCheckRunDetailsLogTails } from './check-run-details-log-normalization'
 import { checkLogDetails, checkLogJob } from './check-run-details-log-normalization-test-fixture'
 import { resetOwnRetainedStringCopier } from '../../../../../shared/own-retained-string'
-import type { PRCheckRunDetails } from '../../../../../shared/github/check-types'
+import type { PRCheckRunDetails } from '../../../../../shared/github/checks/check-types'
 
 type NormalizationTiming = {
   inputKind: 'plain' | 'malformed' | 'multibyte'

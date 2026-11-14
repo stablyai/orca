@@ -23,7 +23,7 @@ import type { RuntimeStore } from '../../src/main/runtime/construction/runtime-s
 import { RuntimeClientSettingsController } from '../../src/main/runtime/client/settings/runtime-client-settings'
 import { mutateHostAgentLaunchSettings } from '../../src/renderer/src/runtime/agent-launch-settings/agent-launch-settings-transport'
 import { AGENT_LAUNCH_CHOICES_CAPABILITY } from '../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
-import { structuredLaunchSeedOptions } from '../../src/shared/native-chat/input/native-chat-session-option-defaults'
+import { structuredLaunchSeedOptions } from '../../src/shared/native-chat/input/session-options/native-chat-session-option-defaults'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 
 vi.mock('../../src/main/agent-hooks/installation/managed-agent-hook-controls', () => ({

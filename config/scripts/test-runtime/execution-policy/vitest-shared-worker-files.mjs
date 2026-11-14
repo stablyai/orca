@@ -62,7 +62,9 @@ export function filesSafeToShareWorker(root, files, aliases = []) {
     }
     return source
   }
-  const isTestSupport = (file) => /\bfrom\s+['"]vitest['"]/.test(read(file))
+  const isTestSupport = (file) =>
+    /(?:[.-]test[-.](?:fixture|support)|-test-harness)\.[cm]?[jt]sx?$/.test(file) ||
+    /\bfrom\s+['"]vitest['"]/.test(read(file))
   const memo = new Map()
   const visiting = new Set()
   const requiresIsolation = (file) => {

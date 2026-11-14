@@ -3,7 +3,7 @@ import * as fs from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import * as transcriptFs from '../../native-chat/wsl-transcript-fs-access'
+import * as transcriptFs from '../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import { renameClaudeTranscript } from './claude-provider-session-rename'
 
 let home: string

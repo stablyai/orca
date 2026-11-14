@@ -129,6 +129,27 @@ describe('pruneSessionlessMissingLocalWorktreeMetadataForRepo', () => {
     expect(state.worktreeMeta[worktreeId]).toBeDefined()
   })
 
+  it('keeps an archived workspace whose checkout was deleted on purpose', () => {
+    const state = makeState()
+    const archivedId = `${REPO_ID}::/workspace/archived`
+    const deletedId = `${REPO_ID}::/workspace/deleted`
+    state.worktreeMeta[archivedId] = {
+      ...makeMeta(archivedId),
+      comment: 'pick up after review',
+      linkedPR: 42,
+      isArchived: true,
+      archivedCheckout: { branch: 'feature/archived', archivedAt: 1 }
+    }
+    state.worktreeMeta[deletedId] = makeMeta(deletedId)
+    const scan = capture(state)
+
+    expect(pruneCaptured(state, scan, [archivedId, deletedId])).toEqual([deletedId])
+    expect(state.worktreeMeta[archivedId]).toMatchObject({
+      comment: 'pick up after review',
+      linkedPR: 42
+    })
+  })
+
   // Route-retired tombstones must not pin metadata forever (#17775).
   it('does not let route-retired SSH leases pin a metadata row', () => {
     const state = makeState()

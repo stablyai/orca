@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { WorktreeRemove } from '../../shared/rpc-contract/worktree-params'
+import type { WorktreeRemove } from '../../shared/rpc-contract/workspaces/worktree-params'
 import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
 import {
   findEphemeralVmWorkspaceOwner,
