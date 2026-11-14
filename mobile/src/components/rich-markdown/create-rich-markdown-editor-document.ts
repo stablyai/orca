@@ -1,7 +1,7 @@
 import { createRichMarkdownEditorScope } from './document-scope'
 import { currentMarkdown, setEditable, setMarkdown, stopEditorContent } from './editor-content'
 import { startEditorListeners, stopEditorListeners } from './editor-listeners'
-import { startEditorSurface } from './editor-surface'
+import { editorElement, startEditorSurface } from './editor-surface'
 import { startHostBridge } from './host-bridge'
 import { dismissKeyboard } from './keyboard-dismiss'
 import { runCommand } from './editor-commands'
@@ -23,6 +23,9 @@ export function createRichMarkdownEditorDocument(
       },
       setEditable: (editable) => {
         setEditable(scope, editable)
+      },
+      setTextScale: (scale) => {
+        editorElement(scope).style.setProperty('--markdown-text-scale', String(scale))
       },
       runCommand: (command) => runCommand(scope, command),
       currentMarkdown: () => currentMarkdown(scope),

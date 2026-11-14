@@ -20,6 +20,8 @@ import type { BridgeSafeAreaInsets } from './bridge/bridge-safe-area-insets'
 import type { BridgeFoldDivision } from './bridge/bridge-fold-division'
 import type { BridgeHapticsKind } from './bridge/bridge-haptics-notify'
 import { createBridgeHost, type BridgeHost } from './bridge-host'
+import { BridgeViewGoneError } from './bridge-host-errors'
+import { subscribeMarkdownTextScale } from './bridge-host-storage'
 import type { BridgeSessionBack } from './bridge-host-back'
 import type { BridgeNavigateBackOutcome } from './bridge-host-contract'
 import type { BridgeNativeVerb } from './bridge/bridge-native-verbs'
@@ -28,13 +30,6 @@ import type { MobileWebShellSessionState } from './mobile-web-shell-session-cont
 import type { PageHostSnapshot } from './use-page-host-snapshot'
 import type { PageStorageForInit } from './page-storage-keys'
 import { createPageFramesWithoutHost } from './page-frames-without-host'
-
-class BridgeViewGoneError extends Error {
-  constructor() {
-    super('the shell view for this session is not mounted')
-    this.name = 'BridgeViewGoneError'
-  }
-}
 
 // Stamp both refs with their session: React attaches replacement refs before retired cleanup, which must not post teardown frames into the new page.
 type MountedView = { sessionId: string; handle: OrcaMobileWebShellViewHandle }
@@ -225,6 +220,11 @@ export function useMobileWebShellBridge(args: MobileWebShellBridgeArgs): MobileW
       mounted.host.publishPageGeometry(args.pageGeometry)
     }
   }, [buildId, client, sessionId, snapshot, args.pageGeometry])
+
+  useLayoutEffect(
+    () => subscribeMarkdownTextScale(hostRef.current, sessionId),
+    [buildId, client, sessionId, snapshot]
+  )
 
   // A rebuilt host already starts from the latest scheme, language and verdict; each publish re-sends init only when its value changed under a live page.
   const { colorScheme, uiLocale } = args

@@ -11,6 +11,8 @@ import {
   type ForwardedRef
 } from 'react'
 import { View, type HostInstance } from 'react-native'
+import { GestureDetector } from 'react-native-gesture-handler'
+import type { useMarkdownTextScalePinchGesture } from '../markdown-text-scale/use-markdown-text-scale-pinch-gesture'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
@@ -41,6 +43,7 @@ export type MobileRichMarkdownEditorComponentProps = Omit<
   onOpenLink?: (url: string) => void
   /** Loads a workspace-relative image path; without it those images stay unloaded. */
   loadImageSource?: (path: string) => Promise<string>
+  pinchGesture?: ReturnType<typeof useMarkdownTextScalePinchGesture>
 }
 
 export type MobileRichMarkdownEditorHandle = {
@@ -54,9 +57,11 @@ function MobileRichMarkdownEditorWebInner(
   {
     content,
     editable,
+    textScale = 1,
     onChange,
     onOpenLink,
-    loadImageSource
+    loadImageSource,
+    pinchGesture
   }: MobileRichMarkdownEditorComponentProps,
   ref: ForwardedRef<MobileRichMarkdownEditorHandle>
 ) {
@@ -92,6 +97,10 @@ function MobileRichMarkdownEditorWebInner(
       setEditable: (nextEditable: boolean) =>
         send((api) => {
           api.setEditable(nextEditable)
+        }),
+      setTextScale: (scale: number) =>
+        send((api) => {
+          api.setTextScale(scale)
         }),
       runCommand: (command: Parameters<RichMarkdownEditorApi['runCommand']>[0]) =>
         send((api) => {
@@ -195,6 +204,10 @@ function MobileRichMarkdownEditorWebInner(
     // Mount document once; read promptForUrl via closure because rerunning on changing callback props discards live caret/document.
   }, [])
 
+  useEffect(() => {
+    transport.setTextScale(textScale)
+  }, [textScale, transport])
+
   // Layout effect: restore the host's scope class before paint after a themed className swap.
   useLayoutEffect(() => {
     const host = hostRef.current
@@ -203,10 +216,23 @@ function MobileRichMarkdownEditorWebInner(
     }
   }, [colorScheme])
 
+  const host = <View ref={hostRef} style={styles.host} />
+
   return (
     <View style={styles.container}>
       <MobileRichMarkdownToolbar editable={editable} onCommand={runCommand} />
-      <View ref={hostRef} style={styles.host} />
+      {pinchGesture ? (
+        <GestureDetector
+          gesture={pinchGesture}
+          touchAction="pan-y"
+          userSelect="auto"
+          enableContextMenu
+        >
+          <View style={styles.host}>{host}</View>
+        </GestureDetector>
+      ) : (
+        host
+      )}
       <TextInputModal
         visible={urlPromptKind !== null}
         title={

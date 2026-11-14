@@ -146,6 +146,8 @@ export type BridgeHost = {
   publishStorage: () => void
   /** Re-sends `init` when the verdict opens or closes, so the page reads `connected` and the proven status. */
   publishHostStatus: () => void
+  // Push one shell-side change to a loaded page that declared the key in `ready.storageKeys`.
+  publishStorageUpdate: (key: string, value: string | null) => void
   receive: (json: string) => void
   // Hold same-screen param updates even when posting fails; repair from the next ready without delivery tracking. Different pathnames require remount; the page clears consumed params (rulings 33.1/34).
   publishRoute: (next: BridgeInitRoute) => void

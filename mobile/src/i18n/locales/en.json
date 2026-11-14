@@ -4993,5 +4993,8 @@
       "needsWindow": "Couldn’t update. Open Orca on {{desktop}}.",
       "failed": "Couldn’t update the agent list."
     }
+  },
+  "markdownTextScale": {
+    "button": "Markdown text size"
   }
 }

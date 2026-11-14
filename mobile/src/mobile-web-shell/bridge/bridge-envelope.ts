@@ -1,5 +1,6 @@
 import * as z from 'zod'
 import { BRIDGE_APP_INACTIVE_FRAME } from './bridge-app-inactive'
+import { BridgeStorageFrameSchema } from './bridge-storage-frame'
 import { salvagedOptional } from '../../../../src/shared/zod-salvage'
 import { SUPPORTED_UI_LOCALES } from '../../../../src/shared/ui-locale'
 import { NODE_PLATFORM_NAMES } from '../../transport/connection/mobile-runtime-host-platform'
@@ -240,6 +241,7 @@ const BridgeHostMessageSchema = z.union([
     type: z.literal('connectionPath'),
     connection: BridgeConnectionSnapshotSchema
   }),
+  BridgeStorageFrameSchema,
   // Back names no destination; only the native stack knows what screen lies beneath.
   z.object({ v: versionSchema, type: z.literal(BRIDGE_BACK_FRAME) }),
   // Native booted this page ahead of its screen and keeps its ready for the screen that adopts it.
