@@ -67,7 +67,6 @@ export function useAiVaultSessionRefresh(
   const [terminalScopeKey, setTerminalScopeKey] = useState<string | null>(null)
   const requestTokensRef = useRef(new Set<string>())
   const appliedScanRef = useRef(scan)
-  appliedScanRef.current = scan
   const refreshIdRef = useRef(0)
   const refreshInFlightRef = useRef(false)
   const pendingRefreshRef = useRef(false)
@@ -92,10 +91,11 @@ export function useAiVaultSessionRefresh(
   const sessionLimitRef = useRef(sessionLimit)
   // Keep render pure for React Doctor; layout effect still lands before refresh effects.
   useLayoutEffect(() => {
+    appliedScanRef.current = scan
     sessionLimitRef.current = sessionLimit
     scopeOnlyRef.current = scopeOnly
     associationsRef.current = associations
-  }, [associations, scopeOnly, sessionLimit])
+  }, [associations, scan, scopeOnly, sessionLimit])
   const currentScanScopeKey = useCallback(
     () =>
       `${aiVaultSessionResultCacheKey(
