@@ -6,8 +6,10 @@ import {
   RotateCcw,
   Search,
   Settings,
-  SquareCode
+  SquareCode,
+  Trash2
 } from 'lucide-react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -197,6 +199,21 @@ export function BrowserToolbarMenuDropdown({
           {t('browser.history.menuItem', 'History')}
           {historyShortcut ? <DropdownMenuShortcut>{historyShortcut}</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => {
+            useAppStore.getState().clearBrowserHistory()
+            toast.success(
+              t(
+                'auto.components.browser.pane.BrowserToolbarMenu.clearHistorySuccess',
+                'Browsing history cleared'
+              )
+            )
+          }}
+        >
+          <Trash2 className="mr-2 size-3.5" />
+          {t('auto.components.browser.pane.BrowserToolbarMenu.clearHistory', 'Clear History')}
+        </DropdownMenuItem>
+
         <DropdownMenuItem
           onSelect={() => {
             useAppStore.getState().openSettingsTarget({ pane: 'browser', repoId: null })
