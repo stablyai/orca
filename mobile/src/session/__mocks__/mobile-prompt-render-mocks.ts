@@ -73,11 +73,13 @@ vi.mock('../../platform/accessibility/use-reduced-motion', () => ({
 vi.mock('../native-chat/transcript/MobileNativeChatLiveLine', () => ({
   MobileNativeChatLiveLine: 'LiveStatus'
 }))
-vi.mock('../native-chat/input/MobileNativeChatAsk', () => ({ MobileNativeChatAsk: 'ChatAsk' }))
-vi.mock('../native-chat/input/MobileNativeChatSessionOptionPickers', () => ({
+vi.mock('../native-chat/input/prompts/MobileNativeChatAsk', () => ({
+  MobileNativeChatAsk: 'ChatAsk'
+}))
+vi.mock('../native-chat/input/session-options/MobileNativeChatSessionOptionPickers', () => ({
   MobileNativeChatSessionOptionPickers: 'SessionOptions'
 }))
-vi.mock('../native-chat/composer/MobileNativeChatComposerMenu', () => ({
+vi.mock('../native-chat/composer/menus/MobileNativeChatComposerMenu', () => ({
   MobileNativeChatComposerSuggestions: 'Suggestions'
 }))
 vi.mock('../../components/ActionSheetModal', () => ({ ActionSheetModal: 'ActionSheetModal' }))

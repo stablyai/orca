@@ -9,7 +9,7 @@ import { readPageDeviceStore } from '../../../mobile-web-shell/bridge/page-devic
 import {
   resolveMobileNativeChat,
   type MobileNativeChatTab
-} from '../mobile-native-chat-eligibility'
+} from '../conversation/mobile-native-chat-eligibility'
 
 // Bump when a stored shape changes: other versions read as a miss.
 export const STORED_TRANSCRIPT_VERSION = 1

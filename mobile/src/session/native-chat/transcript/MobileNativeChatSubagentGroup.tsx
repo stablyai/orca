@@ -6,7 +6,7 @@ import {
   subagentStateLabel
 } from '../../../../../src/shared/native-chat/transcript/subagents/native-chat-subagent-group-header'
 import { sayMobileNativeChatSubagentGroup as say } from './native-chat-subagent-group-copy'
-import { sayMobileNativeChatSessionOption as sayOption } from '../input/native-chat-session-option-copy'
+import { sayMobileNativeChatSessionOption as sayOption } from '../input/session-options/native-chat-session-option-copy'
 import { normalizeSubagentState } from '../../../../../src/shared/native-chat/transcript/subagents/native-chat-subagent-summary'
 import {
   subagentEntryDetail,

@@ -4,7 +4,7 @@ import type { NativeChatLiveTurnIndicator } from '../../../../../src/shared/nati
 import { isStructuredAgentSessionThinking } from '../../../../../src/shared/agent-session/view/structured-agent-session-live-turn'
 import { selectStructuredAgentTurnActivity } from '../../../../../src/shared/native-chat/transcript/turns/native-chat-turn-activity'
 import { agentStopDisplayStatus } from '../../../../../src/shared/agent-status/lifecycle/agent-stop-display-status'
-import { mobileStructuredSendQueues } from '../composer/mobile-structured-send-queue-rule'
+import { mobileStructuredSendQueues } from '../composer/delivery/mobile-structured-send-queue-rule'
 import {
   nativeChatSendFollowUp,
   type NativeChatSendFollowUp

@@ -1,4 +1,4 @@
-import type { MobileNativeChatSendIntent } from '../composer/mobile-native-chat-send'
+import type { MobileNativeChatSendIntent } from '../composer/delivery/mobile-native-chat-send'
 import type { MobileNativeChatSendOrigin } from './mobile-native-chat-pending-echo'
 
 type Restore = (
