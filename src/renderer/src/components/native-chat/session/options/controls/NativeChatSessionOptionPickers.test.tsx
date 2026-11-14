@@ -104,3 +104,44 @@ it('exposes the current selection on keyboard focus and follows the chat snapsho
   view.rerender(picker([{ ...model, valueSource: 'default' }, effort]))
   expect(screen.getByRole('tooltip').textContent).toBe('Chat model · Extra high')
 })
+
+it('keeps a working model-only picker inspectable without allowing changes', async () => {
+  const model: SessionOptionDescriptor = {
+    id: 'model',
+    label: 'Model',
+    category: 'model',
+    transport: 'catalog',
+    settable: true,
+    valueSource: 'applied',
+    kind: {
+      type: 'select',
+      currentValue: 'chat-model',
+      choices: [{ value: 'chat-model', label: 'Chat model' }]
+    }
+  }
+  const surface = {
+    getSnapshot: () => [model],
+    subscribe: () => () => {},
+    setOption: async () => ({ snapshot: [model] }),
+    invokeAction: async () => ({ snapshot: [model] })
+  }
+  const picker = (isWorking: boolean) => (
+    <TooltipProvider>
+      <NativeChatSessionOptionPickers snapshot={[model]} surface={surface} isWorking={isWorking} />
+    </TooltipProvider>
+  )
+  const view = render(picker(true))
+  const informationalTrigger = screen.getByRole('button', { name: 'Model Chat model' })
+  expect(informationalTrigger.getAttribute('aria-disabled')).toBe('true')
+  expect(view.container.querySelector('button')?.disabled).toBe(true)
+  fireEvent.focus(informationalTrigger)
+  expect((await screen.findByRole('tooltip')).textContent).toBe('Chat model')
+  fireEvent.click(informationalTrigger)
+  for (const key of ['Enter', ' ', 'ArrowDown']) {
+    fireEvent.keyDown(informationalTrigger, { key })
+  }
+  expect(screen.queryByRole('dialog')).toBeNull()
+  view.rerender(picker(false))
+  fireEvent.click(screen.getByRole('button', { name: 'Model Chat model' }))
+  expect(await screen.findByRole('dialog')).not.toBeNull()
+})
