@@ -1,6 +1,9 @@
 import { createElement, Fragment, useMemo, useState, type ReactNode, type RefObject } from 'react'
 import type { TextInputInstance } from 'react-native'
-import { MobileNativeChatBackgroundTasks } from '../input/MobileNativeChatBackgroundTasks'
+import {
+  MobileNativeChatBackgroundTasks,
+  type MobileNativeChatBackgroundTasksSource
+} from '../input/MobileNativeChatBackgroundTasks'
 import { MobileNativeChatDockedTaskList } from '../input/MobileNativeChatDockedTaskList'
 import type { NativeChatTaskList } from '../../../../../src/shared/native-chat/input/native-chat-task-list'
 import {
@@ -8,7 +11,6 @@ import {
   mobileNativeChatChordHeadId,
   type MobileNativeChatQueuedMessagesProps
 } from '../input/MobileNativeChatQueuedMessages'
-import type { MobileStructuredBackgroundTasks } from '../input/use-mobile-structured-background-tasks'
 import { useMobileNativeChatQueuedEditFocus } from '../input/use-mobile-native-chat-queued-edit-focus'
 import { createMobileQueuedHeadLight } from '../input/mobile-queued-head-light'
 import {
@@ -49,7 +51,7 @@ export function useMobileNativeChatComposerTray({
     sessionKey: string
   }
   taskList: NativeChatTaskList | null
-  backgroundTasks: MobileStructuredBackgroundTasks | null
+  backgroundTasks: MobileNativeChatBackgroundTasksSource | null
 }): MobileNativeChatComposerTray {
   const { composerInputRef, editQueuedMessage } = useMobileNativeChatQueuedEditFocus(queued.onEdit)
   // Held here, not in the list, so a chat switch mid-preview mounts the new list already lit.

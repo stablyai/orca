@@ -26,7 +26,7 @@ import type {
 import type { MobileNativeChatCommandRefusalCauses } from './composer/use-mobile-native-chat-send-error'
 import type { MobileStructuredQueuedMessageControls } from './input/use-mobile-structured-queued-message-controls'
 import type { MobileStructuredThreadGoal } from './input/use-mobile-structured-thread-goal'
-import type { MobileStructuredBackgroundTasks } from './input/use-mobile-structured-background-tasks'
+import type { MobileNativeChatBackgroundTasksSource } from './input/MobileNativeChatBackgroundTasks'
 import type { MobileStructuredInterruptedContinue } from './composer/use-mobile-structured-interrupted-continue'
 import type { MobileNativeChatPendingMessage } from './transcript/mobile-native-chat-pending-echo'
 import type { useMobileNativeChatSession } from './use-mobile-native-chat-session'
@@ -100,7 +100,7 @@ export type MobileNativeChatController = {
   handleNativeChatRespondPermission: (text: string) => Promise<boolean>
   handleNativeChatStop: () => void
   nativeChatQueued: MobileStructuredQueuedMessageControls
-  nativeChatBackgroundTasks: MobileStructuredBackgroundTasks | null
+  nativeChatBackgroundTasks: MobileNativeChatBackgroundTasksSource | null
   nativeChatContextUsage: NativeChatContextUsageSummary | null
   nativeChatInterruptedContinue: MobileStructuredInterruptedContinue | null
   nativeChatThreadGoal: MobileStructuredThreadGoal | null
