@@ -1,4 +1,5 @@
-import { Bot, GitFork } from 'lucide-react'
+import { Bot } from 'lucide-react'
+import { NativeChatForkIcon } from '@/components/native-chat/messages/actions/NativeChatForkIcon'
 import { useEffect, useId, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
@@ -200,7 +201,7 @@ function ForkWindow({
               {t('components.native-chat.fork.worktree.cancel', 'Cancel')}
             </Button>
             <Button ref={confirmRef} type="submit" disabled={busy || !state.ready}>
-              {subagent ? <Bot className="size-4" /> : <GitFork className="size-4" />}
+              {subagent ? <Bot className="size-4" /> : <NativeChatForkIcon className="size-4" />}
               {busy
                 ? t('components.native-chat.fork.window.forking', 'Forking…')
                 : subagent

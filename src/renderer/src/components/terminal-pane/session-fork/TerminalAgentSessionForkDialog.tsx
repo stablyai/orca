@@ -1,4 +1,5 @@
-import { Copy, GitFork } from 'lucide-react'
+import { Copy } from 'lucide-react'
+import { NativeChatForkIcon } from '@/components/native-chat/messages/actions/NativeChatForkIcon'
 import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
@@ -89,7 +90,7 @@ export function TerminalAgentSessionForkDialog({
         </DialogHeader>
 
         <div className="flex items-start gap-3 rounded-md border border-border/60 bg-muted/20 px-3 py-3">
-          <GitFork className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+          <NativeChatForkIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
           <div className="min-w-0 space-y-1">
             <p className="text-sm font-medium">
               {t(
@@ -115,7 +116,7 @@ export function TerminalAgentSessionForkDialog({
             )}
           </Button>
           <Button disabled={busy} onClick={() => void handleStartFork()}>
-            <GitFork className="size-4" />
+            <NativeChatForkIcon className="size-4" />
             {busy
               ? t(
                   'auto.components.terminal.pane.TerminalAgentSessionForkDialog.2b10412cfc',
