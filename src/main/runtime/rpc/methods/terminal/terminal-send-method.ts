@@ -17,6 +17,7 @@ import {
   terminalInputSourceForClient,
   isTerminalSendGuardNotWritable,
   resolveMobileFloorClientId,
+  refusedTerminalSend as refusedSend,
   type MobileInputFloorClaimHolder
 } from './terminal-input-delivery'
 import { updateViewportForClient } from './terminal-viewport-update'
@@ -29,16 +30,6 @@ import {
   TERMINAL_INPUT_SESSION_METHOD,
   withTerminalInputSequence
 } from './terminal-send-input-sequence'
-
-// Every refused send reports the same zero-byte result, with the guard's reason when it has one.
-function refusedSend(
-  handle: string,
-  refusedReason?: NonNullable<ReturnType<typeof getTerminalSendGuardRefusedReason>>
-) {
-  return {
-    send: { handle, accepted: false, bytesWritten: 0, ...(refusedReason ? { refusedReason } : {}) }
-  }
-}
 
 export const TERMINAL_SEND_METHODS = [
   defineMethod({
@@ -100,6 +91,16 @@ export const TERMINAL_SEND_METHODS = [
         }
         // Reject stale handles before evaluating driver/lock state on the wrong PTY (#7718).
         const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
+        if (params.agentPrompt === true) {
+          try {
+            runtime.assertTerminalAgentPromptInputSupported(params.terminal)
+          } catch (error) {
+            if (isTerminalSendGuardNotWritable(error)) {
+              return refusedSend(params.terminal)
+            }
+            throw error
+          }
+        }
         const driver = leaf?.ptyId ? runtime.getDriver(leaf.ptyId) : null
         if (
           params.inputKind === 'query-reply' &&

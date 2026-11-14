@@ -163,6 +163,16 @@ export function getTerminalSendGuardRefusedReason(
   return undefined
 }
 
+// Every refused send reports the same zero-byte result, with the guard's reason when it has one.
+export function refusedTerminalSend(
+  handle: string,
+  refusedReason?: NonNullable<ReturnType<typeof getTerminalSendGuardRefusedReason>>
+) {
+  return {
+    send: { handle, accepted: false, bytesWritten: 0, ...(refusedReason ? { refusedReason } : {}) }
+  }
+}
+
 export function isTerminalSendGuardNotWritable(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
   return message.includes('terminal_guard_not_writable')

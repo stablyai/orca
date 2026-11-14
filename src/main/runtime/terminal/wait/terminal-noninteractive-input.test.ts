@@ -200,3 +200,72 @@ it('keeps a blocked generic transition from reporting composer readiness', async
     runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 0)
   }
 })
+
+it('refuses a new agent prompt before recipient selection can outlive a positive mode', async () => {
+  const writes: string[] = []
+  let observedAt = 0
+  let defer = false
+  let release!: (process: string | null) => void
+  const { runtime, handle } = await createTranscriptPane({
+    paneTitle: 'Terminal',
+    foregroundProcess: 'claude',
+    launchAgent: 'claude',
+    data: '\x1b]133;C\x07\x1b]0;claude\x07',
+    processInspection: inspection(['claude', 'mcp', 'serve']),
+    onProcessInspection: () => {
+      observedAt = performance.now()
+    },
+    onWrite: (data) => writes.push(data),
+    foregroundProcessRead: () =>
+      defer
+        ? new Promise<string | null>((resolve) => {
+            release = resolve
+          })
+        : Promise.resolve('claude')
+  })
+  vi.useFakeTimers({
+    toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance']
+  })
+  try {
+    const waiting = runtime.waitForTerminal(handle, { condition: 'tui-idle', timeoutMs: 20_000 })
+    const ready = expect(waiting).resolves.toMatchObject({ satisfied: true })
+    await vi.advanceTimersByTimeAsync(4_000)
+    await ready
+    await vi.advanceTimersByTimeAsync(observedAt + 15_900 - performance.now())
+    expect(runtime.terminalAgentInputMode(handle)).toBe('noninteractive')
+    defer = true
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+    let reply: unknown
+    const sending = dispatcher
+      .dispatch({
+        id: 'positive-at-admission',
+        authToken: 'token',
+        method: 'terminal.send',
+        params: {
+          terminal: handle,
+          text: 'never send after expiry',
+          enter: true,
+          agentPrompt: true,
+          client: { id: 'desktop', type: 'desktop' }
+        }
+      })
+      .then((result) => {
+        reply = result
+      })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(reply).toMatchObject({
+      ok: true,
+      result: { send: { accepted: false, bytesWritten: 0 } }
+    })
+    expect(writes).toEqual([])
+    await vi.advanceTimersByTimeAsync(200)
+    expect(runtime.terminalAgentInputMode(handle)).toBeUndefined()
+    release?.(null)
+    await vi.advanceTimersByTimeAsync(4_000)
+    await sending
+    expect(writes).toEqual([])
+  } finally {
+    release?.(null)
+    runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 0)
+  }
+})
