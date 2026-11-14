@@ -1,3 +1,4 @@
+import { createZcodeAdapter } from '../../../zcode/zcode-runtime-registration'
 import { AcpAtRestCommandCatalog } from '../../../acp/discovery/acp-at-rest-commands'
 import { resolveNativeChatVisualsSkillLocation } from '../../../native-chat/conversation-files/native-chat-visuals-skill-location'
 import { withSupportedCodexCli } from '../../../codex/structured/launch/codex-cli-installation-error'
@@ -215,6 +216,8 @@ function registrationWithAdapter(
       return Object.assign(entry.metadata, { createAdapter: createClaudeAdapter })
     case 'acp':
       return Object.assign(entry.metadata, { createAdapter: createAcpAdapter(entry.spec) })
+    case 'zcode':
+      return Object.assign(entry.metadata, { createAdapter: createZcodeAdapter })
   }
 }
 

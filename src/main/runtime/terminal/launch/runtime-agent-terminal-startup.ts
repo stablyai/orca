@@ -39,6 +39,7 @@ import { resolveStartupShell } from '../../../../shared/agent-launch/startup/tui
 import { resolveWslSessionContext } from '../../../daemon/pty-subprocess/wsl-session-context'
 import { isTuiAgentEnabled } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { resolveWslHostAgentLaunchInputs } from './wsl-host-agent-terminal-launch'
+import { assertZcodeTerminalInvocation } from '../../../zcode/zcode-cli-invocation'
 
 /** No launch command could be built for a requested `startupAgent`. */
 export class AgentLaunchUnbuildableError extends Error {}
@@ -122,6 +123,21 @@ export async function resolveAgentTerminalCreateOptions(
     (plannedAgent
       ? resolveAgentLaunchRuntime(store, workspace, opts.shellOverride, plannedAgent)
       : undefined)
+  if (
+    plannedAgent === 'zcode' &&
+    runtime &&
+    !workspace.connectionId &&
+    !resolveWslSessionContext({
+      cwd: resolveTerminalStartupCwd(workspace.path, opts.cwd) ?? workspace.path,
+      shellOverride: runtime.pty.shellOverride,
+      terminalWindowsWslDistro: runtime.pty.terminalWindowsWslDistro
+    })
+  ) {
+    assertZcodeTerminalInvocation({
+      commandSettings: store.getSettings(),
+      pathEnv: process.env.PATH ?? process.env.Path
+    })
+  }
   const launch =
     plannedAgent && runtime
       ? await buildRuntimeAgentTerminalStartupOptions(

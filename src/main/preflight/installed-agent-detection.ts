@@ -1,3 +1,7 @@
+import {
+  resolveZcodeCliInvocation,
+  zcodeDesktopTerminalRefusal
+} from '../zcode/zcode-cli-invocation'
 // orca skills loads detection outside Electron; exclude integration-client dependencies.
 import { homedir } from 'node:os'
 import path from 'node:path'
@@ -97,7 +101,8 @@ export async function detectInstalledAgents(
   context?: PreflightRuntimeContext,
   options?: InstalledAgentDetectionOptions
 ): Promise<string[]> {
-  const runtime = getPreflightWslTarget(context) ? 'wsl' : process.platform
+  const wslTarget = getPreflightWslTarget(context)
+  const runtime = wslTarget ? 'wsl' : process.platform
   const commands = activeDetectionCommands(options)
   // Why: a CLI outside PATH (e.g. agy in a custom install dir) is reachable only through its override.
   const overrides = overrideProbeCommands(commands, options?.agentCmdOverrides, runtime)
@@ -118,7 +123,15 @@ export async function detectInstalledAgents(
       detected.push(id)
     }
   }
-  return detected
+  if (wslTarget || !detected.includes('zcode')) {
+    return detected
+  }
+  const invocation = resolveZcodeCliInvocation({
+    pathEnv: process.env.PATH ?? process.env.Path
+  })
+  return zcodeDesktopTerminalRefusal(invocation)
+    ? detected.filter((agent) => agent !== 'zcode')
+    : detected
 }
 
 export async function detectInstalledAgentsWithShellPathHydration(

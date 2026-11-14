@@ -1,3 +1,5 @@
+import type { ZcodeStructuredSessionAdapterDeps } from '../../zcode/zcode-structured-session-state'
+import type { ZcodeStructuredLaunchPartDeps } from '../../zcode/zcode-structured-launch-resolution'
 import type { CodexModelCatalogProbeDeps } from '../../codex/structured/catalog/codex-model-catalog-probe'
 import type { AcpStructuredSessionAdapterDeps } from '../../acp/session/acp-structured-session-adapter-deps'
 import type { AcpStructuredLaunchPartDeps } from '../../acp/launch/acp-structured-launch-resolution'
@@ -22,6 +24,8 @@ export type StructuredAgentSessionTransportOverrides = {
   /** Replace command lookup/version probing for scripted ACP children; unset uses the real binary. */
   acpLaunchCommand?: Pick<AcpStructuredLaunchPartDeps, 'resolveCommand' | 'probeVersion'>
   openClaudeConnection?: ClaudeStructuredSessionAdapterDeps['openConnection']
+  openZcodeConnection?: ZcodeStructuredSessionAdapterDeps['openConnection']
+  resolveZcodeInvocation?: ZcodeStructuredLaunchPartDeps['resolveInvocation']
   /** Scripted app-servers carry fake pids the real start-time read cannot answer for. */
   readProcessStartTime?: CodexStructuredSessionAdapterDeps['readProcessStartTime']
   /** The shipped startup limits unless a test shortens them. */

@@ -37,7 +37,7 @@ process.on(${JSON.stringify(PROVIDER_SUPERVISOR_REAP_NOW_SIGNAL)}, () => {
 if (ownerGone()) process.exit(1)
 const childEnv = { ...process.env, ...spec.nodeEnv }
 delete childEnv.ORCA_PROVIDER_SUPERVISOR_SPEC
-delete childEnv.ELECTRON_RUN_AS_NODE
+if (spec.nodeEnv.ELECTRON_RUN_AS_NODE === undefined) delete childEnv.ELECTRON_RUN_AS_NODE
 // The owner sees only this pid's exit; this marked last stderr line says the provider never started.
 const exitWithSpawnFailure = (error, thrown) => {
   const report = { thrown, code: (error && error.code) || 'UNKNOWN', message: String(error && error.message) }
@@ -241,6 +241,9 @@ export function supervisedPosixLaunch(
       nodeEnv[key] = value
     }
   }
+  if (childEnv.ELECTRON_RUN_AS_NODE === '1') {
+    nodeEnv.ELECTRON_RUN_AS_NODE = '1'
+  }
   const supervisorSpec = Buffer.from(
     JSON.stringify({
       cwd,
@@ -255,7 +258,7 @@ export function supervisedPosixLaunch(
   return {
     command: process.execPath,
     args: ['-e', POSIX_PROVIDER_SUPERVISOR_SCRIPT, '--', launch.command, ...launch.args],
-    // Only the supervisor needs Electron Node mode; the provider env above strips this marker.
+    // The provider keeps Node mode only when its resolved environment requests it.
     env: {
       ...supervisorEnv,
       ELECTRON_RUN_AS_NODE: '1',
