@@ -226,8 +226,8 @@
   --editor-surface: #ffffff;
   --foreground: #0a0a0a;
   --chat-canvas-mix: 0%;
-  --chat-foreground-mix: 82%;
-  --chat-strong-mix: 92%;
+  --chat-foreground-mix: 88%;
+  --chat-strong-mix: 98%;
   --chat-faint-mix: 100%;
   --chat-user-mix: 4%;
   --chat-user-border-mix: 7%;
@@ -353,8 +353,8 @@
   --editor-surface: #1e1e1e;
   --foreground: #f0f0f0;
   --chat-canvas-mix: 5%;
-  --chat-foreground-mix: 78%;
-  --chat-strong-mix: 90%;
+  --chat-foreground-mix: 88%;
+  --chat-strong-mix: 98%;
   --chat-faint-mix: 83%;
   --chat-user-mix: 7%;
   --chat-user-border-mix: 6%;

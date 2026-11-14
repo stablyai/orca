@@ -624,6 +624,7 @@
         "fontKeywordTypeface": "字體",
         "fontKeywordTypography": "排版",
         "inheritFont": "與 IDE 字型相同",
+        "systemFont": "系統字型",
         "fontPreviewLabel": "聊天字型預覽",
         "fontPreview": "敏捷的棕色狐狸躍過懶狗。",
         "title": "聊天介面",

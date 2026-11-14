@@ -185,6 +185,7 @@
         "fontKeywordTypeface": "字体",
         "fontKeywordTypography": "排版",
         "inheritFont": "与 IDE 字体相同",
+        "systemFont": "系统字体",
         "fontPreviewLabel": "聊天字体预览",
         "fontPreview": "这段文字用于预览聊天字体",
         "title": "聊天界面",

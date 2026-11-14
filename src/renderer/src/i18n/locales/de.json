@@ -659,6 +659,7 @@
         "fontKeywordTypeface": "Schriftart",
         "fontKeywordTypography": "Typografie",
         "inheritFont": "Wie IDE-Schrift",
+        "systemFont": "Systemschrift",
         "fontPreviewLabel": "Vorschau der Chat-Schrift",
         "fontPreview": "Der schnelle braune Fuchs springt über den faulen Hund.",
         "title": "Chat-Oberfläche",

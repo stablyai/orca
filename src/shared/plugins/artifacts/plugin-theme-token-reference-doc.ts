@@ -94,7 +94,7 @@ const TOKEN_ROLES: Record<PluginAppThemeToken, string> = {
 const OMITTED_DESCRIPTIONS: Partial<Record<PluginAppThemeToken, string>> = {
   '--worktree-sidebar-active-border': 'a mix of `--worktree-sidebar-border`',
   '--chat-user-message': '`--foreground` mixed lightly into the chat background',
-  '--chat-bold-foreground': 'the color of chat headings',
+  '--chat-bold-foreground': 'the chat text color around it',
   '--chat-muted-foreground': '`--muted-foreground` as chat paints it',
   '--chat-inline-code': '`--foreground` mixed lightly into the chat background',
   '--chat-inline-code-foreground': '`--foreground` mixed 85% into the chat background',

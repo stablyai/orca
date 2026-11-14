@@ -705,6 +705,7 @@
         "fontKeywordTypeface": "гарнитура",
         "fontKeywordTypography": "типографика",
         "inheritFont": "Как в IDE",
+        "systemFont": "Системный шрифт",
         "fontPreviewLabel": "Предпросмотр шрифта чата",
         "fontPreview": "Съешь же ещё этих мягких французских булок, да выпей чаю.",
         "title": "Интерфейс чата",

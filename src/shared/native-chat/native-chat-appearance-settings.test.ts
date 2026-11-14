@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   normalizeNativeChatAppearanceSettings,
-  resetNativeChatAppearanceSettings
+  resetNativeChatAppearanceSettings,
+  resolveNativeChatAppearanceSettings
 } from './native-chat-appearance-settings'
 
 describe('native chat appearance normalization', () => {
@@ -50,5 +51,12 @@ describe('native chat appearance normalization', () => {
       futureSetting: { nested: 'keep' }
     })
     expect(resetNativeChatAppearanceSettings({ fontSize: 18 })).toBeUndefined()
+  })
+
+  it('defaults Text size to 13 and stores any other size, 14 included', () => {
+    expect(resolveNativeChatAppearanceSettings(undefined).fontSize).toBe(13)
+    expect(normalizeNativeChatAppearanceSettings({ fontSize: 13 })).toBeUndefined()
+    expect(normalizeNativeChatAppearanceSettings({ fontSize: 14 })).toEqual({ fontSize: 14 })
+    expect(resolveNativeChatAppearanceSettings({ fontSize: 14 }).fontSize).toBe(14)
   })
 })

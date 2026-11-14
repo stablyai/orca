@@ -183,6 +183,7 @@
         "fontFamily": "フォント",
         "fontFamilyDescription": "メッセージ、アクティビティ、入力欄に使用するフォント。",
         "inheritFont": "IDE と同じフォント",
+        "systemFont": "システムフォント",
         "fontPreviewLabel": "チャットフォントのプレビュー",
         "fontPreview": "この文章でチャットのフォントを確認できます。",
         "title": "チャット UI",
