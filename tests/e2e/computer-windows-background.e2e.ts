@@ -16,6 +16,7 @@ import {
 import {
   launchWindowsFormsFixture,
   launchWindowsSemanticFixture,
+  type WindowsControlsFixture,
   type WindowsFormsFixture,
   type WindowsFormsFixtureState,
   type WindowsSemanticFixture,
@@ -49,12 +50,15 @@ async function elementIndex(app: string, line: RegExp): Promise<number> {
 }
 
 // Runs a UI Automation action, waits for its effect, and checks action.delivery against whether the window was activated.
-async function runPatternAction(
+async function runPatternAction<
+  State extends WindowsSemanticFixtureState | WindowsFormsFixtureState
+>(
+  target: WindowsControlsFixture<State>,
   args: string[],
-  effect: (state: WindowsSemanticFixtureState) => boolean,
+  effect: (state: State) => boolean,
   label: string
 ): Promise<{ result: ComputerActionResult; activated: boolean }> {
-  const { waitForState } = requireFixture()
+  const { waitForState } = target
   const before = await waitForState((state) => !state.active, 'fixture window inactive')
   const result = parseJsonOutput<{ result: ComputerActionResult }>(
     (await runOrcaCli(['computer', ...args, '--no-screenshot', '--json'])).stdout
@@ -88,6 +92,7 @@ describe.skipIf(!isWindows || !e2eOptIn || process.env.CI !== 'true')(
       const item = await elementIndex(app, /^\s*(\d+)\s+list item Semantic item 0(?:,|$)/m)
 
       await runPatternAction(
+        requireFixture(),
         ['scroll', '--app', app, '--element-index', String(item), '--direction', 'down'],
         (state) => state.listOffset > 0,
         'list scrolled down'
@@ -99,6 +104,7 @@ describe.skipIf(!isWindows || !e2eOptIn || process.env.CI !== 'true')(
       const item = await elementIndex(app, /^\s*(\d+)\s+list item Semantic item 150(?:,|$)/m)
 
       const { activated } = await runPatternAction(
+        requireFixture(),
         [
           'perform-secondary-action',
           '--app',
@@ -121,6 +127,7 @@ describe.skipIf(!isWindows || !e2eOptIn || process.env.CI !== 'true')(
         /^\s*(\d+)\s+tree view item Semantic branch,.*Secondary Actions:.*\bExpand\b/m
       )
       await runPatternAction(
+        requireFixture(),
         [
           'perform-secondary-action',
           '--app',
@@ -139,6 +146,7 @@ describe.skipIf(!isWindows || !e2eOptIn || process.env.CI !== 'true')(
         /^\s*(\d+)\s+tree view item Semantic branch,.*Secondary Actions:.*\bCollapse\b/m
       )
       await runPatternAction(
+        requireFixture(),
         [
           'perform-secondary-action',
           '--app',
@@ -158,6 +166,7 @@ describe.skipIf(!isWindows || !e2eOptIn || process.env.CI !== 'true')(
       const slider = await elementIndex(app, /^\s*(\d+)\s+slider Semantic level(?:,|$)/m)
 
       const { result } = await runPatternAction(
+        requireFixture(),
         ['set-value', '--app', app, '--element-index', String(slider), '--value', '42'],
         (state) => state.level === 42,
         'slider at 42'
@@ -176,47 +185,24 @@ function requireFormsFixture(): WindowsFormsFixture {
   return formsFixture
 }
 
-// Types into a background WinForms text box by element index and checks the window never came forward.
-async function typeIntoField(
-  seed: string,
-  text: string,
-  landed: (state: WindowsFormsFixtureState) => boolean
+// Runs an action on the background WinForms window and checks it never came forward.
+async function runInBackground(
+  args: (app: string) => string[],
+  effect: (state: WindowsFormsFixtureState) => boolean,
+  label: string
 ): Promise<ComputerActionResult> {
-  const { app, waitForState } = requireFormsFixture()
-  const before = await waitForState((state) => !state.active, 'fixture window inactive')
-  const field = await elementIndex(
-    app,
-    new RegExp(`^\\s*(\\d+)\\s+(?:edit|document)\\b.*${seed}`, 'm')
-  )
-  const result = parseJsonOutput<{ result: ComputerActionResult }>(
-    (
-      await runOrcaCli([
-        'computer',
-        'type-text',
-        '--app',
-        app,
-        '--element-index',
-        String(field),
-        '--text',
-        text,
-        '--no-screenshot',
-        '--json'
-      ])
-    ).stdout
-  ).result
-  const after = await waitForState(landed, `${seed} typed`)
-  expect(after.activations, after.events.join('\n')).toBe(before.activations)
-  expect(result.action).toMatchObject({
-    path: 'accessibility',
-    actionName: 'EM_REPLACESEL',
-    delivery: 'background',
-    verification: { state: 'verified', property: 'elementText' }
-  })
+  const target = requireFormsFixture()
+  const { result, activated } = await runPatternAction(target, args(target.app), effect, label)
+  expect(activated, JSON.stringify(result.action)).toBe(false)
   return result
 }
 
+async function formsIndex(line: RegExp): Promise<string> {
+  return String(await elementIndex(requireFormsFixture().app, line))
+}
+
 describe.skipIf(!isWindows || !e2eOptIn || process.env.CI !== 'true')(
-  'computer-use Windows Forms text entry',
+  'computer-use Windows Forms actions',
   () => {
     beforeAll(async () => {
       await ensureOrcaRuntimeLaunched()
@@ -229,19 +215,63 @@ describe.skipIf(!isWindows || !e2eOptIn || process.env.CI !== 'true')(
       await stopOrcaRuntime()
     })
 
-    test('type-text --element-index types Unicode into a background text box at its caret', async () => {
-      await typeIntoField(
-        'seed-name',
-        ' café Ω 漢字',
-        (state) => state.name === 'seed-name café Ω 漢字'
+    test('type-text --element-index types into background text boxes at their caret', async () => {
+      for (const [seed, text, field, expected] of [
+        ['seed-name', ' café Ω 漢字', 'name', 'seed-name café Ω 漢字'],
+        ['seed-notes', '\nsecond line', 'notes', 'seed-notes\r\nsecond line']
+      ] as const) {
+        const index = await formsIndex(
+          new RegExp(`^\\s*(\\d+)\\s+(?:edit|document)\\b.*${seed}`, 'm')
+        )
+        const result = await runInBackground(
+          (app) => ['type-text', '--app', app, '--element-index', index, '--text', text],
+          (state) => state[field] === expected,
+          `${seed} typed`
+        )
+        expect(result.action).toMatchObject({
+          actionName: 'EM_REPLACESEL',
+          verification: { state: 'verified', property: 'elementText' }
+        })
+      }
+    })
+
+    test('click presses a button and ticks a check box', async () => {
+      const button = await formsIndex(/^\s*(\d+)\s+button Semantic press/m)
+      await runInBackground(
+        (app) => ['click', '--app', app, '--element-index', button],
+        (state) => state.presses === 1,
+        'button pressed'
+      )
+      const check = await formsIndex(/^\s*(\d+)\s+check box Semantic check/m)
+      await runInBackground(
+        (app) => ['click', '--app', app, '--element-index', check],
+        (state) => state.checked,
+        'check box ticked'
       )
     })
 
-    test('type-text --element-index keeps line breaks in a background multiline text box', async () => {
-      await typeIntoField(
-        'seed-notes',
-        '\nsecond line',
-        (state) => state.notes === 'seed-notes\r\nsecond line'
+    test('set-value writes a text box and picks a combo box option', async () => {
+      const field = await formsIndex(/^\s*(\d+)\s+edit\b.*seed-name/m)
+      await runInBackground(
+        (app) => ['set-value', '--app', app, '--element-index', field, '--value', 'replaced'],
+        (state) => state.name === 'replaced',
+        'text box replaced'
+      )
+      const combo = await formsIndex(/^\s*(\d+)\s+combo box\b/m)
+      const result = await runInBackground(
+        (app) => ['set-value', '--app', app, '--element-index', combo, '--value', 'Gamma'],
+        (state) => state.combo === 'Gamma',
+        'combo box at Gamma'
+      )
+      expect(result.action?.verification).toMatchObject({ state: 'verified', property: 'value' })
+    })
+
+    test('scroll pages a list box by its own rows', async () => {
+      const row = await formsIndex(/^\s*(\d+)\s+list item Row 0\b/m)
+      await runInBackground(
+        (app) => ['scroll', '--app', app, '--element-index', row, '--direction', 'down'],
+        (state) => state.listTop > 0,
+        'list scrolled'
       )
     })
 

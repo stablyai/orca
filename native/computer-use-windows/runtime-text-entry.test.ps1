@@ -58,7 +58,7 @@ $functions = @(
     "Test-OrcaWindowFocused", "Wait-OrcaWindowFocused", "Assert-OrcaKeyboardFocus", "New-OrcaForegroundRefusal",
     "Assert-OrcaWindowTarget", "Get-OrcaRequiredString", "Invoke-OrcaOperation",
     "Assert-OrcaInputAllowed", "Test-OrcaTargetTookForeground", "Get-OrcaProperty", "Test-OrcaSensitiveElement",
-    "Test-OrcaEditClass", "Get-OrcaNativeEdit", "Assert-OrcaEditOwner", "ConvertTo-OrcaEditNewlines",
+    "Test-OrcaEditClass", "Get-OrcaNativeEdit", "Assert-OrcaWindowOwner", "Test-OrcaNativeClass", "ConvertTo-OrcaEditNewlines",
     "Invoke-OrcaEditTextInsertion", "Invoke-OrcaElementTextInsertion", "Send-OrcaText",
     "Test-OrcaElementDisabled", "Assert-OrcaStillFocused"
 )

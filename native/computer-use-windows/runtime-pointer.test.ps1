@@ -107,7 +107,7 @@ $functions = @(
     "Get-OrcaClickModifierVirtualKeys", "Send-OrcaMouseClick", "Send-OrcaDrag", "Invoke-OrcaOperation",
     "Assert-OrcaInputAllowed", "Test-OrcaTargetTookForeground", "Invoke-OrcaPrimaryAction", "Get-OrcaScrollPattern",
     "Get-OrcaScrollPercent", "Get-OrcaScrollViewSize", "Get-OrcaRuntimeId", "Test-OrcaSameRuntimeId", "Wait-OrcaScrollPercentChange", "Invoke-OrcaScrollPercent",
-    "Invoke-OrcaScrollPattern"
+    "Invoke-OrcaScrollPattern", "Invoke-OrcaNativeListScroll", "Invoke-OrcaNativeButtonClick"
 )
 foreach ($definition in $ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $false)) {
     if ($definition.Name -in $functions) { . ([scriptblock]::Create($definition.Extent.Text)) }
@@ -301,9 +301,9 @@ if ($uiaTypes) {
         $element
     }
     $ignored = New-TestScrollElement 30.0
-    Assert-TestEqual (Invoke-OrcaScrollPatternReal $ignored $ignored "down" 1) $false "whole page the provider ignores"
+    Assert-TestEqual (Invoke-OrcaScrollPatternReal $ignored $ignored $null "down" 1) $false "whole page the provider ignores"
     $atEnd = New-TestScrollElement 100.0
-    Assert-TestEqual (Invoke-OrcaScrollPatternReal $atEnd $atEnd "down" 1) $true "whole page at the end of the content"
+    Assert-TestEqual (Invoke-OrcaScrollPatternReal $atEnd $atEnd $null "down" 1) $true "whole page at the end of the content"
 } else {
     Write-Output "skipping UI Automation pattern checks: UIAutomationClient is unavailable"
 }
