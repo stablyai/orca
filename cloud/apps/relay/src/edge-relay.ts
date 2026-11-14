@@ -176,9 +176,24 @@ type Identity = { userId: string; relayHostId: string }
 // next drain) before rolling back the env or the image. Env skew matters as much: a director
 // whose ORCA_RELAY_EDGE_FRONT_DOOR_URLS lacks a recorded URL answers the edge URL and clears the
 // record, so every serving revision must carry the same list.
+//
+// A switch is written ahead as pending (relay_edge_host_regions.pending_epoch) before its push is
+// sent, and every later front-door-aware ask of the host finishes it first, so a push that timed
+// out after landing never leaves the director answering below the edge's epoch. Only directors
+// with the env set read it: unset the env or roll the image back only with no pending row left
+// (SELECT count(*) FROM relay_edge_host_regions WHERE pending_epoch IS NOT NULL).
 export type EdgeRoute = { frontDoor?: string; byCountry?: boolean; switchable: boolean }
 
-class FrontDoorSwitchDeferredError extends Error {}
+// Thrown out of the switch's first transaction (nothing written): the pending switch must be
+// committed on its own before any push is sent (EdgeAssignments.moveToEdgeWithFrontDoor).
+class FrontDoorSwitchIntent extends Error {
+  constructor(
+    readonly epoch: number,
+    readonly cellUrl: string | undefined
+  ) {
+    super('relay_edge_front_door_switch_intent')
+  }
+}
 
 type EpochSource = {
   seatsOf(userId: string, relayHostId: string): Array<{ epoch: number }>
@@ -453,13 +468,46 @@ export class EdgeAssignments {
     try {
       return await this.frontDoorAttempt(identity, mapFloor, region, route)
     } catch (error) {
-      if (!(error instanceof FrontDoorSwitchDeferredError)) throw error
-      // The edge definitely did not take the switch's epoch: nothing committed. The host is on the
-      // edge and must stay there (falling through to the cell lanes would place it without an export or a
-      // fence), so it is kept on its current origin and epoch, and switches on a later reconnect.
-      console.warn(JSON.stringify({ event: 'orca_relay_edge_front_door_switch_deferred', reason: error.message }))
-      return await this.frontDoorAttempt(identity, mapFloor, region, { ...route, switchable: false })
+      if (!(error instanceof FrontDoorSwitchIntent)) throw error
+      // Write-ahead: the switch's epoch is recorded as pending, committed, before its push is sent.
+      // From then on every ask of this host (any shape) first completes it (frontDoorAttempt), so
+      // the director never answers an epoch below one the edge may hold.
+      await this.recordPendingSwitch(identity, region, error.epoch, error.cellUrl)
+      return await this.frontDoorAttempt(identity, mapFloor, region, route)
     }
+  }
+
+  // Its own short transaction under the assignment row lock. Only while the row is on the edge
+  // below the pending epoch: a host that moved meanwhile has nothing to complete.
+  private async recordPendingSwitch(
+    identity: Identity,
+    region: RelayRegion | undefined,
+    epoch: number,
+    cellUrl: string | undefined
+  ): Promise<void> {
+    await this.database.transaction(async (transaction) => {
+      let rows: SqlRow[]
+      try {
+        rows = await transaction.queryLocked(
+          `SELECT cell_id, assignment_epoch FROM relay_assignments WHERE user_id = ? AND relay_host_id = ?`,
+          [identity.userId, identity.relayHostId],
+          { failIfUnavailable: true }
+        )
+      } catch (error) {
+        if (error instanceof Error && error.message === 'database_lock_unavailable') throw new EdgeMoveBusyError()
+        throw error
+      }
+      const row = rows[0]
+      if (!row || text(row, 'cell_id') !== EDGE_CELL_ID || integer(row, 'assignment_epoch') >= epoch) return
+      await transaction.query(
+        `INSERT INTO relay_edge_host_regions
+         (user_id, relay_host_id, region, recorded_at, cell_url, pending_epoch, pending_cell_url)
+         VALUES (?, ?, ?, ?, NULL, ?, ?)
+         ON CONFLICT (user_id, relay_host_id) DO UPDATE
+           SET pending_epoch = excluded.pending_epoch, pending_cell_url = excluded.pending_cell_url`,
+        [identity.userId, identity.relayHostId, region ?? RELAY_DEFAULT_REGION, this.now(), epoch, cellUrl ?? null]
+      )
+    })
   }
 
   private async frontDoorAttempt(
@@ -475,15 +523,19 @@ export class EdgeAssignments {
     // apac only for a host mapped by its country: a host listed by id (dogfood, a VPN) may be anywhere.
     const placeApac = viaFrontDoor && route.byCountry === true
     const record = async (transaction: RelayDatabase, cellUrl: string | undefined, onlyIfChanged = false) => {
+      // Every committed answer here also clears any pending switch (completed, or left behind).
       await transaction.query(
-        `INSERT INTO relay_edge_host_regions (user_id, relay_host_id, region, recorded_at, cell_url)
-         VALUES (?, ?, ?, ?, ?)
+        `INSERT INTO relay_edge_host_regions
+         (user_id, relay_host_id, region, recorded_at, cell_url, pending_epoch, pending_cell_url)
+         VALUES (?, ?, ?, ?, ?, NULL, NULL)
          ON CONFLICT (user_id, relay_host_id) DO UPDATE
-           SET region = excluded.region, recorded_at = excluded.recorded_at, cell_url = excluded.cell_url
+           SET region = excluded.region, recorded_at = excluded.recorded_at, cell_url = excluded.cell_url,
+               pending_epoch = NULL, pending_cell_url = NULL
            ${
              onlyIfChanged
                ? `WHERE relay_edge_host_regions.region IS DISTINCT FROM excluded.region
-                    OR relay_edge_host_regions.cell_url IS DISTINCT FROM excluded.cell_url`
+                    OR relay_edge_host_regions.cell_url IS DISTINCT FROM excluded.cell_url
+                    OR relay_edge_host_regions.pending_epoch IS NOT NULL`
                : ''
            }`,
         [identity.userId, identity.relayHostId, region ?? RELAY_DEFAULT_REGION, now, cellUrl ?? null]
@@ -537,14 +589,46 @@ export class EdgeAssignments {
         )
       }
       if (text(row, 'cell_id') === EDGE_CELL_ID) {
-        const recordedRaw = (
+        const rowEpoch = integer(row, 'assignment_epoch')
+        const recordRow = (
           await transaction.query(
-            `SELECT cell_url FROM relay_edge_host_regions WHERE user_id = ? AND relay_host_id = ?`,
+            `SELECT cell_url, pending_epoch, pending_cell_url FROM relay_edge_host_regions
+             WHERE user_id = ? AND relay_host_id = ?`,
             [identity.userId, identity.relayHostId]
           )
-        )[0]?.cell_url
+        )[0]
+        const pendingEpoch =
+          recordRow?.pending_epoch === null || recordRow?.pending_epoch === undefined ? undefined : integer(recordRow, 'pending_epoch')
+        if (pendingEpoch !== undefined && pendingEpoch > rowEpoch) {
+          // A switch whose push was (or may have been) sent: the edge may hold pendingEpoch. Finish
+          // it before anything else, whatever this ask's shape: push the same epoch again (answered
+          // `applied` or `unchanged`; an edge further ahead is minted above by pushOnto), then commit.
+          const target = this.allowedFrontDoor(recordRow?.pending_cell_url)
+          await transaction.query(
+            `UPDATE relay_assignments SET assignment_epoch = ?, lease_expires_at = ?, last_activity_at = ?
+             WHERE user_id = ? AND relay_host_id = ?`,
+            [pendingEpoch, leaseExpiresAt, now, identity.userId, identity.relayHostId]
+          )
+          let pushed: number
+          try {
+            pushed = await this.pushOnto(transaction, identity, pendingEpoch, region, { devices: false })
+          } catch (error) {
+            // Not done: answering the row's epoch could be below the edge's. The host re-asks.
+            if (error instanceof EdgeMoveDeferredError) throw new EdgeMoveBusyError()
+            throw error
+          }
+          await record(transaction, target)
+          console.warn(
+            JSON.stringify({
+              event: 'orca_relay_edge_front_door_switched',
+              to: target === undefined ? 'edge' : 'front_door',
+              assignmentEpoch: pushed
+            })
+          )
+          return this.answer(identity, pushed, leaseExpiresAt, target)
+        }
         // A recorded front door that left the boot list is the edge's own URL (what phones are told).
-        const recorded = this.allowedFrontDoor(recordedRaw)
+        const recorded = this.allowedFrontDoor(recordRow?.cell_url)
         // Sticky: only a real reconnect changes origin (route.switchable).
         if (!route.switchable || chosen === recorded) {
           await transaction.query(
@@ -553,40 +637,10 @@ export class EdgeAssignments {
             [leaseExpiresAt, now, identity.userId, identity.relayHostId]
           )
           await record(transaction, recorded, true)
-          return this.answer(identity, integer(row, 'assignment_epoch'), leaseExpiresAt, recorded)
+          return this.answer(identity, rowEpoch, leaseExpiresAt, recorded)
         }
-        const epoch = Math.max(integer(row, 'assignment_epoch'), mapFloor) + 1
-        await transaction.query(
-          `UPDATE relay_assignments SET assignment_epoch = ?, lease_expires_at = ?, last_activity_at = ?
-           WHERE user_id = ? AND relay_host_id = ?`,
-          [epoch, leaseExpiresAt, now, identity.userId, identity.relayHostId]
-        )
-        let pushed: number
-        try {
-          pushed = await this.pushOnto(transaction, identity, epoch, region, { viaFrontDoor: placeApac, devices: false })
-        } catch (error) {
-          if (!(error instanceof EdgeMoveDeferredError)) throw error
-          // Never sent (this director's push cap): the edge's epoch is unchanged, keep the host
-          // unswitched on its current epoch.
-          if (error.reason === 'edge_busy') throw new FrontDoorSwitchDeferredError(error.message)
-          // Sent, outcome unknown or refused (timeout, 5xx, an edge ahead of this row): the edge may
-          // hold an epoch above the one this rollback keeps, and a desktop's hello at that one would
-          // get WRONG_CELL. Busy (503 + Retry-After) instead: the host re-asks, and the retried push
-          // of the same epoch is answered `unchanged` or `applied`. Keep frontDoor in place until
-          // that retry lands: removing it makes the next ask sticky, which would answer the old epoch
-          // to an edge that may hold the new one. For an edge that cannot answer, mode down is the
-          // lever (hosts leave the edge without export, as for any edge host).
-          throw new EdgeMoveBusyError()
-        }
-        await record(transaction, chosen)
-        console.warn(
-          JSON.stringify({
-            event: 'orca_relay_edge_front_door_switched',
-            to: viaFrontDoor ? 'front_door' : 'edge',
-            assignmentEpoch: pushed
-          })
-        )
-        return this.answer(identity, pushed, leaseExpiresAt, chosen)
+        // A switch: leave this transaction with nothing written, record it as pending, then finish it.
+        throw new FrontDoorSwitchIntent(Math.max(rowEpoch, mapFloor) + 1, chosen)
       }
       if (requestUnits(row) > 0) throw new EdgeMoveDeferredError('units_held')
       const epoch = Math.max(integer(row, 'assignment_epoch'), mapFloor) + 1

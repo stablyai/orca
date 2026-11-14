@@ -248,12 +248,12 @@ describe('EdgeAssignments with front doors', () => {
     expect(pushes[0]!.locationHint).toBe('enam')
   })
 
-  it('a switch push that times out after landing answers busy, and the retry commits the landed epoch', async () => {
+  // A fake edge object: epochs only move forward; `landThenFail` applies the push, then the
+  // director sees a timeout; `down` refuses to answer at all.
+  async function withFakeEdge() {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const database = await openInMemoryRelayDatabase()
     databases.push(database)
-    // A fake edge object: epochs only move forward; `landThenFail` applies the push, then the
-    // director sees a timeout.
     const edgeState = { epoch: 0, landThenFail: false, down: false }
     const pushes: EdgeAssignBody[] = []
     const admin = {
@@ -274,49 +274,85 @@ describe('EdgeAssignments with front doors', () => {
       admin
     )
     await edge.ensureEdgeCell()
+    const rowEpoch = async () => Number((await database.query(`SELECT assignment_epoch FROM relay_assignments`))[0]!.assignment_epoch)
+    return { database, edge, edgeState, pushes, rowEpoch }
+  }
+
+  it('timeout-but-landed switch, then a restart-shaped ask: the host connects at the epoch the edge holds', async () => {
+    const { edge, edgeState, rowEpoch } = await withFakeEdge()
     await edge.moveToEdge(identity, 0, 'us-central1', { switchable: false })
     expect(edgeState.epoch).toBe(1)
     edgeState.landThenFail = true
     await expect(edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: true })).rejects.toBeInstanceOf(
       EdgeMoveBusyError
     )
-    // The edge holds 2; the director row is still 1 and never answered 1 after the push was sent.
-    expect(edgeState.epoch).toBe(2)
-    const row = (await database.query(`SELECT cell_id, assignment_epoch FROM relay_assignments`))[0]!
-    expect([row.cell_id, Number(row.assignment_epoch)]).toEqual([EDGE_CELL_ID, 1])
-    // Still unreachable: still busy, never an answer at an epoch the edge may be past.
-    edgeState.down = true
-    await expect(edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: true })).rejects.toBeInstanceOf(
-      EdgeMoveBusyError
-    )
-    // Back: the retry pushes the same epoch, the edge answers unchanged, and 2 commits.
-    edgeState.down = false
+    // The edge holds 2; the director row is still 1, with the switch pending.
+    expect([edgeState.epoch, await rowEpoch()]).toEqual([2, 1])
     edgeState.landThenFail = false
-    expect(await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: true })).toMatchObject({
+    // App restart / broker retry: reconnect with issue-window, i.e. not switchable. It still
+    // completes the pending switch first, so the answer matches the edge (a hello at 2 verifies).
+    const answered = await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: false })
+    expect(answered).toMatchObject({ cellId: EDGE_CELL_ID, cellUrl: DOOR, assignmentEpoch: 2 })
+    expect([edgeState.epoch, await rowEpoch()]).toEqual([2, 2])
+    expect(await edge.edgeAssignment(identity)).toMatchObject({ cellUrl: DOOR, assignmentEpoch: 2 })
+    // Done: later asks are ordinary (sticky, no push).
+    expect(await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: false })).toMatchObject({
       cellUrl: DOOR,
       assignmentEpoch: 2
     })
-    expect(edgeState.epoch).toBe(2)
-    // A first move whose push fails is still deferred as before (the host is not on the edge yet).
-    await database.query(`DELETE FROM relay_assignments`)
+  })
+
+  it('a pending switch is completed even after the flag stopped mapping the host, then moves back on reconnect', async () => {
+    const { edge, edgeState, rowEpoch } = await withFakeEdge()
+    await edge.moveToEdge(identity, 0, 'us-central1', { switchable: false })
+    edgeState.landThenFail = true
+    await expect(edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: true })).rejects.toBeInstanceOf(
+      EdgeMoveBusyError
+    )
+    // Still unreachable: every ask, of any shape, stays busy rather than answer 1.
+    edgeState.landThenFail = false
+    edgeState.down = true
+    await expect(edge.moveToEdge(identity, 0, 'us-central1', { switchable: false })).rejects.toBeInstanceOf(EdgeMoveBusyError)
+    edgeState.down = false
+    // Flag removed meanwhile: the pending epoch is finished first (director and edge agree at 2)...
+    expect(await edge.moveToEdge(identity, 0, 'us-central1', { switchable: false })).toMatchObject({ cellUrl: DOOR, assignmentEpoch: 2 })
+    // ...and the next real reconnect moves it back to the edge URL at 3.
+    expect(await edge.moveToEdge(identity, 0, 'us-central1', { switchable: true })).toMatchObject({ cellUrl: EDGE_URL, assignmentEpoch: 3 })
+    expect([edgeState.epoch, await rowEpoch()]).toEqual([3, 3])
+  })
+
+  it('a switch whose push never left this director (push cap) is busy, and completes on the next ask', async () => {
+    const { edge, edgeState, pushes, rowEpoch } = await withFakeEdge()
+    await edge.moveToEdge(identity, 0, 'us-central1', { switchable: false })
+    ;(edge as unknown as { lockedCalls: number }).lockedCalls = EDGE_LOCKED_CALLS_MAX
+    await expect(edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: true })).rejects.toBeInstanceOf(
+      EdgeMoveBusyError
+    )
+    expect(pushes).toHaveLength(1)
+    ;(edge as unknown as { lockedCalls: number }).lockedCalls = 0
+    expect(await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: false })).toMatchObject({
+      cellUrl: DOOR,
+      assignmentEpoch: 2
+    })
+    expect([edgeState.epoch, await rowEpoch()]).toEqual([2, 2])
+  })
+
+  it('a first move whose push fails is still deferred as before (the host is not on the edge yet)', async () => {
+    const { edge, edgeState } = await withFakeEdge()
     edgeState.down = true
     await expect(edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: true })).rejects.toBeInstanceOf(
       EdgeMoveDeferredError
     )
   })
 
-  it('a switch this director could not even send (push cap) keeps the host unswitched at its epoch', async () => {
-    const { database, edge, pushes } = await setup(new Set([DOOR]))
+  it('a pending switch left behind by a host that moved off and back is cleared, not completed', async () => {
+    const { database, edge, edgeState, rowEpoch } = await withFakeEdge()
     await edge.moveToEdge(identity, 0, 'us-central1', { switchable: false })
-    ;(edge as unknown as { lockedCalls: number }).lockedCalls = EDGE_LOCKED_CALLS_MAX
-    expect(await edge.moveToEdge(identity, 0, 'us-central1', { frontDoor: DOOR, switchable: true })).toMatchObject({
-      cellId: EDGE_CELL_ID,
-      cellUrl: EDGE_URL,
-      assignmentEpoch: 1
-    })
-    expect(pushes).toHaveLength(1)
-    const row = (await database.query(`SELECT assignment_epoch FROM relay_assignments`))[0]!
-    expect(Number(row.assignment_epoch)).toBe(1)
+    await database.query(`UPDATE relay_edge_host_regions SET pending_epoch = 1, pending_cell_url = ?`, [DOOR])
+    expect(await edge.moveToEdge(identity, 0, 'us-central1', { switchable: false })).toMatchObject({ cellUrl: EDGE_URL, assignmentEpoch: 1 })
+    expect(await rowEpoch()).toBe(1)
+    expect((await database.query(`SELECT pending_epoch FROM relay_edge_host_regions`))[0]!.pending_epoch).toBeNull()
+    expect(edgeState.epoch).toBe(1)
   })
 
   it('a recorded front door dropped from the boot list causes no epoch bump, and the record is cleared', async () => {

@@ -64,6 +64,21 @@ describePostgres('relay edge front door on PostgreSQL', () => {
     })
     expect('devices' in pushes[1]!).toBe(false)
     expect(await edge.edgeAssignment(identity)).toMatchObject({ cellUrl: EDGE_URL, assignmentEpoch: 2 })
+    // A pending switch (as left by a sent push that failed) is finished by any later ask.
+    await database.query(
+      `UPDATE relay_edge_host_regions SET pending_epoch = 3, pending_cell_url = ? WHERE user_id = ? AND relay_host_id = ?`,
+      [DOOR, identity.userId, identity.relayHostId]
+    )
+    expect(await edge.moveToEdge(identity, 0, 'us-central1', { switchable: false })).toMatchObject({
+      cellUrl: DOOR,
+      assignmentEpoch: 3
+    })
+    expect(pushes.at(-1)).toMatchObject({ assignmentEpoch: 3 })
+    const left = await database.query(
+      `SELECT pending_epoch, cell_url FROM relay_edge_host_regions WHERE user_id = ? AND relay_host_id = ?`,
+      [identity.userId, identity.relayHostId]
+    )
+    expect(left).toEqual([{ pending_epoch: null, cell_url: DOOR }])
     vi.restoreAllMocks()
   })
 })
