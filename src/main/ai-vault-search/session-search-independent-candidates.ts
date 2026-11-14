@@ -1,12 +1,12 @@
 import { sessionSearchRecordPages } from './session-search-catalog-pages'
 import type { SessionSearchCatalogPublications } from './session-search-catalog-publications'
 import type SyncDatabase from '../sqlite/sync-database'
-import type { SessionSearchCatalogCandidate } from './session-search-catalog-candidate-types'
+import type { SessionSearchCandidateBatchRow } from './session-search-catalog-candidate-types'
 import { sessionSearchCandidateFacts } from './session-search-candidate-facts'
 
 export function independentSessionSearchCandidates(
   db: SyncDatabase,
-  rows: SessionSearchCatalogCandidate[]
+  rows: SessionSearchCandidateBatchRow[]
 ) {
   const groups = new Set<string>(),
     paths = new Set<string>(),
@@ -47,7 +47,7 @@ export function independentSessionSearchCandidates(
 
 export function insertIndependentSessionSearchCandidates(
   db: SyncDatabase,
-  rows: SessionSearchCatalogCandidate[],
+  rows: SessionSearchCandidateBatchRow[],
   revision: () => number
 ): void {
   const facts = sessionSearchCandidateFacts(db).insertPage(rows.map((row) => row.candidate))
@@ -87,17 +87,17 @@ export function insertIndependentSessionSearchCandidates(
 
 export function putSessionSearchCandidateBatch(
   db: SyncDatabase,
-  rows: SessionSearchCatalogCandidate[],
+  rows: SessionSearchCandidateBatchRow[],
   publications: SessionSearchCatalogPublications,
   revision: () => number,
   inserted: (count: number) => void,
-  put: (row: SessionSearchCatalogCandidate) => void
+  put: (row: SessionSearchCandidateBatchRow) => void
 ): void {
   if (!rows.length) {
     return
   }
   const independent = independentSessionSearchCandidates(db, rows)
-  let run: SessionSearchCatalogCandidate[] = []
+  let run: SessionSearchCandidateBatchRow[] = []
   const flush = () => {
     for (const page of sessionSearchRecordPages(run)) {
       insertIndependentSessionSearchCandidates(db, page, revision)

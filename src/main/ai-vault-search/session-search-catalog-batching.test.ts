@@ -667,7 +667,7 @@ it.each(['observation apply', 'probe end', 'probe begin reply'])(
       if (cut === 'observation apply') {
         expect(changes).toEqual([path])
       }
-      const currentPaths = []
+      const currentPaths: string[] = []
       for await (const currentPath of inventory.paths()) {
         currentPaths.push(currentPath)
       }

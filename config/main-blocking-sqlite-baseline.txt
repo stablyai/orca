@@ -1,11 +1,36 @@
 # Legacy synchronous sqlite uses per file; counts may only go DOWN.
 # Only explicit worker/utility entry files are exempt; their imports remain guarded.
+
 3 src/main/ai-vault-search/query/session-search-engine.ts
 6 src/main/ai-vault-search/query/session-search-postings.ts
 8 src/main/ai-vault-search/query/session-search-retrieval.ts
 2 src/main/ai-vault-search/query/session-search-snippet.ts
 2 src/main/ai-vault-search/query/session-search-source-presence.ts
 2 src/main/ai-vault-search/query/session-search-typo-repair.ts
+2 src/main/ai-vault-search/session-search-candidate-admission.ts # Search worker connection only; reviewed dependency introduced by incremental indexing.
+2 src/main/ai-vault-search/session-search-candidate-entry.ts # Search worker connection only; reviewed dependency introduced by incremental indexing.
+17 src/main/ai-vault-search/session-search-candidate-facts.ts # Search worker connection only; reviewed dependency introduced by incremental indexing.
+4 src/main/ai-vault-search/session-search-candidate-rows.ts # Search worker connection only; reviewed dependency introduced by incremental indexing.
+1 src/main/ai-vault-search/session-search-candidate-schema.ts # Search worker connection only; reviewed dependency introduced by incremental indexing.
+22 src/main/ai-vault-search/session-search-catalog-candidates.ts # Search worker connection only; reviewed dependency introduced by incremental indexing.
+33 src/main/ai-vault-search/session-search-catalog-publications.ts # Search worker connection only; reviewed dependency introduced by incremental indexing.
+4 src/main/ai-vault-search/session-search-catalog-query.ts # Search worker connection only; reviewed dependency introduced by incremental indexing.
+18 src/main/ai-vault-search/session-search-catalog-selection.ts # Search worker connection only; reviewed dependency introduced by incremental indexing.
+5 src/main/ai-vault-search/session-search-catalog-storage.ts # Search worker connection only; reviewed dependency introduced by incremental indexing.
+4 src/main/ai-vault-search/session-search-committed-coverage.ts # Search worker connection only; reviewed dependency introduced by incremental indexing.
+8 src/main/ai-vault-search/session-search-file-rows.ts # Search worker connection only; reviewed dependency introduced by incremental indexing.
+4 src/main/ai-vault-search/session-search-file-state.ts # Search worker connection only; reviewed dependency introduced by incremental indexing.
+4 src/main/ai-vault-search/session-search-independent-candidates.ts # Search worker connection only; reviewed dependency introduced by incremental indexing.
+8 src/main/ai-vault-search/session-search-inventory-flush.ts # Search worker connection only; reviewed dependency introduced by incremental indexing.
+8 src/main/ai-vault-search/session-search-inventory-mutations.ts # Search worker connection only; reviewed dependency introduced by incremental indexing.
+4 src/main/ai-vault-search/session-search-inventory-page.ts # Search worker connection only; reviewed dependency introduced by incremental indexing.
+4 src/main/ai-vault-search/session-search-inventory-prefetch.ts # Search worker connection only; reviewed dependency introduced by incremental indexing.
+2 src/main/ai-vault-search/session-search-inventory-schema.ts # Search worker connection only; reviewed dependency introduced by incremental indexing.
+1 src/main/ai-vault-search/session-search-storage-bootstrap.ts # Search worker connection only; reviewed dependency introduced by incremental indexing.
+14 src/main/ai-vault-search/session-search-store-write.ts # Search worker connection only; reviewed dependency introduced by incremental indexing.
+4 src/main/ai-vault-search/session-search-work-admission.ts # Search worker connection only; reviewed dependency introduced by incremental indexing.
+12 src/main/ai-vault-search/session-search-work-catalog.ts # Search worker connection only; reviewed dependency introduced by incremental indexing.
+4 src/main/ai-vault-search/session-search-work-projection.ts # Search worker connection only; reviewed dependency introduced by incremental indexing.
 10 src/main/ai-vault-search/storage/session-search-file-records.ts
 8 src/main/ai-vault-search/storage/session-search-index-generation.ts
 17 src/main/ai-vault-search/storage/session-search-index-writer.ts
@@ -13,7 +38,6 @@
 3 src/main/ai-vault-search/storage/session-search-query-schema.ts
 22 src/main/ai-vault-search/storage/session-search-retention-delete.ts
 13 src/main/ai-vault-search/storage/session-search-schema.ts
-16 src/main/ai-vault-search/storage/session-search-store.ts
 26 src/main/ai-vault-search/storage/session-search-tool-purge.ts
 9 src/main/ai-vault-search/storage/session-search-write-buffer.ts
 19 src/main/ai-vault/parse-cache/session-parse-cache-database.ts
