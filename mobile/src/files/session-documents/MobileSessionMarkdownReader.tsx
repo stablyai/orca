@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { RefreshCw } from 'lucide-react-native'
-import { MobileRichMarkdownEditor } from '../../components/MobileRichMarkdownEditor'
+import { MobileRichMarkdownEditor } from '../../components/rich-markdown/MobileRichMarkdownEditor'
 import { resolveMarkdownFloatingActionsBottom } from './markdown-floating-actions-layout'
 import { markdownReaderStatusText } from './mobile-markdown-reader-status'
 import { colors, spacing, pressedStyle } from '../../theme/mobile-theme'

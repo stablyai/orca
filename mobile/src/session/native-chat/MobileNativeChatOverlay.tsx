@@ -23,7 +23,7 @@ import { MobileNativeChatNoticeContext } from './transcript/notices/mobile-nativ
 import type { MobileNativeChatImageSource } from './visual/mobile-native-chat-image-preview'
 import type { MobileNativeChatHostOutage } from './status/mobile-native-chat-host-outage'
 import { useMobileNativeChatMarkdownLinks } from './links/use-mobile-native-chat-markdown-links'
-import { MobileMarkdownLinksContext } from '../../components/mobile-markdown-links-context'
+import { MobileMarkdownLinksContext } from '../../components/markdown/links/mobile-markdown-links-context'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 

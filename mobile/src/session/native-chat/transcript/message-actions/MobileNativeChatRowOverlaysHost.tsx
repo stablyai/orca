@@ -6,7 +6,7 @@ import { MobileNativeChatImageViewer } from '../../visual/MobileNativeChatImageV
 import { MobileImageViewerActions } from '../../visual/MobileImageViewerActions'
 import { MobileNativeChatMessageActionsSheet } from './MobileNativeChatMessageActionsSheet'
 import { MobileLinkActionSheet } from './MobileLinkActionSheet'
-import { MarkdownLinkHandlerContext } from '../../../../components/markdown-link-handler'
+import { MarkdownLinkHandlerContext } from '../../../../components/markdown/links/markdown-link-handler'
 import {
   MobileNativeChatRowOverlaysContext,
   type MobileNativeChatViewedImage

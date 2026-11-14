@@ -14,7 +14,7 @@ import {
   MobileHtmlPreview,
   MOBILE_HTML_PREVIEW_SANDBOX,
   MOBILE_HTML_PREVIEW_SEALED_SANDBOX
-} from './MobileHtmlPreview'
+} from '../files/preview/documents/MobileHtmlPreview'
 
 window.__sandbox = MOBILE_HTML_PREVIEW_SANDBOX
 window.__sealedSandbox = MOBILE_HTML_PREVIEW_SEALED_SANDBOX

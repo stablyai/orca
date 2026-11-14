@@ -1,6 +1,6 @@
 import type { ComponentProps, ReactNode } from 'react'
 import { vi } from 'vitest'
-import type { MobileMarkdown as MobileMarkdownComponent } from '../../../../components/MobileMarkdown'
+import type { MobileMarkdown as MobileMarkdownComponent } from '../../../../components/markdown/MobileMarkdown'
 vi.mock('react-native', async () => {
   const React = await import('react')
   const Text = ({ children, ...props }: { children?: ReactNode }): unknown =>
@@ -64,7 +64,7 @@ vi.mock('lucide-react-native', () => ({
   Terminal: 'Terminal'
 }))
 
-vi.mock('../../../../components/MobileMarkdown', async () => {
+vi.mock('../../../../components/markdown/MobileMarkdown', async () => {
   const React = await import('react')
   return {
     MobileMarkdown: (props: ComponentProps<typeof MobileMarkdownComponent>) => {

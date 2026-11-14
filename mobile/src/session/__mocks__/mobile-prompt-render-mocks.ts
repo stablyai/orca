@@ -92,4 +92,4 @@ vi.mock('react-native-reanimated', async () => {
     useSharedValue: (value: unknown) => useRef({ value }).current
   }
 })
-vi.mock('../../components/MobileMarkdown', () => ({ MobileMarkdown: 'Markdown' }))
+vi.mock('../../components/markdown/MobileMarkdown', () => ({ MobileMarkdown: 'Markdown' }))

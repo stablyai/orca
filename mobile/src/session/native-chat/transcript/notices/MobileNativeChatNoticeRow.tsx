@@ -27,7 +27,7 @@ import {
   type MobileNativeChatNoticeView
 } from './mobile-native-chat-notice-context'
 import { MobileNativeChatMarkdown } from '../message-content/MobileNativeChatMarkdown'
-import { INLINE_TEXT_SELECTION } from '../../../../components/inline-text-selection'
+import { INLINE_TEXT_SELECTION } from '../../../../platform/text-selection/inline-text-selection'
 import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'

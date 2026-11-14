@@ -55,8 +55,10 @@ vi.mock('lucide-react-native', () => ({
   SquareTerminal: 'SquareTerminal',
   Wrench: 'Wrench'
 }))
-vi.mock('../../../../components/MobileMarkdown', () => ({ MobileMarkdown: 'MobileMarkdown' }))
-vi.mock('../../../../components/MobileSourceCopyButton', () => ({
+vi.mock('../../../../components/markdown/MobileMarkdown', () => ({
+  MobileMarkdown: 'MobileMarkdown'
+}))
+vi.mock('../../../../components/code-presentation/MobileSourceCopyButton', () => ({
   MobileSourceCopyButton: 'CopyButton'
 }))
 vi.mock('../message-actions/MobileNativeChatMessageActionsSheet', () => ({

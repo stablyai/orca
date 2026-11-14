@@ -8,8 +8,8 @@ import {
   pullRequestEventPullRequestUrl,
   pullRequestEventShortSha
 } from '../../../../../../src/shared/native-chat/native-chat-pull-request-event'
-import { MarkdownLinkHandlerContext } from '../../../../components/markdown-link-handler'
-import { INLINE_TEXT_SELECTION } from '../../../../components/inline-text-selection'
+import { MarkdownLinkHandlerContext } from '../../../../components/markdown/links/markdown-link-handler'
+import { INLINE_TEXT_SELECTION } from '../../../../platform/text-selection/inline-text-selection'
 import { colors, radii, spacing, typography } from '../../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../../theme/use-mobile-color-scheme'

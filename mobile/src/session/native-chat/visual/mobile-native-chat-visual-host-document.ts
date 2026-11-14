@@ -6,7 +6,7 @@ import {
   NATIVE_CHAT_VISUAL_PONG_TYPE,
   NATIVE_CHAT_VISUAL_SIZE_TYPE
 } from '../../../../../src/shared/native-chat/native-chat-visual-shell'
-import { inlineScriptLiteral } from '../../../components/inline-script-json'
+import { inlineScriptLiteral } from '../../../platform/web-document/inline-script-json'
 
 /** `inline` sizes the frame to the height the app applies; `fullscreen` fills the screen and scrolls. */
 export type MobileNativeChatVisualHostMode = 'inline' | 'fullscreen'

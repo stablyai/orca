@@ -174,7 +174,7 @@
       "reason": "The auth-failed banner offers Retry, Re-pair and Remove, and on the page only Re-pair works. /pair-scan sits outside the page's route root of app/h (config/scripts/mobile-web-app/mobile-web-app-route-manifest.mjs:6), so route-handoff.web.ts:207 hands the push to the shell, which opens the native scan screen and returns to the same page document on Back. Retry and Remove are inert here: forceReconnect is null (client-context.web.tsx:45, read through host-client-hooks.ts:88) and removal refuses (page-host-removal-refusal.ts). The banner is reachable on the page because the shell forwards the native client's state (mobile-web-shell/bridge-host.ts:301) and auth-failed is in the wire enum (bridge/bridge-envelope.ts:44). So this one renders Re-pair as native does and one line naming the app for reconnect and removal."
     },
     {
-      "file": "src/components/use-html-preview-link-grant.web.ts",
+      "file": "src/files/preview/documents/use-html-preview-link-grant.web.ts",
       "reason": "Natively the HTML preview is its own WebView and onShouldStartLoadWithRequest hands every request to openExternalLink, so there is nothing to negotiate and the native sibling answers yes. In the page a tap on a link inside the sealed frame becomes a top-frame navigation only the shell around the document can cancel and open, and a shell built before that event drops it in silence. This file asks the shell through the grants init carried (C8.1, ruling 37), and without the externalNavigation grant the preview renders the artifact with its links as text rather than offering a tap that does nothing."
     },
     {
@@ -234,7 +234,7 @@
       "reason": "Native settings screens can cover a still-mounted page. Observe same-session storage snapshots so preference readers refresh on return without remounting the terminal."
     },
     {
-      "file": "src/components/mobile-markdown-math-typesetter.web.ts",
+      "file": "src/components/markdown/math/mobile-markdown-math-typesetter.web.ts",
       "reason": "KaTeX draws a formula as HTML and CSS with its own fonts, which only a document can show. The native file leaves formulas as their source, so the native bundle never carries KaTeX; this one loads KaTeX with the first formula the page draws and adds its stylesheet."
     },
     {

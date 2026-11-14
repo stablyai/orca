@@ -11,16 +11,16 @@ import {
   type ListRenderItem
 } from 'react-native'
 import { Copy, MessageSquare, Send } from 'lucide-react-native'
-import { MobileSyntaxSegments } from '../../components/MobileSyntaxSegments'
+import { MobileSyntaxSegments } from '../../components/code-presentation/MobileSyntaxSegments'
 import {
   buildPlainMobileDiffSyntaxLines,
   highlightMobileCode,
   highlightMobileDiffLines,
   resolveMobileSyntaxLanguage
 } from './mobile-file-syntax'
-import { MobileHtmlPreview } from '../../components/MobileHtmlPreview'
-import { MobilePanZoomImage } from '../../components/MobilePanZoomImage'
-import { MobileSvgPreview } from '../../components/MobileSvgPreview'
+import { MobileHtmlPreview } from '../preview/documents/MobileHtmlPreview'
+import { MobilePanZoomImage } from '../media/presentation/MobilePanZoomImage'
+import { MobileSvgPreview } from '../preview/documents/MobileSvgPreview'
 import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
