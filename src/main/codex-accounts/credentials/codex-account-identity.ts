@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { isDefinitiveAbsence } from '../../../shared/definitive-filesystem-absence'
@@ -8,6 +9,12 @@ import {
   type CodexAuthIdentity as ResolvedCodexIdentity
 } from './codex-auth-identity'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../managed-homes/host-codex-managed-home-ownership'
+import {
+  credentialStoreMayBypassAuthJson,
+  readCodexCredentialStoreMode,
+  type CodexCredentialStoreMode
+} from '../codex-credential-store-mode'
+import { systemDefaultCodexLoginStatus } from '../codex-cli-login-status'
 
 const PROVIDERS_WITHOUT_OPENAI_AUTH = new Set([
   'amazon-bedrock',
@@ -111,11 +118,11 @@ export class CodexAccountIdentity {
     } catch (error) {
       const code = (error as NodeJS.ErrnoException | null)?.code
       if (code === 'ENOENT' || code === 'ENOTDIR') {
-        // Environment API keys can authenticate without an auth.json file.
-        return this.systemDefaultIdentity(
-          false,
-          usesProviderAuth || this.hasEnvApiKey() ? 'api-key' : 'none'
-        )
+        if (usesProviderAuth || this.hasEnvApiKey()) {
+          // Environment API keys and provider-backed auth work without an auth.json file.
+          return this.systemDefaultIdentity(false, 'api-key')
+        }
+        return this.resolveSystemDefaultFromConfiguredStore()
       }
       console.warn(
         '[codex-accounts] Failed to read system-default Codex identity',
@@ -134,25 +141,90 @@ export class CodexAccountIdentity {
     } catch {
       // Keep malformed credentials out of parser error logs.
       console.warn('[codex-accounts] System-default Codex auth is not valid JSON')
-      return this.systemDefaultIdentity(true, 'none')
+      return this.configuredStoreIdentity(true, 'none')
     }
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       console.warn('[codex-accounts] System-default Codex auth has an unexpected format')
-      return this.systemDefaultIdentity(true, 'none')
+      return this.configuredStoreIdentity(true, 'none')
     }
     const mode = resolveStoredAuthMode(parsed)
-    if (!mode || API_KEY_AUTH_MODES.has(mode)) {
-      return this.systemDefaultIdentity(true, mode ? 'api-key' : 'none')
+    if (mode && API_KEY_AUTH_MODES.has(mode)) {
+      return this.systemDefaultIdentity(true, 'api-key')
     }
 
-    const identity = hasChatGptTokenIdentity(mode) ? readCodexAuthIdentity(contents) : null
+    const identity = mode && hasChatGptTokenIdentity(mode) ? readCodexAuthIdentity(contents) : null
+    if (!identity) {
+      // The file cannot establish the active login; the configured store may still hold it.
+      return this.configuredStoreIdentity(true, 'none')
+    }
     return {
       hasAuth: true,
       authKind: 'oauth',
-      email: identity?.email ?? null,
-      providerAccountId: identity?.providerAccountId ?? null,
-      workspaceLabel: identity?.workspaceLabel ?? null
+      email: identity.email ?? null,
+      providerAccountId: identity.providerAccountId ?? null,
+      workspaceLabel: identity.workspaceLabel ?? null
     }
+  }
+
+  /** A keyring-backed login never writes auth.json, so ask Codex about its configured store. */
+  private resolveSystemDefaultFromConfiguredStore(): CodexSystemDefaultIdentity {
+    return this.configuredStoreIdentity(false, 'none')
+  }
+
+  /** Prefer a cached keyring login when auth.json is absent or cannot establish one. */
+  private configuredStoreIdentity(
+    hasAuthWithoutStore: boolean,
+    authKindWithoutStore: CodexSystemDefaultIdentity['authKind']
+  ): CodexSystemDefaultIdentity {
+    const fallback = this.systemDefaultIdentity(hasAuthWithoutStore, authKindWithoutStore)
+    if (!credentialStoreMayBypassAuthJson(this.lastKnownStoreMode)) {
+      return fallback
+    }
+    const loginStatus = systemDefaultCodexLoginStatus.read()
+    if (loginStatus?.authenticated) {
+      return this.systemDefaultIdentity(true, loginStatus.authKind)
+    }
+    // The CLI holds the only copy of the answer; refresh it for the next snapshot.
+    systemDefaultCodexLoginStatus.refreshIfStale()
+    return fallback
+  }
+
+  /** Awaited before `list` so Settings sees keyring-backed sign-ins without a second fetch. */
+  async refreshSystemDefaultLoginStatus(): Promise<void> {
+    // A usable auth.json answers without the CLI; only store-bypassing logins need a probe.
+    if (await this.hasUsableSystemAuth()) {
+      return
+    }
+    const storeMode = await readCodexCredentialStoreMode(this.systemCodexConfigPath())
+    this.lastKnownStoreMode = storeMode
+    if (!credentialStoreMayBypassAuthJson(storeMode)) {
+      return
+    }
+    await systemDefaultCodexLoginStatus.refresh()
+  }
+
+  /** A present file answers forward only when it names a login Orca can actually use. */
+  private async hasUsableSystemAuth(): Promise<boolean> {
+    try {
+      const contents = await readFile(join(homedir(), '.codex', 'auth.json'), 'utf-8')
+      const parsed: unknown = JSON.parse(contents)
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return false
+      }
+      const mode = resolveStoredAuthMode(parsed)
+      return (
+        (mode !== null && API_KEY_AUTH_MODES.has(mode)) || readCodexAuthIdentity(contents) !== null
+      )
+    } catch {
+      return false
+    }
+  }
+
+  /** Last store mode seen by {@link refreshSystemDefaultLoginStatus}; `file` never bypasses auth.json. */
+  private lastKnownStoreMode: CodexCredentialStoreMode = 'file'
+
+  private systemCodexConfigPath(): string {
+    return join(homedir(), '.codex', 'config.toml')
   }
 
   private systemDefaultIdentity(
