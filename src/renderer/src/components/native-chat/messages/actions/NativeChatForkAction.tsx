@@ -8,7 +8,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { useNativeChatOrcaStopView } from '../notices/native-chat-orca-stop-context'
 import type { NativeChatForkRowAction } from './use-native-chat-fork'
 
 const FORK_BUTTON_CLASS =
@@ -24,8 +23,6 @@ export function NativeChatForkAction({
   fork: NativeChatForkRowAction
 }) {
   const t = useTranslate()
-  // Fork stays offered at a usage limit; the window then suggests another agent.
-  const usageLimited = useNativeChatOrcaStopView().usageLimitTurnItemId !== null
   const label = t('components.native-chat.fork.action', 'Fork from this response')
   // Disabled while support is still being learned; an unoffered row keeps an empty slot of this size.
   const disabledReason =
@@ -67,7 +64,7 @@ export function NativeChatForkAction({
                 return
               }
               if (openWorktreeFork) {
-                openWorktreeFork(itemId, 'tab', undefined, usageLimited)
+                openWorktreeFork(itemId, 'tab')
               } else {
                 void fork.request(itemId)
               }
@@ -97,20 +94,16 @@ export function NativeChatForkAction({
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="start">
-        <DropdownMenuItem onSelect={() => openWorktreeFork(itemId, 'tab', undefined, usageLimited)}>
+        <DropdownMenuItem onSelect={() => openWorktreeFork(itemId, 'tab')}>
           <PanelTop className="size-3.5" />
           {t('components.native-chat.fork.menuTabWindow', 'In a new tab…')}
         </DropdownMenuItem>
-        <DropdownMenuItem
-          onSelect={() => openWorktreeFork(itemId, 'worktree', undefined, usageLimited)}
-        >
+        <DropdownMenuItem onSelect={() => openWorktreeFork(itemId, 'worktree')}>
           <GitBranchPlus className="size-3.5" />
           {t('components.native-chat.fork.menuWorktree', 'Into a new worktree…')}
         </DropdownMenuItem>
         {fork.subagentOffered === false ? null : (
-          <DropdownMenuItem
-            onSelect={() => openWorktreeFork(itemId, 'subagent', undefined, usageLimited)}
-          >
+          <DropdownMenuItem onSelect={() => openWorktreeFork(itemId, 'subagent')}>
             <Bot className="size-3.5" />
             {t('components.native-chat.fork.menuSubagent', 'As a background subagent…')}
           </DropdownMenuItem>

@@ -60,8 +60,7 @@ export type NativeChatForkRowAction = {
   openWorktreeFork?: (
     throughItemId: string,
     mode?: NativeChatForkWindowPreset,
-    draft?: string,
-    usageLimited?: boolean
+    draft?: string
   ) => void
   /** The host can fork into a new worktree, so menus offer it as a preset. */
   worktreeForkOffered?: boolean
@@ -80,8 +79,6 @@ export type NativeChatWorktreeForkDialog = {
   mode: NativeChatForkWindowPreset
   /** Your message, left unsent in the fork's composer. */
   draft?: string
-  /** The chat had stopped at its agent's usage limit, so the window suggests another agent. */
-  usageLimited?: boolean
   close: () => void
 }
 

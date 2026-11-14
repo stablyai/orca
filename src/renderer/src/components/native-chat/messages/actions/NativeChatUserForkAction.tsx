@@ -8,7 +8,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useTranslate } from '@/i18n/use-translate'
-import { useNativeChatOrcaStopView } from '../notices/native-chat-orca-stop-context'
 import { NativeChatForkContext } from './native-chat-fork-context'
 import { NativeChatForkIcon } from './NativeChatForkIcon'
 
@@ -24,8 +23,6 @@ export function NativeChatUserForkAction({
   text: string
 }): React.JSX.Element | null {
   const t = useTranslate()
-  // Fork stays offered at a usage limit; the window then suggests another agent.
-  const usageLimited = useNativeChatOrcaStopView().usageLimitTurnItemId !== null
   const fork = useContext(NativeChatForkContext)
   const forkPointBefore = fork?.forkPointBefore
   if (!fork || !forkPointBefore || !text.trim()) {
@@ -62,7 +59,7 @@ export function NativeChatUserForkAction({
   const inTab = (): void =>
     start((through) =>
       openWorktreeFork
-        ? openWorktreeFork(through, 'tab', text, usageLimited)
+        ? openWorktreeFork(through, 'tab', text)
         : void fork.request(through, undefined, undefined, text)
     )
   const menu = Boolean(openWorktreeFork && fork.worktreeForkOffered)
@@ -103,9 +100,7 @@ export function NativeChatUserForkAction({
           {t('components.native-chat.fork.fromMessageTabWindow', 'Edit in a new tab…')}
         </DropdownMenuItem>
         <DropdownMenuItem
-          onSelect={() =>
-            start((through) => openWorktreeFork(through, 'worktree', text, usageLimited))
-          }
+          onSelect={() => start((through) => openWorktreeFork(through, 'worktree', text))}
         >
           {t('components.native-chat.fork.fromMessageWorktree', 'Edit in a new worktree…')}
         </DropdownMenuItem>

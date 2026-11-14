@@ -11,23 +11,12 @@ export function useNativeChatWorktreeForkDialog(
     throughItemId: string
     mode: NativeChatForkWindowPreset
     draft?: string
-    usageLimited?: boolean
   } | null>(null)
   const openWorktreeFork = useCallback(
-    (
-      throughItemId: string,
-      mode: NativeChatForkWindowPreset = 'worktree',
-      draft?: string,
-      usageLimited?: boolean
-    ) => {
+    (throughItemId: string, mode: NativeChatForkWindowPreset = 'worktree', draft?: string) => {
       // A fork already opening owns the chat's fork; a second dialog would start another.
       if (!inFlight.current) {
-        setWorktreeFork({
-          throughItemId,
-          mode,
-          ...(draft ? { draft } : {}),
-          ...(usageLimited ? { usageLimited } : {})
-        })
+        setWorktreeFork({ throughItemId, mode, ...(draft ? { draft } : {}) })
       }
     },
     [inFlight]

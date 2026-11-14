@@ -15,6 +15,7 @@ import { useAppStore } from '@/store'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import { NativeChatForkWindowHost } from './fork-window/NativeChatForkWindow'
+import { useNativeChatOrcaStopView } from '../notices/native-chat-orca-stop-context'
 import { nativeChatWorktreeForkSourceBranch } from './native-chat-worktree-fork'
 import { useNativeChatWorktreeForkRequest } from './native-chat-worktree-fork-requests'
 
@@ -54,6 +55,8 @@ export function NativeChatRowActionsProvider({
 }): React.JSX.Element {
   const worktreeId = useNativeChatTabOwnerWorktreeId(pane.tabId)
   const { agent, target } = pane
+  // Every Fork window, however it opens, suggests another agent at a usage limit.
+  const usageLimited = useNativeChatOrcaStopView().usageLimitTurnItemId !== null
   useNativeChatWorktreeForkRequest(pane.tabId, forks.fork?.openWorktreeForkLatest)
   // A fork and its source share a host; a fork into a new worktree has its source open elsewhere.
   const openSource = useMemo(
@@ -91,7 +94,7 @@ export function NativeChatRowActionsProvider({
                     worktreeId,
                     target,
                     label: chatTabLabel(pane.tabId, worktreeId) ?? agent,
-                    usageLimited: forks.fork.worktreeForkDialog.usageLimited === true,
+                    usageLimited,
                     subagentOffered: forks.fork.subagentOffered !== false,
                     newWorktreeOffered:
                       forks.fork.worktreeForkOffered === true &&

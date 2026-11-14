@@ -47,7 +47,8 @@ export function NativeChatTerminalForkProvider({
               worktreeId,
               target: target ?? { kind: 'local' },
               label: agent,
-              usageLimited: fork.worktreeForkDialog.usageLimited === true,
+              // A terminal chat shows no usage-limit stop, so the window keeps its agent.
+              usageLimited: false,
               subagentOffered: false,
               newWorktreeOffered: fork.worktreeForkOffered === true,
               destinationOffered: fork.worktreeForkOffered === true,
