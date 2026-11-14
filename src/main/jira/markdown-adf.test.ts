@@ -1,5 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import { emailCharacterReader } from './adf-bare-email'
+import { httpCandidateNormalizer, httpCharacterReader } from './adf-http-link'
 import { markdownToAdf } from './markdown-adf'
 import { adfToMarkdownText } from './adf-markdown'
 
@@ -83,25 +84,9 @@ it('uses documented link and textual task fallbacks', async () => {
 })
 
 it('uses the renderer CJK emphasis and prose URL boundaries', async () => {
-  expect(await markdownToAdf('**「重要」**です https://example.com。次')).toEqual({
-    type: 'doc',
-    version: 1,
-    content: [
-      {
-        type: 'paragraph',
-        content: [
-          { type: 'text', text: '「重要」', marks: [{ type: 'strong' }] },
-          { type: 'text', text: 'です ' },
-          {
-            type: 'text',
-            text: 'https://example.com',
-            marks: [{ type: 'link', attrs: { href: 'https://example.com' } }]
-          },
-          { type: 'text', text: '。次' }
-        ]
-      }
-    ]
-  })
+  expect(adfToMarkdownText(await markdownToAdf('**「重要」**です https://example.com。次'))).toBe(
+    '**「重要」**です <https://example.com>。次'
+  )
 })
 
 it('keeps code whitespace, language and embedded fences including in lists', async () => {
@@ -126,7 +111,7 @@ it('keeps code whitespace, language and embedded fences including in lists', asy
       }
     ]
   }
-  expect(adfToMarkdownText(doc)).toBe('- example\n\n  ````js\n  a  \n\n\n  b\n  ```\n\n  ````')
+  expect(adfToMarkdownText(doc)).toBe('- example\n  ````js\n  a  \n\n\n  b\n  ```\n\n  ````')
 })
 
 it('escapes active literal syntax while keeping identifiers and bare links readable', () => {
@@ -287,6 +272,97 @@ it('bounds real email character reads through document read-back at N and 10N', 
         )
       } finally {
         probe.mockRestore()
+      }
+    }
+  }
+})
+
+it('preserves prose-separated URLs, IPv6 authorities and surrounding literal delimiters', () => {
+  const values = [
+    ['https://a.com。https://b.com', '<https://a.com>。<https://b.com>'],
+    [
+      'http://[::1]。next http://user@[::1]:8080/path',
+      '<http://[::1]>。next <http://user@[::1]:8080/path>'
+    ],
+    [
+      'https://example.com/Foo_(bar)) www.example.com',
+      '<https://example.com/Foo_(bar)>) [www.example.com](http://www.example.com)'
+    ],
+    [
+      'https://example.com/me@example.com me@example.com',
+      '<https://example.com/me@example.com> <me@example.com>'
+    ],
+    ['**see https://example.com/x**', '\\*\\*see <https://example.com/x>\\*\\*']
+  ]
+  for (const [value, expected] of values) {
+    expect(
+      adfToMarkdownText({
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [{ type: 'text', text: value }] }]
+      })
+    ).toBe(expected)
+  }
+})
+
+it('bounds actual HTTP normalization reads and admission through document read-back at N and 10N', () => {
+  for (const length of [800, 8000]) {
+    const prefix = 'https://example.com/'
+    const interior = `${prefix}${')'.repeat(length)}x`
+    const trailing = `${prefix}${')'.repeat(length)}`
+    const count = length / 8
+    const pieces = 'https://a.com。'.repeat(count)
+    const fixtures = [
+      {
+        value: interior,
+        expected: `<https://example.com/${')'.repeat(length)}x>`,
+        ranges: [[0, interior.length]]
+      },
+      {
+        value: trailing,
+        expected: `<https://example.com/>${')'.repeat(length)}`,
+        ranges: [[0, trailing.length]]
+      },
+      {
+        value: pieces,
+        expected: '<https://a.com>。'.repeat(count),
+        ranges: Array.from({ length: count }, (_, index) => [14 * index, 14 * index + 13])
+      }
+    ]
+    for (const { value, expected, ranges } of fixtures) {
+      const visited = new Set<number>()
+      let reads = 0
+      const probe = vi.spyOn(httpCharacterReader, 'read').mockImplementation((input, index) => {
+        reads++
+        visited.add(index)
+        return input[index]
+      })
+      const admissions = vi.spyOn(httpCandidateNormalizer, 'normalize')
+      try {
+        expect(
+          adfToMarkdownText({
+            type: 'doc',
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: value }] }]
+          })
+        ).toBe(expected)
+        for (const [start, end] of ranges) {
+          expect(
+            Array.from({ length: end - start }, (_, index) => visited.has(start + index)).every(
+              Boolean
+            ),
+            'HTTP candidate coverage'
+          ).toBe(true)
+        }
+        const actual = admissions.mock.calls.map(([, start, end]) => [start, end])
+        expect(actual).toEqual(ranges)
+        const bytes = actual.reduce((total, [start, end]) => total + end - start, 0)
+        expect(bytes).toBeLessThanOrEqual(value.length)
+        expect(actual.every(([start], index) => index === 0 || start >= actual[index - 1][1])).toBe(
+          true
+        )
+        expect(reads).toBeLessThanOrEqual(3 * bytes + 2 * actual.length)
+      } finally {
+        probe.mockRestore()
+        admissions.mockRestore()
       }
     }
   }

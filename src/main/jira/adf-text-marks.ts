@@ -1,5 +1,6 @@
 import type { Literal, PhrasingContent } from 'mdast'
-import { findProseUrlEnd } from '../../shared/prose-url-boundary'
+import { splitAtProseUrlTerminators } from '../../shared/prose-url-boundary'
+import { httpCandidateNormalizer, type HttpLinkSpan } from './adf-http-link'
 import { bareEmailSpans } from './adf-bare-email'
 import { escapeMarkdownTextLinkDestination } from './adf-media-destination'
 import { adfChildren, adfRecord, adfString } from './adf-nodes'
@@ -19,40 +20,20 @@ type Wrapper = Extract<PhrasingContent, { type: 'strong' | 'emphasis' | 'delete'
 type MediaRenderer = (node: Record<string, unknown>) => string
 const BARE_HTTP = /https?:\/\/[^\s<>]+|www\.[^\s<>]+/giu
 
-type LinkSpan = { start: number; end: number; url: string }
-
-function httpSpans(value: string): LinkSpan[] {
-  const spans: LinkSpan[] = []
-  for (const match of value.matchAll(BARE_HTTP)) {
-    if (match.index > 0 && !/[\s\p{P}]/u.test(value[match.index - 1])) {
-      continue
-    }
-    const proseEnd = findProseUrlEnd(match[0])
-    let label = proseEnd < 0 ? match[0] : match[0].slice(0, proseEnd)
-    const trailing = /[!"&'),.:;<>?\]}]+$/.exec(label)
-    if (trailing) {
-      const base = label.slice(0, trailing.index)
-      let balance = 0
-      for (const char of base) {
-        balance += char === '(' ? 1 : char === ')' ? -1 : 0
-      }
-      let end = trailing.index
-      for (let i = 0; i < trailing[0].length && balance > 0; i++) {
-        if (trailing[0][i] === ')') {
-          balance--
-          end = trailing.index + i + 1
+function httpSpans(value: string): HttpLinkSpan[] {
+  const spans: HttpLinkSpan[] = []
+  let offset = 0
+  for (const [pieceIndex, piece] of splitAtProseUrlTerminators(value).entries()) {
+    if (pieceIndex % 2 === 0) {
+      for (const match of piece.matchAll(BARE_HTTP)) {
+        const start = offset + match.index
+        const span = httpCandidateNormalizer.normalize(value, start, start + match[0].length)
+        if (span) {
+          spans.push(span)
         }
       }
-      label = label.slice(0, end)
     }
-    if (!label) {
-      continue
-    }
-    spans.push({
-      start: match.index,
-      end: match.index + label.length,
-      url: /^www\./i.test(label) ? `http://${label}` : label
-    })
+    offset += piece.length
   }
   return spans
 }
