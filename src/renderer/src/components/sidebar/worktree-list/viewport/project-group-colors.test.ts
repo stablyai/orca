@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { GroupHeaderRow } from '../../../../../../shared/sidebar-list/row-types'
 import type { RenderRow } from '../listing/render-row'
 import { repo, worktree } from '../grouping/worktree-list-groups-test-fixtures'
-import { getProjectGroupColors } from './project-group-colors'
+import { getProjectGroupColors, getProjectGroupThreads } from './project-group-colors'
 
 function group(key: string, color: string | null, depth = 0): GroupHeaderRow {
   return {
@@ -50,6 +50,69 @@ const item: RenderRow = {
 }
 
 describe('getProjectGroupColors', () => {
+  it('connects groups, projects and workspace families, ending each rail at its last child', () => {
+    const rows: RenderRow[] = [
+      group('work', '#8b5cf6'),
+      project(1),
+      item,
+      { ...item, depth: 1, rowKey: 'child' },
+      { ...item, rowKey: 'sibling' },
+      group('nested', null, 1),
+      project(2),
+      item,
+      group('personal', '#14b8a6'),
+      project(1)
+    ]
+    const frames = [null, null, null, 2, null, null, null, null, null, null].map((parent) => ({
+      parent
+    }))
+    const threads = getProjectGroupThreads(rows, 'repo', frames)
+    expect(threads.parents).toEqual([null, 0, 1, 2, 1, 0, 5, 6, null, 8])
+    expect(threads.lastChildren).toEqual([5, 4, 3, null, null, 6, 7, null, 9, null])
+  })
+
+  it('leaves pinned lanes, other grouping modes and host boundaries disconnected', () => {
+    const rows: RenderRow[] = [
+      group('work', '#8b5cf6'),
+      project(1),
+      item,
+      { type: 'header', key: '__pinned__', count: 1, icon: { kind: 'pinned' } },
+      item,
+      { ...item, depth: 1, rowKey: 'pinned-child' },
+      {
+        type: 'host-header',
+        key: 'host:remote',
+        hostId: 'runtime:remote',
+        kind: 'runtime',
+        label: 'Remote',
+        detail: '',
+        health: 'available',
+        collapsed: false,
+        count: 1
+      },
+      project(0),
+      item
+    ]
+    const frames = [null, null, null, null, null, 4, null, null, null].map((parent) => ({
+      parent
+    }))
+    expect(getProjectGroupThreads(rows, 'repo', frames).parents).toEqual([
+      null,
+      0,
+      1,
+      null,
+      null,
+      null,
+      null,
+      null,
+      7
+    ])
+    expect(getProjectGroupThreads(rows, 'workspace-status', frames)).toEqual({
+      parents: [],
+      lastChildren: []
+    })
+  })
+
   it('tints the whole group, including folder workspaces and project notices', () => {
     const header = group('work', '#8b5cf6')
     const rows: RenderRow[] = [
@@ -101,6 +164,13 @@ describe('getProjectGroupColors', () => {
       item
     ]
     const colors = getProjectGroupColors(rows, 'repo')
+    expect(
+      getProjectGroupThreads(
+        rows,
+        'repo',
+        rows.map(() => ({ parent: null }))
+      ).parents
+    ).toEqual([null, 0, 0, 2, 2, 2, null, 6])
     expect(colors.map((entry) => entry?.color ?? null)).toEqual([
       '#8b5cf6',
       '#8b5cf6',

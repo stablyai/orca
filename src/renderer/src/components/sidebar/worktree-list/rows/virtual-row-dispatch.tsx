@@ -32,6 +32,11 @@ import { renderWorktreeItemRow, type WorktreeItemRowContext } from './item-row'
 import { renderWorktreeSectionHeaderRow } from './SectionHeader'
 import type { SectionHeaderRowContext } from './section-header-row-context'
 import type { WorktreeRowDragState } from '../drag/row-state'
+import {
+  getWorktreeCardSurfaceInset,
+  PROJECT_GROUP_HEADER_INDENT,
+  WORKTREE_CARD_SURFACE_MARGIN
+} from './indentation'
 import type { Translate } from '@/i18n/use-translate'
 import {
   getProjectGroupBackgroundStyle,
@@ -122,6 +127,19 @@ function folderLineageToggle(
   return row.lineageGroupKey ? ctx.item.getLineageToggleHandler(row.lineageGroupKey) : undefined
 }
 
+function getProjectNoticeInset(ctx: WorktreeVirtualRowContext, index: number): number | undefined {
+  const parentIndex = ctx.projection.projectGroupThreads.parents[index]
+  const parent = parentIndex == null ? undefined : ctx.renderRows[parentIndex]
+  return parent?.type === 'header'
+    ? getWorktreeCardSurfaceInset({
+        isGrouped: true,
+        groupDepth: parent.projectGroupDepth ?? 0
+      }) +
+        PROJECT_GROUP_HEADER_INDENT +
+        WORKTREE_CARD_SURFACE_MARGIN
+    : undefined
+}
+
 // Header frames retain sticky positioning; each workspace owns its measured slot.
 export function renderWorktreeVirtualRow(
   ctx: WorktreeVirtualRowContext,
@@ -157,6 +175,7 @@ export function renderWorktreeVirtualRow(
 
   if (row.type === 'imported-worktrees-card') {
     return renderImportedWorktreesVirtualRow({
+      leftInset: getProjectNoticeInset(ctx, vItem.index),
       row,
       vItem,
       measureVirtualRowElement: ctx.measureVirtualRowElement,
@@ -168,6 +187,7 @@ export function renderWorktreeVirtualRow(
 
   if (row.type === 'new-external-worktrees-inbox') {
     return renderNewExternalWorktreesInboxVirtualRow({
+      leftInset: getProjectNoticeInset(ctx, vItem.index),
       row,
       vItem,
       measureVirtualRowElement: ctx.measureVirtualRowElement,
@@ -179,6 +199,7 @@ export function renderWorktreeVirtualRow(
 
   if (row.type === 'pending-creation') {
     return renderPendingCreationVirtualRow({
+      leftInset: getProjectNoticeInset(ctx, vItem.index),
       row,
       vItem,
       measureVirtualRowElement: ctx.measureVirtualRowElement
