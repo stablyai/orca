@@ -41,7 +41,7 @@ export function transitionSessionSearchInventory(
   const get = (scope: string, key: string) => authority.get(scope, key)
   const remove = (scope: string, key: string) => catalog.execute({ kind: 'delete', scope, key })
   if (command.kind === 'observe-ack') {
-    for (const receipt of command.receipts) {
+    for (const receipt of authority.prefetched(command.receipts, 'ack')) {
       const row = authority.delivery(receipt.path)
       if (row?.revision === receipt.revision) {
         authority.putDelivery(receipt.path)
@@ -71,7 +71,10 @@ export function transitionSessionSearchInventory(
     failuresDelta += Number(!!next) - Number(!!previous)
     runnableDelta +=
       Number(!!next && next.failures < 3) - Number(!!previous && previous.failures < 3)
-    recordSessionSearchRetry(catalog, failures, path, next)
+    if (previous || next || get(`${failures}:eligible`, path)) {
+      recordSessionSearchRetry(catalog, failures, path, next)
+      authority.forget(`${failures}:eligible`, path)
+    }
     authority.forget(failures, path)
     if (next) {
       refusals.push({ path, revision: get(failures, path)!.tie! })
@@ -80,7 +83,10 @@ export function transitionSessionSearchInventory(
   if (command.kind === 'forget-files') {
     const removedFiles: string[] = []
     const cutoff = command.cutoff ?? catalog.nextRevision()
-    for (const path of command.paths) {
+    for (const { path } of authority.prefetched(
+      command.paths.map((path) => ({ path })),
+      'forget'
+    )) {
       if (authority.newer(path, cutoff)) {
         continue
       }
@@ -106,7 +112,7 @@ export function transitionSessionSearchInventory(
     authority.flush()
     return { filesDelta, failuresDelta, runnableDelta, removedFiles }
   }
-  for (const outcome of command.outcomes) {
+  for (const outcome of authority.prefetched(command.outcomes)) {
     try {
       authority.epoch(outcome.authority)
       const accepted = authority.file(outcome.path)
@@ -123,6 +129,7 @@ export function transitionSessionSearchInventory(
           if (debt && debt.failures < SESSION_INPUT_FAILURES_BEFORE_HELD_OUT) {
             recordSessionSearchRetry(catalog, failures, outcome.path, debt)
             authority.forget(failures, outcome.path)
+            authority.forget(`${failures}:eligible`, outcome.path)
           }
         }
         continue

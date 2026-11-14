@@ -54,6 +54,34 @@ export class SessionSearchAuthorityPage {
   private putAuthority(path: string, value?: Authority): void {
     this.physical.putAuthority(path, value && { ...value, ready: value.ready ?? 1 })
   }
+  *prefetched<T extends { path: string }>(
+    inputs: readonly T[],
+    phase: 'prepare' | 'apply' | 'ack' | 'forget' = 'apply'
+  ): Generator<T> {
+    for (let offset = 0; offset < inputs.length; offset += 8) {
+      const page = inputs.slice(offset, offset + 8)
+      const ancestry = function* (owner: SessionSearchAuthorityPage) {
+        for (const input of page) {
+          yield* owner.ancestry(input.path)
+        }
+      }
+      const paths = page.map((input) => input.path)
+      if (phase !== 'ack') {
+        this.physical.prefetch(phase === 'apply' ? ancestry(this) : paths)
+      }
+      this.physical.prefetchActivity(phase === 'ack' ? paths : ancestry(this))
+      const suffixes =
+        phase === 'prepare'
+          ? ['dirty', 'file-refusals']
+          : phase === 'ack'
+            ? ['dirty', 'file-refusals', 'refusals']
+            : ['dirty', 'file-refusals', 'file-refusals:eligible', 'refusals']
+      for (const suffix of suffixes) {
+        this.catalog.inventory.prefetchFallback(`${this.scope}:${suffix}`, paths)
+      }
+      yield* page
+    }
+  }
   *ancestry(path: string): Generator<string> {
     const base = this.physical.root
     let key = path

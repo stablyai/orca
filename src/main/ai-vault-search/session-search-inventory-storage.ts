@@ -87,18 +87,6 @@ export class SessionSearchInventoryStorage extends SessionSearchInventoryMutatio
     return row ? { source: Number(row.id), member } : undefined
   }
 
-  fallbackValue(scope: string, path: string, read: () => SessionSearchValueRow | undefined) {
-    return this.page ? this.page.fallbackValue(scope, path, read) : read()
-  }
-  forgetFallback(scope: string, path: string): void {
-    this.page?.forgetFallback(scope, path)
-  }
-  peekFallback(scope: string, path: string): SessionSearchValueRow | undefined {
-    return this.page?.peekFallback(scope, path)
-  }
-  peekPhysical(table: SessionSearchPhysicalTable, source: number, path: string) {
-    return this.page?.peek(table, source, path)
-  }
   observation(scope: string): SessionSearchInventoryObservation | undefined {
     const row = this.page
       ? this.page.source(scope)

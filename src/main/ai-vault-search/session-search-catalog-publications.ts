@@ -145,6 +145,23 @@ export class SessionSearchCatalogPublications {
       this.db.prepare('DELETE FROM temp.search_publications WHERE group_key = ?').run(group)
     }
   }
+  selectedSingles(groups: string[]): void {
+    const payload = JSON.stringify(groups)
+    const previous = this.db
+      .prepare(`SELECT dirty,failures FROM temp.search_publications
+      WHERE group_key IN (SELECT value FROM json_each(?))`)
+      .all(payload)
+    for (const row of previous) {
+      this.pending -= Number(row.dirty)
+      this.retryCount -= Number(Number(row.failures) > 0 && Number(row.failures) < 3)
+    }
+    if (previous.length) {
+      this.db
+        .prepare(`DELETE FROM temp.search_publications
+      WHERE group_key IN (SELECT value FROM json_each(?))`)
+        .run(payload)
+    }
+  }
   rowChanged(path: string): void {
     this.db
       .prepare(`UPDATE temp.search_publications SET dirty=1,phase='coverage',cursor=''

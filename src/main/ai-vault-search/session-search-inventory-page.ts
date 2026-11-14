@@ -1,6 +1,14 @@
+import {
+  flushSessionSearchPhysical,
+  flushSessionSearchEpochs
+} from './session-search-inventory-flush'
 import { dirname } from 'node:path'
 import type { SessionSearchValueRow } from './session-search-value-row'
 import type SyncDatabase from '../sqlite/sync-database'
+import {
+  projectSessionSearchPhysical,
+  projectSessionSearchFallback
+} from './session-search-inventory-prefetch'
 import {
   changeSessionSearchInventoryFloor,
   type SessionSearchEpochIdentity,
@@ -18,11 +26,17 @@ const physicalMembers = {
 } satisfies Record<string, SessionSearchInventoryMember[]>
 export type SessionSearchPhysicalTable = keyof typeof physicalMembers
 export type SessionSearchPhysicalFields = Record<string, SyncDatabase.BindValue>
-type Mutation = {
+export type SessionSearchPhysicalMutation = {
   source: number
   path: string
   parent: string
   fields: SessionSearchPhysicalFields
+}
+export type SessionSearchPhysicalEpoch = {
+  source: number
+  revision: number
+  path?: string
+  cutoff?: number
 }
 const projections = Object.fromEntries(
   Object.entries(physicalMembers).map(([table, members]) => [
@@ -41,15 +55,17 @@ const projections = Object.fromEntries(
 export class SessionSearchInventoryPage {
   private readonly sources = new Map<string, Record<string, unknown> | undefined>()
   private readonly physical = new Map<string, Record<string, unknown>>()
-  private readonly pending = new Map<string, { table: SessionSearchPhysicalTable } & Mutation>()
-  private readonly epochs = new Map<
+  private readonly pending = new Map<
     string,
-    { source: number; revision: number; path?: string; cutoff?: number }
+    { table: SessionSearchPhysicalTable } & SessionSearchPhysicalMutation
   >()
+  private readonly epochs = new Map<string, SessionSearchPhysicalEpoch>()
   private readonly sizes = new Map<string, number>()
   private readonly fallback = new Map<string, SessionSearchValueRow | undefined>()
   private readonly floors = new Map<number, SessionSearchInventoryFloor>()
   private bytes = 1024
+  private queryBytes = 0
+  private queryRows = 0
   constructor(private readonly db: SyncDatabase) {}
 
   private retain(key: string, value: unknown): boolean {
@@ -60,7 +76,8 @@ export class SessionSearchInventoryPage {
     const previous = this.sizes.get(key) ?? 0
     if (
       this.sizes.size &&
-      (this.sizes.size + Number(!previous) > 256 || this.bytes - previous + bytes > 256 * 1024)
+      (this.sizes.size + this.queryRows + Number(!previous) > 256 ||
+        this.bytes - previous + bytes > 256 * 1024)
     ) {
       this.flush()
       this.clear()
@@ -142,6 +159,52 @@ export class SessionSearchInventoryPage {
     }
     return row
   }
+  prefetch(table: SessionSearchPhysicalTable, source: number, paths: Iterable<string>): void {
+    const key = (path: string) => `${table}:${source}:${path}`
+    for (const { path, row } of projectSessionSearchPhysical(
+      this.db,
+      table,
+      projections[table],
+      source,
+      paths,
+      (path) => this.physical.has(key(path)),
+      (payload, rows) => this.reserveQuery(payload, rows)
+    )) {
+      const pending = this.pending.get(key(path))
+      const value = { ...row, path, parent: row.parent ?? dirname(path), ...pending?.fields }
+      this.retain(`fact:${key(path)}`, value)
+      this.physical.set(key(path), value)
+    }
+    this.releaseQuery()
+  }
+  prefetchFallback(scope: string, paths: Iterable<string>): void {
+    const key = (path: string) => `fallback:${scope}:${path}`
+    for (const { path, value } of projectSessionSearchFallback(
+      this.db,
+      scope,
+      paths,
+      (path) => this.fallback.has(key(path)),
+      (payload, rows) => this.reserveQuery(payload, rows)
+    )) {
+      this.retain(key(path), value)
+      this.fallback.set(key(path), value)
+    }
+    this.releaseQuery()
+  }
+  private releaseQuery(): void {
+    this.bytes -= this.queryBytes
+    this.queryBytes = this.queryRows = 0
+  }
+  private reserveQuery(payload: string, rows: number): void {
+    this.releaseQuery()
+    this.queryBytes = payload.length * 4 + rows * 128
+    this.queryRows = rows
+    this.bytes += this.queryBytes
+    if (this.sizes.size + rows > 256 || this.bytes > 256 * 1024) {
+      this.flush()
+      this.clear()
+    }
+  }
   peek(table: SessionSearchPhysicalTable, source: number, path: string) {
     const key = `${table}:${source}:${path}`
     const row = this.physical.get(key)
@@ -213,44 +276,7 @@ export class SessionSearchInventoryPage {
     this.epochs.set(key, mutation)
   }
   flush(): void {
-    // Group only final independent column patches; masks preserve untouched versus NULL.
-    while (this.pending.size) {
-      const first = this.pending.values().next().value!
-      const names = Object.keys(first.fields).sort()
-      const signature = names.join(',')
-      const rows: Mutation[] = []
-      for (const [key, row] of this.pending) {
-        if (row.table === first.table && Object.keys(row.fields).sort().join(',') === signature) {
-          rows.push({ source: row.source, path: row.path, parent: row.parent, fields: row.fields })
-          this.pending.delete(key)
-        }
-      }
-      const payload = JSON.stringify(
-        rows.map(({ source, path, parent, fields }) => [
-          source,
-          path,
-          parent,
-          ...names.map((name) => fields[name])
-        ])
-      )
-      this.db
-        .prepare(`INSERT INTO temp.${first.table} (source,path,parent,${signature})
-        SELECT json_extract(value,'$[0]'),json_extract(value,'$[1]'),json_extract(value,'$[2]'),${names.map((_, index) => `json_extract(value,'$[${index + 3}]')`).join(',')}
-        FROM json_each(?) WHERE 1 ON CONFLICT(source,path) DO UPDATE SET ${names.map((name) => `${name}=excluded.${name}`).join(',')}`)
-        .run(payload)
-      if (
-        rows.some((row) => Object.values(row.fields).some((value) => value === null || value === 0))
-      ) {
-        const empty =
-          first.table === 'search_inventory_entries'
-            ? 'file_revision IS NULL AND directory=0'
-            : 'authority_self IS NULL AND observation_authority IS NULL AND delivery_revision IS NULL'
-        this.db
-          .prepare(`DELETE FROM temp.${first.table} WHERE (source,path) IN
-          (SELECT json_extract(value,'$[0]'),json_extract(value,'$[1]') FROM json_each(?)) AND ${empty}`)
-          .run(payload)
-      }
-    }
+    flushSessionSearchPhysical(this.db, this.pending)
     this.flushEpochs()
     for (const [key, size] of this.sizes) {
       if (key.startsWith('write:')) {
@@ -260,33 +286,7 @@ export class SessionSearchInventoryPage {
     }
   }
   flushEpochs(): void {
-    if (this.epochs.size) {
-      const inserted: (string | number | undefined)[][] = [],
-        removed: number[][] = []
-      for (const row of this.epochs.values()) {
-        if (row.path === undefined) {
-          removed.push([row.source, row.revision])
-        } else {
-          inserted.push([row.source, row.revision, row.path, row.cutoff])
-        }
-      }
-      if (removed.length) {
-        this.db
-          .prepare(`DELETE FROM temp.search_inventory_epochs
-        WHERE kind='observation-epochs' AND (source,revision) IN
-        (SELECT json_extract(value,'$[0]'),json_extract(value,'$[1]') FROM json_each(?))`)
-          .run(JSON.stringify(removed))
-      }
-      if (inserted.length) {
-        this.db
-          .prepare(`INSERT INTO temp.search_inventory_epochs(source,kind,revision,path,cutoff,sealed)
-        SELECT json_extract(value,'$[0]'),'observation-epochs',json_extract(value,'$[1]'),json_extract(value,'$[2]'),json_extract(value,'$[3]'),0
-        FROM json_each(?) WHERE 1 ON CONFLICT(source,kind,revision) WHERE kind='observation-epochs'
-        DO UPDATE SET path=excluded.path,cutoff=excluded.cutoff,sealed=0`)
-          .run(JSON.stringify(inserted))
-      }
-      this.epochs.clear()
-    }
+    flushSessionSearchEpochs(this.db, this.epochs)
     for (const [key, size] of this.sizes) {
       if (key.startsWith('epoch:')) {
         this.sizes.delete(key)
@@ -300,6 +300,6 @@ export class SessionSearchInventoryPage {
     this.floors.clear()
     this.fallback.clear()
     this.sizes.clear()
-    this.bytes = 1024
+    this.bytes = 1024 + this.queryBytes
   }
 }

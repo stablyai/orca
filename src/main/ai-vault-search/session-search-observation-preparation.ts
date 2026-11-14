@@ -34,7 +34,7 @@ export function prepareSessionSearchObservations(
       scopeCounts: scopes.map((scope) => [scope, Number.MAX_VALUE, Number.MAX_VALUE])
     }).length * 2
   const prepared = boundedSessionSearchPage(
-    command.inputs,
+    authority.prefetched(command.inputs, 'prepare'),
     (input) => {
       const accepted = authority.file(input.path)
       if (input.requireMembership && !accepted) {
@@ -103,6 +103,7 @@ export function prepareSessionSearchObservations(
             input.refusalRevision
           )
           authority.forget(failures, input.path)
+          authority.forget(`${failures}:eligible`, input.path)
         }
         if (!input.attempt && input.dirtyRevision !== undefined) {
           acknowledgeSessionSearchDirty(catalog, command.scope, input.path, input.dirtyRevision)

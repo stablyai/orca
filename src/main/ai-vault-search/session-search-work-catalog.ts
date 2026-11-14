@@ -12,7 +12,12 @@ import type { SessionSearchStore } from './storage/session-search-store'
 import { recordSessionSearchPrimaryFailure } from './session-search-primary-retries'
 import type { SessionSearchWorkReceipt } from './session-search-work-queue'
 import {
-  projectSessionSearchWork,
+  sessionSearchProjectedCursor,
+  type SessionSearchWorkAdmission
+} from './session-search-work-admission'
+import {
+  decodeSessionSearchCurrentWork,
+  readSessionSearchCurrentWork,
   readSessionSearchWorkPage
 } from './session-search-work-projection'
 
@@ -61,47 +66,44 @@ export class SessionSearchWorkCatalog {
   private reference(row: Record<string, unknown>): SessionSearchFactReference {
     return { id: Number(row.fact_id), revision: Number(row.fact_revision) }
   }
-  private load(row: Record<string, unknown>): SessionSearchWork {
-    const candidate = sessionSearchCandidateFacts(this.db).get(this.reference(row))
-    const root = this.db
-      .prepare(
-        'SELECT root FROM temp.search_candidates WHERE path=? AND agent=? AND selected=1 ORDER BY key LIMIT 1'
-      )
-      .get(candidate.file.path, candidate.agent)?.root
-    return projectSessionSearchWork(row, candidate, root)
-  }
   enqueue(
     candidate: SessionFileCandidate,
     store: SessionSearchStore,
     force = false,
     recent = true,
-    metadata = false
+    metadata = false,
+    accepted?: { projection: SessionSearchWorkAdmission; reference?: SessionSearchFactReference }
   ): void {
     const path = candidate.file.path
-    if (store.fileRow(path)?.state === 'failed') {
+    const row = accepted ? accepted.projection.file : store.fileRow(path)
+    if (row?.state === 'failed') {
       recordSessionSearchPrimaryFailure(this.catalog, path, true, true)
     }
     if (force) {
       store.catalogCandidates.execute({ kind: 'require', path, reason: 'force' })
     }
-    const row = store.fileRow(path)
     const decision = sessionSearchReadDecision({
       candidate,
       row,
-      cursor: row ? store.indexedFile(path, fileIdentity(candidate.file)) : null,
+      cursor: accepted
+        ? sessionSearchProjectedCursor(candidate, row)
+        : row
+          ? store.indexedFile(path, fileIdentity(candidate.file))
+          : null,
       cutoffMs: store.retentionCutoff
     })
     if (!force && !metadata && decision === 'skip') {
       return
     }
     this.accept(() => {
-      const existing = this.entry(path)
+      const existing = accepted ? accepted.projection.work : this.entry(path)
       const facts = sessionSearchCandidateFacts(this.db)
       const previous = existing && this.reference(existing)
-      const selected = facts.selected(path, candidate.agent)
+      const selected = accepted?.reference ?? facts.selected(path, candidate.agent)
       const reference = facts.acquire(
         candidate,
-        [previous, selected].filter((fact) => fact !== undefined)
+        [previous, selected].filter((fact) => fact !== undefined),
+        accepted?.reference ? { reference: accepted.reference, candidate } : undefined
       )
       const due = row?.state === 'due'
       this.db
@@ -128,6 +130,38 @@ export class SessionSearchWorkCatalog {
       facts.reclaim(previous)
     })
   }
+  insertAccepted(
+    rows: {
+      candidate: SessionFileCandidate
+      reference: SessionSearchFactReference
+      due: boolean
+      metadata: boolean
+    }[],
+    recent: boolean
+  ): void {
+    if (!rows.length) {
+      return
+    }
+    const values = rows.map(({ candidate, reference, due, metadata }) => [
+      candidate.file.path,
+      reference.id,
+      reference.revision,
+      ++this.version,
+      Number(metadata),
+      recent ? 'changed' : 'backlog',
+      -(candidate.file.aliasMtimeMs ?? candidate.file.mtimeMs),
+      ++this.order,
+      Number(due)
+    ])
+    this.db
+      .prepare(`INSERT INTO temp.search_read_work
+      (path,fact_id,fact_revision,version,metadata,lane,rank,ordering,due,force_read,deferred)
+      SELECT ${values[0].map((_, index) => `json_extract(value,'$[${index}]')`).join(',')},0,0 FROM json_each(?)`)
+      .run(JSON.stringify(values))
+    this.revision += rows.length
+    this.count += rows.length
+    this.due += rows.filter((row) => row.due).length
+  }
   async hasPublicationDebt(path: string): Promise<boolean> {
     const work = this.get(path)
     return !!work && (work.force || work.metadata)
@@ -136,9 +170,9 @@ export class SessionSearchWorkCatalog {
     return readSessionSearchWorkPage(this.db, eligibleThrough, this.chooseChanged)
   }
   get(path: string, receipt?: SessionSearchWorkReceipt): SessionSearchWork | undefined {
-    const row = this.entry(path)
+    const row = readSessionSearchCurrentWork(this.db, path)
     return row && (!receipt || this.matchesEntry({ version: receipt.version, receipt }, row))
-      ? this.load(row)
+      ? decodeSessionSearchCurrentWork(row)
       : undefined
   }
   async acknowledge(work: SessionSearchWork, retry: boolean): Promise<void> {

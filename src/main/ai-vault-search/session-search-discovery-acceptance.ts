@@ -41,7 +41,7 @@ export function acceptSessionSearchDiscoveryPage(
         dependencyScopes.add(owner.scope)
       }
     }
-    const changed = store.catalogCandidates.execute({ kind: 'changes' }).rows
+    const { rows: changed, references } = store.catalogCandidates.changedPage()
     const scopeCounts: [string, number, number][] = []
     const record = (result: { scopeCounts?: [string, number, number][] }) => {
       scopeCounts.push(...(result.scopeCounts ?? []))
@@ -62,7 +62,8 @@ export function acceptSessionSearchDiscoveryPage(
         recent: command.admission!.recent,
         recovering: command.admission!.recovering
       },
-      changed
+      changed,
+      references
     )
     record(admitted)
     const scopes = new Set(accepted.flatMap((row) => (row.input ? [row.input.scope] : [])))

@@ -45,13 +45,13 @@ it('keeps accepted searchable content and retries bookkeeping without charging a
       const { SessionSearchCatalogCandidates } = require(${JSON.stringify(resolve('src/main/ai-vault-search/session-search-catalog-candidates.ts'))});
       const rowChanged = SessionSearchCatalogCandidates.prototype.rowChanged;
       SessionSearchCatalogCandidates.prototype.rowChanged = function(path) {
-        if (path === workerData.path && Atomics.compareExchange(new Int32Array(workerData.signal), 0, 2, 0) === 2) throw new Error('fixture post-content invalidation refusal');
+        if (path === workerData.path && Atomics.compareExchange(new Int32Array(workerData.signal), 0, 2, 0) === 2) { throw new Error('fixture post-content invalidation refusal'); }
         return rowChanged.call(this, path);
       };
       const settle = SessionSearchStore.prototype.settleAcceptedFile;
       SessionSearchStore.prototype.settleAcceptedFile = function(path) {
         settle.call(this, path);
-        if (path === workerData.path && Atomics.compareExchange(new Int32Array(workerData.signal), 0, 1, 2) === 1) throw new Error('fixture post-content settlement refusal');
+        if (path === workerData.path && Atomics.compareExchange(new Int32Array(workerData.signal), 0, 1, 2) === 1) { throw new Error('fixture post-content settlement refusal'); }
       };
     `,
     onResponse: () => undefined
@@ -92,7 +92,7 @@ it('keeps accepted searchable content and retries bookkeeping without charging a
   }
 })
 
-it('finishes the first conversation after its discovery transfer rolls back internally', async () => {
+it('finishes independent conversations after their discovery transfer rolls back internally', async () => {
   const harness = await openSessionSearchIndexerHarness('ss-first-transfer-rollback')
   const path = join(harness.claudeProjectDir, 'session.jsonl')
   const signal = new Int32Array(new SharedArrayBuffer(4))
@@ -104,7 +104,7 @@ it('finishes the first conversation after its discovery transfer rolls back inte
       const { SessionSearchStore } = require(${JSON.stringify(resolve('src/main/ai-vault-search/storage/session-search-store.ts'))});
       const candidates = SessionSearchStore.prototype.candidates;
       SessionSearchStore.prototype.candidates = async function(command) {
-        if (command.kind !== 'batch' || !command.admission || !command.rows.some(row => row.candidate.file.path === workerData.path) || Atomics.compareExchange(new Int32Array(workerData.signal), 0, 1, 0) !== 1) return candidates.call(this, command);
+        if (command.kind !== 'batch' || !command.admission || !command.rows.some(row => row.candidate.file.path === workerData.path) || Atomics.compareExchange(new Int32Array(workerData.signal), 0, 1, 0) !== 1) { return candidates.call(this, command); }
         this.connection.exec("CREATE TEMP TRIGGER refuse_first_transfer BEFORE UPDATE OF delivery_revision ON search_inventory_activity WHEN OLD.delivery_revision IS NOT NULL AND NEW.delivery_revision IS NULL BEGIN SELECT RAISE(ABORT,'fixture first transfer rollback'); END");
         try { return await candidates.call(this, command); }
         finally { this.connection.exec('DROP TRIGGER refuse_first_transfer'); }
@@ -145,6 +145,16 @@ it('finishes the first conversation after its discovery transfer rolls back inte
     )
   try {
     await writeClaudeTranscript(path, ['firsttransferneedle'], 'first-transfer')
+    await writeClaudeTranscript(
+      join(harness.claudeProjectDir, 'independent-a.jsonl'),
+      ['firsttransferneedle'],
+      'independent-a'
+    )
+    await writeClaudeTranscript(
+      join(harness.claudeProjectDir, 'independent-b.jsonl'),
+      ['firsttransferneedle'],
+      'independent-b'
+    )
     await store.prepare()
     await state.prepare(store)
     state.discovery.begin({ full: true, maintenance: true, recentLimit: 12, overdue: () => false })
@@ -168,7 +178,7 @@ it('finishes the first conversation after its discovery transfer rolls back inte
       recentPerAgent: 12,
       listings: new SessionSearchDirectoryListings()
     })
-    expect(hits()).toEqual({ n: 2 })
+    expect(hits()).toEqual({ n: 6 })
     expect(result).toMatchObject({
       completed: true,
       outOfTime: false,
@@ -199,7 +209,7 @@ it.each(['dirty', 'input-receipts'])(
         const { SessionSearchStore } = require(${JSON.stringify(resolve('src/main/ai-vault-search/storage/session-search-store.ts'))});
         const catalog = SessionSearchStore.prototype.catalog;
         SessionSearchStore.prototype.catalog = async function(command) {
-          if (command.kind !== 'input-invalidate' || command.path !== workerData.path || Atomics.compareExchange(new Int32Array(workerData.signal), 0, 1, 0) !== 1) return catalog.call(this, command);
+          if (command.kind !== 'input-invalidate' || command.path !== workerData.path || Atomics.compareExchange(new Int32Array(workerData.signal), 0, 1, 0) !== 1) { return catalog.call(this, command); }
           this.connection.exec("CREATE TEMP TRIGGER refuse_catalog_acceptance BEFORE INSERT ON search_catalog WHEN NEW.scope LIKE '%:" + workerData.suffix + "' BEGIN SELECT RAISE(ABORT,'fixture internal catalog refusal'); END");
           try { return await catalog.call(this, command); }
           finally { this.connection.exec('DROP TRIGGER refuse_catalog_acceptance'); }

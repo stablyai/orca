@@ -10,7 +10,11 @@ import {
 import { readSessionSearchCandidateRows } from './session-search-candidate-rows'
 import { boundedSessionSearchPage } from './session-search-catalog-pages'
 import { putSessionSearchCandidate } from './session-search-candidate-entry'
-import { sessionSearchCandidateFacts } from './session-search-candidate-facts'
+import {
+  sessionSearchCandidateFacts,
+  type SessionSearchFactReference
+} from './session-search-candidate-facts'
+import { putSessionSearchCandidateBatch } from './session-search-independent-candidates'
 
 import type {
   SessionSearchCatalogCandidate,
@@ -82,15 +86,24 @@ export class SessionSearchCatalogCandidates {
             .map(({ path }) => path)
         }
       case 'batch':
-        for (const row of command.rows) {
-          this.put(row)
-          if (row.force) {
-            this.require(row.candidate.file.path, 'force', true)
+        putSessionSearchCandidateBatch(
+          this.db,
+          command.rows,
+          this.publications,
+          () => ++this.revision,
+          (count) => {
+            this.pending += count
+          },
+          (row) => {
+            this.put(row)
+            if (row.force) {
+              this.require(row.candidate.file.path, 'force', true)
+            }
+            if (row.metadata) {
+              this.require(row.candidate.file.path, 'metadata', true)
+            }
           }
-          if (row.metadata) {
-            this.require(row.candidate.file.path, 'metadata', true)
-          }
-        }
+        )
         return this.result([])
       case 'put':
         this.put(command.row)
@@ -229,6 +242,26 @@ export class SessionSearchCatalogCandidates {
 
   entry(key: string): SessionSearchCandidateRow | undefined {
     return this.read('WHERE key=?', [key])[0]
+  }
+  changedPage() {
+    const references = new Map<string, SessionSearchFactReference>()
+    const rows = readSessionSearchCandidateRows(
+      this.db,
+      'WHERE changed=1 ORDER BY mtime DESC,key LIMIT 256',
+      [],
+      (reference, key) => references.set(key, reference)
+    )
+    return { rows, references }
+  }
+  consumedPage(receipts: { key: string; revision: number }[]): void {
+    if (!receipts.length) {
+      return
+    }
+    const result = this.db
+      .prepare(`UPDATE temp.search_candidates SET changed=0
+      WHERE changed=1 AND (key,revision) IN (SELECT json_extract(value,'$[0]'),json_extract(value,'$[1]') FROM json_each(?))`)
+      .run(JSON.stringify(receipts.map((row) => [row.key, row.revision])))
+    this.pending -= Number(result.changes)
   }
   rowChanged(path: string): void {
     this.publications.rowChanged(path)

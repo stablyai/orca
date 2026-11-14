@@ -67,6 +67,35 @@ export class SessionSearchCandidateFacts {
       throw new Error('Session work candidate snapshot is unavailable')
     }
   }
+  insertPage(candidates: SessionFileCandidate[]): SessionSearchFactReference[] {
+    const values = candidates.map((candidate) => [
+      ++this.revision,
+      candidate.agent,
+      candidate.file.path,
+      ...sessionSearchFileValues(candidate.file),
+      candidate.codexHome,
+      candidate.antigravityHistoryPath ?? null
+    ])
+    const rows = this.db
+      .prepare(`INSERT INTO temp.search_candidate_facts
+      (snapshot_revision,agent,path,mtime,size,dev,ino,nlink,alias_mtime,sidecar,codex_home,history_path)
+      SELECT ${values[0].map((_, index) => `json_extract(value,'$[${index}]')`).join(',')} FROM json_each(?)
+      RETURNING id,snapshot_revision,path`)
+      .all(JSON.stringify(values))
+    const references = new Map(
+      rows.map((row) => [
+        JSON.stringify([row.path, row.snapshot_revision]),
+        { id: Number(row.id), revision: Number(row.snapshot_revision) }
+      ])
+    )
+    return values.map((value) => {
+      const reference = references.get(JSON.stringify([value[2], value[0]]))
+      if (!reference) {
+        throw new Error('Session candidate snapshot insert is unavailable')
+      }
+      return reference
+    })
+  }
   acquire(
     candidate: SessionFileCandidate,
     references: SessionSearchFactReference[] = [],

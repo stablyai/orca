@@ -6,12 +6,37 @@ import type { SessionSearchValueRow } from './session-search-value-row'
 import type { SessionSearchInventoryOwner } from './session-search-inventory-storage'
 import { SESSION_SEARCH_FILE_COLUMNS, sessionSearchFileValues } from './session-search-file-facts'
 import { sessionSearchInventoryRelation } from './session-search-inventory-relation'
-import type { SessionSearchInventoryPage } from './session-search-inventory-page'
+import type {
+  SessionSearchPhysicalTable,
+  SessionSearchInventoryPage
+} from './session-search-inventory-page'
 import { sessionSearchEpochIdentity } from './session-search-inventory-floor'
 
 export abstract class SessionSearchInventoryMutations {
   protected page: SessionSearchInventoryPage | undefined
   constructor(readonly db: SyncDatabase) {}
+  prefetchPhysical(
+    table: SessionSearchPhysicalTable,
+    source: number,
+    paths: Iterable<string>
+  ): void {
+    this.page?.prefetch(table, source, paths)
+  }
+  prefetchFallback(scope: string, paths: Iterable<string>): void {
+    this.page?.prefetchFallback(scope, paths)
+  }
+  fallbackValue(scope: string, path: string, read: () => SessionSearchValueRow | undefined) {
+    return this.page ? this.page.fallbackValue(scope, path, read) : read()
+  }
+  forgetFallback(scope: string, path: string): void {
+    this.page?.forgetFallback(scope, path)
+  }
+  peekFallback(scope: string, path: string): SessionSearchValueRow | undefined {
+    return this.page?.peekFallback(scope, path)
+  }
+  peekPhysical(table: SessionSearchPhysicalTable, source: number, path: string) {
+    return this.page?.peek(table, source, path)
+  }
   abstract getValue(
     owner: SessionSearchInventoryOwner,
     key: string

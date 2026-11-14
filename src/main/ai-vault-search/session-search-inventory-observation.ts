@@ -26,6 +26,12 @@ export class SessionSearchInventoryObservation {
     readonly source: number,
     readonly root: string
   ) {}
+  prefetch(paths: Iterable<string>): void {
+    this.storage.prefetchPhysical('search_inventory_entries', this.source, paths)
+  }
+  prefetchActivity(paths: Iterable<string>): void {
+    this.storage.prefetchPhysical('search_inventory_activity', this.source, paths)
+  }
   directory(path: string): boolean {
     return this.storage.readPhysical('search_inventory_entries', this.source, path).directory === 1
   }

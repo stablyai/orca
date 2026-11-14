@@ -8,7 +8,7 @@ export function readSessionSearchCandidateRows(
   db: SyncDatabase,
   where: string,
   values: (string | number)[],
-  snapshot?: (reference: SessionSearchFactReference) => void
+  snapshot?: (reference: SessionSearchFactReference, key: string) => void
 ): SessionSearchCandidateRow[] {
   return boundedSessionSearchPage(
     db
@@ -19,7 +19,7 @@ export function readSessionSearchCandidateRows(
       if (row.stored_fact_revision == null) {
         throw new Error('Session selection candidate snapshot is unavailable')
       }
-      snapshot?.({ id: Number(row.fact_id), revision: Number(row.fact_revision) })
+      snapshot?.({ id: Number(row.fact_id), revision: Number(row.fact_revision) }, String(row.key))
       return {
         key: String(row.key),
         root: String(row.root),

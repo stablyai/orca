@@ -1,4 +1,5 @@
 import type { FileWithMtime } from '../../ai-vault/session-scanner-types'
+export const PARTIAL_FILE_CURSOR = -1
 
 // Index and parse-cache cursors can diverge when either declines a read; track them independently.
 

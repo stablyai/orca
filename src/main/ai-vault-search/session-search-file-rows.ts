@@ -9,14 +9,15 @@ import { boundedSessionSearchPage } from './session-search-catalog-pages'
 export function readSessionSearchFileRows(
   db: SyncDatabase,
   path?: string,
-  after?: string
+  after?: string,
+  paths?: string[]
 ): SessionSearchFileRow[] {
   const statement = db.prepare(
     // Numeric stat IDs may exceed SQLite's safe INTEGER-to-number read range.
     `SELECT f.path, f.byte_offset AS byteOffset, f.prefix_hash AS prefixHash, s.agent, CAST(f.dev AS REAL) AS dev, CAST(f.ino AS REAL) AS ino,
                   mtime_ms AS mtimeMs, size_bytes AS sizeBytes,
                   state, fail_count AS failCount, failed_mtime_ms AS failedMtimeMs
-           FROM files f LEFT JOIN sessions s ON s.id=f.session_row_id${path !== undefined ? ' WHERE f.path = ?' : after !== undefined ? ' WHERE f.path > ? ORDER BY f.path LIMIT 256' : ''}`
+           FROM files f LEFT JOIN sessions s ON s.id=f.session_row_id${paths ? ' WHERE f.path IN (SELECT value FROM json_each(?))' : path !== undefined ? ' WHERE f.path = ?' : after !== undefined ? ' WHERE f.path > ? ORDER BY f.path LIMIT 256' : ''}`
   )
   type Row = Omit<SessionSearchFileRow, 'identity'> & {
     dev: number | null
@@ -24,7 +25,13 @@ export function readSessionSearchFileRows(
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the selected fields above match this internal row projection.
   const rows = statement.iterate(
-    ...(path !== undefined ? [path] : after !== undefined ? [after] : [])
+    ...(paths
+      ? [JSON.stringify(paths)]
+      : path !== undefined
+        ? [path]
+        : after !== undefined
+          ? [after]
+          : [])
   ) as Iterable<Row>
   const decode = (row: Row): SessionSearchFileRow => ({
     path: row.path,
