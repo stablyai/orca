@@ -4,16 +4,16 @@ import { getWorktreeOnHostFromState } from '@/store/workspaces/selection/worktre
 import type { AppState } from '@/store/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import { getHoveredWorkspaceIdentity } from '../../workspace-actions/deletion/hovered-workspace-delete'
+import { getHoveredWorkspaceIdentity } from './hovered-workspace-identity'
 import { computeRenderedSidebarRows } from '../../worktree-list/listing/rendered-sidebar-worktree-order'
 import { getPublishedVisibleWorktreeShortcutTargets } from '../../worktree-list/listing/visible-worktrees'
 import { computeVisibleWorktrees } from '../../worktree-list/listing/compute-visible-worktrees'
 import { buildVisibleWorktreeOptionsFromState } from '../../worktree-list/listing/visible-worktree-options-from-state'
-import { getWorktreeLineageGroupKey } from '../../../../../../shared/sidebar-list/group-keys'
+import { getWorktreeLineageGroupKey } from '../../../../../../shared/sidebar-list/sections/group-keys'
 import {
   getHostScopedWorktreeLineageInputs,
   getWorktreeLineageAncestors
-} from '../../../../../../shared/sidebar-list/worktree-lineage-projection'
+} from '../../../../../../shared/sidebar-list/lineage/worktree-lineage-projection'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type ChildWorkspacesToggleState = Pick<
@@ -28,7 +28,6 @@ function resolveTargetWorktree(
 ): Worktree | undefined {
   const hovered = getHoveredWorkspaceIdentity(doc)
   if (hovered) {
-    // Hovered cards outrank active ones, matching workspace deletion shortcuts.
     return getIndexedAllWorktrees(selectWorktreesByRepo(state)).find(
       (worktree) =>
         worktree.id === hovered.workspaceId &&

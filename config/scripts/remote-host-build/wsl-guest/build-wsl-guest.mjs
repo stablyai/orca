@@ -55,7 +55,7 @@ stampVersion('wsl-browser-network-relay.js', '.browser-network-version')
 console.log(`Built WSL browser network relay → ${outDir}/wsl-browser-network-relay.js`)
 
 await bundle(
-  'src/main/claude-accounts/claude-profile-wsl-entry.ts',
+  'src/main/claude-accounts/profiles/wsl/claude-profile-wsl-entry.ts',
   WSL_CLAUDE_PROFILE_HELPER_FILENAME
 )
 await bundle(
@@ -63,6 +63,9 @@ await bundle(
   OPENCODE_SQLITE_READER_FILENAME,
   { external: ['electron'] }
 )
-await bundle('src/main/opencode/opencode-wsl-text-task-entry.ts', OPENCODE_WSL_TEXT_TASK_FILENAME)
+await bundle(
+  'src/main/opencode/text-tasks/wsl/opencode-wsl-text-task-entry.ts',
+  OPENCODE_WSL_TEXT_TASK_FILENAME
+)
 
 console.log('WSL guest build complete.')

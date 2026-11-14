@@ -13,7 +13,10 @@ import {
   structuredAgentSessionLaunchHasRetainedInput,
   getStructuredAgentSessionLaunchResumes
 } from '@/lib/agent-session/launch/structured-agent-session-launch-input'
-import { relaunchFailedStructuredAgentSessionWithMessage } from '../../../lib/agent-session/launch/structured-agent-session-launch-message'
+import {
+  relaunchFailedStructuredAgentSessionWithMessage,
+  sendMessageToStartingStructuredAgentSession
+} from '../../../lib/agent-session/launch/structured-agent-session-launch-message'
 import {
   relaunchFailedStructuredAgentSessionForMessage,
   retryStructuredAgentSessionLaunch
@@ -117,7 +120,12 @@ export function useNativeChatProvisionalLaunch(
       send: () => boolean | 'queued'
     ): boolean | 'queued' => {
       if (starting) {
-        return false
+        // Attachments and skills are prepared against the live chat, so only plain text waits for it.
+        return (
+          !requiresSession &&
+          !!worktreeId &&
+          sendMessageToStartingStructuredAgentSession(worktreeId, sessionId, text) !== null
+        )
       }
       if (lifecycle !== 'failed' || !worktreeId) {
         return send()

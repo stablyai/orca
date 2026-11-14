@@ -1,8 +1,10 @@
+import { getTerminalNoticeLifetime } from '../../provider-notices/terminal-notice-lifetime'
+import { prepareAcceptedTerminalNoticeExit } from '../../pty-transport/delivery/pty-notice-exit'
 import { isTerminalLeafId } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { isProvenProcessExit } from '../../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { useAppStore } from '@/store/index'
-import { getTerminalTabOwnerWorktreeId } from '@/store/terminals/terminal-tab-owner-index'
+import { getTerminalTabOwnerWorktreeId } from '@/store/terminals/ownership/terminal-tab-owner-index'
 import { terminalProviderSessionIsGone } from '../../../terminal/terminal-provider-gone-sessions'
 import { closeTerminalTab } from '../../../terminal/terminal-tab-actions'
 import { startParkedTerminalByteWatcher } from './parked-terminal-byte-watcher'
@@ -60,6 +62,7 @@ export function startParkedPtyWatcher(args: {
   ) {
     return
   }
+  const notice = getTerminalNoticeLifetime(ptyId)
   const handlePtyExit = (code: number, { hadPrimary }: { hadPrimary: boolean }): void => {
     // Replacement waits for a future connect, but the dead process’s working title must clear now.
     useAppStore.getState().clearRuntimePaneTitle(tab.id, pane.paneId)
@@ -74,6 +77,7 @@ export function startParkedPtyWatcher(args: {
     if (!provenExit) {
       useAppStore.getState().markUnverifiedPtyLoss(tab.id)
     }
+    const retireNotice = provenExit ? prepareAcceptedTerminalNoticeExit(notice) : () => {}
     // Detach removed the primary observer; this sidecar must preserve sleep state/layout and keep the buffered-exit tombstone against stale watcher re-registration.
     if (!hadPrimary && isSleepPreservedParkedPtyExit(ptyId)) {
       entry.disposersByPtyId.get(ptyId)?.()
@@ -89,6 +93,7 @@ export function startParkedPtyWatcher(args: {
       }
       return
     }
+    retireNotice()
     if (entry.disposersByPtyId.size > 1) {
       discardPreHandlerPtyState(ptyId)
       collapseParkedExitedLeaf(tab.id, ptyId)
@@ -166,17 +171,20 @@ export function collapseParkedExitedLeaf(tabId: string, ptyId: string): void {
     capturedPanesByTabId.get(tabId)?.panes.find((pane) => pane.ptyId === ptyId)?.leafId ??
     Object.entries(layout?.ptyIdsByLeafId ?? {}).find(([, boundPtyId]) => boundPtyId === ptyId)?.[0]
   if (leafId) {
-    collapseParkedTerminalLeaf(tabId, leafId, ptyId)
+    const retireNotice = prepareAcceptedTerminalNoticeExit(getTerminalNoticeLifetime(ptyId))
+    if (collapseParkedTerminalLeaf(tabId, leafId, ptyId)) {
+      retireNotice()
+    }
   }
 }
 
 /** Removes one leaf from a parked tab's stored layout; a no-op once the leaf is gone. */
-export function collapseParkedTerminalLeaf(tabId: string, leafId: string, ptyId?: string): void {
+export function collapseParkedTerminalLeaf(tabId: string, leafId: string, ptyId?: string): boolean {
   const state = useAppStore.getState()
   const layout = state.terminalLayoutsByTabId[tabId]
   const detached = detachTerminalLayoutLeaf(layout, leafId)
   if (!detached) {
-    return
+    return false
   }
   const worktreeId = getTerminalTabOwnerWorktreeId(state.tabsByWorktree, tabId)
   const terminalTab = worktreeId
@@ -197,4 +205,5 @@ export function collapseParkedTerminalLeaf(tabId: string, leafId: string, ptyId?
     tabId,
     resolveTabTitleAfterPaneClose(state.runtimePaneTitlesByTabId[tabId] ?? {}, activePaneId)
   )
+  return true
 }

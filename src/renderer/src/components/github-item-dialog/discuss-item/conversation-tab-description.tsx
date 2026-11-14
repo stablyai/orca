@@ -6,8 +6,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import { GitHubMarkdownComposer } from '@/components/github/GitHubMarkdownComposer'
 import { formatRelativeTime } from '@/components/github/work-item-state-presentation'
-import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type { GitHubRepositoryIdentity as GitHubOwnerRepo } from '../../../../../shared/github/repositories/repository-identity'
+import type { GitHubWorkItem } from '../../../../../shared/github/work-items/work-item-types'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 export function ConversationTabDescription({

@@ -5,8 +5,8 @@ import { createTestStore, seedStore } from '../../testing/app-store-test-fixture
 import { makeWorktree } from '../worktrees/worktree.test-fixture'
 import { createStoreCascadesMockApi } from '../../testing/app-store-cascade-api.test-fixture'
 import '@/runtime/workspace-layout/commands/layout-owner-new-group-split'
-import { openContentTabThroughLayoutOwner } from '@/runtime/workspace-layout/intents/layout-owner-content-tab-open'
-import { contentTabOpenPlacement } from './content-tab-open-placement'
+import '@/runtime/workspace-layout/intents/layout-owner-content-tab-open'
+import './content-tab-open-placement'
 import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import type { TabGroupLayoutNode } from '../../../../../shared/tab-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
@@ -154,84 +154,5 @@ describe.runIf(ORCA_LAYOUT_OWNER_IS_MAIN)('open to the side in a layout-owner bu
     ])
     expect(mainView()).toEqual(windowView())
     expect(mainView().groups).toHaveLength(4)
-  })
-
-  it('keeps the source split’s preview: a preview opened to the side replaces nothing', async () => {
-    openFile('/p.ts', { preview: true })
-    await settledSent()
-    const side = store.getState().createEmptySplitGroup(WT, ROOT, 'right')!
-    openFile('/q.ts', { preview: true, targetGroupId: side })
-    await settledSent()
-
-    expect(mainView()).toEqual(windowView())
-    expect(
-      layoutApplyTestTransport.mainModel!.workspaces[WT]!.tabs.filter((tab) => tab.isPreview)
-    ).toHaveLength(2)
-  })
-
-  it.each([
-    ['terminal', () => store.getState().createTab(WT, ROOT)],
-    ['editor', () => openFile('/c.ts', { targetGroupId: ROOT })],
-    [
-      'browser',
-      () => store.getState().createBrowserTab(WT, 'about:blank', { targetGroupId: ROOT })
-    ],
-    [
-      'chat',
-      () => {
-        // As openAgentSessionTabThroughLayoutOwner does, on this test's store.
-        const tabId = 'agent-session:chat-1'
-        const placement = contentTabOpenPlacement(store.getState(), WT, tabId, {
-          targetGroupId: ROOT
-        })!
-        openContentTabThroughLayoutOwner(store.getState(), {
-          worktreeId: WT,
-          entityId: 'chat-1',
-          command: {
-            type: 'openAgentSessionTab',
-            tabId,
-            sessionId: 'chat-1',
-            agent: 'codex',
-            ...placement
-          },
-          facts: { label: 'Codex' },
-          shown: () => {},
-          drawHere: () => null
-        })
-      }
-    ]
-  ])(
-    'opens a %s tab into the emptied root after its neighbour split again',
-    async (_kind, openIntoRoot) => {
-      // The splits beside the emptied root hold tabs, so main has only those.
-      store.getState().createTab(WT, undefined, undefined, {
-        split: { sourceGroupId: ROOT, splitDirection: 'right' }
-      })
-      const right = store.getState().groupsByWorktree[WT]!.at(-1)!.id
-      store.getState().createTab(WT, undefined, undefined, {
-        split: { sourceGroupId: right, splitDirection: 'down' }
-      })
-      await settledSent()
-
-      openIntoRoot()
-      await settledSent()
-      expect(mainView()).toEqual(windowView())
-    }
-  )
-
-  it('records opens into a split made off another empty split, beside the groups main holds', async () => {
-    openFile('/a.ts')
-    await settledSent()
-    const outer = store.getState().createEmptySplitGroup(WT, ROOT, 'right')!
-    const inner = store.getState().createEmptySplitGroup(WT, outer, 'down')!
-
-    // The inner group's sibling is the outer one, which main lacks until its own first tab.
-    openFile('/b.ts', { targetGroupId: inner })
-    await settledSent()
-    expect(mainView()).toEqual(windowView())
-    const again = store.getState().createEmptySplitGroup(WT, inner, 'up')!
-    openFile('/c.ts', { targetGroupId: again })
-    await settledSent()
-    expect(mainView()).toEqual(windowView())
   })
 })

@@ -1,7 +1,7 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
-import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input-font-size'
+import { TEXT_INPUT_FONT_SIZE } from '../../platform/text-input/text-input-font-size'
 
 export const prTabStyles = themedStyleSheet(() => ({
   container: { flex: 1, backgroundColor: colors.bgBase },
@@ -17,6 +17,9 @@ export const prTabStyles = themedStyleSheet(() => ({
   header: { gap: spacing.xs },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' },
   badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     paddingHorizontal: spacing.sm,
     paddingVertical: 1,
     borderRadius: radii.pill,

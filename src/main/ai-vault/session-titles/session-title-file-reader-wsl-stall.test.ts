@@ -26,7 +26,7 @@ import { resetSessionParseCacheForTests } from '../parse-cache/session-parse-cac
 import {
   resetWslTranscriptFsGateForTests,
   WSL_TRANSCRIPT_FS_SCAN_TIMEOUT_MS
-} from '../../native-chat/wsl-transcript-fs-gate'
+} from '../../native-chat/transcript-filesystem/wsl-transcript-fs-gate'
 
 let releaseStall: (() => void) | undefined
 let tempRoot: string | undefined

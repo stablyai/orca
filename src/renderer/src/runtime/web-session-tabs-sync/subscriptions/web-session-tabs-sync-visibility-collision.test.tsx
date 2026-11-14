@@ -44,11 +44,7 @@ import '@/store/slices/editor/file-ids/editor-file-ids'
 import { replaceRuntimeEnvironmentRevisions } from '../../rpc/environment-revisions/runtime-environment-revision'
 import '../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import '../terminal-handles/web-session-terminal-handle-events'
-import {
-  _getWebSessionTabsReceiptTrackingCountsForTest,
-  _getWebSessionTabsTrackingCountsForTest,
-  resetWebSessionTabsSnapshotFreshnessForTests
-} from '../tracking-lifecycle'
+import { resetWebSessionTabsSnapshotFreshnessForTests } from '../tracking-lifecycle'
 import { useWebSessionTabsSync } from '../use-web-session-tabs-sync'
 import '../state'
 import '../../../lib/window-activity/window-park-visibility'

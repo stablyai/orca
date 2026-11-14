@@ -1,0 +1,303 @@
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import { basename, dirname, join, relative } from 'node:path'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setSecretStore } from '../../../../shared/secret-store'
+import { profileStateStorage } from '../../../orca-profiles/project-transfer/profile-project-state-file'
+import { acquireProfileStateRuntimeAdmission } from '../access/profile-state-access'
+import {
+  openProfileStateDatabase,
+  openProfileStateDatabaseReadOnly
+} from '../database/profile-state-database'
+import {
+  importProfileStateJson,
+  readProfileStateSnapshot
+} from '../documents/profile-state-documents'
+import { hashProfileStatePayload as hashProfileStateJson } from '../documents/profile-state-document-validation'
+import { profileStateJsonExportPath } from '../legacy-json/profile-state-export-path'
+import {
+  createProfileStateDatabaseBackupId,
+  profileStateDatabaseBackupPath
+} from '../backup/profile-state-backup-path'
+import { writeProfileStateDatabaseSnapshotAsync } from '../database/profile-state-database-snapshot'
+import { createProfileStateStore } from '../startup/profile-state-store-factory'
+import '../legacy-json/profile-state-recovery'
+import './profile-state-database-recovery'
+import {
+  ensureProfileStateAuthorityMarker,
+  profileStateAuthorityMarkerPath
+} from '../database/profile-state-authority-marker'
+import {
+  buildRecoveryCrashProcess,
+  killRecoveryAt,
+  type RecoveryCrashOptions
+} from './profile-state-recovery-crash-process'
+
+vi.mock('../../../telemetry/client', () => ({ track: () => {} }))
+vi.mock('../../../telemetry/cohort-classifier', () => ({
+  getCohortAtEmit: () => ({ nth_repo_added: 2 })
+}))
+vi.mock('../../../ssh/config/ssh-config-parser', () => ({
+  loadUserSshConfig: () => ({ hosts: [] }),
+  sshConfigHostsToTargets: () => []
+}))
+
+const suiteRoot = mkdtempSync(join(tmpdir(), 'orca-recovery-crash-boundaries-'))
+const fixtureRoots: string[] = []
+let bundle: string
+const profileId = 'crash-recovery'
+const selectedState = {
+  settings: {
+    theme: 'dark',
+    httpProxyUrl: Buffer.from('sealed-selected').toString('base64'),
+    electronHttp1CompatibilityMode: true
+  },
+  ui: { extension: { origin: 'selected', value: null } },
+  extension: { nested: [null, '\ud800', 'selected'], ['__proto__']: { inert: true } },
+  opaque: null,
+  repos: [],
+  automationRuns: [],
+  automations: []
+}
+const oldState = {
+  ...selectedState,
+  settings: {
+    ...selectedState.settings,
+    theme: 'light',
+    httpProxyUrl: Buffer.from('sealed-old').toString('base64')
+  },
+  ui: { extension: { origin: 'old', value: null } },
+  extension: { nested: [null, '\ud800', 'old'], ['__proto__']: { inert: true } }
+}
+const selectedJson = JSON.stringify(selectedState)
+const oldJson = JSON.stringify(oldState)
+
+beforeAll(() => {
+  bundle = buildRecoveryCrashProcess(suiteRoot).bundle
+})
+beforeEach(() => {
+  setSecretStore({
+    isEncryptionAvailable: () => false,
+    encryptString: () => {
+      throw new Error('Keychain unavailable')
+    },
+    decryptString: () => {
+      throw new Error('Keychain unavailable')
+    },
+    describeProtectionGap: () => null
+  })
+})
+afterEach(() => {
+  for (const root of fixtureRoots.splice(0)) {
+    rmSync(root, { recursive: true, force: true })
+  }
+})
+afterAll(() => {
+  try {
+    for (const seed of seededFixtures.values()) {
+      for (const [suffix, bytes] of seed.originalFamily) {
+        expect(readFileSync(`${seed.databasePath}${suffix}`).equals(bytes)).toBe(true)
+      }
+      expect(readFileSync(seed.backupPath).equals(seed.backupBytes)).toBe(true)
+      expect(readFileSync(seed.exportPath, 'utf8')).toBe(selectedJson)
+    }
+  } finally {
+    rmSync(suiteRoot, { recursive: true, force: true })
+  }
+})
+
+type Fixture = RecoveryCrashOptions & { backupBytes: Buffer; originalFamily: Map<string, Buffer> }
+const seededFixtures = new Map<string, Fixture>()
+
+async function seedFixture(kind: 'json' | 'sqlite', accepted: boolean): Promise<Fixture> {
+  const root = mkdtempSync(join(suiteRoot, 'seed-'))
+  const directory = join(root, 'profiles', profileId)
+  mkdirSync(directory, { recursive: true })
+  writeFileSync(
+    join(root, 'orca-profile-index.json'),
+    JSON.stringify({ activeProfileId: profileId, profiles: [{ id: profileId }] })
+  )
+  const dataFile = join(directory, 'orca-data.json')
+  const databasePath = join(directory, 'profile-state.db')
+  const exportPath = profileStateJsonExportPath(dataFile, 3)
+  const backupPath = profileStateDatabaseBackupPath(
+    databasePath,
+    createProfileStateDatabaseBackupId()
+  )
+  const options = {
+    root,
+    profileId,
+    dataFile,
+    databasePath,
+    exportPath,
+    backupPath,
+    markerPath: join(root, 'http1-compatibility.json'),
+    kind
+  }
+  const source = openProfileStateDatabase(databasePath, profileId)
+  ensureProfileStateAuthorityMarker(databasePath)
+  try {
+    importProfileStateJson(source.db, oldJson)
+    importProfileStateJson(source.db, oldJson)
+    importProfileStateJson(
+      source.db,
+      selectedJson,
+      accepted ? { acceptedLegacyJsonHash: hashProfileStateJson(selectedJson) } : {}
+    )
+    await writeProfileStateDatabaseSnapshotAsync(source.db, backupPath)
+  } finally {
+    source.db.close()
+  }
+  await killRecoveryAt(bundle, options, 'seed', oldJson)
+  expect(existsSync(`${databasePath}-wal`)).toBe(true)
+  expect(existsSync(`${databasePath}-shm`)).toBe(true)
+  // Remove even empty abandoned rollback journals before publication.
+  writeFileSync(`${databasePath}-journal`, '')
+  if (accepted) {
+    writeFileSync(dataFile, selectedJson)
+  }
+  writeFileSync(exportPath, selectedJson)
+  writeFileSync(
+    profileStateJsonExportPath(dataFile, 1),
+    JSON.stringify({ ...oldState, exportRevision: 1 })
+  )
+  writeFileSync(
+    profileStateJsonExportPath(dataFile, 2),
+    JSON.stringify({ ...oldState, exportRevision: 2 })
+  )
+  writeFileSync(options.markerPath, JSON.stringify({ schemeVersion: 2, enabled: false, profileId }))
+  const originalFamily = new Map(
+    ['', '-wal', '-shm', '-journal'].map((suffix) => [
+      suffix,
+      readFileSync(`${databasePath}${suffix}`)
+    ])
+  )
+  return { ...options, backupBytes: readFileSync(backupPath), originalFamily }
+}
+
+function cloneFixture(seed: Fixture): Fixture {
+  const root = mkdtempSync(join(suiteRoot, 'profile-'))
+  fixtureRoots.push(root)
+  cpSync(seed.root, root, { recursive: true })
+  const options = {
+    ...seed,
+    root,
+    dataFile: join(root, relative(seed.root, seed.dataFile)),
+    databasePath: join(root, relative(seed.root, seed.databasePath)),
+    exportPath: join(root, relative(seed.root, seed.exportPath)),
+    backupPath: join(root, relative(seed.root, seed.backupPath)),
+    markerPath: join(root, relative(seed.root, seed.markerPath))
+  }
+  const originalFamily = new Map(
+    ['', '-wal', '-shm', '-journal'].map((suffix) => [
+      suffix,
+      readFileSync(`${options.databasePath}${suffix}`)
+    ])
+  )
+  return { ...options, backupBytes: readFileSync(options.backupPath), originalFamily }
+}
+
+async function fixture(kind: 'json' | 'sqlite', accepted: boolean): Promise<Fixture> {
+  const key = `${kind}/${accepted}`
+  let seed = seededFixtures.get(key)
+  if (!seed) {
+    // Wait for child exit before copying the WAL family.
+    seed = await seedFixture(kind, accepted)
+    seededFixtures.set(key, seed)
+  }
+  return cloneFixture(seed)
+}
+
+function readSqlite(path: string): unknown {
+  const opened = openProfileStateDatabaseReadOnly(path, profileId)
+  try {
+    return JSON.parse(readProfileStateSnapshot(opened.db).json)
+  } finally {
+    opened.db.close()
+  }
+}
+
+function assertQuarantine(profile: Fixture, hasMarker = true): void {
+  const quarantine = readdirSync(dirname(profile.databasePath)).find((name) =>
+    name.startsWith('profile-state-corrupt-')
+  )
+  if (quarantine === undefined) {
+    throw new Error('Recovery did not preserve a quarantine')
+  }
+  const directory = join(dirname(profile.databasePath), quarantine)
+  const archivedMarker = join(
+    directory,
+    basename(profileStateAuthorityMarkerPath(profile.databasePath))
+  )
+  expect(existsSync(archivedMarker)).toBe(hasMarker)
+  if (hasMarker) {
+    expect(readFileSync(archivedMarker, 'utf8')).toBe('sqlite\n')
+  }
+  // Verify exact bytes before SQLite can change the copied WAL family.
+  for (const [suffix, bytes] of profile.originalFamily) {
+    expect(readFileSync(join(directory, `profile-state.db${suffix}`)).equals(bytes)).toBe(true)
+  }
+  expect(readFileSync(join(directory, basename(profile.exportPath)), 'utf8')).toBe(selectedJson)
+  expect(
+    readFileSync(join(directory, basename(profile.backupPath))).equals(profile.backupBytes)
+  ).toBe(true)
+  expect(readSqlite(join(directory, 'profile-state.db'))).toEqual(oldState)
+}
+
+function assertRestart(profile: Fixture, expected: 'old' | 'selected' | 'refused'): void {
+  const admission = acquireProfileStateRuntimeAdmission(profile.root)
+  try {
+    const open = () =>
+      createProfileStateStore({
+        dataFile: profile.dataFile,
+        databaseFile: profile.databasePath,
+        profileId
+      })
+    if (expected === 'refused') {
+      expect(open).toThrow()
+      expect(() => profileStateStorage(profileId, profile.root)).toThrow()
+      return
+    }
+    const expectedState = expected === 'old' ? oldState : selectedState
+    const storage = profileStateStorage(profileId, profile.root)
+    const raw =
+      storage === 'sqlite'
+        ? readSqlite(profile.databasePath)
+        : JSON.parse(readFileSync(profile.dataFile, 'utf8'))
+    // Check raw state before normalization can hide a lost domain.
+    expect(raw).toEqual(expectedState)
+    const reopened = open()
+    try {
+      expect(reopened.backend).toBe('sqlite')
+      expect(reopened.migrated).toBe(storage === 'json')
+      expect(profileStateStorage(profileId, profile.root)).toBe('sqlite')
+      const projected: unknown = JSON.parse(reopened.store.prepareProfileStateExport().json)
+      expect(projected).toMatchObject(expectedState)
+    } finally {
+      reopened.store.freezeWrites()
+    }
+  } finally {
+    admission.release()
+  }
+}
+
+describe('SQLite recovery process death', () => {
+  it.skipIf(process.platform === 'win32')(
+    'allows clean JSON startup after final artifact cleanup is directory-synced',
+    async () => {
+      const profile = await fixture('json', true)
+      await killRecoveryAt(bundle, profile, 'cleanup-directory-synced')
+      assertQuarantine(profile)
+      assertRestart(profile, 'selected')
+    }
+  )
+})

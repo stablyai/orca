@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Text, View } from 'react-native'
 import type { MobileWebShellUpdateFailure } from '../mobile-web-shell/mobile-web-shell-update-failure'
-import { processGenerationStore } from '../mobile-web-shell/process-generation-store'
+import { processGenerationStore } from '../mobile-web-shell/generations/process-generation-store'
 import { loadHosts } from '../host-catalog/host-store'
 import { formatUpdateFailure } from './mobile-web-shell-update-failure-copy'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'

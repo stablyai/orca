@@ -5,7 +5,7 @@ import { buildCounterbalancedSchedule } from '../measurement/counterbalanced-ben
 
 const bundled = await build({
   stdin: {
-    contents: "export * from './src/main/ai-vault/session-root-dedup.ts'",
+    contents: "export * from './src/main/ai-vault/parsing/session-root-dedup.ts'",
     resolveDir: process.cwd(),
     loader: 'ts'
   },

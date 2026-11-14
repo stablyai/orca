@@ -1,19 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
+import {
+  deferHiddenAgentResume,
+  noteHiddenAgentResumePtyEnded
+} from './hidden-agent-resume-deferral'
 import type { ColdRestoreAgentResumeStartup } from '../startup/fresh-spawn-types'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 const wakeRequests = vi.hoisted(() => ({ take: vi.fn(() => false) }))
-vi.mock('@/lib/sleeping-agent-wake-requests', () => ({
+vi.mock('@/lib/agent-session/resume/sleeping-agent-wake-requests', () => ({
   takeSleepingAgentWakeRequest: wakeRequests.take
 }))
 vi.mock('../reattach/deferred-session-reattach-connect', () => ({
   startDeferredSessionReattach: vi.fn()
 }))
-
-import {
-  deferHiddenAgentResume,
-  noteHiddenAgentResumePtyEnded
-} from './hidden-agent-resume-deferral'
 
 function hiddenPaneSession(): ConnectPanePtySession {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: deferHiddenAgentResume reads only these session members.

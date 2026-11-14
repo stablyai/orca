@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { nativeChatAgentRowWords } from '../../messages/rows/native-chat-message-row-words'
 
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 
-import type { NativeChatTurnStatus } from '../../../../../../shared/native-chat/transcript/native-chat-turn-status'
+import type { NativeChatTurnStatus } from '../../../../../../shared/native-chat/transcript/turns/native-chat-turn-status'
 
 import type { NativeChatResolvedPrompt } from '../../../../../../shared/native-chat/native-chat-resolution-receipt'
 import type { NativeChatTurnDiff } from '../../../../../../shared/native-chat/tools/native-chat-turn-diffs'
@@ -59,6 +60,104 @@ function toolRun(id: string): NativeChatMessage {
 }
 
 describe('transcript slots', () => {
+  it('shows completed generated output with final prose after settlement and only once when expanded', () => {
+    const generated: NativeChatMessage = {
+      ...text('image', ''),
+      blocks: [
+        { type: 'text', text: 'Generated image', presentation: 'generated-image' },
+        { type: 'image-ref', path: '/tmp/elephant.png' }
+      ]
+    }
+    const rows = [
+      text('u', 'Generate.', 'user'),
+      toolRun('work'),
+      text('answer', 'Your elephant.'),
+      generated
+    ]
+    const turnStatuses = {
+      active: null,
+      completedByTurn: { u: { startedAt: 1, thinking: false, workedSeconds: 4 } }
+    }
+    for (const expandedTurnKeys of [new Set<string>(), new Set(['u'])]) {
+      const slots = build(rows, { turnStatuses, expandedTurnKeys })
+      const answer = slots.find((slot) => slot.message.id === 'answer')!
+      expect(answer.drawsMessage).toBe(true)
+      expect(answer.endsResponse).toBe(true)
+      const source = slots.find((slot) => slot.message.id === 'image')
+      if (expandedTurnKeys.has('u')) {
+        expect(nativeChatAgentRowWords(source!.message)).toBe('Generated image')
+        expect(source!.endsResponse).toBe(false)
+      }
+      expect(answer.message.blocks).toEqual([
+        { type: 'text', text: 'Your elephant.' },
+        { type: 'image-ref', path: '/tmp/elephant.png' }
+      ])
+      expect(
+        slots
+          .filter((slot) => slot.drawsMessage)
+          .flatMap((slot) => slot.message.blocks.filter((block) => block.type === 'image-ref'))
+      ).toEqual([{ type: 'image-ref', path: '/tmp/elephant.png' }])
+    }
+    const embedded = build(
+      [rows[0]!, generated, text('answer', '![](<file:///tmp/elephant.png>)')],
+      { turnStatuses }
+    )
+    expect(embedded.find((slot) => slot.message.id === 'answer')?.message.blocks).toEqual([
+      { type: 'text', text: '![](<file:///tmp/elephant.png>)' }
+    ])
+  })
+
+  it.each([
+    ['![](/tmp/p.png)', false],
+    ['$$\n![](/tmp/p.png)\n$$', true],
+    ['```md\n![](/tmp/p.png)\n```', true],
+    ['[picture](/tmp/p.png)', true],
+    ['<img src="/tmp/p.png" alt="Picture">', false],
+    ['<!-- <img src="/tmp/p.png"> -->', true],
+    ['`<img src="/tmp/p.png">`', true]
+  ])('deduplicates only rendered image embeds in %s', (markdown, retained) => {
+    const generated: NativeChatMessage = {
+      ...text('image', ''),
+      blocks: [
+        { type: 'text', text: 'Generated image', presentation: 'generated-image' },
+        { type: 'image-ref', path: '/tmp/p.png' }
+      ]
+    }
+    const slots = build([text('u', 'Generate.', 'user'), generated, text('answer', markdown)], {
+      turnStatuses: {
+        active: null,
+        completedByTurn: { u: { startedAt: 1, thinking: false, workedSeconds: 4 } }
+      }
+    })
+    expect(
+      slots
+        .find((slot) => slot.message.id === 'answer')
+        ?.message.blocks.filter((block) => block.type === 'image-ref')
+    ).toEqual(retained ? [{ type: 'image-ref', path: '/tmp/p.png' }] : [])
+  })
+
+  it("hangs response controls only above the person's next message, never on the last row", () => {
+    const visualReply = text('visual', 'Here is the trend.\n\n::orca-visual{file="trend.html"}')
+    const hangs = (messages: NativeChatMessage[]) =>
+      build(messages).map((slot) => [slot.message.id, slot.actionsHang === true])
+
+    expect(hangs([text('u1', 'Hi', 'user'), text('reply', 'Hello')])).toEqual([
+      ['u1', false],
+      ['reply', false]
+    ])
+    expect(hangs([text('u1', 'Chart it', 'user'), visualReply])).toEqual([
+      ['u1', false],
+      ['visual', false]
+    ])
+    expect(
+      hangs([text('u1', 'Hi', 'user'), text('reply', 'Hello'), text('u2', 'Thanks', 'user')])
+    ).toEqual([
+      ['u1', false],
+      ['reply', true],
+      ['u2', false]
+    ])
+  })
+
   it('draws the completed plan outside collapsed work', () => {
     const plan: NativeChatMessage = {
       ...text('plan', '# Proposed change', 'system'),
@@ -173,16 +272,6 @@ describe('transcript slots', () => {
 
     expect(holder(new Set())).toEqual(['a-image'])
     expect(holder(new Set(['A']))).toEqual(['a-text'])
-  })
-
-  it('keeps a message whose only content is a turn status under it', () => {
-    const status: NativeChatTurnStatus = { startedAt: 1, thinking: false, workedSeconds: 4 }
-    const slots = build([text('u', '', 'user')], {
-      liveTurnKey: 'u',
-      turnStatuses: { active: status, completedByTurn: {} }
-    })
-    expect(slots).toHaveLength(1)
-    expect(slots[0]?.status).toBe(status)
   })
 })
 

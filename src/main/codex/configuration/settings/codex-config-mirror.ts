@@ -34,15 +34,20 @@ export function syncSystemConfigIntoManagedCodexHome(
     runtimeHomePath: getOrcaManagedCodexHomePath(),
     systemHomePath: getSystemCodexHomePath()
   }
-): void {
-  if (!mirrorSystemConfigIntoManagedCodexHome(homes)) {
+): boolean {
+  const result = mirrorSystemConfigIntoManagedCodexHome(homes)
+  if (!result.ran) {
     // Apply the daemon guard even on mirror stalls so long home paths can still launch Codex.
     ensureCodexDaemonSocketGuard(homes.runtimeHomePath)
   }
+  return result.complete
 }
 
-/** Returns false when no mirror pass ran, so the caller still owes the daemon guard. */
-function mirrorSystemConfigIntoManagedCodexHome(homes: CodexSettingsPromotionHomes): boolean {
+/** A baseline failure prevents reuse without changing when the daemon guard is owed. */
+function mirrorSystemConfigIntoManagedCodexHome(homes: CodexSettingsPromotionHomes): {
+  ran: boolean
+  complete: boolean
+} {
   // Promote in-chat changes before mirroring ~/.codex or this pass would revert them.
   const promotionPlan = promoteCodexRuntimeSettingsToSystem(homes)
   if (!promotionPlan) {
@@ -51,7 +56,7 @@ function mirrorSystemConfigIntoManagedCodexHome(homes: CodexSettingsPromotionHom
     if (stalledStatus.state === 'stalled') {
       reportCodexConfigSyncOutcome(homes.runtimeHomePath, stalledStatus)
     }
-    return false
+    return { ran: false, complete: false }
   }
   let mirrorResult: CodexConfigMirrorResult
   try {
@@ -59,7 +64,7 @@ function mirrorSystemConfigIntoManagedCodexHome(homes: CodexSettingsPromotionHom
   } catch (error) {
     // Latch mirror failures too, so the user sees their cause without repeated generic logging.
     reportCodexConfigSyncOutcome(homes.runtimeHomePath, getCodexConfigSyncStatus(homes), error)
-    return false
+    return { ran: false, complete: false }
   }
   if (mirrorResult.status === 'refused-indeterminate') {
     // Keep the baseline unchanged on indeterminate reads so unmirrored changes can retry.
@@ -68,18 +73,18 @@ function mirrorSystemConfigIntoManagedCodexHome(homes: CodexSettingsPromotionHom
       getCodexConfigSyncStatus(homes),
       mirrorResult.error
     )
-    return false
+    return { ran: false, complete: false }
   }
   reportCodexConfigSyncOutcome(homes.runtimeHomePath, getCodexConfigSyncStatus(homes))
   if (mirrorResult.status === 'skipped-missing-source') {
     // Bootstrap seeded homes only; advancing an existing baseline would strand unmirrored changes.
     if (!readCodexSettingsBaseline(homes.runtimeHomePath)) {
-      snapshotCodexRuntimeSettingsBaseline(homes.runtimeHomePath)
+      return { ran: true, complete: snapshotCodexRuntimeSettingsBaseline(homes.runtimeHomePath) }
     }
-    return true
+    return { ran: true, complete: true }
   }
   // Advance the baseline only after mirroring so unpromoted changes remain eligible for retry.
-  snapshotCodexRuntimeSettingsBaseline(homes.runtimeHomePath, {
+  const complete = snapshotCodexRuntimeSettingsBaseline(homes.runtimeHomePath, {
     conflicts: new Map(
       [...promotionPlan.conflicts].filter(([key]) => mirrorResult.preservedConflictKeys.has(key))
     ),
@@ -88,7 +93,7 @@ function mirrorSystemConfigIntoManagedCodexHome(homes: CodexSettingsPromotionHom
     mirroredMcpServers: mirrorResult.mirroredMcpServerNames,
     mirroredMcpServerRoot: mirrorResult.mirroredMcpServerRoot
   })
-  return true
+  return { ran: true, complete }
 }
 
 export function ensureCodexDaemonSocketGuard(runtimeHomePath: string): void {

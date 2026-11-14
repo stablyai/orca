@@ -7,11 +7,14 @@ import {
 import { PLUGIN_HOOK_SPECS } from '../../../shared/plugins/events/plugin-hook-payloads'
 import { PLUGIN_WORKER_READY_TIMEOUT_MS } from '../../../shared/plugins/workers/plugin-host-protocol'
 import { runPluginHookChain } from '../../../shared/plugins/workers/plugin-hook-chain'
-import { isInvalidDiscoveredPlugin } from '../plugin-discovery'
-import { assertPluginSystemEnabled, resolveDevPlugin } from '../plugin-dev-event-emit'
-import type { PluginDevFolderLookup, PluginDevFolderTarget } from '../plugin-dev-folders'
-import type { PluginEventDeliveryContext } from '../plugin-event-delivery'
-import type { PluginWorkerHandle } from '../workers/plugin-host-process'
+import { isInvalidDiscoveredPlugin } from '../discovery/plugin-discovery'
+import { assertPluginSystemEnabled, resolveDevPlugin } from '../development/plugin-dev-event-emit'
+import type {
+  PluginDevFolderLookup,
+  PluginDevFolderTarget
+} from '../development/plugin-dev-folders'
+import type { PluginEventDeliveryContext } from '../events/plugin-event-delivery'
+import type { PluginWorkerHandle } from '../workers/parent-process/plugin-host-process-types'
 
 export type PluginDevHookService = PluginDevFolderLookup & {
   options: { isPluginSystemEnabled: () => boolean }

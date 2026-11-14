@@ -6,7 +6,7 @@ import { cn } from '@/lib/class-names'
 import { Trans } from 'react-i18next'
 import { i18n } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { getDetectedSetupScriptTextareaRows } from '@/lib/script-textarea-rows'
+import { getDetectedSetupScriptTextareaRows } from '@/components/script-editor/rows/script-textarea-rows'
 
 type DismissButtonProps = {
   onDismiss: () => void

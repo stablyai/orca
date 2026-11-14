@@ -19,12 +19,7 @@ export function recordCodexCommandTurnClaim(
   }
   return sink.tryReviseResolvedItemAndPublish(
     CLAIM_BYTES,
-    (journal) => {
-      const body = journal.itemBody(commandTurnItemId)
-      return body?.kind === 'turn' && body.state === 'running'
-        ? { identity, body: { ...body, providerTurnId } }
-        : null
-    },
+    { kind: 'turn-claim', identity, providerTurnId },
     { lifecycle: true, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   )
 }

@@ -14,7 +14,7 @@ import { expect, test } from './helpers/orca-app'
 import { orcaCliResult, runCompiledOrcaCli } from './helpers/compiled-orca-cli'
 import { RuntimeClient } from '../../src/cli/runtime/client'
 import { disablePluginSystem, enableDevPlugins } from './helpers/plugin-smoke'
-import { createPluginFromTemplate } from '../../src/cli/plugin-authoring/plugin-create'
+import { createPluginFromTemplate } from '../../src/cli/plugins/authoring/plugin-create'
 import { ISOLATED_FRAMES_E2E } from './helpers/plugin-frame-guest'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 

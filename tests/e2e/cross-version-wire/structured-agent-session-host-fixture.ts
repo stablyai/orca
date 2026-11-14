@@ -1,10 +1,10 @@
-import { agentSessionRecordFixture } from '../../../src/shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { agentSessionConversationView } from '../../../src/shared/agent-session/lifecycle/agent-session-conversation-view'
+import { agentSessionRecordFixture } from '../../../src/shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../src/shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import { vi, type Mock } from 'vitest'
 import type { StructuredAgentSessionAdapter } from '../../../src/main/native-chat/agent-session-wire/providers/structured-agent-session-adapter'
-import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-instant-start.test-support'
+import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-instant-start.test-fixture'
 import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store'
-import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/provider-handles/agent-session-provider-handle-encoding'
 import type { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { CODEX_STRUCTURED_AGENT } from '../../../src/main/codex/structured/launch/codex-structured-agent-definition'
@@ -163,12 +163,13 @@ export function structuredHostStub(
     history: vi.fn(() => ({ ok: true, page: { items: [] } })),
     readCurrentRequests: vi.fn(() => ({ json: '[]', nextCursor: null })),
     sessionAgent: vi.fn(() => null),
-    journalSnapshot: vi.fn(() => ({
+    conversationOutline: vi.fn(() => ({
       sessionId,
       cursor: { epoch: 'epoch-a', sequence: 0 },
-      items: [],
-      submissions: []
+      entries: [],
+      omittedEntries: 0
     })),
+    historyItem: vi.fn(() => null),
     subscribe: vi.fn(() => () => undefined),
     subscribeStatus: vi.fn((subscriber: { emit: (event: unknown) => void }) => {
       subscriber.emit({ type: 'snapshot', sessions: [] })

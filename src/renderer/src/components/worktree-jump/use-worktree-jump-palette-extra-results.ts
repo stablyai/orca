@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { usePaletteExtraSources } from '@/components/cmd-j/palette-extra-sources'
 import type { PaletteExtraSource } from '@/components/cmd-j/palette-extra-results'
-import { comparePaletteRankedItems } from '@/lib/cmd-j-section-leadership'
+import { comparePaletteRankedItems } from '@/lib/workspace/search/palette/cmd-j-section-leadership'
 import {
   encodePaletteIdentity,
   preparePaletteActivity,

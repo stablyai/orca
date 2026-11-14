@@ -1,5 +1,5 @@
 import type { FederationRelayDirection, FederationRelayItemRow } from '../orchestration-records'
-import type { FederationRelayAcknowledgment } from '../../legacy-remote/legacy-remote-db-methods'
+import type { FederationRelayAcknowledgment } from '../../legacy-remote/federation-relay-report-acknowledgment'
 import type { OrchestrationDb } from '../orchestration-db'
 
 export function listPendingFederationRelay(

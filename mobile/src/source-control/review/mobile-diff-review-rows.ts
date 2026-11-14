@@ -7,7 +7,15 @@ const MINIMUM_FOLDED_LINES = 3
 
 export type MobileDiffReviewRow<Line extends MobileDiffLine = MobileDiffLine> =
   | { kind: 'line'; key: string; line: Line; lineIndex: number }
-  | { kind: 'fold'; key: string; hiddenCount: number; startIndex: number; endIndex: number }
+  | {
+      kind: 'fold'
+      key: string
+      hiddenCount: number
+      startIndex: number
+      endIndex: number
+      /** The line the folded code sits inside, shown on the fold like GitHub's hunk header. */
+      enclosingLine: string | null
+    }
   | { kind: 'thread'; key: string; thread: MobileDiffReviewThread }
 
 /**
@@ -72,7 +80,8 @@ export function buildMobileDiffReviewRows<Line extends MobileDiffLine>(
           key: `fold:${foldStart}`,
           hiddenCount: foldEnd - foldStart,
           startIndex: foldStart,
-          endIndex: foldEnd
+          endIndex: foldEnd,
+          enclosingLine: foldEnclosingLine(lines, foldEnd)
         })
         lineIndex = foldEnd - 1
         continue
@@ -81,4 +90,48 @@ export function buildMobileDiffReviewRows<Line extends MobileDiffLine>(
     }
   }
   return rows
+}
+
+const TAB_COLUMNS = 4
+
+function indentColumns(text: string): number {
+  let columns = 0
+  for (const char of text) {
+    if (char === ' ') {
+      columns += 1
+    } else if (char === '\t') {
+      columns += TAB_COLUMNS
+    } else {
+      break
+    }
+  }
+  return columns
+}
+
+/**
+ * The phone's diff has no `@@` headers, so the fold names its scope itself: the nearest new-file line at or
+ * above the fold's end that is indented less than the first line shown after it. Blank lines don't count.
+ */
+export function foldEnclosingLine(
+  lines: readonly MobileDiffLine[],
+  foldEnd: number
+): string | null {
+  const counts = (line: MobileDiffLine | undefined): line is MobileDiffLine =>
+    line !== undefined && line.kind !== 'delete' && line.text.trim() !== ''
+  let nextIndex = foldEnd
+  while (nextIndex < lines.length && !counts(lines[nextIndex])) {
+    nextIndex += 1
+  }
+  const next = lines[nextIndex]
+  if (!counts(next)) {
+    return null
+  }
+  const nextIndent = indentColumns(next.text)
+  for (let index = foldEnd - 1; index >= 0; index -= 1) {
+    const line = lines[index]
+    if (counts(line) && indentColumns(line.text) < nextIndent) {
+      return line.text.trim()
+    }
+  }
+  return null
 }

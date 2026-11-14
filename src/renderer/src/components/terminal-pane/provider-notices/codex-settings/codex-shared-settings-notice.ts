@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store/index'
-import { isLocalWindowsDesktopClient } from '@/lib/desktop-window-chrome'
+import { isLocalWindowsDesktopClient } from '@/app-shell/chrome/desktop-window-chrome'
 import { whenAgentTerminalAppears } from '../agent-presence/agent-terminal-presence'
 
 /** Whether to show the one-time "Codex now uses ~/.codex" card this session, and its dismiss. */

@@ -11,17 +11,17 @@ import {
   setPendingPRCommentAiAck,
   takePendingPRCommentAiAck
 } from '../comments/pr-comments-ai-launch-ack'
-import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'
-import type { ChecksPanelReviewDataState } from '../use-checks-panel-review-data'
+import type { ChecksPanelControllerState } from '../panel/use-checks-panel-controller-state'
+import type { ChecksPanelReviewDataState } from '../review-data/use-checks-panel-review-data'
 import type { ChecksPanelPollingState } from '../refresh/use-checks-panel-polling'
 import { buildSnapshottedThreadResolver } from '../comments/pr-comment-snapshotted-thread-resolver'
 import { markPRCommentThreadResolved } from '@/lib/source-control/review/comments/pr-comment-thread-resolution'
-import { resolveGitLabMRDiscussionForChecks } from '../gitlab-review-client'
+import { resolveGitLabMRDiscussionForChecks } from '../review-data/gitlab-review-client'
 import { clearPRCommentsListSelection } from '../comments/pr-comments-list-selection'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import type { ChecksAgentComposerState } from '../panel-state-types'
-import type { ChecksPanelReview } from '../checks-panel-review'
+import type { ChecksAgentComposerState } from '../panel/panel-state-types'
+import type { HostedReviewInfo as ChecksPanelReview } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import { codeHostErrorText } from '@/lib/source-control/remote/code-host-error-copy'
 
 type ChecksPanelAiAcknowledgementInput = Pick<

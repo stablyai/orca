@@ -11,6 +11,7 @@ import {
 import { BrowserCookieImportDisclosure } from '@/components/BrowserCookieImportDisclosure'
 import { BrowserCookieImportMachineNotice } from '@/components/BrowserCookieImportMachineNotice'
 import { useTranslate } from '@/i18n/use-translate'
+import { translateBrowserSessionProfileLabel } from '@/lib/browser/profiles/browser-session-profile-label'
 import { BROWSER_FAMILY_LABELS } from '../../../../../shared/browser/browser-family-labels'
 import type { BrowserSessionProfile } from '../../../../../shared/browser-workspace-types'
 
@@ -63,8 +64,7 @@ export function BrowserToolbarProfileSub({
         <UserRound className="mr-2 size-3.5" />
         {t('browser.toolbar.profile', 'Profile')}
         <span className="ml-auto truncate pl-2 text-xs text-muted-foreground">
-          {currentProfile?.label ??
-            t('auto.components.browser.pane.BrowserToolbarMenu.ed8f54509d', 'Default')}
+          {translateBrowserSessionProfileLabel(currentProfile?.label, effectiveProfileId)}
         </span>
       </DropdownMenuSubTrigger>
       <DropdownMenuPortal>
@@ -79,7 +79,9 @@ export function BrowserToolbarProfileSub({
                 <Check
                   className={`mr-2 size-3.5 shrink-0 ${isSelectedProfile ? 'opacity-100' : 'opacity-0'}`}
                 />
-                <span className="truncate">{profile.label}</span>
+                <span className="truncate">
+                  {translateBrowserSessionProfileLabel(profile.label, profile.id)}
+                </span>
                 {profile.source?.browserFamily && (
                   <span className="ml-auto pl-2 text-2xs text-muted-foreground">
                     {BROWSER_FAMILY_LABELS[profile.source.browserFamily] ??

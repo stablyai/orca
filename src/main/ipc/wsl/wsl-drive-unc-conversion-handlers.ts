@@ -11,13 +11,13 @@ import type {
 } from '../../../shared/wsl-drive-unc-conversion-types'
 import { relaunchApp } from '../../startup/quit/app-relaunch'
 import { gitExecFileAsync } from '../../git/command-runner/git-exec-file'
-import { readProfileProjectTransferState } from '../../orca-profiles/profile-project-domain-state'
+import { readProfileProjectTransferState } from '../../orca-profiles/project-transfer/profile-project-domain-state'
 import { getOrcaProfileListState } from '../../orca-profiles/profile-index-store'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import type { Store } from '../../persistence/loading-store/store'
-import { pauseWslMoveScope } from '../../persistence/moving-wsl-projects/wsl-move-driver-pause'
+import { pauseWslMoveScope } from '../../persistence/moving-wsl-projects/execution/wsl-move-driver-pause'
 import type { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { quitProcess } from '../../startup/process-quit-request'
+import { quitProcess } from '../../startup/quit/process-quit-request'
 import { startWslDriveUncConversion } from '../../wsl/filesystem/wsl-drive-unc-conversion-run'
 import {
   lastWslDriveUncConversionOutcomes,

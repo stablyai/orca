@@ -1,5 +1,5 @@
 import { dirname } from '@/lib/path'
-import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
+import { resolveWorktreeDisplayName } from '@/lib/workspace/display/worktree-default-display-name'
 import {
   getWorktreePathBasenameFromId,
   splitWorktreeIdForFilesystem

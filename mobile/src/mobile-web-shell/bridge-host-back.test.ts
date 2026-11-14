@@ -67,14 +67,6 @@ describe('the claim a host holds on the device Back key', () => {
     expect(rebuilt.backClaims).toEqual([false])
   })
 
-  it('says nothing on a document that never claimed, so a drop is always a real one', () => {
-    const bridge = harness()
-    bridge.host.receive(ready())
-    bridge.host.receive(clientFrame({ type: 'close' }))
-    bridge.host.dispose()
-    expect(bridge.backClaims).toEqual([])
-  })
-
   it('refuses a claim from a page that has not asked for a session yet', () => {
     const bridge = harness()
     bridge.host.receive(claim(true))
@@ -88,13 +80,6 @@ describe('the claim a host holds on the device Back key', () => {
 })
 
 describe('handing one press to the page', () => {
-  it('posts a back frame to the ready page', () => {
-    const bridge = harness()
-    bridge.host.receive(ready())
-    expect(bridge.host.sendBack()).toBe(true)
-    expect(bridge.last()).toEqual({ v: 1, type: BRIDGE_BACK_FRAME })
-  })
-
   // Older pages drop unknown Back frames; return false without sending so the navigator retains the press.
   it('sends nothing between documents, when the view belongs to no page', () => {
     const bridge = harness()

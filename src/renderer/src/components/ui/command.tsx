@@ -10,6 +10,7 @@ import { cn } from '@/lib/class-names'
 import { handleOverlayCloseAutoFocus } from '@/lib/overlay-interaction/overlay-focus-ownership'
 import { getWheelScrollDeltaY } from '@/lib/wheel-scroll-delta'
 import { OverlayFocusScope, useOverlayFocusScope } from './use-overlay-focus-scope'
+import { useTranslate } from '@/i18n/use-translate'
 import { handleImeOverlayEscape } from '@/lib/text-input/ime/ime-overlay-escape'
 import { useImeTextFieldProps } from '@/lib/text-input/ime/ime-text-field'
 import { DialogOverlay } from '@/components/ui/dialog'
@@ -25,7 +26,16 @@ const commandVariants = cva('flex h-full w-full flex-col overflow-hidden rounded
       // Why: matches DropdownMenuItem type so a searchable picker reads like its sibling menus.
       menu: '[&_[cmdk-item]]:py-[4px] [&_[cmdk-item]]:text-[12px]',
       model:
-        '[&_[cmdk-group]]:p-1.5 [&_[cmdk-group-items]]:flex [&_[cmdk-group-items]]:flex-col [&_[cmdk-group-items]]:gap-px [&_[cmdk-item]]:min-h-7 [&_[cmdk-item]]:py-1.5 [&_[cmdk-item]]:text-[13px]'
+        '[&_[cmdk-group]]:p-1.5 [&_[cmdk-group-items]]:flex [&_[cmdk-group-items]]:flex-col [&_[cmdk-group-items]]:gap-px [&_[cmdk-item]]:min-h-7 [&_[cmdk-item]]:py-1.5 [&_[cmdk-item]]:text-[13px]',
+      // Why: a flat launcher card (split-pane landing): field on a divider over a fixed-height list of 36px rows.
+      card: [
+        'rounded-[12px] border border-border',
+        // Field height, list padding, list height (5 rows + padding) and field inset (list padding + row px, so icons align) move as one set.
+        '[&_[data-cmdk-input-wrapper]]:h-10 [&_[cmdk-list]]:p-2 [&_[cmdk-list]]:h-[196px] [&_[data-cmdk-input-wrapper]]:px-[18px]',
+        '[&_[data-cmdk-input-wrapper]]:gap-2.5 [&_[data-cmdk-input-wrapper]]:bg-transparent [&_[data-cmdk-input-wrapper]]:py-0 [&_[data-cmdk-input-wrapper]_svg]:mr-0 [&_[data-cmdk-input-wrapper]_svg]:opacity-80',
+        '[&_[cmdk-input]]:h-full [&_[cmdk-input]]:py-0 [&_[cmdk-input]]:leading-none [&_[cmdk-input]]:text-ellipsis [&_[cmdk-group]]:p-0',
+        '[&_[cmdk-item]]:h-9 [&_[cmdk-item]]:gap-2.5 [&_[cmdk-item]]:rounded-[7px] [&_[cmdk-item]]:px-2.5 [&_[cmdk-item]]:py-0'
+      ]
     }
   },
   compoundVariants: [
@@ -55,8 +65,8 @@ function Command({
 
 function CommandDialog({
   children,
-  title = 'Command Palette',
-  description = 'Search for a command to run...',
+  title,
+  description,
   shouldFilter,
   onOpenAutoFocus,
   onCloseAutoFocus,
@@ -77,6 +87,7 @@ function CommandDialog({
   surface?: 'default' | 'palette'
   commandProps?: React.ComponentProps<typeof CommandPrimitive>
 }) {
+  const t = useTranslate()
   const { ref: focusScopeRef, scope } = useOverlayFocusScope()
   const { className: commandClassName, ...commandRootProps } = commandProps ?? {}
 
@@ -99,9 +110,15 @@ function CommandDialog({
             onOpenAutoFocus={onOpenAutoFocus}
             onCloseAutoFocus={(event) => handleOverlayCloseAutoFocus(event, onCloseAutoFocus)}
           >
-            <DialogPrimitive.Title className="sr-only">{title}</DialogPrimitive.Title>
+            <DialogPrimitive.Title className="sr-only">
+              {title ?? t('auto.components.ui.command.paletteTitle', 'Command Palette')}
+            </DialogPrimitive.Title>
             <DialogPrimitive.Description className="sr-only">
-              {description}
+              {description ??
+                t(
+                  'auto.components.ui.command.paletteDescription',
+                  'Search for a command to run...'
+                )}
             </DialogPrimitive.Description>
             <Command
               shouldFilter={shouldFilter}
@@ -251,10 +268,19 @@ function CommandGroup({
   )
 }
 
+const COMMAND_ITEM_BASE_CLASS =
+  'relative flex cursor-default gap-2 select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*="size-"])]:size-4'
+
 const commandItemVariants = cva('', {
   variants: {
     selection: { default: '', palette: 'jump-palette-item' },
-    density: { default: '', workspace: 'px-3 py-2 text-xs' },
+    density: { default: '', workspace: 'px-3 py-2 text-xs', flush: 'p-0' },
+    // Cmd+J's workspace row box: titles share one column across row kinds.
+    shape: {
+      default: '',
+      'palette-row':
+        'group mx-0.5 flex cursor-pointer items-center gap-3 rounded-lg border border-transparent px-3 py-2.5 text-left transition-[background-color,border-color,box-shadow] data-[selected=true]:border-border data-[selected=true]:bg-accent data-[selected=true]:text-foreground'
+    },
     emphasis: { default: '', pinned: 'bg-muted/35' }
   },
   defaultVariants: { selection: 'default' }
@@ -265,6 +291,7 @@ function CommandItem({
   selection,
   density,
   emphasis,
+  shape,
   ref,
   ...props
 }: React.ComponentProps<typeof CommandPrimitive.Item> & VariantProps<typeof commandItemVariants>) {
@@ -273,8 +300,54 @@ function CommandItem({
       ref={ref}
       data-slot="command-item"
       className={cn(
-        'relative flex cursor-default gap-2 select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground data-[disabled=true]:pointer-events-none data-[disabled=true]:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*="size-"])]:size-4',
-        commandItemVariants({ selection, density, emphasis }),
+        COMMAND_ITEM_BASE_CLASS,
+        commandItemVariants({ selection, density, emphasis, shape }),
+        className
+      )}
+      {...props}
+    />
+  )
+}
+
+type CommandOptionProps = Omit<React.ComponentProps<'div'>, 'onSelect'> &
+  VariantProps<typeof commandItemVariants> & {
+    selected: boolean
+    /** Rendered as `data-value`, the identity automation reads from command rows. */
+    value?: string
+    disabled?: boolean
+    onHighlight?: () => void
+    onSelect?: () => void
+  }
+
+/** A listbox option cmdk never sees, for windowed lists that own selection; omitting `cmdk-item` keeps cmdk's DOM queries off it. */
+function CommandOption({
+  className,
+  selection,
+  density,
+  emphasis,
+  shape,
+  selected,
+  value,
+  disabled = false,
+  onHighlight,
+  onSelect,
+  ...props
+}: CommandOptionProps): React.JSX.Element {
+  return (
+    <div
+      data-slot="command-item"
+      data-value={value}
+      role="option"
+      aria-selected={selected}
+      data-selected={selected}
+      aria-disabled={disabled}
+      data-disabled={disabled}
+      // Like cmdk, moving over the already-highlighted option does no work.
+      onPointerMove={disabled || selected ? undefined : onHighlight}
+      onClick={disabled ? undefined : onSelect}
+      className={cn(
+        COMMAND_ITEM_BASE_CLASS,
+        commandItemVariants({ selection, density, emphasis, shape }),
         className
       )}
       {...props}
@@ -303,5 +376,6 @@ export {
   CommandInput,
   CommandItem,
   CommandList,
+  CommandOption,
   CommandSeparator
 }

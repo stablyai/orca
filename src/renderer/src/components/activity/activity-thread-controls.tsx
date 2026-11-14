@@ -4,7 +4,7 @@ import { AgentStateDot } from '@/components/AgentStateDot'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useNow } from '@/hooks/use-now'
 import { cn } from '@/lib/class-names'
-import { formatShortTimeAgo } from '@/lib/short-time-ago'
+import { formatShortTimeAgo } from '@/lib/time-format/short-time-ago'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import type { Repo } from '../../../../shared/repo-types'
 import {

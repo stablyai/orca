@@ -8,12 +8,12 @@ import {
 } from '@/components/github/github-work-item-identity'
 import { canUseGitHubRepoContext } from '@/lib/work-items/github/github-source-runtime-context'
 import { useTranslate } from '@/i18n/use-translate'
-import type { PRComment } from '../../../../../shared/github/comment-types'
-import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
+import type { PRComment } from '../../../../../shared/github/comments/comment-types'
+import type { GitHubAssignableUser } from '../../../../../shared/github/pull-requests/pull-request-types'
 import type {
   GitHubWorkItem,
   GitHubWorkItemDetails
-} from '../../../../../shared/github/work-item-types'
+} from '../../../../../shared/github/work-items/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { ChecksTab } from '../inspect-pull-request/checks-tab'
 import { ConversationTab } from '../discuss-item/conversation-tab'

@@ -1,3 +1,4 @@
+import type { FolderWorkspaceCreateResult } from '../../../../../shared/folder-workspaces/folder-workspace-create'
 /** Use one runtime stub for RPC and replay tests so they exercise the same host surface. */
 
 import { vi } from 'vitest'
@@ -6,7 +7,7 @@ import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../../shared/agent-lau
 import type { WorktreeLineageWarning } from '../../../../../shared/worktree/lineage-types'
 import { AgentLaunchPaneAlreadyLiveError } from '../../../../../shared/agent-launch/contracts/agent-launch-pane-already-live'
 import type { RpcContext } from '../../core'
-import { resolveRpcCallerIdentity } from '../../rpc-caller-identity'
+import { resolveRpcCallerIdentity } from '../../callers/rpc-caller-identity'
 import type { AgentSessionRecordStore } from '../../../agent-session/records/agent-session-record-store'
 import type { TerminalWorkspaceLaunchScope } from '../../../orchestration/terminal-authority/structured-sessions/runtime-legacy-worker-terminal-recovery-types'
 import type {
@@ -103,7 +104,39 @@ export function runtimeStub(options: AgentLaunchRuntimeStubOptions = {}) {
       }
     ),
     showRepo: vi.fn(async () => ({ id: 'repo-1' })),
-    createFolderWorkspace: vi.fn(async (_input: Record<string, unknown>) => ({ id: 'fw-new' })),
+    createFolderWorkspace: vi.fn(
+      async (input: Record<string, unknown>): Promise<FolderWorkspaceCreateResult> => {
+        reportPromptCarry(options, input.onStartupPromptCarry, input.startupPrompt)
+        const terminal = {
+          handle: 'term_folder_first',
+          ...(options.startupTerminalPaneKey ? { paneKey: options.startupTerminalPaneKey } : {})
+        }
+        if (input.startupAgent && options.startupTerminalPaneKey) {
+          handlesByPaneKey.set(options.startupTerminalPaneKey, terminal.handle)
+        }
+        if (input.startupAgent && typeof input.onStartupTerminalCreated === 'function') {
+          input.onStartupTerminalCreated(terminal)
+        }
+        return {
+          folderWorkspace: {
+            id: 'fw-new',
+            projectGroupId: 'group-1',
+            name: 'notes',
+            folderPath: '/tmp/notes',
+            linkedTask: null,
+            comment: '',
+            isArchived: false,
+            isUnread: false,
+            isPinned: false,
+            sortOrder: 0,
+            lastActivityAt: 0,
+            createdAt: 0,
+            updatedAt: 0
+          },
+          ...(input.startupAgent ? { startupTerminal: { spawned: true, ...terminal } } : {})
+        }
+      }
+    ),
     createManagedWorktree: vi.fn(async (args: Record<string, unknown>) => {
       reportPromptCarry(options, args.onStartupPromptCarry, args.startupPrompt)
       if (args.startupAgent && options.startupTerminalPaneKey) {

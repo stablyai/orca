@@ -11,6 +11,7 @@ import {
 } from '../host-selection/add-repo-server-ssh-targets'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
+import { formatSshUserFacingError } from '@/components/settings/ssh/targets/ssh-user-facing-error'
 import { upsertAddedRepoWithProjectHostSetup } from '../completion/add-repo-store-upsert'
 import { worktreeRefreshOptions } from '../host-selection/add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
@@ -106,7 +107,7 @@ export function useRemoteRepo(
       } catch (err) {
         toast.error(
           err instanceof Error
-            ? err.message
+            ? formatSshUserFacingError(err.message)
             : translate('auto.components.sidebar.AddRepoSteps.3e64e8a70d', 'Connection failed')
         )
       }

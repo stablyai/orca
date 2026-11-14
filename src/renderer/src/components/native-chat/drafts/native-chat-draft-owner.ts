@@ -1,5 +1,3 @@
-import type { AppState } from '../../../store/types'
-import type { NativeChatComposerDraftOwner } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 import {
   nativeChatDraftScopeTabId,
   structuredAgentSessionIdOfDraftScope
@@ -7,8 +5,10 @@ import {
 import {
   chatWorkspaceByTabId,
   structuredChatWorkspacesBySessionId
-} from '../../../lib/structured-chat-tab-index'
+} from '../../../lib/agent-session/tab-identity/structured-chat-tab-index'
 import { resolveWorktreeOperationRoute } from '../../../lib/workspace/ownership/worktree-operation-route'
+import type { AppState } from '../../../store/types'
+import type { NativeChatComposerDraftOwner } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 
 function workspaceOfDraftScope(
   state: Pick<AppState, 'tabsByWorktree' | 'unifiedTabsByWorktree'>,

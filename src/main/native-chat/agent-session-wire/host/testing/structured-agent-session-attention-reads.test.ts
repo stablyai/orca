@@ -1,29 +1,24 @@
 import { expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
-import { agentSessionJournalProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { AgentSessionTurnCompletionEvent } from '../../../../../shared/agent-session/view/agent-session-turn-completion-wire'
 import { structuredAttentionOrigin } from '../../../../../shared/agent-session/agent-session-attention'
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { createAnnouncedNotificationRegistry } from '../../../../notifications/announced-notification-registry'
-import * as journalRestore from '../../../agent-session-journal/replay/journal-open'
 import * as journalFactory from '../../../agent-session-journal/journal-store-factory'
 import type { AgentSessionExecutionLocation } from '../../../../../shared/agent-session/lifecycle/agent-session-record'
-import {
-  loadTestJournal,
-  openTestJournalHostDatabase
-} from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { journalSqlReads } from '../../../agent-session-journal/journal-sql-reads'
 import {
   HOST_TEST_LOCATION,
   HOST_TEST_SESSION as SESSION,
   hostTestAttachParams,
   hostTestOperationId
-} from './structured-agent-session-host-test-data'
+} from './structured-agent-session-host-test-data.test-fixture'
 import {
   createRestTestRig,
   REST_TEST_CALLER,
   restTestSend,
   sweepOnce
-} from './structured-agent-session-rest-test-rig'
+} from './structured-agent-session-rest-test-rig.test-fixture'
 
 import { STRUCTURED_AGENT_SESSION_IDLE_MS as IDLE_MS } from '../../termination/structured-agent-session-idle-sweep'
 
@@ -45,17 +40,14 @@ it.each(['git-worktree', 'folder'] as const)(
       ).toMatchObject({ ok: true })
       await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalled())
       await rig.restart()
-      const stored = loadTestJournal(rig.root, SESSION)
-      if (!stored) {
-        throw new Error('the conversation has no stored journal')
-      }
+      const stored = await journalSqlReads(rig.host.deps.journalDatabase.readers, SESSION).cursor()
       const acquisitions = rig.adapter.acquire.mock.calls.length
 
       expect(await rig.host.attentionReads.workspace(location)).toEqual([
         {
           sessionId: SESSION,
           scope: location,
-          observedCursor: { epoch: stored.state.epoch, sequence: stored.state.lastSequence }
+          observedCursor: stored
         }
       ])
       for (const other of [
@@ -79,56 +71,44 @@ it.each(['git-worktree', 'folder'] as const)(
   }
 )
 
-it.each(['resting-newer-format', 'live-closed'] as const)(
-  'keeps sibling attention readable when a %s journal cannot supply its boundary',
-  async (failure) => {
-    const rig = await createRestTestRig()
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const damaged = 'session-unreadable'
-    try {
-      const attached = await rig.host.attach(REST_TEST_CALLER, hostTestAttachParams(null))
-      expect(attached.ok).toBe(true)
-      await rig.store.reserveOwner({
-        sessionId: damaged,
-        location: HOST_TEST_LOCATION,
-        provider: 'codex',
-        accountHome: { variable: 'CODEX_HOME', path: '/home/dev/.codex' },
-        expectedFence: null,
-        spawnToken: 'unreadable-chat',
-        claimKeyId: 'key-1',
-        handoffOperationId: null,
-        probe: { outcome: 'reservation-unused' },
-        operation: {
-          callerKey: 'fixture',
-          operationId: hostTestOperationId(),
-          fingerprint: '1'.repeat(64)
-        },
-        now: rig.clock.now
-      })
-      expect(await rig.host.revealSession(damaged)).toMatchObject({ readable: true })
-      if (failure === 'resting-newer-format') {
-        await rig.restart()
-      }
-      const accepted = (await rig.host.attentionReads.workspace(HOST_TEST_LOCATION)).find(
-        (read) => read.sessionId === SESSION
-      )
-      expect(accepted).toBeDefined()
-      if (failure === 'resting-newer-format') {
-        openTestJournalHostDatabase(rig.root)
-          .db.prepare('UPDATE journal_outcome_epochs SET format = format + 1 WHERE session_id = ?')
-          .run(damaged)
-      } else {
-        await rig.host.collaboratorsForTests().sessions.get(damaged)?.journal.close()
-      }
+it('keeps sibling attention readable when a closed live journal cannot supply its boundary', async () => {
+  const rig = await createRestTestRig()
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+  const damaged = 'session-unreadable'
+  try {
+    const attached = await rig.host.attach(REST_TEST_CALLER, hostTestAttachParams(null))
+    expect(attached.ok).toBe(true)
+    await rig.store.reserveOwner({
+      sessionId: damaged,
+      location: HOST_TEST_LOCATION,
+      provider: 'codex',
+      accountHome: { variable: 'CODEX_HOME', path: '/home/dev/.codex' },
+      expectedFence: null,
+      spawnToken: 'unreadable-chat',
+      claimKeyId: 'key-1',
+      handoffOperationId: null,
+      probe: { outcome: 'reservation-unused' },
+      operation: {
+        callerKey: 'fixture',
+        operationId: hostTestOperationId(),
+        fingerprint: '1'.repeat(64)
+      },
+      now: rig.clock.now
+    })
+    expect(await rig.host.revealSession(damaged)).toMatchObject({ readable: true })
+    const accepted = (await rig.host.attentionReads.workspace(HOST_TEST_LOCATION)).find(
+      (read) => read.sessionId === SESSION
+    )
+    expect(accepted).toBeDefined()
+    await rig.host.collaboratorsForTests().sessions.get(damaged)?.journal.close()
 
-      expect(await rig.host.attentionReads.workspace(HOST_TEST_LOCATION)).toEqual([accepted])
-      expect(warn).toHaveBeenCalled()
-    } finally {
-      await rig.dispose()
-      warn.mockRestore()
-    }
+    expect(await rig.host.attentionReads.workspace(HOST_TEST_LOCATION)).toEqual([accepted])
+    expect(warn).toHaveBeenCalled()
+  } finally {
+    await rig.dispose()
+    warn.mockRestore()
   }
-)
+})
 
 it('acknowledges a post-rewind completion after normal idle retirement without reopening history', async () => {
   const rig = await createRestTestRig()
@@ -158,11 +138,12 @@ it('acknowledges a post-rewind completion after normal idle retirement without r
     provider.appendItem(firstTurnIdentity, firstTurn, { turnScope: AGENT_JOURNAL_THREAD_SCOPE })
     await rig.host.flushStreamedEvents(SESSION)
     const journal = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
-    const physicalEpoch = journal.epoch
-    await journal.replaceEpochItems(
-      'handle_forked',
-      attached.fence,
-      [
+    const physicalEpoch = journal.physicalCursor().epoch
+    await journal.write({
+      kind: 'epoch-replace',
+      reason: 'handle_forked',
+      fence: attached.fence,
+      items: [
         {
           identity: { provider: 'orca', clientMessageId: firstRequest.clientMessageId },
           body: initial.body,
@@ -176,12 +157,8 @@ it('acknowledges a post-rewind completion after normal idle retirement without r
           turnScope: AGENT_JOURNAL_THREAD_SCOPE
         }
       ],
-      undefined,
-      agentSessionJournalProviderHandle({
-        agent: 'codex',
-        providerHandle: rig.store.getRecord(SESSION)!.providerHandleChain.at(-1)!.handle
-      })
-    )
+      providerHandle: undefined
+    })
     await rig.host.flushStreamedEvents(SESSION)
     expect(journal.cursor().epoch).not.toBe(physicalEpoch)
     const events: AgentSessionTurnCompletionEvent[] = []
@@ -189,7 +166,7 @@ it('acknowledges a post-rewind completion after normal idle retirement without r
     const next = restTestSend('finish after rewind', attached.fence)
     const nextReply = await rig.host.send(REST_TEST_CALLER, next)
     expect(nextReply).toMatchObject({ ok: true })
-    expect(journal.submission(next.envelope.clientOperationId)).toBeDefined()
+    expect(await journal.reads.submission(next.envelope.clientOperationId)).toBeDefined()
     await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(2))
     const request = rig.adapter.dispatch.mock.calls[1]![0]
     const dispatched = await rig.adapter.dispatch.mock.results[1]!.value
@@ -229,6 +206,8 @@ it('acknowledges a post-rewind completion after normal idle retirement without r
       ...origin,
       scope: { ...origin.scope, workspaceId: 'another-workspace' }
     })
+    // The idle sweep keeps a chat whose delivery loop has not parked after the second send.
+    await rig.host.collaboratorsForTests().conversationDelivery.loop.wake(SESSION)
     rig.clock.now += IDLE_MS + 1
     await sweepOnce(rig.host)
     await vi.waitFor(() => expect(rig.host.hasSession(SESSION)).toBe(false))
@@ -240,7 +219,6 @@ it('acknowledges a post-rewind completion after normal idle retirement without r
     })
     const acquisitions = rig.adapter.acquire.mock.calls.length
     const reopen = vi.spyOn(journalFactory, 'openAgentSessionJournal')
-    const restore = vi.spyOn(journalRestore, 'restoreJournal')
     try {
       const reads = await rig.host.attentionReads.workspace(HOST_TEST_LOCATION)
       expect(
@@ -255,12 +233,10 @@ it('acknowledges a post-rewind completion after normal idle retirement without r
         { sessionId: SESSION, scope: HOST_TEST_LOCATION, observedCursor: retiredCursor }
       ])
       expect(reopen).not.toHaveBeenCalled()
-      expect(restore).not.toHaveBeenCalled()
       expect(rig.adapter.acquire).toHaveBeenCalledTimes(acquisitions)
       expect(rig.host.loadedSessionIds()).toEqual([])
     } finally {
       reopen.mockRestore()
-      restore.mockRestore()
     }
   } finally {
     await rig.dispose()

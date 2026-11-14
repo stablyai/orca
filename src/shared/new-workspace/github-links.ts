@@ -2,10 +2,8 @@ import {
   type GitHubIssueOrPRLink,
   parseGitHubIssueOrPRLink,
   parseGitHubIssueOrPRNumber
-} from '../github/links'
+} from '../github/repositories/links'
 import { isWorkItemLinkQueryTooLarge } from './work-item-link-query-bounds'
-
-export * from '../github/links'
 
 const HTTP_URL_PREFIX_RE = /^https?:\/\//i
 

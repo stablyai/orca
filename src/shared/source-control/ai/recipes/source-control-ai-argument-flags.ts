@@ -1,6 +1,6 @@
 import type { CommitMessageAgentSpec } from '../generation/commit-message-agent-spec'
 import { findOptionOccurrence } from '../../../command-option-occurrence'
-import { agentRequiredValueOptions } from '../../../agent-session/options/agent-session-option-agent-args'
+import { agentRequiredValueOptions } from '../../../agent-session/options/launch/agent-session-option-agent-args'
 import { KIMI_VALUE_OPTIONS } from '../generation/commit-message-generation-options'
 import {
   tokenizeCustomCommandTemplate,

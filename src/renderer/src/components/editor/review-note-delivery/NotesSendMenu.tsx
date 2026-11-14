@@ -22,7 +22,7 @@ import {
   holdNotesForSend,
   isNoteInFlight,
   useNotesInFlightVersion
-} from '@/lib/notes-send-in-flight'
+} from '@/components/notes/delivery/notes-send-in-flight'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { recomputeOn } from '@/lib/recompute-on'

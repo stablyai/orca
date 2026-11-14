@@ -7,7 +7,7 @@ import type {
   AgentChildWorkEvidenceHandle
 } from '../../../shared/agent-status/child-work/agent-status-child-work-evidence'
 import { AGENT_CHILD_WORK_ID_MAX_LENGTH } from '../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
-import { MAX_SUBAGENT_FIELD_CHARS } from '../../../shared/native-chat/transcript/native-chat-subagent-summary'
+import { MAX_SUBAGENT_FIELD_CHARS } from '../../../shared/native-chat/transcript/subagents/native-chat-subagent-summary'
 import type { NativeChatSubagentState } from '../../../shared/native-chat/native-chat-types'
 import { boundSubagentLabel } from '../../native-chat/agent-session-journal/item-lifecycle/journal-subagent-item'
 import type {

@@ -9,15 +9,15 @@ import {
   resolveRuntimeHostReportedPlatform,
   resolveRuntimeHostTerminalWindowsShell,
   resolveSshHostReportedPlatform,
-  resolveAgentResumeLaunchTarget,
-  type AgentResumeLaunchTarget
+  resolveAgentResumeLaunchTarget
 } from '@/lib/agent-session/resume/agent-resume-launch-target'
+import type { AgentResumeLaunchTarget } from '@/lib/agent-session/resume/agent-resume-launch-target'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import { getLocalProjectExecutionRuntimeContext } from '@/runtime/hosts/preflight/local-preflight-context'
 import { resolveResumeLaunchRecipe } from '../../../../../shared/agent-launch/choices/resume-launch-recipe'
-import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { translate } from '@/i18n/i18n'
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 
 export type ResumeSleepingAgentSessionsOptions = {
   suppressNavigation?: boolean

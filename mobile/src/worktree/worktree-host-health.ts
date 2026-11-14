@@ -4,7 +4,7 @@ import {
   getSshConnectionHealth,
   type ExecutionHostHealth
 } from '../../../src/shared/execution-host/execution-host-health'
-import { sshTargetSummaryHostId } from '../../../src/shared/worktree/host-context-labels'
+import { sshTargetSummaryHostId } from '../../../src/shared/worktree/row-display/host-context-labels'
 import { isSshConnectionStatus } from '../transport/connection/ssh-connection-status-arms'
 
 // Mirror desktop SSH health; older hosts without lifecycle and unknown statuses provide no verdict.

@@ -1,5 +1,5 @@
 import { toast } from 'sonner'
-import { extractIpcErrorMessage } from '@/runtime/errors/ipc-error'
+
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { useAppStore } from '@/store/index'
 import { translate } from '@/i18n/i18n'
@@ -9,6 +9,7 @@ import { captureTerminalDropTransportOwner } from './terminal-drop-transport-own
 import { resolveTerminalDropWorktreePath } from './terminal-drop-worktree-path'
 import { isWorktreeUsingLocalWslRuntime } from './terminal-drop-local-wsl'
 import { deliverNativeTerminalFileDrop } from './terminal-native-file-drop'
+import { terminalFileDropErrorMessage } from './terminal-native-file-drop-error'
 
 export type NativeTerminalFileDropArgs = {
   manager: PaneManager
@@ -27,7 +28,7 @@ export function captureNativeTerminalFileDrop(
   try {
     return captureNativeTerminalFileDropDestination(args)
   } catch (err) {
-    toast.error(extractIpcErrorMessage(err, 'Failed to drop files.'))
+    toast.error(terminalFileDropErrorMessage(err, 'drop'))
     return async () => undefined
   }
 }
@@ -84,7 +85,7 @@ function captureNativeTerminalFileDropDestination(
         localWslDrop
       })
     } catch (err) {
-      toast.error(extractIpcErrorMessage(err, 'Failed to drop files.'))
+      toast.error(terminalFileDropErrorMessage(err, 'drop'))
     }
   }
 }
