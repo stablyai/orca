@@ -32,14 +32,28 @@ describe('updateMR approval', () => {
 
     expect(glabExecFileAsyncMock).toHaveBeenCalledOnce()
     expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
-      ['api', '--hostname', 'git.internal', '-X', 'POST', `projects/g%2Fp/merge_requests/12/${approval}`],
+      [
+        'api',
+        '--hostname',
+        'git.internal',
+        '-X',
+        'POST',
+        `projects/g%2Fp/merge_requests/12/${approval}`
+      ],
       {}
     )
   })
 
   it('returns a classified error when the approval POST fails', async () => {
     glabExecFileAsyncMock.mockRejectedValueOnce(new Error('401 Unauthorized'))
-    const result = await updateMR('/repo', 12, { approval: 'approve' }, 'upstream', 'conn-1', projectRef)
+    const result = await updateMR(
+      '/repo',
+      12,
+      { approval: 'approve' },
+      'upstream',
+      'conn-1',
+      projectRef
+    )
     expect(result.ok).toBe(false)
     expect(glabExecFileAsyncMock).toHaveBeenCalledOnce()
   })
