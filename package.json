@@ -343,6 +343,7 @@
     "lint-staged": "^16.4.0",
     "lowlight": "^3.3.0",
     "lucide-react": "^0.577.0",
+    "markdown-table": "3.0.4",
     "marked": "^17.0.1",
     "mermaid": "^11.17.2",
     "monaco-editor": "^0.55.1",

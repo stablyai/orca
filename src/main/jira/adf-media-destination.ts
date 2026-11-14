@@ -18,11 +18,7 @@ function percentEncodeUtf8Char(char: string): string {
 }
 
 /** Percent-encode markdown-hostile destination chars without double-encoding `%HH`. */
-export function escapeMarkdownLinkDestination(url: string): string | null {
-  if (!/^https?:\/\//i.test(url)) {
-    return null
-  }
-
+function encodeMarkdownDestination(url: string): string | null {
   let encoded = ''
   for (let i = 0; i < url.length;) {
     const char = url[i] ?? ''
@@ -52,4 +48,12 @@ export function escapeMarkdownLinkDestination(url: string): string | null {
     }
   }
   return encoded
+}
+
+export function escapeMarkdownLinkDestination(url: string): string | null {
+  return /^https?:\/\//i.test(url) ? encodeMarkdownDestination(url) : null
+}
+
+export function escapeMarkdownTextLinkDestination(url: string): string | null {
+  return /^(?:https?:\/\/|mailto:)/i.test(url) ? encodeMarkdownDestination(url) : null
 }

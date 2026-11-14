@@ -548,6 +548,9 @@ importers:
       lowlight:
         specifier: ^3.3.0
         version: 3.3.0
+      markdown-table:
+        specifier: 3.0.4
+        version: 3.0.4
       lucide-react:
         specifier: ^0.577.0
         version: 0.577.0(@types/react@19.2.18)(react@19.2.8)

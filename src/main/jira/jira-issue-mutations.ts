@@ -47,7 +47,7 @@ export async function createIssue(args: JiraCreateIssueArgs): Promise<JiraCreate
       summary: title
     }
     if (args.description?.trim()) {
-      fields.description = toBodyText(entry.site, args.description.trim())
+      fields.description = await toBodyText(entry.site, args.description.trim())
     }
     const userFieldKeys = new Set(args.userFieldKeys ?? [])
     for (const [fieldKey, value] of Object.entries(args.customFields ?? {})) {
@@ -130,7 +130,9 @@ export async function updateIssue(
       }
       if (updates.transitionComment?.trim()) {
         transitionBody.update = {
-          comment: [{ add: { body: toBodyText(entry.site, updates.transitionComment.trim()) } }]
+          comment: [
+            { add: { body: await toBodyText(entry.site, updates.transitionComment.trim()) } }
+          ]
         }
       }
       await jiraRequest(entry, `${issueBase}/transitions`, {
@@ -168,7 +170,7 @@ export async function addIssueComment(
       `${apiBasePath(entry.site)}/issue/${encodeURIComponent(key)}/comment`,
       {
         method: 'POST',
-        body: JSON.stringify({ body: toBodyText(entry.site, body) })
+        body: JSON.stringify({ body: await toBodyText(entry.site, body) })
       }
     )
     return { ok: true, id: comment.id }
