@@ -7,7 +7,6 @@ imports such as `./todos` resolved to their files).
 ```sh
 orca plugin dev load .   # also writes .orca/types, the typings tsconfig.json extends
 npx tsc -p .             # optional type check
-orca plugin test .       # runs src/panel.test.tsx in Node with orca/testing
 orca plugin check .      # renders the panel once and reports errors with file:line
 ```
 

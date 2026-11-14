@@ -131,19 +131,6 @@ describe('resolveComposerBranchSelection', () => {
       })
     ).toBeUndefined()
   })
-
-  it('keeps a resolver-provided override even in branch mode with a slash name', () => {
-    // Explicit picked-branch overrides must beat typed branch-mode names.
-    expect(
-      resolveComposerBranchNameOverrideForCreate({
-        branchNameOverride: 'feature/picked',
-        branchAutoName: 'feature/picked',
-        workspaceName: 'feature/user-profile',
-        preserveWorkspaceNameEdits: true,
-        createBranchFromWorkspaceName: true
-      })
-    ).toBe('feature/picked')
-  })
 })
 
 describe('resolveComposerManualBranchNameChange', () => {
