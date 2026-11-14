@@ -16,6 +16,7 @@ import { shouldShowOnboarding } from '../onboarding/should-show-onboarding'
 export type FeatureTipsAppOpenDecision =
   | { kind: 'open'; tipId: FeatureTipId }
   | { kind: 'skip' }
+  | { kind: 'waiting' }
   | { kind: 'suppress-for-onboarding' }
 
 export function isCliFeatureTipCompleted(status: CliInstallStatus): boolean {
@@ -83,17 +84,20 @@ export function getFeatureTipsAppOpenDecision(args: {
   }
 
   if (
-    args.promptedThisSession ||
-    args.suppressedByOnboardingThisSession ||
     !args.persistedUIReady ||
     !args.settings ||
     args.onboarding === null ||
-    args.activeModal !== 'none' ||
-    args.cliInstalled === null ||
-    args.chatUiLaunchTipVariant === null ||
-    shouldShowOnboarding(args.onboarding)
+    args.activeModal !== 'none'
   ) {
+    return { kind: 'waiting' }
+  }
+
+  if (args.promptedThisSession || args.suppressedByOnboardingThisSession) {
     return { kind: 'skip' }
+  }
+
+  if (args.cliInstalled === null || args.chatUiLaunchTipVariant === null) {
+    return { kind: 'waiting' }
   }
 
   const nextTip = getPendingFeatureTips({
