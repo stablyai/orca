@@ -43,7 +43,7 @@ export function ThemeStudioNotice({
       <div className="text-[13px] leading-snug font-semibold">
         {t('auto.app-shell.themeStudio.previewing', 'Previewing {{value0}}', { value0: name })}
       </div>
-      <p className="mt-0.5 text-[12px] leading-snug text-muted-foreground">
+      <p className="mt-0.5 line-clamp-2 text-[12px] leading-snug text-muted-foreground">
         {detail.length
           ? detail.join(' · ')
           : t(
