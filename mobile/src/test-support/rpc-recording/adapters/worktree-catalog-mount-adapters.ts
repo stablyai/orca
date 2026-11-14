@@ -4,6 +4,8 @@ import { projectObservable } from '../observable-model'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type * as HomeWorktreeFetch from '../../../worktree/catalog/home-host-worktree-fetch'
 import type * as HomeWorktreeInfo from '../../../worktree/catalog/home-worktree-info'
+import type * as WorktreeCatalogSnapshot from '../../../worktree/catalog/worktree-catalog-snapshot-client'
+import type * as RetiredWorktreeNames from '../../../worktree/catalog/use-retired-worktree-names'
 
 const HOST = 'host-1'
 const REPO = 'repo-1'
@@ -71,9 +73,7 @@ export function worktreeCatalogMountAdapters(
     },
     'worktree.catalog-snapshot': (context) => {
       const { client } = context
-      const SnapshotClient = modules.load<
-        typeof import('../../../worktree/catalog/worktree-catalog-snapshot-client')
-      >(
+      const SnapshotClient = modules.load<typeof WorktreeCatalogSnapshot>(
         'mobile/src/worktree/catalog/worktree-catalog-snapshot-client.ts'
       ).WorktreeCatalogSnapshotClient
       const snapshots = new SnapshotClient()
@@ -96,9 +96,9 @@ export function worktreeCatalogMountAdapters(
       }
     },
     'worktree.retired-names': ({ client }) => {
-      const useRetired = modules.load<
-        typeof import('../../../worktree/catalog/use-retired-worktree-names')
-      >('mobile/src/worktree/catalog/use-retired-worktree-names.ts').useRetiredWorktreeNames
+      const useRetired = modules.load<typeof RetiredWorktreeNames>(
+        'mobile/src/worktree/catalog/use-retired-worktree-names.ts'
+      ).useRetiredWorktreeNames
       let registry: unknown
       let refreshKey = 1
       const hook = hookMount(() => {
