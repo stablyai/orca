@@ -23,6 +23,12 @@ const PTY_ALLOCATION_STEPS = new Set([
   'open_slave'
 ])
 
+// Starting the shell, or the thread that waits for it to exit, fails at a process or thread limit.
+const PROCESS_START_STEPS = new Set(['posix_spawn', 'exit_watcher_thread'])
+// Linux forkpty opens a pseudo-terminal and forks, so its errno says which one ran out.
+const FORK_LIMIT_ERRNOS = new Set([11, 12])
+const PTY_DEVICE_LIMIT_ERRNOS = new Set([6, 23, 24, 28])
+
 const RESOURCE_EXHAUSTION_ERRNOS = new Set([
   6, // ENXIO on macOS: posix_openpt could not provide a usable pty device
   11, // EAGAIN on Linux
@@ -55,7 +61,17 @@ export function getNodePtyRecoveryHint(diagnostic: NodePtyDiagnostic): string | 
   ) {
     return PTY_ALLOCATION_HINT
   }
-  if (diagnostic.step === 'posix_spawn' && RESOURCE_EXHAUSTION_ERRNOS.has(diagnostic.errno)) {
+  if (diagnostic.step === 'forkpty') {
+    return FORK_LIMIT_ERRNOS.has(diagnostic.errno)
+      ? TERMINAL_PROCESS_LIMIT_HINT
+      : PTY_DEVICE_LIMIT_ERRNOS.has(diagnostic.errno)
+        ? PTY_ALLOCATION_HINT
+        : null
+  }
+  if (
+    PROCESS_START_STEPS.has(diagnostic.step) &&
+    RESOURCE_EXHAUSTION_ERRNOS.has(diagnostic.errno)
+  ) {
     return TERMINAL_PROCESS_LIMIT_HINT
   }
   return null
