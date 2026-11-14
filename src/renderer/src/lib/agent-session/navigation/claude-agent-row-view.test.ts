@@ -2,7 +2,7 @@
 
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
+import type { DashboardAgentRow } from '@/components/dashboard/rows/dashboard-agent-row'
 import { useNativeChatOpenSubagent } from '@/components/native-chat/subagents/native-chat-open-subagent'
 import { viewClaudeAgentFromRow } from './claude-agent-row-view'
 
