@@ -9,6 +9,8 @@ export type GitReviewBranchSource = {
   remoteName: string
   urls: string[]
   branchName: string
+  /** A constrained publish destination; null leaves discovery usable without claiming a push head. */
+  pushBranchName?: string | null
   trackedBranchName?: string
   trackedUrls?: string[]
 }
@@ -83,7 +85,8 @@ export async function readGitReviewBranchSources(
       }
     }
   }
-  const normalizeRemote = (remote: string): string => remoteIdentities.get(remote) ?? remote
+  const normalizeRemote = (remote: string): string =>
+    remote === '.' ? remote : (remoteIdentities.get(remote) ?? remote)
   const expandedUrls = new Map<string, string[]>()
   const urlsFor = (remote: string): string[] => {
     const cached = expandedUrls.get(remote)
@@ -103,13 +106,39 @@ export async function readGitReviewBranchSources(
     expandedUrls.set(remote, result)
     return result
   }
+  const booleanValues = new Map<string, boolean>()
+  const gitBoolean = async (key: string): Promise<boolean> => {
+    const cached = booleanValues.get(key)
+    if (cached !== undefined) {
+      return cached
+    }
+    if (!config.has(key)) {
+      return false
+    }
+    try {
+      const value = (await runGit(['config', '--bool', '--get', key])).stdout.trim() === 'true'
+      booleanValues.set(key, value)
+      return value
+    } catch {
+      return false
+    }
+  }
+  const autoSetup = await gitBoolean('push.autosetupremote')
   const sources = new Map<string, GitReviewBranchSource | Error>()
   for (const branch of branchNames) {
     try {
       const trackedRemoteValue = get(`branch.${branch}.remote`)
       const trackedRemote = trackedRemoteValue ? normalizeRemote(trackedRemoteValue) : undefined
       const explicitRemote = get(`branch.${branch}.pushremote`) ?? get('remote.pushdefault')
-      let remote = normalizeRemote(explicitRemote ?? trackedRemote ?? 'origin')
+      let remote =
+        explicitRemote ??
+        trackedRemote ??
+        (remotes.has('origin')
+          ? 'origin'
+          : remotes.size === 1
+            ? remotes.keys().next().value
+            : undefined) ??
+        'origin'
       const localTracking = remote === '.' && !explicitRemote
       if (localTracking) {
         remote = 'origin'
@@ -126,7 +155,31 @@ export async function readGitReviewBranchSources(
         throw new Error('Review push destination is ambiguous')
       }
       const branchName = destinations.values().next().value ?? branch
-      if (destinations.size === 0) {
+      const mirror = await gitBoolean(`remote.${remote}.mirror`)
+      const pushDefault =
+        get('push.default') === 'tracking' ? 'upstream' : (get('push.default') ?? 'simple')
+      let pushBranchName: string | null =
+        localTracking ||
+        (destinations.size === 0 && (specs.length > 0 || (pushDefault === 'nothing' && !mirror)))
+          ? null
+          : branchName
+      const fetchRemote =
+        trackedRemote ??
+        (remotes.has('origin')
+          ? 'origin'
+          : remotes.size === 1
+            ? remotes.keys().next().value
+            : undefined)
+      if (
+        !mirror &&
+        specs.length === 0 &&
+        (!trackedRemote || !get(`branch.${branch}.merge`)) &&
+        ((pushDefault === 'simple' && remote === fetchRemote) || pushDefault === 'upstream') &&
+        !autoSetup
+      ) {
+        pushBranchName = null
+      }
+      if (destinations.size === 0 && !mirror) {
         if (!localTracking && remote === trackedRemote) {
           const merge = get(`branch.${branch}.merge`)
           const tracked = merge?.startsWith('refs/heads/')
@@ -139,11 +192,15 @@ export async function readGitReviewBranchSources(
           ) {
             trackedBranchName = tracked
           }
-          if (get('push.default') === 'upstream' && !merge) {
-            throw new Error('Review upstream is unavailable')
+          if (pushDefault === 'simple' && tracked && tracked !== branch) {
+            pushBranchName = null
+          }
+          if (specs.length === 0 && pushDefault === 'upstream') {
+            pushBranchName = tracked ?? (autoSetup ? branch : null)
           }
         } else if (
-          get('push.default') === 'upstream' &&
+          specs.length === 0 &&
+          pushDefault === 'upstream' &&
           explicitRemote &&
           remote !== trackedRemote
         ) {
@@ -154,6 +211,7 @@ export async function readGitReviewBranchSources(
         remoteName: remote,
         urls: urlsFor(remote),
         branchName,
+        ...(pushBranchName !== branchName ? { pushBranchName } : {}),
         ...(trackedBranchName
           ? { trackedBranchName, trackedUrls: remotes.get(remote)?.fetch ?? [remote] }
           : {})
