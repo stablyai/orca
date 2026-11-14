@@ -15,6 +15,7 @@ export type ProfileSessionState = {
   loading: Promise<void>
   loads: BrowserExtensionProfileLoads
   started: Set<string>
+  enabled: () => string[]
 }
 
 /** Per-session services and per-extension restart restore, supplied by browser-extension-startup. */

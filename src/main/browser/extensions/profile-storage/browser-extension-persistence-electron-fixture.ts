@@ -9,7 +9,7 @@ import { browserSessionRegistry } from '../../sessions/profiles/browser-session-
 import { initializeBrowserExtensionSupport } from '../browser-extension-startup'
 import { BROWSER_EXTENSION_API_CUSTOM_SCHEME } from '../api-runtime/browser-extension-api-scheme'
 import {
-  attachBrowserExtensionsToProfileSession,
+  retainBrowserExtensionPage,
   whenBrowserExtensionSessionsLoaded
 } from '../profile-sessions/browser-extension-session-loader'
 import { addUnpackedBrowserExtension } from '../browser-extension-management'
@@ -128,23 +128,25 @@ async function run(): Promise<void> {
   const pageUrl = `http://127.0.0.1:${typeof address === 'object' && address ? address.port : 0}/login`
 
   initializeBrowserExtensionSupport({ enabled: true })
+  browserSessionRegistry.initializeBrowserSessionsFromPersistedState()
   const profile = browserSessionRegistry.getDefaultProfile()
   session
     .fromPartition(ORCA_BROWSER_PARTITION)
     .serviceWorkers.on('console-message', (_event, details) => capture(details.message))
 
+  const page = new BrowserWindow({
+    show: false,
+    webPreferences: { partition: ORCA_BROWSER_PARTITION, sandbox: true, contextIsolation: true }
+  })
+  await retainBrowserExtensionPage(page.webContents)
+  await page.loadURL('about:blank')
   if (phase === 'first') {
-    attachBrowserExtensionsToProfileSession(profile, [])
     status.added = await addUnpackedBrowserExtension(profile.id, fixtureExtensionDirectory)
     writeStatus()
     return
   }
 
   // Second launch: what a restart does, then the first page load.
-  attachBrowserExtensionsToProfileSession(
-    profile,
-    browserSessionRegistry.getEnabledExtensionIds(profile.id)
-  )
   await whenBrowserExtensionSessionsLoaded(5_000)
   const guest = await openTab(pageUrl)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the builder reads only the fields given here.

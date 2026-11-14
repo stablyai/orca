@@ -23,7 +23,6 @@ export {
   refreshBrowserExtensionPageDemand,
   hasBrowserExtensionProfileDemand
 } from './browser-extension-profile-demand'
-import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import {
   getBrowserExtensionExecution,
   retireBrowserExtensionExecution
@@ -75,7 +74,8 @@ function registerExtensionPreload(sess: Electron.Session): void {
 /** Session setup hook for a local browser profile: wire the host, register the preload, load what's enabled. */
 export function attachBrowserExtensionsToProfileSession(
   profile: BrowserSessionProfile,
-  enabledExtensionIds: string[]
+  enabledExtensionIds: string[],
+  enabled: () => string[]
 ): void {
   if (!isBrowserExtensionSupportEnabled() || stateByProfileId.has(profile.id)) {
     return
@@ -89,14 +89,15 @@ export function attachBrowserExtensionsToProfileSession(
     session: sess,
     loads: new BrowserExtensionProfileLoads(),
     loading: Promise.resolve(),
-    started: new Set()
+    started: new Set(),
+    enabled
   }
   stateByProfileId.set(profile.id, state)
   attachBrowserExtensionProfileDemand(
     profile.id,
     (id, page) => activateProfile(state, id, page),
     (id) => suspendTarget(state, id),
-    () => browserSessionRegistry.getEnabledExtensionIds(profile.id),
+    enabled,
     (ready) => {
       state.loading = ready
       sessionHooks?.activating?.(sess, ready)
@@ -151,7 +152,7 @@ function suspendProfile(state: ProfileSessionState): Promise<void> {
   const ids = new Set([
     ...state.session.extensions.getAllExtensions().map((extension) => extension.id),
     ...state.started,
-    ...browserSessionRegistry.getEnabledExtensionIds(state.profile.id)
+    ...state.enabled()
   ])
   return Promise.all([
     state.loads.cancel(null),
@@ -164,12 +165,7 @@ async function unloadProfileSession(state: ProfileSessionState): Promise<void> {
   forgetBrowserExtensionLoadFailures({ profileId: state.profile.id })
   await suspendProfile(state)
   await Promise.all(
-    [
-      ...new Set([
-        ...state.started,
-        ...browserSessionRegistry.getEnabledExtensionIds(state.profile.id)
-      ])
-    ].map((id) => resetExtension(state, id))
+    [...new Set([...state.started, ...state.enabled()])].map((id) => resetExtension(state, id))
   )
   await state.loads.close()
   for (const extension of state.session.extensions.getAllExtensions()) {

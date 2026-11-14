@@ -73,7 +73,8 @@ export function switchBrowserExtensionSupport(enabled: boolean): Promise<void> {
         for (const profile of browserSessionRegistry.listProfiles()) {
           attachBrowserExtensionsToProfileSession(
             profile,
-            browserSessionRegistry.getEnabledExtensionIds(profile.id)
+            browserSessionRegistry.getEnabledExtensionIds(profile.id),
+            () => browserSessionRegistry.getEnabledExtensionIds(profile.id)
           )
         }
         // Why: tabs already open were created before their session ran extensions.

@@ -1,4 +1,4 @@
-import { retainBrowserExtensionPage } from '../../../extensions/profile-sessions/browser-extension-session-loader'
+import { retainBrowserExtensionPage } from '../../../extensions/profile-sessions/browser-extension-profile-demand'
 import { installBrowserGuestMetadata } from '../../navigation/browser-guest-metadata'
 import { BROWSING_GUEST_POLICY } from './browser-guest-policy-profile'
 import type { BrowserGuestPolicy } from './browser-guest-policy-profile'

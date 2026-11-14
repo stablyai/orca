@@ -85,11 +85,8 @@ vi.mock('electron', () => {
     }
   }
 })
-vi.mock('../../sessions/profiles/browser-session-registry', () => ({
-  browserSessionRegistry: {
-    getEnabledExtensionIds: (id: string) => mocks.enabled.get(id) ?? [],
-    profileIdForSession: () => mocks.profileForSession
-  }
+vi.mock('../../sessions/profiles/browser-session-profile-identity', () => ({
+  getBrowserSessionProfileIdentity: () => mocks.profileForSession
 }))
 vi.mock('node:fs', async (importOriginal) => ({
   ...(await importOriginal<typeof NodeFs>()),
@@ -121,6 +118,16 @@ mocks.userData = mkdtempSync(join(tmpdir(), 'orca-extension-loader-'))
 const contexts = await import('../api-runtime/browser-extension-contexts')
 const { setBrowserExtensionSupportEnabled } = await import('../browser-extension-support')
 const loader = await import('./browser-extension-session-loader')
+function attachProfile(
+  profile: Parameters<typeof loader.attachBrowserExtensionsToProfileSession>[0],
+  initialEnabled: string[]
+): void {
+  loader.attachBrowserExtensionsToProfileSession(
+    profile,
+    initialEnabled,
+    () => mocks.enabled.get(profile.id) ?? []
+  )
+}
 await import('./browser-extension-load-errors')
 const { getBrowserExtensionProfileStateStore } =
   await import('../profile-storage/browser-extension-profile-state-store')
@@ -161,7 +168,7 @@ describe('profile changes while startup loads are in flight', () => {
     mocks.prepareGate.held = new Promise<void>((resolve) => (release = resolve))
     const calls = mocks.prepareCalls
     mocks.enabled.set(profile.id, [ID])
-    loader.attachBrowserExtensionsToProfileSession(profile, [ID])
+    attachProfile(profile, [ID])
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The owned fixture supplies the session identity and lifecycle methods accessed by this production path.
     const page = { session: mocks.session, once: vi.fn() } as unknown as Electron.WebContents
     void loader.retainBrowserExtensionPage(page).catch(() => {})
@@ -191,7 +198,7 @@ describe('profile changes while startup loads are in flight', () => {
   it('an explicit load still in flight when extensions turn off fails and leaves nothing loaded', async () => {
     setBrowserExtensionSupportEnabled(true)
     await loader.detachBrowserExtensionsFromAllProfileSessions()
-    loader.attachBrowserExtensionsToProfileSession(profile, [])
+    attachProfile(profile, [])
     await loader.whenBrowserExtensionProfileLoaded('default')
     mocks.prepareGate.held = new Promise<void>((resolve) => (release = resolve))
     const calls = mocks.prepareCalls
@@ -238,7 +245,7 @@ describe('deleted profile action state', () => {
     }
     setBrowserExtensionSupportEnabled(true)
     if (attached) {
-      loader.attachBrowserExtensionsToProfileSession(profile, [])
+      attachProfile(profile, [])
       await loader.whenBrowserExtensionProfileLoaded(profileId)
     }
     const removed = getBrowserExtensionActionState(profileId, extension)
@@ -291,7 +298,7 @@ it.each([750, 7500])(
     for (let index = 0; index < count; index++) {
       const id = `fleet-${count}-${index}`
       mocks.enabled.set(id, [ID])
-      loader.attachBrowserExtensionsToProfileSession(
+      attachProfile(
         {
           id,
           scope: 'isolated',
@@ -340,7 +347,7 @@ it('keeps pages usable when an enabled extension fails to load', async () => {
   mocks.enabled.set(profile.id, [ID, healthy.id])
   mocks.profileForSession = profile.id
   mocks.session.extensions.loadExtension.mockRejectedValueOnce(new Error('Invalid manifest'))
-  loader.attachBrowserExtensionsToProfileSession(profile, [ID, healthy.id])
+  attachProfile(profile, [ID, healthy.id])
   try {
     for (let index = 0; index < 2; index++) {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The owned fixture supplies the session identity and lifecycle methods accessed by this production path.
@@ -368,7 +375,7 @@ it('does not restore stale enablement after uninstall and reinstall in another O
   await store.remove(ID)
   store.save(installed)
   mocks.session.extensions.loadExtension.mockClear()
-  loader.attachBrowserExtensionsToProfileSession(
+  attachProfile(
     {
       id: 'inactive-profile',
       scope: 'isolated',
@@ -406,7 +413,7 @@ it('reuses completed full maintenance until the install store changes, and scope
   mocks.enabled.set(profile.id, [ID])
   mocks.prepareGate.held = null
   store.save(installed)
-  loader.attachBrowserExtensionsToProfileSession(profile, [ID])
+  attachProfile(profile, [ID])
   const inventory = vi.spyOn(states, 'readProfile')
   const makePage = () =>
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The owned fixture supplies the session identity and lifecycle methods accessed by this production path.

@@ -9,8 +9,8 @@ import {
 } from './browser-extension-profile-demand'
 import { setBrowserExtensionSupportEnabled } from '../browser-extension-support'
 
-vi.mock('../../sessions/profiles/browser-session-registry', () => ({
-  browserSessionRegistry: { profileIdForSession: (session: { id: string }) => session.id }
+vi.mock('../../sessions/profiles/browser-session-profile-identity', () => ({
+  getBrowserSessionProfileIdentity: (session: { id: string }) => session.id
 }))
 const attached: string[] = []
 function attach(id: string, activate: () => Promise<void>, suspend: () => Promise<void>): void {

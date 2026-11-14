@@ -1,4 +1,9 @@
 import { app, session } from 'electron'
+import {
+  forgetBrowserSessionProfileIdentities,
+  getBrowserSessionProfileIdentity,
+  rememberBrowserSessionProfileIdentity
+} from './browser-session-profile-identity'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import '../../../../shared/constants'
@@ -50,7 +55,6 @@ export type BrowserSessionRegistryProfileOptions = {
 // This registry supplies the partition allowlist used by will-attach-webview.
 
 class BrowserSessionRegistry {
-  private sessionProfileIds = new WeakMap<Electron.Session, string>()
   private readonly extensionIdLists = new BrowserSessionExtensionLists(() =>
     this.loadPersistedMeta()
   )
@@ -71,7 +75,7 @@ class BrowserSessionRegistry {
     this.metadataPathOverride = join(options.profileDirectory, BROWSER_SESSION_META_FILE_NAME)
     this.defaultPartition = getOrcaProfileBrowserDefaultPartition(options.orcaProfileId)
     this.profiles.clear()
-    this.sessionProfileIds = new WeakMap()
+    forgetBrowserSessionProfileIdentities()
     this.extensionIdLists.forget()
     this.resetDefaultProfile()
   }
@@ -145,8 +149,12 @@ class BrowserSessionRegistry {
     profile: BrowserSessionProfile,
     enabledExtensionIds = this.getEnabledExtensionIds(profile.id)
   ): void {
-    this.sessionProfileIds.set(session.fromPartition(profile.partition), profile.id)
-    attachBrowserExtensionsToProfileSession(profile, enabledExtensionIds)
+    rememberBrowserSessionProfileIdentity(session.fromPartition(profile.partition), () =>
+      this.profiles.has(profile.id) ? profile.id : null
+    )
+    attachBrowserExtensionsToProfileSession(profile, enabledExtensionIds, () =>
+      this.getEnabledExtensionIds(profile.id)
+    )
   }
 
   getEnabledExtensionIds(profileId: string): string[] {
@@ -198,10 +206,7 @@ class BrowserSessionRegistry {
   }
 
   /** Called after startup has materialized the known profile sessions. */
-  profileIdForSession(candidate: Electron.Session): string | null {
-    const id = this.sessionProfileIds.get(candidate)
-    return id && this.profiles.has(id) ? id : null
-  }
+  profileIdForSession = getBrowserSessionProfileIdentity
 
   isAllowedPartition(partition: string): boolean {
     return this.listProfiles().some((p) => p.partition === partition)
@@ -235,9 +240,7 @@ class BrowserSessionRegistry {
     }
   }
 
-  clearRoutePartitionPolicies(partition: string): void {
-    clearBrowserRoutePartitionPolicies(partition)
-  }
+  clearRoutePartitionPolicies = clearBrowserRoutePartitionPolicies
 
   async createProfile(
     scope: BrowserSessionProfileScope,

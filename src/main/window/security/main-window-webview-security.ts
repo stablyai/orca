@@ -1,5 +1,4 @@
-import { app, type BrowserWindow } from 'electron'
-import { randomUUID } from 'node:crypto'
+import { session, type BrowserWindow } from 'electron'
 import { join } from 'node:path'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../../shared/browser/guest-lifecycle/browser-guest-web-preferences'
 import { normalizeBrowserNavigationUrl } from '../../../shared/browser-url'
@@ -38,6 +37,7 @@ import {
   PLUGIN_FRAME_GUEST_RENDERER_ARGUMENTS
 } from '../../plugins/panels/guest-isolation/plugin-frame-guest-registry'
 import { attachBrowserPasswordGuest } from '../../browser-passwords/browser-password-guest-service'
+import { browserGuestInitialNavigation } from './browser-guest-initial-navigation'
 
 /** orca-preview is outside normal browser URL admission; require the doc partition and a main-minted user-preview grant. */
 function isAdmissibleDocPreviewAttach(partition: string, src: string): boolean {
@@ -91,32 +91,7 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
   // Only previews get this pinned editor-link preload; never accept renderer preload values or expose it to browsing guests.
   const docPreviewLinkPreload = join(__dirname, 'doc-preview-link-preload.js')
   const pluginFrameGuestPreload = join(__dirname, 'plugin-frame-guest-preload.js')
-  const pendingInitialNavigation = new Map<
-    string,
-    { url: string; options: Electron.LoadURLOptions }
-  >()
-  const initialNavigation = new WeakMap<
-    Electron.WebContents,
-    { url: string; options: Electron.LoadURLOptions }
-  >()
-  const captureInitialNavigation = (_event: Electron.Event, guest: Electron.WebContents): void => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Electron WebContents exposes getLastWebPreferences at runtime; its public type omits it.
-    const nativeGuest = guest as Electron.WebContents & {
-      getLastWebPreferences: () => Electron.WebPreferences
-    }
-    const arguments_ = nativeGuest.getLastWebPreferences()?.additionalArguments ?? []
-    const marker = arguments_.find((argument) => pendingInitialNavigation.has(argument))
-    if (!marker) {
-      return
-    }
-    initialNavigation.set(guest, pendingInitialNavigation.get(marker)!)
-    pendingInitialNavigation.delete(marker)
-  }
-  app.on('web-contents-created', captureInitialNavigation)
-  mainWindow.webContents.once('destroyed', () => {
-    app.removeListener('web-contents-created', captureInitialNavigation)
-    pendingInitialNavigation.clear()
-  })
+  const initialNavigation = browserGuestInitialNavigation(mainWindow.webContents)
   mainWindow.webContents.on('will-attach-webview', (event, webPreferences, params) => {
     const src = typeof params.src === 'string' ? params.src : ''
     const normalizedSrc = normalizeBrowserNavigationUrl(src)
@@ -172,8 +147,7 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     // Preserve only the registry-validated partition so isolated profiles keep their storage.
     webPreferences.partition = partition
     if (isProfilePartition) {
-      const marker = `--orca-browser-initial-navigation=${randomUUID()}`
-      pendingInitialNavigation.set(marker, {
+      initialNavigation.stage(event, session.fromPartition(partition), {
         url: src,
         options: {
           ...(typeof params.httpreferrer === 'string' ? { httpReferrer: params.httpreferrer } : {}),
@@ -182,12 +156,13 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
       })
       // Electron constructs this guest synchronously, then calls loadURL before did-attach-webview.
       params.src = ''
-      webPreferences.additionalArguments = [marker]
-      queueMicrotask(() => pendingInitialNavigation.delete(marker))
     }
   })
 
   mainWindow.webContents.on('did-attach-webview', (_event, guest) => {
+    if (guest.isDestroyed()) {
+      return
+    }
     if (attachPluginFrameGuest(guest, mainWindow.webContents)) {
       return
     }
@@ -202,8 +177,7 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     }
     // Install popup/navigation policy at creation or early redirects/target=_blank can outrun registration.
     browserManager.attachGuestPolicies(guest)
-    const navigation = initialNavigation.get(guest)
-    initialNavigation.delete(guest)
+    const navigation = initialNavigation.take(guest)
     if (navigation) {
       void navigateBrowserExtensionPage(guest, () =>
         guest.loadURL(navigation.url, navigation.options)

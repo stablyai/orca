@@ -1,4 +1,4 @@
-import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
+import { getBrowserSessionProfileIdentity } from '../../sessions/profiles/browser-session-profile-identity'
 import { isBrowserExtensionSupportEnabled } from '../browser-extension-support'
 
 type Owner = {
@@ -135,7 +135,7 @@ export function acquireBrowserExtensionProfileDemand(
 }
 
 function pageDemand(contents: Electron.WebContents): Owner {
-  const profileId = browserSessionRegistry.profileIdForSession(contents.session)
+  const profileId = getBrowserSessionProfileIdentity(contents.session)
   return (profileId && acquireBrowserExtensionProfileDemand(profileId)) || noDemand()
 }
 
@@ -165,7 +165,7 @@ export function retainBrowserExtensionPage(contents: Electron.WebContents): Prom
   const page: Page = { owner, ready: owner.ready, changed: new Set(), detach: () => {} }
   pages.set(contents, page)
   setPageOwner(page, owner)
-  const profileId = browserSessionRegistry.profileIdForSession(contents.session)
+  const profileId = getBrowserSessionProfileIdentity(contents.session)
   if (profileId) {
     for (const listener of pageObservers) {
       listener(profileId)
