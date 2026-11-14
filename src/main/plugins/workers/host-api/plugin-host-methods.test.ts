@@ -72,6 +72,62 @@ describe('workspace.readContext host reachability', () => {
   })
 })
 
+describe('agents.list for a named workspace', () => {
+  it('resolves the workspace through the runtime and lists only its agents', async () => {
+    const services = createServices(vi.fn())
+    services.runtimeRpc = vi.fn().mockResolvedValue({ worktree: { id: 'wt-1::/repo' } })
+    services.listAgentStatuses = () => [
+      {
+        paneKey: 'tab-1:leaf-1',
+        worktreeId: 'wt-1::/repo',
+        terminalHandle: 't1',
+        state: 'blocked',
+        agentType: 'claude',
+        stateStartedAt: 10
+      },
+      {
+        paneKey: 'tab-2:leaf-2',
+        worktreeId: 'wt-2::/other',
+        terminalHandle: 't2',
+        state: 'working',
+        agentType: 'codex',
+        stateStartedAt: 20
+      }
+    ]
+    vi.mocked(services.listWorktreeTerminals).mockResolvedValue([{ id: 't1', title: 'Claude' }])
+
+    const outcome = await executePluginHostCall({
+      pluginId: 'samples.demo',
+      method: 'agents.list',
+      params: { workspaceId: 'identity:wt2:local:abc' },
+      surface: 'worker',
+      grantedCapabilities: ['agent:read'],
+      services
+    })
+
+    expect(services.runtimeRpc).toHaveBeenCalledWith(
+      'worktree.show',
+      { worktree: 'identity:wt2:local:abc', matchFolderWorkspaces: true },
+      {}
+    )
+    expect(services.resolveActiveWorktreeContext).not.toHaveBeenCalled()
+    expect(outcome).toMatchObject({
+      ok: true,
+      value: {
+        agents: [
+          {
+            terminalId: 't1',
+            title: 'Claude',
+            agent: 'claude',
+            state: 'blocked',
+            stateStartedAt: 10
+          }
+        ]
+      }
+    })
+  })
+})
+
 describe('workspace.readContext workspace id', () => {
   it('is the id workspace.list gives: identity form, folder key, else the raw id', async () => {
     const contexts = [
