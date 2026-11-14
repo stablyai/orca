@@ -53,10 +53,7 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
       return
     }
     // Re-rank titles: weak readiness cannot see tail-truncated dialogs and must wait for a rendered-screen poll.
-    const evidence = ptyTuiIdleEvidence(this.tuiIdleEvidenceSource, pty, () =>
-      buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
-    )
-    const verdict = evaluateTuiIdle(evidence)
+    const verdict = this.evaluateTuiIdleForPty(pty)
     for (const waiter of waiters) {
       if (verdict.kind === 'blocked') {
         this.terminalWaiters.resolve(
@@ -96,8 +93,8 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
           stagedPointerText: this.orchestrationMailboxPointerDelivery.stagedPointerText(
             terminal.ptyId
           ),
-          outputAt: this.readOutputClockAt(terminal.ptyId),
-          held: this.ptyDeliveryHold(terminal.ptyId) !== null
+          outputAt: () => this.readOutputClockAt(terminal.ptyId),
+          held: () => this.ptyDeliveryHold(terminal.ptyId) !== null
         }),
       deliver: (ptyId) => this.deliverPendingMessagesForPty(ptyId)
     }
@@ -126,6 +123,9 @@ export abstract class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithB
   }
 
   protected armDeliveryRecheck(ptyId: string, decision?: MailboxDeliveryDecision): void {
+    if (decision?.uncertainMailboxes) {
+      this.publishUncertainTerminalMail(ptyId, decision.uncertainMailboxes)
+    }
     this.deliveryRechecks.request(ptyId, decision)
   }
 

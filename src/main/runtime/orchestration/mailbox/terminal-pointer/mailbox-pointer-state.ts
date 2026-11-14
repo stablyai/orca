@@ -39,10 +39,6 @@ export class OrchestrationMailboxPointerState {
     return true
   }
 
-  hasNewerMail(ptyId: string, sequence: number): boolean {
-    return (this.observedMail.get(ptyId) ?? -1) > sequence
-  }
-
   readonly foreground: MailboxForegroundEvidence
 
   constructor(onForegroundRecovery?: (ptyId: string) => void) {

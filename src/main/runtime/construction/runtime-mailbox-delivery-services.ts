@@ -4,6 +4,8 @@ import type { MailboxDeliveryDecision } from '../orchestration/mailbox/notificat
 import type { OrchestrationMailboxTerminal } from '../orchestration/mailbox/routing/mailbox-owner'
 
 export abstract class RuntimeMailboxDeliveryServices {
+  protected abstract mailDeliveryAgent(ptyId: string): string | null | undefined
+  protected abstract publishUncertainTerminalMail(ptyId: string, mailboxes: readonly string[]): void
   protected abstract resolveOrchestrationPointerSubmitTarget(
     ptyId: string,
     foreground?: MailboxForeground,

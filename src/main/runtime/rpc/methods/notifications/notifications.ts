@@ -61,6 +61,18 @@ export const NOTIFICATION_METHODS = [
 
         // Send epoch before the reconnect watermark so getMissedSince knows the counter lifetime (#8591).
         emit({ type: 'ready', subscriptionId, epoch: runtime.getMobileNotificationEpoch() })
+        for (const event of runtime.getMissedNotificationsSince(
+          Number.MAX_SAFE_INTEGER,
+          runtime.getMobileNotificationEpoch()
+        )) {
+          if (
+            event.type === 'notification' &&
+            event.source === 'orchestration-uncertainty' &&
+            shouldEmit(event)
+          ) {
+            emit(event)
+          }
+        }
       })
     }
   }),

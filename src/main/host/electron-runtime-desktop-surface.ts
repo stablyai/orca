@@ -7,15 +7,31 @@ import { encodeRepoIconPng } from './electron-repo-icon-png'
 import { fetchWithElectronManualRedirects } from './electron-manual-redirect-fetch'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../shared/sidebar-inputs-switch'
 
+const mailboxAnnouncements = new Map<string, Notification>()
+
 export const electronRuntimeDesktopSurface: RuntimeDesktopSurface = {
   translateNotification: translateMain,
   isAwayForMobileNotifications: () => readDesktopAwayState(powerMonitor),
-  showNotification: ({ title, body }) => {
+  showNotification: ({ title, body, notificationId }) => {
     if (!Notification.isSupported()) {
       return false
     }
-    new Notification({ title, body }).show()
+    const notification = new Notification({ title, body })
+    if (notificationId) {
+      mailboxAnnouncements.get(notificationId)?.close()
+      mailboxAnnouncements.set(notificationId, notification)
+      notification.once('close', () => {
+        if (mailboxAnnouncements.get(notificationId) === notification) {
+          mailboxAnnouncements.delete(notificationId)
+        }
+      })
+    }
+    notification.show()
     return true
+  },
+  dismissNotification: (id) => {
+    mailboxAnnouncements.get(id)?.close()
+    mailboxAnnouncements.delete(id)
   },
   sendToRenderers: (channel, payload) => {
     for (const window of BrowserWindow.getAllWindows()) {

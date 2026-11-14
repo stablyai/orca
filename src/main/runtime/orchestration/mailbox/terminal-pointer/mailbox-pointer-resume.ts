@@ -1,3 +1,5 @@
+import type { OrchestrationMessageWaiter } from './mailbox-pointer-eligibility'
+import type { OrchestrationMailboxPointerState } from './mailbox-pointer-state'
 import type {
   OrchestrationMailboxPointerMessage,
   PointerDeliveryDependencies
@@ -14,78 +16,113 @@ export function resumePendingOrchestrationMailboxPointer(args: {
   deps: Pick<PointerDeliveryDependencies<never>, 'getDb' | 'resolveSubmitTarget'>
   terminal: OrchestrationMailboxTerminal
   messages: readonly OrchestrationMailboxPointerMessage[]
-  recovering?: boolean
 }): boolean {
   const { ptyId } = args.terminal
-  const newestSequence = args.messages.at(-1)?.sequence
   const expectedTarget = args.deps.resolveSubmitTarget(ptyId)
-  const staged = args.messages[0]
-  const messageIds = args.messages.map((message) => message.id)
-  const phases = new Set(args.messages.map((message) => message.pointer_enter_pending))
-  const persistedTarget = staged?.pointer_pty_id
-    ? {
-        ptyId: staged.pointer_pty_id,
-        processIncarnation: staged.pointer_process_incarnation ?? ''
-      }
-    : null
-  if (
-    newestSequence === undefined ||
-    !expectedTarget ||
-    !staged ||
-    staged.pointer_pty_id !== ptyId ||
-    staged.pointer_process_incarnation !== expectedTarget.processIncarnation ||
-    args.messages.some(
-      (message) =>
-        message.pointer_pty_id !== staged.pointer_pty_id ||
-        message.pointer_process_incarnation !== staged.pointer_process_incarnation
-    )
-  ) {
-    const db = args.deps.getDb()
-    if (db) {
-      const byTarget = new Map<
-        string,
-        { target: { ptyId: string; processIncarnation: string }; ids: string[] }
-      >()
-      for (const message of args.messages) {
-        if (!message.pointer_pty_id || !message.pointer_process_incarnation) {
-          continue
-        }
-        const key = `${message.pointer_pty_id}\u0000${message.pointer_process_incarnation}`
-        const group = byTarget.get(key) ?? {
-          target: {
-            ptyId: message.pointer_pty_id,
-            processIncarnation: message.pointer_process_incarnation
-          },
-          ids: []
-        }
-        group.ids.push(message.id)
-        byTarget.set(key, group)
-      }
-      for (const group of byTarget.values()) {
-        db.releaseMailboxPointerEnter(group.ids, group.target, [
-          MAILBOX_POINTER_RESERVED,
-          MAILBOX_POINTER_WRITE_ATTEMPTED,
-          MAILBOX_POINTER_ENTER_ATTEMPTED
-        ])
-      }
-    }
-    return false
-  }
-  if (phases.size !== 1 || !phases.has(MAILBOX_POINTER_RESERVED)) {
-    // Same-incarnation recovery cannot tell whether pointer text or Enter reached the PTY.
-    if (args.recovering) {
-      return true
-    }
-    args.deps
-      .getDb()
-      ?.settleMailboxPointerEnter(messageIds, persistedTarget!, [
-        MAILBOX_POINTER_WRITE_ATTEMPTED,
-        MAILBOX_POINTER_ENTER_ATTEMPTED
-      ])
+  const db = args.deps.getDb()
+  if (!expectedTarget || !db) {
     return true
   }
-  args.deps
-    .getDb()
-    ?.releaseMailboxPointerEnter(messageIds, persistedTarget!, [MAILBOX_POINTER_RESERVED])
+  const byTarget = new Map<
+    string,
+    {
+      target: { ptyId: string; processIncarnation: string }
+      messages: (typeof args.messages)[number][]
+    }
+  >()
+  for (const message of args.messages) {
+    if (!message.pointer_pty_id || !message.pointer_process_incarnation) {
+      continue
+    }
+    const key = `${message.pointer_pty_id}\u0000${message.pointer_process_incarnation}`
+    const group = byTarget.get(key) ?? {
+      target: {
+        ptyId: message.pointer_pty_id,
+        processIncarnation: message.pointer_process_incarnation
+      },
+      messages: []
+    }
+    group.messages.push(message)
+    byTarget.set(key, group)
+  }
+  let retained = false
+  for (const group of byTarget.values()) {
+    const current =
+      group.target.ptyId === ptyId &&
+      group.target.processIncarnation === expectedTarget.processIncarnation
+    db.releaseMailboxPointerEnter(
+      group.messages.map((message) => message.id),
+      group.target,
+      current
+        ? [MAILBOX_POINTER_RESERVED]
+        : [
+            MAILBOX_POINTER_RESERVED,
+            MAILBOX_POINTER_WRITE_ATTEMPTED,
+            MAILBOX_POINTER_ENTER_ATTEMPTED
+          ]
+    )
+    retained ||=
+      current &&
+      group.messages.some(
+        (message) => (message.pointer_enter_pending ?? 0) > MAILBOX_POINTER_RESERVED
+      )
+  }
+  return retained
+}
+
+export function reconcileUncertainMailboxPointers<T extends OrchestrationMessageWaiter>(
+  deps: PointerDeliveryDependencies<T>,
+  state: OrchestrationMailboxPointerState,
+  ptyId: string
+): void {
+  try {
+    const db = deps.getDb()
+    const target = deps.resolveSubmitTarget(ptyId)
+    if (!db || !target) {
+      return
+    }
+    const owned = new Set(state.flightForPty(ptyId)?.stagedMessageIds)
+    const mailboxes = new Set(
+      db
+        .getPendingMailboxPointerMessagesForPty(ptyId)
+        .filter(
+          (row) =>
+            (row.pointer_enter_pending ?? 0) > MAILBOX_POINTER_RESERVED &&
+            row.pointer_process_incarnation === target.processIncarnation &&
+            !owned.has(row.id)
+        )
+        .map((row) => row.to_handle)
+    )
+    deps.onDeliveryDecision(ptyId, { uncertainMailboxes: [...mailboxes].sort() })
+  } catch {
+    // Unavailable reservation evidence cannot withdraw an unread-mail explanation.
+  }
+}
+
+export function deferForPendingOrchestrationMailboxPointer<
+  T extends OrchestrationMessageWaiter
+>(args: {
+  deps: PointerDeliveryDependencies<T>
+  terminal: OrchestrationMailboxTerminal
+  messages: readonly OrchestrationMailboxPointerMessage[]
+  hasEligibleMail: boolean
+  reconcile: () => void
+  redrive: () => void
+}): boolean {
+  if (args.messages.length === 0) {
+    return !args.hasEligibleMail
+  }
+  const retained = resumePendingOrchestrationMailboxPointer(args)
+  args.reconcile()
+  if (
+    retained &&
+    (!args.hasEligibleMail || args.deps.readComposerText?.(args.terminal.ptyId) !== '')
+  ) {
+    return true
+  }
+  if (!args.hasEligibleMail) {
+    args.redrive()
+    return true
+  }
   return false
 }

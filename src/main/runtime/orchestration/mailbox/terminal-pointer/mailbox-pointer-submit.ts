@@ -37,6 +37,7 @@ export type PointerSubmitDependencies = {
   isPtyAwaitingUserInput: (ptyId: string) => boolean
   writePty: (ptyId: string, data: string) => WriteSettlement | Promise<WriteSettlement>
   settle: (ptyId: string, flight: OrchestrationMailboxDeliveryFlight) => void
+  onUncertainDelivery?: (ptyId: string) => void
   onDeliveryDecision?: (ptyId: string, decision?: MailboxDeliveryDecision) => void
   redrive: (mailboxHandle: string, force?: boolean) => void
 }
@@ -54,7 +55,6 @@ export type PointerSubmitInput = {
   flight: OrchestrationMailboxDeliveryFlight
   expectedTarget: OrchestrationMailboxPointerSubmitTarget
   stagedText?: string
-  enterUncertain?: boolean
 }
 
 export function submitOrchestrationMailboxPointer(
@@ -66,7 +66,8 @@ export function submitOrchestrationMailboxPointer(
   let submitted = false
   let releaseWithoutRedrive = false
   let finalizeReservation = true
-  let preserveAmbiguousDelivery = input.enterUncertain === true
+  let preserveAmbiguousDelivery = false
+  let uncertain = false
   let preserveFlight = false
   let expectedPhase = MAILBOX_POINTER_WRITE_ATTEMPTED
   const isRecovering = () => deps.state.hasRecoveryFlight(input.ptyId)
@@ -88,24 +89,20 @@ export function submitOrchestrationMailboxPointer(
       }
       const composerBeforeProbe = deps.readComposerText?.(input.ptyId)
       if (
-        input.enterUncertain &&
-        !(composerBeforeProbe === '' && deps.state.hasNewerMail(input.ptyId, input.newestSequence))
-      ) {
-        if (messageIds.every((id) => deps.getDb()?.getMessageById(id)?.read === 1)) {
-          clearAndRedrive = true
-        } else {
-          preserveAmbiguousDelivery = true
-          preserveFlight = true
-        }
-        return
-      }
-      if (
         isRecovering() &&
         !terminalComposerTextOwnsPointer(composerBeforeProbe, input.stagedText) &&
         deps.getDb()?.areUnreadMessages(input.mailboxHandle, messageIds) === false &&
         messageIds.every((id) => deps.getDb()?.getMessageById(id)?.read === 1)
       ) {
         clearAndRedrive = true
+        return
+      }
+      if (
+        isRecovering() &&
+        typeof composerBeforeProbe === 'string' &&
+        !terminalComposerTextOwnsPointer(composerBeforeProbe, input.stagedText)
+      ) {
+        uncertain = true
         return
       }
       if (isRecovering() && deps.isAgentSettledForDelivery?.(input.ptyId) === false) {
@@ -159,20 +156,13 @@ export function submitOrchestrationMailboxPointer(
         preserveFlight = true
       } else if (
         isRecovering() &&
-        (input.enterUncertain ||
-          foreground.foreground !== 'agent' ||
+        (foreground.foreground !== 'agent' ||
           !terminal.lastAgentStatusObservedLive ||
           !settled ||
           !ownPointer)
       ) {
-        // New mail can replace the callback, never the older uncertain reservation.
-        preserveFlight = !(
-          foreground.foreground === 'agent' &&
-          terminal.lastAgentStatusObservedLive &&
-          settled &&
-          composer === '' &&
-          deps.state.hasNewerMail(input.ptyId, input.newestSequence)
-        )
+        uncertain = typeof composer === 'string' && !ownPointer
+        preserveFlight = !uncertain
       } else if (deps.state.foreground.foregroundHold(input.ptyId)) {
         preserveFlight = true
       } else if (
@@ -230,13 +220,11 @@ export function submitOrchestrationMailboxPointer(
       }
     })
     .finally(() => {
-      if (preserveFlight && deps.state.isCurrentFlight(input.ptyId, input.flight)) {
+      uncertain ||=
+        preserveAmbiguousDelivery && !submitted && !clearAndRedrive && !releaseWithoutRedrive
+      if (preserveFlight && !uncertain && deps.state.isCurrentFlight(input.ptyId, input.flight)) {
         deps.state.deferFlightUntilIdle(input.ptyId)
-        input.flight.submitEnter = () =>
-          submitOrchestrationMailboxPointer(deps, {
-            ...input,
-            enterUncertain: preserveAmbiguousDelivery
-          })
+        input.flight.submitEnter = () => submitOrchestrationMailboxPointer(deps, input)
         deps.onDeliveryDecision?.(input.ptyId, { foreground: isRecovering() })
         return
       }
@@ -262,7 +250,11 @@ export function submitOrchestrationMailboxPointer(
             ? deps.state.clearWatermark(input.mailboxHandle, input.newestSequence, input.ptyId)
             : deps.state.deactivateWatermark(input.mailboxHandle, input.newestSequence, input.ptyId)
       }
+      const current = deps.state.isCurrentFlight(input.ptyId, input.flight)
       deps.settle(input.ptyId, input.flight)
+      if (uncertain && current) {
+        deps.onUncertainDelivery?.(input.ptyId)
+      }
       if (
         released &&
         rollbackPersisted &&

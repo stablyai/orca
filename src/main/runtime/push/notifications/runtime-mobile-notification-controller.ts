@@ -29,7 +29,7 @@ export type MobileNotificationDispatchEvent = {
   desktopAllowed?: boolean
   desktopAway?: boolean
   emittedAt?: number
-  source: 'agent-task-complete' | 'terminal-bell' | 'test' | 'plugin'
+  source: 'agent-task-complete' | 'terminal-bell' | 'test' | 'plugin' | 'orchestration-uncertainty'
   title: string
   body: string
   worktreeId?: string
@@ -200,6 +200,9 @@ export class RuntimeMobileNotificationController {
   }
 
   dismiss(notificationId: string): void {
+    if (this.replay.retainedNotification(notificationId)) {
+      return
+    }
     // Reads rebuild ids for alerts that never went out (chat panes, silenced workers); each would cost a silent push.
     if (this.dismissalStore && !this.dismissalStore.hasLiveDelivery(notificationId)) {
       return
@@ -250,6 +253,34 @@ export class RuntimeMobileNotificationController {
       ) {
         this.retireDelivery(delivery)
       }
+    }
+  }
+
+  reconcileMailboxAttention(id: string, event: MobileNotificationDispatchEvent | null): void {
+    const previous = this.replay.retainedNotification(id)
+    if (!event) {
+      if (previous) {
+        this.dispatch({ type: 'dismiss', notificationId: id })
+        getRuntimeDesktopSurface().dismissNotification?.(id)
+      }
+      return
+    }
+    if (
+      previous?.type === 'notification' &&
+      previous.title === event.title &&
+      previous.body === event.body
+    ) {
+      return
+    }
+    this.dispatch({ ...event, notificationId: id })
+    try {
+      getRuntimeDesktopSurface().showNotification({
+        title: event.title,
+        body: event.body,
+        notificationId: id
+      })
+    } catch {
+      // Headless runtimes retain the explanation for reconnecting clients.
     }
   }
 

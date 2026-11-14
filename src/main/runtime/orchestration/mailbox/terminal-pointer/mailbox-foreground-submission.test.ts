@@ -238,7 +238,7 @@ describe('one mailbox submission owner', () => {
   )
 
   it.each(['claude', 'codex', 'opencode2'] as const)(
-    'recognises agent-rendered wrapped pointer rows in %s without accepting edits or dialogs',
+    'recognises wrapped pointer rows in %s and retires edited notifications without replay',
     async (agent) => {
       vi.useFakeTimers()
       const db = createDatabase('orca-mail-wrapped-pointer-')
@@ -294,6 +294,32 @@ describe('one mailbox submission owner', () => {
         // Give the recorded frame its normal explicit rest marker, independent of custom labels.
         runtime.onPtyData(PTY_ID, `\x1b]0;${agent} done\x07`, Date.now())
         const run = createBoundRun(db, 'Agent wrapped pointer')
+        const recognised = insertDirectRunMessage(db, run.id, 'Recognised wrapped pointer')
+        write.mockImplementation((_ptyId, data) => {
+          runtime.onPtyData(
+            PTY_ID,
+            data === '\r' ? `\x1b[2J\x1b[H${ready}` : wrapped(data),
+            Date.now()
+          )
+          return true
+        })
+        runtime.notifyMessageArrived(`run:${run.id}`, 'status')
+        await vi.advanceTimersByTimeAsync(1000)
+        expect(write).not.toHaveBeenCalled()
+        shell = false
+        await vi.advanceTimersByTimeAsync(65000)
+        expect(write.mock.calls.map(([, data]) => data)).toEqual([
+          expect.stringContaining('You have 1 orchestration message'),
+          '\r'
+        ])
+        expect(db.getMessageById(recognised.id)).toMatchObject({
+          read: 0,
+          delivered_at: expect.any(String),
+          pointer_enter_pending: 0
+        })
+        db.markAsReadAndDelivered([recognised.id])
+        write.mockClear()
+        shell = true
         const message = insertDirectRunMessage(db, run.id, 'One owned composer')
         runtime.notifyMessageArrived(`run:${run.id}`, 'status')
         await vi.advanceTimersByTimeAsync(1000)
@@ -335,14 +361,16 @@ describe('one mailbox submission owner', () => {
         expect(write).toHaveBeenCalledTimes(1)
         runtime.onPtyData(PTY_ID, wrapped(staged), Date.now())
         await vi.advanceTimersByTimeAsync(65000)
-        expect(write.mock.calls.map(([, data]) => data)).toEqual([staged, '\r'])
+        expect(write.mock.calls.map(([, data]) => data)).toEqual([staged])
         expect(db.getMessageById(message.id)).toMatchObject({
           read: 0,
-          delivered_at: expect.any(String),
-          pointer_enter_pending: 0
+          delivered_at: null,
+          pointer_enter_pending: 2
         })
+        db.markAsReadAndDelivered([message.id])
+        runtime.settleConsumedTerminalMail([`run:${run.id}`])
         await vi.advanceTimersByTimeAsync(65000)
-        expect(write).toHaveBeenCalledTimes(2)
+        expect(write).toHaveBeenCalledTimes(1)
       } finally {
         db.close()
       }

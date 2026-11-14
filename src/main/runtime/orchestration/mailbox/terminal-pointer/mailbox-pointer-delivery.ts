@@ -22,7 +22,10 @@ import {
   MAILBOX_POINTER_RESERVED,
   MAILBOX_POINTER_WRITE_ATTEMPTED
 } from '../../db/messages/mailbox-pointer-enter-state'
-import { resumePendingOrchestrationMailboxPointer } from './mailbox-pointer-resume'
+import {
+  deferForPendingOrchestrationMailboxPointer,
+  reconcileUncertainMailboxPointers
+} from './mailbox-pointer-resume'
 import { stageOrchestrationMailboxPointer, pointerEnterDelayMs } from './mailbox-pointer-stage'
 
 export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMessageWaiter> {
@@ -89,7 +92,16 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         reservedTypes: options.reservedTypes,
         excludeRunOwnedDirect: isOwnDirectMailbox
       })
-      if (unread.length === 0 && pending.length === 0) {
+      if (
+        deferForPendingOrchestrationMailboxPointer({
+          deps: this.deps,
+          terminal,
+          messages: pending,
+          hasEligibleMail: unread.length > 0,
+          reconcile: () => this.reconcileUncertainMail(ptyId),
+          redrive: () => this.redrive(mailboxHandle, true)
+        })
+      ) {
         return
       }
       const newestSequence = unread.at(-1)?.sequence ?? pending.at(-1)?.sequence
@@ -116,18 +128,6 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         return
       }
       if (
-        pending.length > 0 &&
-        !(unread.length > 0 && this.requiresCurrentScreen(ptyId)) &&
-        resumePendingOrchestrationMailboxPointer({
-          deps: this.deps,
-          terminal,
-          messages: pending,
-          recovering: this.requiresCurrentScreen(ptyId)
-        })
-      ) {
-        return
-      }
-      if (
         this.deps.mailboxOwner.resolve(terminal, mailboxHandle, { routeDirectMail: false }) !==
         mailboxHandle
       ) {
@@ -145,6 +145,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         newestSequence,
         enterDelayMs: pointerEnterDelayMs(),
         settle: (ptyId, flight) => this.settle(ptyId, flight),
+        onUncertainDelivery: (ptyId) => this.reconcileUncertainMail(ptyId),
         redrive: (redriveMailbox, force) => this.redrive(redriveMailbox, force)
       })
     } finally {
@@ -176,6 +177,10 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
       incarnation !== undefined &&
       incarnation === this.deps.resolveSubmitTarget(ptyId)?.processIncarnation
     )
+  }
+
+  reconcileUncertainMail(ptyId: string): void {
+    reconcileUncertainMailboxPointers(this.deps, this.state, ptyId)
   }
 
   completeRecovery(ptyId: string): void {
@@ -234,7 +239,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     this.coldParkedPtys.delete(ptyId)
     const { flight, releasedMailboxes } = this.state.retirePty(ptyId, preserveForeground)
     if (!preserveForeground) {
-      this.deps.onDeliveryDecision(ptyId, { foreground: false })
+      this.deps.onDeliveryDecision(ptyId, { foreground: false, uncertainMailboxes: [] })
     }
     if (flight?.enterTimer != null) {
       clearTimeout(flight.enterTimer)

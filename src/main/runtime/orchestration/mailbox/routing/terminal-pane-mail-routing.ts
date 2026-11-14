@@ -326,6 +326,9 @@ export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeW
   protected repointPendingMessagesForHandle(handle: string): void {
     try {
       const terminal = this.orchestrationMailboxDeliveryTarget.resolveTerminal(handle)
+      if (terminal) {
+        this.orchestrationMailboxPointerDelivery.reconcileUncertainMail(terminal.ptyId)
+      }
       if (terminal && this.orchestrationMailboxPointerDelivery.isForegroundHeld(terminal.ptyId)) {
         this.armDeliveryRecheck(terminal.ptyId)
         return

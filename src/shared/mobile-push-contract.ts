@@ -1,6 +1,11 @@
 // Keep strings aligned across desktop, gateway and phone: cloud/packages/push-contract/src.
 
-export const MOBILE_PUSH_SOURCES = ['agent-task-complete', 'terminal-bell', 'plugin'] as const
+export const MOBILE_PUSH_SOURCES = [
+  'agent-task-complete',
+  'terminal-bell',
+  'plugin',
+  'orchestration-uncertainty'
+] as const
 export type MobilePushSource = (typeof MOBILE_PUSH_SOURCES)[number]
 
 // Host maps richer agent status onto these phone states before gateway submission.

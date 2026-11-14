@@ -4,7 +4,12 @@ import {
 } from '../routing/mailbox-owner'
 import { TUI_IDLE_QUIESCENCE_MS } from '../../../terminal/wait/terminal-idle-policy'
 
-export type MailboxDeliveryDecision = { foreground?: boolean; reset?: boolean; settled?: boolean }
+export type MailboxDeliveryDecision = {
+  foreground?: boolean
+  reset?: boolean
+  settled?: boolean
+  uncertainMailboxes?: readonly string[]
+}
 
 type RecheckReaders = {
   terminal(ptyId: string): OrchestrationMailboxTerminal | null
@@ -123,8 +128,8 @@ export function mailboxReadinessRecheckDelay(
   evidence: {
     recovering: boolean
     stagedPointerText: string | undefined
-    outputAt: number | null
-    held: boolean
+    outputAt: () => number | null
+    held: () => boolean
   }
 ): number | null {
   if (
@@ -138,7 +143,7 @@ export function mailboxReadinessRecheckDelay(
   ) {
     return null
   }
-  const remaining =
-    evidence.outputAt === null ? 0 : TUI_IDLE_QUIESCENCE_MS - (Date.now() - evidence.outputAt)
-  return evidence.held || remaining <= 0 ? 2000 : remaining + 50
+  const outputAt = evidence.outputAt()
+  const remaining = outputAt === null ? 0 : TUI_IDLE_QUIESCENCE_MS - (Date.now() - outputAt)
+  return evidence.held() || remaining <= 0 ? 2000 : remaining + 50
 }

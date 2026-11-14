@@ -1,3 +1,4 @@
+import { tuiAgentDisplayName } from '../../../../shared/agent-launch/catalog/tui-agent-display-names'
 import type {
   TerminalIdentityRawInputs,
   TerminalIdentityReadContext
@@ -88,6 +89,32 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
   protected readonly subscriptions = new RuntimeSubscriptionRegistry()
 
   protected readonly mobileNotifications = new RuntimeMobileNotificationController()
+
+  protected publishUncertainTerminalMail(ptyId: string, mailboxes: readonly string[]): void {
+    const pty = this.ptysById.get(ptyId)
+    const terminal = this.getOrchestrationMailboxTerminal(ptyId)
+    const agent = tuiAgentDisplayName(this.mailDeliveryAgent(ptyId) ?? '') ?? 'The agent'
+    const cli = terminal ? this.getTerminalOrchestrationCliCommand(terminal.handle) : 'orca'
+    const commands = mailboxes.map((mailbox) => {
+      const run = mailbox.startsWith('run:') ? mailbox.slice(4) : undefined
+      return `${cli} orchestration check${run ? ` --run ${run}` : ''}`
+    })
+    this.mobileNotifications.reconcileMailboxAttention(
+      `orchestration-mail:${ptyId}`,
+      mailboxes.length
+        ? {
+            type: 'notification',
+            source: 'orchestration-uncertainty',
+            title: `${agent} has unread mail`,
+            body: `${agent}’s mail notification may not have been submitted. In that terminal, run: ${commands.join('; ')}.`,
+            worktreeId: pty?.worktreeId,
+            // Viewing a workspace cannot acknowledge unread terminal mail.
+            workspaceExecutionHostId: null,
+            paneKey: terminal?.paneKeys[0]
+          }
+        : null
+    )
+  }
 
   protected readonly pairedRendererSessionOwnedPtyIds = new Set<string>()
 

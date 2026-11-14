@@ -13,6 +13,7 @@ const DEFAULT_CAPACITY = 256
 
 export class MobileNotificationReplayBuffer {
   private readonly capacity: number
+  private readonly retained = new Map<string, ReplayableMobileNotification>()
   private seq = 0
   private readonly buffer: ReplayableMobileNotification[] = []
   // Persisted client watermarks can exceed a restarted counter; an epoch invalidates that stale position.
@@ -28,7 +29,15 @@ export class MobileNotificationReplayBuffer {
 
   record(event: MobileNotificationEvent): number {
     const seq = ++this.seq
-    this.buffer.push({ ...event, notificationSeq: seq, notificationEpoch: this.epochId })
+    const entry = { ...event, notificationSeq: seq, notificationEpoch: this.epochId }
+    this.buffer.push(entry)
+    if (event.notificationId) {
+      if (event.type === 'notification' && event.source === 'orchestration-uncertainty') {
+        this.retained.set(event.notificationId, entry)
+      } else if (event.type === 'dismiss') {
+        this.retained.delete(event.notificationId)
+      }
+    }
     if (this.buffer.length > this.capacity) {
       this.buffer.splice(0, this.buffer.length - this.capacity)
     }
@@ -38,13 +47,25 @@ export class MobileNotificationReplayBuffer {
   // Return retained events above the watermark; a different epoch invalidates it and returns the whole buffer.
   // Missing epochs preserve the seq-only cut for older clients; eviction can shorten repeated results.
   getMissedSince(lastSeenSeq: number, epoch?: string): ReplayableMobileNotification[] {
-    if (epoch !== undefined && epoch !== this.epochId) {
-      return [...this.buffer]
-    }
-    if (lastSeenSeq >= this.seq) {
-      return []
-    }
-    return this.buffer.filter((entry) => entry.notificationSeq > lastSeenSeq)
+    const missed = this.buffer.filter(
+      (entry) =>
+        (epoch !== undefined && epoch !== this.epochId) || entry.notificationSeq > lastSeenSeq
+    )
+    const current = missed.filter(
+      (entry) =>
+        entry.type !== 'notification' ||
+        entry.source !== 'orchestration-uncertainty' ||
+        this.retained.get(entry.notificationId ?? '')?.notificationSeq === entry.notificationSeq
+    )
+    const sequences = new Set(current.map((entry) => entry.notificationSeq))
+    return [
+      ...current,
+      ...[...this.retained.values()].filter((entry) => !sequences.has(entry.notificationSeq))
+    ].sort((a, b) => a.notificationSeq - b.notificationSeq)
+  }
+
+  retainedNotification(id: string): ReplayableMobileNotification | undefined {
+    return this.retained.get(id)
   }
 
   get size(): number {

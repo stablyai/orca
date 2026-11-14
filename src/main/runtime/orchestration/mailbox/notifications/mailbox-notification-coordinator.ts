@@ -1,4 +1,5 @@
 import type { OrchestrationDb } from '../../db/orchestration-db'
+import { MAILBOX_POINTER_RESERVED } from '../../db/messages/mailbox-pointer-enter-state'
 import type {
   OrchestrationMailboxOwner,
   OrchestrationMailboxTerminal,
@@ -47,7 +48,7 @@ export class OrchestrationMailboxNotificationCoordinator<
     }
   }
 
-  /** Whether delivery has work for this terminal: a pointer reservation to recover, or unread, undelivered mail no waiter or held batch claims. */
+  /** Retryable flights and eligible new mail own wakes; uncertain unread claims do not. */
   hasDeliverableMail(terminal: OrchestrationMailboxTerminal): boolean {
     try {
       const db = this.deps.getDb()
@@ -64,7 +65,9 @@ export class OrchestrationMailboxNotificationCoordinator<
         return (
           // Mirrors deliver(): an unfiltered waiter preempts recovery too.
           !hasUnfilteredOrchestrationWaiter(waiters) &&
-          (db.getPendingMailboxPointerMessages(mailboxHandle).length > 0 ||
+          (db
+            .getPendingMailboxPointerMessages(mailboxHandle)
+            .some((row) => row.pointer_enter_pending === MAILBOX_POINTER_RESERVED) ||
             selectOrchestrationPointerBatch({
               db,
               mailboxHandle,
@@ -85,6 +88,9 @@ export class OrchestrationMailboxNotificationCoordinator<
   }
 
   settleDelivery(terminal: OrchestrationMailboxTerminal | null): boolean {
+    if (terminal) {
+      this.deps.pointerDelivery.reconcileUncertainMail(terminal.ptyId)
+    }
     if (!terminal || !this.deps.pointerDelivery.requiresCurrentScreen(terminal.ptyId)) {
       return false
     }
