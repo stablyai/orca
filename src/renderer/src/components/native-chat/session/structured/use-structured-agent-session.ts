@@ -28,10 +28,7 @@ import {
 } from '../../../../../../shared/agent-session/view/structured-agent-session-message-projection'
 import { useStructuredAgentSessionMessages } from '../../conversation/projection/use-structured-agent-session-messages'
 import { useStructuredAgentSessionTransportState } from './use-structured-agent-session-transport-state'
-import {
-  stopStructuredAgentSessionBackgroundTask,
-  useStructuredAgentSessionStop
-} from './writes/use-structured-agent-session-stop'
+import * as sessionStop from './writes/use-structured-agent-session-stop'
 import { useStructuredAgentSessionTransport } from './use-structured-agent-session-transport'
 import { useStructuredAgentSessionOptions } from '../options/structured/use-structured-agent-session-options'
 import { useStructuredAgentSessionThreadGoal } from '../goals/use-structured-agent-session-thread-goal'
@@ -90,6 +87,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
   const {
     conversationCommands,
     compactInstructions,
+    cleanBackgroundTerminals,
     optionSnapshot,
     optionSurface,
     setStructuredOption,
@@ -128,7 +126,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     [transportState.queuedMessages]
   )
   const stopControlInput = { sessionId, target, transportState, hostStopping, mutate }
-  const stopControl = useStructuredAgentSessionStop(stopControlInput)
+  const stopControl = sessionStop.useStructuredAgentSessionStop(stopControlInput)
   const prompts = pendingStructuredSessionPrompts(transportState)
   const isWorking = transportState.isWorking || transportState.queueSendsNext
   // Resolved per send, so a send's alternate flips the setting before the queue's own rules.
@@ -237,6 +235,7 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     conversationCommands,
     accountUsage,
     compactInstructions,
+    cleanBackgroundTerminals,
     ...structuredConversationCommandRunner({
       agentName,
       pending: commandPending,
@@ -307,8 +306,10 @@ export function useStructuredAgentSession(args: StructuredAgentSessionViewArgs) 
     ),
     cancel: (turnId: string | undefined, prompt?: { itemId: string; expectedRevision: number }) =>
       cancelStructuredAgentSessionPrompt(admit(), turnId, prompt),
+    cleanBackgroundTerminalsCommand: () =>
+      sessionStop.cleanStructuredAgentSessionBackgroundTerminals(mutate),
     stopBackgroundTask: (taskId?: string) =>
-      stopStructuredAgentSessionBackgroundTask(mutate, taskId),
+      sessionStop.stopStructuredAgentSessionBackgroundTask(mutate, taskId),
     respond: (item: StructuredPromptItem, response: AgentSessionPromptResponse) =>
       respondToStructuredAgentSessionPrompt({ item, response, action: admit() }),
     optionSnapshot,

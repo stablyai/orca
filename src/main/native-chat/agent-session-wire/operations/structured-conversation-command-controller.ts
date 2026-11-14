@@ -26,7 +26,7 @@ export class StructuredConversationCommandController {
     })
 
   run = (caller: StructuredAgentSessionCaller, params: ConversationCommandParams) => {
-    if (params.command === 'compact') {
+    if (params.command !== 'clear') {
       return runStructuredCompaction(this.context(), this.host, caller, params, {
         clearInFlight: this.pending.has(params.envelope.sessionId)
       })

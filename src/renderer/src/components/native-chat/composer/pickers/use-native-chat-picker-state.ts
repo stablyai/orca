@@ -1,3 +1,6 @@
+import type { NativeChatPickerState } from './native-chat-picker-state'
+export type { NativeChatPickerState } from './native-chat-picker-state'
+import * as sendClassification from './use-native-chat-send-classification'
 import {
   writeNativeChatComposerText,
   type NativeChatComposerInput
@@ -25,37 +28,19 @@ import {
   type ComposerAutocomplete
 } from '../../../../../../shared/native-chat/input/native-chat-composer-autocomplete'
 import { applyPickerSuggestion } from '../../../../../../shared/native-chat/input/native-chat-picker-triggers'
-import {
-  classifyNativeChatSend,
-  type NativeChatSendClassification,
-  type NativeChatSessionSkill,
-  type SlashCommandSuggestion
+import type {
+  NativeChatSessionSkill,
+  SlashCommandSuggestion
 } from '../../../../../../shared/native-chat/input/native-chat-slash-commands'
 import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/input/native-chat-picker-items'
+import type { AgentSessionConversationCommand } from '../../../../../../shared/agent-session/agent-session-conversation-command'
 import { nativeChatPickerCommands } from '../../../../../../shared/native-chat/input/native-chat-skill-visibility'
 import { useNativeChatSkills } from './use-native-chat-skills'
 import { useNativeChatPreferredSuggestion } from './use-native-chat-preferred-suggestion'
 import {
   emitNativeChatPickerItemAccepted,
-  emitNativeChatPickerOpened,
-  emitNativeChatSendClassified
+  emitNativeChatPickerOpened
 } from '@/components/native-chat/telemetry/native-chat-telemetry'
-
-export type NativeChatPickerState = {
-  autocomplete: ComposerAutocomplete
-  listboxId: string
-  retrySkills: () => void
-  classifySend: (draft: string) => NativeChatSendClassification
-  clearSkillOrigin: () => void
-  /** The draft still leads with the skill the user picked from the menu. */
-  isPickedSkill: (draft: string) => boolean
-  completeItem: (item: NativeChatPickerItem) => void
-  completeMention: (path: string) => void
-  dismiss: (triggerKey: string) => void
-  handleDraftOrCaretChange: (value: string, caret: number) => void
-  /** Arrow-key highlight moves; a catalog refresh keeps the row they land on until the next edit. */
-  navigateSuggestion: Dispatch<SetStateAction<number>>
-}
 
 export function useNativeChatPickerState(args: {
   agent: AgentType
@@ -65,6 +50,8 @@ export function useNativeChatPickerState(args: {
   draftScopeKey: string
   draft: string
   caret: number
+  conversationCommands?: readonly AgentSessionConversationCommand[]
+  cleanBackgroundTerminals?: boolean
   agentCommands: readonly SlashCommandSuggestion[]
   /** A message recalled from history is resent or walked past, not completed, until it is edited. */
   recalledFromHistory: boolean
@@ -116,8 +103,21 @@ export function useNativeChatPickerState(args: {
     launchWorktreeId
   )
   const pickerCommands = useMemo(
-    () => nativeChatPickerCommands(agent, agentCommands, discovery.skills),
-    [agent, agentCommands, discovery.skills]
+    () =>
+      nativeChatPickerCommands(
+        agent,
+        agentCommands,
+        discovery.skills,
+        args.conversationCommands,
+        args.cleanBackgroundTerminals
+      ),
+    [
+      agent,
+      agentCommands,
+      discovery.skills,
+      args.conversationCommands,
+      args.cleanBackgroundTerminals
+    ]
   )
   const listboxId = `native-chat-picker-${useId().replaceAll(':', '')}`
   const dismissalContext = `${draftScopeKey}:${agent}`
@@ -283,26 +283,14 @@ export function useNativeChatPickerState(args: {
     ]
   )
 
-  const classifySend = useCallback(
-    (value: string) => {
-      const outcome = classifyNativeChatSend(
-        value,
-        agentCommands,
-        skillOriginRef.current,
-        profile?.skillPrefix ?? null
-      )
-      emitNativeChatSendClassified({ agent, outcome })
-      return outcome
-    },
-    [agent, agentCommands, profile]
+  const classifySend = sendClassification.useNativeChatSendClassification(
+    agent,
+    agentCommands,
+    skillOriginRef,
+    profile?.skillPrefix ?? null
   )
-  const clearSkillOrigin = useCallback(() => {
-    skillOriginRef.current = null
-  }, [])
-  const isPickedSkill = useCallback(
-    (value: string) => skillOriginRef.current === (value.split(/\s/, 1)[0] ?? ''),
-    []
-  )
+  const { clearSkillOrigin, isPickedSkill } =
+    sendClassification.useNativeChatPickedSkillOrigin(skillOriginRef)
   const dismiss = useCallback(
     (triggerKey: string) => setDismissed({ context: dismissalContext, triggerKey }),
     [dismissalContext]

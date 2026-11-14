@@ -101,7 +101,14 @@ function restoreTurnItems(
 ): CodexJournalTranslationAdmission {
   input.currentTurnIds.set(input.threadId, new Set([turnId]))
   try {
-    for (const item of Array.isArray(turn.items) ? turn.items : []) {
+    const turnItems = Array.isArray(turn.items) ? turn.items : []
+    const review = turnItems.some(
+      (item) => readCodexJournalRecord(item).type === 'enteredReviewMode'
+    )
+    for (const item of turnItems) {
+      if (review && readCodexJournalRecord(item).type === 'userMessage') {
+        continue
+      }
       const admission = input.handleItem({
         threadId: input.threadId,
         method: 'item/completed',

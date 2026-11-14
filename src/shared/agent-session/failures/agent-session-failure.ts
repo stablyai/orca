@@ -75,6 +75,8 @@ export const AGENT_SESSION_FAILURE_KINDS = [
   /** A conversation command the chat's state refused when its turn to run came. */
   'commandRefused',
   'compactionFailed',
+  'reviewFailed',
+  'reviewSettingsUnsupported',
   'compactionUnconfirmed',
   'cancelUnconfirmed',
   /** A Stop naming no turn reached the agent, which ended nothing while the chat read working. */

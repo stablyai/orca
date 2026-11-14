@@ -1,3 +1,4 @@
+import type { NativeChatReviewMenu } from '../../../../../src/shared/native-chat/input/native-chat-review-menu'
 import type { AgentSessionConversationCommand } from '../../../../../src/shared/agent-session/agent-session-conversation-command'
 import {
   useCallback,
@@ -38,8 +39,9 @@ import { sayMobileNativeChatSessionOption } from './native-chat-session-option-c
 export type MobileNativeChatSessionOptionsController = {
   optionSurface?: SessionOptionsSurface
   conversationCommands?: readonly AgentSessionConversationCommand[]
+  cleanBackgroundTerminals?: boolean
   compactInstructions?: boolean
-  optionPickerRequest?: { id: string; sequence: number } | null
+  optionPickerRequest?: { id: string; sequence: number; review?: NativeChatReviewMenu } | null
   snapshot: SessionOptionDescriptor[]
   pendingId: string | null
   /** Structured picks are taken before the chat attaches and applied when it does. */

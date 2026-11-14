@@ -1,7 +1,7 @@
+import { isCodexTurnOptionKey } from '../turns/codex-turn-option-keys'
 import type { StructuredAgentSessionLiveOptions } from '../../../native-chat/agent-session-wire/options/structured-agent-session-option-models'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session/options/agent-session-options-result'
 import type { CodexSession } from '../session-lifecycle/codex-structured-session-state'
-import { isCodexTurnOptionKey } from '../turns/codex-turn-option-keys'
 import { AgentSessionOptionRejectedError } from '../../../native-chat/agent-session-wire/options/structured-agent-session-option-error'
 import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/structured-agent-session-option-codec'
 import { CODEX_DEFAULT_SERVICE_TIER, codexFastServiceTier } from './codex-structured-service-tier'
@@ -109,4 +109,15 @@ export function codexServiceTierOfFastMode(
     throw new Error('codex fast mode must be encoded as true or false')
   }
   return fastMode ? (codexFastServiceTier(model) ?? 'fast') : CODEX_DEFAULT_SERVICE_TIER
+}
+
+export function setCodexStructuredSessionOption(
+  session: CodexSession,
+  key: string,
+  value: string
+): Promise<Readonly<Record<string, string>>> {
+  if (!isCodexTurnOptionKey(key) && key !== 'fastMode') {
+    throw new Error(`codex app-server has no thread option named ${key}`)
+  }
+  return applyCodexStructuredSessionOption(session, key, value)
 }

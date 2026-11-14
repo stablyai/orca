@@ -1,3 +1,21 @@
+import { dispatchNativeReviewCommand } from './structured-agent-session-review-command'
+import {
+  STRUCTURED_AGENT_SESSION_SLASH_COMMANDS,
+  CONVERSATION_COMMANDS,
+  commandParts,
+  structuredRecognizedCommands,
+  structuredAgentSessionGoalChange,
+  isStructuredAgentSessionGoalCommand
+} from './structured-agent-session-command-syntax'
+export {
+  STRUCTURED_AGENT_SESSION_SLASH_COMMANDS,
+  isStructuredAgentSessionGoalCommand,
+  structuredAgentSessionGoalChange,
+  isBareStructuredAgentSessionGoalCommand,
+  structuredAgentSessionGoalObjective
+} from './structured-agent-session-command-syntax'
+import type { NativeChatReviewRun } from '../../native-chat/input/native-chat-review-menu'
+import type { AgentSessionReviewTarget } from '../agent-session-review-target'
 import { agentSessionInteractionCommand } from '../options/agent-session-interaction-mode'
 import { getTextDrivenNativeChatCommands } from '../../native-chat/native-chat-agent-profiles'
 import type { AgentType } from '../../agent-status/contracts/agent-status-types'
@@ -20,31 +38,23 @@ import {
 
 const COMPACT_INSTRUCTIONS_HINT = '[instructions]'
 
-const CONVERSATION_COMMANDS: readonly SlashCommandSuggestion[] = [
-  { name: 'clear', description: 'Clear conversation context' },
-  { name: 'compact', description: 'Compact conversation context' }
-]
-
-/** Session options remain available on hosts predating conversation commands. */
-export const STRUCTURED_AGENT_SESSION_SLASH_COMMANDS: readonly SlashCommandSuggestion[] = [
-  { name: 'model', description: 'Choose the model' },
-  { name: 'effort', description: 'Choose reasoning effort' }
-]
-
 export type StructuredAgentSessionComposerOptions = {
   agent?: AgentType
   snapshot: readonly SessionOptionDescriptor[]
-  invokeAction: (id: string) => Promise<boolean>
+  invokeAction: (id: string, review?: NativeChatReviewRun) => Promise<boolean>
   setOption: (id: string, value: SessionOptionValue) => Promise<boolean>
   /** What the running session reported for its `/` menu; undefined until read or on an older host. */
   sessionCommands?: readonly AgentSessionSlashCommand[]
   conversationCommands?: readonly AgentSessionConversationCommand[]
   /** Text after `/compact` reaches the agent; without this it is refused, never dropped. */
   compactInstructions?: boolean
+  cleanBackgroundTerminals?: boolean
+  cleanBackgroundTerminalsCommand?: () => Promise<boolean>
   runConversationCommand?: (
     command: AgentSessionConversationCommand,
     instructions?: string,
-    onSent?: () => void
+    onSent?: () => void,
+    review?: AgentSessionReviewTarget
   ) => Promise<Omit<StructuredAgentSessionCommandOutcome, 'handled'>>
   /** Without host goal support, /goal remains agent-handled text. */
   changeThreadGoal?: (change: AgentSessionThreadGoalChange) => Promise<boolean>
@@ -67,23 +77,6 @@ export type StructuredAgentSessionCommandOutcome = {
   errorParams?: StructuredComposerFailureParams
   /** Show refusal only while this condition holds. */
   refusedWhile?: StructuredAgentSessionCommandRefusalCause
-}
-
-function commandParts(text: string): { name: string; argument: string } | null {
-  if (!text.startsWith('/')) {
-    return null
-  }
-  const match = /^\/([^\s]+)(?:\s+([\s\S]*))?$/.exec(text.trimEnd())
-  if (!match) {
-    return null
-  }
-  const name = match[1]!.toLowerCase()
-  const argument = match[2]?.trim() ?? ''
-  // Other commands take one line; a longer message that starts with their name is for the agent.
-  return /[\n\r\u2028\u2029]/.test(argument) &&
-    !CONVERSATION_COMMANDS.some((entry) => entry.name === name)
-    ? null
-    : { name, argument }
 }
 
 /** Fallback menu combines host-owned and agent text-driven commands when no catalog is reported. */
@@ -117,7 +110,8 @@ export function structuredSessionSlashCommands(
   conversationCommands: readonly AgentSessionConversationCommand[] | undefined,
   reported: readonly AgentSessionSlashCommand[] | undefined,
   compactInstructions?: boolean,
-  interactionModeSupported = false
+  interactionModeSupported = false,
+  cleanBackgroundTerminals = false
 ): readonly SlashCommandSuggestion[] {
   const modeCommands: SlashCommandSuggestion[] = interactionModeSupported
     ? [
@@ -128,6 +122,9 @@ export function structuredSessionSlashCommands(
       ]
     : []
   const hostOwned = [
+    ...(cleanBackgroundTerminals
+      ? [{ name: 'stop', description: 'Stop background terminals' }]
+      : []),
     ...modeCommands,
     ...structuredSlashCommands(conversationCommands, agent, compactInstructions).filter(
       ({ name }) => !modeCommands.some((entry) => entry.name === name)
@@ -143,21 +140,22 @@ export function structuredSessionSlashCommands(
   ]
 }
 
-function structuredRecognizedCommands(): readonly SlashCommandSuggestion[] {
-  return [...STRUCTURED_AGENT_SESSION_SLASH_COMMANDS, ...CONVERSATION_COMMANDS]
-}
-
 /** Whether the chat host, rather than the agent, owns this command. Callers also
  *  use it to refuse attachments: a host command sends no message, so attachments
  *  would be silently dropped, whereas a pass-through command is a real send. */
 export function isStructuredAgentSessionComposerCommand(
   text: string,
   agent: AgentType | undefined,
-  snapshot: readonly SessionOptionDescriptor[]
+  snapshot: readonly SessionOptionDescriptor[],
+  commands?: readonly AgentSessionConversationCommand[],
+  clean = false
 ): boolean {
   const command = commandParts(text)
   return Boolean(
-    (command && structuredRecognizedCommands().some((entry) => entry.name === command.name)) ||
+    (command &&
+      structuredRecognizedCommands(commands, clean, agent).some(
+        (entry) => entry.name === command.name
+      )) ||
     (agentSessionInteractionCommand(agent ?? '', text) !== null &&
       snapshot.some((entry) => entry.id === 'interactionMode'))
   )
@@ -168,19 +166,25 @@ export function isStructuredAgentSessionHostCommand(
   text: string,
   hostSetsGoals: boolean,
   agent: AgentType | undefined,
-  snapshot: readonly SessionOptionDescriptor[]
+  snapshot: readonly SessionOptionDescriptor[],
+  commands?: readonly AgentSessionConversationCommand[],
+  clean = false
 ): boolean {
   return (
-    isStructuredAgentSessionComposerCommand(text, agent, snapshot) ||
+    isStructuredAgentSessionComposerCommand(text, agent, snapshot, commands, clean) ||
     (hostSetsGoals && isStructuredAgentSessionGoalCommand(text))
   )
 }
 
 export function prepareStructuredAgentSessionComposerCommand(
   _agent: AgentType,
-  _reported?: readonly AgentSessionSlashCommand[]
+  _reported?: readonly AgentSessionSlashCommand[],
+  commands?: readonly AgentSessionConversationCommand[],
+  clean = false
 ): (text: string) => boolean {
-  const names = new Set(structuredRecognizedCommands().map((entry) => entry.name))
+  const names = new Set(
+    structuredRecognizedCommands(commands, clean, _agent).map((entry) => entry.name)
+  )
   return (text) => {
     const command = commandParts(text)
     return command !== null && names.has(command.name)
@@ -193,24 +197,8 @@ export function isLoneStructuredAgentSessionConversationCommand(text: string): b
   return Boolean(
     command &&
     command.argument === '' &&
-    CONVERSATION_COMMANDS.some((entry) => entry.name === command.name)
+    CONVERSATION_COMMANDS.some((entry) => entry.name !== 'review' && entry.name === command.name)
   )
-}
-
-/** `/goal …`, which the host answers only where it can set this session's goal. */
-export function isStructuredAgentSessionGoalCommand(text: string): boolean {
-  return commandParts(text)?.name === 'goal'
-}
-
-const GOAL_CONTROLS: ReadonlyMap<string, AgentSessionThreadGoalChange> = new Map([
-  ['pause', { kind: 'status', status: 'paused' }],
-  ['resume', { kind: 'status', status: 'active' }],
-  ['clear', { kind: 'clear' }]
-])
-
-/** `/goal pause|resume|clear` controls the current goal; any other text is a new objective. */
-export function structuredAgentSessionGoalChange(argument: string): AgentSessionThreadGoalChange {
-  return GOAL_CONTROLS.get(argument.toLowerCase()) ?? { kind: 'set', objective: argument }
 }
 
 /** `/clear`, `/compact` and goal changes that start work change the conversation; pausing or clearing a goal does not. */
@@ -220,27 +208,7 @@ export function structuredAgentSessionCommandChangesConversation(text: string): 
     const change = command.argument ? structuredAgentSessionGoalChange(command.argument) : null
     return change?.kind === 'set' || (change?.kind === 'status' && change.status === 'active')
   }
-  return command?.name === 'clear' || command?.name === 'compact'
-}
-
-/** `/goal` with nothing after it: an entrance to goal mode, not an objective. */
-export function isBareStructuredAgentSessionGoalCommand(text: string): boolean {
-  const command = commandParts(text)
-  return command?.name === 'goal' && command.argument === ''
-}
-
-/** Goal mode strips an optional /goal prefix instead of treating it as objective text. */
-export function structuredAgentSessionGoalObjective(text: string): string {
-  const goal = /^\/goal(?:\s+([\s\S]*))?$/i.exec(text.trimEnd())
-  return goal ? (goal[1]?.trim() ?? '') : text.trim()
-}
-
-function unavailable(name: string): StructuredAgentSessionCommandOutcome {
-  return {
-    handled: true,
-    accepted: true,
-    ...structuredComposerFailure('commandUnavailable', { name })
-  }
+  return command?.name === 'clear' || command?.name === 'compact' || command?.name === 'review'
 }
 
 export async function dispatchStructuredAgentSessionComposerCommand(
@@ -277,9 +245,19 @@ export async function dispatchStructuredAgentSessionComposerCommand(
   }
   if (
     !command ||
-    !isStructuredAgentSessionComposerCommand(text, controller.agent, controller.snapshot)
+    !isStructuredAgentSessionComposerCommand(
+      text,
+      controller.agent,
+      controller.snapshot,
+      controller.conversationCommands,
+      controller.cleanBackgroundTerminals
+    )
   ) {
     return { handled: false, accepted: false, error: null }
+  }
+  const native = await dispatchNativeReviewCommand(command, controller, onSent)
+  if (native) {
+    return native
   }
   if (command.name === 'clear' || command.name === 'compact') {
     if (command.argument && !(command.name === 'compact' && controller.compactInstructions)) {
@@ -307,7 +285,11 @@ export async function dispatchStructuredAgentSessionComposerCommand(
     }
   }
   if (command.name !== 'model' && command.name !== 'effort') {
-    return unavailable(command.name)
+    return {
+      handled: true,
+      accepted: true,
+      ...structuredComposerFailure('commandUnavailable', { name: command.name })
+    }
   }
   const descriptor = controller.snapshot.find((entry) => entry.id === command.name)
   if (!command.argument) {

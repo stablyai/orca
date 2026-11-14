@@ -1,3 +1,4 @@
+import { createNativeChatReviewMenu } from '../../../../shared/native-chat/input/native-chat-review-menu'
 import { mkdtemp, mkdir, realpath, rename, rm, symlink } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -300,3 +301,40 @@ it('rebinds a repository replaced at the same common-directory path', async () =
     { refName: 'refs/heads/replacement', localBranchName: 'replacement' }
   ])
 })
+
+it.each([1000, 10000])(
+  'loads %i review branches with one population read and no per-row child',
+  async (population) => {
+    const { root, tagOid } = await fixture()
+    await gitExecFileAsync(['update-ref', '--stdin'], {
+      cwd: root,
+      stdin: Array.from(
+        { length: population },
+        (_, i) => `create refs/heads/review-${i} ${tagOid}\n`
+      ).join('')
+    })
+    vi.stubEnv('ORCA_MAIN_THREAD_DIAGNOSTICS', '1')
+    drainSubprocessSpawnStats()
+    const branches = vi.fn(async () => (await listLocalBranches(root)).branches)
+    const menu = createNativeChatReviewMenu({
+      hasGit: true,
+      branches,
+      commits: async () => [],
+      run: async () => ({ accepted: true, error: null }),
+      onError: vi.fn()
+    })
+    await menu.select('baseBranch')
+    expect(branches).toHaveBeenCalledOnce()
+    expect(
+      menu.getSnapshot().choices.filter((row) => row.value.startsWith('review-'))
+    ).toHaveLength(population)
+    const spawns = drainSubprocessSpawnStats()
+    expect(spawns['git for-each-ref']?.count).toBe(1)
+    // One batch provides each of refs, checkout identity and worktree occupancy; none is per branch.
+    for (const stat of Object.values(spawns)) {
+      expect(stat.count).toBeLessThanOrEqual(1)
+    }
+    expect(Object.keys(spawns).length).toBeLessThanOrEqual(4)
+    console.info('Review branch subprocesses', population, spawns)
+  }
+)

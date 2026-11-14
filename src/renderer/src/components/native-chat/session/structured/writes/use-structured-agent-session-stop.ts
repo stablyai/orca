@@ -63,3 +63,15 @@ export function useStructuredAgentSessionStop(input: {
     }
   }
 }
+
+export async function cleanStructuredAgentSessionBackgroundTerminals(
+  mutate: StructuredAgentSessionMutate
+): Promise<boolean> {
+  return (
+    (
+      await mutate<AgentSessionCancelResult>('agentSession.cancel', 'agentSession.cancel', {
+        scope: 'background-terminals'
+      })
+    )?.cancelled === true
+  )
+}

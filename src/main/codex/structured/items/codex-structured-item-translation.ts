@@ -197,6 +197,9 @@ export function codexJournalItem(
   helperName?: CodexHelperName,
   started?: CodexThreadItem
 ): CodexJournalItem {
+  if (item.type === 'enteredReviewMode' || item.type === 'exitedReviewMode') {
+    return { body: null, handled: true }
+  }
   if (item.type === 'userMessage' || item.type === 'agentMessage') {
     const question = codexAsyncQuestionBlock(item)
     const blocks = question ? [...codexMessageBlocks(item), question] : codexMessageBlocks(item)

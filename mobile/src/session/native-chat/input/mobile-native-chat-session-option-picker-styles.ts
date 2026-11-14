@@ -20,6 +20,7 @@ export const sessionOptionPickerStyles = themedStyleSheet(() => ({
     top: 8,
     left: spacing.xs
   },
+  reviewList: { height: 280 },
   pageTop: {
     height: spacing.sm
   },

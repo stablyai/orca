@@ -1,8 +1,9 @@
+import type { AgentSessionReviewTarget } from './agent-session-review-target'
 import type { AgentSessionFailureFact } from './failures/agent-session-failure'
 import type { AgentSessionFailureSentence } from './failures/agent-session-failure-words'
 import type { AgentSessionQueuedSendReceipt } from './agent-session-wire'
 
-export type AgentSessionConversationCommand = 'clear' | 'compact'
+export type AgentSessionConversationCommand = 'clear' | 'compact' | 'review'
 
 /** What the user typed and what a text-driven agent receives. */
 export function agentSessionCompactCommandText(instructions?: string): string {
@@ -12,12 +13,17 @@ export function agentSessionCompactCommandText(instructions?: string): string {
 /** The fields a command's mutation is fingerprinted over: host and clients must build the same ones. */
 export function agentSessionConversationCommandFields(
   command: AgentSessionConversationCommand,
-  options: { instructions?: string; delivery?: 'queue-if-active' } = {}
-): Record<string, string> {
+  options: {
+    instructions?: string
+    delivery?: 'queue-if-active'
+    review?: AgentSessionReviewTarget
+  } = {}
+): Record<string, unknown> {
   return {
     command,
     ...(options.instructions ? { instructions: options.instructions } : {}),
-    ...(options.delivery ? { delivery: options.delivery } : {})
+    ...(options.delivery ? { delivery: options.delivery } : {}),
+    ...(options.review ? { review: options.review } : {})
   }
 }
 
@@ -49,7 +55,7 @@ export type AgentSessionConversationCommandRecord = AgentSessionConversationComm
 export function isAgentSessionConversationCommand(
   value: unknown
 ): value is AgentSessionConversationCommand {
-  return value === 'clear' || value === 'compact'
+  return value === 'clear' || value === 'compact' || value === 'review'
 }
 
 export function isAgentSessionConversationCommandResult(

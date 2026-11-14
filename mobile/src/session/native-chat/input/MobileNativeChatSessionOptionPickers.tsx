@@ -1,3 +1,4 @@
+import { OptionRows } from './MobileNativeChatSessionOptionSummaryRows'
 import { useEffect, useRef } from 'react'
 import { AccessibilityInfo, Keyboard, Platform, Text, View } from 'react-native'
 import {
@@ -10,6 +11,7 @@ import {
   ShieldCheck,
   type LucideIcon
 } from 'lucide-react-native'
+import { MobileNativeChatReviewMenu } from './MobileNativeChatReviewMenu'
 import { BottomDrawer } from '../../../components/bottom-drawer/BottomDrawer'
 import { ListGroup, LIST_LEADING_INSET, SectionHeader } from '../../../components/list/ListGroup'
 import { NavBarButton } from '../../../components/nav-bar/NavBarButton'
@@ -20,7 +22,6 @@ import { translate } from '../../../i18n/mobile-i18n'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
 import { useMoreModelsShown } from './use-more-models-shown'
 import {
-  isReadOnlySessionOptionValue,
   sessionOptionDispatchUnconfirmed,
   type SessionOptionDescriptor,
   type SessionOptionValue
@@ -36,9 +37,7 @@ import { mobileSessionOptionSummaryValue } from './mobile-native-chat-session-op
 import {
   descriptorRowElements,
   ModelPill,
-  SessionOptionCaption,
-  SessionOptionSummaryRow,
-  showsSessionOptionAsSwitch
+  SessionOptionCaption
 } from './MobileNativeChatSessionOptionRows'
 import {
   SessionOptionSegments,
@@ -186,6 +185,8 @@ export function MobileNativeChatSessionOptionPickers({
     : mobileSessionOptionSummaryValue(home)
   const secondary = (model && nativeChatOptionValuesLabel(options, say)) || null
 
+  const review =
+    presentation?.page === 'review' ? controller.optionPickerRequest?.review : undefined
   const closePicker = (): void => onNavigate(null)
   const applyOption = (descriptor: SessionOptionDescriptor, value: SessionOptionValue): void => {
     // A permission report can match a new explicit pick while the saved intent is Own.
@@ -251,14 +252,19 @@ export function MobileNativeChatSessionOptionPickers({
         }}
       />
       <BottomDrawer
-        visible={activeDescriptor !== undefined}
-        onClose={closePicker}
+        visible={review !== undefined || activeDescriptor !== undefined}
+        contentScrollable={review ? false : undefined}
+        onClose={() =>
+          review && review.getSnapshot().page !== 'review' ? review.back() : closePicker()
+        }
         onAfterClose={() => {
           moreModels.reset()
           onDrawerAfterClose?.()
         }}
       >
-        {activeDescriptor ? (
+        {review ? (
+          <MobileNativeChatReviewMenu menu={review} onClose={closePicker} />
+        ) : activeDescriptor ? (
           <View style={styles.sheet}>
             <View style={styles.header}>
               <SheetHeader
@@ -352,66 +358,5 @@ export function MobileNativeChatSessionOptionPickers({
         ) : null}
       </BottomDrawer>
     </View>
-  )
-}
-
-function OptionRows({
-  descriptors,
-  permission,
-  permissionColor,
-  locked,
-  onNavigate,
-  onSetOption
-}: {
-  descriptors: readonly SessionOptionDescriptor[]
-  permission: SessionOptionDescriptor | undefined
-  permissionColor: string | undefined
-  locked: (descriptor: SessionOptionDescriptor) => boolean
-  onNavigate: (page: string) => void
-  onSetOption: (descriptor: SessionOptionDescriptor, value: SessionOptionValue) => void
-}): React.JSX.Element | null {
-  const t = useMobileTranslation()
-  if (descriptors.length === 0) {
-    return null
-  }
-  return (
-    <>
-      <SectionHeader title={t('chat.sessionOptionPickers.optionsSection', 'Options')} />
-      <ListGroup>
-        {descriptors.flatMap((descriptor) => {
-          const isPermission = descriptor === permission
-          const disabled = locked(descriptor) || !descriptor.settable
-          if (showsSessionOptionAsSwitch(descriptor)) {
-            return descriptorRowElements(
-              {
-                descriptor,
-                disabled,
-                onSetOption: (value) => onSetOption(descriptor, value),
-                onInvokeAction: () => onNavigate(descriptor.id)
-              },
-              t
-            )
-          }
-          return [
-            <SessionOptionSummaryRow
-              key={descriptor.id}
-              label={
-                isPermission
-                  ? t('chat.sessionOptionPickers.permissions', 'Permissions')
-                  : nativeChatSessionOptionLabel(descriptor, say)
-              }
-              value={mobileSessionOptionSummaryValue(descriptor)}
-              valueColor={isPermission ? permissionColor : undefined}
-              disabled={disabled}
-              onPress={
-                isReadOnlySessionOptionValue(descriptor)
-                  ? undefined
-                  : () => onNavigate(descriptor.id)
-              }
-            />
-          ]
-        })}
-      </ListGroup>
-    </>
   )
 }

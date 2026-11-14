@@ -268,7 +268,9 @@ export function useNativeChatComposerSubmit(args: {
         commandText,
         threadGoal !== undefined,
         args.agent,
-        structuredTransport.optionSnapshot
+        structuredTransport.optionSnapshot,
+        structuredTransport.conversationCommands,
+        structuredTransport.cleanBackgroundTerminals
       )
     )
   return { send, goalMode, messageDelivery }

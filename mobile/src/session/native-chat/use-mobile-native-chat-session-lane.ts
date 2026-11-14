@@ -18,6 +18,7 @@ export function useMobileNativeChatSessionLane({
   structured,
   resolution,
   sourceIdentity,
+  worktreeId,
   hostSupport,
   appendComposerTextRef,
   enabled,
@@ -29,6 +30,7 @@ export function useMobileNativeChatSessionLane({
   client: RpcClient | null
   pairedHostClient: RpcClient | null
   hostId: string
+  worktreeId?: string
   composerScopeKey?: string | null
   structured: boolean
   resolution: MobileNativeChatResolution | null
@@ -68,6 +70,7 @@ export function useMobileNativeChatSessionLane({
     transcriptPath: structured ? null : (resolution?.transcriptPath ?? null)
   })
   const structuredSession = useMobileStructuredAgentSession({
+    worktreeId,
     client,
     hostId,
     pairedHostClient,

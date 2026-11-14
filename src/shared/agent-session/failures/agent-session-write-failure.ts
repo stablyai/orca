@@ -51,7 +51,7 @@ export function agentSessionWriteKindForMethod(
   }
   if (fingerprintMethod === 'agentSession.cancel') {
     // A background-task stop never asked the agent to stop.
-    if (fields.scope !== 'background-tasks') {
+    if (fields.scope !== 'background-tasks' && fields.scope !== 'background-terminals') {
       return 'stop'
     }
     return typeof fields.taskId === 'string' ? 'stop-task' : 'stop-tasks'

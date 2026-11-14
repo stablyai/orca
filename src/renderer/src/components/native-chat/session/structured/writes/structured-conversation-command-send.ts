@@ -1,3 +1,4 @@
+import type { AgentSessionReviewTarget } from '../../../../../../../shared/agent-session/agent-session-review-target'
 import type {
   AgentSessionConversationCommand,
   AgentSessionConversationCommandResult
@@ -129,13 +130,15 @@ export function structuredConversationCommandRunner(args: {
   send: (
     command: AgentSessionConversationCommand,
     delivery?: 'queue-if-active',
-    instructions?: string
+    instructions?: string,
+    review?: AgentSessionReviewTarget
   ) => Promise<StructuredAgentSessionWriteOutcome<AgentSessionConversationCommandResult>>
 }): {
   runConversationCommand: (
     command: AgentSessionConversationCommand,
     instructions?: string,
-    onSent?: () => void
+    onSent?: () => void,
+    review?: AgentSessionReviewTarget
   ) => Promise<CommandOutcome>
   commandRefusalCauses: StructuredConversationCommandCauses
 } {
@@ -153,10 +156,11 @@ export function structuredConversationCommandRunner(args: {
   const run = (
     command: AgentSessionConversationCommand,
     instructions?: string,
-    onSent?: () => void
+    onSent?: () => void,
+    review?: AgentSessionReviewTarget
   ) => {
     const waitsInLine =
-      command === 'compact' &&
+      command !== 'clear' &&
       args.commandsWait &&
       !(promptPending && pendingPromptsAllUnanswerableHere(args.prompts))
     return sendStructuredConversationCommand({
@@ -179,8 +183,9 @@ export function structuredConversationCommandRunner(args: {
       send: (command) =>
         args.send(
           command,
-          command === 'compact' && args.commandsWait ? 'queue-if-active' : undefined,
-          instructions
+          command !== 'clear' && args.commandsWait ? 'queue-if-active' : undefined,
+          instructions,
+          review
         )
     })
   }

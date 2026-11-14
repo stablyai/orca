@@ -24,6 +24,7 @@ export function useNativeChatComposerCatalog(
   const structured = Boolean(structuredTransport)
   const reported = structuredTransport?.sessionCommands
   const conversationCommands = structuredTransport?.conversationCommands
+  const cleanBackgroundTerminals = structuredTransport?.cleanBackgroundTerminals
   const compactInstructions = structuredTransport?.compactInstructions
   const interactionModeSupported =
     structuredTransport?.optionSnapshot.some((entry) => entry.id === 'interactionMode') === true
@@ -41,7 +42,9 @@ export function useNativeChatComposerCatalog(
         conversationCommands,
         reported,
         compactInstructions,
-        interactionModeSupported
+        cleanBackgroundTerminals,
+        interactionModeSupported,
+        cleanBackgroundTerminals
       ),
       accountUsage,
       fork
@@ -54,6 +57,7 @@ export function useNativeChatComposerCatalog(
     sideChat,
     sideChatNotReady,
     compactInstructions,
+    cleanBackgroundTerminals,
     conversationCommands,
     reported,
     structured,

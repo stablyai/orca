@@ -1,3 +1,8 @@
+import { createNativeChatReviewMenu } from '../../../../../../shared/native-chat/input/native-chat-review-menu'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
+import type { RuntimeGitLocalBranches } from '../../../../../../shared/runtime-worktree-contracts'
+import type { GitHistoryResult } from '../../../../../../shared/git/history/git-history-types'
 import { openNativeChatAccountUsageModal } from '@/components/native-chat/usage/native-chat-account-usage-modal'
 import { useMemo, type Dispatch, type SetStateAction } from 'react'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
@@ -153,14 +158,56 @@ export function useNativeChatStructuredComposerTransport(args: {
           {
             agent: props.agent,
             snapshot: controller.optionSnapshot,
-            invokeAction: async (id) => {
-              setOptionPickerRequest({ id, consume: () => setOptionPickerRequest(null) })
+            invokeAction: async (id, review) => {
+              let menu
+              if (review && worktreeId) {
+                const worktree = toRuntimeWorktreeSelector(worktreeId)
+                const branches = async () =>
+                  (
+                    await callRuntimeRpc<RuntimeGitLocalBranches>(
+                      props.target,
+                      'git.localBranches',
+                      { worktree }
+                    )
+                  ).branches
+                let folderBranches: string[] | undefined
+                let hasGit = true
+                if (worktreeId.startsWith('folder:')) {
+                  try {
+                    folderBranches = await branches()
+                  } catch {
+                    folderBranches = []
+                    hasGit = false
+                  }
+                }
+                menu = createNativeChatReviewMenu({
+                  hasGit,
+                  branches: () => (folderBranches ? Promise.resolve(folderBranches) : branches()),
+                  commits: async () =>
+                    (
+                      await callRuntimeRpc<GitHistoryResult>(props.target, 'git.history', {
+                        worktree,
+                        limit: 100,
+                        refs: 'head'
+                      })
+                    ).items,
+                  run: review,
+                  onError
+                })
+              }
+              setOptionPickerRequest({
+                id,
+                ...(menu ? { review: menu } : {}),
+                consume: () => setOptionPickerRequest(null)
+              })
               return true
             },
             setOption: controller.setStructuredOption,
             sessionCommands: controller.sessionCommands,
             conversationCommands: controller.conversationCommands,
             compactInstructions: controller.compactInstructions,
+            cleanBackgroundTerminals: controller.cleanBackgroundTerminals,
+            cleanBackgroundTerminalsCommand: controller.cleanBackgroundTerminalsCommand,
             runConversationCommand: controller.runConversationCommand,
             ...(changeThreadGoal ? { changeThreadGoal } : {})
           },
@@ -179,6 +226,7 @@ export function useNativeChatStructuredComposerTransport(args: {
       optionsSurface: controller.optionSurface,
       conversationCommands: controller.conversationCommands,
       compactInstructions: controller.compactInstructions,
+      cleanBackgroundTerminals: controller.cleanBackgroundTerminals,
       optionSnapshot: controller.optionSnapshot,
       optionPickerRequest,
       sessionCommands: controller.sessionCommands,

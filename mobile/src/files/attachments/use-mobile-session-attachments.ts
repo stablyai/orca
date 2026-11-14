@@ -114,6 +114,8 @@ export function useMobileSessionAttachments(scope: MobileSessionAccessorySelecti
     acceptsFiles: agentSessionHostSupport?.phoneAttachments === true,
     conversationCommands:
       nativeChatController.nativeChatSessionOptions?.controller.conversationCommands,
+    cleanBackgroundTerminals:
+      nativeChatController.nativeChatSessionOptions?.controller.cleanBackgroundTerminals,
     compactInstructions:
       nativeChatController.nativeChatSessionOptions?.controller.compactInstructions,
     files: nativeChatFiles,

@@ -92,7 +92,7 @@ export function useMobileStructuredAgentSession(
 
   const turnId = runningStructuredAgentSessionTurnId(state)
   const options = useMobileStructuredAgentOptions({
-    agent,
+    ...args,
     modelCatalogCache: useHostModelCatalogCache({ hostId, client, agent, enabled }),
     client,
     sessionId,
@@ -107,8 +107,7 @@ export function useMobileStructuredAgentSession(
     }),
     turnId,
     hasTurn: state.latestTurn != null || state.submissions.length > 0,
-    unloadedTurnRevisions: state.unloadedTurnRevisions,
-    hostSupport
+    unloadedTurnRevisions: state.unloadedTurnRevisions
   })
   const sendController = useMobileStructuredCommandController(options)
   const { contextUsageSupport, ...optionFields } = options

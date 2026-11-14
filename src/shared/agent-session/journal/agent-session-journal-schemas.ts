@@ -6,6 +6,7 @@
 // History pages lack row v: extensions must also remain safe for older clients.
 
 import * as z from 'zod'
+import { AgentSessionReviewTargetSchema } from '../agent-session-review-target'
 import { AgentSessionContextUsageSchema } from '../agent-session-context-usage-schema'
 import { AgentJournalThreadGoalStateSchema } from './agent-session-journal-thread-goal-schema'
 import { AgentSessionFailureFactSchema } from '../failures/agent-session-failure-fact-schema'
@@ -173,7 +174,11 @@ const MessageBody = z.object({
   // Open like roles: a send mode a newer build writes must not turn the row malformed.
   sentAs: z.string().min(1).optional(),
   command: z
-    .object({ name: z.string().min(1), instructions: z.string().min(1).optional() })
+    .object({
+      name: z.string().min(1),
+      instructions: z.string().min(1).optional(),
+      review: openDiscriminatedUnion(AgentSessionReviewTargetSchema).optional()
+    })
     .optional(),
   skills: z.array(z.object({ name: z.string().min(1), path: z.string().min(1) })).optional(),
   // Open like `sentAs`: a state a newer host writes reads as completed, never malformed.

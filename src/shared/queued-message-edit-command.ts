@@ -1,3 +1,4 @@
+import type { AgentSessionConversationCommand } from './agent-session/agent-session-conversation-command'
 import { agentSessionInteractionCommand } from './agent-session/options/agent-session-interaction-mode'
 import type { AgentType } from './agent-status/contracts/agent-status-types'
 import type { AgentSessionSlashCommand } from './agent-session/agent-session-wire'
@@ -12,18 +13,34 @@ export function queuedMessageEditAcceptsText(
   agent: AgentType,
   reported: readonly AgentSessionSlashCommand[] | undefined,
   hostSetsGoals: boolean,
-  hostSetsInteractionMode: boolean
+  hostSetsInteractionMode: boolean,
+  conversationCommands?: readonly AgentSessionConversationCommand[],
+  cleanBackgroundTerminals = false
 ): boolean {
-  return prepareQueuedMessageEditText(agent, reported, hostSetsGoals, hostSetsInteractionMode)(text)
+  return prepareQueuedMessageEditText(
+    agent,
+    reported,
+    hostSetsGoals,
+    hostSetsInteractionMode,
+    conversationCommands,
+    cleanBackgroundTerminals
+  )(text)
 }
 
 export function prepareQueuedMessageEditText(
   agent: AgentType,
   reported: readonly AgentSessionSlashCommand[] | undefined,
   hostSetsGoals: boolean,
-  hostSetsInteractionMode: boolean
+  hostSetsInteractionMode: boolean,
+  conversationCommands?: readonly AgentSessionConversationCommand[],
+  cleanBackgroundTerminals = false
 ): (text: string) => boolean {
-  const hostCommand = prepareStructuredAgentSessionComposerCommand(agent, reported)
+  const hostCommand = prepareStructuredAgentSessionComposerCommand(
+    agent,
+    reported,
+    conversationCommands,
+    cleanBackgroundTerminals
+  )
   return (text) =>
     !(
       hostCommand(text) ||

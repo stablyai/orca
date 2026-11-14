@@ -81,6 +81,7 @@ export type StructuredMobileSession = Omit<
   }
 
 export type MobileStructuredAgentSessionArgs = {
+  worktreeId?: string
   client: RpcClient | null
   /** The paired host the route opened: its query cache holds the chat's last model lists. */
   hostId?: string

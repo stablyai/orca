@@ -64,9 +64,17 @@ export function MobileQueuedMessageComposer({
         agent,
         reported,
         hostSetsGoals,
-        context?.interactionModeSupported === true
+        context?.interactionModeSupported === true,
+        context?.structured?.catalog.conversationCommands,
+        context?.structured?.catalog.cleanBackgroundTerminals
       ),
-    [agent, reported, hostSetsGoals, context?.interactionModeSupported]
+    [
+      agent,
+      reported,
+      hostSetsGoals,
+      context?.interactionModeSupported,
+      context?.structured?.catalog
+    ]
   )
   const refuseCommand = (text: string): boolean => {
     if (acceptsText(text)) {

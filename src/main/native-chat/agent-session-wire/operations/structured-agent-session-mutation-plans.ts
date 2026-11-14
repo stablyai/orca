@@ -1,3 +1,5 @@
+import type { AgentSessionConversationCommand } from '../../../../shared/agent-session/agent-session-conversation-command'
+import type { AgentSessionReviewTarget } from '../../../../shared/agent-session/agent-session-review-target'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 // Command receipts prove acceptance; other plans use ledger rows and journal replay.
 
@@ -189,6 +191,8 @@ export type ConversationCommandAcceptance =
 
 /** Accept compact as a submission, or as a queued card later converted to one. */
 export function conversationCommandPlan(params: {
+  command?: AgentSessionConversationCommand
+  review?: AgentSessionReviewTarget
   envelope: AgentSessionMutationEnvelope
   instructions?: string
   delivery?: 'queue-if-active'
@@ -200,7 +204,10 @@ export function conversationCommandPlan(params: {
     operationIdScope: 'global',
     conversationWrite: true,
     commandReceipt: submissionOrDraftReceipt(clientMessageId),
-    fields: agentSessionConversationCommandFields(STRUCTURED_AGENT_SESSION_COMPACT_COMMAND, params),
+    fields: agentSessionConversationCommandFields(
+      params.command ?? STRUCTURED_AGENT_SESSION_COMPACT_COMMAND,
+      params
+    ),
     recoverUnknownFromDurableState: true,
     run: async (ctx) => {
       const sent = await performSend(ctx, {
@@ -208,7 +215,7 @@ export function conversationCommandPlan(params: {
         origin: 'client',
         source: USER_MESSAGE_SOURCE,
         payloadFingerprint: params.envelope.payloadFingerprint,
-        body: structuredAgentSessionCompactBody(params.instructions)
+        body: structuredAgentSessionCompactBody(params.instructions, params.command, params.review)
       })
       return sent.ok ? { ok: true, value: { clientMessageId } } : sent
     },
@@ -231,7 +238,7 @@ export function conversationCommandPlan(params: {
 export function cancelPlan(params: {
   envelope: AgentSessionMutationEnvelope
   turnId?: string
-  scope?: 'background-tasks'
+  scope?: 'background-tasks' | 'background-terminals'
   taskId?: string
   prompt?: { itemId: string; expectedRevision: number }
   childWork?: () => readonly AgentChildWorkView[] | undefined

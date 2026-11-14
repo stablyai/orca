@@ -171,8 +171,9 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
   )
 
   return {
-    conversationCommands: support?.commands ?? [],
+    conversationCommands: support?.commands,
     compactInstructions: support?.compactInstructions === true,
+    cleanBackgroundTerminals: support?.cleanBackgroundTerminals === true,
     /** Absent unless this host and session can change the goal. */
     accountUsage: support?.accountUsage,
     threadGoal: support?.threadGoal,

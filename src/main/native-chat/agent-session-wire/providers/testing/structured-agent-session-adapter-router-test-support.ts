@@ -65,6 +65,8 @@ export function claudeAndCodexDeclared(): StructuredAgentRegistry {
   return claudeAndCodexAgents({
     ...NO_METHODS,
     compact: unused,
+    review: unused,
+    cleanBackgroundTerminals: unused,
     changeThreadGoal: unused,
     prepareRewind: async (input) => ({
       ok: true,
@@ -94,6 +96,9 @@ function implementedBy(
       ...declared,
       fork: adapter.copyConversation ? declared.fork : undefined,
       compact: declared.compact && Boolean(adapter.compact),
+      review: declared.review && Boolean(adapter.review),
+      cleanBackgroundTerminals:
+        declared.cleanBackgroundTerminals && Boolean(adapter.cleanBackgroundTerminals),
       threadGoal: declared.threadGoal && Boolean(adapter.changeThreadGoal),
       rewind:
         declared.rewind &&

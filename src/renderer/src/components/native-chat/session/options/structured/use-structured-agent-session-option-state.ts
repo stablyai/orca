@@ -97,6 +97,7 @@ export function useStructuredAgentSessionOptionState(args: {
             sessionId: acceptedSupport.sessionId,
             commands: acceptedSupport.result.conversationCommands ?? [],
             compactInstructions: acceptedSupport.result.compactInstructions === true,
+            cleanBackgroundTerminals: acceptedSupport.result.cleanBackgroundTerminals === true,
             accountUsage: acceptedSupport.result.accountUsage,
             threadGoal: acceptedSupport.result.threadGoal,
             reportedThreadGoal: acceptedSupport.result.reportedThreadGoal,

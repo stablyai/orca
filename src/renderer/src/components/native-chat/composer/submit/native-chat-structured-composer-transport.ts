@@ -18,6 +18,7 @@ export type NativeChatStructuredComposerTransport = {
   capturePresentation: CaptureStructuredAgentSessionPresentation
   conversationCommands?: readonly AgentSessionConversationCommand[]
   compactInstructions?: boolean
+  cleanBackgroundTerminals?: boolean
   send: (
     text: string,
     attachments: readonly NativeChatComposerImageAttachment[],

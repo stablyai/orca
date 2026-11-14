@@ -73,6 +73,7 @@ export function useMobileStructuredSendWithOutcome(args: {
     | 'invokeAction'
     | 'conversationCommands'
     | 'compactInstructions'
+    | 'cleanBackgroundTerminals'
     | 'changeThreadGoal'
   >
   sessionCommands?: readonly AgentSessionSlashCommand[]
@@ -189,7 +190,7 @@ export function useMobileStructuredSendWithOutcome(args: {
             },
             startFailures: () => agentSessionVisibleFailureFacts(stateRef.current.items),
             waitsInLine: (command) =>
-              command === 'compact' &&
+              command !== 'clear' &&
               commandsWait &&
               !pendingPromptsAllUnanswerableHere(
                 selectAgentSessionCurrentRequests(stateRef.current)
