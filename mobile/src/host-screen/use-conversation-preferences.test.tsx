@@ -10,7 +10,10 @@ import {
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { FakeSession } from '../transport/connection/mobile-endpoint-supervisor-test-fakes'
-import { INITIAL_MOBILE_VIEW, type MobileViewState } from '../worktree/workspace-view-settings'
+import {
+  INITIAL_MOBILE_VIEW,
+  type MobileViewState
+} from '../worktree/workspace-list/workspace-view-settings'
 import { useConversationPreferences } from './use-conversation-preferences'
 
 function endpoint() {

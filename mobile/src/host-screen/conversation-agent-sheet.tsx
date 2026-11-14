@@ -1,6 +1,6 @@
 import { Pressable, Text, View } from 'react-native'
 import { BottomDrawer } from '../components/bottom-drawer/BottomDrawer'
-import { MobileAgentIcon } from '../components/MobileAgentIcon'
+import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
 import type { MobileNewTabAgentOption } from '../session/agent-launch/mobile-new-tab-agent-options'
 import { conversationCopy } from './conversation-copy'
 import { conversationStyles as styles } from './conversation-styles'

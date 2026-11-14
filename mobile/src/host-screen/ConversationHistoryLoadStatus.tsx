@@ -1,5 +1,5 @@
 import { ActivityIndicator } from 'react-native'
-import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
+import { HostRouteNoticeBanner } from '../components/host-connection/HostRouteNoticeBanner'
 import { colors } from '../theme/mobile-theme'
 import { conversationCopy } from './conversation-copy'
 import { conversationStyles as styles } from './conversation-styles'

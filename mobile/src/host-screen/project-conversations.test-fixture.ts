@@ -1,5 +1,5 @@
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
-import type { Worktree } from '../worktree/workspace-list-types'
+import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import type { ConversationHistory } from './project-conversations'
 
 export function conversationAgent(

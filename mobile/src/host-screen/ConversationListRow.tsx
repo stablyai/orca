@@ -1,13 +1,13 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { MoreHorizontal, Pin } from 'lucide-react-native'
 import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentation/agent-type-label'
-import { MobileAgentIcon } from '../components/MobileAgentIcon'
-import { AgentStateDot } from '../components/AgentStateDot'
+import { MobileAgentIcon } from '../components/icons/MobileAgentIcon'
+import { AgentStateDot } from '../agents/presentation/AgentStateDot'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { ConversationRow } from './conversation-project'
 import { conversationCopy, conversationTimeAgo } from './conversation-copy'
-import { agentStateLabel } from '../worktree/agent-row-display'
+import { agentStateLabel } from '../worktree/agent-lineage/agent-row-display'
 import { conversationStyles as styles } from './conversation-styles'
 
 export function ConversationListRow({

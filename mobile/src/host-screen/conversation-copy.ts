@@ -1,4 +1,4 @@
-import { formatTimeAgo } from '../worktree/agent-row-display'
+import { formatTimeAgo } from '../worktree/agent-lineage/agent-row-display'
 
 const english = {
   conversations: 'Conversations',

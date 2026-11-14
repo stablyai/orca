@@ -1,4 +1,4 @@
-import type { Worktree } from '../worktree/workspace-list-types'
+import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 
 export type MobileAgentHistoryStateParams = {
   hostId: string

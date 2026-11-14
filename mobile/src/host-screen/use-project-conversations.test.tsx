@@ -6,7 +6,7 @@ import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { FakeSession } from '../transport/connection/mobile-endpoint-supervisor-test-fakes'
 import { createStableLogicalRpcClient } from '../transport/connection/stable-logical-rpc-client'
-import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
+import { getWorktreeRowIdentity } from '../worktree/row-presentation/worktree-host-row-identity'
 import { conversationHistory, conversationWorkspace } from './project-conversations.test-fixture'
 import {
   useProjectConversations,

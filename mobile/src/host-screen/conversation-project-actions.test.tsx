@@ -8,7 +8,7 @@ import { HiddenConversationProjectsSheet } from './hidden-conversation-projects-
 import { conversationCopy } from './conversation-copy'
 import type { ConversationProject } from './project-conversations'
 import { conversationWorkspace } from './project-conversations.test-fixture'
-import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
+import { mountFixture } from '../test-support/rpc-recording/react-mounting/recorder-fixture-shape'
 import type { HostScreenController } from './use-host-screen-controller'
 
 vi.mock('react-native', () => ({
@@ -21,7 +21,7 @@ vi.mock('react-native', () => ({
 vi.mock('../components/bottom-drawer/BottomDrawer', () => ({
   BottomDrawer: ({ children }: { children: ReactNode }) => children
 }))
-vi.mock('../components/MobileRepoIcon', () => ({ MobileRepoIcon: 'MobileRepoIcon' }))
+vi.mock('../components/icons/MobileRepoIcon', () => ({ MobileRepoIcon: 'MobileRepoIcon' }))
 vi.mock('lucide-react-native', () => ({
   Eye: 'Icon',
   EyeOff: 'Icon',

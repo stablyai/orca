@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { mobileStructuredSessionStatusFeed } from '../session/native-chat/agent-session/mobile-structured-session-status-feed'
 import type { AgentSessionConversationNames } from '../../../src/shared/agent-session/agent-session-conversation-names'
 import { useForceReconnect } from '../transport/connection/host-client-hooks'
-import { useWorkspaceClient } from '../worktree/use-workspace-client'
+import { useWorkspaceClient } from '../worktree/execution-hosts/use-workspace-client'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { connectionRetryAction } from '../transport/connection/connection-retry-action'
 import type {

@@ -1,5 +1,5 @@
 import { EyeOff, Folder } from 'lucide-react-native'
-import { ActionSheetModal } from '../components/ActionSheetModal'
+import { ActionSheetModal } from '../components/sheets/ActionSheetModal'
 import type { HostScreenController } from './use-host-screen-controller'
 import type { ConversationProject } from './project-conversations'
 import { conversationCopy } from './conversation-copy'

@@ -1,4 +1,4 @@
-import type { WorktreeHostContextOf } from '../worktree/worktree-host-context-labels'
+import type { WorktreeHostContextOf } from '../worktree/row-presentation/worktree-host-context-labels'
 import { toAiVaultProjectKey } from '../../../src/shared/ai-vault/scanning/ai-vault-project-key'
 import { createConversationWorkspaceMatcher } from '../../../src/shared/conversation-workspace-matcher'
 import {
@@ -15,15 +15,15 @@ import {
   buildProjectGroupingIndex,
   getProjectGroupingForRepo
 } from '../../../src/shared/project-section-grouping'
-import type { ProjectSectionCatalog } from '../worktree/workspace-list-sections'
+import type { ProjectSectionCatalog } from '../worktree/workspace-list/workspace-list-sections'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../src/shared/execution-host'
 import { structuredAgentSessionPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
-import { agentDotState, agentRowTimeAt } from '../worktree/agent-row-display'
-import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
+import { agentDotState, agentRowTimeAt } from '../worktree/agent-lineage/agent-row-display'
+import { getWorktreeRowIdentity } from '../worktree/row-presentation/worktree-host-row-identity'
 import { createConversationHistoryIndex } from './conversation-history-index'
 import { orderProjectConversations } from './project-conversation-order'
 import { conversationTitle, conversationUserPreview } from './conversation-row-content'
-import type { SectionRepo, Worktree } from '../worktree/workspace-list-types'
+import type { SectionRepo, Worktree } from '../worktree/workspace-list/workspace-list-types'
 
 export { readConversationHistory, readConversationTabs } from './conversation-records'
 export type { ConversationHistory, ConversationTab } from './conversation-records'

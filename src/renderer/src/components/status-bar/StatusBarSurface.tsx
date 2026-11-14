@@ -9,51 +9,55 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useTranslate } from '@/i18n/use-translate'
-import { UsageRosterPanel } from './UsageRosterPanel'
+import { UsageRosterPanel } from './usage/UsageRosterPanel'
 import {
   STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS,
   shouldOpenStatusBarContextMenu
-} from './status-bar-context-menu-policy'
-import { StatusBarUsageEmptyCta } from './StatusBarUsageEmptyCta'
-import { StatusBarUsageChangeNotices } from './StatusBarUsageChangeNotices'
-import { UpdateStatusSegment } from './UpdateStatusSegment'
-import { SkillUpdateStatusSegment } from './SkillUpdateStatusSegment'
+} from './composition/status-bar-context-menu-policy'
+import { StatusBarUsageEmptyCta } from './usage/StatusBarUsageEmptyCta'
+import { StatusBarUsageChangeNotices } from './usage/StatusBarUsageChangeNotices'
+import { UpdateStatusSegment } from './updates/UpdateStatusSegment'
+import { SkillUpdateStatusSegment } from './updates/SkillUpdateStatusSegment'
 import { NativeChatResumeStatusSegment } from './NativeChatResumeStatusSegment'
 import { CaffeinateStatusSegment } from './CaffeinateStatusSegment'
-import { PluginsStatusSegment } from './PluginsStatusSegment'
-import { PluginStatusBarItems } from './PluginStatusBarItems'
-import { RemoteServerUpdateStatusSegment } from './RemoteServerUpdateStatusSegment'
+import { PluginsStatusSegment } from './plugins/PluginsStatusSegment'
+import { PluginStatusBarItems } from './plugins/PluginStatusBarItems'
+import { RemoteServerUpdateStatusSegment } from './updates/RemoteServerUpdateStatusSegment'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from '@/components/floating-terminal/floating-terminal'
 import { FloatingTerminalIconContextMenu } from '@/components/floating-terminal/FloatingTerminalIconContextMenu'
-import { ClaudeSwitcherMenu } from './ClaudeSwitcherMenu'
-import { CodexSwitcherMenu } from './CodexSwitcherMenu'
-import { ProviderDetailsMenu } from './ProviderDetailsMenu'
-import { AntigravityUsageMenu } from './AntigravityUsageMenu'
+import { ClaudeSwitcherMenu } from './accounts/ClaudeSwitcherMenu'
+import { CodexSwitcherMenu } from './accounts/CodexSwitcherMenu'
+import { ProviderDetailsMenu } from './usage/ProviderDetailsMenu'
+import { AntigravityUsageMenu } from './usage/AntigravityUsageMenu'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
-import { ProviderSegment, UsageOverflowChip, getUsageTone } from './StatusBarProviderSegment'
+import { ProviderSegment, UsageOverflowChip, getUsageTone } from './usage/StatusBarProviderSegment'
 import {
   UsageUnitLabel,
   getUsageUnitLabelState,
   usageChipShowsPercentage
-} from './usage-unit-label'
-import { useStatusBarController } from './use-status-bar-controller'
-import { isOwnerNotSetUpPlaceholder } from './owner-usage-rate-limits'
-import { StatusBarVisibilityMenu } from './StatusBarVisibilityMenu'
+} from './usage/usage-unit-label'
+import { useStatusBarController } from './composition/use-status-bar-controller'
+import { isOwnerNotSetUpPlaceholder } from './usage/owner-usage-rate-limits'
+import { StatusBarVisibilityMenu } from './composition/StatusBarVisibilityMenu'
 import { isPairedWebClientWindow } from '@/app-shell/chrome/desktop-window-chrome'
 
 const PetStatusSegment = lazyWithRetry(() =>
   import('./PetStatusSegment').then((module) => ({ default: module.PetStatusSegment }))
 )
 const ResourceUsageStatusSegment = lazyWithRetry(() =>
-  import('./ResourceUsageStatusSegment').then((module) => ({
+  import('./resources/ResourceUsageStatusSegment').then((module) => ({
     default: module.ResourceUsageStatusSegment
   }))
 )
 const PortsStatusSegment = lazyWithRetry(() =>
-  import('./PortsStatusSegment').then((module) => ({ default: module.PortsStatusSegment }))
+  import('./host-connections/PortsStatusSegment').then((module) => ({
+    default: module.PortsStatusSegment
+  }))
 )
 const SshStatusSegment = lazyWithRetry(() =>
-  import('./SshStatusSegment').then((module) => ({ default: module.SshStatusSegment }))
+  import('./host-connections/SshStatusSegment').then((module) => ({
+    default: module.SshStatusSegment
+  }))
 )
 
 export type StatusBarProps = {

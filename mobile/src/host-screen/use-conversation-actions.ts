@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { rpcClientForExecutionHost } from '../worktree/execution-host-scoped-rpc-client'
+import { rpcClientForExecutionHost } from '../worktree/execution-hosts/execution-host-scoped-rpc-client'
 import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
@@ -14,7 +14,7 @@ import {
   supportsMobileExistingAgentLaunch
 } from '../session/agent-launch/mobile-existing-agent-launch'
 import type { MobileNewTabAgentOption } from '../session/agent-launch/mobile-new-tab-agent-options'
-import type { Worktree } from '../worktree/workspace-list-types'
+import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import type { HostScreenController } from './use-host-screen-controller'
 import type { useProjectConversations } from './use-project-conversations'
 import {

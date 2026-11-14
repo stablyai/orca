@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { structuredAgentSessionPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
-import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
+import { getWorktreeRowIdentity } from '../worktree/row-presentation/worktree-host-row-identity'
 import { buildProjectConversations, readConversationHistory } from './project-conversations'
 import {
   conversationAgent,

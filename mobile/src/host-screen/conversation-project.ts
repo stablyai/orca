@@ -1,10 +1,10 @@
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
-import type { AgentDotState } from '../worktree/agent-row-display'
+import type { AgentDotState } from '../worktree/agent-lineage/agent-row-display'
 import type {
   SectionRepo,
   Worktree,
   WorktreeHostContextView
-} from '../worktree/workspace-list-types'
+} from '../worktree/workspace-list/workspace-list-types'
 import type { ConversationHistory } from './conversation-records'
 
 export type ConversationRow = {

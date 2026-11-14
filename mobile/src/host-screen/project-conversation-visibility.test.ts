@@ -1,5 +1,5 @@
 import { projectHostSetupProjectionFromRepos } from '../../../src/shared/project-host-setup-projection'
-import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
+import { getWorktreeRowIdentity } from '../worktree/row-presentation/worktree-host-row-identity'
 import { expect, it } from 'vitest'
 import { buildProjectConversations, projectConversationTarget } from './project-conversations'
 import { conversationHistory, conversationWorkspace } from './project-conversations.test-fixture'

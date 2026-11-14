@@ -8,9 +8,9 @@ import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import {
   rpcClientForExecutionHost,
   reachableServerClients
-} from '../worktree/execution-host-scoped-rpc-client'
-import { getWorktreeRowIdentity } from '../worktree/worktree-host-row-identity'
-import { resolveWorktreeHostId } from '../worktree/worktree-host-context-labels'
+} from '../worktree/execution-hosts/execution-host-scoped-rpc-client'
+import { getWorktreeRowIdentity } from '../worktree/row-presentation/worktree-host-row-identity'
+import { resolveWorktreeHostId } from '../worktree/row-presentation/worktree-host-context-labels'
 import { isConversationHistoryNotice } from './conversation-records'
 import { sessionTabsListRead } from '../session/tabs/mobile-session-tab-read-operations'
 import type { HostScreenController } from './use-host-screen-controller'

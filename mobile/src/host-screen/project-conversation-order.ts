@@ -1,6 +1,6 @@
 import type { ConversationPreferences } from '../../../src/shared/conversation-navigation-preferences'
 import { sortProjectEntries } from '../../../src/shared/project-section-order'
-import type { ProjectSectionCatalog } from '../worktree/workspace-list-sections'
+import type { ProjectSectionCatalog } from '../worktree/workspace-list/workspace-list-sections'
 import type { ConversationProject } from './project-conversations'
 
 export function orderProjectConversations(

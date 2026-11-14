@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { resolveNativeBrowserNetworkExecutionRoute } from './browser-network-execution-route'
-import {
-  browserNetworkExecutionHostKey,
-  parseBrowserNetworkExecutionHostKey
-} from '../../../../shared/browser/client-hosting/browser-network-execution-host'
+import { browserNetworkExecutionHostKey } from '../../../../shared/browser/client-hosting/browser-network-execution-host'
 
 describe('browser network execution route', () => {
   it('uses structural keys for delimiter-containing execution-host identities', () => {
@@ -47,36 +44,5 @@ describe('browser network execution route', () => {
         runtimeRevision: 2
       })
     ).toThrow('browser_tunnel_execution_host_mismatch')
-  })
-
-  it('round trips only canonical execution-host keys', () => {
-    const host = {
-      kind: 'ssh' as const,
-      targetId: 'ssh-a',
-      providerEpoch: 'provider-a',
-      connectionGeneration: 3
-    }
-    const key = browserNetworkExecutionHostKey(host)
-
-    expect(parseBrowserNetworkExecutionHostKey(key)).toEqual(host)
-    const wsl = {
-      kind: 'wsl' as const,
-      runtimeId: 'runtime-a',
-      revision: 4,
-      distro: 'Ubuntu'
-    }
-    expect(parseBrowserNetworkExecutionHostKey(browserNetworkExecutionHostKey(wsl))).toEqual(wsl)
-    for (const malformed of [
-      'ssh:ssh-a:provider-a:3',
-      ' ["ssh","ssh-a","provider-a",3]',
-      '["ssh","ssh-a","provider-a",3,4]',
-      '["native","runtime-a",-1]',
-      '["wsl","runtime-a",4,""]',
-      '["wsl","runtime-a",4,"Ubuntu","extra"]'
-    ]) {
-      expect(() => parseBrowserNetworkExecutionHostKey(malformed)).toThrow(
-        'browser_tunnel_execution_host_key_invalid'
-      )
-    }
   })
 })

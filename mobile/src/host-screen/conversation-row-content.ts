@@ -1,6 +1,6 @@
 import { isKnownHarnessInjectedUserTurnText } from '../../../src/shared/harness-injected-user-turns'
 import { isGenericConversationTitle } from '../../../src/shared/project-conversation-list'
-import type { Worktree } from '../worktree/workspace-list-types'
+import type { Worktree } from '../worktree/workspace-list/workspace-list-types'
 import type { ConversationHistory } from './conversation-records'
 
 export function conversationTitle(

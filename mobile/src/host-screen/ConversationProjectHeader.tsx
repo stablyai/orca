@@ -1,6 +1,6 @@
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { MoreHorizontal, Plus } from 'lucide-react-native'
-import { MobileRepoIcon } from '../components/MobileRepoIcon'
+import { MobileRepoIcon } from '../components/icons/MobileRepoIcon'
 import { readMobileRepoIcon } from './host-screen-reply-schema'
 import { colors } from '../theme/mobile-theme'
 import { conversationStyles as styles } from './conversation-styles'

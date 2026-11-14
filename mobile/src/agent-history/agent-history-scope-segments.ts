@@ -1,6 +1,6 @@
 import type { AiVaultScope } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import type { Translate } from '../i18n/mobile-i18n'
-import type { MobileSegment } from '../components/MobileSegmentedControl'
+import type { MobileSegment } from '../components/controls/MobileSegmentedControl'
 
 export function scopeSegments(t: Translate): MobileSegment<AiVaultScope>[] {
   return [
