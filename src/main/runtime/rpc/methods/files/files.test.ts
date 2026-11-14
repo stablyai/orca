@@ -141,6 +141,7 @@ describe('file RPC methods', () => {
   it('opens phone and older-CLI files without moving the desktop unless a target asks to', async () => {
     const openMobileFile = vi.fn(async () => ({}))
     const openMobileDiff = vi.fn(async () => ({}))
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: these handlers call only the two open methods and getRuntimeId.
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       openMobileFile,

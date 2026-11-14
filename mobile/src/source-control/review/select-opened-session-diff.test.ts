@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import { selectOpenedSessionDiff } from './select-opened-session-diff'
 
@@ -42,7 +41,7 @@ describe('selectOpenedSessionDiff', () => {
         return ok({ activeTabId: 'unstaged' })
       })
       const selecting = selectOpenedSessionDiff(
-        { sendRequest } as unknown as RpcClient,
+        { sendRequest },
         {
           worktreeId: 'wt-1',
           relativePath: 'a.ts',

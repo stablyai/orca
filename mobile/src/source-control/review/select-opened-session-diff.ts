@@ -1,13 +1,12 @@
 import { sessionFileTabListRead } from '../../files/session-documents/mobile-source-file-open-operations'
 import { activateMobileSessionTab } from '../../session/tabs/mobile-session-tab-activation'
-import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 
 // The desktop publishes the tab after files.openDiff replies; a few short polls cover that hop.
 const TAB_POLL_DELAYS_MS = [0, 300, 600, 900] as const
 
 /** Selects the diff tab "Open in session" opened for this phone only; the desktop keeps its own view (#33052). */
 export async function selectOpenedSessionDiff(
-  client: RpcClient,
+  client: Parameters<typeof activateMobileSessionTab>[0],
   target: { worktreeId: string; relativePath: string; staged: boolean },
   isCurrent: () => boolean
 ): Promise<void> {
