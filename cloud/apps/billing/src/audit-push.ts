@@ -25,6 +25,15 @@ export type BillingAuditEvent = {
   actorUserId?: string
   // Flat and small. No price ids, customer ids or card details: plan, interval, seats, cents.
   detail?: Record<string, string | number | boolean | null>
+  /**
+   * Names the change itself rather than the moment it was seen, for changes that happen once per
+   * subscription period (a plan starting or ending). Several Stripe events report the same change
+   * (one Checkout sends checkout.session.completed, customer.subscription.created/updated and
+   * invoice.paid, often concurrently), and each that reads the row before another wrote it sees the
+   * change again: with this key they all push the same event id, so the control plane keeps one.
+   * Never sent.
+   */
+  onceKey?: string
 }
 
 type PushEnv = Pick<Env, 'CONTROL_PLANE_TOKEN' | 'SANDBOX_CONTROL_URL' | 'SANDBOX_CONTROL'>
@@ -35,7 +44,9 @@ export function hasTeamAuditLog(accountId: string): boolean {
 }
 
 async function eventId(accountId: string, event: BillingAuditEvent): Promise<string> {
-  const text = `${accountId}|${event.action}|${event.at}|${event.actorUserId ?? ''}|${JSON.stringify(event.detail ?? {})}`
+  const text = event.onceKey
+    ? `${accountId}|${event.action}|once|${event.onceKey}`
+    : `${accountId}|${event.action}|${event.at}|${event.actorUserId ?? ''}|${JSON.stringify(event.detail ?? {})}`
   const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))
   return `billing_${Array.from(bytes.slice(0, 20), (byte) => byte.toString(16).padStart(2, '0')).join('')}`
 }
@@ -95,17 +106,25 @@ const NOT_STARTED = new Set(['incomplete'])
 
 /**
  * What changed between the stored subscription and the one Stripe now reports, as audit events.
- * A replay of the same Stripe state finds no difference, so it records nothing twice.
+ * A replay of the same Stripe state finds no difference, so it records nothing twice. With
+ * `subscription` (its id and current period start, ms), a plan starting or ending carries a once
+ * key, so concurrent events that each saw the change still record it once.
  */
-export function subscriptionAuditEvents(before: SubscriptionTerms | null, after: SubscriptionTerms, at: number): BillingAuditEvent[] {
+export function subscriptionAuditEvents(
+  before: SubscriptionTerms | null,
+  after: SubscriptionTerms,
+  at: number,
+  subscription?: { id: string; periodStart: number }
+): BillingAuditEvent[] {
   const terms = { plan: after.plan, interval: after.billing_interval, seats: after.seats }
   const wasLive = before !== null && !ENDED.has(before.status) && !NOT_STARTED.has(before.status)
   const isLive = !ENDED.has(after.status) && !NOT_STARTED.has(after.status)
+  const once = subscription ? { onceKey: `${subscription.id}|${subscription.periodStart}` } : {}
   if (!wasLive) {
-    return isLive ? [{ action: 'billing.plan_started', at, detail: terms }] : []
+    return isLive ? [{ action: 'billing.plan_started', at, detail: terms, ...once }] : []
   }
   if (!isLive) {
-    return ENDED.has(after.status) ? [{ action: 'billing.plan_canceled', at, detail: { plan: before!.plan } }] : []
+    return ENDED.has(after.status) ? [{ action: 'billing.plan_canceled', at, detail: { plan: before!.plan }, ...once }] : []
   }
   const events: BillingAuditEvent[] = []
   if (before!.plan !== after.plan || before!.billing_interval !== after.billing_interval) {

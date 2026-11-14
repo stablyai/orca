@@ -180,7 +180,8 @@ export async function syncSubscription(env: Env, stripe: StripeClient, subscript
     subscriptionAuditEvents(
       known,
       { status: subscription.status, plan: match.plan, billing_interval: match.interval, seats, cancel_at_period_end: cancelling, current_period_end: periodEnd * 1000 },
-      now
+      now,
+      { id: subscription.id, periodStart: periodStart * 1000 }
     )
   )
   if (overageItemId) {
@@ -313,7 +314,7 @@ export async function endCustomerSubscriptions(env: Env, customerId: string, now
 async function markCanceled(env: Env, row: SubscriptionRow, now: number): Promise<void> {
   await upsertSubscription(env.BILLING_DB, { ...row, status: 'canceled', past_due_since: null, member_count: null, updated_at: now })
   await projectGrants(env, row.stripe_subscription_id, now)
-  await pushBillingAudit(env, row.account_id, subscriptionAuditEvents(row, { ...row, status: 'canceled' }, now))
+  await pushBillingAudit(env, row.account_id, subscriptionAuditEvents(row, { ...row, status: 'canceled' }, now, { id: row.stripe_subscription_id, periodStart: row.current_period_start }))
 }
 
 /**

@@ -84,6 +84,49 @@ describe('subscription changes', () => {
     expect(control.events().map((event) => event.action)).toEqual(['billing.plan_started'])
   })
 
+  it('records one plan start for a Checkout whose Stripe events arrive together', async () => {
+    const control = controlPlane()
+    const h = await createHarness({ SANDBOX_CONTROL_URL: CONTROL })
+    // SAFETY: the Worker only calls fetch on the binding.
+    h.env.SANDBOX_CONTROL = control.binding as unknown as Fetcher
+    const token = await h.desktopToken({ sub: 'u1', org: 'o1', orgRole: 'owner', email: 'a@example.com' })
+    await h.call('POST', '/v1/billing/checkout', { body: { plan: 'team', seats: 2 }, headers: { authorization: `Bearer ${token}` } })
+    const customer = [...h.stripe.customers.keys()][0]!
+    const subscription = h.stripe.putSubscription({ customer, accountId: 'org:o1', basePrice: 'price_team_month', quantity: 2, periodStart: PERIOD_START, periodEnd: PERIOD_END })
+    // One Checkout: three events, delivered at once, each re-reading the same subscription.
+    await Promise.all([
+      h.webhook(checkoutCompleted({ customer, subscription: subscription.id, accountId: 'org:o1' })),
+      h.webhook(stripeEvent('customer.subscription.created', subscription)),
+      h.webhook(stripeEvent('invoice.paid', { id: 'in_1', customer, subscription: subscription.id }))
+    ])
+    const started = control.events().filter((event) => event.action === 'billing.plan_started')
+    expect(started.length).toBeGreaterThanOrEqual(1)
+    // However many saw it, they name one event, which the control plane keeps once.
+    expect(new Set(started.map((event) => event.eventId)).size).toBe(1)
+  })
+
+  it('names a plan start or end by subscription and period, not by when it was seen', () => {
+    const live = { status: 'active', plan: 'team', billing_interval: 'month', seats: 2, cancel_at_period_end: 0 } as const
+    const sub = { id: 'sub_1', periodStart: 1_000 }
+    const first = subscriptionAuditEvents(null, live, 1, sub)[0]!
+    const second = subscriptionAuditEvents({ ...live, status: 'incomplete' }, live, 2, sub)[0]!
+    expect(first.onceKey).toBe(second.onceKey)
+    // A new period (a team coming back) is a new start.
+    expect(subscriptionAuditEvents({ ...live, status: 'canceled' }, live, 3, { ...sub, periodStart: 2_000 })[0]!.onceKey).not.toBe(first.onceKey)
+    // Other changes keep their per-moment ids.
+    expect(subscriptionAuditEvents(live, { ...live, seats: 3 }, 4, sub)[0]!.onceKey).toBeUndefined()
+  })
+
+  it('pushes the same event id for the same once key at different times', async () => {
+    const control = controlPlane()
+    const env = { CONTROL_PLANE_TOKEN: 'c'.repeat(40), SANDBOX_CONTROL_URL: CONTROL, SANDBOX_CONTROL: control.binding as unknown as Fetcher }
+    await pushBillingAudit(env, 'org:o1', [{ action: 'billing.plan_started', at: 1, onceKey: 'sub_1|1000' }])
+    await pushBillingAudit(env, 'org:o1', [{ action: 'billing.plan_started', at: 2, onceKey: 'sub_1|1000' }])
+    const [a, b] = control.events()
+    expect(a!.eventId).toBe(b!.eventId)
+    expect('onceKey' in a!).toBe(false)
+  })
+
   it('works out what changed from the stored row alone', () => {
     const live = { status: 'active', plan: 'team', billing_interval: 'month', seats: 2, cancel_at_period_end: 0 } as const
     const actions = (before: Parameters<typeof subscriptionAuditEvents>[0], after: Parameters<typeof subscriptionAuditEvents>[1]) =>
