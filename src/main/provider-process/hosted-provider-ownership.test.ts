@@ -23,6 +23,7 @@ import { discoverModelsLocal } from '../text-generation/models/commit-message-mo
 import type { HostedProviderOutcome } from '../daemon/protocol/daemon-provider-process-protocol'
 import type { SpawnSourceControlAgent } from '../text-generation/source-control-text-generation-types'
 import { runAgentModelCatalogListing } from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
+import { reportDaemonPtyCwdVerdict } from '../daemon/observability/daemon-adoption-telemetry-event'
 
 const { owners } = vi.hoisted(
   (): { owners: { duplex: PassThrough; stderr: PassThrough; control: PassThrough }[] } => ({
@@ -33,8 +34,12 @@ const { owners } = vi.hoisted(
 vi.mock('../daemon/executable-host/macos/daemon-mac-code-identity', () => ({
   inspectMacProcessCodeIdentity: vi.fn()
 }))
+vi.mock('../daemon/observability/daemon-adoption-telemetry-event', () => ({
+  reportDaemonPtyCwdVerdict: vi.fn(async () => {})
+}))
 
 beforeEach(() => {
+  vi.mocked(reportDaemonPtyCwdVerdict).mockClear()
   vi.mocked(inspectMacProcessCodeIdentity).mockReset().mockResolvedValue({
     identity: 'resolved',
     executablePath: '/fake/Orca Agents'
@@ -109,7 +114,12 @@ function pendingChild(
       launchNonce: 'original-host'
     }),
     ensureConnectedWithin: async () => {},
-    request: async (type: string) => (type === 'spawnProvider' ? { pid } : { state: 'unknown' }),
+    request: async (type: string) =>
+      type === 'spawnProvider'
+        ? { pid }
+        : type === 'probeProviderCwd'
+          ? { outcome: 'ok' }
+          : { state: 'unknown' },
     onProviderExit: (_nonce: string, listener: typeof exit, reconnect?: () => void) => {
       exit = listener
       reconnected = reconnect ?? (() => {})
@@ -222,6 +232,12 @@ it.each<{
   expect(request.mock.calls.filter(([type]) => type === 'spawnProvider')).toHaveLength(
     hosted ? 1 : 0
   )
+  if (hosted) {
+    expect(request.mock.calls.map(([type]) => type)).toEqual(['probeProviderCwd', 'spawnProvider'])
+    expect(reportDaemonPtyCwdVerdict).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: '/tmp', cwdReadableByDaemon: true })
+    )
+  }
   handle.child.stdout.resume()
   handle.child.stderr.resume()
   if (hosted) {
@@ -252,6 +268,95 @@ it('does not launch either route after Stop during image inspection', async () =
   await expect(handle.child.ready).rejects.toThrow('Provider launch canceled')
   expect(fallback).not.toHaveBeenCalled()
   expect(request.mock.calls.filter(([type]) => type === 'spawnProvider')).toHaveLength(0)
+})
+
+it.each(['denied', 'unsupported', 'malformed'])(
+  'replies through exactly one direct child when cwd preflight is %s',
+  async (outcome) => {
+    const fallback = vi.fn(() =>
+      spawn(process.execPath, ['-e', 'process.stdout.write("direct reply")'], {
+        stdio: ['pipe', 'pipe', 'pipe']
+      })
+    )
+    const handle = pendingChild(fallback)
+    const request = vi.spyOn(handle.client, 'request').mockImplementation(async (type) => {
+      if (type === 'probeProviderCwd') {
+        if (outcome === 'unsupported') {
+          throw new Error('Unknown request type: probeProviderCwd')
+        }
+        return outcome === 'denied' ? { outcome: 'denied' } : { state: 'unknown' }
+      }
+      throw new Error('Unexpected hosted dispatch')
+    })
+    let output = ''
+    handle.child.stdout.on('data', (chunk) => (output += chunk.toString()))
+    const closed = once(handle.child, 'close')
+    await handle.child.ready
+    expect(await closed).toEqual([0, null])
+    expect(output).toBe('direct reply')
+    expect(fallback).toHaveBeenCalledTimes(1)
+    expect(request.mock.calls.map(([type]) => type)).toEqual(['probeProviderCwd'])
+    if (outcome === 'denied') {
+      expect(reportDaemonPtyCwdVerdict).toHaveBeenCalledExactlyOnceWith({
+        cwd: '/tmp',
+        cwdReadableByDaemon: false,
+        pidPath: null,
+        daemonIdentity: {
+          providerSpawn: true,
+          pid: 300,
+          startedAtMs: 1,
+          launchNonce: 'original-host'
+        }
+      })
+    } else {
+      expect(reportDaemonPtyCwdVerdict).not.toHaveBeenCalled()
+    }
+  }
+)
+
+it('does not launch or report stale denial after Stop during cwd preflight', async () => {
+  const probe = Promise.withResolvers<{ outcome: string }>()
+  const started = Promise.withResolvers<void>()
+  const fallback = vi.fn(() => {
+    throw new Error('Canceled launch')
+  })
+  const handle = pendingChild(fallback)
+  const request = vi.spyOn(handle.client, 'request').mockImplementation(() => {
+    started.resolve()
+    return probe.promise
+  })
+  await started.promise
+  handle.child.kill('SIGTERM')
+  probe.resolve({ outcome: 'denied' })
+  await expect(handle.child.ready).rejects.toThrow('Provider launch canceled')
+  expect(fallback).not.toHaveBeenCalled()
+  expect(request.mock.calls.map(([type]) => type)).toEqual(['probeProviderCwd'])
+  expect(reportDaemonPtyCwdVerdict).not.toHaveBeenCalled()
+})
+
+it('does not lend a replaced host its predecessor cwd verdict or notice', async () => {
+  const fallback = vi.fn(() =>
+    spawn(process.execPath, ['-e', 'process.stdout.write("replacement direct reply")'], {
+      stdio: ['pipe', 'pipe', 'pipe']
+    })
+  )
+  const handle = pendingChild(fallback)
+  const request = vi.spyOn(handle.client, 'request').mockImplementation(async () => {
+    vi.spyOn(handle.client, 'getDaemonIdentity').mockReturnValue({
+      providerSpawn: true,
+      pid: 301,
+      startedAtMs: 2,
+      launchNonce: 'replacement-host'
+    })
+    return { outcome: 'denied' }
+  })
+  handle.child.stdout.resume()
+  const closed = once(handle.child, 'close')
+  await handle.child.ready
+  expect(await closed).toEqual([0, null])
+  expect(fallback).toHaveBeenCalledTimes(1)
+  expect(request.mock.calls.map(([type]) => type)).toEqual(['probeProviderCwd'])
+  expect(reportDaemonPtyCwdVerdict).not.toHaveBeenCalled()
 })
 
 it('keeps a paused final answer until it is read, independently of dead transport cleanup', async () => {

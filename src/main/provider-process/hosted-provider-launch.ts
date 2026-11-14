@@ -3,18 +3,62 @@ import type { createProviderSpawnSpec } from './provider-process-supervisor'
 import type { DaemonClient } from '../daemon/transport/client/daemon-client'
 import type { DaemonEndpointIdentity } from '../daemon/protocol/daemon-hello-protocol'
 import { inspectMacProcessCodeIdentity } from '../daemon/executable-host/macos/daemon-mac-code-identity'
+import type { DirectoryEnumerationOutcome } from '../daemon/permissions/directory-enumeration-probe'
+import { sameDaemonIdentity } from '../daemon/transport/client/daemon-client-hello-handshake'
+import { reportDaemonPtyCwdVerdict } from '../daemon/observability/daemon-adoption-telemetry-event'
+
+async function probeHostedCwd(
+  client: DaemonClient,
+  cwd: string
+): Promise<DirectoryEnumerationOutcome | null> {
+  try {
+    const reply = await client.request<{ outcome?: unknown } | null>(
+      'probeProviderCwd',
+      { cwd },
+      1_500
+    )
+    const outcome = reply?.outcome
+    return outcome === 'ok' || outcome === 'denied' || outcome === 'missing' || outcome === 'other'
+      ? outcome
+      : null
+  } catch {
+    // No spawn was sent: old hosts and unanswered permission reads keep GUI-owned launching.
+    return null
+  }
+}
 
 export async function inspectHostedIdentity(
-  client: DaemonClient
+  client: DaemonClient,
+  cwd: string,
+  isCanceled: () => boolean
 ): Promise<DaemonEndpointIdentity | null> {
   const identity = client.getDaemonIdentity()
   if (!identity?.providerSpawn) {
     return null
   }
   const image = await inspectMacProcessCodeIdentity(identity.pid)
-  return image.executablePath && (image.identity === 'resolved' || image.identity === 'parked')
-    ? identity
-    : null
+  if (
+    isCanceled() ||
+    !image.executablePath ||
+    (image.identity !== 'resolved' && image.identity !== 'parked') ||
+    !sameDaemonIdentity(identity, client.getDaemonIdentity())
+  ) {
+    return null
+  }
+  const outcome = await probeHostedCwd(client, cwd)
+  const current = client.getDaemonIdentity()
+  if (isCanceled() || !current?.providerSpawn || !sameDaemonIdentity(identity, current)) {
+    return null
+  }
+  if (outcome === 'ok' || outcome === 'denied') {
+    void reportDaemonPtyCwdVerdict({
+      cwd,
+      cwdReadableByDaemon: outcome === 'ok',
+      pidPath: null,
+      daemonIdentity: identity
+    })
+  }
+  return outcome === 'ok' ? identity : null
 }
 
 export function createHostedLaunch(

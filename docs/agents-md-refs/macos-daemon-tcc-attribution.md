@@ -64,6 +64,13 @@ unsupported hosts, an unavailable host executable, failed connection or ping che
 and remote/server routes keep direct launching under their existing owner. An adopted older daemon keeps its original name until
 it exits; the fork fallback and Windows names are unchanged.
 
+Before each hosted provider launch, the actual authenticated host enumerates the working folder.
+Only a successful read permits hosted launching; a denial, unknown result, timeout or unsupported
+probe keeps the existing direct launch before any hosted spawn is sent. Confirmed host denial
+uses the same folder-access notice as terminals when the app itself can read the folder. A later
+successful host read clears stale denial evidence. This checks the working folder at launch time;
+it cannot predict access to other folders a tool might later open or a grant revoked after launch.
+
 ## macOS floor
 
 The helper's Node declares `LC_BUILD_VERSION minos 13.5`, which is also the helper's

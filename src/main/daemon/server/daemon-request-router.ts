@@ -46,6 +46,7 @@ export class DaemonRequestRouter {
   async route(clientId: string, request: DaemonRequest, socket?: Socket): Promise<unknown> {
     const client = this.options.connections.get(clientId)
     switch (request.type) {
+      case 'probeProviderCwd':
       case 'spawnProvider':
       case 'signalProvider':
       case 'queryProvider':
@@ -258,11 +259,7 @@ export class DaemonRequestRouter {
     return { snapshot }
   }
 
-  private async shutdown(
-    clientId: string,
-    requestId: string,
-    killSessions: boolean
-  ): Promise<Record<string, never>> {
+  private async shutdown(clientId: string, requestId: string, killSessions: boolean) {
     this.options.log.log('shutdown', {
       reason: 'rpc',
       killSessions: killSessions === true

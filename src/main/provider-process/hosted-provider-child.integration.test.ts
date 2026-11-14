@@ -20,6 +20,11 @@ import type {
 } from '../daemon/protocol/daemon-provider-process-protocol'
 import { ProviderOwnerListener } from './provider-owner-channels'
 import { createSupervisorOutputGate } from './provider-supervisor-output-gate.test-support'
+import * as adoptionTelemetry from '../daemon/observability/daemon-adoption-telemetry-event'
+import {
+  getDaemonFolderAccessMismatch,
+  resetDaemonFolderAccessMismatchForTests
+} from '../daemon/permissions/daemon-folder-access-mismatch'
 
 vi.mock('../daemon/executable-host/macos/daemon-mac-code-identity', () => ({
   inspectMacProcessCodeIdentity: vi.fn(async () => ({
@@ -53,14 +58,19 @@ describe.skipIf(process.platform === 'win32')('hosted provider production transp
 
   afterEach(async () => {
     for (const child of children) {
-      await child.signalRoot!('SIGCONT')
-      await child.signalRoot!('SIGTERM')
+      if (child.signalRoot) {
+        await child.signalRoot('SIGCONT')
+        await child.signalRoot('SIGTERM')
+      } else if (child.exitCode === null && child.signalCode === null) {
+        child.kill('SIGTERM')
+      }
     }
     await server.shutdown()
     client.disconnect()
     children.clear()
     setSpawnObserver(null)
     vi.restoreAllMocks()
+    resetDaemonFolderAccessMismatchForTests()
     await rm(directory, { recursive: true, force: true })
   })
 
@@ -118,6 +128,73 @@ describe.skipIf(process.platform === 'win32')('hosted provider production transp
     )
     return { created: created.promise, result }
   }
+
+  it('keeps chat direct on host denial, shows the existing GUI-readable notice, then clears it on recovery', async () => {
+    const request = client.request.bind(client)
+    const probe = vi.spyOn(client, 'request').mockImplementation(async function <T>(
+      ...args: Parameters<typeof request>
+    ): Promise<T> {
+      if (args[0] === 'probeProviderCwd') {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only this test-owned host permission response is injected; GUI enumeration and notice storage remain real.
+        return { outcome: 'denied' } as T
+      }
+      return request<T>(...args)
+    })
+    const report = vi.spyOn(adoptionTelemetry, 'reportDaemonPtyCwdVerdict')
+    const spec = createProviderSpawnSpec(
+      {
+        command: process.execPath,
+        args: ['-e', 'process.stdout.write("direct reply")'],
+        cwd: directory
+      },
+      { PATH: process.env.PATH },
+      process.platform
+    )
+    const fallback = vi.fn(() =>
+      spawn(spec.program, spec.args, {
+        cwd: spec.cwd,
+        env: spec.env,
+        detached: spec.detached,
+        stdio: ['pipe', 'pipe', 'pipe', ...spec.groupReportStdio]
+      })
+    )
+    const child = new HostedProviderChild(spec, async () => client, fallback)
+    children.add(child)
+    let output = ''
+    child.stdout.on('data', (chunk) => (output += chunk.toString()))
+    const closed = once(child, 'close')
+    await child.ready
+    expect(await closed).toEqual([0, null])
+    expect(output).toBe('direct reply')
+    expect(fallback).toHaveBeenCalledTimes(1)
+    expect(probe.mock.calls.some(([type]) => type === 'spawnProvider')).toBe(false)
+    await report.mock.results[0].value
+    if (process.platform === 'darwin') {
+      expect(getDaemonFolderAccessMismatch(client.getDaemonIdentity())).not.toBeNull()
+    }
+    probe.mockRestore()
+    expect(await client.request('probeProviderCwd', { cwd: directory })).toEqual({ outcome: 'ok' })
+    expect(await generate('process.stdout.write("hosted reply")').result).toMatchObject({
+      success: true,
+      rawOutput: 'hosted reply'
+    })
+    await report.mock.results.at(-1)!.value
+    expect(getDaemonFolderAccessMismatch(client.getDaemonIdentity())).toBeNull()
+  })
+
+  it('probes only absolute working folders through the authenticated host without harming the connection', async () => {
+    expect(await client.request('probeProviderCwd', { cwd: directory })).toEqual({ outcome: 'ok' })
+    expect(await client.request('probeProviderCwd', { cwd: join(directory, 'missing') })).toEqual({
+      outcome: 'missing'
+    })
+    await expect(client.request('probeProviderCwd', { cwd: 'relative' })).rejects.toThrow(
+      'Invalid provider working folder'
+    )
+    expect(await generate('process.stdout.write("still connected")').result).toMatchObject({
+      success: true,
+      rawOutput: 'still connected'
+    })
+  })
 
   it('settles native no-start before refusal and releases the Codex home for a hosted reply', async () => {
     const timeline: string[] = []

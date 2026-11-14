@@ -108,7 +108,7 @@ export class HostedProviderChild extends ProviderChildHandle {
       if (this.canceled) {
         return this.failBeforeDispatch(new Error('Provider launch canceled'))
       }
-      const identity = await inspectHostedIdentity(this.client)
+      const identity = await inspectHostedIdentity(this.client, this.spec.cwd, () => this.canceled)
       if (this.canceled) {
         return this.failBeforeDispatch(new Error('Provider launch canceled'))
       }

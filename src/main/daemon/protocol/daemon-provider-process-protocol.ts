@@ -26,6 +26,7 @@ export type HostedProviderExitEvent = {
 }
 
 export type HostedProviderRequest =
+  | { id: string; type: 'probeProviderCwd'; payload: { cwd: string } }
   | { id: string; type: 'spawnProvider'; payload: HostedProviderSpawn }
   | {
       id: string

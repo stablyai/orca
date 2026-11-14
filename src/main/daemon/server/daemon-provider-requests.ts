@@ -1,4 +1,7 @@
 import type { Socket } from 'node:net'
+import { isAbsolute } from 'node:path'
+import { sharedPromiseSettlementWaiters } from '../../../shared/promise-settlement-waiters'
+import { enumerateDirectoryOnce } from '../permissions/directory-enumeration-probe'
 import type { DaemonClientConnections, ConnectedDaemonClient } from './daemon-client-connections'
 import type { DaemonTerminalAdmission } from './daemon-terminal-admission'
 import type { TerminalHost } from '../terminal-host/terminal-host'
@@ -7,7 +10,10 @@ import type { DaemonProviderProcesses } from './daemon-provider-processes'
 import type { DaemonServerLifecycle } from './daemon-server-lifecycle'
 
 export function routeProviderRequest(
-  request: Extract<DaemonRequest, { type: 'spawnProvider' | 'signalProvider' | 'queryProvider' }>,
+  request: Extract<
+    DaemonRequest,
+    { type: 'probeProviderCwd' | 'spawnProvider' | 'signalProvider' | 'queryProvider' }
+  >,
   client: ConnectedDaemonClient | undefined,
   options: { providerProcesses?: DaemonProviderProcesses; lifecycle: DaemonServerLifecycle },
   socket: Socket
@@ -19,6 +25,16 @@ export function routeProviderRequest(
     !providers?.enabled
   ) {
     throw new Error('Provider host unavailable')
+  }
+  if (request.type === 'probeProviderCwd') {
+    const cwd = request.payload?.cwd
+    if (typeof cwd !== 'string' || !isAbsolute(cwd) || cwd.includes('\0')) {
+      throw new Error('Invalid provider working folder')
+    }
+    return sharedPromiseSettlementWaiters(enumerateDirectoryOnce(cwd))
+      .wait({ timeoutMs: 1_000 })
+      .catch(() => null)
+      .then((outcome) => ({ outcome }))
   }
   if (request.type === 'spawnProvider') {
     return providers.spawn(request.payload, socket, options.lifecycle.isAcceptingProviderWork())
