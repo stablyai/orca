@@ -15,6 +15,7 @@ export const NATIVE_CHAT_NOTICE_COPY = {
   compaction: 'Context compacted',
   contextCleared: 'Context cleared',
   forkedFrom: 'Forked from',
+  forkedFromUnknown: 'Forked from another chat',
   plan: 'Plan'
 } as const
 
@@ -24,7 +25,15 @@ export type NativeChatNoticeLook =
   /** A rule across the chat with its label. */
   | { kind: 'divider'; label: 'compaction' | 'contextCleared' }
   /** The rule after a fork's inherited history, naming the chat it came from. */
-  | { kind: 'forked-from'; sourceSessionId: string; sourceName: string }
+  | {
+      kind: 'forked-from'
+      sourceSessionId: string
+      sourceName: string
+      /** The source is itself a fork, so it is named with its mark. */
+      sourceForked: boolean
+      /** The host has no readable record of the source: nothing to open, no name to show. */
+      sourceMissing: boolean
+    }
   /** Laid out in columns, so drawn in monospace. */
   | { kind: 'command-output' }
   /** The host's line in the reader's words, drawn faint. */
@@ -64,7 +73,9 @@ export function nativeChatNoticeLook(block: NativeChatTextBlock): NativeChatNoti
     return {
       kind: 'forked-from',
       sourceSessionId: block.forkedFrom.sessionId,
-      sourceName: forkedFromSourceName(block.text)
+      sourceName: forkedFromSourceName(block.text),
+      sourceForked: block.forkedFrom.sourceForked === true,
+      sourceMissing: block.forkedFrom.sourceMissing === true
     }
   }
   if (presentation === 'command-output') {

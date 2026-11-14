@@ -1,4 +1,6 @@
 import { Bell, ChevronDown, ChevronRight, Eye, EyeOff, X } from 'lucide-react-native'
+import { MobileForkMarkedName } from '../session/fork/MobileForkMarkedName'
+import { mobileForkAccessibleName } from '../session/fork/mobile-fork-marked-name'
 import { Fragment, memo, useCallback, useState } from 'react'
 import { Alert, Pressable, Text, View } from 'react-native'
 import { formatAgentTypeLabel } from '../../../src/shared/agent-status/presentation/agent-type-label'
@@ -234,7 +236,7 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={[
-            title,
+            row.forked ? mobileForkAccessibleName(title) : title,
             unread ? t('agents.list.unread', 'Unread') : null,
             stateWord || null,
             preview || null,
@@ -274,7 +276,7 @@ const MobileAgentListRow = memo(function MobileAgentListRow(props: {
           <View style={[styles.text, row.stale && homeListStyles.rowDisabled]}>
             <View style={styles.titleLine}>
               <Text style={[styles.title, unread && styles.titleUnread]} numberOfLines={1}>
-                {title}
+                {row.forked ? <MobileForkMarkedName name={title} /> : title}
               </Text>
               {time ? <Text style={styles.time}>{time}</Text> : null}
             </View>

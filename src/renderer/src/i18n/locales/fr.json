@@ -19810,7 +19810,8 @@
         "safetyReviewApproved": "{{agent}} a approuvé cette action. Voir les détails.",
         "safetyReview": "{{agent}} a signalé un avertissement de sécurité. Voir les détails.",
         "truncatedResponse": "Réponse du fournisseur tronquée (taille d’origine : {{bytes}} octets).",
-        "forkedFrom": "Branche créée à partir de"
+        "forkedFrom": "Branche créée à partir de",
+        "forkedFromUnknown": "Branche créée à partir d’une autre conversation"
       },
       "providerFrame": {
         "byteCount_one": "{{count}} octet",
@@ -20295,7 +20296,12 @@
         "failed": "{{agent}} n’a pas pu créer de branche de cette conversation",
         "hostUnsupported": "Cet hôte utilise une ancienne version d’Orca. Mettez Orca à jour sur l’hôte, puis réessayez.",
         "failedDetail": "Votre conversation est inchangée. Réessayez.",
-        "commandWorking": "Impossible de créer une branche pendant que {{agent}} répond. Relancez /fork quand la réponse est terminée."
+        "commandWorking": "Impossible de créer une branche pendant que {{agent}} répond. Relancez /fork quand la réponse est terminée.",
+        "mark": "Branche ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "Branche : {{name}}",
+        "sourceTooltip": "Branche de {{name}}",
+        "unknownSourceTooltip": "Branche d’une autre conversation"
       },
       "cardKindHidden": {
         "description": "Vous pouvez modifier cela à tout moment dans",

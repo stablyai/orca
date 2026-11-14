@@ -155,10 +155,16 @@ export function notifyAgentSessionStoreCacheChanges(
         !isDeepStrictEqual(previous.conversationCommand, next.conversationCommand)
       )
     })
+  // A same-text user rename changes how a fork's divider names its source, so it counts.
   const renamed = writes.records.upsert
-    .filter(
-      ([id]) => before.records.get(id)?.conversationName !== after.records.get(id)?.conversationName
-    )
+    .filter(([id]) => {
+      const previous = before.records.get(id)
+      const next = after.records.get(id)
+      return (
+        previous?.conversationName !== next?.conversationName ||
+        previous?.conversationNameSource !== next?.conversationNameSource
+      )
+    })
     .map(([id]) => id)
   if (topologyChanged) {
     sessionCrewChanges.notify(new Set(['records']))

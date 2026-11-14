@@ -39,7 +39,15 @@ export function structuredAgentSessionStatusBlock(
     ...(body.tone !== undefined ? { tone: body.tone } : modelFallback ? { tone: 'notice' } : {}),
     ...(body.providerFrame ? { providerFrame: body.providerFrame } : {}),
     ...(failure ? { failure } : {}),
-    ...(body.forkedFrom ? { forkedFrom: { sessionId: body.forkedFrom.sessionId } } : {}),
+    ...(body.forkedFrom
+      ? {
+          forkedFrom: {
+            sessionId: body.forkedFrom.sessionId,
+            ...(body.forkedFrom.sourceForked ? { sourceForked: true as const } : {}),
+            ...(body.forkedFrom.sourceMissing ? { sourceMissing: true as const } : {})
+          }
+        }
+      : {}),
     ...(failure?.kind === 'usageLimitReached' && turnScope?.kind === 'turn'
       ? { usageLimitTurnItemId: turnScope.turnItemId }
       : {}),

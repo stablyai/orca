@@ -65,6 +65,17 @@ export function agentStateLabel(state: AgentDotState): string {
   }
 }
 
+/** The row's label when it leads with a forked chat's name: that name and what follows it. */
+export function agentDisplayForkedLead(
+  row: RuntimeWorktreeAgentRow,
+  label: string
+): { name: string; rest: string } | null {
+  const name = row.conversationName?.trim()
+  return row.conversationForked && name && label.startsWith(name)
+    ? { name, rest: label.slice(name.length) }
+    : null
+}
+
 // Match desktop's compact row: name then message, else message → prompt → state; Stop leads while ending the turn.
 export function agentDisplayLabel(row: RuntimeWorktreeAgentRow, now: number): string {
   const name = row.conversationName?.trim()

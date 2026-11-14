@@ -19209,7 +19209,8 @@
         "safetyReviewApproved": "{{agent}} 已核准此操作。查看詳細資訊。",
         "safetyReview": "{{agent}} 回報了安全審查警告。查看詳細資訊。",
         "truncatedResponse": "供應商回應已截斷（原始大小：{{bytes}} 位元組）。",
-        "forkedFrom": "分支來源"
+        "forkedFrom": "分支來源",
+        "forkedFromUnknown": "分支來源：另一個聊天"
       },
       "composer": {
         "planMode": "規劃",
@@ -19915,7 +19916,12 @@
         "failed": "{{agent}} 無法從此聊天建立分支",
         "hostUnsupported": "此主機執行的是舊版 Orca。請更新主機上的 Orca 後再試一次。",
         "failedDetail": "聊天未變更。請再試一次。",
-        "commandWorking": "{{agent}} 回覆期間無法建立分支。回覆結束後，請再次執行 /fork。"
+        "commandWorking": "{{agent}} 回覆期間無法建立分支。回覆結束後，請再次執行 /fork。",
+        "mark": "分支 ·",
+        "markedName": "{{mark}} {{name}}",
+        "accessibleName": "分支：{{name}}",
+        "sourceTooltip": "{{name}} 的分支",
+        "unknownSourceTooltip": "另一個聊天的分支"
       },
       "cardKindHidden": {
         "description": "你可以隨時在此處變更",

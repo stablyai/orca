@@ -1,4 +1,6 @@
 import { useMemo } from 'react'
+import { useAppStore } from '@/store/index'
+import { selectWorktreeHostConnectionPhase } from '@/lib/workspace/ownership/worktree-host-connection-phase'
 import { openDesktopStructuredSession } from '@/lib/agent-session/open/activate-ai-vault-structured-session'
 import {
   NativeChatForkContext,
@@ -27,11 +29,15 @@ export function NativeChatRowActionsProvider({
   children: React.ReactNode
 }): React.JSX.Element {
   const worktreeId = useNativeChatTabOwnerWorktreeId(pane.tabId)
+  // A disconnected host cannot open the source, so its divider shows plain words until it returns.
+  const hostConnected = useAppStore(
+    (state) => selectWorktreeHostConnectionPhase(state, worktreeId).phase === 'connected'
+  )
   const { agent, target } = pane
   // A fork and its source share a workspace and host.
   const openSource = useMemo(
     () =>
-      worktreeId
+      worktreeId && hostConnected
         ? (sourceSessionId: string) =>
             void openDesktopStructuredSession(
               {
@@ -42,7 +48,7 @@ export function NativeChatRowActionsProvider({
               target
             )
         : undefined,
-    [agent, target, worktreeId]
+    [agent, target, worktreeId, hostConnected]
   )
   return (
     <NativeChatRewindContext.Provider value={chat.rewind.surface}>

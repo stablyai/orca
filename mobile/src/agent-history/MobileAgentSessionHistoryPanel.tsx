@@ -150,6 +150,7 @@ function MobileAgentSessionHistoryPanelContent({
 
   const sessions = screenState.kind === 'ready' ? screenState.sessions : EMPTY_SESSIONS
   const issues = screenState.kind === 'ready' ? screenState.issues : EMPTY_ISSUES
+  const forkedSessionIds = screenState.kind === 'ready' ? screenState.forkedSessionIds : undefined
   const sessionsById = useMemo(
     () => new Map(sessions.map((session) => [session.id, session])),
     [sessions]
@@ -161,9 +162,10 @@ function MobileAgentSessionHistoryPanelContent({
         scope,
         scopeFilterPaths,
         activeWorktreePath,
-        now
+        now,
+        forkedSessionIds
       }),
-    [sessions, query, scope, scopeFilterPaths, activeWorktreePath, now, t]
+    [sessions, query, scope, scopeFilterPaths, activeWorktreePath, now, forkedSessionIds, t]
   )
 
   const showRefreshLine = useRefreshHint(revalidating)

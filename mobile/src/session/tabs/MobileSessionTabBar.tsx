@@ -25,10 +25,13 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import {
   buildMobileSessionTabSummary,
+  isForkedChatTab,
   type MobileSessionTabSummary
 } from './mobile-session-tab-rows'
 import { MobileSessionTabMark } from './MobileSessionTabMark'
 import { MobileSessionTabsSheet } from './MobileSessionTabsSheet'
+import { MobileForkMarkedName } from '../fork/MobileForkMarkedName'
+import { mobileForkAccessibleName } from '../fork/mobile-fork-marked-name'
 import type { MobileSessionController } from '../use-mobile-session-controller'
 
 const SWIPE_SETTLE_MS = 250
@@ -164,7 +167,10 @@ export function MobileSessionTabBar({
     rows.length === 1
       ? t('session.tabBar.oneTab', '1 tab')
       : t('session.tabBar.tabCount', '{{count}} tabs', { count: rows.length })
-  const tabLabel = [active?.title, status ? agentStateLabel(status) : null]
+  const tabLabel = [
+    active && isForkedChatTab(active.tab) ? mobileForkAccessibleName(active.title) : active?.title,
+    status ? agentStateLabel(status) : null
+  ]
     .filter(Boolean)
     .join(', ')
   const countAccessibilityLabel = [
@@ -230,7 +236,11 @@ export function MobileSessionTabBar({
                 </>
               ) : null}
               <Text style={styles.title} numberOfLines={1}>
-                {active?.title ?? countLabel}
+                {active && isForkedChatTab(active.tab) ? (
+                  <MobileForkMarkedName name={active.title} />
+                ) : (
+                  (active?.title ?? countLabel)
+                )}
               </Text>
             </Animated.View>
           </Pressable>

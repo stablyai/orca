@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { mobileChatShownName } from '../session/fork/mobile-fork-marked-name'
 import { useQueryClient } from '@tanstack/react-query'
 import { mobileStructuredSessionStatusFeed } from '../session/native-chat/agent-session/mobile-structured-session-status-feed'
 import type { AgentSessionConversationNames } from '../../../src/shared/agent-session/agent-session-conversation-names'
@@ -46,6 +47,8 @@ export type AgentHistoryScreenState =
       kind: 'ready'
       sessions: AiVaultSession[]
       issues: AiVaultScanIssue[]
+      /** Sessions whose host says the chat is a fork; their titles follow the fork mark. */
+      forkedSessionIds: ReadonlySet<string>
     }
 
 // Rows keep the scope paths they were scanned for, so a revisit filters them before worktree.ps lands.
@@ -242,15 +245,17 @@ export function useMobileAgentHistoryState(params: MobileAgentHistoryStateParams
       return read
     }
     if (read) {
-      return {
-        kind: 'ready',
-        issues: read.issues,
-        sessions: read.sessions.map((session) => {
-          const id = session.structuredSession?.sessionId
-          const title = id ? names.get(id)?.conversationName : null
-          return title ? { ...session, title } : session
-        })
-      }
+      const forkedSessionIds = new Set<string>()
+      const sessions = read.sessions.map((session) => {
+        const id = session.structuredSession?.sessionId
+        const note = id ? names.get(id) : undefined
+        if (note?.forkedFrom) {
+          forkedSessionIds.add(session.id)
+        }
+        const title = note ? mobileChatShownName(names, note, session.agent) : null
+        return title ? { ...session, title } : session
+      })
+      return { kind: 'ready', issues: read.issues, sessions, forkedSessionIds }
     }
     switch (hostScreenState({ data: read, error, isFetching }, connState)) {
       case 'empty-error':

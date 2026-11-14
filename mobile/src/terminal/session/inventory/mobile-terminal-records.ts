@@ -85,6 +85,7 @@ type MobileSessionTabLike =
       title?: string
       sessionId?: string
       agent?: string
+      forked?: true
       chatStatus?: unknown
       isActive?: boolean
     }
@@ -204,6 +205,7 @@ function mobileSessionTabEqual(
         b.type === 'agent-session' &&
         a.sessionId === b.sessionId &&
         a.agent === b.agent &&
+        a.forked === b.forked &&
         JSON.stringify(a.chatStatus ?? null) === JSON.stringify(b.chatStatus ?? null)
       )
   }

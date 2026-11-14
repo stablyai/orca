@@ -1,4 +1,5 @@
 import { agentNoUpdateLabel } from '../../../../../src/shared/agent-status/presentation/agent-row-decay-state'
+import { MobileForkMarkedName } from '../../../session/fork/MobileForkMarkedName'
 import { memo, type ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../../../src/shared/runtime-worktree-contracts'
@@ -7,6 +8,7 @@ import { colors, spacing, pressedStyle } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import {
+  agentDisplayForkedLead,
   agentDisplayLabel,
   agentDotState,
   agentRowTimeAt,
@@ -54,6 +56,7 @@ function WorktreeAgentRowComponent({
       : agent,
     now
   )
+  const forkedLead = agentDisplayForkedLead(agent, label)
   const childText = childRow ? mobileAgentChildRowText(childRow, now) : null
   const timeAt = childRow ? childRow.firstObservedAt : agentRowTimeAt(agent)
   // Like desktop, a silent row reports how long since its last update, not when its turn began.
@@ -76,6 +79,11 @@ function WorktreeAgentRowComponent({
           <>
             {childText.lead}
             {childText.trail ? ` · ${childText.trail}` : ''}
+          </>
+        ) : forkedLead ? (
+          <>
+            <MobileForkMarkedName name={forkedLead.name} />
+            {forkedLead.rest}
           </>
         ) : (
           label
