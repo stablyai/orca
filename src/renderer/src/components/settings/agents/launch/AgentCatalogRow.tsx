@@ -128,6 +128,7 @@ export function AgentCatalogRow({
     >
       {/* Clicking the row's empty space expands it; its controls and the name button handle their own clicks. */}
       <div
+        data-settings-scroll-row=""
         className="-mx-2 flex cursor-pointer flex-wrap items-center gap-3 rounded-md px-2 py-1 transition-colors hover:bg-accent"
         onClick={(event) => {
           const target = event.target

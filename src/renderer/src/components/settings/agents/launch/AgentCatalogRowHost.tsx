@@ -1,7 +1,7 @@
 import { useLayoutEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
-import { getAgentSettingsRowId } from '../agents-search'
+import { getAgentSettingsRowId } from '../agent-settings-navigation'
 import { AgentCatalogRow, type AgentCatalogRowViewProps } from './AgentCatalogRow'
 import {
   createAgentCatalogRowHost,

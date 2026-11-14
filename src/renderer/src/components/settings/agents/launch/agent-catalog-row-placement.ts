@@ -1,3 +1,5 @@
+import { scheduleSettingsListReveal } from '../../section-layout/settings-list-scroll'
+
 export type AgentCatalogRowHost = ReturnType<typeof createAgentCatalogRowHost>
 
 export function createAgentCatalogRowHost(): {
@@ -27,6 +29,7 @@ export function createAgentCatalogRowHost(): {
       if (element.parentElement === parent && element.nextSibling === before) {
         return
       }
+      const previousParent = element.parentElement
       const atomic =
         element.isConnected && parent.isConnected && typeof parent.moveBefore === 'function'
       const focused = document.activeElement
@@ -70,6 +73,19 @@ export function createAgentCatalogRowHost(): {
         for (const [node, offset] of offsets) {
           node.scrollTop = offset.top
           node.scrollLeft = offset.left
+        }
+        if (active && previousParent && previousParent !== parent) {
+          const destination = active.closest('[data-settings-scroll-list]')
+          const cancelOnFocus = (): void => cancelAnimationFrame(frame)
+          const frame = scheduleSettingsListReveal(
+            () =>
+              document.activeElement === active &&
+              active.closest('[data-settings-scroll-list]') === destination
+                ? active
+                : null,
+            () => document.removeEventListener('focusin', cancelOnFocus, true)
+          )
+          document.addEventListener('focusin', cancelOnFocus, { capture: true, once: true })
         }
       } finally {
         moving = false

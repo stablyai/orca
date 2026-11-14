@@ -87,6 +87,9 @@ export function AgentDetectionCatalog({
       )}
 
       <section
+        data-agent-inventory-state={
+          detectionFailed ? 'failed' : detectionPending ? 'pending' : 'ready'
+        }
         id={AGENTS_INSTALLED_SECTION_ID}
         tabIndex={-1}
         className="space-y-8 scroll-mt-8 outline-none"

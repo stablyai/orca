@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
+import { getAgentSettingsRowId } from './agent-settings-navigation'
 import {
   getClaudeSubagentNavigationTitle,
   getClaudeSubagentNavigationDescription,
@@ -101,9 +101,6 @@ const AGENT_CHAT_CHOICE_SEARCH_ENTRY_ID = 'agent-chat-choice'
 /** The Installed list, where each chat agent's row holds its Chat | CLI choice. */
 export const AGENTS_INSTALLED_SECTION_ID = 'agents-installed'
 
-export function getAgentSettingsRowId(agent: TuiAgent): string {
-  return `settings-agent-${agent}`
-}
 /** The top Chat or Terminal tiles that set this computer's default. */
 export const AGENT_DEFAULT_SURFACE_SECTION_ID = 'agents-default-surface'
 export const AGENT_PERMISSIONS_SECTION_ID = 'agents-permissions'

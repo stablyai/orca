@@ -21,9 +21,13 @@ export function revealInSettingsList(target: HTMLElement): void {
   }
 }
 
-export function scheduleSettingsListReveal(target: () => HTMLElement | null): number {
+export function scheduleSettingsListReveal(
+  target: () => HTMLElement | null,
+  onSettled?: () => void
+): number {
   const revision = navigationRevision
   return requestAnimationFrame(() => {
+    onSettled?.()
     if (revision !== navigationRevision) {
       return
     }

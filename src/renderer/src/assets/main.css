@@ -2266,6 +2266,11 @@ html.native-shell .app-layout {
     var(--settings-target-bleed-right, 0px) 0 0 var(--settings-target-tint);
 }
 
+[data-settings-scroll-list] .settings-target-highlight {
+  --settings-target-tint: color-mix(in srgb, var(--foreground) 12%, transparent);
+  border-radius: var(--radius-md);
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .settings-target-highlight {
     animation: settings-target-highlight-fade 3s ease-out forwards;

@@ -1,3 +1,4 @@
+import { isAgentSettingsRowId } from '../agents/agent-settings-navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SourceControlAiSettingsPatch } from '../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import { useAppStore } from '../../../store/index'
@@ -174,15 +175,19 @@ export function useSettingsInteractionController(model: SettingsInteractionModel
     highlighted.classList.add(SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME)
     applySettingsTargetHighlightBleed(highlighted)
     // A section the jump just revealed grows over ~200ms; re-scroll once if the row is still cut off.
-    const settle = window.setTimeout(() => {
-      const container = contentScrollRef.current
-      if (container && !isFullyVisibleIn(target, container)) {
-        scrollSubsectionIntoView(targetId, container)
-      }
-      applySettingsTargetHighlightBleed(highlighted)
-    }, SETTINGS_REVEAL_SETTLE_MS)
+    const settle = isAgentSettingsRowId(targetId)
+      ? undefined
+      : window.setTimeout(() => {
+          const container = contentScrollRef.current
+          if (container && !isFullyVisibleIn(target, container)) {
+            scrollSubsectionIntoView(targetId, container)
+          }
+          applySettingsTargetHighlightBleed(highlighted)
+        }, SETTINGS_REVEAL_SETTLE_MS)
     return () => {
-      window.clearTimeout(settle)
+      if (settle !== undefined) {
+        window.clearTimeout(settle)
+      }
       clearSettingsTargetHighlightBleed(highlighted)
       highlighted.classList.remove(SETTINGS_TARGET_HIGHLIGHT_CLASS_NAME)
     }

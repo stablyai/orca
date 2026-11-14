@@ -1,3 +1,4 @@
+import { isAgentSettingsRowId } from '../agents/agent-settings-navigation'
 import type { MutableRefObject } from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { SpeechModelState } from '../../../../../shared/speech-types'
@@ -177,7 +178,9 @@ export function scrollSubsectionIntoView(targetId: string, container?: HTMLEleme
   }
   // A target inside its own scroll area (the Shortcuts list) needs every scroller moved, not just the page.
   if (!container || hasNestedScroller(target, container)) {
-    target.scrollIntoView({ block: container ? 'center' : 'start' })
+    target.scrollIntoView({
+      block: isAgentSettingsRowId(targetId) ? 'nearest' : container ? 'center' : 'start'
+    })
     return
   }
   const containerRect = container.getBoundingClientRect()

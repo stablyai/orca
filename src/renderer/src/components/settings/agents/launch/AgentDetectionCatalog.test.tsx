@@ -6,6 +6,7 @@ import { AgentDetectionCatalog } from './AgentDetectionCatalog'
 import type { AgentCatalogRowProps } from './AgentCatalogRow'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
 import { TooltipProvider } from '../../../ui/tooltip'
+import { cancelSettingsListReveal } from '../../section-layout/settings-list-scroll'
 
 const claude: AgentCatalogEntry = {
   id: 'claude',
@@ -166,5 +167,56 @@ it.each([
     expect(screen.getByRole('button', { name: 'Claude' }).getAttribute('aria-expanded')).toBe(
       expected
     )
+  }
+)
+
+it('reveals only the destination list when a focused editor changes membership', async () => {
+  const view = render(catalog(false, vi.fn()))
+  fireEvent.click(screen.getByRole('button', { name: 'Claude' }))
+  const input = screen.getByDisplayValue<HTMLInputElement>('claude')
+  input.focus()
+  const destination = screen.getByRole('region', { name: 'Installed agents' })
+  const source = screen.getByRole('region', { name: 'Agents available to install' })
+  source.scrollTop = 20
+  view.container.scrollTop = 40
+  vi.spyOn(destination, 'getBoundingClientRect').mockImplementation(
+    () => new DOMRect(0, 100, 500, 200)
+  )
+  vi.spyOn(input, 'getBoundingClientRect').mockImplementation(
+    () => new DOMRect(0, 800 - destination.scrollTop, 100, 20)
+  )
+  view.rerender(catalog(true, vi.fn()))
+  await waitFor(() => expect(destination.scrollTop).toBe(544))
+  expect(source.scrollTop).toBe(20)
+  expect(view.container.scrollTop).toBe(40)
+  expect(document.activeElement).toBe(input)
+})
+
+it.each(['unfocused', 'focus change', 'navigation'])(
+  'does not reveal a moved editor after %s',
+  async (mode) => {
+    const view = render(catalog(false, vi.fn()))
+    fireEvent.click(screen.getByRole('button', { name: 'Claude' }))
+    const input = screen.getByDisplayValue<HTMLInputElement>('claude')
+    if (mode !== 'unfocused') {
+      input.focus()
+    }
+    const destination = screen.getByRole('region', { name: 'Installed agents' })
+    vi.spyOn(destination, 'getBoundingClientRect').mockImplementation(
+      () => new DOMRect(0, 100, 500, 200)
+    )
+    vi.spyOn(input, 'getBoundingClientRect').mockImplementation(
+      () => new DOMRect(0, 800 - destination.scrollTop, 100, 20)
+    )
+    view.rerender(catalog(true, vi.fn()))
+    if (mode === 'focus change') {
+      const outside = document.createElement('button')
+      view.container.append(outside)
+      outside.focus()
+    } else if (mode === 'navigation') {
+      cancelSettingsListReveal()
+    }
+    await act(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())))
+    expect(destination.scrollTop).toBe(0)
   }
 )
