@@ -2303,6 +2303,18 @@
     "unhide": "Show All",
     "zoom": "Zoom"
   },
+  "notch": {
+    "rowState": {
+      "attention": "Needs you",
+      "done": "Finished",
+      "working": "Working"
+    },
+    "status": {
+      "attention": "{{count}} awaiting input",
+      "done": "{{count}} finished",
+      "working": "{{count}} working"
+    }
+  },
   "pet": {
     "defaultLabels": {
       "bundle": "Pet bundle",

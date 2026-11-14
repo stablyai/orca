@@ -54,7 +54,7 @@ import { browserSessionRegistry } from '../browser/sessions/profiles/browser-ses
 import { logStartupMilestone } from './diagnostics/startup-diagnostics'
 import { writeHttp1CompatibilityMarker } from './network-compatibility/http1-compatibility-marker'
 import { mainProcessState as state } from './main-process-state'
-import { syncMacMenuBarIcon } from './main-window/main-window-actions'
+import { syncSystemPresenceSettingUpdate } from './system-presence-setting-sync'
 import { updateGpuAccelerationAboutPanel } from './gpu-recovery/gpu-lifecycle'
 import {
   logWslCliReconciliationResults,
@@ -273,9 +273,8 @@ export async function initializeReadyFoundation(): Promise<void> {
     }
     if ('showMenuBarIcon' in updates) {
       hangWatchdog?.setMenuBarIconSetting(settings.showMenuBarIcon !== false)
-      // Store owns settings mutations; sync every menu-bar toggle through this listener.
-      syncMacMenuBarIcon(settings.showMenuBarIcon !== false)
     }
+    syncSystemPresenceSettingUpdate(updates, settings)
     if ('agentStatusHooksEnabled' in updates) {
       agentHookServer.setStatusHooksEnabled(isAgentStatusHooksEnabled(settings))
       // The ensure gate blocks only new relays; stop live guests/timers on disable and resume on enable for existing panes.

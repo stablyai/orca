@@ -8,6 +8,7 @@ import type { BrowserPasswordsGlobalSettings } from './browser-passwords-types'
 import type { ClaudeAccountSwitchSettings } from './claude-account-switch-settings'
 import type { ExternalConversationSettings } from './external-conversation-settings'
 import type { NativeChatGlobalSettings } from './native-chat/native-chat-appearance-settings'
+import type { NotchStatusSettings } from './notch/notch-status-settings'
 import type { NativeChatIdleStopSettings } from './native-chat/native-chat-idle-stop'
 import type { EditorTypographySettings } from './editor-typography-settings-types'
 import type { PluginAppearanceSettings } from './plugin-appearance-settings-types'
@@ -32,6 +33,7 @@ export type GlobalSettingsBase = AntigravityChatAuthSettings &
   SshRemoteControlSettings &
   ClaudeAgentViewSettings &
   NativeChatGlobalSettings &
+  NotchStatusSettings &
   NativeChatIdleStopSettings &
   WorktreeDeletionPreferences &
   WorktreeCardDisplaySettings &

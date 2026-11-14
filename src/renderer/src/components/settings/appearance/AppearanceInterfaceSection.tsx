@@ -4,6 +4,7 @@ import type { GlobalSettings } from '../../../../../shared/global-settings-types
 import { UIZoomControl } from './UIZoomControl'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { ReduceVisualEffectsSetting } from './ReduceVisualEffectsSetting'
+import { NotchStatusSetting } from './NotchStatusSetting'
 import { getReduceVisualEffectsEntries } from './appearance-reduce-visual-effects-search'
 import { SettingsGroupDisclosure } from '../section-layout/SettingsGroupDisclosure'
 import { SettingsSearchableSelect } from '../form-controls/SettingsSearchableSelect'
@@ -21,7 +22,7 @@ import {
   getTypographyEntries,
   getZoomEntries
 } from './appearance-search'
-import { getMenuBarIconEntries, getSystemTrayEntries } from './appearance-system-presence-search'
+import * as systemPresence from './appearance-system-presence-search'
 import { SHOW_UI_LANGUAGE_SETTING } from '@/i18n/supported-languages'
 import { useTranslate } from '@/i18n/use-translate'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from '../search/settings-search'
@@ -95,19 +96,19 @@ export function AppearanceInterfaceSection({
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
   const zoomInKeyCombos = useShortcutKeyComboDetails('zoom.in')
   const zoomOutKeyCombos = useShortcutKeyComboDetails('zoom.out')
-  const menuBarIconEntry = getMenuBarIconEntries({ showMenuBarIcon: true })[0]
-  const systemTrayEntry = getSystemTrayEntries({ showSystemTray: true })[0]
+  const menuBarIconEntry = systemPresence.getMenuBarIconEntries({ showMenuBarIcon: true })[0]
+  const systemTrayEntry = systemPresence.getSystemTrayEntries({ showSystemTray: true })[0]
   const themeEntry = getThemeEntries()[0]
   const themeLabel = t('auto.components.settings.AppearancePane.932ff1fbff', 'Theme')
   const titlebarEntry = getTitlebarEntries()[0]
   const typographyEntry = getTypographyEntries()[0]
   const zoomEntry = getZoomEntries()[0]
   const reduceVisualEffectsEntry = getReduceVisualEffectsEntries()[0]
+  const presence = { showSystemTray: isDesktopWindows, showMenuBarIcon: isDesktopMac }
   const advancedEntries = [
     ...getTitlebarEntries(),
     ...getReduceVisualEffectsEntries(),
-    ...getSystemTrayEntries({ showSystemTray: isDesktopWindows }),
-    ...getMenuBarIconEntries({ showMenuBarIcon: isDesktopMac })
+    ...systemPresence.getSystemPresenceEntries({ ...presence, showNotchStatus: isDesktopMac })
   ]
   const showAdvanced = !isSearching || matchesSettingsSearch(searchQuery, advancedEntries)
 
@@ -362,6 +363,8 @@ export function AppearanceInterfaceSection({
               />
             </SearchableSetting>
           ) : null}
+
+          <NotchStatusSetting settings={settings} updateSettings={updateSettings} />
         </SettingsGroupDisclosure>
       ) : null}
     </>
