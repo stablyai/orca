@@ -5,8 +5,8 @@ import {
   BROWSER_TAB_LAYOUT_FIELDS,
   BROWSER_TAB_WORKSPACE_FIELDS,
   type LayoutContentFacts
-} from '../../../../../shared/workspace-layout/workspace-layout-beside'
-import { omitStoredFields } from '../../../../../shared/workspace-layout/stored-record-fields'
+} from '../../../../../shared/workspace-layout/persistence/workspace-layout-beside'
+import { omitStoredFields } from '../../../../../shared/workspace-layout/persistence/stored-record-fields'
 
 export type PendingTabFacts = {
   worktreeId: string

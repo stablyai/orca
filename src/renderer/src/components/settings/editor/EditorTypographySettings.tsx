@@ -14,11 +14,9 @@ import {
   resolveEditorFontFamily,
   resolveEditorLigaturesMode,
   type EditorLigaturesMode
-} from '@/lib/editor/appearance/editor-typography'
-import {
-  supportsCodeFontSmoothing,
-  type CodeFontSmoothing
-} from '@/lib/editor/appearance/code-font-smoothing'
+} from '../../../../../shared/editor/editor-typography'
+import type { CodeFontSmoothing } from '@/lib/editor/appearance/code-font-smoothing'
+import { isMacUserAgent } from '../../../app-shell/platform/user-agent-platform'
 import { useTranslate } from '@/i18n/use-translate'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import {
@@ -133,7 +131,7 @@ export function EditorTypographySettings({
         />
       </SearchableSetting>
 
-      {supportsCodeFontSmoothing() ? (
+      {isMacUserAgent() ? (
         <SearchableSetting id={GENERAL_SETTING_ANCHORS.fontSmoothing} {...entries.fontSmoothing}>
           <SettingsRow
             label={entries.fontSmoothing.title}

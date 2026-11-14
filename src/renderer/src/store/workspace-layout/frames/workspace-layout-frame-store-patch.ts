@@ -1,8 +1,9 @@
+import { annotateBrowserPageHandles } from '@/store/slices/browser/hosts/browser-initialization-presentation-ownership'
 import { pendingEditorEntityIds } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 // Patch framed workspaces, reusing equal objects to avoid rerenders and retaining window-owned terminal/editor/page state. Every built patch applies and records staged browser handover (L284).
 
-import { BROWSER_TAB_LAYOUT_FIELDS } from '../../../../../shared/workspace-layout/workspace-layout-beside'
-import { stableJson } from '../../../../../shared/workspace-layout/workspace-layout-load-report'
+import { BROWSER_TAB_LAYOUT_FIELDS } from '../../../../../shared/workspace-layout/persistence/workspace-layout-beside'
+import { stableJson } from '../../../../../shared/workspace-layout/persistence/workspace-layout-load-report'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { isEditorTabContentType } from '../../slices/editor/tabs/editor-tab-content-type'
 import type { AppState } from '../../types'
@@ -289,7 +290,11 @@ export function buildLayoutFrameStorePatch(
     patch.browserPagesByWorkspace = { ...pages, ...Object.fromEntries(addedPages) }
   }
   if (closedPageIds.size > 0 || addedHandles.length > 0) {
-    patch.remoteBrowserPageHandlesByPageId = { ...handles, ...Object.fromEntries(addedHandles) }
+    patch.remoteBrowserPageHandlesByPageId = annotateBrowserPageHandles(
+      { ...handles, ...Object.fromEntries(addedHandles) },
+      [...closedPageIds, ...addedHandles.map(([id]) => id)],
+      state.remoteBrowserPageHandlesByPageId
+    )
   }
   return patch
 }

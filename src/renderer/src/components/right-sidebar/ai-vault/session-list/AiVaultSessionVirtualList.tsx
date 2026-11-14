@@ -8,7 +8,7 @@ import type {
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { AiVaultResumeStartup } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-startup'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useLatestHandler } from '@/lib/use-latest-handler'
 import { measureVirtualRowRetainingHiddenSize } from '@/hooks/virtualized-hidden-row-measurement'
 import { getActiveStickyHeaderIndexForScroll } from '../../../sidebar/worktree-list/viewport/virtual-rows'

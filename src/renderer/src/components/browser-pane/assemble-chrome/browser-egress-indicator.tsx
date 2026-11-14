@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { Globe, Monitor, Server } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID,
   BROWSER_SSH_WORKSPACE_ROUTING_SETTINGS_TARGET_ID
-} from '@/lib/settings-navigation-types'
+} from '@/components/settings/navigation/settings-navigation-types'
 import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId

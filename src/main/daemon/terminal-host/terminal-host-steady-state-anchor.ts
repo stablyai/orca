@@ -1,6 +1,6 @@
 import { recognizeAgentProcess } from '../../../shared/agent-status/process/agent-process-recognition'
 import type { RemoteForegroundEvidence } from '../../../shared/foreground-process-evidence'
-import { buildPaneProcessFingerprint } from '../../providers/posix-pane-foreground-fingerprint'
+import { buildPaneProcessFingerprint } from '../../providers/foreground/posix-pane-fingerprint'
 import type { Session } from '../sessions/session'
 
 /** Full-capture identity may be reused only while its pane fingerprint and raw foreground name match. */

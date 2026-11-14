@@ -7,26 +7,26 @@ import Animated, {
   useSharedValue,
   withTiming
 } from 'react-native-reanimated'
+import { usageBarFill } from '../../accounts/usage/UsageBar'
 import {
   getUsageBarState,
   getWindowResetLabel,
-  usageBarFill,
-  type AccountsSnapshot,
   type ProviderKey
-} from '../../components/AccountUsage'
+} from '../../accounts/usage/usage-selectors'
+import type { AccountsSnapshot } from '../../accounts/accounts-snapshot'
 import { ClaudeIcon, OpenAIIcon } from '../../components/AgentIcons'
 import { useNow } from '../../hooks/use-now'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useResponsiveLayout } from '../../layout/responsive-layout'
-import { useReducedMotionEnabled } from '../../platform/use-reduced-motion'
+import { useReducedMotionEnabled } from '../../platform/accessibility/use-reduced-motion'
 import type { HomeStatsSummary } from '../../stats/home-stats-total'
 import { colors, spacing } from '../../theme/mobile-theme'
 import '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useHostClient } from '../../transport/connection/host-client-hooks'
 import type { ConnectionState } from '../../transport/connection/connection-state'
-import type { HostProfile } from '../../transport/hosts/host-profile'
-import { useHostDisplay } from '../../transport/hosts/use-host-display'
+import type { HostProfile } from '../../host-catalog/host-profile'
+import { useHostDisplay } from '../../host-descriptors/use-host-display'
 import { formatTimeAgo } from '../../worktree/agent-row-display'
 import { homeListStyles } from '../home-list-styles'
 import { MobileHomeSectionHeading } from '../MobileHomeSectionHeading'

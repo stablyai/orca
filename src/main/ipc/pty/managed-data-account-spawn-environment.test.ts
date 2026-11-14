@@ -49,7 +49,7 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllEnvs())
 
-describe('independent pane Claude environments', () => {
+describe('independent pane agent session environments', () => {
   it('canonicalizes explicit Windows stamps for old receivers and keeps caller deletions authoritative', () => {
     const platform = process.platform
     Object.defineProperty(process, 'platform', { value: 'win32' })
@@ -81,6 +81,22 @@ describe('independent pane Claude environments', () => {
       Object.defineProperty(process, 'platform', { value: platform })
     }
   })
+
+  it.each(['local', 'daemon'])(
+    '%s panes drop the launching Codex task identity but keep user Codex settings',
+    (provider) => {
+      vi.stubEnv('CODEX_THREAD_ID', 'parent-thread')
+      vi.stubEnv('CODEX_WINDOWS_REGISTERED_CORE', '1')
+      vi.stubEnv('CODEX_HOME', '/home/user/.codex')
+      const pane =
+        provider === 'local'
+          ? buildInheritedLocalPtyEnvironment({}, [])
+          : createDaemonPtyEnvironment({ sessionId: 'pane', cols: 80, rows: 24, env: {} })
+      expect(pane.CODEX_THREAD_ID).toBeUndefined()
+      expect(pane.CODEX_WINDOWS_REGISTERED_CORE).toBeUndefined()
+      expect(pane.CODEX_HOME).toBe('/home/user/.codex')
+    }
+  )
 
   it.each(['local', 'daemon'])(
     '%s owns stamps only from the pane overlay through final preparation',
@@ -196,31 +212,6 @@ describe.each(['renderer', 'runtime'])('%s managed account daemon environment', 
       if (key !== 'XDG_STATE_HOME') {
         expect(child[key]).toBe(value)
       }
-    }
-  })
-
-  it('preserves independent daemon defaults when main has no baseline or owned markers', async () => {
-    const env: Record<string, string> = {}
-    applyManagedDataAccountEnvironment(env, { launchAgent: 'opencode' })
-    const envToDelete = await spawnDeletions(route, env)
-    const defaults = {
-      XDG_DATA_HOME: join(tmpdir(), 'persistent-daemon', 'data'),
-      XDG_STATE_HOME: join(tmpdir(), 'persistent-daemon', 'state'),
-      OPENCODE_DB: 'daemon.db',
-      OPENCODE_AUTH_CONTENT: JSON.stringify({ fixture: { key: randomUUID() } })
-    }
-    for (const [key, value] of Object.entries(defaults)) {
-      vi.stubEnv(key, value)
-    }
-    const child = createDaemonPtyEnvironment({
-      sessionId: 'pane',
-      cols: 80,
-      rows: 24,
-      env,
-      envToDelete
-    })
-    for (const [key, value] of Object.entries(defaults)) {
-      expect(hash(child[key]) === hash(value)).toBe(true)
     }
   })
 

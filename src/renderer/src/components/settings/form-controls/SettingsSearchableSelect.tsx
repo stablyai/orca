@@ -5,7 +5,7 @@ import { Button } from '../../ui/button'
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList } from '../../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../../ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../ui/tooltip'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import { filterSearchableSelectGroups } from './settings-form-option-filter'
 
@@ -40,6 +40,8 @@ type SettingsSearchableSelectProps = {
   onValueChange: (value: string) => void
   searchPlaceholder: string
   compact?: boolean
+  /** Size the trigger to its value like the plain settings selects, instead of a fixed 220px. */
+  fitValue?: boolean
   emptyText?: string
   open?: boolean
   disabled?: boolean
@@ -69,6 +71,7 @@ function SettingsSearchableSelectControl({
   searchPlaceholder,
   emptyText,
   compact = false,
+  fitValue = false,
   open: controlledOpen,
   disabled = false,
   onOpenChange,
@@ -163,7 +166,11 @@ function SettingsSearchableSelectControl({
           disabled={disabled}
           onKeyDown={handleTriggerKeyDown}
           className={
-            compact ? 'w-auto min-w-0 max-w-56 justify-between' : 'min-w-[220px] justify-between'
+            compact
+              ? 'w-auto min-w-0 max-w-56 justify-between'
+              : fitValue
+                ? 'min-w-32 justify-between'
+                : 'min-w-[220px] justify-between'
           }
         >
           <span className="inline-flex min-w-0 flex-1 items-center gap-2">

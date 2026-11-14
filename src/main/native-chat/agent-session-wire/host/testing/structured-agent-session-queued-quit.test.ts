@@ -1,9 +1,10 @@
+import { readTestHostJournal } from '../../../agent-session-journal/journal-observation.test-support'
 import { afterEach, expect, it, vi } from 'vitest'
-import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
+import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data.test-fixture'
 import {
   interruptedRestart,
   QUEUED_BEFORE_QUIT
-} from './structured-agent-session-restart-interruption-test-harness'
+} from './structured-agent-session-restart-interruption.test-fixture'
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -19,7 +20,7 @@ it.each([undefined, 'kill-delivered'] as const)(
     if (evidence) {
       expect(host.deps.store.getRecord(SESSION)?.lease.deathEvidence?.kind).toBe(evidence)
     }
-    const snapshot = await host.journalSnapshot(SESSION)
+    const snapshot = await readTestHostJournal(host, SESSION)
     expect(snapshot.submissions.filter((entry) => entry.queuedMessageId !== undefined)).toEqual([])
     expect(await host.restartResume.list()).toHaveLength(1)
     const page = await host.history({ sessionId: SESSION, direction: 'tail' })

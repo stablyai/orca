@@ -1,4 +1,4 @@
-import { recordRendererCrashBreadcrumb } from '../../crash-breadcrumb-recorder'
+import { recordRendererCrashBreadcrumb } from '../../../diagnostics/crash-reporting/crash-breadcrumb-recorder'
 
 export type MonacoSetupStep = readonly [name: string, setup: () => void]
 

@@ -12,7 +12,7 @@ import {
   subscribeToLocalImageCacheInvalidation as onImageCacheInvalidated
 } from './local-image-src-cache'
 import { pinLocalImageCacheKey as pinLocalImageCache } from './local-image-cache-pinning'
-import { readBrowserAttachmentFile } from '@/lib/browser-attachment-files'
+import { readBrowserAttachmentFile } from '@/lib/files/drop/browser-attachment-files'
 import { runtimeTargetEnvironmentId } from '@/runtime/rpc/targets/runtime-client-target'
 
 export function getLocalImageCacheKey(

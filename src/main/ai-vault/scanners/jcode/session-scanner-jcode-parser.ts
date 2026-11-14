@@ -1,5 +1,5 @@
-import { waitForAiVaultScan } from '../../ai-vault-scan-cancellation'
-import { wslGatedReadFile } from '../../../native-chat/wsl-transcript-fs-access'
+import { waitForAiVaultScan } from '../../scan-lifecycle/ai-vault-scan-cancellation'
+import { wslGatedReadFile } from '../../../native-chat/transcript-filesystem/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { FileWithMtime } from '../../session-scanner-types'
@@ -9,12 +9,15 @@ import {
   finalizeSession,
   sessionIdFromFileName,
   updateTimeline
-} from '../../session-scanner-accumulator'
-import { addSessionContent } from '../../session-scanner-messages'
-import { arrayValue, extractString } from '../../session-scanner-values'
-import { asRecord } from '../../session-scanner-record-value'
-import { extractContentText, normalizeTitleText } from '../../session-scanner-text-normalization'
-import { numberValue } from '../../session-scanner-token-values'
+} from '../../parsing/session-scanner-accumulator'
+import { addSessionContent } from '../../parsing/session-scanner-messages'
+import { arrayValue, asRecord } from '../../parsing/session-record-fields'
+import { extractString } from '../../../../shared/trimmed-string'
+import {
+  extractContentText,
+  normalizeTitleText
+} from '../../parsing/session-scanner-text-normalization'
+import { numberValue } from '../../parsing/session-scanner-token-values'
 
 type ParserSessionOptions = {
   executionHostId?: ExecutionHostId

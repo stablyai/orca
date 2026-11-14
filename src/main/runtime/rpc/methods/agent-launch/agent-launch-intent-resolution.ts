@@ -8,7 +8,7 @@ import type {
 } from '../../../../../shared/agent-launch/contracts/agent-launch-intent'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import { assertTerminalLaunchAdmissible } from '../../../../agent-launch/agent-launch-surface-factories'
-import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch-params'
+import type { AgentLaunchParams } from '../../../../../shared/rpc-contract/agent-launch/agent-launch-params'
 import { resolveAgentLaunchModeOnHost } from '../../../../agent-launch/agent-launch-mode'
 
 import type { EarlyAgentLaunchTab } from './agent-launch-tab-publication'

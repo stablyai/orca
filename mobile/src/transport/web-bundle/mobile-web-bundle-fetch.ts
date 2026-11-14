@@ -1,10 +1,11 @@
 import { CryptoDigestAlgorithm, digest } from 'expo-crypto'
 import { PrioritySemaphore } from '../../../../src/shared/priority-semaphore'
 import { mobileWebBundleManifestRead } from './mobile-web-bundle-operations'
-import type {
-  MobileWebBundleAssetRead,
-  MobileWebBundleManifestRead,
-  MobileWebBundleManifestReply
+import {
+  shellDownloadedAssets,
+  type MobileWebBundleAssetRead,
+  type MobileWebBundleManifestRead,
+  type MobileWebBundleManifestReply
 } from './mobile-web-bundle-reply-schemas'
 import type { RpcClient } from '../rpc/rpc-client-contract'
 import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
@@ -53,7 +54,7 @@ export type MobileWebBundleFetchProgress = {
 export type MobileWebBundleFetchResult = {
   readonly manifest: MobileWebBundleManifestRead
   readonly assets: ReadonlyMap<string, Uint8Array>
-  // stageGeneration must copy every reused asset or fail rather than stage an incomplete tree.
+  // stageGeneration must copy every reused asset or fail rather than stage an incomplete tree (skipped catalogs aside).
   readonly reused: readonly string[]
   readonly totalBytes: number
   readonly elapsedMs: number
@@ -93,10 +94,12 @@ export async function fetchMobileWebBundle(args: {
   const manifest = opened.manifest
   const reader = mobileWebBundleWindowReader(args.client, opened)
   const connection = connectionReadsOf(args.client)
+  // Before reuse: a skipped catalog an older generation lists may not be on disk there either.
+  const wanted = shellDownloadedAssets(manifest)
   const candidates = new Set(
-    args.reusable === undefined ? [] : manifest.assets.filter((entry) => args.reusable?.has(entry))
+    args.reusable === undefined ? [] : wanted.filter((entry) => args.reusable?.has(entry))
   )
-  const fetched = manifest.assets.filter((entry) => !candidates.has(entry))
+  const fetched = wanted.filter((entry) => !candidates.has(entry))
   const assets = new Map<string, Uint8Array>()
   const reused: string[] = []
   let receivedBytes = 0

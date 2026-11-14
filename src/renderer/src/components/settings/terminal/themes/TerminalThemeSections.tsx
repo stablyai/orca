@@ -1,41 +1,42 @@
 import { usePluginTerminalThemes } from '@/store/plugins/appearance/plugin-themes'
-import { withTerminalPluginPalettes } from '@/lib/terminal-plugin-palettes'
-import { useState, type ReactNode } from 'react'
+import { withTerminalPluginPalettes } from '@/lib/terminal/themes/terminal-plugin-palettes'
+import { useState } from 'react'
+import type { ReactNode } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
-import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { parseCustomTerminalThemeSelection } from '../../../../../../shared/terminal-themes/terminal-custom-themes'
 import {
   terminalCustomThemeRemoval,
-  type TerminalCustomThemeRemoval,
   DEFAULT_TERMINAL_THEME_DARK,
   DEFAULT_TERMINAL_THEME_LIGHT
 } from '../../../../../../shared/terminal-themes/terminal-theme-selection'
+import type { TerminalCustomThemeRemoval } from '../../../../../../shared/terminal-themes/terminal-theme-selection'
 import {
   hasTerminalColorOverrides,
-  TERMINAL_COLOR_OVERRIDES_SETTING,
-  type TerminalThemeSlot
+  TERMINAL_COLOR_OVERRIDES_SETTING
 } from '../../../../../../shared/terminal-themes/terminal-color-overrides'
+import type { TerminalThemeSlot } from '../../../../../../shared/terminal-themes/terminal-color-overrides'
 import {
   ColorField,
   SettingsSegmentedControl,
-  SettingsSwitchRow,
-  SettingsSubsectionHeader
+  SettingsSwitchRow
 } from '../../form-controls/SettingsFormControls'
 import { ThemePicker } from './TerminalThemePicker'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
+import { SettingsGroupSubsection } from '../../section-layout/SettingsGroup'
+import { TERMINAL_THEME_MODE_SETTING_ID } from './terminal-theme-search'
 import { TerminalSettingsPreview } from '../appearance/TerminalSettingsPreview'
 import { WarpThemeImportButton } from './WarpThemeImportButton'
 import { YamlThemeImportButton } from './YamlThemeImportButton'
-import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
-
 import {
   getAvailableTerminalThemeOptions,
-  resolveEffectiveTerminalAppearance,
-  type TerminalThemeOption
-} from '@/lib/terminal-theme'
+  resolveEffectiveTerminalAppearance
+} from '@/lib/terminal/appearance/terminal-theme'
+import type { TerminalThemeOption } from '@/lib/terminal/appearance/terminal-theme'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
+import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
+import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
 
 let lastEditedTerminalThemeTarget: TerminalThemeSlot | null = null
 
@@ -177,165 +178,156 @@ export function TerminalThemeCatalogSection({
       )
 
   return (
-    <section className="space-y-5">
-      <SettingsSubsectionHeader
-        className="items-center"
-        title={t('auto.components.settings.TerminalThemeSections.a39d64fe4a', 'Terminal themes')}
-        action={
-          showThemeImport ? (
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <WarpThemeImportButton warpThemes={warpThemes} />
-              <YamlThemeImportButton warpThemes={warpThemes} />
-            </div>
-          ) : null
-        }
-      />
-
-      <div className="ml-4 grid gap-4">
-        <div className={advancedContent ? 'border-b border-border/40' : undefined}>
-          <div className="space-y-3">
-            <SearchableSetting
-              title={t('auto.components.settings.TerminalThemeSections.2318e07c68', 'Theme mode')}
-              keywords={['terminal', 'theme', 'dark', 'light']}
-              forceVisible
-            >
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground">
-                  {t('auto.components.settings.TerminalThemeSections.2318e07c68', 'Theme mode')}
-                </p>
-                <SettingsSegmentedControl
-                  value={target}
-                  onChange={setTarget}
-                  ariaLabel={t(
-                    'auto.components.settings.TerminalThemeSections.target_aria',
-                    'Terminal theme mode'
-                  )}
-                  equalWidth
-                  options={[
-                    {
-                      value: 'dark',
-                      label: t('auto.components.settings.TerminalThemeSections.target_dark', 'Dark')
-                    },
-                    {
-                      value: 'light',
-                      label: t(
-                        'auto.components.settings.TerminalThemeSections.target_light',
-                        'Light'
-                      )
-                    }
-                  ]}
-                />
-              </div>
-            </SearchableSetting>
-
-            {isLightTarget ? (
-              <SearchableSetting
-                title={t(
-                  'auto.components.settings.TerminalThemeSections.match_dark_mode',
-                  'Match dark mode'
-                )}
-                keywords={['terminal', 'light mode', 'theme', 'match dark']}
-                forceVisible
-              >
-                <SettingsSwitchRow
-                  label={t(
-                    'auto.components.settings.TerminalThemeSections.match_dark_mode',
-                    'Match dark mode'
-                  )}
-                  description={t(
-                    'auto.components.settings.TerminalThemeSections.match_dark_mode_description',
-                    'Share the dark terminal theme and divider color in light mode.'
-                  )}
-                  checked={matchDarkMode}
-                  onChange={() =>
-                    // The legacy setting stores the inverse; the UI exposes the matching concept.
-                    updateSettings({
-                      terminalUseSeparateLightTheme: !settings.terminalUseSeparateLightTheme
-                    })
-                  }
-                />
-              </SearchableSetting>
-            ) : null}
+    <SettingsGroupSubsection
+      title={t('auto.components.settings.TerminalThemeSections.a39d64fe4a', 'Terminal themes')}
+      action={
+        showThemeImport ? (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <WarpThemeImportButton warpThemes={warpThemes} />
+            <YamlThemeImportButton warpThemes={warpThemes} />
           </div>
-
-          <div
-            className={cn(
-              'grid overflow-hidden transition-[grid-template-rows,padding-top] duration-200 ease-out',
-              showCustomControls ? 'grid-rows-[1fr] pt-6' : 'grid-rows-[0fr] pt-0'
+        ) : null
+      }
+    >
+      <SearchableSetting
+        id={TERMINAL_THEME_MODE_SETTING_ID}
+        title={t('auto.components.settings.TerminalThemeSections.2318e07c68', 'Theme mode')}
+        keywords={['terminal', 'theme', 'dark', 'light']}
+        forceVisible
+      >
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-muted-foreground">
+            {t('auto.components.settings.TerminalThemeSections.2318e07c68', 'Theme mode')}
+          </p>
+          <SettingsSegmentedControl
+            value={target}
+            onChange={setTarget}
+            ariaLabel={t(
+              'auto.components.settings.TerminalThemeSections.target_aria',
+              'Terminal theme mode'
             )}
-            aria-hidden={!showCustomControls}
-            inert={!showCustomControls}
-          >
-            <div
-              className={cn(
-                'min-h-0 space-y-6 transition-[opacity,transform] duration-150 ease-out',
-                showCustomControls
-                  ? 'translate-y-0 opacity-100'
-                  : 'pointer-events-none -translate-y-1 opacity-0'
-              )}
-            >
-              <SearchableSetting
-                title={pickerTitle}
-                description={pickerDescription}
-                keywords={['terminal', 'theme', 'dark', 'light', 'preview']}
-                forceVisible
-              >
-                <ThemePicker
-                  label={pickerTitle}
-                  description={pickerDescription}
-                  selectedTheme={selectedTheme}
-                  themeOptions={themeOptions}
-                  onSelectTheme={(theme) => {
-                    rememberTerminalThemeTarget(target)
-                    // A selected theme must replace its slot's overrides or they mask the picker.
-                    updateSettings(
-                      withTerminalPluginPalettes(
-                        settings,
-                        {
-                          [isLightTarget ? 'terminalThemeLight' : 'terminalThemeDark']: theme,
-                          ...(hasTerminalColorOverrides(settings, target)
-                            ? { [TERMINAL_COLOR_OVERRIDES_SETTING[target]]: undefined }
-                            : {})
-                        },
-                        pluginTerminalThemes
-                      )
-                    )
-                  }}
-                  onDeleteImportedTheme={deleteImportedTheme}
-                  importedHighlightSignal={showCustomControls ? importedHighlightSignal : undefined}
-                />
-              </SearchableSetting>
-
-              <SearchableSetting
-                title={dividerTitle}
-                description={dividerDescription}
-                keywords={['terminal', 'divider', 'dark', 'light', 'color']}
-                forceVisible
-              >
-                <ColorField
-                  label={dividerTitle}
-                  description={dividerDescription}
-                  value={
-                    isLightTarget
-                      ? settings.terminalDividerColorLight
-                      : settings.terminalDividerColorDark
-                  }
-                  fallback={isLightTarget ? '#d4d4d8' : '#3f3f46'}
-                  onChange={(value) =>
-                    updateSettings(
-                      isLightTarget
-                        ? { terminalDividerColorLight: value }
-                        : { terminalDividerColorDark: value }
-                    )
-                  }
-                />
-              </SearchableSetting>
-            </div>
-          </div>
+            equalWidth
+            options={[
+              {
+                value: 'dark',
+                label: t('auto.components.settings.TerminalThemeSections.target_dark', 'Dark')
+              },
+              {
+                value: 'light',
+                label: t('auto.components.settings.TerminalThemeSections.target_light', 'Light')
+              }
+            ]}
+          />
         </div>
+      </SearchableSetting>
 
-        {advancedContent ? <div className="-mt-4">{advancedContent}</div> : null}
+      {isLightTarget ? (
+        <SearchableSetting
+          title={t(
+            'auto.components.settings.TerminalThemeSections.match_dark_mode',
+            'Match dark mode'
+          )}
+          keywords={['terminal', 'light mode', 'theme', 'match dark']}
+          forceVisible
+        >
+          <SettingsSwitchRow
+            label={t(
+              'auto.components.settings.TerminalThemeSections.match_dark_mode',
+              'Match dark mode'
+            )}
+            description={t(
+              'auto.components.settings.TerminalThemeSections.match_dark_mode_description',
+              'Share the dark terminal theme and divider color in light mode.'
+            )}
+            checked={matchDarkMode}
+            onChange={() =>
+              // The legacy setting stores the inverse; the UI exposes the matching concept.
+              updateSettings({
+                terminalUseSeparateLightTheme: !settings.terminalUseSeparateLightTheme
+              })
+            }
+          />
+        </SearchableSetting>
+      ) : null}
 
+      <div
+        className={cn(
+          'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
+          showCustomControls ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+        )}
+        aria-hidden={!showCustomControls}
+        inert={!showCustomControls}
+      >
+        <div
+          className={cn(
+            'min-h-0 transition-[opacity,transform] duration-150 ease-out',
+            showCustomControls
+              ? 'translate-y-0 opacity-100'
+              : 'pointer-events-none -translate-y-1 opacity-0'
+          )}
+        >
+          <SearchableSetting
+            title={pickerTitle}
+            description={pickerDescription}
+            keywords={['terminal', 'theme', 'dark', 'light', 'preview']}
+            forceVisible
+          >
+            <ThemePicker
+              label={pickerTitle}
+              description={pickerDescription}
+              selectedTheme={selectedTheme}
+              themeOptions={themeOptions}
+              onSelectTheme={(theme) => {
+                rememberTerminalThemeTarget(target)
+                // A selected theme must replace its slot's overrides or they mask the picker.
+                updateSettings(
+                  withTerminalPluginPalettes(
+                    settings,
+                    {
+                      [isLightTarget ? 'terminalThemeLight' : 'terminalThemeDark']: theme,
+                      ...(hasTerminalColorOverrides(settings, target)
+                        ? { [TERMINAL_COLOR_OVERRIDES_SETTING[target]]: undefined }
+                        : {})
+                    },
+                    pluginTerminalThemes
+                  )
+                )
+              }}
+              onDeleteImportedTheme={deleteImportedTheme}
+              importedHighlightSignal={showCustomControls ? importedHighlightSignal : undefined}
+            />
+          </SearchableSetting>
+
+          <SearchableSetting
+            title={dividerTitle}
+            description={dividerDescription}
+            keywords={['terminal', 'divider', 'dark', 'light', 'color']}
+            forceVisible
+          >
+            <ColorField
+              label={dividerTitle}
+              description={dividerDescription}
+              value={
+                isLightTarget
+                  ? settings.terminalDividerColorLight
+                  : settings.terminalDividerColorDark
+              }
+              fallback={isLightTarget ? '#d4d4d8' : '#3f3f46'}
+              onChange={(value) =>
+                updateSettings(
+                  isLightTarget
+                    ? { terminalDividerColorLight: value }
+                    : { terminalDividerColorDark: value }
+                )
+              }
+            />
+          </SearchableSetting>
+        </div>
+      </div>
+
+      {advancedContent}
+
+      <div className="border-t border-border py-4">
         <TerminalSettingsPreview
           title={
             isLightTarget
@@ -359,6 +351,6 @@ export function TerminalThemeCatalogSection({
           modeOverride={target}
         />
       </div>
-    </section>
+    </SettingsGroupSubsection>
   )
 }

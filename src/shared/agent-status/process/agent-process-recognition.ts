@@ -7,6 +7,7 @@ import { EXACT_NODE_ENTRYPOINT_IDENTITIES } from './agent-node-entrypoint-identi
 import { NODE_PACKAGE_SCRIPT_ENTRYPOINTS } from './agent-node-package-entrypoints'
 import type { AgentType } from '../contracts/agent-status-types'
 import type { TerminalAgent } from '../identity/terminal-agent'
+import type { TuiAgent } from '../../agent-launch/catalog/tui-agent'
 import { filterHeadlessOneShotAgentCommand } from './agent-headless-command'
 import { getFirstCommandToken } from '../../command-token-scanner'
 import {
@@ -87,6 +88,10 @@ function agentForNormalizedProcess(normalized: string): TerminalAgent | undefine
   }
   if (normalized.startsWith('grok-')) {
     return PROCESS_TO_AGENT.get('grok')
+  }
+  // Jcode's Linux release wraps `jcode` around jcode-linux-<arch>.bin; raw release binaries keep the platform name.
+  if (/^jcode-(?:linux|macos|freebsd|windows)-(?:x86_64|aarch64)(?:\.bin)?$/.test(normalized)) {
+    return PROCESS_TO_AGENT.get('jcode')
   }
   // Muse execs a versioned muse-bin binary; this prefix also covers truncated comm without matching unrelated muse-* tools.
   if (normalized.startsWith('muse-bin-')) {
@@ -188,7 +193,8 @@ export function isExpectedAgentProcess(
       /^(?:qoderclicn|qodercn)(?:-\d.*)?$/.test(normalizedProcess)) ||
     (['qoder', 'qodercli'].includes(normalizedExpected) &&
       /^(?:qoder|qodercli(?:-\d.*)?)$/.test(normalizedProcess)) ||
-    (normalizedExpected === 'muse' && normalizedProcess.startsWith('muse-bin-'))
+    (normalizedExpected === 'muse' && normalizedProcess.startsWith('muse-bin-')) ||
+    (normalizedExpected === 'jcode' && agentForNormalizedProcess(normalizedProcess) === 'jcode')
   )
 }
 
@@ -199,6 +205,17 @@ export const GENERIC_PROCESS_NAME_AGENTS: ReadonlySet<TerminalAgent> = new Set([
   'continue',
   'mistral-vibe'
 ])
+
+/** Before writing to `agent`: its expectedProcess, or a name it is recognized by (dsh-TUI 0.19 runs as `dsh-tui`, not `dsh`); generic names such as Agent Teams' `orca` launcher prove nothing. */
+export function isAgentForegroundProcess(
+  processName: string | null | undefined,
+  agent: TuiAgent
+): boolean {
+  return (
+    isExpectedAgentProcess(processName, TUI_AGENT_CONFIG[agent].expectedProcess) ||
+    (!GENERIC_PROCESS_NAME_AGENTS.has(agent) && recognizeAgentProcess(processName)?.agent === agent)
+  )
+}
 
 export function recognizeAgentProcess(
   processName: string | null | undefined

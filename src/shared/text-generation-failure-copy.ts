@@ -40,6 +40,7 @@ export const TEXT_GENERATION_FAILURE_COPY = {
   commandTemplateEmptyPullRequest: 'Command template is empty for pull request details.',
   commandTemplateEmptyBranchName: 'Command template is empty for branch names.',
   commandTemplateEmptyChatName: 'Command template is empty for chat names.',
+  commandTemplateEmptyDictationCleanup: 'Command template is empty for dictation cleanup.',
   sourceControlAgentUnsupported:
     'Choose a supported Source Control AI agent for this action in Settings -> Git -> Source Control AI. Supported agents: {{agents}}, or Custom command.',
   chatNameAgentUnsupported:
@@ -47,6 +48,8 @@ export const TEXT_GENERATION_FAILURE_COPY = {
   sourceControlCustomCommandEmpty:
     'Custom command is empty. Add one in Settings -> Git -> Source Control AI.',
   chatNameCustomCommandEmpty: 'Custom command is empty. Add one in Settings -> Chat -> Chat names.',
+  dictationCleanupAgentUnsupported:
+    'Choose a supported agent for AI cleanup in Settings -> Voice -> Cleanup. Supported agents: {{agents}}, or Custom command.',
   agentCannotGenerateCommitMessage:
     'Agent "{{agent}}" does not support Source Control AI commit messages. Supported agents: {{agents}}, or Custom command.',
   agentCannotGeneratePullRequest:
@@ -55,6 +58,8 @@ export const TEXT_GENERATION_FAILURE_COPY = {
     'Agent "{{agent}}" does not support Source Control AI branch names. Supported agents: {{agents}}, or Custom command.',
   agentCannotGenerateChatName:
     'Agent "{{agent}}" does not support chat names. Supported agents: {{agents}}, or Custom command.',
+  agentCannotGenerateDictationCleanup:
+    'Agent "{{agent}}" does not support dictation cleanup. Supported agents: {{agents}}, or Custom command.',
   noModelForAgent: 'No model is available for {{label}}.',
   planCustomCommandEmpty:
     'Custom command is empty. Add one in Settings → Git → AI Commit Messages.',

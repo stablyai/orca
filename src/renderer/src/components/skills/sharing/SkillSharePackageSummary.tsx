@@ -1,6 +1,6 @@
 import { AlertTriangle } from 'lucide-react'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { useTranslate } from '@/i18n/use-translate'
 import type { SkillSharePreview } from '../../../../../shared/skill-sharing-contract'
 import { fileCountLabel, skillCountLabel } from '../presentation/skill-display-labels'

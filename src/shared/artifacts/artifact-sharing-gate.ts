@@ -23,7 +23,7 @@ export class ArtifactSharingDisabledError extends Error {
   }
 }
 
-/** Absent or non-`true` denies: an unmigrated profile must not inherit the capability. */
+/** Only explicit `true` grants: new profiles store it from defaults; absent or `false` denies. */
 export function isArtifactSharingEnabled(
   settings: Pick<GlobalSettings, 'artifactSharingEnabled'> | null | undefined
 ): boolean {

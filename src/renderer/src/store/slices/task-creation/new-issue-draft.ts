@@ -1,6 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../types'
-import type { GitHubAssignableUser } from '../../../../../shared/github/pull-request-types'
+import type { GitHubAssignableUser } from '../../../../../shared/github/pull-requests/pull-request-types'
 
 /** Keep issue draft in session memory across accidental dismissal; clear on successful submit/restart, never persist to disk. */
 export type NewIssueDraft = {

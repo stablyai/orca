@@ -1,5 +1,5 @@
 import { openMobileAgentHistoryChat } from './open-mobile-agent-history-chat'
-import { mobileStructuredSessionOpenMessage } from '../session/mobile-structured-session-open-message'
+import { mobileStructuredSessionOpenMessage } from '../session/native-chat/agent-session/mobile-structured-session-open-message'
 import { prepareMobileHistoryResumeTarget } from './mobile-history-resume-target-preparation'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { View } from 'react-native'
@@ -23,7 +23,7 @@ import {
   resumeAiVaultSessionInTerminal
 } from './ai-vault-resume-launch'
 import { prepareMobileAiVaultSessionResume } from './ai-vault-resume-preparation'
-import { triggerError, triggerSuccess } from '../platform/haptics'
+import { triggerError, triggerSuccess } from '../platform/haptics/haptics'
 import type * as AiVault from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
 import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'

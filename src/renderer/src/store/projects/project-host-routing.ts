@@ -22,7 +22,7 @@ import {
   sshHostWithoutServerMessage,
   type ProjectHostSetupTarget
 } from '../../../../shared/project-host-setup-target'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import type { AppState } from '../types'
 import { findSoleHostCopy } from '../../../../shared/worktree/host-qualified-identity'
 

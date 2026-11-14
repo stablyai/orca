@@ -13,7 +13,7 @@ import { OrcaRuntimeWithMainLayoutRenames } from './main-layout-renames'
 import { liveTerminalsOfTab } from '../session-lifecycle/close/closed-tab-terminal'
 import type { WorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-model'
 import type { CommandOf } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import { isPaneColumnSplitDropNoOp } from '../../../shared/workspace-layout/pane-column-split-drop-no-op'
+import { isPaneColumnSplitDropNoOp } from '../../../shared/workspace-layout/tab-groups/pane-column-split-drop-no-op'
 import { selectMobileSessionTab } from './mobile-session-tab-selection'
 
 export abstract class OrcaRuntimeWithMainLayoutTabMoves extends OrcaRuntimeWithMainLayoutRenames {

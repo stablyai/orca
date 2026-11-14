@@ -3,8 +3,8 @@ import { OfflineAudioChunker } from './stt-offline-audio-chunker'
 
 // Silero's own defaults: a frame at or above this is speech; inside speech, one below the second is silence.
 const SPEECH_PROBABILITY = 0.5
-const SILENCE_PROBABILITY = 0.35
-// A pause this long commits the phrase before it. Shorter cuts split phrases, and each piece gets its own capital and full stop.
+export const SILENCE_PROBABILITY = 0.35
+// A pause this long ends the phrase before it, which then decodes for live text; every cut costs a decode.
 export const VAD_PAUSE_SECONDS = 0.6
 // Silence kept ahead of detected speech so a soft first syllable isn't clipped.
 const SPEECH_PREROLL_SECONDS = 0.4
@@ -161,4 +161,29 @@ function concat(a: Float32Array, b: Float32Array): Float32Array {
   out.set(a)
   out.set(b, a.length)
   return out
+}
+
+// Optional: without it dictation still works, with text only at the decode bound and at stop.
+export async function loadSileroVad(
+  transcribe: typeof TranscribeCpp,
+  path: string | undefined,
+  sampleRate: number
+): Promise<TranscribeCpp.TranscribeModel | null> {
+  if (!path) {
+    return null
+  }
+  try {
+    // Tiny and per-frame; the CPU keeps it off a GPU that may fail over.
+    const model = await transcribe.TranscribeModel.load(path, { backend: 'cpu' })
+    if (model.vadInfo.sampleRate === sampleRate) {
+      return model
+    }
+    console.warn(
+      `[speech] Silero VAD needs ${model.vadInfo.sampleRate} Hz; this model takes ${sampleRate} Hz`
+    )
+    model.dispose()
+  } catch (error) {
+    console.warn('[speech] Silero VAD unavailable; text arrives at stop:', error)
+  }
+  return null
 }

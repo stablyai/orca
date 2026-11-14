@@ -1,3 +1,5 @@
+import { sleepingAgentRecordIndex } from '@/store/terminals/sleep/sleeping-agent-record-index'
+import { getFirstTerminalTabOwnerWorktreeId } from '@/store/terminals/ownership/terminal-tab-owner-index'
 import type { useAppStore } from '@/store/index'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { agentTurnEndedUncleanly } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
@@ -15,7 +17,10 @@ import { getProviderSessionClaimKey } from '../../../../../shared/sleeping-recor
 import { isWebTerminalSurfaceTabId } from '../../../../../shared/workspace-layout/terminal-surface-id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { isWorkspaceSleepRecord } from '../../../../../shared/workspace-sleep'
-import { isPaneResumingInPlace, isPaneSpawnDeferred } from '../../pane-spawn-deferral-registry'
+import {
+  isPaneResumingInPlace,
+  isPaneSpawnDeferred
+} from '../../../components/terminal-pane/session-restore/spawn-deferral/pane-spawn-deferral-registry'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
@@ -43,7 +48,9 @@ function getLegacyProviderSessionKeysForTab(
   tabId: string
 ): Set<string> {
   const keys = new Set<string>()
-  for (const record of Object.values(state.sleepingAgentSessionsByPaneKey)) {
+  for (const record of sleepingAgentRecordIndex
+    .entries(state.sleepingAgentSessionsByPaneKey, worktreeId)
+    .map(([, record]) => record)) {
     if (record.worktreeId === worktreeId && getLegacyPaneTabId(record) === tabId) {
       keys.add(getProviderSessionClaimKey(record))
     }
@@ -131,13 +138,11 @@ function findPreservedTabOwner(
   if (hinted) {
     return { tab: hinted, worktreeId: worktreeIdHint }
   }
-  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree)) {
-    const tab = tabs.find((candidate) => candidate.id === tabId)
-    if (tab) {
-      return { tab, worktreeId }
-    }
-  }
-  return null
+  const worktreeId = getFirstTerminalTabOwnerWorktreeId(state.tabsByWorktree, tabId)
+  const tab = worktreeId
+    ? state.tabsByWorktree[worktreeId]?.find((candidate) => candidate.id === tabId)
+    : undefined
+  return tab && worktreeId ? { tab, worktreeId } : null
 }
 
 /** A workspace sleep's record whose tab is gone: main has no pane to resume it in, so the window reopens it in a fresh tab (#22657). */

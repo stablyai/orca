@@ -1,5 +1,5 @@
 import React from 'react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 type RichMarkdownToolbarButtonProps = {

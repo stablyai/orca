@@ -43,7 +43,6 @@ export type AttachBrowserPageWebviewArgs = {
   onUpdatePageStateRef: MutableRefObject<(tabId: string, updates: BrowserTabPageState) => void>
   setGuestRecoveryGeneration: Dispatch<SetStateAction<number>>
   focusAddressBarNow: () => boolean
-  syncNavigationState: (webview: Electron.WebviewTag) => void
   syncBrowserAnnotationViewportBridge: () => void
   faviconUrlRef: MutableRefObject<string | null>
   addressBarInputRef: RefObject<HTMLInputElement | null>
@@ -77,8 +76,7 @@ export function attachBrowserPageWebview(
     handleInternalFileDropRef,
     dismissAddressBarSuggestionsRef,
     browserTabUrlRef,
-    lastKnownWebviewUrlRef,
-    syncNavigationState
+    lastKnownWebviewUrlRef
   } = args
 
   const viewport = ensureBrowserPageViewport(browserTabId, workspaceId)
@@ -110,7 +108,6 @@ export function attachBrowserPageWebview(
 
   if (!ensuredWebview.created) {
     // pointerEvents already applied inside ensureBrowserPageWebview for the reused-webview path.
-    syncNavigationState(webview)
     // Why: seed from the store URL (getURL() can throw during attach) so URL sync won't force-navigate an already-correct webview.
     lastKnownWebviewUrlRef.current = normalizeBrowserNavigationUrl(browserTabUrlRef.current) ?? null
   }

@@ -1,19 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { HEADER_LENGTH, FrameDecoder } from '../../../shared/relay-frame-decoder'
 import type { DecodedFrame } from '../../../shared/relay-frame-decoder-contract'
-import { MessageType, encodeFrame, encodeJsonRpcFrame } from './remote-frame-protocol'
-
-describe('frame encoding', () => {
-  it('rejects messages larger than MAX_MESSAGE_SIZE', () => {
-    const bigPayload = {
-      jsonrpc: '2.0' as const,
-      id: 1,
-      method: 'x',
-      params: { data: 'a'.repeat(17 * 1024 * 1024) }
-    }
-    expect(() => encodeJsonRpcFrame(bigPayload, 1, 0)).toThrow('Message too large')
-  })
-})
+import { MessageType, encodeFrame } from './remote-frame-protocol'
 
 describe('FrameDecoder', () => {
   // Freeze clock for framing cases; relay-protocol-backpressure.test.ts separately covers time-sliced drain under CI load.

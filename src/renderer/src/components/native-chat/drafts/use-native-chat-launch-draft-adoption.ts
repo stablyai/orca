@@ -6,7 +6,7 @@ import {
   launchDraftResolvedByTranscript,
   nativeChatLaunchDraftTurnBaseline,
   type NativeChatLaunchDraftTurnBaseline
-} from '../../../../../shared/native-chat/transcript/native-chat-launch-draft-resolution'
+} from '../../../../../shared/native-chat/transcript/pending-sends/native-chat-launch-draft-resolution'
 import {
   isNativeChatTranscriptUnsettled,
   type ReadState

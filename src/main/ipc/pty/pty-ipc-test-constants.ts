@@ -1,8 +1,8 @@
-import { it, vi } from 'vitest'
-import type { Mock } from 'vitest'
+import { it, vi, type Mock } from 'vitest'
+
 import { join, posix } from 'node:path'
-import { getBundledLauncherPath } from '../../cli/bundled-cli-launcher-path'
-import { resolveWindowsShellLaunchArgs } from '../../providers/windows-shell-args'
+import { getBundledLauncherPath } from '../../cli/packaged-assets/bundled-cli-launcher-path'
+import { resolveWindowsShellLaunchArgs } from '../../providers/shell-launch/windows/shell-args'
 
 export type PlatformGatedTest = (
   name: string,

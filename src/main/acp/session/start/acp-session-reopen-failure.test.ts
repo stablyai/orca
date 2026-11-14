@@ -14,8 +14,8 @@ it('propagates a temporary load envelope before takeover or a dead-child asserti
       resume: {
         key: 'saved-key',
         sessionId: 'saved-id',
-        mayBeUnsaved: () => false,
-        unannouncedLosses: () => []
+        mayBeUnsaved: async () => false,
+        lossKeys: []
       }
     },
     script: (agent) =>

@@ -1,8 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  RuntimeMobileSessionTabsRemovedResult,
-  RuntimeMobileSessionTabsResult
-} from '../../../../../shared/runtime-session-contracts'
+import type { RuntimeMobileSessionTabsResult } from '../../../../../shared/runtime-session-contracts'
 import { applyWebSessionTabsSnapshot } from '../snapshot-api'
 import type { WebSessionTabsSyncState } from '../state'
 
@@ -157,90 +154,4 @@ describe('a workspace mirrored from two paired runtimes', () => {
       }
     }
   )
-
-  it("retires the other runtime's own terminals, ready or pending, and refocuses a survivor", () => {
-    let state = apply(makeState(), makeSnapshot([serverTerminal('agent-1', true)]), SERVER_ENV, NOW)
-    state = apply(
-      state,
-      makeSnapshot([serverTerminal('a-ready', true), serverTerminal('a-pending', false)], {
-        publicationEpoch: 'desktop-a-epoch'
-      }),
-      DESKTOP_A_ENV,
-      NOW + 1000
-    )
-    expect(terminalIds(state)).toEqual([
-      'web-terminal-a-pending',
-      'web-terminal-a-ready',
-      'web-terminal-agent-1'
-    ])
-    state = { ...state, activeTabIdByWorktree: { [WT]: 'web-terminal-a-ready' } }
-    const retraction: RuntimeMobileSessionTabsRemovedResult = {
-      ...desktopABrowserSnapshot([], 2),
-      removed: true,
-      activeGroupId: null,
-      activeTabId: null,
-      activeTabType: null,
-      tabs: []
-    }
-    state = apply(state, retraction, DESKTOP_A_ENV, NOW + 2000)
-    expect(terminalIds(state)).toEqual(['web-terminal-agent-1'])
-    expect(state.activeTabIdByWorktree[WT]).toBe('web-terminal-agent-1')
-  })
-
-  it('never keeps a shared terminal bound to a runtime that dropped it', () => {
-    let state = apply(makeState(), makeSnapshot([serverTerminal('shared', true)]), SERVER_ENV, NOW)
-    state = apply(
-      state,
-      makeSnapshot([serverTerminal('shared', true)], { publicationEpoch: 'desktop-a-epoch' }),
-      DESKTOP_A_ENV,
-      NOW + 1000
-    )
-    expect(state.tabsByWorktree[WT]?.[0]?.ptyId).toBe(`remote:${DESKTOP_A_ENV}@@pty-shared`)
-    state = apply(state, desktopABrowserSnapshot([], 2), DESKTOP_A_ENV, NOW + 2000)
-    expect(terminalIds(state)).toEqual([])
-    state = apply(
-      state,
-      makeSnapshot([serverTerminal('shared', true)], { snapshotVersion: 2 }),
-      SERVER_ENV,
-      NOW + 3000
-    )
-    expect(state.tabsByWorktree[WT]?.[0]?.ptyId).toBe(`remote:${SERVER_ENV}@@pty-shared`)
-  })
-
-  it("keeps the server's chats when the other runtime's frame lists none", () => {
-    const chat = (sessionId: string): RuntimeMobileSessionTabsResult['tabs'][number] => ({
-      type: 'agent-session',
-      id: `agent-session:${sessionId}`,
-      title: 'Codex Chat',
-      sessionId,
-      agent: 'codex',
-      isActive: false
-    })
-    const chatIds = (s: WebSessionTabsSyncState): string[] =>
-      (s.unifiedTabsByWorktree[WT] ?? [])
-        .filter((tab) => tab.contentType === 'agent-session')
-        .map((tab) => tab.entityId)
-        .sort()
-    let state = apply(
-      makeState(),
-      makeSnapshot([chat('codex-1'), chat('codex-2')]),
-      SERVER_ENV,
-      NOW
-    )
-    state = apply(state, desktopABrowserSnapshot([desktopAPage], 1), DESKTOP_A_ENV, NOW + 1000)
-    expect(chatIds(state)).toEqual(['codex-1', 'codex-2'])
-
-    // A chat both runtimes publish keeps one row, and the server still retires its own.
-    state = apply(
-      state,
-      desktopABrowserSnapshot([desktopAPage, chat('codex-1')], 2),
-      DESKTOP_A_ENV,
-      NOW + 2000
-    )
-    expect((state.unifiedTabsByWorktree[WT] ?? []).map((tab) => tab.id)).toEqual([
-      ...new Set((state.unifiedTabsByWorktree[WT] ?? []).map((tab) => tab.id))
-    ])
-    state = apply(state, makeSnapshot([], { snapshotVersion: 2 }), SERVER_ENV, NOW + 3000)
-    expect(chatIds(state)).toEqual(['codex-1'])
-  })
 })

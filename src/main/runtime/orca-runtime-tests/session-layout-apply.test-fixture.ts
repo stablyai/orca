@@ -1,8 +1,8 @@
 // Apply layout record patches to plain session maps as Store does, including main-owned chat tabs.
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-layout-command-types'
-import { applyCommandToSession } from '../../persistence/terminal-topology/terminal-pane-admission'
-import { resolveHostId } from '../../persistence/loading-store/session-host-partitions'
+import { applyCommandToSession } from '../../persistence/terminal-topology/pane-admission/terminal-pane-admission'
+import { resolveHostId } from '../../persistence/loading-store/workspace-sessions/session-host-partitions'
 
 export function layoutApplyOn(
   get: (hostId: string) => WorkspaceSessionState | null,

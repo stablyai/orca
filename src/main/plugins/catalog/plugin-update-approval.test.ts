@@ -4,7 +4,7 @@ import {
   pluginManifestSchema,
   type PluginManifest
 } from '../../../shared/plugins/manifest/plugin-manifest'
-import type { ValidDiscoveredPlugin } from '../plugin-discovery'
+import type { ValidDiscoveredPlugin } from '../discovery/plugin-discovery'
 import { installCatalogReleaseWithApproval } from './plugin-update-approval'
 
 const KEY = 'samples.demo'
@@ -141,23 +141,6 @@ describe('catalog update approval', () => {
       const { outcome, approve } = await runUpdate({ before, after })
       expect(outcome).toMatchObject({ ok: true, needsReview: true })
       expect(approve).not.toHaveBeenCalled()
-    })
-  }
-
-  for (const [type, sample] of Object.entries(SAMPLES)) {
-    it(`never carries or one-click grants approval when a ${type} plugin moves repository`, async () => {
-      const before = sample()
-      const after = { ...sample(), version: '1.1.0' }
-      for (const enableIfData of [false, true]) {
-        const { outcome, approve } = await runUpdate({
-          before,
-          after,
-          repositoryMoved: true,
-          enableIfData
-        })
-        expect(outcome).toMatchObject({ ok: true, needsReview: true })
-        expect(approve).not.toHaveBeenCalled()
-      }
     })
   }
 

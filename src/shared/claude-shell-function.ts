@@ -12,17 +12,18 @@ if ! typeset -f claude >/dev/null 2>&1 && [[ -n "\${ORCA_CLAUDE_PROFILE_POINTER:
       { [ -z "\${ORCA_CLAUDE_USER_CONFIG_DIR:-}" ] || [ "\${CLAUDE_CONFIG_DIR%/}" != "\${ORCA_CLAUDE_USER_CONFIG_DIR%/}" ]; }; then
       command claude "$@"; return
     fi
+    # Why exec: bash can keep the subshell leading Claude's foreground group; zsh exec runs functions, hence unset -f.
     # Why: Orca's value replaced the user's own at spawn, so System default restores theirs.
     if [ -z "$__orca_claude_home" ] && [ -n "\${CLAUDE_CONFIG_DIR:-}" ] && [ -n "\${ORCA_CLAUDE_USER_CONFIG_DIR:-}" ]; then
-      ( unset ORCA_CLAUDE_INJECTED_CONFIG_DIR; export CLAUDE_CONFIG_DIR="$ORCA_CLAUDE_USER_CONFIG_DIR"; command claude "$@" ); return
+      ( unset ORCA_CLAUDE_INJECTED_CONFIG_DIR; export CLAUDE_CONFIG_DIR="$ORCA_CLAUDE_USER_CONFIG_DIR"; unset -f claude; exec claude "$@" ); return
     fi
     if [ -z "$__orca_claude_home" ]; then
-      ( unset CLAUDE_CONFIG_DIR ORCA_CLAUDE_INJECTED_CONFIG_DIR; command claude "$@" ); return
+      ( unset CLAUDE_CONFIG_DIR ORCA_CLAUDE_INJECTED_CONFIG_DIR; unset -f claude; exec claude "$@" ); return
     fi
     case "$__orca_claude_home" in /*|[A-Za-z]:*) ;; *) return 1 ;; esac
     # Why -m 700: matches the folder Orca's setup creates; a credentials folder stays private.
     [ -d "$__orca_claude_home" ] || mkdir -p -m 700 -- "$__orca_claude_home" 2>/dev/null
-    ( export CLAUDE_CONFIG_DIR="$__orca_claude_home" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$__orca_claude_home"; command claude "$@" )
+    ( export CLAUDE_CONFIG_DIR="$__orca_claude_home" ORCA_CLAUDE_INJECTED_CONFIG_DIR="$__orca_claude_home"; unset -f claude; exec claude "$@" )
   }
 fi
 unset __orca_claude_binary

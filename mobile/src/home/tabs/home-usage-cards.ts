@@ -3,11 +3,10 @@ import {
   getInactiveProviderUsage,
   hasActiveProviderUsage,
   hasRenderableUsage,
-  type AccountsSnapshot,
-  type ProviderKey,
-  type ProviderRateLimits
-} from '../../components/account-usage-state'
-import { getActiveCodexAccountIdForRateLimitTarget } from '../../components/codex-reset-credit'
+  type ProviderKey
+} from '../../accounts/usage/usage-selectors'
+import type { AccountsSnapshot, ProviderRateLimits } from '../../accounts/accounts-snapshot'
+import { getActiveCodexAccountIdForRateLimitTarget } from '../../accounts/usage/codex-reset-credit'
 
 export type HomeUsageCard = {
   /** The managed account's id, or null for the agent's own login (System default). */

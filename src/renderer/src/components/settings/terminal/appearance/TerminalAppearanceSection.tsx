@@ -1,5 +1,5 @@
 import { Cat } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { Fragment, useState, type ReactNode } from 'react'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import type { TerminalThemeSlot } from '../../../../../../shared/terminal-themes/terminal-color-overrides'
 import {
@@ -25,7 +25,8 @@ import { getTerminalConfigImportSearchEntries } from '../configuration/terminal-
 import { getTerminalPaneAppearanceSearchEntries } from './terminal-pane-appearance-search'
 import { getTerminalWindowSearchEntries } from './terminal-window-search'
 import { Button } from '../../../ui/button'
-import { SettingsRow, SettingsSubsectionHeader } from '../../form-controls/SettingsFormControls'
+import { SettingsRow } from '../../form-controls/SettingsFormControls'
+import { SettingsGroupSubsection } from '../../section-layout/SettingsGroup'
 import { FontAutocomplete } from '../../appearance/fonts/FontAutocomplete'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { TerminalFontSizeSetting } from './TerminalFontSizeSetting'
@@ -35,12 +36,12 @@ import { ClaudeCodeThemeSyncSetting } from '../themes/ClaudeCodeThemeSyncSetting
 import { TerminalWindowSection } from './TerminalWindowSection'
 import { TerminalCursorAppearanceSection } from './TerminalCursorAppearanceSection'
 import { TerminalPaneAppearanceSection } from './TerminalPaneAppearanceSection'
-import { AppearanceAdvancedDisclosure } from '../../appearance/AppearanceAdvancedDisclosure'
+import { SettingsGroupDisclosure } from '../../section-layout/SettingsGroupDisclosure'
 import { TerminalConfigImportModal } from '../configuration/TerminalConfigImportModal'
 import type { UseTerminalConfigImportReturn } from '../configuration/useTerminalConfigImport'
 import { WarpThemeImportModal } from '../themes/WarpThemeImportModal'
 import type { UseWarpThemeImportReturn } from '../themes/useWarpThemeImport'
-import { isWebClientLocation } from '@/lib/web-client-location'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
 import ghosttyIcon from '../../../../../../../resources/ghostty.svg'
 import { useTranslate } from '@/i18n/use-translate'
 
@@ -168,112 +169,94 @@ export function TerminalAppearanceSection({
   const showAdvancedDisclosure = !isSearching || cursorMatches || paneMatches || windowMatches
   const renderPreviewAdvancedContent = (colorOverrideSlot: TerminalThemeSlot): ReactNode =>
     showAdvancedDisclosure ? (
-      <AppearanceAdvancedDisclosure
-        showTopBorder={false}
-        className="mt-0 pt-2"
-        contentClassName="ml-4 pt-4"
-      >
-        {advancedGroups(colorOverrideSlot).map((group, index) => (
-          <div
-            key={group.key}
-            className={index > 0 ? 'mt-2 border-t border-border/60 pt-4' : undefined}
-          >
-            {group.node}
-          </div>
+      <SettingsGroupDisclosure>
+        {advancedGroups(colorOverrideSlot).map((group) => (
+          <Fragment key={group.key}>{group.node}</Fragment>
         ))}
-      </AppearanceAdvancedDisclosure>
+      </SettingsGroupDisclosure>
     ) : null
 
   return (
-    <div className="space-y-5">
+    <>
       {/* Preview grids stack full-width because this expanded column stays narrower than xl. */}
       {showPrimaryTypography ? (
-        <section className="space-y-3 pt-2">
-          <SettingsSubsectionHeader
-            className="items-center"
-            title={t(
-              'auto.components.settings.TerminalAppearanceSection.5ae74b7796',
-              'Terminal typography'
-            )}
-            action={
-              showConfigImports ? (
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5"
-                    onClick={() => void terminalConfigImport.handleClick('ghostty')}
-                  >
-                    <img src={ghosttyIcon} alt="" aria-hidden="true" className="size-4" />
-                    {t(
-                      'auto.components.settings.TerminalAppearanceSection.855a76343a',
-                      'Import from Ghostty'
-                    )}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5"
-                    onClick={() => void terminalConfigImport.handleClick('kitty')}
-                  >
-                    <Cat className="size-4" aria-hidden="true" />
-                    {t(
-                      'auto.components.settings.TerminalAppearanceSection.kitty_import',
-                      'Import from Kitty'
-                    )}
-                  </Button>
-                </div>
-              ) : null
-            }
+        <SettingsGroupSubsection
+          title={t(
+            'auto.components.settings.TerminalAppearanceSection.5ae74b7796',
+            'Terminal typography'
+          )}
+          action={
+            showConfigImports ? (
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => void terminalConfigImport.handleClick('ghostty')}
+                >
+                  <img src={ghosttyIcon} alt="" aria-hidden="true" className="size-4" />
+                  {t(
+                    'auto.components.settings.TerminalAppearanceSection.855a76343a',
+                    'Import from Ghostty'
+                  )}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => void terminalConfigImport.handleClick('kitty')}
+                >
+                  <Cat className="size-4" aria-hidden="true" />
+                  {t(
+                    'auto.components.settings.TerminalAppearanceSection.kitty_import',
+                    'Import from Kitty'
+                  )}
+                </Button>
+              </div>
+            ) : null
+          }
+        >
+          <TerminalFontSizeSetting
+            settings={settings}
+            updateSettings={updateSettings}
+            forceVisible={forceVisiblePrimary}
           />
 
-          <div className="ml-4 divide-y divide-border/40 border-y border-border/40">
-            <TerminalFontSizeSetting
-              settings={settings}
-              updateSettings={updateSettings}
-              forceVisible={forceVisiblePrimary}
-            />
-
-            <SearchableSetting
-              title={t(
+          <SearchableSetting
+            title={t(
+              'auto.components.settings.TerminalAppearanceSection.a157b95a08',
+              'Font family'
+            )}
+            description={terminalTypographyEntries[1]?.description}
+            keywords={terminalTypographyEntries[1]?.keywords ?? ['terminal', 'typography', 'font']}
+            forceVisible={forceVisiblePrimary}
+          >
+            <SettingsRow
+              label={t(
                 'auto.components.settings.TerminalAppearanceSection.a157b95a08',
                 'Font family'
               )}
-              description={terminalTypographyEntries[1]?.description}
-              keywords={
-                terminalTypographyEntries[1]?.keywords ?? ['terminal', 'typography', 'font']
+              control={
+                <FontAutocomplete
+                  value={settings.terminalFontFamily}
+                  suggestions={terminalFontSuggestions}
+                  onRequestSuggestions={onRequestFontSuggestions}
+                  onChange={(value) => updateSettings({ terminalFontFamily: value })}
+                  onPreviewFontFamily={setPreviewFontFamily}
+                />
               }
-              forceVisible={forceVisiblePrimary}
-            >
-              <SettingsRow
-                label={t(
-                  'auto.components.settings.TerminalAppearanceSection.a157b95a08',
-                  'Font family'
-                )}
-                control={
-                  <FontAutocomplete
-                    value={settings.terminalFontFamily}
-                    suggestions={terminalFontSuggestions}
-                    onRequestSuggestions={onRequestFontSuggestions}
-                    onChange={(value) => updateSettings({ terminalFontFamily: value })}
-                    onPreviewFontFamily={setPreviewFontFamily}
-                  />
-                }
-              />
-            </SearchableSetting>
-          </div>
+            />
+          </SearchableSetting>
 
           {showTypographyAdvancedDisclosure ? (
-            <div className="ml-4">
-              <AppearanceAdvancedDisclosure showTopBorder={false} contentClassName="ml-4">
-                <TerminalAdvancedTypographyControls
-                  settings={settings}
-                  updateSettings={updateSettings}
-                />
-              </AppearanceAdvancedDisclosure>
-            </div>
+            <SettingsGroupDisclosure>
+              <TerminalAdvancedTypographyControls
+                settings={settings}
+                updateSettings={updateSettings}
+              />
+            </SettingsGroupDisclosure>
           ) : null}
-        </section>
+        </SettingsGroupSubsection>
       ) : null}
 
       {showThemeCatalog ? (
@@ -325,6 +308,6 @@ export function TerminalAppearanceSection({
           />
         </>
       ) : null}
-    </div>
+    </>
   )
 }

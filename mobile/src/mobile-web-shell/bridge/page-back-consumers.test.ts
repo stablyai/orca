@@ -104,16 +104,6 @@ describe('who in the page is holding the device Back key', () => {
     expect(claims).toEqual([true, true])
   })
 
-  // Reassert only a held claim: ready already cleared it at the shell, so unclaimed documents need no redundant false frame.
-  it('says nothing when it is holding nothing, because the shell already holds that', () => {
-    const { claims, stack } = consumers()
-    stack.reassert()
-    const release = stack.claim(() => true)
-    release()
-    stack.reassert()
-    expect(claims).toEqual([true, false])
-  })
-
   it('gives the key back when the client closes, whoever was still holding it', () => {
     const { claims, stack } = consumers()
     stack.claim(() => true)

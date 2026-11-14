@@ -13,7 +13,7 @@ import {
   sortOrchestrationAgents
 } from '@/lib/skills/orchestration-skill-coverage'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/class-names'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 

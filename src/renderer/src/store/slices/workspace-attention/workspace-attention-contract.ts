@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { StoredAgentAttentionUnread } from '@/attention/agent-attention-contract'
 import type { AgentAttentionUnreadWrite } from '@/attention/agent-attention-policy'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
+import type { HostScopedWorktreeKey } from '../../../../../shared/worktree/host-qualified-identity'
 import type { AppState } from '../../types'
 
 export type WorkspaceAttentionSet = Parameters<StateCreator<AppState>>[0]
@@ -34,8 +35,20 @@ export type WorkspaceAttentionSlice = {
   /** An admitted, unviewed agent completion or prompt (terminal or structured chat). */
   markAgentAttentionUnread: (write: AgentAttentionUnreadWrite) => void
   /** Read all markers of tabs shown in a focused, present window. screenArrived includes tab/workspace/host/focus changes and settles flags even without removed markers. */
-  readOnScreenAttention: (screen: OnScreenAttention, options: { screenArrived: boolean }) => void
-  /** Sidebar "Mark as read" (also removes every marker in the workspace) / "Mark as unread". */
+  readOnScreenAttention: (
+    screen: OnScreenAttention,
+    options: { screenArrived: boolean; markersRead?: boolean }
+  ) => void
+  /**
+   * Host-qualified workspaces whose persisted flag this renderer's markers raised (the flag was down when the
+   * marker arrived). Only these lower when their last marker goes; a flag the user, a peer or a
+   * previous session raised waits for a visit or Mark as read. Renderer-local, so a restart
+   * starts empty and never lowers a flag it cannot explain.
+   */
+  workspaceUnreadRaisedByMarkers: Partial<Record<HostScopedWorktreeKey, true>>
+  /** Host-qualified workspaces the user marked unread this session. Renderer-local. */
+  workspacesMarkedUnreadByUser: Partial<Record<HostScopedWorktreeKey, true>>
+  /** Sidebar "Mark as read" (also removes every marker and reads every agent in the workspace) / "Mark as unread". */
   setWorkspaceUnreadByUser: (
     worktreeId: string,
     isUnread: boolean,

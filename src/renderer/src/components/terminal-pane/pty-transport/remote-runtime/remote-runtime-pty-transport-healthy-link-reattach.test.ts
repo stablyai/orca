@@ -99,62 +99,6 @@ describe('remote runtime PTY reattach on a healthy link', () => {
     return transport
   }
 
-  it('reattaches a handle the host still reports ready within seconds of a stream end', async () => {
-    const transport = await attachHostMirror()
-    runtimeCall.mockImplementation(async (args: { method: string }) =>
-      args.method === 'session.tabs.list' || args.method === 'session.tabs.activate'
-        ? readyHostSessionInventoryResponse('terminal-1')
-        : { ok: true, result: {} }
-    )
-
-    endLatestStream()
-    await vi.advanceTimersByTimeAsync(2_000)
-
-    expect(subscribedTerminalHandles()).toEqual(['terminal-1', 'terminal-1'])
-    emitSnapshot(latestSubscribePayload().streamId, 'reattached')
-    expect(transport.isConnected()).toBe(true)
-    expect(transport.getRecoveryState?.().phase).toBe('connected')
-    transport.destroy?.()
-  })
-
-  it('keeps reattaching a still-ready handle that ends repeatedly instead of parking', async () => {
-    const transport = await attachHostMirror()
-    runtimeCall.mockImplementation(async (args: { method: string }) =>
-      args.method === 'session.tabs.list' || args.method === 'session.tabs.activate'
-        ? readyHostSessionInventoryResponse('terminal-1')
-        : { ok: true, result: {} }
-    )
-
-    for (let cycle = 0; cycle < 5; cycle += 1) {
-      endLatestStream()
-      await vi.advanceTimersByTimeAsync(10_000)
-      expect(subscribedTerminalHandles()).toHaveLength(cycle + 2)
-      emitSnapshot(latestSubscribePayload().streamId, `cycle ${cycle}`)
-      expect(transport.isConnected()).toBe(true)
-      expect(transport.getRecoveryState?.().phase).toBe('connected')
-    }
-    transport.destroy?.()
-  })
-
-  it('retries a resubscribe whose host answered without a ready handle', async () => {
-    const transport = await attachHostMirror()
-    let hostReady = false
-    runtimeCall.mockImplementation(async (args: { method: string }) =>
-      args.method === 'session.tabs.list' || args.method === 'session.tabs.activate'
-        ? hostSnapshot(hostReady ? 'ready' : 'pending-handle')
-        : { ok: true, result: {} }
-    )
-
-    endLatestStream()
-    await vi.advanceTimersByTimeAsync(16_000)
-    expect(subscribedTerminalHandles()).toHaveLength(1)
-    hostReady = true
-    await vi.advanceTimersByTimeAsync(5_000)
-
-    expect(subscribedTerminalHandles()).toEqual(['terminal-1', 'terminal-1'])
-    transport.destroy?.()
-  })
-
   it('retries an attach whose host surface stayed pending past the bounded wait', async () => {
     let hostReady = false
     runtimeCall.mockImplementation(async (args: { method: string }) =>

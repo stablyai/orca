@@ -8,7 +8,7 @@ import {
   formatNativeChatContextUsageAnswer,
   formatNativeChatContextUsageUnreported
 } from '../../../usage/native-chat-context-usage-answer'
-import type { NativeChatPtySessionOptionsSurface } from '../../../../../../../shared/native-chat/input/native-chat-pty-session-options'
+import type { NativeChatPtySessionOptionsSurface } from '../../../../../../../shared/native-chat/input/session-options/native-chat-pty-session-options'
 
 export type NativeChatModelContextWindow = (modelId: string) => number | null
 

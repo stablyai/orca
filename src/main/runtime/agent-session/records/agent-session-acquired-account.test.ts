@@ -2,13 +2,13 @@ import { describe, expect, it } from 'vitest'
 import {
   acquiredAgentSessionAccount,
   withAcquiredAgentSessionAccount
-} from '../../../../shared/agent-session/lifecycle/agent-session-acquired-account'
-import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
+} from '../../../../shared/agent-session/lifecycle/accounts/agent-session-acquired-account'
+import { agentSessionConversationView } from '../../../../shared/agent-session/lifecycle/leases/agent-session-conversation-view'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
-} from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
-import { createRestTestRig } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig'
+} from '../../../../shared/agent-session/lifecycle/records/agent-session-record.test-fixture'
+import { createRestTestRig } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-rest-test-rig.test-fixture'
 import {
   openTestAgentSessionRecordStore,
   seedTestAgentSessionRecordStore
@@ -98,7 +98,9 @@ describe('actual acquired account receipt in the fenced record owner', () => {
         now: 40_003,
         accountAcquisition: { generation: 'new-generation', recipe }
       })
-      const reloaded = (await openTestAgentSessionRecordStore(f.rig.root)).getRecord(f.root)
+      const reloaded = (
+        await openTestAgentSessionRecordStore(f.rig.root, { mode: 'observe' })
+      ).getRecord(f.root)
       if (!reloaded) {
         throw new Error('durable proof missing')
       }

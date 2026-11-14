@@ -35,7 +35,7 @@ const { createTabsSliceMockApi } = await import('@/store/slices/tabs/tabs-slice-
 createTabsSliceMockApi()
 
 const { createTestStore, seedStore } = await import('@/store/testing/app-store-test-fixture'),
-  { makeTab } = await import('@/store/terminals/terminal-tab.test-fixture'),
+  { makeTab } = await import('@/store/terminals/testing/terminal-tab.test-fixture'),
   { makeTabGroup, makeUnifiedTab } = await import('@/store/slices/tabs/tab-group.test-fixture'),
   { makeWorktree } = await import('@/store/slices/worktrees/worktree.test-fixture')
 const store = createTestStore()

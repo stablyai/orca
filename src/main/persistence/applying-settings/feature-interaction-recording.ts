@@ -12,7 +12,7 @@ import { getCohortAtEmit } from '../../telemetry/cohort-classifier'
 
 export type FeatureInteractionOperations = {
   state: PersistedState
-  scheduleSave: (domains?: readonly string[]) => void
+  scheduleSave: (domains: readonly string[]) => void
   notifyUIChanged: () => void
   getUI: () => PersistedState['ui']
 }

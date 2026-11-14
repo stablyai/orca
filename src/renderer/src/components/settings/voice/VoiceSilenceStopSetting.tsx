@@ -44,10 +44,10 @@ export function VoiceSilenceStopSetting({
 
   return (
     <SettingsRow
-      label={t('components.settings.voice.silenceStop.title', 'Stop After Silence')}
+      label={t('components.settings.voice.silenceStop.label', 'Stop after silence')}
       description={t(
-        'components.settings.voice.silenceStop.description',
-        'Stops listening once you’ve been quiet this long. Never while you hold the shortcut.'
+        'components.settings.voice.silenceStop.short',
+        'Ends dictation when you stop talking.'
       )}
       labelId={labelId}
       control={

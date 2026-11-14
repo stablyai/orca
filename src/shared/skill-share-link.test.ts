@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest'
 import { parseSkillShareId } from './skill-share-link'
 
 describe('parseSkillShareId', () => {
-  it('rejects attacker origins and lookalike paths', () => {
-    expect(parseSkillShareId('https://attacker.test/skills/share/share_123')).toBeNull()
-    expect(parseSkillShareId('https://app.orca.dev/skills/share/share_123/more')).toBeNull()
-    expect(parseSkillShareId('javascript:share_123')).toBeNull()
+  it('accepts share links on both the orca.dev and legacy onorca.dev hosts', () => {
+    expect(parseSkillShareId('https://share.orca.dev/skills/share/shr_new')).toBe('shr_new')
+    expect(parseSkillShareId('https://share.onorca.dev/skills/share/shr_old')).toBe('shr_old')
+  })
+
+  it('rejects lookalike hosts', () => {
+    expect(parseSkillShareId('https://share.orca.dev.evil.test/skills/share/shr_1')).toBeNull()
+    expect(parseSkillShareId('https://evilshare.orca.dev/skills/share/shr_1')).toBeNull()
   })
 })

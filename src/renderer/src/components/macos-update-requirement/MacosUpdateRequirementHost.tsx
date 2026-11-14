@@ -1,8 +1,8 @@
 import { Suspense, type JSX } from 'react'
 import { ModalBoundary } from '@/app-shell/app-root-surface-boundaries'
-import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
-import { isWebClientLocation } from '@/lib/web-client-location'
-import { useAppStore } from '@/store'
+import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
+import { isWebClientLocation } from '@/app-shell/platform/web-client-location'
+import { useAppStore } from '@/store/index'
 
 const MacosUpdateRequirementNotice = lazy(() => import('./MacosUpdateRequirementNotice'))
 

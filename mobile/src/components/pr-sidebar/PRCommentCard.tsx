@@ -1,12 +1,12 @@
 import { memo, useState } from 'react'
 import { Image, Platform, Pressable, Text, View } from 'react-native'
-import { openExternalLink } from '../../platform/external-link'
+import { openExternalLink } from '../../platform/external-links/external-link'
 import { Check, CornerDownRight, ExternalLink, Pencil, Trash2, Undo2 } from 'lucide-react-native'
 import type {
   GitHubReaction,
   GitHubReactionContent,
   PRComment
-} from '../../../../src/shared/github/comment-types'
+} from '../../../../src/shared/github/comments/comment-types'
 import { colors, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { Translate } from '../../i18n/mobile-i18n'
@@ -308,7 +308,7 @@ export const PRCommentCard = memo(function PRCommentCard({
       {actions ? (
         <ConfirmModal
           visible={confirmDelete}
-          title={t('pullRequest.commentCard.deleteConfirmTitle', 'Delete comment?')}
+          title={t('common.delete', 'Delete')}
           message={t(
             'pullRequest.commentCard.deleteConfirmMessage',
             'This permanently deletes the comment on GitHub.'

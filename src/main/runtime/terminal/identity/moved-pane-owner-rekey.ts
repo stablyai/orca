@@ -2,7 +2,7 @@ import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import { forgetFailedAgentLaunches } from '../../../agent-launch/agent-launch-pane-attachment'
 import type { Store } from '../../../persistence/loading-store/store'
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
-import type { TerminalLeafMoveRequest } from '../../../../shared/workspace-layout/terminal-leaf-move'
+import type { TerminalLeafMoveRequest } from '../../../../shared/workspace-layout/terminal-topology/terminal-leaf-move'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 
 type PaneOwnerRuntime = Pick<OrcaRuntimeService, 'getExistingOrchestrationDb'> | undefined

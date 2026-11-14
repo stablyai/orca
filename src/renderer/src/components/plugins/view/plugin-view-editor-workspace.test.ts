@@ -1,64 +1,82 @@
-import { describe, expect, it, vi } from 'vitest'
+// @vitest-environment happy-dom
+import { afterEach, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
+import { showWorkspaceForFile } from './plugin-view-editor-workspace'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 
-vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
-  activateAndRevealWorkspace: vi.fn()
-}))
-vi.mock('@/store', () => ({ useAppStore: { getState: vi.fn() } }))
-
-import { findWorkspaceShowingFile, folderWorkspaceRows } from './plugin-view-editor-workspace'
-
-const worktree = (id: string, path: string, extra: Record<string, unknown> = {}) => ({
-  id,
-  path,
-  isArchived: false,
-  ...extra
+const activation = vi.hoisted(() => ({ activateAndRevealWorkspace: vi.fn() }))
+vi.mock('@/lib/workspace/activation/worktree-activation', () => activation)
+const initialState = useAppStore.getState()
+afterEach(() => {
+  useAppStore.setState(initialState, true)
+  vi.clearAllMocks()
 })
 
-describe('the workspace that shows a file', () => {
-  it('matches the real path when the given one goes through a symlink, preferring the deepest', () => {
-    const repos = [
-      worktree('r1::/private/tmp', '/private/tmp'),
-      worktree('r2::/private/tmp/sketch', '/private/tmp/sketch')
-    ]
-    expect(
-      findWorkspaceShowingFile(
-        repos,
-        ['/tmp/sketch/sample.sketch', '/private/tmp/sketch/sample.sketch'],
-        null
-      )
-    ).toEqual({
-      worktreeId: 'r2::/private/tmp/sketch',
-      relativePath: 'sample.sketch',
-      filePath: '/private/tmp/sketch/sample.sketch'
-    })
+it('refuses a retired file owner without registering its deleting directory as a folder', async () => {
+  const addRepoPath = vi.fn()
+  const row = makeWorktree({
+    id: 'r::/work/feature',
+    repoId: 'r',
+    path: '/work/feature',
+    hostId: 'local',
+    removing: true,
+    removalRecorded: true
   })
-
-  it('skips remote and archived workspaces, and finds none outside every workspace', () => {
-    const repos = [
-      worktree('r1::/w', '/w', { hostId: 'ssh:box' }),
-      worktree('r1::/w2', '/w', { isArchived: true })
-    ]
-    expect(findWorkspaceShowingFile(repos, ['/w/a.sketch'], null)).toBeNull()
-    expect(findWorkspaceShowingFile([], ['/w/a.sketch'], null)).toBeNull()
+  useAppStore.setState({
+    worktreesByRepo: { r: [row] },
+    folderWorkspaces: [],
+    activeWorktreeId: null,
+    addRepoPath
   })
+  await expect(
+    showWorkspaceForFile(['/work/feature/document.ext'], '/work/feature')
+  ).resolves.toBeNull()
+  expect(addRepoPath).not.toHaveBeenCalled()
+  expect(activation.activateAndRevealWorkspace).not.toHaveBeenCalled()
 
-  it('prefers the active workspace among equally deep ones', () => {
-    const repos = [worktree('a', '/w'), worktree('b', '/w')]
-    expect(findWorkspaceShowingFile(repos, ['/w/a.sketch'], 'b')?.worktreeId).toBe('b')
+  useAppStore.setState({ worktreesByRepo: { r: [{ ...row, removalRecorded: undefined }] } })
+  await expect(
+    showWorkspaceForFile(['/work/feature/document.ext'], '/work/feature')
+  ).resolves.toMatchObject({ worktreeId: row.id })
+  expect(addRepoPath).not.toHaveBeenCalled()
+  expect(activation.activateAndRevealWorkspace).toHaveBeenCalledWith(row.id, {
+    providesInitialSurface: true,
+    executionHostId: 'local'
   })
+})
 
-  it('finds a local folder workspace by its tab key, never a remote one', () => {
-    const folder = (id: string, folderPath: string, connectionId: string | null) => ({
-      id,
-      folderPath,
-      connectionId,
-      isArchived: false
-    })
-    const rows = folderWorkspaceRows([folder('f1', '/notes', null), folder('f2', '/notes', 'box')])
-    expect(findWorkspaceShowingFile(rows, ['/notes/a.sketch'], null)).toEqual({
-      worktreeId: 'folder:f1',
-      relativePath: 'a.sketch',
-      filePath: '/notes/a.sketch'
-    })
+it('still registers a genuinely unowned file folder and opens it', async () => {
+  const row = makeWorktree({
+    id: 'added::/new/folder',
+    repoId: 'added',
+    path: '/new/folder',
+    hostId: 'local'
+  })
+  const addRepoPath = vi.fn<typeof initialState.addRepoPath>(async () => {
+    useAppStore.setState({ worktreesByRepo: { added: [row] } })
+    return {
+      id: 'added',
+      path: '/new/folder',
+      displayName: 'added',
+      badgeColor: 'blue',
+      addedAt: 1
+    }
+  })
+  const fetchWorktrees = vi.fn().mockResolvedValue(true)
+  useAppStore.setState({
+    worktreesByRepo: {},
+    folderWorkspaces: [],
+    activeWorktreeId: null,
+    addRepoPath,
+    fetchWorktrees
+  })
+  await expect(
+    showWorkspaceForFile(['/new/folder/document.ext'], '/new/folder')
+  ).resolves.toMatchObject({ worktreeId: row.id, addedRepoId: 'added' })
+  expect(addRepoPath).toHaveBeenCalledWith('/new/folder', 'folder', { runtimeEnvironmentId: null })
+  expect(fetchWorktrees).toHaveBeenCalledWith('added')
+  expect(activation.activateAndRevealWorkspace).toHaveBeenCalledWith(row.id, {
+    providesInitialSurface: true,
+    executionHostId: 'local'
   })
 })

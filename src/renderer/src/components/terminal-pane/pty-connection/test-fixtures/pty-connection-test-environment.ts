@@ -133,7 +133,7 @@ export async function restoreTerminalTestGlobals(): Promise<void> {
   // Flush real-promise settle continuations while window still exists; fake timers postpone them beyond teardown (orca#14728).
   await flushAsyncTicks(20)
   const { cancelPendingSafeFitContinuations } =
-    await import('@/lib/pane-manager/pane-fit-continuation-registry')
+    await import('@/lib/pane-manager/terminal-fit/pane-fit-continuation-registry')
   for (const pane of takeTerminalTestPanes()) {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture panes provide the fit and terminal members read during cancellation.
     cancelPendingSafeFitContinuations(pane as unknown as ManagedPane)
@@ -189,10 +189,10 @@ async function resetSharedTerminalModuleState(): Promise<void> {
     attentionSubscriptions,
     paneRecovery
   ] = await Promise.all([
-    import('@/lib/pane-manager/pane-terminal-output-queue-registry'),
+    import('@/lib/pane-manager/terminal-output/pane-terminal-output-queue-registry'),
     import('@/lib/agent-session/launch/startup/agent-startup-delayed-delivery'),
     import('@/lib/agent-session/launch/startup/agent-startup-delivery-guards'),
-    import('@/lib/hook-command-delayed-delivery'),
+    import('@/lib/workspace/creation/setup/hook-command-delayed-delivery'),
     import('../../agent-completion/agent-completion-identity-store'),
     import('../../agent-completion/command-code/command-code-done-settle'),
     import('../../agent-completion/process-inspection/agent-process-inspection-queue'),

@@ -10,7 +10,8 @@ import { MOBILE_WEB_BUNDLE_CHUNK_BYTES } from '../../../../../shared/mobile-web-
 import {
   computeMobileWebBundleId,
   mobileWebBundleBrotliPath,
-  type MobileWebBundleAsset
+  type MobileWebBundleAsset,
+  type MobileWebBundleCatalog
 } from '../../../../../shared/mobile-web-bundle/manifest-contract'
 
 export const sha256Hex = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex')
@@ -52,14 +53,24 @@ export type SyntheticMobileWebBundle = {
   root: string
   buildId: string
   assets: MobileWebBundleAsset[]
+  catalogs: MobileWebBundleCatalog[]
 }
 
 export function writeSyntheticMobileWebBundle(
   root: string,
   seed: number,
-  extraAssets: readonly SyntheticAsset[] = []
+  extraAssets: readonly SyntheticAsset[] = [],
+  localeCatalogs: Readonly<Record<string, Record<string, unknown>>> = {}
 ): SyntheticMobileWebBundle {
   mkdirSync(join(root, 'assets'), { recursive: true })
+  const catalogs = Object.entries(localeCatalogs).map(([locale, catalog]) => {
+    const bytes = Buffer.from(JSON.stringify(catalog), 'utf8')
+    const sha256 = sha256Hex(bytes)
+    const path = `catalogs/${sha256}.json`
+    mkdirSync(join(root, 'catalogs'), { recursive: true })
+    writeFileSync(join(root, path), bytes)
+    return { locale, path, sha256, byteLength: bytes.byteLength }
+  })
   const written = [...syntheticAssets(seed), ...extraAssets]
   const copies = new Map<string, Buffer>()
   for (const asset of written) {
@@ -91,11 +102,12 @@ export function writeSyntheticMobileWebBundle(
       entrypoint: 'index.html',
       totalBytes: assets.reduce((total, asset) => total + asset.byteLength, 0),
       assets,
-      routes: []
+      routes: [],
+      ...(catalogs.length === 0 ? {} : { catalogs })
     }),
     'utf8'
   )
-  return { root, buildId, assets }
+  return { root, buildId, assets, catalogs }
 }
 
 /** Only the envelope reads runtimeId; bundle methods read directly from this install. */

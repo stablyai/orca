@@ -1,3 +1,5 @@
+import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import { agentJournalSubmissionKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 // Accept into conversations without provider ownership; delivery starts children after acceptance.
 
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
@@ -179,4 +181,26 @@ export function structuredAgentSessionFailureWordsContext(
       : {}),
     ...(command ? { command } : {})
   }
+}
+
+/** Read only the oldest awaited input body for failed-start wording. */
+export async function readStructuredAgentSessionFailureWordsContext(
+  record: Pick<AgentSessionRecord, 'provider'> | null,
+  journal: AgentSessionJournal | undefined
+): Promise<AgentSessionFailureWordsContext> {
+  const words = structuredAgentSessionFailureWordsContext(record)
+  if (!journal) {
+    return words
+  }
+  const pending = await journal.reads.pendingSubmissions()
+  const oldest = pending.reduce<(typeof pending)[number] | undefined>(
+    (prior, entry) =>
+      !prior || (entry.acceptedSequence ?? 0) < (prior.acceptedSequence ?? 0) ? entry : prior,
+    undefined
+  )
+  const body =
+    oldest && (await journal.reads.itemBody(agentJournalSubmissionKey(oldest.clientMessageId)))
+  return body?.kind === 'message' && body.command?.name === 'compact'
+    ? { ...words, command: 'compact' }
+    : words
 }

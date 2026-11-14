@@ -6,7 +6,7 @@ import {
   isAgentStatusFresh,
   AGENT_STATUS_STALE_AFTER_MS
 } from '../../../../shared/agent-status/contracts/agent-status-freshness'
-import { resolveWorktreeStatus, type WorktreeStatus } from '@/lib/worktree-status'
+import { resolveWorktreeStatus } from '@/lib/workspace/activity/worktree-status'
 
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { agentVerdictDisplayMark } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
@@ -16,6 +16,7 @@ import {
   parsePaneKey
 } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
+  type WorktreeStatus,
   applyAgentPaneActivityFlags,
   type AgentPaneActivityFlags
 } from '../../../../shared/worktree-status-rollup'

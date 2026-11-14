@@ -2,19 +2,21 @@ import { providerTimelineExecutionItems } from '../../agent-session-timeline/pro
 // Plan against queued journal state; death/replacement proof interrupts only matching owners,
 // otherwise settle unverifiable and revise when later proof arrives.
 
-import { STALE_SESSION_ROW_PREFIX } from '../../../../shared/agent-session/lifecycle/agent-session-stop-row-identity'
 import type { AgentSessionReplacedRuntime } from '../../../runtime/agent-session/agent-session-replaced-runtime'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalRenderItem
+  type AgentJournalRenderItem,
+  type AgentJournalItemBody
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
-import type { AgentSessionDeathEvidence } from '../../../../shared/agent-session/lifecycle/agent-session-death-evidence'
+import type { AgentSessionDeathEvidence } from '../../../../shared/agent-session/lifecycle/leases/agent-session-death-evidence'
 import type { AgentSessionFailureWordsContext } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import { journalPendingSubmissionResolutions } from '../../agent-session-journal/submissions/journal-pending-submission-recovery'
 import { DISPATCH_DOUBT_PROVIDER_EXITED } from '../../agent-session-journal/projection/journal-dispatch-doubt-reasons'
 import type { JournalLifecycleMutationInput } from '../../agent-session-journal/writing/journal-lifecycle-mutation'
 import type { ResolveDispatchInput } from '../../agent-session-journal/journal-store-contracts'
-import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
+import type { SqlAgentSessionJournal } from '../../agent-session-journal/journal-sql-store'
+import type { UnopenedSendJournal } from '../delivery/structured-agent-session-unopened-send-withdrawal'
+import type { TurnVerdictJournal } from './structured-agent-session-stale-turn-verdict'
 import { lostLiveWorkJournalBody } from '../../agent-session-journal/item-lifecycle/journal-subagent-liveness'
 import {
   endedUnseenMessageBody,
@@ -34,19 +36,14 @@ import { settledRootTurnScope } from './structured-agent-session-exit-turn-scope
 import { isUnverifiableTurn, staleStopRow } from './structured-agent-session-stale-stop-row'
 import { isInProgressStructuredAgentSessionItem } from './structured-agent-session-unfinished-work'
 
-export type StaleStructuredAgentSessionStateJournal = Pick<
-  AgentSessionJournal,
-  | 'snapshot'
-  | 'itemFence'
-  | 'itemBody'
-  | 'submissions'
-  | 'statusRead'
-  | 'inputOrder'
-  | 'stopMarks'
-  | 'lastProviderActivityAt'
-  | 'cursor'
-  | 'appendPlannedLifecycleBatch'
->
+import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
+
+export type StaleStructuredAgentSessionStateJournal = TurnVerdictJournal & {
+  cursor: () => AgentJournalCursor
+  statusRead: () => { items: readonly AgentJournalRenderItem[] }
+  itemBody: (itemId: string) => AgentJournalItemBody | null
+  inputOrder: NonNullable<UnopenedSendJournal['inputOrder']>
+}
 
 export type StaleStructuredAgentSessionStateInput = {
   journal: StaleStructuredAgentSessionStateJournal
@@ -62,23 +59,12 @@ export type StaleStructuredAgentSessionStateInput = {
 }
 
 export async function settleStaleStructuredAgentSessionState(
-  input: StaleStructuredAgentSessionStateInput
+  input: Omit<StaleStructuredAgentSessionStateInput, 'journal'> & {
+    journal: Pick<SqlAgentSessionJournal, 'settleStaleState'>
+  }
 ): Promise<number> {
-  const { journal } = input
-  // Terminal results make retries no-ops; failed transactions retain the same identity prefix.
-  const generation = input.acquisitionGeneration ?? `seq-${journal.cursor().sequence}`
-  let planned = 0
-  await journal.appendPlannedLifecycleBatch({
-    settlementId: `${STALE_SESSION_ROW_PREFIX}${input.sessionId}:${input.fence}:${generation}`,
-    fence: input.fence,
-    recovered: true,
-    plan: () => {
-      const plan = planStaleStructuredAgentSessionState(input)
-      planned = plan.mutations.length
-      return plan
-    }
-  })
-  return planned
+  const { journal, ...facts } = input
+  return journal.settleStaleState(facts)
 }
 
 export function planStaleStructuredAgentSessionState(

@@ -1,4 +1,5 @@
 import type { PersistedUIState } from '../../../../../shared/persisted-ui-state-types'
+import type { ActivityBarPosition } from '../../../../../shared/ui-chrome-types'
 
 /** Capture hydrated baseline and persist only locally changed fields: shared desktop/web/mobile UI snapshots otherwise overwrite peers’ disjoint updates (STA-5781). */
 export type PersistedUIWriteBaseline = {
@@ -9,6 +10,7 @@ export type PersistedUIWriteBaseline = {
   rightSidebarTab: PersistedUIState['rightSidebarTab']
   rightSidebarExplorerView: PersistedUIState['rightSidebarExplorerView']
   rightSidebarWidth: number
+  activityBarPosition: ActivityBarPosition
   markdownTocPanelWidth: number
   combinedDiffFileTreeWidth: number
   groupBy: PersistedUIState['groupBy']
@@ -40,6 +42,7 @@ const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   rightSidebarTab: true,
   rightSidebarExplorerView: true,
   rightSidebarWidth: true,
+  activityBarPosition: true,
   markdownTocPanelWidth: true,
   combinedDiffFileTreeWidth: true,
   groupBy: true,

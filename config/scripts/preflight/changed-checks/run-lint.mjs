@@ -41,6 +41,7 @@ export const LINT_STEPS = [
   'check:ts-nocheck-ratchet',
   'check:workspace-record-read-ratchet',
   'check:tab-map-seam-ratchet',
+  'check:terminal-parking-ownership-ratchet',
   'check:unproven-pty-retirement-ratchet',
   'check:daemon-blocking-call-ratchet',
   'check:main-sync-fs-ratchet',

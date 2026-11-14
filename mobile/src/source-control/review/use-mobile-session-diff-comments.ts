@@ -1,12 +1,12 @@
 import { useEffect, useCallback, useMemo, useRef, useState } from 'react'
 import { formatDiffComments } from '../../../../src/shared/diff-comments-format'
 import { translate } from '../../i18n/mobile-i18n'
-import { useClipboardWriter } from '../../platform/clipboard'
+import { useClipboardWriter } from '../../platform/clipboard/clipboard'
 import { interpretOrThrowRefusalMessage } from '../../transport/rpc/rpc-refusal-message'
 import type { SendRequestOptions } from '../../transport/rpc/unvalidated-rpc-request-port'
 import { sessionWorktreeRecordRead } from '../../worktree/session-worktree-record-operations'
 import { sessionWorktreeNotesWrite } from './mobile-review-notes-operations'
-import { triggerSelection, triggerSuccess, triggerError } from '../../platform/haptics'
+import { triggerSelection, triggerSuccess, triggerError } from '../../platform/haptics/haptics'
 import {
   addMobileDiffComment,
   normalizeMobileDiffComments,

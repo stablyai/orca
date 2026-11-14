@@ -17,9 +17,6 @@ export function useTerminalKeyboardShortcuts(controller: TerminalActivationContr
     terminalShortcutPolicy
   } = controller
   useEffect(() => {
-    if (!activeWorktreeId) {
-      return
-    }
     const isMac = navigator.userAgent.includes('Mac')
     const shortcutPlatform: NodeJS.Platform = isMac
       ? 'darwin'

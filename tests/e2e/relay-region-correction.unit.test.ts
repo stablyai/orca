@@ -13,9 +13,9 @@ import { IDLE_REHOME_MIN_CONTROL_AGE_MS } from '../../cloud/apps/relay/src/conne
 import { CONTROL_RENEWAL_BATCH_INTERVAL_MS } from '../../cloud/apps/relay/src/control-leases/control-renewal-batch'
 import { RELAY_PROTOCOL_LIMITS } from '../../cloud/packages/relay-contract/src/protocol-limits'
 import type * as AdminTokenVerifier from '../../cloud/apps/relay/src/authentication/admin-token-verifier'
-import { RelayOriginPool } from '../../src/main/runtime/mobile-cloud-relay/relay-origin-pool'
-import { RELAY_HOST_CAPABILITY_HEADERS } from '../../src/main/runtime/mobile-cloud-relay/relay-control-protocol'
-import type { MobileSocketTransport } from '../../src/main/runtime/rpc/mobile-socket-wiring'
+import { RelayOriginPool } from '../../src/main/runtime/mobile-cloud-relay/origin-lifecycle/relay-origin-pool'
+import { RELAY_HOST_CAPABILITY_HEADERS } from '../../src/main/runtime/mobile-cloud-relay/control-channel/relay-control-protocol'
+import type { MobileSocketTransport } from '../../src/main/runtime/rpc/mobile/mobile-socket-wiring'
 import { createRelayExecutionProcess } from './helpers/relay-execution-process'
 
 vi.mock('../../cloud/apps/relay/src/authentication/relay-token-verifier', () => ({

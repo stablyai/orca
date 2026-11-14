@@ -8,10 +8,7 @@ import type { ProviderDiagnostic } from '../../../../shared/agent-session/failur
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentJournalTurnJoin } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 
-export {
-  MAX_CODEX_PENDING_DISPATCH_ECHOES,
-  MAX_CODEX_RECORDED_TURN_ENDS
-} from './codex-dispatch-receipt-correlation'
+export { MAX_CODEX_PENDING_DISPATCH_ECHOES, MAX_CODEX_RECORDED_TURN_ENDS }
 
 export type CodexTurnEnd =
   | { status: 'completed' }
@@ -31,7 +28,7 @@ export type CodexDispatchEchoes = {
   answered: (clientMessageId: string, at: number) => void
   /** Only status received after a no-turn answer determines whether that send is held. */
   observeStatus: (active: boolean) => void
-  /** Sends still executing; ended turns release them even without an echo. */
+  /** Sends awaiting admission to a published turn; exact echoes remain independently armed. */
   heldSends: () => ReadonlySet<string>
   /** False at capacity preserves older pending sends. */
   arm: (clientMessageId: string, requestedAt?: number) => boolean
@@ -63,6 +60,8 @@ export type CodexDispatchEchoes = {
   /** Mark a timed-out open wait so later sends do not wait again. */
   leftUnopened: (threadId: string, turnId: string) => void
   opened: (threadId: string, turnId: string) => void
+  /** The turn's admitted journal writes landed; receipt observation alone cannot release work. */
+  published: (threadId: string, turnId: string) => void
   /** An error naming a never-opened turn counts as its end. */
   hasOpened: (threadId: string, turnId: string) => boolean
   /** Latest answered turn still unopened after its wait was exhausted. */
@@ -105,12 +104,14 @@ export function createCodexDispatchEchoes(
   >()
   let clock = 0
   let status: { active: boolean; at: number } | null = null
+  const publishedTurns = new Set<string>()
   const heldSends = (): Set<string> =>
     new Set(
       [...armed].flatMap(([clientMessageId, entry]) =>
         entry.answeredAt === undefined ||
         (entry.turn
-          ? entry.turnEnded !== true
+          ? entry.turnEnded !== true &&
+            !publishedTurns.has(turnKey(entry.turn.threadId, entry.turn.turnId))
           : status?.active === true && status.at > entry.answeredAt)
           ? [clientMessageId]
           : []
@@ -224,6 +225,16 @@ export function createCodexDispatchEchoes(
         openedTurns.delete(oldest)
       }
     },
+    published: (threadId, turnId) =>
+      reporting(() => {
+        publishedTurns.add(turnKey(threadId, turnId))
+        for (const oldest of publishedTurns) {
+          if (publishedTurns.size <= MAX_CODEX_RECORDED_TURN_ENDS) {
+            break
+          }
+          publishedTurns.delete(oldest)
+        }
+      }),
     hasOpened: (threadId, turnId) => openedTurns.has(turnKey(threadId, turnId)),
     endTurn: (threadId, turnId, end) =>
       reporting(() => {
@@ -286,6 +297,7 @@ export function createCodexDispatchEchoes(
       receiptCorrelation.clear()
       unopenedTurns.clear()
       openedTurns.clear()
+      publishedTurns.clear()
       nextSequence = 0
     },
     get size() {

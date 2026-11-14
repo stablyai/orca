@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { isLinuxUserAgent, isMacUserAgent } from '@/lib/user-agent-platform'
+import { isLinuxUserAgent, isMacUserAgent } from '@/app-shell/platform/user-agent-platform'
 import {
   consumePrimarySelectionNativePasteSuppression,
   readPrimarySelectionText,

@@ -21,7 +21,7 @@ import {
   recordQuickOpenFileVisit,
   quickOpenHistoryScope,
   readQuickOpenHistory
-} from '@/lib/quick-open-file-history'
+} from '@/lib/files/search/quick-open-file-history'
 import type { AppState } from '@/store/types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 
